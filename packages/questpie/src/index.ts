@@ -211,7 +211,7 @@ export const relation = Object.freeze({
 
 interface DefinitionBrand {
 	readonly category: "definition";
-	readonly resourceKind: "collection";
+	readonly resourceKind: "collection" | "seed";
 }
 
 interface AugmentationBrand {
@@ -341,5 +341,110 @@ export function defineCollection<
 		relations: input.relations ?? ({} as Relations),
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
+	});
+}
+
+type SeedValueForField<Field> =
+	Field extends FieldDefinition<infer Value>
+		? Value extends Date
+			? Value | string
+			: Value
+		: never;
+
+type SeedValues<Fields extends Readonly<Record<string, FieldDefinition>>> =
+	Readonly<{
+		[Key in keyof Fields]?: SeedValueForField<Fields[Key]> | null;
+	}>;
+
+export interface SeedStepDefinition {
+	readonly kind: "insert" | "update" | "upsert" | "delete";
+	readonly collection: `collection:${string}`;
+	readonly values?: Readonly<Record<string, unknown>>;
+	readonly key?: Readonly<Record<string, unknown>>;
+	readonly create?: Readonly<Record<string, unknown>>;
+	readonly update?: Readonly<Record<string, unknown>>;
+}
+
+export interface SeedDefinition<Name extends string = string> {
+	readonly __questpie: Readonly<{
+		category: "definition";
+		resourceKind: "seed";
+	}>;
+	readonly name: Name;
+	readonly dependsOn: readonly string[];
+	readonly steps: readonly SeedStepDefinition[];
+}
+
+function collectionIdentity(
+	collection: CollectionDefinition,
+): `collection:${string}` {
+	return `collection:${collection.name}`;
+}
+
+export const seed = Object.freeze({
+	insert: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
+		collection: CollectionDefinition<string, Fields>,
+		values: SeedValues<Fields>,
+	): SeedStepDefinition =>
+		Object.freeze({
+			kind: "insert",
+			collection: collectionIdentity(collection),
+			values: Object.freeze({ ...values }),
+		}),
+	update: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
+		collection: CollectionDefinition<string, Fields>,
+		input: Readonly<{ key: SeedValues<Fields>; values: SeedValues<Fields> }>,
+	): SeedStepDefinition =>
+		Object.freeze({
+			kind: "update",
+			collection: collectionIdentity(collection),
+			key: Object.freeze({ ...input.key }),
+			values: Object.freeze({ ...input.values }),
+		}),
+	upsert: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
+		collection: CollectionDefinition<string, Fields>,
+		input: Readonly<{
+			key: SeedValues<Fields>;
+			create: SeedValues<Fields>;
+			update: SeedValues<Fields>;
+		}>,
+	): SeedStepDefinition =>
+		Object.freeze({
+			kind: "upsert",
+			collection: collectionIdentity(collection),
+			key: Object.freeze({ ...input.key }),
+			create: Object.freeze({ ...input.create }),
+			update: Object.freeze({ ...input.update }),
+		}),
+	delete: <const Fields extends Readonly<Record<string, FieldDefinition>>>(
+		collection: CollectionDefinition<string, Fields>,
+		key: SeedValues<Fields>,
+	): SeedStepDefinition =>
+		Object.freeze({
+			kind: "delete",
+			collection: collectionIdentity(collection),
+			key: Object.freeze({ ...key }),
+		}),
+});
+
+export function defineSeed<
+	const Name extends string,
+	const Dependencies extends readonly string[],
+	const Steps extends readonly SeedStepDefinition[],
+>(
+	input: Readonly<{
+		name: Name;
+		dependsOn?: Dependencies;
+		steps: Steps;
+	}>,
+): SeedDefinition<Name> {
+	return Object.freeze({
+		__questpie: Object.freeze({
+			category: "definition",
+			resourceKind: "seed",
+		}),
+		name: input.name,
+		dependsOn: Object.freeze([...(input.dependsOn ?? [])]),
+		steps: Object.freeze([...input.steps]),
 	});
 }

@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import type {
@@ -215,6 +217,36 @@ function queryContract(value: RecordValue): RecordValue {
 	};
 }
 
+function seedContract(value: RecordValue): RecordValue {
+	return {
+		format: "questpie.seed-definition-contract",
+		version: 1,
+		name: string(value.name, "seed.name"),
+		dependsOn: [...((value.dependsOn ?? []) as readonly string[])].sort(
+			compareAscii,
+		),
+		steps: (value.steps as readonly unknown[]).map((item) => {
+			const step = record(item, "seed step");
+			return {
+				kind: string(step.kind, "seed step kind"),
+				collection: string(step.collection, "seed step collection"),
+				...(step.values === undefined
+					? {}
+					: { values: record(step.values, "seed values") }),
+				...(step.key === undefined
+					? {}
+					: { key: record(step.key, "seed key") }),
+				...(step.create === undefined
+					? {}
+					: { create: record(step.create, "seed create values") }),
+				...(step.update === undefined
+					? {}
+					: { update: record(step.update, "seed update values") }),
+			};
+		}),
+	};
+}
+
 function ownerCollectionContract(
 	value: RecordValue,
 	contributionIdentities: readonly string[],
@@ -379,6 +411,22 @@ export function normalizeResources(
 				},
 				value: item.value,
 			});
+		} else if (kind === "seed") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: seedContract(item.value),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
 		} else
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",
@@ -404,9 +452,104 @@ export function normalizeResources(
 
 function snake(value: string): string {
 	return value
-		.replaceAll(".", "_")
 		.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+		.replace(/([A-Z])([A-Z][a-z])/g, "$1_$2")
 		.toLowerCase();
+}
+
+function defaultCollectionName(name: string): string {
+	return name.split(".").map(snake).join("__");
+}
+
+function shortenedPostgresName(identity: string, candidate: string): string {
+	if (Buffer.byteLength(candidate) <= 63) return candidate;
+	const suffix = createHash("sha256")
+		.update(`questpie-postgres-name-v1\0${identity}`)
+		.digest("hex")
+		.slice(0, 12);
+	let prefix = candidate;
+	while (Buffer.byteLength(`${prefix}_${suffix}`) > 63)
+		prefix = prefix.slice(0, -1);
+	return `${prefix}_${suffix}`;
+}
+
+function physicalName(
+	configuration: ApplicationConfiguration,
+	identity: string,
+	inline: unknown,
+	fallback: string,
+): string {
+	const override = configuration.postgres.physicalNames[identity];
+	if (inline !== null && inline !== undefined && override !== undefined)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-005",
+			"invalidPhysicalName",
+			`${identity} supplies both inline and questpie.json physical names`,
+		);
+	const candidate = String(
+		inline ?? override ?? shortenedPostgresName(identity, fallback),
+	);
+	if (
+		!/^[a-z][a-z0-9_]*$/.test(candidate) ||
+		Buffer.byteLength(candidate) > 63 ||
+		candidate.startsWith("pg_") ||
+		candidate.startsWith("questpie_")
+	)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-005",
+			"invalidPhysicalName",
+			`${identity} has invalid PostgreSQL name ${candidate}`,
+		);
+	return candidate;
+}
+
+function boundConstraints(
+	configuration: ApplicationConfiguration,
+	collectionIdentity: string,
+	tableName: string,
+	field: Readonly<{ key: string; contract: RecordValue }>,
+): RecordValue[] {
+	const type = record(field.contract.type, "Field type");
+	const fieldIdentity = `${collectionIdentity}/field:${field.key}`;
+	const bounds =
+		type.kind === "text"
+			? (["minLength", "maxLength"] as const)
+			: type.kind === "integer"
+				? (["minimum", "maximum"] as const)
+				: [];
+	return bounds.flatMap((bound) => {
+		const value = type[bound];
+		if (typeof value !== "number") return [];
+		const identity = `${fieldIdentity}/invariant:${bound}`;
+		const left =
+			bound === "minLength" || bound === "maxLength"
+				? {
+						kind: "textLength",
+						expression: { kind: "field", field: fieldIdentity },
+					}
+				: { kind: "field", field: fieldIdentity };
+		return [
+			{
+				kind: "check",
+				identity,
+				postgresName: physicalName(
+					configuration,
+					identity,
+					null,
+					`qp_ck_${tableName}_${snake(field.key)}_${snake(bound)}`,
+				),
+				expression: {
+					kind: "compare",
+					operator:
+						bound === "minLength" || bound === "minimum"
+							? "greaterThanOrEqual"
+							: "lessThanOrEqual",
+					left,
+					right: { kind: "literal", value },
+				},
+			},
+		];
+	});
 }
 
 function resolvedCollectionEntries(
@@ -493,63 +636,23 @@ export function projectManifest(
 	);
 	const schemaCollections = collections.map((resource) => {
 		const fields = resolvedFields(resource);
-		const constraints = resolvedCollectionEntries(resource, "constraints").map(
-			({ key, contract: value }) => ({
-				kind: value.kind,
-				identity: `${resource.identity}/constraint:${key}`,
-				postgresName:
-					value.postgresName ?? `${snake(resource.name)}_${snake(key)}`,
-				fields: (value.fields as readonly string[]).map(
-					(field) => `${resource.identity}/field:${field}`,
-				),
-			}),
+		const tableName = physicalName(
+			configuration,
+			resource.identity,
+			resource.value.postgresName,
+			defaultCollectionName(resource.name),
 		);
-		const primaryKeys = constraints.filter(
-			(item) => item.kind === "primaryKey",
-		);
-		if (primaryKeys.length !== 1)
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-013",
-				"structuralTypeError",
-				`${resource.identity} requires exactly one named primary key`,
-			);
-		const indexes = resolvedCollectionEntries(resource, "indexes").map(
-			({ key, contract: value }) => ({
-				kind: "btree",
-				identity: `${resource.identity}/index:${key}`,
-				postgresName:
-					value.postgresName ?? `${snake(resource.name)}_${snake(key)}`,
-				fields: (value.fields as readonly string[]).map((field) => ({
-					field: `${resource.identity}/field:${field}`,
-					order: "asc",
-					nulls: "last",
-					operatorClass: "typeDefault",
-					collation: null,
-				})),
-			}),
-		);
-		const relations = entries(resource.value.relations).map(([key, value]) => ({
-			kind: "toOne",
-			identity: `${resource.identity}/relation:${key}`,
-			target: value.target,
-			fields: (value.fields as readonly string[]).map(
-				(field) => `${resource.identity}/field:${field}`,
-			),
-			references: (value.references as readonly string[]).map(
-				(field) => `${value.target}/field:${field}`,
-			),
-			constraintPostgresName:
-				value.postgresName ?? `${snake(resource.name)}_${snake(key)}_fk`,
-			onDelete: value.onDelete,
-			onUpdate: value.onUpdate,
-		}));
-		return {
-			identity: resource.identity,
-			postgresName: resource.value.postgresName ?? snake(resource.name),
-			fields: fields.map(({ key, contract }) => ({
-				identity: `${resource.identity}/field:${key}`,
+		const projectedFields = fields.map(({ key, contract }) => {
+			const identity = `${resource.identity}/field:${key}`;
+			return {
+				identity,
 				path: [key],
-				postgresName: contract.postgresName ?? snake(key),
+				postgresName: physicalName(
+					configuration,
+					identity,
+					contract.postgresName,
+					snake(key),
+				),
 				type: contract.type,
 				nullable: contract.nullable,
 				default: contract.default,
@@ -557,12 +660,229 @@ export function projectManifest(
 					record(contract.type, "field type").kind === "text"
 						? "questpie.binary"
 						: null,
-			})),
+			};
+		});
+		const constraints = [
+			...resolvedCollectionEntries(resource, "constraints").map(
+				({ key, contract: value }) => {
+					const identity = `${resource.identity}/constraint:${key}`;
+					const prefix =
+						value.kind === "primaryKey"
+							? "qp_pk"
+							: value.kind === "unique"
+								? "qp_uq"
+								: "qp_ck";
+					return {
+						kind: value.kind,
+						identity,
+						postgresName: physicalName(
+							configuration,
+							identity,
+							value.postgresName,
+							`${prefix}_${tableName}_${snake(key)}`,
+						),
+						fields: (value.fields as readonly string[]).map(
+							(field) => `${resource.identity}/field:${field}`,
+						),
+					};
+				},
+			),
+			...fields.flatMap((field) =>
+				boundConstraints(configuration, resource.identity, tableName, field),
+			),
+		].sort((left, right) =>
+			compareAscii(String(left.identity), String(right.identity)),
+		);
+		const primaryKeys = constraints.filter(
+			(item) => item.kind === "primaryKey",
+		);
+		if (primaryKeys.length !== 1)
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				`${resource.identity} requires exactly one named primary key`,
+			);
+		const indexes = resolvedCollectionEntries(resource, "indexes").map(
+			({ key, contract: value }) => {
+				const identity = `${resource.identity}/index:${key}`;
+				return {
+					kind: "btree",
+					identity,
+					postgresName: physicalName(
+						configuration,
+						identity,
+						value.postgresName,
+						`qp_ix_${tableName}_${snake(key)}`,
+					),
+					fields: (value.fields as readonly string[]).map((field) => ({
+						field: `${resource.identity}/field:${field}`,
+						order: "asc",
+						nulls: "last",
+						operatorClass: "typeDefault",
+						collation:
+							projectedFields.find(
+								(candidate) =>
+									candidate.identity === `${resource.identity}/field:${field}`,
+							)?.collation === "questpie.binary"
+								? "field"
+								: null,
+					})),
+				};
+			},
+		);
+		const relations = entries(resource.value.relations).map(([key, value]) => {
+			const identity = `${resource.identity}/relation:${key}`;
+			return {
+				kind: "toOne",
+				identity,
+				target: value.target,
+				fields: (value.fields as readonly string[]).map(
+					(field) => `${resource.identity}/field:${field}`,
+				),
+				references: (value.references as readonly string[]).map(
+					(field) => `${value.target}/field:${field}`,
+				),
+				constraintPostgresName: physicalName(
+					configuration,
+					identity,
+					value.postgresName,
+					`qp_fk_${tableName}_${snake(key)}`,
+				),
+				onDelete: value.onDelete,
+				onUpdate: value.onUpdate,
+			};
+		});
+		return {
+			identity: resource.identity,
+			postgresName: tableName,
+			fields: projectedFields,
 			constraints,
 			indexes,
 			relations,
 		};
 	});
+	const collectionMap = new Map(
+		schemaCollections.map((collection) => [collection.identity, collection]),
+	);
+	const knownPhysicalTargets = new Set<string>();
+	const globalNames = new Map<string, string>();
+	for (const collection of schemaCollections) {
+		knownPhysicalTargets.add(collection.identity);
+		const previousTable = globalNames.get(`table:${collection.postgresName}`);
+		if (previousTable)
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-006",
+				"physicalNameCollision",
+				`${previousTable} and ${collection.identity} share ${collection.postgresName}`,
+			);
+		globalNames.set(`table:${collection.postgresName}`, collection.identity);
+		const localNames = new Map<string, string>();
+		for (const field of collection.fields) {
+			knownPhysicalTargets.add(field.identity);
+			const previous = localNames.get(`field:${field.postgresName}`);
+			if (previous)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-006",
+					"physicalNameCollision",
+					`${previous} and ${field.identity} share ${field.postgresName}`,
+				);
+			localNames.set(`field:${field.postgresName}`, field.identity);
+		}
+		for (const constraint of collection.constraints) {
+			knownPhysicalTargets.add(String(constraint.identity));
+			const previous = localNames.get(`constraint:${constraint.postgresName}`);
+			if (previous)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-006",
+					"physicalNameCollision",
+					`${previous} and ${constraint.identity} share ${constraint.postgresName}`,
+				);
+			localNames.set(
+				`constraint:${constraint.postgresName}`,
+				String(constraint.identity),
+			);
+		}
+		for (const relation of collection.relations) {
+			knownPhysicalTargets.add(relation.identity);
+			const previous = localNames.get(
+				`constraint:${relation.constraintPostgresName}`,
+			);
+			if (previous)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-006",
+					"physicalNameCollision",
+					`${previous} and ${relation.identity} share ${relation.constraintPostgresName}`,
+				);
+			localNames.set(
+				`constraint:${relation.constraintPostgresName}`,
+				relation.identity,
+			);
+			const target = collectionMap.get(String(relation.target));
+			if (!target)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-003",
+					"invalidReference",
+					`${relation.identity} targets unknown ${relation.target}`,
+				);
+			const localFields = new Map(
+				collection.fields.map((field) => [field.identity, field]),
+			);
+			const targetFields = new Set(
+				target.fields.map((field) => field.identity),
+			);
+			if (
+				relation.fields.length !== relation.references.length ||
+				relation.fields.some((field) => !localFields.has(field)) ||
+				relation.references.some((field) => !targetFields.has(field))
+			)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-003",
+					"invalidReference",
+					`${relation.identity} has an invalid endpoint`,
+				);
+			const referencedKey = target.constraints.some(
+				(constraint) =>
+					(constraint.kind === "primaryKey" || constraint.kind === "unique") &&
+					canonicalBytes(constraint.fields) ===
+						canonicalBytes(relation.references),
+			);
+			if (!referencedKey)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-003",
+					"invalidReference",
+					`${relation.identity} does not reference a primary or unique key`,
+				);
+			if (
+				relation.onDelete === "setNull" &&
+				relation.fields.some(
+					(field) => localFields.get(field)?.nullable !== true,
+				)
+			)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-003",
+					"invalidReference",
+					`${relation.identity} setNull requires nullable local Fields`,
+				);
+		}
+		for (const index of collection.indexes) {
+			knownPhysicalTargets.add(index.identity);
+			const previous = globalNames.get(`index:${index.postgresName}`);
+			if (previous)
+				throw new CompilerDiagnosticError(
+					"QP-SCHEMA-006",
+					"physicalNameCollision",
+					`${previous} and ${index.identity} share ${index.postgresName}`,
+				);
+			globalNames.set(`index:${index.postgresName}`, index.identity);
+		}
+	}
+	for (const identity of Object.keys(configuration.postgres.physicalNames))
+		if (!knownPhysicalTargets.has(identity))
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`postgres.physicalNames references unknown ${identity}`,
+			);
 	const schema = {
 		format: "questpie.schema-projection",
 		version: 1,

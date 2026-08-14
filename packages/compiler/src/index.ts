@@ -33,6 +33,26 @@ import type {
 import { replaceGeneratedDirectory } from "./write";
 
 export { CompilerDiagnosticError } from "./diagnostic";
+export {
+	createCommittedMigration,
+	createMigrationPlan,
+	verifyCommittedMigration,
+} from "./schema";
+export {
+	applyCommittedMigrations,
+	inspectSchemaFingerprint,
+} from "./schema-postgres";
+export type {
+	ApplyMigrationsResult,
+	SchemaFingerprintV1,
+} from "./schema-postgres";
+export type {
+	CommittedMigration,
+	MigrationPlanV1,
+	MigrationStepV1,
+	PlannedMigration,
+	SchemaProjectionV1,
+} from "./schema";
 
 export interface CompileApplicationOptions {
 	readonly applicationRoot: string;

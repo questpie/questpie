@@ -1,0 +1,827 @@
+import { createHash } from "node:crypto";
+
+import { canonicalBytes, compareAscii, digest } from "./canonical";
+import { CompilerDiagnosticError } from "./diagnostic";
+
+type JsonRecord = Readonly<Record<string, unknown>>;
+
+export interface SchemaProjectionV1 extends JsonRecord {
+	readonly format: "questpie.schema-projection";
+	readonly version: 1;
+	readonly application: Readonly<{ name: string; postgresSchema: string }>;
+	readonly requiredPostgres: Readonly<{
+		minimumMajor: 16;
+		databaseCollation: string;
+		databaseCType: string;
+		extensions: readonly Readonly<{ name: string }>[];
+	}>;
+	readonly collections: readonly JsonRecord[];
+}
+
+export type MigrationClassification =
+	| "safe"
+	| "guarded"
+	| "destructive"
+	| "blocked";
+
+export interface MigrationStepV1 extends JsonRecord {
+	readonly stepId: string;
+	readonly kind: string;
+	readonly targetIdentity: string;
+	readonly containerIdentity: string;
+	readonly lock:
+		| "none"
+		| "share"
+		| "shareRowExclusive"
+		| "shareUpdateExclusive"
+		| "accessExclusive";
+	readonly scansData: boolean;
+	readonly rewritesTable: boolean;
+	readonly reversibleWithoutData: boolean;
+	readonly classification: MigrationClassification;
+}
+
+export interface MigrationPlanV1 extends JsonRecord {
+	readonly format: "questpie.migration-plan";
+	readonly version: 1;
+	readonly application: string;
+	readonly slug: string;
+	readonly baseMigration: string | null;
+	readonly baseSchemaDigest: string;
+	readonly targetSchemaDigest: string;
+	readonly renames: readonly Readonly<{ from: string; to: string }>[];
+	readonly requiredPostgres: SchemaProjectionV1["requiredPostgres"];
+	readonly classification: MigrationClassification;
+	readonly steps: readonly MigrationStepV1[];
+}
+
+export interface PlannedMigration {
+	readonly plan: MigrationPlanV1;
+	readonly digest: string;
+	readonly baseSchema: SchemaProjectionV1;
+}
+
+export interface CommittedMigration {
+	readonly identity: string;
+	readonly checksum: string;
+	readonly plan: MigrationPlanV1;
+	readonly baseSchema: SchemaProjectionV1;
+	readonly targetSchema: SchemaProjectionV1;
+	readonly files: Readonly<Record<string, string>>;
+}
+
+function schemaError(
+	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
+	diagnosticClass: string,
+	message: string,
+	details: Readonly<Record<string, unknown>> = {},
+): never {
+	throw new CompilerDiagnosticError(code, diagnosticClass, message, details);
+}
+
+function assertProjection(value: unknown, label: string): SchemaProjectionV1 {
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		return schemaError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			`${label} is not an object`,
+		);
+	const projection = value as SchemaProjectionV1;
+	if (
+		projection.format !== "questpie.schema-projection" ||
+		projection.version !== 1 ||
+		!projection.application ||
+		!projection.requiredPostgres ||
+		!Array.isArray(projection.collections)
+	)
+		return schemaError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			`${label} is not a Schema Projection v1`,
+		);
+	return projection;
+}
+
+function mapByIdentity(
+	values: readonly JsonRecord[],
+	label: string,
+): Map<string, JsonRecord> {
+	const mapped = new Map<string, JsonRecord>();
+	for (const value of values) {
+		const identity = value.identity;
+		if (typeof identity !== "string")
+			return schemaError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				`${label} identity is missing`,
+			);
+		if (mapped.has(identity))
+			return schemaError(
+				"QP-SCHEMA-002",
+				"duplicateIdentity",
+				`${identity} is duplicated`,
+			);
+		mapped.set(identity, value);
+	}
+	return mapped;
+}
+
+function schemaDigest(schema: SchemaProjectionV1): string {
+	return digest("questpie-schema-projection-v1", schema);
+}
+
+function genesis(target: SchemaProjectionV1): SchemaProjectionV1 {
+	return {
+		format: "questpie.schema-projection",
+		version: 1,
+		application: target.application,
+		requiredPostgres: target.requiredPostgres,
+		collections: [],
+	};
+}
+
+const severity: Readonly<Record<MigrationClassification, number>> = {
+	safe: 0,
+	guarded: 1,
+	destructive: 2,
+	blocked: 3,
+};
+
+function maximumClassification(
+	steps: readonly MigrationStepV1[],
+): MigrationClassification {
+	let result: MigrationClassification = "safe";
+	for (const step of steps)
+		if (severity[step.classification] > severity[result])
+			result = step.classification;
+	return result;
+}
+
+function step(
+	input: Readonly<{
+		kind: string;
+		targetIdentity: string;
+		containerIdentity: string;
+		lock: MigrationStepV1["lock"];
+		scansData: boolean;
+		rewritesTable: boolean;
+		reversibleWithoutData: boolean;
+		classification: MigrationClassification;
+	}>,
+): MigrationStepV1 {
+	return {
+		stepId: digest("questpie-migration-step-v1", input),
+		...input,
+	};
+}
+
+const kindRank = [
+	"createApplicationSchema",
+	"renameCollection",
+	"createCollection",
+	"renameField",
+	"renameConstraint",
+	"renameRelationConstraint",
+	"renameIndex",
+	"addField",
+	"alterField",
+	"addConstraint",
+	"addRelation",
+	"addIndex",
+	"dropIndex",
+	"dropRelation",
+	"dropConstraint",
+	"dropField",
+	"dropCollection",
+] as const;
+
+function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
+	return steps.sort((left, right) => {
+		const kindOrder =
+			kindRank.indexOf(left.kind as (typeof kindRank)[number]) -
+			kindRank.indexOf(right.kind as (typeof kindRank)[number]);
+		return kindOrder || compareAscii(left.targetIdentity, right.targetIdentity);
+	});
+}
+
+function childRecords(
+	collection: JsonRecord,
+	key: string,
+): readonly JsonRecord[] {
+	const value = collection[key];
+	return Array.isArray(value) ? (value as readonly JsonRecord[]) : [];
+}
+
+function createSteps(target: SchemaProjectionV1): MigrationStepV1[] {
+	const steps: MigrationStepV1[] = [
+		step({
+			kind: "createApplicationSchema",
+			targetIdentity: `application:${target.application.name}`,
+			containerIdentity: `application:${target.application.name}`,
+			lock: "none",
+			scansData: false,
+			rewritesTable: false,
+			reversibleWithoutData: true,
+			classification: "safe",
+		}),
+	];
+	for (const collection of target.collections) {
+		const identity = String(collection.identity);
+		steps.push(
+			step({
+				kind: "createCollection",
+				targetIdentity: identity,
+				containerIdentity: `application:${target.application.name}`,
+				lock: "accessExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+		for (const constraint of childRecords(collection, "constraints"))
+			steps.push(
+				step({
+					kind: "addConstraint",
+					targetIdentity: String(constraint.identity),
+					containerIdentity: identity,
+					lock: "shareRowExclusive",
+					scansData: true,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "guarded",
+				}),
+			);
+		for (const relation of childRecords(collection, "relations"))
+			steps.push(
+				step({
+					kind: "addRelation",
+					targetIdentity: String(relation.identity),
+					containerIdentity: identity,
+					lock: "shareRowExclusive",
+					scansData: true,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "guarded",
+				}),
+			);
+		for (const index of childRecords(collection, "indexes"))
+			steps.push(
+				step({
+					kind: "addIndex",
+					targetIdentity: String(index.identity),
+					containerIdentity: identity,
+					lock: "share",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "safe",
+				}),
+			);
+	}
+	return sortSteps(steps);
+}
+
+function destructiveDeltaSteps(
+	base: SchemaProjectionV1,
+	target: SchemaProjectionV1,
+): MigrationStepV1[] {
+	const baseCollections = mapByIdentity(base.collections, "base Collection");
+	const targetCollections = mapByIdentity(
+		target.collections,
+		"target Collection",
+	);
+	const steps: MigrationStepV1[] = [];
+	for (const collection of target.collections)
+		if (!baseCollections.has(String(collection.identity)))
+			steps.push(
+				...createSteps({ ...target, collections: [collection] }).slice(1),
+			);
+	for (const collection of base.collections) {
+		const identity = String(collection.identity);
+		if (!targetCollections.has(identity))
+			steps.push(
+				step({
+					kind: "dropCollection",
+					targetIdentity: identity,
+					containerIdentity: `application:${target.application.name}`,
+					lock: "accessExclusive",
+					scansData: true,
+					rewritesTable: false,
+					reversibleWithoutData: false,
+					classification: "destructive",
+				}),
+			);
+	}
+	for (const [identity, targetCollection] of targetCollections) {
+		const baseCollection = baseCollections.get(identity);
+		if (!baseCollection) continue;
+		for (const key of [
+			"fields",
+			"constraints",
+			"relations",
+			"indexes",
+		] as const) {
+			const before = mapByIdentity(
+				childRecords(baseCollection, key),
+				`base ${key}`,
+			);
+			const after = mapByIdentity(
+				childRecords(targetCollection, key),
+				`target ${key}`,
+			);
+			for (const value of childRecords(targetCollection, key)) {
+				const childIdentity = String(value.identity);
+				if (!before.has(childIdentity)) {
+					const kind =
+						key === "fields"
+							? "addField"
+							: key === "constraints"
+								? "addConstraint"
+								: key === "relations"
+									? "addRelation"
+									: "addIndex";
+					steps.push(
+						step({
+							kind,
+							targetIdentity: childIdentity,
+							containerIdentity: identity,
+							lock: "accessExclusive",
+							scansData: true,
+							rewritesTable: false,
+							reversibleWithoutData: true,
+							classification:
+								key === "fields" &&
+								value.nullable === true &&
+								value.default === null
+									? "safe"
+									: "guarded",
+						}),
+					);
+				} else if (
+					canonicalBytes(before.get(childIdentity)) !== canonicalBytes(value)
+				) {
+					steps.push(
+						step({
+							kind:
+								key === "fields"
+									? "alterField"
+									: key === "constraints"
+										? "addConstraint"
+										: key === "relations"
+											? "addRelation"
+											: "addIndex",
+							targetIdentity: childIdentity,
+							containerIdentity: identity,
+							lock: "accessExclusive",
+							scansData: true,
+							rewritesTable: key === "fields",
+							reversibleWithoutData: false,
+							classification: "destructive",
+						}),
+					);
+				}
+			}
+			for (const value of childRecords(baseCollection, key)) {
+				const childIdentity = String(value.identity);
+				if (!after.has(childIdentity))
+					steps.push(
+						step({
+							kind:
+								key === "fields"
+									? "dropField"
+									: key === "constraints"
+										? "dropConstraint"
+										: key === "relations"
+											? "dropRelation"
+											: "dropIndex",
+							targetIdentity: childIdentity,
+							containerIdentity: identity,
+							lock: "accessExclusive",
+							scansData: true,
+							rewritesTable: false,
+							reversibleWithoutData: false,
+							classification: "destructive",
+						}),
+					);
+			}
+		}
+	}
+	return sortSteps(steps);
+}
+
+export function createMigrationPlan(
+	input: Readonly<{
+		targetSchema: SchemaProjectionV1;
+		baseSchema?: SchemaProjectionV1;
+		baseMigration?: string | null;
+		slug: string;
+		renames?: readonly Readonly<{ from: string; to: string }>[];
+	}>,
+): PlannedMigration {
+	const target = assertProjection(input.targetSchema, "target schema");
+	const base = input.baseSchema
+		? assertProjection(input.baseSchema, "base schema")
+		: genesis(target);
+	if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(input.slug))
+		return schemaError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			"migration slug must be lower kebab case",
+		);
+	if (
+		base.application.name !== target.application.name ||
+		base.application.postgresSchema !== target.application.postgresSchema
+	)
+		return schemaError(
+			"QP-SCHEMA-029",
+			"applicationBindingMismatch",
+			"base and target application bindings differ",
+		);
+	const renames = [...(input.renames ?? [])].sort((left, right) =>
+		compareAscii(`${left.from}\0${left.to}`, `${right.from}\0${right.to}`),
+	);
+	const steps =
+		base.collections.length === 0
+			? createSteps(target)
+			: destructiveDeltaSteps(base, target);
+	const plan: MigrationPlanV1 = {
+		format: "questpie.migration-plan",
+		version: 1,
+		application: target.application.name,
+		slug: input.slug,
+		baseMigration: input.baseMigration ?? null,
+		baseSchemaDigest: schemaDigest(base),
+		targetSchemaDigest: schemaDigest(target),
+		renames,
+		requiredPostgres: target.requiredPostgres,
+		classification: maximumClassification(steps),
+		steps,
+	};
+	return {
+		plan,
+		digest: digest("questpie-migration-plan-v1", plan),
+		baseSchema: base,
+	};
+}
+
+function quote(name: string): string {
+	return `"${name.replaceAll('"', '""')}"`;
+}
+
+function collectionFor(
+	schema: SchemaProjectionV1,
+	identity: string,
+): JsonRecord {
+	const collection = schema.collections.find(
+		(candidate) => candidate.identity === identity,
+	);
+	if (!collection)
+		return schemaError(
+			"QP-SCHEMA-003",
+			"invalidReference",
+			`unknown Collection ${identity}`,
+		);
+	return collection;
+}
+
+function childFor(
+	collection: JsonRecord,
+	kind: string,
+	identity: string,
+): JsonRecord {
+	const key =
+		kind === "addConstraint"
+			? "constraints"
+			: kind === "addRelation"
+				? "relations"
+				: kind === "addIndex"
+					? "indexes"
+					: "fields";
+	const child = childRecords(collection, key).find(
+		(candidate) => candidate.identity === identity,
+	);
+	if (!child)
+		return schemaError(
+			"QP-SCHEMA-003",
+			"invalidReference",
+			`unknown schema target ${identity}`,
+		);
+	return child;
+}
+
+function sqlType(field: JsonRecord): string {
+	const type = field.type as JsonRecord;
+	switch (type.kind) {
+		case "uuid":
+			return "pg_catalog.uuid";
+		case "text":
+			return 'pg_catalog.text COLLATE pg_catalog."C"';
+		case "boolean":
+			return "pg_catalog.bool";
+		case "integer":
+			return "pg_catalog.int4";
+		case "bigint":
+			return "pg_catalog.int8";
+		case "numeric":
+			return `pg_catalog.numeric(${type.precision}, ${type.scale})`;
+		case "timestamp":
+			return type.withTimezone === true
+				? "pg_catalog.timestamptz"
+				: "pg_catalog.timestamp";
+		case "date":
+			return "pg_catalog.date";
+		case "object":
+		case "array":
+		case "json":
+			return "pg_catalog.jsonb";
+		default:
+			return schemaError(
+				"QP-SCHEMA-031",
+				"nonTransactionalDdl",
+				`unsupported Field type ${String(type.kind)}`,
+			);
+	}
+}
+
+function defaultSql(value: unknown): string {
+	if (value === null) return "";
+	const normalized = value as JsonRecord;
+	if (normalized.kind === "randomUuid")
+		return " DEFAULT pg_catalog.gen_random_uuid()";
+	if (normalized.kind === "now") return " DEFAULT pg_catalog.now()";
+	if (normalized.kind === "literal") {
+		if (normalized.value === null) return " DEFAULT NULL";
+		if (typeof normalized.value === "boolean")
+			return ` DEFAULT ${normalized.value ? "TRUE" : "FALSE"}`;
+		if (typeof normalized.value === "number")
+			return ` DEFAULT ${normalized.value}`;
+		return ` DEFAULT '${String(normalized.value).replaceAll("'", "''")}'`;
+	}
+	return schemaError(
+		"QP-SCHEMA-031",
+		"nonTransactionalDdl",
+		"unsupported default",
+	);
+}
+
+function renderCheckExpression(
+	expression: JsonRecord,
+	collection: JsonRecord,
+): string {
+	if (expression.kind === "field")
+		return quote(
+			String(
+				childFor(collection, "addField", String(expression.field)).postgresName,
+			),
+		);
+	if (expression.kind === "literal") {
+		if (expression.value === null) return "NULL";
+		if (typeof expression.value === "boolean")
+			return expression.value ? "TRUE" : "FALSE";
+		if (typeof expression.value === "number") return String(expression.value);
+		return `'${String(expression.value).replaceAll("'", "''")}'`;
+	}
+	if (expression.kind === "textLength")
+		return `pg_catalog.char_length(${renderCheckExpression(expression.expression as JsonRecord, collection)})`;
+	if (expression.kind === "compare") {
+		const operators: Readonly<Record<string, string>> = {
+			equal: "=",
+			notEqual: "<>",
+			lessThan: "<",
+			lessThanOrEqual: "<=",
+			greaterThan: ">",
+			greaterThanOrEqual: ">=",
+		};
+		const operator = operators[String(expression.operator)];
+		if (!operator)
+			return schemaError(
+				"QP-SCHEMA-031",
+				"nonTransactionalDdl",
+				`unsupported check operator ${String(expression.operator)}`,
+			);
+		return `(${renderCheckExpression(expression.left as JsonRecord, collection)} ${operator} ${renderCheckExpression(expression.right as JsonRecord, collection)})`;
+	}
+	return schemaError(
+		"QP-SCHEMA-031",
+		"nonTransactionalDdl",
+		`unsupported check expression ${String(expression.kind)}`,
+	);
+}
+
+function renderStep(
+	stepValue: MigrationStepV1,
+	target: SchemaProjectionV1,
+	base: SchemaProjectionV1,
+): string {
+	const schemaName = target.application.postgresSchema;
+	if (stepValue.kind === "createApplicationSchema")
+		return `CREATE SCHEMA ${quote(schemaName)};`;
+	if (stepValue.kind === "createCollection") {
+		const collection = collectionFor(target, stepValue.targetIdentity);
+		const columns = childRecords(collection, "fields").map(
+			(field) =>
+				`  ${quote(String(field.postgresName))} ${sqlType(field)}${field.nullable === true ? "" : " NOT NULL"}${defaultSql(field.default)}`,
+		);
+		return `CREATE TABLE ${quote(schemaName)}.${quote(String(collection.postgresName))} (\n${columns.join(",\n")}\n);`;
+	}
+	const collection = collectionFor(
+		stepValue.kind.startsWith("drop") ? base : target,
+		stepValue.containerIdentity,
+	);
+	const table = `${quote(schemaName)}.${quote(String(collection.postgresName))}`;
+	if (stepValue.kind === "addConstraint") {
+		const constraint = childFor(
+			collection,
+			stepValue.kind,
+			stepValue.targetIdentity,
+		);
+		if (constraint.kind === "check")
+			return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(constraint.postgresName))} CHECK (${renderCheckExpression(constraint.expression as JsonRecord, collection)});`;
+		const fields = (constraint.fields as readonly string[])
+			.map((identity) =>
+				quote(String(childFor(collection, "addField", identity).postgresName)),
+			)
+			.join(", ");
+		if (constraint.kind === "primaryKey")
+			return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(constraint.postgresName))} PRIMARY KEY (${fields});`;
+		if (constraint.kind === "unique")
+			return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(constraint.postgresName))} UNIQUE (${fields});`;
+		return schemaError(
+			"QP-SCHEMA-031",
+			"nonTransactionalDdl",
+			`unsupported Constraint ${stepValue.targetIdentity}`,
+		);
+	}
+	if (stepValue.kind === "addRelation") {
+		const relation = childFor(
+			collection,
+			stepValue.kind,
+			stepValue.targetIdentity,
+		);
+		const targetCollection = collectionFor(target, String(relation.target));
+		const local = (relation.fields as readonly string[])
+			.map((identity) =>
+				quote(String(childFor(collection, "addField", identity).postgresName)),
+			)
+			.join(", ");
+		const referenced = (relation.references as readonly string[])
+			.map((identity) =>
+				quote(
+					String(childFor(targetCollection, "addField", identity).postgresName),
+				),
+			)
+			.join(", ");
+		const action = (value: unknown) =>
+			String(value)
+				.replace(/([a-z])([A-Z])/g, "$1 $2")
+				.toUpperCase();
+		return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(relation.constraintPostgresName))} FOREIGN KEY (${local}) REFERENCES ${quote(schemaName)}.${quote(String(targetCollection.postgresName))} (${referenced}) ON DELETE ${action(relation.onDelete)} ON UPDATE ${action(relation.onUpdate)};`;
+	}
+	if (stepValue.kind === "addIndex") {
+		const index = childFor(
+			collection,
+			stepValue.kind,
+			stepValue.targetIdentity,
+		);
+		const fields = (index.fields as readonly JsonRecord[])
+			.map(
+				(entry) =>
+					`${quote(String(childFor(collection, "addField", String(entry.field)).postgresName))} ${String(entry.order).toUpperCase()} NULLS ${String(entry.nulls).toUpperCase()}`,
+			)
+			.join(", ");
+		return `CREATE INDEX ${quote(String(index.postgresName))} ON ${table} USING btree (${fields});`;
+	}
+	if (stepValue.kind === "dropCollection") return `DROP TABLE ${table};`;
+	return schemaError(
+		"QP-SCHEMA-031",
+		"nonTransactionalDdl",
+		`SQL renderer does not support ${stepValue.kind}`,
+	);
+}
+
+function migrationChecksum(files: Readonly<Record<string, string>>): string {
+	return createHash("sha256")
+		.update("questpie-migration-v1\0")
+		.update(files["migration.json"] ?? "")
+		.update("\0")
+		.update(files["plan.json"] ?? "")
+		.update("\0")
+		.update(files["base-schema.json"] ?? "")
+		.update("\0")
+		.update(files["target-schema.json"] ?? "")
+		.update("\0")
+		.update(files["up.sql"] ?? "")
+		.digest("hex");
+}
+
+export function createCommittedMigration(
+	input: Readonly<{
+		plan: MigrationPlanV1;
+		baseSchema: SchemaProjectionV1;
+		targetSchema: SchemaProjectionV1;
+		planDigest: string;
+		sequence?: number;
+		parent?: string | null;
+		currentSchema?: SchemaProjectionV1;
+		acceptDestructive?: string;
+	}>,
+): CommittedMigration {
+	const base = assertProjection(input.baseSchema, "base schema");
+	const target = assertProjection(input.targetSchema, "target schema");
+	const actualPlanDigest = digest("questpie-migration-plan-v1", input.plan);
+	if (input.planDigest !== actualPlanDigest)
+		return schemaError(
+			"QP-SCHEMA-021",
+			"planDigestMismatch",
+			"Migration Plan Digest does not match the supplied plan",
+		);
+	if (input.plan.classification === "blocked")
+		return schemaError(
+			"QP-SCHEMA-031",
+			"nonTransactionalDdl",
+			"blocked Migration Plan cannot be committed",
+		);
+	if (
+		input.plan.classification === "destructive" &&
+		input.acceptDestructive !== actualPlanDigest
+	)
+		return schemaError(
+			"QP-SCHEMA-020",
+			"destructiveAcknowledgementRequired",
+			"destructive Migration Plan requires its exact digest",
+		);
+	const current = input.currentSchema ?? target;
+	const replanned = createMigrationPlan({
+		targetSchema: current,
+		baseSchema: base,
+		baseMigration: input.plan.baseMigration,
+		slug: input.plan.slug,
+		renames: input.plan.renames,
+	});
+	if (
+		canonicalBytes(replanned.plan) !== canonicalBytes(input.plan) ||
+		schemaDigest(target) !== input.plan.targetSchemaDigest
+	)
+		return schemaError(
+			"QP-SCHEMA-022",
+			"stalePlan",
+			"Definitions or migration history changed after planning",
+		);
+	const sequence = input.sequence ?? 1;
+	if (!Number.isSafeInteger(sequence) || sequence < 1 || sequence > 999_999)
+		return schemaError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			"migration sequence is outside six-digit v1 range",
+		);
+	const identity = `${sequence.toString().padStart(6, "0")}_${input.plan.slug}`;
+	const metadata = {
+		format: "questpie.committed-migration",
+		version: 1,
+		identity,
+		sequence,
+		slug: input.plan.slug,
+		parent: input.parent ?? input.plan.baseMigration,
+		planDigest: actualPlanDigest,
+		baseSchemaDigest: schemaDigest(base),
+		targetSchemaDigest: schemaDigest(target),
+		requiredPostgres: target.requiredPostgres,
+		transaction: "required",
+		sqlRenderer: "questpie-postgres-ddl-v1",
+	};
+	const upSql = input.plan.steps
+		.map(
+			(item) =>
+				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base)}\n`,
+		)
+		.join("\n");
+	const files: Record<string, string> = {
+		"migration.json": canonicalBytes(metadata),
+		"plan.json": canonicalBytes(input.plan),
+		"base-schema.json": canonicalBytes(base),
+		"target-schema.json": canonicalBytes(target),
+		"up.sql": upSql,
+	};
+	const checksum = migrationChecksum(files);
+	files["checksum.sha256"] = `${checksum}\n`;
+	return {
+		identity,
+		checksum,
+		plan: input.plan,
+		baseSchema: base,
+		targetSchema: target,
+		files,
+	};
+}
+
+export function verifyCommittedMigration(migration: CommittedMigration): void {
+	const expected = migration.files["checksum.sha256"];
+	const actual = `${migrationChecksum(migration.files)}\n`;
+	if (expected !== actual || migration.checksum !== actual.trim())
+		schemaError(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			`${migration.identity} checksum is invalid`,
+		);
+}
