@@ -345,4 +345,106 @@ describe("BETA-02 migration artifacts", () => {
 			}),
 		).toThrow(/QP-SCHEMA-022/);
 	});
+
+	test("renders canonical bigint bound SQL", async () => {
+		const compilation = await compiledFixture;
+		const baseSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const messages = baseSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		const bodyMinimum = messages.constraints.find(
+			(constraint: { identity: string }) =>
+				constraint.identity ===
+				"collection:messages/field:body/invariant:minLength",
+		);
+		const identity = "collection:messages/field:largeSequence";
+		messages.fields.push({
+			collation: null,
+			default: null,
+			identity,
+			nullable: true,
+			path: ["largeSequence"],
+			postgresName: "large_sequence",
+			type: { kind: "bigint", maximum: null, minimum: "10" },
+		});
+		messages.constraints.push({
+			...structuredClone(bodyMinimum),
+			identity: `${identity}/invariant:minimum`,
+			postgresName: "qp_ck_messages_large_sequence_minimum",
+			expression: {
+				kind: "compare",
+				left: { kind: "field", field: identity },
+				operator: "greaterThanOrEqual",
+				right: { kind: "literal", value: "10" },
+			},
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		messages.constraints.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const genesisPlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-bigint-bound",
+		});
+		const genesis = createCommittedMigration({
+			plan: genesisPlan.plan,
+			baseSchema: genesisPlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: genesisPlan.digest,
+			localMigrations: [],
+		});
+		expect(genesis.files["up.sql"]).toContain(
+			"(\"large_sequence\" >= CAST('10' AS pg_catalog.int8))",
+		);
+
+		const targetSchema = structuredClone(baseSchema);
+		const targetMessages = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		targetMessages.fields.find(
+			(field: { identity: string }) => field.identity === identity,
+		).type.minimum = "9";
+		targetMessages.constraints.find(
+			(constraint: { identity: string }) =>
+				constraint.identity === `${identity}/invariant:minimum`,
+		).expression.right.value = "9";
+		const nextPlan = createMigrationPlan({
+			baseSchema,
+			targetSchema,
+			baseMigration: genesis.identity,
+			slug: "relax-bigint-bound",
+		});
+		expect(nextPlan.status).toBe("planned");
+		if (nextPlan.status !== "planned")
+			throw new Error("bound plan disappeared");
+		const next = createCommittedMigration({
+			plan: nextPlan.plan,
+			baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: nextPlan.digest,
+			localMigrations: [genesis],
+		});
+		expect(next.files["up.sql"]).toContain(
+			"(\"large_sequence\" >= CAST('9' AS pg_catalog.int8))",
+		);
+		expect(
+			next.files["up.sql"].indexOf(
+				'DROP CONSTRAINT "qp_ck_messages_large_sequence_minimum"',
+			),
+		).toBeLessThan(
+			next.files["up.sql"].indexOf(
+				'ADD CONSTRAINT "qp_ck_messages_large_sequence_minimum"',
+			),
+		);
+	});
 });

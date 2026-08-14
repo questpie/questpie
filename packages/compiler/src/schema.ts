@@ -14,6 +14,11 @@ import type {
 	MigrationPlanningResult,
 	PlannedMigration,
 } from "./schema/migration-planning";
+import {
+	renderPostgresCheck,
+	renderPostgresDefault,
+	renderPostgresType,
+} from "./schema/postgres-ddl";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -215,6 +220,15 @@ const kindRank: readonly MigrationStepKindV1[] = [
 
 function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
 	return steps.sort((left, right) => {
+		if (left.targetIdentity === right.targetIdentity) {
+			const replacements: Readonly<Record<string, string>> = {
+				addConstraint: "dropConstraint",
+				addRelation: "dropRelation",
+				addIndex: "dropIndex",
+			};
+			if (replacements[left.kind] === right.kind) return 1;
+			if (replacements[right.kind] === left.kind) return -1;
+		}
 		const kindOrder =
 			kindRank.indexOf(left.kind) - kindRank.indexOf(right.kind);
 		return kindOrder || compareAscii(left.targetIdentity, right.targetIdentity);
@@ -733,105 +747,6 @@ function childFor(
 	return child;
 }
 
-function sqlType(field: JsonRecord): string {
-	const type = field.type as JsonRecord;
-	switch (type.kind) {
-		case "uuid":
-			return "pg_catalog.uuid";
-		case "text":
-			return 'pg_catalog.text COLLATE pg_catalog."C"';
-		case "boolean":
-			return "pg_catalog.bool";
-		case "integer":
-			return "pg_catalog.int4";
-		case "bigint":
-			return "pg_catalog.int8";
-		case "numeric":
-			return `pg_catalog.numeric(${type.precision}, ${type.scale})`;
-		case "timestamp":
-			return type.withTimezone === true
-				? "pg_catalog.timestamptz"
-				: "pg_catalog.timestamp";
-		case "date":
-			return "pg_catalog.date";
-		case "object":
-		case "array":
-		case "json":
-			return "pg_catalog.jsonb";
-		default:
-			return schemaError(
-				"QP-SCHEMA-031",
-				"nonTransactionalDdl",
-				`unsupported Field type ${String(type.kind)}`,
-			);
-	}
-}
-
-function defaultSql(value: unknown): string {
-	if (value === null) return "";
-	const normalized = value as JsonRecord;
-	if (normalized.kind === "randomUuid")
-		return " DEFAULT pg_catalog.gen_random_uuid()";
-	if (normalized.kind === "now") return " DEFAULT pg_catalog.now()";
-	if (normalized.kind === "literal") {
-		if (normalized.value === null) return " DEFAULT NULL";
-		if (typeof normalized.value === "boolean")
-			return ` DEFAULT ${normalized.value ? "TRUE" : "FALSE"}`;
-		if (typeof normalized.value === "number")
-			return ` DEFAULT ${normalized.value}`;
-		return ` DEFAULT '${String(normalized.value).replaceAll("'", "''")}'`;
-	}
-	return schemaError(
-		"QP-SCHEMA-031",
-		"nonTransactionalDdl",
-		"unsupported default",
-	);
-}
-
-function renderCheckExpression(
-	expression: JsonRecord,
-	collection: JsonRecord,
-): string {
-	if (expression.kind === "field")
-		return quote(
-			String(
-				childFor(collection, "addField", String(expression.field)).postgresName,
-			),
-		);
-	if (expression.kind === "literal") {
-		if (expression.value === null) return "NULL";
-		if (typeof expression.value === "boolean")
-			return expression.value ? "TRUE" : "FALSE";
-		if (typeof expression.value === "number") return String(expression.value);
-		return `'${String(expression.value).replaceAll("'", "''")}'`;
-	}
-	if (expression.kind === "textLength")
-		return `pg_catalog.char_length(${renderCheckExpression(expression.expression as JsonRecord, collection)})`;
-	if (expression.kind === "compare") {
-		const operators: Readonly<Record<string, string>> = {
-			equal: "=",
-			notEqual: "<>",
-			lessThan: "<",
-			lessThanOrEqual: "<=",
-			greaterThan: ">",
-			greaterThanOrEqual: ">=",
-		};
-		const operator = operators[String(expression.operator)];
-		if (!operator)
-			return schemaError(
-				"QP-SCHEMA-031",
-				"nonTransactionalDdl",
-				`unsupported check operator ${String(expression.operator)}`,
-			);
-		return `(${renderCheckExpression(expression.left as JsonRecord, collection)} ${operator} ${renderCheckExpression(expression.right as JsonRecord, collection)})`;
-	}
-	return schemaError(
-		"QP-SCHEMA-031",
-		"nonTransactionalDdl",
-		`unsupported check expression ${String(expression.kind)}`,
-	);
-}
-
 function renderStep(
 	stepValue: MigrationStepV1,
 	target: SchemaProjectionV1,
@@ -845,7 +760,7 @@ function renderStep(
 		const collection = collectionFor(target, stepValue.targetIdentity);
 		const columns = childRecords(collection, "fields").map(
 			(field) =>
-				`  ${quote(String(field.postgresName))} ${sqlType(field)}${field.nullable === true ? "" : " NOT NULL"}${defaultSql(field.default)}`,
+				`  ${quote(String(field.postgresName))} ${renderPostgresType(field)}${field.nullable === true ? "" : " NOT NULL"}${renderPostgresDefault(field.default)}`,
 		);
 		return `CREATE TABLE ${quote(schemaName)}.${quote(String(collection.postgresName))} (\n${columns.join(",\n")}\n);`;
 	}
@@ -933,7 +848,7 @@ function renderStep(
 			stepValue.kind,
 			stepValue.targetIdentity,
 		);
-		return `ALTER TABLE ${table} ADD COLUMN ${quote(String(field.postgresName))} ${sqlType(field)}${field.nullable === true ? "" : " NOT NULL"}${defaultSql(field.default)};`;
+		return `ALTER TABLE ${table} ADD COLUMN ${quote(String(field.postgresName))} ${renderPostgresType(field)}${field.nullable === true ? "" : " NOT NULL"}${renderPostgresDefault(field.default)};`;
 	}
 	if (stepValue.kind === "alterField") {
 		if (!targetCollection || !baseCollection)
@@ -963,20 +878,20 @@ function renderStep(
 			);
 		if (canonicalBytes(baseField.type) !== canonicalBytes(field.type))
 			statements.push(
-				`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${sqlType(field)} USING ${column}::${sqlType(field).split(" COLLATE ")[0]};`,
+				`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${renderPostgresType(field)} USING ${column}::${renderPostgresType(field).split(" COLLATE ")[0]};`,
 			);
 		if (
 			canonicalBytes(baseField.default) !== canonicalBytes(field.default) &&
 			field.default !== null
 		)
 			statements.push(
-				`ALTER TABLE ${table} ALTER COLUMN ${column} SET${defaultSql(field.default)};`,
+				`ALTER TABLE ${table} ALTER COLUMN ${column} SET${renderPostgresDefault(field.default)};`,
 			);
 		if (baseField.nullable === true && field.nullable !== true) {
 			const literal = field.default as JsonRecord | null;
 			if (literal?.kind === "literal")
 				statements.push(
-					`UPDATE ${table} SET ${column} =${defaultSql(literal).slice(8)} WHERE ${column} IS NULL;`,
+					`UPDATE ${table} SET ${column} =${renderPostgresDefault(literal).slice(8)} WHERE ${column} IS NULL;`,
 				);
 			statements.push(
 				`ALTER TABLE ${table} ALTER COLUMN ${column} SET NOT NULL;`,
@@ -1000,7 +915,7 @@ function renderStep(
 			stepValue.targetIdentity,
 		);
 		if (constraint.kind === "check")
-			return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(constraint.postgresName))} CHECK (${renderCheckExpression(constraint.expression as JsonRecord, collection)});`;
+			return `ALTER TABLE ${table} ADD CONSTRAINT ${quote(String(constraint.postgresName))} CHECK (${renderPostgresCheck(constraint.expression as JsonRecord, collection)});`;
 		const fields = (constraint.fields as readonly string[])
 			.map((identity) =>
 				quote(String(childFor(collection, "addField", identity).postgresName)),
