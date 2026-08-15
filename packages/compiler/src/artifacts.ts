@@ -16,9 +16,11 @@ import {
 	renderClientContract,
 	renderPackageContract,
 } from "./generate";
+import { projectRelationalCompilation } from "./relational";
 import { projectManifest, projectMemberContributions } from "./schema";
 import type {
 	ApplicationConfiguration,
+	EvaluatedExport,
 	NormalizedResource,
 	PackageInventory,
 } from "./types";
@@ -60,6 +62,7 @@ export async function createArtifacts(
 		frameworkFiles: readonly string[];
 		inventories: readonly PackageInventory[];
 		resources: readonly NormalizedResource[];
+		evaluatedExports: readonly EvaluatedExport[];
 		packageCompilations: readonly Readonly<{
 			name: string;
 			files: readonly string[];
@@ -70,6 +73,12 @@ export async function createArtifacts(
 	const manifest = projectManifest(input.configuration, input.resources);
 	const executionComposition = projectExecutionComposition(input.resources);
 	const schema = manifest.schema;
+	const relational = projectRelationalCompilation({
+		exports: input.evaluatedExports,
+		resources: input.resources,
+		schema,
+		data: manifest.data,
+	});
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
 	const packageGraphs = await Promise.all(
@@ -207,6 +216,9 @@ export async function createArtifacts(
 				};
 			}),
 		})),
+		...(relational.structuralOrigins.length > 0
+			? { structuralPlans: relational.structuralOrigins }
+			: {}),
 	};
 	const originMapBytes = canonicalBytes(originMap);
 	const executionExplanation = explainExecutionComposition(
@@ -246,6 +258,11 @@ export async function createArtifacts(
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
 	};
+	if (relational.hasRelationalArtifacts) {
+		generated["policy-projection.json"] = canonicalBytes(relational.policy);
+		generated["query-projection.json"] = canonicalBytes(relational.query);
+		generated["relational-explain.json"] = canonicalBytes(relational.explain);
+	}
 	for (const compilation of input.packageCompilations)
 		generated[packageContractPath(compilation.name)] = renderPackageContract(
 			compilation.name,

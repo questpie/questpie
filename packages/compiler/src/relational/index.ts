@@ -1,6 +1,11 @@
 import { digest } from "../canonical";
 import type { DataQueryTemplateV1, PolicyProgramV1 } from "./types";
 
+export { relationalDiscoverySource } from "./discovery";
+export { normalizeBoundPolicy } from "./binding";
+export type { BoundPolicyProgramV1, PolicyScopeBindingV1 } from "./binding";
+export { projectRelationalCompilation } from "./projection";
+
 export {
 	normalizePolicyPrograms,
 	selectDefaultPolicy,
