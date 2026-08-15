@@ -1,5 +1,6 @@
-import type {
-	Authority,
+import {
+	principal,
+	type Authority,
 	ContextBootstrap,
 	ContextDefinition,
 	ContextInputOf,
@@ -14,6 +15,7 @@ import type {
 
 import { decodeContextInput } from "./context-input";
 import { retainResponseLifetime } from "./response";
+import { decodeOperationWireRoot, type OperationWireRootFrame } from "./wire";
 
 type AnyService = ServiceDefinition<
 	string,
@@ -38,7 +40,6 @@ export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
 	readonly context: Context;
 	readonly bootstrap: ContextBootstrap;
-	readonly acceptPrincipal: (value: unknown) => value is Principal;
 	readonly project: (
 		scope: Readonly<{
 			facts: ExecutionFacts<ContextResolvedOf<Context>>;
@@ -49,11 +50,22 @@ export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	) => MaybePromise<View>;
 }
 
+export type { OperationWireRootFrame } from "./wire";
+
 export interface ApplicationRuntime<Input, View> {
 	execution<Result>(
 		input: Readonly<{
 			principal: Principal;
 			context: Input;
+			signal?: AbortSignal;
+			deadline?: number;
+		}>,
+		use: (view: View) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
+	operationWire<Result>(
+		input: Readonly<{
+			principal: Principal;
+			frame: unknown;
 			signal?: AbortSignal;
 			deadline?: number;
 		}>,
@@ -157,7 +169,7 @@ export function createApplicationRuntime<
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
 		if (state !== "open") throw new Error("Runtime is closing");
-		if (!program.acceptPrincipal(input.principal))
+		if (!principal.is(input.principal))
 			throw new Error("Execution requires a trusted Principal");
 		const controller = new AbortController();
 		rootControllers.add(controller);
@@ -235,7 +247,6 @@ export function createApplicationRuntime<
 						input: decoded,
 						principal: input.principal,
 						bootstrap: program.bootstrap,
-						signal: controller.signal,
 					}),
 				);
 				controller.signal.throwIfAborted();
@@ -275,6 +286,26 @@ export function createApplicationRuntime<
 
 	return Object.freeze({
 		execution,
+		operationWire: <Result>(
+			input: Readonly<{
+				principal: Principal;
+				frame: unknown;
+				signal?: AbortSignal;
+				deadline?: number;
+			}>,
+			use: (view: View) => MaybePromise<Result>,
+		) => {
+			const decoded = decodeOperationWireRoot(input.frame, input.principal);
+			return execution(
+				{
+					principal: decoded.principal,
+					context: decoded.context as ContextInputOf<Context>,
+					signal: input.signal,
+					deadline: input.deadline,
+				},
+				use,
+			);
+		},
 		close: () => {
 			if (closePromise) return closePromise;
 			state = "closing";

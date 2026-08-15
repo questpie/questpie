@@ -2,14 +2,10 @@ import { beforeEach, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { codec, defineContext, defineService, principal } from "questpie";
+
 import { compileApplication } from "@questpie/compiler";
 
-import {
-	codec,
-	defineContext,
-	defineService,
-	principal,
-} from "../../packages/questpie/src";
 import { createApplicationRuntime } from "../../packages/runtime/src";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
@@ -82,7 +78,6 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 		services: [auditConnection, executionAudit],
 		context: collaborationContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ facts, service }) => {
 			const [first, second] = await Promise.all([
 				service(executionAudit),
@@ -183,7 +178,6 @@ test("retains execution Services until a response body reaches EOF", async () =>
 		services: [streamService],
 		context: streamContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({ stream: await service(streamService) }),
 	});
 	let body!: ReadableStreamDefaultController<Uint8Array>;
@@ -243,7 +237,6 @@ test("aborts retained responses before closing application Services", async () =
 		services: [applicationService, executionService],
 		context: closeContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ facts, service }) => {
 			rootSignal = facts.signal;
 			return { execution: await service(executionService) };
@@ -303,7 +296,6 @@ test("isolates application Services between Runtime instances", async () => {
 		services: [isolatedService],
 		context: isolatedContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({
 			service,
 		}: Parameters<
@@ -371,7 +363,6 @@ test("unwinds created dependencies after Service resolution failure", async () =
 		services: [dependency, failing],
 		context: failureContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({ failing: await service(failing) }),
 	});
 	let callbackCalls = 0;
@@ -410,24 +401,47 @@ test("decodes direct and Operation-Wire Context input through one root", async (
 		services: [],
 		context: wireContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: ({ facts }) => facts,
 	});
-	const run = (context: unknown) =>
+	const useFacts = ({
+		tenant,
+		values,
+	}: {
+		tenant: unknown;
+		values: unknown;
+	}) => ({
+		tenant,
+		values,
+	});
+	const runDirect = (context: { readonly companyId: string }) =>
 		runtime.execution(
 			{
 				principal: principal.user({ id: principalId }),
-				context: context as { readonly companyId: string },
+				context,
 			},
-			({ tenant, values }) => ({ tenant, values }),
+			useFacts,
 		);
-	const direct = await run({ companyId });
-	const fromWire = await run(JSON.parse(JSON.stringify({ companyId })));
+	const runWire = (context: unknown) =>
+		runtime.operationWire(
+			{
+				principal: principal.user({ id: principalId }),
+				frame: JSON.parse(
+					JSON.stringify({
+						format: "questpie.operation-wire-root",
+						version: 1,
+						context,
+					}),
+				),
+			},
+			useFacts,
+		);
+	const direct = await runDirect({ companyId });
+	const fromWire = await runWire({ companyId });
 	expect(fromWire).toEqual(direct);
 	expect(resolutions).toBe(2);
 
 	await expect(
-		run({ companyId: "not-a-uuid", authority: "system" }),
+		runWire({ companyId: "not-a-uuid", authority: "system" }),
 	).rejects.toThrow("Context input");
 	expect(resolutions).toBe(2);
 	await runtime.close();
@@ -447,7 +461,6 @@ test("rejects a structurally forged Principal before Context Resolution", async 
 		services: [],
 		context: trustedContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: ({ facts }) => facts,
 	});
 	await expect(
@@ -490,7 +503,6 @@ test("disposes execution Services after handler failure", async () => {
 		services: [handlerService],
 		context: handlerContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({
 			handler: await service(handlerService),
 		}),
@@ -531,7 +543,6 @@ test("retains execution Services through SSE EOF", async () => {
 		services: [sseService],
 		context: sseContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({ sse: await service(sseService) }),
 	});
 	const response = await runtime.execution(
@@ -575,7 +586,6 @@ test("does not enter the handler after cancellation during Context Resolution", 
 		services: [],
 		context: cancellationContext,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: ({ facts }) => facts,
 	});
 	const controller = new AbortController();
@@ -595,5 +605,50 @@ test("does not enter the handler after cancellation during Context Resolution", 
 	releaseResolution();
 	await expect(execution).rejects.toThrow("cancel resolution");
 	expect(callbackCalls).toBe(0);
+	await runtime.close();
+});
+
+test("disposes execution Services after a response stream error", async () => {
+	const events: string[] = [];
+	const streamErrorService = defineService({
+		name: "streamError.execution",
+		lifetime: "execution",
+		effect: "read",
+		create: () => ({ ready: true }),
+		dispose: () => {
+			events.push("dispose");
+		},
+	});
+	const streamErrorContext = defineContext({
+		name: "streamError.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [streamErrorService],
+		context: streamErrorContext,
+		bootstrap: { get: async () => null },
+		project: async ({ service }) => ({
+			stream: await service(streamErrorService),
+		}),
+	});
+	const response = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ stream }) => {
+			expect(stream.ready).toBe(true);
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					pull() {
+						throw new Error("stream failed");
+					},
+				}),
+			);
+		},
+	);
+	await expect(response.text()).rejects.toThrow("stream failed");
+	expect(events).toEqual(["dispose"]);
 	await runtime.close();
 });

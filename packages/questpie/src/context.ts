@@ -1,4 +1,11 @@
-import type { Codec, CodecValue } from "./index";
+import type {
+	Codec,
+	CodecValue,
+	CollectionDefinition,
+	FieldDefinition,
+} from "./index";
+import type { SeedPrimaryKey } from "./seed-types";
+import type { FieldNode, InlineShapeDefinition } from "./shape";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
@@ -43,11 +50,81 @@ export const principal = Object.freeze({
 		Boolean(value && typeof value === "object" && trustedPrincipals.has(value)),
 });
 
+type BootstrapValue<Node> =
+	Node extends FieldDefinition<infer Value, infer Nullable>
+		? Value | (Nullable extends true ? null : never)
+		: never;
+
+type BootstrapSelection<Fields extends Readonly<Record<string, FieldNode>>> =
+	Readonly<{
+		[Key in keyof Fields]?: Fields[Key] extends FieldDefinition
+			? true
+			: Fields[Key] extends InlineShapeDefinition<infer Children>
+				? BootstrapSelection<Children>
+				: never;
+	}>;
+
+type BootstrapSelectedNode<Node, Selection> = Node extends FieldDefinition
+	? Selection extends true
+		? BootstrapValue<Node>
+		: never
+	: Node extends InlineShapeDefinition<infer Children>
+		? Selection extends BootstrapSelection<Children>
+			? BootstrapSelectedRow<Children, Selection>
+			: never
+		: never;
+
+type BootstrapSelectedRow<
+	Fields extends Readonly<Record<string, FieldNode>>,
+	Selection extends BootstrapSelection<Fields>,
+> = Readonly<{
+	[Key in keyof Selection & keyof Fields]: BootstrapSelectedNode<
+		Fields[Key],
+		Selection[Key]
+	>;
+}>;
+
+type BootstrapFields<Collection> =
+	Collection extends CollectionDefinition<
+		string,
+		infer Fields,
+		infer _Constraints
+	>
+		? Fields
+		: never;
+
+type BootstrapConstraints<Collection> =
+	Collection extends CollectionDefinition<
+		string,
+		infer _Fields,
+		infer Constraints
+	>
+		? Constraints
+		: never;
+
 export interface ContextBootstrap {
-	get(
-		collection: unknown,
-		input: Readonly<{ key: unknown; select: unknown }>,
-	): Promise<unknown | null>;
+	get<
+		const Collection extends CollectionDefinition,
+		const Selection extends BootstrapSelection<BootstrapFields<Collection>>,
+	>(
+		collection: Collection,
+		input: Readonly<{
+			key: SeedPrimaryKey<
+				BootstrapFields<Collection>,
+				BootstrapConstraints<Collection>
+			>;
+			select: Selection &
+				Readonly<
+					Record<
+						Exclude<keyof Selection, keyof BootstrapFields<Collection>>,
+						never
+					>
+				>;
+		}>,
+	): Promise<BootstrapSelectedRow<
+		BootstrapFields<Collection>,
+		Selection
+	> | null>;
 }
 
 export interface ContextDefinition<
@@ -73,7 +150,6 @@ export interface ContextDefinition<
 			input: Input;
 			principal: Principal;
 			bootstrap: ContextBootstrap;
-			signal: AbortSignal;
 		}>,
 	): MaybePromise<Resolved>;
 }
@@ -112,7 +188,6 @@ export function defineContext<
 				input: CodecValue<InputCodec>;
 				principal: Principal;
 				bootstrap: ContextBootstrap;
-				signal: AbortSignal;
 			}>,
 		) => MaybePromise<Resolved>;
 	}>,

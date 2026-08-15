@@ -10,7 +10,7 @@
 	"reference": {
 		"platform": "linux-x64",
 		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
-		"runnerClass": "reference-local"
+		"runnerClass": "stable-reference-local"
 	},
 	"observed": {
 		"changedLoopMs": 4070,

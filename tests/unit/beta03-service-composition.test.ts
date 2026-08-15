@@ -7,14 +7,18 @@ import type { NormalizedResource } from "../../packages/compiler/src/types";
 function serviceResource(
 	name: string,
 	dependencies: readonly Readonly<{ key: string; identity: string }>[],
+	options: Readonly<{
+		lifetime?: "application" | "execution";
+		effect?: "read" | "external";
+	}> = {},
 ): NormalizedResource {
 	return {
 		identity: `service:${name}`,
 		kind: "service",
 		name,
 		contract: {
-			lifetime: "execution",
-			effect: "read",
+			lifetime: options.lifetime ?? "execution",
+			effect: options.effect ?? "read",
 			dependencies,
 			executableSlots: ["create"],
 		},
@@ -45,4 +49,34 @@ test("reports an unknown Service dependency with the closed diagnostic", () => {
 			diagnosticClass: "unknownReference",
 		});
 	}
+});
+
+test("rejects invalid Service lifetime and effect edges", () => {
+	expect(() =>
+		projectExecutionComposition([
+			serviceResource("execution", []),
+			serviceResource(
+				"application",
+				[{ key: "execution", identity: "service:execution" }],
+				{ lifetime: "application" },
+			),
+		]),
+	).toThrow("application lifetime cannot depend");
+	expect(() =>
+		projectExecutionComposition([
+			serviceResource("external", [], { effect: "external" }),
+			serviceResource("read", [
+				{ key: "external", identity: "service:external" },
+			]),
+		]),
+	).toThrow("read effect cannot depend");
+});
+
+test("rejects a Service dependency cycle deterministically", () => {
+	expect(() =>
+		projectExecutionComposition([
+			serviceResource("alpha", [{ key: "beta", identity: "service:beta" }]),
+			serviceResource("beta", [{ key: "alpha", identity: "service:alpha" }]),
+		]),
+	).toThrow("Service dependency cycle includes service:alpha");
 });

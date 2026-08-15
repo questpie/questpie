@@ -1,11 +1,7 @@
 import { expect, test } from "bun:test";
 
-import {
-	codec,
-	defineContext,
-	defineService,
-	principal,
-} from "../../packages/questpie/src";
+import { codec, defineContext, defineService, principal } from "questpie";
+
 import { createApplicationRuntime } from "../../packages/runtime/src";
 
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
@@ -42,7 +38,6 @@ test("BETA-03 execution lifecycle stays inside stable-runner budgets", async () 
 		services: [application, execution],
 		context,
 		bootstrap: { get: async () => null },
-		acceptPrincipal: principal.is,
 		project: async ({ service }) => {
 			const [first, second] = await Promise.all([
 				service(execution),
