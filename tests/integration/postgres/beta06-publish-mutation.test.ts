@@ -15,6 +15,23 @@ afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
 
+async function waitForBlockedChannelRead(): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt += 1) {
+		const [blocked] = await database!.unsafe<
+			Readonly<Array<{ blocked: boolean }>>
+		>(`SELECT EXISTS (
+  SELECT 1
+  FROM pg_catalog.pg_stat_activity
+  WHERE pid <> pg_catalog.pg_backend_pid()
+    AND query LIKE '%FROM "collaboration"."channels"%FOR UPDATE%'
+    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
+) AS blocked`);
+		if (blocked?.blocked) return;
+		await Bun.sleep(10);
+	}
+	throw new Error("Mutation did not reach the observable Channel lock wait");
+}
+
 postgresTest(
 	"replays a response-lost message.publish call without duplicating its atomic bundle",
 	async () => {
@@ -167,6 +184,87 @@ postgresTest(
 				await application.close();
 			}
 		} finally {
+			await prepared.dispose();
+		}
+	},
+	30_000,
+);
+
+postgresTest(
+	"rechecks current Membership after a Channel lock wait and rolls back every fact",
+	async () => {
+		const prepared = await prepareBeta05PostgresApplication(database!);
+		const blocker = await database!.reserve();
+		try {
+			const application = await prepared.generated.app.createApp({
+				postgres: { url: beta05PostgresUrl() },
+			});
+			try {
+				const internal = await prepared.generated.loadInternal();
+				const user = prepared.generated.framework.principal.user({
+					id: beta05Ids.principal,
+				});
+				const callId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62b0";
+				const client = prepared.generated.client.createClient({
+					baseUrl: "http://runtime.test",
+					fetch: (request: Request) =>
+						application.fetch(
+							internal.bindIngressPrincipalForRequest(request, user),
+						),
+				});
+				await blocker.unsafe("BEGIN");
+				await blocker.unsafe(
+					"SELECT id FROM collaboration.channels WHERE id = $1 FOR UPDATE",
+					[beta05Ids.channel],
+				);
+				const pending = client
+					.withContext({ companyId: beta05Ids.company })
+					.mutations["message.publish"](
+						{ channelId: beta05Ids.channel, body: "must be revoked" },
+						{ callId },
+					);
+				await waitForBlockedChannelRead();
+				await database!.unsafe(
+					"UPDATE collaboration.memberships SET status = 'inactive' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+					[beta05Ids.company, beta05Ids.principal],
+				);
+				await blocker.unsafe("COMMIT");
+				await expect(pending).rejects.toMatchObject({
+					code: "CHANNEL_UNAVAILABLE",
+					status: 404,
+				});
+				const [counts] = await database!.unsafe<
+					Readonly<
+						Array<{
+							messages: number;
+							audit: number;
+							facts: number;
+							intents: number;
+							receipts: number;
+						}>
+					>
+				>(
+					`SELECT
+  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
+  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
+  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
+  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+					[callId],
+				);
+				expect(counts).toEqual({
+					messages: 0,
+					audit: 0,
+					facts: 0,
+					intents: 0,
+					receipts: 0,
+				});
+			} finally {
+				await blocker.unsafe("ROLLBACK").catch(() => {});
+				await application.close();
+			}
+		} finally {
+			await blocker.release();
 			await prepared.dispose();
 		}
 	},
