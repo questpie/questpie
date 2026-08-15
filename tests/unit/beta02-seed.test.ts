@@ -344,7 +344,7 @@ describe("BETA-02 committed Seeds", () => {
 		});
 		const commit = (
 			value: unknown,
-			name = "collaboration.unicode-json.v1",
+			name = "collaboration.unicodeJson.v1",
 			dependsOn: readonly string[] = [],
 			companyName = "Unicode JSON",
 		) =>
@@ -367,7 +367,7 @@ describe("BETA-02 committed Seeds", () => {
 			});
 
 		expect(() =>
-			commit({ emoji: "😀" }, "collaboration.😀.v1", ["seed:😀"], "😀"),
+			commit({ emoji: "😀" }, undefined, ["seed:collaboration.base.v1"], "😀"),
 		).not.toThrow();
 		for (const invalid of [
 			{ nested: ["\ud800"] },
