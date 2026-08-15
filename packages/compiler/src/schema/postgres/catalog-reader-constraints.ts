@@ -31,6 +31,8 @@ export async function readCatalogTableConstraintsAndIndexes(
 			validated: boolean;
 			deferrable: boolean;
 			initiallyDeferred: boolean;
+			enforced: boolean;
+			period: boolean;
 			local: boolean;
 			inheritedCount: number;
 			noInherit: boolean;
@@ -60,6 +62,8 @@ export async function readCatalogTableConstraintsAndIndexes(
 		       con.convalidated as validated,
 		       con.condeferrable as deferrable,
 		       con.condeferred as "initiallyDeferred",
+		       coalesce((pg_catalog.to_jsonb(con)->>'conenforced')::boolean, true) as enforced,
+		       coalesce((pg_catalog.to_jsonb(con)->>'conperiod')::boolean, false) as period,
 		       con.conislocal as local,
 		       con.coninhcount::integer as "inheritedCount",
 		       con.connoinherit as "noInherit"
@@ -94,6 +98,8 @@ function readConstraints(
 		validated: boolean;
 		deferrable: boolean;
 		initiallyDeferred: boolean;
+		enforced: boolean;
+		period: boolean;
 		local: boolean;
 		inheritedCount: number;
 		noInherit: boolean;
@@ -115,6 +121,8 @@ function readConstraints(
 				constraint.validated &&
 				!constraint.deferrable &&
 				!constraint.initiallyDeferred &&
+				constraint.enforced &&
+				!constraint.period &&
 				constraint.local &&
 				constraint.inheritedCount === 0 &&
 				!constraint.noInherit,
@@ -131,6 +139,12 @@ function readConstraints(
 			);
 	for (const constraint of constraints) {
 		if (constraint.type === "n") continue;
+		if (!constraint.enforced || constraint.period) {
+			state.unsupportedObjects.push(
+				unsupportedConstraint(applicationSchema, table.name, constraint.name),
+			);
+			continue;
+		}
 		if (constraint.type === "c") {
 			if (
 				!constraint.local ||

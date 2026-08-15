@@ -617,6 +617,68 @@ describe.skipIf(!database)(
 		});
 
 		test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")(
+			"rejects a PostgreSQL 18 NOT ENFORCED check constraint",
+			async () => {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" ADD CONSTRAINT "messages_unenforced_check" CHECK ("id" > 0) NOT ENFORCED',
+				);
+				try {
+					const comparable = await readCatalogComparable(database!, {
+						application: "catalog-fact-probe",
+						applicationSchema: "catalog_fact_probe",
+						requiredExtensionNames: [],
+					});
+					expect(comparable.unsupportedObjects).toContainEqual({
+						kind: "other",
+						qualifiedIdentity:
+							"catalog_fact_probe.messages.messages_unenforced_check",
+						attachedTo: "catalog_fact_probe.messages",
+					});
+					expect(
+						(comparable.objects as readonly Record<string, unknown>[]).some(
+							(object) => object.name === "messages_unenforced_check",
+						),
+					).toBe(false);
+				} finally {
+					await database!.unsafe(
+						'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_unenforced_check"',
+					);
+				}
+			},
+		);
+
+		test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")(
+			"rejects PostgreSQL 18 PERIOD constraints",
+			async () => {
+				await database!.unsafe(
+					'CREATE TABLE "catalog_fact_probe"."temporal_parent" ("bucket" daterange, "valid_at" daterange, CONSTRAINT "temporal_parent_pk" PRIMARY KEY ("bucket", "valid_at" WITHOUT OVERLAPS)); CREATE TABLE "catalog_fact_probe"."temporal_child" ("bucket" daterange, "valid_at" daterange, CONSTRAINT "temporal_child_fk" FOREIGN KEY ("bucket", PERIOD "valid_at") REFERENCES "catalog_fact_probe"."temporal_parent" ("bucket", PERIOD "valid_at"))',
+				);
+				try {
+					const comparable = await readCatalogComparable(database!, {
+						application: "catalog-fact-probe",
+						applicationSchema: "catalog_fact_probe",
+						requiredExtensionNames: [],
+					});
+					expect(comparable.unsupportedObjects).toContainEqual({
+						kind: "other",
+						qualifiedIdentity:
+							"catalog_fact_probe.temporal_child.temporal_child_fk",
+						attachedTo: "catalog_fact_probe.temporal_child",
+					});
+					expect(
+						(comparable.objects as readonly Record<string, unknown>[]).some(
+							(object) => object.name === "temporal_child_fk",
+						),
+					).toBe(false);
+				} finally {
+					await database!.unsafe(
+						'DROP TABLE "catalog_fact_probe"."temporal_child", "catalog_fact_probe"."temporal_parent"',
+					);
+				}
+			},
+		);
+
+		test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")(
 			"rejects a non-inherited PostgreSQL 18 NOT NULL catalog constraint",
 			async () => {
 				await database!.unsafe(
