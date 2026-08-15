@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 
-import { canonicalBytes, compareAscii, digest } from "./canonical";
-import { CompilerDiagnosticError } from "./diagnostic";
-import type { SchemaProjectionV1 } from "./schema";
-import { normalizeJsonBackedValue } from "./seed/json-codec";
+import { canonicalBytes, compareAscii, digest } from "../canonical";
+import { CompilerDiagnosticError } from "../diagnostic";
+import type { SchemaProjectionV1 } from "../schema";
+import { normalizeJsonBackedValue } from "./json-codec";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 

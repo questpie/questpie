@@ -1,8 +1,12 @@
 import { canonicalBytes } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { SchemaProjectionV1 } from "../schema";
-import type { CommittedSeedV1, SeedFieldValueV1, SeedStepV1 } from "../seed";
-import { createCommittedSeed, verifyCommittedSeed } from "../seed";
+import type {
+	CommittedSeedV1,
+	SeedFieldValueV1,
+	SeedStepV1,
+} from "./committed-seed";
+import { createCommittedSeed, verifyCommittedSeed } from "./committed-seed";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 

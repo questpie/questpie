@@ -1,6 +1,6 @@
 import { SQL } from "bun";
 
-import { digest } from "./canonical";
+import { digest } from "../../canonical";
 import {
 	acquireSessionLock,
 	assertBackendPid,
@@ -10,19 +10,23 @@ import {
 	probeCommittedSession,
 	resolvePostgresControl,
 	withPinnedTransaction,
-} from "./postgres-session";
-import type { PostgresCommandControl } from "./postgres-session";
-import type { SchemaProjectionV1 } from "./schema";
+} from "../../postgres-session";
+import type { PostgresCommandControl } from "../../postgres-session";
+import type { SchemaProjectionV1 } from "../../schema";
 import {
 	assertSchemaMatches,
 	bootstrap,
 	childRecords,
 	fail,
 	providerObservations,
-} from "./schema";
-import type { CommittedSeedV1, SeedFieldValueV1, SeedStepV1 } from "./seed";
-import { orderCommittedSeeds } from "./seed";
-import { validateCommittedSeedSchema } from "./seed/index";
+} from "../../schema";
+import type {
+	CommittedSeedV1,
+	SeedFieldValueV1,
+	SeedStepV1,
+} from "../committed-seed";
+import { orderCommittedSeeds } from "../committed-seed";
+import { validateCommittedSeedSchema } from "../schema-validation";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 export interface ApplySeedsResult {

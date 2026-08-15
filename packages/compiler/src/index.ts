@@ -46,7 +46,7 @@ export type {
 	SeedStepV1,
 	SeedValueV1,
 } from "./seed";
-export { loadCommittedSeed, validateCommittedSeedSchema } from "./seed/index";
+export { loadCommittedSeed, validateCommittedSeedSchema } from "./seed";
 export {
 	createCommittedMigration,
 	createMigrationPlan,
@@ -63,9 +63,9 @@ export {
 } from "./schema";
 export type { CliExplanationV1 } from "./schema";
 export { applyCommittedMigrations, inspectSchemaFingerprint } from "./schema";
-export { applyCommittedSeeds } from "./seed-postgres";
+export { applyCommittedSeeds } from "./seed";
 export type { ApplyMigrationsResult, SchemaFingerprintV1 } from "./schema";
-export type { ApplySeedsResult } from "./seed-postgres";
+export type { ApplySeedsResult } from "./seed";
 export type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,

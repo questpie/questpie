@@ -2,8 +2,8 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { CompilerDiagnosticError } from "../diagnostic";
-import type { CommittedSeedV1, SeedStepV1 } from "../seed";
-import { verifyCommittedSeed } from "../seed";
+import type { CommittedSeedV1, SeedStepV1 } from "./committed-seed";
+import { verifyCommittedSeed } from "./committed-seed";
 
 const fileNames = [
 	"seed.json",
