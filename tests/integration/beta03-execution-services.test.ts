@@ -185,3 +185,72 @@ test("retains execution Services until a response body reaches EOF", async () =>
 	expect(events).toEqual(["create", "dispose"]);
 	await runtime.close();
 });
+
+test("aborts retained responses before closing application Services", async () => {
+	const events: string[] = [];
+	let rootSignal!: AbortSignal;
+	const applicationService = defineService({
+		name: "close.application",
+		lifetime: "application",
+		effect: "read",
+		create: () => ({ ready: true }),
+		dispose: () => {
+			events.push("dispose:application");
+		},
+	});
+	const executionService = defineService({
+		name: "close.execution",
+		lifetime: "execution",
+		effect: "read",
+		dependencies: { application: applicationService },
+		create: ({ services }) => ({ ready: services.application.ready }),
+		dispose: () => {
+			events.push("dispose:execution");
+		},
+	});
+	const closeContext = defineContext({
+		name: "close.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [applicationService, executionService],
+		context: closeContext,
+		bootstrap: { get: async () => null },
+		project: async ({ facts, service }) => {
+			rootSignal = facts.signal;
+			return { execution: await service(executionService) };
+		},
+	});
+	const response = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ execution }) => {
+			expect(execution.ready).toBe(true);
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					cancel() {
+						events.push("cancel:response");
+					},
+				}),
+			);
+		},
+	);
+	const reader = response.body!.getReader();
+	const closing = runtime.close();
+	try {
+		await Promise.resolve();
+		expect(rootSignal.aborted).toBe(true);
+		await closing;
+		expect(events).toEqual([
+			"cancel:response",
+			"dispose:execution",
+			"dispose:application",
+		]);
+	} finally {
+		if (!rootSignal.aborted) await reader.cancel("test cleanup");
+		await closing;
+	}
+});

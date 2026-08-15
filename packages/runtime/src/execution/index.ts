@@ -124,6 +124,7 @@ export function createApplicationRuntime<
 	const applicationOwned: OwnedService[] = [];
 	const applicationController = new AbortController();
 	const activeRoots = new Set<Promise<unknown>>();
+	const rootControllers = new Set<AbortController>();
 	let state: "open" | "closing" | "closed" = "open";
 	let closePromise: Promise<void> | undefined;
 
@@ -157,6 +158,7 @@ export function createApplicationRuntime<
 		if (input.principal.questpiePrincipal !== true)
 			throw new Error("Execution requires a trusted Principal");
 		const controller = new AbortController();
+		rootControllers.add(controller);
 		const onAbort = () => controller.abort(abortReason(input.signal!));
 		if (input.signal?.aborted) controller.abort(abortReason(input.signal));
 		else input.signal?.addEventListener("abort", onAbort, { once: true });
@@ -177,6 +179,7 @@ export function createApplicationRuntime<
 			if (finalizePromise) return finalizePromise;
 			finalizePromise = (async () => {
 				input.signal?.removeEventListener("abort", onAbort);
+				rootControllers.delete(controller);
 				await disposeOwned(executionOwned);
 			})();
 			void finalizePromise.then(resolveScope, rejectScope);
@@ -268,6 +271,8 @@ export function createApplicationRuntime<
 		close: () => {
 			if (closePromise) return closePromise;
 			state = "closing";
+			for (const controller of rootControllers)
+				controller.abort(new DOMException("Runtime closing", "AbortError"));
 			applicationController.abort(
 				new DOMException("Runtime closing", "AbortError"),
 			);
