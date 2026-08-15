@@ -175,11 +175,11 @@ export const customers = defineCollection({
 			properties: {
 				locale: value.text({ nullable: false, maxLength: 16 }),
 				marketingEmail: value.boolean({ nullable: false }),
-					tags: value.array({
-						nullable: false,
-						items: value.text({ nullable: false, maxLength: 40 }),
-						maximumItems: 100,
-					}),
+				tags: value.array({
+					nullable: false,
+					items: value.text({ nullable: false, maxLength: 40 }),
+					maximumItems: 100,
+				}),
 			},
 		}),
 
@@ -947,30 +947,30 @@ Committed Migration.
 
 V1 classifies every supported change by this closed matrix:
 
-| Exact semantic delta                                                                                           | Class                                                |
-| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| create application schema or Collection                                                                        | `safe`                                               |
-| add nullable Field without a default                                                                           | `safe`                                               |
-| add nullable `field.object`, `field.array`, or `field.json` without a default                                  | `safe`                                               |
-| relax text/integer/bigint bound; increase numeric precision without changing scale                             | `safe`                                               |
-| add a literal default to an existing nullable Field                                                            | `guarded`                                            |
-| add nullable Field with literal default                                                                        | `guarded`                                            |
-| add check, unique, Relation/foreign key, or Index                                                              | `guarded`                                            |
-| widen `integer` to `bigint`                                                                                    | `guarded`                                            |
-| explicit Collection or Field rename                                                                            | `destructive` because external SQL names change      |
-| change an explicit physical name for Constraint, Index, or Relation                                            | `destructive`; lower to drop plus add                |
-| drop Collection, Field, Constraint, Relation, or Index                                                         | `destructive`                                        |
-| required to nullable                                                                                           | `destructive` because the generated contract changes |
-| nullable to required with a literal backfill default                                                           | `destructive`                                        |
-| add required Field with a literal default                                                                      | `destructive`                                        |
-| drop or change a default                                                                                       | `destructive`                                        |
-| strengthen a text/integer/bigint bound; reduce numeric precision; change numeric scale                         | `destructive`                                        |
-| change primary/unique Field list, check expression, Index Fields/order/nulls, or Relation endpoints/actions    | `destructive`; lower to drop plus add                |
-| nullable to required without a literal backfill; add required Field without a literal default                  | `blocked`                                            |
-| change Field kind except `integer` to `bigint`; change timestamp time-zone mode                                | `blocked`                                            |
-| add or change an embedded value codec on an existing JSONB Field                                               | `blocked`; stored rows require a later data-migration artifact |
-| request generated/identity column, RLS, JSON-path/GIN/expression/unique Index, another collation/opclass, or unsupported DDL | `blocked`                                 |
-| request non-transactional DDL or any delta not listed above                                                    | `blocked`                                            |
+| Exact semantic delta                                                                                                         | Class                                                          |
+| ---------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| create application schema or Collection                                                                                      | `safe`                                                         |
+| add nullable Field without a default                                                                                         | `safe`                                                         |
+| add nullable `field.object`, `field.array`, or `field.json` without a default                                                | `safe`                                                         |
+| relax text/integer/bigint bound; increase numeric precision without changing scale                                           | `safe`                                                         |
+| add a literal default to an existing nullable Field                                                                          | `guarded`                                                      |
+| add nullable Field with literal default                                                                                      | `guarded`                                                      |
+| add check, unique, Relation/foreign key, or Index                                                                            | `guarded`                                                      |
+| widen `integer` to `bigint`                                                                                                  | `guarded`                                                      |
+| explicit Collection or Field rename                                                                                          | `destructive` because external SQL names change                |
+| change an explicit physical name for Constraint, Index, or Relation                                                          | `destructive`; lower to drop plus add                          |
+| drop Collection, Field, Constraint, Relation, or Index                                                                       | `destructive`                                                  |
+| required to nullable                                                                                                         | `destructive` because the generated contract changes           |
+| nullable to required with a literal backfill default                                                                         | `destructive`                                                  |
+| add required Field with a literal default                                                                                    | `destructive`                                                  |
+| drop or change a default                                                                                                     | `destructive`                                                  |
+| strengthen a text/integer/bigint bound; reduce numeric precision; change numeric scale                                       | `destructive`                                                  |
+| change primary/unique Field list, check expression, Index Fields/order/nulls, or Relation endpoints/actions                  | `destructive`; lower to drop plus add                          |
+| nullable to required without a literal backfill; add required Field without a literal default                                | `blocked`                                                      |
+| change Field kind except `integer` to `bigint`; change timestamp time-zone mode                                              | `blocked`                                                      |
+| add or change an embedded value codec on an existing JSONB Field                                                             | `blocked`; stored rows require a later data-migration artifact |
+| request generated/identity column, RLS, JSON-path/GIN/expression/unique Index, another collation/opclass, or unsupported DDL | `blocked`                                                      |
+| request non-transactional DDL or any delta not listed above                                                                  | `blocked`                                                      |
 
 `randomUuid` and `now` are not literal backfill defaults. Adding a required
 Field to an existing Collection with either default is blocked because the
@@ -1687,9 +1687,9 @@ Deploy tooling must ship an immutable artifact before it calls apply.
 | Case                                              | Required behavior                                    | Diagnostic or proof                                |
 | ------------------------------------------------- | ---------------------------------------------------- | -------------------------------------------------- |
 | File or export rename only                        | Schema Projection Digest unchanged                   | byte-stability fixture                             |
-| Regular Collection has zero or two primary keys  | compile fails; no Schema Projection                  | `QP-SCHEMA-001 invalidDefinition`                  |
-| Dotted nested path is supplied                    | treated as one key, never split                       | segment-array identity fixture                     |
-| SQL `NULL` and top-level JSON `null`              | distinct outer-null and tagged-JSON values            | codec/Seed golden                                  |
+| Regular Collection has zero or two primary keys   | compile fails; no Schema Projection                  | `QP-SCHEMA-001 invalidDefinition`                  |
+| Dotted nested path is supplied                    | treated as one key, never split                      | segment-array identity fixture                     |
+| SQL `NULL` and top-level JSON `null`              | distinct outer-null and tagged-JSON values           | codec/Seed golden                                  |
 | Definition order changes                          | Schema Projection and Migration Plan bytes unchanged | permutation test                                   |
 | Two semantic members map to one physical name     | compile fails                                        | `QP-SCHEMA-006 physicalNameCollision`              |
 | Name exceeds PostgreSQL limit                     | deterministic hash suffix                            | 63-byte fixture                                    |
