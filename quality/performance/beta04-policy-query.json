@@ -5,21 +5,16 @@
 	"command": ["bun", "test", "tests/performance/beta04-policy-query.test.ts"],
 	"budgetOwner": "BETA-04",
 	"metrics": {
-		"compileAndLowerMs": {
-			"direction": "max",
-			"budget": 5000,
-			"unit": "ms"
-		},
-		"bindExecute100Ms": {
-			"direction": "max",
-			"budget": 100,
-			"unit": "ms"
-		},
-		"maximumRowsRead": {
+		"compileAndLowerMs": { "direction": "max", "budget": 5000, "unit": "ms" },
+		"postgresExecute20Ms": { "direction": "max", "budget": 300, "unit": "ms" },
+		"postgresPlanningMs": { "direction": "max", "budget": 7, "unit": "ms" },
+		"postgresExecutionMs": { "direction": "max", "budget": 10, "unit": "ms" },
+		"postgresReturnedRows": {
 			"direction": "max",
 			"budget": 101,
 			"unit": "rows"
 		},
+		"postgresScanRows": { "direction": "max", "budget": 1000, "unit": "rows" },
 		"publicDeclarationBytes": {
 			"direction": "max",
 			"budget": 125000,
