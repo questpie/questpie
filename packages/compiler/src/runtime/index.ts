@@ -45,17 +45,18 @@ export interface RuntimeContractProjection {
 	readonly wireDigest: string;
 }
 
-function queryOperations(resources: readonly NormalizedResource[]) {
+function operationContracts(resources: readonly NormalizedResource[]) {
 	return resources
 		.filter(
 			(resource) =>
-				resource.kind === "query" && resource.contract.exposure === "network",
+				(resource.kind === "query" || resource.kind === "mutation") &&
+				resource.contract.exposure === "network",
 		)
 		.map((resource) => ({
 			identity: resource.identity,
 			input: resource.contract.input,
 			output: resource.contract.output,
-			declaredErrors: {},
+			declaredErrors: resource.contract.declaredErrors ?? {},
 		}))
 		.sort((left, right) => compareAscii(left.identity, right.identity));
 }
@@ -73,7 +74,7 @@ export function projectRuntimeContract(
 	}>,
 ): RuntimeContractProjection {
 	const application = `application:${input.configuration.application.name}`;
-	const operations = queryOperations(input.resources);
+	const operations = operationContracts(input.resources);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -93,7 +94,7 @@ export function projectRuntimeContract(
 	);
 	const slots = input.resources
 		.filter((resource) =>
-			["context", "query", "service"].includes(resource.kind),
+			["context", "mutation", "query", "service"].includes(resource.kind),
 		)
 		.flatMap((resource) => {
 			const origin = {
@@ -111,7 +112,7 @@ export function projectRuntimeContract(
 				resource.contract,
 			);
 			const executableSlots =
-				resource.kind === "query"
+				resource.kind === "query" || resource.kind === "mutation"
 					? ["handler"]
 					: (resource.contract.executableSlots as readonly string[]);
 			return executableSlots.map((slot) => {

@@ -13,6 +13,7 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
+import { projectMutations } from "./mutation";
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
@@ -273,6 +274,7 @@ export async function createArtifacts(
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
+	const mutations = projectMutations(input.resources);
 	const generated: Record<string, string> = {
 		"app.ts": renderAppContract(
 			input.resources,
@@ -300,6 +302,14 @@ export async function createArtifacts(
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
+	if (mutations.projection.mutations.length > 0) {
+		generated["mutation-projection.json"] = canonicalBytes(
+			mutations.projection,
+		);
+		generated["mutation-transaction-plans.json"] = canonicalBytes(
+			mutations.transactions,
+		);
+	}
 	let postgresQueryPlans: unknown = {
 		format: "questpie.postgres-query-plans",
 		version: 1,

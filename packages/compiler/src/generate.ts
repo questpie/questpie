@@ -1,5 +1,6 @@
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
+import { renderMutationDeclarations, renderMutationFactory } from "./mutation";
 import type {
 	RelationalGeneratedContractV1,
 	RelationalGeneratedSelectionV1,
@@ -15,7 +16,10 @@ function record(value: unknown): RecordValue {
 	return value as RecordValue;
 }
 
-function fieldType(field: RecordValue): string {
+function fieldType(
+	field: RecordValue,
+	timestampType: "Date" | "string" = "string",
+): string {
 	const scalar = field.scalar;
 	let type =
 		scalar === "boolean"
@@ -23,7 +27,7 @@ function fieldType(field: RecordValue): string {
 			: scalar === "integer"
 				? "number"
 				: scalar === "timestamp"
-					? "string"
+					? timestampType
 					: scalar === "object"
 						? embeddedFieldType(field)
 						: scalar === "array"
@@ -35,13 +39,16 @@ function fieldType(field: RecordValue): string {
 	return type;
 }
 
-function fieldNodeType(field: RecordValue): string {
-	if (field.kind !== "inlineShape") return fieldType(field);
+function fieldNodeType(
+	field: RecordValue,
+	timestampType: "Date" | "string" = "string",
+): string {
+	if (field.kind !== "inlineShape") return fieldType(field, timestampType);
 	return `Readonly<{ ${Object.entries(record(field.fields))
 		.sort(([left], [right]) => compareAscii(left, right))
 		.map(
 			([key, child]) =>
-				`readonly ${JSON.stringify(key)}: ${fieldNodeType(record(child))};`,
+				`readonly ${JSON.stringify(key)}: ${fieldNodeType(record(child), timestampType)};`,
 		)
 		.join(" ")} }>`;
 }
@@ -153,7 +160,7 @@ function renderData(resources: readonly NormalizedResource[]): string {
 			const row = fields
 				.map(
 					([key, field]) =>
-						`readonly ${JSON.stringify(key)}: ${fieldNodeType(field)};`,
+						`readonly ${JSON.stringify(key)}: ${fieldNodeType(field, "Date")};`,
 				)
 				.join(" ");
 			const constraints = record(resource.value.constraints);
@@ -192,7 +199,6 @@ function renderQueryOperations(
 }
 
 const factoryNames = [
-	"defineMutation",
 	"defineAction",
 	"defineRoute",
 	"defineReaction",
@@ -270,12 +276,18 @@ export function renderAppContract(
 			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
 		})
 		.join("\n\t");
-	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
+	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
 export interface ReadCollection<Row, Key> {
-	get(input: Readonly<{ key: Key }>): Promise<Row | null>;
+	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
+}
+
+export interface WriteCollection<Row, Key> extends ReadCollection<Row, Key> {
+	create<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ input: Partial<Row>; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>>>;
+	update<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; patch: Partial<Row>; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
+	delete<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
 }
 
 export interface GeneratedData {
@@ -283,9 +295,15 @@ export interface GeneratedData {
 	${queryRuns}
 }
 
+export interface GeneratedMutationData {
+	${renderData(resources).replaceAll(": ReadCollection<", ": WriteCollection<")}
+}
+
 export interface GeneratedQueries {
 	${renderQueries(resources)}
 }
+
+${renderMutationDeclarations(resources)}
 
 export type GeneratedQueryOperations = Readonly<{
 	${renderQueryOperations(resources)}
@@ -294,6 +312,16 @@ export type GeneratedQueryOperations = Readonly<{
 export interface QueryContext {
 	readonly data: Readonly<GeneratedData>;
 	readonly signal: AbortSignal;
+}
+
+export interface MutationContext extends Omit<RootExecution, "services"> {
+	readonly data: Readonly<GeneratedMutationData>;
+	readonly operationTime: Date;
+	readonly callId: string;
+	readonly transactionId: string;
+	readonly dispatch: Readonly<{
+		messagePublished(input: Readonly<{ companyId: string; messageId: string }>): Promise<void>;
+	}>;
 }
 
 type ApplicationContextDefinition = ${contextDefinition};
@@ -355,13 +383,14 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	identity: \`query:\${definition.name}\` as const,
 	network: definition.network === true,
 })) as QueryFactory;
+${renderMutationFactory()}
 ${otherFactories}
 
 export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations }>) => Result | Promise<Result>,
+		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
 }

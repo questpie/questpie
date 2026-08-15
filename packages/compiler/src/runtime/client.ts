@@ -51,6 +51,10 @@ export function renderClientContract(
 		(resource) =>
 			resource.kind === "query" && resource.contract.exposure === "network",
 	);
+	const mutations = resources.filter(
+		(resource) =>
+			resource.kind === "mutation" && resource.contract.exposure === "network",
+	);
 	const declarations = queries
 		.map(
 			(resource) =>
@@ -64,11 +68,32 @@ export function renderClientContract(
 			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
 		})
 		.join("\n\t\t\t");
+	const mutationDeclarations = mutations
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}(operationInput: ${renderCodecType(resource.contract.input)}, options?: CallOptions): Promise<${renderCodecType(resource.contract.output)}>;`,
+		)
+		.join("\n\t\t");
+	const mutationImplementations = mutations
+		.map((resource) => {
+			const operationInput = renderCodecType(resource.contract.input);
+			const operationOutput = renderCodecType(resource.contract.output);
+			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
+		})
+		.join("\n\t\t\t");
 	const outputCodecs = Object.fromEntries(
-		queries.map((resource) => [resource.identity, resource.contract.output]),
+		[...queries, ...mutations].map((resource) => [
+			resource.identity,
+			resource.contract.output,
+		]),
 	);
 	const declaredErrorCodes = Object.fromEntries(
-		queries.map((resource) => [resource.identity, []]),
+		[...queries, ...mutations].map((resource) => [
+			resource.identity,
+			Object.values(record(resource.contract.declaredErrors ?? {})).map(
+				(error) => String(record(error).code),
+			),
+		]),
 	);
 	return `import type { AppContextInput } from "./app";
 
@@ -82,6 +107,9 @@ export interface GeneratedClientScope {
 	readonly context: AppContextInput;
 	readonly queries: Readonly<{
 		${declarations}
+	}>;
+	readonly mutations: Readonly<{
+		${mutationDeclarations}
 	}>;
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
@@ -213,6 +241,8 @@ export function createClient(input: Readonly<{
 		const context = immutableContext(next);
 		return Object.freeze({ context, queries: Object.freeze({
 			${implementations}
+		}), mutations: Object.freeze({
+			${mutationImplementations}
 		}), withContext: scope });
 	};
 	return Object.freeze({ withContext: scope });

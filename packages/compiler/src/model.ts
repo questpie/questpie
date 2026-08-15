@@ -133,7 +133,11 @@ function packageContract(value: RecordValue): RecordValue {
 	const valueBrand = brand(value);
 	if (valueBrand.category === "augmentation")
 		return augmentationContract(value);
-	if (valueBrand.resourceKind === "query") return queryContract(value);
+	if (
+		valueBrand.resourceKind === "query" ||
+		valueBrand.resourceKind === "mutation"
+	)
+		return operationContract(valueBrand.resourceKind, value);
 	if (valueBrand.resourceKind === "policy")
 		return normalizeBoundPolicy(value).program as unknown as RecordValue;
 	if (valueBrand.resourceKind === "service")
@@ -223,13 +227,70 @@ function codecContract(value: unknown, optionalAllowed = false): unknown {
 	return { kind };
 }
 
-function queryContract(value: RecordValue): RecordValue {
+function operationContract(
+	kind: "mutation" | "query",
+	value: RecordValue,
+): RecordValue {
+	const errors = record(value.errors ?? {}, `${kind}.errors`);
+	const declaredErrors = Object.fromEntries(
+		Object.entries(errors)
+			.sort(([left], [right]) => compareAscii(left, right))
+			.map(([key, candidate]) => {
+				const definition = record(candidate, `${kind}.errors.${key}`);
+				if (definition.kind !== "operationError")
+					throw new CompilerDiagnosticError(
+						"QP-COMPOSE-013",
+						"structuralTypeError",
+						`${kind}.errors.${key} is not an Operation Error`,
+					);
+				const status = definition.status;
+				if (
+					typeof status !== "number" ||
+					!Number.isInteger(status) ||
+					status < 400 ||
+					status > 599
+				)
+					throw new CompilerDiagnosticError(
+						"QP-COMPOSE-013",
+						"structuralTypeError",
+						`${kind}.errors.${key}.status is invalid`,
+					);
+				return [
+					key,
+					{
+						code: string(definition.code, `${kind}.errors.${key}.code`),
+						status,
+						payload:
+							definition.payload === null
+								? null
+								: codecContract(definition.payload),
+					},
+				];
+			}),
+	);
+	let policyContract: RecordValue | null = null;
+	if (kind === "mutation") {
+		const policy = record(value.policy, `${kind}.policy`);
+		if (
+			policy.kind !== "booleanExpression" ||
+			policy.operator !== "authenticated" ||
+			!Array.isArray(policy.operands) ||
+			policy.operands.length !== 0
+		)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				`${kind}.policy is outside the accepted authenticated admission scope`,
+			);
+		policyContract = { kind: "authenticated" };
+	}
 	return {
-		format: "questpie.query-definition-contract",
+		format: `questpie.${kind}-definition-contract`,
 		version: 1,
-		name: string(value.name, "query.name"),
+		name: string(value.name, `${kind}.name`),
 		input: codecContract(value.input),
 		output: codecContract(value.output),
+		...(kind === "mutation" ? { declaredErrors, policy: policyContract } : {}),
 		exposure: value.network === true ? "network" : "server",
 		executableSlots: ["handler"],
 	};
@@ -432,12 +493,12 @@ export function normalizeResources(
 				},
 				value: item.value,
 			});
-		} else if (kind === "query") {
+		} else if (kind === "query" || kind === "mutation") {
 			resources.push({
 				identity,
 				kind,
 				name,
-				contract: queryContract(item.value),
+				contract: operationContract(kind, item.value),
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

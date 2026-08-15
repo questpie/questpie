@@ -4,7 +4,7 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 
-type OperationKind = "query";
+type OperationKind = "mutation" | "query";
 
 export interface RuntimeExecutableBinding<View> {
 	readonly identity: string;

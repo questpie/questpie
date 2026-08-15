@@ -103,22 +103,30 @@ export function validateRuntimeExecutableBindings<View>(
 	if (
 		candidates.some(
 			(binding) =>
-				binding.kind === "query" &&
-				(binding.definition.name !== binding.identity.slice("query:".length) ||
+				(binding.kind === "query" || binding.kind === "mutation") &&
+				(binding.definition.name !==
+					binding.identity.slice(`${binding.kind}:`.length) ||
 					binding.definition.handler !== binding.execute),
 		)
 	)
-		throw new TypeError("Runtime Query executable binding does not match");
+		throw new TypeError("Runtime operation executable binding does not match");
 	if (
 		candidates.some((binding) => {
-			const implementation =
-				binding.kind === "query"
-					? binding.execute
-					: binding.kind === "context"
-						? binding.definition.resolve
-						: binding.slot === "create"
+			let implementation: unknown;
+			switch (binding.kind) {
+				case "query":
+				case "mutation":
+					implementation = binding.execute;
+					break;
+				case "context":
+					implementation = binding.definition.resolve;
+					break;
+				case "service":
+					implementation =
+						binding.slot === "create"
 							? binding.definition.create
 							: binding.definition.dispose;
+			}
 			return serverExports[binding.bundleExport] !== implementation;
 		})
 	)
@@ -126,7 +134,7 @@ export function validateRuntimeExecutableBindings<View>(
 	return Object.freeze(
 		candidates.filter(
 			(binding): binding is RuntimeExecutableBinding<View> =>
-				binding.kind === "query",
+				binding.kind === "query" || binding.kind === "mutation",
 		),
 	);
 }

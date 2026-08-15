@@ -49,7 +49,7 @@ type RuntimeBuildV1 = Readonly<{
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
 		identity: string;
-		kind: "context" | "query" | "service";
+		kind: "context" | "mutation" | "query" | "service";
 		slot: "create" | "dispose" | "handler" | "resolve";
 		runtimeGraphDigest: string;
 		bundleExport: string;

@@ -56,6 +56,12 @@ export type { FieldNode, InlineShapeDefinition } from "./shape";
 export { value } from "./value";
 export type { JsonValue, TaggedJsonValue, ValueDefinition } from "./value";
 export type { Codec, CodecKind, CodecValue } from "./codec";
+export { operation } from "./operation";
+export type {
+	OperationErrorDefinition,
+	OperationErrorFactories,
+	OperationErrorMap,
+} from "./operation";
 export type { DataFieldDescriptor, FieldDefinition } from "./field-contract";
 export type {
 	CollectionAugmentation,

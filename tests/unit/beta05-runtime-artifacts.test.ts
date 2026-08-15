@@ -94,26 +94,26 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			version: 1,
 			path: "/_questpie/operation",
 			protocol: { name: "questpie.operation", version: 1 },
-			operations: [
-				{
-					identity: "query:messages.page",
-					input: {
-						kind: "object",
-						properties: {
-							after: { kind: "nullable", codec: { kind: "text" } },
-							channelId: { kind: "uuid" },
-							first: { kind: "integer" },
-						},
-					},
-					output: {
-						kind: "object",
-						properties: {
-							nodes: { kind: "array" },
-						},
+		});
+		expect(wire.operations).toContainEqual(
+			expect.objectContaining({
+				identity: "query:messages.page",
+				input: {
+					kind: "object",
+					properties: {
+						after: { kind: "nullable", codec: { kind: "text" } },
+						channelId: { kind: "uuid" },
+						first: { kind: "integer" },
 					},
 				},
-			],
-		});
+				output: expect.objectContaining({
+					kind: "object",
+					properties: expect.objectContaining({
+						nodes: expect.objectContaining({ kind: "array" }),
+					}),
+				}),
+			}),
+		);
 		expect(first.generatedFiles["app.ts"]).toContain(
 			"export const defineQuery: QueryFactory",
 		);

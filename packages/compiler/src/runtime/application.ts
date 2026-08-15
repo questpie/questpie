@@ -80,16 +80,16 @@ function applicationEntry(
 	};
 	const bindingEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
-		const implementation =
-			slot.kind === "query"
-				? `${definition}.handler`
-				: `${definition}.${slot.slot}`;
-		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${slot.kind === "query" ? `, execute: ${implementation}` : ""} })`;
+		const operation = slot.kind === "query" || slot.kind === "mutation";
+		const implementation = operation
+			? `${definition}.handler`
+			: `${definition}.${slot.slot}`;
+		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${operation ? `, execute: ${implementation}` : ""} })`;
 	});
 	const serverEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
 		const implementation =
-			slot.kind === "query"
+			slot.kind === "query" || slot.kind === "mutation"
 				? `${definition}.handler`
 				: `${definition}.${slot.slot}`;
 		return `${JSON.stringify(slot.bundleExport)}: ${implementation}`;
@@ -130,6 +130,15 @@ function applicationEntry(
 		.map(
 			(resource) =>
 				`${JSON.stringify(resource.name)}: (operationInput) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput)`,
+		)
+		.join(",\n");
+	const mutations = input.resources
+		.filter((resource) => resource.kind === "mutation")
+		.sort((left, right) => compareAscii(left.name, right.name));
+	const directMutations = mutations
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: (operationInput, options) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput, options)`,
 		)
 		.join(",\n");
 	const queryProjection = record(input.queryProjection, "Query Projection");
@@ -266,6 +275,7 @@ export async function createApplication(input) {
 		execution: (root, use) => runtime.execution(root, ({ execution, ...operations }) => use(Object.freeze({
 			...execution,
 			queries: Object.freeze({${directQueries}}),
+			mutations: Object.freeze({${directMutations}}),
 		}))),
 		close: () => {
 			if (!closePromise) closePromise = runtime.close().finally(() => {
@@ -332,7 +342,7 @@ export async function renderApplicationBundle(
 						{ filter: /.*/, namespace: "questpie-authoring" },
 						() => ({
 							contents:
-								'export const defineQuery = (definition) => Object.freeze({ ...definition, kind: "query", identity: `query:${definition.name}`, network: definition.network === true });',
+								'const define = (kind) => (definition) => Object.freeze({ ...definition, kind, identity: `${kind}:${definition.name}`, network: definition.network === true }); export const defineQuery = define("query"); export const defineMutation = define("mutation");',
 							loader: "js",
 						}),
 					);
