@@ -12,7 +12,7 @@ import {
 	renderClientContract,
 	renderPackageContract,
 } from "./generate";
-import { projectManifest, projectMemberContributions } from "./model";
+import { projectManifest, projectMemberContributions } from "./schema";
 import type {
 	ApplicationConfiguration,
 	NormalizedResource,

@@ -1,5 +1,5 @@
 import { compareAscii } from "./canonical";
-import { renderCoreDataContract } from "./generated-data";
+import { renderCoreDataContract } from "./data";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;

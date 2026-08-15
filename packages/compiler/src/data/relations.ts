@@ -1,6 +1,6 @@
-import { compareAscii } from "./canonical";
-import { CompilerDiagnosticError } from "./diagnostic";
-import type { NormalizedResource } from "./types";
+import { compareAscii } from "../canonical";
+import { CompilerDiagnosticError } from "../diagnostic";
+import type { NormalizedResource } from "../types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 

@@ -1,4 +1,4 @@
-import { compareAscii } from "./canonical";
+import { compareAscii } from "../canonical";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 

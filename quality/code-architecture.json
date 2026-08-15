@@ -3,7 +3,5 @@
 	"version": 1,
 	"warningLines": 500,
 	"maximumLines": 800,
-	"legacy": {
-		"packages/compiler/src/model.ts": 961
-	}
+	"legacy": {}
 }

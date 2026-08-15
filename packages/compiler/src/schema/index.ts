@@ -38,6 +38,7 @@ export type {
 	SchemaFingerprintV1,
 } from "./postgres-types";
 export { localCheckContract, projectCheckExpression } from "./check-expression";
+export { projectManifest, projectMemberContributions } from "./manifest";
 export { flattenFieldContracts } from "./field-contract";
 export { fieldPath, indexField } from "./field-reference";
 export {
