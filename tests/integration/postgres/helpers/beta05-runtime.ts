@@ -40,7 +40,7 @@ export function beta05PostgresUrl(): string {
 	url.port = process.env.PGPORT ?? "5432";
 	url.username = process.env.PGUSER ?? "postgres";
 	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
-	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	if (process.env.PGPASSWORD) url["password"] = process.env.PGPASSWORD;
 	return url.toString();
 }
 
