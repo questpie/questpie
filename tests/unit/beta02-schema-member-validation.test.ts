@@ -7,8 +7,15 @@ import { compileApplication } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
-test("rejects application schema names outside the physical-name grammar", async () => {
-	for (const schemaName of ["MixedSchema", "a-b", "pg_private"] as const) {
+test("rejects invalid and reserved application schema names", async () => {
+	for (const schemaName of [
+		"MixedSchema",
+		"a-b",
+		"information_schema",
+		"pg_catalog",
+		"public",
+		"questpie_internal",
+	] as const) {
 		const temporary = await mkdtemp(
 			join(tmpdir(), "questpie-bad-schema-name-"),
 		);

@@ -1,5 +1,3 @@
-import { createHash } from "node:crypto";
-
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
@@ -10,6 +8,11 @@ import {
 	validateBtreeIndexTerms,
 	validateKeyConstraintFields,
 } from "./schema/member-validation";
+import {
+	shortenedPostgresName,
+	validatedApplicationSchemaName,
+	validatedPhysicalName,
+} from "./schema/physical-name";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -439,18 +442,6 @@ function defaultCollectionName(name: string): string {
 	return name.split(".").map(snake).join("__");
 }
 
-function shortenedPostgresName(identity: string, candidate: string): string {
-	if (Buffer.byteLength(candidate) <= 63) return candidate;
-	const suffix = createHash("sha256")
-		.update(`questpie-postgres-name-v1\0${identity}`)
-		.digest("hex")
-		.slice(0, 12);
-	let prefix = candidate;
-	while (Buffer.byteLength(`${prefix}_${suffix}`) > 63)
-		prefix = prefix.slice(0, -1);
-	return `${prefix}_${suffix}`;
-}
-
 function physicalName(
 	configuration: ApplicationConfiguration,
 	identity: string,
@@ -469,22 +460,6 @@ function physicalName(
 	);
 	return validatedPhysicalName(identity, candidate);
 }
-
-function validatedPhysicalName(identity: string, candidate: string): string {
-	if (
-		!/^[a-z][a-z0-9_]*$/.test(candidate) ||
-		Buffer.byteLength(candidate) > 63 ||
-		candidate.startsWith("pg_") ||
-		candidate.startsWith("questpie_")
-	)
-		throw new CompilerDiagnosticError(
-			"QP-SCHEMA-005",
-			"invalidPhysicalName",
-			`${identity} has invalid PostgreSQL name ${candidate}`,
-		);
-	return candidate;
-}
-
 function boundConstraints(
 	configuration: ApplicationConfiguration,
 	collectionIdentity: string,
@@ -891,7 +866,7 @@ export function projectManifest(
 		version: 1,
 		application: {
 			name: configuration.application.name,
-			postgresSchema: validatedPhysicalName(
+			postgresSchema: validatedApplicationSchemaName(
 				`application:${configuration.application.name}`,
 				configuration.postgres.schema,
 			),
