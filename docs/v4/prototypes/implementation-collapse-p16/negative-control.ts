@@ -40,7 +40,7 @@ const invalid = [
 	},
 	() => {
 		const value = clone();
-		at(value, 4).agentReady = true;
+		at(value, 3).agentReady = true;
 		return value;
 	},
 	() => {
