@@ -12,6 +12,7 @@ import type {
 	ServiceLifetime,
 } from "questpie";
 
+import { decodeContextInput } from "./context-input";
 import { retainResponseLifetime } from "./response";
 
 type AnyService = ServiceDefinition<
@@ -225,7 +226,9 @@ export function createApplicationRuntime<
 			let result: Awaited<Result> | undefined;
 			try {
 				if (controller.signal.aborted) throw abortReason(controller.signal);
-				const decoded = copiedFrozen(input.context);
+				const decoded = deepFreeze(
+					decodeContextInput(program.context.input, input.context),
+				);
 				const resolved = copiedFrozen(
 					await program.context.resolve({
 						input: decoded,

@@ -387,3 +387,42 @@ test("unwinds created dependencies after Service resolution failure", async () =
 	});
 	await runtime.close();
 });
+
+test("decodes direct and Operation-Wire Context input through one root", async () => {
+	let resolutions = 0;
+	const wireContext = defineContext({
+		name: "wire.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => {
+			resolutions += 1;
+			return {
+				tenant: { id: input.companyId },
+				values: { resolvedCompanyId: input.companyId },
+			};
+		},
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context: wireContext,
+		bootstrap: { get: async () => null },
+		project: ({ facts }) => facts,
+	});
+	const run = (context: unknown) =>
+		runtime.execution(
+			{
+				principal: principal.user({ id: principalId }),
+				context: context as { readonly companyId: string },
+			},
+			({ tenant, values }) => ({ tenant, values }),
+		);
+	const direct = await run({ companyId });
+	const fromWire = await run(JSON.parse(JSON.stringify({ companyId })));
+	expect(fromWire).toEqual(direct);
+	expect(resolutions).toBe(2);
+
+	await expect(
+		run({ companyId: "not-a-uuid", authority: "system" }),
+	).rejects.toThrow("Context input");
+	expect(resolutions).toBe(2);
+	await runtime.close();
+});
