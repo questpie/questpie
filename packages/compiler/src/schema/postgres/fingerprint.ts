@@ -2,11 +2,7 @@ import { SQL } from "bun";
 
 import { canonicalBytes, compareAscii, digest } from "../../canonical";
 import type { SchemaProjectionV1 } from "../contracts";
-import {
-	expectedDefault,
-	operatorClass,
-	physicalType,
-} from "../postgres-catalog";
+import { expectedDefault, physicalType } from "../postgres-catalog";
 import type { SchemaFingerprintV1 } from "../postgres-types";
 import {
 	expectedComparable,

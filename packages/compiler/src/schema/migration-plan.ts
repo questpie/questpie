@@ -1,5 +1,5 @@
 import { canonicalBytes, compareAscii, digest } from "../canonical";
-import type { MigrationPlanV1, SchemaProjectionV1 } from "./contracts";
+import type { MigrationPlanV1 } from "./contracts";
 import {
 	classifyProviderDelta,
 	maximumClassification,

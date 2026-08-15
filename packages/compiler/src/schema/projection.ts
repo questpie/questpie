@@ -1,4 +1,4 @@
-import { canonicalBytes, digest } from "../canonical";
+import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { MigrationPlanV1, SchemaProjectionV1 } from "./contracts";
 
