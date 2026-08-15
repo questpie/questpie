@@ -38,11 +38,26 @@ export async function readCatalogComparableInOwnedTransaction(
 	const [bindingCatalog] = await sql<{ exists: boolean }[]>`
 		select pg_catalog.to_regclass('questpie_internal.application_bindings') is not null as exists
 	`;
-	if (!bindingCatalog?.exists)
+	const installedExtensions =
+		scope.requiredExtensionNames.length === 0
+			? []
+			: await sql<{ name: string }[]>`
+				select extname as name
+				from pg_catalog.pg_extension
+				where extname in ${sql([...scope.requiredExtensionNames])}
+				order by extname
+			`;
+	if (!bindingCatalog?.exists && namespace?.exists)
 		return fail(
 			"QP-SCHEMA-029",
 			"applicationBindingMismatch",
 			"Application Identity binding catalog is missing",
+		);
+	if (!bindingCatalog?.exists)
+		return genesisComparable(
+			scope.application,
+			scope.applicationSchema,
+			installedExtensions,
 		);
 	const bindings = await sql<
 		{ application: string; applicationSchema: string }[]
@@ -70,25 +85,12 @@ export async function readCatalogComparableInOwnedTransaction(
 	const application = binding?.application ?? scope.application;
 	const applicationSchema =
 		binding?.applicationSchema ?? scope.applicationSchema;
-	const installedExtensions =
-		scope.requiredExtensionNames.length === 0
-			? []
-			: await sql<{ name: string }[]>`
-				select extname as name
-				from pg_catalog.pg_extension
-				where extname in ${sql([...scope.requiredExtensionNames])}
-				order by extname
-			`;
 	if (!namespace?.exists)
-		return {
+		return genesisComparable(
 			application,
 			applicationSchema,
-			applicationSchemaExists: false,
-			objects: [],
-			unsupportedObjects: [],
-			externalDependencies: [],
-			installedRequiredExtensions: installedExtensions.map((item) => item.name),
-		};
+			installedExtensions,
+		);
 
 	const relations = await sql<
 		{
@@ -177,6 +179,22 @@ export async function readCatalogComparableInOwnedTransaction(
 		externalDependencies: [...state.dependencies.values()].sort(
 			compareFingerprintDependencies,
 		),
+		installedRequiredExtensions: installedExtensions.map((item) => item.name),
+	};
+}
+
+function genesisComparable(
+	application: string,
+	applicationSchema: string,
+	installedExtensions: readonly { readonly name: string }[],
+): JsonRecord {
+	return {
+		application,
+		applicationSchema,
+		applicationSchemaExists: false,
+		objects: [],
+		unsupportedObjects: [],
+		externalDependencies: [],
 		installedRequiredExtensions: installedExtensions.map((item) => item.name),
 	};
 }
