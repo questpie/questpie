@@ -47,8 +47,8 @@ const acceptedDiagnostic = new CompilerDiagnosticError(
 	"seedTargetMismatch",
 	"accepted diagnostic pair",
 );
-// @ts-expect-error diagnostic classes are closed for their exact code
 const invalidDiagnostic = new CompilerDiagnosticError(
+	// @ts-expect-error diagnostic classes are closed for their exact code
 	"QP-SEED-003",
 	"seedCardinalityMismatch",
 	"invalid",
