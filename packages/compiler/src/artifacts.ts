@@ -16,7 +16,10 @@ import {
 	renderClientContract,
 	renderPackageContract,
 } from "./generate";
-import { projectRelationalCompilation } from "./relational";
+import {
+	lowerPostgresQueryPlans,
+	projectRelationalCompilation,
+} from "./relational";
 import { projectManifest, projectMemberContributions } from "./schema";
 import type {
 	ApplicationConfiguration,
@@ -262,6 +265,13 @@ export async function createArtifacts(
 	if (relational.hasRelationalArtifacts) {
 		generated["policy-projection.json"] = canonicalBytes(relational.policy);
 		generated["query-projection.json"] = canonicalBytes(relational.query);
+		generated["postgres-query-plans.json"] = canonicalBytes(
+			lowerPostgresQueryPlans({
+				schema,
+				policyProjection: relational.policy,
+				queryProjection: relational.query,
+			}),
+		);
 		generated["relational-explain.json"] = canonicalBytes(relational.explain);
 	}
 	for (const compilation of input.packageCompilations)
