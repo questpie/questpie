@@ -35,7 +35,16 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 	const runtime = createApplicationRuntime({
 		services: [auditConnection, executionAudit],
 		context: collaborationContext,
-		bootstrap: { get: async () => null },
+		bootstrap: {
+			get: async () =>
+				({
+					companyId,
+					principalId,
+					role: "member",
+					scopeKey: "company",
+					status: "active",
+				}) as never,
+		},
 		project: async ({ facts, service }) => {
 			const [first, second] = await Promise.all([
 				service(executionAudit),
@@ -61,7 +70,11 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 			expect(first).toBe(second);
 			expect(first.connectionId).toBe(1);
 			expect(Object.isFrozen(facts)).toBe(true);
-			expect(facts.values.principalId).toBe(principalId);
+			expect(facts.values).toEqual({
+				selectedMembershipPrincipalId: principalId,
+				selectedMembershipScope: "company",
+				selectedRole: "member",
+			});
 			callbackStarted();
 			await new Promise<never>((_resolve, reject) => {
 				facts.signal.addEventListener(

@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { normalizeBoundPolicy } from "./relational";
 import {
 	fieldPath,
 	flattenFieldContracts,
@@ -133,6 +134,8 @@ function packageContract(value: RecordValue): RecordValue {
 	if (valueBrand.category === "augmentation")
 		return augmentationContract(value);
 	if (valueBrand.resourceKind === "query") return queryContract(value);
+	if (valueBrand.resourceKind === "policy")
+		return normalizeBoundPolicy(value).program as unknown as RecordValue;
 	if (valueBrand.resourceKind === "service")
 		return compositionContract("service", value);
 	if (valueBrand.resourceKind === "collection")
@@ -149,6 +152,7 @@ export function createPackageInventory(
 	exports: readonly EvaluatedExport[],
 ): PackageInventory {
 	const inventoryEntries: PackageInventoryEntry[] = exports
+		.filter((item) => item.value["__questpie"] !== undefined)
 		.map((item) => {
 			const valueBrand = brand(item.value);
 			const contract = packageContract(item.value);
@@ -300,6 +304,11 @@ export function normalizeResources(
 
 	const resources: NormalizedResource[] = [];
 	for (const item of exports) {
+		if (
+			item.value.kind === "dataQuery" &&
+			item.value["__questpie"] === undefined
+		)
+			continue;
 		const valueBrand = brand(item.value);
 		if (valueBrand.category !== "definition") continue;
 		const kind = string(valueBrand.resourceKind, "Resource Kind");
@@ -403,6 +412,23 @@ export function normalizeResources(
 				kind,
 				name,
 				contract: queryContract(item.value),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "policy") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: normalizeBoundPolicy(item.value)
+					.program as unknown as RecordValue,
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

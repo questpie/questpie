@@ -1,9 +1,5 @@
-import type {
-	Codec,
-	CodecValue,
-	CollectionDefinition,
-	FieldDefinition,
-} from "./index";
+import type { CollectionDefinition } from "./collection-contract";
+import type { Codec, CodecValue, FieldDefinition } from "./field-contract";
 import type { SeedPrimaryKey } from "./seed-types";
 import type { FieldNode, InlineShapeDefinition } from "./shape";
 
@@ -48,6 +44,40 @@ export const principal = Object.freeze({
 		createPrincipal("user", input.id),
 	is: (value: unknown): value is Principal =>
 		Boolean(value && typeof value === "object" && trustedPrincipals.has(value)),
+});
+
+type ContextError<
+	Code extends string,
+	Resource extends string | undefined,
+> = Error &
+	Readonly<{
+		code: Code;
+	}> &
+	(Resource extends string
+		? Readonly<{ resource: Resource }>
+		: Readonly<Record<never, never>>);
+
+function contextError<
+	const Code extends "notFound" | "unauthenticated",
+	const Resource extends string | undefined,
+>(code: Code, resource: Resource): ContextError<Code, Resource> {
+	const error = Object.assign(
+		new Error(code),
+		resource === undefined ? { code } : { code, resource },
+	);
+	return Object.freeze(error) as unknown as ContextError<Code, Resource>;
+}
+
+export const context = Object.freeze({
+	tenant: <const Id extends string>(value: Readonly<{ id: Id }>) =>
+		Object.freeze({ id: value.id }),
+	error: Object.freeze({
+		unauthenticated: (): ContextError<"unauthenticated", undefined> =>
+			contextError("unauthenticated", undefined),
+		notFound: <const Resource extends string>(
+			resource: Resource,
+		): ContextError<"notFound", Resource> => contextError("notFound", resource),
+	}),
 });
 
 type BootstrapValue<Node> =

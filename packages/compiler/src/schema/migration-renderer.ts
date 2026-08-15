@@ -68,6 +68,7 @@ function renderStep(
 	target: SchemaProjectionV1,
 	base: SchemaProjectionV1,
 	renames: MigrationPlanV1["renames"],
+	steps: readonly MigrationStepV1[],
 ): string {
 	const schemaName = target.application.postgresSchema;
 	if (stepValue.kind === "createApplicationSchema")
@@ -331,8 +332,17 @@ function renderStep(
 			stepValue.targetIdentity,
 			renames,
 		);
+		const renameKind =
+			stepValue.kind === "dropConstraint"
+				? "renameConstraint"
+				: "renameRelationConstraint";
+		const physicalRenamed = steps.some(
+			(candidate) =>
+				candidate.kind === renameKind &&
+				candidate.targetIdentity === mappedIdentity,
+		);
 		const renamedTarget =
-			mappedIdentity === stepValue.targetIdentity
+			mappedIdentity === stepValue.targetIdentity && !physicalRenamed
 				? undefined
 				: childRecords(targetCollection ?? {}, key).find(
 						(item) => item.identity === mappedIdentity,
@@ -360,8 +370,13 @@ function renderStep(
 			stepValue.targetIdentity,
 			renames,
 		);
+		const physicalRenamed = steps.some(
+			(candidate) =>
+				candidate.kind === "renameIndex" &&
+				candidate.targetIdentity === mappedIdentity,
+		);
 		const renamedTarget =
-			mappedIdentity === stepValue.targetIdentity
+			mappedIdentity === stepValue.targetIdentity && !physicalRenamed
 				? undefined
 				: childRecords(targetCollection ?? {}, "indexes").find(
 						(item) => item.identity === mappedIdentity,
@@ -383,7 +398,7 @@ export function renderMigrationSql(
 	return plan.steps
 		.map(
 			(item) =>
-				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base, plan.renames)}\n`,
+				`-- questpie-step: ${item.stepId}\n${renderStep(item, target, base, plan.renames, plan.steps)}\n`,
 		)
 		.join("\n");
 }

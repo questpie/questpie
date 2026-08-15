@@ -503,6 +503,7 @@ export async function compileApplication(
 		),
 		inventories,
 		resources: firstResources,
+		evaluatedExports: [...firstExports, ...packageExports],
 		packageCompilations,
 	});
 	const reversedGeneratedFiles = await createArtifacts({
@@ -519,6 +520,7 @@ export async function compileApplication(
 		),
 		inventories,
 		resources: secondResources,
+		evaluatedExports: [...secondExports, ...packageExports],
 		packageCompilations: packageCompilations.map((compilation) => ({
 			...compilation,
 			resources: compilation.reversedResources,

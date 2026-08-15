@@ -13,6 +13,9 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-017"
 	| "QP-COMPOSE-020"
 	| "QP-DATA-003"
+	| "QP-DATA-005"
+	| "QP-POLICY-001"
+	| "QP-POLICY-002"
 	| "QP-SCHEMA-001"
 	| "QP-SCHEMA-002"
 	| "QP-SCHEMA-003"
@@ -55,6 +58,9 @@ const diagnosticClassesByCode = {
 	"QP-COMPOSE-017": ["invalidApplicationRoot"],
 	"QP-COMPOSE-020": ["duplicateContributionIdentity"],
 	"QP-DATA-003": ["invalidRelationReference"],
+	"QP-DATA-005": ["invalidOperator"],
+	"QP-POLICY-001": ["missingDefaultPolicy"],
+	"QP-POLICY-002": ["ambiguousDefaultPolicy"],
 	"QP-SCHEMA-001": ["invalidDefinition"],
 	"QP-SCHEMA-002": ["duplicateIdentity"],
 	"QP-SCHEMA-003": ["invalidReference"],

@@ -11,6 +11,8 @@ immutable Seed lifecycle at reviewed head `dca711f0`, evidence head `5a4681ca`,
 and merge `b630fb01`. Accepted BETA-03 adds the first bounded
 Service/Context/execution Runtime tracer at reviewed head `f830e48c`, evidence
 head `1e2a367a`, and merge `a7d24541`.
+The BETA-04 Policy-scoped Message Query tracer is reviewed at `7918bac0`, with
+accepted review evidence at `a1a4265b`; PR #308 remains the merge/tracker gate.
 
 Fixed accepted proof authority:
 
@@ -41,6 +43,8 @@ Fixed accepted proof authority:
 | #289 BETA-02 evidence                | `5a4681cae262309af3f8fd8edbc77feccec9cb24` |
 | #290 BETA-03 reviewed implementation | `f830e48c554b027afcb13efea6d3f900fd8c7ece` |
 | #290 BETA-03 evidence                | `1e2a367a72a7e012685912eccfa21d2085ac9b17` |
+| #291 BETA-04 reviewed implementation | `7918bac0c7d579142fc4882c23f6a61e82dc1a51` |
+| #291 BETA-04 evidence                | `a1a4265b886eb86c133433f6fa84b699457b1258` |
 
 ADR-0008 through ADR-0021 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -59,7 +63,8 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, accepted merge head `a7d24541c433ab502316b34906d97c9dd51f7ee1`.
+  `feat/v4`, accepted authority merge head
+  `19ac6845a51d639887f10d1fd2eeedc841f70555`.
 - The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
@@ -70,6 +75,11 @@ capabilities, never durable authority or a provider matrix.
   implementation head `f830e48c554b027afcb13efea6d3f900fd8c7ece` and
   evidence head `1e2a367a72a7e012685912eccfa21d2085ac9b17`. PR #305
   merged it to `feat/v4`; issue #290 is closed.
+- The reviewed BETA-04 implementation worktree is
+  `/home/drepkovsky/code/questpie-v4-beta-04`, branch `feat/v4-beta-04`, at
+  reviewed head `7918bac0c7d579142fc4882c23f6a61e82dc1a51` and evidence
+  head `a1a4265b886eb86c133433f6fa84b699457b1258`. PR #308 must merge normally
+  before issue #291 closes or BETA-05 becomes agent-ready.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -106,6 +116,24 @@ review, CI, merge, and tracker state before enabling its immediate successor.
 Do not skip a blocked issue or parallelize dependent implementation.
 
 ## Latest verification
+
+- #291 initial reviewed head `f2c1f7be06deaf6ebca9e934c64be0a290034172`
+  received a valid fresh stateless Opus-medium `BLOCKED` with three findings:
+  an unbounded materialized page plan, a mocked PostgreSQL performance claim,
+  and an unreviewed authority revision. Repaired reviewed head
+  `7918bac0c7d579142fc4882c23f6a61e82dc1a51` received the single replacement
+  fresh stateless Opus-medium `PASS`. Raw findings are byte-preserved in
+  `docs/v4/implementation/beta04/`.
+- #291 focused changed, full, release, architecture, package, PostgreSQL
+  16/17/18, generated-contract, hostile, and selected-PR performance gates are
+  PASS. GitHub Actions run `31892854190` measured PostgreSQL 17 execute20 at
+  37.725 ms, planning at 0.422 ms, execution at 0.575 ms, 101 returned rows,
+  and 509 total scan rows. The first-plus-one hostile proves
+  `qp_ix_messages_page`, exactly two Message rows at `first=1`, and no Message
+  sequential scan on all three supported majors.
+- #291 remains a reviewed candidate in PR #308. Do not close the issue, advance
+  P16 readiness, or start BETA-05 until the evidence head passes final CI and
+  merges normally to `feat/v4`.
 
 - P2R1/BETA04 authority candidate `10d5712a` received a valid fresh stateless
   Opus-medium `BLOCKED` because its checker required two unretained authoring
@@ -216,9 +244,10 @@ Do not skip a blocked issue or parallelize dependent implementation.
 ## Next invocation
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-04 issue #291
-from merge base `a7d24541c433ab502316b34906d97c9dd51f7ee1` without
-widening its relationally authorized Query tracer. Preserve the #289/#290
-review evidence, docs-hygiene branch, marketing worktree, scalar-research
-worktree, and archive branch.
+Use the repo-owned QUESTPIE v4 skill. Finish PR #308 for reviewed BETA-04 issue
+#291 at implementation head `7918bac0` and evidence head `a1a4265b`. Require
+final CI, normal merge to `feat/v4`, tracker closure, and dependency-derived P16
+readiness before starting BETA-05. Preserve the #289/#290 review evidence,
+docs-hygiene branch, marketing worktree, scalar-research worktree, and archive
+branch.
 ```

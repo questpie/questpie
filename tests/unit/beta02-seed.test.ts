@@ -28,10 +28,15 @@ function caught(action: () => void): unknown {
 describe("BETA-02 committed Seeds", () => {
 	test("commits the collaboration graph as one immutable Seed", async () => {
 		const compiled = await compilation;
-		const [committed] = compiled.committedSeeds;
+		const committed = compiled.committedSeeds.find(
+			({ identity }) => identity === "seed:collaboration.demo.v1",
+		);
 		expect(committed).toBeDefined();
 		if (!committed) throw new Error("compiled collaboration Seed is missing");
 		expect(committed.identity).toBe("seed:collaboration.demo.v1");
+		expect(committed.files["checksum.sha256"]).toBe(
+			"1f54d6b02406519d85f5cd9a84548bd7108b128e717fcb0a96ee0c42df08ad41\n",
+		);
 		expect(committed.steps.map((step) => step.collection)).toEqual([
 			"collection:companies",
 			"collection:spaces",

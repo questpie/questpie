@@ -1,5 +1,9 @@
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
+import type {
+	RelationalGeneratedContractV1,
+	RelationalGeneratedSelectionV1,
+} from "./relational";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -207,15 +211,18 @@ export function renderAppContract(
 	data: unknown,
 	schema: unknown,
 	sourceRoot: string,
+	relational: RelationalGeneratedContractV1,
 ): string {
-	const sourceModule = (resource: NormalizedResource): string => {
+	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
 			sourceRoot === "." ? "" : `${sourceRoot.replace(/\/$/, "")}/`;
-		const relativePath = resource.origin.logicalPath.startsWith(prefix)
-			? resource.origin.logicalPath.slice(prefix.length)
-			: resource.origin.logicalPath;
+		const relativePath = logicalPath.startsWith(prefix)
+			? logicalPath.slice(prefix.length)
+			: logicalPath;
 		return `#questpie/source/${relativePath}`;
 	};
+	const sourceModule = (resource: NormalizedResource): string =>
+		sourceModulePath(resource.origin.logicalPath);
 	const definitionType = (resource: NormalizedResource): string =>
 		`(typeof import(${JSON.stringify(sourceModule(resource))}))[${JSON.stringify(resource.origin.exportName)}]`;
 	const context = resources.find(
@@ -236,6 +243,39 @@ export function renderAppContract(
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
+	const fieldByIdentity = (identity: string): RecordValue => {
+		const marker = "/field:";
+		const offset = identity.indexOf(marker);
+		const collectionIdentity = identity.slice(0, offset);
+		const path = identity.slice(offset + marker.length).split("/");
+		const resource = resources.find(
+			(candidate) => candidate.identity === collectionIdentity,
+		);
+		const field = resource
+			? fieldAtPath(collectionFields(resource), path)
+			: undefined;
+		if (!field) throw new TypeError(`unknown selected Field ${identity}`);
+		return field;
+	};
+	const renderSelection = (
+		selection: readonly RelationalGeneratedSelectionV1[],
+	): string =>
+		`{ ${selection
+			.map((selected) => {
+				const key = JSON.stringify(String(selected.key));
+				if (selected.kind === "field") {
+					return `${key}${selected.optional ? "?" : ""}: ${fieldType(fieldByIdentity(selected.field))};`;
+				}
+				return `${key}: ${renderSelection(selected.select)} | null;`;
+			})
+			.join(" ")} }`;
+	const queryRuns = relational.queries
+		.map((query) => {
+			const definition = `(typeof import(${JSON.stringify(sourceModulePath(query.origin.path))}))[${JSON.stringify(query.origin.exportName)}]`;
+			const result = `Readonly<{ nodes: Array<${renderSelection(query.select)}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>`;
+			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
+		})
+		.join("\n\t");
 	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
@@ -246,6 +286,7 @@ export interface ReadCollection<Row, Key> {
 
 export interface GeneratedData {
 	${renderData(resources)}
+	${queryRuns}
 }
 
 export interface GeneratedQueries {

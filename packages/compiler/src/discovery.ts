@@ -14,6 +14,7 @@ import ts from "typescript";
 
 import { compareAscii } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { relationalDiscoverySource } from "./relational";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -543,10 +544,20 @@ Date.now = () => { throw new Error("QP-COMPOSE-010 Date.now"); };
 if (globalThis.crypto?.randomUUID) globalThis.crypto.randomUUID = () => { throw new Error("QP-COMPOSE-010 crypto.randomUUID"); };
 globalThis.fetch = () => { throw new Error("QP-COMPOSE-010 fetch"); };
 const { default: records } = await import(${JSON.stringify(`./${basename(bundlePath)}`)});
+const resourceIdentities = new Map();
+for (const record of records) for (const value of Object.values(record.exports)) {
+  const metadata = value?.__questpie;
+  if (metadata?.category !== "definition" || typeof metadata.resourceKind !== "string" || typeof value.name !== "string") continue;
+  const identity = metadata.resourceKind + ":" + value.name;
+  const previous = resourceIdentities.get(identity);
+  if (previous && previous !== value) throw new Error("QP-COMPOSE-002 duplicateResourceIdentity " + identity);
+  resourceIdentities.set(identity, value);
+}
+${relationalDiscoverySource}
 const direct = new Set(${JSON.stringify(directKeys)});
 const candidates = new Map();
 for (const record of records) for (const [exportName, value] of Object.entries(record.exports)) {
-  if (!value || typeof value !== "object" || !value.__questpie || typeof value.__questpie !== "object") continue;
+  if (!value || typeof value !== "object" || ((!value.__questpie || typeof value.__questpie !== "object") && value.kind !== "dataQuery")) continue;
   const list = candidates.get(value) ?? [];
   list.push({ logicalPath: record.logicalPath, exportName, value });
   candidates.set(value, list);
@@ -558,7 +569,7 @@ for (const list of candidates.values()) {
     const rightDirect = direct.has(right.logicalPath + "\\0" + right.exportName) ? 0 : 1;
     return leftDirect - rightDirect || (left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
   });
-  found.push(list[0]);
+  found.push({ ...list[0], value: projectRelationalValue(list[0].value) });
 }
 found.sort((left, right) => left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
 process.stdout.write(JSON.stringify(found));
@@ -594,11 +605,23 @@ process.stdout.write(JSON.stringify(found));
 			stderr: "pipe",
 		});
 		if (child.exitCode !== 0) {
+			if (child.stderr.toString().includes("QP-COMPOSE-002"))
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-002",
+					"duplicateResourceIdentity",
+					"controlled evaluation found a duplicate Resource identity",
+				);
 			if (child.stderr.toString().includes("QP-COMPOSE-010"))
 				throw new CompilerDiagnosticError(
 					"QP-COMPOSE-010",
 					"impureStructuralGraph",
 					"controlled child evaluation failed",
+				);
+			if (child.stderr.toString().includes("QP-DATA-005"))
+				throw new CompilerDiagnosticError(
+					"QP-DATA-005",
+					"invalidOperator",
+					"controlled relational evaluation found an unknown operator",
 				);
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",

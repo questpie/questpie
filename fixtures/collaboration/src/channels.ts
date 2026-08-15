@@ -8,6 +8,12 @@ export const channels = defineCollection({
 		id: field.uuid({ nullable: false, default: "randomUuid" }),
 		spaceId: field.uuid({ nullable: false }),
 		name: field.text({ nullable: false, minLength: 1, maxLength: 120 }),
+		visibility: field.text({
+			nullable: false,
+			minLength: 1,
+			maxLength: 16,
+			default: "company",
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),

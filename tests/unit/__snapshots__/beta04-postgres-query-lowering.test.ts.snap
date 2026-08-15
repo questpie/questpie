@@ -1,0 +1,293 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`lowers one Policy-authorized Message page to one static PostgreSQL statement 1`] = `
+"{
+  "format": "questpie.postgres-query-plan",
+  "version": 1,
+  "queryDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "templateDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "policy": "policy:messages.default",
+  "policyProgramDigest": "ba9a6a4668910504c12b812177bbf9171a10f5b56a152d224f36807c58b3cf7e",
+  "usedExecutionFacts": [
+    "authorityKind",
+    "principalId",
+    "tenantId"
+  ],
+  "admission": "authenticated",
+  "binding": {
+    "parameters": [
+      {
+        "name": "after",
+        "kind": "cursor",
+        "nullable": true
+      },
+      {
+        "name": "channelId",
+        "kind": "scalar",
+        "codec": {
+          "kind": "uuid"
+        },
+        "nullable": false
+      },
+      {
+        "name": "first",
+        "kind": "scalar",
+        "codec": {
+          "kind": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "nullable": false
+      }
+    ]
+  },
+  "page": {
+    "kind": "forwardCursor",
+    "first": {
+      "parameter": "first",
+      "minimum": 1,
+      "maximum": 100
+    },
+    "after": {
+      "parameter": "after"
+    },
+    "scopeParameters": [
+      "channelId"
+    ],
+    "order": [
+      {
+        "field": "collection:messages/field:createdAt",
+        "codec": "timestamp",
+        "nullable": false,
+        "withTimezone": true
+      },
+      {
+        "field": "collection:messages/field:id",
+        "codec": "uuid",
+        "nullable": false
+      }
+    ]
+  },
+  "sql": "WITH \\"qp_page\\" AS MATERIALIZED (SELECT \\"qp_row\\".* FROM \\"collaboration\\".\\"messages\\" AS \\"qp_row\\" WHERE EXISTS (SELECT 1 FROM \\"collaboration\\".\\"channels\\" AS \\"qp_evidence0\\" WHERE ((\\"qp_evidence0\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_row\\".\\"channel_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"spaces\\" AS \\"qp_evidence1\\" WHERE ((\\"qp_evidence1\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence0\\".\\"space_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"companies\\" AS \\"qp_evidence2\\" WHERE ((\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence1\\".\\"company_id\\") AND (\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM $1::uuid) AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"memberships\\" AS \\"qp_evidence3\\" WHERE ((\\"qp_evidence3\\".\\"company_id\\" IS NOT DISTINCT FROM \\"qp_evidence2\\".\\"id\\") AND (\\"qp_evidence3\\".\\"principal_id\\" IS NOT DISTINCT FROM $2::uuid) AND (\\"qp_evidence3\\".\\"scope_key\\" IS NOT DISTINCT FROM $3::text) AND (\\"qp_evidence3\\".\\"status\\" IS NOT DISTINCT FROM $4::text))))))))) AND (\\"qp_row\\".\\"channel_id\\" = $5::uuid) AND (NOT $6::boolean OR (((pg_catalog.date_trunc('milliseconds', \\"qp_row\\".\\"created_at\\") < $7::timestamptz)) OR (pg_catalog.date_trunc('milliseconds', \\"qp_row\\".\\"created_at\\") IS NOT DISTINCT FROM $7::timestamptz AND (\\"qp_row\\".\\"id\\" < $8::uuid)))) ORDER BY pg_catalog.date_trunc('milliseconds', \\"qp_row\\".\\"created_at\\") DESC NULLS LAST, \\"qp_row\\".\\"id\\" DESC NULLS LAST LIMIT ($9::integer + 1)) SELECT \\"qp_relation_0\\".\\"qp_present\\" AS \\"qp_author_present\\", \\"qp_relation_0\\".\\"qp_value_0\\" AS \\"qp_author_id\\", \\"qp_relation_0\\".\\"qp_value_1\\" AS \\"qp_author_role\\", CASE WHEN \\"qp_guard_1\\".\\"allowed\\" THEN \\"qp_row\\".\\"body\\" ELSE NULL END AS \\"qp_body\\", \\"qp_guard_1\\".\\"allowed\\" AS \\"qp_body_allowed\\", pg_catalog.date_trunc('milliseconds', \\"qp_row\\".\\"created_at\\") AS \\"qp_createdAt\\", \\"qp_row\\".\\"id\\" AS \\"qp_id\\" FROM \\"qp_page\\" AS \\"qp_row\\" LEFT JOIN LATERAL (SELECT TRUE AS \\"qp_present\\", \\"qp_relation_0_row\\".\\"id\\" AS \\"qp_value_0\\", \\"qp_relation_0_row\\".\\"role\\" AS \\"qp_value_1\\" FROM \\"collaboration\\".\\"memberships\\" AS \\"qp_relation_0_row\\" WHERE \\"qp_relation_0_row\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_row\\".\\"author_membership_id\\" AND ($10::text IS NOT DISTINCT FROM $11::text) LIMIT 1) AS \\"qp_relation_0\\" ON TRUE CROSS JOIN LATERAL (SELECT EXISTS (SELECT 1 FROM \\"collaboration\\".\\"memberships\\" AS \\"qp_evidence4\\" WHERE ((\\"qp_evidence4\\".\\"company_id\\" IS NOT DISTINCT FROM $1::uuid) AND (\\"qp_evidence4\\".\\"principal_id\\" IS NOT DISTINCT FROM $2::uuid) AND (\\"qp_evidence4\\".\\"scope_key\\" IS NOT DISTINCT FROM $3::text) AND (\\"qp_evidence4\\".\\"status\\" IS NOT DISTINCT FROM $4::text) AND (\\"qp_evidence4\\".\\"role\\" IN ($12::text, $13::text)) AND (\\"qp_row\\".\\"channel_id\\" IS DISTINCT FROM $14::uuid))) AS \\"allowed\\") AS \\"qp_guard_1\\" ORDER BY pg_catalog.date_trunc('milliseconds', \\"qp_row\\".\\"created_at\\") DESC NULLS LAST, \\"qp_row\\".\\"id\\" DESC NULLS LAST;\\n",
+  "parameters": [
+    {
+      "kind": "executionFact",
+      "source": "tenant",
+      "path": [
+        "id"
+      ],
+      "codec": "uuid",
+      "postgresType": "uuid",
+      "position": 1
+    },
+    {
+      "kind": "executionFact",
+      "source": "principal",
+      "path": [
+        "id"
+      ],
+      "codec": "uuid",
+      "postgresType": "uuid",
+      "position": 2
+    },
+    {
+      "kind": "literal",
+      "value": "company",
+      "codec": "text",
+      "postgresType": "text",
+      "position": 3
+    },
+    {
+      "kind": "literal",
+      "value": "active",
+      "codec": "text",
+      "postgresType": "text",
+      "position": 4
+    },
+    {
+      "kind": "queryParameter",
+      "parameter": "channelId",
+      "postgresType": "uuid",
+      "position": 5
+    },
+    {
+      "kind": "cursorPresent",
+      "parameter": "after",
+      "postgresType": "boolean",
+      "position": 6
+    },
+    {
+      "kind": "cursorValue",
+      "parameter": "after",
+      "field": "collection:messages/field:createdAt",
+      "postgresType": "timestamptz",
+      "position": 7
+    },
+    {
+      "kind": "cursorValue",
+      "parameter": "after",
+      "field": "collection:messages/field:id",
+      "postgresType": "uuid",
+      "position": 8
+    },
+    {
+      "kind": "queryParameter",
+      "parameter": "first",
+      "postgresType": "integer",
+      "position": 9
+    },
+    {
+      "kind": "executionFact",
+      "source": "authority",
+      "path": [
+        "kind"
+      ],
+      "codec": "authority",
+      "postgresType": "text",
+      "position": 10
+    },
+    {
+      "kind": "literal",
+      "value": "system",
+      "codec": "authority",
+      "postgresType": "text",
+      "position": 11
+    },
+    {
+      "kind": "literal",
+      "value": "admin",
+      "codec": "text",
+      "postgresType": "text",
+      "position": 12
+    },
+    {
+      "kind": "literal",
+      "value": "owner",
+      "codec": "text",
+      "postgresType": "text",
+      "position": 13
+    },
+    {
+      "kind": "literal",
+      "value": "00000000-0000-0000-0000-000000000000",
+      "codec": "uuid",
+      "postgresType": "uuid",
+      "position": 14
+    }
+  ],
+  "result": [
+    {
+      "kind": "toOne",
+      "key": "author",
+      "relation": "collection:messages/relation:author",
+      "presenceColumn": "qp_author_present",
+      "fields": [
+        {
+          "key": "id",
+          "field": "collection:memberships/field:id",
+          "column": "qp_author_id",
+          "codec": {
+            "kind": "uuid"
+          },
+          "nullable": false
+        },
+        {
+          "key": "role",
+          "field": "collection:memberships/field:role",
+          "column": "qp_author_role",
+          "codec": {
+            "kind": "text",
+            "minLength": 1,
+            "maxLength": 32,
+            "collation": "questpie.binary"
+          },
+          "nullable": false
+        }
+      ]
+    },
+    {
+      "kind": "field",
+      "key": "body",
+      "field": "collection:messages/field:body",
+      "column": "qp_body",
+      "codec": {
+        "kind": "text",
+        "minLength": 1,
+        "maxLength": 8192,
+        "collation": "questpie.binary"
+      },
+      "nullable": false,
+      "guardColumn": "qp_body_allowed"
+    },
+    {
+      "kind": "field",
+      "key": "createdAt",
+      "field": "collection:messages/field:createdAt",
+      "column": "qp_createdAt",
+      "codec": {
+        "kind": "timestamp",
+        "withTimezone": true
+      },
+      "nullable": false
+    },
+    {
+      "kind": "field",
+      "key": "id",
+      "field": "collection:messages/field:id",
+      "column": "qp_id",
+      "codec": {
+        "kind": "uuid"
+      },
+      "nullable": false
+    }
+  ],
+  "nondisclosure": {
+    "keyedLookup": {
+      "sql": "WITH \\"qp_authorized\\" AS MATERIALIZED (SELECT \\"qp_row\\".* FROM \\"collaboration\\".\\"messages\\" AS \\"qp_row\\" WHERE EXISTS (SELECT 1 FROM \\"collaboration\\".\\"channels\\" AS \\"qp_evidence0\\" WHERE ((\\"qp_evidence0\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_row\\".\\"channel_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"spaces\\" AS \\"qp_evidence1\\" WHERE ((\\"qp_evidence1\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence0\\".\\"space_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"companies\\" AS \\"qp_evidence2\\" WHERE ((\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence1\\".\\"company_id\\") AND (\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM $1::uuid) AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"memberships\\" AS \\"qp_evidence3\\" WHERE ((\\"qp_evidence3\\".\\"company_id\\" IS NOT DISTINCT FROM \\"qp_evidence2\\".\\"id\\") AND (\\"qp_evidence3\\".\\"principal_id\\" IS NOT DISTINCT FROM $2::uuid) AND (\\"qp_evidence3\\".\\"scope_key\\" IS NOT DISTINCT FROM $3::text) AND (\\"qp_evidence3\\".\\"status\\" IS NOT DISTINCT FROM $4::text)))))))))) SELECT CASE WHEN EXISTS (SELECT 1 FROM \\"qp_authorized\\" AS \\"qp_key_row\\" WHERE \\"qp_key_row\\".\\"id\\" IS NOT DISTINCT FROM $5::uuid) THEN 'found' ELSE 'notFound' END AS \\"qp_key_outcome\\";\\n",
+      "parameters": [
+        {
+          "kind": "executionFact",
+          "source": "tenant",
+          "path": [
+            "id"
+          ],
+          "codec": "uuid",
+          "postgresType": "uuid",
+          "position": 1
+        },
+        {
+          "kind": "executionFact",
+          "source": "principal",
+          "path": [
+            "id"
+          ],
+          "codec": "uuid",
+          "postgresType": "uuid",
+          "position": 2
+        },
+        {
+          "kind": "literal",
+          "value": "company",
+          "codec": "text",
+          "postgresType": "text",
+          "position": 3
+        },
+        {
+          "kind": "literal",
+          "value": "active",
+          "codec": "text",
+          "postgresType": "text",
+          "position": 4
+        },
+        {
+          "position": 5,
+          "kind": "key",
+          "postgresType": "uuid"
+        }
+      ],
+      "keyField": "collection:messages/field:id",
+      "outcomeColumn": "qp_key_outcome"
+    }
+  }
+}"
+`;

@@ -1,4 +1,4 @@
-import { canonicalBytes, compareAscii, digest } from "../canonical";
+import { canonicalBytes, compareAscii } from "../canonical";
 import type {
 	MigrationPlanV1,
 	MigrationStepKindV1,
@@ -12,6 +12,11 @@ import {
 } from "./migration-classification";
 import type { MigrationClassification } from "./migration-classification";
 import {
+	expandReferencedKeyDependencies,
+	type MigrationStepDependency,
+} from "./migration-dependencies";
+import { createMigrationStep as step } from "./migration-step";
+import {
 	childRecords,
 	mapByIdentity,
 	mapIdentityBackward,
@@ -20,24 +25,6 @@ import {
 } from "./projection";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
-
-function step(
-	input: Readonly<{
-		kind: MigrationStepKindV1;
-		targetIdentity: string;
-		containerIdentity: string;
-		lock: MigrationStepV1["lock"];
-		scansData: boolean;
-		rewritesTable: boolean;
-		reversibleWithoutData: boolean;
-		classification: MigrationClassification;
-	}>,
-): MigrationStepV1 {
-	return {
-		stepId: digest("questpie-migration-step-v1", input),
-		...input,
-	};
-}
 
 const kindRank: readonly MigrationStepKindV1[] = [
 	"createApplicationSchema",
@@ -62,6 +49,7 @@ const kindRank: readonly MigrationStepKindV1[] = [
 function sortSteps(
 	steps: MigrationStepV1[],
 	renames: MigrationPlanV1["renames"] = [],
+	dependencies: readonly MigrationStepDependency[] = [],
 ): MigrationStepV1[] {
 	const replacements: Readonly<Record<string, MigrationStepKindV1>> = {
 		addConstraint: "dropConstraint",
@@ -79,10 +67,20 @@ function sortSteps(
 	};
 	const pending = [...steps];
 	const sorted: MigrationStepV1[] = [];
+	const explicitPredecessors = new Map<string, Set<string>>();
+	for (const dependency of dependencies) {
+		const predecessors =
+			explicitPredecessors.get(dependency.dependentStepId) ?? new Set<string>();
+		predecessors.add(dependency.predecessorStepId);
+		explicitPredecessors.set(dependency.dependentStepId, predecessors);
+	}
 	while (pending.length > 0) {
 		const ready = pending
 			.filter(
 				(candidate) =>
+					!pending.some((predecessor) =>
+						explicitPredecessors.get(candidate.stepId)?.has(predecessor.stepId),
+					) &&
 					!pending.some(
 						(predecessor) =>
 							mapIdentityForward(predecessor.targetIdentity, renames) ===
@@ -453,5 +451,11 @@ export function destructiveDeltaSteps(
 				}),
 			);
 	}
-	return sortSteps(steps, renames);
+	const expanded = expandReferencedKeyDependencies({
+		base,
+		target,
+		renames,
+		steps,
+	});
+	return sortSteps(expanded.steps, renames, expanded.dependencies);
 }

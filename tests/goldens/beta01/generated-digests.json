@@ -1,16 +1,21 @@
 {
 	"files": {
-		"app.ts": "55c869afb19c01819ce150e97533d8d84b886db037a3bcc9ac99e360d8a00359",
-		"build-input.json": "6e38fcff710b07adc3118c760c72731ca84d65f7594761b597536cb1e3b14902",
+		"app.ts": "892d4a0256a559589f604d431dbbf79b2b8cbeb1d1bba5493e2b24ba749aaf2c",
+		"build-input.json": "a8b46f7f42846b4c1a548ed4c3b3e7f351a2b35661a9e9631b079615caeb4c39",
 		"client.ts": "557043240ed91541f704da25adcec68b7f2541e58f2b66f9a749c4af6b152f85",
 		"context-projection.json": "429caf9e4c56beb307c9ad09340a3f2f05a61904465205a366de626b6fee5767",
-		"execution-composition-explain.json": "028868365d22fc7ab6721fe44db2ddcdc083d24af0e9c9a6c2647c504596f54f",
-		"internal/checksums.json": "3e8b5f245f34fc21ec56e6ebe1e2ef897f063e84056bbc0b863b2c54fbdcd4b6",
+		"execution-composition-explain.json": "b73e6a6aeb175ab04afb830f42c8b6b4838f175cc0b455a7c58ccd3db81e402e",
+		"internal/checksums.json": "cb2a8e7117f164925b110b9b5cf03049719ca6f04ef3a308dcd31660700df8db",
 		"internal/package-contracts/questpie-collaboration-audit-846963f083917e90c9a1fa4c25d7ac12de3ef0dc1fb82b1c2badd14616c61c0c.ts": "ca79dff0c95d5c669e0a815288f69200977258d3ff5882d0b9f4e0e5f7ef110c",
 		"internal/package-inventories.json": "2ffe2e9595411fa40b2fbfa51b9d3c853bf4be9286a1135ac866f9428b54d12d",
-		"manifest.json": "4bda7d10f5f5cc949d2d516cd739641377f9e5fde177f149460d66f277c84a15",
-		"origin-map.json": "8a2c9accdbeb2940cc3d494643919044f2ad5e396ca60c8858e181e868e08841",
-		"schema-projection.json": "9d8b3ba3ca845cbceefc4bd9d1e8a8ae5944674878c97fe80ae0beeee43e44dc",
+		"manifest.json": "36d994e655af16ca5fb85add716cd439977e8499bbecd88f87f44a7d6eb7df28",
+		"origin-map.json": "5c5c9121626f83e82556f75a63288f6383cb277470b18a34dca70ea541193e95",
+		"policy-projection.json": "e2c8b87eb9a024abb7b6993b8861babdfa2524221c07cf52fb8729ad43b5a84d",
+		"postgres-query-plans.json": "02827cea9195d4b46138ad5900152f7e57743095d5d5ccc94311c379e5b4eb3f",
+		"query-projection.json": "9c136620463be84829691ace27e25da164000f7196f624b80284e25a80ad9eb7",
+		"relational-explain.json": "3e437d1039bb4b05b2ab5c83e252e36e71c74dbfc22c9f57ff6122f74965a561",
+		"relational-nondisclosure.json": "58d1987e6412b223b4199ce9ea7d1fc3d08e4a8fbbb3de9c81b246a74363bdaa",
+		"schema-projection.json": "18056834a52bf9970e9b0d9c53c4c14252bfe5983d6ae9ea0b0c18b3f5b3f487",
 		"service-projection.json": "2e7da08cdfb205f5871935d9460084dab09455aa8c6bbdabe081ebc72dfdf46d"
 	},
 	"inventories": [

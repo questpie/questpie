@@ -142,16 +142,22 @@ function full(): void {
 	gitDiffCheck();
 }
 
+function buildPublicPackage(): void {
+	run(["bunx", "turbo", "run", "build", "--filter", "questpie"]);
+}
+
 function postgres(): void {
 	if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER) {
 		fail("PGHOST, PGDATABASE, and PGUSER are required for the PostgreSQL lane");
 	}
 	const roots = ["tests/integration/postgres"];
 	if (!roots.some(existsSync)) fail("no PostgreSQL tests exist");
+	buildPublicPackage();
 	run(["bun", "test", ...roots]);
 }
 
 function scenarios(kind: "micro" | "load" | "soak"): void {
+	if (kind === "micro") buildPublicPackage();
 	run(["bun", "run", "scripts/performance.ts", kind]);
 }
 

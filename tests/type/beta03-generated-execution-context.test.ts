@@ -40,7 +40,11 @@ type ResolvedContext = Expect<Equal<
 	AppResolvedContext,
 	Readonly<{
 		tenant: Readonly<{ id: string }>;
-		values: Readonly<{ principalId: string }>;
+		values: Readonly<{
+			selectedMembershipPrincipalId: string;
+			selectedMembershipScope: string;
+			selectedRole: string;
+		}>;
 	}>
 >>;
 type AuditConnection = Expect<Equal<
