@@ -65,3 +65,56 @@ export const invalidIndex = defineCollection({
 		}
 	}
 });
+
+test("rejects empty, missing, and structural key Constraint fields before projection", async () => {
+	for (const hostile of [
+		{
+			constraint:
+				'primary: constraint.primaryKey({ fields: [] }), valid: constraint.unique({ fields: ["id"] })',
+			diagnostic:
+				/QP-SCHEMA-001 invalidDefinition: .*\/constraint:primary requires at least one Field/,
+		},
+		{
+			constraint:
+				'primary: constraint.primaryKey({ fields: ["id"] }), hostile: constraint.unique({ fields: [] })',
+			diagnostic:
+				/QP-SCHEMA-001 invalidDefinition: .*\/constraint:hostile requires at least one Field/,
+		},
+		{
+			constraint:
+				'primary: constraint.primaryKey({ fields: ["id"] }), hostile: constraint.unique({ fields: ["missing"] as any })',
+			diagnostic:
+				/QP-SCHEMA-003 invalidReference: .*\/constraint:hostile references unknown .*\/field:missing/,
+		},
+		{
+			constraint:
+				'primary: constraint.primaryKey({ fields: ["address"] as any })',
+			diagnostic:
+				/QP-SCHEMA-003 invalidReference: .*\/constraint:primary references unknown .*\/field:address/,
+		},
+	] as const) {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-bad-key-"));
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/invalid-key.ts"),
+				`import { constraint, defineCollection, field, shape } from "questpie";
+
+export const invalidKey = defineCollection({
+	name: "invalidKey",
+	fields: {
+		id: field.uuid(),
+		address: shape.inline({ fields: { city: field.text() } }),
+	},
+	constraints: { ${hostile.constraint} },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toThrow(hostile.diagnostic);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
+	}
+});

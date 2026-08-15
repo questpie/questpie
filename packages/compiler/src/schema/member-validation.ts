@@ -37,3 +37,25 @@ export function validateBtreeIndexTerms<
 	}
 	return terms;
 }
+
+export function validateKeyConstraintFields(
+	constraintIdentity: string,
+	references: readonly string[],
+	fields: readonly RecordValue[],
+): readonly string[] {
+	if (references.length === 0)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-001",
+			"invalidDefinition",
+			`${constraintIdentity} requires at least one Field`,
+		);
+	const knownFields = new Set(fields.map((field) => String(field.identity)));
+	for (const reference of references)
+		if (!knownFields.has(reference))
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				`${constraintIdentity} references unknown ${reference}`,
+			);
+	return references;
+}

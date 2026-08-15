@@ -5,7 +5,10 @@ import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
 import { flattenFieldContracts } from "./schema/field-contract";
 import { fieldPath, indexField } from "./schema/field-reference";
-import { validateBtreeIndexTerms } from "./schema/member-validation";
+import {
+	validateBtreeIndexTerms,
+	validateKeyConstraintFields,
+} from "./schema/member-validation";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -655,6 +658,9 @@ export function projectManifest(
 							: value.kind === "unique"
 								? "qp_uq"
 								: "qp_ck";
+					const references = (value.fields as readonly unknown[]).map((field) =>
+						fieldSemanticIdentity(resource.identity, fieldPath(field)),
+					);
 					return {
 						kind: value.kind,
 						identity,
@@ -664,8 +670,10 @@ export function projectManifest(
 							value.postgresName,
 							`${prefix}_${tableName}_${snake(key)}`,
 						),
-						fields: (value.fields as readonly unknown[]).map((field) =>
-							fieldSemanticIdentity(resource.identity, fieldPath(field)),
+						fields: validateKeyConstraintFields(
+							identity,
+							references,
+							projectedFields,
 						),
 					};
 				},
