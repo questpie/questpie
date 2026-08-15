@@ -209,7 +209,7 @@ function parameter<
 	return Object.freeze({
 		kind: "parameter",
 		parameterKind,
-		nullable: options.nullable,
+		...options,
 	});
 }
 
