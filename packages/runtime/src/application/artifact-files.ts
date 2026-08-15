@@ -1,0 +1,68 @@
+import { createHash } from "node:crypto";
+
+import {
+	failRuntimeArtifact as fail,
+	runtimeArtifactDigest as artifactDigest,
+	runtimeArtifactRecord as record,
+} from "./artifact-protocol";
+import type { RuntimeArtifactsV1 } from "./artifacts";
+
+export function verifyRuntimeArtifactFiles(
+	artifacts: RuntimeArtifactsV1,
+	files: Readonly<Record<string, Uint8Array | string>>,
+): void {
+	const build = artifacts.runtimeBuild;
+	const paths = Object.keys(files).sort();
+	const expectedPaths = build.inventory.map((item) => item.path);
+	if (
+		paths.length !== expectedPaths.length ||
+		expectedPaths.some((path, index) => path !== paths[index])
+	)
+		fail("artifact file inventory does not match");
+	for (const item of build.inventory) {
+		const bytes = files[item.path];
+		if (bytes === undefined) fail(`artifact file ${item.path} is missing`);
+		const actual = createHash("sha256").update(bytes).digest("hex");
+		if (actual !== item.digest)
+			fail(`artifact file ${item.path} digest does not match`);
+	}
+	const server = files["internal/application.js"];
+	if (server === undefined)
+		fail("artifact file internal/application.js is missing");
+	if (
+		createHash("sha256").update(server).digest("hex") !==
+		build.serverBundleDigest
+	)
+		fail("server bundle digest does not match");
+	const parseJsonFile = (path: string): unknown => {
+		const bytes = files[path];
+		if (bytes === undefined) fail(`artifact file ${path} is missing`);
+		try {
+			return JSON.parse(
+				typeof bytes === "string"
+					? bytes
+					: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+			);
+		} catch {
+			fail(`artifact file ${path} is not canonical JSON`);
+		}
+	};
+	if (
+		artifactDigest(
+			"questpie-runtime-executables-v1",
+			parseJsonFile("runtime-executables.json"),
+		) !== build.runtimeExecutablesDigest
+	)
+		fail("runtime-executables.json semantic digest does not match");
+	const rawWire = record(
+		parseJsonFile("wire-contract.json"),
+		"wire-contract.json",
+	);
+	const { digest: rawWireDigest, ...rawWireUnsigned } = rawWire;
+	if (
+		rawWireDigest !== build.wireDigest ||
+		artifactDigest("questpie-operation-wire-v1", rawWireUnsigned) !==
+			build.wireDigest
+	)
+		fail("wire-contract.json semantic digest does not match");
+}

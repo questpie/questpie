@@ -7,6 +7,11 @@ import {
 } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
+import {
+	findAcceptanceGitDiffSecret,
+	findAcceptancePacketSecret,
+} from "./acceptance-packet-secrets";
+
 type Manifest = {
 	ticket: string;
 	reviewedHead?: string;
@@ -24,17 +29,6 @@ type Options = {
 	timeoutMs: number;
 	dryRun: boolean;
 };
-
-const SECRET_PATTERNS: Array<[string, RegExp]> = [
-	["database URL", /\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/\S+/i],
-	["private key", /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
-	["GitHub token", /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/],
-	["AWS access key", /\bAKIA[0-9A-Z]{16}\b/],
-	[
-		"generic credential",
-		/\b(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?[^\s"']{8,}/i,
-	],
-];
 
 function fail(message: string): never {
 	console.error(`acceptance review: ${message}`);
@@ -106,9 +100,13 @@ function xml(value: string): string {
 }
 
 function rejectSecrets(packet: string): void {
-	for (const [name, pattern] of SECRET_PATTERNS) {
-		if (pattern.test(packet)) fail(`packet contains a prohibited ${name}`);
-	}
+	const secret = findAcceptancePacketSecret(packet);
+	if (secret) fail(`packet contains a prohibited ${secret.name}`);
+}
+
+function rejectDiffSecrets(diff: string): void {
+	const secret = findAcceptanceGitDiffSecret(diff);
+	if (secret) fail(`packet diff contains a prohibited ${secret.name}`);
 }
 
 const options = parseArgs(Bun.argv.slice(2));
@@ -162,10 +160,13 @@ for (const [name, authorityHead] of Object.entries(manifest.authorityHeads)) {
 const documents = authorityPaths
 	.map((path, index) => {
 		const source = relative(process.cwd(), path) || path;
-		return `<document index="${index + 1}"><source>${xml(source)}</source><document_content>${xml(readFileSync(path, "utf8"))}</document_content></document>`;
+		const content = readFileSync(path, "utf8");
+		rejectSecrets(content);
+		return `<document index="${index + 1}"><source>${xml(source)}</source><document_content>${xml(content)}</document_content></document>`;
 	})
 	.join("\n");
 const manifestSource = relative(process.cwd(), manifestPath) || manifestPath;
+rejectSecrets(JSON.stringify(manifest));
 const diff = shell([
 	"git",
 	"diff",
@@ -176,10 +177,9 @@ const diff = shell([
 	".",
 ]);
 if (diff === "") fail("review diff is empty");
+rejectDiffSecrets(diff);
 
 const packet = `<documents>\n${documents}\n<document index="${authorityPaths.length + 1}"><source>${xml(manifestSource)}</source><document_content>${xml(JSON.stringify(manifest, null, 2))}</document_content></document>\n<document index="${authorityPaths.length + 2}"><source>exact git diff ${xml(options.diffBase!)}..${xml(head)}</source><document_content>${xml(diff)}</document_content></document>\n</documents>\n<review_metadata><reviewed_head>${xml(head)}</reviewed_head><diff_base>${xml(options.diffBase!)}</diff_base><model>opus</model><effort>medium</effort></review_metadata>\n<review_task>\nYou are the independent acceptance reviewer for QUESTPIE v4 atlas ticket ${xml(manifest.ticket)}. Review only the exact clean head and diff supplied above against the fixed authority, proof manifest, verification results, and acceptance criteria. Look for contradictions, missing evidence, invalid ownership, non-portable agent dependencies, unsafe review behavior, false quality or performance gates, and scope creep into production Runtime implementation.\n\nReturn exactly one verdict line first: VERDICT: PASS or VERDICT: BLOCKED. A PASS means no blocking finding remains. For BLOCKED, list each concrete blocker with the affected file and required evidence or repair. Then list non-blocking observations. Keep findings grounded in the supplied packet.\n</review_task>\n`;
-rejectSecrets(packet);
-
 if (options.dryRun) {
 	console.log(
 		JSON.stringify({

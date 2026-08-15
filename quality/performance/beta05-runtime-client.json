@@ -1,0 +1,23 @@
+{
+	"id": "beta05-runtime-client",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta05-runtime-client.test.ts"],
+	"budgetOwner": "BETA-05",
+	"metrics": {
+		"coldStartMs": { "direction": "max", "budget": 650, "unit": "ms" },
+		"wireExecute20Ms": { "direction": "max", "budget": 600, "unit": "ms" },
+		"requestBytes": { "direction": "max", "budget": 1048576, "unit": "bytes" },
+		"responseBytes": { "direction": "max", "budget": 1048576, "unit": "bytes" },
+		"serverBundleBytes": {
+			"direction": "max",
+			"budget": 311296,
+			"unit": "bytes"
+		},
+		"runtimeBuildBytes": {
+			"direction": "max",
+			"budget": 16384,
+			"unit": "bytes"
+		}
+	}
+}

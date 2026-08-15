@@ -11,6 +11,9 @@
 		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
+		"@questpie/runtime": "workspace:*",
+		"@types/bun": "1.3.14",
+		"questpie": "workspace:*",
 		"typescript": "6.0.2"
 	}
 }

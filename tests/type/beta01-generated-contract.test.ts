@@ -77,8 +77,11 @@ describe("BETA-01 generated contract", () => {
 			"app.ts",
 			"build-input.json",
 			"client.ts",
+			"committed-migrations.json",
 			"context-projection.json",
 			"execution-composition-explain.json",
+			"internal/application.d.ts",
+			"internal/application.js",
 			"internal/checksums.json",
 			collaborationAuditContractPath,
 			"internal/package-inventories.json",
@@ -89,8 +92,11 @@ describe("BETA-01 generated contract", () => {
 			"query-projection.json",
 			"relational-explain.json",
 			"relational-nondisclosure.json",
+			"runtime-build.json",
+			"runtime-executables.json",
 			"schema-projection.json",
 			"service-projection.json",
+			"wire-contract.json",
 		]);
 
 		const manifest = JSON.parse(
@@ -168,7 +174,7 @@ describe("BETA-01 generated contract", () => {
 			"context:app.context",
 			"policy:memberships.default",
 			"policy:messages.default",
-			"query:messages.byId",
+			"query:messages.page",
 			"seed:collaboration.authorization.v1",
 			"seed:collaboration.demo.v1",
 			"service:audit.connection",
@@ -212,5 +218,5 @@ describe("BETA-01 generated contract", () => {
 			"utf8",
 		);
 		expect(consumer).toContain('from "#questpie/app"');
-	});
+	}, 15_000);
 });

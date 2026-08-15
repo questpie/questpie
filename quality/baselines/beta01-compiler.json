@@ -9,16 +9,20 @@
 	},
 	"reference": {
 		"platform": "linux-x64",
-		"processor": "AMD Ryzen 5 5600G with Radeon Graphics"
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"recordedAt": "2026-08-16",
+		"samples": 3,
+		"aggregation": "median by compileMs"
 	},
 	"observed": {
-		"compileMs": 1075.09,
-		"typecheckMs": 896.08,
-		"generatedBytes": 34600,
-		"publicDeclarationBytes": 4103,
-		"typescriptTypes": 1824,
-		"typescriptInstantiations": 3684,
-		"typescriptMemoryKiB": 106206
+		"compileMs": 1480.402517,
+		"typecheckMs": 1179.8806260000001,
+		"generatedBytes": 276660,
+		"publicDeclarationBytes": 29521,
+		"typescriptTypes": 5506,
+		"typescriptInstantiations": 14818,
+		"typescriptMemoryKiB": 108205
 	},
 	"budgets": {
 		"compileMs": 5000,

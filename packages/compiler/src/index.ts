@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import ts from "typescript";
 
@@ -353,11 +354,13 @@ export async function compileApplication(
 ): Promise<CompileApplicationResult> {
 	const started = performance.now();
 	const applicationRoot = resolve(options.applicationRoot);
-	const compilerRoot = dirname(import.meta.dir);
-	const repositoryRoot = resolve(compilerRoot, "../..");
-	const frameworkEntry = resolve(
-		repositoryRoot,
-		"packages/questpie/src/index.ts",
+	const frameworkEntry = fileURLToPath(import.meta.resolve("questpie"));
+	const frameworkTypeEntry = frameworkEntry.endsWith(".js")
+		? `${frameworkEntry.slice(0, -3)}.d.ts`
+		: frameworkEntry;
+	const frameworkRoot = dirname(dirname(frameworkEntry));
+	const typescriptRoot = dirname(
+		dirname(fileURLToPath(import.meta.resolve("typescript"))),
 	);
 	const configurationText = await readFile(
 		join(applicationRoot, "questpie.json"),
@@ -496,7 +499,7 @@ export async function compileApplication(
 		typescriptConfigFiles,
 		lockfileText,
 		sourceFiles: applicationGraph,
-		frameworkRoot: resolve(repositoryRoot, "packages/questpie"),
+		frameworkRoot,
 		frameworkFiles: await collectReachableSourceFiles(
 			[frameworkEntry],
 			packages,
@@ -513,7 +516,7 @@ export async function compileApplication(
 		typescriptConfigFiles,
 		lockfileText,
 		sourceFiles: applicationGraph,
-		frameworkRoot: resolve(repositoryRoot, "packages/questpie"),
+		frameworkRoot,
 		frameworkFiles: await collectReachableSourceFiles(
 			[frameworkEntry],
 			packages,
@@ -535,9 +538,9 @@ export async function compileApplication(
 	const typecheck = await typecheckCurrentContract({
 		applicationFiles: applicationGraph,
 		generatedFiles,
-		frameworkEntry,
+		frameworkTypeEntry,
 		packages,
-		compilerRoot,
+		typescriptRoot,
 		applicationTsconfig,
 		applicationSourceRoot: resolve(
 			applicationRoot,

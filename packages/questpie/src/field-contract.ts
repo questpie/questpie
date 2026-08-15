@@ -1,12 +1,4 @@
-export type CodecKind = "boolean" | "integer" | "object" | "text" | "uuid";
-
-export interface Codec<Value, Kind extends CodecKind = CodecKind> {
-	readonly kind: Kind;
-	readonly value?: Value;
-}
-
-export type CodecValue<ValueCodec> =
-	ValueCodec extends Codec<infer Value> ? Value : never;
+export type { Codec, CodecKind, CodecValue } from "./codec";
 
 export interface DataFieldDescriptor<
 	Identity extends `collection:${string}/field:${string}`,

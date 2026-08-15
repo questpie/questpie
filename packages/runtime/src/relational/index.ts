@@ -7,6 +7,7 @@ export type {
 } from "./cursor";
 
 export { DataQueryExecutionError, executePostgresQuery } from "./query";
+export { createPostgresContextBootstrap } from "./bootstrap";
 export type {
 	DataQueryBindingV1,
 	DataQueryDiagnosticCode,

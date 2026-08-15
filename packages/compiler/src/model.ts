@@ -184,7 +184,7 @@ export function createPackageInventory(
 	};
 }
 
-function codecContract(value: unknown): unknown {
+function codecContract(value: unknown, optionalAllowed = false): unknown {
 	const codec = record(value, "codec");
 	if (codec.kind === "object") {
 		return {
@@ -192,11 +192,35 @@ function codecContract(value: unknown): unknown {
 			properties: Object.fromEntries(
 				Object.entries(record(codec.properties, "codec properties"))
 					.sort(([left], [right]) => compareAscii(left, right))
-					.map(([key, child]) => [key, codecContract(child)]),
+					.map(([key, child]) => [key, codecContract(child, true)]),
 			),
 		};
 	}
-	return { kind: string(codec.kind, "codec kind") };
+	if (codec.kind === "array") {
+		return {
+			kind: "array",
+			items: codecContract(codec.items),
+		};
+	}
+	if (codec.kind === "nullable")
+		return { kind: "nullable", codec: codecContract(codec.codec) };
+	if (codec.kind === "optional") {
+		if (!optionalAllowed)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"codec.optional is valid only for an object property",
+			);
+		return { kind: "optional", codec: codecContract(codec.codec) };
+	}
+	const kind = string(codec.kind, "codec kind");
+	if (!["boolean", "integer", "text", "timestamp", "uuid"].includes(kind))
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			`unsupported codec kind ${kind}`,
+		);
+	return { kind };
 }
 
 function queryContract(value: RecordValue): RecordValue {
@@ -206,6 +230,8 @@ function queryContract(value: RecordValue): RecordValue {
 		name: string(value.name, "query.name"),
 		input: codecContract(value.input),
 		output: codecContract(value.output),
+		exposure: value.network === true ? "network" : "server",
+		executableSlots: ["handler"],
 	};
 }
 

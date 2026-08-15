@@ -1,22 +1,28 @@
 {
 	"files": {
-		"app.ts": "892d4a0256a559589f604d431dbbf79b2b8cbeb1d1bba5493e2b24ba749aaf2c",
-		"build-input.json": "a8b46f7f42846b4c1a548ed4c3b3e7f351a2b35661a9e9631b079615caeb4c39",
-		"client.ts": "557043240ed91541f704da25adcec68b7f2541e58f2b66f9a749c4af6b152f85",
-		"context-projection.json": "429caf9e4c56beb307c9ad09340a3f2f05a61904465205a366de626b6fee5767",
-		"execution-composition-explain.json": "b73e6a6aeb175ab04afb830f42c8b6b4838f175cc0b455a7c58ccd3db81e402e",
-		"internal/checksums.json": "cb2a8e7117f164925b110b9b5cf03049719ca6f04ef3a308dcd31660700df8db",
+		"app.ts": "30197cbe6d150cbd59a6f03d41f14c8bd1076cc295c6888a626b073831f7db06",
+		"build-input.json": "c1b291626d09542e6e4d9cb43d399716f07fd55c6c4197c05d5a2c62c2433085",
+		"client.ts": "ebbfd7218a2a2faa272e702a568740fafb74e2c435001ca5bfde1ab34c8675c2",
+		"committed-migrations.json": "9d8ed1ba5da00bff75f51e686eb9de3591184f5abb516dacb12c08eafe4a0d9b",
+		"context-projection.json": "5c6907d908396dec8a0bc92e3b5397cb032bbfff72dfeb4facb160f8e417e653",
+		"execution-composition-explain.json": "0fd7f77cf49a1d372e5d41ff4acf104583072e9b1a11d27b589d9bbde011a6c8",
+		"internal/application.d.ts": "240b04a22aefd74f658fb6fb5da2bf44df98ea8edc3d95dfcbaa80aed5f400c8",
+		"internal/application.js": "01d98c29396110f993393d30beeccf320ce5ee4bfe09f41f4fd8910e89fc713e",
+		"internal/checksums.json": "9627a98e5325de8cd292d689536af87500d0a7a9c7a50466f85556575e57a6c5",
 		"internal/package-contracts/questpie-collaboration-audit-846963f083917e90c9a1fa4c25d7ac12de3ef0dc1fb82b1c2badd14616c61c0c.ts": "ca79dff0c95d5c669e0a815288f69200977258d3ff5882d0b9f4e0e5f7ef110c",
 		"internal/package-inventories.json": "2ffe2e9595411fa40b2fbfa51b9d3c853bf4be9286a1135ac866f9428b54d12d",
-		"manifest.json": "36d994e655af16ca5fb85add716cd439977e8499bbecd88f87f44a7d6eb7df28",
-		"origin-map.json": "5c5c9121626f83e82556f75a63288f6383cb277470b18a34dca70ea541193e95",
+		"manifest.json": "9111f9631cc381c60de71e0b262d4ef2fb1c83952399440f0c4fdad112757cb6",
+		"origin-map.json": "4552dbe570a26d7d22081628eea56e63dc7871b2c6f1de3decdcc7d205e72a74",
 		"policy-projection.json": "e2c8b87eb9a024abb7b6993b8861babdfa2524221c07cf52fb8729ad43b5a84d",
 		"postgres-query-plans.json": "02827cea9195d4b46138ad5900152f7e57743095d5d5ccc94311c379e5b4eb3f",
 		"query-projection.json": "9c136620463be84829691ace27e25da164000f7196f624b80284e25a80ad9eb7",
 		"relational-explain.json": "3e437d1039bb4b05b2ab5c83e252e36e71c74dbfc22c9f57ff6122f74965a561",
 		"relational-nondisclosure.json": "58d1987e6412b223b4199ce9ea7d1fc3d08e4a8fbbb3de9c81b246a74363bdaa",
+		"runtime-build.json": "28c7403a79b4e53145cfb1f1fd8a292f1be60902a6579aafbbc2d73378d19f09",
+		"runtime-executables.json": "357eb072032f5c09bfa94285294b6d99318394c4cd115ad74b43b5c56c5b5f01",
 		"schema-projection.json": "18056834a52bf9970e9b0d9c53c4c14252bfe5983d6ae9ea0b0c18b3f5b3f487",
-		"service-projection.json": "2e7da08cdfb205f5871935d9460084dab09455aa8c6bbdabe081ebc72dfdf46d"
+		"service-projection.json": "2e7da08cdfb205f5871935d9460084dab09455aa8c6bbdabe081ebc72dfdf46d",
+		"wire-contract.json": "7fb90c3e9b65b28e77bd2384bc9866521a08675aa2f4d437fe62647e1c94ea70"
 	},
 	"inventories": [
 		{

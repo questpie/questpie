@@ -37,3 +37,18 @@ Keep commands in `package.json`, behavior in config/CI, contributor workflow in
 `CONTRIBUTING.md`, security reporting in `SECURITY.md`, product truth in
 SPEC/ADRs/workbenches, and proof history in PROOF-MAP/manifests. Update this
 branch reference only for stable cross-task procedure.
+
+## Acceptance packet secret scan
+
+The stateless acceptance wrapper permits only credential-free
+`postgres://localhost/` or `postgresql://localhost/` test literals, optionally
+with a simple database path or numeric port, and the exact source assignment
+`url.password = process.env.PGPASSWORD`. These describe local configuration;
+they do not place a credential value in the packet. Embedded URL credentials,
+remote hosts, query strings, fragments, fallback values, alternate environment
+variables, and all other credential patterns remain prohibited. Retained diffs
+may contain the equivalent computed-property PGPASSWORD spelling, but authored
+source uses the readable direct property. Synthetic rejection probes are
+masked only on explicitly marked lines in the exact scanner test path; the
+marker has no effect elsewhere. Every allowlist change requires positive
+fixtures and negative controls for real URL credentials and real assignments.

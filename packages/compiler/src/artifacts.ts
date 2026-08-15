@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
-import { relative, sep } from "node:path";
+import { extname, join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
 	canonicalBytes,
@@ -11,17 +12,27 @@ import {
 	explainExecutionComposition,
 	projectExecutionComposition,
 } from "./composition";
-import {
-	renderAppContract,
-	renderClientContract,
-	renderPackageContract,
-} from "./generate";
+import { renderAppContract, renderPackageContract } from "./generate";
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
 	projectRelationalNondisclosure,
 } from "./relational";
-import { projectManifest, projectMemberContributions } from "./schema";
+import {
+	projectCommittedMigrations,
+	projectRuntimeBuild,
+	projectRuntimeContract,
+	renderApplicationBundle,
+	renderApplicationDeclaration,
+	renderClientContract,
+	runtimeArtifactBytes,
+} from "./runtime";
+import {
+	expectedComparable,
+	projectManifest,
+	projectMemberContributions,
+} from "./schema";
+import type { SchemaProjectionV1 } from "./schema";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -245,6 +256,23 @@ export async function createArtifacts(
 			entries: inventory.entries,
 		})),
 	};
+	const runtime = projectRuntimeContract({
+		configuration: input.configuration,
+		resources: input.resources,
+		sourceGraph: [
+			...sourceGraph.map((file) => ({ ...file, packageId: null })),
+			...packageGraphs.flatMap(({ inventory, graph: packageGraph }) =>
+				packageGraph.map((file) => ({
+					...file,
+					packageId: inventory.package.id,
+				})),
+			),
+		],
+		contextProjection: executionComposition.context,
+	});
+	const committedMigrations = await projectCommittedMigrations(
+		input.applicationRoot,
+	);
 	const generated: Record<string, string> = {
 		"app.ts": renderAppContract(
 			input.resources,
@@ -254,7 +282,14 @@ export async function createArtifacts(
 			relational.declarations,
 		),
 		"build-input.json": canonicalBytes(buildInput),
-		"client.ts": renderClientContract(input.resources),
+		"client.ts": renderClientContract(input.resources, {
+			application: `application:${input.configuration.application.name}`,
+			clientContractDigest: runtime.clientContractDigest,
+			wireDigest: runtime.wireDigest,
+			path: String(runtime.wire.path),
+			mediaType: String(runtime.wire.mediaType),
+		}),
+		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),
 		"execution-composition-explain.json": canonicalBytes(executionExplanation),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
@@ -262,9 +297,16 @@ export async function createArtifacts(
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
+		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
+		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
+	};
+	let postgresQueryPlans: unknown = {
+		format: "questpie.postgres-query-plans",
+		version: 1,
+		plans: [],
 	};
 	if (relational.hasRelationalArtifacts) {
-		const postgresQueryPlans = lowerPostgresQueryPlans({
+		postgresQueryPlans = lowerPostgresQueryPlans({
 			schema,
 			policyProjection: relational.policy,
 			queryProjection: relational.query,
@@ -286,6 +328,39 @@ export async function createArtifacts(
 			compilation.name,
 			compilation.resources,
 		);
+	generated["internal/application.d.ts"] = renderApplicationDeclaration();
+	const runtimeBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle"),
+	);
+	const readinessEntry = join(
+		import.meta.dir,
+		"runtime",
+		`postgres-readiness${extname(fileURLToPath(import.meta.url))}`,
+	);
+	generated["internal/application.js"] = await renderApplicationBundle({
+		applicationRoot: input.applicationRoot,
+		configuration: input.configuration,
+		resources: input.resources,
+		slots: runtime.executables.slots,
+		inventories: input.inventories,
+		queryProjection: relational.query,
+		postgresQueryPlans,
+		schemaProjection: schema,
+		readinessEntry,
+		runtimeBundleEntry,
+	});
+	generated["runtime-build.json"] = runtimeArtifactBytes(
+		projectRuntimeBuild({
+			configuration: input.configuration,
+			files: generated,
+			runtime,
+			migrationHead: committedMigrations.head,
+			schemaFingerprint: digest(
+				"questpie-schema-fingerprint-v1",
+				expectedComparable(schema as SchemaProjectionV1),
+			),
+		}),
+	);
 	generated["internal/checksums.json"] = canonicalBytes({
 		format: "questpie.generated-checksums",
 		version: 1,

@@ -1,0 +1,196 @@
+[
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:1",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 1,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": null,
+			"traceId": null,
+			"correlationId": "runtime:1",
+			"causationId": null,
+			"actor": {
+				"principalRef": null,
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": [
+				{
+					"kind": "artifact",
+					"id": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4"
+				}
+			]
+		},
+		"durability": "telemetry",
+		"event": { "family": "runtime", "kind": "ready" }
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:2",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 2,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": "execution:1",
+			"traceId": null,
+			"correlationId": "call:1",
+			"causationId": null,
+			"actor": {
+				"principalRef": "user:018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": [
+				{ "kind": "operation", "id": "query:messages.page" },
+				{ "kind": "operationCall", "id": "call:1" }
+			]
+		},
+		"durability": "telemetry",
+		"event": {
+			"family": "operation",
+			"kind": "accepted",
+			"operation": "query:messages.page"
+		}
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:3",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 3,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": "execution:1",
+			"traceId": null,
+			"correlationId": "call:1",
+			"causationId": null,
+			"actor": {
+				"principalRef": "user:018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": [
+				{ "kind": "operation", "id": "query:messages.page" },
+				{ "kind": "operationCall", "id": "call:1" }
+			]
+		},
+		"durability": "telemetry",
+		"event": {
+			"family": "operation",
+			"kind": "result",
+			"operation": "query:messages.page"
+		}
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:4",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 4,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": "execution:2",
+			"traceId": null,
+			"correlationId": "direct:1",
+			"causationId": null,
+			"actor": {
+				"principalRef": "user:018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": [
+				{ "kind": "operation", "id": "query:messages.page" },
+				{ "kind": "operationCall", "id": "direct:1" }
+			]
+		},
+		"durability": "telemetry",
+		"event": {
+			"family": "operation",
+			"kind": "accepted",
+			"operation": "query:messages.page"
+		}
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:5",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 5,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": "execution:2",
+			"traceId": null,
+			"correlationId": "direct:1",
+			"causationId": null,
+			"actor": {
+				"principalRef": "user:018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": [
+				{ "kind": "operation", "id": "query:messages.page" },
+				{ "kind": "operationCall", "id": "direct:1" }
+			]
+		},
+		"durability": "telemetry",
+		"event": {
+			"family": "operation",
+			"kind": "result",
+			"operation": "query:messages.page"
+		}
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:6",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 6,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": null,
+			"traceId": null,
+			"correlationId": "runtime:6",
+			"causationId": null,
+			"actor": {
+				"principalRef": null,
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": []
+		},
+		"durability": "telemetry",
+		"event": { "family": "runtime", "kind": "drainStarted" }
+	},
+	{
+		"envelope": {
+			"format": "questpie.execution-envelope",
+			"version": 1,
+			"eventId": "event:7",
+			"occurredAt": "2026-08-15T16:00:00.000Z",
+			"sequence": 7,
+			"application": "application:collaboration",
+			"deploymentDigest": "d5eed117be105c1676376e87cfe010f486c94bb0004e2815f25f8e182c85c5e4",
+			"executionId": null,
+			"traceId": null,
+			"correlationId": "runtime:7",
+			"causationId": null,
+			"actor": {
+				"principalRef": null,
+				"tenantRef": null,
+				"authority": "ordinary"
+			},
+			"links": []
+		},
+		"durability": "telemetry",
+		"event": { "family": "runtime", "kind": "stopped" }
+	}
+]
