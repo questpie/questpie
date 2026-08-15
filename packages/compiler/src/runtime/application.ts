@@ -289,9 +289,7 @@ export async function renderApplicationBundle(
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
 		readinessEntry: string;
-		runtimeEntry: string;
-		runtimeBootstrapEntry: string;
-		runtimeIngressEntry: string;
+		runtimeBundleEntry: string;
 	}>,
 ): Promise<string> {
 	const entry = applicationEntry(input);
@@ -345,16 +343,16 @@ export async function renderApplicationBundle(
 						),
 					}));
 					builder.onResolve({ filter: /^questpie:runtime$/ }, () => ({
-						path: input.runtimeEntry,
+						path: input.runtimeBundleEntry,
 					}));
 					builder.onResolve({ filter: /^questpie:runtime-readiness$/ }, () => ({
 						path: input.readinessEntry,
 					}));
 					builder.onResolve({ filter: /^questpie:runtime-bootstrap$/ }, () => ({
-						path: input.runtimeBootstrapEntry,
+						path: input.runtimeBundleEntry,
 					}));
 					builder.onResolve({ filter: /^questpie:runtime-ingress$/ }, () => ({
-						path: input.runtimeIngressEntry,
+						path: input.runtimeBundleEntry,
 					}));
 					builder.onResolve({ filter: /.*/ }, (args) => {
 						const packageEntry = packageEntries.get(args.path);

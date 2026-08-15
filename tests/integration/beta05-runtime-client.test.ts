@@ -64,7 +64,7 @@ type QueryInput = Readonly<{
 	after: string | null;
 }>;
 
-const expectedPage = Object.freeze({
+const expectedWirePage = Object.freeze({
 	nodes: Object.freeze([
 		Object.freeze({
 			author: null,
@@ -74,6 +74,15 @@ const expectedPage = Object.freeze({
 		}),
 	]),
 	pageInfo: Object.freeze({ endCursor: "cursor:one", hasNextPage: false }),
+});
+
+const expectedPage = Object.freeze({
+	...expectedWirePage,
+	nodes: Object.freeze(
+		expectedWirePage.nodes.map((node) =>
+			Object.freeze({ ...node, createdAt: new Date(node.createdAt) }),
+		),
+	),
 });
 
 beforeAll(async () => {
@@ -229,7 +238,7 @@ async function runtimeHarness() {
 						run: async (definition: unknown) => {
 							expect(definition).toBe(channelMessagePage);
 							dataRuns += 1;
-							return expectedPage;
+							return expectedWirePage;
 						},
 					}),
 					signal: facts.signal,
@@ -310,9 +319,11 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			.queries["messages.page"](input);
 		expect({ direct, fetch: rawFrame.payload, client: clientResult }).toEqual({
 			direct: expectedPage,
-			fetch: expectedPage,
+			fetch: expectedWirePage,
 			client: expectedPage,
 		});
+		expect(direct.nodes[0]?.createdAt).toBeInstanceOf(Date);
+		expect(clientResult.nodes[0]?.createdAt).toBeInstanceOf(Date);
 		expect(generatedFetches).toBe(1);
 		expect(harness.dataRuns()).toBe(3);
 		expect(harness.bootstrapGets()).toBe(3);
@@ -366,6 +377,28 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		).rejects.toThrow("response lost");
 		expect(lostResponses).toBe(1);
 		expect(harness.dataRuns()).toBe(dataBeforeLoss + 1);
+
+		const beforeDeclaredError = harness.dataRuns();
+		const declaredErrorClient = generatedClient.createClient({
+			baseUrl: "http://runtime.test",
+			fetch: async (request) => {
+				const call = (await request.json()) as Readonly<{ callId: string }>;
+				return new Response(
+					JSON.stringify({
+						kind: "declaredError",
+						callId: call.callId,
+						operation: "query:messages.page",
+						protocol: wireContract.protocol,
+						error: { code: "NOT_DECLARED", payload: {}, status: 400 },
+					}),
+					{ headers: { "content-type": String(wireContract.mediaType) } },
+				);
+			},
+		});
+		await expect(
+			declaredErrorClient.withContext(context).queries["messages.page"](input),
+		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
+		expect(harness.dataRuns()).toBe(beforeDeclaredError);
 	} finally {
 		await harness.runtime.close();
 	}

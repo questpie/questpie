@@ -1,8 +1,7 @@
 import type { SQL } from "bun";
 
 import { digest } from "../canonical";
-import type { SchemaProjectionV1 } from "../schema/contracts";
-import { fingerprint } from "../schema/postgres/fingerprint";
+import { fingerprint, type SchemaProjectionV1 } from "../schema";
 
 type RuntimeBuildReadiness = Readonly<{
 	migrationHead: string | null;

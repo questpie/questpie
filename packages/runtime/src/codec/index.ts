@@ -31,7 +31,12 @@ function record(
 	return value as Readonly<Record<string, unknown>>;
 }
 
-function timestamp(value: unknown, path: string): string {
+function timestamp(value: unknown, path: string): Date {
+	if (value instanceof Date) {
+		if (!Number.isFinite(value.getTime()))
+			invalid(path, "must be a valid timestamp");
+		return value;
+	}
 	if (
 		typeof value !== "string" ||
 		!/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]{3}Z$/.test(
@@ -42,12 +47,19 @@ function timestamp(value: unknown, path: string): string {
 	const parsed = new Date(value);
 	if (!Number.isFinite(parsed.getTime()) || parsed.toISOString() !== value)
 		invalid(path, "must be a canonical UTC timestamp");
-	return value;
+	return parsed;
 }
 
-function decode(codec: RuntimeCodec, value: unknown, path: string): unknown {
+function transform(
+	codec: RuntimeCodec,
+	value: unknown,
+	path: string,
+	direction: "runtime" | "wire",
+): unknown {
 	if (codec.kind === "nullable")
-		return value === null ? null : decode(codec.codec, value, path);
+		return value === null
+			? null
+			: transform(codec.codec, value, path, direction);
 	if (codec.kind === "optional")
 		invalid(path, "uses optional outside an object property");
 	if (codec.kind === "boolean") {
@@ -78,12 +90,17 @@ function decode(codec: RuntimeCodec, value: unknown, path: string): unknown {
 			invalid(path, "must be a canonical UUID");
 		return value;
 	}
-	if (codec.kind === "timestamp") return timestamp(value, path);
+	if (codec.kind === "timestamp") {
+		if (direction === "runtime") return timestamp(value, path);
+		if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+			invalid(path, "must be a valid timestamp");
+		return value.toISOString();
+	}
 	if (codec.kind === "array") {
 		if (!Array.isArray(value)) invalid(path, "must be an array");
 		return Object.freeze(
 			value.map((item, index) =>
-				decode(codec.items, item, `${path}[${index}]`),
+				transform(codec.items, item, `${path}[${index}]`, direction),
 			),
 		);
 	}
@@ -105,10 +122,15 @@ function decode(codec: RuntimeCodec, value: unknown, path: string): unknown {
 		const child = properties[key]!;
 		if (child.kind === "optional") {
 			if (Object.hasOwn(input, key))
-				output[key] = decode(child.codec, input[key], `${path}.${key}`);
+				output[key] = transform(
+					child.codec,
+					input[key],
+					`${path}.${key}`,
+					direction,
+				);
 			continue;
 		}
-		output[key] = decode(child, input[key], `${path}.${key}`);
+		output[key] = transform(child, input[key], `${path}.${key}`, direction);
 	}
 	return Object.freeze(output);
 }
@@ -189,5 +211,13 @@ export function decodeRuntimeCodec<Value>(
 	value: unknown,
 	path = "$",
 ): Value {
-	return decode(codec, value, path) as Value;
+	return transform(codec, value, path, "runtime") as Value;
+}
+
+export function encodeRuntimeCodec<Value>(
+	codec: RuntimeCodec,
+	value: Value,
+	path = "$",
+): unknown {
+	return transform(codec, value, path, "wire");
 }

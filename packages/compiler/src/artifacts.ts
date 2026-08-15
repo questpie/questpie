@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -27,9 +27,12 @@ import {
 	renderClientContract,
 	runtimeArtifactBytes,
 } from "./runtime";
-import { projectManifest, projectMemberContributions } from "./schema";
+import {
+	expectedComparable,
+	projectManifest,
+	projectMemberContributions,
+} from "./schema";
 import type { SchemaProjectionV1 } from "./schema";
-import { expectedComparable } from "./schema/postgres/expected-fingerprint";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -326,8 +329,9 @@ export async function createArtifacts(
 			compilation.resources,
 		);
 	generated["internal/application.d.ts"] = renderApplicationDeclaration();
-	const runtimeEntry = fileURLToPath(import.meta.resolve("@questpie/runtime"));
-	const runtimeSourceRoot = dirname(runtimeEntry);
+	const runtimeBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle"),
+	);
 	generated["internal/application.js"] = await renderApplicationBundle({
 		applicationRoot: input.applicationRoot,
 		configuration: input.configuration,
@@ -338,9 +342,7 @@ export async function createArtifacts(
 		postgresQueryPlans,
 		schemaProjection: schema,
 		readinessEntry: join(import.meta.dir, "runtime/postgres-readiness.ts"),
-		runtimeEntry,
-		runtimeBootstrapEntry: join(runtimeSourceRoot, "relational/bootstrap.ts"),
-		runtimeIngressEntry: join(runtimeSourceRoot, "operation/ingress.ts"),
+		runtimeBundleEntry,
 	});
 	generated["runtime-build.json"] = runtimeArtifactBytes(
 		projectRuntimeBuild({

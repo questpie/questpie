@@ -30,9 +30,11 @@ export { bootstrap } from "./postgres/bootstrap";
 export {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
+	fingerprint,
 	inspectSchemaFingerprint,
 	providerObservations,
 } from "./postgres/fingerprint";
+export { expectedComparable } from "./postgres/expected-fingerprint";
 export { childRecords, fail } from "./postgres/shared";
 export type {
 	ApplyMigrationsResult,

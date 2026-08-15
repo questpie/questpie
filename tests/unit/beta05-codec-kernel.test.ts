@@ -46,7 +46,7 @@ test("projects one recursive built-in codec grammar for the Message page", () =>
 		Readonly<{
 			nodes: readonly Readonly<{
 				body?: string;
-				createdAt: string;
+				createdAt: Date;
 			}>[];
 			pageInfo: Readonly<{
 				endCursor: string | null;

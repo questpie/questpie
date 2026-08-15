@@ -118,8 +118,22 @@ postgresTest(
 					.queries["messages.page"](input);
 				expect(clientFetches).toBe(1);
 				expect(clientResult).toEqual(direct);
-				expect(rawFrame.payload).toEqual(direct);
 				expect(direct).toEqual({
+					nodes: [
+						{
+							author: null,
+							body: "one engine",
+							createdAt: new Date("2026-08-15T10:00:00.000Z"),
+							id: beta05Ids.message,
+						},
+					],
+					pageInfo: {
+						endCursor: expect.any(String),
+						hasNextPage: false,
+					},
+				});
+				expect(rawFrame.payload).toEqual({
+					...(direct as Readonly<Record<string, unknown>>),
 					nodes: [
 						{
 							author: null,
@@ -128,10 +142,6 @@ postgresTest(
 							id: beta05Ids.message,
 						},
 					],
-					pageInfo: {
-						endCursor: expect.any(String),
-						hasNextPage: false,
-					},
 				});
 			} finally {
 				await application.close();

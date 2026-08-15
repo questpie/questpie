@@ -67,13 +67,11 @@ export type RuntimeOperationContract = Readonly<{
 }>;
 
 export interface OperationEngine<View> {
-	has(identity: string): boolean;
 	prepare(identity: string, input: unknown): PreparedOperation<View>;
 	invokePrepared(
 		operation: PreparedOperation<View>,
 		ctx: View,
 	): Promise<unknown>;
-	invoke(identity: string, input: unknown, ctx: View): Promise<unknown>;
 }
 
 export function createOperationEngine<View>(
@@ -96,7 +94,6 @@ export function createOperationEngine<View>(
 			"Runtime operation contract does not match executable binding",
 		);
 	return Object.freeze({
-		has: (identity: string) => operations.has(identity),
 		prepare: (identity: string, input: unknown) => {
 			const operation = operations.get(identity);
 			const contract = codecs.get(identity);
@@ -114,8 +111,18 @@ export function createOperationEngine<View>(
 			});
 			return decode(operation.output, result);
 		},
-		invoke(identity: string, input: unknown, ctx: View) {
-			return this.invokePrepared(this.prepare(identity, input), ctx);
-		},
 	});
 }
+
+export { readBoundedRequestBody } from "./body";
+export { bindIngressPrincipal, readIngressPrincipal } from "./ingress";
+export {
+	decodeOperationWireRequest,
+	failureFrame,
+	operationFailureStatus,
+	operationMediaType,
+	operationPath,
+	operationWireResponse,
+	rejectionFrame,
+	resultFrame,
+} from "./wire";

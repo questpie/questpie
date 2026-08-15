@@ -9,23 +9,27 @@ function record(value: unknown): RecordValue {
 	return value as RecordValue;
 }
 
-export function renderCodecType(value: unknown): string {
+export function renderCodecType(
+	value: unknown,
+	timestampType: "Date" | "string" = "Date",
+): string {
 	const descriptor = record(value);
 	if (descriptor.kind === "nullable")
-		return `${renderCodecType(descriptor.codec)} | null`;
-	if (descriptor.kind === "optional") return renderCodecType(descriptor.codec);
+		return `${renderCodecType(descriptor.codec, timestampType)} | null`;
+	if (descriptor.kind === "optional")
+		return renderCodecType(descriptor.codec, timestampType);
 	if (descriptor.kind === "array")
-		return `ReadonlyArray<${renderCodecType(descriptor.items)}>`;
+		return `ReadonlyArray<${renderCodecType(descriptor.items, timestampType)}>`;
 	if (descriptor.kind === "uuid" || descriptor.kind === "text") return "string";
 	if (descriptor.kind === "boolean") return "boolean";
 	if (descriptor.kind === "integer") return "number";
-	if (descriptor.kind === "timestamp") return "string";
+	if (descriptor.kind === "timestamp") return timestampType;
 	if (descriptor.kind === "object") {
 		const properties = Object.entries(record(descriptor.properties))
 			.sort(([left], [right]) => compareAscii(left, right))
 			.map(([key, child]) => {
 				const childDescriptor = record(child);
-				return `readonly ${JSON.stringify(key)}${childDescriptor.kind === "optional" ? "?" : ""}: ${renderCodecType(child)};`;
+				return `readonly ${JSON.stringify(key)}${childDescriptor.kind === "optional" ? "?" : ""}: ${renderCodecType(child, timestampType)};`;
 			})
 			.join(" ");
 		return `Readonly<{ ${properties} }>`;
@@ -63,6 +67,9 @@ export function renderClientContract(
 	const outputCodecs = Object.fromEntries(
 		queries.map((resource) => [resource.identity, resource.contract.output]),
 	);
+	const declaredErrorCodes = Object.fromEntries(
+		queries.map((resource) => [resource.identity, []]),
+	);
 	return `import type { AppContextInput } from "./app";
 
 export interface CallOptions {
@@ -85,6 +92,7 @@ export interface GeneratedClient {
 
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
+const declaredErrorCodes: WireRecord = ${canonicalBytes(declaredErrorCodes).trim()};
 const failureCodes = new Set([
 	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
@@ -126,7 +134,7 @@ function decode(codecValue: unknown, value: unknown): unknown {
 		if (typeof value !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$/.test(value)) return protocolFailure();
 		try { if (new Date(value).toISOString() !== value) return protocolFailure(); }
 		catch { return protocolFailure(); }
-		return value;
+		return new Date(value);
 	}
 	if (descriptor.kind === "uuid") {
 		if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) return protocolFailure();
@@ -195,6 +203,8 @@ export function createClient(input: Readonly<{
 			const detail = wireRecord(frame.error);
 			exactKeys(detail, ["code", "payload", "status"]);
 			if (typeof detail.code !== "string" || typeof detail.status !== "number") protocolFailure();
+			const allowed = declaredErrorCodes[operation];
+			if (!Array.isArray(allowed) || !allowed.includes(detail.code)) protocolFailure();
 			throw Object.assign(new Error(detail.code), detail);
 		}
 		return protocolFailure();

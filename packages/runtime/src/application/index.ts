@@ -5,23 +5,22 @@ import {
 	type Principal,
 } from "questpie";
 
+import { encodeRuntimeCodec } from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
 import {
 	createOperationEngine,
-	OperationFailure,
-	type PreparedOperation,
-} from "../operation";
-import { readBoundedRequestBody } from "../operation/body";
-import {
 	decodeOperationWireRequest,
 	failureFrame,
-	operationMediaType,
+	OperationFailure,
 	operationFailureStatus,
+	operationMediaType,
 	operationPath,
 	operationWireResponse,
+	type PreparedOperation,
+	readBoundedRequestBody,
 	rejectionFrame,
 	resultFrame,
-} from "../operation/wire";
+} from "../operation";
 import { verifyRuntimeArtifactFiles } from "./artifact-files";
 import { decodeRuntimeArtifacts, type RuntimeArtifactsV1 } from "./artifacts";
 import {
@@ -379,7 +378,10 @@ export async function createRuntimeApplication<
 				},
 				({ invoke }) => invoke(prepared, frame.callId),
 			);
-			const framed = resultFrame(frame, payload);
+			const framed = resultFrame(
+				frame,
+				encodeRuntimeCodec(prepared.output, payload),
+			);
 			const bytes = JSON.stringify(framed);
 			if (
 				Buffer.byteLength(bytes) > artifacts.wireContract.limits.responseBytes

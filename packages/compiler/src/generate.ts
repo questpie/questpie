@@ -174,7 +174,7 @@ function renderQueries(resources: readonly NormalizedResource[]): string {
 		.filter((resource) => resource.kind === "query")
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; }>;`;
+			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output, "string")}; }>;`;
 		})
 		.join("\n\t");
 }
@@ -331,7 +331,7 @@ export type QueryDefinition<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly handler: (input: Readonly<{
 		input: GeneratedQueries[Name]["input"];
 		ctx: QueryContext;
-	}>) => GeneratedQueries[Name]["output"] | Promise<GeneratedQueries[Name]["output"]>;
+	}>) => GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
 }>;
 
 export type QueryFactory = <const Name extends keyof GeneratedQueries>(
@@ -343,7 +343,7 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 		handler(input: Readonly<{
 			input: GeneratedQueries[Name]["input"];
 			ctx: QueryContext;
-		}>): GeneratedQueries[Name]["output"] | Promise<GeneratedQueries[Name]["output"]>;
+		}>): GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
 	}>,
 ) => QueryDefinition<Name>;
 

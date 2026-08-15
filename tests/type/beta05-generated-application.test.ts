@@ -118,7 +118,7 @@ async function useGeneratedApp() {
 	page.nodes satisfies ReadonlyArray<Readonly<{
 		id: string;
 		body?: string;
-		createdAt: string;
+		createdAt: Date;
 		author: Readonly<{ id: string; role: string }> | null;
 	}>>;
 	response satisfies Response;

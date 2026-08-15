@@ -57,7 +57,7 @@ export const codec = Object.freeze({
 	text: () => scalar<string, "text">("text"),
 	boolean: () => scalar<boolean, "boolean">("boolean"),
 	integer: () => scalar<number, "integer">("integer"),
-	timestamp: () => scalar<string, "timestamp">("timestamp"),
+	timestamp: () => scalar<Date, "timestamp">("timestamp"),
 	object: <const Properties extends CodecMap>(
 		properties: Properties,
 	): Codec<ObjectValue<Properties>, "object"> =>
