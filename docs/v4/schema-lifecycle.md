@@ -339,6 +339,29 @@ determinism boundary, not a security sandbox for hostile Package code. No
 callback or executable code enters the Schema Projection, Committed Migration,
 or deploy runner.
 
+### Authored-check signature supersession audit
+
+The earlier one-phase signature
+`constraint.check(({ fields }) => fields.endsAt.greaterThan(fields.startsAt))`
+is superseded by
+`constraint.check<typeof appointmentFields>(({ fields }) =>
+fields.endsAt.greaterThan(fields.startsAt))` with the same extracted object
+passed as `fields: appointmentFields`.
+
+TypeScript cannot infer the callback's Field generic from the sibling `fields`
+property of the surrounding `defineCollection` input. Defaulting the callback
+to a broad Field record would make every property possibly absent and would
+erase exact missing-Field and incompatible-scalar diagnostics. The explicit
+`typeof appointmentFields` binding preserves literal Field keys and scalar
+kinds without `any`, widening, a universal builder, or another authoring phase.
+
+This is a deliberate source incompatibility for the unreleased one-phase
+signature. It changes only authored TypeScript. The callback still evaluates
+once to the same closed expression tree, and no callback enters an artifact.
+For an equivalent expression, Schema Projection, Migration Plan, generated SQL,
+Committed Migration, checksum, and Schema Fingerprint bytes remain unchanged;
+the signature repair therefore creates no migration.
+
 An Index has one or more scalar column Field entries. It cannot name an inline
 shape, a JSON-backed Field, an embedded member, or an open-JSON path. Each entry has
 `order: "asc" | "desc"`

@@ -99,6 +99,12 @@ export const appointments = defineCollection({
 });
 ```
 
+Declare the Fields object before the Collection and pass its type to
+`constraint.check`. The explicit type argument keeps Field names and scalar
+compatibility exact. The compiler evaluates the callback once and stores only
+its closed expression tree, so the callback does not enter migration artifacts
+or deployment.
+
 Configure the Application Identity, PostgreSQL schema, and discovery root in
 the [`questpie.json` Application Root](./definition-composition#configure-one-application-root).
 

@@ -66,6 +66,30 @@ Projection in `docs/v4/schema-lifecycle.md`.
   and observed Live Query state remain later verticals and cannot reinterpret
   these bytes silently.
 
+## Revision: explicit Field binding for authored checks
+
+The initially accepted one-phase check signature
+`constraint.check(({ fields }) => fields.endsAt.greaterThan(fields.startsAt))`
+is superseded before beta.1 by the explicit sibling-Field binding
+`constraint.check<typeof appointmentFields>(({ fields }) =>
+fields.endsAt.greaterThan(fields.startsAt))`, where the Collection also uses
+`fields: appointmentFields`.
+
+TypeScript cannot infer a callback generic from a sibling `fields` property of
+the surrounding `defineCollection` call. A broad fallback such as
+`Record<string, FieldDefinition>` would make every property possibly absent and
+would erase exact missing-Field and incompatible-scalar errors. Extracting the
+Fields object and passing `typeof appointmentFields` preserves its literal keys
+and scalar kinds without `any`, widening, or a second builder phase.
+
+This is an intentional source incompatibility for the unreleased one-phase
+signature. It changes only authored TypeScript: the callback still evaluates
+once to the same closed check-expression tree. For an equivalent expression,
+the Schema Projection, Migration Plan, generated SQL, Committed Migration,
+checksums, and Schema Fingerprint bytes are unchanged, so this signature repair
+does not create a migration. The exact authoring form is projected in the
+internal and public schema lifecycle pages.
+
 ## Rejected alternatives
 
 - Keyless regular Collections.
