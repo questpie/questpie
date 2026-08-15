@@ -1,4 +1,8 @@
-import { canonicalBytes, compareAscii } from "../canonical";
+import {
+	canonicalBytes,
+	compareAscii,
+	hasLoneUnicodeSurrogate,
+} from "../canonical";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -60,6 +64,8 @@ function normalizeOpenJson(value: unknown, invalid: InvalidValue): unknown {
 			continue;
 		}
 		if (frame.kind === "objectValue") {
+			if (hasLoneUnicodeSurrogate(frame.key))
+				return invalid("does not accept a lone Unicode surrogate");
 			if (frame.key.normalize("NFC") !== frame.key)
 				return invalid("requires NFC JSON object keys");
 			stack.push({
@@ -84,6 +90,8 @@ function normalizeOpenJson(value: unknown, invalid: InvalidValue): unknown {
 			continue;
 		}
 		if (typeof item === "string") {
+			if (hasLoneUnicodeSurrogate(item))
+				return invalid("does not accept a lone Unicode surrogate");
 			if (item.normalize("NFC") !== item)
 				return invalid("requires NFC JSON strings");
 			assignJsonValue(frame.parent, frame.key, item);

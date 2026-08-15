@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
-import { canonicalBytes, compareAscii, digest } from "../canonical";
+import {
+	canonicalBytes,
+	compareAscii,
+	digest,
+	hasLoneUnicodeSurrogate,
+} from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { CompilerDiagnosticArguments } from "../diagnostic";
 import type { SchemaProjectionV1 } from "../schema";
@@ -165,8 +170,10 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 				: normalized;
 		});
 	if (type.kind === "text") {
-		if (typeof value !== "string" || value.normalize("NFC") !== value)
-			return invalid("requires NFC text");
+		if (typeof value !== "string") return invalid("requires NFC text");
+		if (hasLoneUnicodeSurrogate(value))
+			return invalid("does not accept a lone Unicode surrogate");
+		if (value.normalize("NFC") !== value) return invalid("requires NFC text");
 		const length = [...value].length;
 		if (
 			(typeof type.minLength === "number" && length < type.minLength) ||
@@ -290,14 +297,27 @@ export function createCommittedSeed(
 			"seedTargetMismatch",
 			"Seed name is missing",
 		);
+	if (hasLoneUnicodeSurrogate(name))
+		return seedError(
+			"QP-SEED-003",
+			"seedTargetMismatch",
+			"Seed name does not accept a lone Unicode surrogate",
+		);
 	const identity = `seed:${name}` as const;
 	const dependencies = [
 		...((input.definition.dependsOn ?? []) as readonly string[]),
 	]
-		.map(
-			(item) =>
-				(item.startsWith("seed:") ? item : `seed:${item}`) as `seed:${string}`,
-		)
+		.map((item) => {
+			if (hasLoneUnicodeSurrogate(item))
+				return seedError(
+					"QP-SEED-003",
+					"seedTargetMismatch",
+					`${identity} dependency does not accept a lone Unicode surrogate`,
+				);
+			return (
+				item.startsWith("seed:") ? item : `seed:${item}`
+			) as `seed:${string}`;
+		})
 		.sort(compareAscii);
 	if (
 		new Set(dependencies).size !== dependencies.length ||

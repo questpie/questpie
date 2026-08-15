@@ -4,19 +4,18 @@ function compareAscii(left: string, right: string): number {
 	return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function arrayIndex(key: string): number | null {
-	if (!/^(?:0|[1-9][0-9]*)$/.test(key)) return null;
-	const value = Number(key);
-	return Number.isInteger(value) && value <= 4_294_967_294 ? value : null;
-}
-
-function compareCanonicalObjectKeys(left: string, right: string): number {
-	const leftIndex = arrayIndex(left);
-	const rightIndex = arrayIndex(right);
-	if (leftIndex !== null && rightIndex !== null) return leftIndex - rightIndex;
-	if (leftIndex !== null) return -1;
-	if (rightIndex !== null) return 1;
-	return compareAscii(left, right);
+export function hasLoneUnicodeSurrogate(value: string): boolean {
+	for (let index = 0; index < value.length; index += 1) {
+		const codeUnit = value.charCodeAt(index);
+		if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+			const next = value.charCodeAt(index + 1);
+			if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+			index += 1;
+			continue;
+		}
+		if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) return true;
+	}
+	return false;
 }
 
 type CanonicalFrame =
@@ -43,16 +42,20 @@ export function canonicalBytes(value: unknown): string {
 		if (frame.kind === "entry") {
 			if (frame.value === undefined)
 				throw new TypeError(`canonical JSON rejects undefined at ${frame.key}`);
+			if (hasLoneUnicodeSurrogate(frame.key))
+				throw new TypeError("canonical JSON rejects a lone Unicode surrogate");
 			output.push(`${JSON.stringify(frame.key)}:`);
 			stack.push({ kind: "value", value: frame.value });
 			continue;
 		}
 		const item = frame.value;
-		if (
-			item === null ||
-			typeof item === "string" ||
-			typeof item === "boolean"
-		) {
+		if (typeof item === "string") {
+			if (hasLoneUnicodeSurrogate(item))
+				throw new TypeError("canonical JSON rejects a lone Unicode surrogate");
+			output.push(JSON.stringify(item));
+			continue;
+		}
+		if (item === null || typeof item === "boolean") {
 			output.push(JSON.stringify(item));
 			continue;
 		}
@@ -80,7 +83,7 @@ export function canonicalBytes(value: unknown): string {
 			continue;
 		}
 		const entries = Object.entries(item).sort(([left], [right]) =>
-			compareCanonicalObjectKeys(left, right),
+			compareAscii(left, right),
 		);
 		stack.push({ kind: "text", value: "}" });
 		for (let index = entries.length - 1; index >= 0; index -= 1) {
