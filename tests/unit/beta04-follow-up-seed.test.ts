@@ -20,7 +20,9 @@ test("commits immutable membership evidence as a follow-up Seed", async () => {
 		"seed:collaboration.demo.v1",
 		"seed:collaboration.authorization.v1",
 	]);
-	const followUp = ordered[1];
+	const followUp = ordered.find(
+		({ identity }) => identity === "seed:collaboration.authorization.v1",
+	);
 	if (!followUp) throw new Error("expected the BETA-04 follow-up Seed");
 	expect(followUp.dependencies).toEqual(["seed:collaboration.demo.v1"]);
 	expect(followUp.steps).toEqual([
