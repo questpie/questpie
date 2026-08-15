@@ -11,6 +11,7 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
+import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
 	decodeOperationWireRequest,
@@ -48,6 +49,9 @@ export interface RuntimeApplicationProgram<
 	ExecutionView = OperationView,
 > extends RuntimeProgram<Context, OperationView> {
 	readonly projectExecution?: RuntimeProgram<Context, ExecutionView>["project"];
+	readonly projectMutation?: (
+		scope: Parameters<RuntimeProgram<Context, OperationView>["project"]>[0],
+	) => MaybePromise<MutationInvoker<OperationView>>;
 	readonly resolvePrincipal: (
 		request: Request,
 	) => MaybePromise<Principal | null>;
@@ -57,7 +61,11 @@ export interface RuntimeApplicationProgram<
 }
 
 export interface RuntimeOperations {
-	invoke(operation: string, input: unknown): Promise<unknown>;
+	invoke(
+		operation: string,
+		input: unknown,
+		options?: Readonly<{ callId?: string }>,
+	): Promise<unknown>;
 }
 
 export interface RuntimeApplication<Input, ExecutionView> {
@@ -141,13 +149,14 @@ export async function createRuntimeApplication<
 		bootstrap: input.program.bootstrap,
 		project: async (scope) => {
 			const operation = await input.program.project(scope);
+			const mutation = await input.program.projectMutation?.(scope);
 			const execution = () =>
 				Promise.resolve(
 					input.program.projectExecution
 						? input.program.projectExecution(scope)
 						: (operation as unknown as ExecutionView),
 				);
-			return Object.freeze({ operation, execution });
+			return Object.freeze({ operation, execution, mutation });
 		},
 	});
 	const activeByPrincipal = new Map<string, number>();
@@ -194,6 +203,7 @@ export async function createRuntimeApplication<
 				view: Readonly<{
 					operation: OperationView;
 					execution(): Promise<ExecutionView>;
+					mutation?: MutationInvoker<OperationView>;
 				}>;
 			}>,
 		) => MaybePromise<Result>,
@@ -242,10 +252,18 @@ export async function createRuntimeApplication<
 							eventFacts,
 						);
 						try {
-							const result = await operationEngine.invokePrepared(
-								operation,
-								view.operation,
-							);
+							const result =
+								operation.binding.kind === "mutation"
+									? await view.mutation?.(operation, callId)
+									: await operationEngine.invokePrepared(
+											operation,
+											view.operation,
+										);
+							if (
+								operation.binding.kind === "mutation" &&
+								view.mutation === undefined
+							)
+								throw new OperationFailure("INTERNAL");
 							if (controlled.deadlineExpired)
 								throw new OperationFailure("DEADLINE_EXCEEDED", true);
 							if (controlled.controller.signal.aborted)
@@ -301,8 +319,14 @@ export async function createRuntimeApplication<
 	>["execution"] = (root, use) =>
 		executeRoot(root, async ({ invoke, view }) => {
 			const scope = Object.freeze({
-				invoke: (identity: string, operationInput: unknown) => {
+				invoke: (
+					identity: string,
+					operationInput: unknown,
+					options?: Readonly<{ callId?: string }>,
+				) => {
 					const prepared = operationEngine.prepare(identity, operationInput);
+					if (prepared.binding.kind === "mutation")
+						return invoke(prepared, options?.callId ?? crypto.randomUUID());
 					callSequence += 1;
 					return invoke(prepared, `direct:${callSequence}`);
 				},

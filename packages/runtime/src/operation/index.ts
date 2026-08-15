@@ -68,6 +68,7 @@ export type RuntimeOperationContract = Readonly<{
 
 export interface OperationEngine<View> {
 	prepare(identity: string, input: unknown): PreparedOperation<View>;
+	decodeResult(operation: PreparedOperation<View>, value: unknown): unknown;
 	invokePrepared(
 		operation: PreparedOperation<View>,
 		ctx: View,
@@ -104,6 +105,8 @@ export function createOperationEngine<View>(
 				input: decode(contract.input, input),
 			});
 		},
+		decodeResult: (operation: PreparedOperation<View>, value: unknown) =>
+			decode(operation.output, value),
 		invokePrepared: async (operation: PreparedOperation<View>, ctx: View) => {
 			const result = await operation.binding.execute({
 				input: operation.input,

@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { compileApplication } from "@questpie/compiler";
+import { compileApplication, loadCommittedMigration } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -88,4 +89,13 @@ test("projects the authored message.publish Mutation into the executable applica
 			},
 		}),
 	);
+	const migrationRoot = resolve(
+		fixtureRoot,
+		"questpie/migrations/000003_publish-message-transaction",
+	);
+	const migration = await loadCommittedMigration(migrationRoot);
+	expect(migration.plan.baseMigration).toBe("000002_authorize-message-pages");
+	expect(
+		await readFile(resolve(migrationRoot, "target-schema.json"), "utf8"),
+	).toBe(compilation.generatedFiles["schema-projection.json"]);
 });
