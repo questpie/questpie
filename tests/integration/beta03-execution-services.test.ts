@@ -254,3 +254,57 @@ test("aborts retained responses before closing application Services", async () =
 		await closing;
 	}
 });
+
+test("isolates application Services between Runtime instances", async () => {
+	let nextInstance = 0;
+	const disposals: number[] = [];
+	const isolatedService = defineService({
+		name: "isolated.application",
+		lifetime: "application",
+		effect: "read",
+		create: () => Object.freeze({ instance: ++nextInstance }),
+		dispose: ({ instance }) => {
+			disposals.push(instance);
+		},
+	});
+	const isolatedContext = defineContext({
+		name: "isolated.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const program = {
+		services: [isolatedService],
+		context: isolatedContext,
+		bootstrap: { get: async () => null },
+		project: async ({
+			service,
+		}: Parameters<
+			Parameters<typeof createApplicationRuntime>[0]["project"]
+		>[0]) => ({ isolated: await service(isolatedService) }),
+	};
+	const firstRuntime = createApplicationRuntime(program);
+	const secondRuntime = createApplicationRuntime(program);
+	const execute = (runtime: typeof firstRuntime) =>
+		runtime.execution(
+			{
+				principal: principal.user({ id: principalId }),
+				context: { companyId },
+			},
+			({ isolated }) => isolated,
+		);
+
+	const [firstA, firstB, second] = await Promise.all([
+		execute(firstRuntime),
+		execute(firstRuntime),
+		execute(secondRuntime),
+	]);
+	expect(firstA).toBe(firstB);
+	expect(firstA.instance).toBe(1);
+	expect(second.instance).toBe(2);
+
+	await firstRuntime.close();
+	expect(disposals).toEqual([1]);
+	expect((await execute(secondRuntime)).instance).toBe(2);
+	await secondRuntime.close();
+	expect(disposals).toEqual([1, 2]);
+});
