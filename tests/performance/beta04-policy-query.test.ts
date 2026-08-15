@@ -85,9 +85,7 @@ function derivedBudget(
 	);
 }
 
-test("BETA-04 measures the authorized Query through real PostgreSQL", async () => {
-	if (!process.env.PGHOST)
-		throw new Error("BETA-04 PostgreSQL performance evidence requires PGHOST");
+async function measureAuthorizedQuery(): Promise<void> {
 	const database = new SQL({ max: 1 });
 	try {
 		const [server] = await database<
@@ -220,4 +218,10 @@ test("BETA-04 measures the authorized Query through real PostgreSQL", async () =
 	} finally {
 		await database.close({ timeout: 0 });
 	}
-});
+}
+
+const postgresTest = process.env.PGHOST ? test : test.skip;
+postgresTest(
+	"BETA-04 measures the authorized Query through real PostgreSQL",
+	measureAuthorizedQuery,
+);
