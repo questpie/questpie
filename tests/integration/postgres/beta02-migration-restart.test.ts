@@ -23,7 +23,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -370,12 +370,58 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			await holder.unsafe("ROLLBACK");
 			holder.release();
 		}
+		await database!.unsafe(
+			'ALTER TABLE "partial_apply_probe"."messages" ADD COLUMN "base_drift_probe" integer',
+		);
+		await expect(
+			applyCommittedMigrations({ migrations: [first, second] }),
+		).resolves.toMatchObject({
+			status: "failed",
+			exitCode: 4,
+			applied: [],
+			failed: second.identity,
+			diagnostic: {
+				format: "questpie.diagnostic",
+				version: 1,
+				code: "QP-SCHEMA-026",
+				class: "baseDrift",
+				blocking: "deploy",
+				comparison: "appliedToDatabase",
+			},
+			remaining: [],
+		});
+		await database!.unsafe(
+			'ALTER TABLE "partial_apply_probe"."messages" DROP COLUMN "base_drift_probe"',
+		);
 		await expect(
 			applyCommittedMigrations({ migrations: [first, second] }),
 		).resolves.toMatchObject({
 			status: "applied",
 			applied: [second.identity],
 		});
+		await database!.unsafe(
+			'ALTER TABLE "partial_apply_probe"."messages" ADD COLUMN "target_drift_probe" integer',
+		);
+		await expect(
+			applyCommittedMigrations({ migrations: [first, second] }),
+		).resolves.toMatchObject({
+			status: "failed",
+			exitCode: 4,
+			applied: [],
+			failed: second.identity,
+			diagnostic: {
+				format: "questpie.diagnostic",
+				version: 1,
+				code: "QP-SCHEMA-027",
+				class: "targetDrift",
+				blocking: "deploy",
+				comparison: "appliedToDatabase",
+			},
+			remaining: [],
+		});
+		await database!.unsafe(
+			'ALTER TABLE "partial_apply_probe"."messages" DROP COLUMN "target_drift_probe"',
+		);
 	}, 10_000);
 
 	test("allows an authorized non-owner deploy role to verify an applied migration", async () => {

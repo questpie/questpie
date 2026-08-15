@@ -343,22 +343,43 @@ export async function applyCommittedMigrations(
 					);
 			}
 			const pending = migrations.slice(receipts.length);
-			if (receipts.length === 0) {
-				if (await schemaExists(session, target.application.postgresSchema))
-					return fail(
-						"QP-SCHEMA-026",
-						"baseDrift",
-						"Genesis requires the application schema to be absent before DDL",
-					);
-			} else if (pending[0]) {
-				await assertMigrationBoundary(
-					session,
-					pending[0].baseSchema,
-					"base",
-					pending[0].identity,
-				);
-			}
 			const applied: string[] = [];
+			const firstPending = pending[0];
+			if (firstPending)
+				try {
+					if (
+						receipts.length === 0 &&
+						(await schemaExists(session, target.application.postgresSchema))
+					)
+						return migrationFailure(
+							new CompilerDiagnosticError(
+								"QP-SCHEMA-026",
+								"baseDrift",
+								"Genesis requires the application schema to be absent before DDL",
+							),
+							firstPending.identity,
+							application,
+							applied,
+							pending.slice(1).map((item) => item.identity),
+						)!;
+					if (receipts.length > 0)
+						await assertMigrationBoundary(
+							session,
+							firstPending.baseSchema,
+							"base",
+							firstPending.identity,
+						);
+				} catch (error) {
+					const failure = migrationFailure(
+						error,
+						firstPending.identity,
+						application,
+						applied,
+						pending.slice(1).map((item) => item.identity),
+					);
+					if (failure) return failure;
+					throw error;
+				}
 			for (const [pendingIndex, migration] of pending.entries()) {
 				try {
 					if (pendingIndex > 0)
