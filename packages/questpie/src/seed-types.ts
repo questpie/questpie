@@ -1,8 +1,8 @@
 import type {
 	ConstraintDefinition,
-	FieldDefinition,
 	FieldReference,
-} from "./index";
+} from "./collection-contract";
+import type { FieldDefinition } from "./field-contract";
 import type { FieldNode, InlineShapeDefinition } from "./shape";
 
 type SeedValueForField<Field> =

@@ -1,9 +1,5 @@
-import type {
-	Codec,
-	CodecValue,
-	CollectionDefinition,
-	FieldDefinition,
-} from "./index";
+import type { CollectionDefinition } from "./collection-contract";
+import type { Codec, CodecValue, FieldDefinition } from "./field-contract";
 import type { SeedPrimaryKey } from "./seed-types";
 import type { FieldNode, InlineShapeDefinition } from "./shape";
 

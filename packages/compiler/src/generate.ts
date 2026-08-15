@@ -1,5 +1,9 @@
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
+import type {
+	RelationalGeneratedContractV1,
+	RelationalGeneratedSelectionV1,
+} from "./relational";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -207,7 +211,7 @@ export function renderAppContract(
 	data: unknown,
 	schema: unknown,
 	sourceRoot: string,
-	relational: unknown,
+	relational: RelationalGeneratedContractV1,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -239,17 +243,6 @@ export function renderAppContract(
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	const relationalProjection = record(relational);
-	const policies = (record(relationalProjection.policy).policies ??
-		[]) as readonly unknown[];
-	const queries = (record(relationalProjection.query).queries ??
-		[]) as readonly unknown[];
-	const policiesByIdentity = new Map(
-		policies.map((entry) => {
-			const program = record(record(entry).program);
-			return [String(program.identity), program] as const;
-		}),
-	);
 	const fieldByIdentity = (identity: string): RecordValue => {
 		const marker = "/field:";
 		const offset = identity.indexOf(marker);
@@ -264,43 +257,22 @@ export function renderAppContract(
 		if (!field) throw new TypeError(`unknown selected Field ${identity}`);
 		return field;
 	};
-	const selectedOutputPaths = (policyIdentity: string): ReadonlySet<string> => {
-		const program = policiesByIdentity.get(policyIdentity);
-		if (!program) return new Set();
-		const fields = program.fields ? record(program.fields) : undefined;
-		const rules = (fields?.selectedOutput ?? []) as readonly unknown[];
-		return new Set(
-			rules.map((rule) => {
-				const path = record(rule).path as readonly unknown[];
-				return path.map(String).join("/");
-			}),
-		);
-	};
 	const renderSelection = (
-		selection: readonly unknown[],
-		optionalPaths: ReadonlySet<string>,
+		selection: readonly RelationalGeneratedSelectionV1[],
 	): string =>
 		`{ ${selection
-			.map((rawSelection) => {
-				const selected = record(rawSelection);
+			.map((selected) => {
 				const key = JSON.stringify(String(selected.key));
 				if (selected.kind === "field") {
-					const identity = String(selected.field);
-					const path = identity.slice(identity.indexOf("/field:") + 7);
-					return `${key}${optionalPaths.has(path) ? "?" : ""}: ${fieldType(fieldByIdentity(identity))};`;
+					return `${key}${selected.optional ? "?" : ""}: ${fieldType(fieldByIdentity(selected.field))};`;
 				}
-				if (selected.kind !== "toOne")
-					throw new TypeError("unsupported generated Query selection");
-				return `${key}: ${renderSelection(selected.select as readonly unknown[], new Set())} | null;`;
+				return `${key}: ${renderSelection(selected.select)} | null;`;
 			})
 			.join(" ")} }`;
-	const queryRuns = queries
-		.map((rawQuery) => {
-			const query = record(rawQuery);
-			const origin = record(query.origin);
-			const template = record(query.template);
-			const definition = `(typeof import(${JSON.stringify(sourceModulePath(String(origin.path)))}))[${JSON.stringify(String(origin.exportName))}]`;
-			const result = `Readonly<{ nodes: Array<${renderSelection(template.select as readonly unknown[], selectedOutputPaths(String(query.policy)))}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>`;
+	const queryRuns = relational.queries
+		.map((query) => {
+			const definition = `(typeof import(${JSON.stringify(sourceModulePath(query.origin.path))}))[${JSON.stringify(query.origin.exportName)}]`;
+			const result = `Readonly<{ nodes: Array<${renderSelection(query.select)}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>`;
 			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
 		})
 		.join("\n\t");

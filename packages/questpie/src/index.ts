@@ -1,7 +1,24 @@
-import {
-	type CheckConstraintDefinition,
-	createCheckConstraint,
-} from "./check-expression";
+import { createCheckConstraint } from "./check-expression";
+import type {
+	CollectionAugmentation,
+	CollectionDefinition,
+	ConstraintDefinition,
+	ConstraintMemberDefinition,
+	FieldReference,
+	IndexDefinition,
+	IndexField,
+	InverseRelationDefinition,
+	RelationDefinition,
+	RelationReference,
+} from "./collection-contract";
+import type {
+	Codec,
+	CodecKind,
+	CodecValue,
+	FieldDefault,
+	FieldDefinition,
+	FieldScalar,
+} from "./field-contract";
 import type {
 	PrimaryKeyReferences,
 	SeedInsertValues,
@@ -40,38 +57,30 @@ export { shape } from "./shape";
 export type { FieldNode, InlineShapeDefinition } from "./shape";
 export { value } from "./value";
 export type { JsonValue, TaggedJsonValue, ValueDefinition } from "./value";
-
-export type CodecKind = "boolean" | "integer" | "object" | "text" | "uuid";
-
-export interface Codec<Value, Kind extends CodecKind = CodecKind> {
-	readonly kind: Kind;
-	readonly value?: Value;
-}
-
-export type CodecValue<ValueCodec> =
-	ValueCodec extends Codec<infer Value> ? Value : never;
-
-export interface DataFieldDescriptor<
-	Identity extends `collection:${string}/field:${string}`,
-	FieldCodec,
-	Value,
-	Nullable extends boolean,
-	HasDefault extends boolean,
-> {
-	readonly identity: Identity;
-	readonly codec: FieldCodec;
-	readonly nullable: Nullable;
-	readonly hasDefault: HasDefault;
-	readonly value?: Value;
-}
+export type {
+	Codec,
+	CodecKind,
+	CodecValue,
+	DataFieldDescriptor,
+	FieldDefinition,
+} from "./field-contract";
+export type {
+	CollectionAugmentation,
+	CollectionDefinition,
+	ConstraintDefinition,
+	FieldReference,
+	IndexDefinition,
+	IndexField,
+	InverseRelationDefinition,
+	RelationDefinition,
+	RelationReference,
+} from "./collection-contract";
 
 type ScalarOptions = Readonly<{ nullable?: boolean }>;
 type FieldBaseOptions = Readonly<{
 	nullable: boolean;
 	postgres?: Readonly<{ name: string }>;
 }>;
-
-type FieldDefault = "now" | "randomUuid" | boolean | number | string;
 
 type ExactOptions<Options, Shape> = Options &
 	Readonly<Record<Exclude<keyof Options, keyof Shape>, never>>;
@@ -95,36 +104,6 @@ type FieldRuntimeOptions = FieldBaseOptions &
 		scale?: number;
 		withTimezone?: boolean;
 	}>;
-
-type FieldValue = object | string | number | boolean | null;
-
-type FieldScalar =
-	| "array"
-	| "bigint"
-	| "boolean"
-	| "date"
-	| "integer"
-	| "json"
-	| "numeric"
-	| "object"
-	| "text"
-	| "timestamp"
-	| "uuid";
-
-export interface FieldDefinition<
-	Value = FieldValue,
-	Nullable extends boolean = boolean,
-	Default extends FieldDefault | null = FieldDefault | null,
-	Scalar extends FieldScalar = FieldScalar,
-> {
-	readonly kind: "field";
-	readonly scalar: Scalar;
-	readonly nullable: Nullable;
-	readonly default: Default;
-	readonly postgresName: string | null;
-	readonly options: Readonly<Record<string, unknown>>;
-	readonly value?: Value;
-}
 
 function fieldDefinition<
 	const Scalar extends FieldScalar,
@@ -308,21 +287,6 @@ export const codec = Object.freeze({
 	> => Object.freeze({ kind: "object", properties }),
 });
 
-export type FieldReference = string | readonly [string, ...string[]];
-
-export interface ConstraintDefinition<
-	Fields extends readonly FieldReference[] = readonly never[],
-	Kind extends "primaryKey" | "unique" = "primaryKey" | "unique",
-> {
-	readonly kind: Kind;
-	readonly fields: Fields;
-	readonly postgresName: string | null;
-}
-
-type ConstraintMemberDefinition =
-	| ConstraintDefinition<readonly FieldReference[]>
-	| CheckConstraintDefinition;
-
 function frozenTuple<const Values extends readonly unknown[]>(
 	values: Values,
 ): Values {
@@ -353,22 +317,6 @@ export const constraint = Object.freeze({
 	check: createCheckConstraint,
 });
 
-export type IndexField =
-	| FieldReference
-	| Readonly<{
-			field: FieldReference;
-			order?: "asc" | "desc";
-			nulls?: "first" | "last";
-	  }>;
-
-export interface IndexDefinition<
-	Fields extends readonly IndexField[] = readonly never[],
-> {
-	readonly kind: "btree";
-	readonly fields: Fields;
-	readonly postgresName: string | null;
-}
-
 export function index<const Fields extends readonly IndexField[]>(
 	input: Readonly<{ fields: Fields; postgres?: { name: string } }>,
 ): IndexDefinition<Fields> {
@@ -377,32 +325,6 @@ export function index<const Fields extends readonly IndexField[]>(
 		fields: frozenTuple(input.fields),
 		postgresName: input.postgres?.name ?? null,
 	});
-}
-
-export interface RelationDefinition<
-	Target extends `collection:${string}` = `collection:${string}`,
-	Fields extends readonly FieldReference[] = readonly FieldReference[],
-	References extends readonly FieldReference[] = readonly FieldReference[],
-> {
-	readonly kind: "toOne";
-	readonly target: Target;
-	readonly fields: Fields;
-	readonly references: References;
-	readonly onDelete: "restrict" | "cascade" | "setNull" | "noAction";
-	readonly onUpdate: "restrict" | "cascade" | "setNull" | "noAction";
-	readonly postgresName: string | null;
-}
-
-export type RelationReference<
-	Name extends string = string,
-	Member extends string = string,
-> = `collection:${Name}/relation:${Member}`;
-
-export interface InverseRelationDefinition<
-	InverseOf extends RelationReference = RelationReference,
-> {
-	readonly kind: "toMany";
-	readonly inverseOf: InverseOf;
 }
 
 export function relationRef<
@@ -443,58 +365,6 @@ export const relation = Object.freeze({
 	): InverseRelationDefinition<InverseOf> =>
 		Object.freeze({ ...input, kind: "toMany", inverseOf: input.inverseOf }),
 });
-
-interface DefinitionBrand {
-	readonly category: "definition";
-	readonly resourceKind: "collection" | "seed";
-}
-
-interface AugmentationBrand {
-	readonly category: "augmentation";
-	readonly resourceKind: "collection";
-}
-
-export interface CollectionAugmentation<
-	Name extends string = string,
-	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
-		Record<never, never>
-	>,
-	Constraints extends Readonly<Record<string, ConstraintMemberDefinition>> =
-		Readonly<Record<never, never>>,
-	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly IndexField[] }>
-	> = Readonly<Record<never, never>>,
-> {
-	readonly __questpie: AugmentationBrand;
-	readonly name: Name;
-	readonly fields: Fields;
-	readonly constraints: Constraints;
-	readonly indexes: Indexes;
-}
-
-export interface CollectionDefinition<
-	Name extends string = string,
-	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
-		Record<never, never>
-	>,
-	Constraints extends Readonly<Record<string, ConstraintMemberDefinition>> =
-		Readonly<Record<never, never>>,
-	Indexes extends Readonly<
-		Record<string, { readonly fields: readonly IndexField[] }>
-	> = Readonly<Record<never, never>>,
-	Relations extends Readonly<
-		Record<string, RelationDefinition | InverseRelationDefinition>
-	> = Readonly<Record<never, never>>,
-> {
-	readonly __questpie: DefinitionBrand;
-	readonly name: Name;
-	readonly fields: Fields;
-	readonly constraints: Constraints;
-	readonly indexes: Indexes;
-	readonly relations: Relations;
-	readonly augmentations: readonly CollectionAugmentation[];
-	readonly postgresName: string | null;
-}
 
 type ValidateFieldReferences<
 	Fields extends Readonly<Record<string, FieldNode>>,

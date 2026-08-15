@@ -1,4 +1,4 @@
-import type { DataFieldDescriptor } from "../index";
+import type { DataFieldDescriptor } from "../field-contract";
 import { booleanExpression, type BooleanExpression } from "./model";
 
 type FieldIdentity = `collection:${string}/field:${string}`;

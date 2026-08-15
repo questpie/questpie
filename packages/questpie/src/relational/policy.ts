@@ -1,8 +1,5 @@
-import type {
-	FieldDefinition,
-	FieldNode,
-	InlineShapeDefinition,
-} from "../index";
+import type { FieldDefinition } from "../field-contract";
+import type { FieldNode, InlineShapeDefinition } from "../shape";
 import {
 	booleanExpression,
 	type BooleanExpression,

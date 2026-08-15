@@ -1,4 +1,4 @@
-import type { FieldDefinition } from "./index";
+import type { FieldDefinition } from "./field-contract";
 
 export type FieldNode = FieldDefinition | InlineShapeDefinition;
 

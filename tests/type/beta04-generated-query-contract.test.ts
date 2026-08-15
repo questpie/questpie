@@ -50,7 +50,9 @@ void (0 as unknown as NoCount);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
-		expect(compilation.generatedFiles["app.ts"]).toContain("run(");
+		expect(compilation.generatedFiles["app.ts"]).toContain(
+			'run(plan: (typeof import("#questpie/source/message-page.ts"))["channelMessagePage"], input: (typeof import("#questpie/source/message-page.ts"))["channelMessagePage"]["parameters"]): Promise<Readonly<{ nodes: Array<{ "author": { "id": string; "role": string; } | null; "body"?: string; "createdAt": string; "id": string; }>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>>;',
+		);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

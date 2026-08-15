@@ -2,6 +2,11 @@ import { digest } from "../canonical";
 import type { DataQueryTemplateV1, PolicyProgramV1 } from "./types";
 
 export { relationalDiscoverySource } from "./discovery";
+export { projectRelationalGeneratedContract } from "./generated-contract";
+export type {
+	RelationalGeneratedContractV1,
+	RelationalGeneratedSelectionV1,
+} from "./generated-contract";
 export { normalizeBoundPolicy } from "./binding";
 export type { BoundPolicyProgramV1, PolicyScopeBindingV1 } from "./binding";
 export { projectRelationalCompilation } from "./projection";

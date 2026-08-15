@@ -2,6 +2,7 @@ import { compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { EvaluatedExport, NormalizedResource } from "../types";
 import { normalizeBoundPolicy } from "./binding";
+import { projectRelationalGeneratedContract } from "./generated-contract";
 import { selectDefaultPolicy } from "./normalize-policy";
 import { normalizeDataQueryTemplate } from "./normalize-query";
 
@@ -23,6 +24,7 @@ export function projectRelationalCompilation(
 	policy: Readonly<Record<string, unknown>>;
 	query: Readonly<Record<string, unknown>>;
 	explain: Readonly<Record<string, unknown>>;
+	declarations: import("./generated-contract").RelationalGeneratedContractV1;
 	structuralOrigins: readonly Readonly<Record<string, unknown>>[];
 	hasRelationalArtifacts: boolean;
 }> {
@@ -109,6 +111,14 @@ export function projectRelationalCompilation(
 		establishedAt: { kind: "export", ...query.origin },
 	}));
 	return {
+		declarations: projectRelationalGeneratedContract({
+			policies: policies.map(({ program }) => program),
+			queries: queries.map(({ policy, origin, template }) => ({
+				policy,
+				origin,
+				select: template.select,
+			})),
+		}),
 		policy: {
 			format: "questpie.policy-projection",
 			version: 1,
