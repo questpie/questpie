@@ -10,6 +10,7 @@ import type {
 } from "../types";
 import {
 	buildPostgresCatalog,
+	fieldValueSql,
 	qualifiedTable,
 	quoteIdentifier,
 	requiredCollection,
@@ -230,7 +231,7 @@ function relationJoin(
 		const innerColumn = `qp_value_${fieldIndex}`;
 		const column = `qp_${selection.key}_${fieldSelection.key}`;
 		return {
-			inner: `${quoteIdentifier(rowAlias)}.${quoteIdentifier(field.postgresName)} AS ${quoteIdentifier(innerColumn)}`,
+			inner: `${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(innerColumn)}`,
 			outer: `${quoteIdentifier(relationAlias)}.${quoteIdentifier(innerColumn)} AS ${quoteIdentifier(column)}`,
 			result: {
 				key: fieldSelection.key,
@@ -280,7 +281,7 @@ function rootFieldResult(
 	if (!rule)
 		return {
 			columns: [
-				`${quoteIdentifier(rootAlias)}.${quoteIdentifier(field.postgresName)} AS ${quoteIdentifier(column)}`,
+				`${fieldValueSql(field, rootAlias)} AS ${quoteIdentifier(column)}`,
 			],
 			joins: [],
 			result: {
@@ -301,7 +302,7 @@ function rootFieldResult(
 	});
 	return {
 		columns: [
-			`CASE WHEN ${quoteIdentifier(guardAlias)}."allowed" THEN ${quoteIdentifier(rootAlias)}.${quoteIdentifier(field.postgresName)} ELSE NULL END AS ${quoteIdentifier(column)}`,
+			`CASE WHEN ${quoteIdentifier(guardAlias)}."allowed" THEN ${fieldValueSql(field, rootAlias)} ELSE NULL END AS ${quoteIdentifier(column)}`,
 			`${quoteIdentifier(guardAlias)}."allowed" AS ${quoteIdentifier(guardColumn)}`,
 		],
 		joins: [

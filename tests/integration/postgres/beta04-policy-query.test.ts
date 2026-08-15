@@ -33,15 +33,24 @@ const messageIds = [
 	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61c2",
 	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61c3",
 ] as const;
+const microsecondChannelId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61d0";
+const microsecondMessageIds = [
+	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61d1",
+	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61d2",
+] as const;
 
 let plan: PostgresQueryPlanV1;
 
-function binding(after: string | null, first = 1): DataQueryBindingV1 {
+function binding(
+	after: string | null,
+	first = 1,
+	boundChannelId = channelId,
+): DataQueryBindingV1 {
 	return {
 		templateDigest: plan.templateDigest,
 		values: [
 			{ parameter: "after", value: after },
-			{ parameter: "channelId", value: channelId },
+			{ parameter: "channelId", value: boundChannelId },
 			{ parameter: "first", value: first },
 		],
 	};
@@ -60,6 +69,7 @@ async function execute(
 	options: Readonly<{
 		after?: string | null;
 		first?: number;
+		channelId?: string;
 		principal?: string;
 		signal?: AbortSignal;
 		tenant?: string;
@@ -67,7 +77,7 @@ async function execute(
 ) {
 	return executePostgresQuery({
 		plan,
-		binding: binding(options.after ?? null, options.first),
+		binding: binding(options.after ?? null, options.first, options.channelId),
 		executionFacts: executionFacts(options.principal, options.tenant),
 		adapter,
 		signal: options.signal,
@@ -142,6 +152,50 @@ afterAll(async () => {
 describe.skipIf(!database)(
 	"BETA-04 Bun PostgreSQL Policy Query adapter",
 	() => {
+		test("uses canonical millisecond order for microsecond PostgreSQL rows and cursor seeks", async () => {
+			await database!`
+					insert into collaboration.channels (id, space_id, name, visibility)
+					values (${microsecondChannelId}, ${spaceId}, 'Precision', 'company')
+				`;
+			await database!`
+					insert into collaboration.messages
+						(id, channel_id, author_membership_id, body, created_at)
+					values
+						(${microsecondMessageIds[0]}, ${microsecondChannelId}, ${membershipId}, 'lower-id', '2026-08-15T11:00:00.000900Z'),
+						(${microsecondMessageIds[1]}, ${microsecondChannelId}, ${membershipId}, 'higher-id', '2026-08-15T11:00:00.000100Z')
+				`;
+
+			const adapter = createBunPostgresQueryAdapter(database!);
+			const firstPage = await execute(adapter, {
+				channelId: microsecondChannelId,
+				first: 1,
+			});
+			expect(
+				firstPage.nodes.map(({ id, createdAt }) => ({ id, createdAt })),
+			).toEqual([
+				{
+					id: microsecondMessageIds[1],
+					createdAt: "2026-08-15T11:00:00.000Z",
+				},
+			]);
+			expect(firstPage.pageInfo.hasNextPage).toBe(true);
+
+			const secondPage = await execute(adapter, {
+				after: firstPage.pageInfo.endCursor,
+				channelId: microsecondChannelId,
+				first: 1,
+			});
+			expect(
+				secondPage.nodes.map(({ id, createdAt }) => ({ id, createdAt })),
+			).toEqual([
+				{
+					id: microsecondMessageIds[0],
+					createdAt: "2026-08-15T11:00:00.000Z",
+				},
+			]);
+			expect(secondPage.pageInfo.hasNextPage).toBe(false);
+		});
+
 		test("uses fresh Policy evidence for pages, revocation, output guards, and relation disclosure", async () => {
 			const adapter = createBunPostgresQueryAdapter(database!);
 			const firstPage = await execute(adapter);

@@ -474,6 +474,9 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 	expect(plan.sql).not.toContain("COUNT(");
 	expect(plan.sql).toContain("LIMIT ($");
 	expect(plan.sql).toContain(" + 1)");
+	const canonicalTimestamp = `pg_catalog.date_trunc('milliseconds', "qp_row"."created_at")`;
+	expect(plan.sql).toContain(`${canonicalTimestamp} AS "qp_createdAt"`);
+	expect(plan.sql.split(canonicalTimestamp)).toHaveLength(6);
 	expect(plan.page).toEqual({
 		kind: "forwardCursor",
 		first: { parameter: "first", minimum: 1, maximum: 100 },

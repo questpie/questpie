@@ -66,6 +66,13 @@ export function qualifiedTable(
 	return `${quoteIdentifier(catalog.schemaName)}.${quoteIdentifier(collection.postgresName)}`;
 }
 
+export function fieldValueSql(field: PostgresField, alias: string): string {
+	const column = `${quoteIdentifier(alias)}.${quoteIdentifier(field.postgresName)}`;
+	return field.codec.kind === "timestamp"
+		? `pg_catalog.date_trunc('milliseconds', ${column})`
+		: column;
+}
+
 export function postgresType(
 	codec: Readonly<{ kind: string; withTimezone?: boolean }>,
 ): string {

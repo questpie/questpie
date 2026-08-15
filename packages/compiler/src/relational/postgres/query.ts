@@ -6,8 +6,8 @@ import type {
 	ScalarQueryFilterV1,
 } from "../types";
 import {
+	fieldValueSql,
 	postgresType,
-	quoteIdentifier,
 	requiredField,
 	type PostgresCatalog,
 	type PostgresField,
@@ -57,7 +57,7 @@ function queryOperand(
 
 function fieldSql(fieldIdentity: string, context: QuerySqlContext): string {
 	const field = requiredField(context.catalog, fieldIdentity as never);
-	return `${quoteIdentifier(context.alias)}.${quoteIdentifier(field.postgresName)}`;
+	return fieldValueSql(field, context.alias);
 }
 
 function scalarFilterSql(
@@ -162,7 +162,7 @@ export function orderSql(
 	return template.order
 		.map((term) => {
 			const field = requiredField(catalog, term.field);
-			return `${quoteIdentifier(alias)}.${quoteIdentifier(field.postgresName)} ${term.direction.toUpperCase()} NULLS ${term.nulls.toUpperCase()}`;
+			return `${fieldValueSql(field, alias)} ${term.direction.toUpperCase()} NULLS ${term.nulls.toUpperCase()}`;
 		})
 		.join(", ");
 }
@@ -174,7 +174,7 @@ function cursorComparison(
 	nulls: "first" | "last",
 	alias: string,
 ): string {
-	const row = `${quoteIdentifier(alias)}.${quoteIdentifier(field.postgresName)}`;
+	const row = fieldValueSql(field, alias);
 	const comparison = direction === "asc" ? ">" : "<";
 	if (!field.nullable) return `(${row} ${comparison} ${value})`;
 	if (nulls === "first")
