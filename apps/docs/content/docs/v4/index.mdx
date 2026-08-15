@@ -68,8 +68,8 @@ the same authorization decision to every execution surface.
 QUESTPIE has seven executable Definition kinds: Query, Mutation, Action, Route,
 Reaction, Job, and Workflow. They import application-specialized factories from
 `#questpie/app`; the compiler binds every handler statically in a matched
-Runtime Build. Complete Workflow product breadth remains a later release
-vertical, but its factory and shared checkpoint kernel are fixed.
+Runtime Build. The Workflow contract uses the shared durable kernel and
+contains only named steps, timers, and typed signals.
 
 A Mutation owns its PostgreSQL transaction and can add durable work to the same
 commit. Query reads and Mutation writes use exact generated contracts and the

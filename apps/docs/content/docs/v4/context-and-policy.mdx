@@ -9,12 +9,10 @@ enforces one compiled Policy model for application authorization. Context
 resolves trusted identity and application scope once. Policy checks current
 relational evidence where the data operation runs.
 
-## Define the collaboration fixture
+## Define collaboration data
 
-The schema and structural Query guides use a Barbershop to introduce data
-primitives. From this page onward, the examples use one collaboration fixture
-because its Company, Space, Channel, Membership, and Message graph makes
-relational authorization visible:
+This guide uses a Company, Space, Channel, Membership, and Message graph to
+make relational authorization visible:
 
 ```ts title="src/data/collaboration.ts"
 import { constraint, defineCollection, field } from "questpie";

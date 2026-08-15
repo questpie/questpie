@@ -75,12 +75,11 @@ All three are compiler outputs with exact source digests. They cannot define
 business handlers, authorize calls, expose secrets, or create another
 observability path. Their invocation telemetry stays in the Execution Envelope.
 
-## What remains later
+## Know the current limits
 
-Multipart and presigned uploads, ranges, scanning, transforms, CDN, retention
-erasure, public buckets, full-text Index syntax, external and vector Search,
-highlighting, and analyzer breadth remain focused later verticals. Their named
-seams are preserved without optional methods or provider-specific behavior in
-the beta contract.
+This contract does not include multipart or presigned uploads, ranges,
+scanning, transforms, CDN, retention erasure, public buckets, full-text Index
+syntax, external or vector Search, highlighting, or analyzer configuration.
+The named seams contain no optional methods or provider-specific behavior.
 
-The accepted proof uses only B-tree Indexes and emits no RLS claim.
+The Index contract is B-tree-only, and QUESTPIE emits no RLS claim.

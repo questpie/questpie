@@ -44,6 +44,7 @@ import {
 	defineQuery,
 	defineReaction,
 	defineRoute,
+	defineWorkflow,
 } from "#questpie/app";
 ```
 
@@ -78,8 +79,8 @@ the Current App Contract and reject stale generated output.
 
 An inline handler is the normal form. The `messageSummary` Definition above
 owns one Executable Slot: the one handler position the compiler records for
-that Definition. Query, Mutation, Action, Route, Reaction, and Job Definitions
-each carry exactly one handler.
+that Definition. Query, Mutation, Action, Route, Reaction, Job, and Workflow
+Definitions each carry exactly one handler.
 
 The compiler keeps the handler and its runtime-only imports outside controlled
 structural evaluation. It records a stable slot in the structural contract and
