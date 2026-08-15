@@ -19,6 +19,7 @@ import {
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
+	projectRelationalNondisclosure,
 } from "./relational";
 import { projectManifest, projectMemberContributions } from "./schema";
 import type {
@@ -263,13 +264,19 @@ export async function createArtifacts(
 		"service-projection.json": canonicalBytes(executionComposition.services),
 	};
 	if (relational.hasRelationalArtifacts) {
+		const postgresQueryPlans = lowerPostgresQueryPlans({
+			schema,
+			policyProjection: relational.policy,
+			queryProjection: relational.query,
+		});
 		generated["policy-projection.json"] = canonicalBytes(relational.policy);
 		generated["query-projection.json"] = canonicalBytes(relational.query);
-		generated["postgres-query-plans.json"] = canonicalBytes(
-			lowerPostgresQueryPlans({
-				schema,
+		generated["postgres-query-plans.json"] = canonicalBytes(postgresQueryPlans);
+		generated["relational-nondisclosure.json"] = canonicalBytes(
+			projectRelationalNondisclosure({
 				policyProjection: relational.policy,
 				queryProjection: relational.query,
+				postgresQueryPlans,
 			}),
 		);
 		generated["relational-explain.json"] = canonicalBytes(relational.explain);

@@ -5,6 +5,11 @@ export { relationalDiscoverySource } from "./discovery";
 export { normalizeBoundPolicy } from "./binding";
 export type { BoundPolicyProgramV1, PolicyScopeBindingV1 } from "./binding";
 export { projectRelationalCompilation } from "./projection";
+export { projectRelationalNondisclosure } from "./nondisclosure";
+export type {
+	RelationalNondisclosureQueryV1,
+	RelationalNondisclosureV1,
+} from "./nondisclosure";
 export { lowerPostgresQueryPlans } from "./postgres";
 export type { PostgresQueryPlanV1, PostgresQueryPlansV1 } from "./postgres";
 
