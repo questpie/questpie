@@ -440,24 +440,25 @@ export async function applyCommittedMigrations(
 			try {
 				resultFingerprint = await fingerprint(session, target);
 			} catch (error) {
+				let diagnosticError = error;
 				if (
 					error instanceof CompilerDiagnosticError &&
 					error.code === "QP-SCHEMA-028"
 				)
-					error = new CompilerDiagnosticError(
+					diagnosticError = new CompilerDiagnosticError(
 						"QP-SCHEMA-027",
 						"targetDrift",
 						`${migrations.at(-1)!.identity} target Schema Fingerprint does not match the committed artifact`,
 					);
 				const failure = migrationFailure(
-					error,
+					diagnosticError,
 					migrations.at(-1)!.identity,
 					application,
 					applied,
 					[],
 				);
 				if (failure) return failure;
-				throw error;
+				throw diagnosticError;
 			}
 			return {
 				status: applied.length > 0 ? "applied" : "alreadyApplied",
