@@ -290,9 +290,12 @@ export async function readCatalogComparableInOwnedTransaction(
 				type: string;
 				fields: string[];
 				referencedTable: string | null;
+				referencedNamespace: string | null;
 				referencedFields: string[];
 				onDelete: string;
 				onUpdate: string;
+				matchType: string;
+				deleteSetFieldCount: number;
 				definition: string;
 				validated: boolean;
 				deferrable: boolean;
@@ -311,6 +314,7 @@ export async function readCatalogComparableInOwnedTransaction(
 			         order by key.position
 			       ), array[]::name[])::text[] as fields,
 			       target.relname as "referencedTable",
+			       target_namespace.nspname as "referencedNamespace",
 			       coalesce(array(
 			         select a.attname
 			         from unnest(con.confkey) with ordinality as key(attnum, position)
@@ -319,6 +323,8 @@ export async function readCatalogComparableInOwnedTransaction(
 			       ), array[]::name[])::text[] as "referencedFields",
 			       con.confdeltype::text as "onDelete",
 			       con.confupdtype::text as "onUpdate",
+			       con.confmatchtype::text as "matchType",
+			       coalesce(pg_catalog.cardinality(con.confdelsetcols), 0)::integer as "deleteSetFieldCount",
 			       pg_catalog.pg_get_expr(con.conbin, con.conrelid) as definition,
 			       con.convalidated as validated,
 			       con.condeferrable as deferrable,
@@ -330,6 +336,7 @@ export async function readCatalogComparableInOwnedTransaction(
 			join pg_catalog.pg_class source on source.oid = con.conrelid
 			join pg_catalog.pg_namespace n on n.oid = source.relnamespace
 			left join pg_catalog.pg_class target on target.oid = con.confrelid
+			left join pg_catalog.pg_namespace target_namespace on target_namespace.oid = target.relnamespace
 			where n.nspname = ${scope.applicationSchema} and source.relname = ${table.name}
 			order by con.conname
 		`;
@@ -369,6 +376,20 @@ export async function readCatalogComparableInOwnedTransaction(
 			// attnotnull. Fingerprint v1 owns nullability on the column object.
 			if (constraint.type === "n") continue;
 			if (constraint.type === "c") {
+				if (
+					!constraint.local ||
+					constraint.inheritedCount !== 0 ||
+					constraint.noInherit ||
+					constraint.deferrable ||
+					constraint.initiallyDeferred
+				) {
+					unsupportedObjects.push({
+						kind: "other",
+						qualifiedIdentity: `${scope.applicationSchema}.${table.name}.${constraint.name}`,
+						attachedTo: `${scope.applicationSchema}.${table.name}`,
+					});
+					continue;
+				}
 				const expression = parseCatalogCheck(constraint.definition);
 				if (expression)
 					objects.push({
@@ -399,7 +420,13 @@ export async function readCatalogComparableInOwnedTransaction(
 			else if (constraint.type === "f") {
 				const onDelete = foreignKeyAction(constraint.onDelete);
 				const onUpdate = foreignKeyAction(constraint.onUpdate);
-				if (onDelete && onUpdate)
+				if (
+					onDelete &&
+					onUpdate &&
+					constraint.matchType === "s" &&
+					constraint.deleteSetFieldCount === 0 &&
+					constraint.referencedNamespace === scope.applicationSchema
+				)
 					objects.push({
 						kind: "foreignKey",
 						table: table.name,
@@ -436,7 +463,10 @@ export async function readCatalogComparableInOwnedTransaction(
 				predicate: string | null;
 				hasExpressions: boolean;
 				keyTermCount: number;
+				totalTermCount: number;
+				nullsNotDistinct: boolean;
 				constraintBacked: boolean;
+				constraintName: string | null;
 			}[]
 		>`
 			select i.relname as name,
@@ -447,7 +477,10 @@ export async function readCatalogComparableInOwnedTransaction(
 			       pg_catalog.pg_get_expr(x.indpred, x.indrelid) as predicate,
 			       x.indexprs is not null as "hasExpressions",
 			       x.indnkeyatts::integer as "keyTermCount",
-			       con.oid is not null as "constraintBacked"
+			       x.indnatts::integer as "totalTermCount",
+			       x.indnullsnotdistinct as "nullsNotDistinct",
+			       con.oid is not null as "constraintBacked",
+			       con.conname as "constraintName"
 			from pg_catalog.pg_index x
 			join pg_catalog.pg_class i on i.oid = x.indexrelid
 			join pg_catalog.pg_class source on source.oid = x.indrelid
@@ -516,12 +549,14 @@ export async function readCatalogComparableInOwnedTransaction(
 				};
 				dependencies.set(canonicalBytes(dependency), dependency);
 			}
-			if (index.constraintBacked) continue;
-			const supported =
+			const hasSupportedIndexState = (unique: boolean, requireReady: boolean) =>
 				index.method === "btree" &&
-				!index.unique &&
+				index.unique === unique &&
+				(!requireReady || (index.valid && index.ready)) &&
 				index.predicate === null &&
 				!index.hasExpressions &&
+				!index.nullsNotDistinct &&
+				index.totalTermCount === index.keyTermCount &&
 				terms.length === index.keyTermCount &&
 				terms.every(
 					(term) =>
@@ -532,7 +567,24 @@ export async function readCatalogComparableInOwnedTransaction(
 							(term.collationNamespace === "pg_catalog" &&
 								term.collation === "C")),
 				);
-			if (!supported) {
+			if (index.constraintBacked) {
+				if (!hasSupportedIndexState(true, true)) {
+					const constraintIndex = objects.findIndex(
+						(object) =>
+							(object.kind === "primaryKey" || object.kind === "unique") &&
+							object.table === table.name &&
+							object.name === index.constraintName,
+					);
+					if (constraintIndex >= 0) objects.splice(constraintIndex, 1);
+					unsupportedObjects.push({
+						kind: "other",
+						qualifiedIdentity: `${scope.applicationSchema}.${table.name}.${index.constraintName}`,
+						attachedTo: `${scope.applicationSchema}.${table.name}`,
+					});
+				}
+				continue;
+			}
+			if (!hasSupportedIndexState(false, false)) {
 				unsupportedObjects.push({
 					kind: "other",
 					qualifiedIdentity: `${scope.applicationSchema}.${index.name}`,

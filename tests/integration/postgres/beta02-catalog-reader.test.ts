@@ -23,7 +23,7 @@ beforeAll(async () => {
 		session.release();
 	}
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE; CREATE SCHEMA "catalog_reader_probe"; CREATE TABLE "catalog_reader_probe"."messages" ("id" integer NOT NULL, "body" text, CONSTRAINT "unsupported_body_check" CHECK (lower("body") = \'ready\')); CREATE VIEW "catalog_reader_probe"."message_ids" AS SELECT "id" FROM "catalog_reader_probe"."messages"; CREATE SCHEMA "catalog_fact_probe"; CREATE TABLE "catalog_fact_probe"."parents" ("id" uuid NOT NULL, CONSTRAINT "parents_pk" PRIMARY KEY ("id")); CREATE TABLE "catalog_fact_probe"."messages" ("id" integer NOT NULL, "parent_id" uuid, "body" text COLLATE pg_catalog."C" DEFAULT \'hello\' NOT NULL, "starts_at" timestamp NOT NULL, "ends_at" timestamp NOT NULL, CONSTRAINT "messages_pk" PRIMARY KEY ("id"), CONSTRAINT "messages_body_check" CHECK (pg_catalog.char_length("body") > 1), CONSTRAINT "messages_time_check" CHECK ("ends_at" > "starts_at"), CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE); CREATE INDEX "messages_body_idx" ON "catalog_fact_probe"."messages" USING btree ("body" DESC NULLS LAST);',
+		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_external_probe" CASCADE; CREATE SCHEMA "catalog_reader_probe"; CREATE TABLE "catalog_reader_probe"."messages" ("id" integer NOT NULL, "body" text, CONSTRAINT "unsupported_body_check" CHECK (lower("body") = \'ready\')); CREATE VIEW "catalog_reader_probe"."message_ids" AS SELECT "id" FROM "catalog_reader_probe"."messages"; CREATE SCHEMA "catalog_fact_probe"; CREATE TABLE "catalog_fact_probe"."parents" ("id" uuid NOT NULL, CONSTRAINT "parents_pk" PRIMARY KEY ("id")); CREATE TABLE "catalog_fact_probe"."messages" ("id" integer NOT NULL, "parent_id" uuid, "body" text COLLATE pg_catalog."C" DEFAULT \'hello\' NOT NULL, "starts_at" timestamp NOT NULL, "ends_at" timestamp NOT NULL, CONSTRAINT "messages_pk" PRIMARY KEY ("id"), CONSTRAINT "messages_body_check" CHECK (pg_catalog.char_length("body") > 1), CONSTRAINT "messages_time_check" CHECK ("ends_at" > "starts_at"), CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE); CREATE INDEX "messages_body_idx" ON "catalog_fact_probe"."messages" USING btree ("body" DESC NULLS LAST); CREATE SCHEMA "catalog_external_probe"; CREATE TABLE "catalog_external_probe"."parents" ("id" uuid PRIMARY KEY);',
 	);
 	await database`
 		delete from questpie_internal.application_bindings
@@ -46,7 +46,7 @@ afterAll(async () => {
 		where application_name in ('catalog-reader-probe', 'catalog-fact-probe')
 	`;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE;',
+		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_external_probe" CASCADE;',
 	);
 	await database.close();
 });
@@ -232,6 +232,216 @@ describe.skipIf(!database)(
 			} finally {
 				await database!.unsafe(
 					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE',
+				);
+			}
+		});
+
+		test("returns a foreign key outside the application namespace as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_external_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages.messages_parent_fk",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "foreignKey" &&
+							object.name === "messages_parent_fk",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE',
+				);
+			}
+		});
+
+		test("returns non-local and NO INHERIT checks as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" ADD CONSTRAINT "messages_no_inherit_check" CHECK ("id" > 0) NO INHERIT; CREATE TABLE "catalog_fact_probe"."check_parent" ("probe" integer, CONSTRAINT "inherited_probe_check" CHECK ("probe" > 0)); CREATE TABLE "catalog_fact_probe"."check_child" ("probe" integer) INHERITS ("catalog_fact_probe"."check_parent");',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				for (const [table, name] of [
+					["messages", "messages_no_inherit_check"],
+					["check_child", "inherited_probe_check"],
+				] as const) {
+					expect(comparable.unsupportedObjects).toContainEqual({
+						kind: "other",
+						qualifiedIdentity: `catalog_fact_probe.${table}.${name}`,
+						attachedTo: `catalog_fact_probe.${table}`,
+					});
+					expect(
+						(comparable.objects as readonly Record<string, unknown>[]).some(
+							(object) =>
+								object.kind === "check" &&
+								object.table === table &&
+								object.name === name,
+						),
+					).toBe(false);
+				}
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_no_inherit_check"; DROP TABLE "catalog_fact_probe"."check_child"; DROP TABLE "catalog_fact_probe"."check_parent";',
+				);
+			}
+		});
+
+		test("returns a MATCH FULL foreign key as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") MATCH FULL ON DELETE SET NULL ON UPDATE CASCADE',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages.messages_parent_fk",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "foreignKey" &&
+							object.name === "messages_parent_fk",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE',
+				);
+			}
+		});
+
+		test("returns a column-specific SET NULL foreign key as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ("parent_id") ON UPDATE CASCADE',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages.messages_parent_fk",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "foreignKey" &&
+							object.name === "messages_parent_fk",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_parent_fk", ADD CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE',
+				);
+			}
+		});
+
+		test("returns a constraint-backed Index with INCLUDE as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" ADD CONSTRAINT "messages_body_unique" UNIQUE ("body") INCLUDE ("id")',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages.messages_body_unique",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "unique" &&
+							object.name === "messages_body_unique",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_body_unique"',
+				);
+			}
+		});
+
+		test("returns a NULLS NOT DISTINCT backing Index as unsupported", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" ADD CONSTRAINT "messages_body_not_distinct" UNIQUE NULLS NOT DISTINCT ("body")',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity:
+						"catalog_fact_probe.messages.messages_body_not_distinct",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "unique" &&
+							object.name === "messages_body_not_distinct",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_body_not_distinct"',
+				);
+			}
+		});
+
+		test("returns an authored Index with INCLUDE as unsupported", async () => {
+			await database!.unsafe(
+				'CREATE INDEX "messages_body_include_idx" ON "catalog_fact_probe"."messages" USING btree ("body") INCLUDE ("id")',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages_body_include_idx",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "index" &&
+							object.name === "messages_body_include_idx",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'DROP INDEX "catalog_fact_probe"."messages_body_include_idx"',
 				);
 			}
 		});
