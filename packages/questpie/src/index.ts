@@ -745,3 +745,5 @@ export function defineSeed<
 		steps: Object.freeze([...input.steps]),
 	}) as unknown as SeedDefinition<Name, Dependencies, Steps>;
 }
+
+export { dataQuery, definePolicy, policy, query } from "./relational";
