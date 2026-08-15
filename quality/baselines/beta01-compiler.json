@@ -16,13 +16,13 @@
 		"aggregation": "median by compileMs"
 	},
 	"observed": {
-		"compileMs": 1652.629138,
-		"typecheckMs": 1364.999548,
-		"generatedBytes": 276559,
-		"publicDeclarationBytes": 29523,
-		"typescriptTypes": 8697,
-		"typescriptInstantiations": 23722,
-		"typescriptMemoryKiB": 107475
+		"compileMs": 1480.402517,
+		"typecheckMs": 1179.8806260000001,
+		"generatedBytes": 276660,
+		"publicDeclarationBytes": 29521,
+		"typescriptTypes": 5506,
+		"typescriptInstantiations": 14818,
+		"typescriptMemoryKiB": 108205
 	},
 	"budgets": {
 		"compileMs": 5000,
