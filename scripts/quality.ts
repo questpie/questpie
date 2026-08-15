@@ -152,6 +152,8 @@ function postgres(): void {
 }
 
 function scenarios(kind: "micro" | "load" | "soak"): void {
+	if (kind === "micro")
+		run(["bunx", "turbo", "run", "build", "--filter", "questpie"]);
 	run(["bun", "run", "scripts/performance.ts", kind]);
 }
 
