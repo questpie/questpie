@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
+import type { SQL } from "bun";
+
 import { compileApplication } from "@questpie/compiler";
 
 import {
 	executePostgresQuery,
-	type PostgresQueryAdapter,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
 import baseline from "../../quality/baselines/beta04-policy-query.json";
@@ -38,26 +39,44 @@ test("BETA-04 authorized PostgreSQL pages stay inside their slice-owned budgets"
 	if (!plan) throw new Error("expected the compiled Message page plan");
 
 	let maximumRowsRead = 0;
-	const adapter: PostgresQueryAdapter = {
-		transaction: async (_options, use) =>
-			use({
-				query: async () => {
-					const rows = [
-						{
-							qp_author_present: null,
-							qp_author_id: null,
-							qp_author_role: null,
-							qp_body: "measured",
-							qp_body_allowed: true,
-							qp_createdAt: "2026-08-15T10:00:00.000Z",
-							qp_id: messageId,
-						},
-					];
-					maximumRowsRead = Math.max(maximumRowsRead, rows.length);
-					return rows;
+	const sql = {
+		async reserve() {
+			return {
+				close: async () => {},
+				release: () => {},
+				unsafe(statement: string) {
+					const result =
+						statement === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" ||
+						statement === "COMMIT" ||
+						statement === "ROLLBACK"
+							? []
+							: (() => {
+									const rows = [
+										{
+											qp_author_present: null,
+											qp_author_id: null,
+											qp_author_role: null,
+											qp_body: "measured",
+											qp_body_allowed: true,
+											qp_createdAt: "2026-08-15T10:00:00.000Z",
+											qp_id: messageId,
+										},
+									];
+									maximumRowsRead = Math.max(maximumRowsRead, rows.length);
+									return rows;
+								})();
+					const pending = Promise.resolve(result);
+					const query = {
+						cancel: () => query,
+						execute: () => query,
+						// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
+						then: pending.then.bind(pending),
+					};
+					return query;
 				},
-			}),
-	};
+			};
+		},
+	} as unknown as SQL;
 	const binding = {
 		templateDigest: plan.templateDigest,
 		values: [
@@ -78,7 +97,7 @@ test("BETA-04 authorized PostgreSQL pages stay inside their slice-owned budgets"
 			plan,
 			binding,
 			executionFacts,
-			adapter,
+			sql,
 		});
 		expect(page.nodes).toHaveLength(1);
 	}

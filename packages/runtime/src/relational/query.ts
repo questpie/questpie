@@ -1,10 +1,13 @@
 import { createHash } from "node:crypto";
 
+import type { SQL } from "bun";
+
 import {
 	createCursorBindingV2,
 	type CursorOrderTerm,
 	type CursorScalar,
 } from "./cursor";
+import { executePostgresStatement } from "./postgres";
 
 type ScalarValue = boolean | number | string;
 
@@ -144,25 +147,6 @@ export type QueryExecutionFacts = Readonly<{
 }>;
 
 export type PostgresQueryRow = Readonly<Record<string, unknown>>;
-
-export interface PostgresQueryTransaction {
-	query(
-		sql: string,
-		parameters: readonly unknown[],
-		options: Readonly<{ signal?: AbortSignal }>,
-	): Promise<readonly PostgresQueryRow[]>;
-}
-
-export interface PostgresQueryAdapter {
-	transaction<Result>(
-		options: Readonly<{
-			isolationLevel: "repeatable read";
-			readOnly: true;
-			signal?: AbortSignal;
-		}>,
-		use: (transaction: PostgresQueryTransaction) => Promise<Result>,
-	): Promise<Result>;
-}
 
 export type DataQueryDiagnosticCode =
 	| "QP-DATA-001"
@@ -594,7 +578,7 @@ export async function executePostgresQuery(
 		plan: PostgresQueryPlanV1;
 		binding: DataQueryBindingV1;
 		executionFacts: QueryExecutionFacts;
-		adapter: PostgresQueryAdapter;
+		sql: SQL;
 		maximumPageSize?: number;
 		signal?: AbortSignal;
 	}>,
@@ -637,21 +621,11 @@ export async function executePostgresQuery(
 			input.executionFacts,
 			boundary,
 		);
-		const rows = await input.adapter.transaction(
-			{
-				isolationLevel: "repeatable read",
-				readOnly: true,
-				signal: input.signal,
-			},
-			async (transaction) => {
-				input.signal?.throwIfAborted();
-				const result = await transaction.query(input.plan.sql, parameters, {
-					signal: input.signal,
-				});
-				input.signal?.throwIfAborted();
-				return result;
-			},
-		);
+		const rows = await executePostgresStatement(input.sql, {
+			statement: input.plan.sql,
+			parameters,
+			signal: input.signal,
+		});
 		input.signal?.throwIfAborted();
 		const first = values.get(input.plan.page.first.parameter);
 		if (typeof first !== "number")

@@ -1,10 +1,6 @@
 import type { SQL } from "bun";
 
-import type {
-	PostgresQueryAdapter,
-	PostgresQueryRow,
-	PostgresQueryTransaction,
-} from "./query";
+type PostgresQueryRow = Readonly<Record<string, unknown>>;
 
 interface AbortableSqlQuery extends PromiseLike<readonly PostgresQueryRow[]> {
 	cancel(): AbortableSqlQuery;
@@ -71,80 +67,65 @@ async function executeControl(
 	await transaction.unsafe(statement).execute();
 }
 
-export function createBunPostgresQueryAdapter(sql: SQL): PostgresQueryAdapter {
+export async function executePostgresStatement(
+	sql: SQL,
+	input: Readonly<{
+		statement: string;
+		parameters: readonly unknown[];
+		signal?: AbortSignal;
+	}>,
+): Promise<readonly PostgresQueryRow[]> {
 	const pool = sql as unknown as BunSqlPool;
-	return Object.freeze({
-		transaction: async <Result>(
-			options: Readonly<{
-				isolationLevel: "repeatable read";
-				readOnly: true;
-				signal?: AbortSignal;
-			}>,
-			use: (transaction: PostgresQueryTransaction) => Promise<Result>,
-		): Promise<Result> => {
-			if (
-				options.isolationLevel !== "repeatable read" ||
-				options.readOnly !== true
-			)
-				throw new TypeError(
-					"PostgreSQL Query execution requires repeatable-read read-only",
-				);
-			options.signal?.throwIfAborted();
-			const transaction = await reserveConnection(pool);
-			let result: Result;
-			try {
-				await executeControl(
-					transaction,
-					"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
-				);
-				let statements = 0;
-				const queryTransaction: PostgresQueryTransaction = Object.freeze({
-					query: async (
-						statement: string,
-						parameters: readonly unknown[],
-						queryOptions: Readonly<{ signal?: AbortSignal }>,
-					) => {
-						if (statements !== 0)
-							throw new TypeError(
-								"PostgreSQL Query execution requires one statement",
-							);
-						statements += 1;
-						if (queryOptions.signal !== options.signal)
-							throw new TypeError(
-								"PostgreSQL Query signal must match its transaction",
-							);
-						options.signal?.throwIfAborted();
-						return executeAbortable(
-							transaction.unsafe(statement, parameters),
-							options.signal,
-							async () => {
-								await transaction.close({ timeout: 0 });
-							},
-						);
-					},
-				});
-				result = await use(queryTransaction);
-				if (statements !== 1)
-					throw new TypeError(
-						"PostgreSQL Query execution requires one statement",
-					);
-				options.signal?.throwIfAborted();
-				await executeControl(transaction, "COMMIT");
-			} catch (error) {
-				try {
-					await executeControl(transaction, "ROLLBACK");
-				} catch {
-					// A disconnected reservation is already rolled back by PostgreSQL.
-				}
-				try {
-					await transaction.release();
-				} catch {
-					// A disconnected Bun reservation may reject release; preserve the query failure.
-				}
-				throw error;
-			}
+	input.signal?.throwIfAborted();
+	const transaction = await reserveConnection(pool);
+	let rows: readonly PostgresQueryRow[];
+	try {
+		await executeControl(
+			transaction,
+			"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+		);
+		input.signal?.throwIfAborted();
+		rows = await executeAbortable(
+			transaction.unsafe(input.statement, input.parameters),
+			input.signal,
+			async () => {
+				await transaction.close({ timeout: 0 });
+			},
+		);
+		input.signal?.throwIfAborted();
+		await executeControl(transaction, "COMMIT");
+	} catch (error) {
+		try {
+			await executeControl(transaction, "ROLLBACK");
+		} catch {
+			// A disconnected reservation is already rolled back by PostgreSQL.
+		}
+		try {
 			await transaction.release();
-			return result;
-		},
-	});
+		} catch {
+			// A disconnected Bun reservation may reject release; preserve the query failure.
+		}
+		throw error;
+	}
+	await transaction.release();
+	return rows;
+}
+
+export async function executePostgresKeyedOutcome(
+	sql: SQL,
+	input: Readonly<{
+		statement: string;
+		parameters: readonly unknown[];
+		signal?: AbortSignal;
+	}>,
+): Promise<"found" | "notFound"> {
+	const rows = await executePostgresStatement(sql, input);
+	const outcome = rows[0]?.qp_key_outcome;
+	if (
+		rows.length !== 1 ||
+		(outcome !== "found" && outcome !== "notFound") ||
+		Object.keys(rows[0] ?? {}).length !== 1
+	)
+		throw new TypeError("invalid PostgreSQL keyed nondisclosure outcome");
+	return outcome;
 }

@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 
+import type { SQL } from "bun";
+
 import {
 	DataQueryExecutionError,
 	executePostgresQuery,
-	type PostgresQueryAdapter,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
 
@@ -227,34 +228,63 @@ function rows() {
 	];
 }
 
+function fakeSql(
+	query: (
+		statement: string,
+		parameters: readonly unknown[],
+	) =>
+		| readonly Readonly<Record<string, unknown>>[]
+		| Promise<readonly Readonly<Record<string, unknown>>[]>,
+	onReserve?: () => void,
+): SQL {
+	const pending = (
+		promise: Promise<readonly Readonly<Record<string, unknown>>[]>,
+	) => {
+		const value = {
+			cancel: () => value,
+			execute: () => value,
+			// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
+			then: promise.then.bind(promise),
+		};
+		return value;
+	};
+	return {
+		async reserve() {
+			onReserve?.();
+			return {
+				close: async () => {},
+				release: () => {},
+				unsafe(statement: string, parameters: readonly unknown[] = []) {
+					if (
+						statement === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" ||
+						statement === "COMMIT" ||
+						statement === "ROLLBACK"
+					)
+						return pending(Promise.resolve([]));
+					return pending(Promise.resolve(query(statement, parameters)));
+				},
+			};
+		},
+	} as unknown as SQL;
+}
+
 test("binds one exact authorized page and decodes structural disclosure", async () => {
 	const calls: Array<
 		Readonly<{ sql: string; parameters: readonly unknown[] }>
 	> = [];
-	const transactionOptions: unknown[] = [];
-	const adapter: PostgresQueryAdapter = {
-		transaction: async (options, use) => {
-			transactionOptions.push(options);
-			return use({
-				query: async (sql, parameters) => {
-					calls.push({ sql, parameters });
-					return rows();
-				},
-			});
-		},
-	};
+	const sql = fakeSql((statement, parameters) => {
+		calls.push({ sql: statement, parameters });
+		return rows();
+	});
 
 	const page = await executePostgresQuery({
 		plan,
 		binding,
 		executionFacts,
-		adapter,
+		sql,
 		maximumPageSize: 50,
 	});
 
-	expect(transactionOptions).toEqual([
-		{ isolationLevel: "repeatable read", readOnly: true, signal: undefined },
-	]);
 	expect(calls).toEqual([
 		{
 			sql: plan.sql,
@@ -304,10 +334,7 @@ test("normalizes PostgreSQL timestamp Dates before result and cursor validation"
 		plan,
 		binding,
 		executionFacts,
-		adapter: {
-			transaction: async (_options, use) =>
-				use({ query: async () => dateRows }),
-		},
+		sql: fakeSql(() => dateRows),
 	});
 
 	expect(page.nodes[0]?.createdAt).toBe(createdAt1);
@@ -319,12 +346,12 @@ test("normalizes PostgreSQL timestamp Dates before result and cursor validation"
 
 test("rejects exact binding failures before opening a transaction", async () => {
 	let transactions = 0;
-	const adapter: PostgresQueryAdapter = {
-		transaction: async () => {
+	const sql = fakeSql(
+		() => [],
+		() => {
 			transactions += 1;
-			return undefined as never;
 		},
-	};
+	);
 	const invalidBindings = [
 		{
 			binding: { ...binding, values: binding.values.slice(0, -1) },
@@ -372,7 +399,7 @@ test("rejects exact binding failures before opening a transaction", async () => 
 				plan,
 				binding: hostile.binding,
 				executionFacts,
-				adapter,
+				sql,
 				maximumPageSize: 50,
 			});
 			expect.unreachable("binding should fail");
@@ -391,7 +418,7 @@ test("rejects exact binding failures before opening a transaction", async () => 
 			plan,
 			binding,
 			executionFacts,
-			adapter,
+			sql,
 			maximumPageSize: 1,
 		}),
 	).rejects.toMatchObject({ code: "QP-DATA-012", phase: "bind" });
@@ -403,10 +430,7 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 		plan,
 		binding,
 		executionFacts,
-		adapter: {
-			transaction: async (_options, use) =>
-				use({ query: async () => rows().slice(0, 1) }),
-		},
+		sql: fakeSql(() => rows().slice(0, 1)),
 	});
 	let transactions = 0;
 	const changedScope = {
@@ -427,43 +451,63 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 				),
 			},
 			executionFacts,
-			adapter: {
-				transaction: async () => {
+			sql: fakeSql(
+				() => [],
+				() => {
 					transactions += 1;
-					return undefined as never;
 				},
-			},
+			),
 		}),
 	).rejects.toMatchObject({ code: "QP-DATA-013", phase: "bind" });
 	expect(transactions).toBe(0);
 });
 
+test("rejects a tampered cursor before reserving PostgreSQL", async () => {
+	const firstPage = await executePostgresQuery({
+		plan,
+		binding,
+		executionFacts,
+		sql: fakeSql(() => rows().slice(0, 1)),
+	});
+	let reservations = 0;
+	await expect(
+		executePostgresQuery({
+			plan,
+			binding: {
+				...binding,
+				values: binding.values.map((item) =>
+					item.parameter === "after"
+						? { ...item, value: `${firstPage.pageInfo.endCursor}=` }
+						: item,
+				),
+			},
+			executionFacts,
+			sql: fakeSql(
+				() => [],
+				() => {
+					reservations += 1;
+				},
+			),
+		}),
+	).rejects.toMatchObject({ code: "QP-DATA-010", phase: "bind" });
+	expect(reservations).toBe(0);
+});
+
 test("propagates cancellation through the transaction and query seam", async () => {
 	const controller = new AbortController();
 	let cleanupObserved = false;
-	const adapter: PostgresQueryAdapter = {
-		transaction: async (options, use) => {
-			try {
-				return await use({
-					query: async (_sql, _parameters, queryOptions) => {
-						expect(queryOptions.signal).toBe(controller.signal);
-						expect(options.signal).toBe(controller.signal);
-						controller.abort(new Error("stop"));
-						return rows();
-					},
-				});
-			} finally {
-				cleanupObserved = true;
-			}
-		},
-	};
+	const sql = fakeSql(() => {
+		controller.abort(new Error("stop"));
+		cleanupObserved = true;
+		return rows();
+	});
 
 	await expect(
 		executePostgresQuery({
 			plan,
 			binding,
 			executionFacts,
-			adapter,
+			sql,
 			signal: controller.signal,
 		}),
 	).rejects.toThrow("stop");
@@ -478,10 +522,7 @@ test("rejects an invalid returned scalar at the execute boundary", async () => {
 			plan,
 			binding,
 			executionFacts,
-			adapter: {
-				transaction: async (_options, use) =>
-					use({ query: async () => invalidRows }),
-			},
+			sql: fakeSql(() => invalidRows),
 		}),
 	).rejects.toMatchObject({
 		blocking: "none",

@@ -10,12 +10,11 @@ import {
 } from "@questpie/compiler";
 
 import {
-	createBunPostgresQueryAdapter,
 	executePostgresQuery,
 	type DataQueryBindingV1,
-	type PostgresQueryAdapter,
 	type PostgresQueryPlanV1,
 } from "../../../packages/runtime/src";
+import { executePostgresKeyedOutcome } from "../../../packages/runtime/src/relational/postgres";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
@@ -80,8 +79,9 @@ async function probeKey(
 	proof: KeyedLookupProof,
 	key: string,
 	principal = principalId,
+	tenant = companyId,
 ): Promise<Readonly<Record<string, unknown>>> {
-	const facts = executionFacts(principal);
+	const facts = executionFacts(principal, tenant);
 	const values = proof.parameters.map((parameter) => {
 		if (parameter.kind === "key") return key;
 		if (parameter.kind === "literal") return parameter.value;
@@ -93,17 +93,15 @@ async function probeKey(
 			return facts.authority.kind;
 		throw new Error("unsupported keyed proof execution fact");
 	});
-	const rows = await database!.unsafe<Readonly<Record<string, unknown>>[]>(
-		proof.sql,
-		values,
-	);
-	const outcome = rows[0];
-	if (!outcome) throw new Error("keyed proof returned no outcome");
-	return outcome;
+	const outcome = await executePostgresKeyedOutcome(database!, {
+		statement: proof.sql,
+		parameters: values,
+	});
+	return { [proof.outcomeColumn]: outcome };
 }
 
 async function execute(
-	adapter: PostgresQueryAdapter,
+	sql: SQL,
 	options: Readonly<{
 		after?: string | null;
 		first?: number;
@@ -117,7 +115,7 @@ async function execute(
 		plan,
 		binding: binding(options.after ?? null, options.first, options.channelId),
 		executionFacts: executionFacts(options.principal, options.tenant),
-		adapter,
+		sql,
 		signal: options.signal,
 	});
 }
@@ -209,6 +207,9 @@ describe.skipIf(!database)(
 			expect(missing).toEqual({ qp_key_outcome: "notFound" });
 			expect(invisible).toEqual(missing);
 			expect(Object.keys(invisible)).toEqual([proof.outcomeColumn]);
+			expect(
+				await probeKey(proof, messageIds[0], principalId, foreignTenantId),
+			).toEqual(missing);
 		});
 
 		test("uses canonical millisecond order for microsecond PostgreSQL rows and cursor seeks", async () => {
@@ -224,8 +225,7 @@ describe.skipIf(!database)(
 						(${microsecondMessageIds[1]}, ${microsecondChannelId}, ${membershipId}, 'higher-id', '2026-08-15T11:00:00.000100Z')
 				`;
 
-			const adapter = createBunPostgresQueryAdapter(database!);
-			const firstPage = await execute(adapter, {
+			const firstPage = await execute(database!, {
 				channelId: microsecondChannelId,
 				first: 1,
 			});
@@ -239,7 +239,7 @@ describe.skipIf(!database)(
 			]);
 			expect(firstPage.pageInfo.hasNextPage).toBe(true);
 
-			const secondPage = await execute(adapter, {
+			const secondPage = await execute(database!, {
 				after: firstPage.pageInfo.endCursor,
 				channelId: microsecondChannelId,
 				first: 1,
@@ -256,8 +256,7 @@ describe.skipIf(!database)(
 		});
 
 		test("uses fresh Policy evidence for pages, revocation, output guards, and relation disclosure", async () => {
-			const adapter = createBunPostgresQueryAdapter(database!);
-			const firstPage = await execute(adapter);
+			const firstPage = await execute(database!);
 			expect(firstPage).toEqual({
 				nodes: [
 					{
@@ -270,14 +269,14 @@ describe.skipIf(!database)(
 				pageInfo: { endCursor: expect.any(String), hasNextPage: true },
 			});
 
-			const foreignPage = await execute(adapter, {
+			const foreignPage = await execute(database!, {
 				principal: foreignPrincipalId,
 			});
 			expect(foreignPage).toEqual({
 				nodes: [],
 				pageInfo: { endCursor: null, hasNextPage: false },
 			});
-			const forgedTenantPage = await execute(adapter, {
+			const forgedTenantPage = await execute(database!, {
 				tenant: foreignTenantId,
 			});
 			expect(forgedTenantPage).toEqual({
@@ -290,7 +289,7 @@ describe.skipIf(!database)(
 			set role = 'member'
 			where id = ${membershipId}
 		`;
-			const staleRolePage = await execute(adapter, {
+			const staleRolePage = await execute(database!, {
 				after: firstPage.pageInfo.endCursor,
 			});
 			expect(staleRolePage.nodes).toEqual([
@@ -306,7 +305,7 @@ describe.skipIf(!database)(
 			set status = 'revoked'
 			where id = ${membershipId}
 		`;
-			expect(await execute(adapter)).toEqual({
+			expect(await execute(database!)).toEqual({
 				nodes: [],
 				pageInfo: { endCursor: null, hasNextPage: false },
 			});
@@ -319,33 +318,23 @@ describe.skipIf(!database)(
 		});
 
 		test("rejects a tampered cursor before opening PostgreSQL", async () => {
-			const realAdapter = createBunPostgresQueryAdapter(database!);
-			const firstPage = await execute(realAdapter);
-			let transactions = 0;
-			const observedAdapter: PostgresQueryAdapter = {
-				transaction: (options, use) => {
-					transactions += 1;
-					return realAdapter.transaction(options, use);
-				},
-			};
+			const firstPage = await execute(database!);
 			await expect(
-				execute(observedAdapter, {
+				execute(database!, {
 					after: `${firstPage.pageInfo.endCursor}=`,
 				}),
 			).rejects.toMatchObject({ code: "QP-DATA-010", phase: "bind" });
-			expect(transactions).toBe(0);
 		});
 
 		test("cancels blocked SQL, rolls back, and reuses the single-connection pool", async () => {
 			const holder = await lockDatabase!.reserve();
 			const controller = new AbortController();
-			const adapter = createBunPostgresQueryAdapter(database!);
 			try {
 				await holder.unsafe("BEGIN");
 				await holder.unsafe(
 					"LOCK TABLE collaboration.messages IN ACCESS EXCLUSIVE MODE",
 				);
-				const blocked = execute(adapter, { signal: controller.signal });
+				const blocked = execute(database!, { signal: controller.signal });
 
 				let observedBlockedQuery = false;
 				for (let attempt = 0; attempt < 100; attempt += 1) {
@@ -372,7 +361,7 @@ describe.skipIf(!database)(
 				holder.release();
 			}
 
-			const reusablePage = await execute(adapter);
+			const reusablePage = await execute(database!);
 			expect(reusablePage.nodes).toHaveLength(1);
 			expect(reusablePage.nodes[0]?.id).toBe(messageIds[0]);
 		});

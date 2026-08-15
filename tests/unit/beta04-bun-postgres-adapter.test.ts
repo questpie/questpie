@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 
 import type { SQL } from "bun";
 
-import { createBunPostgresQueryAdapter } from "../../packages/runtime/src";
+import { executePostgresKeyedOutcome } from "../../packages/runtime/src/relational/postgres";
 
 interface DeferredQuery {
 	cancel(): DeferredQuery;
@@ -60,7 +60,7 @@ function fakeSql() {
 					if (block) {
 						rejectActive = reject;
 						started?.();
-					} else resolve([{ value: 1 }]);
+					} else resolve([{ qp_key_outcome: "found" }]);
 				},
 			);
 			const query: DeferredQuery = {
@@ -109,14 +109,12 @@ function fakeSql() {
 
 test("runs static SQL in one pinned read-only repeatable-read transaction", async () => {
 	const database = fakeSql();
-	const adapter = createBunPostgresQueryAdapter(database.sql);
-	const rows = await adapter.transaction(
-		{ isolationLevel: "repeatable read", readOnly: true },
-		(transaction) =>
-			transaction.query("SELECT $1::integer AS value\n", [1], {}),
-	);
+	const outcome = await executePostgresKeyedOutcome(database.sql, {
+		statement: "SELECT $1::integer AS value\n",
+		parameters: [1],
+	});
 
-	expect(rows).toEqual([{ value: 1 }]);
+	expect(outcome).toBe("found");
 	expect(database.controlStatements).toEqual([
 		"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
 		"COMMIT",
@@ -131,20 +129,13 @@ test("runs static SQL in one pinned read-only repeatable-read transaction", asyn
 
 test("cancels and disconnects the Bun query while keeping the injected pool reusable", async () => {
 	const database = fakeSql();
-	const adapter = createBunPostgresQueryAdapter(database.sql);
 	const controller = new AbortController();
 	database.setBlock(true);
-	const blocked = adapter.transaction(
-		{
-			isolationLevel: "repeatable read",
-			readOnly: true,
-			signal: controller.signal,
-		},
-		(transaction) =>
-			transaction.query("SELECT blocked\n", [], {
-				signal: controller.signal,
-			}),
-	);
+	const blocked = executePostgresKeyedOutcome(database.sql, {
+		statement: "SELECT blocked\n",
+		parameters: [],
+		signal: controller.signal,
+	});
 	await database.startedPromise;
 	controller.abort(new Error("stop"));
 	await expect(blocked).rejects.toThrow("query cancelled");
@@ -153,11 +144,11 @@ test("cancels and disconnects the Bun query while keeping the injected pool reus
 	expect(database.rollbacks).toBe(1);
 
 	database.setBlock(false);
-	const rows = await adapter.transaction(
-		{ isolationLevel: "repeatable read", readOnly: true },
-		(transaction) => transaction.query("SELECT reusable\n", [], {}),
-	);
-	expect(rows).toEqual([{ value: 1 }]);
+	const outcome = await executePostgresKeyedOutcome(database.sql, {
+		statement: "SELECT reusable\n",
+		parameters: [],
+	});
+	expect(outcome).toBe("found");
 	expect(database.commits).toBe(1);
 	expect(database.releases).toBe(2);
 });

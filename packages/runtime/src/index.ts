@@ -8,7 +8,6 @@ export type {
 
 export {
 	createCursorBindingV2,
-	createBunPostgresQueryAdapter,
 	DataCursorBindingError,
 	DataQueryExecutionError,
 	executePostgresQuery,
@@ -20,12 +19,10 @@ export type {
 	DataQueryDiagnosticCode,
 	DataQueryPage,
 	DataCursorDiagnosticCode,
-	PostgresQueryAdapter,
 	PostgresQueryParameterV1,
 	PostgresQueryPlanV1,
 	PostgresQueryResultV1,
 	PostgresQueryRow,
-	PostgresQueryTransaction,
 	QueryExecutionFacts,
 	QueryParameterV1,
 	ScalarCodecV1,

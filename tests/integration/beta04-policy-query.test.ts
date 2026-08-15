@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
+import type { SQL } from "bun";
 import { principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
@@ -10,7 +11,6 @@ import {
 	createApplicationRuntime,
 	executePostgresQuery,
 	type DataQueryBindingV1,
-	type PostgresQueryAdapter,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
 
@@ -103,20 +103,31 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 			},
 		],
 	] as const;
-	const adapter: PostgresQueryAdapter = {
-		transaction: async (options, use) => {
-			expect(options).toMatchObject({
-				isolationLevel: "repeatable read",
-				readOnly: true,
-			});
-			return use({
-				query: async (sql, parameters) => {
-					calls.push({ sql, parameters });
-					return pages[calls.length - 1] ?? [];
+	const sql = {
+		async reserve() {
+			return {
+				close: async () => {},
+				release: () => {},
+				unsafe(statement: string, parameters: readonly unknown[] = []) {
+					const result =
+						statement === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" ||
+						statement === "COMMIT" ||
+						statement === "ROLLBACK"
+							? []
+							: (calls.push({ sql: statement, parameters }),
+								pages[calls.length - 1] ?? []);
+					const pending = Promise.resolve(result);
+					const query = {
+						cancel: () => query,
+						execute: () => query,
+						// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
+						then: pending.then.bind(pending),
+					};
+					return query;
 				},
-			});
+			};
 		},
-	};
+	} as unknown as SQL;
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: collaborationContext,
@@ -142,7 +153,7 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 						principal: { id: facts.principal.id },
 						tenant: { id: facts.tenant.id },
 					},
-					adapter,
+					sql,
 					signal: facts.signal,
 				});
 			},
