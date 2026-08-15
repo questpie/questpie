@@ -1767,7 +1767,9 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		]);
 		if (process.env.QUESTPIE_POSTGRES_MAJOR)
 			expect(observedPostgresMajor).toBe(process.env.QUESTPIE_POSTGRES_MAJOR);
-		const [committedSeed] = compilation.committedSeeds;
+		const committedSeed = compilation.committedSeeds.find(
+			({ identity }) => identity === "seed:collaboration.demo.v1",
+		);
 		if (!committedSeed)
 			throw new Error("compiled collaboration Seed is missing");
 		const seeded = await applyCommittedSeeds({
