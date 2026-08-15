@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -141,10 +141,6 @@ beforeAll(async () => {
 		compilation.generatedFiles["runtime-executables.json"]!,
 	);
 	wireContract = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
-});
-
-afterAll(async () => {
-	// Compilation output is an ignored fixture cache owned by compiler tests.
 });
 
 function definitions(): ReadonlyMap<string, Definition> {
