@@ -1,3 +1,13 @@
+export { createRuntimeApplication } from "./application";
+export type {
+	ExecutionEventV1,
+	RuntimeApplication,
+	RuntimeApplicationProgram,
+	RuntimeExecutableBindings,
+	RuntimeExecutableInventoryBinding,
+	RuntimeOperations,
+} from "./application";
+
 export { createApplicationRuntime } from "./execution";
 export type {
 	ApplicationRuntime,
