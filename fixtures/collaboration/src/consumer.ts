@@ -2,13 +2,33 @@ import { codec } from "questpie";
 
 import { defineQuery } from "#questpie/app";
 
-export const messageById = defineQuery({
-	name: "messages.byId",
-	input: codec.object({ id: codec.uuid() }),
-	output: codec.object({ id: codec.uuid(), body: codec.text() }),
+import { channelMessagePage } from "./message-page";
+
+export const messagePage = defineQuery({
+	name: "messages.page",
+	network: true,
+	input: codec.object({
+		channelId: codec.uuid(),
+		first: codec.integer(),
+		after: codec.nullable(codec.text()),
+	}),
+	output: codec.object({
+		nodes: codec.array(
+			codec.object({
+				author: codec.nullable(
+					codec.object({ id: codec.uuid(), role: codec.text() }),
+				),
+				body: codec.optional(codec.text()),
+				createdAt: codec.timestamp(),
+				id: codec.uuid(),
+			}),
+		),
+		pageInfo: codec.object({
+			endCursor: codec.nullable(codec.text()),
+			hasNextPage: codec.boolean(),
+		}),
+	}),
 	handler: async ({ input, ctx }) => {
-		const message = await ctx.data.messages.get({ key: { id: input.id } });
-		if (!message) throw new Error("message not found");
-		return { id: message.id, body: message.body };
+		return ctx.data.run(channelMessagePage, input);
 	},
 });

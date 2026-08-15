@@ -4,6 +4,7 @@ import type {
 	RelationalGeneratedContractV1,
 	RelationalGeneratedSelectionV1,
 } from "./relational";
+import { renderCodecType } from "./runtime";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -12,25 +13,6 @@ function record(value: unknown): RecordValue {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError("expected an object while rendering declarations");
 	return value as RecordValue;
-}
-
-function typeFromCodec(value: unknown): string {
-	const codec = record(value);
-	if (codec.kind === "uuid" || codec.kind === "text") return "string";
-	if (codec.kind === "boolean") return "boolean";
-	if (codec.kind === "integer") return "number";
-	if (codec.kind === "timestamp") return "string";
-	if (codec.kind === "object") {
-		const properties = Object.entries(record(codec.properties))
-			.sort(([left], [right]) => compareAscii(left, right))
-			.map(
-				([key, child]) =>
-					`readonly ${JSON.stringify(key)}: ${typeFromCodec(child)};`,
-			)
-			.join(" ");
-		return `Readonly<{ ${properties} }>`;
-	}
-	return "never";
 }
 
 function fieldType(field: RecordValue): string {
@@ -192,7 +174,7 @@ function renderQueries(resources: readonly NormalizedResource[]): string {
 		.filter((resource) => resource.kind === "query")
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${typeFromCodec(contract.input)}; output: ${typeFromCodec(contract.output)}; }>;`;
+			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; }>;`;
 		})
 		.join("\n\t");
 }
@@ -325,12 +307,21 @@ export type RootExecution = Readonly<{
 
 export type QueryDefinition<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly kind: "query";
+	readonly identity: \`query:\${Name & string}\`;
 	readonly name: Name;
+	readonly network: boolean;
+	readonly input: Codec<GeneratedQueries[Name]["input"]>;
+	readonly output: Codec<GeneratedQueries[Name]["output"]>;
+	readonly handler: (input: Readonly<{
+		input: GeneratedQueries[Name]["input"];
+		ctx: QueryContext;
+	}>) => GeneratedQueries[Name]["output"] | Promise<GeneratedQueries[Name]["output"]>;
 }>;
 
 export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 	definition: Readonly<{
 		name: Name;
+		network?: boolean;
 		input: Codec<GeneratedQueries[Name]["input"]>;
 		output: Codec<GeneratedQueries[Name]["output"]>;
 		handler(input: Readonly<{
@@ -342,7 +333,12 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
-export declare const defineQuery: QueryFactory;
+export const defineQuery: QueryFactory = ((definition) => Object.freeze({
+	...definition,
+	kind: "query" as const,
+	identity: \`query:\${definition.name}\` as const,
+	network: definition.network === true,
+})) as QueryFactory;
 ${otherFactories}
 
 export interface GeneratedApp {
@@ -355,29 +351,6 @@ export interface GeneratedApp {
 }
 
 export declare function createApp(): GeneratedApp;
-`;
-}
-
-export function renderClientContract(
-	resources: readonly NormalizedResource[],
-): string {
-	const queries = resources
-		.filter((resource) => resource.kind === "query")
-		.map(
-			(resource) =>
-				`${JSON.stringify(resource.name)}(input: ${typeFromCodec(resource.contract.input)}): Promise<${typeFromCodec(resource.contract.output)}>;`,
-		)
-		.join("\n\t\t");
-	return `export interface GeneratedClient {
-	readonly queries: Readonly<{
-		${queries}
-	}>;
-}
-
-export declare function createClient(input: Readonly<{
-	readonly baseUrl: string;
-	readonly fetch?: typeof globalThis.fetch;
-}>): GeneratedClient;
 `;
 }
 

@@ -1,4 +1,5 @@
 import { createCheckConstraint } from "./check-expression";
+import { codec } from "./codec";
 import type {
 	CollectionAugmentation,
 	CollectionDefinition,
@@ -12,9 +13,6 @@ import type {
 	RelationReference,
 } from "./collection-contract";
 import type {
-	Codec,
-	CodecKind,
-	CodecValue,
 	FieldDefault,
 	FieldDefinition,
 	FieldScalar,
@@ -57,13 +55,8 @@ export { shape } from "./shape";
 export type { FieldNode, InlineShapeDefinition } from "./shape";
 export { value } from "./value";
 export type { JsonValue, TaggedJsonValue, ValueDefinition } from "./value";
-export type {
-	Codec,
-	CodecKind,
-	CodecValue,
-	DataFieldDescriptor,
-	FieldDefinition,
-} from "./field-contract";
+export type { Codec, CodecKind, CodecValue } from "./codec";
+export type { DataFieldDescriptor, FieldDefinition } from "./field-contract";
 export type {
 	CollectionAugmentation,
 	CollectionDefinition,
@@ -76,7 +69,6 @@ export type {
 	RelationReference,
 } from "./collection-contract";
 
-type ScalarOptions = Readonly<{ nullable?: boolean }>;
 type FieldBaseOptions = Readonly<{
 	nullable: boolean;
 	postgres?: Readonly<{ name: string }>;
@@ -257,35 +249,7 @@ export const field = Object.freeze({
 	) => fieldDefinition<"json", TaggedJsonValue, Options>("json", options),
 });
 
-function scalarCodec<Value, Kind extends Exclude<CodecKind, "object">>(
-	kind: Kind,
-	options: ScalarOptions = {},
-): Codec<Value, Kind> {
-	return Object.freeze({ kind, nullable: options.nullable ?? false });
-}
-
-export const codec = Object.freeze({
-	uuid: (options: ScalarOptions = {}) =>
-		scalarCodec<string, "uuid">("uuid", options),
-	text: (options: ScalarOptions = {}) =>
-		scalarCodec<string, "text">("text", options),
-	boolean: (options: ScalarOptions = {}) =>
-		scalarCodec<boolean, "boolean">("boolean", options),
-	integer: (options: ScalarOptions = {}) =>
-		scalarCodec<number, "integer">("integer", options),
-	object: <
-		const Properties extends Readonly<
-			Record<string, Codec<object | string | number | boolean | null>>
-		>,
-	>(
-		properties: Properties,
-	): Codec<
-		{
-			readonly [Key in keyof Properties]: CodecValue<Properties[Key]>;
-		},
-		"object"
-	> => Object.freeze({ kind: "object", properties }),
-});
+export { codec };
 
 function frozenTuple<const Values extends readonly unknown[]>(
 	values: Values,

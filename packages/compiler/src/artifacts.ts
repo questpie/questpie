@@ -11,16 +11,20 @@ import {
 	explainExecutionComposition,
 	projectExecutionComposition,
 } from "./composition";
-import {
-	renderAppContract,
-	renderClientContract,
-	renderPackageContract,
-} from "./generate";
+import { renderAppContract, renderPackageContract } from "./generate";
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
 	projectRelationalNondisclosure,
 } from "./relational";
+import {
+	projectCommittedMigrations,
+	projectRuntimeBuild,
+	projectRuntimeContract,
+	renderClientContract,
+	renderServerExecutables,
+	runtimeArtifactBytes,
+} from "./runtime";
 import { projectManifest, projectMemberContributions } from "./schema";
 import type {
 	ApplicationConfiguration,
@@ -245,6 +249,28 @@ export async function createArtifacts(
 			entries: inventory.entries,
 		})),
 	};
+	const runtime = projectRuntimeContract({
+		configuration: input.configuration,
+		resources: input.resources,
+		sourceGraph: [
+			...sourceGraph.map((file) => ({ ...file, packageId: null })),
+			...packageGraphs.flatMap(({ inventory, graph: packageGraph }) =>
+				packageGraph.map((file) => ({
+					...file,
+					packageId: inventory.package.id,
+				})),
+			),
+		],
+		contextProjection: executionComposition.context,
+	});
+	const committedMigrations = await projectCommittedMigrations(
+		input.applicationRoot,
+	);
+	const serverExecutables = renderServerExecutables({
+		slots: runtime.executables.slots,
+		sourceRoot: input.configuration.source.root,
+		inventories: input.inventories,
+	});
 	const generated: Record<string, string> = {
 		"app.ts": renderAppContract(
 			input.resources,
@@ -254,14 +280,24 @@ export async function createArtifacts(
 			relational.declarations,
 		),
 		"build-input.json": canonicalBytes(buildInput),
-		"client.ts": renderClientContract(input.resources),
+		"client.ts": renderClientContract(input.resources, {
+			application: `application:${input.configuration.application.name}`,
+			clientContractDigest: runtime.clientContractDigest,
+			wireDigest: runtime.wireDigest,
+			path: String(runtime.wire.path),
+			mediaType: String(runtime.wire.mediaType),
+		}),
+		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),
 		"execution-composition-explain.json": canonicalBytes(executionExplanation),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
+		"internal/server.ts": serverExecutables,
 		"manifest.json": canonicalBytes(manifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
+		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
+		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
 	if (relational.hasRelationalArtifacts) {
 		const postgresQueryPlans = lowerPostgresQueryPlans({
@@ -286,6 +322,15 @@ export async function createArtifacts(
 			compilation.name,
 			compilation.resources,
 		);
+	generated["runtime-build.json"] = runtimeArtifactBytes(
+		projectRuntimeBuild({
+			configuration: input.configuration,
+			files: generated,
+			runtime,
+			migrationHead: committedMigrations.head,
+			buildInputDigest,
+		}),
+	);
 	generated["internal/checksums.json"] = canonicalBytes({
 		format: "questpie.generated-checksums",
 		version: 1,
