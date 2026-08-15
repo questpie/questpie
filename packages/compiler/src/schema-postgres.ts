@@ -362,8 +362,28 @@ function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
 	};
 }
 
-function renderFingerprintExpression(expression: JsonRecord): string {
-	if (expression.kind === "field") return String(expression.field);
+type QuotePostgresIdentifier = (name: string) => string;
+
+async function postgresIdentifierQuoter(
+	sql: SQL,
+): Promise<QuotePostgresIdentifier> {
+	const keywords = await sql<{ quoted: string; word: string }[]>`
+		select pg_catalog.quote_ident(word) as quoted, word
+		from pg_catalog.pg_get_keywords()
+		where pg_catalog.quote_ident(word) <> word
+	`;
+	const quoted = new Map(
+		keywords.map((keyword) => [keyword.word, keyword.quoted]),
+	);
+	return (name) => quoted.get(name) ?? name;
+}
+
+function renderFingerprintExpression(
+	expression: JsonRecord,
+	quoteIdentifier: QuotePostgresIdentifier,
+): string {
+	if (expression.kind === "field")
+		return quoteIdentifier(String(expression.field));
 	if (expression.kind === "literal") {
 		if (expression.value === null) return "NULL";
 		if (typeof expression.value === "boolean")
@@ -372,7 +392,7 @@ function renderFingerprintExpression(expression: JsonRecord): string {
 		return `'${String(expression.value).replaceAll("'", "''")}'::text`;
 	}
 	if (expression.kind === "textLength")
-		return `char_length(${renderFingerprintExpression(expression.expression as JsonRecord)})`;
+		return `char_length(${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)})`;
 	if (expression.kind === "compare") {
 		const operators: Readonly<Record<string, string>> = {
 			equal: "=",
@@ -382,16 +402,16 @@ function renderFingerprintExpression(expression: JsonRecord): string {
 			greaterThan: ">",
 			greaterThanOrEqual: ">=",
 		};
-		return `${renderFingerprintExpression(expression.left as JsonRecord)} ${operators[String(expression.operator)]} ${renderFingerprintExpression(expression.right as JsonRecord)}`;
+		return `${renderFingerprintExpression(expression.left as JsonRecord, quoteIdentifier)} ${operators[String(expression.operator)]} ${renderFingerprintExpression(expression.right as JsonRecord, quoteIdentifier)}`;
 	}
 	if (expression.kind === "and" || expression.kind === "or")
 		return (expression.expressions as readonly JsonRecord[])
-			.map((item) => `(${renderFingerprintExpression(item)})`)
+			.map((item) => `(${renderFingerprintExpression(item, quoteIdentifier)})`)
 			.join(expression.kind === "and" ? " AND " : " OR ");
 	if (expression.kind === "not")
-		return `NOT (${renderFingerprintExpression(expression.expression as JsonRecord)})`;
+		return `NOT (${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)})`;
 	if (expression.kind === "isNull" || expression.kind === "isNotNull")
-		return `${renderFingerprintExpression(expression.expression as JsonRecord)} IS ${expression.kind === "isNull" ? "NULL" : "NOT NULL"}`;
+		return `${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)} IS ${expression.kind === "isNull" ? "NULL" : "NOT NULL"}`;
 	return fail(
 		"QP-SCHEMA-028",
 		"invalidObject",
@@ -402,13 +422,14 @@ function renderFingerprintExpression(expression: JsonRecord): string {
 function expectedConstraintDefinition(
 	object: JsonRecord,
 	schemaName: string,
+	quoteIdentifier: QuotePostgresIdentifier,
 ): string {
 	if (object.kind === "primaryKey")
-		return `PRIMARY KEY (${(object.fields as readonly string[]).join(", ")})`;
+		return `PRIMARY KEY (${(object.fields as readonly string[]).map(quoteIdentifier).join(", ")})`;
 	if (object.kind === "unique")
-		return `UNIQUE (${(object.fields as readonly string[]).join(", ")})`;
+		return `UNIQUE (${(object.fields as readonly string[]).map(quoteIdentifier).join(", ")})`;
 	if (object.kind === "check")
-		return `CHECK (${renderFingerprintExpression(object.expression as JsonRecord)})`;
+		return `CHECK (${renderFingerprintExpression(object.expression as JsonRecord, quoteIdentifier)})`;
 	if (object.kind === "foreignKey") {
 		const action = (value: unknown) =>
 			String(value)
@@ -416,7 +437,7 @@ function expectedConstraintDefinition(
 				.toUpperCase();
 		const clause = (kind: "UPDATE" | "DELETE", value: unknown) =>
 			value === "noAction" ? "" : ` ON ${kind} ${action(value)}`;
-		return `FOREIGN KEY (${(object.fields as readonly string[]).join(", ")}) REFERENCES ${schemaName}.${String(object.referencedTable)}(${(object.referencedFields as readonly string[]).join(", ")})${clause("UPDATE", object.onUpdate)}${clause("DELETE", object.onDelete)}`;
+		return `FOREIGN KEY (${(object.fields as readonly string[]).map(quoteIdentifier).join(", ")}) REFERENCES ${quoteIdentifier(schemaName)}.${quoteIdentifier(String(object.referencedTable))}(${(object.referencedFields as readonly string[]).map(quoteIdentifier).join(", ")})${clause("UPDATE", object.onUpdate)}${clause("DELETE", object.onDelete)}`;
 	}
 	return fail(
 		"QP-SCHEMA-028",
@@ -428,6 +449,7 @@ function expectedConstraintDefinition(
 function expectedIndexDefinition(
 	object: JsonRecord,
 	schemaName: string,
+	quoteIdentifier: QuotePostgresIdentifier,
 ): string {
 	const fields = (object.fields as readonly JsonRecord[])
 		.map((field) => {
@@ -437,10 +459,10 @@ function expectedIndexDefinition(
 				(field.order === "desc" && field.nulls === "last")
 					? ` NULLS ${String(field.nulls).toUpperCase()}`
 					: "";
-			return `${String(field.field)}${order}${nonDefaultNulls}`;
+			return `${quoteIdentifier(String(field.field))}${order}${nonDefaultNulls}`;
 		})
 		.join(", ");
-	return `CREATE INDEX ${String(object.name)} ON ${schemaName}.${String(object.table)} USING btree (${fields})`;
+	return `CREATE INDEX ${quoteIdentifier(String(object.name))} ON ${quoteIdentifier(schemaName)}.${quoteIdentifier(String(object.table))} USING btree (${fields})`;
 }
 
 export async function assertSchemaMatches(
@@ -452,6 +474,7 @@ export async function assertSchemaMatches(
 		select exists(select 1 from pg_catalog.pg_namespace where nspname = ${schemaName}) as exists
 	`;
 	const expected = expectedComparable(schema);
+	const quoteIdentifier = await postgresIdentifierQuoter(sql);
 	const observedObjects: JsonRecord[] = [{ kind: "schema", name: schemaName }];
 	if (!namespace?.exists)
 		return fail(
@@ -629,7 +652,11 @@ export async function assertSchemaMatches(
 							: object.kind === "foreignKey"
 								? "f"
 								: "c",
-				definition: expectedConstraintDefinition(object, schemaName),
+				definition: expectedConstraintDefinition(
+					object,
+					schemaName,
+					quoteIdentifier,
+				),
 				validated: true,
 				deferrable: object.kind === "check" ? false : object.deferrable,
 				initiallyDeferred:
@@ -706,7 +733,7 @@ export async function assertSchemaMatches(
 				valid: true,
 				ready: true,
 				predicate: null,
-				definition: expectedIndexDefinition(index, schemaName),
+				definition: expectedIndexDefinition(index, schemaName, quoteIdentifier),
 			}))
 			.sort((left, right) => compareAscii(left.name, right.name));
 		if (canonicalBytes(indexes) !== canonicalBytes(expectedIndexes))

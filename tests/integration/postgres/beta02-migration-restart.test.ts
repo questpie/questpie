@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -1272,6 +1272,87 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		expect(receipt).toEqual({ receipts: 2 });
 		await expect(
 			applyCommittedMigrations({ migrations: [genesis, rename] }),
+		).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });
+	});
+
+	test("quotes PostgreSQL keywords through apply, fingerprint, and restart", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			...targetSchema.application,
+			name: "keyword-probe",
+			postgresSchema: "order",
+		};
+		const companies = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+		if (!companies)
+			throw new Error("keyword probe Companies schema is missing");
+		companies.postgresName = "group";
+		const id = companies.fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:companies/field:id",
+		);
+		const name = companies.fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:companies/field:name",
+		);
+		if (!id || !name)
+			throw new Error("keyword probe Companies Fields are missing");
+		id.postgresName = "user";
+		name.postgresName = "from";
+		companies.indexes = [
+			{
+				fields: [
+					{
+						collation: "questpie.binary",
+						field: "collection:companies/field:name",
+						nulls: "last",
+						operatorClass: "typeDefault",
+						order: "asc",
+					},
+				],
+				identity: "collection:companies/index:byName",
+				kind: "btree",
+				postgresName: "limit",
+				unique: false,
+			},
+		];
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-keyword-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		expect(migration.files["up.sql"]).toContain('CREATE TABLE "order"."group"');
+		expect(migration.files["up.sql"]).toContain('"user" pg_catalog.uuid');
+		expect(migration.files["up.sql"]).toContain(
+			'CREATE INDEX "limit" ON "order"."group"',
+		);
+
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({
+			status: "applied",
+			applied: [migration.identity],
+		});
+		const fingerprint = await inspectSchemaFingerprint({
+			schema: targetSchema,
+		});
+		expect(fingerprint.fingerprint.comparable.applicationSchema).toBe("order");
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
 		).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });
 	});
 });
