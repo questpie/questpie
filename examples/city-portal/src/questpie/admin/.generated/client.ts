@@ -6,6 +6,13 @@
  * Pass this directly to <AdminLayoutProvider admin={admin} />
  */
 
+import { default as _modules } from "../modules";
+type _AdminModuleMergeAcc = Record<string, unknown>;
+const _mergedModules = (Array.isArray(_modules)
+	? _modules.reduce<_AdminModuleMergeAcc>((acc, mod) => {
+		for (const [k, v] of Object.entries(mod)) acc[k] = typeof v === "object" && v !== null && !Array.isArray(v) ? { ...(typeof acc[k] === "object" && acc[k] !== null && !Array.isArray(acc[k]) ? acc[k] as Record<string, unknown> : {}), ...(v as Record<string, unknown>) } : v;
+		return acc;
+	}, {}) : _modules) as _AdminModuleMergeAcc;
 import { AccordionRenderer as _block_accordion } from "../blocks/accordion";
 import { AnnouncementBannerRenderer as _block_announcementBanner } from "../blocks/announcement-banner";
 import { ColumnsRenderer as _block_columns } from "../blocks/columns";
@@ -42,7 +49,12 @@ import type { textBlock } from "../../server/blocks/text";
 import type { videoBlock } from "../../server/blocks/video";
 
 const admin = {
-	blocks: { "accordion": _block_accordion, "announcement-banner": _block_announcementBanner, "columns": _block_columns, "contacts-list": _block_contactsList, "cta": _block_cta, "divider": _block_divider, "documents-list": _block_documentsList, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "image": _block_image, "image-text": _block_imageText, "latest-news": _block_latestNews, "spacer": _block_spacer, "text": _block_text, "video": _block_video },
+	blocks: { ...(_mergedModules["blocks"] as Record<string, unknown>), "accordion": _block_accordion, "announcement-banner": _block_announcementBanner, "columns": _block_columns, "contacts-list": _block_contactsList, "cta": _block_cta, "divider": _block_divider, "documents-list": _block_documentsList, "gallery": _block_gallery, "heading": _block_heading, "hero": _block_hero, "image": _block_image, "image-text": _block_imageText, "latest-news": _block_latestNews, "spacer": _block_spacer, "text": _block_text, "video": _block_video },
+	views: { ...(_mergedModules["views"] as Record<string, unknown>) },
+	components: { ...(_mergedModules["components"] as Record<string, unknown>) },
+	fields: { ...(_mergedModules["fields"] as Record<string, unknown>) },
+	pages: { ...(_mergedModules["pages"] as Record<string, unknown>) },
+	widgets: { ...(_mergedModules["widgets"] as Record<string, unknown>) },
 };
 
 type _ServerBlocks = { "accordion": typeof accordionBlock; "announcement-banner": typeof announcementBannerBlock; "columns": typeof columnsBlock; "contacts-list": typeof contactsListBlock; "cta": typeof ctaBlock; "divider": typeof dividerBlock; "documents-list": typeof documentsListBlock; "gallery": typeof galleryBlock; "heading": typeof headingBlock; "hero": typeof heroBlock; "image": typeof imageBlock; "image-text": typeof imageTextBlock; "latest-news": typeof latestNewsBlock; "spacer": typeof spacerBlock; "text": typeof textBlock; "video": typeof videoBlock };

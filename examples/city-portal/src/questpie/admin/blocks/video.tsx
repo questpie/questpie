@@ -20,8 +20,8 @@ export function VideoRenderer({ values }: BlockProps<"video">) {
 	const embedUrl = values.url ? getEmbedUrl(values.url) : null;
 
 	return (
-		<section className="px-6 py-16">
-			<div className="container mx-auto max-w-4xl">
+		<section className="py-16">
+			<div className="mx-auto max-w-4xl px-6">
 				{values.title && (
 					<h2 className="mb-6 text-2xl font-bold tracking-tight">
 						{values.title}

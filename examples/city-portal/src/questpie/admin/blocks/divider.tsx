@@ -20,7 +20,7 @@ export function DividerRenderer({ values }: BlockProps<"divider">) {
 				: "";
 
 	return (
-		<div className="px-6 py-8">
+		<div className="mx-auto max-w-7xl px-6 py-8">
 			<hr className={`border-border border-t ${widthClass} ${styleClass}`} />
 		</div>
 	);

@@ -42,9 +42,9 @@ export default collection("cities")
 	])
 	.title(({ f }) => f.name)
 	.admin(({ c }) => ({
-		label: "Cities",
+		label: { en: "Cities" },
 		icon: c.icon("ph:buildings"),
-		description: "Manage city portals",
+		description: { en: "Manage city portals" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

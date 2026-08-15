@@ -37,8 +37,8 @@ export function TextRenderer({ values }: BlockProps<"text">) {
 	};
 
 	return (
-		<section className={`px-6 ${paddingClass}`}>
-			<div className="prose prose-neutral dark:prose-invert mx-auto">
+		<section className={paddingClass}>
+			<div className="prose prose-neutral dark:prose-invert mx-auto max-w-7xl px-6">
 				<RichTextRenderer content={values.content} styles={richTextStyles} />
 			</div>
 		</section>

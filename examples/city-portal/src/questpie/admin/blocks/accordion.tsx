@@ -28,8 +28,8 @@ export function AccordionRenderer({ values }: BlockProps<"accordion">) {
 	};
 
 	return (
-		<section className="px-6 py-16">
-			<div className="container mx-auto max-w-3xl">
+		<section className="py-16">
+			<div className="mx-auto max-w-3xl px-6">
 				{values.title && (
 					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
 						{values.title}

@@ -17,9 +17,9 @@ export function ImageTextRenderer({ values, data }: BlockProps<"image-text">) {
 	const isImageLeft = values.imagePosition !== "right";
 
 	return (
-		<section className="px-6 py-16">
+		<section className="py-16">
 			<div
-				className={`container mx-auto grid grid-cols-1 items-center gap-12 md:grid-cols-2 ${
+				className={`mx-auto max-w-7xl px-6 grid grid-cols-1 items-center gap-12 md:grid-cols-2 ${
 					!isImageLeft ? "direction-rtl" : ""
 				}`}
 			>

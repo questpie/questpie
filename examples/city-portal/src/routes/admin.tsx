@@ -1,9 +1,7 @@
 import {
 	createFileRoute,
-	HeadContent,
 	Link,
 	Outlet,
-	Scripts,
 	useLocation,
 } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -81,33 +79,26 @@ function AdminLayout() {
 	);
 
 	return (
-		<html lang="en" className="dark">
-			<head>
-				<HeadContent />
-			</head>
-			<body>
-				<ScopeProvider
-					headerName="x-selected-city"
-					storageKey="city-portal-selected-city"
-				>
-					<AdminLayoutProvider
-						admin={admin}
-						client={client}
-						queryClient={queryClient}
-						authClient={authClient}
-						LinkComponent={AdminLink}
-						activeRoute={location.pathname}
-						basePath="/admin"
-						useServerTranslations
-						sidebarProps={{
-							afterBrand: afterBrandSlot,
-						}}
-					>
-						<Outlet />
-					</AdminLayoutProvider>
-				</ScopeProvider>
-				<Scripts />
-			</body>
-		</html>
+		<ScopeProvider
+			headerName="x-selected-city"
+			storageKey="city-portal-selected-city"
+		>
+			<AdminLayoutProvider
+				admin={admin}
+				client={client}
+				queryClient={queryClient}
+				authClient={authClient}
+				LinkComponent={AdminLink}
+				activeRoute={location.pathname}
+				basePath="/admin"
+				useServerTranslations
+				sidebarProps={{
+					afterBrand: afterBrandSlot,
+				}}
+				theme="dark"
+			>
+				<Outlet />
+			</AdminLayoutProvider>
+		</ScopeProvider>
 	);
 }

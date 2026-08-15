@@ -45,9 +45,9 @@ export default collection("submissions")
 	}))
 	.title(({ f }) => f.subject)
 	.admin(({ c }) => ({
-		label: "Submissions",
+		label: { en: "Submissions" },
 		icon: c.icon("ph:envelope"),
-		description: "Contact form submissions",
+		description: { en: "Contact form submissions" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

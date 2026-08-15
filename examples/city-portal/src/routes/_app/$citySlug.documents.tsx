@@ -53,7 +53,7 @@ function DocumentsListing() {
 	const { citySlug } = useParams({ from: "/_app/$citySlug" });
 
 	return (
-		<div className="container mx-auto px-4 py-12">
+		<div className="mx-auto max-w-7xl px-6 py-12">
 			<div className="mb-8">
 				<h1 className="mb-2 text-4xl font-bold tracking-tight">Documents</h1>
 				<p className="text-muted-foreground">

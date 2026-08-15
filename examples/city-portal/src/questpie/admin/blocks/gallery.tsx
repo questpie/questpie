@@ -38,8 +38,8 @@ export function GalleryRenderer({ values, data }: BlockProps<"gallery">) {
 	const gapClass = gapClasses[values.gap || "medium"];
 
 	return (
-		<section className="px-6 py-16">
-			<div className="container mx-auto">
+		<section className="py-16">
+			<div className="mx-auto max-w-7xl px-6">
 				{values.title && (
 					<h2 className="mb-8 text-center text-3xl font-bold tracking-tight">
 						{values.title}

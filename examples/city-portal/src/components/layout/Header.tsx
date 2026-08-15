@@ -78,7 +78,7 @@ export function Header({
 
 			{/* Main Header */}
 			<div className="border-b">
-				<div className="container mx-auto px-4 py-4">
+				<div className="mx-auto max-w-7xl px-6 py-4">
 					<div className="flex items-center justify-between">
 						{/* Logo */}
 						<Link

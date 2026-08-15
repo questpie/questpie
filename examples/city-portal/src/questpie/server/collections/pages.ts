@@ -42,9 +42,9 @@ export default collection("pages")
 	])
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: "Pages",
+		label: { en: "Pages" },
 		icon: c.icon("ph:article"),
-		description: "Website pages with block-based content",
+		description: { en: "Website pages with block-based content" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

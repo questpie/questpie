@@ -22,8 +22,8 @@ export function AnnouncementBannerRenderer({
 	};
 
 	return (
-		<section className="px-6 py-4">
-			<div className="container mx-auto space-y-2">
+		<section className="py-4">
+			<div className="mx-auto max-w-7xl px-6 space-y-2">
 				{announcements.map((announcement) => (
 					<div
 						key={announcement.id}

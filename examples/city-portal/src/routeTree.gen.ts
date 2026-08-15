@@ -9,29 +9,35 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AdminIndexRouteImport } from './routes/admin/index'
-import { Route as ApiPreviewRouteImport } from './routes/api/preview'
-import { Route as ApiSplatRouteImport } from './routes/api/$'
-import { Route as AdminSplatRouteImport } from './routes/admin/$'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as AppCitySlugRouteImport } from './routes/_app/$citySlug'
+import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminSplatRouteImport } from './routes/admin/$'
+import { Route as ApiSplatRouteImport } from './routes/api/$'
+import { Route as ApiPreviewRouteImport } from './routes/api/preview'
 import { Route as AppCitySlugIndexRouteImport } from './routes/_app/$citySlug.index'
-import { Route as AppCitySlugDocumentsRouteImport } from './routes/_app/$citySlug.documents'
-import { Route as AppCitySlugContactRouteImport } from './routes/_app/$citySlug.contact'
 import { Route as AppCitySlugAnnouncementsRouteImport } from './routes/_app/$citySlug.announcements'
+import { Route as AppCitySlugContactRouteImport } from './routes/_app/$citySlug.contact'
+import { Route as AppCitySlugDocumentsRouteImport } from './routes/_app/$citySlug.documents'
+import { Route as AppCitySlugServicesRouteImport } from './routes/_app/$citySlug.services'
 import { Route as AppCitySlugNewsIndexRouteImport } from './routes/_app/$citySlug.news.index'
-import { Route as AppCitySlugPagesSlugRouteImport } from './routes/_app/$citySlug.pages.$slug'
 import { Route as AppCitySlugNewsSlugRouteImport } from './routes/_app/$citySlug.news.$slug'
+import { Route as AppCitySlugPagesSlugRouteImport } from './routes/_app/$citySlug.pages.$slug'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminRoute = AdminRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AppCitySlugRoute = AppCitySlugRouteImport.update({
+  id: '/_app/$citySlug',
+  path: '/$citySlug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminIndexRoute = AdminIndexRouteImport.update({
@@ -39,39 +45,24 @@ const AdminIndexRoute = AdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AdminRoute,
 } as any)
-const ApiPreviewRoute = ApiPreviewRouteImport.update({
-  id: '/api/preview',
-  path: '/api/preview',
-  getParentRoute: () => rootRouteImport,
+const AdminSplatRoute = AdminSplatRouteImport.update({
+  id: '/$',
+  path: '/$',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ApiSplatRoute = ApiSplatRouteImport.update({
   id: '/api/$',
   path: '/api/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminSplatRoute = AdminSplatRouteImport.update({
-  id: '/$',
-  path: '/$',
-  getParentRoute: () => AdminRoute,
-} as any)
-const AppCitySlugRoute = AppCitySlugRouteImport.update({
-  id: '/_app/$citySlug',
-  path: '/$citySlug',
+const ApiPreviewRoute = ApiPreviewRouteImport.update({
+  id: '/api/preview',
+  path: '/api/preview',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AppCitySlugIndexRoute = AppCitySlugIndexRouteImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => AppCitySlugRoute,
-} as any)
-const AppCitySlugDocumentsRoute = AppCitySlugDocumentsRouteImport.update({
-  id: '/documents',
-  path: '/documents',
-  getParentRoute: () => AppCitySlugRoute,
-} as any)
-const AppCitySlugContactRoute = AppCitySlugContactRouteImport.update({
-  id: '/contact',
-  path: '/contact',
   getParentRoute: () => AppCitySlugRoute,
 } as any)
 const AppCitySlugAnnouncementsRoute =
@@ -80,19 +71,34 @@ const AppCitySlugAnnouncementsRoute =
     path: '/announcements',
     getParentRoute: () => AppCitySlugRoute,
   } as any)
+const AppCitySlugContactRoute = AppCitySlugContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => AppCitySlugRoute,
+} as any)
+const AppCitySlugDocumentsRoute = AppCitySlugDocumentsRouteImport.update({
+  id: '/documents',
+  path: '/documents',
+  getParentRoute: () => AppCitySlugRoute,
+} as any)
+const AppCitySlugServicesRoute = AppCitySlugServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => AppCitySlugRoute,
+} as any)
 const AppCitySlugNewsIndexRoute = AppCitySlugNewsIndexRouteImport.update({
   id: '/news/',
   path: '/news/',
   getParentRoute: () => AppCitySlugRoute,
 } as any)
-const AppCitySlugPagesSlugRoute = AppCitySlugPagesSlugRouteImport.update({
-  id: '/pages/$slug',
-  path: '/pages/$slug',
-  getParentRoute: () => AppCitySlugRoute,
-} as any)
 const AppCitySlugNewsSlugRoute = AppCitySlugNewsSlugRouteImport.update({
   id: '/news/$slug',
   path: '/news/$slug',
+  getParentRoute: () => AppCitySlugRoute,
+} as any)
+const AppCitySlugPagesSlugRoute = AppCitySlugPagesSlugRouteImport.update({
+  id: '/pages/$slug',
+  path: '/pages/$slug',
   getParentRoute: () => AppCitySlugRoute,
 } as any)
 
@@ -107,10 +113,11 @@ export interface FileRoutesByFullPath {
   '/$citySlug/announcements': typeof AppCitySlugAnnouncementsRoute
   '/$citySlug/contact': typeof AppCitySlugContactRoute
   '/$citySlug/documents': typeof AppCitySlugDocumentsRoute
+  '/$citySlug/services': typeof AppCitySlugServicesRoute
   '/$citySlug/': typeof AppCitySlugIndexRoute
   '/$citySlug/news/$slug': typeof AppCitySlugNewsSlugRoute
   '/$citySlug/pages/$slug': typeof AppCitySlugPagesSlugRoute
-  '/$citySlug/news': typeof AppCitySlugNewsIndexRoute
+  '/$citySlug/news/': typeof AppCitySlugNewsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -121,6 +128,7 @@ export interface FileRoutesByTo {
   '/$citySlug/announcements': typeof AppCitySlugAnnouncementsRoute
   '/$citySlug/contact': typeof AppCitySlugContactRoute
   '/$citySlug/documents': typeof AppCitySlugDocumentsRoute
+  '/$citySlug/services': typeof AppCitySlugServicesRoute
   '/$citySlug': typeof AppCitySlugIndexRoute
   '/$citySlug/news/$slug': typeof AppCitySlugNewsSlugRoute
   '/$citySlug/pages/$slug': typeof AppCitySlugPagesSlugRoute
@@ -138,6 +146,7 @@ export interface FileRoutesById {
   '/_app/$citySlug/announcements': typeof AppCitySlugAnnouncementsRoute
   '/_app/$citySlug/contact': typeof AppCitySlugContactRoute
   '/_app/$citySlug/documents': typeof AppCitySlugDocumentsRoute
+  '/_app/$citySlug/services': typeof AppCitySlugServicesRoute
   '/_app/$citySlug/': typeof AppCitySlugIndexRoute
   '/_app/$citySlug/news/$slug': typeof AppCitySlugNewsSlugRoute
   '/_app/$citySlug/pages/$slug': typeof AppCitySlugPagesSlugRoute
@@ -156,10 +165,11 @@ export interface FileRouteTypes {
     | '/$citySlug/announcements'
     | '/$citySlug/contact'
     | '/$citySlug/documents'
+    | '/$citySlug/services'
     | '/$citySlug/'
     | '/$citySlug/news/$slug'
     | '/$citySlug/pages/$slug'
-    | '/$citySlug/news'
+    | '/$citySlug/news/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/$citySlug/announcements'
     | '/$citySlug/contact'
     | '/$citySlug/documents'
+    | '/$citySlug/services'
     | '/$citySlug'
     | '/$citySlug/news/$slug'
     | '/$citySlug/pages/$slug'
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/_app/$citySlug/announcements'
     | '/_app/$citySlug/contact'
     | '/_app/$citySlug/documents'
+    | '/_app/$citySlug/services'
     | '/_app/$citySlug/'
     | '/_app/$citySlug/news/$slug'
     | '/_app/$citySlug/pages/$slug'
@@ -202,6 +214,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -209,11 +228,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/_app/$citySlug': {
+      id: '/_app/$citySlug'
+      path: '/$citySlug'
+      fullPath: '/$citySlug'
+      preLoaderRoute: typeof AppCitySlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/': {
@@ -223,12 +242,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminIndexRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/api/preview': {
-      id: '/api/preview'
-      path: '/api/preview'
-      fullPath: '/api/preview'
-      preLoaderRoute: typeof ApiPreviewRouteImport
-      parentRoute: typeof rootRouteImport
+    '/admin/$': {
+      id: '/admin/$'
+      path: '/$'
+      fullPath: '/admin/$'
+      preLoaderRoute: typeof AdminSplatRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/api/$': {
       id: '/api/$'
@@ -237,18 +256,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/$': {
-      id: '/admin/$'
-      path: '/$'
-      fullPath: '/admin/$'
-      preLoaderRoute: typeof AdminSplatRouteImport
-      parentRoute: typeof AdminRoute
-    }
-    '/_app/$citySlug': {
-      id: '/_app/$citySlug'
-      path: '/$citySlug'
-      fullPath: '/$citySlug'
-      preLoaderRoute: typeof AppCitySlugRouteImport
+    '/api/preview': {
+      id: '/api/preview'
+      path: '/api/preview'
+      fullPath: '/api/preview'
+      preLoaderRoute: typeof ApiPreviewRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_app/$citySlug/': {
@@ -258,11 +270,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCitySlugIndexRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
-    '/_app/$citySlug/documents': {
-      id: '/_app/$citySlug/documents'
-      path: '/documents'
-      fullPath: '/$citySlug/documents'
-      preLoaderRoute: typeof AppCitySlugDocumentsRouteImport
+    '/_app/$citySlug/announcements': {
+      id: '/_app/$citySlug/announcements'
+      path: '/announcements'
+      fullPath: '/$citySlug/announcements'
+      preLoaderRoute: typeof AppCitySlugAnnouncementsRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
     '/_app/$citySlug/contact': {
@@ -272,25 +284,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppCitySlugContactRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
-    '/_app/$citySlug/announcements': {
-      id: '/_app/$citySlug/announcements'
-      path: '/announcements'
-      fullPath: '/$citySlug/announcements'
-      preLoaderRoute: typeof AppCitySlugAnnouncementsRouteImport
+    '/_app/$citySlug/documents': {
+      id: '/_app/$citySlug/documents'
+      path: '/documents'
+      fullPath: '/$citySlug/documents'
+      preLoaderRoute: typeof AppCitySlugDocumentsRouteImport
+      parentRoute: typeof AppCitySlugRoute
+    }
+    '/_app/$citySlug/services': {
+      id: '/_app/$citySlug/services'
+      path: '/services'
+      fullPath: '/$citySlug/services'
+      preLoaderRoute: typeof AppCitySlugServicesRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
     '/_app/$citySlug/news/': {
       id: '/_app/$citySlug/news/'
       path: '/news'
-      fullPath: '/$citySlug/news'
+      fullPath: '/$citySlug/news/'
       preLoaderRoute: typeof AppCitySlugNewsIndexRouteImport
-      parentRoute: typeof AppCitySlugRoute
-    }
-    '/_app/$citySlug/pages/$slug': {
-      id: '/_app/$citySlug/pages/$slug'
-      path: '/pages/$slug'
-      fullPath: '/$citySlug/pages/$slug'
-      preLoaderRoute: typeof AppCitySlugPagesSlugRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
     '/_app/$citySlug/news/$slug': {
@@ -298,6 +310,13 @@ declare module '@tanstack/react-router' {
       path: '/news/$slug'
       fullPath: '/$citySlug/news/$slug'
       preLoaderRoute: typeof AppCitySlugNewsSlugRouteImport
+      parentRoute: typeof AppCitySlugRoute
+    }
+    '/_app/$citySlug/pages/$slug': {
+      id: '/_app/$citySlug/pages/$slug'
+      path: '/pages/$slug'
+      fullPath: '/$citySlug/pages/$slug'
+      preLoaderRoute: typeof AppCitySlugPagesSlugRouteImport
       parentRoute: typeof AppCitySlugRoute
     }
   }
@@ -319,6 +338,7 @@ interface AppCitySlugRouteChildren {
   AppCitySlugAnnouncementsRoute: typeof AppCitySlugAnnouncementsRoute
   AppCitySlugContactRoute: typeof AppCitySlugContactRoute
   AppCitySlugDocumentsRoute: typeof AppCitySlugDocumentsRoute
+  AppCitySlugServicesRoute: typeof AppCitySlugServicesRoute
   AppCitySlugIndexRoute: typeof AppCitySlugIndexRoute
   AppCitySlugNewsSlugRoute: typeof AppCitySlugNewsSlugRoute
   AppCitySlugPagesSlugRoute: typeof AppCitySlugPagesSlugRoute
@@ -329,6 +349,7 @@ const AppCitySlugRouteChildren: AppCitySlugRouteChildren = {
   AppCitySlugAnnouncementsRoute: AppCitySlugAnnouncementsRoute,
   AppCitySlugContactRoute: AppCitySlugContactRoute,
   AppCitySlugDocumentsRoute: AppCitySlugDocumentsRoute,
+  AppCitySlugServicesRoute: AppCitySlugServicesRoute,
   AppCitySlugIndexRoute: AppCitySlugIndexRoute,
   AppCitySlugNewsSlugRoute: AppCitySlugNewsSlugRoute,
   AppCitySlugPagesSlugRoute: AppCitySlugPagesSlugRoute,

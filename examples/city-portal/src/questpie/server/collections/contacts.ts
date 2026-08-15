@@ -30,9 +30,9 @@ export default collection("contacts")
 	}))
 	.title(({ f }) => f.department)
 	.admin(({ c }) => ({
-		label: "Contacts",
+		label: { en: "Contacts" },
 		icon: c.icon("ph:address-book"),
-		description: "Department contacts and information",
+		description: { en: "Department contacts and information" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

@@ -43,7 +43,7 @@ export function HeroRenderer({ values, data, children }: BlockProps<"hero">) {
 			/>
 
 			<div
-				className={`relative z-10 container mx-auto flex flex-col gap-6 px-6 py-20 ${alignClass}`}
+				className={`relative z-10 mx-auto max-w-7xl flex flex-col gap-6 px-6 py-20 ${alignClass}`}
 			>
 				<h1 className="max-w-4xl text-4xl leading-[1.1] font-bold tracking-tight text-white sm:text-5xl md:text-6xl">
 					{values.title}

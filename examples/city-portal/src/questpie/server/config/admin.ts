@@ -2,7 +2,7 @@ import { adminConfig } from "#questpie/factories";
 
 export default adminConfig({
 	branding: {
-		name: "City Portal",
+		name: { en: "City Portal" },
 	},
 	locale: {
 		locales: ["en"],
@@ -12,11 +12,11 @@ export default adminConfig({
 		sections: [
 			{
 				id: "overview",
-				title: "Overview",
+				title: { en: "Overview" },
 				items: [
 					{
 						type: "link",
-						label: "Dashboard",
+						label: { en: "Dashboard" },
 						href: "/admin",
 						icon: { type: "icon", props: { name: "ph:house" } },
 					},
@@ -25,7 +25,7 @@ export default adminConfig({
 			},
 			{
 				id: "content",
-				title: "Content",
+				title: { en: "Content" },
 				items: [
 					{ type: "collection", collection: "pages" },
 					{ type: "collection", collection: "news" },
@@ -34,7 +34,7 @@ export default adminConfig({
 			},
 			{
 				id: "resources",
-				title: "Resources",
+				title: { en: "Resources" },
 				items: [
 					{ type: "collection", collection: "documents" },
 					{ type: "collection", collection: "contacts" },
@@ -42,12 +42,12 @@ export default adminConfig({
 			},
 			{
 				id: "engagement",
-				title: "Engagement",
+				title: { en: "Engagement" },
 				items: [{ type: "collection", collection: "submissions" }],
 			},
 			{
 				id: "administration",
-				title: "Administration",
+				title: { en: "Administration" },
 				items: [
 					{ type: "collection", collection: "cities" },
 					{ type: "collection", collection: "cityMembers" },
@@ -55,11 +55,11 @@ export default adminConfig({
 			},
 			{
 				id: "external",
-				title: "External",
+				title: { en: "External" },
 				items: [
 					{
 						type: "link",
-						label: "View Website",
+						label: { en: "View Website" },
 						href: "/",
 						external: true,
 						icon: { type: "icon", props: { name: "ph:arrow-square-out" } },
@@ -69,8 +69,8 @@ export default adminConfig({
 		],
 	},
 	dashboard: {
-		title: "City Portal Dashboard",
-		description: "Content management overview for your city portal",
+		title: { en: "City Portal Dashboard" },
+		description: { en: "Content management overview for your city portal" },
 		actions: [
 			{
 				id: "new-page",

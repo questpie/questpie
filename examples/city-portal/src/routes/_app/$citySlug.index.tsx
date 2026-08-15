@@ -29,7 +29,7 @@ function CityHomepage() {
 
 	if (!page) {
 		return (
-			<div className="container mx-auto px-4 py-24 text-center">
+			<div className="mx-auto max-w-7xl px-6 py-24 text-center">
 				<h1 className="mb-4 text-4xl font-bold">Welcome</h1>
 				<p className="text-muted-foreground mb-8 text-xl">
 					This city portal is being set up. Please check back soon.
@@ -79,7 +79,7 @@ function HomepageWithPreview({ page }: { page: HomepagePage }) {
 				)}
 
 				{!data.content?._tree?.length && !isPreviewMode && (
-					<div className="text-muted-foreground container mx-auto py-32 text-center">
+					<div className="text-muted-foreground mx-auto max-w-7xl py-32 text-center">
 						<h1 className="mb-4 text-4xl font-bold">Welcome to {data.title}</h1>
 						<p className="mb-8 text-xl">
 							Your city council website is ready to be built.

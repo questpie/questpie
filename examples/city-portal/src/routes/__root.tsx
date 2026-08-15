@@ -1,4 +1,9 @@
-import { createRootRoute, Link } from "@tanstack/react-router";
+import {
+	createRootRoute,
+	HeadContent,
+	Link,
+	Scripts,
+} from "@tanstack/react-router";
 
 export const Route = createRootRoute({
 	head: () => ({
@@ -16,17 +21,19 @@ export const Route = createRootRoute({
 		],
 	}),
 	notFoundComponent: () => (
-		<main className="container px-6 py-24 text-center">
-			<h1 className="text-3xl font-bold tracking-tight">Page not found</h1>
-			<p className="text-muted-foreground mt-3">
-				The page you are looking for does not exist.
-			</p>
-			<Link
-				to="/"
-				className="text-primary mt-6 inline-block text-sm font-medium hover:underline"
-			>
-				Back to homepage
-			</Link>
+		<main className="flex min-h-screen items-center justify-center px-6">
+			<div className="text-center">
+				<h1 className="text-3xl font-bold tracking-tight">Page not found</h1>
+				<p className="text-muted-foreground mt-3">
+					The page you are looking for does not exist.
+				</p>
+				<Link
+					to="/"
+					className="text-primary mt-6 inline-block text-sm font-medium hover:underline"
+				>
+					Back to homepage
+				</Link>
+			</div>
 		</main>
 	),
 
@@ -34,5 +41,15 @@ export const Route = createRootRoute({
 });
 
 function RootDocument({ children }: { children: React.ReactNode }) {
-	return <>{children}</>;
+	return (
+		<html lang="en" suppressHydrationWarning>
+			<head>
+				<HeadContent />
+			</head>
+			<body className="bg-background text-foreground min-h-screen antialiased">
+				{children}
+				<Scripts />
+			</body>
+		</html>
+	);
 }

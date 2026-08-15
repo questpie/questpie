@@ -29,9 +29,9 @@ export function ColumnsRenderer({ values, children }: BlockProps<"columns">) {
 	const paddingClass = paddingClasses[values.padding || "medium"];
 
 	return (
-		<section className={`px-6 ${paddingClass}`}>
+		<section className={paddingClass}>
 			<div
-				className={`container mx-auto grid grid-cols-1 ${columnsClass} ${gapClass}`}
+				className={`mx-auto max-w-7xl px-6 grid grid-cols-1 ${columnsClass} ${gapClass}`}
 			>
 				{children}
 			</div>

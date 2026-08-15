@@ -35,7 +35,7 @@ function NewsDetail() {
 	const imageUrl = (article.image as { url?: string } | undefined)?.url;
 
 	return (
-		<article className="container mx-auto px-4 py-12">
+		<article className="mx-auto max-w-7xl px-6 py-12">
 			{/* Back Link */}
 			<Link
 				to="/$citySlug/news"

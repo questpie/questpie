@@ -1,0 +1,34 @@
+services:
+  # PostgreSQL - The ONLY external dependency!
+  postgres:
+    image: postgres:17
+    container_name: cityportal-postgres
+    environment:
+      POSTGRES_DB: cityportal
+      POSTGRES_USER: cityportal
+      POSTGRES_PASSWORD: cityportal_dev_password
+    ports:
+      # 5433 on host to avoid colliding with barbershop (5432) or a system Postgres.
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Bootstrap extensions (pgcrypto, pg_trgm) on first container start.
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cityportal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Optional: local SMTP catcher for testing emails.
+  # Keep MAIL_ADAPTER=console in .env if you don't need it.
+  # Web UI: http://localhost:8025
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: cityportal-mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+
+volumes:
+  postgres_data:

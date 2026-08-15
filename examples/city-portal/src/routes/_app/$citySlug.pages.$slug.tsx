@@ -29,7 +29,7 @@ function CityPage() {
 
 	if (!page) {
 		return (
-			<div className="container mx-auto px-4 py-24 text-center">
+			<div className="mx-auto max-w-7xl px-6 py-24 text-center">
 				<h1 className="mb-4 text-4xl font-bold">Page Not Found</h1>
 				<p className="text-muted-foreground mb-8 text-xl">
 					The page you are looking for does not exist or has been moved.
@@ -71,7 +71,7 @@ function PageWithPreview({ page }: { page: CityPageRecord }) {
 		>
 			<article className={isPreviewMode ? "preview-mode" : ""}>
 				{/* Page Header */}
-				<header className="container mx-auto px-6 py-12">
+				<header className="mx-auto max-w-7xl px-6 py-12">
 					<h1 className="text-4xl font-bold tracking-tight">{data.title}</h1>
 					{data.excerpt && (
 						<p className="text-muted-foreground mt-4 max-w-3xl text-xl">
@@ -92,7 +92,7 @@ function PageWithPreview({ page }: { page: CityPageRecord }) {
 				)}
 
 				{!data.content?._tree?.length && !isPreviewMode && (
-					<div className="text-muted-foreground container mx-auto py-16 text-center">
+					<div className="text-muted-foreground mx-auto max-w-7xl py-16 text-center">
 						<p>This page has no content yet.</p>
 					</div>
 				)}

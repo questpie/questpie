@@ -48,9 +48,9 @@ export default collection("news")
 	])
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: "News",
+		label: { en: "News" },
 		icon: c.icon("ph:newspaper"),
-		description: "News articles and updates",
+		description: { en: "News articles and updates" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

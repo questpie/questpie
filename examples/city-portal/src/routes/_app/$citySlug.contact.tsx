@@ -41,7 +41,7 @@ function ContactPage() {
 	const { settings } = cityRouteApi.useLoaderData();
 
 	return (
-		<div className="container mx-auto px-4 py-12">
+		<div className="mx-auto max-w-7xl px-6 py-12">
 			<div className="mb-8">
 				<h1 className="mb-2 text-4xl font-bold tracking-tight">Contact Us</h1>
 				<p className="text-muted-foreground">

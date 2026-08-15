@@ -24,12 +24,14 @@ export function HeadingRenderer({ values }: BlockProps<"heading">) {
 	const alignClass = alignClasses[values.align || "left"];
 
 	return (
-		<section className="px-6 py-8">
-			<Tag
-				className={`text-foreground font-bold tracking-tight ${sizeClass} ${alignClass}`}
-			>
-				{values.text || "Heading"}
-			</Tag>
+		<section className="py-8">
+			<div className="mx-auto max-w-7xl px-6">
+				<Tag
+					className={`text-foreground font-bold tracking-tight ${sizeClass} ${alignClass}`}
+				>
+					{values.text || "Heading"}
+				</Tag>
+			</div>
 		</section>
 	);
 }

@@ -25,7 +25,7 @@ export function CTARenderer({ values }: BlockProps<"cta">) {
 
 	return (
 		<section className={`px-6 py-20 ${variantStyles.section}`}>
-			<div className="container mx-auto max-w-3xl text-center">
+			<div className="mx-auto max-w-3xl text-center">
 				<h2 className="mb-6 text-3xl font-bold tracking-tight sm:text-4xl">
 					{values.title}
 				</h2>

@@ -59,7 +59,8 @@ export default global("site_settings")
 			.default([
 				{ label: "Home", href: "/", isExternal: false },
 				{ label: "News", href: "/news", isExternal: false },
-				{ label: "Services", href: "/services", isExternal: false },
+				{ label: "Announcements", href: "/announcements", isExternal: false },
+				{ label: "Documents", href: "/documents", isExternal: false },
 				{ label: "Contact", href: "/contact", isExternal: false },
 			] satisfies NavItem[]),
 
@@ -168,9 +169,9 @@ export default global("site_settings")
 			.description("Optional link for more information"),
 	}))
 	.admin(({ c }) => ({
-		label: "Site Settings",
+		label: { en: "Site Settings" },
 		icon: c.icon("ph:gear"),
-		description: "Configure site branding, navigation, and contact details",
+		description: { en: "Configure site branding, navigation, and contact details" },
 	}))
 	.form(({ v, f }) =>
 		v.globalForm({

@@ -44,7 +44,7 @@ export const getCities = createServerFn({ method: "GET" }).handler(async () => {
 });
 
 export const getCityBySlug = createServerFn({ method: "GET" })
-	.inputValidator((data: { slug: string }) => data)
+	.validator((data: { slug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const result = await app.collections.cities.find(
@@ -64,7 +64,7 @@ export const getCityBySlug = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const getSiteSettings = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string }) => data)
+	.validator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -89,7 +89,7 @@ export const getSiteSettings = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const getHomepage = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string }) => data)
+	.validator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -116,7 +116,7 @@ export const getHomepage = createServerFn({ method: "GET" })
 	});
 
 export const getPageBySlug = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string; pageSlug: string }) => data)
+	.validator((data: { citySlug: string; pageSlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -215,7 +215,7 @@ function narrowSubmissionDepartment(department: string): SubmissionDepartment {
 }
 
 export const getNewsList = createServerFn({ method: "GET" })
-	.inputValidator(
+	.validator(
 		(data: { citySlug: string; category?: string; limit?: number }) => data,
 	)
 	.handler(async ({ data }) => {
@@ -247,7 +247,7 @@ export const getNewsList = createServerFn({ method: "GET" })
 	});
 
 export const getNewsBySlug = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string; newsSlug: string }) => data)
+	.validator((data: { citySlug: string; newsSlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -279,7 +279,7 @@ export const getNewsBySlug = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const getAnnouncementsList = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string; showExpired?: boolean }) => data)
+	.validator((data: { citySlug: string; showExpired?: boolean }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -311,7 +311,7 @@ export const getAnnouncementsList = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const getDocumentsList = createServerFn({ method: "GET" })
-	.inputValidator(
+	.validator(
 		(data: { citySlug: string; category?: string; limit?: number }) => data,
 	)
 	.handler(async ({ data }) => {
@@ -346,7 +346,7 @@ export const getDocumentsList = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const getContactPageData = createServerFn({ method: "GET" })
-	.inputValidator((data: { citySlug: string }) => data)
+	.validator((data: { citySlug: string }) => data)
 	.handler(async ({ data }) => {
 		const ctx = await createServerContext();
 		const cityResult = await app.collections.cities.find(
@@ -372,7 +372,7 @@ export const getContactPageData = createServerFn({ method: "GET" })
 // ============================================================================
 
 export const submitContactForm = createServerFn({ method: "POST" })
-	.inputValidator(
+	.validator(
 		(data: {
 			citySlug: string;
 			name: string;

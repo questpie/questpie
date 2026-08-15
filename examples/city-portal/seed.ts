@@ -202,7 +202,7 @@ async function seed() {
 		const cityId = cityIds[city.slug];
 		const cityCtx = await app.createContext({
 			accessMode: "system",
-			cityId,
+			"~contextExtensions": { cityId } as Record<string, unknown>,
 		});
 
 		await app.globals.site_settings.update(
@@ -591,16 +591,8 @@ async function seed() {
 				slug: "services",
 				excerpt: "Discover the services we offer to residents.",
 				content: {
-					_tree: [
-						{ id: "heading-1", type: "heading", children: [] },
-						{ id: "contacts-1", type: "contacts-list", children: [] },
-					],
+					_tree: [{ id: "contacts-1", type: "contacts-list", children: [] }],
 					_values: {
-						"heading-1": {
-							text: "Our Services",
-							level: "h2",
-							align: "left",
-						},
 						"contacts-1": {
 							title: "Council Departments",
 							showAll: true,

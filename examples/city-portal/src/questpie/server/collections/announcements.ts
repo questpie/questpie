@@ -46,9 +46,9 @@ export default collection("announcements")
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: "Announcements",
+		label: { en: "Announcements" },
 		icon: c.icon("ph:megaphone"),
-		description: "Official notices and public announcements",
+		description: { en: "Official notices and public announcements" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

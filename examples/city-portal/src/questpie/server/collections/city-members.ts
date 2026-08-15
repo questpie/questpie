@@ -32,9 +32,9 @@ export default collection("cityMembers")
 		),
 	])
 	.admin(({ c }) => ({
-		label: "City Members",
+		label: { en: "City Members" },
 		icon: c.icon("ph:users-three"),
-		description: "Manage who can access each city portal",
+		description: { en: "Manage who can access each city portal" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({

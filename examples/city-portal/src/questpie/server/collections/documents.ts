@@ -45,9 +45,9 @@ export default collection("documents")
 	}))
 	.title(({ f }) => f.title)
 	.admin(({ c }) => ({
-		label: "Documents",
+		label: { en: "Documents" },
 		icon: c.icon("ph:file-pdf"),
-		description: "Official documents and publications",
+		description: { en: "Official documents and publications" },
 	}))
 	.list(({ v }) =>
 		v.collectionTable({
