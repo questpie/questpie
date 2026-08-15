@@ -4,6 +4,7 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	classifyAddedField,
+	classifyChangedField,
 	classifyProviderDelta,
 	GeneratedInvariantClassifications,
 	maximumClassification,
@@ -218,7 +219,10 @@ const kindRank: readonly MigrationStepKindV1[] = [
 	"dropCollection",
 ] as const;
 
-function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
+function sortSteps(
+	steps: MigrationStepV1[],
+	renames: MigrationPlanV1["renames"] = [],
+): MigrationStepV1[] {
 	const replacements: Readonly<Record<string, MigrationStepKindV1>> = {
 		addConstraint: "dropConstraint",
 		addRelation: "dropRelation",
@@ -241,7 +245,8 @@ function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
 				(candidate) =>
 					!pending.some(
 						(predecessor) =>
-							predecessor.targetIdentity === candidate.targetIdentity &&
+							mapIdentityForward(predecessor.targetIdentity, renames) ===
+								candidate.targetIdentity &&
 							predecessor.kind === replacements[candidate.kind],
 					),
 			)
@@ -370,11 +375,13 @@ function validateRenames(
 				"invalidDefinition",
 				`rename mapping ${mapping.from}=${mapping.to} is not one-to-one over the base and target`,
 			);
-		if (
-			fromField &&
-			canonicalBytes(baseObjects.get(mapping.from)?.type) !==
-				canonicalBytes(targetObjects.get(mapping.to)?.type)
-		)
+		const renamedFieldChange = fromField
+			? classifyChangedField(
+					baseObjects.get(mapping.from) ?? {},
+					targetObjects.get(mapping.to) ?? {},
+				)
+			: null;
+		if (renamedFieldChange?.classification === "blocked")
 			return schemaError(
 				"QP-SCHEMA-031",
 				"nonTransactionalDdl",
@@ -548,7 +555,10 @@ function destructiveDeltaSteps(
 					key === "relations" ? "constraintPostgresName" : "postgresName";
 				const physicalChanged =
 					baseValue[physicalName] !== targetValue[physicalName];
-				if (derivedRename || (key === "fields" && physicalChanged))
+				const semanticChanged =
+					canonicalBytes(semanticComparable(baseValue, renames)) !==
+					canonicalBytes(semanticComparable(targetValue, []));
+				if (physicalChanged && (derivedRename || key === "fields"))
 					steps.push(
 						step({
 							kind: deltaKind(key, "rename"),
@@ -561,9 +571,6 @@ function destructiveDeltaSteps(
 							classification: "destructive",
 						}),
 					);
-				const semanticChanged =
-					canonicalBytes(semanticComparable(baseValue, renames)) !==
-					canonicalBytes(semanticComparable(targetValue, []));
 				if (
 					semanticChanged ||
 					(!derivedRename && key !== "fields" && physicalChanged)
@@ -652,7 +659,7 @@ function destructiveDeltaSteps(
 				}),
 			);
 	}
-	return sortSteps(steps);
+	return sortSteps(steps, renames);
 }
 export function createMigrationPlan(
 	input: MigrationPlanInput & Readonly<{ baseSchema?: undefined }>,
@@ -1030,8 +1037,19 @@ function renderStep(
 				"invalidReference",
 				`unknown drop target ${stepValue.targetIdentity}`,
 			);
-		const name =
-			key === "relations" ? value.constraintPostgresName : value.postgresName;
+		const nameKey =
+			key === "relations" ? "constraintPostgresName" : "postgresName";
+		const mappedIdentity = mapIdentityForward(
+			stepValue.targetIdentity,
+			renames,
+		);
+		const renamedTarget =
+			mappedIdentity === stepValue.targetIdentity
+				? undefined
+				: childRecords(targetCollection ?? {}, key).find(
+						(item) => item.identity === mappedIdentity,
+					);
+		const name = renamedTarget?.[nameKey] ?? value[nameKey];
 		return `ALTER TABLE ${table} DROP CONSTRAINT ${quote(String(name))};`;
 	}
 	if (stepValue.kind === "dropIndex") {
@@ -1050,7 +1068,17 @@ function renderStep(
 				"invalidReference",
 				`unknown drop target ${stepValue.targetIdentity}`,
 			);
-		return `DROP INDEX ${quote(schemaName)}.${quote(String(index.postgresName))};`;
+		const mappedIdentity = mapIdentityForward(
+			stepValue.targetIdentity,
+			renames,
+		);
+		const renamedTarget =
+			mappedIdentity === stepValue.targetIdentity
+				? undefined
+				: childRecords(targetCollection ?? {}, "indexes").find(
+						(item) => item.identity === mappedIdentity,
+					);
+		return `DROP INDEX ${quote(schemaName)}.${quote(String(renamedTarget?.postgresName ?? index.postgresName))};`;
 	}
 	if (stepValue.kind === "dropCollection") return `DROP TABLE ${table};`;
 	return schemaError(

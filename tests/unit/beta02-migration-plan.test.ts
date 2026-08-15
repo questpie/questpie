@@ -10,6 +10,7 @@ import {
 	loadCommittedMigration,
 	verifyCommittedMigration,
 } from "@questpie/compiler";
+import type { RenameIdentityV1, SchemaProjectionV1 } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const compiledFixture = compileApplication({ applicationRoot: fixtureRoot });
@@ -28,6 +29,47 @@ function replaceIdentity(value: unknown, from: string, to: string): unknown {
 			replaceIdentity(item, from, to),
 		]),
 	);
+}
+
+function commitDelta(
+	baseSchema: SchemaProjectionV1,
+	targetSchema: SchemaProjectionV1,
+	slug: string,
+	renames: readonly Readonly<{
+		from: RenameIdentityV1;
+		to: RenameIdentityV1;
+	}>[],
+) {
+	const genesisPlan = createMigrationPlan({
+		targetSchema: baseSchema,
+		slug: "create-rename-fixture",
+	});
+	const genesis = createCommittedMigration({
+		plan: genesisPlan.plan,
+		baseSchema: genesisPlan.baseSchema,
+		targetSchema: baseSchema,
+		currentSchema: baseSchema,
+		planDigest: genesisPlan.digest,
+		localMigrations: [],
+	});
+	const planned = createMigrationPlan({
+		baseMigration: genesis.identity,
+		baseSchema,
+		targetSchema,
+		slug,
+		renames,
+	});
+	if (planned.status !== "planned") throw new Error("delta plan disappeared");
+	const committed = createCommittedMigration({
+		plan: planned.plan,
+		baseSchema,
+		targetSchema,
+		currentSchema: targetSchema,
+		planDigest: planned.digest,
+		localMigrations: [genesis],
+		acceptDestructive: planned.digest,
+	});
+	return { committed, planned };
 }
 
 describe("BETA-02 migration artifacts", () => {
@@ -268,6 +310,168 @@ describe("BETA-02 migration artifacts", () => {
 				],
 			}),
 		).toThrow(/QP-SCHEMA-001/);
+	});
+
+	test("orders renamed constraint, Index, and generated-bound replacements exactly", async () => {
+		const compilation = await compiledFixture;
+		const collaboration = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const companiesOnly = structuredClone(collaboration);
+		companiesOnly.collections = collaboration.collections.filter(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+
+		const collectionFrom = "collection:companies";
+		const collectionTo = "collection:organizations";
+		const constraintTarget = replaceIdentity(
+			companiesOnly,
+			collectionFrom,
+			collectionTo,
+		) as typeof companiesOnly;
+		const organizations = constraintTarget.collections[0];
+		organizations.postgresName = "organizations";
+		for (const constraint of organizations.constraints)
+			constraint.postgresName = String(constraint.postgresName).replace(
+				"companies",
+				"organizations",
+			);
+		const changedConstraint = organizations.constraints.find(
+			(constraint: { identity: string }) =>
+				constraint.identity.endsWith("invariant:minLength"),
+		);
+		changedConstraint.expression.right.value = 2;
+		const constraint = commitDelta(
+			companiesOnly,
+			constraintTarget,
+			"rename-and-change-constraint",
+			[{ from: collectionFrom, to: collectionTo }],
+		);
+		expect(
+			constraint.planned.plan.steps.map((step) => [
+				step.kind,
+				step.targetIdentity,
+			]),
+		).toEqual([
+			["renameCollection", "collection:organizations"],
+			["renameConstraint", "collection:organizations/constraint:primary"],
+			[
+				"renameConstraint",
+				"collection:organizations/field:name/invariant:maxLength",
+			],
+			[
+				"renameConstraint",
+				"collection:organizations/field:name/invariant:minLength",
+			],
+			["dropConstraint", "collection:companies/field:name/invariant:minLength"],
+			[
+				"addConstraint",
+				"collection:organizations/field:name/invariant:minLength",
+			],
+		]);
+
+		const indexedBase = structuredClone(companiesOnly);
+		indexedBase.collections[0].indexes = [
+			{
+				fields: [
+					{
+						collation: "questpie.binary",
+						field: "collection:companies/field:name",
+						nulls: "last",
+						operatorClass: "typeDefault",
+						order: "asc",
+					},
+				],
+				identity: "collection:companies/index:byName",
+				kind: "btree",
+				postgresName: "qp_ix_companies_by_name",
+				unique: false,
+			},
+		];
+		const indexTarget = replaceIdentity(
+			indexedBase,
+			collectionFrom,
+			collectionTo,
+		) as typeof indexedBase;
+		indexTarget.collections[0].postgresName = "organizations";
+		for (const item of indexTarget.collections[0].constraints)
+			item.postgresName = String(item.postgresName).replace(
+				"companies",
+				"organizations",
+			);
+		const changedIndex = indexTarget.collections[0].indexes[0];
+		changedIndex.postgresName = "qp_ix_organizations_by_name";
+		changedIndex.fields[0].field = "collection:organizations/field:id";
+		changedIndex.fields[0].collation = null;
+		const index = commitDelta(
+			indexedBase,
+			indexTarget,
+			"rename-and-change-index",
+			[{ from: collectionFrom, to: collectionTo }],
+		);
+		expect(
+			index.planned.plan.steps
+				.filter((step) => step.kind.endsWith("Index"))
+				.map((step) => [step.kind, step.targetIdentity]),
+		).toEqual([
+			["renameIndex", "collection:organizations/index:byName"],
+			["dropIndex", "collection:companies/index:byName"],
+			["addIndex", "collection:organizations/index:byName"],
+		]);
+
+		const fieldFrom = "collection:companies/field:name";
+		const fieldTo = "collection:companies/field:title";
+		const boundTarget = replaceIdentity(
+			companiesOnly,
+			fieldFrom,
+			fieldTo,
+		) as typeof companiesOnly;
+		const title = boundTarget.collections[0].fields.find(
+			(field: { identity: string }) => field.identity === fieldTo,
+		);
+		title.path = ["title"];
+		title.postgresName = "title";
+		title.type.minLength = 2;
+		for (const item of boundTarget.collections[0].constraints)
+			if (String(item.identity).startsWith(`${fieldTo}/`))
+				item.postgresName = String(item.postgresName).replace("name", "title");
+		const minimum = boundTarget.collections[0].constraints.find(
+			(item: { identity: string }) =>
+				item.identity.endsWith("invariant:minLength"),
+		);
+		minimum.expression.right.value = 2;
+		const bound = commitDelta(
+			companiesOnly,
+			boundTarget,
+			"rename-and-change-generated-bound",
+			[{ from: fieldFrom, to: fieldTo }],
+		);
+		expect(
+			bound.planned.plan.steps.map((step) => [step.kind, step.targetIdentity]),
+		).toEqual([
+			["renameField", "collection:companies/field:title"],
+			[
+				"renameConstraint",
+				"collection:companies/field:title/invariant:maxLength",
+			],
+			[
+				"renameConstraint",
+				"collection:companies/field:title/invariant:minLength",
+			],
+			["dropConstraint", "collection:companies/field:name/invariant:minLength"],
+			["addConstraint", "collection:companies/field:title/invariant:minLength"],
+		]);
+
+		expect(bound.committed.files["up.sql"]).toMatchSnapshot(
+			"renamed generated bound up.sql",
+		);
+		expect(constraint.committed.files["up.sql"]).toMatchSnapshot(
+			"renamed constraint up.sql",
+		);
+		expect(index.committed.files["up.sql"]).toMatchSnapshot(
+			"renamed Index up.sql",
+		);
 	});
 
 	test("refuses stale plans and tampered committed bytes", async () => {

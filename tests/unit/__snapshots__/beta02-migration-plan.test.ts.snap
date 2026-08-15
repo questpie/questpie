@@ -10,3 +10,66 @@ exports[`BETA-02 migration artifacts loads the committed six-file collaboration 
   "up.sql": 6207,
 }
 `;
+
+exports[`BETA-02 migration artifacts orders renamed constraint, Index, and generated-bound replacements exactly: renamed generated bound up.sql 1`] = `
+"-- questpie-step: 1bbe409f5f3a19165d4ba1a191bf1a3e1f7b0795e831558a2ad6dbba72c55d88
+ALTER TABLE "collaboration"."companies" RENAME COLUMN "name" TO "title";
+
+-- questpie-step: 549b71ec3c6f565b0cb0b8bda62455d42ddf9a2964f3017a1d8464cd7fdbf01f
+ALTER TABLE "collaboration"."companies" RENAME CONSTRAINT "qp_ck_companies_name_max_length" TO "qp_ck_companies_title_max_length";
+
+-- questpie-step: 02428ee6bb7e843662cb1c7d32db59acd8308383867911a6075b7eea864106d5
+ALTER TABLE "collaboration"."companies" RENAME CONSTRAINT "qp_ck_companies_name_min_length" TO "qp_ck_companies_title_min_length";
+
+-- questpie-step: 12e5a83f8d1c615d2215e6a869b95c0154c7c4fc7732406a8bd981f4a452ba03
+ALTER TABLE "collaboration"."companies" DROP CONSTRAINT "qp_ck_companies_title_min_length";
+
+-- questpie-step: 3f3766314e04a8b1cf45eb50a9dcc1391d334096c241cd205a59c1d994a20bea
+ALTER TABLE "collaboration"."companies" ADD CONSTRAINT "qp_ck_companies_title_min_length" CHECK ((pg_catalog.char_length("title") >= 2));
+"
+`;
+
+exports[`BETA-02 migration artifacts orders renamed constraint, Index, and generated-bound replacements exactly: renamed constraint up.sql 1`] = `
+"-- questpie-step: f720e3c055ce8a3ec689904c308a2e2e8263e5e6a31e13517a4f27f488e64dbf
+ALTER TABLE "collaboration"."companies" RENAME TO "organizations";
+
+-- questpie-step: 7d830f369f41a674f3c22e1033a8a12b9325488d5a4cd1810c5616cae3d472bb
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_pk_companies_primary" TO "qp_pk_organizations_primary";
+
+-- questpie-step: 87ade1df92f2cb0f46dbf5269804336a581f1e539a06b1cfa2cf158023922daa
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_ck_companies_name_max_length" TO "qp_ck_organizations_name_max_length";
+
+-- questpie-step: ccd874d29404aaaeaa22733b6140f1fe424cf6c9d8a9c47f9cd6f981f958358e
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_ck_companies_name_min_length" TO "qp_ck_organizations_name_min_length";
+
+-- questpie-step: 12e5a83f8d1c615d2215e6a869b95c0154c7c4fc7732406a8bd981f4a452ba03
+ALTER TABLE "collaboration"."organizations" DROP CONSTRAINT "qp_ck_organizations_name_min_length";
+
+-- questpie-step: 340594a90441de29148405b228b74ccbd278c3a744ae51b660b8fe68221ac167
+ALTER TABLE "collaboration"."organizations" ADD CONSTRAINT "qp_ck_organizations_name_min_length" CHECK ((pg_catalog.char_length("name") >= 2));
+"
+`;
+
+exports[`BETA-02 migration artifacts orders renamed constraint, Index, and generated-bound replacements exactly: renamed Index up.sql 1`] = `
+"-- questpie-step: f720e3c055ce8a3ec689904c308a2e2e8263e5e6a31e13517a4f27f488e64dbf
+ALTER TABLE "collaboration"."companies" RENAME TO "organizations";
+
+-- questpie-step: 7d830f369f41a674f3c22e1033a8a12b9325488d5a4cd1810c5616cae3d472bb
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_pk_companies_primary" TO "qp_pk_organizations_primary";
+
+-- questpie-step: 87ade1df92f2cb0f46dbf5269804336a581f1e539a06b1cfa2cf158023922daa
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_ck_companies_name_max_length" TO "qp_ck_organizations_name_max_length";
+
+-- questpie-step: ccd874d29404aaaeaa22733b6140f1fe424cf6c9d8a9c47f9cd6f981f958358e
+ALTER TABLE "collaboration"."organizations" RENAME CONSTRAINT "qp_ck_companies_name_min_length" TO "qp_ck_organizations_name_min_length";
+
+-- questpie-step: e85ba6b438ed0fc2df100992aff8c41740ebdc36d2fd60db589cde77829ee527
+ALTER INDEX "collaboration"."qp_ix_companies_by_name" RENAME TO "qp_ix_organizations_by_name";
+
+-- questpie-step: b4d80178149f6f6bd6db1383b91c45c48f3601694204148ba3d5aff116d8be0a
+DROP INDEX "collaboration"."qp_ix_organizations_by_name";
+
+-- questpie-step: 3aefbbf2b8732f295f9763f376e8e304d0edc1b2a5b4aa494863a9cd3015d161
+CREATE INDEX "qp_ix_organizations_by_name" ON "collaboration"."organizations" USING btree ("id" ASC NULLS LAST);
+"
+`;
