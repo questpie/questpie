@@ -15,6 +15,9 @@ test("projects a Package-owned Service without host Context authority", async ()
 	const originMap = JSON.parse(
 		compilation.generatedFiles["origin-map.json"] ?? "null",
 	);
+	const explanation = JSON.parse(
+		compilation.generatedFiles["execution-composition-explain.json"] ?? "null",
+	);
 	const auditReader = services.services.find(
 		(service: { identity: string }) =>
 			service.identity === "service:questpie.auditReader",
@@ -28,6 +31,31 @@ test("projects a Package-owned Service without host Context authority", async ()
 		lifetime: "execution",
 		effect: "read",
 		dependencies: [],
+	});
+	expect(
+		explanation.services.find(
+			(service: { identity: string }) =>
+				service.identity === "service:questpie.auditReader",
+		),
+	).toEqual({
+		identity: "service:questpie.auditReader",
+		owner: auditReader.owner,
+		lifetime: "execution",
+		effect: "read",
+		dependencies: [],
+		executableSlots: ["create"],
+		origin: originMap.resources.find(
+			(resource: { identity: string }) =>
+				resource.identity === "service:questpie.auditReader",
+		).establishedAt,
+	});
+	expect(explanation.context).toMatchObject({
+		identity: "context:app.context",
+		owner: { kind: "application" },
+		origin: originMap.resources.find(
+			(resource: { identity: string }) =>
+				resource.identity === "context:app.context",
+		).establishedAt,
 	});
 
 	const packageContractPath = Object.keys(compilation.generatedFiles).find(

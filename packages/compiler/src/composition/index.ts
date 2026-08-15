@@ -2,6 +2,8 @@ import { canonicalBytes, compareAscii } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { NormalizedResource } from "../types";
 
+export { explainExecutionComposition } from "./explain";
+
 type RecordValue = Readonly<Record<string, unknown>>;
 
 function record(value: unknown, label: string): RecordValue {

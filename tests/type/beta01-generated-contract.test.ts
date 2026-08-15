@@ -78,6 +78,7 @@ describe("BETA-01 generated contract", () => {
 			"build-input.json",
 			"client.ts",
 			"context-projection.json",
+			"execution-composition-explain.json",
 			"internal/checksums.json",
 			collaborationAuditContractPath,
 			"internal/package-inventories.json",
