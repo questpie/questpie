@@ -76,7 +76,7 @@ function seedCollection(
 	if (!collection)
 		return fail(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			`unknown Seed Collection ${identity}`,
 		);
 	return collection;
@@ -94,7 +94,7 @@ function seedColumns(
 		if (!field)
 			return fail(
 				"QP-SEED-003",
-				"stepSchemaIncompatible",
+				"seedTargetMismatch",
 				`unknown Seed Field ${entry.field}`,
 			);
 		names.push(String(field.postgresName));
@@ -149,7 +149,7 @@ async function executeSeedStep(
 		if (result.length !== 1)
 			return fail(
 				"QP-SEED-012",
-				"cardinalityMismatch",
+				"seedCardinalityMismatch",
 				`${step.stepId} affected ${result.length} rows`,
 			);
 		return;
@@ -171,7 +171,7 @@ async function executeSeedStep(
 		if (result.length !== 1)
 			return fail(
 				"QP-SEED-012",
-				"cardinalityMismatch",
+				"seedCardinalityMismatch",
 				`${step.stepId} affected ${result.length} rows`,
 			);
 		return;
@@ -187,7 +187,7 @@ async function executeSeedStep(
 	if (updates.length === 0)
 		return fail(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			`${step.stepId} upsert update is empty`,
 		);
 	const result = await sql.unsafe(
@@ -197,7 +197,7 @@ async function executeSeedStep(
 	if (result.length !== 1)
 		return fail(
 			"QP-SEED-012",
-			"cardinalityMismatch",
+			"seedCardinalityMismatch",
 			`${step.stepId} did not return one row`,
 		);
 }

@@ -1,13 +1,10 @@
 import { CompilerDiagnosticError } from "../diagnostic";
+import type { CompilerDiagnosticArguments } from "../diagnostic";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-function fail(
-	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
-	diagnosticClass: string,
-	message: string,
-): never {
-	throw new CompilerDiagnosticError(code, diagnosticClass, message);
+function fail(...args: CompilerDiagnosticArguments): never {
+	throw new CompilerDiagnosticError(...args);
 }
 
 function fieldFor(collection: JsonRecord, identity: string): JsonRecord {

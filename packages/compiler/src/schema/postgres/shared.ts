@@ -1,14 +1,10 @@
 import { CompilerDiagnosticError } from "../../diagnostic";
+import type { CompilerDiagnosticArguments } from "../../diagnostic";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-export function fail(
-	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
-	diagnosticClass: string,
-	message: string,
-	details: Readonly<Record<string, unknown>> = {},
-): never {
-	throw new CompilerDiagnosticError(code, diagnosticClass, message, details);
+export function fail(...args: CompilerDiagnosticArguments): never {
+	throw new CompilerDiagnosticError(...args);
 }
 
 export function childRecords(

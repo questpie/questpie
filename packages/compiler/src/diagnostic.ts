@@ -40,17 +40,98 @@ export type CompositionDiagnosticCode =
 	| "QP-SEED-012"
 	| "QP-SEED-014";
 
+const diagnosticClassesByCode = {
+	"QP-COMPOSE-002": ["duplicateResourceIdentity"],
+	"QP-COMPOSE-004": ["unresolvedReference"],
+	"QP-COMPOSE-005": ["packageCompositionNotActivated"],
+	"QP-COMPOSE-006": ["invalidPackageManifest"],
+	"QP-COMPOSE-008": ["packageInventoryChanged"],
+	"QP-COMPOSE-010": ["impureStructuralGraph"],
+	"QP-COMPOSE-011": ["nondeterministicEvaluation"],
+	"QP-COMPOSE-012": ["structuralImportOfGeneratedOutput"],
+	"QP-COMPOSE-013": ["structuralTypeError"],
+	"QP-COMPOSE-014": ["augmentationMemberCollision"],
+	"QP-COMPOSE-015": ["invalidAugmentation"],
+	"QP-COMPOSE-017": ["invalidApplicationRoot"],
+	"QP-COMPOSE-020": ["duplicateContributionIdentity"],
+	"QP-DATA-003": ["invalidRelationReference"],
+	"QP-SCHEMA-001": ["invalidDefinition"],
+	"QP-SCHEMA-002": ["duplicateIdentity"],
+	"QP-SCHEMA-003": ["invalidReference"],
+	"QP-SCHEMA-004": ["unsupportedDefinition"],
+	"QP-SCHEMA-005": ["invalidPhysicalName"],
+	"QP-SCHEMA-006": ["physicalNameCollision"],
+	"QP-SCHEMA-007": [
+		"providerMismatch",
+		"unsupportedPostgres",
+		"missingExtension",
+		"incompatibleExtension",
+	],
+	"QP-SCHEMA-020": ["destructiveAcknowledgementRequired"],
+	"QP-SCHEMA-021": ["planDigestMismatch"],
+	"QP-SCHEMA-022": ["stalePlan"],
+	"QP-SCHEMA-023": ["checksumMismatch"],
+	"QP-SCHEMA-024": ["missingLocalMigration", "unknownAppliedMigration"],
+	"QP-SCHEMA-025": ["orderMismatch"],
+	"QP-SCHEMA-026": ["baseDrift"],
+	"QP-SCHEMA-027": ["targetDrift"],
+	"QP-SCHEMA-028": [
+		"missingObject",
+		"unexpectedObject",
+		"changedObject",
+		"invalidObject",
+	],
+	"QP-SCHEMA-029": ["applicationBindingMismatch"],
+	"QP-SCHEMA-031": ["nonTransactionalDdl"],
+	"QP-SEED-001": ["missingSeedDependency"],
+	"QP-SEED-002": ["seedDependencyCycle"],
+	"QP-SEED-003": ["seedTargetMismatch"],
+	"QP-SEED-004": ["checksumMismatch"],
+	"QP-SEED-009": ["unsupportedSeedStep"],
+	"QP-SEED-011": ["seedInsertConflict"],
+	"QP-SEED-012": ["seedCardinalityMismatch"],
+	"QP-SEED-014": ["seedSchemaDrift"],
+} as const satisfies Readonly<
+	Record<CompositionDiagnosticCode, readonly string[]>
+>;
+
+export type DiagnosticClassForCode<Code extends CompositionDiagnosticCode> =
+	(typeof diagnosticClassesByCode)[Code][number];
+
+type DiagnosticArgumentsByCode = {
+	[Code in CompositionDiagnosticCode]: [
+		code: Code,
+		diagnosticClass: DiagnosticClassForCode<Code>,
+		message: string,
+		details?: Readonly<Record<string, unknown>>,
+	];
+};
+
+export type CompilerDiagnosticArguments =
+	DiagnosticArgumentsByCode[CompositionDiagnosticCode];
+
+export function isDiagnosticClassForCode<
+	Code extends CompositionDiagnosticCode,
+>(
+	code: Code,
+	diagnosticClass: string,
+): diagnosticClass is DiagnosticClassForCode<Code> {
+	return (diagnosticClassesByCode[code] as readonly string[]).includes(
+		diagnosticClass,
+	);
+}
+
 export class CompilerDiagnosticError extends Error {
 	readonly code: CompositionDiagnosticCode;
-	readonly diagnosticClass: string;
+	readonly diagnosticClass: DiagnosticClassForCode<CompositionDiagnosticCode>;
 	readonly details: Readonly<Record<string, unknown>>;
 
-	constructor(
-		code: CompositionDiagnosticCode,
-		diagnosticClass: string,
-		message: string,
-		details: Readonly<Record<string, unknown>> = {},
-	) {
+	constructor(...args: CompilerDiagnosticArguments) {
+		const [code, diagnosticClass, message, details = {}] = args;
+		if (!isDiagnosticClassForCode(code, diagnosticClass))
+			throw new TypeError(
+				`invalid diagnostic code and class pair: ${code} ${diagnosticClass}`,
+			);
 		super(`${code} ${diagnosticClass}: ${message}`);
 		this.name = "CompilerDiagnosticError";
 		this.code = code;

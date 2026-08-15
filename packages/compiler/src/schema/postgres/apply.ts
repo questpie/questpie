@@ -207,11 +207,10 @@ async function assertMigrationBoundary(
 			error.code !== "QP-SCHEMA-028"
 		)
 			throw error;
-		throw new CompilerDiagnosticError(
-			boundary === "base" ? "QP-SCHEMA-026" : "QP-SCHEMA-027",
-			boundary === "base" ? "baseDrift" : "targetDrift",
-			`${migrationIdentity} ${boundary} Schema Fingerprint does not match the committed artifact`,
-		);
+		const message = `${migrationIdentity} ${boundary} Schema Fingerprint does not match the committed artifact`;
+		if (boundary === "base")
+			throw new CompilerDiagnosticError("QP-SCHEMA-026", "baseDrift", message);
+		throw new CompilerDiagnosticError("QP-SCHEMA-027", "targetDrift", message);
 	}
 }
 

@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
+import type { CompilerDiagnosticArguments } from "../diagnostic";
 import type { SchemaProjectionV1 } from "../schema";
 import { normalizeJsonBackedValue } from "./json-codec";
 
@@ -44,12 +45,8 @@ export interface CommittedSeedV1 {
 	}>;
 }
 
-function seedError(
-	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
-	diagnosticClass: string,
-	message: string,
-): never {
-	throw new CompilerDiagnosticError(code, diagnosticClass, message);
+function seedError(...args: CompilerDiagnosticArguments): never {
+	throw new CompilerDiagnosticError(...args);
 }
 
 function children(collection: JsonRecord, key: string): readonly JsonRecord[] {
@@ -67,7 +64,7 @@ function collectionFor(
 	if (!collection)
 		return seedError(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			`unknown Seed Collection ${identity}`,
 		);
 	return collection;
@@ -77,7 +74,7 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 	const invalid = (requirement: string): never =>
 		seedError(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			`${field.identity} ${requirement}`,
 		);
 	if (value === null) {
@@ -204,7 +201,7 @@ function record(
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		return seedError(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			"Seed record must be an object",
 		);
 	const input = value as Record<string, unknown>;
@@ -236,7 +233,7 @@ function record(
 				if (mode === "key" && !requiredKeys.has(String(field.identity)))
 					return seedError(
 						"QP-SEED-003",
-						"stepSchemaIncompatible",
+						"seedTargetMismatch",
 						`Seed record contains invalid Field ${path.join("/")}`,
 					);
 				result.push({
@@ -255,7 +252,7 @@ function record(
 			if (!hasChildren || !raw || typeof raw !== "object" || Array.isArray(raw))
 				return seedError(
 					"QP-SEED-003",
-					"stepSchemaIncompatible",
+					"seedTargetMismatch",
 					`Seed record contains invalid Field ${path.join("/")}`,
 				);
 			visit(raw as Readonly<Record<string, unknown>>, path);
@@ -268,13 +265,13 @@ function record(
 			if (!present.has(identity))
 				return seedError(
 					"QP-SEED-003",
-					"stepSchemaIncompatible",
+					"seedTargetMismatch",
 					`Seed record omits ${identity}`,
 				);
 	if (mode === "key" && result.length !== requiredKeys.size)
 		return seedError(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			"Seed key must contain exactly the primary key",
 		);
 	return result.sort((left, right) => compareAscii(left.field, right.field));
@@ -290,7 +287,7 @@ export function createCommittedSeed(
 	if (typeof name !== "string" || name.length === 0)
 		return seedError(
 			"QP-SEED-003",
-			"stepSchemaIncompatible",
+			"seedTargetMismatch",
 			"Seed name is missing",
 		);
 	const identity = `seed:${name}` as const;
@@ -366,7 +363,7 @@ export function createCommittedSeed(
 			)
 				return seedError(
 					"QP-SEED-003",
-					"stepSchemaIncompatible",
+					"seedTargetMismatch",
 					"upsert repeats a primary-key Field",
 				);
 			const insertFields = new Set(
@@ -380,7 +377,7 @@ export function createCommittedSeed(
 				)
 					return seedError(
 						"QP-SEED-003",
-						"stepSchemaIncompatible",
+						"seedTargetMismatch",
 						`upsert create omits ${String(field.identity)}`,
 					);
 		}

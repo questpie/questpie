@@ -850,10 +850,14 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 					schema: targetSchema,
 					seeds: [failingSeed],
 				}),
-			).rejects.toMatchObject({ code: "QP-SEED-012" });
+			).rejects.toMatchObject({
+				code: "QP-SEED-012",
+				diagnosticClass: "seedCardinalityMismatch",
+			});
 			const [state] = await database!<
 				{
 					companies: number;
+					errorCode: string | null;
 					failed: number;
 					receipts: number;
 					started: number;
@@ -865,10 +869,12 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-probe') as receipts,
 				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'started') as started,
 				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'failed') as failed,
+				  (select error_code from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'failed' order by occurred_at desc limit 1) as "errorCode",
 				  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-probe' and event = 'succeeded') as succeeded
 			`;
 			expect(state).toEqual({
 				companies: 0,
+				errorCode: "QP-SEED-012",
 				failed: attempt,
 				receipts: 0,
 				started: attempt,

@@ -1,16 +1,12 @@
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
+import type { CompilerDiagnosticArguments } from "../diagnostic";
 import type { MigrationPlanV1, SchemaProjectionV1 } from "./contracts";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-export function schemaError(
-	code: ConstructorParameters<typeof CompilerDiagnosticError>[0],
-	diagnosticClass: string,
-	message: string,
-	details: Readonly<Record<string, unknown>> = {},
-): never {
-	throw new CompilerDiagnosticError(code, diagnosticClass, message, details);
+export function schemaError(...args: CompilerDiagnosticArguments): never {
+	throw new CompilerDiagnosticError(...args);
 }
 
 export function assertProjection(

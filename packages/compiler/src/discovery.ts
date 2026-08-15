@@ -593,16 +593,19 @@ process.stdout.write(JSON.stringify(found));
 			stdout: "pipe",
 			stderr: "pipe",
 		});
-		if (child.exitCode !== 0)
+		if (child.exitCode !== 0) {
+			if (child.stderr.toString().includes("QP-COMPOSE-010"))
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-010",
+					"impureStructuralGraph",
+					"controlled child evaluation failed",
+				);
 			throw new CompilerDiagnosticError(
-				child.stderr.toString().includes("QP-COMPOSE-010")
-					? "QP-COMPOSE-010"
-					: "QP-COMPOSE-013",
-				child.stderr.toString().includes("QP-COMPOSE-010")
-					? "impureStructuralGraph"
-					: "structuralTypeError",
+				"QP-COMPOSE-013",
+				"structuralTypeError",
 				"controlled child evaluation failed",
 			);
+		}
 		const evaluated = JSON.parse(child.stdout.toString()) as Array<{
 			logicalPath: string;
 			exportName: string;

@@ -1,5 +1,7 @@
 import { constraint, defineCollection, field, seed } from "questpie";
 
+import { CompilerDiagnosticError } from "@questpie/compiler";
+
 const measurements = defineCollection({
 	name: "measurements",
 	fields: {
@@ -40,6 +42,18 @@ field.uuid({});
 // @ts-expect-error every public Field constructor requires its options object
 field.uuid();
 
+const acceptedDiagnostic = new CompilerDiagnosticError(
+	"QP-SEED-003",
+	"seedTargetMismatch",
+	"accepted diagnostic pair",
+);
+// @ts-expect-error diagnostic classes are closed for their exact code
+const invalidDiagnostic = new CompilerDiagnosticError(
+	"QP-SEED-003",
+	"seedCardinalityMismatch",
+	"invalid",
+);
+
 // @ts-expect-error Field options are an exact closed contract
 field.uuid({ nullable: false, unknown: true });
 // @ts-expect-error timestamp flags are booleans
@@ -51,3 +65,5 @@ field.bigint({ nullable: false, default: "1" });
 field.numeric({ nullable: false, precision: 4, scale: 2, default: "1.00" });
 // @ts-expect-error date literal schema defaults are deferred in v1
 field.date({ nullable: false, default: "2026-08-15" });
+
+void [acceptedDiagnostic, invalidDiagnostic];

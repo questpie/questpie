@@ -13,7 +13,7 @@ type JsonRecord = Readonly<Record<string, unknown>>;
 function incompatible(seed: CommittedSeedV1, message: string): never {
 	throw new CompilerDiagnosticError(
 		"QP-SEED-003",
-		"stepSchemaIncompatible",
+		"seedTargetMismatch",
 		`${seed.identity} ${message}`,
 	);
 }

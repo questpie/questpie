@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 import {
 	compileApplication,
+	CompilerDiagnosticError,
 	createCommittedSeed,
 	loadCommittedSeed,
 	orderCommittedSeeds,
@@ -14,6 +15,15 @@ import {
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const compilation = compileApplication({ applicationRoot: fixtureRoot });
+
+function caught(action: () => void): unknown {
+	try {
+		action();
+	} catch (error) {
+		return error;
+	}
+	throw new Error("expected action to throw");
+}
 
 describe("BETA-02 committed Seeds", () => {
 	test("commits the collaboration graph as one immutable Seed", async () => {
@@ -66,12 +76,26 @@ describe("BETA-02 committed Seeds", () => {
 			(field: { identity: string }) =>
 				field.identity !== "collection:companies/field:name",
 		);
-		expect(() =>
-			validateCommittedSeedSchema(committed, incompatibleSchema),
-		).toThrow(/QP-SEED-003/);
+		expect(
+			caught(() => validateCommittedSeedSchema(committed, incompatibleSchema)),
+		).toMatchObject({
+			code: "QP-SEED-003",
+			diagnosticClass: "seedTargetMismatch",
+		});
 		expect(() =>
 			orderCommittedSeeds([{ ...committed, dependencies: ["seed:missing"] }]),
 		).toThrow(/QP-SEED-001/);
+	});
+
+	test("rejects an invalid diagnostic code and class pair at runtime", () => {
+		expect(
+			() =>
+				new CompilerDiagnosticError(
+					"QP-SEED-003",
+					"seedCardinalityMismatch" as never,
+					"invalid diagnostic pair",
+				),
+		).toThrow(/invalid diagnostic code and class pair/);
 	});
 
 	test("refuses files outside the exact three-file Seed contract", async () => {
