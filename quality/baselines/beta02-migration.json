@@ -10,17 +10,21 @@
 	},
 	"reference": {
 		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
 		"postgres": "local Docker postgres:17"
 	},
 	"observed": {
-		"planCreateMs": 4.3,
+		"changedLoopMs": 2560,
+		"planCreateMs": 6.158954999999878,
 		"migrationGoldenBytes": 25528,
-		"firstConcurrentApplyMs": 111.82,
-		"restartAlreadyAppliedMs": 37.98
+		"firstApplyMs": 99.22870400000102,
+		"restartMs": 38.73295700000017
 	},
 	"budgets": {
 		"changedLoopMs": 5000,
 		"planCreateMs": 1000,
 		"migrationGoldenBytes": 25528
-	}
+	},
+	"status": "PASS"
 }
