@@ -238,6 +238,7 @@ export function createApplicationRuntime<
 						signal: controller.signal,
 					}),
 				);
+				controller.signal.throwIfAborted();
 				const facts = Object.freeze({
 					principal: input.principal,
 					authority: Object.freeze({ kind: "ordinary" as const }),
@@ -247,7 +248,9 @@ export function createApplicationRuntime<
 					deadline: input.deadline ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				const view = await program.project({ facts, service: getService });
+				controller.signal.throwIfAborted();
 				result = await use(view);
+				controller.signal.throwIfAborted();
 			} catch (error) {
 				primaryFailure = error;
 			}

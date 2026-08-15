@@ -552,3 +552,48 @@ test("retains execution Services through SSE EOF", async () => {
 	expect(events).toEqual(["dispose"]);
 	await runtime.close();
 });
+
+test("does not enter the handler after cancellation during Context Resolution", async () => {
+	let releaseResolution!: () => void;
+	let resolutionStarted!: () => void;
+	const started = new Promise<void>((resolveStarted) => {
+		resolutionStarted = resolveStarted;
+	});
+	const release = new Promise<void>((resolveRelease) => {
+		releaseResolution = resolveRelease;
+	});
+	const cancellationContext = defineContext({
+		name: "cancellation.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: async ({ input }) => {
+			resolutionStarted();
+			await release;
+			return { tenant: { id: input.companyId }, values: {} };
+		},
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context: cancellationContext,
+		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
+		project: ({ facts }) => facts,
+	});
+	const controller = new AbortController();
+	let callbackCalls = 0;
+	const execution = runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+			signal: controller.signal,
+		},
+		() => {
+			callbackCalls += 1;
+		},
+	);
+	await started;
+	controller.abort(new Error("cancel resolution"));
+	releaseResolution();
+	await expect(execution).rejects.toThrow("cancel resolution");
+	expect(callbackCalls).toBe(0);
+	await runtime.close();
+});
