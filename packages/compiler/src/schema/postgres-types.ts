@@ -7,6 +7,36 @@ type SchemaDiagnosticCode = Extract<
 	`QP-SCHEMA-${string}`
 >;
 
+type SchemaDiagnosticClass =
+	| "invalidDefinition"
+	| "duplicateIdentity"
+	| "invalidReference"
+	| "unsupportedDefinition"
+	| "invalidPhysicalName"
+	| "physicalNameCollision"
+	| "providerMismatch"
+	| "destructiveAcknowledgementRequired"
+	| "planDigestMismatch"
+	| "stalePlan"
+	| "checksumMismatch"
+	| "missingLocalMigration"
+	| "pendingMigration"
+	| "unknownAppliedMigration"
+	| "orderMismatch"
+	| "applicationBindingMismatch"
+	| "baseDrift"
+	| "targetDrift"
+	| "missingObject"
+	| "unexpectedObject"
+	| "changedObject"
+	| "invalidObject"
+	| "undeclaredDependency"
+	| "unplannedDesiredChange"
+	| "unsupportedPostgres"
+	| "missingExtension"
+	| "incompatibleExtension"
+	| "nonTransactionalDdl";
+
 type CanonicalJsonValue =
 	| null
 	| boolean
@@ -46,7 +76,7 @@ export interface SchemaDiagnosticV1 {
 	readonly format: "questpie.diagnostic";
 	readonly version: 1;
 	readonly code: SchemaDiagnosticCode;
-	readonly class: string;
+	readonly class: SchemaDiagnosticClass;
 	readonly severity: "error";
 	readonly blocking: "deploy" | "fatal";
 	readonly identity: string | null;

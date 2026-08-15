@@ -29,6 +29,70 @@ import {
 } from "./fingerprint";
 import { fail } from "./shared";
 
+const schemaDiagnosticCodes = new Set<string>([
+	"QP-SCHEMA-001",
+	"QP-SCHEMA-002",
+	"QP-SCHEMA-003",
+	"QP-SCHEMA-004",
+	"QP-SCHEMA-005",
+	"QP-SCHEMA-006",
+	"QP-SCHEMA-007",
+	"QP-SCHEMA-020",
+	"QP-SCHEMA-021",
+	"QP-SCHEMA-022",
+	"QP-SCHEMA-023",
+	"QP-SCHEMA-024",
+	"QP-SCHEMA-025",
+	"QP-SCHEMA-026",
+	"QP-SCHEMA-027",
+	"QP-SCHEMA-028",
+	"QP-SCHEMA-029",
+	"QP-SCHEMA-031",
+]);
+
+const schemaDiagnosticClasses = new Set<string>([
+	"invalidDefinition",
+	"duplicateIdentity",
+	"invalidReference",
+	"unsupportedDefinition",
+	"invalidPhysicalName",
+	"physicalNameCollision",
+	"providerMismatch",
+	"destructiveAcknowledgementRequired",
+	"planDigestMismatch",
+	"stalePlan",
+	"checksumMismatch",
+	"missingLocalMigration",
+	"pendingMigration",
+	"unknownAppliedMigration",
+	"orderMismatch",
+	"applicationBindingMismatch",
+	"baseDrift",
+	"targetDrift",
+	"missingObject",
+	"unexpectedObject",
+	"changedObject",
+	"invalidObject",
+	"undeclaredDependency",
+	"unplannedDesiredChange",
+	"unsupportedPostgres",
+	"missingExtension",
+	"incompatibleExtension",
+	"nonTransactionalDdl",
+]);
+
+function isSchemaDiagnosticCode(
+	value: string,
+): value is SchemaDiagnosticV1["code"] {
+	return schemaDiagnosticCodes.has(value);
+}
+
+function isSchemaDiagnosticClass(
+	value: string,
+): value is SchemaDiagnosticV1["class"] {
+	return schemaDiagnosticClasses.has(value);
+}
+
 function diagnosticComparison(
 	code: CompilerDiagnosticError["code"],
 ): SchemaDiagnosticV1["comparison"] {
@@ -51,14 +115,19 @@ function schemaDiagnostic(
 	error: CompilerDiagnosticError,
 	migrationIdentity: string,
 	application: string,
-): SchemaDiagnosticV1 {
+): SchemaDiagnosticV1 | null {
+	if (
+		!isSchemaDiagnosticCode(error.code) ||
+		!isSchemaDiagnosticClass(error.diagnosticClass)
+	)
+		return null;
 	const drift = ["QP-SCHEMA-026", "QP-SCHEMA-027", "QP-SCHEMA-028"].includes(
 		error.code,
 	);
 	return {
 		format: "questpie.diagnostic",
 		version: 1,
-		code: error.code as SchemaDiagnosticV1["code"],
+		code: error.code,
 		class: error.diagnosticClass,
 		severity: "error",
 		blocking: drift ? "deploy" : "fatal",
@@ -100,15 +169,18 @@ function migrationFailure(
 	applied: readonly string[],
 	remaining: readonly string[],
 ): ApplyMigrationsFailure | null {
-	if (error instanceof CompilerDiagnosticError)
+	if (error instanceof CompilerDiagnosticError) {
+		const diagnostic = schemaDiagnostic(error, migrationIdentity, application);
+		if (!diagnostic) return null;
 		return {
 			status: "failed",
 			exitCode: 4,
 			applied: [...applied],
 			failed: migrationIdentity,
-			diagnostic: schemaDiagnostic(error, migrationIdentity, application),
+			diagnostic,
 			remaining: [...remaining],
 		};
+	}
 	if (error instanceof SQL.PostgresError)
 		return {
 			status: "failed",
