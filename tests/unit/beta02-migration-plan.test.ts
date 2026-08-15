@@ -210,6 +210,134 @@ describe("BETA-02 migration artifacts", () => {
 		);
 	});
 
+	test("freezes addField, ordered alterField, and Relation constraint rename SQL", async () => {
+		const compilation = await compiledFixture;
+		const schema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const messagesFor = (projection: typeof schema) =>
+			projection.collections.find(
+				(collection: { identity: string }) =>
+					collection.identity === "collection:messages",
+			);
+
+		const addTarget = structuredClone(schema);
+		messagesFor(addTarget).fields.push({
+			collation: "questpie.binary",
+			default: null,
+			identity: "collection:messages/field:nickname",
+			nullable: true,
+			path: ["nickname"],
+			postgresName: "nickname",
+			type: { kind: "text", minLength: null, maxLength: null },
+		});
+		messagesFor(addTarget).fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const added = commitDelta(schema, addTarget, "add-nickname", []);
+		expect(added.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"addField",
+		]);
+		expect(added.committed.files["up.sql"]).toBe(
+			`-- questpie-step: ${added.planned.plan.steps[0]?.stepId}\nALTER TABLE "collaboration"."messages" ADD COLUMN "nickname" pg_catalog.text COLLATE pg_catalog."C";\n`,
+		);
+
+		const semanticBase = structuredClone(schema);
+		const semanticTarget = structuredClone(schema);
+		for (const projection of [semanticBase, semanticTarget]) {
+			messagesFor(projection).fields.push({
+				collation: "questpie.binary",
+				default: { kind: "literal", value: "before" },
+				identity: "collection:messages/field:semanticNote",
+				nullable: true,
+				path: ["semanticNote"],
+				postgresName: "semantic_note",
+				type: { kind: "text", minLength: 1, maxLength: null },
+			});
+			messagesFor(projection).fields.sort(
+				(left: { identity: string }, right: { identity: string }) =>
+					left.identity.localeCompare(right.identity),
+			);
+		}
+		const semanticNote = messagesFor(semanticTarget).fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:messages/field:semanticNote",
+		);
+		semanticNote.default = { kind: "literal", value: "after" };
+		semanticNote.type.minLength = 2;
+		const semantic = commitDelta(
+			semanticBase,
+			semanticTarget,
+			"alter-semantic-note",
+			[],
+		);
+		expect(semantic.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"alterField",
+		]);
+		expect(semantic.committed.files["up.sql"]).toBe(
+			`-- questpie-step: ${semantic.planned.plan.steps[0]?.stepId}\nALTER TABLE "collaboration"."messages" ALTER COLUMN "semantic_note" DROP DEFAULT;\nALTER TABLE "collaboration"."messages" ALTER COLUMN "semantic_note" SET DEFAULT 'after';\n`,
+		);
+
+		const orderedBase = structuredClone(schema);
+		const orderedTarget = structuredClone(schema);
+		for (const projection of [orderedBase, orderedTarget]) {
+			messagesFor(projection).fields.push({
+				collation: null,
+				default: { kind: "literal", value: 1 },
+				identity: "collection:messages/field:position",
+				nullable: true,
+				path: ["position"],
+				postgresName: "position",
+				type: { kind: "integer", minimum: null, maximum: null },
+			});
+			messagesFor(projection).fields.sort(
+				(left: { identity: string }, right: { identity: string }) =>
+					left.identity.localeCompare(right.identity),
+			);
+		}
+		const position = messagesFor(orderedTarget).fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:messages/field:position",
+		);
+		position.default = { kind: "literal", value: "2" };
+		position.nullable = false;
+		position.type = { kind: "bigint", minimum: null, maximum: null };
+		const ordered = commitDelta(
+			orderedBase,
+			orderedTarget,
+			"alter-position",
+			[],
+		);
+		expect(ordered.committed.files["up.sql"]).toBe(
+			`-- questpie-step: ${ordered.planned.plan.steps[0]?.stepId}\nALTER TABLE "collaboration"."messages" ALTER COLUMN "position" DROP DEFAULT;\nALTER TABLE "collaboration"."messages" ALTER COLUMN "position" TYPE pg_catalog.int8 USING "position"::pg_catalog.int8;\nALTER TABLE "collaboration"."messages" ALTER COLUMN "position" SET DEFAULT '2';\nUPDATE "collaboration"."messages" SET "position" = '2' WHERE "position" IS NULL;\nALTER TABLE "collaboration"."messages" ALTER COLUMN "position" SET NOT NULL;\n`,
+		);
+
+		const relationTarget = structuredClone(schema);
+		const channels = relationTarget.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:channels",
+		);
+		const space = channels.relations.find(
+			(relation: { identity: string }) =>
+				relation.identity === "collection:channels/relation:space",
+		);
+		const previousName = space.constraintPostgresName;
+		space.constraintPostgresName = "renamed_channel_space_fk";
+		const renamed = commitDelta(
+			schema,
+			relationTarget,
+			"rename-channel-space-constraint",
+			[],
+		);
+		expect(renamed.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"renameRelationConstraint",
+		]);
+		expect(renamed.committed.files["up.sql"]).toBe(
+			`-- questpie-step: ${renamed.planned.plan.steps[0]?.stepId}\nALTER TABLE "collaboration"."channels" RENAME CONSTRAINT "${previousName}" TO "renamed_channel_space_fk";\n`,
+		);
+	});
+
 	test("refuses an extra file in the committed migration directory", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-migration-"));
 		try {

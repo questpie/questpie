@@ -196,7 +196,7 @@ function renderStep(
 			statements.push(
 				`ALTER TABLE ${table} ALTER COLUMN ${column} DROP DEFAULT;`,
 			);
-		if (canonicalBytes(baseField.type) !== canonicalBytes(field.type))
+		if (renderPostgresType(baseField) !== renderPostgresType(field))
 			statements.push(
 				`ALTER TABLE ${table} ALTER COLUMN ${column} TYPE ${renderPostgresType(field)} USING ${column}::${renderPostgresType(field).split(" COLLATE ")[0]};`,
 			);

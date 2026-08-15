@@ -356,7 +356,7 @@ export function destructiveDeltaSteps(
 				const semanticChanged =
 					canonicalBytes(semanticComparable(baseValue, renames)) !==
 					canonicalBytes(semanticComparable(targetValue, []));
-				if (physicalChanged && (derivedRename || key === "fields"))
+				if (physicalChanged)
 					steps.push(
 						step({
 							kind: deltaKind(key, "rename"),
@@ -369,10 +369,7 @@ export function destructiveDeltaSteps(
 							classification: "destructive",
 						}),
 					);
-				if (
-					semanticChanged ||
-					(!derivedRename && key !== "fields" && physicalChanged)
-				) {
+				if (semanticChanged) {
 					if (key === "fields") {
 						const change = generatedInvariants.classify(baseValue, targetValue);
 						if (change?.effect === "alterField")
