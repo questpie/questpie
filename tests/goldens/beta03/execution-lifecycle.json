@@ -3,11 +3,8 @@
 	"version": 1,
 	"scenario": "cancelled-root",
 	"events": [
-		"context:resolve",
 		"create:application:1",
 		"create:execution:1",
-		"callback:start",
-		"callback:abort",
 		"dispose:execution:1",
 		"dispose:application:1"
 	]

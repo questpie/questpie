@@ -1,4 +1,4 @@
-import { beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -6,6 +6,13 @@ import { codec, defineContext, defineService, principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
+import {
+	auditConnection,
+	collaborationContext,
+	executionAudit,
+	executionFixtureState,
+	resetExecutionFixture,
+} from "../../fixtures/collaboration/src/execution";
 import { createApplicationRuntime } from "../../packages/runtime/src";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
@@ -16,64 +23,15 @@ const lifecycleGolden = resolve(
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
 
-let lifecycle: string[];
-let applicationCreates: number;
-let executionCreates: number;
-
-beforeEach(() => {
-	lifecycle = [];
-	applicationCreates = 0;
-	executionCreates = 0;
-});
-
 test("coalesces execution Service creation and cancels in reverse cleanup order", async () => {
+	resetExecutionFixture();
+	const callbackLifecycle: string[] = [];
 	const compilation = await compileApplication({
 		applicationRoot: fixtureRoot,
 	});
 	expect(compilation.generatedFiles["service-projection.json"]).toBeDefined();
 	expect(compilation.generatedFiles["context-projection.json"]).toBeDefined();
 
-	const auditConnection = defineService({
-		name: "audit.connection",
-		lifetime: "application",
-		effect: "read",
-		create: () => {
-			applicationCreates += 1;
-			lifecycle.push(`create:application:${applicationCreates}`);
-			return Object.freeze({ id: applicationCreates });
-		},
-		dispose: (instance) => {
-			lifecycle.push(`dispose:application:${instance.id}`);
-		},
-	});
-	const executionAudit = defineService({
-		name: "audit.execution",
-		lifetime: "execution",
-		effect: "read",
-		dependencies: { connection: auditConnection },
-		create: ({ services }) => {
-			executionCreates += 1;
-			lifecycle.push(`create:execution:${executionCreates}`);
-			return Object.freeze({
-				connectionId: services.connection.id,
-				id: executionCreates,
-			});
-		},
-		dispose: (instance) => {
-			lifecycle.push(`dispose:execution:${instance.id}`);
-		},
-	});
-	const collaborationContext = defineContext({
-		name: "app.context",
-		input: codec.object({ companyId: codec.uuid() }),
-		resolve: ({ input, principal: executionPrincipal }) => {
-			lifecycle.push("context:resolve");
-			return {
-				tenant: { id: input.companyId },
-				values: { principalId: executionPrincipal.id },
-			};
-		},
-	});
 	const runtime = createApplicationRuntime({
 		services: [auditConnection, executionAudit],
 		context: collaborationContext,
@@ -99,7 +57,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 			signal: controller.signal,
 		},
 		async ({ facts, first, second }) => {
-			lifecycle.push("callback:start");
+			callbackLifecycle.push("callback:start");
 			expect(first).toBe(second);
 			expect(first.connectionId).toBe(1);
 			expect(Object.isFrozen(facts)).toBe(true);
@@ -109,7 +67,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 				facts.signal.addEventListener(
 					"abort",
 					() => {
-						lifecycle.push("callback:abort");
+						callbackLifecycle.push("callback:abort");
 						reject(facts.signal.reason);
 					},
 					{ once: true },
@@ -121,34 +79,33 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 	await started;
 	controller.abort(new Error("cancel execution"));
 	await expect(execution).rejects.toThrow("cancel execution");
-	expect({ applicationCreates, executionCreates, lifecycle }).toEqual({
+	expect(executionFixtureState()).toEqual({
 		applicationCreates: 1,
 		executionCreates: 1,
 		lifecycle: [
-			"context:resolve",
 			"create:application:1",
 			"create:execution:1",
-			"callback:start",
-			"callback:abort",
 			"dispose:execution:1",
 		],
 	});
+	expect(callbackLifecycle).toEqual(["callback:start", "callback:abort"]);
 
 	await runtime.close();
-	expect(lifecycle).toEqual([
-		"context:resolve",
-		"create:application:1",
-		"create:execution:1",
-		"callback:start",
-		"callback:abort",
-		"dispose:execution:1",
-		"dispose:application:1",
-	]);
+	expect(executionFixtureState()).toEqual({
+		applicationCreates: 1,
+		executionCreates: 1,
+		lifecycle: [
+			"create:application:1",
+			"create:execution:1",
+			"dispose:execution:1",
+			"dispose:application:1",
+		],
+	});
 	expect({
 		format: "questpie.execution-lifecycle-trace",
 		version: 1,
 		scenario: "cancelled-root",
-		events: lifecycle,
+		events: executionFixtureState().lifecycle,
 	}).toEqual(JSON.parse(await readFile(lifecycleGolden, "utf8")));
 });
 
