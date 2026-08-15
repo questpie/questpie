@@ -2,13 +2,13 @@ import { readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
 import { CompilerDiagnosticError } from "../diagnostic";
+import { verifyCommittedMigration } from "./committed-migration";
 import type {
 	CommittedMigration,
 	CommittedMigrationFilesV1,
 	MigrationPlanV1,
 	SchemaProjectionV1,
-} from "../schema";
-import { verifyCommittedMigration } from "../schema";
+} from "./contracts";
 
 const fileNames = [
 	"migration.json",

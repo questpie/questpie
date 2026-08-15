@@ -2,7 +2,7 @@ import type {
 	MigrationPlanV1,
 	RenameIdentityV1,
 	SchemaProjectionV1,
-} from "../schema";
+} from "./contracts";
 
 export interface PlannedMigration {
 	readonly status: "planned";
