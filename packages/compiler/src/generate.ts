@@ -1,4 +1,5 @@
 import { compareAscii } from "./canonical";
+import { renderCoreDataContract } from "./generated-data";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -40,7 +41,7 @@ function fieldType(field: RecordValue): string {
 					: scalar === "object"
 						? embeddedFieldType(field)
 						: scalar === "array"
-							? `readonly ${embeddedValueType(record(record(field.options).items))}[]`
+							? `ReadonlyArray<${embeddedValueType(record(record(field.options).items))}>`
 							: scalar === "json"
 								? "TaggedJsonValue"
 								: "string";
@@ -119,7 +120,7 @@ function embeddedValueType(value: RecordValue): string {
 				: value.kind === "object"
 					? embeddedObjectType(record(options.properties))
 					: value.kind === "array"
-						? `readonly ${embeddedValueType(record(options.items))}[]`
+						? `ReadonlyArray<${embeddedValueType(record(options.items))}>`
 						: "string";
 	if (value.nullable === true) type = `${type} | null`;
 	return type;
@@ -203,11 +204,15 @@ const factoryNames = [
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
+	data: unknown,
+	schema: unknown,
 ): string {
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `import type { Codec, TaggedJsonValue } from "questpie";
+	return `import type { Codec, DataFieldDescriptor, TaggedJsonValue } from "questpie";
+
+${renderCoreDataContract(data, schema)}
 
 export interface ReadCollection<Row, Key> {
 	get(input: Readonly<{ key: Key }>): Promise<Row | null>;

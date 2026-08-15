@@ -28,6 +28,20 @@ export interface Codec<Value, Kind extends CodecKind = CodecKind> {
 export type CodecValue<ValueCodec> =
 	ValueCodec extends Codec<infer Value> ? Value : never;
 
+export interface DataFieldDescriptor<
+	Identity extends `collection:${string}/field:${string}`,
+	FieldCodec,
+	Value,
+	Nullable extends boolean,
+	HasDefault extends boolean,
+> {
+	readonly identity: Identity;
+	readonly codec: FieldCodec;
+	readonly nullable: Nullable;
+	readonly hasDefault: HasDefault;
+	readonly value?: Value;
+}
+
 type ScalarOptions = Readonly<{ nullable?: boolean }>;
 type FieldBaseOptions = Readonly<{
 	nullable?: boolean;

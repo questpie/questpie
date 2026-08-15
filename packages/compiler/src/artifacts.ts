@@ -221,7 +221,7 @@ export async function createArtifacts(
 		})),
 	};
 	const generated: Record<string, string> = {
-		"app.ts": renderAppContract(input.resources),
+		"app.ts": renderAppContract(input.resources, manifest.data, schema),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),

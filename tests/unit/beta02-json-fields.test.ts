@@ -124,7 +124,7 @@ export const profiles = defineCollection({
 				'readonly "metadata": TaggedJsonValue | null;',
 			);
 			expect(compilation.generatedFiles["app.ts"]).toContain(
-				'readonly "preferences": Readonly<{ readonly "aliases": readonly string[]; readonly "locale": string; readonly "marketingEmail": boolean | null; }>;',
+				'readonly "preferences": Readonly<{ readonly "aliases": ReadonlyArray<string>; readonly "locale": string; readonly "marketingEmail": boolean | null; }>;',
 			);
 
 			const seedDefinition = (preferences: unknown, metadata: unknown) => ({
