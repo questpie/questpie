@@ -1,0 +1,668 @@
+import { createHash } from "node:crypto";
+
+import {
+	createCursorBindingV2,
+	type CursorOrderTerm,
+	type CursorScalar,
+} from "./cursor";
+
+type ScalarValue = boolean | number | string;
+
+export type ScalarCodecV1 =
+	| Readonly<{ kind: "uuid" }>
+	| Readonly<{
+			kind: "text";
+			minLength: number | null;
+			maxLength: number | null;
+			collation: "questpie.binary";
+	  }>
+	| Readonly<{ kind: "boolean" }>
+	| Readonly<{
+			kind: "integer";
+			minimum: number | null;
+			maximum: number | null;
+	  }>
+	| Readonly<{ kind: "bigint"; minimum: string | null; maximum: string | null }>
+	| Readonly<{ kind: "numeric"; precision: number; scale: number }>
+	| Readonly<{ kind: "timestamp"; withTimezone: boolean }>
+	| Readonly<{ kind: "date" }>;
+
+export type QueryParameterV1 =
+	| Readonly<{
+			name: string;
+			kind: "scalar";
+			codec: ScalarCodecV1;
+			nullable: false;
+	  }>
+	| Readonly<{
+			name: string;
+			kind: "list";
+			codec: ScalarCodecV1;
+			maximumItems: number;
+			nullable: false;
+			semantics: "set";
+	  }>
+	| Readonly<{ name: string; kind: "cursor"; nullable: true }>;
+
+export type PostgresQueryParameterV1 =
+	| Readonly<{
+			position: number;
+			kind: "cursorPresent";
+			parameter: string;
+			postgresType: "boolean";
+	  }>
+	| Readonly<{
+			position: number;
+			kind: "cursorValue";
+			parameter: string;
+			field: string;
+			postgresType: string;
+	  }>
+	| Readonly<{
+			position: number;
+			kind: "executionFact";
+			source: string;
+			path: readonly string[];
+			codec: string;
+			postgresType: string;
+	  }>
+	| Readonly<{
+			position: number;
+			kind: "literal";
+			value: null | ScalarValue;
+			codec: string;
+			postgresType: string;
+	  }>
+	| Readonly<{
+			position: number;
+			kind: "queryParameter";
+			parameter: string;
+			postgresType: string;
+	  }>;
+
+type ResultFieldV1 = Readonly<{
+	key: string;
+	field: string;
+	column: string;
+	codec: ScalarCodecV1;
+	nullable: boolean;
+}>;
+
+export type PostgresQueryResultV1 =
+	| (ResultFieldV1 & Readonly<{ kind: "field"; guardColumn?: string }>)
+	| Readonly<{
+			kind: "toOne";
+			key: string;
+			relation: string;
+			presenceColumn: string;
+			fields: readonly ResultFieldV1[];
+	  }>;
+
+export interface PostgresQueryPlanV1 {
+	readonly format: "questpie.postgres-query-plan";
+	readonly version: 1;
+	readonly queryDigest: string;
+	readonly templateDigest: string;
+	readonly policy: string;
+	readonly policyProgramDigest: string;
+	readonly usedExecutionFacts: readonly (
+		| "authorityKind"
+		| "principalId"
+		| "tenantId"
+	)[];
+	readonly admission: "authenticated" | "public" | "system";
+	readonly binding: Readonly<{ parameters: readonly QueryParameterV1[] }>;
+	readonly page: Readonly<{
+		kind: "forwardCursor";
+		first: Readonly<{ parameter: string; minimum: number; maximum: number }>;
+		after: Readonly<{ parameter: string }>;
+		scopeParameters: readonly string[];
+		order: readonly Readonly<{
+			field: string;
+			codec: string;
+			nullable: boolean;
+			withTimezone?: boolean;
+		}>[];
+	}>;
+	readonly sql: string;
+	readonly parameters: readonly PostgresQueryParameterV1[];
+	readonly result: readonly PostgresQueryResultV1[];
+}
+
+export type DataQueryBindingV1 = Readonly<{
+	templateDigest: string;
+	values: readonly Readonly<{
+		parameter: string;
+		value: null | ScalarValue | readonly ScalarValue[];
+	}>[];
+}>;
+
+export type QueryExecutionFacts = Readonly<{
+	authority: Readonly<{ kind: "ordinary" | "system" }>;
+	principal: Readonly<{ id: string }>;
+	tenant: Readonly<{ id: string }>;
+}>;
+
+export type PostgresQueryRow = Readonly<Record<string, unknown>>;
+
+export interface PostgresQueryTransaction {
+	query(
+		sql: string,
+		parameters: readonly unknown[],
+		options: Readonly<{ signal?: AbortSignal }>,
+	): Promise<readonly PostgresQueryRow[]>;
+}
+
+export interface PostgresQueryAdapter {
+	transaction<Result>(
+		options: Readonly<{
+			isolationLevel: "repeatable read";
+			readOnly: true;
+			signal?: AbortSignal;
+		}>,
+		use: (transaction: PostgresQueryTransaction) => Promise<Result>,
+	): Promise<Result>;
+}
+
+export type DataQueryDiagnosticCode =
+	| "QP-DATA-001"
+	| "QP-DATA-006"
+	| "QP-DATA-012"
+	| "QP-DATA-014";
+
+const diagnosticClasses = {
+	"QP-DATA-001": "invalidScalarValue",
+	"QP-DATA-006": "invalidSetOperand",
+	"QP-DATA-012": "executionLimitExceeded",
+	"QP-DATA-014": "invalidParameterReference",
+} as const;
+
+export class DataQueryExecutionError extends Error {
+	readonly blocking = "none" as const;
+	readonly diagnosticClass: (typeof diagnosticClasses)[DataQueryDiagnosticCode];
+
+	constructor(
+		readonly code: DataQueryDiagnosticCode,
+		readonly phase: "bind" | "execute",
+	) {
+		const diagnosticClass = diagnosticClasses[code];
+		super(diagnosticClass);
+		this.name = "DataQueryExecutionError";
+		this.diagnosticClass = diagnosticClass;
+	}
+}
+
+export type DataQueryPage = Readonly<{
+	nodes: readonly Readonly<Record<string, unknown>>[];
+	pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean }>;
+}>;
+
+const digestPattern = /^[0-9a-f]{64}$/;
+const uuidPattern =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function hasLoneUnicodeSurrogate(value: string): boolean {
+	for (let index = 0; index < value.length; index += 1) {
+		const codeUnit = value.charCodeAt(index);
+		if (codeUnit >= 0xd800 && codeUnit <= 0xdbff) {
+			const next = value.charCodeAt(index + 1);
+			if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+			index += 1;
+			continue;
+		}
+		if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) return true;
+	}
+	return false;
+}
+
+function validTimestamp(value: string, withTimezone: boolean): boolean {
+	const pattern = withTimezone
+		? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+		: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
+	if (!pattern.test(value)) return false;
+	const comparable = withTimezone ? value : `${value}Z`;
+	return new Date(comparable).toISOString() === comparable;
+}
+
+function validScalar(
+	value: unknown,
+	codec: ScalarCodecV1,
+): value is ScalarValue {
+	if (codec.kind === "boolean") return typeof value === "boolean";
+	if (codec.kind === "integer")
+		return (
+			typeof value === "number" &&
+			Number.isSafeInteger(value) &&
+			!Object.is(value, -0) &&
+			value >= -2_147_483_648 &&
+			value <= 2_147_483_647 &&
+			(codec.minimum === null || value >= codec.minimum) &&
+			(codec.maximum === null || value <= codec.maximum)
+		);
+	if (typeof value !== "string" || hasLoneUnicodeSurrogate(value)) return false;
+	if (codec.kind === "uuid") return uuidPattern.test(value);
+	if (codec.kind === "text") {
+		const length = Array.from(value).length;
+		return (
+			value.normalize("NFC") === value &&
+			(codec.minLength === null || length >= codec.minLength) &&
+			(codec.maxLength === null || length <= codec.maxLength)
+		);
+	}
+	if (codec.kind === "bigint") {
+		if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return false;
+		const parsed = BigInt(value);
+		return (
+			parsed >= -9_223_372_036_854_775_808n &&
+			parsed <= 9_223_372_036_854_775_807n &&
+			(codec.minimum === null || parsed >= BigInt(codec.minimum)) &&
+			(codec.maximum === null || parsed <= BigInt(codec.maximum))
+		);
+	}
+	if (codec.kind === "numeric") {
+		const pattern =
+			codec.scale === 0
+				? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/
+				: new RegExp(
+						`^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\.[0-9]{${codec.scale}}$`,
+					);
+		return (
+			pattern.test(value) &&
+			value.replace(/[-.]/g, "").length <= codec.precision
+		);
+	}
+	if (codec.kind === "timestamp")
+		return validTimestamp(value, codec.withTimezone);
+	if (codec.kind === "date")
+		return (
+			/^\d{4}-\d{2}-\d{2}$/.test(value) &&
+			new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
+		);
+	return false;
+}
+
+function quote(value: string): string {
+	if (hasLoneUnicodeSurrogate(value)) throw new TypeError("invalid Unicode");
+	return JSON.stringify(value);
+}
+
+function canonicalScalar(value: ScalarValue): string {
+	if (
+		typeof value === "number" &&
+		(!Number.isFinite(value) || Object.is(value, -0))
+	)
+		throw new TypeError("invalid number");
+	return typeof value === "string" ? quote(value) : JSON.stringify(value);
+}
+
+function canonicalValue(
+	value: null | ScalarValue | readonly ScalarValue[],
+): string {
+	if (value === null) return "null";
+	if (Array.isArray(value)) return `[${value.map(canonicalScalar).join(",")}]`;
+	return canonicalScalar(value as ScalarValue);
+}
+
+function sha256(domain: string, bytes: string): string {
+	return createHash("sha256").update(`${domain}\0`).update(bytes).digest("hex");
+}
+
+function dataQueryScopeBytes(
+	templateDigest: string,
+	parameterNames: readonly string[],
+	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
+): string {
+	const entries = parameterNames.map((parameter) => {
+		const value = values.get(parameter);
+		if (value === undefined)
+			throw new TypeError(
+				`invalid compiled Query scope parameter ${parameter}`,
+			);
+		return `{"parameter":${quote(parameter)},"value":${canonicalValue(value)}}`;
+	});
+	return `{"format":"questpie.data-query-scope","templateDigest":${quote(templateDigest)},"values":[${entries.join(",")}],"version":1}\n`;
+}
+
+function bindError(code: DataQueryDiagnosticCode): never {
+	throw new DataQueryExecutionError(code, "bind");
+}
+
+function normalizeSet(
+	value: unknown,
+	parameter: Extract<QueryParameterV1, { kind: "list" }>,
+): readonly ScalarValue[] {
+	if (!Array.isArray(value)) bindError("QP-DATA-006");
+	if (value.length > parameter.maximumItems) bindError("QP-DATA-006");
+	const unique = new Map<string, ScalarValue>();
+	for (const item of value) {
+		if (!validScalar(item, parameter.codec)) bindError("QP-DATA-006");
+		unique.set(canonicalScalar(item), item);
+	}
+	return [...unique.entries()]
+		.sort(([left], [right]) =>
+			Buffer.compare(Buffer.from(left), Buffer.from(right)),
+		)
+		.map(([, item]) => item);
+}
+
+function normalizeBinding(
+	plan: PostgresQueryPlanV1,
+	binding: DataQueryBindingV1,
+	maximumPageSize: number,
+): ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]> {
+	if (
+		binding.templateDigest !== plan.templateDigest ||
+		!Array.isArray(binding.values)
+	)
+		bindError("QP-DATA-014");
+	const supplied = new Map<string, unknown>();
+	for (const entry of binding.values) {
+		if (
+			!entry ||
+			typeof entry !== "object" ||
+			typeof entry.parameter !== "string" ||
+			supplied.has(entry.parameter)
+		)
+			bindError("QP-DATA-014");
+		supplied.set(entry.parameter, entry.value);
+	}
+	if (supplied.size !== plan.binding.parameters.length)
+		bindError("QP-DATA-014");
+	const normalized = new Map<
+		string,
+		null | ScalarValue | readonly ScalarValue[]
+	>();
+	for (const parameter of plan.binding.parameters) {
+		if (!supplied.has(parameter.name)) bindError("QP-DATA-014");
+		const value = supplied.get(parameter.name);
+		if (parameter.kind === "cursor") {
+			if (value !== null && typeof value !== "string") bindError("QP-DATA-001");
+			normalized.set(parameter.name, value as string | null);
+			continue;
+		}
+		if (parameter.kind === "list") {
+			normalized.set(parameter.name, normalizeSet(value, parameter));
+			continue;
+		}
+		if (!validScalar(value, parameter.codec)) bindError("QP-DATA-001");
+		normalized.set(parameter.name, value);
+	}
+	const first = normalized.get(plan.page.first.parameter);
+	if (
+		typeof first !== "number" ||
+		first < plan.page.first.minimum ||
+		first > plan.page.first.maximum
+	)
+		bindError("QP-DATA-001");
+	if (first > maximumPageSize) bindError("QP-DATA-012");
+	return normalized;
+}
+
+function executionFact(
+	parameter: Extract<PostgresQueryParameterV1, { kind: "executionFact" }>,
+	facts: QueryExecutionFacts,
+): ScalarValue {
+	const path = parameter.path.join(".");
+	if (parameter.source === "authority" && path === "kind")
+		return facts.authority.kind;
+	if (parameter.source === "principal" && path === "id")
+		return facts.principal.id;
+	if (parameter.source === "tenant" && path === "id") return facts.tenant.id;
+	throw new TypeError(
+		`invalid compiled execution fact ${parameter.source}.${path}`,
+	);
+}
+
+function sparseExecutionFacts(
+	plan: PostgresQueryPlanV1,
+	facts: QueryExecutionFacts,
+) {
+	const expected = new Set<string>();
+	for (const parameter of plan.parameters) {
+		if (parameter.kind !== "executionFact") continue;
+		const path = parameter.path.join(".");
+		if (parameter.source === "authority" && path === "kind")
+			expected.add("authorityKind");
+		else if (parameter.source === "principal" && path === "id")
+			expected.add("principalId");
+		else if (parameter.source === "tenant" && path === "id")
+			expected.add("tenantId");
+		else
+			throw new TypeError(
+				`invalid compiled execution fact ${parameter.source}.${path}`,
+			);
+	}
+	if (
+		plan.usedExecutionFacts.length !== expected.size ||
+		plan.usedExecutionFacts.some((key) => !expected.has(key))
+	)
+		throw new TypeError("invalid compiled Policy cursor fact scope");
+	const result: {
+		authorityKind?: "ordinary" | "system";
+		principalId?: string;
+		tenantId?: string;
+	} = {};
+	for (const key of plan.usedExecutionFacts) {
+		if (key === "authorityKind") result.authorityKind = facts.authority.kind;
+		else if (key === "principalId") result.principalId = facts.principal.id;
+		else if (key === "tenantId") result.tenantId = facts.tenant.id;
+		else
+			throw new TypeError(`invalid compiled execution fact ${key as string}`);
+	}
+	return result;
+}
+
+function positionalParameters(
+	plan: PostgresQueryPlanV1,
+	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
+	facts: QueryExecutionFacts,
+	boundary: readonly CursorScalar[] | null,
+): readonly unknown[] {
+	const orderIndex = new Map(
+		plan.page.order.map((term, index) => [term.field, index] as const),
+	);
+	return plan.parameters.map((parameter, index) => {
+		if (parameter.position !== index + 1)
+			throw new TypeError("invalid compiled PostgreSQL parameter positions");
+		if (parameter.kind === "literal") return parameter.value;
+		if (parameter.kind === "executionFact")
+			return executionFact(parameter, facts);
+		if (parameter.kind === "queryParameter") {
+			const value = values.get(parameter.parameter);
+			if (value === undefined)
+				throw new TypeError("invalid compiled Query parameter reference");
+			return value;
+		}
+		if (parameter.parameter !== plan.page.after.parameter)
+			throw new TypeError("invalid compiled cursor parameter reference");
+		if (parameter.kind === "cursorPresent") return boundary !== null;
+		const termIndex = orderIndex.get(parameter.field);
+		if (termIndex === undefined)
+			throw new TypeError("invalid compiled cursor Field reference");
+		return boundary?.[termIndex] ?? null;
+	});
+}
+
+function decodeField(
+	row: PostgresQueryRow,
+	field: ResultFieldV1,
+): ScalarValue | null {
+	const value = row[field.column];
+	if (value === null && field.nullable) return null;
+	if (!validScalar(value, field.codec))
+		throw new DataQueryExecutionError("QP-DATA-001", "execute");
+	return value;
+}
+
+function decodeRow(
+	row: PostgresQueryRow,
+	result: readonly PostgresQueryResultV1[],
+): Readonly<Record<string, unknown>> {
+	const output: Record<string, unknown> = {};
+	for (const item of result) {
+		if (item.kind === "field") {
+			if (item.guardColumn !== undefined) {
+				const guard = row[item.guardColumn];
+				if (guard === false) continue;
+				if (guard !== true)
+					throw new DataQueryExecutionError("QP-DATA-001", "execute");
+			}
+			output[item.key] = decodeField(row, item);
+			continue;
+		}
+		const present = row[item.presenceColumn];
+		if (present === null) {
+			output[item.key] = null;
+			continue;
+		}
+		if (present !== true)
+			throw new DataQueryExecutionError("QP-DATA-001", "execute");
+		const related: Record<string, unknown> = {};
+		for (const field of item.fields)
+			related[field.key] = decodeField(row, field);
+		output[item.key] = related;
+	}
+	return Object.freeze(output);
+}
+
+function orderTerms(plan: PostgresQueryPlanV1): readonly CursorOrderTerm[] {
+	return plan.page.order.map((term) => {
+		const selected = plan.result.find(
+			(item): item is Extract<PostgresQueryResultV1, { kind: "field" }> =>
+				item.kind === "field" && item.field === term.field,
+		);
+		if (
+			!selected ||
+			selected.guardColumn !== undefined ||
+			selected.codec.kind !== term.codec ||
+			selected.nullable !== term.nullable ||
+			!term.field.startsWith("collection:") ||
+			!term.field.includes("/field:") ||
+			![
+				"bigint",
+				"boolean",
+				"date",
+				"integer",
+				"numeric",
+				"text",
+				"timestamp",
+				"uuid",
+			].includes(term.codec)
+		)
+			throw new TypeError("invalid compiled cursor order");
+		const codec = selected.codec;
+		return {
+			field: term.field as CursorOrderTerm["field"],
+			codec: term.codec as CursorOrderTerm["codec"],
+			nullable: term.nullable,
+			...(codec.kind === "timestamp"
+				? {
+						withTimezone: codec.withTimezone,
+					}
+				: codec.kind === "integer" || codec.kind === "bigint"
+					? { minimum: codec.minimum, maximum: codec.maximum }
+					: codec.kind === "numeric"
+						? { precision: codec.precision, scale: codec.scale }
+						: {}),
+		};
+	});
+}
+
+function cursorValues(
+	plan: PostgresQueryPlanV1,
+	row: PostgresQueryRow,
+): readonly CursorScalar[] {
+	return plan.page.order.map((term) => {
+		const field = plan.result.find(
+			(item): item is Extract<PostgresQueryResultV1, { kind: "field" }> =>
+				item.kind === "field" && item.field === term.field,
+		);
+		if (!field || field.guardColumn !== undefined)
+			throw new TypeError("invalid compiled cursor result Field");
+		return decodeField(row, field);
+	});
+}
+
+export async function executePostgresQuery(
+	input: Readonly<{
+		plan: PostgresQueryPlanV1;
+		binding: DataQueryBindingV1;
+		executionFacts: QueryExecutionFacts;
+		adapter: PostgresQueryAdapter;
+		maximumPageSize?: number;
+		signal?: AbortSignal;
+	}>,
+): Promise<DataQueryPage> {
+	input.signal?.throwIfAborted();
+	const maximumPageSize = input.maximumPageSize ?? 100;
+	if (!Number.isSafeInteger(maximumPageSize) || maximumPageSize < 1)
+		throw new TypeError("maximumPageSize must be a positive integer");
+	if (
+		input.plan.format !== "questpie.postgres-query-plan" ||
+		input.plan.version !== 1 ||
+		!digestPattern.test(input.plan.templateDigest) ||
+		!digestPattern.test(input.plan.policyProgramDigest) ||
+		input.plan.page.kind !== "forwardCursor" ||
+		input.plan.page.order.length === 0 ||
+		typeof input.plan.sql !== "string"
+	)
+		throw new TypeError("invalid compiled PostgreSQL Query plan");
+	const values = normalizeBinding(input.plan, input.binding, maximumPageSize);
+	const scopeBytes = dataQueryScopeBytes(
+		input.plan.templateDigest,
+		input.plan.page.scopeParameters,
+		values,
+	);
+	const cursor = createCursorBindingV2({
+		templateDigest: input.plan.templateDigest,
+		scopeDigest: sha256("questpie-data-query-scope-v1", scopeBytes),
+		policyProgramDigest: input.plan.policyProgramDigest,
+		usedExecutionFacts: sparseExecutionFacts(input.plan, input.executionFacts),
+		order: orderTerms(input.plan),
+	});
+	const after = values.get(input.plan.page.after.parameter);
+	if (after !== null && typeof after !== "string")
+		throw new TypeError("invalid compiled cursor binding");
+	return cursor.execute(after, async (boundary) => {
+		input.signal?.throwIfAborted();
+		const parameters = positionalParameters(
+			input.plan,
+			values,
+			input.executionFacts,
+			boundary,
+		);
+		const rows = await input.adapter.transaction(
+			{
+				isolationLevel: "repeatable read",
+				readOnly: true,
+				signal: input.signal,
+			},
+			async (transaction) => {
+				input.signal?.throwIfAborted();
+				const result = await transaction.query(input.plan.sql, parameters, {
+					signal: input.signal,
+				});
+				input.signal?.throwIfAborted();
+				return result;
+			},
+		);
+		input.signal?.throwIfAborted();
+		const first = values.get(input.plan.page.first.parameter);
+		if (typeof first !== "number")
+			throw new TypeError("invalid compiled page binding");
+		if (rows.length > first + 1)
+			throw new TypeError(
+				"PostgreSQL Query adapter exceeded compiled row bound",
+			);
+		const visibleRows = rows.slice(0, first);
+		const nodes = visibleRows.map((row) => decodeRow(row, input.plan.result));
+		const last = visibleRows.at(-1);
+		return Object.freeze({
+			nodes: Object.freeze(nodes),
+			pageInfo: Object.freeze({
+				endCursor: last ? cursor.encode(cursorValues(input.plan, last)) : null,
+				hasNextPage: rows.length > first,
+			}),
+		});
+	});
+}

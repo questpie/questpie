@@ -3,9 +3,11 @@ import { createHash } from "node:crypto";
 export type CursorScalar = boolean | number | string | null;
 
 export type CursorScalarCodec =
+	| "bigint"
 	| "boolean"
 	| "date"
 	| "integer"
+	| "numeric"
 	| "text"
 	| "timestamp"
 	| "uuid";
@@ -15,6 +17,10 @@ export type CursorOrderTerm = Readonly<{
 	codec: CursorScalarCodec;
 	nullable: boolean;
 	withTimezone?: boolean;
+	minimum?: number | string | null;
+	maximum?: number | string | null;
+	precision?: number;
+	scale?: number;
 }>;
 
 export type UsedExecutionFacts = Readonly<{
@@ -22,6 +28,32 @@ export type UsedExecutionFacts = Readonly<{
 	principalId?: string;
 	tenantId?: string;
 }>;
+
+export type DataCursorDiagnosticCode =
+	| "QP-DATA-010"
+	| "QP-DATA-011"
+	| "QP-DATA-013";
+
+export class DataCursorBindingError extends Error {
+	readonly blocking = "none" as const;
+	readonly phase = "bind" as const;
+	readonly diagnosticClass:
+		| "cursorScopeMismatch"
+		| "cursorTemplateMismatch"
+		| "invalidCursor";
+
+	constructor(readonly code: DataCursorDiagnosticCode) {
+		const diagnosticClass =
+			code === "QP-DATA-010"
+				? "invalidCursor"
+				: code === "QP-DATA-011"
+					? "cursorTemplateMismatch"
+					: "cursorScopeMismatch";
+		super(diagnosticClass);
+		this.name = "DataCursorBindingError";
+		this.diagnosticClass = diagnosticClass;
+	}
+}
 
 type PolicyCursorScopeV1 = Readonly<{
 	format: "questpie.policy-cursor-scope";
@@ -138,10 +170,33 @@ function validScalar(
 		return (
 			typeof value === "number" &&
 			Number.isSafeInteger(value) &&
-			!Object.is(value, -0)
+			!Object.is(value, -0) &&
+			(typeof term.minimum !== "number" || value >= term.minimum) &&
+			(typeof term.maximum !== "number" || value <= term.maximum)
 		);
 	if (typeof value !== "string" || hasLoneUnicodeSurrogate(value)) return false;
 	if (term.codec === "uuid") return uuidPattern.test(value);
+	if (term.codec === "bigint") {
+		if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return false;
+		const parsed = BigInt(value);
+		return (
+			parsed >= -9_223_372_036_854_775_808n &&
+			parsed <= 9_223_372_036_854_775_807n &&
+			(typeof term.minimum !== "string" || parsed >= BigInt(term.minimum)) &&
+			(typeof term.maximum !== "string" || parsed <= BigInt(term.maximum))
+		);
+	}
+	if (term.codec === "numeric") {
+		if (typeof term.precision !== "number" || typeof term.scale !== "number")
+			return false;
+		const pattern =
+			term.scale === 0
+				? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/
+				: new RegExp(`^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\.[0-9]{${term.scale}}$`);
+		return (
+			pattern.test(value) && value.replace(/[-.]/g, "").length <= term.precision
+		);
+	}
 	if (term.codec === "date") {
 		if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
 		return (
@@ -333,5 +388,45 @@ export function createCursorCodecV2(
 		policyScopeDigest,
 		decode,
 		encode,
+	});
+}
+
+export function createCursorBindingV2(
+	input: Readonly<{
+		templateDigest: string;
+		scopeDigest: string;
+		policyProgramDigest: string;
+		usedExecutionFacts: UsedExecutionFacts;
+		order: readonly CursorOrderTerm[];
+	}>,
+): Readonly<{
+	policyScopeBytes: string;
+	policyScopeDigest: string;
+	encode(values: readonly CursorScalar[]): string;
+	execute<Result>(
+		after: string | null,
+		adapter: (boundary: readonly CursorScalar[] | null) => Result,
+	): Result;
+}> {
+	const codec = createCursorCodecV2(input);
+	return Object.freeze({
+		policyScopeBytes: codec.policyScopeBytes,
+		policyScopeDigest: codec.policyScopeDigest,
+		encode: codec.encode,
+		execute: <Result>(
+			after: string | null,
+			adapter: (boundary: readonly CursorScalar[] | null) => Result,
+		): Result => {
+			if (after === null) return adapter(null);
+			const decoded = codec.decode(after);
+			if ("kind" in decoded) {
+				if (decoded.kind === "templateMismatch")
+					throw new DataCursorBindingError("QP-DATA-011");
+				if (decoded.kind === "scopeMismatch")
+					throw new DataCursorBindingError("QP-DATA-013");
+				throw new DataCursorBindingError("QP-DATA-010");
+			}
+			return adapter(decoded);
+		},
 	});
 }
