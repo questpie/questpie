@@ -72,7 +72,7 @@ export function projectDataRelations(
 					if (!relationMembers.has(inverseOf))
 						throw new CompilerDiagnosticError(
 							"QP-COMPOSE-004",
-							"unresolvedReference",
+							"unknownReference",
 							`${identity} references missing ${inverseOf}`,
 						);
 					if (!owning)

@@ -98,7 +98,7 @@ function validateServiceGraph(resources: readonly NormalizedResource[]): void {
 			if (!target)
 				throw new CompilerDiagnosticError(
 					"QP-COMPOSE-004",
-					"unresolvedReference",
+					"unknownReference",
 					`${service.identity} references unknown ${dependency.identity}`,
 				);
 			if (

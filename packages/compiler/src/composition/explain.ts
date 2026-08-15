@@ -38,7 +38,7 @@ export function explainExecutionComposition(
 		if (!origin)
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-004",
-				"unresolvedReference",
+				"unknownReference",
 				`${identity} has no Origin Map entry`,
 			);
 		return { ...resource, origin };

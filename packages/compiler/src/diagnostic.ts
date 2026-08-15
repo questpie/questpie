@@ -42,7 +42,7 @@ export type CompositionDiagnosticCode =
 
 const diagnosticClassesByCode = {
 	"QP-COMPOSE-002": ["duplicateResourceIdentity"],
-	"QP-COMPOSE-004": ["unresolvedReference"],
+	"QP-COMPOSE-004": ["unknownReference"],
 	"QP-COMPOSE-005": ["packageCompositionNotActivated"],
 	"QP-COMPOSE-006": ["invalidPackageManifest"],
 	"QP-COMPOSE-008": ["packageInventoryChanged"],
