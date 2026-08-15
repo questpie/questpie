@@ -109,7 +109,7 @@ handlerOutput.nodes[0]!.createdAt satisfies Date;
 handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
-	const app = await createApp({ postgres: { url: ["postgres:", "//localhost/questpie"].join("") } });
+	const app = await createApp({ postgres: { url: "postgres://localhost/questpie" } });
 	const response: Response = await app.fetch(new Request("http://runtime.test/_questpie/operation"));
 	const page = await app.execution(
 		{
