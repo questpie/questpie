@@ -138,8 +138,7 @@ function applicationEntry(
 import { createRuntimeApplication, executePostgresQuery } from "questpie:runtime";
 import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
-import { digest } from "questpie:compiler-canonical";
-import { fingerprint } from "questpie:schema-fingerprint";
+import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
 ${imports.join("\n")}
 ${structuralImports.join("\n")}
 
@@ -195,32 +194,12 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap,
 			resolvePrincipal: readIngressPrincipal,
-			verifyReadiness: async (artifacts) => {
-				postgresController.signal.throwIfAborted();
-				const applicationName = schemaProjection.application.name;
-				const postgresSchema = schemaProjection.application.postgresSchema;
-				const bindings = await sql.unsafe(
-					'SELECT application_name AS "applicationName", postgres_schema AS "postgresSchema" FROM questpie_internal.application_bindings WHERE application_name = $1 OR postgres_schema = $2 ORDER BY application_name',
-					[applicationName, postgresSchema],
-				);
-				if (bindings.length !== 1 || bindings[0].applicationName !== applicationName || bindings[0].postgresSchema !== postgresSchema)
-					throw new TypeError("PostgreSQL Application binding does not match Runtime Build");
-				const receipts = await sql.unsafe(
-					'SELECT migration_identity AS identity, sequence, parent_identity AS parent, checksum FROM questpie_internal.schema_migration_receipts WHERE application_name = $1 ORDER BY sequence',
-					[applicationName],
-				);
-				if (receipts.length !== committedMigrations.migrations.length || receipts.some((receipt, index) => {
-					const expected = committedMigrations.migrations[index];
-					return !expected || receipt.identity !== expected.identity || receipt.sequence !== expected.sequence || receipt.parent !== expected.parent || receipt.checksum !== expected.checksum;
-				})) throw new TypeError("PostgreSQL migration history does not match Runtime Build");
-				if ((receipts.at(-1)?.identity ?? null) !== artifacts.runtimeBuild.migrationHead)
-					throw new TypeError("PostgreSQL migration head does not match Runtime Build");
-				const liveFingerprint = await fingerprint(sql, schemaProjection);
-				const liveFingerprintDigest = digest("questpie-schema-fingerprint-v1", liveFingerprint.comparable);
-				if (liveFingerprintDigest !== artifacts.runtimeBuild.schemaFingerprint)
-					throw new TypeError("PostgreSQL Schema Fingerprint does not match Runtime Build");
-				postgresController.signal.throwIfAborted();
-			},
+			verifyReadiness: (artifacts) => verifyPostgresRuntimeReadiness({
+				sql,
+				schema: schemaProjection,
+				committedMigrations,
+				expected: artifacts.runtimeBuild,
+			}),
 			project: ({ facts }) => Object.freeze({
 				data: Object.freeze({
 					run: (definition, operationInput) => {
@@ -280,8 +259,7 @@ export async function renderApplicationBundle(
 		queryProjection: unknown;
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
-		compilerCanonicalEntry: string;
-		fingerprintEntry: string;
+		readinessEntry: string;
 		runtimeEntry: string;
 		runtimeBootstrapEntry: string;
 		runtimeIngressEntry: string;
@@ -340,14 +318,9 @@ export async function renderApplicationBundle(
 					builder.onResolve({ filter: /^questpie:runtime$/ }, () => ({
 						path: input.runtimeEntry,
 					}));
-					builder.onResolve(
-						{ filter: /^questpie:compiler-canonical$/ },
-						() => ({ path: input.compilerCanonicalEntry }),
-					);
-					builder.onResolve(
-						{ filter: /^questpie:schema-fingerprint$/ },
-						() => ({ path: input.fingerprintEntry }),
-					);
+					builder.onResolve({ filter: /^questpie:runtime-readiness$/ }, () => ({
+						path: input.readinessEntry,
+					}));
 					builder.onResolve({ filter: /^questpie:runtime-bootstrap$/ }, () => ({
 						path: input.runtimeBootstrapEntry,
 					}));
