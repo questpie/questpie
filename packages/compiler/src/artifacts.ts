@@ -247,6 +247,7 @@ export async function createArtifacts(
 			manifest.data,
 			schema,
 			input.configuration.source.root,
+			relational,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),

@@ -207,15 +207,18 @@ export function renderAppContract(
 	data: unknown,
 	schema: unknown,
 	sourceRoot: string,
+	relational: unknown,
 ): string {
-	const sourceModule = (resource: NormalizedResource): string => {
+	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
 			sourceRoot === "." ? "" : `${sourceRoot.replace(/\/$/, "")}/`;
-		const relativePath = resource.origin.logicalPath.startsWith(prefix)
-			? resource.origin.logicalPath.slice(prefix.length)
-			: resource.origin.logicalPath;
+		const relativePath = logicalPath.startsWith(prefix)
+			? logicalPath.slice(prefix.length)
+			: logicalPath;
 		return `#questpie/source/${relativePath}`;
 	};
+	const sourceModule = (resource: NormalizedResource): string =>
+		sourceModulePath(resource.origin.logicalPath);
 	const definitionType = (resource: NormalizedResource): string =>
 		`(typeof import(${JSON.stringify(sourceModule(resource))}))[${JSON.stringify(resource.origin.exportName)}]`;
 	const context = resources.find(
@@ -236,6 +239,71 @@ export function renderAppContract(
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
+	const relationalProjection = record(relational);
+	const policies = (record(relationalProjection.policy).policies ??
+		[]) as readonly unknown[];
+	const queries = (record(relationalProjection.query).queries ??
+		[]) as readonly unknown[];
+	const policiesByIdentity = new Map(
+		policies.map((entry) => {
+			const program = record(record(entry).program);
+			return [String(program.identity), program] as const;
+		}),
+	);
+	const fieldByIdentity = (identity: string): RecordValue => {
+		const marker = "/field:";
+		const offset = identity.indexOf(marker);
+		const collectionIdentity = identity.slice(0, offset);
+		const path = identity.slice(offset + marker.length).split("/");
+		const resource = resources.find(
+			(candidate) => candidate.identity === collectionIdentity,
+		);
+		const field = resource
+			? fieldAtPath(collectionFields(resource), path)
+			: undefined;
+		if (!field) throw new TypeError(`unknown selected Field ${identity}`);
+		return field;
+	};
+	const selectedOutputPaths = (policyIdentity: string): ReadonlySet<string> => {
+		const program = policiesByIdentity.get(policyIdentity);
+		if (!program) return new Set();
+		const fields = program.fields ? record(program.fields) : undefined;
+		const rules = (fields?.selectedOutput ?? []) as readonly unknown[];
+		return new Set(
+			rules.map((rule) => {
+				const path = record(rule).path as readonly unknown[];
+				return path.map(String).join("/");
+			}),
+		);
+	};
+	const renderSelection = (
+		selection: readonly unknown[],
+		optionalPaths: ReadonlySet<string>,
+	): string =>
+		`{ ${selection
+			.map((rawSelection) => {
+				const selected = record(rawSelection);
+				const key = JSON.stringify(String(selected.key));
+				if (selected.kind === "field") {
+					const identity = String(selected.field);
+					const path = identity.slice(identity.indexOf("/field:") + 7);
+					return `${key}${optionalPaths.has(path) ? "?" : ""}: ${fieldType(fieldByIdentity(identity))};`;
+				}
+				if (selected.kind !== "toOne")
+					throw new TypeError("unsupported generated Query selection");
+				return `${key}: ${renderSelection(selected.select as readonly unknown[], new Set())} | null;`;
+			})
+			.join(" ")} }`;
+	const queryRuns = queries
+		.map((rawQuery) => {
+			const query = record(rawQuery);
+			const origin = record(query.origin);
+			const template = record(query.template);
+			const definition = `(typeof import(${JSON.stringify(sourceModulePath(String(origin.path)))}))[${JSON.stringify(String(origin.exportName))}]`;
+			const result = `Readonly<{ nodes: Array<${renderSelection(template.select as readonly unknown[], selectedOutputPaths(String(query.policy)))}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>`;
+			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
+		})
+		.join("\n\t");
 	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
@@ -246,6 +314,7 @@ export interface ReadCollection<Row, Key> {
 
 export interface GeneratedData {
 	${renderData(resources)}
+	${queryRuns}
 }
 
 export interface GeneratedQueries {
