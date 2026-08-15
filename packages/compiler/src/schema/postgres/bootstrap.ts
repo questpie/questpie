@@ -274,7 +274,54 @@ const bootstrapIndexes = [
 	],
 ] as const;
 
-async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
+type CatalogColumn = readonly [
+	table: string,
+	name: string,
+	type: string,
+	notNull: boolean,
+];
+
+type CatalogConstraint = readonly [
+	table: string,
+	name: string,
+	type: string,
+	definition: string,
+];
+
+type CatalogIndex = readonly [
+	table: string,
+	name: string,
+	method: string,
+	unique: boolean,
+	primary: boolean,
+	definition: string,
+];
+
+export type InternalProtocolCatalog = Readonly<{
+	tables: readonly string[];
+	columns: readonly CatalogColumn[];
+	constraints: readonly CatalogConstraint[];
+	indexes: readonly CatalogIndex[];
+}>;
+
+export const bootstrapCatalogV1: InternalProtocolCatalog = Object.freeze({
+	tables: Object.freeze([
+		"application_bindings",
+		"protocol",
+		"schema_migration_receipts",
+		"seed_attempt_events",
+		"seed_receipts",
+	]),
+	columns: bootstrapColumns,
+	constraints: bootstrapConstraints,
+	indexes: bootstrapIndexes,
+});
+
+export async function verifyInternalProtocolCatalog(
+	sql: SQL,
+	catalog: InternalProtocolCatalog,
+	expectedProtocol: Readonly<{ version: number; checksum: string }>,
+): Promise<void> {
 	const [namespace] = await sql<
 		{
 			publicPrivileges: boolean;
@@ -387,13 +434,6 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		where n.nspname = 'questpie_internal'
 		order by t.relname, i.relname
 	`;
-	const expectedTables = [
-		"application_bindings",
-		"protocol",
-		"schema_migration_receipts",
-		"seed_attempt_events",
-		"seed_receipts",
-	];
 	const notNullColumns = columns
 		.filter((column) => column.notNull)
 		.map((column) => [column.table, column.name])
@@ -421,7 +461,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		!namespace ||
 		namespace.publicPrivileges ||
 		canonicalBytes(tables.map((table) => table.name)) !==
-			canonicalBytes(expectedTables) ||
+			canonicalBytes(catalog.tables) ||
 		tables.some((table) => !table.ownerMatches || table.publicPrivileges) ||
 		!validNotNullConstraints ||
 		canonicalBytes(
@@ -431,7 +471,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 				column.type,
 				column.notNull,
 			]),
-		) !== canonicalBytes(bootstrapColumns) ||
+		) !== canonicalBytes(catalog.columns) ||
 		canonicalBytes(
 			constraints.map((constraint) => [
 				constraint.table,
@@ -439,7 +479,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 				constraint.type,
 				constraint.definition,
 			]),
-		) !== canonicalBytes(bootstrapConstraints) ||
+		) !== canonicalBytes(catalog.constraints) ||
 		indexes.some((index) => !index.ownerMatches) ||
 		canonicalBytes(
 			indexes.map((index) => [
@@ -450,7 +490,7 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 				index.primary,
 				index.definition,
 			]),
-		) !== canonicalBytes(bootstrapIndexes)
+		) !== canonicalBytes(catalog.indexes)
 	)
 		return fail(
 			"QP-SCHEMA-023",
@@ -462,12 +502,22 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		from questpie_internal.protocol
 		where singleton = true
 	`;
-	if (protocol?.version !== 1 || protocol.checksum !== bootstrapChecksum)
+	if (
+		protocol?.version !== expectedProtocol.version ||
+		protocol.checksum !== expectedProtocol.checksum
+	)
 		return fail(
 			"QP-SCHEMA-023",
 			"checksumMismatch",
-			"questpie.internal.v1 protocol is missing or changed",
+			`questpie.internal.v${expectedProtocol.version} protocol is missing or changed`,
 		);
+}
+
+async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
+	await verifyInternalProtocolCatalog(sql, bootstrapCatalogV1, {
+		version: 1,
+		checksum: bootstrapChecksum,
+	});
 }
 
 export async function bootstrap(
