@@ -1,5 +1,7 @@
-import { existsSync } from "node:fs";
-import { extname } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { basename, extname, resolve } from "node:path";
+
+import { parseScenarioFilter, selectScenarioIds } from "./scenario-filter";
 
 type Lane =
 	| "changed"
@@ -146,19 +148,49 @@ function buildPublicPackage(): void {
 	run(["bunx", "turbo", "run", "build", "--filter", "questpie"]);
 }
 
-function postgres(): void {
+function postgres(args: string[]): void {
+	let requested: string | undefined;
+	try {
+		requested = parseScenarioFilter(args);
+	} catch (error) {
+		fail(error instanceof Error ? error.message : String(error));
+	}
+	const root = "tests/integration/postgres";
+	if (!existsSync(root)) fail("no PostgreSQL tests exist");
+	let roots = [root];
+	if (requested) {
+		const tests = readdirSync(resolve(root), { withFileTypes: true })
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".test.ts"))
+			.map((entry) => `${root}/${entry.name}`)
+			.sort();
+		const registered = tests.flatMap((path) => {
+			const match = /^(beta\d+)-/.exec(basename(path));
+			return match?.[1] ? [{ id: match[1], path }] : [];
+		});
+		let selectedIds: string[];
+		try {
+			selectedIds = selectScenarioIds(
+				[...new Set(registered.map(({ id }) => id))],
+				requested,
+			);
+		} catch (error) {
+			fail(error instanceof Error ? error.message : String(error));
+		}
+		const selected = new Set(selectedIds);
+		roots = registered
+			.filter(({ id }) => selected.has(id))
+			.map(({ path }) => path);
+	}
 	if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER) {
 		fail("PGHOST, PGDATABASE, and PGUSER are required for the PostgreSQL lane");
 	}
-	const roots = ["tests/integration/postgres"];
-	if (!roots.some(existsSync)) fail("no PostgreSQL tests exist");
 	buildPublicPackage();
 	run(["bun", "test", ...roots]);
 }
 
-function scenarios(kind: "micro" | "load" | "soak"): void {
+function scenarios(kind: "micro" | "load" | "soak", args: string[]): void {
 	if (kind === "micro") buildPublicPackage();
-	run(["bun", "run", "scripts/performance.ts", kind]);
+	run(["bun", "run", "scripts/performance.ts", kind, ...args]);
 }
 
 const lane = Bun.argv[2] as Lane | undefined;
@@ -182,9 +214,9 @@ else if (lane === "release") {
 		"-p",
 		"apps/docs/tsconfig.json",
 	]);
-} else if (lane === "postgres") postgres();
+} else if (lane === "postgres") postgres(args);
 else if (lane === "micro" || lane === "load" || lane === "soak")
-	scenarios(lane);
+	scenarios(lane, args);
 else
 	fail(
 		"lane must be changed, full, release, typescript-forward, postgres, micro, load, or soak",
