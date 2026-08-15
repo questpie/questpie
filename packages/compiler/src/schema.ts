@@ -803,6 +803,10 @@ function renderStep(
 		);
 		return `ALTER TABLE ${quote(schemaName)}.${quote(String(baseCollection.postgresName))} RENAME TO ${quote(String(targetCollection.postgresName))};`;
 	}
+	if (stepValue.kind === "dropCollection") {
+		const baseCollection = collectionFor(base, stepValue.targetIdentity);
+		return `DROP TABLE ${quote(schemaName)}.${quote(String(baseCollection.postgresName))};`;
+	}
 	const targetContainerIdentity = mapIdentityForward(
 		stepValue.containerIdentity,
 		renames,
@@ -1079,7 +1083,6 @@ function renderStep(
 					);
 		return `DROP INDEX ${quote(schemaName)}.${quote(String(renamedTarget?.postgresName ?? index.postgresName))};`;
 	}
-	if (stepValue.kind === "dropCollection") return `DROP TABLE ${table};`;
 	return schemaError(
 		"QP-SCHEMA-031",
 		"nonTransactionalDdl",

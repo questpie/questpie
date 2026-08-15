@@ -73,3 +73,27 @@ DROP INDEX "collaboration"."qp_ix_organizations_by_name";
 CREATE INDEX "qp_ix_organizations_by_name" ON "collaboration"."organizations" USING btree ("id" ASC NULLS LAST);
 "
 `;
+
+exports[`BETA-02 migration artifacts renders Collection, Field, and Relation drops exactly: drop Collection up.sql 1`] = `
+"-- questpie-step: fe9916b4645660b14354c3c30791c5b4d6924732459ecaf8ebceb7c8bd4bdcb2
+DROP TABLE "collaboration"."companies";
+"
+`;
+
+exports[`BETA-02 migration artifacts renders Collection, Field, and Relation drops exactly: drop Field up.sql 1`] = `
+"-- questpie-step: ff1219882890dce5573f6a4618f528228ac26645b35c8c048a060260afdc84c8
+ALTER TABLE "collaboration"."companies" DROP CONSTRAINT "qp_ck_companies_name_max_length";
+
+-- questpie-step: 12e5a83f8d1c615d2215e6a869b95c0154c7c4fc7732406a8bd981f4a452ba03
+ALTER TABLE "collaboration"."companies" DROP CONSTRAINT "qp_ck_companies_name_min_length";
+
+-- questpie-step: 0573555b74206c522f331d45c4b3c1ea8d4749e364d2d881258d0e327a976fa7
+ALTER TABLE "collaboration"."companies" DROP COLUMN "name";
+"
+`;
+
+exports[`BETA-02 migration artifacts renders Collection, Field, and Relation drops exactly: drop Relation up.sql 1`] = `
+"-- questpie-step: c374d9aaca3a3fde36f512b299ba0e162e7c45622e2fbcdeaa1fbafffa34e1b2
+ALTER TABLE "collaboration"."channels" DROP CONSTRAINT "qp_fk_channels_space";
+"
+`;

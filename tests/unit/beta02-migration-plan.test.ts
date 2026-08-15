@@ -543,6 +543,81 @@ describe("BETA-02 migration artifacts", () => {
 		expect(() => verifyCommittedMigration(field.committed)).not.toThrow();
 	});
 
+	test("renders Collection, Field, and Relation drops exactly", async () => {
+		const compilation = await compiledFixture;
+		const collaboration = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const companiesOnly = structuredClone(collaboration);
+		companiesOnly.collections = collaboration.collections.filter(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+
+		const withoutCompanies = structuredClone(companiesOnly);
+		withoutCompanies.collections = [];
+		const collection = commitDelta(
+			companiesOnly,
+			withoutCompanies,
+			"drop-companies",
+			[],
+		);
+		expect(collection.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"dropCollection",
+		]);
+		expect(collection.committed.files["up.sql"]).toMatchSnapshot(
+			"drop Collection up.sql",
+		);
+
+		const withoutName = structuredClone(companiesOnly);
+		withoutName.collections[0].fields =
+			withoutName.collections[0].fields.filter(
+				(field: { identity: string }) =>
+					field.identity !== "collection:companies/field:name",
+			);
+		withoutName.collections[0].constraints =
+			withoutName.collections[0].constraints.filter(
+				(constraint: { identity: string }) =>
+					!constraint.identity.startsWith("collection:companies/field:name/"),
+			);
+		const field = commitDelta(
+			companiesOnly,
+			withoutName,
+			"drop-company-name",
+			[],
+		);
+		expect(field.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"dropConstraint",
+			"dropConstraint",
+			"dropField",
+		]);
+		expect(field.committed.files["up.sql"]).toMatchSnapshot(
+			"drop Field up.sql",
+		);
+
+		const withoutRelation = structuredClone(collaboration);
+		const channels = withoutRelation.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:channels",
+		);
+		channels.relations = channels.relations.filter(
+			(relation: { identity: string }) =>
+				relation.identity !== "collection:channels/relation:space",
+		);
+		const relation = commitDelta(
+			collaboration,
+			withoutRelation,
+			"drop-channel-space",
+			[],
+		);
+		expect(relation.planned.plan.steps.map((step) => step.kind)).toEqual([
+			"dropRelation",
+		]);
+		expect(relation.committed.files["up.sql"]).toMatchSnapshot(
+			"drop Relation up.sql",
+		);
+	});
+
 	test("refuses stale plans and tampered committed bytes", async () => {
 		const compilation = await compiledFixture;
 		const targetSchema = JSON.parse(

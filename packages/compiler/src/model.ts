@@ -467,6 +467,10 @@ function physicalName(
 	const candidate = String(
 		inline ?? override ?? shortenedPostgresName(identity, fallback),
 	);
+	return validatedPhysicalName(identity, candidate);
+}
+
+function validatedPhysicalName(identity: string, candidate: string): string {
 	if (
 		!/^[a-z][a-z0-9_]*$/.test(candidate) ||
 		Buffer.byteLength(candidate) > 63 ||
@@ -887,7 +891,10 @@ export function projectManifest(
 		version: 1,
 		application: {
 			name: configuration.application.name,
-			postgresSchema: configuration.postgres.schema,
+			postgresSchema: validatedPhysicalName(
+				`application:${configuration.application.name}`,
+				configuration.postgres.schema,
+			),
 		},
 		requiredPostgres: {
 			minimumMajor: 16,

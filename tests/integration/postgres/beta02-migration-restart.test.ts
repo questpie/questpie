@@ -1310,7 +1310,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			{
 				fields: [
 					{
-						collation: "questpie.binary",
+						collation: "field",
 						field: "collection:companies/field:name",
 						nulls: "last",
 						operatorClass: "typeDefault",
@@ -1320,7 +1320,6 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				identity: "collection:companies/index:byName",
 				kind: "btree",
 				postgresName: "limit",
-				unique: false,
 			},
 		];
 		const planned = createMigrationPlan({
@@ -1351,6 +1350,20 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			schema: targetSchema,
 		});
 		expect(fingerprint.fingerprint.comparable.applicationSchema).toBe("order");
+		const observedIndex = (
+			fingerprint.fingerprint.comparable.objects as readonly Readonly<
+				Record<string, unknown>
+			>[]
+		).find((object) => object.kind === "index" && object.name === "limit");
+		expect(observedIndex?.fields).toEqual([
+			{
+				collation: "field",
+				field: "from",
+				nulls: "last",
+				operatorClass: "typeDefault",
+				order: "asc",
+			},
+		]);
 		await expect(
 			applyCommittedMigrations({ migrations: [migration] }),
 		).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });

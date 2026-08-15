@@ -1,11 +1,38 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
+
+test("rejects application schema names outside the physical-name grammar", async () => {
+	for (const schemaName of ["MixedSchema", "a-b", "pg_private"] as const) {
+		const temporary = await mkdtemp(
+			join(tmpdir(), "questpie-bad-schema-name-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const configurationPath = join(temporary, "questpie.json");
+			const configuration = JSON.parse(
+				await readFile(configurationPath, "utf8"),
+			);
+			configuration.postgres.schema = schemaName;
+			await writeFile(
+				configurationPath,
+				JSON.stringify(configuration, null, 2),
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toThrow(
+				/QP-SCHEMA-005 invalidPhysicalName: application:collaboration has invalid PostgreSQL name/,
+			);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
+	}
+});
 
 test("rejects empty, missing, structural, and JSON-backed B-tree terms before projection", async () => {
 	for (const hostile of [
