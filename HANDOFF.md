@@ -6,34 +6,35 @@ QUESTPIE v4 is a docs-first rewrite. Public documentation projects Accepted
 ADRs; v3 is behavioral evidence only. The working rule is “v3 jobs, v4
 ownership and invariants, the fewest new public concepts.” The reviewed BETA-01
 structural compiler now emits exact relocated application, Package, and client
-contracts. The reviewed BETA-02 candidate at `dca711f0` implements the bounded
-schema, migration, and immutable Seed tracer, but remains outside accepted
-authority until PR/CI and tracker acceptance; no production v4 Runtime exists
-yet.
+contracts. Accepted BETA-02 implements the bounded schema, migration, and
+immutable Seed lifecycle at reviewed head `dca711f0`, evidence head `5a4681ca`,
+and merge `b630fb01`; no production v4 Runtime exists yet.
 
 Fixed accepted proof authority:
 
-| Contract                           | Accepted head                              |
-| ---------------------------------- | ------------------------------------------ |
-| Foundation data/query              | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
-| P1 executable Definition compiler  | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
-| P2 Context and Policy              | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
-| P3 Query/Mutation/lifecycle        | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
-| P4 Live Query/ledger               | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
-| P5 dispatch/Reaction               | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
-| P6 Runtime/client/Studio           | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
-| Post-P6 gates                      | `a164e33e752ab54d48fcf903371938ecff3dc082` |
-| Reviewed post-P6 repair            | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
-| #17 Service/Route/Auth             | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
-| #18 lifecycle/durable kernel       | `71463e99a70481b0950ae18d1ff409c034c1b158` |
-| #19 HA/optional acceleration       | `96829bd7b08ea54e60fdc7d5b077366235d2dfea` |
-| #20 File/Search/projections        | `6e056bc44c15740b2797a9489fe3823c3100bdad` |
-| #21 kernels/naming/exports         | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
-| #22 repository foundation          | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
-| #14 conformance map                | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
-| #15 beta.1 slice                   | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
-| #301 API ergonomics reviewed proof | `ff2dfa762c953f2511c5f65e6f930bac3da77868` |
-| #301 API ergonomics evidence       | `fbbf05d457f97927dc2b847b0ad049f26d887151` |
+| Contract                             | Accepted head                              |
+| ------------------------------------ | ------------------------------------------ |
+| Foundation data/query                | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
+| P1 executable Definition compiler    | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
+| P2 Context and Policy                | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
+| P3 Query/Mutation/lifecycle          | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
+| P4 Live Query/ledger                 | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
+| P5 dispatch/Reaction                 | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
+| P6 Runtime/client/Studio             | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
+| Post-P6 gates                        | `a164e33e752ab54d48fcf903371938ecff3dc082` |
+| Reviewed post-P6 repair              | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
+| #17 Service/Route/Auth               | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
+| #18 lifecycle/durable kernel         | `71463e99a70481b0950ae18d1ff409c034c1b158` |
+| #19 HA/optional acceleration         | `96829bd7b08ea54e60fdc7d5b077366235d2dfea` |
+| #20 File/Search/projections          | `6e056bc44c15740b2797a9489fe3823c3100bdad` |
+| #21 kernels/naming/exports           | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
+| #22 repository foundation            | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
+| #14 conformance map                  | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
+| #15 beta.1 slice                     | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
+| #301 API ergonomics reviewed proof   | `ff2dfa762c953f2511c5f65e6f930bac3da77868` |
+| #301 API ergonomics evidence         | `fbbf05d457f97927dc2b847b0ad049f26d887151` |
+| #289 BETA-02 reviewed implementation | `dca711f06ca4b3cc58adbc7b2e56799cabd4839a` |
+| #289 BETA-02 evidence                | `5a4681cae262309af3f8fd8edbc77feccec9cb24` |
 
 ADR-0008 through ADR-0021 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -52,16 +53,12 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, clean head `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9`.
-- The active #301 worktree is
-  `/home/drepkovsky/code/questpie-v4-api-ergonomics`, branch
-  `feat/v4-api-ergonomics-proof`. Its reviewed proof head and authority evidence
-  head are fixed above; do not rewrite either commit.
-- The BETA-02 candidate worktree is
+  `feat/v4`, accepted merge head `b630fb01c6966b97fb3ac265bd416c4cfe0f1908`.
+- The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
-  is based on `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9`; preserve its review evidence
-  and do not squash it before #289 PR/CI acceptance.
+  and evidence head `5a4681cae262309af3f8fd8edbc77feccec9cb24` are
+  immutable review evidence; PR #304 merged them to `feat/v4`.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -77,10 +74,10 @@ are executable command authority; personal skill paths are not dependencies.
 Atlas tickets #14–#22, the #16 implementation-collapse proof, BETA-01 issue
 #288, and interstitial API gate #301 are accepted. #301 merged through PR #302
 at `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9` and does not count toward the
-native N=5 implementation queue. BETA-02 issue #289 is the active frontier;
-its implementation candidate has passed deterministic gates and fresh review,
-but PR/CI and tracker acceptance remain. Do not start #290. The accepted
-foundation includes:
+native N=5 implementation queue. BETA-02 issue #289 is accepted through PR
+#304 and tracker closure. GitHub reports zero remaining native blockers for
+BETA-03 issue #290; #290 is the active frontier. The accepted foundation
+includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
   one non-blocking forward lane because 7.0 lacks a stable programmatic API;
@@ -111,9 +108,13 @@ Do not skip a blocked issue or parallelize dependent implementation.
   PASS on PostgreSQL 18. `architecture:check`, `package:check`, and
   `git diff --check` PASS.
 - #289 recorded performance is 2,690 ms for the changed lane, 6.847 ms for
-  migration planning, and 25,528 golden bytes. The candidate exposes compiler
-  and library-level schema/migration/Seed behavior plus CLI explanation
+  migration planning, and 25,528 golden bytes. The accepted slice exposes
+  compiler and library-level schema/migration/Seed behavior plus CLI explanation
   producers and goldens; it does not claim a wired `questpie` command binary.
+- #289 PR #304 merged normally to `feat/v4` at
+  `b630fb01c6966b97fb3ac265bd416c4cfe0f1908`; issue #289 is closed. The target
+  branch has no required status checks because CI currently targets `main`;
+  no failing or required check was bypassed.
 
 - #301 reviewed proof head `ff2dfa762c953f2511c5f65e6f930bac3da77868`
   received a fresh stateless Claude Opus-medium `PASS` after two preserved
@@ -180,9 +181,8 @@ Do not skip a blocked issue or parallelize dependent implementation.
 ## Next invocation
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Take reviewed BETA-02 issue #289 at
-`dca711f0` through PR/CI, merge, and tracker acceptance without widening its
-schema/migration/Seed tracer. Continue the original N=5 queue with #290 only
-after that acceptance. Preserve the review evidence, marketing worktree, and
-archive branch.
+Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-03 issue #290
+from merge base `b630fb01c6966b97fb3ac265bd416c4cfe0f1908` without widening its
+Context/Service/execution tracer. Preserve the #289 review evidence, marketing
+worktree, scalar-research worktree, and archive branch.
 ```
