@@ -78,6 +78,8 @@ function normalizeOpenJson(value: unknown, invalid: InvalidValue): unknown {
 		if (typeof item === "number") {
 			if (!Number.isFinite(item))
 				return invalid("requires finite JSON numbers");
+			if (Object.is(item, -0))
+				return invalid("requires canonical JSON numbers");
 			assignJsonValue(frame.parent, frame.key, item);
 			continue;
 		}

@@ -278,4 +278,49 @@ describe("BETA-02 committed Seeds", () => {
 			message: expect.stringContaining("does not accept cyclic JSON values"),
 		});
 	});
+
+	test("rejects negative-zero tagged open JSON with the registered diagnostic", async () => {
+		const compiled = await compilation;
+		const schema = structuredClone(
+			JSON.parse(compiled.generatedFiles["schema-projection.json"] ?? "null"),
+		);
+		const companies = schema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+		companies.fields.push({
+			collation: null,
+			default: null,
+			identity: "collection:companies/field:metadata",
+			nullable: false,
+			path: ["metadata"],
+			postgresName: "metadata",
+			type: { kind: "json" },
+		});
+
+		expect(
+			caught(() =>
+				createCommittedSeed({
+					definition: {
+						name: "collaboration.negative-zero-json.v1",
+						steps: [
+							{
+								kind: "insert",
+								collection: "collection:companies",
+								values: {
+									metadata: { kind: "json", value: -0 },
+									name: "Negative-zero JSON",
+								},
+							},
+						],
+					},
+					schema,
+				}),
+			),
+		).toMatchObject({
+			code: "QP-SEED-003",
+			diagnosticClass: "seedTargetMismatch",
+			message: expect.stringContaining("requires canonical JSON numbers"),
+		});
+	});
 });
