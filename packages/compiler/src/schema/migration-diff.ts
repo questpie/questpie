@@ -348,7 +348,6 @@ export function destructiveDeltaSteps(
 					continue;
 				}
 				matchedBase.add(baseChildIdentity);
-				const derivedRename = baseChildIdentity !== targetChildIdentity;
 				const physicalName =
 					key === "relations" ? "constraintPostgresName" : "postgresName";
 				const physicalChanged =
