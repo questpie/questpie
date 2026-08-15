@@ -205,6 +205,7 @@ export async function createApplication(input) {
 		artifactFiles: loaded.artifactFiles,
 		serverExports,
 		bindings: {
+			application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
 			runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 			slots: slotBindings,
 		},

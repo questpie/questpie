@@ -213,6 +213,7 @@ async function runtimeHarness() {
 		artifactFiles: artifactFiles(),
 		serverExports: bindings.serverExports,
 		bindings: {
+			application: "application:collaboration",
 			runtimeBuildDigest: String(runtimeBuild.digest),
 			slots: bindings.slots as never,
 		},

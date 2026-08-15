@@ -1,4 +1,5 @@
 import { afterAll, expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -18,6 +19,16 @@ afterAll(async () => {
 
 const postgresTest = process.env.PGHOST ? test : test.skip;
 
+function contentDigest(value: string): string {
+	return createHash("sha256").update(value).digest("hex");
+}
+
+function artifactDigest(domain: string, value: unknown): string {
+	return createHash("sha256")
+		.update(`${domain}\0${JSON.stringify(value)}\n`)
+		.digest("hex");
+}
+
 postgresTest(
 	"runs the exact Message Query through direct, Fetch, and generated client paths",
 	async () => {
@@ -28,6 +39,13 @@ postgresTest(
 				generated.generatedRoot,
 				"runtime-build.json",
 			);
+			const wirePath = join(generated.generatedRoot, "wire-contract.json");
+			const checksumsPath = join(
+				generated.generatedRoot,
+				"internal/checksums.json",
+			);
+			const wireBytes = await readFile(wirePath, "utf8");
+			const checksumsBytes = await readFile(checksumsPath, "utf8");
 			const mismatched = JSON.parse(runtimeBuildBytes);
 			mismatched.schemaFingerprint = "0".repeat(64);
 			await writeFile(runtimeBuildPath, `${JSON.stringify(mismatched)}\n`);
@@ -35,6 +53,73 @@ postgresTest(
 				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
 			).rejects.toThrow("Runtime Build digest does not match");
 			await writeFile(runtimeBuildPath, runtimeBuildBytes);
+
+			const { digest: _wireDigest, ...unsignedWire } = JSON.parse(wireBytes);
+			const forgedUnsignedWire = {
+				...unsignedWire,
+				application: "application:forged",
+			};
+			const forgedWire = {
+				...forgedUnsignedWire,
+				digest: artifactDigest(
+					"questpie-operation-wire-v1",
+					forgedUnsignedWire,
+				),
+			};
+			const forgedWireBytes = `${JSON.stringify(forgedWire)}\n`;
+			const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
+				JSON.parse(runtimeBuildBytes);
+			const forgedUnsignedRuntimeBuild = {
+				...unsignedRuntimeBuild,
+				application: "application:forged",
+				wireDigest: forgedWire.digest,
+				inventory: unsignedRuntimeBuild.inventory.map(
+					(item: Readonly<{ path: string; digest: string }>) =>
+						item.path === "wire-contract.json"
+							? { ...item, digest: contentDigest(forgedWireBytes) }
+							: item,
+				),
+			};
+			const forgedRuntimeBuild = {
+				...forgedUnsignedRuntimeBuild,
+				digest: artifactDigest(
+					"questpie-runtime-build-v1",
+					forgedUnsignedRuntimeBuild,
+				),
+			};
+			const forgedRuntimeBuildBytes = `${JSON.stringify(forgedRuntimeBuild)}\n`;
+			const checksums = JSON.parse(checksumsBytes);
+			checksums.files = checksums.files.map(
+				(item: Readonly<{ path: string; digest: string }>) =>
+					item.path === "wire-contract.json"
+						? { ...item, digest: contentDigest(forgedWireBytes) }
+						: item.path === "runtime-build.json"
+							? { ...item, digest: contentDigest(forgedRuntimeBuildBytes) }
+							: item,
+			);
+			await Promise.all([
+				writeFile(wirePath, forgedWireBytes),
+				writeFile(runtimeBuildPath, forgedRuntimeBuildBytes),
+				writeFile(checksumsPath, `${JSON.stringify(checksums)}\n`),
+			]);
+			const forgedOutcome = await generated.app
+				.createApp({ postgres: { url: beta05PostgresUrl() } })
+				.then(
+					async (forgedApplication: Readonly<{ close(): Promise<void> }>) => {
+						await forgedApplication.close();
+						return "accepted" as const;
+					},
+					(error: unknown) => error,
+				);
+			expect(forgedOutcome).toBeInstanceOf(TypeError);
+			expect((forgedOutcome as Error).message).toBe(
+				"Runtime executable Application Identity does not match",
+			);
+			await Promise.all([
+				writeFile(wirePath, wireBytes),
+				writeFile(runtimeBuildPath, runtimeBuildBytes),
+				writeFile(checksumsPath, checksumsBytes),
+			]);
 
 			const application = await generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },

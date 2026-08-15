@@ -23,6 +23,7 @@ export type RuntimeExecutableInventoryBinding<View> =
 	  }>;
 
 export type RuntimeExecutableBindings<View> = Readonly<{
+	application: `application:${string}`;
 	runtimeBuildDigest: string;
 	slots: readonly RuntimeExecutableInventoryBinding<View>[];
 }>;
@@ -36,6 +37,10 @@ export function validateRuntimeExecutableBindings<View>(
 		services: readonly ServiceDefinition[];
 	}>,
 ): readonly RuntimeExecutableBinding<View>[] {
+	if (bindings.application !== artifacts.runtimeBuild.application)
+		throw new TypeError(
+			"Runtime executable Application Identity does not match",
+		);
 	if (bindings.runtimeBuildDigest !== artifacts.runtimeBuild.digest)
 		throw new TypeError("Runtime executable binding is from another build");
 	const candidates = bindings.slots.map((binding) =>

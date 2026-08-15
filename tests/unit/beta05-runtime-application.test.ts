@@ -280,6 +280,7 @@ function executableBindings(
 ) {
 	return {
 		bindings: {
+			application: "application:collaboration",
 			runtimeBuildDigest: artifacts.runtimeBuild.digest,
 			slots: slots as never,
 		},
@@ -396,6 +397,79 @@ test("rejects an unsupported Runtime ABI or internal protocol before readiness",
 			}),
 		).rejects.toThrow(message);
 	}
+	expect(readinessChecks).toBe(0);
+});
+
+test("binds Runtime Build Application Identity to the executable bundle", async () => {
+	let readinessChecks = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const original = runtimeArtifacts();
+	const { digest: _wireDigest, ...unsignedWire } = original.wireContract;
+	const changedUnsignedWire = {
+		...unsignedWire,
+		application: "application:forged",
+	};
+	const wireContract = {
+		...changedUnsignedWire,
+		digest: digest("questpie-operation-wire-v1", changedUnsignedWire),
+	};
+	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const { digest: _buildDigest, ...unsignedBuild } = original.runtimeBuild;
+	const changedUnsignedBuild = {
+		...unsignedBuild,
+		application: "application:forged",
+		wireDigest: wireContract.digest,
+		inventory: unsignedBuild.inventory.map((item) =>
+			item.path === "wire-contract.json"
+				? { ...item, digest: fileDigest(wireBytes) }
+				: item,
+		),
+	};
+	const runtimeBuild = {
+		...changedUnsignedBuild,
+		digest: digest("questpie-runtime-build-v1", changedUnsignedBuild),
+	};
+	const artifacts = {
+		...original,
+		artifactFiles: {
+			...original.artifactFiles,
+			"wire-contract.json": wireBytes,
+		},
+		runtimeBuild,
+		wireContract,
+	};
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts as never),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts as never, bindings),
+			program: {
+				services: [],
+				context,
+				bootstrap: { get: async () => null },
+				project: ({ facts }) => ({ signal: facts.signal }),
+				resolvePrincipal: async () => principal.anonymous(),
+				verifyReadiness: () => {
+					readinessChecks += 1;
+				},
+			},
+		}),
+	).rejects.toThrow("Runtime executable Application Identity does not match");
 	expect(readinessChecks).toBe(0);
 });
 
@@ -673,6 +747,7 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", a
 					hostile.artifacts as ReturnType<typeof runtimeArtifacts>
 				).artifactFiles,
 				bindings: {
+					application: "application:collaboration",
 					runtimeBuildDigest:
 						hostile.runtimeBuildDigest ??
 						(hostile.artifacts as ReturnType<typeof runtimeArtifacts>)
