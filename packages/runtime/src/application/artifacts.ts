@@ -35,6 +35,7 @@ type RuntimeBuildV1 = Readonly<{
 	postgresQueryPlansDigest: string | null;
 	committedMigrationsDigest: string;
 	migrationHead: string | null;
+	schemaFingerprint: string;
 	serverBundleDigest: string;
 	runtimeExecutablesDigest: string;
 	runtimeGraphDigest: string;
@@ -227,6 +228,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"postgresQueryPlansDigest",
 			"committedMigrationsDigest",
 			"migrationHead",
+			"schemaFingerprint",
 			"serverBundleDigest",
 			"runtimeExecutablesDigest",
 			"runtimeGraphDigest",
@@ -255,6 +257,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"schemaProjectionDigest",
 		"compilerRuntimeBuildDigest",
 		"committedMigrationsDigest",
+		"schemaFingerprint",
 		"serverBundleDigest",
 		"runtimeExecutablesDigest",
 		"runtimeGraphDigest",

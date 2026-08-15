@@ -195,6 +195,7 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 			artifactFiles["committed-migrations.json"],
 		),
 		migrationHead: "000002_authorize-message-pages",
+		schemaFingerprint: sha("8"),
 		serverBundleDigest: fileDigest(artifactFiles["internal/application.js"]),
 		runtimeExecutablesDigest: digest(
 			"questpie-runtime-executables-v1",
@@ -284,6 +285,58 @@ function executableBindings(
 		serverExports: serverExportsFor(slots),
 	};
 }
+
+test("requires the Runtime Build to bind the Schema Fingerprint", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	const {
+		schemaFingerprint: _schemaFingerprint,
+		digest: _runtimeBuildDigest,
+		...runtimeBuildWithoutSchemaFingerprint
+	} = artifacts.runtimeBuild;
+	const runtimeBuild = {
+		...runtimeBuildWithoutSchemaFingerprint,
+		digest: digest(
+			"questpie-runtime-build-v1",
+			runtimeBuildWithoutSchemaFingerprint,
+		),
+	};
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild,
+			},
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(
+				{ ...artifacts, runtimeBuild: runtimeBuild as never },
+				bindings,
+			),
+			program: {
+				services: [],
+				context,
+				bootstrap: { get: async () => null },
+				project: ({ facts }) => ({ signal: facts.signal }),
+				resolvePrincipal: async () => principal.anonymous(),
+			},
+		}),
+	).rejects.toThrow("runtime build has invalid keys");
+});
 
 test("rejects a mismatched Runtime Build before Context or handler disclosure", async () => {
 	let resolves = 0;
