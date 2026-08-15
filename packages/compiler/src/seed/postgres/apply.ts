@@ -34,6 +34,34 @@ export interface ApplySeedsResult {
 	readonly alreadyApplied: readonly string[];
 }
 
+const durableSeedFailureCodes = new Set([
+	"QP-SEED-001",
+	"QP-SEED-002",
+	"QP-SEED-003",
+	"QP-SEED-004",
+	"QP-SEED-009",
+	"QP-SEED-011",
+	"QP-SEED-012",
+	"QP-SEED-014",
+]);
+
+function errorCode(error: unknown): string | null {
+	return error && typeof error === "object" && "code" in error
+		? String(error.code)
+		: null;
+}
+
+function postgresSqlState(error: unknown): string | null {
+	return error && typeof error === "object" && "errno" in error
+		? String(error.errno)
+		: null;
+}
+
+function durableSeedFailureCode(error: unknown): string | null {
+	const code = errorCode(error);
+	return code && durableSeedFailureCodes.has(code) ? code : null;
+}
+
 function quoted(name: string): string {
 	return `"${name.replaceAll('"', '""')}"`;
 }
@@ -93,10 +121,20 @@ async function executeSeedStep(
 		Array.from({ length }, (_, index) => `$${index + offset + 1}`).join(", ");
 	if (step.kind === "insert") {
 		const values = seedColumns(collection, step.values ?? []);
-		await sql.unsafe(
-			`INSERT INTO ${table} (${values.names.map(quoted).join(", ")}) VALUES (${placeholders(values.values.length)})`,
-			values.values,
-		);
+		try {
+			await sql.unsafe(
+				`INSERT INTO ${table} (${values.names.map(quoted).join(", ")}) VALUES (${placeholders(values.values.length)})`,
+				values.values,
+			);
+		} catch (error) {
+			if (postgresSqlState(error) === "23505")
+				return fail(
+					"QP-SEED-011",
+					"seedInsertConflict",
+					`${step.stepId} conflicts with existing data`,
+				);
+			throw error;
+		}
 		return;
 	}
 	const key = seedColumns(collection, step.key ?? []);
@@ -347,19 +385,19 @@ export async function applyCommittedSeeds(
 					);
 					applied.push(seed.identity);
 				} catch (error) {
-					const errorCode =
-						error && typeof error === "object" && "code" in error
-							? String(error.code)
-							: "QP-SEED-009";
+					const diagnosticCode = errorCode(error);
 					const blocked = [
 						"QP-SCHEMA-026",
 						"QP-SCHEMA-027",
 						"QP-SCHEMA-028",
-					].includes(errorCode);
+					].includes(diagnosticCode ?? "");
+					const persistedErrorCode = blocked
+						? "QP-SEED-014"
+						: durableSeedFailureCode(error);
 					await session`
 						insert into questpie_internal.seed_attempt_events
 						(application_name, attempt_id, sequence, seed_identity, checksum, event, occurred_at, error_code)
-							values (${application}, ${attemptId}, 1, ${seed.identity}, ${seed.checksum}, ${blocked ? "blocked" : "failed"}, ${new Date()}, ${blocked ? "QP-SEED-014" : errorCode})
+							values (${application}, ${attemptId}, 1, ${seed.identity}, ${seed.checksum}, ${blocked ? "blocked" : "failed"}, ${new Date()}, ${persistedErrorCode})
 					`;
 					if (blocked) {
 						blockedIdentity = seed.identity;

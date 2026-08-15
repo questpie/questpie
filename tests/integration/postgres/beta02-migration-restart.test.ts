@@ -666,6 +666,96 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		}
 	}, 10_000);
 
+	test("maps a Seed insert conflict to its registered durable diagnostic", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const targetSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "seed-insert-conflict-probe",
+				postgresSchema: "seed_insert_conflict_probe",
+			},
+		};
+		await database!.unsafe(
+			'DROP SCHEMA IF EXISTS "seed_insert_conflict_probe" CASCADE',
+		);
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-seed-insert-conflict-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await applyCommittedMigrations({ migrations: [migration] });
+		const conflictingId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6170";
+		await database!`
+			insert into seed_insert_conflict_probe.companies (id, name)
+			values (${conflictingId}, 'existing')
+		`;
+		const seed = createCommittedSeed({
+			definition: {
+				name: "seed-insert-conflict-probe.demo.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:companies",
+						values: { id: conflictingId, name: "seeded" },
+					},
+				],
+			},
+			schema: targetSchema,
+		});
+
+		await expect(
+			applyCommittedSeeds({ schema: targetSchema, seeds: [seed] }),
+		).rejects.toMatchObject({
+			code: "QP-SEED-011",
+			diagnosticClass: "seedInsertConflict",
+		});
+		const [failed] = await database!<
+			{
+				errorCode: string | null;
+				event: string;
+				receipts: number;
+				rows: number;
+			}[]
+		>`
+			select
+			  failed.event,
+			  failed.error_code as "errorCode",
+			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-insert-conflict-probe') as receipts,
+			  (select count(*)::integer from seed_insert_conflict_probe.companies) as rows
+			from questpie_internal.seed_attempt_events failed
+			where failed.application_name = 'seed-insert-conflict-probe'
+			  and failed.seed_identity = ${seed.identity}
+			  and failed.event = 'failed'
+		`;
+		expect(failed).toEqual({
+			errorCode: "QP-SEED-011",
+			event: "failed",
+			receipts: 0,
+			rows: 1,
+		});
+
+		await database!`
+			delete from seed_insert_conflict_probe.companies
+			where id = ${conflictingId}
+		`;
+		await expect(
+			applyCommittedSeeds({ schema: targetSchema, seeds: [seed] }),
+		).resolves.toEqual({ applied: [seed.identity], alreadyApplied: [] });
+	}, 10_000);
+
 	test("records a blocked attempt for an applied Seed checksum mismatch", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
@@ -903,15 +993,23 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		await holder.unsafe("ROLLBACK");
 		holder.release();
 		const [rolledBack] = await database!<
-			{ failed: number; inserted: number; receipts: number; started: number }[]
+			{
+				errorCode: string | null;
+				failed: number;
+				inserted: number;
+				receipts: number;
+				started: number;
+			}[]
 		>`
 			select
 			  (select count(*)::integer from seed_cancel_probe.companies where id = ${insertedId}) as inserted,
 			  (select count(*)::integer from questpie_internal.seed_receipts where application_name = 'seed-cancel-probe') as receipts,
 			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'started') as started,
-			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'failed') as failed
+			  (select count(*)::integer from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'failed') as failed,
+			  (select error_code from questpie_internal.seed_attempt_events where application_name = 'seed-cancel-probe' and event = 'failed') as "errorCode"
 		`;
 		expect(rolledBack).toEqual({
+			errorCode: null,
 			failed: 1,
 			inserted: 0,
 			receipts: 0,
