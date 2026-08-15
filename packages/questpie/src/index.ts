@@ -1,3 +1,11 @@
+import type {
+	PrimaryKeyReferences,
+	SeedInsertValues,
+	SeedInsertWithoutKeys,
+	SeedPartialValues,
+	SeedPartialWithoutKeys,
+	SeedPrimaryKey,
+} from "./seed-types";
 import type { FieldNode, InlineShapeDefinition } from "./shape";
 import {
 	type TaggedJsonValue,
@@ -557,75 +565,6 @@ export function defineCollection<
 	});
 }
 
-type SeedValueForField<Field> =
-	Field extends FieldDefinition<infer Value, infer Nullable>
-		? Value | (Nullable extends true ? null : never)
-		: never;
-
-type SeedValueForNode<
-	Node,
-	Mode extends "insert" | "partial",
-> = Node extends FieldDefinition
-	? SeedValueForField<Node>
-	: Node extends InlineShapeDefinition<infer Children>
-		? Mode extends "insert"
-			? SeedInsertValues<Children>
-			: SeedPartialValues<Children>
-		: never;
-
-type RequiredSeedKeys<Fields extends Readonly<Record<string, FieldNode>>> = {
-	[Key in keyof Fields]: Fields[Key] extends FieldDefinition<
-		unknown,
-		false,
-		null
-	>
-		? Key
-		: Fields[Key] extends InlineShapeDefinition<infer Children>
-			? RequiredSeedKeys<Children> extends never
-				? never
-				: Key
-			: never;
-}[keyof Fields];
-
-type SeedInsertValues<Fields extends Readonly<Record<string, FieldNode>>> =
-	Readonly<
-		{
-			[Key in RequiredSeedKeys<Fields>]: SeedValueForNode<
-				Fields[Key],
-				"insert"
-			>;
-		} & {
-			[Key in Exclude<
-				keyof Fields,
-				RequiredSeedKeys<Fields>
-			>]?: SeedValueForNode<Fields[Key], "insert">;
-		}
-	>;
-
-type SeedPartialValues<Fields extends Readonly<Record<string, FieldNode>>> =
-	Readonly<{
-		[Key in keyof Fields]?: SeedValueForNode<Fields[Key], "partial">;
-	}>;
-
-type PrimaryKeyNames<Constraints> = {
-	[Key in keyof Constraints]: Constraints[Key] extends ConstraintDefinition<
-		infer Fields,
-		"primaryKey"
-	>
-		? Extract<Fields[number], string>
-		: never;
-}[keyof Constraints];
-
-type SeedPrimaryKey<
-	Fields extends Readonly<Record<string, FieldNode>>,
-	Constraints,
-> = Readonly<{
-	[Key in Extract<PrimaryKeyNames<Constraints>, keyof Fields>]-?: Exclude<
-		SeedValueForField<Extract<Fields[Key], FieldDefinition>>,
-		null
-	>;
-}>;
-
 export interface SeedStepDefinition<
 	Kind extends "insert" | "update" | "upsert" | "delete" =
 		| "insert"
@@ -679,7 +618,7 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly string[]>>
+			Record<string, ConstraintDefinition<readonly FieldReference[]>>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
@@ -698,14 +637,14 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly string[]>>
+			Record<string, ConstraintDefinition<readonly FieldReference[]>>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
 		input: Readonly<{
 			key: SeedPrimaryKey<Fields, Constraints>;
-			create: Omit<SeedInsertValues<Fields>, PrimaryKeyNames<Constraints>>;
-			update: Omit<SeedPartialValues<Fields>, PrimaryKeyNames<Constraints>>;
+			create: SeedInsertWithoutKeys<Fields, PrimaryKeyReferences<Constraints>>;
+			update: SeedPartialWithoutKeys<Fields, PrimaryKeyReferences<Constraints>>;
 		}>,
 	): SeedStepDefinition<"upsert", `collection:${Name}`> =>
 		Object.freeze({
@@ -719,7 +658,7 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly string[]>>
+			Record<string, ConstraintDefinition<readonly FieldReference[]>>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,

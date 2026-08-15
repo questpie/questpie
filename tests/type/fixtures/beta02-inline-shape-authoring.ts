@@ -23,10 +23,13 @@ const customers = defineCollection({
 			},
 		}),
 		"address.city": field.text(),
+		sequence: field.integer(),
 	},
 	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
-		city: constraint.unique({ fields: [["address", "city"]] }),
+		primary: constraint.primaryKey({
+			fields: [["address", "city"], ["address", "geo", "latitude"], "sequence"],
+		}),
+		idUnique: constraint.unique({ fields: ["id"] }),
 	},
 	indexes: {
 		location: index({
@@ -49,12 +52,65 @@ seed.insert(customers, {
 		geo: { latitude: "48.14860", longitude: "17.10770" },
 	},
 	"address.city": "literal top-level key",
+	sequence: 1,
+});
+seed.delete(customers, {
+	address: { city: "Bratislava", geo: { latitude: "48.14860" } },
+	sequence: 1,
+});
+seed.delete(customers, {
+	// @ts-expect-error nested primary keys preserve their object shape
+	"address/city": "Bratislava",
+	sequence: 1,
+});
+// @ts-expect-error every nested primary-key leaf is required
+seed.delete(customers, { address: { city: "Bratislava" } });
+seed.delete(customers, {
+	address: {
+		city: "Bratislava",
+		geo: {
+			latitude: "48.14860",
+			// @ts-expect-error a key contains no non-primary sibling Fields
+			longitude: "17.10770",
+		},
+	},
+	sequence: 1,
+});
+seed.upsert(customers, {
+	key: {
+		address: { city: "Bratislava", geo: { latitude: "48.14860" } },
+		sequence: 1,
+	},
+	create: {
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+		address: {
+			geo: { longitude: "17.10770" },
+		},
+		"address.city": "literal top-level key",
+	},
+	update: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a1" },
+});
+seed.upsert(customers, {
+	key: {
+		address: { city: "Bratislava", geo: { latitude: "48.14860" } },
+		sequence: 1,
+	},
+	create: {
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+		address: {
+			geo: { longitude: "17.10770" },
+		},
+		"address.city": "literal top-level key",
+	},
+	// @ts-expect-error upsert update cannot repeat a nested primary-key Field
+	update: { address: { city: "Košice" } },
 });
 seed.insert(customers, {
 	id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 	// @ts-expect-error every required inline leaf must be present
 	address: { city: "Bratislava" },
 	"address.city": "literal top-level key",
+	sequence: 1,
 });
 
 // @ts-expect-error an inline shape cannot be empty

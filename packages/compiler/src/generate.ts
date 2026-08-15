@@ -72,6 +72,43 @@ function fieldAtPath(
 	return node?.kind === "inlineShape" ? undefined : node;
 }
 
+interface KeyTypeNode {
+	field?: RecordValue;
+	children: Map<string, KeyTypeNode>;
+}
+
+function renderKeyType(
+	fields: readonly [string, RecordValue][],
+	references: readonly unknown[],
+): string {
+	const root: KeyTypeNode = { children: new Map() };
+	for (const reference of references) {
+		const path = (Array.isArray(reference) ? reference : [reference]).map(
+			String,
+		);
+		let node = root;
+		for (const segment of path) {
+			let child = node.children.get(segment);
+			if (!child) {
+				child = { children: new Map() };
+				node.children.set(segment, child);
+			}
+			node = child;
+		}
+		node.field = fieldAtPath(fields, path);
+	}
+	const render = (node: KeyTypeNode): string => {
+		if (node.field) return fieldType(node.field);
+		return `Readonly<{ ${[...node.children.entries()]
+			.sort(([left], [right]) => compareAscii(left, right))
+			.map(
+				([key, child]) => `readonly ${JSON.stringify(key)}: ${render(child)};`,
+			)
+			.join(" ")} }>`;
+	};
+	return render(root);
+}
+
 function embeddedValueType(value: RecordValue): string {
 	const options = record(value.options ?? {});
 	let type =
@@ -136,13 +173,11 @@ function renderData(resources: readonly NormalizedResource[]): string {
 			const primary = Object.values(constraints)
 				.map(record)
 				.find((constraint) => constraint.kind === "primaryKey");
-			const keys = ((primary?.fields ?? []) as readonly unknown[])
-				.map((key) => {
-					const field = fieldAtPath(fields, key);
-					return `readonly ${JSON.stringify(Array.isArray(key) ? key.join("/") : key)}: ${field ? fieldType(field) : "never"};`;
-				})
-				.join(" ");
-			return `readonly ${JSON.stringify(resource.name)}: ReadCollection<Readonly<{ ${row} }>, Readonly<{ ${keys} }>>;`;
+			const key = renderKeyType(
+				fields,
+				(primary?.fields ?? []) as readonly unknown[],
+			);
+			return `readonly ${JSON.stringify(resource.name)}: ReadCollection<Readonly<{ ${row} }>, ${key}>;`;
 		})
 		.join("\n\t\t");
 }

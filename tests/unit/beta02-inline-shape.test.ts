@@ -3,7 +3,11 @@ import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { compileApplication, createCommittedSeed } from "@questpie/compiler";
+import {
+	compileApplication,
+	createCommittedSeed,
+	validateCommittedSeedSchema,
+} from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -27,10 +31,15 @@ export const customers = defineCollection({
 				longitude: field.numeric({ precision: 8, scale: 5 }),
 			} }),
 		} }),
+		sequence: field.integer(),
 	},
 	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
-		city: constraint.unique({ fields: [["address", "city"]] }),
+		primary: constraint.primaryKey({ fields: [
+			["address", "city"],
+			["address", "geo", "latitude"],
+			"sequence",
+		] }),
+		idUnique: constraint.unique({ fields: ["id"] }),
 	},
 	indexes: { location: index({ fields: [
 		{ field: ["address", "geo", "latitude"], order: "desc", nulls: "first" },
@@ -84,13 +93,22 @@ export const customers = defineCollection({
 					path: ["id"],
 					postgresName: "id",
 				},
+				{
+					identity: "collection:customers/field:sequence",
+					path: ["sequence"],
+					postgresName: "sequence",
+				},
 			]);
 			expect(
 				customers.constraints.find(
 					(value: { identity: string }) =>
-						value.identity === "collection:customers/constraint:city",
+						value.identity === "collection:customers/constraint:primary",
 				)?.fields,
-			).toEqual(["collection:customers/field:address/field:city"]);
+			).toEqual([
+				"collection:customers/field:address/field:city",
+				"collection:customers/field:address/field:geo/field:latitude",
+				"collection:customers/field:sequence",
+			]);
 			expect(customers.indexes[0].fields).toEqual([
 				{
 					field: "collection:customers/field:address/field:geo/field:latitude",
@@ -110,6 +128,9 @@ export const customers = defineCollection({
 			expect(compilation.generatedFiles["app.ts"]).toContain(
 				'readonly "address": Readonly<{ readonly "city": string; readonly "geo": Readonly<{ readonly "latitude": string; readonly "longitude": string; }>; }>;',
 			);
+			expect(compilation.generatedFiles["app.ts"]).toContain(
+				'Readonly<{ readonly "address": Readonly<{ readonly "city": string; readonly "geo": Readonly<{ readonly "latitude": string; }>; }>; readonly "sequence": number; }>>',
+			);
 			const committed = createCommittedSeed({
 				definition: {
 					name: "customers.demo.v1",
@@ -126,6 +147,18 @@ export const customers = defineCollection({
 										longitude: "17.10770",
 									},
 								},
+								sequence: 1,
+							},
+						},
+						{
+							kind: "delete",
+							collection: "collection:customers",
+							key: {
+								address: {
+									city: "Bratislava",
+									geo: { latitude: "48.14860" },
+								},
+								sequence: 1,
 							},
 						},
 					],
@@ -137,7 +170,25 @@ export const customers = defineCollection({
 				"collection:customers/field:address/field:geo/field:latitude",
 				"collection:customers/field:address/field:geo/field:longitude",
 				"collection:customers/field:id",
+				"collection:customers/field:sequence",
 			]);
+			expect(committed.steps[1]?.key).toEqual([
+				{
+					field: "collection:customers/field:address/field:city",
+					value: "Bratislava",
+				},
+				{
+					field: "collection:customers/field:address/field:geo/field:latitude",
+					value: { kind: "numeric", value: "48.14860" },
+				},
+				{
+					field: "collection:customers/field:sequence",
+					value: 1,
+				},
+			]);
+			expect(() =>
+				validateCommittedSeedSchema(committed, schema),
+			).not.toThrow();
 			expect(() =>
 				createCommittedSeed({
 					definition: {
@@ -156,6 +207,60 @@ export const customers = defineCollection({
 					schema,
 				}),
 			).toThrow(/QP-SEED-003/);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
+	});
+
+	test("revalidates prototype-like paths and tagged open JSON", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-inline-hostile-"));
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/inline-hostile.ts"),
+				`import { constraint, defineCollection, field, shape } from "questpie";
+
+export const hostile = defineCollection({
+	name: "hostilePaths",
+	fields: {
+		constructor: shape.inline({ fields: { code: field.text() } }),
+		payload: field.json(),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: [["constructor", "code"]] }),
+	},
+});
+`,
+			);
+			const compilation = await compileApplication({
+				applicationRoot: temporary,
+			});
+			const schema = JSON.parse(
+				compilation.generatedFiles["schema-projection.json"] ?? "null",
+			);
+			const committed = createCommittedSeed({
+				definition: {
+					name: "hostilePaths.demo.v1",
+					steps: [
+						{
+							kind: "insert",
+							collection: "collection:hostilePaths",
+							values: {
+								constructor: { code: "alpha" },
+								payload: { kind: "json", value: null },
+							},
+						},
+					],
+				},
+				schema,
+			});
+			expect(() =>
+				validateCommittedSeedSchema(committed, schema),
+			).not.toThrow();
+			expect(committed.steps[0]?.values).toContainEqual({
+				field: "collection:hostilePaths/field:payload",
+				value: { kind: "json", value: null },
+			});
 		} finally {
 			await rm(temporary, { recursive: true });
 		}

@@ -30,20 +30,46 @@ function authoredRecord(
 	const fields = Array.isArray(collection.fields)
 		? (collection.fields as readonly JsonRecord[])
 		: [];
-	const result: Record<string, unknown> = {};
+	const result = Object.create(null) as Record<string, unknown>;
 	for (const entry of entries) {
 		const field = fields.find(
 			(candidate) => candidate.identity === entry.field,
 		);
 		const path = field?.path;
-		const key = Array.isArray(path) ? path.at(-1) : undefined;
-		if (typeof key !== "string" || Object.hasOwn(result, key))
+		if (
+			!Array.isArray(path) ||
+			path.length === 0 ||
+			path.some((segment) => typeof segment !== "string")
+		)
 			return incompatible(seed, "contains an unknown or duplicate Field");
 		const value = entry.value;
-		result[key] =
-			value && typeof value === "object" && "kind" in value
+		const type = (field as JsonRecord).type as JsonRecord;
+		const authoredValue =
+			type.kind !== "json" &&
+			value &&
+			typeof value === "object" &&
+			"kind" in value
 				? value.value
 				: value;
+		let parent = result;
+		for (const segment of path.slice(0, -1) as string[]) {
+			const existing = Object.hasOwn(parent, segment)
+				? parent[segment]
+				: undefined;
+			if (existing === undefined)
+				parent[segment] = Object.create(null) as Record<string, unknown>;
+			else if (
+				!existing ||
+				typeof existing !== "object" ||
+				Array.isArray(existing)
+			)
+				return incompatible(seed, "contains an unknown or duplicate Field");
+			parent = parent[segment] as Record<string, unknown>;
+		}
+		const key = path.at(-1) as string;
+		if (Object.hasOwn(parent, key))
+			return incompatible(seed, "contains an unknown or duplicate Field");
+		parent[key] = authoredValue;
 	}
 	return result;
 }
