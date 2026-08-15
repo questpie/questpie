@@ -174,7 +174,7 @@ function renderQueries(resources: readonly NormalizedResource[]): string {
 		.filter((resource) => resource.kind === "query")
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output, "string")}; }>;`;
+			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
 		})
 		.join("\n\t");
 }

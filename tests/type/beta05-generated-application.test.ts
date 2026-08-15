@@ -97,8 +97,16 @@ test("emits one executable App over the same exact Query engine", async () => {
 
 		await writeFile(
 			join(temporary, "generated-app-contract-consumer.ts"),
-			`import { createApp } from "#questpie/app";
+			`import { createApp, type QueryDefinition } from "#questpie/app";
 import { principal } from "questpie";
+
+type MessagePageHandlerOutput = Awaited<
+	ReturnType<QueryDefinition<"messages.page">["handler"]>
+>;
+declare const handlerOutput: MessagePageHandlerOutput;
+handlerOutput.nodes[0]!.createdAt satisfies Date;
+// @ts-expect-error canonical timestamp strings belong to the raw wire, not handlers
+handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
 	const app = await createApp({ postgres: { url: ["postgres:", "//localhost/questpie"].join("") } });

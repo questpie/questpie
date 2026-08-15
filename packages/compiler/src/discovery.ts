@@ -279,7 +279,9 @@ export async function validateStructuralSources(
 			if (
 				ts.isNewExpression(node) &&
 				ts.isIdentifier(node.expression) &&
-				["Date", "Function"].includes(node.expression.text)
+				(node.expression.text === "Function" ||
+					(node.expression.text === "Date" &&
+						(functionDepth === 0 || node.arguments?.length !== 1)))
 			)
 				impure(
 					`${node.expression.text} construction is forbidden in structural source`,

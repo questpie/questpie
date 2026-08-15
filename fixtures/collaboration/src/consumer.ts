@@ -29,6 +29,13 @@ export const messagePage = defineQuery({
 		}),
 	}),
 	handler: async ({ input, ctx }) => {
-		return ctx.data.run(channelMessagePage, input);
+		const page = await ctx.data.run(channelMessagePage, input);
+		return {
+			...page,
+			nodes: page.nodes.map((node) => ({
+				...node,
+				createdAt: new Date(node.createdAt),
+			})),
+		};
 	},
 });
