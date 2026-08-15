@@ -5,7 +5,11 @@ import {
 	type Principal,
 } from "questpie";
 
-import { encodeRuntimeCodec } from "../codec";
+import {
+	decodeRuntimeCodec,
+	encodeRuntimeCodec,
+	RuntimeCodecError,
+} from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
 import {
 	createOperationEngine,
@@ -340,13 +344,21 @@ export async function createRuntimeApplication<
 		)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
 		let prepared: PreparedOperation<OperationView>;
+		let contextInput: ContextInputOf<Context>;
 		try {
 			prepared = operationEngine.prepare(frame.operation, frame.input);
+			contextInput = decodeRuntimeCodec<ContextInputOf<Context>>(
+				input.program.context.input as never,
+				frame.context,
+				"$context",
+			);
 		} catch (error) {
 			const failure =
 				error instanceof OperationFailure
 					? error
-					: new OperationFailure("INTERNAL");
+					: error instanceof RuntimeCodecError
+						? new OperationFailure("PROTOCOL_UNSUPPORTED")
+						: new OperationFailure("INTERNAL");
 			return operationWireResponse(
 				failureFrame(frame, failure.code, failure.retryable),
 				operationFailureStatus(failure.code),
@@ -369,7 +381,7 @@ export async function createRuntimeApplication<
 			const payload = await executeRoot(
 				{
 					principal: resolvedPrincipal,
-					context: frame.context as ContextInputOf<Context>,
+					context: contextInput,
 					signal: request.signal,
 					deadline:
 						frame.timeoutMilliseconds === null

@@ -716,6 +716,7 @@ test("pairs the exact Context and Service exports before readiness", async () =>
 
 test("uses one engine for direct and Fetch and rejects hostile wire before disclosure", async () => {
 	let resolves = 0;
+	let bootstrapReads = 0;
 	let handlerCalls = 0;
 	let principalResolutions = 0;
 	let principalFailure = false;
@@ -753,7 +754,12 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		program: {
 			services: [],
 			context,
-			bootstrap: { get: async () => null },
+			bootstrap: {
+				get: async () => {
+					bootstrapReads += 1;
+					return null;
+				},
+			},
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async (request) => {
 				principalResolutions += 1;
@@ -823,6 +829,10 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 			{ ...baseFrame, input: { first: 2, at: "2026-99-15T16:00:00.000Z" } },
 			"PROTOCOL_UNSUPPORTED",
 		],
+		[
+			{ ...baseFrame, context: { ...baseFrame.context, extra: true } },
+			"PROTOCOL_UNSUPPORTED",
+		],
 	] as const) {
 		const hostile = await send(frame);
 		expect((await hostile.json()) as unknown).toMatchObject({
@@ -830,7 +840,13 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 			error: { code },
 		});
 	}
-	expect({ handlerCalls, principalResolutions, resolves }).toEqual({
+	expect({
+		bootstrapReads,
+		handlerCalls,
+		principalResolutions,
+		resolves,
+	}).toEqual({
+		bootstrapReads: 0,
 		handlerCalls: 0,
 		principalResolutions: 0,
 		resolves: 0,
@@ -848,7 +864,13 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		(operations) => operations.invoke("query:messages.page", { first: 2 }),
 	);
 	expect(direct).toEqual({ count: 2 });
-	expect({ handlerCalls, principalResolutions, resolves }).toEqual({
+	expect({
+		bootstrapReads,
+		handlerCalls,
+		principalResolutions,
+		resolves,
+	}).toEqual({
+		bootstrapReads: 0,
 		handlerCalls: 2,
 		principalResolutions: 1,
 		resolves: 2,
