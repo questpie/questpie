@@ -111,9 +111,15 @@ export async function readCatalogComparableInOwnedTransaction(
 		order by c.relname
 	`;
 	const tables = relations.filter((relation) => relation.kind === "r");
+	const supportedTables = tables.filter(
+		(table) =>
+			table.persistence === "p" &&
+			!table.rowSecurityEnabled &&
+			!table.rowSecurityForced,
+	);
 	const objects: JsonRecord[] = [
 		{ kind: "schema", name: scope.applicationSchema },
-		...tables.map((table) => ({
+		...supportedTables.map((table) => ({
 			kind: "table",
 			name: table.name,
 			persistence: table.persistence === "p" ? "permanent" : table.persistence,
@@ -122,7 +128,7 @@ export async function readCatalogComparableInOwnedTransaction(
 		})),
 	];
 	const unsupportedObjects: JsonRecord[] = relations
-		.filter((relation) => relation.kind !== "r")
+		.filter((relation) => relation.kind !== "r" && relation.kind !== "c")
 		.map((relation) => ({
 			kind:
 				relation.kind === "v"
@@ -151,7 +157,7 @@ export async function readCatalogComparableInOwnedTransaction(
 				attachedTo: null,
 			});
 	const dependencies = new Map<string, JsonRecord>();
-	for (const table of tables) {
+	for (const table of supportedTables) {
 		const columns = await sql<
 			{
 				name: string;
@@ -217,20 +223,36 @@ export async function readCatalogComparableInOwnedTransaction(
 				defaultValue?.kind === "randomUuid" || defaultValue?.kind === "now"
 					? await readDefaultFunctionDependency(sql, defaultValue.kind)
 					: null;
-			objects.push({
-				kind: "column",
-				table: table.name,
-				name: column.name,
-				type,
-				nullable: column.nullable,
-				default: defaultValue,
-				identity: column.identity === "" ? "none" : column.identity,
-				generated: column.generated === "" ? "none" : column.generated,
-				collation:
-					column.collation === null
-						? null
-						: `${column.collationNamespace}.${column.collation}`,
-			});
+			const unsupportedColumnState =
+				type.kind === "unsupported" ||
+				(column.defaultExpression !== null && defaultValue === null) ||
+				((defaultValue?.kind === "randomUuid" ||
+					defaultValue?.kind === "now") &&
+					(defaultFunction?.namespace !== "pg_catalog" ||
+						defaultFunction.name !==
+							(defaultValue.kind === "randomUuid"
+								? "gen_random_uuid"
+								: "now"))) ||
+				(column.collation !== null &&
+					(column.collationNamespace !== "pg_catalog" ||
+						column.collation !== "C")) ||
+				column.identity !== "" ||
+				column.generated !== "";
+			if (!unsupportedColumnState)
+				objects.push({
+					kind: "column",
+					table: table.name,
+					name: column.name,
+					type,
+					nullable: column.nullable,
+					default: defaultValue,
+					identity: "none",
+					generated: "none",
+					collation:
+						column.collation === null
+							? null
+							: `${column.collationNamespace}.${column.collation}`,
+				});
 			const dependency = {
 				kind: "type",
 				schema: column.typeNamespace,
@@ -262,22 +284,7 @@ export async function readCatalogComparableInOwnedTransaction(
 					functionDependency,
 				);
 			}
-			if (
-				type.kind === "unsupported" ||
-				(column.defaultExpression !== null && defaultValue === null) ||
-				((defaultValue?.kind === "randomUuid" ||
-					defaultValue?.kind === "now") &&
-					(defaultFunction?.namespace !== "pg_catalog" ||
-						defaultFunction.name !==
-							(defaultValue.kind === "randomUuid"
-								? "gen_random_uuid"
-								: "now"))) ||
-				(column.collation !== null &&
-					(column.collationNamespace !== "pg_catalog" ||
-						column.collation !== "C")) ||
-				column.identity !== "" ||
-				column.generated !== ""
-			)
+			if (unsupportedColumnState)
 				unsupportedObjects.push({
 					kind: "other",
 					qualifiedIdentity: `${scope.applicationSchema}.${table.name}.${column.name}`,
@@ -614,8 +621,9 @@ export async function readCatalogComparableInOwnedTransaction(
 	const unsupportedCatalogObjects = await sql<
 		{ kind: string; qualifiedIdentity: string; attachedTo: string | null }[]
 	>`
-		select case p.prokind when 'p' then 'procedure' else 'function' end as kind,
-		       ${scope.applicationSchema} || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as "qualifiedIdentity",
+		select case p.prokind when 'f' then 'function' when 'p' then 'procedure' else 'other' end as kind,
+		       case p.prokind when 'f' then 'function' when 'p' then 'procedure' else p.prokind::text end
+		         || ':' || ${scope.applicationSchema} || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as "qualifiedIdentity",
 		       null::text as "attachedTo"
 		from pg_catalog.pg_proc p
 		join pg_catalog.pg_namespace n on n.oid = p.pronamespace
@@ -626,8 +634,12 @@ export async function readCatalogComparableInOwnedTransaction(
 		       null::text
 		from pg_catalog.pg_type t
 		join pg_catalog.pg_namespace n on n.oid = t.typnamespace
+		left join pg_catalog.pg_class composite on composite.oid = t.typrelid
 		where n.nspname = ${scope.applicationSchema}
-		  and (t.typtype in ('d', 'e') or (t.typtype = 'c' and t.typrelid = 0))
+		  and (
+		    t.typtype in ('d', 'e')
+		    or (t.typtype = 'c' and composite.relkind = 'c')
+		  )
 		union all
 		select 'trigger', ${scope.applicationSchema} || '.' || c.relname || '.' || tg.tgname,
 		       ${scope.applicationSchema} || '.' || c.relname

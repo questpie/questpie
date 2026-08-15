@@ -72,9 +72,7 @@ function parseOperand(raw: string): JsonRecord | null {
 		const child = parseExpression(length[1]!);
 		return child ? { kind: "textLength", expression: child } : null;
 	}
-	const cast = /^CAST\(([\s\S]*)\s+AS\s+[\w."]+\)$/i.exec(expression);
-	if (cast) return parseOperand(cast[1]!);
-	const literal = parseLiteral(expression);
+	const literal = parseLiteral(expression, ["text", "int8", "bigint"]);
 	if (literal) return literal;
 	const quoted = /^"((?:""|[^"])*)"$/.exec(expression);
 	if (quoted) return { kind: "field", field: quoted[1]!.replaceAll('""', '"') };
@@ -83,13 +81,24 @@ function parseOperand(raw: string): JsonRecord | null {
 	return null;
 }
 
-function parseLiteral(expression: string): JsonRecord | null {
+function parseLiteral(
+	expression: string,
+	allowedStringCasts: readonly string[] = ["text"],
+): JsonRecord | null {
 	if (/^NULL$/i.test(expression)) return { kind: "literal", value: null };
 	if (/^(?:true|false)$/i.test(expression))
 		return { kind: "literal", value: expression.toLowerCase() === "true" };
 	if (/^-?(?:\d+|\d+\.\d+)$/.test(expression))
 		return { kind: "literal", value: Number(expression) };
-	const string = /^'((?:''|[^'])*)'(?:::[\w."]+)?$/.exec(expression);
+	const string =
+		/^'((?:''|[^'])*)'(?:\s*::\s*((?:(?:pg_catalog|"pg_catalog")\.)?(?:[a-z_][a-z0-9_]*|"[a-z_][a-z0-9_]*")))?$/i.exec(
+			expression,
+		);
+	const cast = string?.[2]
+		?.replaceAll('"', "")
+		.toLowerCase()
+		.replace(/^pg_catalog\./, "");
+	if (cast && !allowedStringCasts.includes(cast)) return null;
 	return string
 		? { kind: "literal", value: string[1]!.replaceAll("''", "'") }
 		: null;

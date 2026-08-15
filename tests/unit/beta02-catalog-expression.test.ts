@@ -62,3 +62,21 @@ test("parses the closed PostgreSQL default and check expression grammar", () => 
 		right: { kind: "field", field: "starts_at" },
 	});
 });
+
+test("rejects explicit casts without a proven closed literal type", () => {
+	expect(
+		parseCatalogCheck("CAST(\"body\" AS text) = 'ready'::text"),
+	).toBeNull();
+	expect(parseCatalogCheck('CAST("body" AS integer) > 1')).toBeNull();
+	expect(parseCatalogDefault("'1'::integer")).toBeNull();
+	expect(parseCatalogDefault("'ready'::pg_catalog.text")).toEqual({
+		kind: "literal",
+		value: "ready",
+	});
+	expect(parseCatalogCheck("id <= '9223372036854775807'::bigint")).toEqual({
+		kind: "compare",
+		operator: "lessThanOrEqual",
+		left: { kind: "field", field: "id" },
+		right: { kind: "literal", value: "9223372036854775807" },
+	});
+});

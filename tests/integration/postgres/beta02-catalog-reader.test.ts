@@ -66,7 +66,6 @@ describe.skipIf(!database)(
 				applicationSchema: "catalog_reader_probe",
 				applicationSchemaExists: true,
 				objects: [
-					{ kind: "column", name: "body", table: "messages" },
 					{ kind: "column", name: "id", table: "messages" },
 					{ kind: "schema", name: "catalog_reader_probe" },
 					{ kind: "table", name: "messages" },
@@ -442,6 +441,149 @@ describe.skipIf(!database)(
 			} finally {
 				await database!.unsafe(
 					'DROP INDEX "catalog_fact_probe"."messages_body_include_idx"',
+				);
+			}
+		});
+
+		test("does not project children of an unsupported table state", async () => {
+			await database!.unsafe(
+				'CREATE UNLOGGED TABLE "catalog_fact_probe"."unsupported_table" ("id" integer)',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.unsupported_table",
+					attachedTo: null,
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.name === "unsupported_table" ||
+							object.table === "unsupported_table",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'DROP TABLE "catalog_fact_probe"."unsupported_table"',
+				);
+			}
+		});
+
+		test("does not project an unsupported column state", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" ADD COLUMN "unsupported_collation" text COLLATE pg_catalog."default"',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity:
+						"catalog_fact_probe.messages.unsupported_collation",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.kind === "column" &&
+							object.table === "messages" &&
+							object.name === "unsupported_collation",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" DROP COLUMN "unsupported_collation"',
+				);
+			}
+		});
+
+		test("enumerates a standalone composite type exactly once", async () => {
+			await database!.unsafe(
+				'CREATE TYPE "catalog_fact_probe"."delivery_result" AS ("provider_id" text, "accepted" boolean)',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(
+					(
+						comparable.unsupportedObjects as readonly Record<string, unknown>[]
+					).filter(
+						(object) =>
+							object.qualifiedIdentity === "catalog_fact_probe.delivery_result",
+					),
+				).toEqual([
+					{
+						kind: "compositeType",
+						qualifiedIdentity: "catalog_fact_probe.delivery_result",
+						attachedTo: null,
+					},
+				]);
+			} finally {
+				await database!.unsafe(
+					'DROP TYPE "catalog_fact_probe"."delivery_result"',
+				);
+			}
+		});
+
+		test("enumerates overloaded routines with their exact prokind identity", async () => {
+			await database!.unsafe(
+				"CREATE FUNCTION catalog_fact_probe.routine_probe(integer) RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE FUNCTION catalog_fact_probe.routine_probe(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE PROCEDURE catalog_fact_probe.routine_probe(boolean) LANGUAGE plpgsql AS 'BEGIN NULL; END'; CREATE AGGREGATE catalog_fact_probe.aggregate_probe(integer) (SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0'); CREATE FUNCTION catalog_fact_probe.window_probe(integer) RETURNS integer LANGUAGE sql WINDOW IMMUTABLE AS 'SELECT $1';",
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				const routines = (
+					comparable.unsupportedObjects as readonly Record<string, unknown>[]
+				).filter((object) =>
+					String(object.qualifiedIdentity).includes("_probe("),
+				);
+				expect(routines).toEqual([
+					{
+						kind: "function",
+						qualifiedIdentity:
+							"function:catalog_fact_probe.routine_probe(integer)",
+						attachedTo: null,
+					},
+					{
+						kind: "function",
+						qualifiedIdentity:
+							"function:catalog_fact_probe.routine_probe(text)",
+						attachedTo: null,
+					},
+					{
+						kind: "other",
+						qualifiedIdentity: "a:catalog_fact_probe.aggregate_probe(integer)",
+						attachedTo: null,
+					},
+					{
+						kind: "other",
+						qualifiedIdentity: "w:catalog_fact_probe.window_probe(integer)",
+						attachedTo: null,
+					},
+					{
+						kind: "procedure",
+						qualifiedIdentity:
+							"procedure:catalog_fact_probe.routine_probe(IN boolean)",
+						attachedTo: null,
+					},
+				]);
+			} finally {
+				await database!.unsafe(
+					"DROP AGGREGATE catalog_fact_probe.aggregate_probe(integer); DROP FUNCTION catalog_fact_probe.window_probe(integer); DROP FUNCTION catalog_fact_probe.routine_probe(integer); DROP FUNCTION catalog_fact_probe.routine_probe(text); DROP PROCEDURE catalog_fact_probe.routine_probe(boolean);",
 				);
 			}
 		});
