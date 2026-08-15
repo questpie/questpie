@@ -135,6 +135,21 @@ Status: accepted by ADR-0010 after proof head
 Opus-medium `PASS`. P3 is also accepted by ADR-0011, P4 by ADR-0012, and P5 is
 next.
 
+The later sibling `P2R1/BETA04Authority` revision was reviewed at
+`f8e12ead9f667ecc2c6e5478a3071b7f23e67099` and recorded at
+`2ae1981740102ede7a5fc1e567b9645bd9d6fbe6` after the initial
+`10d5712ab816ef5576ec041da216d95c6921ac0d` review was validly `BLOCKED` for
+non-portable authoring-object provenance. The replacement review passed after
+the exact projection became byte-pinned and reproducible from a bundle
+containing only the reviewed head and its ancestors. P2R1 adds only the
+Policy-protected `DataCursorV2`, `PolicyCursorScopeV1`, fatal
+`QP-POLICY-001`/`QP-POLICY-002` promotion, and dependency-derived BETA-04
+readiness. Original P2 head `5fbd9058`, its acceptance packet and canonical
+digests, `PolicyProgramV1` bytes, and `DataCursorV1` bytes remain unchanged.
+The accepted foundation proof's `query-grammar-goldens.mjs` encodes v1 cursor
+bytes through its RFC 8785 plus LF `bytes()` function, so the revision's v1
+wording is a restatement rather than an encoding change.
+
 ### Candidate surface this chapter may accept
 
 - `defineContext({ input, resolve })` with transport-neutral input;

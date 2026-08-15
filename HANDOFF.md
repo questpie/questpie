@@ -19,6 +19,8 @@ Fixed accepted proof authority:
 | Foundation data/query                | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
 | P1 executable Definition compiler    | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
 | P2 Context and Policy                | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
+| P2R1/BETA04 authority reviewed       | `f8e12ead9f667ecc2c6e5478a3071b7f23e67099` |
+| P2R1/BETA04 authority evidence       | `2ae1981740102ede7a5fc1e567b9645bd9d6fbe6` |
 | P3 Query/Mutation/lifecycle          | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
 | P4 Live Query/ledger                 | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
 | P5 dispatch/Reaction                 | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
@@ -104,6 +106,15 @@ review, CI, merge, and tracker state before enabling its immediate successor.
 Do not skip a blocked issue or parallelize dependent implementation.
 
 ## Latest verification
+
+- P2R1/BETA04 authority candidate `10d5712a` received a valid fresh stateless
+  Opus-medium `BLOCKED` because its checker required two unretained authoring
+  objects. Raw findings remain in
+  `docs/v4/prototypes/beta04-authority-revision/REVIEW.json`. Portable repaired
+  head `f8e12ead9f667ecc2c6e5478a3071b7f23e67099` received replacement `PASS`;
+  raw evidence is `REVIEW-02.json` and commit `2ae19817`. The sibling revision
+  preserves original P2 and v1 bytes while accepting only Policy cursor v2,
+  two fatal compiler diagnostics, and mechanically derived BETA-04 readiness.
 
 - #290 initial reviewed head `6d0c81392297964180c6032164e3d4b87814b5cc`
   received a valid fresh stateless Claude Opus-medium `BLOCKED` with four
