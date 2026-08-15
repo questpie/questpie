@@ -113,10 +113,10 @@ Each segment has 1–63 characters. The complete name has at most 255 characters
 invalid. QUESTPIE reports `QP-COMPOSE-003 invalidResourceName` for an invalid
 kind or name.
 
-Resource Kind is a closed compiler protocol. The composition foundation
-allocates `collection` and `seed`; accepted executable Definitions also
-allocate `query`, `mutation`, `action`, `route`, `reaction`, and `job`. A
-Package cannot add another Resource Kind.
+Resource Kind is a closed compiler protocol. Structural schema composition
+allocates `collection` and `seed`. Executable Definitions allocate exactly
+seven Resource Kinds: `query`, `mutation`, `action`, `route`, `reaction`,
+`job`, and `workflow`. A Package cannot add another Resource Kind.
 
 Each Definition supplies its name explicitly:
 
