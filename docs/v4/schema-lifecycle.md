@@ -1581,7 +1581,7 @@ canonical step without `stepId`, prefixed by `questpie-seed-step-v1\0`.
 An insert issues one `INSERT` and any conflict fails the Seed transaction. An
 update or delete uses equality over the complete primary key and must affect
 exactly one row; zero or multiple rows reports `QP-SEED-012
-cardinalityMismatch` and rolls back. For an upsert, `create` and `update` may
+seedCardinalityMismatch` and rolls back. For an upsert, `create` and `update` may
 not repeat a key Field, and `create` plus the key must form a valid insert.
 QUESTPIE emits `INSERT ... ON CONFLICT (<primary-key>) DO UPDATE`; the statement
 must return exactly one row. Seed steps execute in stored array order. These
