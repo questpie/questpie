@@ -20,22 +20,31 @@ const providerSchema = {
 	},
 } as SchemaProjectionV1;
 
-function providerSql(overrides: Readonly<Record<string, unknown>>): SQL {
-	return (async (strings: TemplateStringsArray) => {
+function providerSql(
+	overrides: Readonly<Record<string, unknown>>,
+	extensions: readonly Readonly<{
+		name: string;
+		installedVersion: unknown;
+	}>[] = [],
+): SQL {
+	return ((strings: TemplateStringsArray | readonly string[]) => {
+		if (!("raw" in strings)) return strings;
 		const query = strings.join("?");
-		if (!query.includes("pg_catalog.pg_database"))
-			throw new Error(`unexpected provider query: ${query}`);
-		return [
-			{
-				binaryCollationDeterministic: true,
-				binaryCollationProvider: "c",
-				databaseCType: "C.UTF-8",
-				databaseCollation: "C.UTF-8",
-				databaseEncoding: "UTF8",
-				serverVersion: "17.5",
-				...overrides,
-			},
-		];
+		if (query.includes("pg_catalog.pg_database"))
+			return Promise.resolve([
+				{
+					binaryCollationDeterministic: true,
+					binaryCollationProvider: "c",
+					databaseCType: "C.UTF-8",
+					databaseCollation: "C.UTF-8",
+					databaseEncoding: "UTF8",
+					serverVersion: "17.5",
+					...overrides,
+				},
+			]);
+		if (query.includes("pg_catalog.pg_extension"))
+			return Promise.resolve(extensions);
+		throw new Error(`unexpected provider query: ${query}`);
 	}) as unknown as SQL;
 }
 
@@ -106,7 +115,7 @@ describe("BETA-02 PostgreSQL session protocol", () => {
 			),
 		).rejects.toMatchObject({
 			code: "QP-SCHEMA-007",
-			diagnosticClass: "providerMismatch",
+			diagnosticClass: "unsupportedPostgres",
 		});
 		await expect(
 			providerObservations(
@@ -118,7 +127,54 @@ describe("BETA-02 PostgreSQL session protocol", () => {
 			),
 		).rejects.toMatchObject({
 			code: "QP-SCHEMA-007",
-			diagnosticClass: "providerMismatch",
+			diagnosticClass: "unsupportedPostgres",
+		});
+	});
+
+	test("reports closed provider-profile subtype diagnostics", async () => {
+		await expect(
+			providerObservations(
+				providerSql({ serverVersion: "15.9" }),
+				providerSchema,
+			),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-007",
+			diagnosticClass: "unsupportedPostgres",
+		});
+
+		const extensionSchema = {
+			...providerSchema,
+			requiredPostgres: {
+				...providerSchema.requiredPostgres,
+				extensions: [{ name: "pgcrypto" }],
+			},
+		};
+		await expect(
+			providerObservations(providerSql({}), extensionSchema),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-007",
+			diagnosticClass: "missingExtension",
+		});
+		await expect(
+			providerObservations(
+				providerSql({}, [{ name: "pgcrypto", installedVersion: "" }]),
+				extensionSchema,
+			),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-007",
+			diagnosticClass: "incompatibleExtension",
+		});
+		await expect(
+			providerObservations(
+				providerSql({}, [
+					{ name: "pgcrypto", installedVersion: "1.3-provider-build" },
+				]),
+				extensionSchema,
+			),
+		).resolves.toMatchObject({
+			extensions: [
+				{ name: "pgcrypto", installedVersion: "1.3-provider-build" },
+			],
 		});
 	});
 

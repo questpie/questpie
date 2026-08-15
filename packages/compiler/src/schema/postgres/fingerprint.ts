@@ -487,23 +487,23 @@ export async function providerObservations(
 	if (!database)
 		return fail(
 			"QP-SCHEMA-007",
-			"providerMismatch",
+			"unsupportedPostgres",
 			"database observations are unavailable",
 		);
 	const major = Number.parseInt(database.serverVersion, 10);
 	if (
+		!Number.isSafeInteger(major) ||
 		major < schema.requiredPostgres.minimumMajor ||
 		database.databaseCollation !== schema.requiredPostgres.databaseCollation ||
 		database.databaseCType !== schema.requiredPostgres.databaseCType ||
 		database.databaseEncoding !== "UTF8" ||
 		database.binaryCollationProvider !== "c" ||
-		database.binaryCollationDeterministic !== true ||
-		extensions.length !== schema.requiredPostgres.extensions.length
+		database.binaryCollationDeterministic !== true
 	)
 		return fail(
 			"QP-SCHEMA-007",
-			"providerMismatch",
-			"PostgreSQL provider does not match the committed profile",
+			"unsupportedPostgres",
+			"PostgreSQL does not match the committed core provider profile",
 			{
 				serverVersion: database.serverVersion,
 				databaseCollation: database.databaseCollation,
@@ -513,6 +513,32 @@ export async function providerObservations(
 				binaryCollationDeterministic: database.binaryCollationDeterministic,
 				extensions,
 			},
+		);
+	const missingExtensions = requiredExtensions.filter(
+		(required) => !extensions.some((extension) => extension.name === required),
+	);
+	if (missingExtensions.length > 0)
+		return fail(
+			"QP-SCHEMA-007",
+			"missingExtension",
+			"PostgreSQL is missing a required extension",
+			{ expected: requiredExtensions, actual: extensions },
+		);
+	const observedExtensionNames = extensions.map((extension) => extension.name);
+	if (
+		new Set(observedExtensionNames).size !== observedExtensionNames.length ||
+		extensions.some(
+			(extension) =>
+				!requiredExtensions.includes(extension.name) ||
+				typeof extension.installedVersion !== "string" ||
+				extension.installedVersion.length === 0,
+		)
+	)
+		return fail(
+			"QP-SCHEMA-007",
+			"incompatibleExtension",
+			"PostgreSQL returned an incompatible required-extension observation",
+			{ expected: requiredExtensions, actual: extensions },
 		);
 	return {
 		...database,
