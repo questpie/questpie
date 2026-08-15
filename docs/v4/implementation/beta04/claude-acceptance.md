@@ -1,0 +1,41 @@
+# BETA-04 replacement implementation review
+
+- Model: `opus`
+- Effort: `medium`
+- Diff base: `19ac6845a51d639887f10d1fd2eeedc841f70555`
+- Reviewed head: `7918bac0c7d579142fc4882c23f6a61e82dc1a51`
+- Invocation: fresh, stateless, no tools
+- Verdict: `PASS`
+
+## Raw findings
+
+```text
+VERDICT: PASS
+
+The three blockers from the committed initial review (`docs/v4/implementation/beta04/claude-initial-review.md`) are discharged at this head:
+
+- **B1 (dead index / unbounded materialization).** The lowering no longer emits a `qp_authorized AS MATERIALIZED` full-scope CTE for the page path. `packages/compiler/src/relational/postgres/index.ts` now emits one `qp_page AS MATERIALIZED` CTE in which Policy scope, caller filter, cursor seek, `ORDER BY`, and `LIMIT (first + 1)` all sit against the base relation, and the fixture Query (`fixtures/collaboration/src/message-page.ts`) orders by `id DESC` only, matching the committed `(channel_id ASC, id DESC)` B-tree. Real evidence exists rather than assertion: `tests/integration/postgres/beta04-policy-query.test.ts` runs `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)` over the compiled statement against 8,224 seeded Messages and asserts `Index Name = qp_ix_messages_page`, `Actual Rows = 2` for `first = 1`, `Rows Removed by Filter = 0`, and no `Seq Scan` on `messages`.
+- **B2 (mocked microbenchmark).** `tests/performance/beta04-policy-query.test.ts` now applies both committed migrations to a real PostgreSQL 17 target, asserts `server_version_num`, and records `postgresPlanningMs`, `postgresExecutionMs`, `postgresReturnedRows`, and `postgresScanRows` from `EXPLAIN ANALYZE`. `.github/workflows/ci.yml` provisions a `postgres:17` service for the `micro` job with `QUESTPIE_PERFORMANCE_EVIDENCE_CLASS`. The remaining mocked scenario is renamed `beta04-query-binding` and claims only binding/decode cost. All three declared budget derivations in `quality/baselines/beta04-policy-query.json` recompute exactly (259.91→300, 6.98→7, 9.48→10), and `quality/baselines/beta04-query-binding.json` (112.91→120) does too; the tests assert the derivations rather than trusting the literals.
+- **B3 (authority amended by the slice).** The ADR-0008 Policy-aware cursor-scope revision, the ADR-0010 `QP-POLICY-001/002` revision, and the `PolicyCursorScopeV1` section of `docs/v4/context-and-policy.md` are present in the fixed authority supplied to this review and are cited as a separate head (`f8e12ead…` "P2R1/BETA04 authority revision") in the manifest. This diff (`19ac6845..7918bac0`) touches none of those files and does not flip `QUEUE.json.agentReady`.
+
+Spot checks against the acceptance criteria that hold:
+
+- Nondisclosure: keyed lookup returns only `qp_key_outcome ∈ {found, notFound}` (`executePostgresKeyedOutcome` rejects any other column shape); missing key, foreign Principal, and forged Tenant all produce the identical value. `hasNextPage` and `endCursor` derive only from the authorized `first + 1` base, and `orderTerms()` refuses any order Field carrying a `guardColumn`, so a conditionally omitted Field cannot leak through the cursor.
+- Cursor: `DataCursorBindingError` validates shape → template → query scope → Policy scope strictly before `reserve()`, proven by the `transactions`/`reservations` counters in `tests/unit/beta04-postgres-query-runtime.test.ts`. `usedExecutionFacts` is sparse and omits unreached facts.
+- Relation disclosure: the `author` join applies the *target* Collection's default Policy (`memberships.default` → `authority.isSystem()`), which correctly yields `null` under ordinary authority in both the mocked and real-PostgreSQL tests — Boolean evidence versus row disclosure is separated as ADR-0010 requires.
+- No count/aggregate surface: `app.ts` is asserted free of a `count(` member and the type test proves `Extract<keyof QueryContext["data"], "count">` is `never`.
+- Migration/Seed immutability: `000001` bytes are untouched; `verifyCommittedMigrationChain([genesis, authorization])` passes and `authorization.targetSchema` equals the compiled current schema; the demo Seed checksum is now pinned in `tests/unit/beta02-seed.test.ts`.
+
+## Non-blocking observations
+
+1. **PostgreSQL microbenchmark skips silently.** `tests/performance/beta04-policy-query.test.ts` uses `process.env.PGHOST ? test : test.skip`, so `bun run bench:micro` exits 0 with zero measurements when the lane is misconfigured. The cited CI run supplies `PGHOST`, so the evidence is real, but the gate cannot detect its own absence. Prefer failing when the scenario declares PostgreSQL metrics and no target is reachable.
+2. **`ctx.data.run` is still declared but unimplemented.** `packages/compiler/src/generate.ts` emits per-Query `run(plan, input)` into `GeneratedData`; nothing in `packages/runtime` supplies it, and `tests/integration/beta04-policy-query.test.ts` builds its own `run` inside `project`. Consistent with the BETA-03 `renderData` precedent, but this absence is not recorded in the replacement manifest and should be an explicit stated absence owned by BETA-05.
+3. **Nested Field path derivation is still wrong in two helpers.** `fieldPath()` in `relational/generated-contract.ts` and `fieldByIdentity()` in `generate.ts` split the identity tail on `/`, yielding `["address", "field:city"]`. The PostgreSQL lowerer (`rootFieldResult`) compares the schema `path` array correctly, so the two disagree. Latent only because this slice uses flat Fields; the failure mode is a generated type that says a conditionally omitted nested Field is required, not a disclosure leak.
+4. **Compile-time 2,048-byte cursor envelope proof is absent.** ADR-0008's accepted revision requires the *compiler* to reject a template whose maximum envelope cannot fit including `policyScopeDigest`. Only `packages/runtime/src/relational/cursor.ts` enforces it, and an over-long encode raises a bare `TypeError` at execute time rather than a registered diagnostic.
+5. **Several structural failures are bare `TypeError`s, not diagnostics.** `relationalDiscoverySource` throws `"QP-DATA no unique cursor constraint"`; `relationJoin` and `queryFilterSql` throw for nested conditional output and Relation filters; `orderTerms()` throws for a guarded order Field. The last case is covered by the explicit carve-out in `design-context.md`, but the others are unregistered failure spellings.
+6. **Diagnostic classification still depends on stderr substring matching.** `packages/compiler/src/discovery.ts` maps child failures by `child.stderr.toString().includes("QP-COMPOSE-002" | "QP-COMPOSE-010" | "QP-DATA-005")`; authored source containing those literals can misclassify a failure.
+7. **BETA-04 edits BETA-02-owned modules and tests without manifest disclosure.** `packages/compiler/src/schema/migration-dependencies.ts` (214 lines) and the renderer changes extend accepted BETA-02 migration planning. Separately, `tests/unit/beta02-migration-plan.test.ts` and `tests/performance/beta02-migration.test.ts` now read the target schema from the committed `000001` bytes instead of the compiler, so those tests no longer directly prove that compiling the fixture reproduces the Genesis target. The chain is still bound transitively via `beta04-collaboration-schema.test.ts`, but the manifest should call the ownership drift and the reduced directness out.
+8. **`tests/integration/postgres/beta04-policy-query.test.ts` mutates shared fixture rows without restore-on-failure.** The revocation/role-change test sets `role='member'` then `status='revoked'` and restores only at the end of the test body; a mid-test failure leaves the later cursor-tamper and cancellation tests reading an empty authorized set.
+9. **The keyed-lookup proof statement retains an unbounded `qp_authorized AS MATERIALIZED` scan.** This is proof-only (no generated keyed Query capability exists), but if a later slice promotes it to a real Operation it inherits exactly the plan shape B1 rejected.
+10. **`IS NOT DISTINCT FROM` on non-nullable Policy correlations** remains in `policyExpressionSql`. The measured plan is bounded (509 total scan rows, and the distractor EXPLAIN shows a 2-row index scan), so this no longer compounds a blocker, but it is not a btree-indexable operator and will matter once evidence Collections grow.
+```
