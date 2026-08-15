@@ -10,6 +10,7 @@ export type {
 	SeedValueV1,
 } from "./committed-seed";
 export { loadCommittedSeed } from "./artifact-files";
+export { explainCommittedSeed } from "./explain";
 export { applyCommittedSeeds } from "./postgres/apply";
 export type { ApplySeedsResult } from "./postgres/apply";
 export { validateCommittedSeedSchema } from "./schema-validation";

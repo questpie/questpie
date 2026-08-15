@@ -1,6 +1,4 @@
 import { canonicalBytes } from "../canonical";
-import type { CommittedSeedV1 } from "../seed";
-import { verifyCommittedSeed } from "../seed";
 import { verifyCommittedMigration } from "./committed-migration";
 import type { CommittedMigration } from "./contracts";
 import type { ApplyMigrationsResult } from "./postgres-types";
@@ -104,43 +102,6 @@ export function explainMigrationApply(
 			`head ${result.head}`,
 			`applied ${result.applied.length === 0 ? "none" : result.applied.join(", ")}`,
 			`fingerprint ${result.fingerprintDigest}`,
-		],
-	);
-}
-
-export function explainCommittedSeed(seed: CommittedSeedV1): CliExplanationV1 {
-	verifyCommittedSeed(seed);
-	const files = fileBytes(seed.files);
-	const totalBytes = Object.values(files).reduce(
-		(total, value) => total + Number(value),
-		0,
-	);
-	const steps = seed.steps.map((step) => ({
-		stepId: step.stepId,
-		kind: step.kind,
-		collection: step.collection,
-	}));
-	return explanation(
-		"seed status",
-		"committed",
-		{
-			identity: seed.identity,
-			checksum: seed.checksum,
-			dependencies: seed.dependencies,
-			files,
-			totalBytes,
-			steps,
-		},
-		[
-			`seed ${seed.identity}`,
-			"status committed",
-			`checksum ${seed.checksum}`,
-			`dependencies ${seed.dependencies.length === 0 ? "none" : seed.dependencies.join(", ")}`,
-			`files ${Object.keys(files).length} (${totalBytes} bytes)`,
-			...steps.map(
-				(step, index) =>
-					`step ${String(index + 1).padStart(2, "0")} ${step.kind} ${step.collection} ${step.stepId}`,
-			),
 		],
 	);
 }

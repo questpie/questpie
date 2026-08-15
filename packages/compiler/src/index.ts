@@ -56,11 +56,11 @@ export {
 export type { MigrationClassification } from "./schema";
 export {
 	explainCommittedMigration,
-	explainCommittedSeed,
 	explainMigrationApply,
 	loadCommittedMigration,
 	renderCliExplanation,
 } from "./schema";
+export { explainCommittedSeed } from "./seed";
 export type { CliExplanationV1 } from "./schema";
 export { applyCommittedMigrations, inspectSchemaFingerprint } from "./schema";
 export { applyCommittedSeeds } from "./seed";

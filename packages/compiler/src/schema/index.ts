@@ -21,7 +21,6 @@ export type {
 export { loadCommittedMigration } from "./migration-files";
 export {
 	explainCommittedMigration,
-	explainCommittedSeed,
 	explainMigrationApply,
 	renderCliExplanation,
 } from "./explain";
