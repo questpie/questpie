@@ -1,18 +1,21 @@
 import { expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import {
-	compileApplication,
 	createCommittedMigration,
 	createMigrationPlan,
 } from "@questpie/compiler";
 
 test("BETA-02 migration artifacts stay inside stable-runner budgets", async () => {
-	const compilation = await compileApplication({
-		applicationRoot: resolve(import.meta.dir, "../../fixtures/collaboration"),
-	});
 	const targetSchema = JSON.parse(
-		compilation.generatedFiles["schema-projection.json"] ?? "null",
+		await readFile(
+			resolve(
+				import.meta.dir,
+				"../../fixtures/collaboration/questpie/migrations/000001_create-collaboration/target-schema.json",
+			),
+			"utf8",
+		),
 	);
 	const started = performance.now();
 	const planned = createMigrationPlan({
