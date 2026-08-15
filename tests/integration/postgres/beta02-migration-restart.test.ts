@@ -15,7 +15,11 @@ import {
 	inspectSchemaFingerprint,
 } from "@questpie/compiler";
 
-import { lockKey } from "../../../packages/compiler/src/postgres-session";
+import {
+	acquireSessionLock,
+	configurePostgresTimeouts,
+	lockKey,
+} from "../../../packages/compiler/src/postgres-session";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
@@ -71,6 +75,27 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		await holder`select pg_catalog.pg_advisory_lock(${applicationKey})`;
 		const started = performance.now();
 		try {
+			const contender = await database!.reserve();
+			try {
+				const control = { lockTimeoutMs: 25, statementTimeoutMs: 500 };
+				await configurePostgresTimeouts(contender, control);
+				await expect(
+					acquireSessionLock(
+						contender,
+						applicationKey,
+						control,
+						new AbortController().signal,
+					),
+				).rejects.toMatchObject({ errno: "55P03" });
+				const [timeout] = await contender<{ value: string }[]>`
+					select current_setting('lock_timeout') as value
+				`;
+				expect(timeout?.value).toBe("25ms");
+				await contender`create temporary table lock_timeout_restored (id integer)`;
+			} finally {
+				contender.release();
+			}
+
 			let lockError: unknown;
 			try {
 				await applyCommittedMigrations({

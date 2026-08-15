@@ -110,7 +110,17 @@ export async function acquireSessionLock(
 		await abortableDelay(10, signal);
 	}
 	await sql`select pg_catalog.set_config('lock_timeout', '1ms', false)`;
-	await sql`select pg_catalog.pg_advisory_lock(${key})`;
+	try {
+		await sql`select pg_catalog.pg_advisory_lock(${key})`;
+	} finally {
+		await sql`
+			select pg_catalog.set_config(
+				'lock_timeout',
+				${`${control.lockTimeoutMs}ms`},
+				false
+			)
+		`;
+	}
 }
 
 function abortableDelay(

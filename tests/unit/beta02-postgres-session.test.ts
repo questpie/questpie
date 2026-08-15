@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { SQL } from "bun";
 
 import {
+	acquireSessionLock,
 	executeAbortable,
 	probeSessionAffinity,
 	resolvePostgresControl,
@@ -39,6 +40,42 @@ function providerSql(overrides: Readonly<Record<string, unknown>>): SQL {
 }
 
 describe("BETA-02 PostgreSQL session protocol", () => {
+	test("restores the configured lock timeout after the final advisory-lock attempt", async () => {
+		for (const finalAttempt of ["success", "failure"] as const) {
+			const commands: string[] = [];
+			const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
+				const command = strings.join("?").replaceAll(/\s+/g, " ").trim();
+				commands.push(`${command} ${values.join(" ")}`);
+				if (command.includes("pg_try_advisory_lock")) {
+					const query = Object.assign(Promise.resolve([{ acquired: false }]), {
+						cancel: () => query,
+						execute: () => query,
+					});
+					return query;
+				}
+				if (command.includes("pg_advisory_lock") && finalAttempt === "failure")
+					return Promise.reject(new Error("lock timeout"));
+				return Promise.resolve([]);
+			}) as unknown as SQL;
+
+			const result = acquireSessionLock(
+				sql,
+				17n,
+				{ lockTimeoutMs: 1, statementTimeoutMs: 100 },
+				new AbortController().signal,
+			);
+			if (finalAttempt === "failure")
+				await expect(result).rejects.toThrow("lock timeout");
+			else await expect(result).resolves.toBeUndefined();
+
+			expect(commands.slice(-3)).toEqual([
+				expect.stringContaining("set_config('lock_timeout', '1ms', false)"),
+				expect.stringContaining("pg_advisory_lock"),
+				expect.stringContaining("set_config( 'lock_timeout', ?, false ) 1ms"),
+			]);
+		}
+	});
+
 	test("commits two probes and accepts only one pinned backend", async () => {
 		const observed: number[] = [];
 		const pid = await probeSessionAffinity(async () => {
