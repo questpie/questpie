@@ -19,7 +19,7 @@ import {
 	childRecords,
 	fail,
 	providerObservations,
-} from "./schema-postgres";
+} from "./schema";
 import type { CommittedSeedV1, SeedFieldValueV1, SeedStepV1 } from "./seed";
 import { orderCommittedSeeds } from "./seed";
 import { validateCommittedSeedSchema } from "./seed/index";

@@ -26,3 +26,15 @@ export {
 	renderCliExplanation,
 } from "./explain";
 export type { CliExplanationV1 } from "./explain";
+export { applyCommittedMigrations } from "./postgres/apply";
+export { bootstrap } from "./postgres/bootstrap";
+export {
+	assertSchemaMatches,
+	inspectSchemaFingerprint,
+	providerObservations,
+} from "./postgres/fingerprint";
+export { childRecords, fail } from "./postgres/shared";
+export type {
+	ApplyMigrationsResult,
+	SchemaFingerprintV1,
+} from "./postgres-types";

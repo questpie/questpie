@@ -4,7 +4,6 @@
 	"warningLines": 500,
 	"maximumLines": 800,
 	"legacy": {
-		"packages/compiler/src/model.ts": 961,
-		"packages/compiler/src/schema-postgres.ts": 1592
+		"packages/compiler/src/model.ts": 961
 	}
 }

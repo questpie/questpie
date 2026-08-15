@@ -6,7 +6,7 @@ import { resolve } from "node:path";
 import {
 	bootstrapChecksum,
 	bootstrapSql,
-} from "../../packages/compiler/src/schema-postgres";
+} from "../../packages/compiler/src/schema/postgres/bootstrap";
 
 test("embeds the authoritative bootstrap SQL bytes and checksum exactly", async () => {
 	const authority = await readFile(

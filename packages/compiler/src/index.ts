@@ -62,15 +62,9 @@ export {
 	renderCliExplanation,
 } from "./schema/index";
 export type { CliExplanationV1 } from "./schema/index";
-export {
-	applyCommittedMigrations,
-	inspectSchemaFingerprint,
-} from "./schema-postgres";
+export { applyCommittedMigrations, inspectSchemaFingerprint } from "./schema";
 export { applyCommittedSeeds } from "./seed-postgres";
-export type {
-	ApplyMigrationsResult,
-	SchemaFingerprintV1,
-} from "./schema/postgres-types";
+export type { ApplyMigrationsResult, SchemaFingerprintV1 } from "./schema";
 export type { ApplySeedsResult } from "./seed-postgres";
 export type {
 	CommittedMigration,

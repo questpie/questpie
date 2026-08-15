@@ -8,7 +8,7 @@ import {
 	resolvePostgresControl,
 } from "../../packages/compiler/src/postgres-session";
 import type { SchemaProjectionV1 } from "../../packages/compiler/src/schema";
-import { providerObservations } from "../../packages/compiler/src/schema-postgres";
+import { providerObservations } from "../../packages/compiler/src/schema";
 
 const providerSchema = {
 	requiredPostgres: {
