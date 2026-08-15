@@ -104,6 +104,25 @@ function applicationEntry(
 				.map((slot) => definitionName(slot)),
 		),
 	];
+	const applicationServiceEntries = input.resources
+		.filter(
+			(resource) =>
+				resource.kind === "service" && resource.origin.packageId === null,
+		)
+		.sort((left, right) => compareAscii(left.name, right.name))
+		.map((resource) => {
+			const slot = input.slots.find(
+				(candidate) =>
+					candidate.kind === "service" &&
+					candidate.identity === resource.identity,
+			);
+			if (!slot)
+				throw new TypeError(
+					`Runtime Application lacks Service slot ${resource.identity}`,
+				);
+			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
+		})
+		.join(",\n");
 	const queries = input.resources
 		.filter((resource) => resource.kind === "query")
 		.sort((left, right) => compareAscii(left.name, right.name));
@@ -224,6 +243,15 @@ export async function createApplication(input) {
 				}),
 				signal: facts.signal,
 			}),
+			projectExecution: async ({ facts, service }) => Object.freeze({
+				principal: facts.principal,
+				authority: facts.authority,
+				tenant: facts.tenant,
+				values: facts.values,
+				services: Object.freeze({${applicationServiceEntries}}),
+				signal: facts.signal,
+				deadline: facts.deadline,
+			}),
 		},
 		});
 	} catch (error) {
@@ -234,7 +262,8 @@ export async function createApplication(input) {
 	let closePromise;
 	return Object.freeze({
 		fetch: runtime.fetch,
-		execution: (root, use) => runtime.execution(root, (operations) => use(Object.freeze({
+		execution: (root, use) => runtime.execution(root, ({ execution, ...operations }) => use(Object.freeze({
+			...execution,
 			queries: Object.freeze({${directQueries}}),
 		}))),
 		close: () => {

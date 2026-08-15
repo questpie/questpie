@@ -361,7 +361,7 @@ export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: Readonly<{ queries: GeneratedQueryOperations }>) => Result | Promise<Result>,
+		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
 }

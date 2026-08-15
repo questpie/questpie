@@ -41,8 +41,10 @@ type MaybePromise<Value> = Value | Promise<Value>;
 
 export interface RuntimeApplicationProgram<
 	Context extends ContextDefinition,
-	View,
-> extends RuntimeProgram<Context, View> {
+	OperationView,
+	ExecutionView = OperationView,
+> extends RuntimeProgram<Context, OperationView> {
+	readonly projectExecution?: RuntimeProgram<Context, ExecutionView>["project"];
 	readonly resolvePrincipal: (
 		request: Request,
 	) => MaybePromise<Principal | null>;
@@ -55,7 +57,7 @@ export interface RuntimeOperations {
 	invoke(operation: string, input: unknown): Promise<unknown>;
 }
 
-export interface RuntimeApplication<Input> {
+export interface RuntimeApplication<Input, ExecutionView> {
 	execution<Result>(
 		input: Readonly<{
 			principal: Principal;
@@ -63,7 +65,9 @@ export interface RuntimeApplication<Input> {
 			signal?: AbortSignal;
 			deadline?: number;
 		}>,
-		use: (operations: RuntimeOperations) => MaybePromise<Result>,
+		use: (
+			scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
+		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
 	fetch(request: Request): Promise<Response>;
 	close(): Promise<void>;
@@ -81,20 +85,21 @@ function isAbort(error: unknown): boolean {
 
 export async function createRuntimeApplication<
 	Context extends ContextDefinition,
-	View,
+	OperationView,
+	ExecutionView = OperationView,
 >(
 	input: Readonly<{
 		artifacts: unknown;
 		artifactFiles: Readonly<Record<string, Uint8Array | string>>;
 		serverExports: Readonly<Record<string, unknown>>;
-		bindings: RuntimeExecutableBindings<View>;
-		program: RuntimeApplicationProgram<Context, View>;
+		bindings: RuntimeExecutableBindings<OperationView>;
+		program: RuntimeApplicationProgram<Context, OperationView, ExecutionView>;
 		drainMilliseconds?: number;
 		maximumActiveRootsPerPrincipal?: number;
 		events?: (event: ExecutionEventV1) => void;
 		now?: () => Date;
 	}>,
-): Promise<RuntimeApplication<ContextInputOf<Context>>> {
+): Promise<RuntimeApplication<ContextInputOf<Context>, ExecutionView>> {
 	if (
 		input.maximumActiveRootsPerPrincipal !== undefined &&
 		(!Number.isSafeInteger(input.maximumActiveRootsPerPrincipal) ||
@@ -116,14 +121,32 @@ export async function createRuntimeApplication<
 		artifacts,
 		input.bindings,
 		input.serverExports,
-		input.program as RuntimeApplicationProgram<ContextDefinition, View>,
+		input.program as RuntimeApplicationProgram<
+			ContextDefinition,
+			OperationView,
+			ExecutionView
+		>,
 	);
 	const operationEngine = createOperationEngine(
 		queryBindings,
 		artifacts.wireContract.operations,
 	);
 	await input.program.verifyReadiness?.(artifacts);
-	const core = createApplicationRuntime(input.program);
+	const core = createApplicationRuntime({
+		services: input.program.services,
+		context: input.program.context,
+		bootstrap: input.program.bootstrap,
+		project: async (scope) => {
+			const operation = await input.program.project(scope);
+			const execution = () =>
+				Promise.resolve(
+					input.program.projectExecution
+						? input.program.projectExecution(scope)
+						: (operation as unknown as ExecutionView),
+				);
+			return Object.freeze({ operation, execution });
+		},
+	});
 	const activeByPrincipal = new Map<string, number>();
 	const activeRoots = new Set<Promise<unknown>>();
 	const rootControllers = new Set<AbortController>();
@@ -162,10 +185,13 @@ export async function createRuntimeApplication<
 		use: (
 			input: Readonly<{
 				invoke(
-					operation: PreparedOperation<View>,
+					operation: PreparedOperation<OperationView>,
 					callId: string,
 				): Promise<unknown>;
-				view: View;
+				view: Readonly<{
+					operation: OperationView;
+					execution(): Promise<ExecutionView>;
+				}>;
 			}>,
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> => {
@@ -215,7 +241,7 @@ export async function createRuntimeApplication<
 						try {
 							const result = await operationEngine.invokePrepared(
 								operation,
-								view,
+								view.operation,
 							);
 							if (controlled.deadlineExpired)
 								throw new OperationFailure("DEADLINE_EXCEEDED", true);
@@ -266,19 +292,20 @@ export async function createRuntimeApplication<
 		}
 	};
 
-	const execution: RuntimeApplication<ContextInputOf<Context>>["execution"] = (
-		root,
-		use,
-	) =>
-		executeRoot(root, ({ invoke }) => {
-			const operations = Object.freeze({
+	const execution: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["execution"] = (root, use) =>
+		executeRoot(root, async ({ invoke, view }) => {
+			const scope = Object.freeze({
 				invoke: (identity: string, operationInput: unknown) => {
 					const prepared = operationEngine.prepare(identity, operationInput);
 					callSequence += 1;
 					return invoke(prepared, `direct:${callSequence}`);
 				},
+				execution: await view.execution(),
 			});
-			return use(operations);
+			return use(scope);
 		});
 
 	const fetch = async (request: Request): Promise<Response> => {
@@ -313,7 +340,7 @@ export async function createRuntimeApplication<
 			frame.wireDigest !== artifacts.wireContract.digest
 		)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
-		let prepared: PreparedOperation<View>;
+		let prepared: PreparedOperation<OperationView>;
 		try {
 			prepared = operationEngine.prepare(frame.operation, frame.input);
 		} catch (error) {

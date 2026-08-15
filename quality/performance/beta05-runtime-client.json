@@ -5,8 +5,8 @@
 	"command": ["bun", "test", "tests/performance/beta05-runtime-client.test.ts"],
 	"budgetOwner": "BETA-05",
 	"metrics": {
-		"coldStartMs": { "direction": "max", "budget": 700, "unit": "ms" },
-		"wireExecute20Ms": { "direction": "max", "budget": 500, "unit": "ms" },
+		"coldStartMs": { "direction": "max", "budget": 650, "unit": "ms" },
+		"wireExecute20Ms": { "direction": "max", "budget": 600, "unit": "ms" },
 		"requestBytes": { "direction": "max", "budget": 1048576, "unit": "bytes" },
 		"responseBytes": { "direction": "max", "budget": 1048576, "unit": "bytes" },
 		"serverBundleBytes": {

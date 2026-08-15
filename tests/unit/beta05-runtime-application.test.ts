@@ -462,6 +462,7 @@ test("rejects a changed inventory file before readiness or executable disclosure
 
 test("runs one valid build through the direct operation engine", async () => {
 	let handlerCalls = 0;
+	let projectionCalls = 0;
 	const context = defineContext({
 		name: "app.context",
 		input: codec.object({ companyId: codec.uuid() }),
@@ -489,9 +490,10 @@ test("runs one valid build through the direct operation engine", async () => {
 		services: [],
 		context,
 		bootstrap: { get: async () => null },
-		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
-			signal: facts.signal,
-		}),
+		project: ({ facts }: { facts: { signal: AbortSignal } }) => {
+			projectionCalls += 1;
+			return { signal: facts.signal };
+		},
 		resolvePrincipal: async () => principal.anonymous(),
 	};
 	const executableInput = executableBindings(artifacts, bindings);
@@ -538,6 +540,7 @@ test("runs one valid build through the direct operation engine", async () => {
 	);
 	expect(result).toEqual({ count: 2 });
 	expect(handlerCalls).toBe(1);
+	expect(projectionCalls).toBe(1);
 	await app.close();
 });
 

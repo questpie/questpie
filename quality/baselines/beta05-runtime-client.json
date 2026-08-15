@@ -12,28 +12,28 @@
 		"recordedAt": "2026-08-15"
 	},
 	"observed": {
-		"coldStartMs": 67.8471300000001,
-		"wireExecute20Ms": 47.67284100000006,
+		"coldStartMs": 64.86280899999997,
+		"wireExecute20Ms": 57.019349999999804,
 		"requestBytes": 523,
 		"responseBytes": 869,
-		"serverBundleBytes": 154219,
+		"serverBundleBytes": 154939,
 		"runtimeBuildBytes": 6189
 	},
 	"budgetDerivation": {
 		"coldStartMs": {
-			"referenceObservedMs": 67.8471300000001,
+			"referenceObservedMs": 64.86280899999997,
 			"multiplier": 10,
 			"roundUpQuantumMs": 50
 		},
 		"wireExecute20Ms": {
-			"referenceObservedMs": 47.67284100000006,
+			"referenceObservedMs": 57.019349999999804,
 			"multiplier": 10,
 			"roundUpQuantumMs": 50
 		}
 	},
 	"sizeBudgetDerivation": {
 		"serverBundleBytes": {
-			"referenceObservedBytes": 154219,
+			"referenceObservedBytes": 154939,
 			"multiplier": 2,
 			"roundUpQuantumBytes": 4096
 		},
@@ -44,8 +44,8 @@
 		}
 	},
 	"budgets": {
-		"coldStartMs": 700,
-		"wireExecute20Ms": 500,
+		"coldStartMs": 650,
+		"wireExecute20Ms": 600,
 		"requestBytes": 1048576,
 		"responseBytes": 1048576,
 		"serverBundleBytes": 311296,
