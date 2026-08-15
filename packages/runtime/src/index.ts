@@ -8,6 +8,7 @@ export type {
 
 export {
 	createCursorBindingV2,
+	createBunPostgresQueryAdapter,
 	DataCursorBindingError,
 	DataQueryExecutionError,
 	executePostgresQuery,

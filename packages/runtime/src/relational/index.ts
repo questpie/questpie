@@ -7,6 +7,7 @@ export type {
 } from "./cursor";
 
 export { DataQueryExecutionError, executePostgresQuery } from "./query";
+export { createBunPostgresQueryAdapter } from "./postgres";
 export type {
 	DataQueryBindingV1,
 	DataQueryDiagnosticCode,
