@@ -466,3 +466,89 @@ test("rejects a structurally forged Principal before Context Resolution", async 
 	expect(resolutions).toBe(0);
 	await runtime.close();
 });
+
+test("disposes execution Services after handler failure", async () => {
+	const events: string[] = [];
+	const handlerService = defineService({
+		name: "handler.execution",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			events.push("create");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose");
+		},
+	});
+	const handlerContext = defineContext({
+		name: "handler.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [handlerService],
+		context: handlerContext,
+		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
+		project: async ({ service }) => ({
+			handler: await service(handlerService),
+		}),
+	});
+	await expect(
+		runtime.execution(
+			{
+				principal: principal.user({ id: principalId }),
+				context: { companyId },
+			},
+			({ handler }) => {
+				expect(handler.ready).toBe(true);
+				throw new Error("handler failed");
+			},
+		),
+	).rejects.toThrow("handler failed");
+	expect(events).toEqual(["create", "dispose"]);
+	await runtime.close();
+});
+
+test("retains execution Services through SSE EOF", async () => {
+	const events: string[] = [];
+	const sseService = defineService({
+		name: "sse.execution",
+		lifetime: "execution",
+		effect: "read",
+		create: () => ({ ready: true }),
+		dispose: () => {
+			events.push("dispose");
+		},
+	});
+	const sseContext = defineContext({
+		name: "sse.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [sseService],
+		context: sseContext,
+		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
+		project: async ({ service }) => ({ sse: await service(sseService) }),
+	});
+	const response = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ sse }) => {
+			expect(sse.ready).toBe(true);
+			return new Response("event: ready\ndata: {}\n\n", {
+				headers: { "content-type": "text/event-stream" },
+			});
+		},
+	);
+	expect(events).toEqual([]);
+	expect(response.headers.get("content-type")).toBe("text/event-stream");
+	expect(await response.text()).toBe("event: ready\ndata: {}\n\n");
+	expect(events).toEqual(["dispose"]);
+	await runtime.close();
+});
