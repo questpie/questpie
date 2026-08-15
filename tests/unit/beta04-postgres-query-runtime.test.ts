@@ -295,6 +295,28 @@ test("binds one exact authorized page and decodes structural disclosure", async 
 	});
 });
 
+test("normalizes PostgreSQL timestamp Dates before result and cursor validation", async () => {
+	const dateRows = rows().map((row) => ({
+		...row,
+		qp_f2: new Date(String(row.qp_f2)),
+	}));
+	const page = await executePostgresQuery({
+		plan,
+		binding,
+		executionFacts,
+		adapter: {
+			transaction: async (_options, use) =>
+				use({ query: async () => dateRows }),
+		},
+	});
+
+	expect(page.nodes[0]?.createdAt).toBe(createdAt1);
+	const cursor = JSON.parse(
+		Buffer.from(page.pageInfo.endCursor!, "base64url").toString(),
+	);
+	expect(cursor.order[0].value).toBe(createdAt2);
+});
+
 test("rejects exact binding failures before opening a transaction", async () => {
 	let transactions = 0;
 	const adapter: PostgresQueryAdapter = {

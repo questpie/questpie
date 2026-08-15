@@ -90,7 +90,11 @@ beforeAll(async () => {
 			),
 		),
 	]);
-	await applyCommittedMigrations({ migrations });
+	const applied = await applyCommittedMigrations({ migrations });
+	if (applied.status !== "applied")
+		throw new Error(
+			`failed to apply BETA-04 migrations: ${JSON.stringify(applied)}`,
+		);
 
 	const compilation = await compileApplication({
 		applicationRoot: fixtureRoot,
@@ -131,7 +135,8 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-	await Promise.all([database?.close(), lockDatabase?.close()]);
+	void database?.close({ timeout: 0 }).catch(() => {});
+	await lockDatabase?.close({ timeout: 0 });
 });
 
 describe.skipIf(!database)(

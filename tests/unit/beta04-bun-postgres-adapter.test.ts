@@ -14,24 +14,53 @@ function fakeSql() {
 	const calls: Array<
 		Readonly<{ sql: string; parameters: readonly unknown[] }>
 	> = [];
-	const beginModes: string[] = [];
+	const controlStatements: string[] = [];
 	let cancellations = 0;
 	let commits = 0;
 	let rollbacks = 0;
+	let closes = 0;
+	let releases = 0;
 	let block = false;
+	let rejectActive: ((reason?: unknown) => void) | undefined;
 	let started: (() => void) | undefined;
 	const startedPromise = new Promise<void>((resolve) => {
 		started = resolve;
 	});
 	const transaction = {
-		unsafe(sql: string, parameters: readonly unknown[]): DeferredQuery {
+		async close() {
+			closes += 1;
+			rejectActive?.(new Error("connection closed"));
+		},
+		release() {
+			releases += 1;
+		},
+		unsafe(sql: string, parameters: readonly unknown[] = []): DeferredQuery {
+			if (
+				sql === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" ||
+				sql === "COMMIT" ||
+				sql === "ROLLBACK"
+			) {
+				controlStatements.push(sql);
+				if (sql === "COMMIT") commits += 1;
+				if (sql === "ROLLBACK") rollbacks += 1;
+				const promise = Promise.resolve<readonly Record<string, unknown>[]>([]);
+				const control: DeferredQuery = {
+					cancel: () => control,
+					execute: () => control,
+					// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
+					then: promise.then.bind(promise),
+				};
+				return control;
+			}
 			calls.push({ sql, parameters });
 			let rejectQuery: (reason?: unknown) => void = () => {};
 			const promise = new Promise<readonly Record<string, unknown>[]>(
 				(resolve, reject) => {
 					rejectQuery = reject;
-					if (block) started?.();
-					else resolve([{ value: 1 }]);
+					if (block) {
+						rejectActive = reject;
+						started?.();
+					} else resolve([{ value: 1 }]);
 				},
 			);
 			const query: DeferredQuery = {
@@ -48,24 +77,13 @@ function fakeSql() {
 		},
 	};
 	const sql = {
-		async begin<Result>(
-			mode: string,
-			use: (value: typeof transaction) => Promise<Result>,
-		): Promise<Result> {
-			beginModes.push(mode);
-			try {
-				const result = await use(transaction);
-				commits += 1;
-				return result;
-			} catch (error) {
-				rollbacks += 1;
-				throw error;
-			}
+		async reserve() {
+			return transaction;
 		},
 	};
 	return {
 		calls,
-		beginModes,
+		controlStatements,
 		startedPromise,
 		get cancellations() {
 			return cancellations;
@@ -75,6 +93,12 @@ function fakeSql() {
 		},
 		get rollbacks() {
 			return rollbacks;
+		},
+		get closes() {
+			return closes;
+		},
+		get releases() {
+			return releases;
 		},
 		setBlock(value: boolean) {
 			block = value;
@@ -93,17 +117,19 @@ test("runs static SQL in one pinned read-only repeatable-read transaction", asyn
 	);
 
 	expect(rows).toEqual([{ value: 1 }]);
-	expect(database.beginModes).toEqual([
-		"isolation level repeatable read read only",
+	expect(database.controlStatements).toEqual([
+		"BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY",
+		"COMMIT",
 	]);
 	expect(database.calls).toEqual([
 		{ sql: "SELECT $1::integer AS value\n", parameters: [1] },
 	]);
 	expect(database.commits).toBe(1);
 	expect(database.rollbacks).toBe(0);
+	expect(database.releases).toBe(1);
 });
 
-test("cancels the Bun query, rolls back, and keeps the injected pool reusable", async () => {
+test("cancels and disconnects the Bun query while keeping the injected pool reusable", async () => {
 	const database = fakeSql();
 	const adapter = createBunPostgresQueryAdapter(database.sql);
 	const controller = new AbortController();
@@ -123,7 +149,8 @@ test("cancels the Bun query, rolls back, and keeps the injected pool reusable", 
 	controller.abort(new Error("stop"));
 	await expect(blocked).rejects.toThrow("query cancelled");
 	expect(database.cancellations).toBe(1);
-	expect(database.rollbacks).toBe(1);
+	expect(database.closes).toBe(1);
+	expect(database.rollbacks).toBe(0);
 
 	database.setBlock(false);
 	const rows = await adapter.transaction(
@@ -132,5 +159,5 @@ test("cancels the Bun query, rolls back, and keeps the injected pool reusable", 
 	);
 	expect(rows).toEqual([{ value: 1 }]);
 	expect(database.commits).toBe(1);
-	expect(database.beginModes).toHaveLength(2);
+	expect(database.releases).toBe(2);
 });

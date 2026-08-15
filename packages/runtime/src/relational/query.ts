@@ -487,8 +487,14 @@ function decodeField(
 	row: PostgresQueryRow,
 	field: ResultFieldV1,
 ): ScalarValue | null {
-	const value = row[field.column];
+	let value = row[field.column];
 	if (value === null && field.nullable) return null;
+	if (field.codec.kind === "timestamp" && value instanceof Date) {
+		if (Number.isNaN(value.getTime()))
+			throw new DataQueryExecutionError("QP-DATA-001", "execute");
+		const timestamp = value.toISOString();
+		value = field.codec.withTimezone ? timestamp : timestamp.slice(0, -1);
+	}
 	if (!validScalar(value, field.codec))
 		throw new DataQueryExecutionError("QP-DATA-001", "execute");
 	return value;
