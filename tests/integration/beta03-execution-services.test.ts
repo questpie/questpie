@@ -82,6 +82,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 		services: [auditConnection, executionAudit],
 		context: collaborationContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: async ({ facts, service }) => {
 			const [first, second] = await Promise.all([
 				service(executionAudit),
@@ -182,6 +183,7 @@ test("retains execution Services until a response body reaches EOF", async () =>
 		services: [streamService],
 		context: streamContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({ stream: await service(streamService) }),
 	});
 	let body!: ReadableStreamDefaultController<Uint8Array>;
@@ -241,6 +243,7 @@ test("aborts retained responses before closing application Services", async () =
 		services: [applicationService, executionService],
 		context: closeContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: async ({ facts, service }) => {
 			rootSignal = facts.signal;
 			return { execution: await service(executionService) };
@@ -300,6 +303,7 @@ test("isolates application Services between Runtime instances", async () => {
 		services: [isolatedService],
 		context: isolatedContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: async ({
 			service,
 		}: Parameters<
@@ -367,6 +371,7 @@ test("unwinds created dependencies after Service resolution failure", async () =
 		services: [dependency, failing],
 		context: failureContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: async ({ service }) => ({ failing: await service(failing) }),
 	});
 	let callbackCalls = 0;
@@ -405,6 +410,7 @@ test("decodes direct and Operation-Wire Context input through one root", async (
 		services: [],
 		context: wireContext,
 		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
 		project: ({ facts }) => facts,
 	});
 	const run = (context: unknown) =>
@@ -424,5 +430,39 @@ test("decodes direct and Operation-Wire Context input through one root", async (
 		run({ companyId: "not-a-uuid", authority: "system" }),
 	).rejects.toThrow("Context input");
 	expect(resolutions).toBe(2);
+	await runtime.close();
+});
+
+test("rejects a structurally forged Principal before Context Resolution", async () => {
+	let resolutions = 0;
+	const trustedContext = defineContext({
+		name: "trusted.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => {
+			resolutions += 1;
+			return { tenant: { id: input.companyId }, values: {} };
+		},
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context: trustedContext,
+		bootstrap: { get: async () => null },
+		acceptPrincipal: principal.is,
+		project: ({ facts }) => facts,
+	});
+	await expect(
+		runtime.execution(
+			{
+				principal: {
+					questpiePrincipal: true,
+					kind: "user",
+					id: principalId,
+				} as never,
+				context: { companyId },
+			},
+			() => null,
+		),
+	).rejects.toThrow("trusted Principal");
+	expect(resolutions).toBe(0);
 	await runtime.close();
 });

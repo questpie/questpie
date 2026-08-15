@@ -38,6 +38,7 @@ export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
 	readonly context: Context;
 	readonly bootstrap: ContextBootstrap;
+	readonly acceptPrincipal: (value: unknown) => value is Principal;
 	readonly project: (
 		scope: Readonly<{
 			facts: ExecutionFacts<ContextResolvedOf<Context>>;
@@ -156,7 +157,7 @@ export function createApplicationRuntime<
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
 		if (state !== "open") throw new Error("Runtime is closing");
-		if (input.principal.questpiePrincipal !== true)
+		if (!program.acceptPrincipal(input.principal))
 			throw new Error("Execution requires a trusted Principal");
 		const controller = new AbortController();
 		rootControllers.add(controller);

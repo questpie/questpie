@@ -14,6 +14,11 @@ test("types Service dependency edges and Context capabilities before projection"
 		await writeFile(
 			join(temporary, "src/service-context-types.ts"),
 			`import { codec, defineContext, defineService } from "questpie";
+import type { Principal } from "questpie";
+
+// @ts-expect-error Principal values are created by trusted principal factories
+const forgedPrincipal: Principal = { questpiePrincipal: true, kind: "user", id: "forged" };
+void forgedPrincipal;
 
 export const applicationRead = defineService({
 	name: "types.applicationRead",

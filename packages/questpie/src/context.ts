@@ -10,7 +10,11 @@ type DeepReadonly<Value> = Value extends (...input: never[]) => unknown
 			? Readonly<{ [Key in keyof Value]: DeepReadonly<Value[Key]> }>
 			: Value;
 
+const principalBrand: unique symbol = Symbol("questpie.principal");
+const trustedPrincipals = new WeakSet<object>();
+
 export type Principal = Readonly<{
+	readonly [principalBrand]: true;
 	readonly questpiePrincipal: true;
 	readonly kind: "anonymous" | "service" | "user";
 	readonly id: string;
@@ -19,7 +23,14 @@ export type Principal = Readonly<{
 export type Authority = Readonly<{ kind: "ordinary" }>;
 
 function createPrincipal(kind: Principal["kind"], id: string): Principal {
-	return Object.freeze({ questpiePrincipal: true, kind, id });
+	const value = Object.freeze({
+		[principalBrand]: true as const,
+		questpiePrincipal: true as const,
+		kind,
+		id,
+	});
+	trustedPrincipals.add(value);
+	return value;
 }
 
 export const principal = Object.freeze({
@@ -28,6 +39,8 @@ export const principal = Object.freeze({
 		createPrincipal("service", input.name),
 	user: (input: Readonly<{ id: string }>): Principal =>
 		createPrincipal("user", input.id),
+	is: (value: unknown): value is Principal =>
+		Boolean(value && typeof value === "object" && trustedPrincipals.has(value)),
 });
 
 export interface ContextBootstrap {
