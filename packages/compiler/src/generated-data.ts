@@ -150,14 +150,53 @@ function renderUniqueConstraints(
 		.join(" ")} }>`;
 }
 
-export function renderCoreDataContract(data: unknown, schema: unknown): string {
-	const dataProjection = record(data);
-	const schemaProjection = record(schema);
-	const collections = (dataProjection.collections as readonly unknown[])
+function renderRelations(
+	collection: RecordValue,
+	collections: ReadonlyMap<string, RecordValue>,
+): string {
+	return `Readonly<{ ${((collection.relations ?? []) as readonly unknown[])
 		.map(record)
 		.sort((left, right) =>
 			compareAscii(String(left.identity), String(right.identity)),
 		)
+		.map((relation) => {
+			const identity = String(relation.identity);
+			const key = identity.slice(
+				`${String(collection.identity)}/relation:`.length,
+			);
+			const targetIdentity = String(relation.target);
+			const target = collections.get(targetIdentity);
+			if (!target)
+				throw new TypeError(`missing Data Collection ${targetIdentity}`);
+			const targetName = targetIdentity.slice("collection:".length);
+			const targetFields = renderDataTree(
+				dataTree(target.fields as readonly unknown[]),
+				"fields",
+			);
+			const inverse =
+				relation.kind === "toMany"
+					? ` readonly inverseOf: ${JSON.stringify(relation.inverseOf)};`
+					: "";
+			return `readonly ${JSON.stringify(key)}: Readonly<{ readonly kind: ${JSON.stringify(relation.kind)}; readonly identity: ${JSON.stringify(identity)}; readonly target: Readonly<{ readonly name: ${JSON.stringify(targetName)}; readonly identity: ${JSON.stringify(targetIdentity)}; readonly fields: ${targetFields}; }>;${inverse} }>;`;
+		})
+		.join(" ")} }>`;
+}
+
+export function renderCoreDataContract(data: unknown, schema: unknown): string {
+	const dataProjection = record(data);
+	const schemaProjection = record(schema);
+	const dataCollections = (dataProjection.collections as readonly unknown[])
+		.map(record)
+		.sort((left, right) =>
+			compareAscii(String(left.identity), String(right.identity)),
+		);
+	const collectionMap = new Map(
+		dataCollections.map((collection) => [
+			String(collection.identity),
+			collection,
+		]),
+	);
+	const collections = dataCollections
 		.map((collection) => {
 			const identity = String(collection.identity);
 			const name = identity.slice("collection:".length);
@@ -169,7 +208,7 @@ export function renderCoreDataContract(data: unknown, schema: unknown): string {
 			if (!schemaCollection)
 				throw new TypeError(`missing Schema Collection ${identity}`);
 			const tree = dataTree(collection.fields as readonly unknown[]);
-			return `readonly ${JSON.stringify(name)}: Readonly<{ readonly name: ${JSON.stringify(name)}; readonly identity: ${JSON.stringify(identity)}; readonly fields: ${renderDataTree(tree, "fields")}; readonly uniqueConstraints: ${renderUniqueConstraints(collection, schemaCollection)}; readonly row: ${renderDataTree(tree, "row")}; readonly insert: ${renderDataTree(tree, "insert")}; readonly update: ${renderDataTree(tree, "update")}; readonly relations: Readonly<{}>; }>;`;
+			return `readonly ${JSON.stringify(name)}: Readonly<{ readonly name: ${JSON.stringify(name)}; readonly identity: ${JSON.stringify(identity)}; readonly fields: ${renderDataTree(tree, "fields")}; readonly uniqueConstraints: ${renderUniqueConstraints(collection, schemaCollection)}; readonly row: ${renderDataTree(tree, "row")}; readonly insert: ${renderDataTree(tree, "insert")}; readonly update: ${renderDataTree(tree, "update")}; readonly relations: ${renderRelations(collection, collectionMap)}; }>;`;
 		})
 		.join("\n\t\t\t");
 	return `export interface AppContract {

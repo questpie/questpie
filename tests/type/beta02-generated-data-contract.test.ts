@@ -58,6 +58,7 @@ type Equal<Left, Right> =
 	(<Value>() => Value extends Right ? 1 : 2) ? true : false;
 type Expect<Value extends true> = Value;
 type Customer = AppData["collections"]["contractCustomers"];
+type Space = AppData["collections"]["spaces"];
 
 type DataAlias = Expect<Equal<AppData, AppContract["data"]>>;
 type Name = Expect<Equal<Customer["name"], "contractCustomers">>;
@@ -135,6 +136,22 @@ type Update = Expect<Equal<
 		sequence?: number;
 	}>
 >>;
+type CompanyRelation = Expect<Equal<
+	Space["relations"]["company"],
+	Readonly<{
+		kind: "toOne";
+		identity: "collection:spaces/relation:company";
+		target: Readonly<{
+			name: "companies";
+			identity: "collection:companies";
+			fields: AppData["collections"]["companies"]["fields"];
+		}>;
+	}>
+>>;
+type RelationTargetIsOneHop = Expect<Equal<
+	keyof Space["relations"]["company"]["target"],
+	"fields" | "identity" | "name"
+>>;
 
 const insert: Customer["insert"] = {
 	address: { city: "Bratislava" },
@@ -157,6 +174,8 @@ void (0 as unknown as UniqueTuple);
 void (0 as unknown as Row);
 void (0 as unknown as Insert);
 void (0 as unknown as Update);
+void (0 as unknown as CompanyRelation);
+void (0 as unknown as RelationTargetIsOneHop);
 void insert;
 void update;
 void missingAddress;

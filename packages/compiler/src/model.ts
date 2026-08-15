@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { canonicalBytes, compareAscii, digest } from "./canonical";
+import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
 import { flattenFieldContracts } from "./schema/field-contract";
 import { fieldPath, indexField } from "./schema/field-reference";
@@ -61,6 +62,19 @@ function indexContract(value: RecordValue): RecordValue {
 }
 
 function relationContract(value: RecordValue): RecordValue {
+	if (value.kind === "toMany") {
+		const keys = Object.keys(value).sort(compareAscii);
+		if (canonicalBytes(keys) !== canonicalBytes(["inverseOf", "kind"]))
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				"relation.toMany accepts only inverseOf",
+			);
+		return {
+			kind: "toMany",
+			inverseOf: string(value.inverseOf, "relation.inverseOf"),
+		};
+	}
 	return {
 		kind: "toOne",
 		target: value.target,
@@ -702,28 +716,30 @@ export function projectManifest(
 				};
 			},
 		);
-		const relations = entries(resource.value.relations).map(([key, value]) => {
-			const identity = `${resource.identity}/relation:${key}`;
-			return {
-				kind: "toOne",
-				identity,
-				target: value.target,
-				fields: (value.fields as readonly unknown[]).map((field) =>
-					fieldSemanticIdentity(resource.identity, fieldPath(field)),
-				),
-				references: (value.references as readonly unknown[]).map((field) =>
-					fieldSemanticIdentity(String(value.target), fieldPath(field)),
-				),
-				constraintPostgresName: physicalName(
-					configuration,
+		const relations = entries(resource.value.relations)
+			.filter(([, value]) => value.kind === "toOne")
+			.map(([key, value]) => {
+				const identity = `${resource.identity}/relation:${key}`;
+				return {
+					kind: "toOne",
 					identity,
-					value.postgresName,
-					`qp_fk_${tableName}_${snake(key)}`,
-				),
-				onDelete: value.onDelete,
-				onUpdate: value.onUpdate,
-			};
-		});
+					target: value.target,
+					fields: (value.fields as readonly unknown[]).map((field) =>
+						fieldSemanticIdentity(resource.identity, fieldPath(field)),
+					),
+					references: (value.references as readonly unknown[]).map((field) =>
+						fieldSemanticIdentity(String(value.target), fieldPath(field)),
+					),
+					constraintPostgresName: physicalName(
+						configuration,
+						identity,
+						value.postgresName,
+						`qp_fk_${tableName}_${snake(key)}`,
+					),
+					onDelete: value.onDelete,
+					onUpdate: value.onUpdate,
+				};
+			});
 		return {
 			identity: resource.identity,
 			postgresName: tableName,
@@ -870,6 +886,7 @@ export function projectManifest(
 		},
 		collections: schemaCollections,
 	};
+	const dataRelations = projectDataRelations(collections, schemaCollections);
 	const data = {
 		format: "questpie.data-contract-projection",
 		version: 1,
@@ -891,13 +908,7 @@ export function projectManifest(
 					nullable: field.nullable,
 					hasDefault: field.default !== null,
 				})),
-				relations: collection.relations.map((relation) => ({
-					kind: "toOne",
-					identity: relation.identity,
-					target: relation.target,
-					fields: relation.fields,
-					references: relation.references,
-				})),
+				relations: dataRelations.get(collection.identity) ?? [],
 			};
 		}),
 	};

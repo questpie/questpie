@@ -377,8 +377,8 @@ export function index<const Fields extends readonly IndexField[]>(
 
 export interface RelationDefinition<
 	Target extends `collection:${string}` = `collection:${string}`,
-	Fields extends readonly FieldReference[] = readonly never[],
-	References extends readonly FieldReference[] = readonly never[],
+	Fields extends readonly FieldReference[] = readonly FieldReference[],
+	References extends readonly FieldReference[] = readonly FieldReference[],
 > {
 	readonly kind: "toOne";
 	readonly target: Target;
@@ -389,10 +389,29 @@ export interface RelationDefinition<
 	readonly postgresName: string | null;
 }
 
+export type RelationReference<
+	Name extends string = string,
+	Member extends string = string,
+> = `collection:${Name}/relation:${Member}`;
+
+export interface InverseRelationDefinition<
+	InverseOf extends RelationReference = RelationReference,
+> {
+	readonly kind: "toMany";
+	readonly inverseOf: InverseOf;
+}
+
 export function relationRef<const Name extends string>(
 	name: Name,
-): `collection:${Name}` {
-	return `collection:${name}`;
+): `collection:${Name}`;
+export function relationRef<
+	const Name extends string,
+	const Member extends string,
+>(name: Name, member: Member): RelationReference<Name, Member>;
+export function relationRef(name: string, member?: string): string {
+	return member === undefined
+		? `collection:${name}`
+		: `collection:${name}/relation:${member}`;
 }
 
 export const relation = Object.freeze({
@@ -419,6 +438,10 @@ export const relation = Object.freeze({
 			onUpdate: input.onUpdate ?? "restrict",
 			postgresName: input.postgres?.name ?? null,
 		}),
+	toMany: <const InverseOf extends RelationReference>(
+		input: Readonly<{ inverseOf: InverseOf }>,
+	): InverseRelationDefinition<InverseOf> =>
+		Object.freeze({ ...input, kind: "toMany", inverseOf: input.inverseOf }),
 });
 
 interface DefinitionBrand {
@@ -462,7 +485,7 @@ export interface CollectionDefinition<
 		Record<string, { readonly fields: readonly IndexField[] }>
 	> = Readonly<Record<never, never>>,
 	Relations extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, RelationDefinition | InverseRelationDefinition>
 	> = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: DefinitionBrand;
@@ -487,6 +510,22 @@ type ValidateFieldReferences<
 	> extends never
 		? Members[Key]
 		: never;
+};
+
+type ValidateRelationFieldReferences<
+	Fields extends Readonly<Record<string, FieldNode>>,
+	Members extends Readonly<
+		Record<string, RelationDefinition | InverseRelationDefinition>
+	>,
+> = {
+	readonly [Key in keyof Members]: Members[Key] extends RelationDefinition
+		? Exclude<
+				MemberFieldReference<Members[Key]["fields"][number]>,
+				FieldReferences<Fields>
+			> extends never
+			? Members[Key]
+			: never
+		: Members[Key];
 };
 
 type MemberFieldReference<Value> =
@@ -551,7 +590,7 @@ export function defineCollection<
 		Record<string, { readonly fields: readonly IndexField[] }>
 	>,
 	const Relations extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, RelationDefinition | InverseRelationDefinition>
 	>,
 >(
 	input: Readonly<{
@@ -559,7 +598,7 @@ export function defineCollection<
 		fields: Fields;
 		constraints: Constraints & ValidateFieldReferences<Fields, Constraints>;
 		indexes?: Indexes & ValidateFieldReferences<Fields, Indexes>;
-		relations?: Relations & ValidateFieldReferences<Fields, Relations>;
+		relations?: Relations & ValidateRelationFieldReferences<Fields, Relations>;
 		augmentations?: readonly CollectionAugmentation[];
 		postgres?: Readonly<{ name: string }>;
 	}>,

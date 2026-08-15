@@ -1,5 +1,6 @@
 export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-002"
+	| "QP-COMPOSE-004"
 	| "QP-COMPOSE-005"
 	| "QP-COMPOSE-006"
 	| "QP-COMPOSE-008"
@@ -11,6 +12,7 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-015"
 	| "QP-COMPOSE-017"
 	| "QP-COMPOSE-020"
+	| "QP-DATA-003"
 	| "QP-SCHEMA-001"
 	| "QP-SCHEMA-002"
 	| "QP-SCHEMA-003"
