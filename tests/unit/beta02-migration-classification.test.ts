@@ -537,3 +537,43 @@ test("classifies numeric precision and scale migrations", async () => {
 		expect(result.plan.classification, scenario.name).toBe(scenario.expected);
 	}
 });
+
+test("orders replacement dependencies transitively with unrelated steps", async () => {
+	const base = await collaborationSchema();
+	const target = structuredClone(base);
+	const messages = target.collections.find(
+		(collection: { identity: string }) =>
+			collection.identity === "collection:messages",
+	);
+	const minimum = messages.constraints.find(
+		(constraint: { identity: string }) =>
+			constraint.identity ===
+			"collection:messages/field:body/invariant:minLength",
+	);
+	minimum.expression.right.value = 2;
+	const existingIndex = messages.indexes[0];
+	messages.indexes.push({
+		...structuredClone(existingIndex),
+		identity: "collection:messages/index:byAuditIdAgain",
+		postgresName: "qp_ix_messages_by_audit_id_again",
+	});
+	messages.indexes.sort(
+		(left: { identity: string }, right: { identity: string }) =>
+			left.identity.localeCompare(right.identity),
+	);
+
+	const result = createMigrationPlan({
+		baseMigration: "000001_create-collaboration",
+		baseSchema: base,
+		slug: "replace-check-and-add-index",
+		targetSchema: target,
+	});
+
+	expect(result.status).toBe("planned");
+	if (result.status !== "planned") throw new Error("plan disappeared");
+	expect(result.plan.steps.map((step) => step.kind)).toEqual([
+		"addIndex",
+		"dropConstraint",
+		"addConstraint",
+	]);
+});

@@ -414,7 +414,9 @@ function expectedConstraintDefinition(
 			String(value)
 				.replace(/([a-z])([A-Z])/g, "$1 $2")
 				.toUpperCase();
-		return `FOREIGN KEY (${(object.fields as readonly string[]).join(", ")}) REFERENCES ${schemaName}.${String(object.referencedTable)}(${(object.referencedFields as readonly string[]).join(", ")}) ON UPDATE ${action(object.onUpdate)} ON DELETE ${action(object.onDelete)}`;
+		const clause = (kind: "UPDATE" | "DELETE", value: unknown) =>
+			value === "noAction" ? "" : ` ON ${kind} ${action(value)}`;
+		return `FOREIGN KEY (${(object.fields as readonly string[]).join(", ")}) REFERENCES ${schemaName}.${String(object.referencedTable)}(${(object.referencedFields as readonly string[]).join(", ")})${clause("UPDATE", object.onUpdate)}${clause("DELETE", object.onDelete)}`;
 	}
 	return fail(
 		"QP-SCHEMA-028",

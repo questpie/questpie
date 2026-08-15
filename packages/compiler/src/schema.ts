@@ -219,20 +219,44 @@ const kindRank: readonly MigrationStepKindV1[] = [
 ] as const;
 
 function sortSteps(steps: MigrationStepV1[]): MigrationStepV1[] {
-	return steps.sort((left, right) => {
-		if (left.targetIdentity === right.targetIdentity) {
-			const replacements: Readonly<Record<string, string>> = {
-				addConstraint: "dropConstraint",
-				addRelation: "dropRelation",
-				addIndex: "dropIndex",
-			};
-			if (replacements[left.kind] === right.kind) return 1;
-			if (replacements[right.kind] === left.kind) return -1;
-		}
+	const replacements: Readonly<Record<string, MigrationStepKindV1>> = {
+		addConstraint: "dropConstraint",
+		addRelation: "dropRelation",
+		addIndex: "dropIndex",
+	};
+	const compare = (left: MigrationStepV1, right: MigrationStepV1) => {
 		const kindOrder =
 			kindRank.indexOf(left.kind) - kindRank.indexOf(right.kind);
-		return kindOrder || compareAscii(left.targetIdentity, right.targetIdentity);
-	});
+		return (
+			kindOrder ||
+			compareAscii(left.targetIdentity, right.targetIdentity) ||
+			compareAscii(left.stepId, right.stepId)
+		);
+	};
+	const pending = [...steps];
+	const sorted: MigrationStepV1[] = [];
+	while (pending.length > 0) {
+		const ready = pending
+			.filter(
+				(candidate) =>
+					!pending.some(
+						(predecessor) =>
+							predecessor.targetIdentity === candidate.targetIdentity &&
+							predecessor.kind === replacements[candidate.kind],
+					),
+			)
+			.sort(compare);
+		const next = ready[0];
+		if (!next)
+			return schemaError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				"migration step dependency cycle",
+			);
+		sorted.push(next);
+		pending.splice(pending.indexOf(next), 1);
+	}
+	return sorted;
 }
 
 function childRecords(

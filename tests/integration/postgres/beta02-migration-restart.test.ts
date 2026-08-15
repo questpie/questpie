@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -284,6 +284,63 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
 			);
 		}
+	}, 10_000);
+
+	test("matches PostgreSQL noAction and setNull foreign-key actions", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "fk-actions-probe",
+			postgresSchema: "fk_actions_probe",
+		};
+		const messages = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		const authorId = messages.fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:messages/field:authorMembershipId",
+		);
+		const author = messages.relations.find(
+			(relation: { identity: string }) =>
+				relation.identity === "collection:messages/relation:author",
+		);
+		authorId.nullable = true;
+		author.onUpdate = "noAction";
+		author.onDelete = "setNull";
+
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-fk-actions-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+		const [actions] = await database!<{ onDelete: string; onUpdate: string }[]>`
+			select con.confdeltype::text as "onDelete", con.confupdtype::text as "onUpdate"
+			from pg_catalog.pg_constraint con
+			join pg_catalog.pg_class rel on rel.oid = con.conrelid
+			join pg_catalog.pg_namespace ns on ns.oid = rel.relnamespace
+			where ns.nspname = 'fk_actions_probe'
+			  and con.conname = 'qp_fk_messages_author'
+		`;
+		expect(actions).toEqual({ onDelete: "n", onUpdate: "a" });
+		await expect(
+			inspectSchemaFingerprint({ schema: targetSchema }),
+		).resolves.toBeDefined();
 	}, 10_000);
 
 	test("stores and fingerprints every foundational Field family", async () => {
