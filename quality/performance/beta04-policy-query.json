@@ -1,0 +1,34 @@
+{
+	"id": "beta04-policy-query",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta04-policy-query.test.ts"],
+	"budgetOwner": "BETA-04",
+	"metrics": {
+		"compileAndLowerMs": {
+			"direction": "max",
+			"budget": 5000,
+			"unit": "ms"
+		},
+		"bindExecute100Ms": {
+			"direction": "max",
+			"budget": 100,
+			"unit": "ms"
+		},
+		"maximumRowsRead": {
+			"direction": "max",
+			"budget": 101,
+			"unit": "rows"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}
