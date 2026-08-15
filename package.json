@@ -1,5 +1,5 @@
 {
-	"name": "questpie",
+	"name": "@questpie/workspace",
 	"private": true,
 	"workspaces": [
 		"apps/*",
@@ -48,6 +48,7 @@
 		"knip": "6.32.1",
 		"oxfmt": "^0.41.0",
 		"oxlint": "^1.56.0",
+		"questpie": "workspace:*",
 		"skills-ref": "0.1.5",
 		"turbo": "^2.6.3",
 		"typescript": "6.0.2"
