@@ -96,15 +96,8 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 		return { kind: "uuid", value };
 	}
 	if (type.kind === "timestamp") {
-		if (value instanceof Date && Number.isNaN(value.valueOf()))
-			return invalid("requires a valid timestamp");
 		const withTimezone = type.withTimezone === true;
-		const normalized =
-			value instanceof Date
-				? withTimezone
-					? value.toISOString()
-					: value.toISOString().slice(0, -1)
-				: value;
+		const normalized = value;
 		const pattern = withTimezone
 			? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
 			: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
@@ -138,6 +131,11 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 			number > 9_223_372_036_854_775_807n
 		)
 			return invalid("is outside PostgreSQL bigint");
+		if (
+			(typeof type.minimum === "string" && number < BigInt(type.minimum)) ||
+			(typeof type.maximum === "string" && number > BigInt(type.maximum))
+		)
+			return invalid("violates its bigint bounds");
 		return { kind: "bigint", value };
 	}
 	if (type.kind === "numeric") {
@@ -186,6 +184,8 @@ function normalizeValue(field: JsonRecord, value: unknown): SeedValueV1 {
 		typeof value === "number" &&
 		Number.isSafeInteger(value)
 	) {
+		if (value < -2_147_483_648 || value > 2_147_483_647)
+			return invalid("is outside PostgreSQL integer");
 		if (
 			(typeof type.minimum === "number" && value < type.minimum) ||
 			(typeof type.maximum === "number" && value > type.maximum)

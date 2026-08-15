@@ -14,7 +14,7 @@ function typeFromCodec(value: unknown): string {
 	if (codec.kind === "uuid" || codec.kind === "text") return "string";
 	if (codec.kind === "boolean") return "boolean";
 	if (codec.kind === "integer") return "number";
-	if (codec.kind === "timestamp") return "Date";
+	if (codec.kind === "timestamp") return "string";
 	if (codec.kind === "object") {
 		const properties = Object.entries(record(codec.properties))
 			.sort(([left], [right]) => compareAscii(left, right))
@@ -36,7 +36,7 @@ function fieldType(field: RecordValue): string {
 			: scalar === "integer"
 				? "number"
 				: scalar === "timestamp"
-					? "Date"
+					? "string"
 					: scalar === "object"
 						? embeddedFieldType(field)
 						: scalar === "array"

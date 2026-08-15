@@ -51,7 +51,7 @@ type FieldRuntimeOptions = FieldBaseOptions &
 		withTimezone?: boolean;
 	}>;
 
-type FieldValue = object | string | number | boolean | Date | null;
+type FieldValue = object | string | number | boolean | null;
 
 export interface FieldDefinition<
 	Value = FieldValue,
@@ -88,29 +88,19 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 		? Default
 		: null
 > {
-	const normalizedOptions: Record<string, unknown> = {};
-	for (const key of [
-		"minLength",
-		"maxLength",
-		"minimum",
-		"maximum",
-		"precision",
-		"properties",
-		"items",
-		"maximumItems",
-		"scale",
-		"withTimezone",
-	] as const) {
-		const value = options[key];
-		if (value !== undefined) normalizedOptions[key] = value;
-	}
+	const {
+		nullable = false,
+		default: defaultValue = null,
+		postgres,
+		...scalarOptions
+	} = options;
 	return Object.freeze({
 		kind: "field",
 		scalar,
-		nullable: options.nullable ?? false,
-		default: options.default ?? null,
-		postgresName: options.postgres?.name ?? null,
-		options: Object.freeze(normalizedOptions),
+		nullable,
+		default: defaultValue,
+		postgresName: postgres?.name ?? null,
+		options: Object.freeze(scalarOptions),
 	}) as FieldDefinition<
 		Value,
 		Options extends { nullable: true } ? true : false,
@@ -125,7 +115,13 @@ export const field = Object.freeze({
 		const Options extends FieldBaseOptions &
 			Readonly<{ default?: "randomUuid" }>,
 	>(
-		options: Options = {} as Options,
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: "randomUuid" }>
+		> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: "randomUuid" }>
+		>,
 	) => fieldDefinition<string, Options>("uuid", options),
 	text: <
 		const Options extends FieldBaseOptions &
@@ -135,12 +131,34 @@ export const field = Object.freeze({
 				default?: string;
 			}>,
 	>(
-		options: Options = {} as Options,
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{
+					minLength?: number;
+					maxLength?: number;
+					default?: string;
+				}>
+		> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{
+					minLength?: number;
+					maxLength?: number;
+					default?: string;
+				}>
+		>,
 	) => fieldDefinition<string, Options>("text", options),
 	boolean: <
 		const Options extends FieldBaseOptions & Readonly<{ default?: boolean }>,
 	>(
-		options: Options = {} as Options,
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: boolean }>
+		> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: boolean }>
+		>,
 	) => fieldDefinition<boolean, Options>("boolean", options),
 	integer: <
 		const Options extends FieldBaseOptions &
@@ -150,7 +168,23 @@ export const field = Object.freeze({
 				default?: number;
 			}>,
 	>(
-		options: Options = {} as Options,
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{
+					minimum?: number;
+					maximum?: number;
+					default?: number;
+				}>
+		> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions &
+				Readonly<{
+					minimum?: number;
+					maximum?: number;
+					default?: number;
+				}>
+		>,
 	) => fieldDefinition<number, Options>("integer", options),
 	bigint: <const Options extends BigintFieldOptions>(
 		options: ExactOptions<Options, BigintFieldOptions> = {} as ExactOptions<
@@ -165,8 +199,14 @@ export const field = Object.freeze({
 		const Options extends FieldBaseOptions &
 			Readonly<{ default?: "now"; withTimezone?: boolean }>,
 	>(
-		options: Options = {} as Options,
-	) => fieldDefinition<Date, Options>("timestamp", options),
+		options: ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
+		> = {} as ExactOptions<
+			Options,
+			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
+		>,
+	) => fieldDefinition<string, Options>("timestamp", options),
 	date: <const Options extends FieldBaseOptions>(
 		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
 			Options,
@@ -519,9 +559,7 @@ export function defineCollection<
 
 type SeedValueForField<Field> =
 	Field extends FieldDefinition<infer Value, infer Nullable>
-		? Value extends Date
-			? Value | string | (Nullable extends true ? null : never)
-			: Value | (Nullable extends true ? null : never)
+		? Value | (Nullable extends true ? null : never)
 		: never;
 
 type SeedValueForNode<

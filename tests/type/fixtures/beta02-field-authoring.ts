@@ -31,6 +31,11 @@ field.text({ default: "ready" });
 field.boolean({ default: false });
 field.integer({ default: 42 });
 
+// @ts-expect-error Field options are an exact closed contract
+field.uuid({ unknown: true });
+// @ts-expect-error timestamp flags are booleans
+field.timestamp({ withTimezone: "yes" });
+
 // @ts-expect-error bigint literal schema defaults are deferred in v1
 field.bigint({ default: "1" });
 // @ts-expect-error numeric literal schema defaults are deferred in v1

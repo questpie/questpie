@@ -3,7 +3,7 @@ import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { compileApplication } from "@questpie/compiler";
+import { compileApplication, createCommittedSeed } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -25,6 +25,7 @@ export const measurements = defineCollection({
 		label: field.text({ default: "now" }),
 		enabled: field.boolean({ default: true }),
 		position: field.integer({ default: 0 }),
+		observedAt: field.timestamp({ withTimezone: true }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
@@ -72,6 +73,10 @@ export const measurements = defineCollection({
 				expect.objectContaining({
 					identity: "collection:measurements/field:label",
 					default: { kind: "literal", value: "now" },
+				}),
+				expect.objectContaining({
+					identity: "collection:measurements/field:observedAt",
+					type: { kind: "timestamp", withTimezone: true },
 				}),
 				expect.objectContaining({
 					identity: "collection:measurements/field:position",
@@ -122,8 +127,32 @@ export const measurements = defineCollection({
 				),
 			);
 			expect(compilation.generatedFiles["app.ts"]).toContain(
-				'readonly "amount": string; readonly "day": string | null; readonly "enabled": boolean; readonly "id": string; readonly "label": string; readonly "position": number;',
+				'readonly "amount": string; readonly "day": string | null; readonly "enabled": boolean; readonly "id": string; readonly "label": string; readonly "observedAt": string; readonly "position": number;',
 			);
+			const definition = (id: unknown, position?: unknown) => ({
+				name: "measurements.demo.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:measurements",
+						values: {
+							id,
+							amount: "1.0000",
+							observedAt: "2026-08-15T12:00:00.000Z",
+							...(position === undefined ? {} : { position }),
+						},
+					},
+				],
+			});
+			expect(() =>
+				createCommittedSeed({ definition: definition("-1"), schema }),
+			).toThrow(/field:id violates its bigint bounds/);
+			expect(() =>
+				createCommittedSeed({
+					definition: definition("1", 2_147_483_648),
+					schema,
+				}),
+			).toThrow(/field:position is outside PostgreSQL integer/);
 		} finally {
 			await rm(temporary, { recursive: true });
 		}

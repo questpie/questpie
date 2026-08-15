@@ -117,6 +117,26 @@ describe("BETA-02 committed Seeds", () => {
 		).toThrow(/QP-SEED-003/);
 		expect(() =>
 			createCommittedSeed({
+				definition: {
+					name: "collaboration.timestamp-date.v1",
+					steps: [
+						{
+							kind: "insert",
+							collection: "collection:messages",
+							values: {
+								authorMembershipId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+								body: "hello",
+								channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a1",
+								createdAt: new Date(0),
+							},
+						},
+					],
+				},
+				schema,
+			}),
+		).toThrow(/QP-SEED-003/);
+		expect(() =>
+			createCommittedSeed({
 				definition: definition("018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0", ""),
 				schema,
 			}),

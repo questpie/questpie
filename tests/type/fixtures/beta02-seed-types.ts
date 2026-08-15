@@ -32,6 +32,7 @@ seed.insert(messages, {
 	note: null,
 	createdAt: "2026-08-14T12:00:00.000Z",
 });
+// @ts-expect-error timestamp values are canonical strings at every public boundary
 seed.insert(messages, { body: "hello", createdAt: new Date(0) });
 seed.update(messages, {
 	key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
@@ -44,7 +45,7 @@ seed.insert(messages, {});
 seed.insert(messages, { body: null });
 // @ts-expect-error values contain only declared Fields
 seed.insert(messages, { body: "hello", unknown: true });
-// @ts-expect-error timestamp Seed values are Date or string
+// @ts-expect-error timestamp Seed values are canonical strings
 seed.insert(messages, { body: "hello", createdAt: 42 });
 // @ts-expect-error a key contains the exact primary key only
 seed.update(messages, { key: { id: "id", body: "extra" }, values: {} });
