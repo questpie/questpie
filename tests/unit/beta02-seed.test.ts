@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -174,5 +174,55 @@ describe("BETA-02 committed Seeds", () => {
 				schema,
 			}),
 		).toThrow(/QP-SEED-003/);
+	});
+
+	test("commits and reloads deeply nested tagged open JSON", async () => {
+		const compiled = await compilation;
+		const schema = structuredClone(
+			JSON.parse(compiled.generatedFiles["schema-projection.json"] ?? "null"),
+		);
+		const companies = schema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+		companies.fields.push({
+			collation: null,
+			default: null,
+			identity: "collection:companies/field:metadata",
+			nullable: false,
+			path: ["metadata"],
+			postgresName: "metadata",
+			type: { kind: "json" },
+		});
+		let deepJson: unknown = "leaf";
+		for (let depth = 0; depth < 12; depth += 1) deepJson = { nested: deepJson };
+		const committed = createCommittedSeed({
+			definition: {
+				name: "collaboration.deep-json.v1",
+				steps: [
+					{
+						kind: "insert",
+						collection: "collection:companies",
+						values: {
+							metadata: { kind: "json", value: deepJson },
+							name: "Deep JSON",
+						},
+					},
+				],
+			},
+			schema,
+		});
+		expect(() => verifyCommittedSeed(committed)).not.toThrow();
+
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-deep-json-seed-"));
+		try {
+			const directory = join(temporary, "collaboration.deep-json.v1");
+			await mkdir(directory);
+			for (const [name, bytes] of Object.entries(committed.files))
+				await writeFile(join(directory, name), bytes);
+			await expect(loadCommittedSeed(directory)).resolves.toEqual(committed);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
 	});
 });

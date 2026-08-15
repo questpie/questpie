@@ -16,11 +16,7 @@ function record(value: unknown, invalid: InvalidValue): JsonRecord {
 	return value as JsonRecord;
 }
 
-function normalizeOpenJson(
-	value: unknown,
-	invalid: InvalidValue,
-	depth = 0,
-): unknown {
+function normalizeOpenJson(value: unknown, invalid: InvalidValue): unknown {
 	if (value === null || typeof value === "boolean") return value;
 	if (typeof value === "number") {
 		if (!Number.isFinite(value)) return invalid("requires finite JSON numbers");
@@ -31,12 +27,11 @@ function normalizeOpenJson(
 			return invalid("requires NFC JSON strings");
 		return value;
 	}
-	if (depth >= 8) return invalid("exceeds the JSON container depth limit");
 	if (Array.isArray(value)) {
 		for (let index = 0; index < value.length; index += 1)
 			if (!(index in value))
 				return invalid("does not accept sparse JSON arrays");
-		return value.map((item) => normalizeOpenJson(item, invalid, depth + 1));
+		return value.map((item) => normalizeOpenJson(item, invalid));
 	}
 	const input = record(value, invalid);
 	return Object.fromEntries(
@@ -45,7 +40,7 @@ function normalizeOpenJson(
 			.map((key) => {
 				if (key.normalize("NFC") !== key)
 					return invalid("requires NFC JSON object keys");
-				return [key, normalizeOpenJson(input[key], invalid, depth + 1)];
+				return [key, normalizeOpenJson(input[key], invalid)];
 			}),
 	);
 }
