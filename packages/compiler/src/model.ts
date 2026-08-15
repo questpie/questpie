@@ -1,4 +1,5 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
+import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	fieldPath,
@@ -369,6 +370,22 @@ export function normalizeResources(
 					contributions.map((entry) => entry.identity),
 				),
 				contributions,
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "service" || kind === "context") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: compositionContract(kind, item.value),
+				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,
 					exportName: item.exportName,

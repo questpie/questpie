@@ -77,12 +77,14 @@ describe("BETA-01 generated contract", () => {
 			"app.ts",
 			"build-input.json",
 			"client.ts",
+			"context-projection.json",
 			"internal/checksums.json",
 			collaborationAuditContractPath,
 			"internal/package-inventories.json",
 			"manifest.json",
 			"origin-map.json",
 			"schema-projection.json",
+			"service-projection.json",
 		]);
 
 		const manifest = JSON.parse(
@@ -157,8 +159,11 @@ describe("BETA-01 generated contract", () => {
 			"collection:memberships",
 			"collection:messages",
 			"collection:spaces",
+			"context:app.context",
 			"query:messages.byId",
 			"seed:collaboration.demo.v1",
+			"service:audit.connection",
+			"service:audit.execution",
 		]);
 		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");

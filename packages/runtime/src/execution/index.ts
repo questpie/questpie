@@ -1,0 +1,253 @@
+import type {
+	ContextBootstrap,
+	ContextDefinition,
+	ContextInputOf,
+	ContextResolvedOf,
+	Principal,
+	ServiceDefinition,
+	ServiceDependencyMap,
+	ServiceEffect,
+	ServiceInstance,
+	ServiceLifetime,
+} from "questpie";
+
+type AnyService = ServiceDefinition<
+	string,
+	ServiceLifetime,
+	ServiceEffect,
+	ServiceDependencyMap,
+	unknown
+>;
+
+type MaybePromise<Value> = Value | Promise<Value>;
+
+export type ExecutionFacts<Resolved> = Readonly<{
+	principal: Principal;
+	tenant: Resolved extends Readonly<{ tenant: infer Tenant }> ? Tenant : never;
+	values: Resolved extends Readonly<{ values: infer Values }> ? Values : never;
+	signal: AbortSignal;
+}>;
+
+export interface RuntimeProgram<Context extends ContextDefinition, View> {
+	readonly services: readonly AnyService[];
+	readonly context: Context;
+	readonly bootstrap: ContextBootstrap;
+	readonly project: (
+		scope: Readonly<{
+			facts: ExecutionFacts<ContextResolvedOf<Context>>;
+			service<Definition extends AnyService>(
+				definition: Definition,
+			): Promise<ServiceInstance<Definition>>;
+		}>,
+	) => MaybePromise<View>;
+}
+
+export interface ApplicationRuntime<Input, View> {
+	execution<Result>(
+		input: Readonly<{
+			principal: Principal;
+			context: Input;
+			signal?: AbortSignal;
+		}>,
+		use: (view: View) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
+	close(): Promise<void>;
+}
+
+type OwnedService = Readonly<{
+	definition: AnyService;
+	instance: unknown;
+}>;
+
+function serviceIdentity(definition: AnyService): `service:${string}` {
+	return `service:${definition.name}`;
+}
+
+function abortReason(signal: AbortSignal): unknown {
+	return signal.reason ?? new DOMException("Execution aborted", "AbortError");
+}
+
+function deepFreeze<Value>(value: Value): Value {
+	if (!value || typeof value !== "object") return value;
+	const pending: object[] = [value];
+	const seen = new Set<object>();
+	while (pending.length > 0) {
+		const current = pending.pop();
+		if (!current || seen.has(current)) continue;
+		seen.add(current);
+		for (const child of Object.values(current))
+			if (child && typeof child === "object" && !(child instanceof AbortSignal))
+				pending.push(child);
+		Object.freeze(current);
+	}
+	return value;
+}
+
+function copiedFrozen<Value>(value: Value): Value {
+	return deepFreeze(structuredClone(value));
+}
+
+async function disposeOwned(owned: OwnedService[]): Promise<void> {
+	let failure: unknown;
+	for (const item of owned.toReversed()) {
+		if (!item.definition.dispose) continue;
+		try {
+			await item.definition.dispose(item.instance);
+		} catch (error) {
+			failure = failure
+				? new SuppressedError(error, failure, "Service disposal failed")
+				: error;
+		}
+	}
+	if (failure) throw failure;
+}
+
+export function createApplicationRuntime<
+	Context extends ContextDefinition,
+	View,
+>(
+	program: RuntimeProgram<Context, View>,
+): ApplicationRuntime<ContextInputOf<Context>, View> {
+	const definitions = new Map(
+		program.services.map((definition) => [
+			serviceIdentity(definition),
+			definition,
+		]),
+	);
+	const applicationCells = new Map<string, Promise<unknown>>();
+	const applicationOwned: OwnedService[] = [];
+	const applicationController = new AbortController();
+	const activeRoots = new Set<Promise<unknown>>();
+	let state: "open" | "closing" | "closed" = "open";
+	let closePromise: Promise<void> | undefined;
+
+	for (const definition of program.services)
+		for (const dependency of Object.values(definition.dependencies)) {
+			if (!definitions.has(serviceIdentity(dependency)))
+				throw new Error(
+					`${serviceIdentity(definition)} has an unknown dependency`,
+				);
+			if (
+				definition.lifetime === "application" &&
+				dependency.lifetime === "execution"
+			)
+				throw new Error(
+					"application Service cannot depend on execution Service",
+				);
+			if (definition.effect === "read" && dependency.effect === "external")
+				throw new Error("read Service cannot depend on external Service");
+		}
+
+	async function execution<Result>(
+		input: Readonly<{
+			principal: Principal;
+			context: ContextInputOf<Context>;
+			signal?: AbortSignal;
+		}>,
+		use: (view: View) => MaybePromise<Result>,
+	): Promise<Awaited<Result>> {
+		if (state !== "open") throw new Error("Runtime is closing");
+		if (input.principal.questpiePrincipal !== true)
+			throw new Error("Execution requires a trusted Principal");
+		const controller = new AbortController();
+		const onAbort = () => controller.abort(abortReason(input.signal!));
+		if (input.signal?.aborted) controller.abort(abortReason(input.signal));
+		else input.signal?.addEventListener("abort", onAbort, { once: true });
+		const executionCells = new Map<string, Promise<unknown>>();
+		const executionOwned: OwnedService[] = [];
+
+		const getService = <Definition extends AnyService>(
+			definition: Definition,
+		): Promise<ServiceInstance<Definition>> => {
+			const identity = serviceIdentity(definition);
+			const cells =
+				definition.lifetime === "application"
+					? applicationCells
+					: executionCells;
+			const existing = cells.get(identity);
+			if (existing) return existing as Promise<ServiceInstance<Definition>>;
+			const created = (async () => {
+				const dependencyEntries = await Promise.all(
+					Object.entries(definition.dependencies).map(
+						async ([key, dependency]) => [key, await getService(dependency)],
+					),
+				);
+				const instance = await definition.create({
+					services: Object.freeze(Object.fromEntries(dependencyEntries)),
+					signal:
+						definition.lifetime === "application"
+							? applicationController.signal
+							: controller.signal,
+				});
+				const owner =
+					definition.lifetime === "application"
+						? applicationOwned
+						: executionOwned;
+				owner.push({ definition, instance });
+				return instance;
+			})();
+			cells.set(identity, created);
+			return created as Promise<ServiceInstance<Definition>>;
+		};
+
+		const root = (async () => {
+			let primaryFailure: unknown;
+			let result: Awaited<Result> | undefined;
+			try {
+				if (controller.signal.aborted) throw abortReason(controller.signal);
+				const decoded = copiedFrozen(input.context);
+				const resolved = copiedFrozen(
+					await program.context.resolve({
+						input: decoded,
+						principal: input.principal,
+						bootstrap: program.bootstrap,
+						signal: controller.signal,
+					}),
+				);
+				const facts = Object.freeze({
+					principal: input.principal,
+					tenant: resolved.tenant,
+					values: resolved.values,
+					signal: controller.signal,
+				}) as ExecutionFacts<ContextResolvedOf<Context>>;
+				const view = await program.project({ facts, service: getService });
+				result = await use(view);
+			} catch (error) {
+				primaryFailure = error;
+			}
+			input.signal?.removeEventListener("abort", onAbort);
+			let cleanupFailure: unknown;
+			try {
+				await disposeOwned(executionOwned);
+			} catch (error) {
+				cleanupFailure = error;
+			}
+			if (primaryFailure) throw primaryFailure;
+			if (cleanupFailure) throw cleanupFailure;
+			return result as Awaited<Result>;
+		})();
+		activeRoots.add(root);
+		try {
+			return (await root) as Awaited<Result>;
+		} finally {
+			activeRoots.delete(root);
+		}
+	}
+
+	return Object.freeze({
+		execution,
+		close: () => {
+			if (closePromise) return closePromise;
+			state = "closing";
+			applicationController.abort(
+				new DOMException("Runtime closing", "AbortError"),
+			);
+			closePromise = (async () => {
+				await Promise.allSettled(activeRoots);
+				await disposeOwned(applicationOwned);
+				state = "closed";
+			})();
+			return closePromise;
+		},
+	});
+}

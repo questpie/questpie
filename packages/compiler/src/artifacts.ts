@@ -7,6 +7,7 @@ import {
 	contentDigest,
 	digest,
 } from "./canonical";
+import { projectExecutionComposition } from "./composition";
 import {
 	renderAppContract,
 	renderClientContract,
@@ -64,6 +65,7 @@ export async function createArtifacts(
 	}>,
 ): Promise<Readonly<Record<string, string>>> {
 	const manifest = projectManifest(input.configuration, input.resources);
+	const executionComposition = projectExecutionComposition(input.resources);
 	const schema = manifest.schema;
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
@@ -224,10 +226,12 @@ export async function createArtifacts(
 		"app.ts": renderAppContract(input.resources, manifest.data, schema),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),
+		"context-projection.json": canonicalBytes(executionComposition.context),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
 		"manifest.json": canonicalBytes(manifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
+		"service-projection.json": canonicalBytes(executionComposition.services),
 	};
 	for (const compilation of input.packageCompilations)
 		generated[packageContractPath(compilation.name)] = renderPackageContract(
