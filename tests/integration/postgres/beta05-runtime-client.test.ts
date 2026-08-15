@@ -1,88 +1,16 @@
 import { afterAll, expect, test } from "bun:test";
-import {
-	cp,
-	mkdir,
-	mkdtemp,
-	readFile,
-	rm,
-	symlink,
-	writeFile,
-} from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { readFile, writeFile } from "node:fs/promises";
+import { join } from "node:path";
 
 import { SQL } from "bun";
 
 import {
-	applyCommittedMigrations,
-	compileApplication,
-	loadCommittedMigration,
-} from "@questpie/compiler";
+	beta05Ids,
+	beta05PostgresUrl,
+	prepareBeta05PostgresApplication,
+} from "./helpers/beta05-runtime";
 
-const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
-const repositoryRoot = resolve(import.meta.dir, "../../..");
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
-
-const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
-const spaceId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a1";
-const channelId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2";
-const membershipId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3";
-const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
-const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1";
-
-function postgresUrl(): string {
-	const url = new URL("postgres://localhost/");
-	url.hostname = process.env.PGHOST ?? "127.0.0.1";
-	url.port = process.env.PGPORT ?? "5432";
-	url.username = process.env.PGUSER ?? "postgres";
-	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
-	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
-	return url.toString();
-}
-
-async function relocatedFixture(): Promise<string> {
-	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta05-pg-"));
-	await cp(fixtureRoot, temporary, { recursive: true });
-	await mkdir(join(temporary, "node_modules"), { recursive: true });
-	await rm(join(temporary, "node_modules/questpie"), {
-		force: true,
-		recursive: true,
-	});
-	await mkdir(join(temporary, "node_modules/questpie"));
-	await writeFile(
-		join(temporary, "node_modules/questpie/package.json"),
-		JSON.stringify({
-			name: "questpie",
-			type: "module",
-			exports: "./index.ts",
-		}),
-	);
-	await symlink(
-		resolve(repositoryRoot, "packages/questpie/src/index.ts"),
-		join(temporary, "node_modules/questpie/index.ts"),
-		"file",
-	);
-	return temporary;
-}
-
-async function importGenerated(temporary: string) {
-	const generated = join(temporary, ".questpie/generated");
-	const nonce = `?beta05=${crypto.randomUUID()}`;
-	const app = await import(
-		`${pathToFileURL(join(generated, "app.ts")).href}${nonce}`
-	);
-	const client = await import(
-		`${pathToFileURL(join(generated, "client.ts")).href}${nonce}`
-	);
-	const internal = await import(
-		`${pathToFileURL(join(generated, "internal/application.js")).href}${nonce}`
-	);
-	const framework = await import(
-		`${pathToFileURL(join(temporary, "node_modules/questpie/index.ts")).href}${nonce}`
-	);
-	return { app, client, framework, generated, internal };
-}
 
 afterAll(async () => {
 	await database?.close({ timeout: 0 });
@@ -93,85 +21,45 @@ const postgresTest = process.env.PGHOST ? test : test.skip;
 postgresTest(
 	"runs the exact Message Query through direct, Fetch, and generated client paths",
 	async () => {
-		await database!.unsafe(
-			'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
-		);
-		const migrations = await Promise.all([
-			loadCommittedMigration(
-				resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
-			),
-			loadCommittedMigration(
-				resolve(
-					fixtureRoot,
-					"questpie/migrations/000002_authorize-message-pages",
-				),
-			),
-		]);
-		const applied = await applyCommittedMigrations({ migrations });
-		expect(applied.status).toBe("applied");
-		await database!`
-			insert into collaboration.companies (id, name)
-			values (${companyId}, 'Acme')
-		`;
-		await database!`
-			insert into collaboration.spaces (id, company_id, name)
-			values (${spaceId}, ${companyId}, 'Product')
-		`;
-		await database!`
-			insert into collaboration.channels (id, space_id, name)
-			values (${channelId}, ${spaceId}, 'General')
-		`;
-		await database!`
-			insert into collaboration.memberships
-				(id, company_id, principal_id, role, scope_key, status)
-			values
-				(${membershipId}, ${companyId}, ${principalId}, 'admin', 'company', 'active')
-		`;
-		await database!`
-			insert into collaboration.messages
-				(id, channel_id, author_membership_id, body, created_at)
-			values
-				(${messageId}, ${channelId}, ${membershipId}, 'one engine', '2026-08-15T10:00:00.000Z')
-		`;
-
-		const temporary = await relocatedFixture();
+		const prepared = await prepareBeta05PostgresApplication(database!);
 		try {
-			await compileApplication({ applicationRoot: temporary });
-			const generated = await importGenerated(temporary);
-			const originalRuntimeBuild = await readFile(
-				join(generated.generated, "runtime-build.json"),
-				"utf8",
+			const { generated, runtimeBuildBytes } = prepared;
+			const runtimeBuildPath = join(
+				generated.generatedRoot,
+				"runtime-build.json",
 			);
-			const mismatched = JSON.parse(originalRuntimeBuild);
+			const mismatched = JSON.parse(runtimeBuildBytes);
 			mismatched.schemaFingerprint = "0".repeat(64);
-			await writeFile(
-				join(generated.generated, "runtime-build.json"),
-				`${JSON.stringify(mismatched)}\n`,
-			);
+			await writeFile(runtimeBuildPath, `${JSON.stringify(mismatched)}\n`);
 			await expect(
-				generated.app.createApp({ postgres: { url: postgresUrl() } }),
+				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
 			).rejects.toThrow("Runtime Build digest does not match");
-			await writeFile(
-				join(generated.generated, "runtime-build.json"),
-				originalRuntimeBuild,
-			);
+			await writeFile(runtimeBuildPath, runtimeBuildBytes);
 
 			const application = await generated.app.createApp({
-				postgres: { url: postgresUrl() },
+				postgres: { url: beta05PostgresUrl() },
 			});
 			try {
-				const user = generated.framework.principal.user({ id: principalId });
-				const context = { companyId };
-				const input = { channelId, first: 20, after: null };
+				const internal = await generated.loadInternal();
+				const user = generated.framework.principal.user({
+					id: beta05Ids.principal,
+				});
+				const context = { companyId: beta05Ids.company };
+				const input = { channelId: beta05Ids.channel, first: 20, after: null };
 				const direct = await application.execution(
 					{ principal: user, context },
-					({ queries }: { queries: Record<string, Function> }) =>
-						queries["messages.page"]!(input),
+					({
+						queries,
+					}: Readonly<{
+						queries: Readonly<
+							Record<string, (queryInput: unknown) => Promise<unknown>>
+						>;
+					}>) => queries["messages.page"]!(input),
 				);
-				const runtimeBuild = JSON.parse(originalRuntimeBuild);
+				const runtimeBuild = JSON.parse(runtimeBuildBytes);
 				const wire = JSON.parse(
 					await readFile(
-						join(generated.generated, "wire-contract.json"),
+						join(generated.generatedRoot, "wire-contract.json"),
 						"utf8",
 					),
 				);
@@ -194,7 +82,7 @@ postgresTest(
 					},
 				);
 				const rawResponse = await application.fetch(
-					generated.internal.bindIngressPrincipalForRequest(rawRequest, user),
+					internal.bindIngressPrincipalForRequest(rawRequest, user),
 				);
 				expect(rawResponse.status).toBe(200);
 				const rawFrame = (await rawResponse.json()) as Readonly<{
@@ -209,7 +97,7 @@ postgresTest(
 					fetch: (request: Request) => {
 						clientFetches += 1;
 						return application.fetch(
-							generated.internal.bindIngressPrincipalForRequest(request, user),
+							internal.bindIngressPrincipalForRequest(request, user),
 						);
 					},
 				});
@@ -225,7 +113,7 @@ postgresTest(
 							author: null,
 							body: "one engine",
 							createdAt: "2026-08-15T10:00:00.000Z",
-							id: messageId,
+							id: beta05Ids.message,
 						},
 					],
 					pageInfo: {
@@ -236,8 +124,18 @@ postgresTest(
 			} finally {
 				await application.close();
 			}
+
+			await database!`
+				delete from questpie_internal.schema_migration_receipts
+				where sequence = 2
+			`;
+			await expect(
+				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
+			).rejects.toThrow(
+				"PostgreSQL migration history does not match Runtime Build",
+			);
 		} finally {
-			await rm(temporary, { force: true, recursive: true });
+			await prepared.dispose();
 		}
 	},
 );
