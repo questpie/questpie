@@ -20,6 +20,7 @@ export type Queue = {
 	release: string;
 	parent: number;
 	authorityHeads: Record<string, string>;
+	acceptedIssues: Record<string, string>;
 	issues: Issue[];
 };
 
@@ -52,6 +53,29 @@ export function validate(queue: Queue): void {
 		throw new Error("expected twelve beta tracers");
 	const ids = queue.issues.map(({ id }) => id);
 	if (new Set(ids).size !== ids.length) throw new Error("duplicate issue id");
+	for (const [id, head] of Object.entries(queue.acceptedIssues)) {
+		if (!ids.includes(id)) throw new Error(`unknown accepted issue ${id}`);
+		if (!/^[0-9a-f]{40}$/.test(head))
+			throw new Error(`accepted issue ${id} lacks an exact merge head`);
+		const issue = queue.issues.find((candidate) => candidate.id === id)!;
+		if (
+			issue.blockedBy.some(
+				(dependency) => queue.acceptedIssues[dependency] === undefined,
+			)
+		)
+			throw new Error(`accepted issue ${id} has an unaccepted dependency`);
+	}
+	const ready = queue.issues.filter(
+		(issue) =>
+			queue.acceptedIssues[issue.id] === undefined &&
+			issue.blockedBy.every(
+				(dependency) => queue.acceptedIssues[dependency] !== undefined,
+			),
+	);
+	if (ready.length !== 1)
+		throw new Error(
+			`expected one next agent-ready issue, received ${ready.length}`,
+		);
 	for (const [index, issue] of queue.issues.entries()) {
 		if (issue.id !== `BETA-${String(index + 1).padStart(2, "0")}`)
 			throw new Error(`non-canonical issue order ${issue.id}`);
@@ -71,7 +95,7 @@ export function validate(queue: Queue): void {
 			if (!ids.includes(dependency) || ids.indexOf(dependency) >= index)
 				throw new Error(`${issue.id} has invalid dependency ${dependency}`);
 		}
-		if (issue.agentReady !== (issue.blockedBy.length === 0))
+		if (issue.agentReady !== (ready[0]?.id === issue.id))
 			throw new Error(`${issue.id} readiness does not match blockers`);
 		if (!issue.verify.includes("git diff --check"))
 			throw new Error(`${issue.id} lacks diff hygiene`);

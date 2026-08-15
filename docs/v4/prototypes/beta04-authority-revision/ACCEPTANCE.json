@@ -1,0 +1,58 @@
+{
+	"ticket": "#291 BETA-04 authority revision",
+	"proof": "docs/v4/prototypes/beta04-authority-revision",
+	"reviewHistory": [
+		{
+			"reviewedHead": "10d5712ab816ef5576ec041da216d95c6921ac0d",
+			"model": "opus",
+			"effort": "medium",
+			"verdict": "BLOCKED",
+			"finding": "The proof depended on two unretained authoring commit objects rather than solely on portable, byte-pinned projection evidence."
+		}
+	],
+	"authorityHeads": {
+		"foundation": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
+		"P2": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
+		"P16": "1d9303a58c9557aac3da648895c817fa039478ba",
+		"BETA01Merge": "20ad8529ee18aba6830a7646acb3a9c9292f2fc6",
+		"BETA02Merge": "b630fb01c6966b97fb3ac265bd416c4cfe0f1908",
+		"BETA03Merge": "a7d24541c433ab502316b34906d97c9dd51f7ee1",
+		"diffBase": "33662605105d7a80ade94d430dbf3f838964ff69"
+	},
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/beta04-authority-revision/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta04-authority-revision/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta04-authority-revision/portable-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/beta04-authority-revision/tsconfig.json",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/beta04-authority-revision/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/beta04-authority-revision",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"The original P2 proof head, acceptance packet blob and SHA-256, Message Policy Program digest, and all other P2 canonical digests remain immutable inputs rather than being relabelled or regenerated.",
+		"Policy-protected Query execution receives only DataCursorV2 with one sibling Policy scope digest over sparse compiler-used execution facts; DataCursorV1 is never reinterpreted.",
+		"Cursor shape, canonical bytes, domain, encoding, size bound, validation precedence, diagnostics, nondisclosure, and recovery are exact and add no Policy-free execution surface.",
+		"QP-POLICY-001 missingDefaultPolicy and QP-POLICY-002 ambiguousDefaultPolicy are the only promoted Policy diagnostics and remain fatal compile failures rather than runtime denial results.",
+		"BETA-04 is the sole agent-ready issue because exact accepted BETA-01 through BETA-03 merge heads satisfy its dependency chain; readiness is mechanically derived and has non-inert negative controls.",
+		"The exact reviewed projection is losslessly base64-wrapped, limited to ADR, internal/public documentation, BETA-04 design context, and P16 queue governance; it changes no production SQL, Runtime implementation, or performance evidence.",
+		"PostgreSQL remains the only durable dependency, the public Index remains B-tree-only, and the revision adds no RLS, raw SQL, aggregate, backward-pagination, or provider-matrix authority."
+	]
+}

@@ -90,6 +90,32 @@ checksums, and Schema Fingerprint bytes are unchanged, so this signature repair
 does not create a migration. The exact authoring form is projected in the
 internal and public schema lifecycle pages.
 
+## Revision: Policy-aware cursor scope
+
+`DataCursorV1` remains byte-for-byte frozen for the accepted foundational
+protocol and proofs. Policy-protected execution emits `DataCursorV2`, which
+keeps the v1 Query Template Digest, Query-parameter Scope Digest, and order
+tuple and adds one sibling `policyScopeDigest`. This revision creates no
+Policy-free execution surface.
+
+The sibling digest is over the accepted `questpie.policy-cursor-scope` v1
+value. It contains the Policy Program Digest and only the Principal, Tenant,
+and Authority facts reached by the compiled read and selection plan. Its digest
+domain remains `questpie-policy-cursor-scope-v1\0`. Unused Context convenience
+values do not enter it.
+
+Both the scope and Cursor use RFC 8785 canonical JSON bytes plus one LF. The
+scope digest is domain-prefixed SHA-256. Cursor v2 uses the same unpadded
+base64url encoding and 2,048-byte bound as v1; the compiler accounts for the
+additional digest member when proving the maximum envelope.
+
+The Runtime does not reinterpret or upgrade v1 bytes. A v1 cursor supplied to
+a Policy-protected Query is `QP-DATA-010 invalidCursor`. For v2,
+`QP-DATA-013 cursorScopeMismatch` deliberately covers a mismatch in either the
+Query-parameter scope or the Policy-equivalent execution scope. Both failures
+have the same recovery and disclosure behavior, so QUESTPIE does not reveal
+which input changed. Validation still completes before SQL or disclosure.
+
 ## Rejected alternatives
 
 - Keyless regular Collections.

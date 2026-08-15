@@ -20,7 +20,27 @@ const invalid = [
 	},
 	() => {
 		const value = clone();
-		at(value, 3).agentReady = true;
+		delete value.acceptedIssues["BETA-03"];
+		return value;
+	},
+	() => {
+		const value = clone();
+		delete value.acceptedIssues["BETA-02"];
+		return value;
+	},
+	() => {
+		const value = clone();
+		value.acceptedIssues["BETA-13"] = "a".repeat(40);
+		return value;
+	},
+	() => {
+		const value = clone();
+		value.acceptedIssues["BETA-03"] = "short";
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 4).agentReady = true;
 		return value;
 	},
 	() => {
