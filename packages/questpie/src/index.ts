@@ -26,7 +26,7 @@ export type {
 	ServiceInstances,
 	ServiceLifetime,
 } from "./service";
-export { defineContext, principal } from "./context";
+export { context, defineContext, principal } from "./context";
 export type {
 	Authority,
 	ContextBootstrap,

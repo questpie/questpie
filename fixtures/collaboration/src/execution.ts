@@ -1,4 +1,6 @@
-import { codec, defineContext, defineService } from "questpie";
+import { codec, context, defineContext, defineService } from "questpie";
+
+import { memberships } from "./memberships";
 
 const lifecycle: string[] = [];
 let applicationCreates = 0;
@@ -39,10 +41,33 @@ export const executionAudit = defineService({
 export const collaborationContext = defineContext({
 	name: "app.context",
 	input: codec.object({ companyId: codec.uuid() }),
-	resolve: ({ input, principal }) => ({
-		tenant: { id: input.companyId },
-		values: { principalId: principal.id },
-	}),
+	resolve: async ({ input, principal, bootstrap }) => {
+		if (principal.kind === "anonymous") throw context.error.unauthenticated();
+		const membership = await bootstrap.get(memberships, {
+			key: {
+				companyId: input.companyId,
+				principalId: principal.id,
+				scopeKey: "company",
+			},
+			select: {
+				companyId: true,
+				principalId: true,
+				role: true,
+				scopeKey: true,
+				status: true,
+			},
+		});
+		if (membership === null || membership.status !== "active")
+			throw context.error.notFound("tenant");
+		return {
+			tenant: context.tenant({ id: membership.companyId }),
+			values: {
+				selectedMembershipPrincipalId: membership.principalId,
+				selectedMembershipScope: membership.scopeKey,
+				selectedRole: membership.role,
+			},
+		};
+	},
 });
 
 export function resetExecutionFixture(): void {
