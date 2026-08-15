@@ -4,6 +4,21 @@ function compareAscii(left: string, right: string): number {
 	return left < right ? -1 : left > right ? 1 : 0;
 }
 
+function arrayIndex(key: string): number | null {
+	if (!/^(?:0|[1-9][0-9]*)$/.test(key)) return null;
+	const value = Number(key);
+	return Number.isInteger(value) && value <= 4_294_967_294 ? value : null;
+}
+
+function compareCanonicalObjectKeys(left: string, right: string): number {
+	const leftIndex = arrayIndex(left);
+	const rightIndex = arrayIndex(right);
+	if (leftIndex !== null && rightIndex !== null) return leftIndex - rightIndex;
+	if (leftIndex !== null) return -1;
+	if (rightIndex !== null) return 1;
+	return compareAscii(left, right);
+}
+
 type CanonicalFrame =
 	| Readonly<{ key: string; kind: "entry"; value: unknown }>
 	| Readonly<{ kind: "leave"; value: object }>
@@ -65,7 +80,7 @@ export function canonicalBytes(value: unknown): string {
 			continue;
 		}
 		const entries = Object.entries(item).sort(([left], [right]) =>
-			compareAscii(left, right),
+			compareCanonicalObjectKeys(left, right),
 		);
 		stack.push({ kind: "text", value: "}" });
 		for (let index = entries.length - 1; index >= 0; index -= 1) {
