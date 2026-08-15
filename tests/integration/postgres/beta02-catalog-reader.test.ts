@@ -566,7 +566,7 @@ describe.skipIf(!database)(
 
 		test("enumerates overloaded routines with their exact prokind identity", async () => {
 			await database!.unsafe(
-				"CREATE FUNCTION catalog_fact_probe.routine_probe(integer) RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE FUNCTION catalog_fact_probe.routine_probe(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE PROCEDURE catalog_fact_probe.routine_probe(boolean) LANGUAGE plpgsql AS 'BEGIN NULL; END'; CREATE AGGREGATE catalog_fact_probe.aggregate_probe(integer) (SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0'); CREATE FUNCTION catalog_fact_probe.window_probe(integer) RETURNS integer LANGUAGE sql WINDOW IMMUTABLE AS 'SELECT $1';",
+				"CREATE FUNCTION catalog_fact_probe.routine_probe(integer) RETURNS integer LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE FUNCTION catalog_fact_probe.routine_probe(text) RETURNS text LANGUAGE sql IMMUTABLE AS 'SELECT $1'; CREATE PROCEDURE catalog_fact_probe.routine_probe(IN enabled boolean) LANGUAGE plpgsql AS 'BEGIN NULL; END'; CREATE AGGREGATE catalog_fact_probe.aggregate_probe(integer) (SFUNC = pg_catalog.int4pl, STYPE = integer, INITCOND = '0'); CREATE FUNCTION catalog_fact_probe.window_probe(integer) RETURNS integer LANGUAGE sql WINDOW IMMUTABLE AS 'SELECT $1';",
 			);
 			try {
 				const comparable = await readCatalogComparable(database!, {
@@ -605,7 +605,7 @@ describe.skipIf(!database)(
 					{
 						kind: "procedure",
 						qualifiedIdentity:
-							"procedure:catalog_fact_probe.routine_probe(IN boolean)",
+							"procedure:catalog_fact_probe.routine_probe(boolean)",
 						attachedTo: null,
 					},
 				]);

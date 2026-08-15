@@ -11,7 +11,15 @@ export async function readUnsupportedCatalogObjects(
 	>`
 		select case p.prokind when 'f' then 'function' when 'p' then 'procedure' else 'other' end as kind,
 		       case p.prokind when 'f' then 'function' when 'p' then 'procedure' else p.prokind::text end
-		         || ':' || ${applicationSchema} || '.' || p.proname || '(' || pg_catalog.pg_get_function_identity_arguments(p.oid) || ')' as "qualifiedIdentity",
+		         || ':' || ${applicationSchema} || '.' || p.proname || '('
+		         || coalesce((
+		           select pg_catalog.string_agg(
+		             pg_catalog.format_type(argument.type_oid, null),
+		             ',' order by argument.ordinality
+		           )
+		           from pg_catalog.unnest(p.proargtypes::oid[])
+		             with ordinality as argument(type_oid, ordinality)
+		         ), '') || ')' as "qualifiedIdentity",
 		       null::text as "attachedTo"
 		from pg_catalog.pg_proc p
 		join pg_catalog.pg_namespace n on n.oid = p.pronamespace
