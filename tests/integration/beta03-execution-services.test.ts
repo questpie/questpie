@@ -1,4 +1,5 @@
 import { beforeEach, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
@@ -12,6 +13,10 @@ import {
 import { createApplicationRuntime } from "../../packages/runtime/src";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
+const lifecycleGolden = resolve(
+	import.meta.dir,
+	"../goldens/beta03/execution-lifecycle.json",
+);
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
 
@@ -65,10 +70,13 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 	const collaborationContext = defineContext({
 		name: "app.context",
 		input: codec.object({ companyId: codec.uuid() }),
-		resolve: ({ input, principal: executionPrincipal }) => ({
-			tenant: { id: input.companyId },
-			values: { principalId: executionPrincipal.id },
-		}),
+		resolve: ({ input, principal: executionPrincipal }) => {
+			lifecycle.push("context:resolve");
+			return {
+				tenant: { id: input.companyId },
+				values: { principalId: executionPrincipal.id },
+			};
+		},
 	});
 	const runtime = createApplicationRuntime({
 		services: [auditConnection, executionAudit],
@@ -95,6 +103,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 			signal: controller.signal,
 		},
 		async ({ facts, first, second }) => {
+			lifecycle.push("callback:start");
 			expect(first).toBe(second);
 			expect(first.connectionId).toBe(1);
 			expect(Object.isFrozen(facts)).toBe(true);
@@ -103,7 +112,10 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 			await new Promise<never>((_resolve, reject) => {
 				facts.signal.addEventListener(
 					"abort",
-					() => reject(facts.signal.reason),
+					() => {
+						lifecycle.push("callback:abort");
+						reject(facts.signal.reason);
+					},
 					{ once: true },
 				);
 			});
@@ -117,19 +129,31 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 		applicationCreates: 1,
 		executionCreates: 1,
 		lifecycle: [
+			"context:resolve",
 			"create:application:1",
 			"create:execution:1",
+			"callback:start",
+			"callback:abort",
 			"dispose:execution:1",
 		],
 	});
 
 	await runtime.close();
 	expect(lifecycle).toEqual([
+		"context:resolve",
 		"create:application:1",
 		"create:execution:1",
+		"callback:start",
+		"callback:abort",
 		"dispose:execution:1",
 		"dispose:application:1",
 	]);
+	expect({
+		format: "questpie.execution-lifecycle-trace",
+		version: 1,
+		scenario: "cancelled-root",
+		events: lifecycle,
+	}).toEqual(JSON.parse(await readFile(lifecycleGolden, "utf8")));
 });
 
 test("retains execution Services until a response body reaches EOF", async () => {
