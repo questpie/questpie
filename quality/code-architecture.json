@@ -1,0 +1,7 @@
+{
+	"format": "questpie.code-architecture-ratchet",
+	"version": 1,
+	"warningLines": 500,
+	"maximumLines": 800,
+	"legacy": {}
+}

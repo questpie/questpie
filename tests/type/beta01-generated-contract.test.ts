@@ -131,8 +131,8 @@ describe("BETA-01 generated contract", () => {
 				packageId: null,
 				path: "src/messages.ts",
 				span: {
-					start: { line: 24, column: 3 },
-					end: { line: 28, column: 5 },
+					start: { line: 25, column: 3 },
+					end: { line: 29, column: 5 },
 				},
 			},
 		});
@@ -158,6 +158,7 @@ describe("BETA-01 generated contract", () => {
 			"collection:messages",
 			"collection:spaces",
 			"query:messages.byId",
+			"seed:collaboration.demo.v1",
 		]);
 		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");

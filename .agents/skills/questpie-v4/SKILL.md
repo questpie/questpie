@@ -19,6 +19,8 @@ branch:
   [public-documentation.md](references/public-documentation.md).
 - Repository scripts, tests, benchmarks, CI, dependencies, security, or release:
   read [repository-quality.md](references/repository-quality.md).
+- Creating, splitting, or reorganizing production modules: also read
+  [codebase.md](references/codebase.md).
 
 Load a second branch only when the task genuinely crosses it. Use repository
 documents and package scripts as authority; personal skill paths are never a

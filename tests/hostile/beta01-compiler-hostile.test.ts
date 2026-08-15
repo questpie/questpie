@@ -66,7 +66,7 @@ describe("BETA-01 hostile compiler cases", () => {
 			`import { constraint, defineCollection, field } from "questpie";
 export const duplicate = defineCollection({
   name: "messages",
-  fields: { id: field.uuid() },
+  fields: { id: field.uuid({ nullable: false }) },
   constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
 `,
@@ -158,7 +158,7 @@ import { defineQuery } from "#questpie/package";
 
 export const auditEntries = defineCollection({
   name: "auditEntries",
-  fields: { id: field.uuid() },
+  fields: { id: field.uuid({ nullable: false }) },
   constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
 
@@ -288,7 +288,7 @@ export const auditById = defineQuery({
 		);
 		await expectDiagnostic(
 			() => compileApplication({ applicationRoot: root }),
-			"QP-COMPOSE-013",
+			"QP-SCHEMA-003",
 		);
 	});
 });

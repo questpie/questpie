@@ -50,33 +50,35 @@ import { constraint, defineCollection, field, index, relation } from "questpie";
 
 import { tenants } from "./tenants";
 
+const appointmentFields = {
+	id: field.uuid({ nullable: false, default: "randomUuid" }),
+	tenantId: field.uuid({ nullable: false }),
+	customerName: field.text({ nullable: false, maxLength: 160 }),
+	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	status: field.text({
+		nullable: false,
+		maxLength: 24,
+		default: "scheduled",
+	}),
+	createdAt: field.timestamp({
+		nullable: false,
+		withTimezone: true,
+		default: "now",
+	}),
+	updatedAt: field.timestamp({
+		nullable: false,
+		withTimezone: true,
+		default: "now",
+	}),
+};
+
 export const appointments = defineCollection({
 	name: "appointments",
-	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		tenantId: field.uuid({ nullable: false }),
-		customerName: field.text({ nullable: false, maxLength: 160 }),
-		startsAt: field.timestamp({ nullable: false, withTimezone: true }),
-		endsAt: field.timestamp({ nullable: false, withTimezone: true }),
-		status: field.text({
-			nullable: false,
-			maxLength: 24,
-			default: "scheduled",
-		}),
-		createdAt: field.timestamp({
-			nullable: false,
-			withTimezone: true,
-			default: "now",
-		}),
-		updatedAt: field.timestamp({
-			nullable: false,
-			withTimezone: true,
-			default: "now",
-		}),
-	},
+	fields: appointmentFields,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
-		validWindow: constraint.check(({ fields }) =>
+		validWindow: constraint.check<typeof appointmentFields>(({ fields }) =>
 			fields.endsAt.greaterThan(fields.startsAt),
 		),
 	},
@@ -96,6 +98,12 @@ export const appointments = defineCollection({
 	},
 });
 ```
+
+Declare the Fields object before the Collection and pass its type to
+`constraint.check`. The explicit type argument keeps Field names and scalar
+compatibility exact. The compiler evaluates the callback once and stores only
+its closed expression tree, so the callback does not enter migration artifacts
+or deployment.
 
 Configure the Application Identity, PostgreSQL schema, and discovery root in
 the [`questpie.json` Application Root](./definition-composition#configure-one-application-root).
@@ -564,16 +572,16 @@ export const demoBarbershop = defineSeed({
 			id: "018f5f70-0a0c-7f11-89f9-2aa4f8df3945",
 			tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 			customerName: "Nina Horvath",
-			startsAt: new Date("2026-08-11T09:00:00.000Z"),
-			endsAt: new Date("2026-08-11T09:30:00.000Z"),
+			startsAt: "2026-08-11T09:00:00.000Z",
+			endsAt: "2026-08-11T09:30:00.000Z",
 			status: "scheduled",
 		}),
 	],
 });
 ```
 
-The Controlled Structural Evaluator permits `new Date(<ISO 8601 literal>)`. Clock reads
-such as `Date.now()` and `new Date()` without a literal are forbidden.
+Seed timestamp values are canonical strings. `Date` values and clock reads such as
+`Date.now()` or `new Date()` are not valid Seed values.
 
 QUESTPIE compiles these immutable Seed files. You must commit all three:
 

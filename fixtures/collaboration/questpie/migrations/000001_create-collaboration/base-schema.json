@@ -1,0 +1,1 @@
+{"application":{"name":"collaboration","postgresSchema":"collaboration"},"collections":[],"format":"questpie.schema-projection","requiredPostgres":{"databaseCType":"C.UTF-8","databaseCollation":"C.UTF-8","extensions":[],"minimumMajor":16},"version":1}

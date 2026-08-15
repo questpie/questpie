@@ -1,7 +1,12 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import {
+	fieldPath,
+	flattenFieldContracts,
+	indexField,
+	localCheckContract,
+} from "./schema";
 import type {
-	ApplicationConfiguration,
 	EvaluatedExport,
 	NormalizedResource,
 	PackageInventory,
@@ -11,7 +16,6 @@ import type {
 } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
-
 function record(value: unknown, label: string): RecordValue {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new CompilerDiagnosticError(
@@ -38,45 +42,21 @@ function entries(value: unknown): [string, RecordValue][] {
 		.sort(([left], [right]) => compareAscii(left, right));
 }
 
-function fieldContract(key: string, value: RecordValue): RecordValue {
-	const scalar = string(value.scalar, `${key}.scalar`);
-	const options = record(value.options ?? {}, `${key}.options`);
-	let type: RecordValue;
-	if (scalar === "text")
-		type = {
-			kind: "text",
-			minLength: options.minLength ?? null,
-			maxLength: options.maxLength ?? null,
-			collation: "questpie.binary",
-		};
-	else if (scalar === "timestamp")
-		type = { kind: "timestamp", withTimezone: options.withTimezone ?? false };
-	else if (scalar === "integer")
-		type = {
-			kind: "integer",
-			minimum: options.minimum ?? null,
-			maximum: options.maximum ?? null,
-		};
-	else type = { kind: scalar };
-	const rawDefault = value.default;
-	const normalizedDefault =
-		rawDefault === "now" || rawDefault === "randomUuid"
-			? { kind: rawDefault }
-			: null;
-	return {
-		path: [key],
-		type,
-		nullable: value.nullable === true,
-		default: normalizedDefault,
-		postgresName:
-			typeof value.postgresName === "string" ? value.postgresName : null,
-	};
-}
-
 function constraintContract(value: RecordValue): RecordValue {
+	const kind = string(value.kind, "constraint.kind");
+	if (kind === "check")
+		return {
+			kind,
+			expression: localCheckContract(
+				value.expression,
+				"constraint.check expression",
+			),
+			postgresName:
+				typeof value.postgresName === "string" ? value.postgresName : null,
+		};
 	return {
-		kind: string(value.kind, "constraint.kind"),
-		fields: (value.fields as readonly string[]).map((field) => [field]),
+		kind,
+		fields: (value.fields as readonly unknown[]).map(fieldPath),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
@@ -85,22 +65,31 @@ function constraintContract(value: RecordValue): RecordValue {
 function indexContract(value: RecordValue): RecordValue {
 	return {
 		kind: "btree",
-		fields: (value.fields as readonly string[]).map((field) => ({
-			field: [field],
-			order: "asc",
-			nulls: "last",
-		})),
+		fields: (value.fields as readonly unknown[]).map(indexField),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 	};
 }
 
 function relationContract(value: RecordValue): RecordValue {
+	if (value.kind === "toMany") {
+		const keys = Object.keys(value).sort(compareAscii);
+		if (canonicalBytes(keys) !== canonicalBytes(["inverseOf", "kind"]))
+			throw new CompilerDiagnosticError(
+				"QP-SCHEMA-001",
+				"invalidDefinition",
+				"relation.toMany accepts only inverseOf",
+			);
+		return {
+			kind: "toMany",
+			inverseOf: string(value.inverseOf, "relation.inverseOf"),
+		};
+	}
 	return {
 		kind: "toOne",
 		target: value.target,
-		fields: (value.fields as readonly string[]).map((field) => [field]),
-		references: (value.references as readonly string[]).map((field) => [field]),
+		fields: (value.fields as readonly unknown[]).map(fieldPath),
+		references: (value.references as readonly unknown[]).map(fieldPath),
 		onDelete: value.onDelete,
 		onUpdate: value.onUpdate,
 		postgresName:
@@ -113,9 +102,7 @@ function augmentationContract(value: RecordValue): RecordValue {
 		format: "questpie.collection-augmentation-contract",
 		version: 1,
 		name: string(value.name, "augmentation.name"),
-		fields: entries(value.fields).map(([key, field]) =>
-			fieldContract(key, field),
-		),
+		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		constraints: entries(value.constraints).map(([key, constraint]) => ({
 			key,
 			contract: constraintContract(constraint),
@@ -215,6 +202,36 @@ function queryContract(value: RecordValue): RecordValue {
 	};
 }
 
+function seedContract(value: RecordValue): RecordValue {
+	return {
+		format: "questpie.seed-definition-contract",
+		version: 1,
+		name: string(value.name, "seed.name"),
+		dependsOn: [...((value.dependsOn ?? []) as readonly string[])].sort(
+			compareAscii,
+		),
+		steps: (value.steps as readonly unknown[]).map((item) => {
+			const step = record(item, "seed step");
+			return {
+				kind: string(step.kind, "seed step kind"),
+				collection: string(step.collection, "seed step collection"),
+				...(step.values === undefined
+					? {}
+					: { values: record(step.values, "seed values") }),
+				...(step.key === undefined
+					? {}
+					: { key: record(step.key, "seed key") }),
+				...(step.create === undefined
+					? {}
+					: { create: record(step.create, "seed create values") }),
+				...(step.update === undefined
+					? {}
+					: { update: record(step.update, "seed update values") }),
+			};
+		}),
+	};
+}
+
 function ownerCollectionContract(
 	value: RecordValue,
 	contributionIdentities: readonly string[],
@@ -225,9 +242,7 @@ function ownerCollectionContract(
 		name: string(value.name, "collection.name"),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
-		fields: entries(value.fields).map(([key, field]) =>
-			fieldContract(key, field),
-		),
+		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		constraints: entries(value.constraints).map(([key, constraint]) => ({
 			key,
 			contract: constraintContract(constraint),
@@ -379,6 +394,22 @@ export function normalizeResources(
 				},
 				value: item.value,
 			});
+		} else if (kind === "seed") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: seedContract(item.value),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
 		} else
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",
@@ -400,231 +431,6 @@ export function normalizeResources(
 			);
 	}
 	return resources;
-}
-
-function snake(value: string): string {
-	return value
-		.replaceAll(".", "_")
-		.replace(/([a-z0-9])([A-Z])/g, "$1_$2")
-		.toLowerCase();
-}
-
-function resolvedCollectionEntries(
-	resource: NormalizedResource,
-	kind: "constraints" | "fields" | "indexes",
-): Array<{
-	key: string;
-	contract: RecordValue;
-	contributionIdentity: string | null;
-}> {
-	const resolved: Array<{
-		key: string;
-		contract: RecordValue;
-		contributionIdentity: string | null;
-	}> = entries(resource.value[kind]).map(([key, value]) => ({
-		key,
-		contract: value,
-		contributionIdentity: null,
-	}));
-	for (const rawAugmentation of (resource.value.augmentations ??
-		[]) as readonly unknown[]) {
-		const augmentation = record(rawAugmentation, "augmentation");
-		const contributionIdentity = `${resource.identity}/augmentation:${string(augmentation.name, "augmentation.name")}`;
-		for (const [key, value] of entries(augmentation[kind])) {
-			if (resolved.some((entry) => entry.key === key))
-				throw new CompilerDiagnosticError(
-					"QP-COMPOSE-014",
-					"augmentationMemberCollision",
-					`${resource.identity}/${kind.slice(0, -1)}:${key} has multiple contributors`,
-				);
-			resolved.push({
-				key,
-				contract: value,
-				contributionIdentity,
-			});
-		}
-	}
-	return resolved.sort((left, right) => compareAscii(left.key, right.key));
-}
-
-function resolvedFields(resource: NormalizedResource): Array<{
-	key: string;
-	contract: RecordValue;
-	contributionIdentity: string | null;
-}> {
-	return resolvedCollectionEntries(resource, "fields").map((entry) => ({
-		...entry,
-		contract: fieldContract(entry.key, entry.contract),
-	}));
-}
-
-export function projectMemberContributions(
-	resource: NormalizedResource,
-): ReadonlyArray<
-	Readonly<{ identity: string; contributionIdentity: string | null }>
-> {
-	if (resource.kind !== "collection") return [];
-	return [
-		...resolvedCollectionEntries(resource, "fields").map((entry) => ({
-			identity: `${resource.identity}/field:${entry.key}`,
-			contributionIdentity: entry.contributionIdentity,
-		})),
-		...resolvedCollectionEntries(resource, "constraints").map((entry) => ({
-			identity: `${resource.identity}/constraint:${entry.key}`,
-			contributionIdentity: entry.contributionIdentity,
-		})),
-		...resolvedCollectionEntries(resource, "indexes").map((entry) => ({
-			identity: `${resource.identity}/index:${entry.key}`,
-			contributionIdentity: entry.contributionIdentity,
-		})),
-		...entries(resource.value.relations).map(([key]) => ({
-			identity: `${resource.identity}/relation:${key}`,
-			contributionIdentity: null,
-		})),
-	].sort((left, right) => compareAscii(left.identity, right.identity));
-}
-
-export function projectManifest(
-	configuration: ApplicationConfiguration,
-	resources: readonly NormalizedResource[],
-): Readonly<Record<string, unknown>> {
-	const collections = resources.filter(
-		(resource) => resource.kind === "collection",
-	);
-	const schemaCollections = collections.map((resource) => {
-		const fields = resolvedFields(resource);
-		const constraints = resolvedCollectionEntries(resource, "constraints").map(
-			({ key, contract: value }) => ({
-				kind: value.kind,
-				identity: `${resource.identity}/constraint:${key}`,
-				postgresName:
-					value.postgresName ?? `${snake(resource.name)}_${snake(key)}`,
-				fields: (value.fields as readonly string[]).map(
-					(field) => `${resource.identity}/field:${field}`,
-				),
-			}),
-		);
-		const primaryKeys = constraints.filter(
-			(item) => item.kind === "primaryKey",
-		);
-		if (primaryKeys.length !== 1)
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-013",
-				"structuralTypeError",
-				`${resource.identity} requires exactly one named primary key`,
-			);
-		const indexes = resolvedCollectionEntries(resource, "indexes").map(
-			({ key, contract: value }) => ({
-				kind: "btree",
-				identity: `${resource.identity}/index:${key}`,
-				postgresName:
-					value.postgresName ?? `${snake(resource.name)}_${snake(key)}`,
-				fields: (value.fields as readonly string[]).map((field) => ({
-					field: `${resource.identity}/field:${field}`,
-					order: "asc",
-					nulls: "last",
-					operatorClass: "typeDefault",
-					collation: null,
-				})),
-			}),
-		);
-		const relations = entries(resource.value.relations).map(([key, value]) => ({
-			kind: "toOne",
-			identity: `${resource.identity}/relation:${key}`,
-			target: value.target,
-			fields: (value.fields as readonly string[]).map(
-				(field) => `${resource.identity}/field:${field}`,
-			),
-			references: (value.references as readonly string[]).map(
-				(field) => `${value.target}/field:${field}`,
-			),
-			constraintPostgresName:
-				value.postgresName ?? `${snake(resource.name)}_${snake(key)}_fk`,
-			onDelete: value.onDelete,
-			onUpdate: value.onUpdate,
-		}));
-		return {
-			identity: resource.identity,
-			postgresName: resource.value.postgresName ?? snake(resource.name),
-			fields: fields.map(({ key, contract }) => ({
-				identity: `${resource.identity}/field:${key}`,
-				path: [key],
-				postgresName: contract.postgresName ?? snake(key),
-				type: contract.type,
-				nullable: contract.nullable,
-				default: contract.default,
-				collation:
-					record(contract.type, "field type").kind === "text"
-						? "questpie.binary"
-						: null,
-			})),
-			constraints,
-			indexes,
-			relations,
-		};
-	});
-	const schema = {
-		format: "questpie.schema-projection",
-		version: 1,
-		application: {
-			name: configuration.application.name,
-			postgresSchema: configuration.postgres.schema,
-		},
-		requiredPostgres: {
-			minimumMajor: 16,
-			databaseCollation: configuration.postgres.databaseCollation,
-			databaseCType: configuration.postgres.databaseCType,
-			extensions: configuration.postgres.extensions.map((name) => ({ name })),
-		},
-		collections: schemaCollections,
-	};
-	const data = {
-		format: "questpie.data-contract-projection",
-		version: 1,
-		applicationIdentity: `application:${configuration.application.name}`,
-		collections: schemaCollections.map((collection) => {
-			const primary = collection.constraints.find(
-				(constraint) => constraint.kind === "primaryKey",
-			);
-			return {
-				identity: collection.identity,
-				primaryKey: {
-					identity: primary?.identity,
-					fields: primary?.fields,
-				},
-				fields: collection.fields.map((field) => ({
-					identity: field.identity,
-					path: field.path,
-					codec: field.type,
-					nullable: field.nullable,
-					hasDefault: field.default !== null,
-				})),
-				relations: collection.relations.map((relation) => ({
-					kind: "toOne",
-					identity: relation.identity,
-					target: relation.target,
-					fields: relation.fields,
-					references: relation.references,
-				})),
-			};
-		}),
-	};
-	return {
-		format: "questpie.manifest",
-		version: 1,
-		application: { name: configuration.application.name },
-		composition: {
-			resources: resources.map((resource) => ({
-				identity: resource.identity,
-				contributions: resource.contributions.map((contribution) => ({
-					identity: contribution.identity,
-					structuralContractDigest: contribution.structuralContractDigest,
-				})),
-			})),
-		},
-		schema,
-		data,
-	};
 }
 
 export function semanticDraft(

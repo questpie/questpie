@@ -1,17 +1,13 @@
-import {
-	constraint,
-	defineCollection,
-	field,
-	relation,
-	relationRef,
-} from "questpie";
+import { constraint, defineCollection, field, relation } from "questpie";
+
+import { companies } from "./companies";
 
 export const memberships = defineCollection({
 	name: "memberships",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
-		companyId: field.uuid(),
-		principalId: field.uuid(),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		companyId: field.uuid({ nullable: false }),
+		principalId: field.uuid({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -21,7 +17,7 @@ export const memberships = defineCollection({
 	},
 	relations: {
 		company: relation.toOne({
-			target: relationRef("companies"),
+			target: companies,
 			fields: ["companyId"],
 			references: ["id"],
 		}),

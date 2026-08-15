@@ -24,6 +24,8 @@ import {
 	normalizeResources,
 	semanticDraft,
 } from "./model";
+import type { SchemaProjectionV1 } from "./schema";
+import { createCommittedSeed, type CommittedSeedV1 } from "./seed";
 import { typecheckCurrentContract } from "./typecheck";
 import type {
 	ApplicationConfiguration,
@@ -33,6 +35,51 @@ import type {
 import { replaceGeneratedDirectory } from "./write";
 
 export { CompilerDiagnosticError } from "./diagnostic";
+export {
+	createCommittedSeed,
+	orderCommittedSeeds,
+	verifyCommittedSeed,
+} from "./seed";
+export type {
+	CommittedSeedV1,
+	SeedFieldValueV1,
+	SeedStepV1,
+	SeedValueV1,
+} from "./seed";
+export { loadCommittedSeed, validateCommittedSeedSchema } from "./seed";
+export {
+	createCommittedMigration,
+	createMigrationPlan,
+	verifyCommittedMigration,
+	verifyCommittedMigrationChain,
+} from "./schema";
+export type { MigrationClassification } from "./schema";
+export {
+	explainCommittedMigration,
+	explainMigrationApply,
+	loadCommittedMigration,
+	renderCliExplanation,
+} from "./schema";
+export { explainCommittedSeed } from "./seed";
+export type { CliExplanationV1 } from "./schema";
+export { applyCommittedMigrations, inspectSchemaFingerprint } from "./schema";
+export { applyCommittedSeeds } from "./seed";
+export type { ApplyMigrationsResult, SchemaFingerprintV1 } from "./schema";
+export type { ApplySeedsResult } from "./seed";
+export type {
+	CommittedMigration,
+	CommittedMigrationFilesV1,
+	MigrationPlanV1,
+	MigrationStepKindV1,
+	MigrationStepV1,
+	RenameIdentityV1,
+	SchemaProjectionV1,
+} from "./schema";
+export type {
+	MigrationPlanningResult,
+	NoChangesMigration,
+	PlannedMigration,
+} from "./schema";
 
 export interface CompileApplicationOptions {
 	readonly applicationRoot: string;
@@ -41,6 +88,7 @@ export interface CompileApplicationOptions {
 
 export interface CompileApplicationResult {
 	readonly generatedFiles: Readonly<Record<string, string>>;
+	readonly committedSeeds: readonly CommittedSeedV1[];
 	readonly packageInventories: readonly Readonly<{
 		name: string;
 		digest: string;
@@ -494,11 +542,20 @@ export async function compileApplication(
 			contractPath: packageContractPath(compilation.name),
 		})),
 	});
+	const schema = JSON.parse(
+		generatedFiles["schema-projection.json"] ?? "null",
+	) as SchemaProjectionV1;
+	const committedSeeds = firstResources
+		.filter((resource) => resource.kind === "seed")
+		.map((resource) =>
+			createCommittedSeed({ definition: resource.contract, schema }),
+		);
 	const outputDirectory =
 		options.outputDirectory ?? resolve(applicationRoot, ".questpie/generated");
 	await replaceGeneratedDirectory(outputDirectory, generatedFiles);
 	return {
 		generatedFiles,
+		committedSeeds,
 		packageInventories: inventories.map((inventory) => ({
 			name: inventory.package.name,
 			digest: inventory.digest,

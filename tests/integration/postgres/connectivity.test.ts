@@ -16,5 +16,9 @@ test.skipIf(!sql)(
 	`;
 		expect(result?.value).toBe(1);
 		expect(result?.version).toMatch(/^\d+\.\d+/);
+		if (process.env.QUESTPIE_POSTGRES_MAJOR)
+			expect(result?.version.split(".")[0]).toBe(
+				process.env.QUESTPIE_POSTGRES_MAJOR,
+			);
 	},
 );

@@ -29,6 +29,7 @@
 		"**/*.gen.ts",
 		"**/.generated",
 		"**/migrations/**",
+		"**/seeds/**",
 		"**/CHANGELOG.md",
 		"**/templates/**/*.yml",
 		"**/templates/**/*.yaml",
