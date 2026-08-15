@@ -635,6 +635,53 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		}
 	}, 10_000);
 
+	test("rejects an applied head with no Application Identity binding", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "missing-binding-probe",
+			postgresSchema: "missing_binding_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-missing-binding-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+
+		await database!`
+			delete from questpie_internal.application_bindings
+			where application_name = 'missing-binding-probe'
+		`;
+		await database!.unsafe('DROP SCHEMA "missing_binding_probe" CASCADE');
+		try {
+			await expect(
+				applyCommittedMigrations({ migrations: [migration] }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-029",
+				diagnosticClass: "applicationBindingMismatch",
+			});
+		} finally {
+			await database!`
+				delete from questpie_internal.schema_migration_receipts
+				where application_name = 'missing-binding-probe'
+			`;
+		}
+	}, 10_000);
+
 	test("reads one standalone Schema Fingerprint from a concurrent snapshot", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,

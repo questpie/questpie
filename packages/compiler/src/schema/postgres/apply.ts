@@ -311,6 +311,12 @@ export async function applyCommittedMigrations(
 				where application_name = ${application}
 				order by sequence
 			`;
+			if (receipts.length > 0 && conflictingBindings.length !== 1)
+				return fail(
+					"QP-SCHEMA-029",
+					"applicationBindingMismatch",
+					"Applied migration history requires one exact Application Identity binding",
+				);
 			if (receipts.length > migrations.length)
 				return fail(
 					"QP-SCHEMA-024",
