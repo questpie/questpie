@@ -8,6 +8,7 @@ import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
 } from "../../packages/runtime/src/operation/ingress";
+import expectedRuntimeEvents from "../goldens/beta05/runtime-events.json";
 
 const sha = (character: string) => character.repeat(64);
 
@@ -859,6 +860,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	expect(handlerCalls).toBe(2);
 	await app.close();
 	const eventBytes = JSON.stringify(events);
+	expect(events).toEqual(expectedRuntimeEvents);
 	expect(eventBytes).not.toContain(baseFrame.context.companyId);
 	expect(eventBytes).not.toContain('"input"');
 	expect(
