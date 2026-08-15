@@ -131,3 +131,57 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 		"dispose:application:1",
 	]);
 });
+
+test("retains execution Services until a response body reaches EOF", async () => {
+	const events: string[] = [];
+	const streamService = defineService({
+		name: "stream.execution",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			events.push("create");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose");
+		},
+	});
+	const streamContext = defineContext({
+		name: "stream.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const runtime = createApplicationRuntime({
+		services: [streamService],
+		context: streamContext,
+		bootstrap: { get: async () => null },
+		project: async ({ service }) => ({ stream: await service(streamService) }),
+	});
+	let body!: ReadableStreamDefaultController<Uint8Array>;
+	const response = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ stream }) => {
+			expect(stream.ready).toBe(true);
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						body = controller;
+					},
+				}),
+			);
+		},
+	);
+
+	expect(events).toEqual(["create"]);
+	body.enqueue(new TextEncoder().encode("complete"));
+	body.close();
+	expect(await response.text()).toBe("complete");
+	expect(events).toEqual(["create", "dispose"]);
+	await runtime.close();
+});

@@ -12,6 +12,8 @@ import type {
 	ServiceLifetime,
 } from "questpie";
 
+import { retainResponseLifetime } from "./response";
+
 type AnyService = ServiceDefinition<
 	string,
 	ServiceLifetime,
@@ -160,6 +162,26 @@ export function createApplicationRuntime<
 		else input.signal?.addEventListener("abort", onAbort, { once: true });
 		const executionCells = new Map<string, Promise<unknown>>();
 		const executionOwned: OwnedService[] = [];
+		let resolveScope!: () => void;
+		let rejectScope!: (error: unknown) => void;
+		const scopeDone = new Promise<void>((resolveDone, rejectDone) => {
+			resolveScope = resolveDone;
+			rejectScope = rejectDone;
+		});
+		activeRoots.add(scopeDone);
+		void scopeDone
+			.finally(() => activeRoots.delete(scopeDone))
+			.catch(() => undefined);
+		let finalizePromise: Promise<void> | undefined;
+		const finalize = (): Promise<void> => {
+			if (finalizePromise) return finalizePromise;
+			finalizePromise = (async () => {
+				input.signal?.removeEventListener("abort", onAbort);
+				await disposeOwned(executionOwned);
+			})();
+			void finalizePromise.then(resolveScope, rejectScope);
+			return finalizePromise;
+		};
 
 		const getService = <Definition extends AnyService>(
 			definition: Definition,
@@ -222,10 +244,15 @@ export function createApplicationRuntime<
 			} catch (error) {
 				primaryFailure = error;
 			}
-			input.signal?.removeEventListener("abort", onAbort);
+			if (!primaryFailure && result instanceof Response)
+				return (await retainResponseLifetime(
+					result,
+					controller.signal,
+					finalize,
+				)) as Awaited<Result>;
 			let cleanupFailure: unknown;
 			try {
-				await disposeOwned(executionOwned);
+				await finalize();
 			} catch (error) {
 				cleanupFailure = error;
 			}
@@ -233,12 +260,7 @@ export function createApplicationRuntime<
 			if (cleanupFailure) throw cleanupFailure;
 			return result as Awaited<Result>;
 		})();
-		activeRoots.add(root);
-		try {
-			return (await root) as Awaited<Result>;
-		} finally {
-			activeRoots.delete(root);
-		}
+		return (await root) as Awaited<Result>;
 	}
 
 	return Object.freeze({
