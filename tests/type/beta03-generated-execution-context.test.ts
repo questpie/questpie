@@ -6,6 +6,10 @@ import { join, resolve } from "node:path";
 import { compileApplication } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
+const typescriptCompiler = resolve(
+	import.meta.dir,
+	"../../node_modules/typescript/bin/tsc",
+);
 
 test("emits exact non-recursive root Execution declarations", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta03-execution-"));
@@ -95,4 +99,22 @@ void elevatedInput;
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
+});
+
+test("resolves generated Execution source types through the fixture mapping", async () => {
+	await compileApplication({ applicationRoot: fixtureRoot });
+	const result = Bun.spawnSync(
+		[
+			"bun",
+			typescriptCompiler,
+			"-p",
+			join(fixtureRoot, "tsconfig.json"),
+			"--pretty",
+			"false",
+		],
+		{ cwd: fixtureRoot, stderr: "pipe", stdout: "pipe" },
+	);
+	const diagnostics = `${result.stdout.toString()}${result.stderr.toString()}`;
+	expect(diagnostics).toBe("");
+	expect(result.exitCode).toBe(0);
 });

@@ -214,7 +214,7 @@ export function renderAppContract(
 		const relativePath = resource.origin.logicalPath.startsWith(prefix)
 			? resource.origin.logicalPath.slice(prefix.length)
 			: resource.origin.logicalPath;
-		return `#questpie/source/${relativePath.replace(/\.(?:ts|tsx)$/, "")}`;
+		return `#questpie/source/${relativePath}`;
 	};
 	const definitionType = (resource: NormalizedResource): string =>
 		`(typeof import(${JSON.stringify(sourceModule(resource))}))[${JSON.stringify(resource.origin.exportName)}]`;
