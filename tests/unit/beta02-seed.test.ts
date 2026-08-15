@@ -176,7 +176,7 @@ describe("BETA-02 committed Seeds", () => {
 		).toThrow(/QP-SEED-003/);
 	});
 
-	test("commits and reloads deeply nested tagged open JSON", async () => {
+	test("commits and reloads stack-deep tagged open JSON", async () => {
 		const compiled = await compilation;
 		const schema = structuredClone(
 			JSON.parse(compiled.generatedFiles["schema-projection.json"] ?? "null"),
@@ -195,7 +195,8 @@ describe("BETA-02 committed Seeds", () => {
 			type: { kind: "json" },
 		});
 		let deepJson: unknown = "leaf";
-		for (let depth = 0; depth < 12; depth += 1) deepJson = { nested: deepJson };
+		for (let depth = 0; depth < 20_000; depth += 1)
+			deepJson = { nested: deepJson };
 		const committed = createCommittedSeed({
 			definition: {
 				name: "collaboration.deep-json.v1",
@@ -213,6 +214,9 @@ describe("BETA-02 committed Seeds", () => {
 			schema,
 		});
 		expect(() => verifyCommittedSeed(committed)).not.toThrow();
+		expect(Buffer.byteLength(committed.files["steps.json"] ?? "")).toBeLessThan(
+			1_048_576,
+		);
 
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-deep-json-seed-"));
 		try {
@@ -220,9 +224,58 @@ describe("BETA-02 committed Seeds", () => {
 			await mkdir(directory);
 			for (const [name, bytes] of Object.entries(committed.files))
 				await writeFile(join(directory, name), bytes);
-			await expect(loadCommittedSeed(directory)).resolves.toEqual(committed);
+			const loaded = await loadCommittedSeed(directory);
+			expect(loaded.identity).toBe(committed.identity);
+			expect(loaded.files).toEqual(committed.files);
 		} finally {
 			await rm(temporary, { recursive: true });
 		}
+	});
+
+	test("rejects cyclic tagged open JSON with the registered diagnostic", async () => {
+		const compiled = await compilation;
+		const schema = structuredClone(
+			JSON.parse(compiled.generatedFiles["schema-projection.json"] ?? "null"),
+		);
+		const companies = schema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+		companies.fields.push({
+			collation: null,
+			default: null,
+			identity: "collection:companies/field:metadata",
+			nullable: false,
+			path: ["metadata"],
+			postgresName: "metadata",
+			type: { kind: "json" },
+		});
+		const cyclic: Record<string, unknown> = {};
+		cyclic.self = cyclic;
+
+		expect(
+			caught(() =>
+				createCommittedSeed({
+					definition: {
+						name: "collaboration.cyclic-json.v1",
+						steps: [
+							{
+								kind: "insert",
+								collection: "collection:companies",
+								values: {
+									metadata: { kind: "json", value: cyclic },
+									name: "Cyclic JSON",
+								},
+							},
+						],
+					},
+					schema,
+				}),
+			),
+		).toMatchObject({
+			code: "QP-SEED-003",
+			diagnosticClass: "seedTargetMismatch",
+			message: expect.stringContaining("does not accept cyclic JSON values"),
+		});
 	});
 });

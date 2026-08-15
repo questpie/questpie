@@ -4,37 +4,79 @@ function compareAscii(left: string, right: string): number {
 	return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function canonicalize(value: unknown, seen: Set<object>): unknown {
-	if (value === null || typeof value === "string" || typeof value === "boolean")
-		return value;
-	if (typeof value === "number") {
-		if (!Number.isFinite(value) || Object.is(value, -0))
-			throw new TypeError("canonical JSON rejects non-finite numbers and -0");
-		return value;
-	}
-	if (typeof value !== "object")
-		throw new TypeError(`canonical JSON rejects ${typeof value}`);
-	if (seen.has(value)) throw new TypeError("canonical JSON rejects cycles");
-	seen.add(value);
-	try {
-		if (Array.isArray(value))
-			return value.map((item) => canonicalize(item, seen));
-		return Object.fromEntries(
-			Object.entries(value)
-				.sort(([left], [right]) => compareAscii(left, right))
-				.map(([key, item]) => {
-					if (item === undefined)
-						throw new TypeError(`canonical JSON rejects undefined at ${key}`);
-					return [key, canonicalize(item, seen)];
-				}),
-		);
-	} finally {
-		seen.delete(value);
-	}
-}
+type CanonicalFrame =
+	| Readonly<{ key: string; kind: "entry"; value: unknown }>
+	| Readonly<{ kind: "leave"; value: object }>
+	| Readonly<{ kind: "text"; value: string }>
+	| Readonly<{ kind: "value"; value: unknown }>;
 
 export function canonicalBytes(value: unknown): string {
-	return `${JSON.stringify(canonicalize(value, new Set()))}\n`;
+	const active = new Set<object>();
+	const output: string[] = [];
+	const stack: CanonicalFrame[] = [{ kind: "value", value }];
+	while (stack.length > 0) {
+		const frame = stack.pop();
+		if (!frame) break;
+		if (frame.kind === "text") {
+			output.push(frame.value);
+			continue;
+		}
+		if (frame.kind === "leave") {
+			active.delete(frame.value);
+			continue;
+		}
+		if (frame.kind === "entry") {
+			if (frame.value === undefined)
+				throw new TypeError(`canonical JSON rejects undefined at ${frame.key}`);
+			output.push(`${JSON.stringify(frame.key)}:`);
+			stack.push({ kind: "value", value: frame.value });
+			continue;
+		}
+		const item = frame.value;
+		if (
+			item === null ||
+			typeof item === "string" ||
+			typeof item === "boolean"
+		) {
+			output.push(JSON.stringify(item));
+			continue;
+		}
+		if (typeof item === "number") {
+			if (!Number.isFinite(item) || Object.is(item, -0))
+				throw new TypeError("canonical JSON rejects non-finite numbers and -0");
+			output.push(JSON.stringify(item));
+			continue;
+		}
+		if (typeof item !== "object")
+			throw new TypeError(`canonical JSON rejects ${typeof item}`);
+		if (active.has(item)) throw new TypeError("canonical JSON rejects cycles");
+		active.add(item);
+		stack.push({ kind: "leave", value: item });
+		if (Array.isArray(item)) {
+			stack.push({ kind: "text", value: "]" });
+			for (let index = item.length - 1; index >= 0; index -= 1) {
+				stack.push({
+					kind: "value",
+					value: index in item ? item[index] : null,
+				});
+				if (index > 0) stack.push({ kind: "text", value: "," });
+			}
+			stack.push({ kind: "text", value: "[" });
+			continue;
+		}
+		const entries = Object.entries(item).sort(([left], [right]) =>
+			compareAscii(left, right),
+		);
+		stack.push({ kind: "text", value: "}" });
+		for (let index = entries.length - 1; index >= 0; index -= 1) {
+			const entry = entries[index];
+			if (!entry) continue;
+			stack.push({ kind: "entry", key: entry[0], value: entry[1] });
+			if (index > 0) stack.push({ kind: "text", value: "," });
+		}
+		stack.push({ kind: "text", value: "{" });
+	}
+	return `${output.join("")}\n`;
 }
 
 export function digest(domain: string, value: unknown): string {
