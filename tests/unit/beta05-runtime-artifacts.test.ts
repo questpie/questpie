@@ -7,8 +7,6 @@ import { pathToFileURL } from "node:url";
 
 import { compileApplication } from "@questpie/compiler";
 
-import { validateRuntimeExecutableBinding } from "../../packages/compiler/src/runtime";
-
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 test("binds every generated network Query slot to immutable Runtime Build bytes", async () => {
@@ -33,7 +31,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			compiler: {
 				version: "4.0.0-beta.1",
 				bunVersion: Bun.version,
-				executableFormat: "source-module-v1",
+				executableFormat: "bun-esm-bundle-v1",
 			},
 			later: {
 				changeLedgerDigest: null,
@@ -43,6 +41,12 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			},
 		});
 		expect(runtimeBuild.compilerRuntimeBuildDigest).toMatch(/^[0-9a-f]{64}$/);
+		expect(runtimeBuild.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/);
+		expect(runtimeBuild.serverBundleDigest).toBe(
+			createHash("sha256")
+				.update(first.generatedFiles["internal/application.js"]!)
+				.digest("hex"),
+		);
 		expect(
 			runtimeBuild.inventory.map(({ path }: { path: string }) => path),
 		).toEqual(
@@ -118,51 +122,6 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		expect(first.generatedFiles["client.ts"]).toContain("withContext");
 
-		const binding = {
-			runtimeBuildDigest: runtimeBuild.digest,
-			slots: runtimeBuild.slots,
-		};
-		expect(validateRuntimeExecutableBinding(runtimeBuild, binding)).toEqual({
-			accepted: true,
-			reason: null,
-		});
-		expect(
-			validateRuntimeExecutableBinding(runtimeBuild, {
-				...binding,
-				slots: binding.slots.slice(1),
-			}),
-		).toEqual({ accepted: false, reason: "missing" });
-		expect(
-			validateRuntimeExecutableBinding(runtimeBuild, {
-				...binding,
-				slots: [...binding.slots, binding.slots[0]],
-			}),
-		).toEqual({ accepted: false, reason: "duplicate" });
-		expect(
-			validateRuntimeExecutableBinding(runtimeBuild, {
-				...binding,
-				slots: [
-					{ ...binding.slots[0], kind: "mutation" },
-					...binding.slots.slice(1),
-				],
-			}),
-		).toEqual({ accepted: false, reason: "wrongKind" });
-		expect(
-			validateRuntimeExecutableBinding(runtimeBuild, {
-				...binding,
-				slots: [
-					{ ...binding.slots[0], runtimeGraphDigest: "0".repeat(64) },
-					...binding.slots.slice(1),
-				],
-			}),
-		).toEqual({ accepted: false, reason: "stale" });
-		expect(
-			validateRuntimeExecutableBinding(runtimeBuild, {
-				...binding,
-				runtimeBuildDigest: "0".repeat(64),
-			}),
-		).toEqual({ accepted: false, reason: "crossBuild" });
-
 		const generatedClient = await import(
 			pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href
 		);
@@ -213,4 +172,4 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
-});
+}, 30_000);

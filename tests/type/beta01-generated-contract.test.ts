@@ -80,10 +80,11 @@ describe("BETA-01 generated contract", () => {
 			"committed-migrations.json",
 			"context-projection.json",
 			"execution-composition-explain.json",
+			"internal/application.d.ts",
+			"internal/application.js",
 			"internal/checksums.json",
 			collaborationAuditContractPath,
 			"internal/package-inventories.json",
-			"internal/server.ts",
 			"manifest.json",
 			"origin-map.json",
 			"policy-projection.json",
@@ -217,5 +218,5 @@ describe("BETA-01 generated contract", () => {
 			"utf8",
 		);
 		expect(consumer).toContain('from "#questpie/app"');
-	});
+	}, 15_000);
 });

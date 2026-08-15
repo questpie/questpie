@@ -98,6 +98,7 @@
       "name": "@questpie/compiler",
       "version": "4.0.0-beta.1",
       "dependencies": {
+        "@questpie/runtime": "workspace:*",
         "typescript": "6.0.2",
       },
     },

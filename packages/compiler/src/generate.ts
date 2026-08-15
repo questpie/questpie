@@ -179,6 +179,18 @@ function renderQueries(resources: readonly NormalizedResource[]): string {
 		.join("\n\t");
 }
 
+function renderQueryOperations(
+	resources: readonly NormalizedResource[],
+): string {
+	return resources
+		.filter((resource) => resource.kind === "query")
+		.map(
+			(resource) =>
+				`readonly ${JSON.stringify(resource.name)}: (input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>;`,
+		)
+		.join("\n\t");
+}
+
 const factoryNames = [
 	"defineMutation",
 	"defineAction",
@@ -275,6 +287,10 @@ export interface GeneratedQueries {
 	${renderQueries(resources)}
 }
 
+export type GeneratedQueryOperations = Readonly<{
+	${renderQueryOperations(resources)}
+}>;
+
 export interface QueryContext {
 	readonly data: Readonly<GeneratedData>;
 	readonly signal: AbortSignal;
@@ -342,15 +358,22 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 ${otherFactories}
 
 export interface GeneratedApp {
-	readonly queries: GeneratedQueries;
+	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: RootExecution) => Result | Promise<Result>,
+		callback: (execution: Readonly<{ queries: GeneratedQueryOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
 }
 
-export declare function createApp(): GeneratedApp;
+export type CreateAppInput = Readonly<{
+	postgres: Readonly<{ url: string }>;
+}>;
+
+export async function createApp(input: CreateAppInput): Promise<GeneratedApp> {
+	const application = await import("./internal/application.js");
+	return application.createApplication(input);
+}
 `;
 }
 

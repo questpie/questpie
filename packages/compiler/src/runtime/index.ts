@@ -10,11 +10,14 @@ import {
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
 export { renderClientContract, renderCodecType } from "./client";
-export { renderServerExecutables } from "./server";
+export {
+	renderApplicationBundle,
+	renderApplicationDeclaration,
+} from "./application";
 
 type ArtifactFiles = Readonly<Record<string, string>>;
 
-export interface RuntimeExecutableSlotV1 {
+interface RuntimeExecutableSlotV1 {
 	readonly identity: string;
 	readonly kind: string;
 	readonly slot: string;
@@ -258,7 +261,7 @@ export function projectRuntimeBuild(
 		files: ArtifactFiles;
 		runtime: RuntimeContractProjection;
 		migrationHead: string | null;
-		buildInputDigest: string;
+		schemaFingerprint: string;
 	}>,
 ): Readonly<Record<string, unknown>> {
 	const fileDigest = (path: string): string | null => {
@@ -275,8 +278,8 @@ export function projectRuntimeBuild(
 	const compiler = {
 		version: "4.0.0-beta.1",
 		bunVersion: Bun.version,
-		buildInputDigest: input.buildInputDigest,
-		executableFormat: "source-module-v1",
+		buildInputDigest: fileDigest("build-input.json"),
+		executableFormat: "bun-esm-bundle-v1",
 	};
 	const slots = input.runtime.executables.slots as readonly Readonly<{
 		identity: string;
@@ -309,12 +312,13 @@ export function projectRuntimeBuild(
 		clientContractDigest: input.runtime.clientContractDigest,
 		packageInventoryDigest: fileDigest("internal/package-inventories.json"),
 		schemaProjectionDigest: fileDigest("schema-projection.json"),
+		schemaFingerprint: input.schemaFingerprint,
 		policyProjectionDigest: fileDigest("policy-projection.json"),
 		queryProjectionDigest: fileDigest("query-projection.json"),
 		postgresQueryPlansDigest: fileDigest("postgres-query-plans.json"),
 		committedMigrationsDigest: fileDigest("committed-migrations.json"),
 		migrationHead: input.migrationHead,
-		serverBundleDigest: fileDigest("internal/server.ts"),
+		serverBundleDigest: fileDigest("internal/application.js"),
 		runtimeExecutablesDigest: input.runtime.runtimeExecutablesDigest,
 		runtimeGraphDigest,
 		wireDigest: input.runtime.wireDigest,
@@ -340,52 +344,6 @@ export function projectRuntimeBuild(
 		...withoutDigest,
 		digest: digest("questpie-runtime-build-v1", withoutDigest),
 	};
-}
-
-export type RuntimeBindingRefusal =
-	| "crossBuild"
-	| "duplicate"
-	| "missing"
-	| "stale"
-	| "wrongKind";
-
-export function validateRuntimeExecutableBinding(
-	expected: Readonly<Record<string, unknown>>,
-	candidate: Readonly<{
-		runtimeBuildDigest: string;
-		slots: readonly Readonly<{
-			identity: string;
-			kind: string;
-			slot: string;
-			runtimeGraphDigest: string;
-			bundleExport: string;
-		}>[];
-	}>,
-): Readonly<{ accepted: boolean; reason: RuntimeBindingRefusal | null }> {
-	if (candidate.runtimeBuildDigest !== expected.digest)
-		return { accepted: false, reason: "crossBuild" };
-	const expectedSlots = expected.slots as typeof candidate.slots;
-	const byKey = new Map(
-		expectedSlots.map((slot) => [`${slot.identity}#${slot.slot}`, slot]),
-	);
-	const seen = new Set<string>();
-	for (const slot of candidate.slots) {
-		const key = `${slot.identity}#${slot.slot}`;
-		if (seen.has(key)) return { accepted: false, reason: "duplicate" };
-		seen.add(key);
-		const expectedSlot = byKey.get(key);
-		if (!expectedSlot) return { accepted: false, reason: "stale" };
-		if (expectedSlot.kind !== slot.kind)
-			return { accepted: false, reason: "wrongKind" };
-		if (
-			expectedSlot.runtimeGraphDigest !== slot.runtimeGraphDigest ||
-			expectedSlot.bundleExport !== slot.bundleExport
-		)
-			return { accepted: false, reason: "stale" };
-	}
-	if (seen.size !== expectedSlots.length)
-		return { accepted: false, reason: "missing" };
-	return { accepted: true, reason: null };
 }
 
 export function runtimeArtifactBytes(value: unknown): string {
