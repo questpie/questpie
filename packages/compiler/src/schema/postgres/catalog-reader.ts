@@ -97,6 +97,7 @@ export async function readCatalogComparableInOwnedTransaction(
 			name: string;
 			kind: string;
 			persistence: string;
+			replicaIdentity: string;
 			rowSecurityEnabled: boolean;
 			rowSecurityForced: boolean;
 		}[]
@@ -104,6 +105,7 @@ export async function readCatalogComparableInOwnedTransaction(
 		select c.relname as name,
 		       c.relkind::text as kind,
 		       c.relpersistence::text as persistence,
+		       c.relreplident::text as "replicaIdentity",
 		       c.relrowsecurity as "rowSecurityEnabled",
 		       c.relforcerowsecurity as "rowSecurityForced"
 		from pg_catalog.pg_class c
@@ -116,6 +118,7 @@ export async function readCatalogComparableInOwnedTransaction(
 	const supportedTables = tables.filter(
 		(table) =>
 			table.persistence === "p" &&
+			table.replicaIdentity === "d" &&
 			!table.rowSecurityEnabled &&
 			!table.rowSecurityForced,
 	);
@@ -142,6 +145,7 @@ export async function readCatalogComparableInOwnedTransaction(
 	for (const table of tables)
 		if (
 			table.persistence !== "p" ||
+			table.replicaIdentity !== "d" ||
 			table.rowSecurityEnabled ||
 			table.rowSecurityForced
 		)

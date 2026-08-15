@@ -474,6 +474,34 @@ describe.skipIf(!database)(
 			}
 		});
 
+		test("rejects a nondefault table replica identity", async () => {
+			await database!.unsafe(
+				'ALTER TABLE "catalog_fact_probe"."messages" REPLICA IDENTITY FULL',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity: "catalog_fact_probe.messages",
+					attachedTo: null,
+				});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							object.name === "messages" || object.table === "messages",
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'ALTER TABLE "catalog_fact_probe"."messages" REPLICA IDENTITY DEFAULT',
+				);
+			}
+		});
+
 		test("does not project an unsupported column state", async () => {
 			await database!.unsafe(
 				'ALTER TABLE "catalog_fact_probe"."messages" ADD COLUMN "unsupported_collation" text COLLATE pg_catalog."default"',
