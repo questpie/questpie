@@ -381,18 +381,24 @@ async function postgresIdentifierQuoter(
 function renderFingerprintExpression(
 	expression: JsonRecord,
 	quoteIdentifier: QuotePostgresIdentifier,
+	collection?: JsonRecord,
+	literalType?: string,
 ): string {
 	if (expression.kind === "field")
-		return quoteIdentifier(String(expression.field));
+		return quoteIdentifier(
+			collection
+				? physicalFieldName(collection, String(expression.field))
+				: String(expression.field),
+		);
 	if (expression.kind === "literal") {
 		if (expression.value === null) return "NULL";
 		if (typeof expression.value === "boolean")
 			return expression.value ? "true" : "false";
 		if (typeof expression.value === "number") return String(expression.value);
-		return `'${String(expression.value).replaceAll("'", "''")}'::text`;
+		return `'${String(expression.value).replaceAll("'", "''")}'::${literalType === "bigint" ? "bigint" : "text"}`;
 	}
 	if (expression.kind === "textLength")
-		return `char_length(${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)})`;
+		return `char_length(${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier, collection)})`;
 	if (expression.kind === "compare") {
 		const operators: Readonly<Record<string, string>> = {
 			equal: "=",
@@ -402,16 +408,27 @@ function renderFingerprintExpression(
 			greaterThan: ">",
 			greaterThanOrEqual: ">=",
 		};
-		return `${renderFingerprintExpression(expression.left as JsonRecord, quoteIdentifier)} ${operators[String(expression.operator)]} ${renderFingerprintExpression(expression.right as JsonRecord, quoteIdentifier)}`;
+		const left = expression.left as JsonRecord;
+		const leftField =
+			collection && left.kind === "field"
+				? childRecords(collection, "fields").find(
+						(field) => field.identity === left.field,
+					)
+				: undefined;
+		const leftType = (leftField?.type as JsonRecord | undefined)?.kind;
+		return `${renderFingerprintExpression(left, quoteIdentifier, collection)} ${operators[String(expression.operator)]} ${renderFingerprintExpression(expression.right as JsonRecord, quoteIdentifier, collection, typeof leftType === "string" ? leftType : undefined)}`;
 	}
 	if (expression.kind === "and" || expression.kind === "or")
 		return (expression.expressions as readonly JsonRecord[])
-			.map((item) => `(${renderFingerprintExpression(item, quoteIdentifier)})`)
+			.map(
+				(item) =>
+					`(${renderFingerprintExpression(item, quoteIdentifier, collection)})`,
+			)
 			.join(expression.kind === "and" ? " AND " : " OR ");
 	if (expression.kind === "not")
-		return `NOT (${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)})`;
+		return `NOT (${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier, collection)})`;
 	if (expression.kind === "isNull" || expression.kind === "isNotNull")
-		return `${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier)} IS ${expression.kind === "isNull" ? "NULL" : "NOT NULL"}`;
+		return `${renderFingerprintExpression(expression.expression as JsonRecord, quoteIdentifier, collection)} IS ${expression.kind === "isNull" ? "NULL" : "NOT NULL"}`;
 	return fail(
 		"QP-SCHEMA-028",
 		"invalidObject",
@@ -423,13 +440,24 @@ function expectedConstraintDefinition(
 	object: JsonRecord,
 	schemaName: string,
 	quoteIdentifier: QuotePostgresIdentifier,
+	collection: JsonRecord,
 ): string {
 	if (object.kind === "primaryKey")
 		return `PRIMARY KEY (${(object.fields as readonly string[]).map(quoteIdentifier).join(", ")})`;
 	if (object.kind === "unique")
 		return `UNIQUE (${(object.fields as readonly string[]).map(quoteIdentifier).join(", ")})`;
-	if (object.kind === "check")
-		return `CHECK (${renderFingerprintExpression(object.expression as JsonRecord, quoteIdentifier)})`;
+	if (object.kind === "check") {
+		const semanticConstraint = childRecords(collection, "constraints").find(
+			(constraint) => constraint.postgresName === object.name,
+		);
+		if (!semanticConstraint)
+			return fail(
+				"QP-SCHEMA-028",
+				"invalidObject",
+				`unknown semantic Constraint ${String(object.name)}`,
+			);
+		return `CHECK (${renderFingerprintExpression(semanticConstraint.expression as JsonRecord, quoteIdentifier, collection)})`;
+	}
 	if (object.kind === "foreignKey") {
 		const action = (value: unknown) =>
 			String(value)
@@ -656,6 +684,7 @@ export async function assertSchemaMatches(
 					object,
 					schemaName,
 					quoteIdentifier,
+					collection,
 				),
 				validated: true,
 				deferrable: object.kind === "check" ? false : object.deferrable,
@@ -895,11 +924,27 @@ export async function providerObservations(
 			serverVersion: string;
 			databaseCollation: string;
 			databaseCType: string;
+			databaseEncoding: string;
+			binaryCollationProvider: string | null;
+			binaryCollationDeterministic: boolean | null;
 		}[]
 	>`
 		select current_setting('server_version') as "serverVersion",
 		       datcollate as "databaseCollation",
-		       datctype as "databaseCType"
+		       datctype as "databaseCType",
+		       pg_catalog.pg_encoding_to_char(encoding) as "databaseEncoding",
+		       (
+		         select collprovider::text
+		         from pg_catalog.pg_collation c
+		         join pg_catalog.pg_namespace n on n.oid = c.collnamespace
+		         where n.nspname = 'pg_catalog' and c.collname = 'C'
+		       ) as "binaryCollationProvider",
+		       (
+		         select collisdeterministic
+		         from pg_catalog.pg_collation c
+		         join pg_catalog.pg_namespace n on n.oid = c.collnamespace
+		         where n.nspname = 'pg_catalog' and c.collname = 'C'
+		       ) as "binaryCollationDeterministic"
 		from pg_catalog.pg_database where datname = current_database()
 	`;
 	const requiredExtensions = schema.requiredPostgres.extensions.map(
@@ -925,6 +970,9 @@ export async function providerObservations(
 		major < schema.requiredPostgres.minimumMajor ||
 		database.databaseCollation !== schema.requiredPostgres.databaseCollation ||
 		database.databaseCType !== schema.requiredPostgres.databaseCType ||
+		database.databaseEncoding !== "UTF8" ||
+		database.binaryCollationProvider !== "c" ||
+		database.binaryCollationDeterministic !== true ||
 		extensions.length !== schema.requiredPostgres.extensions.length
 	)
 		return fail(
@@ -935,10 +983,18 @@ export async function providerObservations(
 				serverVersion: database.serverVersion,
 				databaseCollation: database.databaseCollation,
 				databaseCType: database.databaseCType,
+				databaseEncoding: database.databaseEncoding,
+				binaryCollationProvider: database.binaryCollationProvider,
+				binaryCollationDeterministic: database.binaryCollationDeterministic,
 				extensions,
 			},
 		);
-	return { ...database, extensions };
+	return {
+		...database,
+		binaryCollationProvider: database.binaryCollationProvider,
+		binaryCollationDeterministic: database.binaryCollationDeterministic,
+		extensions,
+	};
 }
 
 async function fingerprint(

@@ -393,7 +393,11 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 							identity: "collection:measurements/field:id",
 							path: ["id"],
 							postgresName: "id",
-							type: { kind: "bigint", minimum: null, maximum: null },
+							type: {
+								kind: "bigint",
+								minimum: "-9223372036854775808",
+								maximum: "9223372036854775807",
+							},
 							nullable: false,
 							default: null,
 							collation: null,
@@ -435,6 +439,34 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 							identity: "collection:measurements/constraint:primary",
 							postgresName: "qp_pk_measurements_primary",
 							fields: ["collection:measurements/field:id"],
+						},
+						{
+							kind: "check",
+							identity: "collection:measurements/field:id/invariant:maximum",
+							postgresName: "qp_ck_measurements_id_maximum",
+							expression: {
+								kind: "compare",
+								operator: "lessThanOrEqual",
+								left: {
+									kind: "field",
+									field: "collection:measurements/field:id",
+								},
+								right: { kind: "literal", value: "9223372036854775807" },
+							},
+						},
+						{
+							kind: "check",
+							identity: "collection:measurements/field:id/invariant:minimum",
+							postgresName: "qp_ck_measurements_id_minimum",
+							expression: {
+								kind: "compare",
+								operator: "greaterThanOrEqual",
+								left: {
+									kind: "field",
+									field: "collection:measurements/field:id",
+								},
+								right: { kind: "literal", value: "-9223372036854775808" },
+							},
 						},
 					],
 					indexes: [],

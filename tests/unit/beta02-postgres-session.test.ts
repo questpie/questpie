@@ -1,10 +1,42 @@
 import { describe, expect, test } from "bun:test";
 
+import type { SQL } from "bun";
+
 import {
 	executeAbortable,
 	probeSessionAffinity,
 	resolvePostgresControl,
 } from "../../packages/compiler/src/postgres-session";
+import type { SchemaProjectionV1 } from "../../packages/compiler/src/schema";
+import { providerObservations } from "../../packages/compiler/src/schema-postgres";
+
+const providerSchema = {
+	requiredPostgres: {
+		databaseCType: "C.UTF-8",
+		databaseCollation: "C.UTF-8",
+		extensions: [],
+		minimumMajor: 16,
+	},
+} as SchemaProjectionV1;
+
+function providerSql(overrides: Readonly<Record<string, unknown>>): SQL {
+	return (async (strings: TemplateStringsArray) => {
+		const query = strings.join("?");
+		if (!query.includes("pg_catalog.pg_database"))
+			throw new Error(`unexpected provider query: ${query}`);
+		return [
+			{
+				binaryCollationDeterministic: true,
+				binaryCollationProvider: "c",
+				databaseCType: "C.UTF-8",
+				databaseCollation: "C.UTF-8",
+				databaseEncoding: "UTF8",
+				serverVersion: "17.5",
+				...overrides,
+			},
+		];
+	}) as unknown as SQL;
+}
 
 describe("BETA-02 PostgreSQL session protocol", () => {
 	test("commits two probes and accepts only one pinned backend", async () => {
@@ -23,6 +55,30 @@ describe("BETA-02 PostgreSQL session protocol", () => {
 
 		await expect(
 			probeSessionAffinity(async () => pids.shift() ?? -1),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-007",
+			diagnosticClass: "providerMismatch",
+		});
+	});
+
+	test("fails closed when UTF-8 or the binary collation contract is absent", async () => {
+		await expect(
+			providerObservations(
+				providerSql({ databaseEncoding: "LATIN1" }),
+				providerSchema,
+			),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-007",
+			diagnosticClass: "providerMismatch",
+		});
+		await expect(
+			providerObservations(
+				providerSql({
+					binaryCollationDeterministic: false,
+					binaryCollationProvider: "i",
+				}),
+				providerSchema,
+			),
 		).rejects.toMatchObject({
 			code: "QP-SCHEMA-007",
 			diagnosticClass: "providerMismatch",
