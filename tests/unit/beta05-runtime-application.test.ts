@@ -339,6 +339,66 @@ test("requires the Runtime Build to bind the Schema Fingerprint", async () => {
 	).rejects.toThrow("runtime build has invalid keys");
 });
 
+test("rejects an unsupported Runtime ABI or internal protocol before readiness", async () => {
+	let readinessChecks = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	for (const [field, value, message] of [
+		["runtimeAbi", "questpie.runtime.v999", "unsupported Runtime ABI"],
+		[
+			"internalProtocol",
+			"questpie.internal.v999",
+			"unsupported internal protocol",
+		],
+	] as const) {
+		const { digest: _digest, ...unsignedBuild } = artifacts.runtimeBuild;
+		const changedBuild = { ...unsignedBuild, [field]: value };
+		const runtimeBuild = {
+			...changedBuild,
+			digest: digest("questpie-runtime-build-v1", changedBuild),
+		};
+		await expect(
+			createRuntimeApplication({
+				artifacts: {
+					...runtimeArtifactEnvelope(artifacts),
+					runtimeBuild,
+				},
+				artifactFiles: artifacts.artifactFiles,
+				...executableBindings(
+					{ ...artifacts, runtimeBuild: runtimeBuild as never },
+					bindings,
+				),
+				program: {
+					services: [],
+					context,
+					bootstrap: { get: async () => null },
+					project: ({ facts }) => ({ signal: facts.signal }),
+					resolvePrincipal: async () => principal.anonymous(),
+					verifyReadiness: () => {
+						readinessChecks += 1;
+					},
+				},
+			}),
+		).rejects.toThrow(message);
+	}
+	expect(readinessChecks).toBe(0);
+});
+
 test("rejects a mismatched Runtime Build before Context or handler disclosure", async () => {
 	let resolves = 0;
 	let handlerCalls = 0;

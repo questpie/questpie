@@ -16,8 +16,8 @@ type RuntimeBuildV1 = Readonly<{
 	format: "questpie.runtime-build";
 	version: 1;
 	application: string;
-	runtimeAbi: string;
-	internalProtocol: string;
+	runtimeAbi: "questpie.runtime.v1";
+	internalProtocol: "questpie.internal.v2";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -394,6 +394,10 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		);
 	for (const key of ["application", "runtimeAbi", "internalProtocol"] as const)
 		string(build[key], key);
+	if (build.runtimeAbi !== "questpie.runtime.v1")
+		fail("unsupported Runtime ABI");
+	if (build.internalProtocol !== "questpie.internal.v2")
+		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
 		string(build.migrationHead, "migrationHead");
 	const { digest: _digest, ...unsigned } = build;
