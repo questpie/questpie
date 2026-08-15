@@ -54,6 +54,41 @@ postgresTest(
 			).rejects.toThrow("Runtime Build digest does not match");
 			await writeFile(runtimeBuildPath, runtimeBuildBytes);
 
+			const { digest: _fingerprintBuildDigest, ...unsignedFingerprintBuild } =
+				JSON.parse(runtimeBuildBytes);
+			const mismatchedFingerprintUnsignedBuild = {
+				...unsignedFingerprintBuild,
+				schemaFingerprint: "0".repeat(64),
+			};
+			const mismatchedFingerprintBuild = {
+				...mismatchedFingerprintUnsignedBuild,
+				digest: artifactDigest(
+					"questpie-runtime-build-v1",
+					mismatchedFingerprintUnsignedBuild,
+				),
+			};
+			const mismatchedFingerprintBytes = `${JSON.stringify(mismatchedFingerprintBuild)}\n`;
+			const fingerprintChecksums = JSON.parse(checksumsBytes);
+			fingerprintChecksums.files = fingerprintChecksums.files.map(
+				(item: Readonly<{ path: string; digest: string }>) =>
+					item.path === "runtime-build.json"
+						? { ...item, digest: contentDigest(mismatchedFingerprintBytes) }
+						: item,
+			);
+			await Promise.all([
+				writeFile(runtimeBuildPath, mismatchedFingerprintBytes),
+				writeFile(checksumsPath, `${JSON.stringify(fingerprintChecksums)}\n`),
+			]);
+			await expect(
+				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
+			).rejects.toThrow(
+				"PostgreSQL Schema Fingerprint does not match Runtime Build",
+			);
+			await Promise.all([
+				writeFile(runtimeBuildPath, runtimeBuildBytes),
+				writeFile(checksumsPath, checksumsBytes),
+			]);
+
 			const { digest: _wireDigest, ...unsignedWire } = JSON.parse(wireBytes);
 			const forgedUnsignedWire = {
 				...unsignedWire,
