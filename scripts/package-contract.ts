@@ -1,5 +1,18 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import {
+	cpSync,
+	existsSync,
+	mkdtempSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	rmSync,
+	symlinkSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 type PackageJson = {
 	name?: string;
@@ -79,6 +92,67 @@ for (const { path, json } of publicPackages) {
 	if (/packed .*\bsrc\//.test(inspection))
 		fail(`${label}: tarball unexpectedly contains source files`);
 }
+
+async function verifyPrivateBuildClosure(): Promise<void> {
+	const temporary = mkdtempSync(join(tmpdir(), "questpie-private-packages-"));
+	try {
+		const nodeModules = join(temporary, "node_modules");
+		const install = (
+			name: string,
+			source: string,
+			exports: Readonly<Record<string, unknown>>,
+			isPrivate = true,
+		): void => {
+			const root = join(nodeModules, ...name.split("/"));
+			mkdirSync(root, { recursive: true });
+			cpSync(resolve(source, "dist"), join(root, "dist"), {
+				recursive: true,
+			});
+			writeFileSync(
+				join(root, "package.json"),
+				JSON.stringify({ name, private: isPrivate, type: "module", exports }),
+			);
+			if (existsSync(join(root, "src")))
+				fail(`${name}: relocated build unexpectedly contains source files`);
+		};
+
+		install(
+			"questpie",
+			"packages/questpie",
+			{
+				".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+			},
+			false,
+		);
+		install("@questpie/runtime", "packages/runtime", {
+			".": "./dist/index.js",
+			"./bundle": "./dist/bundle.js",
+		});
+		install("@questpie/compiler", "packages/compiler", {
+			".": "./dist/index.js",
+		});
+		symlinkSync(
+			resolve("node_modules/typescript"),
+			join(nodeModules, "typescript"),
+		);
+		symlinkSync(resolve("node_modules/@types"), join(nodeModules, "@types"));
+
+		const applicationRoot = join(temporary, "application");
+		cpSync(resolve("fixtures/collaboration"), applicationRoot, {
+			recursive: true,
+		});
+		const compiler = await import(
+			`${pathToFileURL(join(nodeModules, "@questpie/compiler/dist/index.js")).href}?relocated=${crypto.randomUUID()}`
+		);
+		const compilation = await compiler.compileApplication({ applicationRoot });
+		if (!compilation.generatedFiles["internal/application.js"])
+			fail("private package closure emitted no Runtime application bundle");
+	} finally {
+		rmSync(temporary, { force: true, recursive: true });
+	}
+}
+
+await verifyPrivateBuildClosure();
 
 console.log(
 	`package-contract: ${publicPackages.length} publishable package(s) valid`,

@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { join, relative, sep } from "node:path";
+import { extname, join, relative, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -332,6 +332,11 @@ export async function createArtifacts(
 	const runtimeBundleEntry = fileURLToPath(
 		import.meta.resolve("@questpie/runtime/bundle"),
 	);
+	const readinessEntry = join(
+		import.meta.dir,
+		"runtime",
+		`postgres-readiness${extname(fileURLToPath(import.meta.url))}`,
+	);
 	generated["internal/application.js"] = await renderApplicationBundle({
 		applicationRoot: input.applicationRoot,
 		configuration: input.configuration,
@@ -341,7 +346,7 @@ export async function createArtifacts(
 		queryProjection: relational.query,
 		postgresQueryPlans,
 		schemaProjection: schema,
-		readinessEntry: join(import.meta.dir, "runtime/postgres-readiness.ts"),
+		readinessEntry,
 		runtimeBundleEntry,
 	});
 	generated["runtime-build.json"] = runtimeArtifactBytes(

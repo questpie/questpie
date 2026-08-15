@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { CompilerDiagnosticError } from "./diagnostic";
 import type { PackageResolution } from "./types";
@@ -9,9 +10,9 @@ export async function typecheckCurrentContract(
 	input: Readonly<{
 		applicationFiles: readonly string[];
 		generatedFiles: Readonly<Record<string, string>>;
-		frameworkEntry: string;
+		frameworkTypeEntry: string;
 		packages: ReadonlyMap<string, PackageResolution>;
-		compilerRoot: string;
+		typescriptRoot: string;
 		applicationTsconfig: string;
 		applicationSourceRoot: string;
 		packageCompilations: readonly Readonly<{
@@ -38,13 +39,15 @@ export async function typecheckCurrentContract(
 			await writeFile(target, contents);
 		}
 		const paths: Record<string, string[]> = {
-			questpie: [input.frameworkEntry],
+			questpie: [input.frameworkTypeEntry],
 			"#questpie/app": [join(temporary, "generated/app.ts")],
 			"#questpie/client": [join(temporary, "generated/client.ts")],
 			"#questpie/source/*": [join(input.applicationSourceRoot, "*")],
 		};
 		const typeRoots = [
-			resolve(input.compilerRoot, "../../node_modules/@types"),
+			dirname(
+				dirname(fileURLToPath(import.meta.resolve("@types/bun/package.json"))),
+			),
 		];
 		for (const [name, resolution] of input.packages)
 			paths[`${name}/questpie`] = [resolution.entry];
@@ -89,7 +92,7 @@ export async function typecheckCurrentContract(
 						compilerOptions: {
 							noEmit: true,
 							paths: {
-								questpie: [input.frameworkEntry],
+								questpie: [input.frameworkTypeEntry],
 								"#questpie/package": [
 									join(temporary, "generated", compilation.contractPath),
 								],
@@ -108,10 +111,7 @@ export async function typecheckCurrentContract(
 			);
 			configs.push({ label: compilation.name, path: packageConfigPath });
 		}
-		const compiler = resolve(
-			input.compilerRoot,
-			"../../node_modules/typescript/bin/tsc",
-		);
+		const compiler = resolve(input.typescriptRoot, "bin/tsc");
 		const started = performance.now();
 		const outputs: string[] = [];
 		let types = 0;
