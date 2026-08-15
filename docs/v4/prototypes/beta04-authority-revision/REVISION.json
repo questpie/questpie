@@ -1,0 +1,72 @@
+{
+	"format": "questpie.beta04-authority-revision",
+	"version": 1,
+	"identity": "P2R1/BETA04Authority",
+	"proposalCommits": {
+		"cursorAndPolicy": "22379c7680811acea7c11e4fe5929405ba91a20f",
+		"designAndReadiness": "32b1e44479a711ac600455b1c509718942b09535",
+		"diffBase": "33662605105d7a80ade94d430dbf3f838964ff69"
+	},
+	"originalP2": {
+		"proofHead": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
+		"acceptancePacketBlob": "73b66334fc38360a3ad777498d20ccdc039bcfb9",
+		"acceptancePacketSha256": "790f06ab8af64ce1099881fcf166b187f072f493ef764cecdb8bfb372ff0dd68",
+		"messagePolicyProgramDigest": "972c05336c129b4f4aaabe5f20aee46019497008920d6e02f3193d6353d63bcb",
+		"status": "preserved"
+	},
+	"cursor": {
+		"foundationalVersion": 1,
+		"policyProtectedVersion": 2,
+		"policyScopeMember": "policyScopeDigest",
+		"policyScopeFormat": "questpie.policy-cursor-scope",
+		"policyScopeVersion": 1,
+		"digestDomain": "questpie-policy-cursor-scope-v1\u0000",
+		"canonicalEncoding": "RFC8785+LF",
+		"base64urlPadding": "forbidden",
+		"maximumAsciiBytes": 2048,
+		"usedExecutionFacts": ["authorityKind", "principalId", "tenantId"],
+		"unusedFacts": "omitted",
+		"v1OnPolicyQuery": "QP-DATA-010",
+		"scopeMismatch": "QP-DATA-013",
+		"validationOrder": ["shape", "templateDigest", "scopeDigests", "sql"]
+	},
+	"policyDiagnostics": [
+		{
+			"code": "QP-POLICY-001",
+			"class": "missingDefaultPolicy",
+			"phase": "compile",
+			"blocking": "fatal"
+		},
+		{
+			"code": "QP-POLICY-002",
+			"class": "ambiguousDefaultPolicy",
+			"phase": "compile",
+			"blocking": "fatal"
+		}
+	],
+	"acceptedIssues": {
+		"BETA-01": "20ad8529ee18aba6830a7646acb3a9c9292f2fc6",
+		"BETA-02": "b630fb01c6966b97fb3ac265bd416c4cfe0f1908",
+		"BETA-03": "a7d24541c433ab502316b34906d97c9dd51f7ee1"
+	},
+	"readyIssue": "BETA-04",
+	"projectionPatches": {
+		"authorityAndGuidance": {
+			"path": "PROJECTION.patch.b64",
+			"encoding": "base64",
+			"sha256": "5d51458115297dcc6eabde4362353feca665764c718026f81cddd4efe45fc289"
+		},
+		"readinessRepair": {
+			"path": "READINESS.patch.b64",
+			"encoding": "base64",
+			"sha256": "d91d10052b36ee72043c09e9e4d322a76e3ab1a0556b60db9b57c059c49e04db"
+		}
+	},
+	"nonGoals": [
+		"production SQL",
+		"performance evidence",
+		"PolicyProgramV1 byte revision",
+		"DataCursorV1 reinterpretation",
+		"new Policy diagnostics"
+	]
+}
