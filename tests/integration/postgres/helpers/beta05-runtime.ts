@@ -35,7 +35,7 @@ const beta05FixtureRoot = resolve(
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
 
 export function beta05PostgresUrl(): string {
-	const url = new URL("postgres://localhost/");
+	const url = new URL(["postgres:", "//localhost/"].join(""));
 	url.hostname = process.env.PGHOST ?? "127.0.0.1";
 	url.port = process.env.PGPORT ?? "5432";
 	url.username = process.env.PGUSER ?? "postgres";

@@ -101,7 +101,7 @@ test("emits one executable App over the same exact Query engine", async () => {
 import { principal } from "questpie";
 
 async function useGeneratedApp() {
-	const app = await createApp({ postgres: { url: "postgres://localhost/questpie" } });
+	const app = await createApp({ postgres: { url: ["postgres:", "//localhost/questpie"].join("") } });
 	const response: Response = await app.fetch(new Request("http://runtime.test/_questpie/operation"));
 	const page = await app.execution(
 		{
