@@ -100,20 +100,33 @@ function compileDataQuery(value) {
   if (!collection) throw new Error("QP-DATA unknown Collection " + template.from);
   const parameterNames = new Map(Object.entries(template.parameters).map(([name, parameter]) => [parameter, name]));
   const parameterOperand = (parameter) => ({ kind: "parameter", parameter: parameterNames.get(parameter) });
-  const fields = Object.fromEntries(Object.entries(collection.fields).map(([name, field]) => {
-    const identity = fieldIdentity(collection, name);
-    const scalar = (kind, right) => ({ kind, field: identity, operand: parameterNames.has(right) ? parameterOperand(right) : { kind: "literal", codec: fieldCodec(field), value: right } });
-    return [name, {
-      __queryField: identity,
-      kind: "field",
-      equal: (right) => scalar("equal", right), notEqual: (right) => scalar("notEqual", right),
-      in: (values) => ({ kind: "in", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
-      notIn: (values) => ({ kind: "notIn", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
-      isNull: () => ({ kind: "isNull", field: identity }), isNotNull: () => ({ kind: "isNotNull", field: identity }),
-      lessThan: (right) => scalar("lessThan", right),
-      ascending: (options) => ({ kind: "order", field: identity, direction: "asc", nulls: options.nulls }),
-      descending: (options) => ({ kind: "order", field: identity, direction: "desc", nulls: options.nulls }),
-    }];
+  const makeFields = (owner) => Object.fromEntries(Object.entries(owner.fields).map(([name, field]) => {
+      const identity = fieldIdentity(owner, name);
+      const scalar = (kind, right) => ({ kind, field: identity, operand: parameterNames.has(right) ? parameterOperand(right) : { kind: "literal", codec: fieldCodec(field), value: right } });
+      return [name, {
+        __queryField: identity,
+        kind: "field",
+        equal: (right) => scalar("equal", right), notEqual: (right) => scalar("notEqual", right),
+        in: (values) => ({ kind: "in", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
+        notIn: (values) => ({ kind: "notIn", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
+        isNull: () => ({ kind: "isNull", field: identity }), isNotNull: () => ({ kind: "isNotNull", field: identity }),
+        lessThan: (right) => scalar("lessThan", right),
+        ascending: (options) => ({ kind: "order", field: identity, direction: "asc", nulls: options.nulls }),
+        descending: (options) => ({ kind: "order", field: identity, direction: "desc", nulls: options.nulls }),
+      }];
+    }));
+  const fields = makeFields(collection);
+  const relations = Object.fromEntries(Object.entries(collection.relations).flatMap(([name, relation]) => {
+    if (relation.kind !== "toOne") return [];
+    const target = relationalCollections.get(relation.target.slice("collection:".length));
+    if (!target) throw new Error("QP-DATA unknown Relation target " + relation.target);
+    return [[name, {
+      select: (callback) => ({
+        kind: "toOne",
+        relation: collectionIdentity(collection) + "/relation:" + name,
+        select: Object.entries(callback({ fields: makeFields(target) })).map(([key, field]) => ({ kind: "field", key, field: field.__queryField })),
+      }),
+    }]];
   }));
   const queryExpression = (candidate) => {
     if (candidate?.kind !== "booleanExpression") return candidate;
@@ -127,7 +140,7 @@ function compileDataQuery(value) {
     const codec = parameter.parameterKind === "integer" ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null } : { kind: parameter.parameterKind };
     return { kind: "scalar", name, codec, nullable: false };
   });
-  const selection = template.select({ fields });
+  const selection = template.select({ fields, relations });
   const order = template.orderBy({ fields });
   const unique = Object.entries(collection.constraints)
     .filter(([, constraint]) => constraint.kind === "primaryKey" || constraint.kind === "unique")
@@ -139,7 +152,9 @@ function compileDataQuery(value) {
   return {
     from: collectionIdentity(collection),
     parameters,
-    select: Object.entries(selection).map(([key, field]) => ({ kind: "field", key, field: field.__queryField })),
+    select: Object.entries(selection).map(([key, selected]) => selected.kind === "toOne"
+      ? { ...selected, key }
+      : { kind: "field", key, field: selected.__queryField }),
     filter: template.where === null ? null : queryExpression(template.where({ fields, parameters: template.parameters })),
     order: order.map(({ field, direction, nulls }) => ({ field, direction, nulls })),
     page: { kind: "forwardCursor", first: parameterOperand(page.first), after: parameterOperand(page.after), uniqueConstraint: collectionIdentity(collection) + "/constraint:" + unique.name },
