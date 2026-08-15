@@ -285,8 +285,16 @@ export declare function createClient(input: Readonly<{
 }
 
 export function renderPackageContract(
+	packageName: string,
 	resources: readonly NormalizedResource[],
 ): string {
+	const services = resources
+		.filter((resource) => resource.kind === "service")
+		.map(
+			(resource) =>
+				`readonly ${JSON.stringify(resource.name)}: ServiceInstance<typeof PackageDefinitions[${JSON.stringify(resource.origin.exportName)}]>;`,
+		)
+		.join("\n\t\t");
 	const factories = [
 		"defineQuery",
 		"defineMutation",
@@ -299,7 +307,8 @@ export function renderPackageContract(
 		.filter((name) => name !== "defineQuery")
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `import type { Codec } from "questpie";
+	return `import type { Codec, ServiceInstance } from "questpie";
+import type * as PackageDefinitions from ${JSON.stringify(`${packageName}/questpie`)};
 
 export interface ReadCollection<Row, Key> {
 	get(input: Readonly<{ key: Key }>): Promise<Row | null>;
@@ -312,6 +321,10 @@ export interface PackageData {
 export interface PackageQueries {
 	${renderQueries(resources)}
 }
+
+export type PackageServices = Readonly<{
+	${services}
+}>;
 
 export type PackageQueryFactory = <const Name extends keyof PackageQueries>(
 	definition: Readonly<{

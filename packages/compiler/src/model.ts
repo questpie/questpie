@@ -133,6 +133,8 @@ function packageContract(value: RecordValue): RecordValue {
 	if (valueBrand.category === "augmentation")
 		return augmentationContract(value);
 	if (valueBrand.resourceKind === "query") return queryContract(value);
+	if (valueBrand.resourceKind === "service")
+		return compositionContract("service", value);
 	if (valueBrand.resourceKind === "collection")
 		return ownerCollectionContract(value, []);
 	throw new CompilerDiagnosticError(

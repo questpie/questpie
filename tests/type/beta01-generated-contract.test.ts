@@ -121,8 +121,8 @@ describe("BETA-01 generated contract", () => {
 				packageId: originMap.packages[0].id,
 				path: "src/questpie.ts",
 				span: {
-					start: { line: 6, column: 3 },
-					end: { line: 6, column: 42 },
+					start: { line: 18, column: 3 },
+					end: { line: 18, column: 42 },
 				},
 			},
 		});
@@ -145,7 +145,7 @@ describe("BETA-01 generated contract", () => {
 				{
 					name: "@questpie/collaboration-audit",
 					digest:
-						"eb0fd0e75cb854bd195c509f8d29af0ee582262d2dbef6ded975f97f5dba8a9a",
+						"1a2ace658948831cc4be0cfc7fd2080d5598f2100d9ceb86a3d4729216cf6079",
 				},
 			],
 		});
@@ -164,6 +164,7 @@ describe("BETA-01 generated contract", () => {
 			"seed:collaboration.demo.v1",
 			"service:audit.connection",
 			"service:audit.execution",
+			"service:questpie.auditReader",
 		]);
 		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");

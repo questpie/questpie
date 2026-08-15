@@ -235,6 +235,7 @@ export async function createArtifacts(
 	};
 	for (const compilation of input.packageCompilations)
 		generated[packageContractPath(compilation.name)] = renderPackageContract(
+			compilation.name,
 			compilation.resources,
 		);
 	generated["internal/checksums.json"] = canonicalBytes({

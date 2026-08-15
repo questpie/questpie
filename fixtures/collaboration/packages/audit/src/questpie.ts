@@ -1,4 +1,16 @@
-import { defineCollectionAugmentation, field, index } from "questpie";
+import {
+	defineCollectionAugmentation,
+	defineService,
+	field,
+	index,
+} from "questpie";
+
+export const auditReader = defineService({
+	name: "questpie.auditReader",
+	lifetime: "execution",
+	effect: "read",
+	create: () => Object.freeze({ source: "audit" as const }),
+});
 
 export const messageAudit = defineCollectionAugmentation({
 	name: "questpie.auditFieldsV1",
