@@ -15,7 +15,7 @@ import {
 
 import { decodeContextInput } from "./context-input";
 import { retainResponseLifetime } from "./response";
-import { decodeOperationWireRoot, type OperationWireRootFrame } from "./wire";
+import { decodeOperationWireRoot } from "./wire";
 
 type AnyService = ServiceDefinition<
 	string,
