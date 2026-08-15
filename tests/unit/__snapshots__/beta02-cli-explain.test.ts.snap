@@ -53,6 +53,21 @@ exports[`BETA-02 CLI explanations renders canonical migration facts as human and
 "
 `;
 
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 5`] = `
+"migration apply failed
+exit 5
+applied 000001_create-collaboration
+failed 000002_add-delivery-state
+diagnostic SQLSTATE 57014
+remaining 000003_add-delivery-attempts
+"
+`;
+
+exports[`BETA-02 CLI explanations renders canonical migration facts as human and JSON goldens 6`] = `
+"{"command":"migration apply","facts":{"applied":["000001_create-collaboration"],"diagnostic":{"sqlstate":"57014"},"exitCode":5,"failed":"000002_add-delivery-state","remaining":["000003_add-delivery-attempts"],"status":"failed"},"format":"questpie.cli-explanation","status":"failed","version":1}
+"
+`;
+
 exports[`BETA-02 CLI explanations renders the immutable Seed graph from committed bytes 1`] = `
 "seed seed:collaboration.demo.v1
 status committed

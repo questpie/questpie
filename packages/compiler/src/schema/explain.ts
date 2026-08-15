@@ -88,6 +88,32 @@ export function explainCommittedMigration(
 export function explainMigrationApply(
 	result: ApplyMigrationsResult,
 ): CliExplanationV1 {
+	if (result.status === "failed") {
+		const diagnostic =
+			"code" in result.diagnostic
+				? `${result.diagnostic.code} ${result.diagnostic.class}`
+				: `SQLSTATE ${result.diagnostic.sqlstate ?? "unavailable"}`;
+		return explanation(
+			"migration apply",
+			"failed",
+			{
+				status: result.status,
+				exitCode: result.exitCode,
+				applied: result.applied,
+				failed: result.failed,
+				diagnostic: result.diagnostic,
+				remaining: result.remaining,
+			},
+			[
+				"migration apply failed",
+				`exit ${result.exitCode}`,
+				`applied ${result.applied.length === 0 ? "none" : result.applied.join(", ")}`,
+				`failed ${result.failed}`,
+				`diagnostic ${diagnostic}`,
+				`remaining ${result.remaining.length === 0 ? "none" : result.remaining.join(", ")}`,
+			],
+		);
+	}
 	return explanation(
 		"migration apply",
 		result.status,

@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 
 import { digest } from "../../canonical";
+import { CompilerDiagnosticError } from "../../diagnostic";
 import {
 	acquireSessionLock,
 	assertBackendPid,
@@ -14,7 +15,11 @@ import {
 import type { PostgresCommandControl } from "../../postgres-session";
 import { verifyCommittedMigrationChain } from "../committed-migration";
 import type { CommittedMigration } from "../contracts";
-import type { ApplyMigrationsResult } from "../postgres-types";
+import type {
+	ApplyMigrationsFailure,
+	ApplyMigrationsResult,
+	SchemaDiagnosticV1,
+} from "../postgres-types";
 import { bootstrap } from "./bootstrap";
 import {
 	assertSchemaMatches,
@@ -23,6 +28,120 @@ import {
 	schemaExists,
 } from "./fingerprint";
 import { fail } from "./shared";
+
+function diagnosticComparison(
+	code: CompilerDiagnosticError["code"],
+): SchemaDiagnosticV1["comparison"] {
+	if (["QP-SCHEMA-026", "QP-SCHEMA-027", "QP-SCHEMA-028"].includes(code))
+		return "appliedToDatabase";
+	if (code === "QP-SCHEMA-007") return "provider";
+	if (
+		[
+			"QP-SCHEMA-023",
+			"QP-SCHEMA-024",
+			"QP-SCHEMA-025",
+			"QP-SCHEMA-029",
+		].includes(code)
+	)
+		return "localToReceipts";
+	return null;
+}
+
+function schemaDiagnostic(
+	error: CompilerDiagnosticError,
+	migrationIdentity: string,
+	application: string,
+): SchemaDiagnosticV1 {
+	const drift = ["QP-SCHEMA-026", "QP-SCHEMA-027", "QP-SCHEMA-028"].includes(
+		error.code,
+	);
+	return {
+		format: "questpie.diagnostic",
+		version: 1,
+		code: error.code as SchemaDiagnosticV1["code"],
+		class: error.diagnosticClass,
+		severity: "error",
+		blocking: drift ? "deploy" : "fatal",
+		identity: migrationIdentity,
+		origins: [],
+		summary: error.message,
+		expected: null,
+		actual: null,
+		recovery: drift
+			? [
+					{
+						description: "Inspect and repair the live Schema Fingerprint",
+						command: "bunx questpie schema drift",
+					},
+				]
+			: [
+					{
+						description: "Resolve the blocking migration diagnostic",
+						command: null,
+					},
+				],
+		comparison: diagnosticComparison(error.code),
+		physicalName: null,
+		containerIdentity: `application:${application}`,
+	};
+}
+
+function sqlstate(error: SQL.PostgresError): string | null {
+	const value = error.errno;
+	return typeof value === "string" && /^[0-9A-Z]{5}$/.test(value)
+		? value
+		: null;
+}
+
+function migrationFailure(
+	error: unknown,
+	migrationIdentity: string,
+	application: string,
+	applied: readonly string[],
+	remaining: readonly string[],
+): ApplyMigrationsFailure | null {
+	if (error instanceof CompilerDiagnosticError)
+		return {
+			status: "failed",
+			exitCode: 4,
+			applied: [...applied],
+			failed: migrationIdentity,
+			diagnostic: schemaDiagnostic(error, migrationIdentity, application),
+			remaining: [...remaining],
+		};
+	if (error instanceof SQL.PostgresError)
+		return {
+			status: "failed",
+			exitCode: 5,
+			applied: [...applied],
+			failed: migrationIdentity,
+			diagnostic: { sqlstate: sqlstate(error) },
+			remaining: [...remaining],
+		};
+	return null;
+}
+
+async function assertMigrationBoundary(
+	sql: SQL,
+	schema: Parameters<typeof assertSchemaMatches>[1],
+	boundary: "base" | "target",
+	migrationIdentity: string,
+): Promise<void> {
+	try {
+		await assertSchemaMatches(sql, schema);
+	} catch (error) {
+		if (
+			!(error instanceof CompilerDiagnosticError) ||
+			error.code !== "QP-SCHEMA-028"
+		)
+			throw error;
+		throw new CompilerDiagnosticError(
+			boundary === "base" ? "QP-SCHEMA-026" : "QP-SCHEMA-027",
+			boundary === "base" ? "baseDrift" : "targetDrift",
+			`${migrationIdentity} ${boundary} Schema Fingerprint does not match the committed artifact`,
+		);
+	}
+}
 
 export async function applyCommittedMigrations(
 	input: Readonly<{
@@ -155,41 +274,98 @@ export async function applyCommittedMigrations(
 			if (receipts.length === 0) {
 				if (await schemaExists(session, target.application.postgresSchema))
 					return fail(
-						"QP-SCHEMA-028",
+						"QP-SCHEMA-026",
 						"baseDrift",
 						"Genesis requires the application schema to be absent before DDL",
 					);
 			} else if (pending[0]) {
-				await assertSchemaMatches(session, pending[0].baseSchema);
+				await assertMigrationBoundary(
+					session,
+					pending[0].baseSchema,
+					"base",
+					pending[0].identity,
+				);
 			}
 			const applied: string[] = [];
-			for (const migration of pending) {
-				await withPinnedTransaction(
-					session,
-					firstPid,
-					`${migration.identity} transaction`,
-					input.signal,
-					async (transaction) => {
-						if (migration.plan.baseMigration === null)
-							await transaction`
+			for (const [pendingIndex, migration] of pending.entries()) {
+				try {
+					if (pendingIndex > 0)
+						await assertMigrationBoundary(
+							session,
+							migration.baseSchema,
+							"base",
+							migration.identity,
+						);
+					await withPinnedTransaction(
+						session,
+						firstPid,
+						`${migration.identity} transaction`,
+						input.signal,
+						async (transaction) => {
+							if (migration.plan.baseMigration === null)
+								await transaction`
 							insert into questpie_internal.application_bindings
 							(application_name, postgres_schema, created_at)
 							values (${application}, ${target.application.postgresSchema}, ${new Date()})
 						`;
-						const migrationSql = migration.files["up.sql"] ?? "";
-						if (migrationSql.length > 0) await transaction.unsafe(migrationSql);
-						await assertSchemaMatches(transaction, migration.targetSchema);
-						await transaction`
+							const migrationSql = migration.files["up.sql"] ?? "";
+							if (migrationSql.length > 0)
+								await transaction.unsafe(migrationSql);
+							await assertMigrationBoundary(
+								transaction,
+								migration.targetSchema,
+								"target",
+								migration.identity,
+							);
+							await transaction`
 						insert into questpie_internal.schema_migration_receipts
 						(application_name, migration_identity, sequence, parent_identity, checksum, base_schema_digest, target_schema_digest, applied_at)
 						values (${application}, ${migration.identity}, ${Number(migration.identity.slice(0, 6))}, ${migration.plan.baseMigration}, ${migration.checksum}, ${migration.plan.baseSchemaDigest}, ${migration.plan.targetSchemaDigest}, ${new Date()})
 					`;
-					},
-				);
-				await assertSchemaMatches(session, migration.targetSchema);
-				applied.push(migration.identity);
+						},
+					);
+					applied.push(migration.identity);
+					await assertMigrationBoundary(
+						session,
+						migration.targetSchema,
+						"target",
+						migration.identity,
+					);
+				} catch (error) {
+					const failure = migrationFailure(
+						error,
+						migration.identity,
+						application,
+						applied,
+						pending.slice(pendingIndex + 1).map((item) => item.identity),
+					);
+					if (failure) return failure;
+					throw error;
+				}
 			}
-			const resultFingerprint = await fingerprint(session, target);
+			let resultFingerprint;
+			try {
+				resultFingerprint = await fingerprint(session, target);
+			} catch (error) {
+				if (
+					error instanceof CompilerDiagnosticError &&
+					error.code === "QP-SCHEMA-028"
+				)
+					error = new CompilerDiagnosticError(
+						"QP-SCHEMA-027",
+						"targetDrift",
+						`${migrations.at(-1)!.identity} target Schema Fingerprint does not match the committed artifact`,
+					);
+				const failure = migrationFailure(
+					error,
+					migrations.at(-1)!.identity,
+					application,
+					applied,
+					[],
+				);
+				if (failure) return failure;
+				throw error;
+			}
 			return {
 				status: applied.length > 0 ? "applied" : "alreadyApplied",
 				applied,

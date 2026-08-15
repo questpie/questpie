@@ -30,6 +30,17 @@ describe("BETA-02 CLI explanations", () => {
 		});
 		expect(renderCliExplanation(applied, "human")).toMatchSnapshot();
 		expect(renderCliExplanation(applied, "json")).toMatchSnapshot();
+
+		const failed = explainMigrationApply({
+			status: "failed",
+			exitCode: 5,
+			applied: [migration.identity],
+			failed: "000002_add-delivery-state",
+			remaining: ["000003_add-delivery-attempts"],
+			diagnostic: { sqlstate: "57014" },
+		});
+		expect(renderCliExplanation(failed, "human")).toMatchSnapshot();
+		expect(renderCliExplanation(failed, "json")).toMatchSnapshot();
 	});
 
 	test("renders the immutable Seed graph from committed bytes", async () => {
