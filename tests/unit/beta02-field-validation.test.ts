@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
-import { fieldContract } from "../../packages/compiler/src/schema/field-contract";
+import { flattenFieldContracts } from "../../packages/compiler/src/schema";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -117,7 +117,7 @@ export const invalid = defineCollection({
 				options: {},
 			},
 		])
-			expect(() => fieldContract(["candidate"], candidate)).toThrow(
+			expect(() => flattenFieldContracts({ candidate })).toThrow(
 				/QP-SCHEMA-001/,
 			);
 
@@ -133,13 +133,15 @@ export const invalid = defineCollection({
 				options: { items: nested, maximumItems: 1 },
 			};
 		expect(() =>
-			fieldContract(["candidate"], {
-				kind: "field",
-				scalar: "array",
-				nullable: false,
-				default: null,
-				postgresName: null,
-				options: { items: nested, maximumItems: 1 },
+			flattenFieldContracts({
+				candidate: {
+					kind: "field",
+					scalar: "array",
+					nullable: false,
+					default: null,
+					postgresName: null,
+					options: { items: nested, maximumItems: 1 },
+				},
 			}),
 		).toThrow(/QP-SCHEMA-001/);
 
@@ -152,13 +154,15 @@ export const invalid = defineCollection({
 			cyclic.options as { properties: Record<string, unknown> }
 		).properties.self = cyclic;
 		expect(() =>
-			fieldContract(["candidate"], {
-				kind: "field",
-				scalar: "object",
-				nullable: false,
-				default: null,
-				postgresName: null,
-				options: { properties: { nested: cyclic } },
+			flattenFieldContracts({
+				candidate: {
+					kind: "field",
+					scalar: "object",
+					nullable: false,
+					default: null,
+					postgresName: null,
+					options: { properties: { nested: cyclic } },
+				},
 			}),
 		).toThrow(/QP-SCHEMA-001/);
 	});
