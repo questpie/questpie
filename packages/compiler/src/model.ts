@@ -6,6 +6,7 @@ import { CompilerDiagnosticError } from "./diagnostic";
 import { flattenFieldContracts } from "./schema/field-contract";
 import { fieldPath, indexField } from "./schema/field-reference";
 import {
+	reservePostgresRelationName,
 	validateBtreeIndexTerms,
 	validateKeyConstraintFields,
 } from "./schema/member-validation";
@@ -766,14 +767,11 @@ export function projectManifest(
 	const globalNames = new Map<string, string>();
 	for (const collection of schemaCollections) {
 		knownPhysicalTargets.add(collection.identity);
-		const previousTable = globalNames.get(`table:${collection.postgresName}`);
-		if (previousTable)
-			throw new CompilerDiagnosticError(
-				"QP-SCHEMA-006",
-				"physicalNameCollision",
-				`${previousTable} and ${collection.identity} share ${collection.postgresName}`,
-			);
-		globalNames.set(`table:${collection.postgresName}`, collection.identity);
+		reservePostgresRelationName(
+			globalNames,
+			collection.postgresName,
+			collection.identity,
+		);
 		const localNames = new Map<string, string>();
 		for (const field of collection.fields) {
 			knownPhysicalTargets.add(field.identity);
@@ -799,6 +797,12 @@ export function projectManifest(
 				`constraint:${constraint.postgresName}`,
 				String(constraint.identity),
 			);
+			if (constraint.kind === "primaryKey" || constraint.kind === "unique")
+				reservePostgresRelationName(
+					globalNames,
+					String(constraint.postgresName),
+					String(constraint.identity),
+				);
 		}
 		for (const relation of collection.relations) {
 			knownPhysicalTargets.add(relation.identity);
@@ -864,14 +868,11 @@ export function projectManifest(
 		}
 		for (const index of collection.indexes) {
 			knownPhysicalTargets.add(index.identity);
-			const previous = globalNames.get(`index:${index.postgresName}`);
-			if (previous)
-				throw new CompilerDiagnosticError(
-					"QP-SCHEMA-006",
-					"physicalNameCollision",
-					`${previous} and ${index.identity} share ${index.postgresName}`,
-				);
-			globalNames.set(`index:${index.postgresName}`, index.identity);
+			reservePostgresRelationName(
+				globalNames,
+				index.postgresName,
+				index.identity,
+			);
 		}
 	}
 	for (const identity of Object.keys(configuration.postgres.physicalNames))

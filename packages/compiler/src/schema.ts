@@ -662,10 +662,11 @@ export function createMigrationPlan(
 		compareAscii(`${left.from}\0${left.to}`, `${right.from}\0${right.to}`),
 	);
 	validateRenames(base, target, renames);
-	const steps =
-		base.collections.length === 0
-			? createSteps(target)
-			: destructiveDeltaSteps(base, target, renames);
+	const isGenesis =
+		(input.baseMigration ?? null) === null && base.collections.length === 0;
+	const steps = isGenesis
+		? createSteps(target)
+		: destructiveDeltaSteps(base, target, renames);
 	const providerDelta = classifyProviderDelta(
 		base.requiredPostgres,
 		target.requiredPostgres,

@@ -118,3 +118,54 @@ export const invalidKey = defineCollection({
 		}
 	}
 });
+
+test("rejects collisions in PostgreSQL's schema relation namespace", async () => {
+	for (const hostile of [
+		{
+			members: `
+export const collisionTable = defineCollection({
+	name: "collisionTable",
+	postgres: { name: "shared_relation" },
+	fields: { id: field.uuid() },
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+export const collisionIndex = defineCollection({
+	name: "collisionIndex",
+	fields: { id: field.uuid() },
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+	indexes: { shared: index({ fields: ["id"], postgres: { name: "shared_relation" } }) },
+});`,
+		},
+		{
+			members: `
+export const firstKey = defineCollection({
+	name: "firstKey",
+	fields: { id: field.uuid() },
+	constraints: { primary: constraint.primaryKey({ fields: ["id"], postgres: { name: "shared_key" } }) },
+});
+export const secondKey = defineCollection({
+	name: "secondKey",
+	fields: { id: field.uuid() },
+	constraints: { primary: constraint.primaryKey({ fields: ["id"], postgres: { name: "shared_key" } }) },
+});`,
+		},
+	] as const) {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-name-collision-"));
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/relation-name-collision.ts"),
+				`import { constraint, defineCollection, field, index } from "questpie";
+${hostile.members}
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toThrow(
+				/QP-SCHEMA-006 physicalNameCollision: .* share shared_/,
+			);
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
+	}
+});

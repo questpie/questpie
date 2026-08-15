@@ -2,6 +2,21 @@ import { CompilerDiagnosticError } from "../diagnostic";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
+export function reservePostgresRelationName(
+	names: Map<string, string>,
+	name: string,
+	identity: string,
+): void {
+	const previous = names.get(name);
+	if (previous)
+		throw new CompilerDiagnosticError(
+			"QP-SCHEMA-006",
+			"physicalNameCollision",
+			`${previous} and ${identity} share ${name}`,
+		);
+	names.set(name, identity);
+}
+
 export function validateBtreeIndexTerms<
 	Term extends Readonly<{ field: string }>,
 >(

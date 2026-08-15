@@ -134,6 +134,40 @@ describe("BETA-02 migration artifacts", () => {
 		).toMatchSnapshot();
 	});
 
+	test("does not recreate the application schema after an empty applied head", async () => {
+		const compilation = await compiledFixture;
+		const collaboration = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const baseSchema = structuredClone(collaboration);
+		baseSchema.collections = [];
+		const targetSchema = structuredClone(baseSchema);
+		targetSchema.collections = collaboration.collections.filter(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+
+		const planned = createMigrationPlan({
+			baseMigration: "000002_drop-all-collections",
+			baseSchema,
+			targetSchema,
+			slug: "restore-companies",
+		});
+
+		expect(planned.status).toBe("planned");
+		if (planned.status !== "planned") throw new Error("plan disappeared");
+		expect(planned.plan.steps.map((step) => step.kind)).toEqual([
+			"createCollection",
+			"addConstraint",
+			"addConstraint",
+			"addConstraint",
+		]);
+		expect(planned.plan.classification).toBe("guarded");
+		expect(planned.plan.steps).not.toContainEqual(
+			expect.objectContaining({ kind: "createApplicationSchema" }),
+		);
+	});
+
 	test("refuses an extra file in the committed migration directory", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-migration-"));
 		try {
