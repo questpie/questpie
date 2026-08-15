@@ -495,10 +495,7 @@ function destructiveDeltaSteps(
 			);
 			continue;
 		}
-		if (
-			baseIdentity !== targetIdentity ||
-			baseCollection.postgresName !== targetCollection.postgresName
-		)
+		if (baseCollection.postgresName !== targetCollection.postgresName)
 			steps.push(
 				step({
 					kind: "renameCollection",
@@ -708,11 +705,13 @@ export function createMigrationPlan(
 		canonicalBytes(base) === canonicalBytes(target)
 	)
 		return { status: "noChanges" };
-	const classifiedSteps = providerDelta
-		? [...steps, { classification: providerDelta }]
-		: steps.length > 0
-			? steps
-			: [{ classification: "blocked" as const }];
+	const classifiedSteps = [
+		...steps,
+		...(providerDelta ? [{ classification: providerDelta }] : []),
+		...(renames.length > 0 ? [{ classification: "destructive" as const }] : []),
+	];
+	if (classifiedSteps.length === 0)
+		classifiedSteps.push({ classification: "blocked" });
 	const plan: MigrationPlanV1 = {
 		format: "questpie.migration-plan",
 		version: 1,

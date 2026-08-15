@@ -1452,7 +1452,8 @@ export async function applyCommittedMigrations(
 							(application_name, postgres_schema, created_at)
 							values (${application}, ${target.application.postgresSchema}, ${new Date()})
 						`;
-						await transaction.unsafe(migration.files["up.sql"] ?? "");
+						const migrationSql = migration.files["up.sql"] ?? "";
+						if (migrationSql.length > 0) await transaction.unsafe(migrationSql);
 						await assertSchemaMatches(transaction, migration.targetSchema);
 						await transaction`
 						insert into questpie_internal.schema_migration_receipts

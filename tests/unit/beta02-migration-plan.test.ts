@@ -474,6 +474,75 @@ describe("BETA-02 migration artifacts", () => {
 		);
 	});
 
+	test("commits semantic renames with stable physical names without empty DDL", async () => {
+		const compilation = await compiledFixture;
+		const collaboration = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const companiesOnly = structuredClone(collaboration);
+		companiesOnly.collections = collaboration.collections.filter(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:companies",
+		);
+
+		const collectionTarget = replaceIdentity(
+			companiesOnly,
+			"collection:companies",
+			"collection:organizations",
+		) as typeof companiesOnly;
+		const collection = commitDelta(
+			companiesOnly,
+			collectionTarget,
+			"rename-collection-semantically",
+			[
+				{
+					from: "collection:companies",
+					to: "collection:organizations",
+				},
+			],
+		);
+		expect(collection.planned.plan).toMatchObject({
+			classification: "destructive",
+			renames: [
+				{
+					from: "collection:companies",
+					to: "collection:organizations",
+				},
+			],
+			steps: [],
+		});
+		expect(collection.committed.files["up.sql"]).toBe("");
+		expect(() => verifyCommittedMigration(collection.committed)).not.toThrow();
+
+		const fieldTarget = replaceIdentity(
+			companiesOnly,
+			"collection:companies/field:name",
+			"collection:companies/field:title",
+		) as typeof companiesOnly;
+		const title = fieldTarget.collections[0].fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:companies/field:title",
+		);
+		title.path = ["title"];
+		const field = commitDelta(
+			companiesOnly,
+			fieldTarget,
+			"rename-field-semantically",
+			[
+				{
+					from: "collection:companies/field:name",
+					to: "collection:companies/field:title",
+				},
+			],
+		);
+		expect(field.planned.plan).toMatchObject({
+			classification: "destructive",
+			steps: [],
+		});
+		expect(field.committed.files["up.sql"]).toBe("");
+		expect(() => verifyCommittedMigration(field.committed)).not.toThrow();
+	});
+
 	test("refuses stale plans and tampered committed bytes", async () => {
 		const compilation = await compiledFixture;
 		const targetSchema = JSON.parse(

@@ -21,7 +21,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -1196,5 +1196,82 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				status: "PASS",
 			}),
 		);
+	});
+
+	test("receipts a semantic rename with stable physical names and no DDL", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const baseSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "semantic-rename-probe",
+				postgresSchema: "semantic_rename_probe",
+			},
+		};
+		const genesisPlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-semantic-rename-probe",
+		});
+		const genesis = createCommittedMigration({
+			plan: genesisPlan.plan,
+			baseSchema: genesisPlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: genesisPlan.digest,
+			localMigrations: [],
+		});
+		const targetSchema = JSON.parse(
+			JSON.stringify(baseSchema).replaceAll(
+				"collection:companies",
+				"collection:organizations",
+			),
+		);
+		const renamePlan = createMigrationPlan({
+			baseMigration: genesis.identity,
+			baseSchema,
+			targetSchema,
+			slug: "rename-companies-semantically",
+			renames: [
+				{
+					from: "collection:companies",
+					to: "collection:organizations",
+				},
+			],
+		});
+		if (renamePlan.status !== "planned")
+			throw new Error("semantic rename plan disappeared");
+		const rename = createCommittedMigration({
+			plan: renamePlan.plan,
+			baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: renamePlan.digest,
+			localMigrations: [genesis],
+			acceptDestructive: renamePlan.digest,
+		});
+		expect(rename.files["up.sql"]).toBe("");
+
+		const applied = await applyCommittedMigrations({
+			migrations: [genesis, rename],
+		});
+		expect(applied).toMatchObject({
+			status: "applied",
+			applied: [genesis.identity, rename.identity],
+			head: rename.identity,
+		});
+		const [receipt] = await database!<{ receipts: number }[]>`
+			select count(*)::integer as receipts
+			from questpie_internal.schema_migration_receipts
+			where application_name = 'semantic-rename-probe'
+		`;
+		expect(receipt).toEqual({ receipts: 2 });
+		await expect(
+			applyCommittedMigrations({ migrations: [genesis, rename] }),
+		).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });
 	});
 });
