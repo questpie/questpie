@@ -5,6 +5,7 @@ import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
 import { flattenFieldContracts } from "./schema/field-contract";
 import { fieldPath, indexField } from "./schema/field-reference";
+import { validateBtreeIndexTerms } from "./schema/member-validation";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
@@ -687,6 +688,23 @@ export function projectManifest(
 		const indexes = resolvedCollectionEntries(resource, "indexes").map(
 			({ key, contract: value }) => {
 				const identity = `${resource.identity}/index:${key}`;
+				const terms = (value.fields as readonly unknown[]).map((rawField) => {
+					const field = indexField(rawField);
+					return {
+						field: fieldSemanticIdentity(resource.identity, field.field),
+						order: field.order,
+						nulls: field.nulls,
+						operatorClass: "typeDefault",
+						collation:
+							projectedFields.find(
+								(candidate) =>
+									candidate.identity ===
+									fieldSemanticIdentity(resource.identity, field.field),
+							)?.collation === "questpie.binary"
+								? "field"
+								: null,
+					};
+				});
 				return {
 					kind: "btree",
 					identity,
@@ -696,23 +714,7 @@ export function projectManifest(
 						value.postgresName,
 						`qp_ix_${tableName}_${snake(key)}`,
 					),
-					fields: (value.fields as readonly unknown[]).map((rawField) => {
-						const field = indexField(rawField);
-						return {
-							field: fieldSemanticIdentity(resource.identity, field.field),
-							order: field.order,
-							nulls: field.nulls,
-							operatorClass: "typeDefault",
-							collation:
-								projectedFields.find(
-									(candidate) =>
-										candidate.identity ===
-										fieldSemanticIdentity(resource.identity, field.field),
-								)?.collation === "questpie.binary"
-									? "field"
-									: null,
-						};
-					}),
+					fields: validateBtreeIndexTerms(identity, terms, projectedFields),
 				};
 			},
 		);
