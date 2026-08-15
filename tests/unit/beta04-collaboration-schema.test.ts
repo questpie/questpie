@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 import {
 	compileApplication,
+	createCommittedMigration,
+	createMigrationPlan,
 	loadCommittedMigration,
 	verifyCommittedMigrationChain,
 } from "@questpie/compiler";
@@ -106,5 +108,71 @@ test("commits the authorization schema evolution after the frozen Genesis", asyn
 	);
 	expect(authorization.files["up.sql"]).toContain(
 		'ADD COLUMN "scope_key" pg_catalog.text',
+	);
+	const orderedSteps = authorization.plan.steps.map(
+		({ kind, targetIdentity }) => `${kind}:${targetIdentity}`,
+	);
+	const dependentRelation = "collection:messages/relation:author";
+	const replacedPrimary = "collection:memberships/constraint:primary";
+	const dropRelation = orderedSteps.indexOf(
+		`dropRelation:${dependentRelation}`,
+	);
+	const dropPrimary = orderedSteps.indexOf(`dropConstraint:${replacedPrimary}`);
+	const addPrimary = orderedSteps.indexOf(`addConstraint:${replacedPrimary}`);
+	const addRelation = orderedSteps.indexOf(`addRelation:${dependentRelation}`);
+
+	expect(dropRelation).toBeGreaterThanOrEqual(0);
+	expect(dropRelation).toBeLessThan(dropPrimary);
+	expect(addRelation).toBeGreaterThan(addPrimary);
+	expect(authorization.files["up.sql"]).toContain(
+		'ALTER TABLE "collaboration"."messages" DROP CONSTRAINT "qp_fk_messages_author";',
+	);
+	expect(
+		authorization.files["up.sql"].lastIndexOf("qp_fk_messages_author"),
+	).toBeGreaterThan(
+		authorization.files["up.sql"].lastIndexOf("qp_pk_memberships_primary"),
+	);
+});
+
+test("drops a physically renamed dependent Relation by its current name", async () => {
+	const compilation = await compiledFixture;
+	const target = JSON.parse(
+		compilation.generatedFiles["schema-projection.json"] ?? "null",
+	);
+	const messages = target.collections.find(
+		(collection: { identity: string }) =>
+			collection.identity === "collection:messages",
+	);
+	const author = messages.relations.find(
+		(relation: { identity: string }) =>
+			relation.identity === "collection:messages/relation:author",
+	);
+	author.constraintPostgresName = "renamed_messages_author_fk";
+	const genesis = await loadCommittedMigration(
+		resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+	);
+	const planned = createMigrationPlan({
+		baseSchema: genesis.targetSchema,
+		targetSchema: target,
+		baseMigration: genesis.identity,
+		slug: "rename-author-and-replace-membership-key",
+	});
+	if (planned.status !== "planned")
+		throw new Error("expected a Migration Plan");
+	const committed = createCommittedMigration({
+		plan: planned.plan,
+		baseSchema: genesis.targetSchema,
+		targetSchema: target,
+		planDigest: planned.digest,
+		localMigrations: [genesis],
+		currentSchema: target,
+		acceptDestructive: planned.digest,
+	});
+
+	expect(committed.files["up.sql"]).toContain(
+		'RENAME CONSTRAINT "qp_fk_messages_author" TO "renamed_messages_author_fk";',
+	);
+	expect(committed.files["up.sql"]).toContain(
+		'DROP CONSTRAINT "renamed_messages_author_fk";',
 	);
 });

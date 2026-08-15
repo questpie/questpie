@@ -40,6 +40,9 @@ ALTER TABLE "collaboration"."memberships" ADD CONSTRAINT "qp_ck_memberships_stat
 -- questpie-step: be8595f580989aaf3aafa6feb4c9bd851cea89717a863c2d86b5c7b41c814f89
 CREATE INDEX "qp_ix_messages_page" ON "collaboration"."messages" USING btree ("channel_id" ASC NULLS LAST, "created_at" DESC NULLS LAST, "id" DESC NULLS LAST);
 
+-- questpie-step: 5faaea913b8fbf7bd94709c1dfc1dd24637943283c5f223a62dfad0bbb8d2001
+ALTER TABLE "collaboration"."messages" DROP CONSTRAINT "qp_fk_messages_author";
+
 -- questpie-step: 9f764cf52ca45ee9ab2b6e02bc594b747f37bd1b1722beb04d2b552d5fa2644b
 ALTER TABLE "collaboration"."memberships" DROP CONSTRAINT "qp_uq_memberships_one_principal_per_company";
 
@@ -48,3 +51,6 @@ ALTER TABLE "collaboration"."memberships" DROP CONSTRAINT "qp_pk_memberships_pri
 
 -- questpie-step: cb7d9c36b9fdcbae2bffda6044cb93ecb7c490655be07d520d716ca8fda9c921
 ALTER TABLE "collaboration"."memberships" ADD CONSTRAINT "qp_pk_memberships_primary" PRIMARY KEY ("company_id", "principal_id", "scope_key");
+
+-- questpie-step: 30e56fd790b0761ecf77cf42fa7b0c341eb23da38cf15d9be107a83692c2d618
+ALTER TABLE "collaboration"."messages" ADD CONSTRAINT "qp_fk_messages_author" FOREIGN KEY ("author_membership_id") REFERENCES "collaboration"."memberships" ("id") ON DELETE RESTRICT ON UPDATE RESTRICT;
