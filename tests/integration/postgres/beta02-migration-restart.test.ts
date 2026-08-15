@@ -209,10 +209,16 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			}
 			expect(blockedQuery).toContain("cancellation_probe");
 			ddlController.abort();
-			const { error: ddlError } = await applying;
-			expect(ddlError).toBeInstanceOf(SQL.PostgresError);
-			expect((ddlError as SQL.PostgresError).errno).toBe("57014");
-			expect((ddlError as Error).message).toContain("user request");
+			const { error: ddlError, value: ddlResult } = await applying;
+			expect(ddlError).toBeUndefined();
+			expect(ddlResult).toEqual({
+				status: "failed",
+				exitCode: 5,
+				applied: [],
+				failed: evolvedMigration.identity,
+				diagnostic: { sqlstate: "57014" },
+				remaining: [],
+			});
 			const [rolledBack] = await database!<
 				{ fieldExists: boolean; receipts: number }[]
 			>`
@@ -235,6 +241,140 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		expect(ddlRetry).toMatchObject({
 			status: "applied",
 			applied: ["000002_add-cancellation-probe"],
+		});
+	}, 10_000);
+
+	test("returns a partial failure after committing an earlier migration and resumes", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const baseSchema = {
+			...fixtureSchema,
+			application: {
+				...fixtureSchema.application,
+				name: "partial-apply-probe",
+				postgresSchema: "partial_apply_probe",
+			},
+		};
+		const basePlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-partial-apply-probe",
+		});
+		const first = createCommittedMigration({
+			plan: basePlan.plan,
+			baseSchema: basePlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: basePlan.digest,
+			localMigrations: [],
+		});
+		const evolvedSchema = structuredClone(baseSchema);
+		const messages = evolvedSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		if (!messages) throw new Error("partial apply Messages schema is missing");
+		messages.fields.push({
+			collation: "questpie.binary",
+			default: null,
+			identity: "collection:messages/field:partialProbe",
+			nullable: true,
+			path: ["partialProbe"],
+			postgresName: "partial_probe",
+			type: {
+				collation: "questpie.binary",
+				kind: "text",
+				maxLength: null,
+				minLength: null,
+			},
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const evolvedPlan = createMigrationPlan({
+			baseMigration: first.identity,
+			baseSchema,
+			slug: "add-partial-probe",
+			targetSchema: evolvedSchema,
+		});
+		const second = createCommittedMigration({
+			currentSchema: evolvedSchema,
+			plan: evolvedPlan.plan,
+			baseSchema: evolvedPlan.baseSchema,
+			planDigest: evolvedPlan.digest,
+			localMigrations: [first],
+			targetSchema: evolvedSchema,
+		});
+		const holder = await database!.reserve();
+		const lockAfterFirstCommit = (async () => {
+			for (let attempt = 0; attempt < 1_000; attempt += 1) {
+				const [protocol] = await holder<{ ready: boolean }[]>`
+					select pg_catalog.to_regclass(
+						'questpie_internal.schema_migration_receipts'
+					) is not null as ready
+				`;
+				if (!protocol?.ready) {
+					await Bun.sleep(1);
+					continue;
+				}
+				const [receipt] = await holder<{ exists: boolean }[]>`
+					select exists(
+						select 1 from questpie_internal.schema_migration_receipts
+						where application_name = 'partial-apply-probe'
+						  and migration_identity = ${first.identity}
+					) as exists
+				`;
+				if (receipt?.exists) {
+					await holder.unsafe("BEGIN");
+					await holder.unsafe(
+						'LOCK TABLE "partial_apply_probe"."messages" IN ACCESS SHARE MODE',
+					);
+					return;
+				}
+				await Bun.sleep(1);
+			}
+			throw new Error("first migration receipt was not observed");
+		})();
+		try {
+			const result = await applyCommittedMigrations({
+				migrations: [first, second],
+				lockTimeoutMs: 100,
+				statementTimeoutMs: 1_000,
+			});
+			await lockAfterFirstCommit;
+			expect(result).toEqual({
+				status: "failed",
+				exitCode: 5,
+				applied: [first.identity],
+				failed: second.identity,
+				diagnostic: { sqlstate: "55P03" },
+				remaining: [],
+			});
+			const [state] = await database!<
+				{ fieldExists: boolean; receipts: number }[]
+			>`
+				select
+				  exists(
+				    select 1 from pg_catalog.pg_attribute
+				    where attrelid = 'partial_apply_probe.messages'::regclass
+				      and attname = 'partial_probe' and not attisdropped
+				  ) as "fieldExists",
+				  (select count(*)::integer from questpie_internal.schema_migration_receipts where application_name = 'partial-apply-probe') as receipts
+			`;
+			expect(state).toEqual({ fieldExists: false, receipts: 1 });
+		} finally {
+			await holder.unsafe("ROLLBACK");
+			holder.release();
+		}
+		await expect(
+			applyCommittedMigrations({ migrations: [first, second] }),
+		).resolves.toMatchObject({
+			status: "applied",
+			applied: [second.identity],
 		});
 	}, 10_000);
 
