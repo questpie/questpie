@@ -29,14 +29,6 @@ export const publishMessage = defineMutation({
 	},
 	handler: async ({ input, ctx, errors }) => {
 		ctx.signal.throwIfAborted();
-		const membership = await ctx.data.memberships.get({
-			key: {
-				companyId: ctx.tenant.id,
-				principalId: ctx.principal.id,
-				scopeKey: "company",
-			},
-			select: { id: true, role: true, status: true },
-		});
 		const channel = await ctx.data.channels.get({
 			key: { id: input.channelId },
 			select: { id: true, spaceId: true },
@@ -47,6 +39,14 @@ export const publishMessage = defineMutation({
 					select: { companyId: true },
 				})
 			: null;
+		const membership = await ctx.data.memberships.get({
+			key: {
+				companyId: ctx.tenant.id,
+				principalId: ctx.principal.id,
+				scopeKey: "company",
+			},
+			select: { id: true, role: true, status: true },
+		});
 		if (
 			membership === null ||
 			membership.status !== "active" ||
@@ -69,7 +69,7 @@ export const publishMessage = defineMutation({
 		});
 		await ctx.data.messageEvents.create({
 			input: {
-				id: crypto.randomUUID(),
+				id: ctx.callId,
 				messageId: message.id,
 				kind: "published",
 				occurredAt: ctx.operationTime,

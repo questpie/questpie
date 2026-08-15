@@ -14,6 +14,8 @@ import { createApplicationRuntime, type RuntimeProgram } from "../execution";
 import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
+	DeclaredOperationError,
+	declaredErrorFrame,
 	decodeOperationWireRequest,
 	failureFrame,
 	OperationFailure,
@@ -64,7 +66,11 @@ export interface RuntimeOperations {
 	invoke(
 		operation: string,
 		input: unknown,
-		options?: Readonly<{ callId?: string }>,
+		options?: Readonly<{
+			callId?: string;
+			signal?: AbortSignal;
+			deadline?: number;
+		}>,
 	): Promise<unknown>;
 }
 
@@ -199,6 +205,7 @@ export async function createRuntimeApplication<
 				invoke(
 					operation: PreparedOperation<OperationView>,
 					callId: string,
+					options?: Readonly<{ signal?: AbortSignal; deadline?: number }>,
 				): Promise<unknown>;
 				view: Readonly<{
 					operation: OperationView;
@@ -230,7 +237,7 @@ export async function createRuntimeApplication<
 			(view) =>
 				use({
 					view,
-					invoke: async (operation, callId) => {
+					invoke: async (operation, callId, options) => {
 						const eventFacts = {
 							executionId,
 							correlationId: callId,
@@ -254,7 +261,7 @@ export async function createRuntimeApplication<
 						try {
 							const result =
 								operation.binding.kind === "mutation"
-									? await view.mutation?.(operation, callId)
+									? await view.mutation?.(operation, callId, options)
 									: await operationEngine.invokePrepared(
 											operation,
 											view.operation,
@@ -322,11 +329,19 @@ export async function createRuntimeApplication<
 				invoke: (
 					identity: string,
 					operationInput: unknown,
-					options?: Readonly<{ callId?: string }>,
+					options?: Readonly<{
+						callId?: string;
+						signal?: AbortSignal;
+						deadline?: number;
+					}>,
 				) => {
 					const prepared = operationEngine.prepare(identity, operationInput);
 					if (prepared.binding.kind === "mutation")
-						return invoke(prepared, options?.callId ?? crypto.randomUUID());
+						return invoke(
+							prepared,
+							options?.callId ?? crypto.randomUUID(),
+							options,
+						);
 					callSequence += 1;
 					return invoke(prepared, `direct:${callSequence}`);
 				},
@@ -430,6 +445,11 @@ export async function createRuntimeApplication<
 		} catch (error) {
 			if (request.signal.aborted) throw request.signal.reason;
 			if (isAbort(error)) throw error;
+			if (error instanceof DeclaredOperationError)
+				return operationWireResponse(
+					declaredErrorFrame(frame, error),
+					error.status,
+				);
 			const failure =
 				error instanceof OperationFailure
 					? error

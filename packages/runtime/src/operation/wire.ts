@@ -94,6 +94,23 @@ export function failureFrame(
 	});
 }
 
+export function declaredErrorFrame(
+	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
+	error: Readonly<{ code: string; status: number; payload: unknown }>,
+) {
+	return Object.freeze({
+		protocol: operationProtocol,
+		kind: "declaredError" as const,
+		operation: frame.operation,
+		callId: frame.callId,
+		error: Object.freeze({
+			code: error.code,
+			status: error.status,
+			payload: error.payload,
+		}),
+	});
+}
+
 export function resultFrame(
 	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
 	payload: unknown,

@@ -163,7 +163,7 @@ function applicationEntry(
 		)
 		.join(",\n");
 	return `import { SQL } from "bun";
-import { createRuntimeApplication, executePostgresQuery } from "questpie:runtime";
+import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery } from "questpie:runtime";
 import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
@@ -252,6 +252,12 @@ export async function createApplication(input) {
 					},
 				}),
 				signal: facts.signal,
+			}),
+			projectMutation: ({ facts }) => createPostgresMutationInvoker({
+				sql,
+				schema: schemaProjection,
+				application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
+				facts,
 			}),
 			projectExecution: async ({ facts, service }) => Object.freeze({
 				principal: facts.principal,

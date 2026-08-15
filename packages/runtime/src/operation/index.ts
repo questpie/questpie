@@ -21,7 +21,19 @@ export interface RuntimeExecutableBinding<View> {
 	readonly definition: Readonly<{
 		name: string;
 		handler: RuntimeExecutableBinding<View>["execute"];
+		errors?: Readonly<Record<string, unknown>>;
 	}>;
+}
+
+export class DeclaredOperationError extends Error {
+	constructor(
+		readonly code: string,
+		readonly status: number,
+		readonly payload: unknown = null,
+	) {
+		super(code);
+		this.name = "DeclaredOperationError";
+	}
 }
 
 export type OperationFailureCode =
@@ -56,6 +68,7 @@ function decode(codec: RuntimeCodec, value: unknown): unknown {
 
 export type PreparedOperation<View> = Readonly<{
 	binding: RuntimeExecutableBinding<View>;
+	inputCodec: RuntimeCodec;
 	output: RuntimeCodec;
 	input: unknown;
 }>;
@@ -101,6 +114,7 @@ export function createOperationEngine<View>(
 			if (!operation || !contract) throw new OperationFailure("NOT_FOUND");
 			return Object.freeze({
 				binding: operation,
+				inputCodec: contract.input,
 				output: contract.output,
 				input: decode(contract.input, input),
 			});
@@ -121,6 +135,7 @@ export { readBoundedRequestBody } from "./body";
 export { bindIngressPrincipal, readIngressPrincipal } from "./ingress";
 export {
 	decodeOperationWireRequest,
+	declaredErrorFrame,
 	failureFrame,
 	operationFailureStatus,
 	operationMediaType,
