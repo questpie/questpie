@@ -32,6 +32,29 @@ async function waitForBlockedChannelRead(): Promise<void> {
 	throw new Error("Mutation did not reach the observable Channel lock wait");
 }
 
+async function mutationCounts(callId: string) {
+	const [counts] = await database!.unsafe<
+		Readonly<
+			Array<{
+				messages: number;
+				audit: number;
+				facts: number;
+				intents: number;
+				receipts: number;
+			}>
+		>
+	>(
+		`SELECT
+  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
+  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
+  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
+  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+		[callId],
+	);
+	return counts;
+}
+
 postgresTest(
 	"replays a response-lost message.publish call without duplicating its atomic bundle",
 	async () => {
@@ -128,25 +151,7 @@ postgresTest(
 				]);
 				expect(concurrent[1]).toEqual(concurrent[0]);
 
-				const [counts] = await database!.unsafe<
-					Readonly<
-						Array<{
-							messages: number;
-							audit: number;
-							facts: number;
-							intents: number;
-							receipts: number;
-						}>
-					>
-				>(
-					`SELECT
-  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
-  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
-  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
-					[callId],
-				);
+				const counts = await mutationCounts(callId);
 				expect(counts).toEqual({
 					messages: 1,
 					audit: 1,
@@ -154,31 +159,29 @@ postgresTest(
 					intents: 1,
 					receipts: 1,
 				});
-				const [concurrentCounts] = await database!.unsafe<
-					Readonly<
-						Array<{
-							messages: number;
-							audit: number;
-							facts: number;
-							intents: number;
-							receipts: number;
-						}>
-					>
-				>(
-					`SELECT
-  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
-  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
-  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
-					[concurrentCallId],
-				);
+				const concurrentCounts = await mutationCounts(concurrentCallId);
 				expect(concurrentCounts).toEqual({
 					messages: 1,
 					audit: 1,
 					facts: 1,
 					intents: 1,
 					receipts: 1,
+				});
+				const constraintCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62a2";
+				await expect(
+					lossyClient
+						.withContext(context)
+						.mutations["message.publish"](
+							{ channelId: beta05Ids.channel, body: "   " },
+							{ callId: constraintCallId },
+						),
+				).rejects.toMatchObject({ code: "INTERNAL" });
+				expect(await mutationCounts(constraintCallId)).toEqual({
+					messages: 0,
+					audit: 0,
+					facts: 0,
+					intents: 0,
+					receipts: 0,
 				});
 			} finally {
 				await application.close();
@@ -233,26 +236,37 @@ postgresTest(
 					code: "CHANNEL_UNAVAILABLE",
 					status: 404,
 				});
-				const [counts] = await database!.unsafe<
-					Readonly<
-						Array<{
-							messages: number;
-							audit: number;
-							facts: number;
-							intents: number;
-							receipts: number;
-						}>
-					>
-				>(
-					`SELECT
-  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
-  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
-  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
-					[callId],
-				);
+				const counts = await mutationCounts(callId);
 				expect(counts).toEqual({
+					messages: 0,
+					audit: 0,
+					facts: 0,
+					intents: 0,
+					receipts: 0,
+				});
+
+				await database!.unsafe(
+					"UPDATE collaboration.memberships SET status = 'active' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+					[beta05Ids.company, beta05Ids.principal],
+				);
+				await blocker.unsafe("BEGIN");
+				await blocker.unsafe(
+					"SELECT id FROM collaboration.channels WHERE id = $1 FOR UPDATE",
+					[beta05Ids.channel],
+				);
+				const cancelledCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62b1";
+				const controller = new AbortController();
+				const cancelled = client
+					.withContext({ companyId: beta05Ids.company })
+					.mutations["message.publish"](
+						{ channelId: beta05Ids.channel, body: "must roll back" },
+						{ callId: cancelledCallId, signal: controller.signal },
+					);
+				await waitForBlockedChannelRead();
+				controller.abort(new DOMException("caller cancelled", "AbortError"));
+				await blocker.unsafe("COMMIT");
+				await expect(cancelled).rejects.toMatchObject({ name: "AbortError" });
+				expect(await mutationCounts(cancelledCallId)).toEqual({
 					messages: 0,
 					audit: 0,
 					facts: 0,
