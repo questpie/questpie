@@ -150,7 +150,7 @@ test("cancels and disconnects the Bun query while keeping the injected pool reus
 	await expect(blocked).rejects.toThrow("query cancelled");
 	expect(database.cancellations).toBe(1);
 	expect(database.closes).toBe(1);
-	expect(database.rollbacks).toBe(0);
+	expect(database.rollbacks).toBe(1);
 
 	database.setBlock(false);
 	const rows = await adapter.transaction(

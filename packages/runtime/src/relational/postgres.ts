@@ -91,7 +91,7 @@ export function createBunPostgresQueryAdapter(sql: SQL): PostgresQueryAdapter {
 				);
 			options.signal?.throwIfAborted();
 			const transaction = await reserveConnection(pool);
-			let connectionClosed = false;
+			let result: Result;
 			try {
 				await executeControl(
 					transaction,
@@ -118,35 +118,33 @@ export function createBunPostgresQueryAdapter(sql: SQL): PostgresQueryAdapter {
 							transaction.unsafe(statement, parameters),
 							options.signal,
 							async () => {
-								connectionClosed = true;
 								await transaction.close({ timeout: 0 });
 							},
 						);
 					},
 				});
-				const result = await use(queryTransaction);
+				result = await use(queryTransaction);
 				if (statements !== 1)
 					throw new TypeError(
 						"PostgreSQL Query execution requires one statement",
 					);
 				options.signal?.throwIfAborted();
 				await executeControl(transaction, "COMMIT");
-				return result;
 			} catch (error) {
-				if (!connectionClosed)
-					try {
-						await executeControl(transaction, "ROLLBACK");
-					} catch {
-						// Preserve the application/query failure as the primary error.
-					}
-				throw error;
-			} finally {
+				try {
+					await executeControl(transaction, "ROLLBACK");
+				} catch {
+					// A disconnected reservation is already rolled back by PostgreSQL.
+				}
 				try {
 					await transaction.release();
-				} catch (error) {
-					if (!connectionClosed || !isClosedConnection(error)) throw error;
+				} catch {
+					// A disconnected Bun reservation may reject release; preserve the query failure.
 				}
+				throw error;
 			}
+			await transaction.release();
+			return result;
 		},
 	});
 }
