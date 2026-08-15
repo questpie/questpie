@@ -5,7 +5,7 @@ import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
 import {
 	readCatalogComparable,
-	readCatalogComparableOnSession,
+	readCatalogComparableInOwnedTransaction,
 } from "./catalog-reader";
 import { expectedComparable } from "./expected-fingerprint";
 import { fail } from "./shared";
@@ -17,7 +17,18 @@ export async function assertSchemaMatches(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<JsonRecord> {
-	return compareSchemaToCatalog(sql, schema, readCatalogComparableOnSession);
+	return compareSchemaToCatalog(sql, schema, readCatalogComparable);
+}
+
+export async function assertSchemaMatchesInOwnedTransaction(
+	sql: SQL,
+	schema: SchemaProjectionV1,
+): Promise<JsonRecord> {
+	return compareSchemaToCatalog(
+		sql,
+		schema,
+		readCatalogComparableInOwnedTransaction,
+	);
 }
 
 async function compareSchemaToCatalog(
@@ -33,6 +44,13 @@ async function compareSchemaToCatalog(
 			(extension) => extension.name,
 		),
 	});
+	return compareComparable(expected, actual);
+}
+
+function compareComparable(
+	expected: JsonRecord,
+	actual: JsonRecord,
+): JsonRecord {
 	if (canonicalBytes(actual) === canonicalBytes(expected)) return actual;
 	return fingerprintMismatch(expected, actual);
 }
@@ -212,13 +230,25 @@ export async function fingerprint(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<SchemaFingerprintV1> {
-	const observations = await providerObservations(sql, schema);
-	const comparable = await assertSchemaMatches(sql, schema);
+	const expected = expectedComparable(schema);
+	const evidence = await sql.begin(
+		"isolation level repeatable read read only",
+		async (transaction) => ({
+			observations: await providerObservations(transaction, schema),
+			actual: await readCatalogComparableInOwnedTransaction(transaction, {
+				application: schema.application.name,
+				applicationSchema: schema.application.postgresSchema,
+				requiredExtensionNames: schema.requiredPostgres.extensions.map(
+					(extension) => extension.name,
+				),
+			}),
+		}),
+	);
 	return {
 		format: "questpie.schema-fingerprint",
 		version: 1,
-		comparable,
-		observations,
+		comparable: compareComparable(expected, evidence.actual),
+		observations: evidence.observations,
 	};
 }
 
@@ -232,10 +262,7 @@ export async function inspectSchemaFingerprint(
 		? new SQL(input.connectionString)
 		: new SQL();
 	try {
-		const value = await sql.begin(
-			"isolation level repeatable read read only",
-			(transaction) => fingerprint(transaction, input.schema),
-		);
+		const value = await fingerprint(sql, input.schema);
 		return {
 			fingerprint: value,
 			digest: digest("questpie-schema-fingerprint-v1", value.comparable),

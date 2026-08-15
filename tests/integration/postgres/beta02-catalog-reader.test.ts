@@ -3,19 +3,48 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 
 import { digest } from "../../../packages/compiler/src/canonical";
+import { bootstrap } from "../../../packages/compiler/src/schema";
 import { readCatalogComparable } from "../../../packages/compiler/src/schema/postgres/catalog-reader";
 
 const database = process.env.PGHOST ? new SQL() : undefined;
 
 beforeAll(async () => {
 	if (!database) return;
+	const session = await database.reserve();
+	try {
+		const [connection] = await session<{ database: string; pid: number }[]>`
+			select current_database() as database, pg_backend_pid() as pid
+		`;
+		await bootstrap(session, connection!.database, connection!.pid, {
+			lockTimeoutMs: 1_000,
+			statementTimeoutMs: 5_000,
+		});
+	} finally {
+		session.release();
+	}
 	await database.unsafe(
 		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE; CREATE SCHEMA "catalog_reader_probe"; CREATE TABLE "catalog_reader_probe"."messages" ("id" integer NOT NULL, "body" text, CONSTRAINT "unsupported_body_check" CHECK (lower("body") = \'ready\')); CREATE VIEW "catalog_reader_probe"."message_ids" AS SELECT "id" FROM "catalog_reader_probe"."messages"; CREATE SCHEMA "catalog_fact_probe"; CREATE TABLE "catalog_fact_probe"."parents" ("id" uuid NOT NULL, CONSTRAINT "parents_pk" PRIMARY KEY ("id")); CREATE TABLE "catalog_fact_probe"."messages" ("id" integer NOT NULL, "parent_id" uuid, "body" text COLLATE pg_catalog."C" DEFAULT \'hello\' NOT NULL, "starts_at" timestamp NOT NULL, "ends_at" timestamp NOT NULL, CONSTRAINT "messages_pk" PRIMARY KEY ("id"), CONSTRAINT "messages_body_check" CHECK (pg_catalog.char_length("body") > 1), CONSTRAINT "messages_time_check" CHECK ("ends_at" > "starts_at"), CONSTRAINT "messages_parent_fk" FOREIGN KEY ("parent_id") REFERENCES "catalog_fact_probe"."parents" ("id") ON DELETE SET NULL ON UPDATE CASCADE); CREATE INDEX "messages_body_idx" ON "catalog_fact_probe"."messages" USING btree ("body" DESC NULLS LAST);',
 	);
+	await database`
+		delete from questpie_internal.application_bindings
+		where application_name in ('catalog-reader-probe', 'catalog-fact-probe')
+		   or postgres_schema in ('catalog_reader_probe', 'catalog_fact_probe')
+	`;
+	await database`
+		insert into questpie_internal.application_bindings
+		(application_name, postgres_schema, created_at)
+		values
+			('catalog-reader-probe', 'catalog_reader_probe', ${new Date()}),
+			('catalog-fact-probe', 'catalog_fact_probe', ${new Date()})
+	`;
 });
 
 afterAll(async () => {
 	if (!database) return;
+	await database`
+		delete from questpie_internal.application_bindings
+		where application_name in ('catalog-reader-probe', 'catalog-fact-probe')
+	`;
 	await database.unsafe(
 		'DROP SCHEMA IF EXISTS "catalog_reader_probe" CASCADE; DROP SCHEMA IF EXISTS "catalog_fact_probe" CASCADE;',
 	);

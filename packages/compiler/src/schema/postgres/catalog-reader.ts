@@ -6,6 +6,7 @@ import {
 	compareFingerprintDependencies,
 	compareFingerprintObjects,
 } from "./fingerprint-order";
+import { fail } from "./shared";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -20,14 +21,55 @@ export async function readCatalogComparable(
 	scope: CatalogFingerprintScope,
 ): Promise<JsonRecord> {
 	return sql.begin("isolation level repeatable read read only", (transaction) =>
-		readCatalogComparableOnSession(transaction, scope),
+		readCatalogComparableInOwnedTransaction(transaction, scope),
 	);
 }
 
-export async function readCatalogComparableOnSession(
+export async function readCatalogComparableInOwnedTransaction(
 	sql: SQL,
 	scope: CatalogFingerprintScope,
 ): Promise<JsonRecord> {
+	await sql.unsafe("SET LOCAL search_path = pg_catalog");
+	const [namespace] = await sql<{ exists: boolean }[]>`
+		select exists(
+			select 1 from pg_catalog.pg_namespace where nspname = ${scope.applicationSchema}
+		) as exists
+	`;
+	const [bindingCatalog] = await sql<{ exists: boolean }[]>`
+		select pg_catalog.to_regclass('questpie_internal.application_bindings') is not null as exists
+	`;
+	if (!bindingCatalog?.exists)
+		return fail(
+			"QP-SCHEMA-029",
+			"applicationBindingMismatch",
+			"Application Identity binding catalog is missing",
+		);
+	const bindings = await sql<
+		{ application: string; applicationSchema: string }[]
+	>`
+		select application_name as application, postgres_schema as "applicationSchema"
+		from questpie_internal.application_bindings
+		where application_name = ${scope.application}
+		   or postgres_schema = ${scope.applicationSchema}
+		order by application_name
+	`;
+	const binding = bindings[0];
+	if (
+		(bindings.length === 0 && namespace?.exists === true) ||
+		(bindings.length !== 0 &&
+			(bindings.length !== 1 ||
+				binding?.application !== scope.application ||
+				binding.applicationSchema !== scope.applicationSchema))
+	)
+		return fail(
+			"QP-SCHEMA-029",
+			"applicationBindingMismatch",
+			"Application Identity and PostgreSQL schema binding disagree",
+			{ expected: scope.application, actual: bindings },
+		);
+	const application = binding?.application ?? scope.application;
+	const applicationSchema =
+		binding?.applicationSchema ?? scope.applicationSchema;
 	const installedExtensions =
 		scope.requiredExtensionNames.length === 0
 			? []
@@ -37,15 +79,10 @@ export async function readCatalogComparableOnSession(
 				where extname in ${sql([...scope.requiredExtensionNames])}
 				order by extname
 			`;
-	const [namespace] = await sql<{ exists: boolean }[]>`
-		select exists(
-			select 1 from pg_catalog.pg_namespace where nspname = ${scope.applicationSchema}
-		) as exists
-	`;
 	if (!namespace?.exists)
 		return {
-			application: scope.application,
-			applicationSchema: scope.applicationSchema,
+			application,
+			applicationSchema,
 			applicationSchemaExists: false,
 			objects: [],
 			unsupportedObjects: [],
@@ -563,8 +600,8 @@ export async function readCatalogComparableOnSession(
 	`;
 	unsupportedObjects.push(...unsupportedCatalogObjects);
 	return {
-		application: scope.application,
-		applicationSchema: scope.applicationSchema,
+		application,
+		applicationSchema,
 		applicationSchemaExists: true,
 		objects: objects.sort(compareFingerprintObjects),
 		unsupportedObjects: unsupportedObjects.sort(compareFingerprintObjects),

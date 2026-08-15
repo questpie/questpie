@@ -15,6 +15,7 @@ import type { PostgresCommandControl } from "../../postgres-session";
 import type { SchemaProjectionV1 } from "../../schema";
 import {
 	assertSchemaMatches,
+	assertSchemaMatchesInOwnedTransaction,
 	bootstrap,
 	childRecords,
 	fail,
@@ -364,7 +365,10 @@ export async function applyCommittedSeeds(
 						`${seed.identity} transaction`,
 						input.signal,
 						async (transaction) => {
-							await assertSchemaMatches(transaction, input.schema);
+							await assertSchemaMatchesInOwnedTransaction(
+								transaction,
+								input.schema,
+							);
 							for (const step of seed.steps) {
 								input.signal?.throwIfAborted();
 								await executeSeedStep(transaction, input.schema, step);

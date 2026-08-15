@@ -20,6 +20,7 @@ import {
 	configurePostgresTimeouts,
 	lockKey,
 } from "../../../packages/compiler/src/postgres-session";
+import { assertSchemaMatches } from "../../../packages/compiler/src/schema";
 
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
@@ -27,7 +28,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "bootstrap_pg18_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "identity_probe" CASCADE; DROP SCHEMA IF EXISTS "snapshot_probe" CASCADE; DROP SCHEMA IF EXISTS "bootstrap_pg18_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -556,6 +557,151 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			await expect(
 				applyCommittedMigrations({ migrations: [migration] }),
 			).resolves.toMatchObject({ status: "alreadyApplied" });
+		}
+	}, 10_000);
+
+	test("rejects a standalone fingerprint with the wrong Application Identity", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "identity-probe",
+			postgresSchema: "identity_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-identity-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+
+		const wrongIdentity = structuredClone(targetSchema);
+		wrongIdentity.application.name = "different-identity";
+		await expect(
+			inspectSchemaFingerprint({ schema: wrongIdentity }),
+		).rejects.toMatchObject({
+			code: "QP-SCHEMA-029",
+			diagnosticClass: "applicationBindingMismatch",
+		});
+
+		await database!`
+			delete from questpie_internal.application_bindings
+			where application_name = 'identity-probe'
+		`;
+		try {
+			await expect(
+				inspectSchemaFingerprint({ schema: targetSchema }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-029",
+				diagnosticClass: "applicationBindingMismatch",
+			});
+		} finally {
+			await database!`
+				insert into questpie_internal.application_bindings
+				(application_name, postgres_schema, created_at)
+				values ('identity-probe', 'identity_probe', ${new Date()})
+			`;
+		}
+
+		await database!`
+			insert into questpie_internal.application_bindings
+			(application_name, postgres_schema, created_at)
+			values ('different-identity', 'different_identity', ${new Date()})
+		`;
+		try {
+			await expect(
+				inspectSchemaFingerprint({ schema: wrongIdentity }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-029",
+				diagnosticClass: "applicationBindingMismatch",
+			});
+		} finally {
+			await database!`
+				delete from questpie_internal.application_bindings
+				where application_name = 'different-identity'
+			`;
+		}
+	}, 10_000);
+
+	test("reads one standalone Schema Fingerprint from a concurrent snapshot", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "snapshot-probe",
+			postgresSchema: "snapshot_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-snapshot-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+
+		const blocker = await database!.reserve();
+		let blockerCommitted = false;
+		await blocker`begin`;
+		await blocker`lock table questpie_internal.application_bindings in access exclusive mode`;
+		const pending = assertSchemaMatches(database!, targetSchema);
+		try {
+			let blocked = false;
+			for (let attempt = 0; attempt < 100 && !blocked; attempt++) {
+				const [state] = await database!<{ blocked: boolean }[]>`
+					select exists(
+					  select 1 from pg_catalog.pg_stat_activity
+					  where datname = current_database()
+					    and pid <> pg_backend_pid()
+					    and wait_event_type = 'Lock'
+					    and query like '%from questpie_internal.application_bindings%'
+					) as blocked
+				`;
+				blocked = state?.blocked === true;
+				if (!blocked) await Bun.sleep(10);
+			}
+			expect(blocked).toBe(true);
+			await database!.unsafe(
+				'CREATE VIEW "snapshot_probe"."concurrent_view" AS SELECT 1 AS value',
+			);
+			await blocker`commit`;
+			blockerCommitted = true;
+			await expect(pending).resolves.toBeDefined();
+			await expect(
+				assertSchemaMatches(database!, targetSchema),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-028",
+				diagnosticClass: "invalidObject",
+			});
+		} finally {
+			if (!blockerCommitted) await blocker`rollback`;
+			blocker.release();
+			await database!.unsafe(
+				'DROP VIEW IF EXISTS "snapshot_probe"."concurrent_view"',
+			);
+			await pending.catch(() => undefined);
 		}
 	}, 10_000);
 

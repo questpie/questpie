@@ -29,6 +29,7 @@ export { applyCommittedMigrations } from "./postgres/apply";
 export { bootstrap } from "./postgres/bootstrap";
 export {
 	assertSchemaMatches,
+	assertSchemaMatchesInOwnedTransaction,
 	inspectSchemaFingerprint,
 	providerObservations,
 } from "./postgres/fingerprint";

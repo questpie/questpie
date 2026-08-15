@@ -23,6 +23,7 @@ import type {
 import { bootstrap } from "./bootstrap";
 import {
 	assertSchemaMatches,
+	assertSchemaMatchesInOwnedTransaction,
 	fingerprint,
 	providerObservations,
 	schemaExists,
@@ -198,9 +199,10 @@ async function assertMigrationBoundary(
 	schema: Parameters<typeof assertSchemaMatches>[1],
 	boundary: "base" | "target",
 	migrationIdentity: string,
+	assertMatches: typeof assertSchemaMatches = assertSchemaMatches,
 ): Promise<void> {
 	try {
-		await assertSchemaMatches(sql, schema);
+		await assertMatches(sql, schema);
 	} catch (error) {
 		if (
 			!(error instanceof CompilerDiagnosticError) ||
@@ -408,6 +410,7 @@ export async function applyCommittedMigrations(
 								migration.targetSchema,
 								"target",
 								migration.identity,
+								assertSchemaMatchesInOwnedTransaction,
 							);
 							await transaction`
 						insert into questpie_internal.schema_migration_receipts
