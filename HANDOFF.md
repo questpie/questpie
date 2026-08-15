@@ -8,9 +8,9 @@ ownership and invariants, the fewest new public concepts.” The reviewed BETA-0
 structural compiler now emits exact relocated application, Package, and client
 contracts. Accepted BETA-02 implements the bounded schema, migration, and
 immutable Seed lifecycle at reviewed head `dca711f0`, evidence head `5a4681ca`,
-and merge `b630fb01`. BETA-03 is a reviewed candidate at `f830e48c`; it adds
-the first bounded Service/Context/execution Runtime tracer but remains awaiting
-normal PR, CI, merge, and tracker acceptance.
+and merge `b630fb01`. Accepted BETA-03 adds the first bounded
+Service/Context/execution Runtime tracer at reviewed head `f830e48c`, evidence
+head `1e2a367a`, and merge `a7d24541`.
 
 Fixed accepted proof authority:
 
@@ -37,6 +37,8 @@ Fixed accepted proof authority:
 | #301 API ergonomics evidence         | `fbbf05d457f97927dc2b847b0ad049f26d887151` |
 | #289 BETA-02 reviewed implementation | `dca711f06ca4b3cc58adbc7b2e56799cabd4839a` |
 | #289 BETA-02 evidence                | `5a4681cae262309af3f8fd8edbc77feccec9cb24` |
+| #290 BETA-03 reviewed implementation | `f830e48c554b027afcb13efea6d3f900fd8c7ece` |
+| #290 BETA-03 evidence                | `1e2a367a72a7e012685912eccfa21d2085ac9b17` |
 
 ADR-0008 through ADR-0021 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -55,16 +57,17 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, accepted merge head `b630fb01c6966b97fb3ac265bd416c4cfe0f1908`.
+  `feat/v4`, accepted merge head `a7d24541c433ab502316b34906d97c9dd51f7ee1`.
 - The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
   and evidence head `5a4681cae262309af3f8fd8edbc77feccec9cb24` are
   immutable review evidence; PR #304 merged them to `feat/v4`.
-- The reviewed BETA-03 candidate worktree is
+- The accepted BETA-03 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-03`, branch `feat/v4-beta-03`, at
-  implementation head `f830e48c554b027afcb13efea6d3f900fd8c7ece`. It is
-  review-complete but not accepted until PR, CI, merge, and tracker closure.
+  implementation head `f830e48c554b027afcb13efea6d3f900fd8c7ece` and
+  evidence head `1e2a367a72a7e012685912eccfa21d2085ac9b17`. PR #305
+  merged it to `feat/v4`; issue #290 is closed.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -81,10 +84,9 @@ Atlas tickets #14–#22, the #16 implementation-collapse proof, BETA-01 issue
 #288, and interstitial API gate #301 are accepted. #301 merged through PR #302
 at `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9` and does not count toward the
 native N=5 implementation queue. BETA-02 issue #289 is accepted through PR
-#304 and tracker closure. BETA-03 issue #290 has a fresh stateless Claude
-Opus-medium `PASS` at `f830e48c` and is the active acceptance frontier pending
-PR, CI, merge, and tracker closure. BETA-04 issue #291 remains blocked by #290
-and must not be promoted yet. The accepted foundation includes:
+#304 and tracker closure. BETA-03 issue #290 is accepted through PR #305 and
+tracker closure. BETA-04 issue #291 is now the active frontier. The accepted
+foundation includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
   one non-blocking forward lane because 7.0 lacks a stable programmatic API;
@@ -113,8 +115,10 @@ Do not skip a blocked issue or parallelize dependent implementation.
   generated-contract, hostile, and performance gates are recorded PASS. The
   timing evidence is an honestly labelled local reference with a mechanically
   derived binding budget; it makes no tagged stable-runner claim.
-- #290 remains a reviewed candidate, not an accepted queue item. #291 stays
-  blocked until #290 completes normal PR, CI, merge, and tracker closure.
+- #290 PR #305 merged normally to `feat/v4` at
+  `a7d24541c433ab502316b34906d97c9dd51f7ee1`; issue #290 is closed. The target
+  branch reported no status checks, so none were bypassed. #291 is the next
+  dependency-ordered frontier.
 
 - #289 exact diff `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9..dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
   received five valid fresh stateless Claude Opus-medium `BLOCKED` reviews at
@@ -201,9 +205,9 @@ Do not skip a blocked issue or parallelize dependent implementation.
 ## Next invocation
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Complete normal PR, CI, merge, and tracker
-acceptance for reviewed BETA-03 issue #290 at implementation head
-`f830e48c554b027afcb13efea6d3f900fd8c7ece`. Keep #291 blocked until #290 is
-merged and closed. Preserve the #289 review evidence, marketing worktree,
-scalar-research worktree, and archive branch.
+Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-04 issue #291
+from merge base `a7d24541c433ab502316b34906d97c9dd51f7ee1` without
+widening its relationally authorized Query tracer. Preserve the #289/#290
+review evidence, docs-hygiene branch, marketing worktree, scalar-research
+worktree, and archive branch.
 ```
