@@ -20,7 +20,17 @@ interface DataQueryDescriptor {
 	readonly uniqueConstraints: Readonly<
 		Record<string, Readonly<{ fields: readonly string[] }>>
 	>;
-	readonly relations: Readonly<Record<string, unknown>>;
+	readonly relations: Readonly<Record<string, DataQueryRelationDescriptor>>;
+}
+
+interface DataQueryRelationDescriptor {
+	readonly kind: "toOne" | "toMany";
+	readonly identity: `collection:${string}/relation:${string}`;
+	readonly target: Readonly<{
+		name: string;
+		identity: `collection:${string}`;
+		fields: FieldMap;
+	}>;
 }
 
 interface QueryParameter<
@@ -125,15 +135,43 @@ interface SelectedField<Value> {
 	readonly value?: Value;
 }
 
-type OutputSelection = Readonly<Record<string, SelectedField<unknown>>>;
+interface SelectedToOne<Selection extends OutputSelection> {
+	readonly kind: "toOne";
+	readonly selection: Selection;
+}
+
+type OutputSelection = Readonly<
+	Record<string, SelectedField<unknown> | SelectedToOne<OutputSelection>>
+>;
 
 type SelectedOutput<Selection extends OutputSelection> = {
 	-readonly [Key in keyof Selection]: Selection[Key] extends SelectedField<
 		infer Value
 	>
 		? Value
+		: Selection[Key] extends SelectedToOne<infer Nested>
+			? SelectedOutput<Nested> | null
+			: never;
+};
+
+type QueryRelations<Relations> = {
+	readonly [Key in keyof Relations]: Relations[Key] extends infer Relation extends
+		DataQueryRelationDescriptor
+		? Relation["kind"] extends "toOne"
+			? Readonly<{
+					select<const Selection extends OutputSelection>(
+						selection: (scope: {
+							readonly fields: QueryFields<Relation["target"]["fields"]>;
+						}) => Selection,
+					): SelectedToOne<Selection>;
+				}>
+			: never
 		: never;
 };
+
+type SelectionScope<Descriptor extends DataQueryDescriptor> =
+	QueryScope<Descriptor> &
+		Readonly<{ relations: QueryRelations<Descriptor["relations"]> }>;
 
 interface ForwardPage<
 	First extends QueryParameter<number, false, "integer">,
@@ -170,7 +208,7 @@ export function dataQuery<Descriptor extends DataQueryDescriptor>(): <
 	definition: Readonly<{
 		from: Descriptor["name"];
 		parameters: Parameters;
-		select: (scope: QueryScope<Descriptor>) => Selection;
+		select: (scope: SelectionScope<Descriptor>) => Selection;
 		where:
 			| null
 			| ((

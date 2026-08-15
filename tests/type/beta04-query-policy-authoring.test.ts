@@ -108,7 +108,32 @@ interface MessageDescriptor {
 			readonly fields: readonly ["id"];
 		};
 	};
-	readonly relations: {};
+	readonly relations: {
+		readonly author: {
+			readonly kind: "toOne";
+			readonly identity: "collection:messages/relation:author";
+			readonly target: {
+				readonly name: "memberships";
+				readonly identity: "collection:memberships";
+				readonly fields: {
+					readonly id: DataFieldDescriptor<
+						"collection:memberships/field:id",
+						{ readonly kind: "uuid" },
+						string,
+						false,
+						true
+					>;
+					readonly status: DataFieldDescriptor<
+						"collection:memberships/field:status",
+						{ readonly kind: "text" },
+						string,
+						false,
+						false
+					>;
+				};
+			};
+		};
+	};
 }
 
 const readableMessages = policy.rows(
@@ -149,7 +174,7 @@ export const messagePage = dataQuery<MessageDescriptor>()({
 		}),
 		after: query.parameter.cursor({ nullable: true }),
 	},
-	select: ({ fields }) => {
+	select: ({ fields, relations }) => {
 		// @ts-expect-error Query selection is closed to exact descriptor Fields.
 		void fields.unknownField;
 		return {
@@ -157,6 +182,10 @@ export const messagePage = dataQuery<MessageDescriptor>()({
 			body: fields.body,
 			moderationNote: fields.moderationNote,
 			createdAt: fields.createdAt,
+			author: relations.author.select(({ fields: author }) => ({
+				id: author.id,
+				status: author.status,
+			})),
 		};
 	},
 	where: ({ fields, parameters }) =>
@@ -186,6 +215,7 @@ type _node = Expect<
 			body: string;
 			moderationNote: string | null;
 			createdAt: string;
+			author: { id: string; status: string } | null;
 		}
 	>
 >;
