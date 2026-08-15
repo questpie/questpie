@@ -11,8 +11,8 @@ immutable Seed lifecycle at reviewed head `dca711f0`, evidence head `5a4681ca`,
 and merge `b630fb01`. Accepted BETA-03 adds the first bounded
 Service/Context/execution Runtime tracer at reviewed head `f830e48c`, evidence
 head `1e2a367a`, and merge `a7d24541`.
-The BETA-04 Policy-scoped Message Query tracer is reviewed at `7918bac0`, with
-accepted review evidence at `a1a4265b`; PR #308 remains the merge/tracker gate.
+Accepted BETA-04 adds the first Policy-scoped Message Query tracer at reviewed
+head `7918bac0`, evidence head `a1a4265b`, and merge `275cad0c`.
 
 Fixed accepted proof authority:
 
@@ -63,8 +63,7 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, accepted authority merge head
-  `19ac6845a51d639887f10d1fd2eeedc841f70555`.
+  `feat/v4`, accepted merge head `275cad0c1d25251dc5d1ca1835a1316769218d7c`.
 - The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
@@ -75,11 +74,11 @@ capabilities, never durable authority or a provider matrix.
   implementation head `f830e48c554b027afcb13efea6d3f900fd8c7ece` and
   evidence head `1e2a367a72a7e012685912eccfa21d2085ac9b17`. PR #305
   merged it to `feat/v4`; issue #290 is closed.
-- The reviewed BETA-04 implementation worktree is
+- The accepted BETA-04 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-04`, branch `feat/v4-beta-04`, at
   reviewed head `7918bac0c7d579142fc4882c23f6a61e82dc1a51` and evidence
-  head `a1a4265b886eb86c133433f6fa84b699457b1258`. PR #308 must merge normally
-  before issue #291 closes or BETA-05 becomes agent-ready.
+  head `a1a4265b886eb86c133433f6fa84b699457b1258`. PR #308 merged it to
+  `feat/v4` at `275cad0c1d25251dc5d1ca1835a1316769218d7c`; issue #291 is closed.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -97,8 +96,9 @@ Atlas tickets #14–#22, the #16 implementation-collapse proof, BETA-01 issue
 at `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9` and does not count toward the
 native N=5 implementation queue. BETA-02 issue #289 is accepted through PR
 #304 and tracker closure. BETA-03 issue #290 is accepted through PR #305 and
-tracker closure. BETA-04 issue #291 is now the active frontier. The accepted
-foundation includes:
+tracker closure. BETA-04 issue #291 is accepted through PR #308 and tracker
+closure. BETA-05 issue #292 is now the active frontier. The accepted foundation
+includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
   one non-blocking forward lane because 7.0 lacks a stable programmatic API;
@@ -131,9 +131,9 @@ Do not skip a blocked issue or parallelize dependent implementation.
   and 509 total scan rows. The first-plus-one hostile proves
   `qp_ix_messages_page`, exactly two Message rows at `first=1`, and no Message
   sequential scan on all three supported majors.
-- #291 remains a reviewed candidate in PR #308. Do not close the issue, advance
-  P16 readiness, or start BETA-05 until the evidence head passes final CI and
-  merges normally to `feat/v4`.
+- #291 evidence head passed final CI run `31893362124`; PR #308 merged normally
+  to `feat/v4` at `275cad0c1d25251dc5d1ca1835a1316769218d7c`, and issue #291
+  is closed. P16 now derives BETA-05 as the sole agent-ready frontier.
 
 - P2R1/BETA04 authority candidate `10d5712a` received a valid fresh stateless
   Opus-medium `BLOCKED` because its checker required two unretained authoring
@@ -244,10 +244,9 @@ Do not skip a blocked issue or parallelize dependent implementation.
 ## Next invocation
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Finish PR #308 for reviewed BETA-04 issue
-#291 at implementation head `7918bac0` and evidence head `a1a4265b`. Require
-final CI, normal merge to `feat/v4`, tracker closure, and dependency-derived P16
-readiness before starting BETA-05. Preserve the #289/#290 review evidence,
-docs-hygiene branch, marketing worktree, scalar-research worktree, and archive
-branch.
+Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-05 issue #292
+from merge base `275cad0c1d25251dc5d1ca1835a1316769218d7c` without widening its
+generated Runtime Build, Route, and client tracer. Preserve the #289/#290/#291
+review evidence, docs-hygiene branch, marketing worktree, scalar-research
+worktree, and archive branch.
 ```
