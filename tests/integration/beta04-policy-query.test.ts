@@ -28,8 +28,32 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 	const envelope = JSON.parse(
 		compilation.generatedFiles["postgres-query-plans.json"] ?? "null",
 	) as Readonly<{ plans: readonly PostgresQueryPlanV1[] }>;
+	const nondisclosure = JSON.parse(
+		compilation.generatedFiles["relational-nondisclosure.json"] ?? "null",
+	) as Readonly<{
+		queries: readonly Readonly<{
+			queryDigest: string;
+			policyProgramDigest: string;
+			keyedLookup: Readonly<{
+				missingKey: string;
+				policyInvisibleKey: string;
+			}>;
+			countOracle: string;
+		}>[];
+	}>;
 	const plan = envelope.plans[0];
 	if (!plan) throw new Error("expected the compiled Message page plan");
+	const transcript = nondisclosure.queries[0];
+	if (!transcript) throw new Error("expected the nondisclosure transcript");
+	expect(transcript).toMatchObject({
+		queryDigest: plan.queryDigest,
+		policyProgramDigest: plan.policyProgramDigest,
+		keyedLookup: {
+			missingKey: "notFound",
+			policyInvisibleKey: "notFound",
+		},
+		countOracle: "absent",
+	});
 
 	expect(plan.sql.indexOf('"qp_authorized" AS MATERIALIZED')).toBeLessThan(
 		plan.sql.indexOf('"qp_page" AS MATERIALIZED'),

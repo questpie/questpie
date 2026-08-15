@@ -88,6 +88,7 @@ describe("BETA-01 generated contract", () => {
 			"postgres-query-plans.json",
 			"query-projection.json",
 			"relational-explain.json",
+			"relational-nondisclosure.json",
 			"schema-projection.json",
 			"service-projection.json",
 		]);
