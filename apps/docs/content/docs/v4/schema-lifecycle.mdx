@@ -572,16 +572,16 @@ export const demoBarbershop = defineSeed({
 			id: "018f5f70-0a0c-7f11-89f9-2aa4f8df3945",
 			tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 			customerName: "Nina Horvath",
-			startsAt: new Date("2026-08-11T09:00:00.000Z"),
-			endsAt: new Date("2026-08-11T09:30:00.000Z"),
+			startsAt: "2026-08-11T09:00:00.000Z",
+			endsAt: "2026-08-11T09:30:00.000Z",
 			status: "scheduled",
 		}),
 	],
 });
 ```
 
-The Controlled Structural Evaluator permits `new Date(<ISO 8601 literal>)`. Clock reads
-such as `Date.now()` and `new Date()` without a literal are forbidden.
+Seed timestamp values are canonical strings. `Date` values and clock reads such as
+`Date.now()` or `new Date()` are not valid Seed values.
 
 QUESTPIE compiles these immutable Seed files. You must commit all three:
 
