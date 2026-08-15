@@ -74,11 +74,6 @@ test("projects the mutable membership evidence and stable Message page index", a
 			nulls: "last",
 		},
 		{
-			field: "collection:messages/field:createdAt",
-			order: "desc",
-			nulls: "last",
-		},
-		{
 			field: "collection:messages/field:id",
 			order: "desc",
 			nulls: "last",

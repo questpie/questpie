@@ -37,6 +37,8 @@ const microsecondMessageIds = [
 	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61d1",
 	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61d2",
 ] as const;
+const planChannelId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61e0";
+const planDistractorChannelId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61e1";
 
 type KeyedLookupProof = Readonly<{
 	sql: string;
@@ -120,6 +122,47 @@ async function execute(
 	});
 }
 
+type ExplainNode = Readonly<{
+	"Node Type": string;
+	"Actual Loops"?: number;
+	"Actual Rows"?: number;
+	"Index Name"?: string;
+	"Relation Name"?: string;
+	"Rows Removed by Filter"?: number;
+	"Shared Hit Blocks"?: number;
+	"Shared Read Blocks"?: number;
+	Plans?: readonly ExplainNode[];
+}>;
+
+function explainParameters(): readonly unknown[] {
+	const values = new Map(
+		binding(null, 1, planChannelId).values.map(({ parameter, value }) => [
+			parameter,
+			value,
+		]),
+	);
+	const facts = executionFacts();
+	return plan.parameters.map((parameter, index) => {
+		expect(parameter.position).toBe(index + 1);
+		if (parameter.kind === "literal") return parameter.value;
+		if (parameter.kind === "queryParameter")
+			return values.get(parameter.parameter);
+		if (parameter.kind === "cursorPresent") return false;
+		if (parameter.kind === "cursorValue") return null;
+		const path = parameter.path.join(".");
+		if (parameter.source === "authority" && path === "kind")
+			return facts.authority.kind;
+		if (parameter.source === "principal" && path === "id")
+			return facts.principal.id;
+		if (parameter.source === "tenant" && path === "id") return facts.tenant.id;
+		throw new Error("unsupported EXPLAIN execution fact");
+	});
+}
+
+function explainNodes(root: ExplainNode): readonly ExplainNode[] {
+	return [root, ...(root.Plans ?? []).flatMap(explainNodes)];
+}
+
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
@@ -178,6 +221,41 @@ beforeAll(async () => {
 			(${messageIds[1]}, ${channelId}, ${membershipId}, 'middle', '2026-08-15T09:00:00.000Z'),
 			(${messageIds[2]}, ${channelId}, ${membershipId}, 'oldest', '2026-08-15T08:00:00.000Z')
 	`;
+	await database`
+		insert into collaboration.channels (id, space_id, name, visibility)
+		values
+			(${planChannelId}, ${spaceId}, 'Plan proof', 'company'),
+			(${planDistractorChannelId}, ${spaceId}, 'Plan distractors', 'company')
+	`;
+	await database.unsafe(
+		`
+		insert into collaboration.messages
+			(id, channel_id, author_membership_id, body, created_at)
+		select
+			pg_catalog.gen_random_uuid(),
+			$1::pg_catalog.uuid,
+			$2::pg_catalog.uuid,
+			'plan-proof-' || ordinal,
+			'2026-08-15T12:00:00Z'::pg_catalog.timestamptz + ordinal * interval '1 millisecond'
+		from pg_catalog.generate_series(1, 32) as ordinal
+	`,
+		[planChannelId, membershipId],
+	);
+	await database.unsafe(
+		`
+		insert into collaboration.messages
+			(id, channel_id, author_membership_id, body, created_at)
+		select
+			pg_catalog.gen_random_uuid(),
+			$1::pg_catalog.uuid,
+			$2::pg_catalog.uuid,
+			'plan-distractor-' || ordinal,
+			'2026-08-15T12:00:00Z'::pg_catalog.timestamptz + ordinal * interval '1 millisecond'
+		from pg_catalog.generate_series(1, 8192) as ordinal
+	`,
+		[planDistractorChannelId, membershipId],
+	);
+	await database.unsafe("ANALYZE collaboration.messages");
 });
 
 afterAll(async () => {
@@ -188,6 +266,42 @@ afterAll(async () => {
 describe.skipIf(!database)(
 	"BETA-04 Bun PostgreSQL Policy Query adapter",
 	() => {
+		test("uses the stable Message page index for an exact first-plus-one scan", async () => {
+			const rows = await database!.unsafe(
+				`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${plan.sql}`,
+				explainParameters(),
+			);
+			const rawPlan = rows[0]?.["QUERY PLAN"];
+			const document =
+				typeof rawPlan === "string" ? JSON.parse(rawPlan) : rawPlan;
+			const root = document?.[0]?.Plan as ExplainNode | undefined;
+			expect(root).toBeDefined();
+			const nodes = explainNodes(root!);
+			const messageScan = nodes.find(
+				(node) =>
+					node["Relation Name"] === "messages" &&
+					node["Index Name"] === "qp_ix_messages_page",
+			);
+
+			expect(messageScan).toMatchObject({
+				"Actual Loops": 1,
+				"Actual Rows": 2,
+				"Index Name": "qp_ix_messages_page",
+			});
+			expect(messageScan?.["Rows Removed by Filter"] ?? 0).toBe(0);
+			expect(
+				(messageScan?.["Shared Hit Blocks"] ?? 0) +
+					(messageScan?.["Shared Read Blocks"] ?? 0),
+			).toBeGreaterThan(0);
+			expect(
+				nodes.some(
+					(node) =>
+						node["Node Type"] === "Seq Scan" &&
+						node["Relation Name"] === "messages",
+				),
+			).toBe(false);
+		});
+
 		test("normalizes missing and Policy-invisible Message keys without disclosure", async () => {
 			const proof = (
 				plan as unknown as Readonly<{
@@ -212,7 +326,7 @@ describe.skipIf(!database)(
 			).toEqual(missing);
 		});
 
-		test("uses canonical millisecond order for microsecond PostgreSQL rows and cursor seeks", async () => {
+		test("keeps selected timestamps canonical while the stable ID cursor seeks", async () => {
 			await database!`
 					insert into collaboration.channels (id, space_id, name, visibility)
 					values (${microsecondChannelId}, ${spaceId}, 'Precision', 'company')
@@ -261,9 +375,9 @@ describe.skipIf(!database)(
 				nodes: [
 					{
 						author: null,
-						body: "newest",
-						createdAt: "2026-08-15T10:00:00.000Z",
-						id: messageIds[0],
+						body: "oldest",
+						createdAt: "2026-08-15T08:00:00.000Z",
+						id: messageIds[2],
 					},
 				],
 				pageInfo: { endCursor: expect.any(String), hasNextPage: true },
@@ -343,7 +457,7 @@ describe.skipIf(!database)(
 						select 1
 						from pg_catalog.pg_stat_activity
 						where pid <> pg_catalog.pg_backend_pid()
-						  and query like '%qp_authorized%'
+						  and query like '%qp_page%'
 						  and wait_event_type = 'Lock'
 					) as blocked
 				`;
@@ -363,7 +477,7 @@ describe.skipIf(!database)(
 
 			const reusablePage = await execute(database!);
 			expect(reusablePage.nodes).toHaveLength(1);
-			expect(reusablePage.nodes[0]?.id).toBe(messageIds[0]);
+			expect(reusablePage.nodes[0]?.id).toBe(messageIds[2]);
 		});
 	},
 );

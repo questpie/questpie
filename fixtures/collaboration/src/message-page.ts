@@ -26,10 +26,7 @@ export const channelMessagePage = dataQuery<
 	}),
 	where: ({ fields, parameters }) =>
 		fields.channelId.equal(parameters.channelId),
-	orderBy: ({ fields }) => [
-		fields.createdAt.descending({ nulls: "last" }),
-		fields.id.descending({ nulls: "last" }),
-	],
+	orderBy: ({ fields }) => [fields.id.descending({ nulls: "last" })],
 	page: ({ parameters }) =>
 		query.forwardCursor({
 			first: parameters.first,

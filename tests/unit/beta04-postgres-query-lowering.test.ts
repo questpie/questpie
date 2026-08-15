@@ -467,8 +467,10 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 			.map((statement) => statement.trim())
 			.filter(Boolean),
 	).toHaveLength(1);
-	expect(plan.sql.indexOf('"qp_authorized" AS MATERIALIZED')).toBeLessThan(
-		plan.sql.indexOf('"qp_page" AS MATERIALIZED'),
+	expect(plan.sql).not.toContain('"qp_authorized" AS MATERIALIZED');
+	expect(plan.sql).toContain('WITH "qp_page" AS MATERIALIZED');
+	expect(plan.sql.indexOf("EXISTS (SELECT 1")).toBeLessThan(
+		plan.sql.indexOf('"qp_row"."channel_id" ='),
 	);
 	expect(plan.sql).toContain("EXISTS (SELECT 1");
 	expect(plan.sql).not.toContain("COUNT(");

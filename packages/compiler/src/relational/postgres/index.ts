@@ -343,13 +343,12 @@ export function lowerPostgresQueryPlan(
 	if (!read)
 		throw new TypeError(`Policy ${policy.program.identity} denies read`);
 	const parameters = new PostgresParameters();
-	const authorizedAlias = "qp_row";
+	const pageAlias = "qp_row";
 	const policySql = policyExpressionSql(read.rows, {
 		catalog,
 		parameters,
-		aliases: new Map([["row", authorizedAlias]]),
+		aliases: new Map([["row", pageAlias]]),
 	});
-	const pageAlias = "qp_row";
 	const pageContext: QuerySqlContext = {
 		catalog,
 		parameters,
@@ -411,7 +410,7 @@ export function lowerPostgresQueryPlan(
 		result.push(rendered.result);
 	}
 
-	const sql = `WITH "qp_authorized" AS MATERIALIZED (SELECT ${quoteIdentifier(authorizedAlias)}.* FROM ${qualifiedTable(catalog, rootCollection)} AS ${quoteIdentifier(authorizedAlias)} WHERE ${policySql}), "qp_page" AS MATERIALIZED (SELECT ${quoteIdentifier(pageAlias)}.* FROM "qp_authorized" AS ${quoteIdentifier(pageAlias)} WHERE ${filterSql} AND ${boundarySql} ORDER BY ${ordering} LIMIT (${first} + 1)) SELECT ${columns.join(", ")} FROM "qp_page" AS ${quoteIdentifier(pageAlias)}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} ORDER BY ${ordering};\n`;
+	const sql = `WITH "qp_page" AS MATERIALIZED (SELECT ${quoteIdentifier(pageAlias)}.* FROM ${qualifiedTable(catalog, rootCollection)} AS ${quoteIdentifier(pageAlias)} WHERE ${policySql} AND ${filterSql} AND ${boundarySql} ORDER BY ${ordering} LIMIT (${first} + 1)) SELECT ${columns.join(", ")} FROM "qp_page" AS ${quoteIdentifier(pageAlias)}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} ORDER BY ${ordering};\n`;
 	const positionalParameters = parameters.values();
 	const keyedLookup = lowerPostgresKeyedLookupProof({
 		catalog,

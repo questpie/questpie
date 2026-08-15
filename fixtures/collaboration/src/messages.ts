@@ -35,11 +35,7 @@ export const messages = defineCollection({
 	},
 	indexes: {
 		page: index({
-			fields: [
-				"channelId",
-				{ field: "createdAt", order: "desc", nulls: "last" },
-				{ field: "id", order: "desc", nulls: "last" },
-			],
+			fields: ["channelId", { field: "id", order: "desc", nulls: "last" }],
 		}),
 	},
 	augmentations: [messageAudit],

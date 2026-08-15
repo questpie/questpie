@@ -61,9 +61,8 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 		countOracle: "absent",
 	});
 
-	expect(plan.sql.indexOf('"qp_authorized" AS MATERIALIZED')).toBeLessThan(
-		plan.sql.indexOf('"qp_page" AS MATERIALIZED'),
-	);
+	expect(plan.sql).not.toContain('"qp_authorized" AS MATERIALIZED');
+	expect(plan.sql).toContain('WITH "qp_page" AS MATERIALIZED');
 	expect(plan.sql).not.toContain("COUNT(");
 	expect(compilation.generatedFiles["app.ts"]).not.toMatch(/\bcount\s*\(/);
 
@@ -210,11 +209,7 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 	});
 	expect(calls).toHaveLength(2);
 	expect(calls.every(({ sql }) => sql === plan.sql)).toBe(true);
-	expect(calls[1]?.parameters.slice(5, 8)).toEqual([
-		true,
-		"2026-08-15T10:00:00.000Z",
-		firstId,
-	]);
+	expect(calls[1]?.parameters.slice(5, 8)).toEqual([true, firstId, 1]);
 
 	await runtime.close();
 });

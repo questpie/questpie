@@ -38,7 +38,7 @@ ALTER TABLE "collaboration"."memberships" ADD CONSTRAINT "qp_ck_memberships_stat
 ALTER TABLE "collaboration"."memberships" ADD CONSTRAINT "qp_ck_memberships_status_min_length" CHECK ((pg_catalog.char_length("status") >= 1));
 
 -- questpie-step: be8595f580989aaf3aafa6feb4c9bd851cea89717a863c2d86b5c7b41c814f89
-CREATE INDEX "qp_ix_messages_page" ON "collaboration"."messages" USING btree ("channel_id" ASC NULLS LAST, "created_at" DESC NULLS LAST, "id" DESC NULLS LAST);
+CREATE INDEX "qp_ix_messages_page" ON "collaboration"."messages" USING btree ("channel_id" ASC NULLS LAST, "id" DESC NULLS LAST);
 
 -- questpie-step: 5faaea913b8fbf7bd94709c1dfc1dd24637943283c5f223a62dfad0bbb8d2001
 ALTER TABLE "collaboration"."messages" DROP CONSTRAINT "qp_fk_messages_author";
