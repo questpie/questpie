@@ -1,12 +1,16 @@
 import type { SQL } from "bun";
 
-import { canonicalBytes, compareAscii } from "../../canonical";
+import { canonicalBytes } from "../../canonical";
 import type { SchemaProjectionV1 } from "../contracts";
 import {
 	dependencyName,
 	fingerprintType,
 	operatorClass,
 } from "../postgres-catalog";
+import {
+	compareFingerprintDependencies,
+	compareFingerprintObjects,
+} from "./fingerprint-order";
 import { childRecords, fail } from "./shared";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
@@ -237,12 +241,10 @@ export function expectedComparable(schema: SchemaProjectionV1): JsonRecord {
 		application: schema.application.name,
 		applicationSchema: schema.application.postgresSchema,
 		applicationSchemaExists,
-		objects: objects.sort((left, right) =>
-			compareAscii(canonicalBytes(left), canonicalBytes(right)),
-		),
+		objects: objects.sort(compareFingerprintObjects),
 		unsupportedObjects: [],
-		externalDependencies: [...dependencies.values()].sort((left, right) =>
-			compareAscii(canonicalBytes(left), canonicalBytes(right)),
+		externalDependencies: [...dependencies.values()].sort(
+			compareFingerprintDependencies,
 		),
 		installedRequiredExtensions: schema.requiredPostgres.extensions.map(
 			(extension) => extension.name,

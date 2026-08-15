@@ -27,7 +27,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "bootstrap_pg18_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -156,8 +156,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			lockTimeoutMs: 500,
 			statementTimeoutMs: 5_000,
 		});
-		expect(retry.status).toBe("applied");
-
+		expect(retry).toMatchObject({ status: "applied" });
 		const evolvedSchema = structuredClone(targetSchema);
 		const messages = evolvedSchema.collections.find(
 			(collection: { identity: string }) =>
@@ -496,6 +495,67 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			await database!.unsafe(
 				`DROP OWNED BY ${role}; DROP ROLE IF EXISTS ${role}`,
 			);
+		}
+	}, 10_000);
+
+	test("normalizes PostgreSQL 18 NOT NULL constraints in bootstrap verification", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "bootstrap-pg18-probe",
+			postgresSchema: "bootstrap_pg18_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-bootstrap-pg18-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+		const [notNullCatalog] = await database!<
+			{ major: number; constraints: number }[]
+		>`
+			select current_setting('server_version_num')::integer / 10000 as major,
+			       count(*)::integer as constraints
+			from pg_catalog.pg_constraint con
+			join pg_catalog.pg_class rel on rel.oid = con.conrelid
+			join pg_catalog.pg_namespace ns on ns.oid = rel.relnamespace
+			where ns.nspname = 'questpie_internal' and con.contype = 'n'
+		`;
+		expect(notNullCatalog?.constraints).toBe(
+			(notNullCatalog?.major ?? 0) >= 18 ? 26 : 0,
+		);
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "alreadyApplied" });
+		if ((notNullCatalog?.major ?? 0) >= 18) {
+			await database!.unsafe(
+				"ALTER TABLE questpie_internal.protocol ALTER CONSTRAINT protocol_version_not_null NO INHERIT",
+			);
+			try {
+				await expect(
+					applyCommittedMigrations({ migrations: [migration] }),
+				).rejects.toMatchObject({ code: "QP-SCHEMA-023" });
+			} finally {
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.protocol ALTER CONSTRAINT protocol_version_not_null INHERIT",
+				);
+			}
+			await expect(
+				applyCommittedMigrations({ migrations: [migration] }),
+			).resolves.toMatchObject({ status: "alreadyApplied" });
 		}
 	}, 10_000);
 
@@ -1346,6 +1406,12 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		expect(receipt?.count).toBe(1);
 		const observedPostgresMajor =
 			drift.fingerprint.observations.serverVersion.split(".")[0];
+		expect(Object.keys(drift.fingerprint.observations).sort()).toEqual([
+			"databaseCType",
+			"databaseCollation",
+			"extensions",
+			"serverVersion",
+		]);
 		if (process.env.QUESTPIE_POSTGRES_MAJOR)
 			expect(observedPostgresMajor).toBe(process.env.QUESTPIE_POSTGRES_MAJOR);
 		const [committedSeed] = compilation.committedSeeds;

@@ -113,9 +113,6 @@ export interface SchemaFingerprintV1 extends JsonRecord {
 		serverVersion: string;
 		databaseCollation: string;
 		databaseCType: string;
-		databaseEncoding: string;
-		binaryCollationProvider: string;
-		binaryCollationDeterministic: boolean;
 		extensions: readonly Readonly<{
 			name: string;
 			installedVersion: string;

@@ -164,14 +164,16 @@ describe("BETA-02 PostgreSQL session protocol", () => {
 			code: "QP-SCHEMA-007",
 			diagnosticClass: "incompatibleExtension",
 		});
-		await expect(
-			providerObservations(
-				providerSql({}, [
-					{ name: "pgcrypto", installedVersion: "1.3-provider-build" },
-				]),
-				extensionSchema,
-			),
-		).resolves.toMatchObject({
+		const observations = await providerObservations(
+			providerSql({}, [
+				{ name: "pgcrypto", installedVersion: "1.3-provider-build" },
+			]),
+			extensionSchema,
+		);
+		expect(observations).toEqual({
+			serverVersion: "17.5",
+			databaseCollation: "C.UTF-8",
+			databaseCType: "C.UTF-8",
 			extensions: [
 				{ name: "pgcrypto", installedVersion: "1.3-provider-build" },
 			],

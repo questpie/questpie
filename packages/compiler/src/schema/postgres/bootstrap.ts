@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 
 import { SQL } from "bun";
 
-import { canonicalBytes } from "../../canonical";
+import { canonicalBytes, compareAscii } from "../../canonical";
 import {
 	acquireSessionLock,
 	assertBackendPid,
@@ -330,7 +330,36 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		join pg_catalog.pg_class c on c.oid = con.conrelid
 		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 		where n.nspname = 'questpie_internal'
+		  and con.contype <> 'n'
 		order by c.relname, con.conname
+	`;
+	const notNullConstraints = await sql<
+		{
+			table: string;
+			field: string | null;
+			fieldCount: number;
+			validated: boolean;
+			local: boolean;
+			inheritedCount: number;
+			noInherit: boolean;
+		}[]
+	>`
+		select c.relname as table,
+		       a.attname as field,
+		       cardinality(con.conkey)::integer as "fieldCount",
+		       con.convalidated as validated,
+		       con.conislocal as local,
+		       con.coninhcount::integer as "inheritedCount",
+		       con.connoinherit as "noInherit"
+		from pg_catalog.pg_constraint con
+		join pg_catalog.pg_class c on c.oid = con.conrelid
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		left join pg_catalog.pg_attribute a
+		  on a.attrelid = con.conrelid
+		 and cardinality(con.conkey) = 1
+		 and a.attnum = con.conkey[1]
+		where n.nspname = 'questpie_internal' and con.contype = 'n'
+		order by c.relname, a.attname nulls first, con.conname
 	`;
 	const indexes = await sql<
 		{
@@ -365,12 +394,36 @@ async function verifyBootstrapCatalog(sql: SQL): Promise<void> {
 		"seed_attempt_events",
 		"seed_receipts",
 	];
+	const notNullColumns = columns
+		.filter((column) => column.notNull)
+		.map((column) => [column.table, column.name])
+		.sort((left, right) =>
+			compareAscii(canonicalBytes(left), canonicalBytes(right)),
+		);
+	const validNotNullConstraints =
+		notNullConstraints.length === 0 ||
+		(notNullConstraints.every(
+			(constraint) =>
+				constraint.field !== null &&
+				constraint.fieldCount === 1 &&
+				constraint.validated &&
+				constraint.local &&
+				constraint.inheritedCount === 0 &&
+				!constraint.noInherit,
+		) &&
+			canonicalBytes(
+				notNullConstraints.map((constraint) => [
+					constraint.table,
+					constraint.field,
+				]),
+			) === canonicalBytes(notNullColumns));
 	if (
 		!namespace ||
 		namespace.publicPrivileges ||
 		canonicalBytes(tables.map((table) => table.name)) !==
 			canonicalBytes(expectedTables) ||
 		tables.some((table) => !table.ownerMatches || table.publicPrivileges) ||
+		!validNotNullConstraints ||
 		canonicalBytes(
 			columns.map((column) => [
 				column.table,
