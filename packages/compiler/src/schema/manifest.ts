@@ -498,7 +498,7 @@ export function projectManifest(
 			),
 		},
 		requiredPostgres: {
-			minimumMajor: 16,
+			minimumMajor: configuration.postgres.minimumMajor,
 			databaseCollation: configuration.postgres.databaseCollation,
 			databaseCType: configuration.postgres.databaseCType,
 			extensions: configuration.postgres.extensions.map((name) => ({ name })),

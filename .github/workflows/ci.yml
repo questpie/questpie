@@ -35,11 +35,15 @@ jobs:
       - run: bun run quality:full
 
   postgres:
-    name: PostgreSQL correctness
+    name: PostgreSQL ${{ matrix.postgres }} correctness
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: [16, 17, 18]
     services:
       postgres:
-        image: postgres:17
+        image: postgres:${{ matrix.postgres }}
         env:
           POSTGRES_DB: questpie
           POSTGRES_USER: questpie
@@ -63,6 +67,7 @@ jobs:
           PGPORT: "5432"
           PGDATABASE: questpie
           PGUSER: questpie
+          QUESTPIE_POSTGRES_MAJOR: "${{ matrix.postgres }}"
 
   typescript-forward:
     name: TypeScript 7 forward conformance

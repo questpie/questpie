@@ -1344,7 +1344,10 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			where application_name = 'collaboration'
 		`;
 		expect(receipt?.count).toBe(1);
-		expect(drift.fingerprint.observations.serverVersion).toMatch(/^17\./);
+		const observedPostgresMajor =
+			drift.fingerprint.observations.serverVersion.split(".")[0];
+		if (process.env.QUESTPIE_POSTGRES_MAJOR)
+			expect(observedPostgresMajor).toBe(process.env.QUESTPIE_POSTGRES_MAJOR);
 		const [committedSeed] = compilation.committedSeeds;
 		if (!committedSeed)
 			throw new Error("compiled collaboration Seed is missing");
@@ -1540,7 +1543,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		console.log(
 			JSON.stringify({
 				scenario: "beta02-postgres-local",
-				postgres: "17",
+				postgres: observedPostgresMajor,
 				measurements: { firstApplyMs, restartMs },
 				status: "PASS",
 			}),

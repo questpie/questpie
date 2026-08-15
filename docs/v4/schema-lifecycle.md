@@ -78,7 +78,11 @@ different application and cannot adopt the old receipts or schema implicitly.
 `postgres` also requires `minimumMajor: 16`, `databaseCollation`,
 `databaseCType`, and an identity-sorted extension-name list. Provider
 validation compares those exact locale values and extension presence before
-planning or applying.
+planning or applying. Schema artifact v1 keeps `minimumMajor` fixed at the
+configured literal `16`; the compiler projects that configuration value rather
+than substituting an implementation constant. PostgreSQL 16, 17, and 18 run the
+same correctness lane so version-sensitive catalog deparsing remains explicit
+conformance evidence, not a provider-specific implementation matrix.
 
 Independently of the database defaults above, foundational Data text semantics
 require `pg_catalog.C`. Before planning, applying, drift comparison, or Query

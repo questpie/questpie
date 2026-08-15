@@ -12,6 +12,9 @@ import {
 } from "@questpie/compiler";
 import type { RenameIdentityV1, SchemaProjectionV1 } from "@questpie/compiler";
 
+import { projectManifest } from "../../packages/compiler/src/schema/manifest";
+import type { ApplicationConfiguration } from "../../packages/compiler/src/types";
+
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const compiledFixture = compileApplication({ applicationRoot: fixtureRoot });
 
@@ -73,6 +76,33 @@ function commitDelta(
 }
 
 describe("BETA-02 migration artifacts", () => {
+	test("reads the frozen PostgreSQL minimum from configuration during projection", () => {
+		let minimumMajorReads = 0;
+		const configuration = {
+			$schema: "https://questpie.dev/schema/application-v1.json",
+			version: 1,
+			application: { name: "configured-floor" },
+			postgres: {
+				schema: "configured_floor",
+				get minimumMajor() {
+					minimumMajorReads += 1;
+					return 16 as const;
+				},
+				databaseCollation: "C.UTF-8",
+				databaseCType: "C.UTF-8",
+				extensions: [],
+				physicalNames: {},
+			},
+			source: { root: "src", exclude: [] },
+			packages: {},
+		} satisfies ApplicationConfiguration;
+
+		const manifest = projectManifest(configuration, []);
+		const schema = manifest.schema as SchemaProjectionV1;
+		expect(schema.requiredPostgres.minimumMajor).toBe(16);
+		expect(minimumMajorReads).toBe(1);
+	});
+
 	test("plans and commits the collaboration Genesis migration exactly", async () => {
 		const compilation = await compiledFixture;
 		const targetSchema = JSON.parse(
