@@ -3,12 +3,16 @@ import { constraint, defineCollection, field, seed } from "questpie";
 const measurements = defineCollection({
 	name: "measurements",
 	fields: {
-		id: field.bigint({ minimum: "0", maximum: "9223372036854775807" }),
-		amount: field.numeric({ precision: 12, scale: 4 }),
+		id: field.bigint({
+			nullable: false,
+			minimum: "0",
+			maximum: "9223372036854775807",
+		}),
+		amount: field.numeric({ nullable: false, precision: 12, scale: 4 }),
 		day: field.date({ nullable: true }),
-		label: field.text({ default: "pending" }),
-		enabled: field.boolean({ default: true }),
-		position: field.integer({ default: 0 }),
+		label: field.text({ nullable: false, default: "pending" }),
+		enabled: field.boolean({ nullable: false, default: true }),
+		position: field.integer({ nullable: false, default: 0 }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -27,18 +31,23 @@ seed.insert(measurements, { id: "1", amount: 1 });
 // @ts-expect-error date is canonical YYYY-MM-DD text
 seed.insert(measurements, { id: "1", amount: "1.0000", day: new Date() });
 
-field.text({ default: "ready" });
-field.boolean({ default: false });
-field.integer({ default: 42 });
+field.text({ nullable: false, default: "ready" });
+field.boolean({ nullable: false, default: false });
+field.integer({ nullable: false, default: 42 });
+
+// @ts-expect-error every public Field constructor requires explicit nullability
+field.uuid({});
+// @ts-expect-error every public Field constructor requires its options object
+field.uuid();
 
 // @ts-expect-error Field options are an exact closed contract
-field.uuid({ unknown: true });
+field.uuid({ nullable: false, unknown: true });
 // @ts-expect-error timestamp flags are booleans
-field.timestamp({ withTimezone: "yes" });
+field.timestamp({ nullable: false, withTimezone: "yes" });
 
 // @ts-expect-error bigint literal schema defaults are deferred in v1
-field.bigint({ default: "1" });
+field.bigint({ nullable: false, default: "1" });
 // @ts-expect-error numeric literal schema defaults are deferred in v1
-field.numeric({ precision: 4, scale: 2, default: "1.00" });
+field.numeric({ nullable: false, precision: 4, scale: 2, default: "1.00" });
 // @ts-expect-error date literal schema defaults are deferred in v1
-field.date({ default: "2026-08-15" });
+field.date({ nullable: false, default: "2026-08-15" });

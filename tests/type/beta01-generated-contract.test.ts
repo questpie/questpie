@@ -131,8 +131,8 @@ describe("BETA-01 generated contract", () => {
 				packageId: null,
 				path: "src/messages.ts",
 				span: {
-					start: { line: 21, column: 3 },
-					end: { line: 25, column: 5 },
+					start: { line: 25, column: 3 },
+					end: { line: 29, column: 5 },
 				},
 			},
 		});

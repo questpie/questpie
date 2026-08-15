@@ -17,10 +17,10 @@ const appointmentSource = (expression: string) => `
 import { constraint, defineCollection, field } from "questpie";
 
 const appointmentFields = {
-	id: field.uuid(),
-	startsAt: field.timestamp({ withTimezone: true }),
-	endsAt: field.timestamp({ withTimezone: true }),
-	sequence: field.integer(),
+	id: field.uuid({ nullable: false }),
+	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	sequence: field.integer({ nullable: false }),
 };
 
 export const checkAppointments = defineCollection({
@@ -99,9 +99,9 @@ describe("BETA-02 authored check Constraints", () => {
 
 	test("evaluates the callback once and freezes the closed tree", () => {
 		const fields = {
-			startsAt: field.timestamp({ withTimezone: true }),
-			endsAt: field.timestamp({ withTimezone: true }),
-			greaterThan: field.timestamp({ withTimezone: true }),
+			startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+			endsAt: field.timestamp({ nullable: false, withTimezone: true }),
+			greaterThan: field.timestamp({ nullable: false, withTimezone: true }),
 		};
 		let calls = 0;
 		const definition = constraint.check<typeof fields>(({ fields }) => {

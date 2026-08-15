@@ -10,8 +10,8 @@ import {
 const companies = defineCollection({
 	name: "companies",
 	fields: {
-		id: field.uuid(),
-		slug: field.text(),
+		id: field.uuid({ nullable: false }),
+		slug: field.text({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -22,8 +22,8 @@ const companies = defineCollection({
 const spaces = defineCollection({
 	name: "spaces",
 	fields: {
-		id: field.uuid(),
-		companyId: field.uuid(),
+		id: field.uuid({ nullable: false }),
+		companyId: field.uuid({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),

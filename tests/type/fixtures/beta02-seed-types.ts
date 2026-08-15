@@ -16,10 +16,14 @@ type Equal<Left, Right> =
 const messages = defineCollection({
 	name: "messages",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
-		body: field.text(),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		body: field.text({ nullable: false }),
 		note: field.text({ nullable: true }),
-		createdAt: field.timestamp({ default: "now", withTimezone: true }),
+		createdAt: field.timestamp({
+			nullable: false,
+			default: "now",
+			withTimezone: true,
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -53,9 +57,9 @@ seed.update(messages, { key: { id: "id", body: "extra" }, values: {} });
 const memberships = defineCollection({
 	name: "memberships",
 	fields: {
-		companyId: field.uuid(),
-		principalId: field.uuid(),
-		role: field.text(),
+		companyId: field.uuid({ nullable: false }),
+		principalId: field.uuid({ nullable: false }),
+		role: field.text({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({

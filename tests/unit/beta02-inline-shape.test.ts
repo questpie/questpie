@@ -23,15 +23,15 @@ describe("BETA-02 inline shapes", () => {
 export const customers = defineCollection({
 	name: "customers",
 	fields: {
-		id: field.uuid(),
+		id: field.uuid({ nullable: false }),
 		address: shape.inline({ fields: {
-			city: field.text({ maxLength: 160 }),
+			city: field.text({ nullable: false, maxLength: 160 }),
 			geo: shape.inline({ fields: {
-				latitude: field.numeric({ precision: 8, scale: 5 }),
-				longitude: field.numeric({ precision: 8, scale: 5 }),
+				latitude: field.numeric({ nullable: false, precision: 8, scale: 5 }),
+				longitude: field.numeric({ nullable: false, precision: 8, scale: 5 }),
 			} }),
 		} }),
-		sequence: field.integer(),
+		sequence: field.integer({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: [
@@ -223,8 +223,10 @@ export const customers = defineCollection({
 export const hostile = defineCollection({
 	name: "hostilePaths",
 	fields: {
-		constructor: shape.inline({ fields: { code: field.text() } }),
-		payload: field.json(),
+		constructor: shape.inline({
+			fields: { code: field.text({ nullable: false }) },
+		}),
+		payload: field.json({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: [["constructor", "code"]] }),
@@ -276,7 +278,10 @@ export const hostile = defineCollection({
 
 export const invalid = defineCollection({
 	name: "invalid-inline",
-	fields: { id: field.uuid(), empty: shape.inline({ fields: {} }) },
+	fields: {
+		id: field.uuid({ nullable: false }),
+		empty: shape.inline({ fields: {} }),
+	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
 `,

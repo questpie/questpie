@@ -18,13 +18,17 @@ test("emits the exact Collection descriptor from the Data Projection", async () 
 export const contractCustomers = defineCollection({
 	name: "contractCustomers",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
 		address: shape.inline({ fields: {
-			city: field.text({ maxLength: 160 }),
+			city: field.text({ nullable: false, maxLength: 160 }),
 			note: field.text({ nullable: true }),
 		} }),
 		details: shape.inline({ fields: {
-			createdAt: field.timestamp({ default: "now", withTimezone: true }),
+			createdAt: field.timestamp({
+				nullable: false,
+				default: "now",
+				withTimezone: true,
+			}),
 			note: field.text({ nullable: true }),
 		} }),
 		preferences: field.object({
@@ -39,7 +43,7 @@ export const contractCustomers = defineCollection({
 				marketingEmail: value.boolean({ nullable: true }),
 			},
 		}),
-		sequence: field.integer(),
+		sequence: field.integer({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: [["address", "city"], "sequence"] }),

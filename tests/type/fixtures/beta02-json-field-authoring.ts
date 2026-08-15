@@ -3,8 +3,9 @@ import { constraint, defineCollection, field, seed, value } from "questpie";
 const profiles = defineCollection({
 	name: "profiles",
 	fields: {
-		id: field.uuid(),
+		id: field.uuid({ nullable: false }),
 		preferences: field.object({
+			nullable: false,
 			properties: {
 				locale: value.text({ nullable: false, maxLength: 16 }),
 				marketingEmail: value.boolean({ nullable: true }),
@@ -16,6 +17,7 @@ const profiles = defineCollection({
 			},
 		}),
 		tags: field.array({
+			nullable: false,
 			items: value.text({ nullable: false }),
 			maximumItems: 100,
 		}),

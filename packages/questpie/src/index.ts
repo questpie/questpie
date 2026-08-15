@@ -48,7 +48,7 @@ export interface DataFieldDescriptor<
 
 type ScalarOptions = Readonly<{ nullable?: boolean }>;
 type FieldBaseOptions = Readonly<{
-	nullable?: boolean;
+	nullable: boolean;
 	postgres?: Readonly<{ name: string }>;
 }>;
 
@@ -116,14 +116,14 @@ function fieldDefinition<
 	options: Options,
 ): FieldDefinition<
 	Value,
-	Options extends { nullable: true } ? true : false,
+	Options["nullable"],
 	Options extends { default: infer Default extends FieldDefault }
 		? Default
 		: null,
 	Scalar
 > {
 	const {
-		nullable = false,
+		nullable,
 		default: defaultValue = null,
 		postgres,
 		...scalarOptions
@@ -137,7 +137,7 @@ function fieldDefinition<
 		options: Object.freeze(scalarOptions),
 	}) as FieldDefinition<
 		Value,
-		Options extends { nullable: true } ? true : false,
+		Options["nullable"],
 		Options extends { default: infer Default extends FieldDefault }
 			? Default
 			: null,
@@ -151,9 +151,6 @@ export const field = Object.freeze({
 			Readonly<{ default?: "randomUuid" }>,
 	>(
 		options: ExactOptions<
-			Options,
-			FieldBaseOptions & Readonly<{ default?: "randomUuid" }>
-		> = {} as ExactOptions<
 			Options,
 			FieldBaseOptions & Readonly<{ default?: "randomUuid" }>
 		>,
@@ -174,23 +171,12 @@ export const field = Object.freeze({
 					maxLength?: number;
 					default?: string;
 				}>
-		> = {} as ExactOptions<
-			Options,
-			FieldBaseOptions &
-				Readonly<{
-					minLength?: number;
-					maxLength?: number;
-					default?: string;
-				}>
 		>,
 	) => fieldDefinition<"text", string, Options>("text", options),
 	boolean: <
 		const Options extends FieldBaseOptions & Readonly<{ default?: boolean }>,
 	>(
 		options: ExactOptions<
-			Options,
-			FieldBaseOptions & Readonly<{ default?: boolean }>
-		> = {} as ExactOptions<
 			Options,
 			FieldBaseOptions & Readonly<{ default?: boolean }>
 		>,
@@ -211,21 +197,10 @@ export const field = Object.freeze({
 					maximum?: number;
 					default?: number;
 				}>
-		> = {} as ExactOptions<
-			Options,
-			FieldBaseOptions &
-				Readonly<{
-					minimum?: number;
-					maximum?: number;
-					default?: number;
-				}>
 		>,
 	) => fieldDefinition<"integer", number, Options>("integer", options),
 	bigint: <const Options extends BigintFieldOptions>(
-		options: ExactOptions<Options, BigintFieldOptions> = {} as ExactOptions<
-			Options,
-			BigintFieldOptions
-		>,
+		options: ExactOptions<Options, BigintFieldOptions>,
 	) => fieldDefinition<"bigint", string, Options>("bigint", options),
 	numeric: <const Options extends NumericFieldOptions>(
 		options: ExactOptions<Options, NumericFieldOptions>,
@@ -237,16 +212,10 @@ export const field = Object.freeze({
 		options: ExactOptions<
 			Options,
 			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
-		> = {} as ExactOptions<
-			Options,
-			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
 		>,
 	) => fieldDefinition<"timestamp", string, Options>("timestamp", options),
 	date: <const Options extends FieldBaseOptions>(
-		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
-			Options,
-			FieldBaseOptions
-		>,
+		options: ExactOptions<Options, FieldBaseOptions>,
 	) => fieldDefinition<"date", string, Options>("date", options),
 	object: <
 		const Options extends FieldBaseOptions &
@@ -286,10 +255,7 @@ export const field = Object.freeze({
 			options,
 		),
 	json: <const Options extends FieldBaseOptions>(
-		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
-			Options,
-			FieldBaseOptions
-		>,
+		options: ExactOptions<Options, FieldBaseOptions>,
 	) => fieldDefinition<"json", TaggedJsonValue, Options>("json", options),
 });
 

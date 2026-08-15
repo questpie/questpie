@@ -5,9 +5,9 @@ import { companies } from "./companies";
 export const memberships = defineCollection({
 	name: "memberships",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
-		companyId: field.uuid(),
-		principalId: field.uuid(),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		companyId: field.uuid({ nullable: false }),
+		principalId: field.uuid({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),

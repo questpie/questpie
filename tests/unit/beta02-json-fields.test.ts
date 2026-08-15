@@ -19,8 +19,8 @@ describe("BETA-02 JSON-backed Fields", () => {
 export const profiles = defineCollection({
 	name: "profiles",
 	fields: {
-		id: field.uuid(),
-		preferences: field.object({ properties: {
+		id: field.uuid({ nullable: false }),
+		preferences: field.object({ nullable: false, properties: {
 			locale: value.text({ nullable: false, maxLength: 16 }),
 			marketingEmail: value.boolean({ nullable: true }),
 			aliases: value.array({
@@ -30,6 +30,7 @@ export const profiles = defineCollection({
 			}),
 		} }),
 		tags: field.array({
+			nullable: false,
 			items: value.text({ nullable: false }),
 			maximumItems: 100,
 		}),

@@ -10,27 +10,69 @@ import { flattenFieldContracts } from "../../packages/compiler/src/schema";
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 describe("BETA-02 Field contract validation", () => {
+	test("rejects omitted Field nullability before projection", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-field-nullable-"));
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/missing-nullability.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+export const invalid = defineCollection({
+	name: "missingNullability",
+	fields: {
+		id: field.uuid({} as { nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+`,
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-001",
+				diagnosticClass: "invalidDefinition",
+			});
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
+	});
+
 	test("rejects invalid scalar and embedded options before artifact emission", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-field-invalid-"));
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
 			const candidates = [
-				["numeric scale", "field.numeric({ precision: 4, scale: 5 })"],
-				["bigint lexical form", "field.bigint({ minimum: '01' })"],
-				["bigint range", "field.bigint({ maximum: '9223372036854775808' })"],
-				["integer order", "field.integer({ minimum: 10, maximum: 9 })"],
-				["text order", "field.text({ minLength: 10, maxLength: 9 })"],
+				[
+					"numeric scale",
+					"field.numeric({ nullable: false, precision: 4, scale: 5 })",
+				],
+				[
+					"bigint lexical form",
+					"field.bigint({ nullable: false, minimum: '01' })",
+				],
+				[
+					"bigint range",
+					"field.bigint({ nullable: false, maximum: '9223372036854775808' })",
+				],
+				[
+					"integer order",
+					"field.integer({ nullable: false, minimum: 10, maximum: 9 })",
+				],
+				[
+					"text order",
+					"field.text({ nullable: false, minLength: 10, maxLength: 9 })",
+				],
 				[
 					"array lower limit",
-					"field.array({ items: value.text({ nullable: false }), maximumItems: 0 })",
+					"field.array({ nullable: false, items: value.text({ nullable: false }), maximumItems: 0 })",
 				],
 				[
 					"array upper limit",
-					"field.array({ items: value.text({ nullable: false }), maximumItems: 1001 })",
+					"field.array({ nullable: false, items: value.text({ nullable: false }), maximumItems: 1001 })",
 				],
 				[
 					"embedded member key",
-					"field.object({ properties: { 'not-valid': value.text({ nullable: false }) } })",
+					"field.object({ nullable: false, properties: { 'not-valid': value.text({ nullable: false }) } })",
 				],
 			] as const;
 			for (const [label, definition] of candidates) {
@@ -39,7 +81,7 @@ describe("BETA-02 Field contract validation", () => {
 					`import { constraint, defineCollection, field, value } from "questpie";
 export const invalid = defineCollection({
 	name: "invalidField",
-	fields: { id: field.uuid(), candidate: ${definition} },
+	fields: { id: field.uuid({ nullable: false }), candidate: ${definition} },
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
 `,

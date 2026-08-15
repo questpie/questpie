@@ -19,13 +19,13 @@ describe("BETA-02 foundational Fields", () => {
 export const measurements = defineCollection({
 	name: "measurements",
 	fields: {
-		id: field.bigint({ minimum: "0", maximum: "9223372036854775807" }),
-		amount: field.numeric({ precision: 12, scale: 4 }),
+		id: field.bigint({ nullable: false, minimum: "0", maximum: "9223372036854775807" }),
+		amount: field.numeric({ nullable: false, precision: 12, scale: 4 }),
 		day: field.date({ nullable: true }),
-		label: field.text({ default: "now" }),
-		enabled: field.boolean({ default: true }),
-		position: field.integer({ default: 0 }),
-		observedAt: field.timestamp({ withTimezone: true }),
+		label: field.text({ nullable: false, default: "now" }),
+		enabled: field.boolean({ nullable: false, default: true }),
+		position: field.integer({ nullable: false, default: 0 }),
+		observedAt: field.timestamp({ nullable: false, withTimezone: true }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });

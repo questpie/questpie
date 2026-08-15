@@ -17,9 +17,9 @@ test("emits exact one-hop Relation descriptors without a recursive target graph"
 export const relationAccounts = defineCollection({
 	name: "relationAccounts",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
 		profile: shape.inline({ fields: {
-			displayName: field.text({ maxLength: 160 }),
+			displayName: field.text({ nullable: false, maxLength: 160 }),
 		} }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
@@ -43,8 +43,8 @@ import { relationAccounts } from "./relation-accounts";
 export const relationEntries = defineCollection({
 	name: "relationEntries",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
-		accountId: field.uuid(),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		accountId: field.uuid({ nullable: false }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 	relations: {
@@ -185,7 +185,7 @@ test("rejects invalid inverse Relation definitions and references", async () => 
 			inverse: 'relationRef("wrongKindPeer", "entries")',
 			extra: `export const wrongKindPeer = defineCollection({
 	name: "wrongKindPeer",
-	fields: { id: field.uuid() },
+	fields: { id: field.uuid({ nullable: false }) },
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 	relations: {
 		entries: relation.toMany({
@@ -213,7 +213,7 @@ test("rejects invalid inverse Relation definitions and references", async () => 
 
 export const invalidInverse = defineCollection({
 	name: "invalidInverse",
-	fields: { id: field.uuid() },
+	fields: { id: field.uuid({ nullable: false }) },
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 	relations: { entries: ${"wrapsFactory" in hostile ? hostile.inverse : `relation.toMany({ inverseOf: ${hostile.inverse} })`} },
 });

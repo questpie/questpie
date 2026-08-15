@@ -1,11 +1,11 @@
 import { constraint, defineCollection, field } from "questpie";
 
 const appointmentFields = {
-	id: field.uuid(),
-	startsAt: field.timestamp({ withTimezone: true }),
-	endsAt: field.timestamp({ withTimezone: true }),
-	sequence: field.integer(),
-	payload: field.json(),
+	id: field.uuid({ nullable: false }),
+	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	sequence: field.integer({ nullable: false }),
+	payload: field.json({ nullable: false }),
 };
 
 const appointments = defineCollection({

@@ -10,20 +10,28 @@ import {
 const customers = defineCollection({
 	name: "customers",
 	fields: {
-		id: field.uuid(),
+		id: field.uuid({ nullable: false }),
 		address: shape.inline({
 			fields: {
-				city: field.text({ maxLength: 160 }),
+				city: field.text({ nullable: false, maxLength: 160 }),
 				geo: shape.inline({
 					fields: {
-						latitude: field.numeric({ precision: 8, scale: 5 }),
-						longitude: field.numeric({ precision: 8, scale: 5 }),
+						latitude: field.numeric({
+							nullable: false,
+							precision: 8,
+							scale: 5,
+						}),
+						longitude: field.numeric({
+							nullable: false,
+							precision: 8,
+							scale: 5,
+						}),
 					},
 				}),
 			},
 		}),
-		"address.city": field.text(),
-		sequence: field.integer(),
+		"address.city": field.text({ nullable: false }),
+		sequence: field.integer({ nullable: false }),
 	},
 	constraints: {
 		primary: constraint.primaryKey({
@@ -126,8 +134,10 @@ index({
 defineCollection({
 	name: "invalid",
 	fields: {
-		id: field.uuid(),
-		address: shape.inline({ fields: { city: field.text() } }),
+		id: field.uuid({ nullable: false }),
+		address: shape.inline({
+			fields: { city: field.text({ nullable: false }) },
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
