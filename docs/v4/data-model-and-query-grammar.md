@@ -1202,6 +1202,18 @@ interface DataCursorV1 {
 		value: null | boolean | number | string;
 	}>;
 }
+
+interface DataCursorV2 {
+	format: "questpie.data-cursor";
+	version: 2;
+	templateDigest: string;
+	scopeDigest: string;
+	policyScopeDigest: string;
+	order: Array<{
+		field: `collection:${string}/field:${string}`;
+		value: null | boolean | number | string;
+	}>;
+}
 ```
 
 `DataQueryBindingV1` is a normalized in-memory execution value, not a
@@ -1226,6 +1238,13 @@ Policy-injected input, including immutable Tenant facts, or add a sibling
 policy-scope digest to a versioned Cursor. It cannot reinterpret v1 scope bytes
 or allow one Principal's cursor to validate for a non-equivalent Policy scope.
 
+The Policy vertical chooses the sibling form. A Policy-protected Query emits
+`DataCursorV2`; `policyScopeDigest` is the digest of
+`PolicyCursorScopeV1` from the Context and Policy contract. `DataCursorV1`
+remains frozen as foundational protocol and proof authority; this revision
+creates no Policy-free execution surface. The Runtime never upgrades a v1
+token for a Policy-protected Query.
+
 Exactly one parameter has `kind: "cursor"`; it is nullable and must be the
 parameter referenced by `page.after`. `page.first` references one non-nullable
 integer parameter used nowhere else. That integer codec must declare
@@ -1239,10 +1258,12 @@ deployment limit. Raising it changes template validation and requires a
 protocol decision, not a configuration edit.
 
 The Scope Digest uses canonical scope bytes with prefix
-`questpie-data-query-scope-v1\0`. A cursor is unpadded base64url of the exact
-canonical `DataCursorV1` bytes. It is opaque, deterministic, and not a bearer
-credential. The Runtime validates it completely and treats a mismatch as an
-invalid cursor, never as authority. The template digest transitively covers
+`questpie-data-query-scope-v1\0`. A cursor is unpadded base64url of its exact
+canonical bytes. The accepted `DataCursorV1` encoding remains unchanged;
+`DataCursorV2` uses RFC 8785 canonical JSON bytes plus one LF. A cursor is
+opaque, deterministic, and not a bearer credential.
+The Runtime validates it completely and treats a mismatch as an invalid cursor,
+never as authority. The template digest transitively covers
 both projection digests, so a schema Constraint/Index change or a Field codec,
 nullability, Relation, or other Data Contract change invalidates outstanding
 cursors before comparison. This conservative invalidation is intentional,
@@ -1259,10 +1280,11 @@ low-entropy values. A transport that shares cursors across Principals must
 authenticate or encrypt the token. It cannot change the decoded comparison
 tuple or use the token as Authority.
 
-The encoded cursor is at most 2,048 ASCII bytes in v1. The compiler rejects a
-template whose maximum identity/codec envelope cannot fit, and the Runtime
-rejects a larger token as `QP-DATA-010` before decoding. A later compact or
-encrypted representation requires a versioned cursor protocol.
+The encoded cursor is at most 2,048 ASCII bytes in v1 and v2. The compiler
+rejects a template whose maximum identity/codec envelope cannot fit, including
+the v2 `policyScopeDigest`, and the Runtime rejects a larger token as
+`QP-DATA-010` before decoding. A later compact or encrypted representation
+requires a versioned cursor protocol.
 
 ## 12. Data Contract Projection and Definition Contract bytes
 
@@ -1784,22 +1806,22 @@ interface DataDiagnosticV1 extends QuestpieDiagnosticBaseV1 {
 }
 ```
 
-| Code          | Class                       | Phase                  | Blocking      | Trigger                                                                                                                                    |
-| ------------- | --------------------------- | ---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `QP-DATA-001` | `invalidScalarValue`        | compile, bind, execute | fatal or none | A literal, binding, returned row, or cursor value fails its exact scalar codec.                                                            |
-| `QP-DATA-002` | `invalidQueryShape`         | compile                | fatal         | A required clause is absent; a select is empty; outputs duplicate a key; or a node is invalid.                                             |
-| `QP-DATA-003` | `invalidRelationReference`  | compile                | fatal         | A resolved Relation has the wrong cardinality, Owner, or declaring target.                                                                 |
-| `QP-DATA-004` | `invalidFieldScope`         | compile                | fatal         | A root or nested expression uses a Field from another Collection scope.                                                                    |
-| `QP-DATA-005` | `invalidOperator`           | compile                | fatal         | A Field kind does not support the requested public operator.                                                                               |
-| `QP-DATA-006` | `invalidSetOperand`         | compile or bind        | fatal or none | `in`/`notIn` contains null, has an incompatible codec, uses a non-list parameter, or exceeds its declared bound.                           |
-| `QP-DATA-007` | `nonTotalOrder`             | compile                | fatal         | Order is empty, duplicates a Field, or does not end in a qualifying non-null primary/unique key.                                           |
-| `QP-DATA-008` | `orderFieldNotSelected`     | compile                | fatal         | An order Field has no direct selected output.                                                                                              |
-| `QP-DATA-009` | `invalidPageParameter`      | compile                | fatal         | Cursor/first parameter count, role, codec, or declared bounds are invalid.                                                                 |
-| `QP-DATA-010` | `invalidCursor`             | bind                   | none          | Cursor base64url, JSON, version, arity, identity, or scalar shape is invalid.                                                              |
-| `QP-DATA-011` | `cursorTemplateMismatch`    | bind                   | none          | Cursor and current Query Template Digest differ, including a Data Contract change.                                                         |
-| `QP-DATA-012` | `executionLimitExceeded`    | bind                   | none          | A valid binding exceeds the Runtime's configured row/page limit before a database read.                                                    |
-| `QP-DATA-013` | `cursorScopeMismatch`       | bind                   | none          | Cursor and current template-parameter scope differ.                                                                                        |
-| `QP-DATA-014` | `invalidParameterReference` | compile or bind        | fatal or none | A parameter name violates the 1-to-63 lower-camel grammar, or a parameter is missing, duplicated, unused, incompatible, or supplied twice. |
+| Code          | Class                       | Phase                  | Blocking      | Trigger                                                                                                                                     |
+| ------------- | --------------------------- | ---------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QP-DATA-001` | `invalidScalarValue`        | compile, bind, execute | fatal or none | A literal, binding, returned row, or cursor value fails its exact scalar codec.                                                             |
+| `QP-DATA-002` | `invalidQueryShape`         | compile                | fatal         | A required clause is absent; a select is empty; outputs duplicate a key; or a node is invalid.                                              |
+| `QP-DATA-003` | `invalidRelationReference`  | compile                | fatal         | A resolved Relation has the wrong cardinality, Owner, or declaring target.                                                                  |
+| `QP-DATA-004` | `invalidFieldScope`         | compile                | fatal         | A root or nested expression uses a Field from another Collection scope.                                                                     |
+| `QP-DATA-005` | `invalidOperator`           | compile                | fatal         | A Field kind does not support the requested public operator.                                                                                |
+| `QP-DATA-006` | `invalidSetOperand`         | compile or bind        | fatal or none | `in`/`notIn` contains null, has an incompatible codec, uses a non-list parameter, or exceeds its declared bound.                            |
+| `QP-DATA-007` | `nonTotalOrder`             | compile                | fatal         | Order is empty, duplicates a Field, or does not end in a qualifying non-null primary/unique key.                                            |
+| `QP-DATA-008` | `orderFieldNotSelected`     | compile                | fatal         | An order Field has no direct selected output.                                                                                               |
+| `QP-DATA-009` | `invalidPageParameter`      | compile                | fatal         | Cursor/first parameter count, role, codec, or declared bounds are invalid.                                                                  |
+| `QP-DATA-010` | `invalidCursor`             | bind                   | none          | Cursor base64url, JSON, version, arity, identity, or scalar shape is invalid.                                                               |
+| `QP-DATA-011` | `cursorTemplateMismatch`    | bind                   | none          | Cursor and current Query Template Digest differ, including a Data Contract change.                                                          |
+| `QP-DATA-012` | `executionLimitExceeded`    | bind                   | none          | A valid binding exceeds the Runtime's configured row/page limit before a database read.                                                     |
+| `QP-DATA-013` | `cursorScopeMismatch`       | bind                   | none          | For v1, Cursor and current template-parameter scope differ. For v2, the Query-parameter scope or Policy-equivalent execution scope differs. |
+| `QP-DATA-014` | `invalidParameterReference` | compile or bind        | fatal or none | A parameter name violates the 1-to-63 lower-camel grammar, or a parameter is missing, duplicated, unused, incompatible, or supplied twice.  |
 
 An unresolved typed Relation reference is `QP-COMPOSE-004`. A resolved
 reference with wrong cardinality, Owner, or declaring target is `QP-DATA-003`.
@@ -1810,6 +1832,13 @@ diagnostics set `blocking: "fatal"`, matching shared-envelope exit code `2`.
 The registry is closed for this v1 protocol. A later Policy rejection for
 non-pushdown pagination belongs to the Policy diagnostic registry, not a new
 unregistered `QP-DATA-*` code.
+
+The code/class envelope remains v1 when validating `DataCursorV2`; only the
+versioned trigger for `QP-DATA-013` is extended. A v1 cursor supplied to a
+Policy-protected Query has the wrong version and shape and is
+`QP-DATA-010 invalidCursor`. V2 validation checks exact bytes and shape first,
+then the Template Digest, then both scope digests, all before SQL. The two scope
+mismatches intentionally share one external result.
 
 ## 16. Hostile-case matrix and proofs
 

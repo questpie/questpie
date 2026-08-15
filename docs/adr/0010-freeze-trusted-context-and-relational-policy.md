@@ -91,6 +91,21 @@ model.
   application, validation/Constraint execution, retries, call identity,
   network error bytes, or any production Runtime implementation.
 
+## Revision: default attachment diagnostics
+
+The accepted P2 proof spellings are the compiler-owned v1 diagnostics for
+implicit default Policy attachment:
+
+- `QP-POLICY-001 missingDefaultPolicy` when generated access requires a default
+  Policy and no candidate exists;
+- `QP-POLICY-002 ambiguousDefaultPolicy` when more than one candidate exists.
+
+Both are compile-phase, fatal diagnostics. Candidate identities are sorted so
+discovery order cannot change the result. They do not represent row denial,
+Relation denial, cursor rejection, or PostgreSQL execution failure. Other
+Policy compilation failures require a separately accepted registry revision;
+implementations cannot invent additional `QP-POLICY-*` spellings.
+
 ## Rejected alternatives
 
 - A Request-, header-, URL-, worker-payload-, or protocol-specific Context

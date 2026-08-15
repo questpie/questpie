@@ -132,6 +132,12 @@ One default Policy candidate may attach to a Collection. The compiler rejects
 zero or multiple candidates wherever generated access requires an implicit
 default. Import order cannot select Policy.
 
+The closed attachment diagnostics are `QP-POLICY-001 missingDefaultPolicy` and
+`QP-POLICY-002 ambiguousDefaultPolicy`. Both are compile-phase, fatal failures;
+the ambiguous diagnostic carries candidate identities in canonical order.
+They never represent a runtime denial. No other `QP-POLICY-*` spelling is
+accepted by this contract.
+
 ### Fixed phases
 
 Policy participates in this fail-closed semantic order:
@@ -221,6 +227,30 @@ cannot preserve the program fails the build.
 A cursor binds the Policy digest and only the Principal, Tenant, and Authority
 facts that the plan uses. The visible page and its sentinel use the same scope.
 A cursor-scope mismatch fails before SQL or disclosure.
+
+The exact scope value is:
+
+```ts
+interface PolicyCursorScopeV1 {
+	format: "questpie.policy-cursor-scope";
+	version: 1;
+	policyProgramDigest: string;
+	usedExecutionFacts: Partial<{
+		authorityKind: "ordinary" | "system";
+		principalId: string;
+		tenantId: string;
+	}>;
+}
+```
+
+Only facts reached by the compiled read and selection plan are present; unused
+members are omitted and `undefined` never enters the bytes. The scope uses RFC
+8785 canonical JSON bytes plus one LF. Its digest is SHA-256 over the exact
+domain prefix `questpie-policy-cursor-scope-v1\0` followed by those bytes.
+Policy-protected Queries carry that digest as `policyScopeDigest` in
+`DataCursorV2`; a mismatch uses the versioned
+`QP-DATA-013 cursorScopeMismatch` trigger before SQL. Unrelated Context values
+do not invalidate or authorize a cursor.
 
 A lock waiter must re-evaluate current row scope, mutable evidence, and
 candidate authority inside the Mutation transaction before writing. The P2

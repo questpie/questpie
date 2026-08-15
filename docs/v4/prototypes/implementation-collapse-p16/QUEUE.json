@@ -19,12 +19,17 @@
 		"P14": "3a89c565cb1eba59815d106df1c06406ac20ac98",
 		"P15": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
 	},
+	"acceptedIssues": {
+		"BETA-01": "20ad8529ee18aba6830a7646acb3a9c9292f2fc6",
+		"BETA-02": "b630fb01c6966b97fb3ac265bd416c4cfe0f1908",
+		"BETA-03": "a7d24541c433ab502316b34906d97c9dd51f7ee1"
+	},
 	"issues": [
 		{
 			"id": "BETA-01",
 			"title": "BETA-01 Compile a relocated collaboration app into exact generated contracts",
 			"blockedBy": [],
-			"agentReady": true,
+			"agentReady": false,
 			"authority": [
 				"ADR-0007",
 				"ADR-0008",
@@ -179,7 +184,7 @@
 			"id": "BETA-04",
 			"title": "BETA-04 Read one relationally authorized Message page through Query",
 			"blockedBy": ["BETA-03"],
-			"agentReady": false,
+			"agentReady": true,
 			"authority": ["ADR-0008", "ADR-0010", "ADR-0011", "ADR-0019", "ADR-0021"],
 			"artifacts": [
 				"normalized Policy and Query programs",

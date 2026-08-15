@@ -465,6 +465,10 @@ A Collection has at most one default Policy. QUESTPIE fails the build when
 generated access needs a default Policy and the Collection has none or more
 than one. Import order cannot select which Policy applies.
 
+Those attachment failures are `QP-POLICY-001 missingDefaultPolicy` and
+`QP-POLICY-002 ambiguousDefaultPolicy`. They are build diagnostics, not runtime
+authorization results.
+
 Policy callbacks build structural expressions. They cannot call a database,
 raw SQL, network, arbitrary Service, or per-row JavaScript. QUESTPIE stops the
 build when it cannot lower an expression without changing its meaning.
@@ -534,9 +538,12 @@ The scope runs before key lookup, counts, ordering, cursor boundaries,
 `first + 1` page sentinels, row locking, Relation disclosure, and output.
 QUESTPIE never fetches forbidden rows and filters them in JavaScript.
 
-The visible page and its cursor sentinel use the same Policy scope. A cursor
-binds the Policy digest and the Principal, Tenant, and Authority facts that the
-plan uses. A scope mismatch fails before SQL or disclosure.
+The visible page and its cursor sentinel use the same Policy scope. A
+Policy-protected Query uses cursor v2, which binds the Policy digest and only
+the Principal, Tenant, and Authority facts that the plan uses. A scope mismatch
+fails before SQL or disclosure with the same external result whether a Query
+parameter, execution fact, or Policy changed. Unused Context convenience values
+do not enter the scope.
 
 After a lock wait, the Mutation transaction rechecks the current row, mutable
 relational evidence, and candidate authority before it writes. A role or

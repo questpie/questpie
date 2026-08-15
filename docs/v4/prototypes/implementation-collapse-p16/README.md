@@ -1,9 +1,12 @@
 # P16 implementation collapse proof
 
-`QUEUE.json` is the exact dependency-ordered beta.1 implementation queue.
-`check.ts` rejects incomplete issue contracts, dependency cycles, invalid
-agent-ready labels, missing fixture coverage, missing performance ownership,
-and forbidden beta scope. `render-issue.ts` renders the accepted GitHub body.
+`QUEUE.json` is the exact dependency-ordered beta.1 implementation queue. Its
+`acceptedIssues` map pins completed tracers to their merge heads; `agentReady`
+is derived from that evidence and every declared dependency, with exactly one
+next tracer ready. `check.ts` rejects incomplete issue contracts, dependency
+cycles, invalid completion or readiness evidence, missing fixture coverage,
+missing performance ownership, and forbidden beta scope. `render-issue.ts`
+renders the accepted GitHub body.
 
 ```sh
 bun run docs/v4/prototypes/implementation-collapse-p16/check.ts

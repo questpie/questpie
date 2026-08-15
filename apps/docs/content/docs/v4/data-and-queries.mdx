@@ -204,12 +204,18 @@ execution facts; they cannot remove a structural read.
 ## Treat cursors as scoped data
 
 A cursor binds the exact Query Template Digest, the canonical filter-parameter
-scope, and the complete order tuple. Changing the template, Field codec,
-Constraint, Relation, selected alias, order, null placement, or filter scope
-invalidates it. Changing only `first` does not.
+scope, and the complete order tuple. A Policy-protected Query uses cursor v2
+and also binds the Policy digest plus only the Principal, Tenant, and Authority
+facts used by its compiled plan. Changing the template, Field codec,
+Constraint, Relation, selected alias, order, null placement, filter scope, or
+Policy-equivalent execution scope invalidates it. Changing only `first` does
+not.
 
 A cursor is opaque but is not Authority. A client restarts with `after: null`
-after a cursor mismatch. Policy adds an equivalent authorization scope before a
-cursor can cross Principals.
+after a cursor mismatch. QUESTPIE checks both scopes before SQL and does not
+reveal which one changed. Cursor v1 is never reinterpreted or upgraded for a
+Policy-protected Query, and this revision creates no Policy-free execution
+surface. Both cursor versions retain the same canonical encoding and 2,048-byte
+limit.
 
 Next, [resolve Context and authorize with Policy](./context-and-policy).
