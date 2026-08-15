@@ -48,6 +48,32 @@ export type ServiceInstances<Dependencies extends ServiceDependencyMap> =
 		[Key in keyof Dependencies]: ServiceInstance<Dependencies[Key]>;
 	}>;
 
+type InvalidDependencyKeys<
+	Lifetime extends ServiceLifetime,
+	Effect extends ServiceEffect,
+	Dependencies extends ServiceDependencyMap,
+> = {
+	[Key in keyof Dependencies]:
+		| (Lifetime extends "application"
+				? Dependencies[Key]["lifetime"] extends "application"
+					? never
+					: Key
+				: never)
+		| (Effect extends "read"
+				? Dependencies[Key]["effect"] extends "read"
+					? never
+					: Key
+				: never);
+}[keyof Dependencies];
+
+type CompatibleDependencies<
+	Lifetime extends ServiceLifetime,
+	Effect extends ServiceEffect,
+	Dependencies extends ServiceDependencyMap,
+> = [InvalidDependencyKeys<Lifetime, Effect, Dependencies>] extends [never]
+	? unknown
+	: never;
+
 export function defineService<
 	const Name extends string,
 	const Lifetime extends ServiceLifetime,
@@ -61,7 +87,8 @@ export function defineService<
 		name: Name;
 		lifetime: Lifetime;
 		effect: Effect;
-		dependencies?: Dependencies;
+		dependencies?: Dependencies &
+			CompatibleDependencies<Lifetime, Effect, Dependencies>;
 		create: (
 			input: Readonly<{
 				services: ServiceInstances<Dependencies>;
