@@ -11,10 +11,13 @@ export type AcceptancePacketSecret = {
 const DATABASE_URL =
 	/\b(?:postgres(?:ql)?|mysql|mongodb(?:\+srv)?):\/\/[^\s"'<>`]+/giu;
 const PASSWORD_PROPERTY_ASSIGNMENT =
-	/\b[A-Za-z_$][\w$]*(?:\.password|\[\s*["']password["']\s*\])\s*=(?!=)/iu;
+	/\b[A-Za-z_$][\w$]*(?:\.password|\[\s*["']password["']\s*\])\s*(?:\|\|=|&&=|\?\?=|>>>=|<<=|>>=|\*\*=|[+\-*/%&|^]=|=(?!=|>))/iu;
 const SAFE_PASSWORD_FORWARDING =
-	/\burl(?:\.password|\[\s*["']password["']\s*\])\s*=\s*process\.env\.PGPASSWORD\b(?!\s*(?:\|\||\?\?|&&))/giu;
-const SAFE_PASSWORD_PLACEHOLDER = /\burl\.password\s*=\s*\.\.\./giu;
+	/\burl(?:\.password|\[\s*["']password["']\s*\])\s*=\s*process\.env\.PGPASSWORD\b(?=[ \t]*(?:;|$))/giu;
+const SAFE_PASSWORD_PLACEHOLDER =
+	/\burl\.password\s*=\s*\.\.\.(?=[ \t]*(?:;|$))/giu;
+const SAFE_PASSWORD_INLINE_CODE =
+	/`url(?:\.password|\[\s*["']password["']\s*\])\s*=\s*(?:process\.env\.PGPASSWORD|\.\.\.)`/giu;
 const NEGATIVE_CONTROL_PATH = "tests/unit/acceptance-packet-secrets.test.ts";
 const NEGATIVE_CONTROL_MARKER = "acceptance-secret-negative-control";
 const SECRET_PATTERNS: Array<[AcceptancePacketSecret["name"], RegExp]> = [
@@ -75,7 +78,11 @@ export function findAcceptancePacketSecret(
 		allowed.push({ start: match.index, end: match.index + match[0].length });
 	}
 
-	for (const pattern of [SAFE_PASSWORD_FORWARDING, SAFE_PASSWORD_PLACEHOLDER]) {
+	for (const pattern of [
+		SAFE_PASSWORD_FORWARDING,
+		SAFE_PASSWORD_PLACEHOLDER,
+		SAFE_PASSWORD_INLINE_CODE,
+	]) {
 		for (const match of packet.matchAll(pattern)) {
 			allowed.push({ start: match.index, end: match.index + match[0].length });
 		}

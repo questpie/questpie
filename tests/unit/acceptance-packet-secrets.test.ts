@@ -11,7 +11,8 @@ describe("acceptance packet secret scanner", () => {
 		'createApp({ postgres: { url: "postgres://localhost/questpie" } });',
 		"if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;",
 		'if (process.env.PGPASSWORD) url["password"] = process.env.PGPASSWORD;',
-		"review requirement: url.password = ...",
+		"review requirement: `url.password = ...`",
+		"review requirement: `url.password = process.env.PGPASSWORD`",
 		'živý packet — new URL("postgres://localhost/questpie"); url.password = process.env.PGPASSWORD;',
 	])("permits the narrow local PostgreSQL test form: %s", (packet) => {
 		expect(findAcceptancePacketSecret(packet)).toBeNull();
@@ -31,6 +32,14 @@ describe("acceptance packet secret scanner", () => {
 		'url.password = "real-secret";', // acceptance-secret-negative-control
 		"url.password = process.env.DATABASE_PASSWORD;", // acceptance-secret-negative-control
 		'url.password = process.env.PGPASSWORD || "real-secret";', // acceptance-secret-negative-control
+		'url.password = process.env.PGPASSWORD + "real-secret";', // acceptance-secret-negative-control
+		'url.password = process.env.PGPASSWORD ? process.env.PGPASSWORD : "real-secret";', // acceptance-secret-negative-control
+		'url.password = process.env.PGPASSWORD, expose("real-secret");', // acceptance-secret-negative-control
+		'url.password ||= "real-secret";', // acceptance-secret-negative-control
+		'url.password += "real-secret";', // acceptance-secret-negative-control
+		'url.password = ... + "real-secret";', // acceptance-secret-negative-control
+		'url.password = process.env.PGPASSWORD\n + "real-secret";', // acceptance-secret-negative-control
+		"url.password = process.env.PGPASSWORD`real-secret`;", // acceptance-secret-negative-control
 		'url["password"] = "real-secret";', // acceptance-secret-negative-control
 	])("rejects a real or evasive password assignment: %s", (packet) => {
 		expect(findAcceptancePacketSecret(packet)?.name).toBe(
