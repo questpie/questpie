@@ -1,5 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { SQL } from "bun";
 
@@ -21,7 +23,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -1399,5 +1401,106 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		await expect(
 			applyCommittedMigrations({ migrations: [migration] }),
 		).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });
+	});
+
+	test("applies, fingerprints, enforces, and restarts an authored check", async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-pg-check-"));
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			await writeFile(
+				join(temporary, "src/check-appointments.ts"),
+				`import { constraint, defineCollection, field } from "questpie";
+
+const appointmentFields = {
+	id: field.uuid(),
+	startsAt: field.timestamp({ withTimezone: true }),
+	endsAt: field.timestamp({ withTimezone: true }),
+};
+
+export const checkAppointments = defineCollection({
+	name: "checkAppointments",
+	fields: appointmentFields,
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+		validWindow: constraint.check<typeof appointmentFields>(({ fields }) =>
+			fields.endsAt.greaterThan(fields.startsAt),
+		),
+	},
+});
+`,
+			);
+			const compilation = await compileApplication({
+				applicationRoot: temporary,
+			});
+			const targetSchema = JSON.parse(
+				compilation.generatedFiles["schema-projection.json"] ?? "null",
+			);
+			targetSchema.application = {
+				...targetSchema.application,
+				name: "check-probe",
+				postgresSchema: "check_probe",
+			};
+			const planned = createMigrationPlan({
+				targetSchema,
+				slug: "create-check-probe",
+			});
+			const migration = createCommittedMigration({
+				plan: planned.plan,
+				baseSchema: planned.baseSchema,
+				targetSchema,
+				currentSchema: targetSchema,
+				planDigest: planned.digest,
+				localMigrations: [],
+			});
+
+			await expect(
+				applyCommittedMigrations({ migrations: [migration] }),
+			).resolves.toMatchObject({
+				status: "applied",
+				applied: [migration.identity],
+			});
+			const fingerprint = await inspectSchemaFingerprint({
+				schema: targetSchema,
+			});
+			const observed = (
+				fingerprint.fingerprint.comparable.objects as readonly Readonly<
+					Record<string, unknown>
+				>[]
+			).find(
+				(object) =>
+					object.kind === "check" &&
+					object.name === "qp_ck_check_appointments_valid_window",
+			);
+			expect(observed).toMatchObject({
+				kind: "check",
+				table: "check_appointments",
+				name: "qp_ck_check_appointments_valid_window",
+				validated: true,
+			});
+
+			let violation: unknown;
+			try {
+				await database!.unsafe(`
+					INSERT INTO check_probe.check_appointments (id, starts_at, ends_at)
+					VALUES (
+						'00000000-0000-0000-0000-000000000001',
+						'2026-08-15T12:00:00.000Z',
+						'2026-08-15T11:00:00.000Z'
+					)
+				`);
+			} catch (error) {
+				violation = error;
+			}
+			expect(violation).toBeInstanceOf(SQL.PostgresError);
+			expect((violation as SQL.PostgresError).errno).toBe("23514");
+			expect(String(violation)).toContain(
+				"qp_ck_check_appointments_valid_window",
+			);
+			await expect(
+				applyCommittedMigrations({ migrations: [migration] }),
+			).resolves.toMatchObject({ status: "alreadyApplied", applied: [] });
+		} finally {
+			await rm(temporary, { recursive: true });
+		}
 	});
 });

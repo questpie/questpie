@@ -41,18 +41,19 @@ const inverse = relationRef("spaces", "company");
 const exactInverse: RelationReference<"spaces", "company"> = inverse;
 const exactTarget: "collection:companies" = spaces.relations.company.target;
 
-// @ts-expect-error owning Relations accept the target Definition, not a string
 relation.toOne({
+	// @ts-expect-error owning Relations accept the target Definition, not a string
 	target: "collection:companies",
 	fields: ["id"],
+	// @ts-expect-error an invalid target cannot supply referenced Fields
 	references: ["id"],
 });
 // @ts-expect-error one-argument collection references are not public authoring
 relationRef("companies");
-// @ts-expect-error referenced Fields must exist on the target Collection
 relation.toOne({
 	target: companies,
 	fields: ["companyId"],
+	// @ts-expect-error referenced Fields must exist on the target Collection
 	references: ["missing"],
 });
 

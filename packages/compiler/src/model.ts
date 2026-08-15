@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { localCheckContract, projectCheckExpression } from "./schema";
 import { flattenFieldContracts } from "./schema/field-contract";
 import { fieldPath, indexField } from "./schema/field-reference";
 import {
@@ -24,7 +25,6 @@ import type {
 } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
-
 function record(value: unknown, label: string): RecordValue {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new CompilerDiagnosticError(
@@ -52,8 +52,19 @@ function entries(value: unknown): [string, RecordValue][] {
 }
 
 function constraintContract(value: RecordValue): RecordValue {
+	const kind = string(value.kind, "constraint.kind");
+	if (kind === "check")
+		return {
+			kind,
+			expression: localCheckContract(
+				value.expression,
+				"constraint.check expression",
+			),
+			postgresName:
+				typeof value.postgresName === "string" ? value.postgresName : null,
+		};
 	return {
-		kind: string(value.kind, "constraint.kind"),
+		kind,
 		fields: (value.fields as readonly unknown[]).map(fieldPath),
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
@@ -638,18 +649,31 @@ export function projectManifest(
 							: value.kind === "unique"
 								? "qp_uq"
 								: "qp_ck";
+					const postgresName = physicalName(
+						configuration,
+						identity,
+						value.postgresName,
+						`${prefix}_${tableName}_${snake(key)}`,
+					);
+					if (value.kind === "check")
+						return {
+							kind: "check",
+							identity,
+							postgresName,
+							expression: projectCheckExpression(
+								identity,
+								resource.identity,
+								value.expression as RecordValue,
+								projectedFields,
+							),
+						};
 					const references = (value.fields as readonly unknown[]).map((field) =>
 						fieldSemanticIdentity(resource.identity, fieldPath(field)),
 					);
 					return {
 						kind: value.kind,
 						identity,
-						postgresName: physicalName(
-							configuration,
-							identity,
-							value.postgresName,
-							`${prefix}_${tableName}_${snake(key)}`,
-						),
+						postgresName,
 						fields: validateKeyConstraintFields(
 							identity,
 							references,

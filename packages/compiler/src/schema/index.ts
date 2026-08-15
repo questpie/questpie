@@ -38,3 +38,4 @@ export type {
 	ApplyMigrationsResult,
 	SchemaFingerprintV1,
 } from "./postgres-types";
+export { localCheckContract, projectCheckExpression } from "./check-expression";

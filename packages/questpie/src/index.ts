@@ -1,3 +1,7 @@
+import {
+	type CheckConstraintDefinition,
+	createCheckConstraint,
+} from "./check-expression";
 import type {
 	PrimaryKeyReferences,
 	SeedInsertValues,
@@ -75,24 +79,27 @@ type FieldRuntimeOptions = FieldBaseOptions &
 
 type FieldValue = object | string | number | boolean | null;
 
+type FieldScalar =
+	| "array"
+	| "bigint"
+	| "boolean"
+	| "date"
+	| "integer"
+	| "json"
+	| "numeric"
+	| "object"
+	| "text"
+	| "timestamp"
+	| "uuid";
+
 export interface FieldDefinition<
 	Value = FieldValue,
 	Nullable extends boolean = boolean,
 	Default extends FieldDefault | null = FieldDefault | null,
+	Scalar extends FieldScalar = FieldScalar,
 > {
 	readonly kind: "field";
-	readonly scalar:
-		| "array"
-		| "bigint"
-		| "boolean"
-		| "date"
-		| "integer"
-		| "json"
-		| "numeric"
-		| "object"
-		| "text"
-		| "timestamp"
-		| "uuid";
+	readonly scalar: Scalar;
 	readonly nullable: Nullable;
 	readonly default: Default;
 	readonly postgresName: string | null;
@@ -100,15 +107,20 @@ export interface FieldDefinition<
 	readonly value?: Value;
 }
 
-function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
-	scalar: FieldDefinition["scalar"],
+function fieldDefinition<
+	const Scalar extends FieldScalar,
+	Value,
+	const Options extends FieldRuntimeOptions,
+>(
+	scalar: Scalar,
 	options: Options,
 ): FieldDefinition<
 	Value,
 	Options extends { nullable: true } ? true : false,
 	Options extends { default: infer Default extends FieldDefault }
 		? Default
-		: null
+		: null,
+	Scalar
 > {
 	const {
 		nullable = false,
@@ -128,7 +140,8 @@ function fieldDefinition<Value, const Options extends FieldRuntimeOptions>(
 		Options extends { nullable: true } ? true : false,
 		Options extends { default: infer Default extends FieldDefault }
 			? Default
-			: null
+			: null,
+		Scalar
 	>;
 }
 
@@ -144,7 +157,7 @@ export const field = Object.freeze({
 			Options,
 			FieldBaseOptions & Readonly<{ default?: "randomUuid" }>
 		>,
-	) => fieldDefinition<string, Options>("uuid", options),
+	) => fieldDefinition<"uuid", string, Options>("uuid", options),
 	text: <
 		const Options extends FieldBaseOptions &
 			Readonly<{
@@ -170,7 +183,7 @@ export const field = Object.freeze({
 					default?: string;
 				}>
 		>,
-	) => fieldDefinition<string, Options>("text", options),
+	) => fieldDefinition<"text", string, Options>("text", options),
 	boolean: <
 		const Options extends FieldBaseOptions & Readonly<{ default?: boolean }>,
 	>(
@@ -181,7 +194,7 @@ export const field = Object.freeze({
 			Options,
 			FieldBaseOptions & Readonly<{ default?: boolean }>
 		>,
-	) => fieldDefinition<boolean, Options>("boolean", options),
+	) => fieldDefinition<"boolean", boolean, Options>("boolean", options),
 	integer: <
 		const Options extends FieldBaseOptions &
 			Readonly<{
@@ -207,16 +220,16 @@ export const field = Object.freeze({
 					default?: number;
 				}>
 		>,
-	) => fieldDefinition<number, Options>("integer", options),
+	) => fieldDefinition<"integer", number, Options>("integer", options),
 	bigint: <const Options extends BigintFieldOptions>(
 		options: ExactOptions<Options, BigintFieldOptions> = {} as ExactOptions<
 			Options,
 			BigintFieldOptions
 		>,
-	) => fieldDefinition<string, Options>("bigint", options),
+	) => fieldDefinition<"bigint", string, Options>("bigint", options),
 	numeric: <const Options extends NumericFieldOptions>(
 		options: ExactOptions<Options, NumericFieldOptions>,
-	) => fieldDefinition<string, Options>("numeric", options),
+	) => fieldDefinition<"numeric", string, Options>("numeric", options),
 	timestamp: <
 		const Options extends FieldBaseOptions &
 			Readonly<{ default?: "now"; withTimezone?: boolean }>,
@@ -228,13 +241,13 @@ export const field = Object.freeze({
 			Options,
 			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
 		>,
-	) => fieldDefinition<string, Options>("timestamp", options),
+	) => fieldDefinition<"timestamp", string, Options>("timestamp", options),
 	date: <const Options extends FieldBaseOptions>(
 		options: ExactOptions<Options, FieldBaseOptions> = {} as ExactOptions<
 			Options,
 			FieldBaseOptions
 		>,
-	) => fieldDefinition<string, Options>("date", options),
+	) => fieldDefinition<"date", string, Options>("date", options),
 	object: <
 		const Options extends FieldBaseOptions &
 			Readonly<{
@@ -250,6 +263,7 @@ export const field = Object.freeze({
 		>,
 	) =>
 		fieldDefinition<
+			"object",
 			Readonly<{
 				[Key in keyof Options["properties"]]: ValueOf<
 					Options["properties"][Key]
@@ -267,7 +281,7 @@ export const field = Object.freeze({
 				Readonly<{ items: ValueDefinition; maximumItems: number }>
 		>,
 	) =>
-		fieldDefinition<readonly ValueOf<Options["items"]>[], Options>(
+		fieldDefinition<"array", readonly ValueOf<Options["items"]>[], Options>(
 			"array",
 			options,
 		),
@@ -276,7 +290,7 @@ export const field = Object.freeze({
 			Options,
 			FieldBaseOptions
 		>,
-	) => fieldDefinition<TaggedJsonValue, Options>("json", options),
+	) => fieldDefinition<"json", TaggedJsonValue, Options>("json", options),
 });
 
 function scalarCodec<Value, Kind extends Exclude<CodecKind, "object">>(
@@ -320,6 +334,10 @@ export interface ConstraintDefinition<
 	readonly postgresName: string | null;
 }
 
+type ConstraintMemberDefinition =
+	| ConstraintDefinition<readonly FieldReference[]>
+	| CheckConstraintDefinition;
+
 function frozenTuple<const Values extends readonly unknown[]>(
 	values: Values,
 ): Values {
@@ -347,6 +365,7 @@ export const constraint = Object.freeze({
 			fields: frozenTuple(input.fields),
 			postgresName: input.postgres?.name ?? null,
 		}),
+	check: createCheckConstraint,
 });
 
 export type IndexField =
@@ -455,9 +474,8 @@ export interface CollectionAugmentation<
 	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
 		Record<never, never>
 	>,
-	Constraints extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
-	> = Readonly<Record<never, never>>,
+	Constraints extends Readonly<Record<string, ConstraintMemberDefinition>> =
+		Readonly<Record<never, never>>,
 	Indexes extends Readonly<
 		Record<string, { readonly fields: readonly IndexField[] }>
 	> = Readonly<Record<never, never>>,
@@ -474,9 +492,8 @@ export interface CollectionDefinition<
 	Fields extends Readonly<Record<string, FieldNode>> = Readonly<
 		Record<never, never>
 	>,
-	Constraints extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
-	> = Readonly<Record<never, never>>,
+	Constraints extends Readonly<Record<string, ConstraintMemberDefinition>> =
+		Readonly<Record<never, never>>,
 	Indexes extends Readonly<
 		Record<string, { readonly fields: readonly IndexField[] }>
 	> = Readonly<Record<never, never>>,
@@ -496,16 +513,18 @@ export interface CollectionDefinition<
 
 type ValidateFieldReferences<
 	Fields extends Readonly<Record<string, FieldNode>>,
-	Members extends Readonly<
-		Record<string, { readonly fields: readonly unknown[] }>
-	>,
+	Members extends Readonly<Record<string, unknown>>,
 > = {
-	readonly [Key in keyof Members]: Exclude<
-		MemberFieldReference<Members[Key]["fields"][number]>,
-		FieldReferences<Fields>
-	> extends never
-		? Members[Key]
-		: never;
+	readonly [Key in keyof Members]: Members[Key] extends Readonly<{
+		fields: infer References extends readonly unknown[];
+	}>
+		? Exclude<
+				MemberFieldReference<References[number]>,
+				FieldReferences<Fields>
+			> extends never
+			? Members[Key]
+			: never
+		: Members[Key];
 };
 
 type ValidateRelationFieldReferences<
@@ -551,7 +570,7 @@ export function defineCollectionAugmentation<
 	const Name extends string,
 	const Fields extends Readonly<Record<string, FieldNode>>,
 	const Constraints extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, ConstraintMemberDefinition>
 	>,
 	const Indexes extends Readonly<
 		Record<string, { readonly fields: readonly IndexField[] }>
@@ -580,7 +599,7 @@ export function defineCollection<
 	const Name extends string,
 	const Fields extends Readonly<Record<string, FieldNode>>,
 	const Constraints extends Readonly<
-		Record<string, { readonly fields: readonly FieldReference[] }>
+		Record<string, ConstraintMemberDefinition>
 	>,
 	const Indexes extends Readonly<
 		Record<string, { readonly fields: readonly IndexField[] }>
@@ -667,7 +686,7 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly FieldReference[]>>
+			Record<string, ConstraintMemberDefinition>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
@@ -686,7 +705,7 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly FieldReference[]>>
+			Record<string, ConstraintMemberDefinition>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,
@@ -707,7 +726,7 @@ export const seed = Object.freeze({
 		const Name extends string,
 		const Fields extends Readonly<Record<string, FieldNode>>,
 		const Constraints extends Readonly<
-			Record<string, ConstraintDefinition<readonly FieldReference[]>>
+			Record<string, ConstraintMemberDefinition>
 		>,
 	>(
 		collection: CollectionDefinition<Name, Fields, Constraints>,

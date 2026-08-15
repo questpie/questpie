@@ -111,23 +111,25 @@ import { constraint, defineCollection, field, index, relation } from "questpie";
 
 import { tenants } from "./tenants";
 
+const appointmentFields = {
+	id: field.uuid({ nullable: false, default: "randomUuid" }),
+	tenantId: field.uuid({ nullable: false }),
+	customerName: field.text({ nullable: false, maxLength: 160 }),
+	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	status: field.text({
+		nullable: false,
+		maxLength: 24,
+		default: "scheduled",
+	}),
+};
+
 export const appointments = defineCollection({
 	name: "appointments",
-	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		tenantId: field.uuid({ nullable: false }),
-		customerName: field.text({ nullable: false, maxLength: 160 }),
-		startsAt: field.timestamp({ nullable: false, withTimezone: true }),
-		endsAt: field.timestamp({ nullable: false, withTimezone: true }),
-		status: field.text({
-			nullable: false,
-			maxLength: 24,
-			default: "scheduled",
-		}),
-	},
+	fields: appointmentFields,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
-		validWindow: constraint.check(({ fields }) =>
+		validWindow: constraint.check<typeof appointmentFields>(({ fields }) =>
 			fields.endsAt.greaterThan(fields.startsAt),
 		),
 	},
