@@ -39,3 +39,16 @@ export type {
 	SchemaFingerprintV1,
 } from "./postgres-types";
 export { localCheckContract, projectCheckExpression } from "./check-expression";
+export { flattenFieldContracts } from "./field-contract";
+export { fieldPath, indexField } from "./field-reference";
+export {
+	reservePostgresRelationName,
+	validateBtreeIndexTerms,
+	validateKeyConstraintFields,
+} from "./member-validation";
+export type { MigrationClassification } from "./migration-classification";
+export {
+	shortenedPostgresName,
+	validatedApplicationSchemaName,
+	validatedPhysicalName,
+} from "./physical-name";

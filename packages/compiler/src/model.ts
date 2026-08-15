@@ -1,19 +1,19 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { projectDataRelations } from "./data-relations";
 import { CompilerDiagnosticError } from "./diagnostic";
-import { localCheckContract, projectCheckExpression } from "./schema";
-import { flattenFieldContracts } from "./schema/field-contract";
-import { fieldPath, indexField } from "./schema/field-reference";
 import {
+	fieldPath,
+	flattenFieldContracts,
+	indexField,
+	localCheckContract,
+	projectCheckExpression,
 	reservePostgresRelationName,
+	shortenedPostgresName,
 	validateBtreeIndexTerms,
 	validateKeyConstraintFields,
-} from "./schema/member-validation";
-import {
-	shortenedPostgresName,
 	validatedApplicationSchemaName,
 	validatedPhysicalName,
-} from "./schema/physical-name";
+} from "./schema";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,

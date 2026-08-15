@@ -53,15 +53,15 @@ export {
 	verifyCommittedMigration,
 	verifyCommittedMigrationChain,
 } from "./schema";
-export type { MigrationClassification } from "./schema/migration-classification";
+export type { MigrationClassification } from "./schema";
 export {
 	explainCommittedMigration,
 	explainCommittedSeed,
 	explainMigrationApply,
 	loadCommittedMigration,
 	renderCliExplanation,
-} from "./schema/index";
-export type { CliExplanationV1 } from "./schema/index";
+} from "./schema";
+export type { CliExplanationV1 } from "./schema";
 export { applyCommittedMigrations, inspectSchemaFingerprint } from "./schema";
 export { applyCommittedSeeds } from "./seed-postgres";
 export type { ApplyMigrationsResult, SchemaFingerprintV1 } from "./schema";
@@ -79,7 +79,7 @@ export type {
 	MigrationPlanningResult,
 	NoChangesMigration,
 	PlannedMigration,
-} from "./schema/migration-planning";
+} from "./schema";
 
 export interface CompileApplicationOptions {
 	readonly applicationRoot: string;
