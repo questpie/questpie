@@ -185,12 +185,23 @@ exports[`lowers one Policy-authorized Message page to one static PostgreSQL stat
         {
           "key": "id",
           "field": "collection:memberships/field:id",
-          "column": "qp_author_id"
+          "column": "qp_author_id",
+          "codec": {
+            "kind": "uuid"
+          },
+          "nullable": false
         },
         {
           "key": "role",
           "field": "collection:memberships/field:role",
-          "column": "qp_author_role"
+          "column": "qp_author_role",
+          "codec": {
+            "kind": "text",
+            "minLength": 1,
+            "maxLength": 32,
+            "collation": "questpie.binary"
+          },
+          "nullable": false
         }
       ]
     },
@@ -199,19 +210,35 @@ exports[`lowers one Policy-authorized Message page to one static PostgreSQL stat
       "key": "body",
       "field": "collection:messages/field:body",
       "column": "qp_body",
+      "codec": {
+        "kind": "text",
+        "minLength": 1,
+        "maxLength": 8192,
+        "collation": "questpie.binary"
+      },
+      "nullable": false,
       "guardColumn": "qp_body_allowed"
     },
     {
       "kind": "field",
       "key": "createdAt",
       "field": "collection:messages/field:createdAt",
-      "column": "qp_createdAt"
+      "column": "qp_createdAt",
+      "codec": {
+        "kind": "timestamp",
+        "withTimezone": true
+      },
+      "nullable": false
     },
     {
       "kind": "field",
       "key": "id",
       "field": "collection:messages/field:id",
-      "column": "qp_id"
+      "column": "qp_id",
+      "codec": {
+        "kind": "uuid"
+      },
+      "nullable": false
     }
   ]
 }"

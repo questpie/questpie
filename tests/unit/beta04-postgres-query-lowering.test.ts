@@ -501,12 +501,34 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 	]);
 	expect(plan.policyProgramDigest).toMatch(/^[0-9a-f]{64}$/);
 	expect(plan.result).toContainEqual(
-		expect.objectContaining({ key: "body", guardColumn: expect.any(String) }),
+		expect.objectContaining({
+			key: "body",
+			guardColumn: expect.any(String),
+			codec: {
+				kind: "text",
+				minLength: 1,
+				maxLength: 8_192,
+				collation: "questpie.binary",
+			},
+			nullable: false,
+		}),
 	);
 	expect(plan.result).toContainEqual(
 		expect.objectContaining({
 			key: "author",
 			presenceColumn: expect.any(String),
+			fields: expect.arrayContaining([
+				expect.objectContaining({
+					key: "role",
+					codec: {
+						kind: "text",
+						minLength: 1,
+						maxLength: 32,
+						collation: "questpie.binary",
+					},
+					nullable: false,
+				}),
+			]),
 		}),
 	);
 	const envelope = lowerPostgresQueryPlans({

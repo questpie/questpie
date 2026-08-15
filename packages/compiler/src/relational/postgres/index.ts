@@ -6,6 +6,7 @@ import type {
 	PolicyProgramV1,
 	QueryParameterV1,
 	RootQuerySelectionV1,
+	ScalarCodecV1,
 } from "../types";
 import {
 	buildPostgresCatalog,
@@ -35,6 +36,8 @@ export type PostgresQueryResultV1 =
 			key: string;
 			field: string;
 			column: string;
+			codec: ScalarCodecV1;
+			nullable: boolean;
 			guardColumn?: string;
 	  }>
 	| Readonly<{
@@ -46,6 +49,8 @@ export type PostgresQueryResultV1 =
 				key: string;
 				field: string;
 				column: string;
+				codec: ScalarCodecV1;
+				nullable: boolean;
 			}>[];
 	  }>;
 
@@ -231,6 +236,8 @@ function relationJoin(
 				key: fieldSelection.key,
 				field: field.identity,
 				column,
+				codec: field.codec,
+				nullable: field.nullable,
 			},
 		};
 	});
@@ -281,6 +288,8 @@ function rootFieldResult(
 				key: selection.key,
 				field: field.identity,
 				column,
+				codec: field.codec,
+				nullable: field.nullable,
 			},
 		};
 	const guardAlias = `qp_guard_${index}`;
@@ -303,6 +312,8 @@ function rootFieldResult(
 			key: selection.key,
 			field: field.identity,
 			column,
+			codec: field.codec,
+			nullable: field.nullable,
 			guardColumn,
 		},
 	};
