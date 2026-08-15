@@ -96,6 +96,7 @@ export async function readCatalogComparableInOwnedTransaction(
 		{
 			name: string;
 			kind: string;
+			inheritanceInvolved: boolean;
 			persistence: string;
 			replicaIdentity: string;
 			rowSecurityEnabled: boolean;
@@ -104,6 +105,10 @@ export async function readCatalogComparableInOwnedTransaction(
 	>`
 		select c.relname as name,
 		       c.relkind::text as kind,
+		       exists(
+		         select 1 from pg_catalog.pg_inherits inheritance
+		         where inheritance.inhrelid = c.oid or inheritance.inhparent = c.oid
+		       ) as "inheritanceInvolved",
 		       c.relpersistence::text as persistence,
 		       c.relreplident::text as "replicaIdentity",
 		       c.relrowsecurity as "rowSecurityEnabled",
@@ -117,6 +122,7 @@ export async function readCatalogComparableInOwnedTransaction(
 	const tables = relations.filter((relation) => relation.kind === "r");
 	const supportedTables = tables.filter(
 		(table) =>
+			!table.inheritanceInvolved &&
 			table.persistence === "p" &&
 			table.replicaIdentity === "d" &&
 			!table.rowSecurityEnabled &&
@@ -144,6 +150,7 @@ export async function readCatalogComparableInOwnedTransaction(
 	};
 	for (const table of tables)
 		if (
+			table.inheritanceInvolved ||
 			table.persistence !== "p" ||
 			table.replicaIdentity !== "d" ||
 			table.rowSecurityEnabled ||

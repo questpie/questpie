@@ -264,7 +264,7 @@ describe.skipIf(!database)(
 			}
 		});
 
-		test("returns non-local and NO INHERIT checks as unsupported", async () => {
+		test("returns NO INHERIT checks and inherited tables as unsupported", async () => {
 			await database!.unsafe(
 				'ALTER TABLE "catalog_fact_probe"."messages" ADD CONSTRAINT "messages_no_inherit_check" CHECK ("id" > 0) NO INHERIT; CREATE TABLE "catalog_fact_probe"."check_parent" ("probe" integer, CONSTRAINT "inherited_probe_check" CHECK ("probe" > 0)); CREATE TABLE "catalog_fact_probe"."check_child" ("probe" integer) INHERITS ("catalog_fact_probe"."check_parent");',
 			);
@@ -274,24 +274,27 @@ describe.skipIf(!database)(
 					applicationSchema: "catalog_fact_probe",
 					requiredExtensionNames: [],
 				});
-				for (const [table, name] of [
-					["messages", "messages_no_inherit_check"],
-					["check_child", "inherited_probe_check"],
-				] as const) {
+				expect(comparable.unsupportedObjects).toContainEqual({
+					kind: "other",
+					qualifiedIdentity:
+						"catalog_fact_probe.messages.messages_no_inherit_check",
+					attachedTo: "catalog_fact_probe.messages",
+				});
+				for (const table of ["check_child", "check_parent"])
 					expect(comparable.unsupportedObjects).toContainEqual({
 						kind: "other",
-						qualifiedIdentity: `catalog_fact_probe.${table}.${name}`,
-						attachedTo: `catalog_fact_probe.${table}`,
+						qualifiedIdentity: `catalog_fact_probe.${table}`,
+						attachedTo: null,
 					});
-					expect(
-						(comparable.objects as readonly Record<string, unknown>[]).some(
-							(object) =>
-								object.kind === "check" &&
-								object.table === table &&
-								object.name === name,
-						),
-					).toBe(false);
-				}
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							(object.kind === "check" &&
+								object.name === "messages_no_inherit_check") ||
+							["check_child", "check_parent"].includes(String(object.name)) ||
+							["check_child", "check_parent"].includes(String(object.table)),
+					),
+				).toBe(false);
 			} finally {
 				await database!.unsafe(
 					'ALTER TABLE "catalog_fact_probe"."messages" DROP CONSTRAINT "messages_no_inherit_check"; DROP TABLE "catalog_fact_probe"."check_child"; DROP TABLE "catalog_fact_probe"."check_parent";',
@@ -498,6 +501,48 @@ describe.skipIf(!database)(
 			} finally {
 				await database!.unsafe(
 					'ALTER TABLE "catalog_fact_probe"."messages" REPLICA IDENTITY DEFAULT',
+				);
+			}
+		});
+
+		test("rejects table inheritance and partition parentage in either direction", async () => {
+			await database!.unsafe(
+				'CREATE TABLE "catalog_external_probe"."inheritance_parent" (); CREATE TABLE "catalog_fact_probe"."inherited_app_child" ("id" integer) INHERITS ("catalog_external_probe"."inheritance_parent"); CREATE TABLE "catalog_fact_probe"."inherited_app_parent" ("id" integer); CREATE TABLE "catalog_external_probe"."inherited_external_child" () INHERITS ("catalog_fact_probe"."inherited_app_parent"); CREATE TABLE "catalog_external_probe"."partition_parent" ("id" integer) PARTITION BY RANGE ("id"); CREATE TABLE "catalog_fact_probe"."partition_leaf" PARTITION OF "catalog_external_probe"."partition_parent" FOR VALUES FROM (0) TO (10)',
+			);
+			try {
+				const comparable = await readCatalogComparable(database!, {
+					application: "catalog-fact-probe",
+					applicationSchema: "catalog_fact_probe",
+					requiredExtensionNames: [],
+				});
+				for (const table of [
+					"inherited_app_child",
+					"inherited_app_parent",
+					"partition_leaf",
+				])
+					expect(comparable.unsupportedObjects).toContainEqual({
+						kind: "other",
+						qualifiedIdentity: `catalog_fact_probe.${table}`,
+						attachedTo: null,
+					});
+				expect(
+					(comparable.objects as readonly Record<string, unknown>[]).some(
+						(object) =>
+							[
+								"inherited_app_child",
+								"inherited_app_parent",
+								"partition_leaf",
+							].includes(String(object.name)) ||
+							[
+								"inherited_app_child",
+								"inherited_app_parent",
+								"partition_leaf",
+							].includes(String(object.table)),
+					),
+				).toBe(false);
+			} finally {
+				await database!.unsafe(
+					'DROP TABLE "catalog_external_probe"."inherited_external_child"; DROP TABLE "catalog_fact_probe"."inherited_app_child"; DROP TABLE "catalog_fact_probe"."partition_leaf"; DROP TABLE "catalog_fact_probe"."inherited_app_parent"; DROP TABLE "catalog_external_probe"."inheritance_parent"; DROP TABLE "catalog_external_probe"."partition_parent"',
 				);
 			}
 		});
