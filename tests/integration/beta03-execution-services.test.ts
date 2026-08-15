@@ -332,3 +332,58 @@ test("isolates application Services between Runtime instances", async () => {
 	await secondRuntime.close();
 	expect(disposals).toEqual([1, 2]);
 });
+
+test("unwinds created dependencies after Service resolution failure", async () => {
+	const events: string[] = [];
+	const dependency = defineService({
+		name: "failure.dependency",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			events.push("create:dependency");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose:dependency");
+		},
+	});
+	const failing = defineService({
+		name: "failure.service",
+		lifetime: "execution",
+		effect: "read",
+		dependencies: { dependency },
+		create: ({ services }) => {
+			expect(services.dependency.ready).toBe(true);
+			events.push("create:failing");
+			throw new Error("service unavailable");
+		},
+	});
+	const failureContext = defineContext({
+		name: "failure.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [dependency, failing],
+		context: failureContext,
+		bootstrap: { get: async () => null },
+		project: async ({ service }) => ({ failing: await service(failing) }),
+	});
+	let callbackCalls = 0;
+	await expect(
+		runtime.execution(
+			{
+				principal: principal.user({ id: principalId }),
+				context: { companyId },
+			},
+			() => {
+				callbackCalls += 1;
+			},
+		),
+	).rejects.toThrow("service unavailable");
+	expect({ callbackCalls, events }).toEqual({
+		callbackCalls: 0,
+		events: ["create:dependency", "create:failing", "dispose:dependency"],
+	});
+	await runtime.close();
+});
