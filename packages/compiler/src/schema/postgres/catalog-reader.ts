@@ -70,11 +70,12 @@ export async function readCatalogComparableInOwnedTransaction(
 	`;
 	const binding = bindings[0];
 	if (
-		(bindings.length === 0 && namespace?.exists === true) ||
-		(bindings.length !== 0 &&
-			(bindings.length !== 1 ||
-				binding?.application !== scope.application ||
-				binding.applicationSchema !== scope.applicationSchema))
+		bindings.length !== (namespace?.exists ? 1 : 0) ||
+		bindings.some(
+			(item) =>
+				item.application !== scope.application ||
+				item.applicationSchema !== scope.applicationSchema,
+		)
 	)
 		return fail(
 			"QP-SCHEMA-029",

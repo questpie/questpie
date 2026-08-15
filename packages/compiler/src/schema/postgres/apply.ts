@@ -311,11 +311,11 @@ export async function applyCommittedMigrations(
 				where application_name = ${application}
 				order by sequence
 			`;
-			if (receipts.length > 0 && conflictingBindings.length !== 1)
+			if (conflictingBindings.length !== (receipts.length === 0 ? 0 : 1))
 				return fail(
 					"QP-SCHEMA-029",
 					"applicationBindingMismatch",
-					"Applied migration history requires one exact Application Identity binding",
+					"Application Identity binding cardinality disagrees with migration history",
 				);
 			if (receipts.length > migrations.length)
 				return fail(
@@ -403,11 +403,24 @@ export async function applyCommittedMigrations(
 						input.signal,
 						async (transaction) => {
 							if (migration.plan.baseMigration === null)
-								await transaction`
-							insert into questpie_internal.application_bindings
-							(application_name, postgres_schema, created_at)
-							values (${application}, ${target.application.postgresSchema}, ${new Date()})
-						`;
+								try {
+									await transaction`
+										insert into questpie_internal.application_bindings
+										(application_name, postgres_schema, created_at)
+										values (${application}, ${target.application.postgresSchema}, ${new Date()})
+									`;
+								} catch (error) {
+									if (
+										error instanceof SQL.PostgresError &&
+										sqlstate(error) === "23505"
+									)
+										return fail(
+											"QP-SCHEMA-029",
+											"applicationBindingMismatch",
+											"Application Identity binding was claimed concurrently",
+										);
+									throw error;
+								}
 							const migrationSql = migration.files["up.sql"] ?? "";
 							if (migrationSql.length > 0)
 								await transaction.unsafe(migrationSql);

@@ -682,6 +682,166 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		}
 	}, 10_000);
 
+	test("rejects an orphan Application Identity binding before Genesis", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "orphan-binding-probe",
+			postgresSchema: "orphan_binding_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-orphan-binding-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+		await database!`
+			delete from questpie_internal.schema_migration_receipts
+			where application_name = 'orphan-binding-probe'
+		`;
+		await database!.unsafe('DROP SCHEMA "orphan_binding_probe" CASCADE');
+
+		try {
+			await expect(
+				inspectSchemaFingerprint({ schema: targetSchema }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-029",
+				diagnosticClass: "applicationBindingMismatch",
+			});
+			await expect(
+				applyCommittedMigrations({ migrations: [migration] }),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-029",
+				diagnosticClass: "applicationBindingMismatch",
+			});
+		} finally {
+			await database!`
+				delete from questpie_internal.application_bindings
+				where application_name = 'orphan-binding-probe'
+			`;
+		}
+	}, 10_000);
+
+	test("maps a concurrent Genesis binding claim before application DDL", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const targetSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		targetSchema.application = {
+			name: "binding-race-probe",
+			postgresSchema: "binding_race_probe",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-binding-race-probe",
+		});
+		const migration = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [migration] }),
+		).resolves.toMatchObject({ status: "applied" });
+		await database!`
+			delete from questpie_internal.schema_migration_receipts
+			where application_name = 'binding-race-probe'
+		`;
+		await database!`
+			delete from questpie_internal.application_bindings
+			where application_name = 'binding-race-probe'
+		`;
+		await database!.unsafe('DROP SCHEMA "binding_race_probe" CASCADE');
+
+		const blocker = await database!.reserve();
+		let blockerCommitted = false;
+		let applying: ReturnType<typeof applyCommittedMigrations> | undefined;
+		await blocker`begin`;
+		await blocker`lock table questpie_internal.application_bindings in share mode`;
+		try {
+			applying = applyCommittedMigrations({
+				migrations: [migration],
+				lockTimeoutMs: 5_000,
+				statementTimeoutMs: 30_000,
+			});
+			let bindingInsertBlocked = false;
+			for (let attempt = 0; attempt < 100 && !bindingInsertBlocked; attempt++) {
+				const [state] = await database!<{ blocked: boolean }[]>`
+					select exists(
+					  select 1 from pg_catalog.pg_stat_activity
+					  where datname = current_database()
+					    and pid <> pg_backend_pid()
+					    and wait_event_type = 'Lock'
+					    and query like '%insert into questpie_internal.application_bindings%'
+					) as blocked
+				`;
+				bindingInsertBlocked = state?.blocked === true;
+				if (!bindingInsertBlocked) await Bun.sleep(10);
+			}
+			expect(bindingInsertBlocked).toBe(true);
+			await blocker`
+				insert into questpie_internal.application_bindings
+				(application_name, postgres_schema, created_at)
+				values ('binding-race-probe', 'binding_race_probe', ${new Date()})
+			`;
+			await blocker`commit`;
+			blockerCommitted = true;
+			await expect(applying).resolves.toMatchObject({
+				status: "failed",
+				exitCode: 4,
+				applied: [],
+				diagnostic: {
+					code: "QP-SCHEMA-029",
+					class: "applicationBindingMismatch",
+				},
+			});
+			const [state] = await database<
+				{ receipts: number; schemaExists: boolean }[]
+			>`
+				select (
+				  select count(*)::integer
+				  from questpie_internal.schema_migration_receipts
+				  where application_name = 'binding-race-probe'
+				) as receipts,
+				pg_catalog.to_regnamespace('binding_race_probe') is not null as "schemaExists"
+			`;
+			expect(state).toEqual({ receipts: 0, schemaExists: false });
+		} finally {
+			if (!blockerCommitted) await blocker`rollback`;
+			blocker.release();
+			await applying?.catch(() => undefined);
+			await database!.unsafe(
+				'DROP SCHEMA IF EXISTS "binding_race_probe" CASCADE',
+			);
+			await database!`
+				delete from questpie_internal.schema_migration_receipts
+				where application_name = 'binding-race-probe'
+			`;
+			await database!`
+				delete from questpie_internal.application_bindings
+				where application_name = 'binding-race-probe'
+			`;
+		}
+	}, 10_000);
+
 	test("reads one standalone Schema Fingerprint from a concurrent snapshot", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
