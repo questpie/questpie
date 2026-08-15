@@ -8,24 +8,27 @@ export type Revision = {
 	format: string;
 	version: number;
 	identity: string;
-	proposalCommits: Record<string, string>;
+	projectionBase: string;
 	originalP2: Record<string, string>;
 	cursor: Record<string, unknown>;
 	policyDiagnostics: Record<string, string>[];
 	acceptedIssues: Record<string, string>;
 	readyIssue: string;
-	projectionPatches: Record<
-		string,
-		{ path: string; encoding: "base64"; sha256: string }
-	>;
+	projectionPatches: ProjectionPatch[];
 	nonGoals: string[];
+};
+
+export type ProjectionPatch = {
+	identity: "authorityAndGuidance" | "readinessRepair";
+	path: string;
+	encoding: "base64";
+	sha256: string;
 };
 
 const root = resolve(import.meta.dir, "../../../..");
 const exact = {
 	diffBase: "33662605105d7a80ade94d430dbf3f838964ff69",
-	cursorAndPolicy: "22379c7680811acea7c11e4fe5929405ba91a20f",
-	designAndReadiness: "32b1e44479a711ac600455b1c509718942b09535",
+	p16: "1d9303a58c9557aac3da648895c817fa039478ba",
 	proofHead: "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
 	packetBlob: "73b66334fc38360a3ad777498d20ccdc039bcfb9",
 	packetSha256:
@@ -33,7 +36,7 @@ const exact = {
 	policyDigest:
 		"972c05336c129b4f4aaabe5f20aee46019497008920d6e02f3193d6353d63bcb",
 	projectionSha256:
-		"5d51458115297dcc6eabde4362353feca665764c718026f81cddd4efe45fc289",
+		"37796a2ff61f2a7bd843ff52ffbb9fd6ad412b009c63564b3177b8a48c09c43b",
 	readinessSha256:
 		"d91d10052b36ee72043c09e9e4d322a76e3ab1a0556b60db9b57c059c49e04db",
 	acceptedIssues: {
@@ -54,12 +57,8 @@ export function validateRevision(revision: Revision): void {
 		revision.identity !== "P2R1/BETA04Authority"
 	)
 		throw new Error("invalid authority revision identity");
-	if (
-		revision.proposalCommits.diffBase !== exact.diffBase ||
-		revision.proposalCommits.cursorAndPolicy !== exact.cursorAndPolicy ||
-		revision.proposalCommits.designAndReadiness !== exact.designAndReadiness
-	)
-		throw new Error("authority proposal commits changed");
+	if (revision.projectionBase !== exact.diffBase)
+		throw new Error("authority projection base changed");
 	if (
 		revision.originalP2.status !== "preserved" ||
 		revision.originalP2.proofHead !== exact.proofHead ||
@@ -118,15 +117,20 @@ export function validateRevision(revision: Revision): void {
 	)
 		throw new Error("beta readiness authority changed");
 	if (
-		revision.projectionPatches.authorityAndGuidance?.path !==
-			"PROJECTION.patch.b64" ||
-		revision.projectionPatches.authorityAndGuidance.encoding !== "base64" ||
-		revision.projectionPatches.authorityAndGuidance.sha256 !==
-			exact.projectionSha256 ||
-		revision.projectionPatches.readinessRepair?.path !==
-			"READINESS.patch.b64" ||
-		revision.projectionPatches.readinessRepair.encoding !== "base64" ||
-		revision.projectionPatches.readinessRepair.sha256 !== exact.readinessSha256
+		!equal(revision.projectionPatches, [
+			{
+				identity: "authorityAndGuidance",
+				path: "PROJECTION.patch.b64",
+				encoding: "base64",
+				sha256: exact.projectionSha256,
+			},
+			{
+				identity: "readinessRepair",
+				path: "READINESS.patch.b64",
+				encoding: "base64",
+				sha256: exact.readinessSha256,
+			},
+		])
 	)
 		throw new Error("reviewed projection identity changed");
 	for (const required of [
@@ -149,8 +153,52 @@ function command(args: string[], cwd = root): string {
 	return result.stdout.toString().trim();
 }
 
+function commandBytes(args: string[], cwd = root): Buffer {
+	const result = Bun.spawnSync(args, { cwd, stdout: "pipe", stderr: "pipe" });
+	if (result.exitCode !== 0)
+		throw new Error(
+			`${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
+		);
+	return Buffer.from(result.stdout);
+}
+
 async function decodePatch(path: string): Promise<Buffer> {
 	return Buffer.from(await readFile(path, "utf8"), "base64");
+}
+
+const allowedPatchPaths = {
+	authorityAndGuidance: [
+		"apps/docs/content/docs/v4/context-and-policy.mdx",
+		"apps/docs/content/docs/v4/data-and-queries.mdx",
+		"docs/adr/0008-freeze-the-foundational-data-and-structural-query-contract.md",
+		"docs/adr/0010-freeze-trusted-context-and-relational-policy.md",
+		"docs/v4/context-and-policy.md",
+		"docs/v4/data-model-and-query-grammar.md",
+		"docs/v4/implementation/beta04/design-context.md",
+		"docs/v4/prototypes/implementation-collapse-p16/QUEUE.json",
+	],
+	readinessRepair: [
+		"docs/v4/prototypes/implementation-collapse-p16/QUEUE.json",
+		"docs/v4/prototypes/implementation-collapse-p16/README.md",
+		"docs/v4/prototypes/implementation-collapse-p16/check.ts",
+		"docs/v4/prototypes/implementation-collapse-p16/negative-control.ts",
+	],
+} as const;
+
+export function validateProjectionPatch(
+	patch: ProjectionPatch,
+	contents: Buffer,
+): void {
+	if (createHash("sha256").update(contents).digest("hex") !== patch.sha256)
+		throw new Error(`projection patch changed: ${patch.path}`);
+	const paths = [
+		...contents.toString().matchAll(/^diff --git a\/(.+) b\/(.+)$/gm),
+	].map(([, left, right]) => {
+		if (left !== right) throw new Error(`projection renames path: ${left}`);
+		return left!;
+	});
+	if (!equal(paths, allowedPatchPaths[patch.identity]))
+		throw new Error(`projection patch crosses authority scope: ${patch.path}`);
 }
 
 async function verifyRepositoryEvidence(revision: Revision): Promise<void> {
@@ -160,39 +208,27 @@ async function verifyRepositoryEvidence(revision: Revision): Promise<void> {
 		exact.packetBlob
 	)
 		throw new Error("original P2 acceptance packet blob changed");
-	const packet = command(["git", "show", `${exact.proofHead}:${packetPath}`]);
-	if (
-		createHash("sha256").update(`${packet}\n`).digest("hex") !==
-		exact.packetSha256
-	)
+	const packet = commandBytes([
+		"git",
+		"show",
+		`${exact.proofHead}:${packetPath}`,
+	]);
+	if (createHash("sha256").update(packet).digest("hex") !== exact.packetSha256)
 		throw new Error("original P2 acceptance packet digest changed");
-	if (
-		command(["git", "rev-parse", `${exact.cursorAndPolicy}^`]) !==
-			exact.diffBase ||
-		command(["git", "rev-parse", `${exact.designAndReadiness}^`]) !==
-			exact.cursorAndPolicy
-	)
-		throw new Error("authority proposal ancestry changed");
+	command(["git", "merge-base", "--is-ancestor", exact.p16, exact.diffBase]);
 	for (const head of Object.values(exact.acceptedIssues))
 		command(["git", "merge-base", "--is-ancestor", head, exact.diffBase]);
 
-	for (const patch of Object.values(revision.projectionPatches)) {
+	for (const patch of revision.projectionPatches) {
 		const path = resolve(import.meta.dir, patch.path);
 		const contents = await decodePatch(path);
-		if (createHash("sha256").update(contents).digest("hex") !== patch.sha256)
-			throw new Error(`projection patch changed: ${patch.path}`);
-		if (
-			/^diff --git a\/(?:packages|tests|quality)\//m.test(contents.toString())
-		)
-			throw new Error(
-				`projection patch crosses authority scope: ${patch.path}`,
-			);
+		validateProjectionPatch(patch, contents);
 	}
 
 	const temporary = mkdtempSync(join(tmpdir(), "questpie-beta04-authority-"));
 	try {
 		command(["git", "worktree", "add", "--detach", temporary, exact.diffBase]);
-		for (const patch of Object.values(revision.projectionPatches)) {
+		for (const patch of revision.projectionPatches) {
 			const decodedPath = join(temporary, ".questpie-authority.patch");
 			await writeFile(
 				decodedPath,

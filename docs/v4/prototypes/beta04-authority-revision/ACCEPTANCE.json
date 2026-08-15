@@ -1,6 +1,15 @@
 {
 	"ticket": "#291 BETA-04 authority revision",
 	"proof": "docs/v4/prototypes/beta04-authority-revision",
+	"reviewHistory": [
+		{
+			"reviewedHead": "10d5712ab816ef5576ec041da216d95c6921ac0d",
+			"model": "opus",
+			"effort": "medium",
+			"verdict": "BLOCKED",
+			"finding": "The proof depended on two unretained authoring commit objects rather than solely on portable, byte-pinned projection evidence."
+		}
+	],
 	"authorityHeads": {
 		"foundation": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
 		"P2": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
@@ -17,6 +26,10 @@
 		},
 		{
 			"command": "bun run docs/v4/prototypes/beta04-authority-revision/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta04-authority-revision/portable-check.ts",
 			"result": "PASS"
 		},
 		{

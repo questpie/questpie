@@ -26,13 +26,15 @@ or canonical artifact digests of the original P2 proof.
 
 ## Exact projection
 
-`PROJECTION.patch.b64` is a lossless envelope around the byte-exact proposal
-from commits `22379c76` and `32b1e444`. `READINESS.patch.b64` losslessly wraps
-the repair for the incomplete P16 promotion by adding
+`PROJECTION.patch.b64` is a lossless envelope around the byte-exact authority
+projection against `33662605`. Its decoded SHA-256 is the durable provenance;
+the proof does not depend on unretained authoring commits. `READINESS.patch.b64`
+losslessly wraps the repair for the incomplete P16 promotion by adding
 accepted-issue evidence, clearing completed BETA-01 readiness, deriving one
 next issue, and adding non-inert negative controls. The proof runner applies
 both patches to the exact base in a disposable worktree and runs the resulting
-P16 positive and negative gates.
+P16 positive and negative gates. The ordered pair is one atomic projection:
+neither intermediate patch is accepted independently.
 
 Only after a fresh stateless Opus-medium `PASS` may these reviewed patches be
 projected into the ADRs, internal/public pages, design context, and P16 queue.
