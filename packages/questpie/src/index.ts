@@ -28,6 +28,7 @@ export type {
 } from "./service";
 export { defineContext, principal } from "./context";
 export type {
+	Authority,
 	ContextBootstrap,
 	ContextDefinition,
 	ContextInputOf,

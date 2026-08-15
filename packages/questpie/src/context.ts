@@ -2,11 +2,21 @@ import type { Codec, CodecValue } from "./index";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
+type DeepReadonly<Value> = Value extends (...input: never[]) => unknown
+	? Value
+	: Value extends readonly (infer Item)[]
+		? readonly DeepReadonly<Item>[]
+		: Value extends object
+			? Readonly<{ [Key in keyof Value]: DeepReadonly<Value[Key]> }>
+			: Value;
+
 export type Principal = Readonly<{
 	readonly questpiePrincipal: true;
 	readonly kind: "anonymous" | "service" | "user";
 	readonly id: string;
 }>;
+
+export type Authority = Readonly<{ kind: "ordinary" }>;
 
 function createPrincipal(kind: Principal["kind"], id: string): Principal {
 	return Object.freeze({ questpiePrincipal: true, kind, id });
@@ -45,22 +55,32 @@ export interface ContextDefinition<
 	readonly name: Name;
 	readonly input: Codec<Input>;
 	readonly executableSlots: readonly ["resolve"];
-	readonly resolve: (
+	resolve(
 		input: Readonly<{
 			input: Input;
 			principal: Principal;
 			bootstrap: ContextBootstrap;
 			signal: AbortSignal;
 		}>,
-	) => MaybePromise<Resolved>;
+	): MaybePromise<Resolved>;
 }
 
 export type ContextInputOf<Definition> =
-	Definition extends ContextDefinition<string, infer Input> ? Input : never;
+	Definition extends ContextDefinition<
+		infer _Name,
+		infer Input,
+		infer _Resolved
+	>
+		? Input
+		: never;
 
 export type ContextResolvedOf<Definition> =
-	Definition extends ContextDefinition<string, unknown, infer Resolved>
-		? Resolved
+	Definition extends ContextDefinition<
+		infer _Name,
+		infer _Input,
+		infer Resolved
+	>
+		? DeepReadonly<Resolved>
 		: never;
 
 export function defineContext<
@@ -83,7 +103,7 @@ export function defineContext<
 			}>,
 		) => MaybePromise<Resolved>;
 	}>,
-): ContextDefinition<Name, CodecValue<InputCodec>, Resolved> {
+): ContextDefinition<Name, CodecValue<InputCodec>, DeepReadonly<Resolved>> {
 	return Object.freeze({
 		__questpie: Object.freeze({
 			category: "definition",
@@ -93,5 +113,9 @@ export function defineContext<
 		input: input.input,
 		executableSlots: Object.freeze(["resolve"] as const),
 		resolve: input.resolve,
-	}) as ContextDefinition<Name, CodecValue<InputCodec>, Resolved>;
+	}) as unknown as ContextDefinition<
+		Name,
+		CodecValue<InputCodec>,
+		DeepReadonly<Resolved>
+	>;
 }

@@ -223,7 +223,12 @@ export async function createArtifacts(
 		})),
 	};
 	const generated: Record<string, string> = {
-		"app.ts": renderAppContract(input.resources, manifest.data, schema),
+		"app.ts": renderAppContract(
+			input.resources,
+			manifest.data,
+			schema,
+			input.configuration.source.root,
+		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),
 		"context-projection.json": canonicalBytes(executionComposition.context),

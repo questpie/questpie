@@ -1,4 +1,5 @@
 import type {
+	Authority,
 	ContextBootstrap,
 	ContextDefinition,
 	ContextInputOf,
@@ -23,9 +24,11 @@ type MaybePromise<Value> = Value | Promise<Value>;
 
 export type ExecutionFacts<Resolved> = Readonly<{
 	principal: Principal;
+	authority: Authority;
 	tenant: Resolved extends Readonly<{ tenant: infer Tenant }> ? Tenant : never;
 	values: Resolved extends Readonly<{ values: infer Values }> ? Values : never;
 	signal: AbortSignal;
+	deadline: number | null;
 }>;
 
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
@@ -48,6 +51,7 @@ export interface ApplicationRuntime<Input, View> {
 			principal: Principal;
 			context: Input;
 			signal?: AbortSignal;
+			deadline?: number;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -143,6 +147,7 @@ export function createApplicationRuntime<
 			principal: Principal;
 			context: ContextInputOf<Context>;
 			signal?: AbortSignal;
+			deadline?: number;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
@@ -206,9 +211,11 @@ export function createApplicationRuntime<
 				);
 				const facts = Object.freeze({
 					principal: input.principal,
+					authority: Object.freeze({ kind: "ordinary" as const }),
 					tenant: resolved.tenant,
 					values: resolved.values,
 					signal: controller.signal,
+					deadline: input.deadline ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				const view = await program.project({ facts, service: getService });
 				result = await use(view);

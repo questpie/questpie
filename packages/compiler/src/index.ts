@@ -537,6 +537,10 @@ export async function compileApplication(
 		packages,
 		compilerRoot,
 		applicationTsconfig,
+		applicationSourceRoot: resolve(
+			applicationRoot,
+			applicationConfiguration.source.root,
+		),
 		packageCompilations: packageCompilations.map((compilation) => ({
 			...compilation,
 			contractPath: packageContractPath(compilation.name),

@@ -206,11 +206,37 @@ export function renderAppContract(
 	resources: readonly NormalizedResource[],
 	data: unknown,
 	schema: unknown,
+	sourceRoot: string,
 ): string {
+	const sourceModule = (resource: NormalizedResource): string => {
+		const prefix =
+			sourceRoot === "." ? "" : `${sourceRoot.replace(/\/$/, "")}/`;
+		const relativePath = resource.origin.logicalPath.startsWith(prefix)
+			? resource.origin.logicalPath.slice(prefix.length)
+			: resource.origin.logicalPath;
+		return `#questpie/source/${relativePath.replace(/\.(?:ts|tsx)$/, "")}`;
+	};
+	const definitionType = (resource: NormalizedResource): string =>
+		`(typeof import(${JSON.stringify(sourceModule(resource))}))[${JSON.stringify(resource.origin.exportName)}]`;
+	const context = resources.find(
+		(resource) =>
+			resource.kind === "context" && resource.origin.packageId === null,
+	);
+	const applicationServices = resources.filter(
+		(resource) =>
+			resource.kind === "service" && resource.origin.packageId === null,
+	);
+	const contextDefinition = context ? definitionType(context) : "never";
+	const executionServices = applicationServices
+		.map(
+			(resource) =>
+				`readonly ${JSON.stringify(resource.name)}: ServiceInstance<${definitionType(resource)}>;`,
+		)
+		.join("\n\t");
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
-	return `import type { Codec, DataFieldDescriptor, TaggedJsonValue } from "questpie";
+	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
@@ -230,6 +256,31 @@ export interface QueryContext {
 	readonly data: Readonly<GeneratedData>;
 	readonly signal: AbortSignal;
 }
+
+type ApplicationContextDefinition = ${contextDefinition};
+export type AppContextInput = ContextInputOf<ApplicationContextDefinition>;
+export type AppResolvedContext = ContextResolvedOf<ApplicationContextDefinition>;
+
+export type ExecutionServices = Readonly<{
+	${executionServices}
+}>;
+
+export type ExecutionInput = Readonly<{
+	principal: Principal;
+	context: AppContextInput;
+	signal?: AbortSignal;
+	deadline?: number;
+}>;
+
+export type RootExecution = Readonly<{
+	principal: Principal;
+	authority: Authority;
+	tenant: AppResolvedContext["tenant"];
+	values: AppResolvedContext["values"];
+	services: ExecutionServices;
+	signal: AbortSignal;
+	deadline: number | null;
+}>;
 
 export type QueryDefinition<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly kind: "query";
@@ -255,6 +306,11 @@ ${otherFactories}
 
 export interface GeneratedApp {
 	readonly queries: GeneratedQueries;
+	execution<Result>(
+		input: ExecutionInput,
+		callback: (execution: RootExecution) => Result | Promise<Result>,
+	): Promise<Awaited<Result>>;
+	close(): Promise<void>;
 }
 
 export declare function createApp(): GeneratedApp;
