@@ -150,8 +150,8 @@ export const duplicate = defineCollection({
 		await writeFile(
 			packageSource,
 			source.replace(
-				"defineCollectionAugmentation, field, index",
-				"codec, constraint, defineCollection, defineCollectionAugmentation, field, index",
+				"\tdefineCollectionAugmentation,\n",
+				"\tcodec,\n\tconstraint,\n\tdefineCollection,\n\tdefineCollectionAugmentation,\n",
 			).concat(`
 
 import { defineQuery } from "#questpie/package";

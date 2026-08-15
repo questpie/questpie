@@ -174,7 +174,7 @@ test("rejects invalid inverse Relation definitions and references", async () => 
 		{
 			inverse: 'relationRef("missingEntries", "account")',
 			diagnostic:
-				/QP-COMPOSE-004 unresolvedReference: .* references missing collection:missingEntries\/relation:account/,
+				/QP-COMPOSE-004 unknownReference: .* references missing collection:missingEntries\/relation:account/,
 		},
 		{
 			inverse: 'relationRef("channels", "space")',

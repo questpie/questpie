@@ -17,6 +17,25 @@ import {
 	type ValueOf,
 } from "./value";
 
+export { defineService } from "./service";
+export type {
+	ServiceDefinition,
+	ServiceDependencyMap,
+	ServiceEffect,
+	ServiceInstance,
+	ServiceInstances,
+	ServiceLifetime,
+} from "./service";
+export { defineContext, principal } from "./context";
+export type {
+	Authority,
+	ContextBootstrap,
+	ContextDefinition,
+	ContextInputOf,
+	ContextResolvedOf,
+	Principal,
+} from "./context";
+
 export { shape } from "./shape";
 export type { FieldNode, InlineShapeDefinition } from "./shape";
 export { value } from "./value";

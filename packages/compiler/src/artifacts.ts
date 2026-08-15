@@ -8,6 +8,10 @@ import {
 	digest,
 } from "./canonical";
 import {
+	explainExecutionComposition,
+	projectExecutionComposition,
+} from "./composition";
+import {
 	renderAppContract,
 	renderClientContract,
 	renderPackageContract,
@@ -64,6 +68,7 @@ export async function createArtifacts(
 	}>,
 ): Promise<Readonly<Record<string, string>>> {
 	const manifest = projectManifest(input.configuration, input.resources);
+	const executionComposition = projectExecutionComposition(input.resources);
 	const schema = manifest.schema;
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
@@ -204,6 +209,10 @@ export async function createArtifacts(
 		})),
 	};
 	const originMapBytes = canonicalBytes(originMap);
+	const executionExplanation = explainExecutionComposition(
+		executionComposition,
+		originMap,
+	);
 	const buildInput = {
 		format: "questpie.build-input",
 		version: 1,
@@ -221,16 +230,25 @@ export async function createArtifacts(
 		})),
 	};
 	const generated: Record<string, string> = {
-		"app.ts": renderAppContract(input.resources, manifest.data, schema),
+		"app.ts": renderAppContract(
+			input.resources,
+			manifest.data,
+			schema,
+			input.configuration.source.root,
+		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources),
+		"context-projection.json": canonicalBytes(executionComposition.context),
+		"execution-composition-explain.json": canonicalBytes(executionExplanation),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
 		"manifest.json": canonicalBytes(manifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
+		"service-projection.json": canonicalBytes(executionComposition.services),
 	};
 	for (const compilation of input.packageCompilations)
 		generated[packageContractPath(compilation.name)] = renderPackageContract(
+			compilation.name,
 			compilation.resources,
 		);
 	generated["internal/checksums.json"] = canonicalBytes({

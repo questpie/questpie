@@ -1,4 +1,5 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
+import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
 import {
 	fieldPath,
@@ -132,6 +133,8 @@ function packageContract(value: RecordValue): RecordValue {
 	if (valueBrand.category === "augmentation")
 		return augmentationContract(value);
 	if (valueBrand.resourceKind === "query") return queryContract(value);
+	if (valueBrand.resourceKind === "service")
+		return compositionContract("service", value);
 	if (valueBrand.resourceKind === "collection")
 		return ownerCollectionContract(value, []);
 	throw new CompilerDiagnosticError(
@@ -369,6 +372,22 @@ export function normalizeResources(
 					contributions.map((entry) => entry.identity),
 				),
 				contributions,
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "service" || kind === "context") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: compositionContract(kind, item.value),
+				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,
 					exportName: item.exportName,

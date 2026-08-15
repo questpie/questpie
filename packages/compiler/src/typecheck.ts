@@ -13,6 +13,7 @@ export async function typecheckCurrentContract(
 		packages: ReadonlyMap<string, PackageResolution>;
 		compilerRoot: string;
 		applicationTsconfig: string;
+		applicationSourceRoot: string;
 		packageCompilations: readonly Readonly<{
 			name: string;
 			files: readonly string[];
@@ -40,6 +41,7 @@ export async function typecheckCurrentContract(
 			questpie: [input.frameworkEntry],
 			"#questpie/app": [join(temporary, "generated/app.ts")],
 			"#questpie/client": [join(temporary, "generated/client.ts")],
+			"#questpie/source/*": [join(input.applicationSourceRoot, "*")],
 		};
 		const typeRoots = [
 			resolve(input.compilerRoot, "../../node_modules/@types"),

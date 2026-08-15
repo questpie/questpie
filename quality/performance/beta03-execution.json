@@ -1,0 +1,19 @@
+{
+	"id": "beta03-execution",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta03-execution.test.ts"],
+	"budgetOwner": "BETA-03",
+	"metrics": {
+		"roots100Ms": {
+			"direction": "max",
+			"budget": 50,
+			"unit": "ms"
+		},
+		"applicationCreates": {
+			"direction": "max",
+			"budget": 1,
+			"unit": "count"
+		}
+	}
+}

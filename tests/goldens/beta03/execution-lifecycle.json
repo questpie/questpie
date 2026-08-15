@@ -1,0 +1,11 @@
+{
+	"format": "questpie.execution-lifecycle-trace",
+	"version": 1,
+	"scenario": "cancelled-root",
+	"events": [
+		"create:application:1",
+		"create:execution:1",
+		"dispose:execution:1",
+		"dispose:application:1"
+	]
+}
