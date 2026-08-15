@@ -1,10 +1,6 @@
-import {
-	constraint,
-	defineCollection,
-	field,
-	relation,
-	relationRef,
-} from "questpie";
+import { constraint, defineCollection, field, relation } from "questpie";
+
+import { spaces } from "./spaces";
 
 export const channels = defineCollection({
 	name: "channels",
@@ -18,7 +14,7 @@ export const channels = defineCollection({
 	},
 	relations: {
 		space: relation.toOne({
-			target: relationRef("spaces"),
+			target: spaces,
 			fields: ["spaceId"],
 			references: ["id"],
 		}),

@@ -1,12 +1,9 @@
-import {
-	constraint,
-	defineCollection,
-	field,
-	relation,
-	relationRef,
-} from "questpie";
+import { constraint, defineCollection, field, relation } from "questpie";
 
 import { messageAudit } from "@questpie/collaboration-audit/questpie";
+
+import { channels } from "./channels";
+import { memberships } from "./memberships";
 
 export const messages = defineCollection({
 	name: "messages",
@@ -22,12 +19,12 @@ export const messages = defineCollection({
 	},
 	relations: {
 		channel: relation.toOne({
-			target: relationRef("channels"),
+			target: channels,
 			fields: ["channelId"],
 			references: ["id"],
 		}),
 		author: relation.toOne({
-			target: relationRef("memberships"),
+			target: memberships,
 			fields: ["authorMembershipId"],
 			references: ["id"],
 		}),

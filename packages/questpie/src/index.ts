@@ -401,37 +401,33 @@ export interface InverseRelationDefinition<
 	readonly inverseOf: InverseOf;
 }
 
-export function relationRef<const Name extends string>(
-	name: Name,
-): `collection:${Name}`;
 export function relationRef<
 	const Name extends string,
 	const Member extends string,
 >(name: Name, member: Member): RelationReference<Name, Member>;
-export function relationRef(name: string, member?: string): string {
-	return member === undefined
-		? `collection:${name}`
-		: `collection:${name}/relation:${member}`;
+export function relationRef(name: string, member: string): string {
+	return `collection:${name}/relation:${member}`;
 }
 
 export const relation = Object.freeze({
 	toOne: <
-		const Target extends `collection:${string}`,
+		const TargetName extends string,
+		const TargetFields extends Readonly<Record<string, FieldNode>>,
 		const Fields extends readonly FieldReference[],
-		const References extends readonly FieldReference[],
+		const References extends readonly FieldReferences<TargetFields>[],
 	>(
 		input: Readonly<{
-			target: Target;
+			target: CollectionDefinition<TargetName, TargetFields>;
 			fields: Fields;
 			references: References;
 			onDelete?: RelationDefinition["onDelete"];
 			onUpdate?: RelationDefinition["onUpdate"];
 			postgres?: { name: string };
 		}>,
-	): RelationDefinition<Target, Fields, References> =>
+	): RelationDefinition<`collection:${TargetName}`, Fields, References> =>
 		Object.freeze({
 			kind: "toOne",
-			target: input.target,
+			target: collectionIdentity(input.target),
 			fields: frozenTuple(input.fields),
 			references: frozenTuple(input.references),
 			onDelete: input.onDelete ?? "restrict",

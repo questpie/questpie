@@ -36,7 +36,9 @@ ${relations}
 		);
 		await writeFile(
 			join(temporary, "src/relation-entries.ts"),
-			`import { constraint, defineCollection, field, relation, relationRef } from "questpie";
+			`import { constraint, defineCollection, field, relation } from "questpie";
+
+import { relationAccounts } from "./relation-accounts";
 
 export const relationEntries = defineCollection({
 	name: "relationEntries",
@@ -47,7 +49,7 @@ export const relationEntries = defineCollection({
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 	relations: {
 		account: relation.toOne({
-			target: relationRef("relationAccounts"),
+			target: relationAccounts,
 			fields: ["accountId"],
 			references: ["id"],
 		}),
