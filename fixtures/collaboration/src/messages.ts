@@ -1,4 +1,4 @@
-import { constraint, defineCollection, field, relation } from "questpie";
+import { constraint, defineCollection, field, index, relation } from "questpie";
 
 import { messageAudit } from "@questpie/collaboration-audit/questpie";
 
@@ -31,6 +31,15 @@ export const messages = defineCollection({
 			target: memberships,
 			fields: ["authorMembershipId"],
 			references: ["id"],
+		}),
+	},
+	indexes: {
+		page: index({
+			fields: [
+				"channelId",
+				{ field: "createdAt", order: "desc", nulls: "last" },
+				{ field: "id", order: "desc", nulls: "last" },
+			],
 		}),
 	},
 	augmentations: [messageAudit],

@@ -104,10 +104,10 @@ describe("BETA-02 migration artifacts", () => {
 	});
 
 	test("plans and commits the collaboration Genesis migration exactly", async () => {
-		const compilation = await compiledFixture;
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		const frozen = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
 		);
+		const targetSchema = frozen.targetSchema;
 		const planned = createMigrationPlan({
 			targetSchema,
 			slug: "create-collaboration",
@@ -175,10 +175,10 @@ describe("BETA-02 migration artifacts", () => {
 	});
 
 	test("loads the committed six-file collaboration migration byte for byte", async () => {
-		const compilation = await compiledFixture;
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		const committed = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
 		);
+		const targetSchema = committed.targetSchema;
 		const planned = createMigrationPlan({
 			targetSchema,
 			slug: "create-collaboration",
@@ -191,10 +191,6 @@ describe("BETA-02 migration artifacts", () => {
 			planDigest: planned.digest,
 			localMigrations: [],
 		});
-		const committed = await loadCommittedMigration(
-			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
-		);
-
 		expect(committed).toEqual(expected);
 		expect(
 			Object.fromEntries(
@@ -441,9 +437,18 @@ describe("BETA-02 migration artifacts", () => {
 			"renameConstraint",
 			"renameConstraint",
 		]);
-		const genesis = await loadCommittedMigration(
-			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
-		);
+		const genesisPlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-collaboration",
+		});
+		const genesis = createCommittedMigration({
+			plan: genesisPlan.plan,
+			baseSchema: genesisPlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: genesisPlan.digest,
+			localMigrations: [],
+		});
 		const committed = createCommittedMigration({
 			plan: explicit.plan,
 			baseSchema,

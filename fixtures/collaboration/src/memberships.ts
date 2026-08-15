@@ -8,12 +8,30 @@ export const memberships = defineCollection({
 		id: field.uuid({ nullable: false, default: "randomUuid" }),
 		companyId: field.uuid({ nullable: false }),
 		principalId: field.uuid({ nullable: false }),
+		scopeKey: field.text({
+			nullable: false,
+			minLength: 1,
+			maxLength: 63,
+			default: "company",
+		}),
+		status: field.text({
+			nullable: false,
+			minLength: 1,
+			maxLength: 16,
+			default: "active",
+		}),
+		role: field.text({
+			nullable: false,
+			minLength: 1,
+			maxLength: 32,
+			default: "member",
+		}),
 	},
 	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
-		onePrincipalPerCompany: constraint.unique({
-			fields: ["companyId", "principalId"],
+		primary: constraint.primaryKey({
+			fields: ["companyId", "principalId", "scopeKey"],
 		}),
+		idUnique: constraint.unique({ fields: ["id"] }),
 	},
 	relations: {
 		company: relation.toOne({
