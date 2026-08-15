@@ -23,7 +23,7 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS "lock_probe" CASCADE; DROP SCHEMA IF EXISTS "partial_apply_probe" CASCADE; DROP SCHEMA IF EXISTS "alter_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "semantic_rename_probe" CASCADE; DROP SCHEMA IF EXISTS "order" CASCADE; DROP SCHEMA IF EXISTS "deploy_role_probe" CASCADE; DROP SCHEMA IF EXISTS "fk_actions_probe" CASCADE; DROP SCHEMA IF EXISTS "foundational_fields_probe" CASCADE; DROP SCHEMA IF EXISTS "numeric_drift_probe" CASCADE; DROP SCHEMA IF EXISTS "check_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_checksum_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_concurrency_probe" CASCADE; DROP SCHEMA IF EXISTS "seed_cancel_probe" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 	);
 });
 
@@ -1516,6 +1516,123 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		);
 	});
 
+	test("applies and fingerprints alterField with a Relation constraint rename", async () => {
+		const compilation = await compileApplication({
+			applicationRoot: fixtureRoot,
+		});
+		const fixtureSchema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		);
+		const baseSchema = structuredClone(fixtureSchema);
+		baseSchema.application = {
+			...baseSchema.application,
+			name: "alter-rename-probe",
+			postgresSchema: "alter_rename_probe",
+		};
+		const messages = baseSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		messages.fields.push({
+			collation: null,
+			default: null,
+			identity: "collection:messages/field:amount",
+			nullable: true,
+			path: ["amount"],
+			postgresName: "amount",
+			type: { kind: "numeric", precision: 10, scale: 2 },
+		});
+		messages.fields.sort(
+			(left: { identity: string }, right: { identity: string }) =>
+				left.identity.localeCompare(right.identity),
+		);
+		const genesisPlan = createMigrationPlan({
+			targetSchema: baseSchema,
+			slug: "create-alter-rename-probe",
+		});
+		const genesis = createCommittedMigration({
+			plan: genesisPlan.plan,
+			baseSchema: genesisPlan.baseSchema,
+			targetSchema: baseSchema,
+			currentSchema: baseSchema,
+			planDigest: genesisPlan.digest,
+			localMigrations: [],
+		});
+		await expect(
+			applyCommittedMigrations({ migrations: [genesis] }),
+		).resolves.toMatchObject({ status: "applied" });
+
+		const targetSchema = structuredClone(baseSchema);
+		const targetMessages = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:messages",
+		);
+		targetMessages.fields.find(
+			(field: { identity: string }) =>
+				field.identity === "collection:messages/field:amount",
+		).type.precision = 12;
+		const channels = targetSchema.collections.find(
+			(collection: { identity: string }) =>
+				collection.identity === "collection:channels",
+		);
+		channels.relations.find(
+			(relation: { identity: string }) =>
+				relation.identity === "collection:channels/relation:space",
+		).constraintPostgresName = "renamed_channel_space_fk";
+		const evolvedPlan = createMigrationPlan({
+			baseMigration: genesis.identity,
+			baseSchema,
+			targetSchema,
+			slug: "alter-amount-and-rename-space-fk",
+		});
+		if (evolvedPlan.status !== "planned")
+			throw new Error("alter/rename plan disappeared");
+		expect(evolvedPlan.plan.steps.map((step) => step.kind)).toEqual([
+			"renameRelationConstraint",
+			"alterField",
+		]);
+		const evolved = createCommittedMigration({
+			plan: evolvedPlan.plan,
+			baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: evolvedPlan.digest,
+			localMigrations: [genesis],
+			acceptDestructive: evolvedPlan.digest,
+		});
+		expect(evolved.files["up.sql"]).toContain(
+			'ALTER COLUMN "amount" TYPE pg_catalog.numeric(12, 2)',
+		);
+		const applied = await applyCommittedMigrations({
+			migrations: [genesis, evolved],
+		});
+		expect(applied).toMatchObject({
+			status: "applied",
+			applied: [evolved.identity],
+		});
+		if (applied.status === "failed") throw new Error("migration failed");
+		const inspected = await inspectSchemaFingerprint({ schema: targetSchema });
+		expect(inspected.digest).toBe(applied.fingerprintDigest);
+		const [catalog] = await database!<
+			{ constraintExists: boolean; formattedType: string }[]
+		>`
+			select
+			  exists(
+			    select 1 from pg_catalog.pg_constraint
+			    where conrelid = 'alter_rename_probe.channels'::regclass
+			      and conname = 'renamed_channel_space_fk'
+			  ) as "constraintExists",
+			  pg_catalog.format_type(a.atttypid, a.atttypmod) as "formattedType"
+			from pg_catalog.pg_attribute a
+			where a.attrelid = 'alter_rename_probe.messages'::regclass
+			  and a.attname = 'amount'
+		`;
+		expect(catalog).toEqual({
+			constraintExists: true,
+			formattedType: "numeric(12,2)",
+		});
+	}, 10_000);
+
 	test("receipts a semantic rename with stable physical names and no DDL", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
@@ -1696,9 +1813,9 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				`import { constraint, defineCollection, field } from "questpie";
 
 const appointmentFields = {
-	id: field.uuid(),
-	startsAt: field.timestamp({ withTimezone: true }),
-	endsAt: field.timestamp({ withTimezone: true }),
+	id: field.uuid({ nullable: false }),
+	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
+	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
 };
 
 export const checkAppointments = defineCollection({
