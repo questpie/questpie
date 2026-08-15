@@ -18,6 +18,10 @@ import {
 	type PostgresCatalog,
 } from "./model";
 import {
+	lowerPostgresKeyedLookupProof,
+	type PostgresKeyedLookupProofV1,
+} from "./nondisclosure";
+import {
 	PostgresParameters,
 	type PostgresQueryParameterV1,
 } from "./parameters";
@@ -86,6 +90,9 @@ export interface PostgresQueryPlanV1 {
 	readonly sql: string;
 	readonly parameters: readonly PostgresQueryParameterV1[];
 	readonly result: readonly PostgresQueryResultV1[];
+	readonly nondisclosure: Readonly<{
+		keyedLookup: PostgresKeyedLookupProofV1;
+	}>;
 }
 
 export interface PostgresQueryPlansV1 {
@@ -406,6 +413,12 @@ export function lowerPostgresQueryPlan(
 
 	const sql = `WITH "qp_authorized" AS MATERIALIZED (SELECT ${quoteIdentifier(authorizedAlias)}.* FROM ${qualifiedTable(catalog, rootCollection)} AS ${quoteIdentifier(authorizedAlias)} WHERE ${policySql}), "qp_page" AS MATERIALIZED (SELECT ${quoteIdentifier(pageAlias)}.* FROM "qp_authorized" AS ${quoteIdentifier(pageAlias)} WHERE ${filterSql} AND ${boundarySql} ORDER BY ${ordering} LIMIT (${first} + 1)) SELECT ${columns.join(", ")} FROM "qp_page" AS ${quoteIdentifier(pageAlias)}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} ORDER BY ${ordering};\n`;
 	const positionalParameters = parameters.values();
+	const keyedLookup = lowerPostgresKeyedLookupProof({
+		catalog,
+		collection: rootCollection,
+		policy: policy.program,
+		template: input.query.template,
+	});
 	return Object.freeze({
 		format: "questpie.postgres-query-plan",
 		version: 1,
@@ -450,6 +463,7 @@ export function lowerPostgresQueryPlan(
 		sql,
 		parameters: positionalParameters,
 		result: Object.freeze(result),
+		nondisclosure: Object.freeze({ keyedLookup }),
 	});
 }
 

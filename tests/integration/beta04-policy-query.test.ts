@@ -35,8 +35,11 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 			queryDigest: string;
 			policyProgramDigest: string;
 			keyedLookup: Readonly<{
-				missingKey: string;
-				policyInvisibleKey: string;
+				proofPlanDigest: string;
+				keyField: string;
+				outcomeColumn: string;
+				disclosure: string;
+				outcomes: Readonly<{ authorized: string; unavailable: string }>;
 			}>;
 			countOracle: string;
 		}>[];
@@ -49,8 +52,11 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 		queryDigest: plan.queryDigest,
 		policyProgramDigest: plan.policyProgramDigest,
 		keyedLookup: {
-			missingKey: "notFound",
-			policyInvisibleKey: "notFound",
+			proofPlanDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+			keyField: "collection:messages/field:id",
+			outcomeColumn: "qp_key_outcome",
+			disclosure: "outcomeOnly",
+			outcomes: { authorized: "found", unavailable: "notFound" },
 		},
 		countOracle: "absent",
 	});

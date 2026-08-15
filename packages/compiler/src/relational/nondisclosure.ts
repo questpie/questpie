@@ -7,8 +7,14 @@ export interface RelationalNondisclosureQueryV1 {
 	readonly policyProgramDigest: string;
 	readonly postgresQueryPlanDigest: string;
 	readonly keyedLookup: Readonly<{
-		missingKey: "notFound";
-		policyInvisibleKey: "notFound";
+		proofPlanDigest: string;
+		keyField: string;
+		outcomeColumn: "qp_key_outcome";
+		disclosure: "outcomeOnly";
+		outcomes: Readonly<{
+			authorized: "found";
+			unavailable: "notFound";
+		}>;
 	}>;
 	readonly countOracle: "absent";
 	readonly page: Readonly<{
@@ -140,6 +146,25 @@ export function projectRelationalNondisclosure(
 			throw new TypeError(
 				`Postgres plan ${queryDigest} does not preserve its Policy digest`,
 			);
+		const nondisclosure = record(
+			plan.nondisclosure,
+			"Postgres nondisclosure proof",
+		);
+		const keyedLookup = record(
+			nondisclosure.keyedLookup,
+			"Postgres keyed lookup proof",
+		);
+		if (
+			keyedLookup.outcomeColumn !== "qp_key_outcome" ||
+			typeof keyedLookup.sql !== "string" ||
+			!Array.isArray(keyedLookup.parameters)
+		)
+			throw new TypeError("invalid Postgres keyed lookup proof");
+		const keyField = requiredString(
+			keyedLookup,
+			"keyField",
+			"Postgres keyed lookup proof",
+		);
 
 		return {
 			queryDigest,
@@ -148,8 +173,14 @@ export function projectRelationalNondisclosure(
 			policyProgramDigest,
 			postgresQueryPlanDigest: digest("questpie-postgres-query-plan-v1", plan),
 			keyedLookup: {
-				missingKey: "notFound",
-				policyInvisibleKey: "notFound",
+				proofPlanDigest: digest(
+					"questpie-postgres-keyed-lookup-proof-v1",
+					keyedLookup,
+				),
+				keyField,
+				outcomeColumn: "qp_key_outcome",
+				disclosure: "outcomeOnly",
+				outcomes: { authorized: "found", unavailable: "notFound" },
 			},
 			countOracle: "absent",
 			page: {

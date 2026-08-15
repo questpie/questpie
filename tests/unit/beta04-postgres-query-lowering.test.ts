@@ -503,6 +503,28 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 		"tenantId",
 	]);
 	expect(plan.policyProgramDigest).toMatch(/^[0-9a-f]{64}$/);
+	expect(plan.nondisclosure.keyedLookup).toMatchObject({
+		keyField: "collection:messages/field:id",
+		outcomeColumn: "qp_key_outcome",
+		parameters: [
+			expect.objectContaining({ kind: "executionFact", position: 1 }),
+			expect.objectContaining({ kind: "executionFact", position: 2 }),
+			expect.objectContaining({ kind: "literal", position: 3 }),
+			expect.objectContaining({ kind: "literal", position: 4 }),
+			{
+				kind: "key",
+				position: 5,
+				postgresType: "uuid",
+			},
+		],
+	});
+	expect(plan.nondisclosure.keyedLookup.sql).toContain(
+		'FROM "qp_authorized" AS "qp_key_row"',
+	);
+	expect(plan.nondisclosure.keyedLookup.sql).toContain(
+		`THEN 'found' ELSE 'notFound' END AS "qp_key_outcome"`,
+	);
+	expect(plan.nondisclosure.keyedLookup.sql).not.toContain("qp_body");
 	expect(plan.result).toContainEqual(
 		expect.objectContaining({
 			key: "body",

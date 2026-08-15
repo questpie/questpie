@@ -39,6 +39,18 @@ const microsecondMessageIds = [
 	"018f5f6e-5f2c-7b41-a854-3d9a6b6b61d2",
 ] as const;
 
+type KeyedLookupProof = Readonly<{
+	sql: string;
+	parameters: readonly Readonly<{
+		kind: "executionFact" | "literal" | "key";
+		position: number;
+		source?: string;
+		path?: readonly string[];
+		value?: unknown;
+	}>[];
+	outcomeColumn: "qp_key_outcome";
+}>;
+
 let plan: PostgresQueryPlanV1;
 
 function binding(
@@ -62,6 +74,32 @@ function executionFacts(principal = principalId, tenant = companyId) {
 		principal: { id: principal },
 		tenant: { id: tenant },
 	};
+}
+
+async function probeKey(
+	proof: KeyedLookupProof,
+	key: string,
+	principal = principalId,
+): Promise<Readonly<Record<string, unknown>>> {
+	const facts = executionFacts(principal);
+	const values = proof.parameters.map((parameter) => {
+		if (parameter.kind === "key") return key;
+		if (parameter.kind === "literal") return parameter.value;
+		const path = parameter.path?.join(".");
+		if (parameter.source === "principal" && path === "id")
+			return facts.principal.id;
+		if (parameter.source === "tenant" && path === "id") return facts.tenant.id;
+		if (parameter.source === "authority" && path === "kind")
+			return facts.authority.kind;
+		throw new Error("unsupported keyed proof execution fact");
+	});
+	const rows = await database!.unsafe<Readonly<Record<string, unknown>>[]>(
+		proof.sql,
+		values,
+	);
+	const outcome = rows[0];
+	if (!outcome) throw new Error("keyed proof returned no outcome");
+	return outcome;
 }
 
 async function execute(
@@ -152,6 +190,27 @@ afterAll(async () => {
 describe.skipIf(!database)(
 	"BETA-04 Bun PostgreSQL Policy Query adapter",
 	() => {
+		test("normalizes missing and Policy-invisible Message keys without disclosure", async () => {
+			const proof = (
+				plan as unknown as Readonly<{
+					nondisclosure: Readonly<{ keyedLookup: KeyedLookupProof }>;
+				}>
+			).nondisclosure.keyedLookup;
+			const missing = await probeKey(
+				proof,
+				"018f5f6e-5f2c-7b41-a854-3d9a6b6b62ff",
+			);
+			const invisible = await probeKey(
+				proof,
+				messageIds[0],
+				foreignPrincipalId,
+			);
+
+			expect(missing).toEqual({ qp_key_outcome: "notFound" });
+			expect(invisible).toEqual(missing);
+			expect(Object.keys(invisible)).toEqual([proof.outcomeColumn]);
+		});
+
 		test("uses canonical millisecond order for microsecond PostgreSQL rows and cursor seeks", async () => {
 			await database!`
 					insert into collaboration.channels (id, space_id, name, visibility)

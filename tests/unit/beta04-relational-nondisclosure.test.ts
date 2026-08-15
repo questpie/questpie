@@ -30,6 +30,14 @@ test("joins nondisclosure outcomes to exact Policy, Query, and lowering digests"
 		templateDigest: queryDigest,
 		policy: policyProgram.identity,
 		policyProgramDigest,
+		nondisclosure: {
+			keyedLookup: {
+				sql: "SELECT CASE WHEN FALSE THEN 'found' ELSE 'notFound' END AS \"qp_key_outcome\";\n",
+				parameters: [{ kind: "key", position: 1, postgresType: "uuid" }],
+				keyField: "collection:messages/field:id",
+				outcomeColumn: "qp_key_outcome",
+			},
+		},
 	};
 
 	const transcript = projectRelationalNondisclosure({
@@ -50,9 +58,15 @@ test("joins nondisclosure outcomes to exact Policy, Query, and lowering digests"
 		},
 	});
 
-	expect(canonicalBytes(transcript)).toBe(
-		'{"format":"questpie.relational-nondisclosure","queries":[{"countOracle":"absent","keyedLookup":{"missingKey":"notFound","policyInvisibleKey":"notFound"},"page":{"firstPlusOneSentinel":"authorizedBaseOnly","rows":"authorizedBaseOnly"},"policy":"policy:messages.default","policyProgramDigest":"7606e61481f278e3c16148bfea3fdc2dc0decc87445521177ee9a58315ea5177","postgresQueryPlanDigest":"23d763c1a836e8297d947129685be2b8318b9cff222656786f5ea9cd7a9da0d8","queryDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","relation":{"missing":null,"policyInvisible":null},"selectedFieldDenied":"omitProperty","templateDigest":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}],"version":1}\n',
-	);
+	expect(transcript.queries[0]?.keyedLookup).toEqual({
+		proofPlanDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+		keyField: "collection:messages/field:id",
+		outcomeColumn: "qp_key_outcome",
+		disclosure: "outcomeOnly",
+		outcomes: { authorized: "found", unavailable: "notFound" },
+	});
+	expect(canonicalBytes(transcript)).not.toContain("missingKey");
+	expect(canonicalBytes(transcript)).not.toContain("policyInvisibleKey");
 
 	expect(() =>
 		projectRelationalNondisclosure({

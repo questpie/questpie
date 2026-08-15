@@ -240,6 +240,54 @@ exports[`lowers one Policy-authorized Message page to one static PostgreSQL stat
       },
       "nullable": false
     }
-  ]
+  ],
+  "nondisclosure": {
+    "keyedLookup": {
+      "sql": "WITH \\"qp_authorized\\" AS MATERIALIZED (SELECT \\"qp_row\\".* FROM \\"collaboration\\".\\"messages\\" AS \\"qp_row\\" WHERE EXISTS (SELECT 1 FROM \\"collaboration\\".\\"channels\\" AS \\"qp_evidence0\\" WHERE ((\\"qp_evidence0\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_row\\".\\"channel_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"spaces\\" AS \\"qp_evidence1\\" WHERE ((\\"qp_evidence1\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence0\\".\\"space_id\\") AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"companies\\" AS \\"qp_evidence2\\" WHERE ((\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM \\"qp_evidence1\\".\\"company_id\\") AND (\\"qp_evidence2\\".\\"id\\" IS NOT DISTINCT FROM $1::uuid) AND EXISTS (SELECT 1 FROM \\"collaboration\\".\\"memberships\\" AS \\"qp_evidence3\\" WHERE ((\\"qp_evidence3\\".\\"company_id\\" IS NOT DISTINCT FROM \\"qp_evidence2\\".\\"id\\") AND (\\"qp_evidence3\\".\\"principal_id\\" IS NOT DISTINCT FROM $2::uuid) AND (\\"qp_evidence3\\".\\"scope_key\\" IS NOT DISTINCT FROM $3::text) AND (\\"qp_evidence3\\".\\"status\\" IS NOT DISTINCT FROM $4::text)))))))))) SELECT CASE WHEN EXISTS (SELECT 1 FROM \\"qp_authorized\\" AS \\"qp_key_row\\" WHERE \\"qp_key_row\\".\\"id\\" IS NOT DISTINCT FROM $5::uuid) THEN 'found' ELSE 'notFound' END AS \\"qp_key_outcome\\";\\n",
+      "parameters": [
+        {
+          "kind": "executionFact",
+          "source": "tenant",
+          "path": [
+            "id"
+          ],
+          "codec": "uuid",
+          "postgresType": "uuid",
+          "position": 1
+        },
+        {
+          "kind": "executionFact",
+          "source": "principal",
+          "path": [
+            "id"
+          ],
+          "codec": "uuid",
+          "postgresType": "uuid",
+          "position": 2
+        },
+        {
+          "kind": "literal",
+          "value": "company",
+          "codec": "text",
+          "postgresType": "text",
+          "position": 3
+        },
+        {
+          "kind": "literal",
+          "value": "active",
+          "codec": "text",
+          "postgresType": "text",
+          "position": 4
+        },
+        {
+          "position": 5,
+          "kind": "key",
+          "postgresType": "uuid"
+        }
+      ],
+      "keyField": "collection:messages/field:id",
+      "outcomeColumn": "qp_key_outcome"
+    }
+  }
 }"
 `;

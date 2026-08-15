@@ -169,6 +169,7 @@ describe("BETA-01 generated contract", () => {
 			"policy:memberships.default",
 			"policy:messages.default",
 			"query:messages.byId",
+			"seed:collaboration.authorization.v1",
 			"seed:collaboration.demo.v1",
 			"service:audit.connection",
 			"service:audit.execution",
