@@ -1,0 +1,16 @@
+{
+	"format": "questpie.beta06-authority-projection",
+	"version": 1,
+	"reviewedHead": "35d48eb8cc5fd6548f00201322138741a2c677fa",
+	"reviewEvidenceHead": "4a3e1a9b522b1d33644b8dfaf0d9646cedf066ee",
+	"reviewVerdict": "PASS",
+	"issue": {
+		"number": 293,
+		"url": "https://github.com/questpie/questpie/issues/293",
+		"bodySource": "ISSUE-293.expected.md",
+		"bodySha256": "9e2f06017649e1be4b68bf66b77d40195a414a59c5073086000959e46163c138",
+		"state": "OPEN",
+		"labels": ["wayfinder:task", "ready-for-agent"],
+		"projectedAt": "2026-08-16T02:12:46Z"
+	}
+}
