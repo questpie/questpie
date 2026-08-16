@@ -32,6 +32,8 @@ export type {
 	DataQueryPage,
 	DataCursorDiagnosticCode,
 	PostgresQueryParameterV1,
+	PostgresQueryObservationV1,
+	PostgresQueryObserver,
 	PostgresQueryPlanV1,
 	PostgresQueryResultV1,
 	PostgresQueryRow,

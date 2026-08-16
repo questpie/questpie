@@ -7,6 +7,11 @@ import {
 	executePostgresQuery,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
+import {
+	createLiveQueryObservation,
+	type LinkedQueryWatchabilityV1,
+	type LinkedStructuralQueryObservationSlotV1,
+} from "../../packages/runtime/src/live-query";
 
 const templateDigest = "a".repeat(64);
 const policyProgramDigest = "b".repeat(64);
@@ -199,6 +204,63 @@ const executionFacts = {
 	tenant: { id: "00000000-0000-0000-0000-000000000020" },
 };
 
+function watchability(
+	options?: Readonly<{
+		policyEvidence?: boolean;
+		unreachedBranch?: boolean;
+	}>,
+): LinkedQueryWatchabilityV1 {
+	const policyEvidence = options?.policyEvidence === true;
+	const main: LinkedStructuralQueryObservationSlotV1 = {
+		kind: "structuralQuery",
+		templateDigest,
+		policy: plan.policy,
+		policyProgramDigest,
+		collections: [
+			...(policyEvidence ? ["collection:memberships"] : []),
+			"collection:messages",
+			"collection:users",
+		],
+		relations: ["collection:messages/relation:author"],
+		tokens: [
+			"collectionRange",
+			"orderingBoundary",
+			"pageSentinel",
+			...(policyEvidence ? (["policyEvidencePoint"] as const) : []),
+			"relationEndpoint",
+			"relationMiss",
+			"tenantPartition",
+		],
+	};
+	const structuralQueries = new Map([[templateDigest, main]]);
+	if (options?.unreachedBranch)
+		structuralQueries.set("c".repeat(64), {
+			kind: "structuralQuery",
+			templateDigest: "c".repeat(64),
+			policy: "policy:audit",
+			policyProgramDigest: "f".repeat(64),
+			collections: ["collection:auditEvents"],
+			relations: [],
+			tokens: ["collectionRange"],
+		});
+	return {
+		identity: "query:messages.page",
+		watchable: true,
+		inputCodec: {},
+		outputCodec: {},
+		contractDigest: "d".repeat(64),
+		context: {
+			kind: "context",
+			identity: "context:request",
+			projectionDigest: "e".repeat(64),
+			tokens: ["contextBootstrapPoint", "tenantPartition"],
+		},
+		structuralQueries,
+		maximumTokensPerPlan: 256,
+		unsupportedReason: null,
+	};
+}
+
 function rows() {
 	return [
 		{
@@ -323,6 +385,115 @@ test("binds one exact authorized page and decodes structural disclosure", async 
 			{ field: plan.page.order[1].field, value: id2 },
 		],
 	});
+});
+
+test("observes only the successful relational page branch and its decoded Relation miss", async () => {
+	const observation = createLiveQueryObservation(
+		watchability({ policyEvidence: true, unreachedBranch: true }),
+	);
+	observation.recordContext("context:request", [
+		{
+			kind: "contextBootstrapPoint",
+			collection: "collection:memberships",
+			detail: { principalId: executionFacts.principal.id },
+		},
+	]);
+
+	const page = await executePostgresQuery({
+		plan,
+		binding,
+		executionFacts,
+		sql: fakeSql(() => rows()),
+		observer: observation,
+	});
+	const observed = observation.finish();
+
+	expect(page.nodes[1]?.author).toBeNull();
+	expect(
+		observed.tokens.map(({ kind, collection }) => [kind, collection]),
+	).toEqual([
+		["policyEvidencePoint", "collection:memberships"],
+		["contextBootstrapPoint", "collection:memberships"],
+		["orderingBoundary", "collection:messages"],
+		["pageSentinel", "collection:messages"],
+		["tenantPartition", "collection:messages"],
+		["collectionRange", "collection:messages"],
+		["relationEndpoint", "collection:users"],
+		["relationMiss", "collection:users"],
+	]);
+	expect(observed.tokens).not.toContainEqual(
+		expect.objectContaining({ collection: "collection:auditEvents" }),
+	);
+	const detail = (kind: (typeof observed.tokens)[number]["kind"]) =>
+		observed.tokens.find((token) => token.kind === kind)?.detail;
+	expect(detail("collectionRange")).toEqual({
+		scope: [
+			{ parameter: "statuses", value: ["draft", "published"] },
+			{ parameter: "tenantSlug", value: "north" },
+		],
+	});
+	expect(detail("orderingBoundary")).toEqual({
+		after: null,
+		order: [
+			"collection:messages/field:createdAt",
+			"collection:messages/field:id",
+		],
+	});
+	expect(detail("pageSentinel")).toEqual({
+		first: 2,
+		hasNextPage: true,
+		observed: 2,
+	});
+	expect(detail("tenantPartition")).toEqual({ id: executionFacts.tenant.id });
+	expect(detail("policyEvidencePoint")).toEqual({
+		conservative: true,
+		policy: plan.policy,
+	});
+	expect(detail("relationEndpoint")).toEqual({
+		conservative: true,
+		observed: 1,
+		relation: "collection:messages/relation:author",
+	});
+	expect(detail("relationMiss")).toEqual({
+		conservative: true,
+		observed: 1,
+		relation: "collection:messages/relation:author",
+	});
+});
+
+test("does not observe failed SQL or invalid relational output", async () => {
+	const query = watchability();
+	const failedSql = createLiveQueryObservation(query);
+	failedSql.recordContext("context:request", []);
+	await expect(
+		executePostgresQuery({
+			plan,
+			binding,
+			executionFacts,
+			sql: fakeSql(() => Promise.reject(new Error("database unavailable"))),
+			observer: failedSql,
+		}),
+	).rejects.toThrow("database unavailable");
+	expect(() => failedSql.finish()).toThrow(
+		"missing an executed observation slot",
+	);
+
+	const failedOutput = createLiveQueryObservation(query);
+	failedOutput.recordContext("context:request", []);
+	const invalidRows = rows();
+	invalidRows[0] = { ...invalidRows[0], qp_f0: "not-a-uuid" };
+	await expect(
+		executePostgresQuery({
+			plan,
+			binding,
+			executionFacts,
+			sql: fakeSql(() => invalidRows),
+			observer: failedOutput,
+		}),
+	).rejects.toMatchObject({ code: "QP-DATA-001", phase: "execute" });
+	expect(() => failedOutput.finish()).toThrow(
+		"missing an executed observation slot",
+	);
 });
 
 test("normalizes PostgreSQL timestamp Dates before result and cursor validation", async () => {

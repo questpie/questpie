@@ -1,4 +1,5 @@
 import { canonicalJsonLine, sha256Digest } from "../canonical-json";
+import type { PostgresQueryObserver } from "../relational";
 import type {
 	LinkedQueryWatchabilityV1,
 	LinkedStructuralQueryObservationSlotV1,
@@ -29,7 +30,7 @@ export type ObservedLiveQueryPlanV1 = Readonly<{
 	digest: string;
 }>;
 
-export interface LiveQueryObservation {
+export interface LiveQueryObservation extends PostgresQueryObserver {
 	recordContext(
 		identity: string,
 		tokens: readonly LiveQueryDependencyTokenV1[],
@@ -197,6 +198,65 @@ export function createLiveQueryObservation(
 					detail: { conservative: true, templateDigest },
 				})),
 			);
+		},
+		recordPostgresQuery(reached) {
+			const slot = query.structuralQueries.get(reached.templateDigest);
+			if (!slot)
+				throw new TypeError(
+					"Structural Query observation slot is not declared",
+				);
+			const tokens: LiveQueryDependencyTokenV1[] = [];
+			const add = (
+				kind: LiveQueryDependencyTokenKind,
+				collection: string,
+				detail: Readonly<Record<string, unknown>>,
+			): void => {
+				if (slot.tokens.includes(kind))
+					tokens.push({ kind, collection, detail });
+			};
+			add("collectionRange", reached.primaryCollection, {
+				scope: reached.scope,
+			});
+			add("orderingBoundary", reached.primaryCollection, {
+				after: reached.after,
+				order: reached.order,
+			});
+			add("pageSentinel", reached.primaryCollection, {
+				first: reached.first,
+				hasNextPage: reached.hasNextPage,
+				observed: reached.observed,
+			});
+			add("tenantPartition", reached.primaryCollection, {
+				id: reached.tenantId,
+			});
+			const relationCollections = new Set(
+				reached.relations.map(({ collection }) => collection),
+			);
+			for (const collection of slot.collections) {
+				if (
+					collection !== reached.primaryCollection &&
+					!relationCollections.has(collection)
+				)
+					add("policyEvidencePoint", collection, {
+						conservative: true,
+						policy: slot.policy,
+					});
+			}
+			for (const relation of reached.relations) {
+				if (relation.endpoints > 0)
+					add("relationEndpoint", relation.collection, {
+						conservative: true,
+						observed: relation.endpoints,
+						relation: relation.relation,
+					});
+				if (relation.misses > 0)
+					add("relationMiss", relation.collection, {
+						conservative: true,
+						observed: relation.misses,
+						relation: relation.relation,
+					});
+			}
+			observation.recordStructuralQuery(reached.templateDigest, tokens);
 		},
 		finish() {
 			if (finished) return finished;

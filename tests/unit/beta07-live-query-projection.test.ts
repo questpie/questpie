@@ -387,7 +387,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			digest: runtimeBuild.realtimeWireDigest,
 		});
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
-			"recordStructuralQueryReached",
+			"observer:facts.liveQueryObservation??undefined",
 		);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
