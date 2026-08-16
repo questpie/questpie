@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "52a8165207e6df6c7a7742ea67c7a8d917e72327",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "f5461efffc0a0733e5f727b82b5bc74398f54d5ed85627db47cfb721335a3b08",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "8a093359-d3db-47fd-90cf-4087ee3df633",
+				"invocationId": "01a00a7d-9842-75c3-a293-f07728911e7b",
+				"packetDigest": "f5461efffc0a0733e5f727b82b5bc74398f54d5ed85627db47cfb721335a3b08",
+				"reviewedHead": "52a8165207e6df6c7a7742ea67c7a8d917e72327",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` still does not produce configuration-independent canonical diff bytes. Although it pins several previously identified settings, the invocation does not pin context generation; Git configuration such as `diff.context` and `diff.interHunkContext` can therefore change the exact patch and packet digest for the same reviewed commits. This contradicts ADR-0024 and the manifest criterion requiring deterministic packet re-derivation. Explicitly pin all remaining byte-affecting diff options—at minimum unified context and inter-hunk context—or execute Git under a fully isolated configuration, and add hostile-config controls proving identical packet bytes when those settings differ.\n\nNon-blocking observations: The revision otherwise preserves valid primary-verdict precedence, confines contingency to the fixed Spec/Standards pair after primary `NO_RESULT`, binds reviews and records to the packet/head/base, rejects tool and unknown events, separates ephemeral reviewer workspaces, validates authority ancestry and output-path safety, and remains within repository-quality scope without introducing a production provider seam."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "0a1021f5-f833-4b4b-8e46-933b28886124",
+				"invocationId": "01a00a7d-9845-7153-8680-c95e0abea223",
+				"packetDigest": "f5461efffc0a0733e5f727b82b5bc74398f54d5ed85627db47cfb721335a3b08",
+				"reviewedHead": "52a8165207e6df6c7a7742ea67c7a8d917e72327",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `tests/unit/acceptance-review-protocol.test.ts` does not directly exercise several required response-validation controls. The “response binding mismatch,” “malformed response shape with missing axis,” and “duplicate verdict” cases modify only `finalResponse` while leaving the `agent_message` event text unchanged. All three therefore fail earlier at transcript/file mismatch in `parseEvents`; they would still pass if the exact response-shape, request-binding, or unique-verdict checks in `decodeResponse` were removed. The suite also lacks a direct empty-response case. Update each response-level control so the completed `agent_message.text` and `finalResponse` contain the same deliberately invalid response, add empty and malformed-JSON controls, and rerun the manifest’s negative-control and quality gates.\n\nNon-blocking observations: The implementation otherwise closes the previously identified ancestry, canonical Git-diff configuration, symlink-parent, Git-administration-path, and bounded-process issues. Primary-verdict precedence, the fixed two-axis profile, distinct invocation identities, packet binding, aggregate record validation, and credential-free committed-record verification remain coherent."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:14:52.113Z"
+}
