@@ -105,6 +105,7 @@ describe("BETA-01 generated contract", () => {
 			"query-projection.json",
 			"query-watchability.json",
 			"reaction-projection.json",
+			"realtime-wire-contract.json",
 			"relational-explain.json",
 			"relational-nondisclosure.json",
 			"runtime-build.json",
