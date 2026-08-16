@@ -1,3 +1,4 @@
+docs/v4/implementation/beta06/claude-acceptance.json
 docs/v4/implementation/beta06/claude-initial-review.json
 docs/v4/implementation/beta06/claude-review-02.json
 docs/v4/prototypes/beta06-authority-reconciliation/REVIEW.json
