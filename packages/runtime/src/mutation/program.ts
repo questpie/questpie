@@ -334,7 +334,7 @@ function decodeOperation(
 		source.selectedFieldPaths,
 		`${label} selectedFieldPaths`,
 	);
-	if (selectedFieldPaths.length === 0)
+	if (member !== "list" && selectedFieldPaths.length === 0)
 		fail(`${label} selection must not be empty`);
 	if ((member === "list" || member === "create") !== (keyFields.length === 0))
 		fail(`${label} keyFields do not match its member`);
