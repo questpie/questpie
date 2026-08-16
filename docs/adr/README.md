@@ -30,6 +30,10 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 22. [API Ergonomics and Operation Projection](./0022-freeze-api-ergonomics-and-operation-projection.md)
 23. [Post-Commit Operation Outcome](./0023-freeze-post-commit-operation-outcome.md)
 
+## Candidate bootstrap amendment
+
+24. [Provider-contingent acceptance](./0024-freeze-provider-contingent-acceptance.md)
+
 ## Open decisions
 
 The schema lifecycle, static composition, foundational data/structural Query,

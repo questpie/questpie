@@ -38,9 +38,9 @@ Keep commands in `package.json`, behavior in config/CI, contributor workflow in
 SPEC/ADRs/workbenches, and proof history in PROOF-MAP/manifests. Update this
 branch reference only for stable cross-task procedure.
 
-## Acceptance packet secret scan
+## Acceptance packet and record safety
 
-The stateless acceptance wrapper permits only credential-free
+The stateless acceptance wrapper and verifier permit only credential-free
 `postgres://localhost/` or `postgresql://localhost/` test literals, optionally
 with a simple database path or numeric port, and the exact source assignment
 `url.password = process.env.PGPASSWORD`. These describe local configuration;
@@ -52,3 +52,9 @@ source uses the readable direct property. Synthetic rejection probes are
 masked only on explicitly marked lines in the exact scanner test path; the
 marker has no effect elsewhere. Every allowlist change requires positive
 fixtures and negative controls for real URL credentials and real assignments.
+
+The committed v2 manifest closes authority paths and digests. Authenticated
+model calls run only before merge; CI re-derives the exact reviewed packet and
+verifies its committed aggregate record. The primary Opus profile and the
+contingency GPT-5.6-sol Spec/Standards pair are fixed by repository code, never
+environment or CLI provider selection.

@@ -568,6 +568,19 @@ after exact Current App Contract inference, Package isolation, declarations,
 and editor budgets pass; it cannot reintroduce a registry or move executable
 Definition ownership into stable structural builders.
 
+### Repository-quality acceptance revision
+
+ADR-0020 and P22 remain immutable protocol-v1 history. #317/ADR-0024 is a
+separate candidate bootstrap revision, not part of any implementation slice.
+It keeps Opus-medium primary and proposes one exact GPT-5.6-sol medium
+Spec/Standards contingency pair only after a recorded primary transport
+`NO_RESULT`. The same packet digest, unanimous `PASS`, clean-head binding, and
+credential-free committed-record verification are mandatory. This revision
+does not weaken ticket authority, let callers select providers, or allow a
+ticket to accept itself with exploratory model prose. If accepted, BETA-07 and
+later slices must consume the merged protocol normally and produce their own
+fresh review evidence.
+
 ## #14: What conformance applications and hostile matrices prove the design?
 
 Blocked by: #1 through #13

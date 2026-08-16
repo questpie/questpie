@@ -888,6 +888,25 @@ Repository-foundation work implements no production compiler or Runtime.
 Individual implementation slices must add their own correctness fixtures,
 micro/load/soak manifests and budgets when the accepted behavior first exists.
 
+## P22R1 — provider-contingent acceptance
+
+Status: candidate bootstrap revision tracked by #317. It preserves every P22
+protocol-v1 byte and historical Opus verdict while removing the accidental
+single-provider availability lock prospectively. ADR-0024 owns the proposed
+transition: Opus-medium remains primary; only a recorded primary `NO_RESULT`
+may activate one closed pair of independent GPT-5.6-sol medium Spec and
+Standards reviews over the same packet digest. Both must return `PASS`.
+
+The candidate introduces a manifest-owned canonical packet, exact
+authority-document digests, one pinned Codex transport, a closed two-axis state
+machine, and a credential-free committed-record verifier. It is an explicit
+one-time maintainer-authorized bootstrap because protocol v1 cannot ratify its
+own replacement while its sole transport is unavailable. No production
+QUESTPIE behavior, provider registry, public plugin seam, or reuse of #317
+evidence for an implementation ticket is authorized. Exact reviewed and
+acceptance heads are projected here only after the candidate passes its own
+deterministic gates and both new axes.
+
 ## P14 — complete conformance map
 
 Status: accepted. Initial reviewed head

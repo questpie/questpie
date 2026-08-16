@@ -15,24 +15,35 @@
 
 ## Accept
 
-Run exactly one fresh stateless Claude Opus review at medium effort only after
-all deterministic gates pass. Invoke the repository wrapper:
+Run the closed acceptance protocol only after all deterministic gates pass.
+Protocol v2 first requests one fresh stateless Claude Opus review at medium
+effort. A valid primary verdict is final. Only primary `NO_RESULT` activates
+the fixed pair of fresh stateless GPT-5.6-sol medium Spec and Standards reviews.
+Invoke the repository wrapper:
 
 ```sh
 bun run review:accept -- \
-  --manifest path/to/acceptance-manifest.json \
-  --authority path/to/relevant-authority.md \
-  --diff-base <exact-parent-commit> \
-  --output path/to/review.json
+  --manifest path/to/acceptance-manifest.json
 ```
 
-Add one `--authority` for each required authority document. The wrapper checks
-all paths, a clean exact head, manifest consistency, secret-like material,
-packet order, timeout/transport/empty output, and an explicit `PASS` or
-`BLOCKED` verdict. It fixes model `opus`, effort `medium`, stateless mode, and
-no tools. Exploratory Claude runs are evidence only and never satisfy this
-gate.
+The v2 manifest owns the exact diff base, output path, proof heads, ordered
+authority paths and SHA-256 digests, PASS-only verification, and acceptance
+criteria. The wrapper checks a clean exact head, ancestry, packet order,
+secret-like material, timeout/transport/empty output, exact reviewer profiles,
+tool-free JSON events, request/digest binding, and explicit verdicts. Callers
+cannot select a model, effort, provider, axis, prompt, or authority file.
 
-For `BLOCKED`, repair and commit a new clean head, rerun every affected gate,
-and run one replacement fresh review. Record raw findings, exact reviewed head,
-model, effort, and verdict. Project authority only after `PASS`.
+Primary `PASS` or `BLOCKED` is final. After primary `NO_RESULT`, both
+contingency axes must `PASS`; either `BLOCKED` blocks and any invalid or
+unavailable axis is no result. Exploratory reviews never satisfy this gate.
+Commit the resulting record and verify it without model credentials:
+
+```sh
+bun run review:accept:verify -- --record path/to/review.json
+```
+
+For `BLOCKED`, preserve the record, repair and commit a new clean head, rerun
+every affected gate, and run one replacement fresh round. Record raw findings,
+exact reviewed head, model, effort, packet digest, invocation identities, and
+verdict. Project authority only after `PASS` and deterministic record
+verification.
