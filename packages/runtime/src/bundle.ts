@@ -5,3 +5,7 @@ export {
 	executePostgresQuery,
 } from "./relational";
 export { createPostgresMutationInvoker } from "./mutation/postgres";
+export {
+	linkCollectionMutationPrograms,
+	linkPostgresCollectionOperationPlans,
+} from "./mutation";

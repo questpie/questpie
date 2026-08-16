@@ -1,5 +1,4 @@
 import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
-import type { TransactionQuery } from "./data";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
@@ -11,6 +10,11 @@ type Row = Readonly<Record<string, unknown>>;
 type Path = readonly string[];
 type Parameter = LinkedPostgresGetOperationPlanV1["lock"]["parameters"][number];
 type Result = LinkedPostgresGetOperationPlanV1["read"]["result"][number];
+
+export type TransactionQuery = (
+	statement: string,
+	parameters?: readonly unknown[],
+) => Promise<readonly Row[]>;
 
 type ExecutionFacts = Readonly<{
 	principal: Readonly<{ id: string; kind: string }>;

@@ -57,25 +57,62 @@ function postgres(commitFails: boolean): Readonly<{
 	};
 }
 
-const schema = {
-	application: { postgresSchema: "collaboration" },
-	collections: [
+const collectionPlans = {
+	plans: [
 		{
-			identity: "collection:messages",
-			postgresName: "messages",
-			fields: [
-				{
-					identity: "collection:messages/field:id",
-					path: ["id"],
-					postgresName: "id",
-				},
-			],
-			constraints: [
-				{
-					kind: "primaryKey",
-					fields: ["collection:messages/field:id"],
-				},
-			],
+			identity: "mutation:messages.create",
+			target: "collection:messages",
+			member: "create",
+			operation: {
+				target: "collection:messages",
+				member: "create",
+				keyFields: [["id"]],
+				callerInputFields: [["id"]],
+			},
+			candidate: {
+				fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
+			},
+			fieldAuthority: { checks: [] },
+			write: {
+				sql: 'INSERT INTO "collaboration"."messages"',
+				parameters: [
+					{
+						position: 1,
+						postgresType: "uuid",
+						kind: "callerInput",
+						path: ["id"],
+						codec: { kind: "uuid" },
+					},
+				],
+				result: [
+					{
+						path: ["id"],
+						column: "id",
+						codec: { kind: "uuid" },
+						nullable: false,
+					},
+				],
+			},
+			limits: { rows: 100, durationMilliseconds: 5_000 },
+		},
+	],
+} as const;
+
+const reactionProjection = {
+	format: "questpie.reaction-projection",
+	version: 1,
+	reactions: [
+		{
+			identity: "reaction:messagePublished",
+			input: {
+				kind: "object",
+				properties: { messageId: { kind: "uuid" } },
+			},
+			origin: {
+				path: "src/message-published.ts",
+				exportName: "messagePublished",
+				packageId: null,
+			},
 		},
 	],
 } as const;
@@ -103,7 +140,6 @@ const operation = {
 		}: Readonly<{ input: unknown; ctx: MutationView }>) => {
 			const created = await ctx.data.messages.create({
 				input: { id: messageId },
-				select: { id: true },
 			});
 			await ctx.dispatch.messagePublished({ messageId: created.id });
 			return created;
@@ -126,7 +162,8 @@ const operation = {
 function invoker(database: ReturnType<typeof postgres>) {
 	return createPostgresMutationInvoker<MutationView>({
 		sql: database.sql,
-		schema,
+		collectionPlans,
+		reactionProjection,
 		application: "application:collaboration",
 		facts: {
 			principal: principal.user({

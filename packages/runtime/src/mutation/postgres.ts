@@ -8,9 +8,14 @@ import {
 	deterministicUuid,
 	mutationDigest,
 } from "./canonical";
+import {
+	createPostgresCollectionMutationData,
+	type TransactionQuery,
+} from "./collection";
 import { CommittedResultUnavailable } from "./committed-result-unavailable";
-import { createPostgresMutationData, type TransactionQuery } from "./data";
+import { createReactionDispatch, linkReactionProjection } from "./dispatch";
 import type { MutationInvoker } from "./index";
+import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 
 type Row = Readonly<Record<string, unknown>>;
 
@@ -117,13 +122,15 @@ function inputScopeBytes(
 export function createPostgresMutationInvoker<View>(
 	input: Readonly<{
 		sql: SQL;
-		schema: unknown;
 		application: string;
+		collectionPlans: LinkedPostgresCollectionOperationPlansV1;
+		reactionProjection: unknown;
 		facts: ExecutionFacts<
 			Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
 		>;
 	}>,
 ): MutationInvoker<View> {
+	const reactionProjection = linkReactionProjection(input.reactionProjection);
 	return async (operation, callId, options) => {
 		if (
 			operation.binding.kind !== "mutation" ||
@@ -142,6 +149,7 @@ export function createPostgresMutationInvoker<View>(
 		const signals = [input.facts.signal, options?.signal].filter(
 			(signal): signal is AbortSignal => signal !== undefined,
 		);
+		signals.push(AbortSignal.timeout(5_000));
 		if (options?.deadline !== undefined) {
 			if (!Number.isFinite(options.deadline))
 				throw new TypeError("Mutation deadline is invalid");
@@ -156,6 +164,7 @@ export function createPostgresMutationInvoker<View>(
 		const facts = Object.freeze({ ...input.facts, signal });
 		const pool = input.sql as unknown as PostgresPool;
 		const session = await pool.reserve();
+		const transactionStarted = performance.now();
 		let transactionState: "preCommit" | "commitSent" | "committed" =
 			"preCommit";
 		let transactionId: string | null = null;
@@ -211,16 +220,19 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 			transactionId = text(owner.transactionId, "transaction id");
 			if (!(owner.operationTime instanceof Date))
 				throw new TypeError("operation time must be a PostgreSQL timestamp");
-			const changes: Array<
-				Readonly<{ collection: string; key: Readonly<Record<string, unknown>> }>
-			> = [];
-			const dispatches: Array<Readonly<{ slot: string; payload: unknown }>> =
-				[];
-			const data = createPostgresMutationData({
-				schema: input.schema,
+			let businessRows = 0;
+			const data = createPostgresCollectionMutationData({
+				plans: input.collectionPlans,
 				query,
-				onCreate: (collection, key) => changes.push({ collection, key }),
+				facts,
+				operationTime: owner.operationTime,
+				consumeRows: (count) => {
+					businessRows += count;
+					if (businessRows > 100)
+						throw new TypeError("Mutation exceeded its business row limit");
+				},
 			});
+			const reactions = createReactionDispatch(reactionProjection);
 			const ctx = Object.freeze({
 				principal: facts.principal,
 				authority: facts.authority,
@@ -232,11 +244,7 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 				operationTime: owner.operationTime,
 				callId,
 				transactionId,
-				dispatch: Object.freeze({
-					messagePublished: async (payload: unknown) => {
-						dispatches.push({ slot: "messagePublished", payload });
-					},
-				}),
+				dispatch: reactions.dispatch,
 			});
 			const result = await operation.binding.execute({
 				input: operation.input,
@@ -252,56 +260,37 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 			const resultBytes = canonicalMutationBytes(encodedResult);
 			if (resultBytes.byteLength > 1_048_576)
 				throw new TypeError("Mutation result exceeds its byte limit");
-			const messageChange = changes.find(
-				(change) => change.collection === "messages",
-			);
-			if (!messageChange || dispatches.length !== 1)
-				throw new TypeError(
-					"Mutation did not produce its compiled change and dispatch",
-				);
-			await query(
-				`INSERT INTO questpie_internal.committed_change_facts
-  (application_name, transaction_id, sequence, operation_name, call_id, collection_name, record_key_bytes, kind, committed_at)
-VALUES ($1, pg_catalog.pg_current_xact_id(), 1, $2, $3, $4, $5, 'insert', $6)`,
-				[
-					input.application,
-					operation.binding.identity,
+			for (const dispatch of reactions.pending) {
+				const originKey = inputScopeBytes({
+					application: input.application,
+					tenantId: facts.tenant.id,
+					operation: operation.binding.identity,
+					principalKind: facts.principal.kind,
+					principalId: facts.principal.id,
 					callId,
-					messageChange.collection,
-					canonicalMutationBytes(messageChange.key),
-					owner.operationTime,
-				],
-			);
-			const dispatch = dispatches[0]!;
-			const payloadBytes = canonicalMutationBytes(dispatch.payload);
-			const dispatchIdentity = inputScopeBytes({
-				application: input.application,
-				tenantId: facts.tenant.id,
-				operation: operation.binding.identity,
-				principalKind: facts.principal.kind,
-				principalId: facts.principal.id,
-				callId,
-				dispatchSlot: dispatch.slot,
-			});
-			await query(
-				`INSERT INTO questpie_internal.pending_reaction_intents
-  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, intent_id, reaction_name, input_digest, payload_bytes, transaction_id, accepted_at, state)
+					dispatchSlot: dispatch.slot,
+				});
+				const recordId = deterministicUuid(originKey);
+				await query(
+					`INSERT INTO questpie_internal.pending_reaction_intents
+  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, record_id, reaction_name, input_digest, payload_bytes, transaction_id, recorded_at, state)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.pg_current_xact_id(), $12, 'pending')`,
-				[
-					input.application,
-					facts.tenant.id,
-					operation.binding.identity,
-					facts.principal.kind,
-					facts.principal.id,
-					callId,
-					dispatch.slot,
-					deterministicUuid(dispatchIdentity),
-					"reaction:messagePublished",
-					mutationDigest(payloadBytes),
-					payloadBytes,
-					owner.operationTime,
-				],
-			);
+					[
+						input.application,
+						facts.tenant.id,
+						operation.binding.identity,
+						facts.principal.kind,
+						facts.principal.id,
+						callId,
+						dispatch.slot,
+						recordId,
+						dispatch.target,
+						mutationDigest(dispatch.payloadBytes),
+						dispatch.payloadBytes,
+						owner.operationTime,
+					],
+				);
+			}
 			await query(
 				`UPDATE questpie_internal.mutation_call_receipts
 SET outcome = 'committed', result_bytes = $7, committed_at = $8
@@ -318,6 +307,8 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 				],
 			);
 			facts.signal.throwIfAborted();
+			if (performance.now() - transactionStarted > 5_000)
+				throw new TypeError("Mutation exceeded its transaction duration limit");
 			transactionState = "commitSent";
 			await execute(session, "COMMIT");
 			transactionState = "committed";
