@@ -536,7 +536,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			where ns.nspname = 'questpie_internal' and con.contype = 'n'
 		`;
 		expect(notNullCatalog?.constraints).toBe(
-			(notNullCatalog?.major ?? 0) >= 18 ? 26 : 0,
+			(notNullCatalog?.major ?? 0) >= 18 ? 50 : 0,
 		);
 		await expect(
 			applyCommittedMigrations({ migrations: [migration] }),
@@ -1936,11 +1936,15 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			"DROP INDEX collaboration.qp_ix_messages_by_audit_id; CREATE INDEX qp_ix_messages_by_audit_id ON collaboration.messages USING btree (audit_id)",
 		);
 
-		await database!.unsafe("ALTER TABLE collaboration.messages SET UNLOGGED");
+		await database!.unsafe(
+			"ALTER TABLE collaboration.message_events SET UNLOGGED",
+		);
 		await expect(
 			inspectSchemaFingerprint({ schema: targetSchema }),
 		).rejects.toMatchObject({ code: "QP-SCHEMA-028" });
-		await database!.unsafe("ALTER TABLE collaboration.messages SET LOGGED");
+		await database!.unsafe(
+			"ALTER TABLE collaboration.message_events SET LOGGED",
+		);
 
 		const otherTarget = {
 			...targetSchema,
