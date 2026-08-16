@@ -4,7 +4,7 @@ import { digest } from "../canonical";
 import {
 	fingerprint,
 	type SchemaProjectionV1,
-	verifyInternalProtocolV2,
+	verifyInternalProtocolV3,
 } from "../schema";
 
 type RuntimeBuildReadiness = Readonly<{
@@ -128,7 +128,7 @@ export async function verifyPostgresRuntimeReadiness(
 		expected: RuntimeBuildReadiness;
 	}>,
 ): Promise<void> {
-	await verifyInternalProtocolV2(input.sql);
+	await verifyInternalProtocolV3(input.sql);
 	const committed = decodeCommittedMigrations(input.committedMigrations);
 	if (committed.head !== input.expected.migrationHead)
 		throw new TypeError(
