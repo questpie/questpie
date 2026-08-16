@@ -90,7 +90,7 @@ describe("BETA-01 generated contract", () => {
 			"internal/application-346fcckz.js",
 			"internal/application-gn0tssb7.js",
 			"internal/application-s44znz36.js",
-			"internal/application-yqmp98pf.js",
+			"internal/application-wqfkfy2k.js",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",
