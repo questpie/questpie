@@ -272,6 +272,46 @@ export const messageOperations = defineCollectionOperations(messages, {
 		const originMap = JSON.parse(
 			compilation.generatedFiles["origin-map.json"] ?? "null",
 		);
+		const manifest = JSON.parse(
+			compilation.generatedFiles["manifest.json"] ?? "null",
+		);
+		expect(
+			manifest.composition.resources
+				.filter((resource: { identity: string }) =>
+					[
+						"mutation:messages.create",
+						"mutation:messages.delete",
+						"mutation:messages.update",
+						"query:messages.get",
+						"query:messages.list",
+					].includes(resource.identity),
+				)
+				.map((resource: { identity: string }) => resource.identity),
+		).toEqual([
+			"mutation:messages.create",
+			"mutation:messages.delete",
+			"mutation:messages.update",
+			"query:messages.get",
+			"query:messages.list",
+		]);
+		const createOrigin = originMap.resources.find(
+			(resource: { identity: string }) =>
+				resource.identity === "mutation:messages.create",
+		);
+		expect(createOrigin).toMatchObject({
+			identity: "mutation:messages.create",
+			establishedAt: {
+				kind: "collectionOperationSetMember",
+				packageId: null,
+				path: "src/message-operations.ts",
+				exportName: "messageOperations",
+				member: "create",
+				span: expect.any(Object),
+				declaredAt: null,
+			},
+			augmentations: [],
+			members: [],
+		});
 		const setOrigin = originMap.structuralPlans.find(
 			(candidate: { kind: string }) =>
 				candidate.kind === "collectionOperationSet",
@@ -290,6 +330,26 @@ export const messageOperations = defineCollectionOperations(messages, {
 				}),
 			]),
 		);
+		const explain = JSON.parse(
+			compilation.generatedFiles["collection-operation-explain.json"] ?? "null",
+		);
+		expect(explain.resources).toContainEqual(
+			expect.objectContaining({
+				identity: "mutation:messages.create",
+				owner: "mutation:messages.create",
+				origin: "src/message-operations.ts#messageOperations.create",
+				executable: {
+					kind: "frameworkGenerated",
+					slot: "slot:mutation:messages.create:generated",
+					program: "mutation:messages.create",
+				},
+				program: expect.objectContaining({
+					target: "collection:messages",
+					policy: "policy:messages.default",
+					member: "create",
+				}),
+			}),
+		);
 		const runtimeBuild = JSON.parse(
 			compilation.generatedFiles["runtime-build.json"] ?? "null",
 		);
@@ -297,6 +357,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			runtimeBuild.inventory
 				.filter((entry: { path: string }) =>
 					[
+						"collection-operation-explain.json",
 						"collection-operation-programs.json",
 						"collection-operation-set-projections.json",
 						"field-normalizer-programs.json",
@@ -306,6 +367,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 				)
 				.map((entry: { path: string }) => entry.path),
 		).toEqual([
+			"collection-operation-explain.json",
 			"collection-operation-programs.json",
 			"collection-operation-set-projections.json",
 			"field-normalizer-programs.json",

@@ -17,6 +17,7 @@ import {
 	lowerPostgresCollectionOperationPlans,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
+	projectCollectionOperationResourceMetadata,
 	projectMutations,
 } from "./mutation";
 import {
@@ -91,16 +92,36 @@ export async function createArtifacts(
 		}>[];
 	}>,
 ): Promise<Readonly<Record<string, string>>> {
-	const manifest = projectManifest(input.configuration, input.resources);
+	const baseManifest = projectManifest(input.configuration, input.resources);
 	const executionComposition = projectExecutionComposition(input.resources);
-	const schema = manifest.schema;
-	const relational = projectRelationalCompilation({
+	const schema = baseManifest.schema;
+	const operationSets = projectCollectionOperationSets({
 		exports: input.evaluatedExports,
 		resources: input.resources,
 		schema,
-		data: manifest.data,
+		data: baseManifest.data,
 	});
-	const operationSets = projectCollectionOperationSets({
+	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
+		sets: operationSets.sets,
+		programs: operationSets.programs,
+		origins: operationSets.origins,
+	});
+	const baseComposition = baseManifest.composition as Readonly<{
+		resources: readonly Readonly<Record<string, unknown>>[];
+	}>;
+	const manifest: Readonly<Record<string, unknown>> = {
+		...baseManifest,
+		composition: {
+			...baseComposition,
+			resources: [
+				...baseComposition.resources,
+				...operationResourceMetadata.compositionResources,
+			].sort((left, right) =>
+				compareAscii(String(left.identity), String(right.identity)),
+			),
+		},
+	};
+	const relational = projectRelationalCompilation({
 		exports: input.evaluatedExports,
 		resources: input.resources,
 		schema,
@@ -190,7 +211,7 @@ export async function createArtifacts(
 		),
 	};
 	const buildInputDigest = digest("questpie-build-input-v1", inputs);
-	const originMap = {
+	const baseOriginMap = {
 		format: "questpie.origin-map",
 		version: 1,
 		buildInputDigest,
@@ -256,6 +277,15 @@ export async function createArtifacts(
 					],
 				}
 			: {}),
+	};
+	const originMap = {
+		...baseOriginMap,
+		resources: [
+			...baseOriginMap.resources,
+			...operationResourceMetadata.resourceOrigins,
+		].sort((left, right) =>
+			compareAscii(String(left.identity), String(right.identity)),
+		),
 	};
 	const originMapBytes = canonicalBytes(originMap);
 	const executionExplanation = explainExecutionComposition(
@@ -359,6 +389,9 @@ export async function createArtifacts(
 			generated["postgres-collection-operation-plans.json"] = canonicalBytes(
 				postgresCollectionOperationPlans,
 			);
+		generated["collection-operation-explain.json"] = canonicalBytes(
+			operationResourceMetadata.explain,
+		);
 	}
 	let postgresQueryPlans: unknown = {
 		format: "questpie.postgres-query-plans",
