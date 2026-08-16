@@ -3,11 +3,9 @@ import { expect, test } from "bun:test";
 import type { SQL } from "bun";
 import { principal } from "questpie";
 
+import { CommittedResultUnavailable } from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
-import {
-	DeclaredOperationError,
-	type PreparedOperation,
-} from "../../packages/runtime/src/operation";
+import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
 const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b63a0";
 const callId = "stable-call-id";
@@ -45,6 +43,7 @@ function postgres(commitFails: boolean): Readonly<{
 			const query = {
 				cancel: () => query,
 				execute: () => query,
+				// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
 				then: promise.then.bind(promise),
 			};
 			return query;
@@ -120,20 +119,7 @@ const operation = {
 		kind: "object",
 		properties: { id: { kind: "uuid" } },
 	},
-	declaredErrors: [
-		{
-			key: "committedResultUnavailable",
-			code: "COMMITTED_RESULT_UNAVAILABLE",
-			status: 503,
-			payload: {
-				kind: "object",
-				properties: {
-					callId: { kind: "text" },
-					transactionId: { kind: "text" },
-				},
-			},
-		},
-	],
+	declaredErrors: [],
 	input: {},
 } as unknown as PreparedOperation<MutationView>;
 
@@ -169,11 +155,16 @@ test("returns a committed result envelope after PostgreSQL acknowledges COMMIT",
 test("classifies an uncertain COMMIT without issuing a false ROLLBACK", async () => {
 	const database = postgres(true);
 	const failure = invoker(database)(operation, callId);
-	await expect(failure).rejects.toBeInstanceOf(DeclaredOperationError);
+	await expect(failure).rejects.toBeInstanceOf(CommittedResultUnavailable);
 	await expect(failure).rejects.toMatchObject({
 		code: "COMMITTED_RESULT_UNAVAILABLE",
-		status: 503,
 		payload: { callId, transactionId: "901" },
+	});
+	await failure.catch((error: unknown) => {
+		expect(Object.isFrozen(error)).toBe(true);
+		expect(Object.isFrozen((error as CommittedResultUnavailable).payload)).toBe(
+			true,
+		);
 	});
 	expect(database.statements).toContain("COMMIT");
 	expect(database.statements).not.toContain("ROLLBACK");

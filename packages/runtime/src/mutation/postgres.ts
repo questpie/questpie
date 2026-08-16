@@ -8,6 +8,7 @@ import {
 	deterministicUuid,
 	mutationDigest,
 } from "./canonical";
+import { CommittedResultUnavailable } from "./committed-result-unavailable";
 import { createPostgresMutationData, type TransactionQuery } from "./data";
 import type { MutationInvoker } from "./index";
 
@@ -322,12 +323,14 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 			transactionState = "committed";
 			return Object.freeze({ committed: true, value: validated });
 		} catch (error) {
-			if (transactionState === "commitSent")
-				throw new DeclaredOperationError(
-					"COMMITTED_RESULT_UNAVAILABLE",
-					503,
-					Object.freeze({ callId, transactionId }),
-				);
+			if (transactionState === "commitSent") {
+				if (transactionId === null)
+					throw new TypeError(
+						"Committed mutation transaction identity is unavailable",
+						{ cause: error },
+					);
+				throw new CommittedResultUnavailable(callId, transactionId, error);
+			}
 			if (transactionState === "preCommit") {
 				try {
 					await execute(session, "ROLLBACK");
