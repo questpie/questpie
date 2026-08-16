@@ -8,51 +8,6 @@ import { compileApplication } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const repositoryRoot = resolve(import.meta.dir, "../..");
-const publishMutation = `import { codec, operation, policy } from "questpie";
-import { defineMutation } from "#questpie/app";
-
-export const publishMessage = defineMutation({
-	name: "message.publish",
-	network: true,
-	input: codec.object({ channelId: codec.uuid(), body: codec.text() }),
-	output: codec.object({
-		id: codec.uuid(), channelId: codec.uuid(), body: codec.text(),
-		createdAt: codec.timestamp(),
-	}),
-	policy: policy.authenticated(),
-	errors: {
-		channelUnavailable: operation.error({ code: "CHANNEL_UNAVAILABLE", status: 404 }),
-		idempotencyConflict: operation.error({
-			code: "IDEMPOTENCY_CONFLICT", status: 409,
-			payload: codec.object({ callId: codec.uuid() }),
-		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
-		const channel = await ctx.data.channels.get({ key: { id: input.channelId } });
-		const space = channel
-			? await ctx.data.spaces.get({ key: { id: channel.spaceId } })
-			: null;
-		if (channel === null || space === null || space.companyId !== ctx.tenant.id)
-			throw errors.channelUnavailable();
-		const message = await ctx.data.messages.create({ input: {
-			channelId: channel.id,
-			authorMembershipId: ctx.values.selectedMembershipId,
-			body: input.body,
-		} });
-		if (message.body === undefined) throw errors.channelUnavailable();
-		await ctx.data.messageEvents.create({ input: {
-			messageId: message.id, kind: "published",
-		} });
-		await ctx.dispatch.messagePublished({
-			companyId: ctx.tenant.id, messageId: message.id,
-		});
-		return {
-			id: message.id, channelId: message.channelId,
-			body: message.body, createdAt: message.createdAt,
-		};
-	},
-});
-`;
 
 test("relocated generated application links inventoried Mutation programs and plans", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta06-wiring-"));
@@ -61,7 +16,6 @@ test("relocated generated application links inventoried Mutation programs and pl
 			recursive: true,
 			filter: (source) => !source.endsWith("/node_modules"),
 		});
-		await writeFile(join(temporary, "src/message-publish.ts"), publishMutation);
 		await mkdir(join(temporary, "node_modules/questpie"), { recursive: true });
 		await writeFile(
 			join(temporary, "node_modules/questpie/package.json"),
@@ -98,8 +52,17 @@ test("relocated generated application links inventoried Mutation programs and pl
 		);
 		expect(bundle).toContain("linkCollectionMutationPrograms");
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
+		expect(bundle).toContain("linkReactionProjection");
 		expect(bundle).toContain("createPostgresCollectionMutationData");
-		expect(bundle).toContain('artifactFiles["reaction-projection.json"]');
+		for (const path of [
+			"collection-operation-programs.json",
+			"field-normalizer-programs.json",
+			"server-value-programs.json",
+			"postgres-collection-operation-plans.json",
+			"policy-projection.json",
+			"reaction-projection.json",
+		])
+			expect(bundle).toContain(`artifactFiles["${path}"]`);
 		expect(bundle).not.toContain("createPostgresMutationData");
 		expect(bundle).not.toContain("@questpie/runtime");
 

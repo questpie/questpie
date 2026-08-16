@@ -439,6 +439,8 @@ export async function createArtifacts(
 		queryProjection: relational.query,
 		postgresQueryPlans,
 		schemaProjection: schema,
+		collectionOperationArtifacts: operationSets.sets.sets.length > 0,
+		reactionArtifact: runtime.reactions.reactions.length > 0,
 		readinessEntry,
 		runtimeBundleEntry,
 	});

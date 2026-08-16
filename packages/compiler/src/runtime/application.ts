@@ -62,6 +62,8 @@ function applicationEntry(
 		queryProjection: unknown;
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
+		collectionOperationArtifacts: boolean;
+		reactionArtifact: boolean;
 	}>,
 ): string {
 	const definitions = new Map<string, number>();
@@ -162,8 +164,36 @@ function applicationEntry(
 				`[structuralQuery${index}, ${JSON.stringify(String(query.digest))}]`,
 		)
 		.join(",\n");
+	const emptyCollectionArtifacts = JSON.stringify({
+		programs: {
+			format: "questpie.collection-operation-programs",
+			version: 1,
+			operations: [],
+		},
+		normalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		plans: {
+			format: "questpie.postgres-collection-operation-plans",
+			version: 1,
+			plans: [],
+		},
+		policies: [],
+	});
+	const emptyReactionProjection = JSON.stringify({
+		format: "questpie.reaction-projection",
+		version: 1,
+		reactions: [],
+	});
 	return `import { SQL } from "bun";
-import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery } from "questpie:runtime";
+import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery, linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } from "questpie:runtime";
 import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
@@ -194,6 +224,36 @@ async function loadRuntimeArtifacts() {
 	};
 }
 
+function linkMutationArtifacts(artifactFiles) {
+	const raw = ${
+		input.collectionOperationArtifacts
+			? `{
+		programs: JSON.parse(artifactFiles["collection-operation-programs.json"]),
+		normalizers: JSON.parse(artifactFiles["field-normalizer-programs.json"]),
+		serverValues: JSON.parse(artifactFiles["server-value-programs.json"]),
+		plans: JSON.parse(artifactFiles["postgres-collection-operation-plans.json"]),
+		policies: JSON.parse(artifactFiles["policy-projection.json"]).policies.map(({ program }) => ({
+			identity: program.identity,
+			target: program.target,
+		})),
+	}`
+			: emptyCollectionArtifacts
+	};
+	const operations = linkCollectionMutationPrograms({
+		collectionOperations: raw.programs,
+		fieldNormalizers: raw.normalizers,
+		serverValues: raw.serverValues,
+		policies: raw.policies,
+	});
+	return Object.freeze({
+		collectionPlans: linkPostgresCollectionOperationPlans({
+			artifact: raw.plans,
+			operations,
+		}),
+		reactions: linkReactionProjection(${input.reactionArtifact ? `JSON.parse(artifactFiles["reaction-projection.json"])` : emptyReactionProjection}),
+	});
+}
+
 export const bindIngressPrincipalForRequest = bindIngressPrincipal;
 
 export async function createApplication(input) {
@@ -207,6 +267,7 @@ export async function createApplication(input) {
 		schema: schemaProjection,
 		signal: postgresController.signal,
 	});
+	let mutationArtifacts;
 	let runtime;
 	try {
 		runtime = await createRuntimeApplication({
@@ -223,12 +284,15 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap,
 			resolvePrincipal: readIngressPrincipal,
-			verifyReadiness: (artifacts) => verifyPostgresRuntimeReadiness({
-				sql,
-				schema: schemaProjection,
-				committedMigrations,
-				expected: artifacts.runtimeBuild,
-			}),
+			verifyReadiness: (artifacts) => {
+				mutationArtifacts = linkMutationArtifacts(loaded.artifactFiles);
+				return verifyPostgresRuntimeReadiness({
+					sql,
+					schema: schemaProjection,
+					committedMigrations,
+					expected: artifacts.runtimeBuild,
+				});
+			},
 			project: ({ facts }) => Object.freeze({
 				data: Object.freeze({
 					run: (definition, operationInput) => {
@@ -253,12 +317,17 @@ export async function createApplication(input) {
 				}),
 				signal: facts.signal,
 			}),
-			projectMutation: ({ facts }) => createPostgresMutationInvoker({
-				sql,
-				schema: schemaProjection,
-				application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
-				facts,
-			}),
+			projectMutation: ({ facts }) => {
+				if (!mutationArtifacts)
+					throw new TypeError("Mutation artifacts are not linked");
+				return createPostgresMutationInvoker({
+					sql,
+					application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
+					facts,
+					collectionPlans: mutationArtifacts.collectionPlans,
+					reactions: mutationArtifacts.reactions,
+				});
+			},
 			projectExecution: async ({ facts, service }) => Object.freeze({
 				principal: facts.principal,
 				authority: facts.authority,
@@ -305,6 +374,8 @@ export async function renderApplicationBundle(
 		queryProjection: unknown;
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
+		collectionOperationArtifacts: boolean;
+		reactionArtifact: boolean;
 		readinessEntry: string;
 		runtimeBundleEntry: string;
 	}>,
