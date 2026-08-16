@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "dfc54dd548a18f78bffbe3089609dee03a15f4f3",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "0fa94daff543c6876c97f5ae1e326516b02edcbd84a3d00c49a0a29d354e8b2a",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "1b801bcf-b07e-4db4-bef5-96ee87586989",
+				"invocationId": "01a00a80-1fdc-7bf3-9da2-6e4443322cf2",
+				"packetDigest": "0fa94daff543c6876c97f5ae1e326516b02edcbd84a3d00c49a0a29d354e8b2a",
+				"reviewedHead": "dfc54dd548a18f78bffbe3089609dee03a15f4f3",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` still does not fully close Git configuration that affects canonical diff bytes. The command pins several formatting options but neither disables nor explicitly pins `diff.orderFile`; repository or user configuration can therefore reorder files in the exact patch for the same commits, changing the packet and digest. This contradicts ADR-0024's deterministic packet re-derivation requirement, while `tests/unit/acceptance-review-packet.test.ts` exercises other hostile diff settings but not ordering. Run packet-producing Git under a fully isolated configuration or explicitly fix diff ordering, and add a hostile `diff.orderFile` negative control proving byte-identical packets.\n\nNon-blocking observations: The previously recorded blockers concerning authority ancestry, bounded process termination, symlink and Git-administration output paths, context/inter-hunk diff settings, and response-level hostile tests are repaired. Primary-verdict precedence, the closed two-axis contingency, packet/request bindings, distinct identities, aggregate validation, and repository-quality-only scope otherwise align with ADR-0024."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "24295f1d-be87-4723-b683-143ad936e30c",
+				"invocationId": "01a00a80-1fe3-7710-80f6-e2f4a1e56f6d",
+				"packetDigest": "0fa94daff543c6876c97f5ae1e326516b02edcbd84a3d00c49a0a29d354e8b2a",
+				"reviewedHead": "dfc54dd548a18f78bffbe3089609dee03a15f4f3",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` still permits repository or user Git configuration to change canonical packet bytes. The diff command pins several formatting options but does not neutralize `diff.orderFile`, which can reorder files in a multi-file diff and therefore change the packet digest for the same reviewed commits. The hostile-configuration test in `tests/unit/acceptance-review-packet.test.ts` does not exercise this setting. Run packet-producing Git commands under fully isolated configuration or explicitly cancel every remaining byte-affecting option, and add a multi-file negative control proving that a hostile `diff.orderFile` cannot alter packet bytes or their digest.\n\nNon-blocking observations: The repair directly exercises matched transcript/response failures for empty output, malformed JSON, missing axis, binding mismatch, and duplicate verdicts. It also pins unified and inter-hunk context, rejects Git-administrative output paths, preserves protocol-v1 artifacts, bounds subprocess output and termination, validates authority ancestry, and keeps the contingency profile and aggregate record closed."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:17:11.032Z"
+}
