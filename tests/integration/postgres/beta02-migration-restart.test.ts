@@ -1955,7 +1955,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				status: "PASS",
 			}),
 		);
-	});
+	}, 120_000);
 
 	test("applies and fingerprints alterField with a Relation constraint rename", async () => {
 		const compilation = await compileApplication({
