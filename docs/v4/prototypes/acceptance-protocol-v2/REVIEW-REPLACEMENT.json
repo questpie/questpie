@@ -1,0 +1,55 @@
+{
+  "protocolVersion": 2,
+  "ticket": "#317",
+  "profile": "questpie.acceptance.v2",
+  "manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+  "reviewedHead": "58e2d532f17a64679ca8c25e70f8dabee998af73",
+  "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+  "packetDigest": "30dddb02fe0c33626651e1e1e9e6de2f58388f1d702085c2bd44ce7661598b6a",
+  "primary": {
+    "profile": "claude-opus-medium-v1",
+    "disposition": "NO_RESULT",
+    "category": "transport"
+  },
+  "contingency": {
+    "profile": {
+      "protocolVersion": 2,
+      "transport": "codex-cli",
+      "model": "gpt-5.6-sol",
+      "effort": "medium",
+      "axes": [
+        "spec",
+        "standards"
+      ]
+    },
+    "verdict": "BLOCKED",
+    "reviews": [
+      {
+        "axis": "spec",
+        "model": "gpt-5.6-sol",
+        "effort": "medium",
+        "requestId": "54b01766-a881-4a82-b1ef-36facfa27071",
+        "invocationId": "01a00a6e-aaee-7c31-925e-632882145735",
+        "packetDigest": "30dddb02fe0c33626651e1e1e9e6de2f58388f1d702085c2bd44ce7661598b6a",
+        "reviewedHead": "58e2d532f17a64679ca8c25e70f8dabee998af73",
+        "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+        "verdict": "BLOCKED",
+        "findings": "VERDICT: BLOCKED\n\n1. `docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json` does not prove the required pre-review repository gates. The proof README requires the full and release lanes to remain green, while the proof procedure permits acceptance review only after all deterministic gates pass; neither `bun run quality:full` nor `bun run quality:release` appears in the verification evidence. Several listed commands also contain descriptive placeholders such as `<P22R1 protocol and negative-control files>` and `<P22R1 changed files>` rather than exact reproducible invocations. Record and run the exact full/release and focused commands before replacement review.\n\n2. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` does not bind `authorityHeads` to the reviewed history. It verifies only that each named commit exists with `git cat-file`; an unrelated repository commit can therefore satisfy a purported fixed proof head. This contradicts ADR-0020’s authority-head/ancestry validation and ADR-0024’s manifest-owned fixed proof heads. Require every authority head to have its prescribed ancestry relationship to the reviewed head, and add a negative control using an existing but non-ancestor commit.\n\nNon-blocking observations: The prior findings about preserving the v1 script, hostile protocol cases, and bounded Codex subprocess handling appear repaired in this diff. Primary verdict precedence, the fixed two-axis contingency, packet/request binding, distinct identities, tool-event rejection, aggregation, and committed-record shape are otherwise consistent with ADR-0024."
+      },
+      {
+        "axis": "standards",
+        "model": "gpt-5.6-sol",
+        "effort": "medium",
+        "requestId": "36e8d404-69ed-4b40-afb2-d1c336ee90a9",
+        "invocationId": "01a00a6e-aaed-71e3-86d6-204384d145ff",
+        "packetDigest": "30dddb02fe0c33626651e1e1e9e6de2f58388f1d702085c2bd44ce7661598b6a",
+        "reviewedHead": "58e2d532f17a64679ca8c25e70f8dabee998af73",
+        "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+        "verdict": "BLOCKED",
+        "findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review.ts` does not bound termination of the primary Claude process. `runPrimaryReview` sends one kill after timeout without awaiting shutdown or escalating, and it does not drain stdout and stderr concurrently while the process runs. A non-cooperative child can therefore survive the timeout or keep the wrapper hanging, while large pipe output can cause a false timeout. Run the primary through the bounded subprocess lifecycle used by the contingency transport, including concurrent stream draining, bounded termination grace, SIGKILL escalation, and subprocess negative controls for large output and ignored termination.\n\n2. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` validates that each declared `authorityHead` names an existing commit but never proves that it is an ancestor of the reviewed head. This leaves the manifest able to attest unrelated proof heads, contrary to the fixed-head and ancestry requirements. Require every authority head to be an ancestor of `reviewedHead`, and add a negative control using an existing but unrelated commit; the current non-ancestor test covers only `diffBase`.\n\nNon-blocking observation: The replacement repairs the previously reported protocol-v1 preservation, hostile-event coverage, record-tampering coverage, and contingency subprocess timeout defects. The fixed response profile, packet bindings, independent axes, and aggregate-verdict validation are otherwise coherent."
+      }
+    ]
+  },
+  "verdict": "BLOCKED",
+  "recordedAt": "2026-08-16T11:58:06.441Z"
+}
