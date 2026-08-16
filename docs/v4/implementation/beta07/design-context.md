@@ -15,12 +15,13 @@ options?)`. A watch delivers complete validated `initial`, `update`, or
 `reset` results. It never publishes patches, Change Ledger facts, Policy
 evidence, or resume-token bytes to application code.
 
-The tracer starts one authorized Message page watch, commits a Message, loses
-the wake and crashes the owning Runtime before it can refresh, then reconnects
-through a fresh Runtime. PostgreSQL reconciliation must discover the committed
-fact without the hint, create a fresh root Execution, re-resolve Context and
-current Policy, and deliver the complete new page exactly once. Membership
-revocation publishes no subsequent result.
+The tracer starts one authorized Message page watch, commits a Message,
+suppresses the armed bounded scan on the owning Runtime and crashes it before
+it can refresh, then reconnects through a fresh Runtime. PostgreSQL startup
+reconciliation must discover the committed fact without a consumed hint,
+create a fresh root Execution, re-resolve Context and current Policy, and
+deliver the complete new page exactly once. Membership revocation publishes no
+subsequent result.
 
 This slice does not add Channel, WebSocket, Redis or another broker,
 cross-Query atomic convergence, Reaction execution, Studio, raw-SQL read
@@ -114,9 +115,27 @@ reactive Collections fail closed. Trigger drift fails readiness.
 
 ## Commit-safe reconciliation
 
-`LISTEN`/`NOTIFY` is only a lossy wake. Startup orders listener establishment
-and commit, durable reconciliation, then hint consumption. Duplicate,
-coalesced, reordered, delayed, or absent hints never create or skip authority.
+The required wake source is a bounded PostgreSQL scan derived from the existing
+30,000 ms unreconciled-lag limit. Its scan-start period and per-attempt bound
+are each `floor(30,000 / 3) = 10,000 ms`: an ordinary fact waits less than one
+period plus one bounded attempt, leaving the final third for scheduling and
+commit overhead. Exceeding that bound is lag failure, not permission to advance
+the horizon. The selected-PR invalidation microbenchmark measures this scan
+path and its steady-state PostgreSQL work separately from correctness.
+
+Startup arms the bounded scan before durable reconciliation and readiness. The
+frozen P4 `wake.mechanism: "listenNotify"` and `startup:
+["listenCommit", "durableReconcile", "consumeWakeHints"]` bytes continue to
+name the optional hint declaration and its ordering. Bun SQL 1.3.14 cannot
+consume PostgreSQL notifications, so `listenCommit` records an explicitly
+disabled hint source and `consumeWakeHints` consumes an empty stream, which is
+valid under the separate frozen `questpie.change-ledger` artifact's
+`wake.tolerates: ["absent", ...]` contract. The compiler-owned internal-v3
+trigger body remains byte-pinned with `pg_notify` for a future compatible
+accelerator; its present cost is one bounded transaction-local hint emission
+per capture-function invocation. Duplicate, coalesced, reordered, delayed, or
+absent hints never create or skip authority. No second PostgreSQL driver or
+hidden wake-provider matrix is introduced for this optional acceleration.
 
 Each consumer persists an exclusive `xid8` visibility horizon. In one pinned
 transaction, reconciliation locks the consumer, selects unprocessed visible
@@ -157,10 +176,18 @@ authority partition. Reconciliation may preserve durable facts and mark a
 binding dirty without a holder, but it cannot recompute or frame that binding
 until a live holder supplies the matching already-resolved Principal and creates
 a fresh root. Durable scope state is therefore not a P5 run-as recipe.
-`LISTEN`/`NOTIFY` may accelerate this scan but never carries the command or
-result authority. If the holder dies, the SSE disconnect creates a new network
+`LISTEN`/`NOTIFY` may accelerate this scan once the durable PostgreSQL adapter
+can consume it, but never carries the command or result authority. If the
+holder dies, the SSE disconnect creates a new network
 ingress root on another instance; the old attachment expires and is never used
 to reconstruct a Principal or resolved Context.
+
+The same 10,000 ms wake-source tick renews the holder's 30,000 ms attachment
+and scans its committed commands and complete generations; each such attempt
+has the same 10,000 ms bound. Consequently a remote `open`, `ack`, or `close`
+becomes visible to its holder in less than 20,000 ms without affinity. GET and
+same-instance command handling may request an immediate tick for latency, but
+that request is only acceleration and cannot replace the bounded scan.
 
 Resume signing material is deployment input, not a generated fixture secret or
 public application capability. BETA-07 supports current deployment-local
@@ -184,7 +211,7 @@ Hot invalidations coalesce to the latest complete result. Slow consumers reset
 or disconnect before an unbounded buffer forms. Runtime readiness remains false
 until durable startup reconciliation completes. Drain refuses new watches,
 finishes bounded work, then closes active SSE bodies with a retryable reset
-before disposing PostgreSQL listener and application resources.
+before disposing the bounded wake source and application resources.
 
 ## First tracer and evidence
 
@@ -192,8 +219,9 @@ The first RED is `tests/integration/beta07-live-query.test.ts`: “reconciles a
 committed Message after lost wake and Runtime crash with fresh Context
 authority.” It must cross the real collaboration compilation, generated client,
 SSE/POST carrier, accepted Message Query and Mutation, PostgreSQL capture, and a
-second Runtime. Deterministic latches surround commit, wake consumption, and
-restart; no timing sleep is evidence.
+second Runtime. Deterministic latches surround commit, suppression of the armed
+scan on the first Runtime, the second Runtime's startup scan, and restart; no
+timing sleep is evidence.
 
 The same tracer routes the SSE GET to instance A, `open` and `close` POSTs to
 instance B, acknowledgement to instance C, and reconnects through a fresh
