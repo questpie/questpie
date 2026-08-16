@@ -18,6 +18,9 @@ const exact = {
 	projection: "823d199efd8658a1c896056c2b9ae9da622de173",
 	projectionParent: "e8105b25534d99441c4beea6f3357cf1bf9001f8",
 	projectionRevert: "64e7cf11fd74e4db02943e70e28667cd0914df92",
+	reviewedHead: "deea51ba2799867825b120ec46ec5d8944991d1b",
+	reviewEvidence: "cb568dc402462163d632a2d689da709a087f64ae",
+	projectionReapplication: "d5bf7d0adadcda0f5b932e6b1a7c20df0e4102a6",
 	projectionSha256:
 		"9f82a90a2fe17bf764aa0bec4e8c8844d2254ba30c25a6b4337cb307596dc108",
 } as const;
@@ -488,7 +491,13 @@ async function verifyRepositoryEvidence(): Promise<void> {
 		exact.p6WireSourceSha256
 	)
 		throw new Error("portable Accepted P6 wire source bytes changed");
-	for (const commit of [exact.projection, exact.projectionRevert])
+	for (const commit of [
+		exact.projection,
+		exact.projectionRevert,
+		exact.reviewedHead,
+		exact.reviewEvidence,
+		exact.projectionReapplication,
+	])
 		command(["git", "merge-base", "--is-ancestor", commit, "HEAD"]);
 	if (
 		command(["git", "rev-parse", `${exact.projection}^`]) !==
@@ -522,6 +531,37 @@ async function verifyRepositoryEvidence(): Promise<void> {
 	if (!projection.equals(portableProjection))
 		throw new Error("portable projection does not equal retained commit bytes");
 	if (
+		command(["git", "rev-parse", `${exact.projectionReapplication}^`]) !==
+		exact.reviewEvidence
+	)
+		throw new Error("accepted projection reapplication parent changed");
+	const reapplication = commandBytes([
+		"git",
+		"-c",
+		"core.abbrev=40",
+		"-c",
+		"diff.noprefix=false",
+		"-c",
+		"diff.algorithm=myers",
+		"-c",
+		"diff.context=3",
+		"show",
+		"--format=",
+		"--binary",
+		exact.projectionReapplication,
+	]);
+	if (!reapplication.equals(portableProjection))
+		throw new Error("accepted projection was not reapplied byte-for-byte");
+	command([
+		"git",
+		"diff",
+		"--quiet",
+		exact.projectionReapplication,
+		"HEAD",
+		"--",
+		...allowedProjectionPaths,
+	]);
+	if (
 		commandBytesWithInput(["git", "hash-object", "--stdin"], source)
 			.toString()
 			.trim() !== exact.p6WireBlob
@@ -550,7 +590,14 @@ async function verifyRepositoryEvidence(): Promise<void> {
 
 	const temporary = mkdtempSync(join(tmpdir(), "questpie-p6r1-"));
 	try {
-		command(["git", "worktree", "add", "--detach", temporary, "HEAD"]);
+		command([
+			"git",
+			"worktree",
+			"add",
+			"--detach",
+			temporary,
+			exact.projectionParent,
+		]);
 		const apply = Bun.spawnSync(["git", "apply", "--check", "-"], {
 			cwd: temporary,
 			stdin: portableProjection,
