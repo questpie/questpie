@@ -40,6 +40,7 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import { createRealtimeCarrier, decodeRealtimeWireContract } from "./realtime";
 import {
 	matchesRetainedClientPair,
 	retainClientPairs,
@@ -371,8 +372,63 @@ export async function createRuntimeApplication<
 			});
 			return use(scope);
 		});
+	const realtimeContract = (() => {
+		if (artifacts.runtimeBuild.realtimeWireDigest === null) return null;
+		const bytes = input.artifactFiles["realtime-wire-contract.json"];
+		if (bytes === undefined)
+			throw new TypeError("missing realtime-wire-contract.json");
+		const raw = JSON.parse(
+			typeof bytes === "string"
+				? bytes
+				: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+		);
+		const contract = decodeRealtimeWireContract(raw);
+		if (
+			contract.application !== artifacts.runtimeBuild.application ||
+			contract.clientContractDigest !==
+				artifacts.runtimeBuild.clientContractDigest ||
+			contract.operationWireDigest !== artifacts.wireContract.digest ||
+			contract.digest !== artifacts.runtimeBuild.realtimeWireDigest
+		)
+			throw new TypeError("realtime wire binding does not match");
+		return contract;
+	})();
+	let realtimeCallSequence = 0;
+	const realtime = realtimeContract
+		? createRealtimeCarrier({
+				contract: realtimeContract,
+				resolvePrincipal: input.program.resolvePrincipal,
+				decodeContext: (value: unknown) =>
+					decodeRuntimeCodec<ContextInputOf<Context>>(
+						input.program.context.input as never,
+						value,
+						"$context",
+					),
+				evaluate: async ({
+					principal: caller,
+					context,
+					query,
+					input: value,
+					signal,
+				}) => {
+					const prepared = operationEngine.prepare(query, value);
+					if (prepared.binding.kind !== "query")
+						throw new OperationFailure("NOT_FOUND");
+					realtimeCallSequence += 1;
+					return executeRoot(
+						{ principal: caller, context, signal },
+						({ invoke }) =>
+							invoke(prepared, `realtime:${realtimeCallSequence}`),
+					);
+				},
+			})
+		: null;
 
 	const fetch = async (request: Request): Promise<Response> => {
+		if (realtime) {
+			const response = await realtime.fetch(request);
+			if (response) return response;
+		}
 		if (new URL(request.url).pathname !== operationPath)
 			return operationWireResponse(rejectionFrame("NOT_FOUND"), 404);
 		if (request.method !== "POST")
@@ -524,6 +580,7 @@ export async function createRuntimeApplication<
 	const close = (): Promise<void> => {
 		if (closePromise) return closePromise;
 		state = "draining";
+		realtime?.beginDrain();
 		emit({ family: "runtime", kind: "drainStarted" });
 		closePromise = (async () => {
 			let timedOut = false;
@@ -546,6 +603,7 @@ export async function createRuntimeApplication<
 					controller.abort(new DOMException("Runtime draining", "AbortError"));
 				await Promise.allSettled(activeRoots);
 			}
+			await realtime?.drain();
 			await core.close();
 			state = "closed";
 			emit({ family: "runtime", kind: "stopped" });

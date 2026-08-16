@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
 
+import { principal } from "questpie";
+
 import { projectRealtimeWireContract } from "../../packages/compiler/src/runtime";
 import {
 	createRealtimeCarrier,
 	decodeRealtimeWireContract,
 } from "../../packages/runtime/src/application/realtime";
-import { principal } from "../../packages/questpie/src";
 
 const application = "application:collaboration";
 const clientContractDigest = "1".repeat(64);
@@ -62,6 +63,18 @@ const projected = projectRealtimeWireContract({
 
 const user = principal.user({ id: "user:one" });
 
+test("decodes only the exact compiler-owned realtime artifact", () => {
+	expect(() =>
+		decodeRealtimeWireContract({ ...projected, provider: "redis" }),
+	).toThrow("realtime wire has invalid keys");
+	expect(() =>
+		decodeRealtimeWireContract({
+			...projected,
+			limits: { ...projected.limits, activeWatchesPerPrincipal: 65 },
+		}),
+	).toThrow("realtime limit activeWatchesPerPrincipal is invalid");
+});
+
 function request(
 	method: "GET" | "POST",
 	body?: unknown,
@@ -76,7 +89,7 @@ function request(
 						"x-questpie-realtime-scope": scopeId,
 					}
 				: { "content-type": projected.commandMediaType },
-		body: body === undefined ? undefined : JSON.stringify(body),
+		...(body === undefined ? {} : { body: JSON.stringify(body) }),
 	});
 }
 
@@ -164,9 +177,7 @@ test("rejects malformed commands before Context or command Principal work", asyn
 test("serves ready, complete delivery, acknowledgement, and close frames", async () => {
 	const value = harness();
 	const response = await value.carrier.fetch(request("GET"));
-	expect(response?.headers.get("content-type")).toBe(
-		projected.streamMediaType,
-	);
+	expect(response?.headers.get("content-type")).toBe(projected.streamMediaType);
 	const reader = response?.body?.getReader();
 	if (!reader) throw new Error("missing realtime stream");
 	expect(await nextFrame(reader)).toEqual({
@@ -176,11 +187,8 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 	});
 
 	expect(
-		(
-			await value.carrier.fetch(
-				request("POST", command("open", "binding:one")),
-			)
-		)?.status,
+		(await value.carrier.fetch(request("POST", command("open", "binding:one"))))
+			?.status,
 	).toBe(202);
 	const delivery = await nextFrame(reader);
 	expect(delivery).toEqual({
@@ -197,10 +205,7 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 	expect(
 		(
 			await value.carrier.fetch(
-				request(
-					"POST",
-					command("ack", "binding:one", { resumeToken: token }),
-				),
+				request("POST", command("ack", "binding:one", { resumeToken: token })),
 			)
 		)?.status,
 	).toBe(202);
@@ -212,6 +217,13 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 		)?.status,
 	).toBe(202);
 	await value.carrier.drain();
+	expect(
+		(
+			await value.carrier.fetch(
+				request("POST", command("open", "binding:after-drain")),
+			)
+		)?.status,
+	).toBe(503);
 	expect(await nextFrame(reader)).toEqual({
 		protocol: projected.protocol,
 		kind: "closed",
@@ -220,6 +232,29 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 		scopeId: "scope:one",
 	});
 	expect((await reader.read()).done).toBe(true);
+});
+
+test("frames an invalid complete result as an exact failure", async () => {
+	const value = harness(async () => ({ nodes: [{ body: 42 }] }));
+	const response = await value.carrier.fetch(request("GET"));
+	const reader = response?.body?.getReader();
+	if (!reader) throw new Error("missing realtime stream");
+	await nextFrame(reader);
+	expect(
+		(
+			await value.carrier.fetch(
+				request("POST", command("open", "binding:invalid-output")),
+			)
+		)?.status,
+	).toBe(202);
+	expect(await nextFrame(reader)).toEqual({
+		protocol: projected.protocol,
+		kind: "failure",
+		bindingId: "binding:invalid-output",
+		query: "query:messages.page",
+		error: { code: "OUTPUT_INVALID" },
+	});
+	await value.carrier.drain();
 });
 
 test("resets unavailable private resume state and enforces 64 watches", async () => {
@@ -262,6 +297,17 @@ test("resets unavailable private resume state and enforces 64 watches", async ()
 	);
 	await Bun.sleep(0);
 	expect(evaluations).toBe(64);
+	const replacement = await value.carrier.fetch(request("GET"));
+	const replacementReader = replacement?.body?.getReader();
+	if (!replacementReader) throw new Error("missing replacement stream");
+	await nextFrame(replacementReader);
+	expect(
+		(
+			await value.carrier.fetch(
+				request("POST", command("open", "binding:replacement")),
+			)
+		)?.status,
+	).toBe(202);
 	await value.carrier.drain();
 });
 
