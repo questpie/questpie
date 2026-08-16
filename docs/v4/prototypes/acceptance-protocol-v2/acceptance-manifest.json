@@ -1,0 +1,92 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"proof": "P22R1 provider-contingent acceptance bootstrap",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"reviewOutput": "docs/v4/prototypes/acceptance-protocol-v2/REVIEW.json",
+	"authorityHeads": {
+		"P22": "17008b0547f24b53d456530b798e8d96ae2e2b1e",
+		"P22R1Candidate": "a68e551f225ee422bd8e25eae81a9399c2de8978"
+	},
+	"authorityDocuments": [
+		{
+			"name": "accepted repository foundation",
+			"path": "docs/adr/0020-establish-the-repository-foundation.md",
+			"sha256": "55f2cb05cac8005dc66de9090c487506ffabd16a4ba4ab84e1d3fa289ec4d9d7"
+		},
+		{
+			"name": "candidate provider-contingent acceptance decision",
+			"path": "docs/adr/0024-freeze-provider-contingent-acceptance.md",
+			"sha256": "7efa02992d9b363b88737d29a5265d702e0ec9f4ef5636e8fd5006d4db5af8f9"
+		},
+		{
+			"name": "accepted P22 decision",
+			"path": "docs/v4/prototypes/repository-foundation-p22/DECISION.md",
+			"sha256": "8c6cf80ece3fc6fd1fe78d899adf86b6b21e1b85931ef72033549480ed17abd1"
+		},
+		{
+			"name": "P22R1 candidate decision",
+			"path": "docs/v4/prototypes/acceptance-protocol-v2/DECISION.md",
+			"sha256": "c8e3e7711182b35429627365ad2ae0a85c8da261e66ebbd69307bd64e684b05b"
+		},
+		{
+			"name": "proof procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "d5de666e7b2a8df877bd8bc4ff546f860a84dcfd40567ce0997b41bbc66e264c"
+		},
+		{
+			"name": "repository quality procedure",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "28f499cfbe66062212d62d5944a7114dd205fc7710462484cdb1965a53b85724"
+		},
+		{
+			"name": "proof map",
+			"path": "docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"sha256": "5caf09a3642e9aca9e19d3a55c3f2e117025edfddab50d4cd5df96d7167ad99b"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run review:accept:negative-control",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run scripts/agent-context-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run check-types",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run build && bun run package:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings <P22R1 changed TypeScript files>",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check <P22R1 changed files>",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check c193e7e5c566852e571944c5f360c98be7240770..HEAD",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"Protocol v1 authority and historical acceptance evidence remain byte-identical and valid.",
+		"A primary Opus-medium PASS or BLOCKED remains final; only a sanitized primary NO_RESULT activates contingency.",
+		"Contingency is exactly one independent GPT-5.6-sol medium Spec and Standards pair over one packet digest, and both must PASS.",
+		"The pinned transport rejects tool events, unknown events, malformed or mismatched responses, reused reviewer identities, timeout, and transport failure as no result.",
+		"The committed manifest owns exact authority paths and digests, while packet preparation is deterministic and secret-scanned from one clean reviewed commit.",
+		"The committed record can be re-derived and verified without model credentials, and tampering or output replacement fails closed.",
+		"The revision adds no production Runtime behavior, public QUESTPIE API, provider registry, or reusable model-selection seam.",
+		"The one-time bootstrap receives unanimous independent review and ordinary repository CI before ADR-0024 is projected Accepted."
+	]
+}
