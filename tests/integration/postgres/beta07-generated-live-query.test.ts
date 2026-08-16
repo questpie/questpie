@@ -4,11 +4,6 @@ import { resolve } from "node:path";
 import { SQL } from "bun";
 
 import {
-	applyCommittedMigrations,
-	loadCommittedMigration,
-} from "@questpie/compiler";
-
-import {
 	beta05Ids,
 	beta05PostgresUrl,
 	prepareBeta05PostgresApplication,
@@ -16,7 +11,6 @@ import {
 
 const database = process.env.PGHOST ? new SQL({ max: 2 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
-const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 
 type GeneratedApplication = Readonly<{
 	fetch(request: Request): Promise<Response>;
@@ -74,6 +68,7 @@ function installDeterministicNetworkTimers() {
 	const reconnects: Array<Readonly<{ handle: object; run(): void }>> = [];
 	let armedIntervals = 0;
 	let invokedIntervals = 0;
+	const reconnectArmed = deferred();
 
 	globalThis.setInterval = ((
 		callback: TimerCallback,
@@ -110,6 +105,7 @@ function installDeterministicNetworkTimers() {
 			handle,
 			run: () => callback(...arguments_),
 		});
+		reconnectArmed.resolve();
 		return handle as never;
 	}) as typeof globalThis.setTimeout;
 	globalThis.clearTimeout = ((handle: unknown) => {
@@ -139,6 +135,7 @@ function installDeterministicNetworkTimers() {
 			if (!pending) throw new Error("generated client did not arm reconnect");
 			pending.run();
 		},
+		waitForReconnect: () => reconnectArmed.promise,
 		restore() {
 			globalThis.setInterval = originalSetInterval;
 			globalThis.clearInterval = originalClearInterval;
@@ -171,46 +168,43 @@ function cutStreamAfter(response: Response, delivery: "initial" | "update") {
 	);
 }
 
-function crashableStream(response: Response) {
-	if (!response.body)
-		throw new Error("generated realtime response has no body");
-	const reader = response.body.getReader();
-	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-	let crashed = false;
-	return Object.freeze({
-		response: new Response(
-			new ReadableStream<Uint8Array>({
-				start(value) {
-					controller = value;
-				},
-				async pull(value) {
-					const part = await reader.read();
-					if (crashed) return;
-					if (part.done) value.close();
-					else value.enqueue(part.value);
-				},
-				cancel(reason) {
-					return reader.cancel(reason);
-				},
-			}),
-			{ headers: response.headers, status: response.status },
-		),
-		async crash() {
-			if (crashed) return;
-			crashed = true;
-			const reason = new DOMException("Runtime A crashed", "AbortError");
-			controller?.error(reason);
-			await reader.cancel(reason);
-		},
-	});
-}
-
 function deferred() {
 	let resolvePromise!: () => void;
 	const promise = new Promise<void>((resolve) => {
 		resolvePromise = resolve;
 	});
 	return { promise, resolve: resolvePromise };
+}
+
+async function readChildAddress(
+	child: Bun.Subprocess<"ignore", "pipe", "pipe">,
+): Promise<string> {
+	const reader = child.stdout.getReader();
+	const decoder = new TextDecoder();
+	let buffered = "";
+	try {
+		while (!buffered.includes("\n")) {
+			const part = await reader.read();
+			if (part.done) throw new Error("child Runtime exited before readiness");
+			buffered += decoder.decode(part.value, { stream: true });
+		}
+	} finally {
+		reader.releaseLock();
+	}
+	const message = JSON.parse(buffered.slice(0, buffered.indexOf("\n"))) as {
+		port?: unknown;
+	};
+	if (!Number.isSafeInteger(message.port) || Number(message.port) <= 0)
+		throw new Error("child Runtime readiness port is invalid");
+	return `http://127.0.0.1:${message.port}`;
+}
+
+function routeTo(request: Request, baseUrl: string): Request {
+	const source = new URL(request.url);
+	return new Request(
+		new URL(`${source.pathname}${source.search}`, baseUrl),
+		request,
+	);
 }
 
 function valueDeferred<Value>() {
@@ -231,24 +225,9 @@ postgresTest(
 		const prepared = await prepareBeta05PostgresApplication(database!);
 		const timers = installDeterministicNetworkTimers();
 		const applications: GeneratedApplication[] = [];
+		let runtimeAProcess: Bun.Subprocess<"ignore", "pipe", "pipe"> | undefined;
 		let blocker: Awaited<ReturnType<SQL["reserve"]>> | undefined;
 		try {
-			const migrations = await Promise.all(
-				[
-					"000001_create-collaboration",
-					"000002_authorize-message-pages",
-					"000003_publish-message-transaction",
-					"000004_watch-message-query",
-				].map((name) =>
-					loadCommittedMigration(
-						resolve(fixtureRoot, "questpie/migrations", name),
-					),
-				),
-			);
-			expect(await applyCommittedMigrations({ migrations })).toEqual(
-				expect.objectContaining({ status: "applied" }),
-			);
-
 			const internal =
 				(await prepared.generated.loadInternal()) as GeneratedInternal;
 			const createApplication = async () => {
@@ -259,13 +238,23 @@ postgresTest(
 				applications.push(application);
 				return application;
 			};
-			const runtimeA = await createApplication();
 			const commandRuntimeB = await createApplication();
 			const acknowledgementRuntimeC = await createApplication();
 			const user = prepared.generated.framework.principal.user({
 				id: beta05Ids.principal,
 			});
 			const context = { companyId: beta05Ids.company };
+			runtimeAProcess = Bun.spawn(
+				[
+					process.execPath,
+					resolve(import.meta.dir, "helpers/beta07-runtime-child.ts"),
+					prepared.generated.generatedRoot,
+					beta05PostgresUrl(),
+					beta05Ids.principal,
+				],
+				{ stdin: "ignore", stdout: "pipe", stderr: "pipe" },
+			);
+			const runtimeAUrl = await readChildAddress(runtimeAProcess);
 			const queryInput = {
 				after: null,
 				channelId: beta05Ids.channel,
@@ -278,25 +267,26 @@ postgresTest(
 			let initialScanRequested = false;
 			let reconnectRuntime: GeneratedApplication | undefined;
 			let reconnectResponse = valueDeferred<number>();
-			let crashRuntimeA: (() => Promise<void>) | undefined;
 			const transport = async (request: Request): Promise<Response> => {
-				const ingress = internal.bindIngressPrincipalForRequest(request, user);
 				if (request.method === "GET") {
 					downstream += 1;
-					const runtime = downstream === 1 ? runtimeA : reconnectRuntime;
-					if (!runtime) throw new Error("fresh reconnect Runtime is not ready");
-					const response = await runtime.fetch(ingress);
+					const response =
+						downstream === 1
+							? await fetch(routeTo(request, runtimeAUrl))
+							: await (async () => {
+									if (!reconnectRuntime)
+										throw new Error("fresh reconnect Runtime is not ready");
+									return reconnectRuntime.fetch(
+										internal.bindIngressPrincipalForRequest(request, user),
+									);
+								})();
 					if (downstream > 1) reconnectResponse.resolve(response.status);
-					if (downstream === 1) {
-						const crashable = crashableStream(response);
-						crashRuntimeA = crashable.crash;
-						return crashable.response;
-					}
 					if (downstream === 2) return cutStreamAfter(response, "update");
 					return response;
 				}
 				if (new URL(request.url).pathname === "/_questpie/operation")
-					return runtimeA.fetch(ingress);
+					return fetch(routeTo(request, runtimeAUrl));
+				const ingress = internal.bindIngressPrincipalForRequest(request, user);
 				const command = (await request.clone().json()) as Readonly<{
 					command?: string;
 				}>;
@@ -309,7 +299,26 @@ postgresTest(
 					!initialScanRequested
 				) {
 					initialScanRequested = true;
-					timers.runInterval(0);
+					let initialEvaluated = false;
+					for (let attempt = 0; attempt < 200; attempt += 1) {
+						const scan = await fetch(`${runtimeAUrl}/__questpie_test/scan`, {
+							method: "POST",
+						});
+						expect(scan.status).toBe(204);
+						const [watch] = await database!<
+							{ evaluated: string; invalidated: string }[]
+						>`
+							select evaluated_invalidation_generation::text as evaluated,
+							       invalidation_generation::text as invalidated
+							from questpie_internal.realtime_watch_bindings
+							where application_name = 'collaboration'
+						`;
+						if (watch?.evaluated === watch?.invalidated) {
+							initialEvaluated = true;
+							break;
+						}
+					}
+					expect(initialEvaluated).toBe(true);
 				}
 				if (response.status === 202 && command.command === "ack") {
 					if (downstream === 1) initialAcknowledged.resolve();
@@ -350,30 +359,43 @@ postgresTest(
 				{ channelId: beta05Ids.channel, body: "after lost wake" },
 				{ callId: "beta07:lost-wake:publish" },
 			);
-			expect(timers.armedIntervals).toBe(3);
-			expect(timers.invokedIntervals).toBe(1);
+			expect(timers.armedIntervals).toBe(2);
+			expect(timers.invokedIntervals).toBe(0);
 			expect(deliveries).toHaveLength(1);
-			if (!crashRuntimeA) throw new Error("Runtime A stream is not crashable");
-			await crashRuntimeA();
-			let normalDetachCommitted = false;
-			for (let attempt = 0; attempt < 200; attempt += 1) {
-				const [detached] = await database!<
-					{ bindings: number; state: string }[]
-				>`
-					select attachment.state,
-					       count(watch.binding_identity)::integer as bindings
-					from questpie_internal.realtime_scope_attachments attachment
-					left join questpie_internal.realtime_watch_bindings watch
-					  using (application_name, scope_identity)
-					where attachment.application_name = 'collaboration'
-					group by attachment.state
-				`;
-				if (detached?.state === "withdrawn" && detached.bindings === 0) {
-					normalDetachCommitted = true;
-					break;
-				}
-			}
-			expect(normalDetachCommitted).toBe(true);
+			const [beforeCrash] = await database!<
+				{ bindings: number; holderGeneration: string; state: string }[]
+			>`
+				select attachment.holder_generation::text as "holderGeneration",
+				       attachment.state,
+				       count(watch.binding_identity)::integer as bindings
+				from questpie_internal.realtime_scope_attachments attachment
+				left join questpie_internal.realtime_watch_bindings watch
+				  using (application_name, scope_identity)
+				where attachment.application_name = 'collaboration'
+				group by attachment.holder_generation, attachment.state
+			`;
+			expect(beforeCrash).toEqual({
+				bindings: 1,
+				holderGeneration: "1",
+				state: "open",
+			});
+			runtimeAProcess.kill("SIGKILL");
+			expect(await runtimeAProcess.exited).not.toBe(0);
+			runtimeAProcess = undefined;
+			await timers.waitForReconnect();
+			const [afterCrash] = await database!<
+				{ bindings: number; holderGeneration: string; state: string }[]
+			>`
+				select attachment.holder_generation::text as "holderGeneration",
+				       attachment.state,
+				       count(watch.binding_identity)::integer as bindings
+				from questpie_internal.realtime_scope_attachments attachment
+				left join questpie_internal.realtime_watch_bindings watch
+				  using (application_name, scope_identity)
+				where attachment.application_name = 'collaboration'
+				group by attachment.holder_generation, attachment.state
+			`;
+			expect(afterCrash).toEqual(beforeCrash);
 
 			reconnectRuntime = await createApplication();
 			timers.runReconnect();
@@ -474,12 +496,16 @@ postgresTest(
 				BigInt(dirty!.evaluated),
 			);
 			expect(deliveries).toHaveLength(2);
-			expect(timers.invokedIntervals).toBe(1);
+			expect(timers.invokedIntervals).toBe(0);
 
 			stop();
 			expect(await closeResponse.promise).toBe(202);
 			expect(downstream).toBe(3);
 		} finally {
+			if (runtimeAProcess) {
+				runtimeAProcess.kill("SIGKILL");
+				await runtimeAProcess.exited;
+			}
 			if (blocker) {
 				await blocker.unsafe("ROLLBACK").catch(() => {});
 				await blocker.release();
