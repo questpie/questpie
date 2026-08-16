@@ -155,7 +155,7 @@ postgresTest(
 				expect(counts).toEqual({
 					messages: 1,
 					audit: 1,
-					facts: 1,
+					facts: 0,
 					intents: 1,
 					receipts: 1,
 				});
@@ -163,7 +163,7 @@ postgresTest(
 				expect(concurrentCounts).toEqual({
 					messages: 1,
 					audit: 1,
-					facts: 1,
+					facts: 0,
 					intents: 1,
 					receipts: 1,
 				});
@@ -194,7 +194,7 @@ postgresTest(
 );
 
 postgresTest(
-	"rechecks current Membership after a Channel lock wait and rolls back every fact",
+	"rechecks current Membership after a Channel lock wait and rolls back every record",
 	async () => {
 		const prepared = await prepareBeta05PostgresApplication(database!);
 		const blocker = await database!.reserve();
