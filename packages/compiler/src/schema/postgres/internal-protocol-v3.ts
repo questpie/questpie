@@ -17,6 +17,13 @@ import {
 	internalProtocolV2Catalog,
 	internalProtocolV2Checksum,
 } from "./internal-protocol-v2";
+import {
+	internalProtocolV3RealtimeColumns,
+	internalProtocolV3RealtimeConstraints,
+	internalProtocolV3RealtimeIndexes,
+	internalProtocolV3RealtimeSql,
+	internalProtocolV3RealtimeTables,
+} from "./internal-protocol-v3-realtime";
 import { fail } from "./shared";
 
 const internalProtocolV3Sql = `CREATE TABLE questpie_internal.change_ledger (
@@ -96,10 +103,12 @@ CREATE TABLE questpie_internal.retained_live_query_results (
   CONSTRAINT retained_generation_positive CHECK (retained_generation > 0),
   CONSTRAINT retained_result_bytes_bounded CHECK (octet_length(result_bytes) <= 1048576),
   CONSTRAINT retained_dependency_bytes_bounded CHECK (octet_length(dependency_plan_bytes) <= 262144),
-  CONSTRAINT retained_expiry_order CHECK (expires_at > created_at)
+  CONSTRAINT retained_expiry_order CHECK (expires_at > created_at),
+  CONSTRAINT retained_age_exact CHECK (expires_at = created_at + interval '24 hours')
 );
 CREATE INDEX retained_live_query_results_expiry_idx
   ON questpie_internal.retained_live_query_results (application_name, expires_at);
+${internalProtocolV3RealtimeSql}
 
 CREATE FUNCTION questpie_internal.capture_reactive_row()
 RETURNS trigger LANGUAGE plpgsql
@@ -201,6 +210,7 @@ const tables = [
 	"processed_change_facts",
 	"reconciliation_consumers",
 	"retained_live_query_results",
+	...internalProtocolV3RealtimeTables,
 ] as const;
 
 const columns = [
@@ -238,6 +248,7 @@ const columns = [
 		"timestamp with time zone",
 		true,
 	],
+	...internalProtocolV3RealtimeColumns,
 	["retained_live_query_results", "application_name", "text", true],
 	["retained_live_query_results", "token_digest", "text", true],
 	["retained_live_query_results", "authority_partition_digest", "text", true],
@@ -322,6 +333,13 @@ const constraints = [
 		"reconciliation_consumers_pkey",
 		"p",
 		"PRIMARY KEY (application_name, consumer_id)",
+	],
+	...internalProtocolV3RealtimeConstraints,
+	[
+		"retained_live_query_results",
+		"retained_age_exact",
+		"c",
+		"CHECK (expires_at = (created_at + '24:00:00'::interval))",
 	],
 	[
 		"retained_live_query_results",
@@ -426,6 +444,7 @@ const indexes = [
 		true,
 		"CREATE UNIQUE INDEX reconciliation_consumers_pkey ON questpie_internal.reconciliation_consumers USING btree (application_name, consumer_id)",
 	],
+	...internalProtocolV3RealtimeIndexes,
 	[
 		"retained_live_query_results",
 		"retained_live_query_results_expiry_idx",

@@ -5,6 +5,7 @@ import { SQL } from "bun";
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import {
 	ensureInternalProtocolV3,
+	ensureInternalProtocolV2,
 	internalProtocolV3Checksum,
 	projectPostgresChangeCapture,
 	verifyInternalProtocolV3,
@@ -44,6 +45,18 @@ async function ensure(sql: SQL): Promise<void> {
 	);
 }
 
+async function ensureV2(sql: SQL): Promise<void> {
+	const [current] = await sql<
+		{ name: string }[]
+	>`select current_database() as name`;
+	await ensureInternalProtocolV2(
+		sql,
+		current!.name,
+		await backendPid(sql),
+		control,
+	);
+}
+
 async function installApplicationSchema(sql: SQL): Promise<void> {
 	await sql.unsafe(`CREATE SCHEMA collaboration;
 CREATE TABLE collaboration.channels (
@@ -61,13 +74,20 @@ CREATE TABLE collaboration.messages (
 async function expectPostgresDenied(
 	query: PromiseLike<unknown>,
 ): Promise<void> {
+	await expectPostgresError(query, "42501");
+}
+
+async function expectPostgresError(
+	query: PromiseLike<unknown>,
+	errno: string,
+): Promise<void> {
 	let rejected: unknown;
 	try {
 		await query;
 	} catch (error) {
 		rejected = error;
 	}
-	expect(rejected).toMatchObject({ errno: "42501" });
+	expect(rejected).toMatchObject({ errno });
 }
 
 beforeEach(async () => {
@@ -112,6 +132,8 @@ describe.skipIf(!database)(
 					"change_ledger",
 					"observed_dependency_plans",
 					"processed_change_facts",
+					"realtime_scope_attachments",
+					"realtime_watch_bindings",
 					"reconciliation_consumers",
 					"retained_live_query_results",
 				])
@@ -139,6 +161,132 @@ $$;`);
 					{ code: "QP-SCHEMA-023" },
 				);
 			},
+		);
+
+		postgresTest(
+			"upgrades immutable v2 and enforces no-affinity Principal watch state",
+			async () => {
+				await ensureV2(database!);
+				await ensure(database!);
+				await verifyInternalProtocolV3(database!);
+
+				const openedAt = new Date("2026-08-16T00:00:00.000Z");
+				const expiresAt = new Date(openedAt.getTime() + 30_000);
+				const deployment = "a".repeat(64);
+				const authority = "b".repeat(64);
+				await database!`
+					insert into questpie_internal.realtime_scope_attachments
+					(application_name, scope_identity, deployment_digest,
+					 authority_partition_digest, principal_kind, principal_id,
+					 opened_at, renewed_at, expires_at, state)
+					values ('collaboration', 'scope:one', ${deployment}, null,
+					        'user', 'user:one', ${openedAt}, ${openedAt}, ${expiresAt}, 'attached')
+				`;
+				await database!`
+					update questpie_internal.realtime_scope_attachments
+					set authority_partition_digest = ${authority}, state = 'open'
+					where application_name = 'collaboration' and scope_identity = 'scope:one'
+					  and principal_kind = 'user' and principal_id = 'user:one'
+					  and state = 'attached' and authority_partition_digest is null
+				`;
+				await expectPostgresError(
+					database!`
+						insert into questpie_internal.realtime_watch_bindings
+						(application_name, scope_identity, binding_identity,
+						 deployment_digest, authority_partition_digest, principal_kind,
+						 principal_id, active_slot, query_identity, query_bytes,
+						 input_bytes, context_input_bytes, opened_at, state)
+						values ('collaboration', 'scope:one', 'binding:mismatched-context',
+						        ${deployment}, ${"d".repeat(64)}, 'user', 'user:one', 1,
+						        'messages.page', 'query'::bytea, '{}'::bytea, '{}'::bytea,
+						        ${openedAt}, 'open')
+					`,
+					"23503",
+				);
+				await database!`
+					insert into questpie_internal.realtime_watch_bindings
+					(application_name, scope_identity, binding_identity,
+					 deployment_digest, authority_partition_digest, principal_kind,
+					 principal_id, active_slot, query_identity, query_bytes,
+					 input_bytes, context_input_bytes, opened_at, state)
+					select 'collaboration', 'scope:one', 'binding:' || slot,
+					       ${deployment}, ${authority}, 'user', 'user:one', slot,
+					       'messages.page', 'query:messages.page'::bytea,
+					       '{"first":20}'::bytea, '{"tenant":"company:one"}'::bytea,
+					       ${openedAt}, 'open'
+					from generate_series(1, 64) slot
+				`;
+
+				await expectPostgresError(
+					database!`
+						insert into questpie_internal.realtime_watch_bindings
+						(application_name, scope_identity, binding_identity,
+						 deployment_digest, authority_partition_digest, principal_kind,
+						 principal_id, active_slot, query_identity, query_bytes,
+						 input_bytes, context_input_bytes, opened_at, state)
+						values ('collaboration', 'scope:one', 'binding:overflow',
+						        ${deployment}, ${authority}, 'user', 'user:one', 65,
+						        'messages.page', 'query'::bytea, '{}'::bytea, '{}'::bytea,
+						        ${openedAt}, 'open')
+					`,
+					"23514",
+				);
+
+				await database!`
+					update questpie_internal.realtime_watch_bindings
+					set acknowledged_generation = 1,
+					    acknowledged_token_digest = ${"c".repeat(64)},
+					    acknowledged_at = ${openedAt}
+					where application_name = 'collaboration'
+					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
+				`;
+				await database!`
+					update questpie_internal.realtime_watch_bindings
+					set state = 'withdrawn', active_slot = null, withdrawn_at = ${openedAt}
+					where application_name = 'collaboration'
+					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
+				`;
+				const [state] = await database!<
+					{ state: string; generation: string; hasCredentialColumn: boolean }[]
+				>`
+					select binding.state,
+					       binding.acknowledged_generation as generation,
+					       exists (
+					         select 1 from information_schema.columns
+					         where table_schema = 'questpie_internal'
+					           and table_name in ('realtime_scope_attachments', 'realtime_watch_bindings')
+					           and column_name in ('credential', 'resolved_context', 'policy_evidence', 'run_as')
+					       ) as "hasCredentialColumn"
+					from questpie_internal.realtime_watch_bindings binding
+					where application_name = 'collaboration'
+					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
+				`;
+				expect(state).toEqual({
+					state: "withdrawn",
+					generation: "1",
+					hasCredentialColumn: false,
+				});
+				await database!`
+					delete from questpie_internal.realtime_scope_attachments
+					where application_name = 'collaboration' and expires_at <= ${expiresAt}
+				`;
+				const [expired] = await database!<{ watches: number }[]>`
+					select count(*)::integer as watches
+					from questpie_internal.realtime_watch_bindings
+					where application_name = 'collaboration'
+				`;
+				expect(expired).toEqual({ watches: 0 });
+
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.realtime_watch_bindings DROP CONSTRAINT realtime_watch_binding_payload_bounded",
+				);
+				await expect(verifyInternalProtocolV3(database!)).rejects.toMatchObject(
+					{
+						code: "QP-SCHEMA-023",
+					},
+				);
+			},
+			15_000,
 		);
 
 		postgresTest(
@@ -307,6 +455,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON collaboration.channels, collaboration.me
 						"reconciliation_consumers",
 						"processed_change_facts",
 						"observed_dependency_plans",
+						"realtime_scope_attachments",
+						"realtime_watch_bindings",
 						"retained_live_query_results",
 					])
 						await expectPostgresDenied(
