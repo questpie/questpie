@@ -58,7 +58,7 @@ export const publishMessage = defineMutation({
 		idempotencyConflict: operation.error({
 			code: "IDEMPOTENCY_CONFLICT",
 			status: 409,
-			payload: codec.object({ callId: codec.uuid() }),
+			payload: codec.object({ callId: codec.text() }),
 		}),
 	},
 	handler: async ({ input, ctx }) => {
@@ -156,6 +156,15 @@ raw database detail. `IDEMPOTENCY_CONFLICT` classifies the same scoped call or
 dispatch identity with different canonical input. A post-commit lost result is
 `COMMITTED_RESULT_UNAVAILABLE` and carries only the stable call and transaction
 identity required for recovery.
+
+ADR-0023 owns its exact wire classification. It is a framework transaction
+outcome with HTTP `500`, `retryable: true`, correlated frame `callId`, and
+canonical PostgreSQL `xid8` text in `error.transactionId`. Generated transport
+does not retry automatically. Direct and generated-client carriers expose a
+frozen `{ callId, transactionId }` payload. The caller's `callId` is general
+bounded NFC text rather than UUID-only; a generated UUID is only the omitted
+default. The declared `IDEMPOTENCY_CONFLICT` payload therefore uses bounded
+text and must preserve a non-UUID caller identity.
 
 The generated Mutation Service projection contains only the transitive `read`
 Service subgraph. An external-effect Service is absent at type level and is
