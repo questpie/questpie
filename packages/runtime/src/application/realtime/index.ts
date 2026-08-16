@@ -11,7 +11,6 @@ export {
 	type DecodedRealtimeWireContractV1,
 } from "./contract";
 export {
-	createLiveQueryCoordinator,
 	type LiveQueryCoordinator,
 	type LiveQueryCoordinatorDelivery,
 	type LiveQueryCoordinatorEvaluation,

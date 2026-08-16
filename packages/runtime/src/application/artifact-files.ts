@@ -48,7 +48,6 @@ export function verifyRuntimeArtifactFiles(
 		}
 	};
 	if (
-		build.realtimeWireDigest !== null &&
 		artifactDigest(
 			"questpie-runtime-executables-v1",
 			parseJsonFile("runtime-executables.json"),

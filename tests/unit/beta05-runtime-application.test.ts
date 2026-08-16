@@ -745,6 +745,40 @@ test("rejects a changed inventory file before readiness or executable disclosure
 	).rejects.toThrow(
 		"manifestDigest does not match inventory path manifest.json",
 	);
+	const forgedExecutables = {
+		...artifacts.runtimeExecutables,
+		slots: artifacts.runtimeExecutables.slots.map((slot, index) =>
+			index === 0 ? { ...slot, sourceDigest: sha("0") } : slot,
+		),
+	};
+	const forgedExecutablesBytes = `${JSON.stringify(forgedExecutables)}\n`;
+	const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
+		artifacts.runtimeBuild;
+	const forgedInventoryBuild = {
+		...unsignedRuntimeBuild,
+		inventory: unsignedRuntimeBuild.inventory.map((item) =>
+			item.path === "runtime-executables.json"
+				? { ...item, digest: fileDigest(forgedExecutablesBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...forgedInventoryBuild,
+					digest: digest("questpie-runtime-build-v1", forgedInventoryBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"runtime-executables.json": forgedExecutablesBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow("runtime-executables.json semantic digest does not match");
 	expect({ readiness, resolves, handlerCalls }).toEqual({
 		readiness: 0,
 		resolves: 0,
