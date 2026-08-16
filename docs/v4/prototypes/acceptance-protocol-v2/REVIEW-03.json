@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "29a260702aed2a0ebc0ed4ceb768ddef1f91557f",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "e5cb36289935d36568f918d1870223c54569fa48c8bc98a4ccbed4d4ed1e67bd",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "eaea8831-3598-4283-9b6c-4483191e694e",
+				"invocationId": "01a00a7b-6849-70b0-962d-5ca1d4a392f2",
+				"packetDigest": "e5cb36289935d36568f918d1870223c54569fa48c8bc98a4ccbed4d4ed1e67bd",
+				"reviewedHead": "29a260702aed2a0ebc0ed4ceb768ddef1f91557f",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "PASS",
+				"findings": "VERDICT: PASS\n\nNo blocking Spec findings remain. The revision preserves protocol-v1 authority and artifacts, keeps valid primary verdicts final, and activates only the fixed two-axis contingency after a sanitized primary no-result. Packet construction binds exact reviewed history, authority ancestry and digests, canonical diff bytes, verification evidence, and secret scanning. The contingency transport fixes model, effort, axes, CLI version, schema, sandbox, configuration isolation, packet bindings, and independent invocation identities; invalid events, tool use, malformed output, timeout, and transport failure fail closed without an artifact. Record validation and credential-free re-derivation enforce the aggregate and prevent substitution. The change remains confined to repository acceptance infrastructure and introduces no production Runtime API, provider registry, or caller-selectable review seam."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "9c0b81c7-459d-404b-b26c-db71ef55f2e3",
+				"invocationId": "01a00a7b-684d-7c20-91ff-a463c3ff1458",
+				"packetDigest": "e5cb36289935d36568f918d1870223c54569fa48c8bc98a4ccbed4d4ed1e67bd",
+				"reviewedHead": "29a260702aed2a0ebc0ed4ceb768ddef1f91557f",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review.ts` and `acceptance-review-safety.ts` permit `reviewOutput` inside Git’s administrative directory. A normalized path such as `.git/HEAD.lock` or `.git/refs/heads/review-output` passes the repository-relative and symlink checks, and the wrapper can create it with `mkdirSync`/`writeFileSync` before credential-free verification discovers that it cannot be a committed record. This violates ADR-0020’s requirement to validate every path and lets an unreviewed branch corrupt or lock repository metadata merely by asking a maintainer to run its acceptance wrapper. Resolve the actual Git administrative directory, reject outputs within it (including separate-worktree Git directories), and add deterministic negative controls for `.git`/resolved git-dir output targets.\n\nNon-blocking observations: The previous blockers are otherwise repaired. Diff generation now closes the identified Git formatting configuration, authority heads are ancestry-bound, existing output-path components reject symlinks, both reviewer processes use bounded concurrent stream draining with termination escalation, and the manifest records exact full/release and focused PASS commands. The fixed two-axis profile, request and packet bindings, event rejection, identity separation, aggregate validation, and committed-record byte comparison remain coherent."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:11:49.584Z"
+}
