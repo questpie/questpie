@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { codec, principal } from "questpie";
+import { codec, operation, policy, principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
@@ -24,7 +24,7 @@ const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1";
 type GeneratedCompilation = Awaited<ReturnType<typeof compileApplication>>;
 type RuntimeSlot = Readonly<{
 	identity: string;
-	kind: "context" | "query" | "service";
+	kind: "context" | "mutation" | "query" | "service";
 	slot: "create" | "dispose" | "handler" | "resolve";
 	runtimeGraphDigest: string;
 	bundleExport: string;
@@ -55,6 +55,7 @@ let collaborationContext: Definition;
 let auditConnection: Definition;
 let executionAudit: Definition;
 let auditReader: Definition;
+let publishMessage: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
 
@@ -109,6 +110,35 @@ beforeAll(async () => {
 	executionAudit = execution.executionAudit;
 	auditReader = audit.auditReader;
 	channelMessagePage = structural.channelMessagePage;
+	publishMessage = generatedApp.defineMutation({
+		name: "message.publish",
+		network: true,
+		input: codec.object({
+			channelId: codec.uuid(),
+			body: codec.text(),
+		}),
+		output: codec.object({
+			id: codec.uuid(),
+			channelId: codec.uuid(),
+			body: codec.text(),
+			createdAt: codec.timestamp(),
+		}),
+		policy: policy.authenticated(),
+		errors: {
+			channelUnavailable: operation.error({
+				code: "CHANNEL_UNAVAILABLE",
+				status: 404,
+			}),
+			idempotencyConflict: operation.error({
+				code: "IDEMPOTENCY_CONFLICT",
+				status: 409,
+				payload: codec.object({ callId: codec.uuid() }),
+			}),
+		},
+		handler: () => {
+			throw new Error("mutation is outside this Query-only runtime harness");
+		},
+	});
 	messagePage = generatedApp.defineQuery({
 		name: "messages.page",
 		network: true,
@@ -155,6 +185,7 @@ beforeAll(async () => {
 function definitions(): ReadonlyMap<string, Definition> {
 	return new Map([
 		["context:app.context", collaborationContext],
+		["mutation:message.publish", publishMessage],
 		["query:messages.page", messagePage],
 		["service:audit.connection", auditConnection],
 		["service:audit.execution", executionAudit],
@@ -169,7 +200,9 @@ function executableBindings() {
 		const definition = byIdentity.get(slot.identity);
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
-			slot.kind === "query" ? definition.handler : definition[slot.slot];
+			slot.kind === "query" || slot.kind === "mutation"
+				? definition.handler
+				: definition[slot.slot];
 		serverExports[slot.bundleExport] = implementation;
 		return Object.freeze({
 			identity: slot.identity,
@@ -178,7 +211,9 @@ function executableBindings() {
 			runtimeGraphDigest: slot.runtimeGraphDigest,
 			bundleExport: slot.bundleExport,
 			definition,
-			...(slot.kind === "query" ? { execute: implementation } : {}),
+			...(slot.kind === "query" || slot.kind === "mutation"
+				? { execute: implementation }
+				: {}),
 		});
 	});
 	return { serverExports: Object.freeze(serverExports), slots };
