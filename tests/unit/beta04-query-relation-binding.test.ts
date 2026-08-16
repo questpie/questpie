@@ -14,18 +14,35 @@ test("binds one-hop Relation selection to its target disclosure Policy", async (
 	) as {
 		queries: readonly {
 			policy: string;
-			template: { select: readonly unknown[] };
+			template: { from: string; select: readonly unknown[] };
 		}[];
 	};
 	const policyProjection = JSON.parse(
 		compilation.generatedFiles["policy-projection.json"] ?? "null",
-	) as { policies: readonly { program: { identity: string } }[] };
+	) as {
+		policies: readonly {
+			program: { identity: string; target: string };
+		}[];
+	};
+	const messagePage = queryProjection.queries.find(
+		({ template }) => template.from === "collection:messages",
+	);
+	if (!messagePage) throw new Error("expected the Message page projection");
+	const membershipPolicy = policyProjection.policies.find(
+		({ program }) => program.identity === "policy:memberships.default",
+	);
+	if (!membershipPolicy)
+		throw new Error("expected the Membership disclosure Policy");
+	const messagePolicy = policyProjection.policies.find(
+		({ program }) => program.identity === "policy:messages.default",
+	);
+	if (!messagePolicy) throw new Error("expected the Message disclosure Policy");
 
 	expect(queryProjection.queries).toHaveLength(1);
-	expect(queryProjection.queries[0]).toMatchObject({
+	expect(messagePage).toMatchObject({
 		policy: "policy:messages.default",
 	});
-	expect(queryProjection.queries[0]?.template.select[0]).toEqual({
+	expect(messagePage.template.select[0]).toEqual({
 		kind: "toOne",
 		key: "author",
 		relation: "collection:messages/relation:author",
@@ -42,7 +59,6 @@ test("binds one-hop Relation selection to its target disclosure Policy", async (
 			},
 		],
 	});
-	expect(
-		policyProjection.policies.map(({ program }) => program.identity),
-	).toEqual(["policy:memberships.default", "policy:messages.default"]);
+	expect(membershipPolicy.program.target).toBe("collection:memberships");
+	expect(messagePolicy.program.target).toBe("collection:messages");
 });
