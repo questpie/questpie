@@ -33,6 +33,7 @@ const deploymentDigest = "a".repeat(64);
 const user = principal.user({ id: "user:one" });
 const otherUser = principal.user({ id: "user:two" });
 const context = { companyId: "company:one" };
+const changedContext = { companyId: "company:two" };
 const queryInput = { after: null, channelId: "channel:one", first: 20 };
 
 const projected = projectRealtimeWireContract({
@@ -282,7 +283,11 @@ describe.skipIf(databases.length === 0)(
 							evaluations += 1;
 							if (evaluationFails) throw new Error("retry later");
 							expect(evaluatedPrincipal).toEqual(user);
-							expect(value).toEqual(context);
+							expect(value).toEqual(
+								value.companyId === changedContext.companyId
+									? changedContext
+									: context,
+							);
 							return {
 								result: {
 									nodes: [
@@ -562,6 +567,64 @@ describe.skipIf(databases.length === 0)(
 					resetReason: "resume-unavailable",
 				});
 				expect(evaluations).toBe(beforeResume + 2);
+
+				const authorityResetStream = await carriers[0]!.fetch(
+					request("GET", undefined, "scope:authority-reset"),
+				);
+				const authorityResetReader = authorityResetStream?.body?.getReader();
+				if (!authorityResetReader)
+					throw new Error("missing authority reset realtime stream");
+				expect((await nextFrame(authorityResetReader))?.kind).toBe("ready");
+				expect(
+					(
+						await carriers[1]!.fetch(
+							request(
+								"POST",
+								command("open", "binding:authority-reset", {
+									context: changedContext,
+									resumeToken: update?.resumeToken,
+									scopeId: "scope:authority-reset",
+								}),
+							),
+						)
+					)?.status,
+				).toBe(202);
+				await coordinators[1]!.durable!.requestScan();
+				await coordinators[0]!.durable!.requestScan();
+				expect(await nextFrame(authorityResetReader)).toMatchObject({
+					kind: "delivery",
+					delivery: "reset",
+					resetReason: "authority-changed",
+				});
+				expect(evaluations).toBe(beforeResume + 3);
+
+				const deploymentResetStream = await wrongDeploymentCarrier.fetch(
+					request("GET", undefined, "scope:deployment-reset"),
+				);
+				const deploymentResetReader = deploymentResetStream?.body?.getReader();
+				if (!deploymentResetReader)
+					throw new Error("missing deployment reset realtime stream");
+				expect((await nextFrame(deploymentResetReader))?.kind).toBe("ready");
+				expect(
+					(
+						await wrongDeploymentCarrier.fetch(
+							request(
+								"POST",
+								command("open", "binding:deployment-reset", {
+									resumeToken: update?.resumeToken,
+									scopeId: "scope:deployment-reset",
+								}),
+							),
+						)
+					)?.status,
+				).toBe(202);
+				await wrongDeployment.durable!.requestScan();
+				expect(await nextFrame(deploymentResetReader)).toMatchObject({
+					kind: "delivery",
+					delivery: "reset",
+					resetReason: "deployment-changed",
+				});
+				expect(evaluations).toBe(beforeResume + 4);
 				expect(
 					(
 						await carriers[1]!.fetch(

@@ -11,7 +11,11 @@ const dependencyPlanBytesLimit = 262_144;
 const retainedTokensPerPrincipal = 128;
 const postgresBigintMaximum = 9_223_372_036_854_775_807n;
 const postgresIntegerMaximum = 2_147_483_647;
-const unavailable = Object.freeze({ status: "unavailable" as const });
+
+type RetainedLiveQueryResetReason =
+	| "authority-changed"
+	| "deployment-changed"
+	| "resume-unavailable";
 
 export type RetainedLiveQueryBinding = Readonly<{
 	applicationName: string;
@@ -42,7 +46,10 @@ type PostgresRetainedResult =
 			dependencyPlanBytes: Uint8Array;
 			retainedGeneration: bigint;
 	  }>
-	| typeof unavailable;
+	| Readonly<{
+			status: "unavailable";
+			resetReason: RetainedLiveQueryResetReason;
+	  }>;
 
 type PostgresLiveQueryPruneResult = Readonly<{
 	retainedResults: number;
@@ -218,6 +225,25 @@ function payloadMatchesLookupBinding(
 	);
 }
 
+function unavailableResetReason(
+	payload: ResumeTokenPayloadV1 | undefined,
+	binding: RetainedLiveQueryLookupBinding,
+): RetainedLiveQueryResetReason {
+	if (
+		!payload ||
+		payload.application !== binding.applicationName ||
+		payload.query !== binding.queryIdentity ||
+		payload.input !== binding.inputDigest ||
+		payload.wire !== binding.wireVersion
+	)
+		return "resume-unavailable";
+	if (payload.deployment !== binding.deploymentDigest)
+		return "deployment-changed";
+	if (payload.authority !== binding.authorityPartitionDigest)
+		return "authority-changed";
+	return "resume-unavailable";
+}
+
 function bytes(value: unknown): Uint8Array | undefined {
 	return value instanceof Uint8Array ? new Uint8Array(value) : undefined;
 }
@@ -389,7 +415,10 @@ export function createPostgresLiveQueryRetention(
 				payload.result !== sha256Digest(resultBytes) ||
 				payload.dependencies !== sha256Digest(dependencyPlanBytes)
 			)
-				return unavailable;
+				return Object.freeze({
+					status: "unavailable" as const,
+					resetReason: unavailableResetReason(payload, binding),
+				});
 			return Object.freeze({
 				status: "available" as const,
 				resultBytes,

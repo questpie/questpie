@@ -93,6 +93,7 @@ describe.skipIf(!database)(
 					await retention.resume({ binding: lookupBinding, resumeToken }),
 				).toEqual({
 					status: "unavailable",
+					resetReason: "resume-unavailable",
 				});
 
 				await retention.acknowledge({
@@ -110,7 +111,10 @@ describe.skipIf(!database)(
 					retainedGeneration: 1n,
 				});
 
-				const unavailable = { status: "unavailable" } as const;
+				const unavailable = {
+					status: "unavailable",
+					resetReason: "resume-unavailable",
+				} as const;
 				const tampered = `${resumeToken.slice(0, -1)}${resumeToken.endsWith("a") ? "b" : "a"}`;
 				expect(
 					await retention.resume({
@@ -118,9 +122,28 @@ describe.skipIf(!database)(
 						resumeToken: tampered,
 					}),
 				).toEqual(unavailable);
+				expect(
+					await retention.resume({
+						binding: { ...lookupBinding, deploymentDigest: digest("d") },
+						resumeToken,
+					}),
+				).toEqual({
+					status: "unavailable",
+					resetReason: "deployment-changed",
+				});
+				expect(
+					await retention.resume({
+						binding: {
+							...lookupBinding,
+							authorityPartitionDigest: digest("d"),
+						},
+						resumeToken,
+					}),
+				).toEqual({
+					status: "unavailable",
+					resetReason: "authority-changed",
+				});
 				for (const incompatible of [
-					{ ...lookupBinding, deploymentDigest: digest("d") },
-					{ ...lookupBinding, authorityPartitionDigest: digest("d") },
 					{ ...lookupBinding, queryIdentity: "messages.other" },
 					{ ...lookupBinding, inputDigest: digest("d") },
 					{ ...lookupBinding, wireVersion: 3 },

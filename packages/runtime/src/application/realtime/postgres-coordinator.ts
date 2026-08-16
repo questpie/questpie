@@ -130,6 +130,11 @@ export function createPostgresDurableLiveQueryCoordinator(
 			watch.latest === null ||
 			watch.invalidationGeneration > watch.evaluatedInvalidationGeneration;
 		if (dirty) {
+			let unavailableResetReason:
+				| "authority-changed"
+				| "deployment-changed"
+				| "resume-unavailable"
+				| null = null;
 			if (
 				watch.latest === null &&
 				watch.resumeRequested &&
@@ -233,6 +238,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 						holder.framed.set(watch.bindingIdentity, sha256Digest(resumeToken));
 					return;
 				}
+				unavailableResetReason = retained.resetReason;
 			}
 			let evaluated;
 			try {
@@ -256,6 +262,9 @@ export function createPostgresDurableLiveQueryCoordinator(
 			);
 			const resumeToken = retention.mint(complete);
 			const resumeUnavailable = watch.latest === null && watch.resumeRequested;
+			const resetReason = resumeUnavailable
+				? (unavailableResetReason ?? "resume-unavailable")
+				: null;
 			const deliveryKind = resumeUnavailable
 				? "reset"
 				: watch.latest === null
@@ -270,7 +279,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 				resultBytes,
 				dependencyPlanBytes,
 				delivery: deliveryKind,
-				resetReason: resumeUnavailable ? "resume-unavailable" : null,
+				resetReason,
 			});
 			if (!staged) return;
 			const published = await holder.attachment.publish(
@@ -279,7 +288,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 					payload: evaluated.payload,
 					observedPlan: evaluated.observedPlan,
 					delivery: deliveryKind,
-					resetReason: resumeUnavailable ? "resume-unavailable" : null,
+					resetReason,
 					resumeToken,
 				}),
 			);
