@@ -27,6 +27,12 @@ const schema = {
 			identity: "collection:records",
 			postgresName: "records",
 			fields: [
+				field("collection:records", "body", "body", {
+					kind: "text",
+					minLength: 1,
+					maxLength: 8_192,
+					collation: "questpie.binary",
+				}),
 				field(
 					"collection:records",
 					"createdAt",
@@ -154,10 +160,29 @@ const policyProgram = {
 	},
 	fields: {
 		callerInput: {
-			create: [{ path: ["title"], when: { kind: "constant", value: true } }],
+			create: [
+				{ path: ["body"], when: { kind: "constant", value: true } },
+				{ path: ["title"], when: { kind: "constant", value: true } },
+			],
 			suppliedPathsOnly: true,
 		},
-		selectedOutput: [],
+		selectedOutput: [
+			{
+				path: ["body"],
+				deniedEncoding: "omitProperty",
+				when: {
+					kind: "and",
+					items: [
+						{
+							kind: "notEqual",
+							left: fieldOperand("row", "collection:records", "body", "text"),
+							right: { kind: "literal", codec: "text", value: "classified" },
+						},
+						permitEvidence("row"),
+					],
+				},
+			},
+		],
 	},
 };
 
@@ -172,6 +197,46 @@ function fieldOperand(
 
 function executionOperand(source: string, name: string, codec: string) {
 	return { kind: "executionFact", source, path: [name], codec };
+}
+
+function permitEvidence(rootScope: "row") {
+	return {
+		kind: "exists",
+		collection: "collection:permits",
+		scope: "permitOutput",
+		semantics: "policyEvidenceBooleanOnly",
+		targetDisclosurePolicy: "notApplied",
+		predicate: {
+			kind: "and",
+			items: [
+				{
+					kind: "equal",
+					left: fieldOperand(
+						"permitOutput",
+						"collection:permits",
+						"principalId",
+						"uuid",
+					),
+					right: executionOperand("principal", "id", "uuid"),
+				},
+				{
+					kind: "equal",
+					left: fieldOperand(
+						"permitOutput",
+						"collection:permits",
+						"ownerId",
+						"uuid",
+					),
+					right: fieldOperand(
+						rootScope,
+						"collection:records",
+						"ownerId",
+						"uuid",
+					),
+				},
+			],
+		},
+	};
 }
 
 const policyProjection = {
@@ -190,6 +255,11 @@ const policyProjection = {
 					scope: "permit",
 					collection: "collection:permits",
 					parentScope: "candidate",
+				},
+				{
+					scope: "permitOutput",
+					collection: "collection:permits",
+					parentScope: "row",
 				},
 				{
 					scope: "row",
@@ -243,8 +313,8 @@ const operations = {
 			member: "create",
 			policy: "policy:records.default",
 			keyFields: [],
-			callerInputFields: [["title"]],
-			selectedFieldPaths: [["id"], ["title"], ["createdAt"]],
+			callerInputFields: [["title"], ["body"]],
+			selectedFieldPaths: [["id"], ["body"], ["title"], ["createdAt"]],
 			dataQuery: null,
 			dataQueryDigest: null,
 			normalizerProgramDigest: digest(
@@ -272,7 +342,7 @@ const operations = {
 			policy: "policy:records.default",
 			keyFields: [["id"]],
 			callerInputFields: [],
-			selectedFieldPaths: [["id"], ["title"]],
+			selectedFieldPaths: [["id"], ["body"], ["title"]],
 			dataQuery: null,
 			dataQueryDigest: null,
 			normalizerProgramDigest: null,
@@ -333,6 +403,7 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 		candidate: {
 			steps: [
 				{ phase: "callerInput", target: ["title"] },
+				{ phase: "callerInput", target: ["body"] },
 				{ phase: "normalizer", target: ["title"], transform: "trim" },
 				{ phase: "schemaDefault", target: ["createdAt"], value: "now" },
 				{ phase: "schemaDefault", target: ["id"], value: "randomUuid" },
@@ -352,7 +423,7 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 		limits: { rows: 100, durationMilliseconds: 5_000 },
 	});
 	if (create.member !== "create") throw new Error("expected create plan");
-	expect(create.fieldAuthority.checks).toHaveLength(1);
+	expect(create.fieldAuthority.checks).toHaveLength(2);
 	expect(create.fieldAuthority.checks[0]?.sql).toContain("SELECT TRUE");
 	expect(create.write.sql).toContain('WITH "qp_candidate" AS');
 	expect(create.write.sql).toContain("pg_catalog.gen_random_uuid()");
@@ -360,7 +431,9 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 	expect(create.write.sql).toContain("btrim(");
 	expect(create.write.sql).toContain('FROM "archive"."permits"');
 	expect(create.write.sql).toContain('INSERT INTO "archive"."records"');
-	expect(create.write.sql).toContain("RETURNING");
+	expect(create.write.sql).toContain("RETURNING *");
+	expect(create.write.sql).toContain('CASE WHEN "qp_guard_1"."allowed"');
+	expect(create.write.sql).toContain('AS "qp_result_1_allowed"');
 	expect(create.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ kind: "callerInput", path: ["title"] }),
@@ -369,12 +442,18 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 				source: "principal",
 				path: ["id"],
 			}),
+			expect.objectContaining({ kind: "literal", value: "classified" }),
 		]),
 	);
 	expect(create.write.result).toEqual([
 		expect.objectContaining({
 			path: ["id"],
 			codec: expect.objectContaining({ kind: "uuid" }),
+		}),
+		expect.objectContaining({
+			path: ["body"],
+			guardColumn: "qp_result_1_allowed",
+			codec: expect.objectContaining({ kind: "text" }),
 		}),
 		expect.objectContaining({
 			path: ["title"],
@@ -385,19 +464,65 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 			codec: expect.objectContaining({ kind: "timestamp", withTimezone: true }),
 		}),
 	]);
+	expect(create.outputAuthority.freshAfterRowLockWait).toBe(true);
+	expect(create.outputAuthority.selectedPaths).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ path: ["id"], conditional: false }),
+			expect.objectContaining({
+				path: ["body"],
+				conditional: true,
+				guardColumn: "qp_result_1_allowed",
+				mutableEvidenceCollections: ["collection:permits"],
+			}),
+		]),
+	);
 	expect(JSON.stringify(create)).not.toMatch(/runtimePlanning|dispatcher/i);
 	expect(JSON.stringify(lowered)).not.toMatch(/messages|reaction/i);
 
 	const get = lowered.plans[1]!;
 	if (get.member !== "get") throw new Error("expected get plan");
+	expect(get.consistency).toEqual({
+		standalone: "readSnapshot",
+		nestedMutation: "keyedLockThenFreshPolicyRead",
+	});
+	expect(get.lifecycle).toEqual([
+		"keyedRowLock",
+		"freshPolicyRead",
+		"selection",
+		"outputFieldAuthority",
+	]);
+	expect(get.lock.sql).toContain('FROM "archive"."records" AS "qp_lock_row"');
+	expect(get.lock.sql).toContain("FOR UPDATE");
+	expect(get.lock.sql).not.toContain('"archive"."permits"');
+	expect(get.lock.outcome).toBe("internalLockedOrAbsent");
+	expect(get.lock.parameters).toEqual([
+		expect.objectContaining({ kind: "key", path: ["id"], position: 1 }),
+	]);
+	expect(get.read.freshAfterRowLockWait).toBe(true);
+	expect(get.outputAuthority.freshAfterRowLockWait).toBe(true);
+	expect(get.outputAuthority.selectedPaths[1]).toMatchObject({
+		path: ["body"],
+		conditional: true,
+		mutableEvidenceCollections: ["collection:permits"],
+	});
 	expect(get.read.sql).toContain('FROM "archive"."records" AS "qp_row"');
+	expect(get.read.sql).toContain('FROM "archive"."permits"');
 	expect(get.read.sql).toContain('"qp_row"."id" IS NOT DISTINCT FROM');
 	expect(get.read.sql).toContain('"qp_row"."owner_id" IS NOT DISTINCT FROM');
+	expect(get.read.sql).toContain('CASE WHEN "qp_guard_1"."allowed"');
+	expect(get.read.result).toContainEqual(
+		expect.objectContaining({
+			path: ["body"],
+			guardColumn: "qp_result_1_allowed",
+		}),
+	);
 	expect(get.read.sql).toContain("LIMIT 1");
+	expect(get.read.sql).not.toContain("FOR UPDATE");
 	expect(get.read.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ kind: "key", path: ["id"] }),
 			expect.objectContaining({ kind: "executionFact", source: "principal" }),
+			expect.objectContaining({ kind: "literal", value: "classified" }),
 		]),
 	);
 });

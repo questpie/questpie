@@ -29,6 +29,7 @@ export interface PostgresOperationResultV1 {
 	readonly column: string;
 	readonly codec: ScalarCodecV1;
 	readonly nullable: boolean;
+	readonly guardColumn?: string;
 }
 
 export interface PostgresGetOperationPlanV1 {
@@ -37,15 +38,34 @@ export interface PostgresGetOperationPlanV1 {
 	readonly member: "get";
 	readonly policy: CollectionOperationProgramV1["policy"];
 	readonly outputCardinality: "optionalOne";
+	readonly consistency: Readonly<{
+		standalone: "readSnapshot";
+		nestedMutation: "keyedLockThenFreshPolicyRead";
+	}>;
+	readonly lifecycle: readonly [
+		"keyedRowLock",
+		"freshPolicyRead",
+		"selection",
+		"outputFieldAuthority",
+	];
+	readonly lock: Readonly<{
+		sql: string;
+		parameters: readonly PostgresOperationParameterV1[];
+		outcome: "internalLockedOrAbsent";
+	}>;
 	readonly read: Readonly<{
+		freshAfterRowLockWait: true;
 		sql: string;
 		parameters: readonly PostgresOperationParameterV1[];
 		result: readonly PostgresOperationResultV1[];
 	}>;
 	readonly outputAuthority: Readonly<{
+		freshAfterRowLockWait: true;
 		selectedPaths: readonly Readonly<{
 			path: readonly string[];
-			conditional: false;
+			conditional: boolean;
+			guardColumn?: string;
+			mutableEvidenceCollections: readonly `collection:${string}`[];
 		}>[];
 	}>;
 	readonly limits: Readonly<{ rows: 1; durationMilliseconds: number }>;
@@ -93,9 +113,12 @@ export interface PostgresCreateOperationPlanV1 {
 		sql: string;
 	}>;
 	readonly outputAuthority: Readonly<{
+		freshAfterRowLockWait: true;
 		selectedPaths: readonly Readonly<{
 			path: readonly string[];
 			conditional: boolean;
+			guardColumn?: string;
+			mutableEvidenceCollections: readonly `collection:${string}`[];
 		}>[];
 	}>;
 	readonly write: Readonly<{

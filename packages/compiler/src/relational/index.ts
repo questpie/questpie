@@ -19,6 +19,7 @@ export { lowerPostgresQueryPlans } from "./postgres";
 export type { PostgresQueryPlanV1, PostgresQueryPlansV1 } from "./postgres";
 export {
 	lowerPostgresMutationPolicyCheck,
+	lowerPostgresMutationPolicyChecks,
 	postgresMutationCollection,
 } from "./postgres-mutation-seam";
 export type {

@@ -76,18 +76,48 @@ export function lowerPostgresMutationPolicyCheck(
 	parameters: readonly PostgresQueryParameterV1[];
 	mutableEvidenceCollections: readonly `collection:${string}`[];
 }> {
-	const catalog = buildPostgresCatalog(input.schema);
-	const parameters = new PostgresParameters();
-	const sql = policyExpressionSql(input.expression, {
-		catalog,
-		parameters,
-		aliases: new Map(Object.entries(input.aliases)),
+	const lowered = lowerPostgresMutationPolicyChecks({
+		schema: input.schema,
+		checks: [{ expression: input.expression, aliases: input.aliases }],
 	});
 	return Object.freeze({
-		sql,
-		parameters: Object.freeze(parameters.values()),
-		mutableEvidenceCollections: Object.freeze(
-			[...evidenceCollections(input.expression)].sort(),
+		...lowered.checks[0]!,
+		parameters: lowered.parameters,
+	});
+}
+
+export function lowerPostgresMutationPolicyChecks(
+	input: Readonly<{
+		schema: unknown;
+		checks: readonly Readonly<{
+			expression: PolicyExpressionV1;
+			aliases: Readonly<Record<string, string>>;
+		}>[];
+	}>,
+): Readonly<{
+	checks: readonly Readonly<{
+		sql: string;
+		mutableEvidenceCollections: readonly `collection:${string}`[];
+	}>[];
+	parameters: readonly PostgresQueryParameterV1[];
+}> {
+	const catalog = buildPostgresCatalog(input.schema);
+	const parameters = new PostgresParameters();
+	return Object.freeze({
+		checks: Object.freeze(
+			input.checks.map((check) =>
+				Object.freeze({
+					sql: policyExpressionSql(check.expression, {
+						catalog,
+						parameters,
+						aliases: new Map(Object.entries(check.aliases)),
+					}),
+					mutableEvidenceCollections: Object.freeze(
+						[...evidenceCollections(check.expression)].sort(),
+					),
+				}),
+			),
 		),
+		parameters: Object.freeze(parameters.values()),
 	});
 }

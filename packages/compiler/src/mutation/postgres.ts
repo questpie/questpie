@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import {
 	lowerPostgresMutationPolicyCheck,
+	lowerPostgresMutationPolicyChecks,
 	postgresMutationCollection,
 	type PolicyProgramV1,
 	type PostgresMutationCollectionV1,
@@ -26,9 +27,16 @@ import {
 	quote,
 	record,
 	result,
-	type Parameters,
+	Parameters,
 	type RecordValue,
 } from "./postgres-shared";
+
+type OutputAuthorityEntry = Readonly<{
+	path: readonly string[];
+	conditional: boolean;
+	guardColumn?: string;
+	mutableEvidenceCollections: readonly `collection:${string}`[];
+}>;
 
 function getPlan(
 	operation: CollectionOperationProgramV1,
@@ -42,34 +50,73 @@ function getPlan(
 		);
 	const read = policy.operations.read;
 	if (!read) throw new TypeError(`${policy.identity} denies read`);
-	const check = lowerPostgresMutationPolicyCheck({
+	const selectedRules = policy.fields?.selectedOutput ?? [];
+	const outputRules = operation.selectedFieldPaths.map((selectedPath) =>
+		selectedRules.find(
+			(rule) => canonicalBytes(rule.path) === canonicalBytes(selectedPath),
+		),
+	);
+	const checks = lowerPostgresMutationPolicyChecks({
 		schema,
-		expression: read.rows,
-		aliases: { row: "qp_row" },
+		checks: [
+			{ expression: read.rows, aliases: { row: "qp_row" } },
+			...outputRules.flatMap((rule) =>
+				rule ? [{ expression: rule.when, aliases: { row: "qp_row" } }] : [],
+			),
+		],
 	});
-	const parameters = policyParameters(check.parameters);
+	const readCheck = checks.checks[0]!;
+	const guardChecks = checks.checks.slice(1);
+	const parameters = policyParameters(checks.parameters);
+	const lockParameters = new Parameters();
+	const lockPredicates = operation.keyFields.map((keyPath) => {
+		const field = fieldByPath(collection, keyPath);
+		return `${quote("qp_lock_row")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(lockParameters, "key", field)}`;
+	});
 	const predicates = operation.keyFields.map((keyPath) => {
 		const field = fieldByPath(collection, keyPath);
 		return `${quote("qp_row")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(parameters, "key", field)}`;
 	});
-	const output = result(collection, operation.selectedFieldPaths);
-	const selectedRules = policy.fields?.selectedOutput ?? [];
-	for (const selectedPath of operation.selectedFieldPaths)
-		if (
-			selectedRules.some(
-				(rule) => canonicalBytes(rule.path) === canonicalBytes(selectedPath),
-			)
-		)
-			throw new TypeError(
-				`${operation.identity} conditional output authority requires a later static lowering`,
-			);
-	const selected = output.map((item) => {
+	const baseOutput = result(collection, operation.selectedFieldPaths);
+	let guardIndex = 0;
+	const joins: string[] = [];
+	const outputAuthority: OutputAuthorityEntry[] = [];
+	const output = baseOutput.map((item, index) => {
+		const rule = outputRules[index];
+		if (!rule) {
+			outputAuthority.push({
+				path: item.path,
+				conditional: false,
+				mutableEvidenceCollections: [],
+			});
+			return item;
+		}
+		const guard = guardChecks[guardIndex++]!;
+		const guardAlias = `qp_guard_${index}`;
+		const guardColumn = `${item.column}_allowed`;
+		joins.push(
+			`CROSS JOIN LATERAL (SELECT ${guard.sql} AS ${quote("allowed")}) AS ${quote(guardAlias)}`,
+		);
+		outputAuthority.push({
+			path: item.path,
+			conditional: true,
+			guardColumn,
+			mutableEvidenceCollections: guard.mutableEvidenceCollections,
+		});
+		return Object.freeze({ ...item, guardColumn });
+	});
+	const selected = output.flatMap((item, index) => {
 		const field = fieldByPath(collection, item.path);
 		const value =
 			field.codec.kind === "timestamp"
 				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_row")}.${quote(field.column)})`
 				: `${quote("qp_row")}.${quote(field.column)}`;
-		return `${value} AS ${quote(item.column)}`;
+		if (!item.guardColumn) return [`${value} AS ${quote(item.column)}`];
+		const guardAlias = `qp_guard_${index}`;
+		return [
+			`CASE WHEN ${quote(guardAlias)}.${quote("allowed")} THEN ${value} ELSE NULL END AS ${quote(item.column)}`,
+			`${quote(guardAlias)}.${quote("allowed")} AS ${quote(item.guardColumn)}`,
+		];
 	});
 	return Object.freeze({
 		identity: operation.identity,
@@ -77,17 +124,30 @@ function getPlan(
 		member: "get",
 		policy: operation.policy,
 		outputCardinality: "optionalOne",
+		consistency: Object.freeze({
+			standalone: "readSnapshot" as const,
+			nestedMutation: "keyedLockThenFreshPolicyRead" as const,
+		}),
+		lifecycle: Object.freeze([
+			"keyedRowLock",
+			"freshPolicyRead",
+			"selection",
+			"outputFieldAuthority",
+		] as const),
+		lock: Object.freeze({
+			sql: `SELECT TRUE AS ${quote("qp_locked")} FROM ${collection.table} AS ${quote("qp_lock_row")} WHERE ${lockPredicates.join(" AND ")} LIMIT 1 FOR UPDATE`,
+			parameters: lockParameters.values(),
+			outcome: "internalLockedOrAbsent" as const,
+		}),
 		read: Object.freeze({
-			sql: `SELECT ${selected.join(", ")} FROM ${collection.table} AS ${quote("qp_row")} WHERE ${[...predicates, check.sql].join(" AND ")} LIMIT 1`,
+			freshAfterRowLockWait: true as const,
+			sql: `SELECT ${selected.join(", ")} FROM ${collection.table} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} WHERE ${[...predicates, readCheck.sql].join(" AND ")} LIMIT 1`,
 			parameters: parameters.values(),
 			result: output,
 		}),
 		outputAuthority: Object.freeze({
-			selectedPaths: Object.freeze(
-				operation.selectedFieldPaths.map((selectedPath) =>
-					Object.freeze({ path: selectedPath, conditional: false as const }),
-				),
-			),
+			freshAfterRowLockWait: true as const,
+			selectedPaths: Object.freeze(outputAuthority),
 		}),
 		limits: Object.freeze({
 			rows: 1,
@@ -129,12 +189,24 @@ function createPlan(
 		throw new TypeError(
 			`${policy.identity} has no explicit create candidate Policy`,
 		);
-	const check = lowerPostgresMutationPolicyCheck({
+	const selectedRules = policy.fields?.selectedOutput ?? [];
+	const outputRules = operation.selectedFieldPaths.map((selectedPath) =>
+		selectedRules.find(
+			(rule) => canonicalBytes(rule.path) === canonicalBytes(selectedPath),
+		),
+	);
+	const checks = lowerPostgresMutationPolicyChecks({
 		schema,
-		expression: create.candidate,
-		aliases: { candidate: "qp_candidate" },
+		checks: [
+			{ expression: create.candidate, aliases: { candidate: "qp_candidate" } },
+			...outputRules.flatMap((rule) =>
+				rule ? [{ expression: rule.when, aliases: { row: "qp_row" } }] : [],
+			),
+		],
 	});
-	const parameters = policyParameters(check.parameters);
+	const candidateCheck = checks.checks[0]!;
+	const guardChecks = checks.checks.slice(1);
+	const parameters = policyParameters(checks.parameters);
 	const steps: Record<string, unknown>[] = [];
 	const expressions = new Map<string, string>();
 	for (const callerPath of operation.callerInputFields) {
@@ -251,25 +323,51 @@ function createPlan(
 			parameters: authorityParameters.values(),
 		});
 	});
-	const output = result(collection, operation.selectedFieldPaths);
+	const baseOutput = result(collection, operation.selectedFieldPaths);
 	const insertColumns = collection.fields.map((field) => quote(field.column));
 	const selection = collection.fields.map(
 		(field) => `${quote("qp_candidate")}.${quote(field.column)}`,
 	);
-	const returning = output.map((item) => {
-		const field = fieldByPath(collection, item.path);
-		return `${quote(field.column)} AS ${quote(item.column)}`;
+	let guardIndex = 0;
+	const joins: string[] = [];
+	const outputAuthority: OutputAuthorityEntry[] = [];
+	const output = baseOutput.map((item, index) => {
+		const rule = outputRules[index];
+		if (!rule) {
+			outputAuthority.push({
+				path: item.path,
+				conditional: false,
+				mutableEvidenceCollections: [],
+			});
+			return item;
+		}
+		const guard = guardChecks[guardIndex++]!;
+		const guardAlias = `qp_guard_${index}`;
+		const guardColumn = `${item.column}_allowed`;
+		joins.push(
+			`CROSS JOIN LATERAL (SELECT ${guard.sql} AS ${quote("allowed")}) AS ${quote(guardAlias)}`,
+		);
+		outputAuthority.push({
+			path: item.path,
+			conditional: true,
+			guardColumn,
+			mutableEvidenceCollections: guard.mutableEvidenceCollections,
+		});
+		return Object.freeze({ ...item, guardColumn });
 	});
-	const selectedRules = policy.fields?.selectedOutput ?? [];
-	for (const selectedPath of operation.selectedFieldPaths)
-		if (
-			selectedRules.some(
-				(rule) => canonicalBytes(rule.path) === canonicalBytes(selectedPath),
-			)
-		)
-			throw new TypeError(
-				`${operation.identity} conditional output authority requires a later static lowering`,
-			);
+	const selected = output.flatMap((item, index) => {
+		const field = fieldByPath(collection, item.path);
+		const value =
+			field.codec.kind === "timestamp"
+				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_row")}.${quote(field.column)})`
+				: `${quote("qp_row")}.${quote(field.column)}`;
+		if (!item.guardColumn) return [`${value} AS ${quote(item.column)}`];
+		const guardAlias = `qp_guard_${index}`;
+		return [
+			`CASE WHEN ${quote(guardAlias)}.${quote("allowed")} THEN ${value} ELSE NULL END AS ${quote(item.column)}`,
+			`${quote(guardAlias)}.${quote("allowed")} AS ${quote(item.guardColumn)}`,
+		];
+	});
 	return Object.freeze({
 		identity: operation.identity,
 		target: operation.target,
@@ -308,21 +406,15 @@ function createPlan(
 		}),
 		candidatePolicy: Object.freeze({
 			freshAfterRowLockWait: true,
-			mutableEvidenceCollections: check.mutableEvidenceCollections,
-			sql: check.sql,
+			mutableEvidenceCollections: candidateCheck.mutableEvidenceCollections,
+			sql: candidateCheck.sql,
 		}),
 		outputAuthority: Object.freeze({
-			selectedPaths: Object.freeze(
-				operation.selectedFieldPaths.map((selectedPath) =>
-					Object.freeze({
-						path: selectedPath,
-						conditional: false,
-					}),
-				),
-			),
+			freshAfterRowLockWait: true as const,
+			selectedPaths: Object.freeze(outputAuthority),
 		}),
 		write: Object.freeze({
-			sql: `WITH ${candidateCte} INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${check.sql} RETURNING ${returning.join(", ")}`,
+			sql: `WITH ${candidateCte}, ${quote("qp_inserted")} AS (INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${candidateCheck.sql} RETURNING *) SELECT ${selected.join(", ")} FROM ${quote("qp_inserted")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
 			parameters: parameters.values(),
 			result: output,
 		}),
