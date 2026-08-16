@@ -17,6 +17,33 @@ import {
 const protocol = Object.freeze({ name: "questpie.operation", version: 1 });
 const mediaType = "application/vnd.questpie.operation+json;version=1";
 
+test("keeps an empty generated Mutation inventory string-addressable", () => {
+	const client = renderClientContract(
+		[
+			{
+				kind: "query",
+				name: "health.read",
+				identity: "query:health.read",
+				contract: {
+					exposure: "network",
+					input: { kind: "object", properties: {} },
+					output: { kind: "object", properties: {} },
+					declaredErrors: {},
+				},
+			},
+		] as never,
+		{
+			application: "application:test",
+			clientContractDigest: "1".repeat(64),
+			wireDigest: "2".repeat(64),
+			path: "/_questpie/operation",
+			mediaType,
+		},
+	);
+
+	expect(client).toContain("const mutationOperations = new Set<string>([]);");
+});
+
 test("accepts only exact Call Identity and canonical xid8 boundaries", () => {
 	const fourByteScalar = String.fromCodePoint(0x10ffff);
 	for (const value of ["a", "é", "a".repeat(256), fourByteScalar.repeat(256)])

@@ -141,7 +141,7 @@ export class CommittedResultUnavailable extends Error {
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
-const mutationOperations = new Set(${canonicalBytes(mutationOperations).trim()});
+const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
 const failureCodes = new Set([
 	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
