@@ -63,7 +63,17 @@ const schema = {
 				}),
 			],
 			relations: [],
-			constraints: [],
+			constraints: [
+				{
+					identity: "collection:records/constraint:primary",
+					kind: "primaryKey",
+					postgresName: "qp_pk_records_primary",
+					fields: [
+						"collection:records/field:id",
+						"collection:records/field:title",
+					],
+				},
+			],
 			indexes: [],
 		},
 	],
@@ -314,7 +324,7 @@ const operations = {
 			policy: "policy:records.default",
 			keyFields: [],
 			callerInputFields: [["title"], ["body"]],
-			selectedFieldPaths: [["id"], ["body"], ["title"], ["createdAt"]],
+			selectedFieldPaths: [["body"], ["createdAt"]],
 			dataQuery: null,
 			dataQueryDigest: null,
 			normalizerProgramDigest: digest(
@@ -340,7 +350,7 @@ const operations = {
 			target: "collection:records",
 			member: "get",
 			policy: "policy:records.default",
-			keyFields: [["id"]],
+			keyFields: [["id"], ["title"]],
 			callerInputFields: [],
 			selectedFieldPaths: [["id"], ["body"], ["title"]],
 			dataQuery: null,
@@ -432,8 +442,10 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 	expect(create.write.sql).toContain('FROM "archive"."permits"');
 	expect(create.write.sql).toContain('INSERT INTO "archive"."records"');
 	expect(create.write.sql).toContain("RETURNING *");
-	expect(create.write.sql).toContain('CASE WHEN "qp_guard_1"."allowed"');
-	expect(create.write.sql).toContain('AS "qp_result_1_allowed"');
+	expect(create.write.sql).toContain('CASE WHEN "qp_guard_0"."allowed"');
+	expect(create.write.sql).toContain('AS "qp_result_0_allowed"');
+	expect(create.write.sql).toContain('AS "qp_record_key_0"');
+	expect(create.write.sql).toContain('AS "qp_record_key_1"');
 	expect(create.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ kind: "callerInput", path: ["title"] }),
@@ -445,18 +457,18 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 			expect.objectContaining({ kind: "literal", value: "classified" }),
 		]),
 	);
+	expect(
+		[...create.write.sql.matchAll(/\$(\d+)::/g)]
+			.map((match) => Number(match[1]))
+			.filter(
+				(position, index, positions) => positions.indexOf(position) === index,
+			)
+			.sort((left, right) => left - right),
+	).toEqual(create.write.parameters.map(({ position }) => position));
 	expect(create.write.result).toEqual([
 		expect.objectContaining({
-			path: ["id"],
-			codec: expect.objectContaining({ kind: "uuid" }),
-		}),
-		expect.objectContaining({
 			path: ["body"],
-			guardColumn: "qp_result_1_allowed",
-			codec: expect.objectContaining({ kind: "text" }),
-		}),
-		expect.objectContaining({
-			path: ["title"],
+			guardColumn: "qp_result_0_allowed",
 			codec: expect.objectContaining({ kind: "text" }),
 		}),
 		expect.objectContaining({
@@ -464,14 +476,27 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 			codec: expect.objectContaining({ kind: "timestamp", withTimezone: true }),
 		}),
 	]);
+	expect(create.recordKey).toEqual([
+		{
+			path: ["id"],
+			column: "qp_record_key_0",
+			codec: { kind: "uuid" },
+			nullable: false,
+		},
+		expect.objectContaining({
+			path: ["title"],
+			column: "qp_record_key_1",
+			codec: expect.objectContaining({ kind: "text" }),
+			nullable: false,
+		}),
+	]);
 	expect(create.outputAuthority.freshAfterRowLockWait).toBe(true);
 	expect(create.outputAuthority.selectedPaths).toEqual(
 		expect.arrayContaining([
-			expect.objectContaining({ path: ["id"], conditional: false }),
 			expect.objectContaining({
 				path: ["body"],
 				conditional: true,
-				guardColumn: "qp_result_1_allowed",
+				guardColumn: "qp_result_0_allowed",
 				mutableEvidenceCollections: ["collection:permits"],
 			}),
 		]),
@@ -497,6 +522,7 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 	expect(get.lock.outcome).toBe("internalLockedOrAbsent");
 	expect(get.lock.parameters).toEqual([
 		expect.objectContaining({ kind: "key", path: ["id"], position: 1 }),
+		expect.objectContaining({ kind: "key", path: ["title"], position: 2 }),
 	]);
 	expect(get.read.freshAfterRowLockWait).toBe(true);
 	expect(get.outputAuthority.freshAfterRowLockWait).toBe(true);

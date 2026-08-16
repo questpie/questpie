@@ -24,6 +24,7 @@ export interface PostgresMutationCollectionV1 {
 	readonly identity: string;
 	readonly table: string;
 	readonly fields: readonly PostgresMutationFieldV1[];
+	readonly primaryKey: readonly PostgresMutationFieldV1[];
 }
 
 export function postgresMutationCollection(
@@ -32,21 +33,30 @@ export function postgresMutationCollection(
 ): PostgresMutationCollectionV1 {
 	const catalog = buildPostgresCatalog(schema);
 	const collection = requiredCollection(catalog, identity);
+	const primaryKey = collection.primaryKey.map((fieldIdentity) => {
+		const field = collection.fields.get(fieldIdentity);
+		if (!field)
+			throw new TypeError(`${identity} primary key references unknown Field`);
+		if (field.nullable)
+			throw new TypeError(`${identity} primary key Field cannot be nullable`);
+		return field;
+	});
+	if (primaryKey.length === 0)
+		throw new TypeError(`${identity} has no primary key`);
+	const projectField = (field: PostgresField): PostgresMutationFieldV1 =>
+		Object.freeze({
+			identity: field.identity,
+			path: field.path,
+			column: field.postgresName,
+			codec: field.codec,
+			nullable: field.nullable,
+			defaultValue: field.defaultValue,
+		});
 	return Object.freeze({
 		identity,
 		table: qualifiedTable(catalog, collection),
-		fields: Object.freeze(
-			[...collection.fields.values()].map((field) =>
-				Object.freeze({
-					identity: field.identity,
-					path: field.path,
-					column: field.postgresName,
-					codec: field.codec,
-					nullable: field.nullable,
-					defaultValue: field.defaultValue,
-				}),
-			),
-		),
+		fields: Object.freeze([...collection.fields.values()].map(projectField)),
+		primaryKey: Object.freeze(primaryKey.map(projectField)),
 	});
 }
 

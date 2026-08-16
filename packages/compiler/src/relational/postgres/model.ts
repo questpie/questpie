@@ -32,6 +32,7 @@ export interface PostgresCollection {
 	readonly postgresName: string;
 	readonly fields: ReadonlyMap<FieldIdentity, PostgresField>;
 	readonly fieldsByPath: ReadonlyMap<string, PostgresField>;
+	readonly primaryKey: readonly FieldIdentity[];
 	readonly relations: ReadonlyMap<string, PostgresRelation>;
 }
 
@@ -144,6 +145,19 @@ export function buildPostgresCatalog(schema: unknown): PostgresCatalog {
 			fields.set(field.identity, field);
 		}
 		const collectionRelations = new Map<string, PostgresRelation>();
+		const primaryConstraints = items(
+			value.constraints ?? [],
+			`${identity} Constraints`,
+		)
+			.map((constraint) => record(constraint, "Schema Constraint"))
+			.filter((constraint) => constraint.kind === "primaryKey");
+		if (primaryConstraints.length > 1)
+			throw new TypeError(`${identity} has multiple primary keys`);
+		const primaryKey = primaryConstraints.flatMap((constraint) =>
+			items(constraint.fields, "Primary key Fields").map(
+				(field) => string(field, "Primary key Field") as FieldIdentity,
+			),
+		);
 		for (const rawRelation of items(
 			value.relations ?? [],
 			`${identity} Relations`,
@@ -175,6 +189,7 @@ export function buildPostgresCatalog(schema: unknown): PostgresCatalog {
 			postgresName: string(value.postgresName, "Collection PostgreSQL name"),
 			fields: collectionFields,
 			fieldsByPath,
+			primaryKey,
 			relations: collectionRelations,
 		});
 	}
