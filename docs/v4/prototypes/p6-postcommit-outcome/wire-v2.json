@@ -1,0 +1,91 @@
+{
+	"artifact": "questpie.operation-wire",
+	"version": 2,
+	"carrier": {
+		"protocol": { "name": "questpie.operation", "version": 1 },
+		"mediaType": "application/vnd.questpie.operation+json;version=1",
+		"exactContractSelector": "wireDigest"
+	},
+	"path": "/_questpie/operation",
+	"request": [
+		"application",
+		"callId",
+		"clientContractDigest",
+		"context",
+		"input",
+		"operation",
+		"protocol",
+		"timeoutMilliseconds",
+		"wireDigest"
+	],
+	"response": {
+		"result": ["callId", "kind", "operation", "payload", "protocol"],
+		"declaredError": ["callId", "error", "kind", "operation", "protocol"],
+		"failure": ["callId", "error", "kind", "operation", "protocol"],
+		"rejection": ["error", "kind"]
+	},
+	"failureDetails": {
+		"ordinary": ["code", "retryable"],
+		"committedResultUnavailable": ["code", "retryable", "transactionId"]
+	},
+	"failures": [
+		"APPLICATION_MISMATCH",
+		"CLIENT_OUTDATED",
+		"COMMITTED_RESULT_UNAVAILABLE",
+		"DEADLINE_EXCEEDED",
+		"INTERNAL",
+		"NOT_FOUND",
+		"PROTOCOL_UNSUPPORTED",
+		"RESOURCE_LIMIT",
+		"RUNTIME_UNAVAILABLE"
+	],
+	"committedResultUnavailable": {
+		"classification": "frameworkTransactionOutcome",
+		"httpStatus": 500,
+		"retryable": true,
+		"transactionOutcome": "committed",
+		"automaticRetry": false,
+		"recovery": "replayExactMutationWithSameCallIdentity",
+		"frameCallIdSource": "acceptedRequest",
+		"transactionIdSource": "committedReceipt",
+		"causeDisclosure": "forbidden"
+	},
+	"callIdentity": {
+		"kind": "text",
+		"minimumUnicodeScalars": 1,
+		"maximumUnicodeScalars": 256,
+		"maximumUtf8Bytes": 1024,
+		"normalization": "NFC",
+		"normalizationBehavior": "rejectNotRewrite",
+		"loneSurrogates": "forbidden",
+		"nullScalar": "forbidden",
+		"uuidRequired": false,
+		"runtimeDefaultWhenAbsent": "crypto.randomUUID",
+		"equality": "exactUtf8AfterValidation"
+	},
+	"transactionIdentity": {
+		"kind": "postgresXid8Text",
+		"canonicalPattern": "^[1-9][0-9]{0,19}$",
+		"maximum": "18446744073709551615",
+		"clientInterpretation": "opaque"
+	},
+	"clientCarrier": {
+		"name": "CommittedResultUnavailable",
+		"code": "COMMITTED_RESULT_UNAVAILABLE",
+		"retryable": true,
+		"payload": ["callId", "transactionId"],
+		"payloadFrozen": true,
+		"constructorIdentityAcrossServerAndClient": "notPromised"
+	},
+	"compatibility": {
+		"wireV1Bytes": "preserved",
+		"wireV1Digest": "d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c",
+		"wireV1MutationExecution": "rejectBeforeContextAndOperation",
+		"wireV1RejectionCode": "CLIENT_OUTDATED",
+		"wireV1RejectionFrame": "wireV1CompatibleUncorrelatedFailure",
+		"retainedV1ResultCompatibility": "forbidden"
+	},
+	"limits": { "requestBytes": 1048576, "responseBytes": 1048576 },
+	"principalSource": "credentialResolverOutsideBody",
+	"mutationAutomaticRetry": false
+}
