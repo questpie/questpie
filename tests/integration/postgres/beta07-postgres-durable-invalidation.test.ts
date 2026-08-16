@@ -92,12 +92,12 @@ async function insertWatch(
 		(application_name, scope_identity, binding_identity, deployment_digest,
 		 authority_partition_digest, principal_kind, principal_id, active_slot,
 		 query_identity, query_bytes, input_bytes, input_digest, context_input_bytes,
-		 wire_version, state)
+		 wire_version, resume_requested, requested_resume_token, state)
 		values (${application}, ${scope}, ${binding}, ${deployment}, ${authority},
 		        'user', ${`principal:${scope}`}, ${slot}, 'messages.page',
 		        ${new TextEncoder().encode('"query:messages.page"\n')},
 		        ${new TextEncoder().encode("{}\n")}, ${inputDigest},
-		        ${new TextEncoder().encode("{}\n")}, 1, 'open')
+		        ${new TextEncoder().encode("{}\n")}, 1, false, null, 'open')
 	`;
 	await database!`
 		insert into questpie_internal.observed_dependency_plans
