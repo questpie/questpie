@@ -17,7 +17,6 @@ import {
 	realtimeWireRecord,
 	type RealtimeCarrierBinding as Binding,
 	type RealtimeCarrierSession as Session,
-	type RealtimeWireRecord as WireRecord,
 } from "./carrier-wire";
 import type { DecodedRealtimeWireContractV1 } from "./contract";
 import type {
@@ -552,7 +551,7 @@ export function createRealtimeCarrier<Context>(
 	};
 	const drain = async () => {
 		beginDrain();
-		for (const session of [...sessions.values()]) {
+		for (const session of sessions.values()) {
 			session.close("runtime-draining", true);
 			disposeSession(session);
 		}

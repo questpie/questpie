@@ -14,10 +14,7 @@ import {
 	type PostgresWakeTickSource,
 	type RetainedLiveQueryCompleteResult,
 } from "../../live-query";
-import type {
-	LiveQueryCoordinator,
-	LiveQueryCoordinatorDelivery,
-} from "./coordinator";
+import type { LiveQueryCoordinator } from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
@@ -30,10 +27,6 @@ type ScopeAuthority = Readonly<{
 	deploymentDigest: string;
 	principal: DurableRealtimeAttachment["principal"];
 }>;
-
-function queryIdentity(value: string): string {
-	return value.startsWith("query:") ? value.slice("query:".length) : value;
-}
 
 function scopeAuthority(
 	applicationName: string,
