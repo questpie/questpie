@@ -307,7 +307,15 @@ export function projectLiveQueryCompilation(
 	artifacts: Readonly<Record<LiveQueryArtifactFile, JsonRecord>>;
 	bytes: Readonly<Record<LiveQueryArtifactFile, string>>;
 	fileDigests: Readonly<Record<LiveQueryArtifactFile, string>>;
-	semanticDigests: Readonly<Record<string, string>>;
+	semanticDigests: Readonly<{
+		watchability: string;
+		dependencyAlgebra: string;
+		changeLedger: string;
+		reconciliation: string;
+		resume: string;
+		captureBoundary: string;
+		limits: string;
+	}>;
 }> {
 	const queryResources = input.resources.filter(
 		(resource) =>

@@ -28,6 +28,7 @@ import {
 } from "./relational";
 import {
 	projectCommittedMigrations,
+	projectRealtimeWireContract,
 	projectRuntimeBuild,
 	projectRuntimeContract,
 	renderApplicationBundle,
@@ -330,6 +331,21 @@ export async function createArtifacts(
 		],
 		contextProjection: executionComposition.context,
 	});
+	const realtime = projectRealtimeWireContract({
+		application: `application:${input.configuration.application.name}`,
+		clientContractDigest: runtime.clientContractDigest,
+		operationWireDigest: runtime.wireDigest,
+		resources: input.resources,
+		watchableQueries: (
+			liveQuery.artifacts["query-watchability.json"]
+				.queries as readonly Readonly<{
+				query: string;
+				watchable: boolean;
+			}>[]
+		)
+			.filter(({ watchable }) => watchable)
+			.map(({ query }) => query),
+	});
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
@@ -351,6 +367,7 @@ export async function createArtifacts(
 			wireDigest: runtime.wireDigest,
 			path: String(runtime.wire.path),
 			mediaType: String(runtime.wire.mediaType),
+			realtime,
 		}),
 		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),
@@ -361,6 +378,7 @@ export async function createArtifacts(
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
+		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
 	if (runtime.reactions.reactions.length > 0)
@@ -463,6 +481,11 @@ export async function createArtifacts(
 				"questpie-schema-fingerprint-v1",
 				expectedComparable(schema as SchemaProjectionV1),
 			),
+			liveQueryDigests: {
+				changeLedger: liveQuery.semanticDigests.changeLedger,
+				resume: liveQuery.semanticDigests.resume,
+			},
+			realtimeWireDigest: realtime.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

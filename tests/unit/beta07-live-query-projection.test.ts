@@ -309,7 +309,8 @@ test("emits Message watchability and inventories every live-query artifact", asy
 					(path: string) =>
 						path.includes("live-query") ||
 						path.includes("change-") ||
-						path === "query-watchability.json",
+						path === "query-watchability.json" ||
+						path === "realtime-wire-contract.json",
 				),
 		).toEqual([
 			"change-capture-boundary.json",
@@ -319,7 +320,27 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			"live-query-limits.json",
 			"live-query-resume.json",
 			"query-watchability.json",
+			"realtime-wire-contract.json",
 		]);
+		expect(runtimeBuild).toMatchObject({
+			internalProtocol: "questpie.internal.v3",
+			realtimeWireDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+			later: {
+				changeLedgerDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+				resumeDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+			},
+		});
+		const realtime = JSON.parse(
+			compilation.generatedFiles["realtime-wire-contract.json"]!,
+		);
+		expect(realtime).toMatchObject({
+			format: "questpie.realtime-wire",
+			version: 1,
+			watchableQueries: [
+				expect.objectContaining({ identity: "query:messages.page" }),
+			],
+			digest: runtimeBuild.realtimeWireDigest,
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
