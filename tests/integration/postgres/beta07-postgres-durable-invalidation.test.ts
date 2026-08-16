@@ -168,6 +168,7 @@ describe.skipIf(!database)(
 				);
 				const effect = createPostgresLiveQueryInvalidationEffect({
 					deploymentDigest: deploymentA,
+					fanoutPerBatch: 1_024,
 				});
 				await reconcilePostgresChangeLedger({
 					sql: database!,
@@ -304,6 +305,101 @@ describe.skipIf(!database)(
 				);
 			},
 			15_000,
+		);
+
+		postgresTest(
+			"invalidates 2,050 durable PostgreSQL bindings in exact 1,024 fanout batches",
+			async () => {
+				const bytes = planBytes("collection:messages");
+				await database!`
+					insert into questpie_internal.realtime_scope_attachments
+					(application_name, scope_identity, deployment_digest,
+					 authority_partition_digest, principal_kind, principal_id, state)
+					select ${application}, 'scope:fanout:' || candidate::text,
+					       ${deploymentA}, ${authority}, 'user',
+					       'principal:fanout:' || candidate::text, 'open'
+					from pg_catalog.generate_series(1, 2050) candidate
+				`;
+				await database!`
+					insert into questpie_internal.realtime_watch_bindings
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, principal_kind, principal_id, active_slot,
+					 query_identity, query_bytes, input_bytes, input_digest,
+					 context_input_bytes, wire_version, resume_requested,
+					 requested_resume_token, state)
+					select ${application}, 'scope:fanout:' || candidate::text,
+					       'binding:fanout:' || candidate::text, ${deploymentA}, ${authority},
+					       'user', 'principal:fanout:' || candidate::text, 1,
+					       'messages.page', ${new TextEncoder().encode('"query:messages.page"\n')},
+					       ${new TextEncoder().encode("{}\n")}, ${inputDigest},
+					       ${new TextEncoder().encode("{}\n")}, 1, false, null, 'open'
+					from pg_catalog.generate_series(1, 2050) candidate
+				`;
+				await database!`
+					insert into questpie_internal.observed_dependency_plans
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, query_identity, input_digest, wire_version,
+					 retained_generation, plan_digest, plan_bytes)
+					select ${application}, 'scope:fanout:' || candidate::text,
+					       'binding:fanout:' || candidate::text, ${deploymentA}, ${authority},
+					       'messages.page', ${inputDigest}, 1, 1, ${sha256Digest(bytes)}, ${bytes}
+					from pg_catalog.generate_series(1, 2050) candidate
+				`;
+				await database!.unsafe(`
+					CREATE TABLE durable_invalidation_probe.batch_sizes (
+					  batch_order bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+					  size integer NOT NULL
+					);
+					CREATE FUNCTION durable_invalidation_probe.record_batch_size()
+					RETURNS trigger LANGUAGE plpgsql AS $$
+					BEGIN
+					  INSERT INTO durable_invalidation_probe.batch_sizes (size)
+					  SELECT count(*)::integer FROM changed;
+					  RETURN NULL;
+					END;
+					$$;
+					CREATE TRIGGER durable_invalidation_batch_probe
+					AFTER UPDATE ON questpie_internal.realtime_watch_bindings
+					REFERENCING NEW TABLE AS changed
+					FOR EACH STATEMENT
+					EXECUTE FUNCTION durable_invalidation_probe.record_batch_size();
+				`);
+				const effect = createPostgresLiveQueryInvalidationEffect({
+					deploymentDigest: deploymentA,
+					fanoutPerBatch: 1_024,
+				});
+				await reconcilePostgresChangeLedger({
+					sql: database!,
+					application,
+					consumer: effect.consumer,
+					apply: () => undefined,
+					effect,
+				});
+				await database!`
+					insert into durable_invalidation_probe.messages (id, body)
+					values ('fanout', 'production fanout witness')
+				`;
+				await reconcilePostgresChangeLedger({
+					sql: database!,
+					application,
+					consumer: effect.consumer,
+					apply: () => undefined,
+					effect,
+				});
+				const sizes = await database!<{ size: number }[]>`
+					select size from durable_invalidation_probe.batch_sizes
+					order by batch_order
+				`;
+				expect(sizes.map((row) => row.size)).toEqual([1_024, 1_024, 2]);
+				const [invalidated] = await database!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.realtime_watch_bindings
+					where application_name = ${application}
+					  and invalidation_generation = 2
+				`;
+				expect(invalidated?.count).toBe(2_050);
+			},
+			30_000,
 		);
 	},
 );

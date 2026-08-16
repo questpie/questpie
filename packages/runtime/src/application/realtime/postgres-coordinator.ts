@@ -11,6 +11,7 @@ import {
 	reconcilePostgresChangeLedger,
 	type LinkedLiveQueryProgramV1,
 	type PostgresRealtimeWatch,
+	type PostgresRealtimeScopeLease,
 	type PostgresWakeTickSource,
 	type RetainedLiveQueryCompleteResult,
 } from "../../live-query";
@@ -26,6 +27,12 @@ type ScopeAuthority = Readonly<{
 	scopeIdentity: string;
 	deploymentDigest: string;
 	principal: DurableRealtimeAttachment["principal"];
+}>;
+
+type Holder = Readonly<{
+	attachment: DurableRealtimeAttachment;
+	framed: Map<string, string>;
+	lease: PostgresRealtimeScopeLease;
 }>;
 
 function scopeAuthority(
@@ -85,7 +92,6 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 		signal?: AbortSignal;
 	}>,
 ): LiveQueryCoordinator<Context> {
-	void input.program;
 	const store = createPostgresRealtimeScopeStore({ sql: input.sql });
 	const retention = createPostgresLiveQueryRetention({
 		sql: input.sql,
@@ -93,19 +99,18 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 	});
 	const effect = createPostgresLiveQueryInvalidationEffect({
 		deploymentDigest: input.deploymentDigest,
+		fanoutPerBatch: input.program.limits.fanoutPerBatch,
 	});
-	const attachments = new Map<
-		string,
-		Readonly<{
-			attachment: DurableRealtimeAttachment;
-			framed: Map<string, string>;
-		}>
+	const attachments = new Map<string, Holder>();
+	const leases = new WeakMap<
+		DurableRealtimeAttachment,
+		PostgresRealtimeScopeLease
 	>();
 	let state: "idle" | "ready" | "draining" | "drained" = "idle";
 
 	const processWatch = async (
-		holder: typeof attachments extends Map<string, infer Value> ? Value : never,
-		authority: ScopeAuthority,
+		holder: Holder,
+		authority: PostgresRealtimeScopeLease,
 		watch: PostgresRealtimeWatch,
 		signal: AbortSignal,
 	): Promise<void> => {
@@ -265,14 +270,13 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 			effect,
 			signal,
 		});
-		for (const holder of attachments.values()) {
+		for (const [scopeId, holder] of attachments) {
 			signal.throwIfAborted();
-			const authority = scopeAuthority(
-				input.applicationName,
-				input.deploymentDigest,
-				holder.attachment,
-			);
-			if (!(await store.renewScope(authority))) continue;
+			const authority = holder.lease;
+			if (!(await store.renewScope(authority))) {
+				if (attachments.get(scopeId) === holder) attachments.delete(scopeId);
+				continue;
+			}
 			const watches = await store.scanOpenWatches(authority);
 			holder.attachment.synchronize(
 				new Set(watches.map((watch) => watch.bindingIdentity)),
@@ -301,27 +305,24 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 			);
 			const attached = await store.attachScope(authority);
 			if (attached.status !== "attached") return false;
+			const lease = Object.freeze({
+				...authority,
+				holderGeneration: attached.holderGeneration,
+			});
+			leases.set(attachment, lease);
 			attachments.set(
 				attachment.scopeId,
-				Object.freeze({ attachment, framed: new Map() }),
+				Object.freeze({ attachment, framed: new Map(), lease }),
 			);
 			void wake.requestScan().catch(() => {});
 			return true;
 		},
-		async detach(scopeId: string, principal: Principal) {
-			const holder = attachments.get(scopeId);
-			if (
-				holder &&
-				holder.attachment.principal.kind === principal.kind &&
-				holder.attachment.principal.id === principal.id
-			)
-				attachments.delete(scopeId);
-			await store.withdrawScope(
-				scopeAuthority(input.applicationName, input.deploymentDigest, {
-					scopeId,
-					principal,
-				}),
-			);
+		async detach(attachment: DurableRealtimeAttachment) {
+			const holder = attachments.get(attachment.scopeId);
+			if (holder?.attachment === attachment)
+				attachments.delete(attachment.scopeId);
+			const lease = leases.get(attachment);
+			if (lease) await store.withdrawScope(lease);
 		},
 		async open(opened: DurableRealtimeOpen) {
 			const result = await store.openWatch({
@@ -355,9 +356,10 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 				input.deploymentDigest,
 				{ scopeId, principal },
 			);
-			const watch = (await store.scanOpenWatches(authority)).find(
-				(candidate) => candidate.bindingIdentity === bindingId,
-			);
+			const watch = await store.readOpenWatch({
+				...authority,
+				bindingIdentity: bindingId,
+			});
 			if (
 				!watch?.latest ||
 				sha256Digest(resumeToken) !== watch.latest.tokenDigest
@@ -404,13 +406,7 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 			if (state === "drained") return;
 			state = "draining";
 			const withdrawals = [...attachments.values()].map((holder) =>
-				store.withdrawScope(
-					scopeAuthority(
-						input.applicationName,
-						input.deploymentDigest,
-						holder.attachment,
-					),
-				),
+				store.withdrawScope(holder.lease),
 			);
 			attachments.clear();
 			await Promise.allSettled(withdrawals);

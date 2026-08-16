@@ -100,7 +100,7 @@ export function createRealtimeCarrier<Context>(
 	let state: "draining" | "ready" = "ready";
 	const sessions = new Map<string, Session>();
 	const disposedSessions = new WeakSet<Session>();
-	const durablyAttachedSessions = new WeakSet<Session>();
+	const durableAttachments = new WeakMap<Session, DurableRealtimeAttachment>();
 	const pendingDisposals = new Set<Promise<void>>();
 	const removeBinding = (
 		session: Session,
@@ -121,9 +121,11 @@ export function createRealtimeCarrier<Context>(
 			sessions.delete(session.scopeId);
 		for (const bindingId of session.bindings.keys())
 			removeBinding(session, bindingId, false);
-		if (input.durableCoordinator && durablyAttachedSessions.has(session)) {
+		const durableAttachment = durableAttachments.get(session);
+		if (input.durableCoordinator && durableAttachment) {
+			durableAttachments.delete(session);
 			const disposal = input.durableCoordinator
-				.detach(session.scopeId, session.principal)
+				.detach(durableAttachment)
 				.catch(() => {})
 				.finally(() => pendingDisposals.delete(disposal));
 			pendingDisposals.add(disposal);
@@ -276,10 +278,6 @@ export function createRealtimeCarrier<Context>(
 			if (prior) {
 				if (prior.principalKey !== realtimePrincipalKey(resolved))
 					return empty(404);
-				if (input.durableCoordinator && durablyAttachedSessions.delete(prior))
-					await input.durableCoordinator.detach(prior.scopeId, prior.principal);
-				prior.close("connection-replaced", true);
-				disposeSession(prior);
 			}
 			const session = createRealtimeSession({
 				contract: input.contract,
@@ -390,7 +388,11 @@ export function createRealtimeCarrier<Context>(
 					session.close("scope-unavailable", false);
 					return empty(404);
 				}
-				durablyAttachedSessions.add(session);
+				durableAttachments.set(session, attachment);
+			}
+			if (prior) {
+				prior.close("connection-replaced", true);
+				disposeSession(prior);
 			}
 			sessions.set(scopeId, session);
 			session.enqueue({

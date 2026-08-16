@@ -12,6 +12,7 @@ const internalProtocolV3RealtimeColumns = [
 	["realtime_scope_attachments", "authority_partition_digest", "text", false],
 	["realtime_scope_attachments", "principal_kind", "text", true],
 	["realtime_scope_attachments", "principal_id", "text", true],
+	["realtime_scope_attachments", "holder_generation", "bigint", true],
 	["realtime_scope_attachments", "opened_at", "timestamp with time zone", true],
 	[
 		"realtime_scope_attachments",

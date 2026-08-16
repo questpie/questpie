@@ -619,6 +619,7 @@ async function verifyRealtimeClockCatalog(sql: SQL): Promise<void> {
 			"expires_at",
 			"(transaction_timestamp() + '00:00:30'::interval)",
 		],
+		["realtime_scope_attachments", "holder_generation", "1"],
 		["realtime_scope_attachments", "opened_at", "transaction_timestamp()"],
 		["realtime_scope_attachments", "renewed_at", "transaction_timestamp()"],
 		["realtime_watch_bindings", "evaluated_invalidation_generation", "0"],

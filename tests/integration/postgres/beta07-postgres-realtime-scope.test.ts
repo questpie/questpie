@@ -80,20 +80,30 @@ describe.skipIf(databases.length === 0)(
 	"BETA-07 PostgreSQL realtime scope authority",
 	() => {
 		postgresTest(
-			"renews a live scope on a fresh holder only for the same deployment and trusted Principal",
+			"fences a stale holder after same-Principal deployment takeover",
 			async () => {
 				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
 				const fresh = createPostgresRealtimeScopeStore({ sql: databases[1]! });
 				const scope = attachInput("scope:takeover");
-				expect(await first.attachScope(scope)).toEqual({ status: "attached" });
+				const firstLease = await first.attachScope(scope);
+				expect(firstLease).toEqual({
+					status: "attached",
+					holderGeneration: 1n,
+				});
 				expect(
 					await first.openWatch(
 						openInput("scope:takeover", "binding:takeover"),
 					),
 				).toEqual({ status: "opened", activeSlot: 1 });
 
-				expect(await fresh.attachScope(scope)).toEqual({ status: "attached" });
-				expect(await fresh.scanOpenWatches(scope)).toHaveLength(1);
+				const freshLease = await fresh.attachScope(scope);
+				expect(freshLease).toEqual({
+					status: "attached",
+					holderGeneration: 2n,
+				});
+				expect(
+					await fresh.scanOpenWatches({ ...scope, holderGeneration: 2n }),
+				).toHaveLength(1);
 				expect(
 					await fresh.attachScope({
 						...scope,
@@ -104,10 +114,35 @@ describe.skipIf(databases.length === 0)(
 					await fresh.attachScope({ ...scope, principal: otherUser }),
 				).toEqual({ status: "unavailable" });
 
-				expect(await first.withdrawScope(scope)).toBe(true);
-				expect(await fresh.attachScope(scope)).toEqual({
-					status: "unavailable",
-				});
+				expect(await first.renewScope({ ...scope, holderGeneration: 1n })).toBe(
+					false,
+				);
+				expect(
+					await first.scanOpenWatches({ ...scope, holderGeneration: 1n }),
+				).toEqual([]);
+				expect(
+					await first.withdrawScope({ ...scope, holderGeneration: 1n }),
+				).toBe(false);
+				expect(
+					await first.stageGeneration({
+						...scope,
+						holderGeneration: 1n,
+						bindingIdentity: "binding:takeover",
+						observedInvalidationGeneration: 1n,
+						generation: 1n,
+						resumeToken: "stale-holder-token",
+						resultBytes,
+						dependencyPlanBytes,
+						delivery: "initial",
+						resetReason: null,
+					}),
+				).toBe(false);
+				expect(await fresh.renewScope({ ...scope, holderGeneration: 2n })).toBe(
+					true,
+				);
+				expect(
+					await fresh.scanOpenWatches({ ...scope, holderGeneration: 2n }),
+				).toHaveLength(1);
 			},
 		);
 
@@ -121,12 +156,16 @@ describe.skipIf(databases.length === 0)(
 				const acknowledger = createPostgresRealtimeScopeStore({
 					sql: databases[2]!,
 				});
-				expect(await holder.attachScope(attachInput("scope:a"))).toEqual({
+				const attached = await holder.attachScope(attachInput("scope:a"));
+				expect(attached).toEqual({
 					status: "attached",
+					holderGeneration: 1n,
 				});
-				expect(await holder.scanOpenWatches(attachInput("scope:a"))).toEqual(
-					[],
-				);
+				const lease = {
+					...attachInput("scope:a"),
+					holderGeneration: 1n,
+				} as const;
+				expect(await holder.scanOpenWatches(lease)).toEqual([]);
 
 				expect(
 					await command.openWatch(openInput("scope:a", "binding:a")),
@@ -134,7 +173,7 @@ describe.skipIf(databases.length === 0)(
 					status: "opened",
 					activeSlot: 1,
 				});
-				const [opened] = await holder.scanOpenWatches(attachInput("scope:a"));
+				const [opened] = await holder.scanOpenWatches(lease);
 				expect(opened).toEqual({
 					bindingIdentity: "binding:a",
 					authorityPartitionDigest,
@@ -163,7 +202,7 @@ describe.skipIf(databases.length === 0)(
 				const resumeToken = "opaque.resume.token";
 				expect(
 					await command.stageGeneration({
-						...attachInput("scope:a"),
+						...lease,
 						bindingIdentity: "binding:a",
 						observedInvalidationGeneration: 1n,
 						generation: 1n,
@@ -174,9 +213,7 @@ describe.skipIf(databases.length === 0)(
 						resetReason: null,
 					}),
 				).toBe(true);
-				expect(
-					(await holder.scanOpenWatches(attachInput("scope:a")))[0]?.latest,
-				).toEqual({
+				expect((await holder.scanOpenWatches(lease))[0]?.latest).toEqual({
 					generation: 1n,
 					tokenDigest: sha256Digest(resumeToken),
 					resultBytes,
@@ -187,13 +224,13 @@ describe.skipIf(databases.length === 0)(
 				});
 				expect(
 					await command.invalidateWatch({
-						...attachInput("scope:a"),
+						...lease,
 						bindingIdentity: "binding:a",
 					}),
 				).toBe(2n);
 				expect(
 					await command.stageGeneration({
-						...attachInput("scope:a"),
+						...lease,
 						bindingIdentity: "binding:a",
 						observedInvalidationGeneration: 1n,
 						generation: 2n,
@@ -220,9 +257,7 @@ describe.skipIf(databases.length === 0)(
 						resumeToken,
 					}),
 				).toBe(true);
-				expect(
-					(await holder.scanOpenWatches(attachInput("scope:a")))[0],
-				).toMatchObject({
+				expect((await holder.scanOpenWatches(lease))[0]).toMatchObject({
 					invalidationGeneration: 2n,
 					evaluatedInvalidationGeneration: 1n,
 					latest: {
@@ -241,9 +276,7 @@ describe.skipIf(databases.length === 0)(
 						bindingIdentity: "binding:a",
 					}),
 				).toBe(true);
-				expect(await holder.scanOpenWatches(attachInput("scope:a"))).toEqual(
-					[],
-				);
+				expect(await holder.scanOpenWatches(lease)).toEqual([]);
 			},
 		);
 
@@ -254,6 +287,10 @@ describe.skipIf(databases.length === 0)(
 				const second = createPostgresRealtimeScopeStore({ sql: databases[1]! });
 				await first.attachScope(attachInput("scope:first"));
 				await second.attachScope(attachInput("scope:second"));
+				const secondLease = {
+					...attachInput("scope:second"),
+					holderGeneration: 1n,
+				} as const;
 
 				const opened = await Promise.all(
 					Array.from({ length: 64 }, (_, index) => {
@@ -294,7 +331,7 @@ describe.skipIf(databases.length === 0)(
 						...attachInput("scope:next-deployment"),
 						deploymentDigest: nextDeploymentDigest,
 					}),
-				).toEqual({ status: "attached" });
+				).toEqual({ status: "attached", holderGeneration: 1n });
 				expect(
 					await second.openWatch({
 						...openInput("scope:next-deployment", "binding:next-deployment"),
@@ -325,12 +362,8 @@ describe.skipIf(databases.length === 0)(
 						...openInput("scope:second", "binding:after-expiry"),
 					}),
 				).toEqual({ status: "opened", activeSlot: 1 });
-				expect(await first.withdrawScope(attachInput("scope:second"))).toBe(
-					true,
-				);
-				expect(
-					await second.scanOpenWatches(attachInput("scope:second")),
-				).toEqual([]);
+				expect(await first.withdrawScope(secondLease)).toBe(true);
+				expect(await second.scanOpenWatches(secondLease)).toEqual([]);
 				await first.attachScope(attachInput("scope:replacement"));
 				expect(
 					await second.openWatch(

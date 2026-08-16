@@ -180,6 +180,7 @@ postgresTest(
 		await installFixture(planBytes);
 		const effect = createPostgresLiveQueryInvalidationEffect({
 			deploymentDigest,
+			fanoutPerBatch: 1_024,
 		});
 		const reconcile = () =>
 			reconcilePostgresChangeLedger({

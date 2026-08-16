@@ -10,6 +10,7 @@ const internalProtocolV3RealtimeSql = `CREATE TABLE questpie_internal.realtime_s
   authority_partition_digest text,
   principal_kind text NOT NULL,
   principal_id text NOT NULL,
+  holder_generation bigint NOT NULL DEFAULT 1,
   opened_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   renewed_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   expires_at timestamptz NOT NULL DEFAULT transaction_timestamp() + interval '30 seconds',
@@ -29,6 +30,7 @@ const internalProtocolV3RealtimeSql = `CREATE TABLE questpie_internal.realtime_s
   CONSTRAINT realtime_scope_principal_id_bounded CHECK (
     length(principal_id) BETWEEN 1 AND 1024 AND octet_length(principal_id) <= 4096
   ),
+  CONSTRAINT realtime_scope_holder_generation_positive CHECK (holder_generation > 0),
   CONSTRAINT realtime_scope_state_known CHECK (state IN ('attached', 'open', 'withdrawn')),
   CONSTRAINT realtime_scope_lifecycle_shape CHECK (
     renewed_at >= opened_at
@@ -210,6 +212,7 @@ DECLARE
   clock_time timestamptz := transaction_timestamp();
 BEGIN
   IF TG_OP = 'INSERT' THEN
+    NEW.holder_generation := 1;
     NEW.opened_at := clock_time;
     NEW.renewed_at := clock_time;
   ELSE
@@ -223,6 +226,10 @@ BEGIN
     IF OLD.authority_partition_digest IS NOT NULL
        AND NEW.authority_partition_digest IS DISTINCT FROM OLD.authority_partition_digest THEN
       RAISE EXCEPTION 'realtime scope authority is immutable';
+    END IF;
+    IF NEW.holder_generation < OLD.holder_generation
+       OR NEW.holder_generation > OLD.holder_generation + 1 THEN
+      RAISE EXCEPTION 'realtime scope holder generation is not a valid fence';
     END IF;
     NEW.opened_at := OLD.opened_at;
     IF NEW.renewed_at IS DISTINCT FROM OLD.renewed_at THEN
@@ -363,6 +370,12 @@ const internalProtocolV3RealtimeConstraints = [
 		"realtime_scope_expiry_exact",
 		"c",
 		"CHECK (expires_at = (renewed_at + '00:00:30'::interval))",
+	],
+	[
+		"realtime_scope_attachments",
+		"realtime_scope_holder_generation_positive",
+		"c",
+		"CHECK (holder_generation > 0)",
 	],
 	[
 		"realtime_scope_attachments",

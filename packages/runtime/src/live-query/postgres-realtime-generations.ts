@@ -11,6 +11,7 @@ import {
 	validateGeneration,
 	validateResumeToken,
 	validateScope,
+	validateScopeLease,
 } from "./postgres-realtime-scope-contract";
 
 export type PostgresRealtimeGenerationStore = Readonly<{
@@ -50,7 +51,7 @@ export function createPostgresRealtimeGenerationStore(
 		},
 
 		async stageGeneration(staged) {
-			validateScope(staged);
+			validateScopeLease(staged);
 			validBoundedIdentity(staged.bindingIdentity, "binding identity");
 			validateCompleteGeneration(staged);
 			return sql.begin(async (transaction) => {
@@ -91,6 +92,7 @@ export function createPostgresRealtimeGenerationStore(
 					  and scope.deployment_digest = ${staged.deploymentDigest}
 					  and scope.principal_kind = ${staged.principal.kind}
 					  and scope.principal_id = ${staged.principal.id}
+					  and scope.holder_generation = ${staged.holderGeneration}
 					  and scope.state = 'open'
 					  and scope.expires_at > transaction_timestamp()
 					  and watch.binding_identity = ${staged.bindingIdentity}

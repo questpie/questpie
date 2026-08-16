@@ -14,7 +14,7 @@ describe("BETA-07 questpie.internal.v3 contract", () => {
 			"4f125ab85f16891c072f1b734e023938b7f2a2eb56c5e17dfd8acafbd71f98ff",
 		);
 		expect(internalProtocolV3Checksum).toBe(
-			"abc43ea90d0798b7cb5fa4dc7d467abeac782490505cbc2a549bc44e29e33c0c",
+			"ae2911fd0e5a2b4422449ad75ff458f273ea4362efba8419209963d60dec1f78",
 		);
 		for (const table of [
 			"change_ledger",

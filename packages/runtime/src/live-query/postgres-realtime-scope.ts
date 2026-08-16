@@ -8,17 +8,20 @@ import {
 	type PostgresRealtimeGenerationStage,
 	type PostgresRealtimeOpenWatch,
 	type PostgresRealtimeScopeAuthority,
+	type PostgresRealtimeScopeLease,
 	type PostgresRealtimeWatch,
 	validBoundedIdentity,
 	validDigest,
 	validateApplicationIdentity,
 	validateOpen,
 	validateScope,
+	validateScopeLease,
 } from "./postgres-realtime-scope-contract";
 
 export type {
 	PostgresRealtimeGeneration,
 	PostgresRealtimeOpenWatch,
+	PostgresRealtimeScopeLease,
 	PostgresRealtimeWatch,
 } from "./postgres-realtime-scope-contract";
 const unavailable = Object.freeze({ status: "unavailable" as const });
@@ -27,8 +30,11 @@ const limit = Object.freeze({ status: "limit" as const });
 export type PostgresRealtimeScopeStore = Readonly<{
 	attachScope(
 		input: PostgresRealtimeScopeAuthority,
-	): Promise<Readonly<{ status: "attached" }> | typeof unavailable>;
-	renewScope(input: PostgresRealtimeScopeAuthority): Promise<boolean>;
+	): Promise<
+		| Readonly<{ status: "attached"; holderGeneration: bigint }>
+		| typeof unavailable
+	>;
+	renewScope(input: PostgresRealtimeScopeLease): Promise<boolean>;
 	openWatch(
 		input: PostgresRealtimeOpenWatch,
 	): Promise<
@@ -37,8 +43,12 @@ export type PostgresRealtimeScopeStore = Readonly<{
 		| typeof limit
 	>;
 	scanOpenWatches(
-		input: PostgresRealtimeScopeAuthority,
+		input: PostgresRealtimeScopeLease,
 	): Promise<readonly PostgresRealtimeWatch[]>;
+	readOpenWatch(
+		input: PostgresRealtimeScopeAuthority &
+			Readonly<{ bindingIdentity: string }>,
+	): Promise<PostgresRealtimeWatch | undefined>;
 	invalidateWatch(
 		input: PostgresRealtimeScopeAuthority &
 			Readonly<{ bindingIdentity: string }>,
@@ -49,7 +59,7 @@ export type PostgresRealtimeScopeStore = Readonly<{
 		input: PostgresRealtimeScopeAuthority &
 			Readonly<{ bindingIdentity: string }>,
 	): Promise<boolean>;
-	withdrawScope(input: PostgresRealtimeScopeAuthority): Promise<boolean>;
+	withdrawScope(input: PostgresRealtimeScopeLease): Promise<boolean>;
 	expireScopes(
 		input: Readonly<{
 			applicationName: string;
@@ -76,7 +86,7 @@ export function createPostgresRealtimeScopeStore(
 					  and scope_identity = ${scope.scopeIdentity}
 					  and expires_at <= transaction_timestamp()
 				`;
-				const attached = await transaction<{ scopeIdentity: string }[]>`
+				const attached = await transaction<{ holderGeneration: bigint }[]>`
 					insert into questpie_internal.realtime_scope_attachments
 					(application_name, scope_identity, deployment_digest,
 					 authority_partition_digest, principal_kind, principal_id,
@@ -85,22 +95,26 @@ export function createPostgresRealtimeScopeStore(
 					 ${scope.deploymentDigest}, null, ${scope.principal.kind},
 					 ${scope.principal.id}, 'attached')
 					on conflict (application_name, scope_identity) do update
-					set renewed_at = transaction_timestamp()
+					set renewed_at = transaction_timestamp(),
+					    holder_generation = realtime_scope_attachments.holder_generation + 1
 					where realtime_scope_attachments.deployment_digest = excluded.deployment_digest
 					  and realtime_scope_attachments.principal_kind = excluded.principal_kind
 					  and realtime_scope_attachments.principal_id = excluded.principal_id
 					  and realtime_scope_attachments.state <> 'withdrawn'
 					  and realtime_scope_attachments.expires_at > transaction_timestamp()
-					returning scope_identity as "scopeIdentity"
+					returning holder_generation as "holderGeneration"
 				`;
 				return attached.length === 1
-					? Object.freeze({ status: "attached" as const })
+					? Object.freeze({
+							status: "attached" as const,
+							holderGeneration: BigInt(attached[0]!.holderGeneration),
+						})
 					: unavailable;
 			});
 		},
 
 		async renewScope(scope) {
-			validateScope(scope);
+			validateScopeLease(scope);
 			const renewed = await input.sql<{ scopeIdentity: string }[]>`
 				update questpie_internal.realtime_scope_attachments
 				set renewed_at = transaction_timestamp()
@@ -109,6 +123,7 @@ export function createPostgresRealtimeScopeStore(
 				  and deployment_digest = ${scope.deploymentDigest}
 				  and principal_kind = ${scope.principal.kind}
 				  and principal_id = ${scope.principal.id}
+				  and holder_generation = ${scope.holderGeneration}
 				  and state <> 'withdrawn'
 				  and expires_at > transaction_timestamp()
 				returning scope_identity as "scopeIdentity"
@@ -247,7 +262,7 @@ export function createPostgresRealtimeScopeStore(
 		},
 
 		async scanOpenWatches(scope) {
-			validateScope(scope);
+			validateScopeLease(scope);
 			const rows = await input.sql<
 				{
 					bindingIdentity: string;
@@ -304,6 +319,7 @@ export function createPostgresRealtimeScopeStore(
 				  and scope.deployment_digest = ${scope.deploymentDigest}
 				  and scope.principal_kind = ${scope.principal.kind}
 				  and scope.principal_id = ${scope.principal.id}
+				  and scope.holder_generation = ${scope.holderGeneration}
 				  and scope.state = 'open'
 				  and scope.expires_at > transaction_timestamp()
 				  and watch.state = 'open'
@@ -350,6 +366,105 @@ export function createPostgresRealtimeScopeStore(
 			);
 		},
 
+		async readOpenWatch(scope) {
+			validateScope(scope);
+			validBoundedIdentity(scope.bindingIdentity, "binding identity");
+			const [row] = await input.sql<
+				{
+					bindingIdentity: string;
+					authorityPartitionDigest: string;
+					queryIdentity: string;
+					queryBytes: Uint8Array;
+					inputBytes: Uint8Array;
+					inputDigest: string;
+					contextInputBytes: Uint8Array;
+					wireVersion: number;
+					resumeRequested: boolean;
+					requestedResumeToken: string | null;
+					activeSlot: number;
+					invalidationGeneration: bigint;
+					evaluatedInvalidationGeneration: bigint;
+					generation: bigint | null;
+					tokenDigest: string | null;
+					resultBytes: Uint8Array | null;
+					dependencyPlanBytes: Uint8Array | null;
+					delivery: PostgresRealtimeGeneration["delivery"] | null;
+					resetReason: PostgresRealtimeGeneration["resetReason"];
+					acknowledged: boolean | null;
+				}[]
+			>`
+				select watch.binding_identity as "bindingIdentity",
+				       watch.authority_partition_digest as "authorityPartitionDigest",
+				       watch.query_identity as "queryIdentity", watch.query_bytes as "queryBytes",
+				       watch.input_bytes as "inputBytes", watch.input_digest as "inputDigest",
+				       watch.context_input_bytes as "contextInputBytes",
+				       watch.wire_version as "wireVersion",
+				       watch.resume_requested as "resumeRequested",
+				       watch.requested_resume_token as "requestedResumeToken",
+				       watch.active_slot::integer as "activeSlot",
+				       watch.invalidation_generation as "invalidationGeneration",
+				       watch.evaluated_invalidation_generation as "evaluatedInvalidationGeneration",
+				       generation.generation, generation.token_digest as "tokenDigest",
+				       generation.result_bytes as "resultBytes",
+				       generation.dependency_plan_bytes as "dependencyPlanBytes",
+				       generation.delivery_kind as delivery,
+				       generation.reset_reason as "resetReason",
+				       (generation.ack_slot = 1) as acknowledged
+				from questpie_internal.realtime_scope_attachments scope
+				join questpie_internal.realtime_watch_bindings watch
+				  on watch.application_name = scope.application_name
+				 and watch.scope_identity = scope.scope_identity
+				left join questpie_internal.realtime_binding_generations generation
+				  on generation.application_name = watch.application_name
+				 and generation.scope_identity = watch.scope_identity
+				 and generation.binding_identity = watch.binding_identity
+				 and generation.latest_slot = 1
+				where scope.application_name = ${scope.applicationName}
+				  and scope.scope_identity = ${scope.scopeIdentity}
+				  and scope.deployment_digest = ${scope.deploymentDigest}
+				  and scope.principal_kind = ${scope.principal.kind}
+				  and scope.principal_id = ${scope.principal.id}
+				  and scope.state = 'open'
+				  and scope.expires_at > transaction_timestamp()
+				  and watch.binding_identity = ${scope.bindingIdentity}
+				  and watch.state = 'open'
+			`;
+			if (!row) return undefined;
+			return Object.freeze({
+				bindingIdentity: row.bindingIdentity,
+				authorityPartitionDigest: row.authorityPartitionDigest,
+				queryIdentity: row.queryIdentity,
+				queryBytes: new Uint8Array(row.queryBytes),
+				inputBytes: new Uint8Array(row.inputBytes),
+				inputDigest: row.inputDigest,
+				contextInputBytes: new Uint8Array(row.contextInputBytes),
+				wireVersion: row.wireVersion,
+				resumeRequested: row.resumeRequested,
+				requestedResumeToken: row.requestedResumeToken,
+				activeSlot: row.activeSlot,
+				invalidationGeneration: BigInt(row.invalidationGeneration),
+				evaluatedInvalidationGeneration: BigInt(
+					row.evaluatedInvalidationGeneration,
+				),
+				latest:
+					row.generation === null ||
+					row.tokenDigest === null ||
+					row.resultBytes === null ||
+					row.dependencyPlanBytes === null ||
+					row.delivery === null
+						? null
+						: Object.freeze({
+								generation: BigInt(row.generation),
+								tokenDigest: row.tokenDigest,
+								resultBytes: new Uint8Array(row.resultBytes),
+								dependencyPlanBytes: new Uint8Array(row.dependencyPlanBytes),
+								delivery: row.delivery,
+								resetReason: row.resetReason,
+								acknowledged: row.acknowledged === true,
+							}),
+			});
+		},
+
 		async invalidateWatch(invalidation) {
 			return generations.invalidateWatch(invalidation);
 		},
@@ -393,7 +508,7 @@ export function createPostgresRealtimeScopeStore(
 		},
 
 		async withdrawScope(scope) {
-			validateScope(scope);
+			validateScopeLease(scope);
 			return input.sql.begin(async (transaction) => {
 				await transaction`
 					select pg_catalog.pg_advisory_xact_lock(
@@ -408,6 +523,7 @@ export function createPostgresRealtimeScopeStore(
 					  and deployment_digest = ${scope.deploymentDigest}
 					  and principal_kind = ${scope.principal.kind}
 					  and principal_id = ${scope.principal.id}
+					  and holder_generation = ${scope.holderGeneration}
 					  and state <> 'withdrawn'
 					  and expires_at > transaction_timestamp()
 					returning scope_identity as "scopeIdentity"

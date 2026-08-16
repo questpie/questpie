@@ -422,16 +422,18 @@ describe.skipIf(databases.length === 0)(
 				).toBe(202);
 				await coordinators[1]!.reconcile();
 				expect(
-					await store.scanOpenWatches({
+					await store.readOpenWatch({
 						...authority,
 						scopeIdentity: "scope:resume",
+						bindingIdentity: "binding:resume",
 					}),
-				).toHaveLength(1);
+				).toBeDefined();
 				tickSources[0].tick();
 				await coordinators[0]!.reconcile();
-				const [resumedWatch] = await store.scanOpenWatches({
+				const resumedWatch = await store.readOpenWatch({
 					...authority,
 					scopeIdentity: "scope:resume",
+					bindingIdentity: "binding:resume",
 				});
 				expect(resumedWatch?.latest).not.toBeNull();
 				expect(evaluations).toBe(beforeResume);

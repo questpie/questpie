@@ -43,7 +43,7 @@ export type DurableRealtimeOpen = Readonly<{
 
 export interface DurableRealtimeCoordinator {
 	attach(input: DurableRealtimeAttachment): Promise<boolean>;
-	detach(scopeId: string, principal: Principal): Promise<void>;
+	detach(input: DurableRealtimeAttachment): Promise<void>;
 	open(input: DurableRealtimeOpen): Promise<"limit" | "opened" | "unavailable">;
 	acknowledge(
 		scopeId: string,

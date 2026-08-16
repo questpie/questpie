@@ -37,10 +37,13 @@ function rowBytes(value: unknown): Uint8Array {
 export function createPostgresLiveQueryInvalidationEffect(
 	input: Readonly<{
 		deploymentDigest: string;
+		fanoutPerBatch: number;
 	}>,
 ): PostgresLiveQueryInvalidationEffect {
 	if (!digestPattern.test(input.deploymentDigest))
 		throw new TypeError("Live Query deployment digest must be SHA-256");
+	if (!Number.isSafeInteger(input.fanoutPerBatch) || input.fanoutPerBatch <= 0)
+		throw new TypeError("Live Query fanout batch limit must be positive");
 	const consumer = `realtime:deployment:${input.deploymentDigest}`;
 	return Object.freeze({
 		consumer,
@@ -71,6 +74,13 @@ ORDER BY plan.scope_identity, plan.binding_identity
 FOR UPDATE OF watch`,
 				[reconciliation.application, input.deploymentDigest],
 			);
+			const dirty: Array<
+				Readonly<{
+					scopeIdentity: string;
+					bindingIdentity: string;
+					increment: number;
+				}>
+			> = [];
 			for (const [index, row] of rows.entries()) {
 				const scopeIdentity = rowText(
 					row.scopeIdentity,
@@ -97,21 +107,40 @@ FOR UPDATE OF watch`,
 					0,
 				);
 				if (increment === 0) continue;
+				dirty.push(
+					Object.freeze({ scopeIdentity, bindingIdentity, increment }),
+				);
+			}
+			for (
+				let offset = 0;
+				offset < dirty.length;
+				offset += input.fanoutPerBatch
+			) {
+				const batch = dirty.slice(offset, offset + input.fanoutPerBatch);
+				const values = batch
+					.map((_, index) => {
+						const parameter = 3 + index * 3;
+						return `($${parameter}::text, $${parameter + 1}::text, $${parameter + 2}::bigint)`;
+					})
+					.join(", ");
 				await reconciliation.execute(
-					`UPDATE questpie_internal.realtime_watch_bindings
-SET invalidation_generation = invalidation_generation + $5::bigint,
+					`UPDATE questpie_internal.realtime_watch_bindings AS watch
+SET invalidation_generation = watch.invalidation_generation + dirty.increment,
     invalidated_at = pg_catalog.transaction_timestamp()
-WHERE application_name = $1
-  AND scope_identity = $2
-  AND binding_identity = $3
-  AND deployment_digest = $4
-  AND state = 'open'`,
+					FROM (VALUES ${values}) AS dirty(scope_identity, binding_identity, increment)
+WHERE watch.application_name = $1
+  AND watch.deployment_digest = $2
+  AND watch.scope_identity = dirty.scope_identity
+  AND watch.binding_identity = dirty.binding_identity
+  AND watch.state = 'open'`,
 					[
 						reconciliation.application,
-						scopeIdentity,
-						bindingIdentity,
 						input.deploymentDigest,
-						increment,
+						...batch.flatMap((candidate) => [
+							candidate.scopeIdentity,
+							candidate.bindingIdentity,
+							candidate.increment,
+						]),
 					],
 				);
 			}

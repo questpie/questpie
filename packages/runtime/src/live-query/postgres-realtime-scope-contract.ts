@@ -15,6 +15,9 @@ export type PostgresRealtimeScopeAuthority = Readonly<{
 	principal: Principal;
 }>;
 
+export type PostgresRealtimeScopeLease = PostgresRealtimeScopeAuthority &
+	Readonly<{ holderGeneration: bigint }>;
+
 export type PostgresRealtimeOpenWatch = PostgresRealtimeScopeAuthority &
 	Readonly<{
 		bindingIdentity: string;
@@ -60,7 +63,7 @@ export type PostgresRealtimeWatch = Readonly<{
 	latest: PostgresRealtimeGeneration | null;
 }>;
 
-export type PostgresRealtimeGenerationStage = PostgresRealtimeScopeAuthority &
+export type PostgresRealtimeGenerationStage = PostgresRealtimeScopeLease &
 	Readonly<{
 		bindingIdentity: string;
 		observedInvalidationGeneration: bigint;
@@ -112,6 +115,16 @@ export function validateScope(input: PostgresRealtimeScopeAuthority): void {
 		Buffer.byteLength(input.principal.id) > 4_096
 	)
 		throw new TypeError("Principal identity is invalid");
+}
+
+export function validateScopeLease(input: PostgresRealtimeScopeLease): void {
+	validateScope(input);
+	if (
+		typeof input.holderGeneration !== "bigint" ||
+		input.holderGeneration <= 0n ||
+		input.holderGeneration > postgresBigintMaximum
+	)
+		throw new TypeError("realtime holder generation is invalid");
 }
 
 export function validateOpen(input: PostgresRealtimeOpenWatch): void {

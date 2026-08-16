@@ -26,6 +26,7 @@ export type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-inv
 export {
 	createPostgresRealtimeScopeStore,
 	type PostgresRealtimeScopeStore,
+	type PostgresRealtimeScopeLease,
 	type PostgresRealtimeWatch,
 } from "./postgres-realtime-scope";
 export {
