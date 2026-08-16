@@ -15,6 +15,10 @@ import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
 export { renderClientContract, renderCodecType } from "./client";
 export {
+	projectRealtimeWireContract,
+	type RealtimeWireContractV1,
+} from "./realtime-wire";
+export {
 	renderApplicationBundle,
 	renderApplicationDeclaration,
 } from "./application";
