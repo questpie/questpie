@@ -157,12 +157,12 @@ function postgres(args: string[]): void {
 	}
 	const root = "tests/integration/postgres";
 	if (!existsSync(root)) fail("no PostgreSQL tests exist");
-	let roots = [root];
+	const tests = readdirSync(resolve(root), { withFileTypes: true })
+		.filter((entry) => entry.isFile() && entry.name.endsWith(".test.ts"))
+		.map((entry) => `${root}/${entry.name}`)
+		.sort();
+	let roots = tests;
 	if (requested) {
-		const tests = readdirSync(resolve(root), { withFileTypes: true })
-			.filter((entry) => entry.isFile() && entry.name.endsWith(".test.ts"))
-			.map((entry) => `${root}/${entry.name}`)
-			.sort();
 		const registered = tests.flatMap((path) => {
 			const match = /^(beta\d+)-/.exec(basename(path));
 			return match?.[1] ? [{ id: match[1], path }] : [];
@@ -185,7 +185,7 @@ function postgres(args: string[]): void {
 		fail("PGHOST, PGDATABASE, and PGUSER are required for the PostgreSQL lane");
 	}
 	buildPublicPackage();
-	run(["bun", "test", ...roots]);
+	for (const root of roots) run(["bun", "test", root]);
 }
 
 function scenarios(kind: "micro" | "load" | "soak", args: string[]): void {

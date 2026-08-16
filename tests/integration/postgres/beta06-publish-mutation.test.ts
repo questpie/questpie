@@ -5,6 +5,7 @@ import { SQL } from "bun";
 import {
 	beta05Ids,
 	beta05PostgresUrl,
+	prepareBeta06PostgresSchema,
 	prepareBeta05PostgresApplication,
 } from "./helpers/beta05-runtime";
 
@@ -174,12 +175,8 @@ postgresTest(
 );
 
 postgresTest("does not synthesize a BETA-07 Change Ledger fact", async () => {
-	const prepared = await prepareBeta05PostgresApplication(database!);
-	try {
-		expect(await changeLedgerFactCount()).toBe(0);
-	} finally {
-		await prepared.dispose();
-	}
+	await prepareBeta06PostgresSchema(database!);
+	expect(await changeLedgerFactCount()).toBe(0);
 });
 
 postgresTest(
@@ -192,6 +189,7 @@ postgresTest(
 				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
+				const ledgerFactsBefore = await changeLedgerFactCount();
 				const internal = await prepared.generated.loadInternal();
 				const user = prepared.generated.framework.principal.user({
 					id: beta05Ids.principal,
@@ -348,7 +346,7 @@ postgresTest(
 					messages: 3,
 					receipts: 2,
 				});
-				expect(await changeLedgerFactCount()).toBe(0);
+				expect(await changeLedgerFactCount()).toBe(ledgerFactsBefore + 2);
 
 				const constraintCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62a2";
 				const beforeConstraint = await persistedMutationRows();

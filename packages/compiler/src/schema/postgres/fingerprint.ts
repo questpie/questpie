@@ -1,6 +1,7 @@
 import { SQL } from "bun";
 
 import { canonicalBytes, digest } from "../../canonical";
+import { CompilerDiagnosticError } from "../../diagnostic";
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
 import { readCatalogComparableInOwnedTransaction } from "./catalog-reader";
@@ -16,9 +17,30 @@ export async function assertSchemaMatches(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<JsonRecord> {
-	return sql.begin("isolation level repeatable read read only", (transaction) =>
+	return readOnlySnapshot(sql, (transaction) =>
 		compareSchemaToCatalog(transaction, schema),
 	);
+}
+
+async function readOnlySnapshot<Value>(
+	sql: SQL,
+	read: (transaction: SQL) => Promise<Value>,
+): Promise<Value> {
+	let diagnostic: CompilerDiagnosticError | undefined;
+	const value = await sql.begin(
+		"isolation level repeatable read read only",
+		async (transaction) => {
+			try {
+				return await read(transaction);
+			} catch (error) {
+				if (!(error instanceof CompilerDiagnosticError)) throw error;
+				diagnostic = error;
+				return undefined;
+			}
+		},
+	);
+	if (diagnostic) throw diagnostic;
+	return value as Value;
 }
 
 export async function assertSchemaMatchesInOwnedTransaction(
@@ -254,13 +276,10 @@ export async function fingerprint(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<SchemaFingerprintV1> {
-	const evidence = await sql.begin(
-		"isolation level repeatable read read only",
-		async (transaction) => ({
-			observations: await providerObservations(transaction, schema),
-			comparable: await compareSchemaToCatalog(transaction, schema),
-		}),
-	);
+	const evidence = await readOnlySnapshot(sql, async (transaction) => ({
+		observations: await providerObservations(transaction, schema),
+		comparable: await compareSchemaToCatalog(transaction, schema),
+	}));
 	return {
 		format: "questpie.schema-fingerprint",
 		version: 1,
