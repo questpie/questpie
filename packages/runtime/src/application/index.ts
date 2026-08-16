@@ -79,7 +79,7 @@ export interface RuntimeApplicationProgram<
 	readonly onLiveQueryObserved?: (
 		input: RealtimeCarrierObservedPlan,
 	) => MaybePromise<void>;
-	readonly liveQueryCoordinator?: LiveQueryCoordinator<ContextInputOf<Context>>;
+	readonly liveQueryCoordinator?: LiveQueryCoordinator;
 	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
 }
 

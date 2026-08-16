@@ -24,7 +24,7 @@ export type RetainedLiveQueryBinding = Readonly<{
 	retainedGeneration: bigint;
 }>;
 
-export type RetainedLiveQueryLookupBinding = Omit<
+type RetainedLiveQueryLookupBinding = Omit<
 	RetainedLiveQueryBinding,
 	"retainedGeneration"
 >;
@@ -35,7 +35,7 @@ export type RetainedLiveQueryCompleteResult = Readonly<{
 	dependencyPlanBytes: Uint8Array;
 }>;
 
-export type PostgresRetainedResult =
+type PostgresRetainedResult =
 	| Readonly<{
 			status: "available";
 			resultBytes: Uint8Array;
@@ -44,7 +44,7 @@ export type PostgresRetainedResult =
 	  }>
 	| typeof unavailable;
 
-export type PostgresLiveQueryPruneResult = Readonly<{
+type PostgresLiveQueryPruneResult = Readonly<{
 	retainedResults: number;
 	ledgerFacts: number;
 }>;

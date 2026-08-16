@@ -6,10 +6,7 @@ import { collaborationContext } from "../../fixtures/collaboration/src/execution
 import { channelMessagePage } from "../../fixtures/collaboration/src/message-page";
 import { createApplicationRuntime } from "../../packages/runtime/src/execution";
 import {
-	createLiveQueryInvalidation,
 	createLiveQueryObservation,
-	type ChangeLedgerFactV1,
-	type LinkedLiveQueryProgramV1,
 	type LinkedQueryWatchabilityV1,
 } from "../../packages/runtime/src/live-query";
 
@@ -199,51 +196,5 @@ test("threads a per-root observation through Context and the reached Message str
 		"collectionRange",
 	]);
 
-	const program: LinkedLiveQueryProgramV1 = {
-		format: "questpie.live-query-program",
-		version: 1,
-		queries: new Map([[messageQuery.identity, messageQuery]]),
-		limits: {
-			activePerPrincipal: 64,
-			bufferedBytesPerClient: 2_097_152,
-			dependencyTokensPerPlan: 256,
-			fanoutPerBatch: 1024,
-			ledgerLagMilliseconds: 30_000,
-			resultBytes: 1_048_576,
-			retainedTokensPerPrincipal: 128,
-			retentionMilliseconds: 86_400_000,
-		},
-	};
-	const invalidation = createLiveQueryInvalidation(program);
-	invalidation.register({
-		watch: "watch:alice:messages",
-		plan: successfulPlan,
-		recompute: async () => {
-			const failedObservation = createLiveQueryObservation(messageQuery);
-			await runtime.execution(
-				{ ...root, liveQueryObservation: failedObservation },
-				({ run }) => {
-					run(channelMessagePage);
-					throw new Error("fresh Policy revoked the Query");
-				},
-			);
-			return { status: "success", plan: failedObservation.finish() };
-		},
-	});
-	const fact: ChangeLedgerFactV1 = {
-		factIdentity: "00000000-0000-0000-0000-000000000001",
-		factId: "1",
-		transactionId: "1",
-		collection: "collection:messages",
-		kind: "insert",
-		oldKey: null,
-		newKey: { id: "message:new" },
-		conservative: false,
-		capturedAt: new Date(0),
-	};
-	const failed = await invalidation.invalidate([fact]);
-
-	expect(failed.failed).toEqual(["watch:alice:messages"]);
-	expect(invalidation.currentPlan("watch:alice:messages")).toBe(successfulPlan);
 	await runtime.close();
 });

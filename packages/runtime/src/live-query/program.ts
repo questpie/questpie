@@ -16,7 +16,7 @@ const tokenKinds = [
 
 type LiveQueryTokenKind = (typeof tokenKinds)[number];
 
-export type LinkedContextObservationSlotV1 = Readonly<{
+type LinkedContextObservationSlotV1 = Readonly<{
 	kind: "context";
 	identity: string;
 	projectionDigest: string;

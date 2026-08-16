@@ -8,7 +8,7 @@ import type {
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
-export type DurableRealtimePreparedWatch = Readonly<{
+type DurableRealtimePreparedWatch = Readonly<{
 	authorityPartitionDigest: string;
 	evaluate(): Promise<LiveQueryCoordinatorEvaluation>;
 }>;

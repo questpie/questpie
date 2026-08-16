@@ -17,7 +17,7 @@ import {
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
-export type RuntimeRealtimeExtension = Readonly<{
+type RuntimeRealtimeExtension = Readonly<{
 	fetch(request: Request): Promise<Response | null>;
 	beginDrain(): void;
 	drain(): Promise<void>;
@@ -40,7 +40,7 @@ export type RuntimeRealtimeFactory<Input> = (
 			}>,
 		): Promise<unknown>;
 		onObservedPlan?: (input: RealtimeCarrierObservedPlan) => MaybePromise<void>;
-		coordinator?: LiveQueryCoordinator<Input>;
+		coordinator?: LiveQueryCoordinator;
 	}>,
 ) => RuntimeRealtimeExtension | null;
 
@@ -84,11 +84,6 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 		captureBoundary: read("change-capture-boundary.json"),
 		limits: read("live-query-limits.json"),
 	});
-	const coordinator = input.coordinator?.durable
-		? { durableCoordinator: input.coordinator.durable }
-		: input.coordinator?.local
-			? { localCoordinator: input.coordinator.local }
-			: {};
 	return createRealtimeCarrier({
 		contract,
 		resolvePrincipal: input.resolvePrincipal,
@@ -109,6 +104,6 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 			return Object.freeze({ result, observedPlan: observation.finish() });
 		},
 		onObservedPlan: input.onObservedPlan,
-		...coordinator,
+		durableCoordinator: input.coordinator?.durable,
 	});
 };

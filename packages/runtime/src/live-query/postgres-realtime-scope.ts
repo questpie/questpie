@@ -19,8 +19,6 @@ import {
 } from "./postgres-realtime-scope-contract";
 
 export type {
-	PostgresRealtimeGeneration,
-	PostgresRealtimeOpenWatch,
 	PostgresRealtimeScopeLease,
 	PostgresRealtimeWatch,
 } from "./postgres-realtime-scope-contract";

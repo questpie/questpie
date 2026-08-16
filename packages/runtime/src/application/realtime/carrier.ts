@@ -19,10 +19,7 @@ import {
 	type RealtimeCarrierSession as Session,
 } from "./carrier-wire";
 import type { DecodedRealtimeWireContractV1 } from "./contract";
-import type {
-	LiveQueryCoordinatorDelivery,
-	LocalLiveQueryCoordinator,
-} from "./coordinator";
+import type { LiveQueryCoordinatorDelivery } from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
@@ -71,16 +68,6 @@ export interface RealtimeCarrier {
 	drain(): Promise<void>;
 }
 
-type RealtimeCoordinatorOption<Context> =
-	| Readonly<{
-			localCoordinator?: LocalLiveQueryCoordinator<Context>;
-			durableCoordinator?: never;
-	  }>
-	| Readonly<{
-			localCoordinator?: never;
-			durableCoordinator: DurableRealtimeCoordinator;
-	  }>;
-
 function empty(status: number): Response {
 	return new Response(null, { status });
 }
@@ -94,24 +81,18 @@ export function createRealtimeCarrier<Context>(
 			input: RealtimeCarrierEvaluation<Context>,
 		): Promise<RealtimeCarrierEvaluationResult>;
 		onObservedPlan?(input: RealtimeCarrierObservedPlan): MaybePromise<void>;
-	}> &
-		RealtimeCoordinatorOption<Context>,
+		durableCoordinator?: DurableRealtimeCoordinator;
+	}>,
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
 	const sessions = new Map<string, Session>();
 	const disposedSessions = new WeakSet<Session>();
 	const durableAttachments = new WeakMap<Session, DurableRealtimeAttachment>();
 	const pendingDisposals = new Set<Promise<void>>();
-	const removeBinding = (
-		session: Session,
-		bindingId: string,
-		closeCoordinator = true,
-	) => {
+	const removeBinding = (session: Session, bindingId: string) => {
 		const binding = session.bindings.get(bindingId);
 		if (!binding) return;
 		binding.controller.abort(new DOMException("Watch closed", "AbortError"));
-		if (closeCoordinator && !input.durableCoordinator)
-			input.localCoordinator?.close(session.scopeId, bindingId);
 		session.bindings.delete(bindingId);
 	};
 	const disposeSession = (session: Session) => {
@@ -120,7 +101,7 @@ export function createRealtimeCarrier<Context>(
 		if (sessions.get(session.scopeId) === session)
 			sessions.delete(session.scopeId);
 		for (const bindingId of session.bindings.keys())
-			removeBinding(session, bindingId, false);
+			removeBinding(session, bindingId);
 		const durableAttachment = durableAttachments.get(session);
 		if (input.durableCoordinator && durableAttachment) {
 			durableAttachments.delete(session);
@@ -184,45 +165,9 @@ export function createRealtimeCarrier<Context>(
 		try {
 			const complete = () =>
 				evaluateComplete(session, binding, context, queryInput);
-			const publish = async (
-				delivery: LiveQueryCoordinatorDelivery,
-			): Promise<boolean> => {
-				await input.onObservedPlan?.({
-					scopeId: session.scopeId,
-					bindingId: binding.id,
-					query: binding.query.identity,
-					plan: delivery.observedPlan,
-				});
-				binding.observedPlan = delivery.observedPlan;
-				binding.token = delivery.resumeToken;
-				return session.enqueue({
-					protocol: input.contract.protocol,
-					kind: "delivery",
-					bindingId: binding.id,
-					query: binding.query.identity,
-					delivery: delivery.delivery,
-					resetReason: delivery.resetReason,
-					payload: delivery.payload,
-					resumeToken: delivery.resumeToken,
-				});
-			};
-			const coordinated = input.localCoordinator
-				? await input.localCoordinator.open({
-						scopeId: session.scopeId,
-						bindingId: binding.id,
-						principal: session.principal,
-						context,
-						query: binding.query.identity,
-						input: queryInput,
-						resumeToken,
-						signal: binding.controller.signal,
-						evaluate: complete,
-						publish,
-					})
-				: undefined;
-			const evaluation = coordinated ?? (await complete());
+			const evaluation = await complete();
 			if (binding.controller.signal.aborted) return;
-			const token = coordinated?.resumeToken ?? crypto.randomUUID();
+			const token = crypto.randomUUID();
 			await input.onObservedPlan?.({
 				scopeId: session.scopeId,
 				bindingId: binding.id,
@@ -236,14 +181,8 @@ export function createRealtimeCarrier<Context>(
 				kind: "delivery",
 				bindingId: binding.id,
 				query: binding.query.identity,
-				delivery:
-					coordinated?.delivery ?? (resumeToken === null ? "initial" : "reset"),
-				resetReason:
-					coordinated !== undefined
-						? coordinated.resetReason
-						: resumeToken === null
-							? null
-							: "resume-unavailable",
+				delivery: resumeToken === null ? "initial" : "reset",
+				resetReason: resumeToken === null ? null : "resume-unavailable",
 				payload: evaluation.payload,
 				resumeToken: token,
 			});
@@ -380,8 +319,7 @@ export function createRealtimeCarrier<Context>(
 					},
 					synchronize(bindingIds) {
 						for (const bindingId of session.bindings.keys())
-							if (!bindingIds.has(bindingId))
-								removeBinding(session, bindingId, false);
+							if (!bindingIds.has(bindingId)) removeBinding(session, bindingId);
 					},
 				};
 				if (!(await input.durableCoordinator.attach(attachment))) {
@@ -507,15 +445,6 @@ export function createRealtimeCarrier<Context>(
 		if (kind === "ack") {
 			const binding = session.bindings.get(bindingId);
 			if (!binding || binding.token !== frame.resumeToken) return empty(409);
-			if (
-				input.localCoordinator &&
-				!(await input.localCoordinator.acknowledge(
-					scopeId,
-					bindingId,
-					frame.resumeToken as string,
-				))
-			)
-				return empty(409);
 			return empty(202);
 		}
 		if (session.bindings.has(bindingId)) return empty(409);
