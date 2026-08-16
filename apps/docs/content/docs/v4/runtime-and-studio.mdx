@@ -78,8 +78,20 @@ values such as `Date` and preserves the exact declared error code, status, and
 payload.
 
 A deployment can keep an older client-contract digest and Operation Wire digest
-together as one retained compatibility entry. A request runs only when its pair
-is current or retained; every other old pair fails with `CLIENT_OUTDATED`.
+together as one retained compatibility entry. A Query runs when its pair is
+current or retained; every other old pair fails with `CLIENT_OUTDATED`.
+ADR-0023 narrows this compatibility rule for Mutations: only a current Wire v2
+pair can execute a Mutation.
+
+Operation Wire v1 remains preserved historical authority. Wire v2 adds one
+framework transaction outcome for a Mutation that committed but whose result
+could not be produced. The failure is
+`COMMITTED_RESULT_UNAVAILABLE`, HTTP `500`, `retryable: true`, with the request
+`callId` and committed PostgreSQL transaction identity. Retryability means the
+caller can replay the exact call identity to recover its receipt; the generated
+transport still performs no automatic Mutation retry. A Wire v1 Query may run
+under a retained pair, but a Wire v1 Mutation is rejected with a v1-readable
+`CLIENT_OUTDATED` response before Context Resolution or Operation execution.
 
 QUESTPIE does not retry a Mutation automatically. If a response is lost after
 commit, the caller reuses the stable Call Identity to recover the stored result

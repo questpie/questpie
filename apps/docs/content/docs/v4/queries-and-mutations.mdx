@@ -280,9 +280,12 @@ export async function editMessage(
 }
 ```
 
-The network call option accepts a stable UUID-formatted `callId`. The Runtime
-mints the same format when a caller omits it. The Mutation can therefore use
-that value for its UUID Message key.
+The network call option accepts a stable bounded text `callId`; it is not
+UUID-only. A supplied value must be valid Unicode, already NFC, contain 1–256
+Unicode scalar values, exclude U+0000, and occupy at most 1,024 UTF-8 bytes.
+The Runtime rejects rather than normalizes it. The generated client mints a UUID
+when the caller omits the value. This example deliberately supplies that UUID
+because the application also chooses to use it as a UUID Message key.
 
 The caller cannot supply `companyId`, `authorId`, `createdAt`, or `updatedAt`.
 The closed server values own them. Field normalization and server values cannot
@@ -432,6 +435,10 @@ reads, writes, locks, and dispatch observe both.
 Cancellation before commit rolls back all writes. Cancellation or response
 loss after commit cannot undo PostgreSQL state. QUESTPIE reports
 `COMMITTED_RESULT_UNAVAILABLE` with the stable call and transaction identity.
+On Wire v2 this is a framework transaction outcome, not an authored error. It
+uses HTTP `500`, `retryable: true`, the correlated frame `callId`, and canonical
+PostgreSQL transaction identity. Retryability permits exact same-ID recovery;
+the transport does not replay the Mutation automatically.
 
 A Mutation call identity includes the application, Tenant, Operation,
 Principal, and `callId`. It also binds the canonical input digest. The result

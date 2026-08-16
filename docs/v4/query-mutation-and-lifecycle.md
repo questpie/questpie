@@ -166,10 +166,22 @@ bytes and does not apply business, audit, or dispatch-intent writes twice. A
 reused call identity with different input fails. The Runtime may mint a call ID
 when a direct caller does not supply one; a retrying caller must preserve it.
 
+ADR-0023 fixes the public identity text shared by direct and wire entry. It is
+not UUID-only: it contains 1–256 valid Unicode scalar values, is already NFC,
+contains no U+0000, and occupies at most 1,024 UTF-8 bytes. Runtime rejects an
+invalid identity instead of normalizing it. A generated UUID is only the
+default when the caller omits the value.
+
 Direct and wire entry use distinct adapters over the same engine. Direct calls
 preserve runtime values such as `Date`. Wire calls encode and decode through the
 compiled codec. Both paths produce equivalent typed results, declared errors,
 nondisclosure, and transaction outcomes.
+
+For `COMMITTED_RESULT_UNAVAILABLE`, both paths expose literal code,
+`retryable: true`, and frozen `{ callId, transactionId }`. Wire v2 uses HTTP
+`500`, preserves `callId` at frame level, and carries canonical PostgreSQL
+`xid8` text as `error.transactionId`. Retryability authorizes exact same-call
+recovery; it never enables transport-owned automatic Mutation retry.
 
 ## Accepted proof
 
