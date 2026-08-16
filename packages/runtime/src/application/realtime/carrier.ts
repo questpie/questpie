@@ -7,6 +7,7 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../../codec";
+import type { ObservedLiveQueryPlanV1 } from "../../live-query";
 import { isOperationCallId, readBoundedRequestBody } from "../../operation";
 import type {
 	DecodedRealtimeQueryV1,
@@ -30,6 +31,18 @@ export type RealtimeCarrierEvaluation<Context> = Readonly<{
 	signal: AbortSignal;
 }>;
 
+export type RealtimeCarrierEvaluationResult = Readonly<{
+	result: unknown;
+	observedPlan: ObservedLiveQueryPlanV1;
+}>;
+
+export type RealtimeCarrierObservedPlan = Readonly<{
+	scopeId: string;
+	bindingId: string;
+	query: string;
+	plan: ObservedLiveQueryPlanV1;
+}>;
+
 export interface RealtimeCarrier {
 	fetch(request: Request): Promise<Response | null>;
 	beginDrain(): void;
@@ -41,6 +54,7 @@ type Binding = {
 	readonly query: DecodedRealtimeQueryV1;
 	readonly controller: AbortController;
 	token: string | null;
+	observedPlan: ObservedLiveQueryPlanV1 | null;
 };
 
 type QueuedFrame = Readonly<{ bytes: Uint8Array; size: number }>;
@@ -260,7 +274,10 @@ export function createRealtimeCarrier<Context>(
 		contract: DecodedRealtimeWireContractV1;
 		resolvePrincipal(request: Request): MaybePromise<Principal | null>;
 		decodeContext(value: unknown): Context;
-		evaluate(input: RealtimeCarrierEvaluation<Context>): Promise<unknown>;
+		evaluate(
+			input: RealtimeCarrierEvaluation<Context>,
+		): Promise<RealtimeCarrierEvaluationResult>;
+		onObservedPlan?(input: RealtimeCarrierObservedPlan): MaybePromise<void>;
 	}>,
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
@@ -301,7 +318,7 @@ export function createRealtimeCarrier<Context>(
 		reset: boolean,
 	) => {
 		try {
-			const result = await input.evaluate({
+			const evaluation = await input.evaluate({
 				principal: session.principal,
 				context,
 				query: binding.query.identity,
@@ -311,7 +328,11 @@ export function createRealtimeCarrier<Context>(
 			if (binding.controller.signal.aborted) return;
 			let payload: unknown;
 			try {
-				payload = encodeRuntimeCodec(binding.query.output, result, "$result");
+				payload = encodeRuntimeCodec(
+					binding.query.output,
+					evaluation.result,
+					"$result",
+				);
 			} catch (error) {
 				if (!(error instanceof RuntimeCodecError)) throw error;
 				frameFailure(session, binding, "OUTPUT_INVALID");
@@ -324,6 +345,13 @@ export function createRealtimeCarrier<Context>(
 				frameFailure(session, binding, "RESOURCE_LIMIT");
 				return;
 			}
+			await input.onObservedPlan?.({
+				scopeId: session.scopeId,
+				bindingId: binding.id,
+				query: binding.query.identity,
+				plan: evaluation.observedPlan,
+			});
+			binding.observedPlan = evaluation.observedPlan;
 			const token = crypto.randomUUID();
 			binding.token = token;
 			session.enqueue({
@@ -452,6 +480,7 @@ export function createRealtimeCarrier<Context>(
 			query,
 			controller: new AbortController(),
 			token: null,
+			observedPlan: null,
 		};
 		session.bindings.set(bindingId, binding);
 		activeByPrincipal.set(session.principalKey, active + 1);

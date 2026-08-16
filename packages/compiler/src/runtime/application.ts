@@ -299,6 +299,7 @@ export async function createApplication(input) {
 						const queryDigest = structuralQueryDigests.get(definition);
 						const plan = queryDigest && plansByDigest.get(queryDigest);
 						if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
+						facts.liveQueryObservation?.recordStructuralQueryReached(plan.templateDigest);
 						return executePostgresQuery({
 							plan,
 							binding: {

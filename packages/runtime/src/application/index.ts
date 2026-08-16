@@ -11,6 +11,11 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
+import {
+	createLiveQueryObservation,
+	linkLiveQueryProgram,
+	type LiveQueryObservation,
+} from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
@@ -40,7 +45,11 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
-import { createRealtimeCarrier, decodeRealtimeWireContract } from "./realtime";
+import {
+	createRealtimeCarrier,
+	decodeRealtimeWireContract,
+	type RealtimeCarrierObservedPlan,
+} from "./realtime";
 import {
 	matchesRetainedClientPair,
 	retainClientPairs,
@@ -70,6 +79,9 @@ export interface RuntimeApplicationProgram<
 	) => MaybePromise<Principal | null>;
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,
+	) => MaybePromise<void>;
+	readonly onLiveQueryObserved?: (
+		input: RealtimeCarrierObservedPlan,
 	) => MaybePromise<void>;
 }
 
@@ -212,6 +224,7 @@ export async function createRuntimeApplication<
 			context: ContextInputOf<Context>;
 			signal?: AbortSignal;
 			deadline?: number;
+			liveQueryObservation?: LiveQueryObservation;
 		}>,
 		use: (
 			input: Readonly<{
@@ -247,6 +260,7 @@ export async function createRuntimeApplication<
 				context: root.context,
 				signal: controlled.controller.signal,
 				deadline: root.deadline,
+				liveQueryObservation: root.liveQueryObservation,
 			},
 			(view) =>
 				use({
@@ -393,6 +407,27 @@ export async function createRuntimeApplication<
 			throw new TypeError("realtime wire binding does not match");
 		return contract;
 	})();
+	const liveQueryProgram = (() => {
+		if (realtimeContract === null) return null;
+		const read = (path: string): unknown => {
+			const bytes = input.artifactFiles[path];
+			if (bytes === undefined) throw new TypeError(`missing ${path}`);
+			return JSON.parse(
+				typeof bytes === "string"
+					? bytes
+					: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+			);
+		};
+		return linkLiveQueryProgram({
+			watchability: read("query-watchability.json"),
+			dependencyAlgebra: read("live-query-dependency-algebra.json"),
+			changeLedger: read("change-ledger.json"),
+			reconciliation: read("change-reconciliation.json"),
+			resume: read("live-query-resume.json"),
+			captureBoundary: read("change-capture-boundary.json"),
+			limits: read("live-query-limits.json"),
+		});
+	})();
 	let realtimeCallSequence = 0;
 	const realtime = realtimeContract
 		? createRealtimeCarrier({
@@ -414,13 +449,23 @@ export async function createRuntimeApplication<
 					const prepared = operationEngine.prepare(query, value);
 					if (prepared.binding.kind !== "query")
 						throw new OperationFailure("NOT_FOUND");
+					const linked = liveQueryProgram?.queries.get(query);
+					if (!linked?.watchable) throw new OperationFailure("NOT_FOUND");
+					const observation = createLiveQueryObservation(linked);
 					realtimeCallSequence += 1;
-					return executeRoot(
-						{ principal: caller, context, signal },
+					const result = await executeRoot(
+						{
+							principal: caller,
+							context,
+							signal,
+							liveQueryObservation: observation,
+						},
 						({ invoke }) =>
 							invoke(prepared, `realtime:${realtimeCallSequence}`),
 					);
+					return Object.freeze({ result, observedPlan: observation.finish() });
 				},
+				onObservedPlan: input.program.onLiveQueryObserved,
 			})
 		: null;
 

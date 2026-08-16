@@ -38,6 +38,7 @@ export interface LiveQueryObservation {
 		templateDigest: string,
 		tokens: readonly LiveQueryDependencyTokenV1[],
 	): void;
+	recordStructuralQueryReached(templateDigest: string): void;
 	finish(): ObservedLiveQueryPlanV1;
 }
 
@@ -174,6 +175,28 @@ export function createLiveQueryObservation(
 				"Structural Query dependency",
 			);
 			structuralQueryObserved = true;
+		},
+		recordStructuralQueryReached(templateDigest) {
+			const slot = query.structuralQueries.get(templateDigest);
+			if (!slot)
+				throw new TypeError(
+					"Structural Query observation slot is not declared",
+				);
+			const kind = slot.tokens.includes("collectionRange")
+				? "collectionRange"
+				: slot.tokens[0];
+			if (!kind)
+				throw new TypeError(
+					"Structural Query observation slot has no token kind",
+				);
+			observation.recordStructuralQuery(
+				templateDigest,
+				slot.collections.map((collection) => ({
+					kind,
+					collection,
+					detail: { conservative: true, templateDigest },
+				})),
+			);
 		},
 		finish() {
 			if (finished) return finished;

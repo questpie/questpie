@@ -2,6 +2,8 @@ export {
 	createRealtimeCarrier,
 	type RealtimeCarrier,
 	type RealtimeCarrierEvaluation,
+	type RealtimeCarrierEvaluationResult,
+	type RealtimeCarrierObservedPlan,
 } from "./carrier";
 export {
 	decodeRealtimeWireContract,

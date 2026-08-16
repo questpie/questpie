@@ -13,6 +13,13 @@ const clientContractDigest = "1".repeat(64);
 const operationWireDigest = "2".repeat(64);
 const context = { companyId: "company:one" };
 const queryInput = { after: null, channelId: "channel:one", first: 20 };
+const observedPlan = Object.freeze({
+	format: "questpie.observed-live-query-plan" as const,
+	version: 1 as const,
+	query: "query:messages.page",
+	tokens: Object.freeze([]),
+	digest: "3".repeat(64),
+});
 
 const projected = projectRealtimeWireContract({
 	application,
@@ -140,6 +147,7 @@ function harness(
 ) {
 	let contextDecodes = 0;
 	let principalResolutions = 0;
+	const observedPlans: unknown[] = [];
 	const carrier = createRealtimeCarrier({
 		contract: decodeRealtimeWireContract(projected),
 		decodeContext(value) {
@@ -150,12 +158,17 @@ function harness(
 			principalResolutions += 1;
 			return user;
 		},
-		evaluate: async () => evaluate(),
+		evaluate: async () =>
+			Object.freeze({ result: await evaluate(), observedPlan }),
+		onObservedPlan(value) {
+			observedPlans.push(value);
+		},
 	});
 	return {
 		carrier,
 		contextDecodes: () => contextDecodes,
 		principalResolutions: () => principalResolutions,
+		observedPlans,
 	};
 }
 
@@ -191,6 +204,14 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 			?.status,
 	).toBe(202);
 	const delivery = await nextFrame(reader);
+	expect(value.observedPlans).toEqual([
+		{
+			scopeId: "scope:one",
+			bindingId: "binding:one",
+			query: "query:messages.page",
+			plan: observedPlan,
+		},
+	]);
 	expect(delivery).toEqual({
 		protocol: projected.protocol,
 		kind: "delivery",
@@ -254,6 +275,7 @@ test("frames an invalid complete result as an exact failure", async () => {
 		query: "query:messages.page",
 		error: { code: "OUTPUT_INVALID" },
 	});
+	expect(value.observedPlans).toEqual([]);
 	await value.carrier.drain();
 });
 
