@@ -1,0 +1,51 @@
+{
+	"ticket": "P6R1 post-commit Operation outcome authority revision",
+	"proof": "docs/v4/prototypes/p6-postcommit-outcome",
+	"authorityHeads": {
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P6": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"BETA06Base": "f0565bfbff5fe33c99f81d1d721e828cfc421dc8"
+	},
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/p6-postcommit-outcome/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/p6-postcommit-outcome/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/p6-postcommit-outcome/portable-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/p6-postcommit-outcome/tsconfig.json",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/p6-postcommit-outcome/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/p6-postcommit-outcome",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs types:check (at retained projection commit fa7ee83d)",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"Accepted P6 Operation Wire v1 source bytes and digest remain immutable historical inputs and are never reinterpreted.",
+		"Operation Wire v2 adds exactly one framework transaction outcome, COMMITTED_RESULT_UNAVAILABLE, and does not create an authored declared error or a new frame kind.",
+		"The correlated v2 failure retains v1 top-level keys and has exact error detail {code,retryable,transactionId}; HTTP 500 never claims rollback and retryable true authorizes only caller-controlled exact same-call recovery.",
+		"Direct and generated-client carriers expose literal code, retryable true, and frozen {callId,transactionId}; causes, database detail, stack traces, and transaction identity on every other failure remain undisclosed.",
+		"Generated transport performs zero automatic Mutation retries; exact same-scope replay recovers byte-identical committed result with one business execution.",
+		"A v1 wire digest receives a v1-readable CLIENT_OUTDATED rejection before Context Resolution or Operation execution and cannot execute a Mutation that might require a v2-only outcome.",
+		"Call Identity is general non-UUID text with exact valid-Unicode, scalar-count, NFC, U+0000, and UTF-8 bounds; runtime rejects rather than rewrites and crypto.randomUUID is only the omitted default.",
+		"Transaction identity is canonical nonzero PostgreSQL xid8 decimal text through uint64 maximum and remains opaque to clients.",
+		"The exact reviewed authority/public/BETA-06 projection is portable, byte-pinned, absent from the pre-review head, and changes no production Runtime, compiler, SQL, provider, host, or automatic-retry behavior."
+	]
+}

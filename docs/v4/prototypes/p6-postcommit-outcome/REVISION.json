@@ -12,12 +12,16 @@
 	},
 	"artifacts": {
 		"wireV1": "wire-v1.json",
-		"wireV2": "wire-v2.json"
+		"wireV2": "wire-v2.json",
+		"wireV2Digest": "76fa80c30428f4ae18e9911bf3f44c57ed01c668284a28dfdef1de64bba1d436"
 	},
-	"projectionPatch": {
+	"projection": {
+		"commit": "fa7ee83d240d1da32bf7b6b49ae90434a3e090bc",
+		"parent": "e505505c77f11f66dd3f4e0530621d040774b574",
+		"revertedBy": "df044e5a1dbac9a424101fb6a462eb95d78b5985",
 		"path": "PROJECTION.patch.b64",
 		"encoding": "base64",
-		"sha256": "PENDING"
+		"diffSha256": "ef962de08f89cf64b4a00ae78e397335d0ec56a06b245147493ad1c7e0ea661e"
 	},
 	"nonGoals": [
 		"production Runtime implementation",

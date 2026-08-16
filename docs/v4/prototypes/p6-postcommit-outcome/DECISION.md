@@ -19,6 +19,8 @@ outcome to `INTERNAL` loses recovery identity and is not P3 parity.
   `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c`.
 - `OperationWireV2` adds one framework transaction-outcome failure,
   `COMMITTED_RESULT_UNAVAILABLE`. It is not an authored declared error.
+  Its canonical digest is
+  `76fa80c30428f4ae18e9911bf3f44c57ed01c668284a28dfdef1de64bba1d436`.
 - The correlated failure frame keeps the v1 top-level keys. Its exact error
   detail is `{ code, retryable, transactionId }`; the already correlated
   top-level `callId` supplies the stable call identity without duplication.
@@ -50,6 +52,10 @@ only for the new code. No application error grammar, Operation authoring,
 database table, retry loop, provider seam, or client backdoor is added. Generic
 unknown failures remain sanitized `INTERNAL` and disclose no transaction ID.
 
-Only after a fresh stateless Opus-medium `PASS` may the byte-pinned projection
-be applied to ADR/public guidance and the BETA-06 design context. Production
-compiler and Runtime changes remain a separate TDD implementation step.
+The candidate projection is retained as ancestor commit `fa7ee83d` and removed
+from the reviewed candidate by exact revert `df044e5a`. Its raw diff digest is
+bound by `REVISION.json`, so review and CI do not depend on a loose local Git
+object. Only after a fresh stateless Opus-medium `PASS` may that exact
+projection be restored to ADR/public guidance and the BETA-06 design context.
+Production compiler and Runtime changes remain a separate TDD implementation
+step.
