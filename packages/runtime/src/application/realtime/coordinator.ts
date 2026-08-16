@@ -35,10 +35,7 @@ export type LiveQueryCoordinatorOpen<Context> = Readonly<{
 	publish(delivery: LiveQueryCoordinatorDelivery): MaybePromise<boolean>;
 }>;
 
-export interface LiveQueryCoordinator<Context> {
-	readonly durable?: DurableRealtimeCoordinator;
-	start(): Promise<void>;
-	drain(): Promise<void>;
+export interface LocalLiveQueryCoordinator<Context> {
 	open(
 		input: LiveQueryCoordinatorOpen<Context>,
 	): Promise<LiveQueryCoordinatorDelivery>;
@@ -54,3 +51,25 @@ export interface LiveQueryCoordinator<Context> {
 		bindingId: string,
 	): ObservedLiveQueryPlanV1 | undefined;
 }
+
+interface LiveQueryCoordinatorLifecycle {
+	start(): Promise<void>;
+	drain(): Promise<void>;
+	reconcile(): Promise<void>;
+}
+
+export type LiveQueryCoordinator<Context> = LiveQueryCoordinatorLifecycle &
+	(
+		| Readonly<{
+				local: LocalLiveQueryCoordinator<Context>;
+				durable?: never;
+		  }>
+		| Readonly<{
+				local?: never;
+				durable: DurableRealtimeCoordinator;
+		  }>
+		| Readonly<{
+				local?: never;
+				durable?: never;
+		  }>
+	);

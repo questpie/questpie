@@ -20,10 +20,13 @@ import {
 } from "./carrier-wire";
 import type { DecodedRealtimeWireContractV1 } from "./contract";
 import type {
-	LiveQueryCoordinator,
 	LiveQueryCoordinatorDelivery,
+	LocalLiveQueryCoordinator,
 } from "./coordinator";
-import type { DurableRealtimeAttachment } from "./durable";
+import type {
+	DurableRealtimeAttachment,
+	DurableRealtimeCoordinator,
+} from "./durable";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 type FailureCode =
@@ -68,6 +71,16 @@ export interface RealtimeCarrier {
 	drain(): Promise<void>;
 }
 
+type RealtimeCoordinatorOption<Context> =
+	| Readonly<{
+			localCoordinator?: LocalLiveQueryCoordinator<Context>;
+			durableCoordinator?: never;
+	  }>
+	| Readonly<{
+			localCoordinator?: never;
+			durableCoordinator: DurableRealtimeCoordinator;
+	  }>;
+
 function empty(status: number): Response {
 	return new Response(null, { status });
 }
@@ -81,8 +94,8 @@ export function createRealtimeCarrier<Context>(
 			input: RealtimeCarrierEvaluation<Context>,
 		): Promise<RealtimeCarrierEvaluationResult>;
 		onObservedPlan?(input: RealtimeCarrierObservedPlan): MaybePromise<void>;
-		coordinator?: LiveQueryCoordinator<Context>;
-	}>,
+	}> &
+		RealtimeCoordinatorOption<Context>,
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
 	const sessions = new Map<string, Session>();
@@ -97,8 +110,8 @@ export function createRealtimeCarrier<Context>(
 		const binding = session.bindings.get(bindingId);
 		if (!binding) return;
 		binding.controller.abort(new DOMException("Watch closed", "AbortError"));
-		if (closeCoordinator && !input.coordinator?.durable)
-			input.coordinator?.close(session.scopeId, bindingId);
+		if (closeCoordinator && !input.durableCoordinator)
+			input.localCoordinator?.close(session.scopeId, bindingId);
 		session.bindings.delete(bindingId);
 	};
 	const disposeSession = (session: Session) => {
@@ -108,8 +121,8 @@ export function createRealtimeCarrier<Context>(
 			sessions.delete(session.scopeId);
 		for (const bindingId of session.bindings.keys())
 			removeBinding(session, bindingId, false);
-		if (input.coordinator?.durable && durablyAttachedSessions.has(session)) {
-			const disposal = input.coordinator.durable
+		if (input.durableCoordinator && durablyAttachedSessions.has(session)) {
+			const disposal = input.durableCoordinator
 				.detach(session.scopeId, session.principal)
 				.catch(() => {})
 				.finally(() => pendingDisposals.delete(disposal));
@@ -191,8 +204,8 @@ export function createRealtimeCarrier<Context>(
 					resumeToken: delivery.resumeToken,
 				});
 			};
-			const coordinated = input.coordinator
-				? await input.coordinator.open({
+			const coordinated = input.localCoordinator
+				? await input.localCoordinator.open({
 						scopeId: session.scopeId,
 						bindingId: binding.id,
 						principal: session.principal,
@@ -263,11 +276,8 @@ export function createRealtimeCarrier<Context>(
 			if (prior) {
 				if (prior.principalKey !== realtimePrincipalKey(resolved))
 					return empty(404);
-				if (input.coordinator?.durable && durablyAttachedSessions.delete(prior))
-					await input.coordinator.durable.detach(
-						prior.scopeId,
-						prior.principal,
-					);
+				if (input.durableCoordinator && durablyAttachedSessions.delete(prior))
+					await input.durableCoordinator.detach(prior.scopeId, prior.principal);
 				prior.close("connection-replaced", true);
 				disposeSession(prior);
 			}
@@ -277,7 +287,7 @@ export function createRealtimeCarrier<Context>(
 				principal: resolved,
 				onDispose: disposeSession,
 			});
-			if (input.coordinator?.durable) {
+			if (input.durableCoordinator) {
 				const attachment: DurableRealtimeAttachment = {
 					scopeId,
 					principal: resolved,
@@ -376,7 +386,7 @@ export function createRealtimeCarrier<Context>(
 								removeBinding(session, bindingId, false);
 					},
 				};
-				if (!(await input.coordinator.durable.attach(attachment))) {
+				if (!(await input.durableCoordinator.attach(attachment))) {
 					session.close("scope-unavailable", false);
 					return empty(404);
 				}
@@ -420,7 +430,7 @@ export function createRealtimeCarrier<Context>(
 		const scopeId = frame.scopeId as string;
 		const bindingId = frame.bindingId as string;
 		const session = sessions.get(scopeId);
-		if (!session && !input.coordinator?.durable) return empty(404);
+		if (!session && !input.durableCoordinator) return empty(404);
 		let resolved: Principal | null;
 		try {
 			resolved = await input.resolvePrincipal(request);
@@ -434,16 +444,16 @@ export function createRealtimeCarrier<Context>(
 				realtimePrincipalKey(resolved) !== session.principalKey)
 		)
 			return empty(404);
-		if (input.coordinator?.durable) {
+		if (input.durableCoordinator) {
 			if (kind === "close")
 				return empty(
-					(await input.coordinator.durable.close(scopeId, bindingId, resolved))
+					(await input.durableCoordinator.close(scopeId, bindingId, resolved))
 						? 202
 						: 404,
 				);
 			if (kind === "ack")
 				return empty(
-					(await input.coordinator.durable.acknowledge(
+					(await input.durableCoordinator.acknowledge(
 						scopeId,
 						bindingId,
 						resolved,
@@ -466,7 +476,7 @@ export function createRealtimeCarrier<Context>(
 			}
 			const contextInputBytes = canonicalJsonLine(decodedContext);
 			const inputBytes = canonicalJsonLine(decodedInput);
-			const result = await input.coordinator.durable.open({
+			const result = await input.durableCoordinator.open({
 				scopeId,
 				bindingId,
 				principal: resolved,
@@ -496,8 +506,8 @@ export function createRealtimeCarrier<Context>(
 			const binding = session.bindings.get(bindingId);
 			if (!binding || binding.token !== frame.resumeToken) return empty(409);
 			if (
-				input.coordinator &&
-				!(await input.coordinator.acknowledge(
+				input.localCoordinator &&
+				!(await input.localCoordinator.acknowledge(
 					scopeId,
 					bindingId,
 					frame.resumeToken as string,

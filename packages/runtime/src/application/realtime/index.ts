@@ -15,6 +15,7 @@ export {
 	type LiveQueryCoordinatorDelivery,
 	type LiveQueryCoordinatorEvaluation,
 	type LiveQueryCoordinatorOpen,
+	type LocalLiveQueryCoordinator,
 } from "./coordinator";
 export { createPostgresDurableLiveQueryCoordinator as createPostgresLiveQueryCoordinator } from "./postgres-coordinator";
 export type { DurableRealtimeCoordinator } from "./durable";

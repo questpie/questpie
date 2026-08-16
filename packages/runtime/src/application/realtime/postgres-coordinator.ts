@@ -417,18 +417,6 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 			await wake.drain();
 			state = "drained";
 		},
-		async open() {
-			throw new Error(
-				"PostgreSQL realtime opens through the durable carrier seam",
-			);
-		},
-		async acknowledge() {
-			return false;
-		},
-		close() {},
 		reconcile: () => wake.requestScan(),
-		currentPlan() {
-			return undefined;
-		},
 	});
 }

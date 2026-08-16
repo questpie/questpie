@@ -919,17 +919,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 				async drain() {
 					coordinatorDrains += 1;
 				},
-				async open() {
-					throw new Error("not used");
-				},
-				async acknowledge() {
-					return false;
-				},
-				close() {},
 				async reconcile() {},
-				currentPlan() {
-					return undefined;
-				},
 			},
 		},
 		events: (event) => events.push(event),
@@ -966,17 +956,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 					async drain() {
 						failedLifecycle.push("drain");
 					},
-					async open() {
-						throw new Error("not used");
-					},
-					async acknowledge() {
-						return false;
-					},
-					close() {},
 					async reconcile() {},
-					currentPlan() {
-						return undefined;
-					},
 				},
 			},
 		}),

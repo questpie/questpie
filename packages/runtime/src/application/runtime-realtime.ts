@@ -84,6 +84,11 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 		captureBoundary: read("change-capture-boundary.json"),
 		limits: read("live-query-limits.json"),
 	});
+	const coordinator = input.coordinator?.durable
+		? { durableCoordinator: input.coordinator.durable }
+		: input.coordinator?.local
+			? { localCoordinator: input.coordinator.local }
+			: {};
 	return createRealtimeCarrier({
 		contract,
 		resolvePrincipal: input.resolvePrincipal,
@@ -104,6 +109,6 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 			return Object.freeze({ result, observedPlan: observation.finish() });
 		},
 		onObservedPlan: input.onObservedPlan,
-		coordinator: input.coordinator,
+		...coordinator,
 	});
 };

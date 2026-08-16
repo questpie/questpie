@@ -41,12 +41,7 @@ export {
 	projectPostgresChangeCapture,
 	verifyPostgresChangeCapture,
 } from "./postgres/change-capture";
-export type {
-	PostgresChangeCaptureCollectionV1,
-	PostgresChangeCaptureTriggerV1,
-	PostgresChangeCaptureV1,
-	PostgresReactiveCollection,
-} from "./postgres/change-capture";
+export type { PostgresChangeCaptureV1 } from "./postgres/change-capture";
 export {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,

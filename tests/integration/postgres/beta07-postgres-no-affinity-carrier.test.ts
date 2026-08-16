@@ -225,7 +225,7 @@ describe.skipIf(databases.length === 0)(
 				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
 					createRealtimeCarrier({
 						contract: decodeRealtimeWireContract(projected),
-						coordinator,
+						durableCoordinator: coordinator.durable,
 						resolvePrincipal: (request) =>
 							request.headers.get("x-test-principal") === otherUser.id
 								? otherUser
