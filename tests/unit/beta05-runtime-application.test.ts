@@ -236,14 +236,9 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 	};
 }
 
-function runtimeArtifactsWithRetainedQueryPair() {
+function runtimeArtifactsV2() {
 	const original = runtimeArtifacts();
 	const { digest: _wireDigest, ...wireV1 } = original.wireContract;
-	const retainedClientContractDigest = sha("9");
-	const retainedWireV1 = {
-		...wireV1,
-		clientContractDigest: retainedClientContractDigest,
-	};
 	const wireV2WithoutDigest = {
 		...wireV1,
 		version: 2,
@@ -283,8 +278,8 @@ function runtimeArtifactsWithRetainedQueryPair() {
 			causeDisclosure: "forbidden",
 		},
 		compatibility: {
-			clientContractDigest: retainedClientContractDigest,
-			wireV1Digest: digest("questpie-operation-wire-v1", retainedWireV1),
+			clientContractDigest: wireV1.clientContractDigest,
+			wireV1Digest: digest("questpie-operation-wire-v1", wireV1),
 			wireV1Source: "sameApplicationClientContractAndOperations",
 			wireV1MutationExecution: "rejectBeforeContextAndOperation",
 			wireV1QueryExecution: "allowed",
@@ -1214,7 +1209,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	]);
 });
 
-test("executes a retained v1 Query only for its exact compiler-owned digest pair", async () => {
+test("executes a retained v1 Query only for its exact deployment-owned digest pair", async () => {
 	let bootstrapReads = 0;
 	let contextResolves = 0;
 	let handlerCalls = 0;
@@ -1226,7 +1221,11 @@ test("executes a retained v1 Query only for its exact compiler-owned digest pair
 			return { tenant: { id: input.companyId }, values: {} };
 		},
 	});
-	const artifacts = runtimeArtifactsWithRetainedQueryPair();
+	const artifacts = runtimeArtifactsV2();
+	const retainedClient = {
+		clientContractDigest: sha("9"),
+		wireDigest: sha("8"),
+	};
 	const bindings = [
 		{
 			identity: "context:app.context",
@@ -1245,6 +1244,7 @@ test("executes a retained v1 Query only for its exact compiler-owned digest pair
 		artifacts: runtimeArtifactEnvelope(artifacts as never),
 		artifactFiles: artifacts.artifactFiles,
 		...executableBindings(artifacts as never, bindings),
+		retainedClients: [retainedClient],
 		program: {
 			services: [],
 			context,
@@ -1258,17 +1258,16 @@ test("executes a retained v1 Query only for its exact compiler-owned digest pair
 			resolvePrincipal: async () => principal.anonymous(),
 		},
 	});
-	const compatibility = artifacts.wireContract.compatibility;
 	const baseFrame = {
 		application: artifacts.runtimeBuild.application,
 		callId: "retained:exact-pair",
-		clientContractDigest: compatibility.clientContractDigest,
+		clientContractDigest: retainedClient.clientContractDigest,
 		context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
 		input: { first: 2 },
 		operation: "query:messages.page",
 		protocol: { name: "questpie.operation", version: 1 },
 		timeoutMilliseconds: 5_000,
-		wireDigest: compatibility.wireV1Digest,
+		wireDigest: retainedClient.wireDigest,
 	};
 	const send = (frame: unknown) =>
 		app.fetch(

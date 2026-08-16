@@ -40,6 +40,11 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import {
+	matchesRetainedClientPair,
+	retainClientPairs,
+	type RetainedClientPair,
+} from "./retained-clients";
 import { controlledRoot } from "./root";
 
 export type { ExecutionEventV1 } from "./events";
@@ -116,6 +121,7 @@ export async function createRuntimeApplication<
 		serverExports: Readonly<Record<string, unknown>>;
 		bindings: RuntimeExecutableBindings<OperationView>;
 		program: RuntimeApplicationProgram<Context, OperationView, ExecutionView>;
+		retainedClients?: readonly RetainedClientPair[];
 		drainMilliseconds?: number;
 		maximumActiveRootsPerPrincipal?: number;
 		events?: (event: ExecutionEventV1) => void;
@@ -139,6 +145,7 @@ export async function createRuntimeApplication<
 	let state: RuntimeState = "verifying";
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
+	const retainedClients = retainClientPairs(input.retainedClients);
 	const queryBindings = validateRuntimeExecutableBindings(
 		artifacts,
 		input.bindings,
@@ -391,15 +398,23 @@ export async function createRuntimeApplication<
 			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
 		if (frame.application !== artifacts.runtimeBuild.application)
 			return operationWireResponse(rejectionFrame("APPLICATION_MISMATCH"), 409);
-		const retainedV1 =
-			artifacts.wireContract.version === 2 &&
-			frame.clientContractDigest ===
-				artifacts.wireContract.compatibility.clientContractDigest &&
-			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
 		const currentV2 =
 			frame.clientContractDigest ===
 				artifacts.runtimeBuild.clientContractDigest &&
 			frame.wireDigest === artifacts.wireContract.digest;
+		const currentV1 =
+			artifacts.wireContract.version === 2 &&
+			frame.clientContractDigest ===
+				artifacts.wireContract.compatibility.clientContractDigest &&
+			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
+		const retainedV1 =
+			!currentV2 &&
+			(currentV1 ||
+				matchesRetainedClientPair(
+					retainedClients,
+					frame.clientContractDigest,
+					frame.wireDigest,
+				));
 		if (!currentV2 && !retainedV1)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
 		if (retainedV1) {
