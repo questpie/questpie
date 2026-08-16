@@ -125,11 +125,23 @@ export interface GeneratedClient {
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
 
+export class CommittedResultUnavailable extends Error {
+	readonly name = "CommittedResultUnavailable" as const;
+	readonly code = "COMMITTED_RESULT_UNAVAILABLE" as const;
+	readonly retryable = true as const;
+	readonly payload: Readonly<{ readonly callId: string; readonly transactionId: string }>;
+	constructor(callId: string, transactionId: string) {
+		super("COMMITTED_RESULT_UNAVAILABLE");
+		this.payload = Object.freeze({ callId, transactionId });
+		Object.freeze(this);
+	}
+}
+
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const failureCodes = new Set([
-	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "DEADLINE_EXCEEDED", "INTERNAL",
+	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
 ]);
 
@@ -143,6 +155,25 @@ function exactKeys(value: WireRecord, expected: readonly string[]): void {
 	const sorted = [...expected].sort();
 	if (actual.length !== sorted.length || actual.some((key, index) => key !== sorted[index]))
 		protocolFailure();
+}
+function isCallIdentity(value: unknown): value is string {
+	if (typeof value !== "string" || value.length === 0 || value.includes("\\0")) return false;
+	let scalars = 0;
+	for (let index = 0; index < value.length; index += 1) {
+		const unit = value.charCodeAt(index);
+		if (unit >= 0xd800 && unit <= 0xdbff) {
+			if (index + 1 >= value.length) return false;
+			const next = value.charCodeAt(index + 1);
+			if (next < 0xdc00 || next > 0xdfff) return false;
+			index += 1;
+		} else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+		scalars += 1;
+		if (scalars > 256) return false;
+	}
+	return value === value.normalize("NFC") && new TextEncoder().encode(value).byteLength <= 1024;
+}
+function isTransactionIdentity(value: unknown): value is string {
+	return typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value) && BigInt(value) <= 18446744073709551615n;
 }
 function decode(codecValue: unknown, value: unknown): unknown {
 	const descriptor = wireRecord(codecValue);
@@ -210,6 +241,7 @@ export function createClient(input: Readonly<{
 	const transport = input.fetch ?? globalThis.fetch;
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
+		if (!isCallIdentity(callId)) protocolFailure();
 		const response = await transport(new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
 			method: "POST",
 			headers: { "content-type": ${JSON.stringify(input.mediaType)} },
@@ -228,6 +260,12 @@ export function createClient(input: Readonly<{
 			exactKeys(frame, rejection ? ["error", "kind"] : ["callId", "error", "kind", "operation", "protocol"]);
 			if (!rejection) verifyCorrelation(frame, operation, callId);
 			const detail = wireRecord(frame.error);
+			if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
+				if (rejection) protocolFailure();
+				exactKeys(detail, ["code", "retryable", "transactionId"]);
+				if (detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) protocolFailure();
+				throw new CommittedResultUnavailable(callId, detail.transactionId);
+			}
 			exactKeys(detail, ["code", "retryable"]);
 			if (typeof detail.code !== "string" || !failureCodes.has(detail.code) || typeof detail.retryable !== "boolean") protocolFailure();
 			throw Object.assign(new Error(detail.code), detail);

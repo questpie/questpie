@@ -173,7 +173,7 @@ export function projectRuntimeContract(
 		"questpie-runtime-executables-v1",
 		executables,
 	);
-	const wireWithoutDigest = {
+	const wireV1WithoutDigest = {
 		format: "questpie.operation-wire",
 		version: 1,
 		application,
@@ -213,7 +213,68 @@ export function projectRuntimeContract(
 		mutationAutomaticRetry: false,
 		clientContractDigest,
 	};
-	const wireDigest = digest("questpie-operation-wire-v1", wireWithoutDigest);
+	const wireV1Digest = digest(
+		"questpie-operation-wire-v1",
+		wireV1WithoutDigest,
+	);
+	const wireWithoutDigest = {
+		...wireV1WithoutDigest,
+		version: 2,
+		resultKinds: ["declaredError", "failure", "result"],
+		failureDetails: {
+			ordinary: ["code", "retryable"],
+			committedResultUnavailable: ["code", "retryable", "transactionId"],
+		},
+		callIdentity: {
+			kind: "text",
+			minimumUnicodeScalars: 1,
+			maximumUnicodeScalars: 256,
+			maximumUtf8Bytes: 1_024,
+			normalization: "NFC",
+			normalizationBehavior: "rejectNotRewrite",
+			loneSurrogates: "forbidden",
+			nullScalar: "forbidden",
+			uuidRequired: false,
+			runtimeDefaultWhenAbsent: "crypto.randomUUID",
+			equality: "exactUtf8AfterValidation",
+		},
+		transactionIdentity: {
+			kind: "postgresXid8Text",
+			canonicalPattern: "^[1-9][0-9]{0,19}$",
+			maximum: "18446744073709551615",
+			clientInterpretation: "opaque",
+		},
+		committedResultUnavailable: {
+			classification: "frameworkTransactionOutcome",
+			httpStatus: 500,
+			retryable: true,
+			transactionOutcome: "committed",
+			automaticRetry: false,
+			recovery: "replayExactMutationWithSameCallIdentity",
+			frameCallIdSource: "acceptedRequest",
+			transactionIdSource: "committedReceipt",
+			causeDisclosure: "forbidden",
+		},
+		compatibility: {
+			wireV1Digest,
+			wireV1Source: "sameApplicationClientContractAndOperations",
+			wireV1MutationExecution: "rejectBeforeContextAndOperation",
+			wireV1QueryExecution: "allowed",
+			wireV1RejectionCode: "CLIENT_OUTDATED",
+		},
+		failures: [
+			"APPLICATION_MISMATCH",
+			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+		],
+	};
+	const wireDigest = digest("questpie-operation-wire-v2", wireWithoutDigest);
 	return {
 		clientContract,
 		clientContractDigest,

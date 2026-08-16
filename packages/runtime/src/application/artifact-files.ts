@@ -59,10 +59,15 @@ export function verifyRuntimeArtifactFiles(
 		"wire-contract.json",
 	);
 	const { digest: rawWireDigest, ...rawWireUnsigned } = rawWire;
+	const wireVersion = rawWire.version;
 	if (
 		rawWireDigest !== build.wireDigest ||
-		artifactDigest("questpie-operation-wire-v1", rawWireUnsigned) !==
-			build.wireDigest
+		artifactDigest(
+			wireVersion === 2
+				? "questpie-operation-wire-v2"
+				: "questpie-operation-wire-v1",
+			rawWireUnsigned,
+		) !== build.wireDigest
 	)
 		fail("wire-contract.json semantic digest does not match");
 	if (

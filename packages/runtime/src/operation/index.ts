@@ -4,6 +4,7 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
+import { CommittedResultUnavailable } from "./committed-result-unavailable";
 
 type OperationKind = "mutation" | "query";
 
@@ -59,10 +60,11 @@ export class OperationFailure extends Error {
 
 export function normalizeOperationError(
 	error: unknown,
-): OperationFailure | DeclaredOperationError {
+): OperationFailure | DeclaredOperationError | CommittedResultUnavailable {
 	if (
 		error instanceof OperationFailure ||
-		error instanceof DeclaredOperationError
+		error instanceof DeclaredOperationError ||
+		error instanceof CommittedResultUnavailable
 	)
 		return error;
 	return new OperationFailure("INTERNAL");
@@ -189,9 +191,14 @@ export function createOperationEngine<View>(
 }
 
 export { readBoundedRequestBody } from "./body";
-export { isOperationCallId } from "./call-identity";
+export { isOperationCallId, isPostgresTransactionId } from "./call-identity";
+export {
+	CommittedResultUnavailable,
+	type CommittedResultUnavailablePayload,
+} from "./committed-result-unavailable";
 export { bindIngressPrincipal, readIngressPrincipal } from "./ingress";
 export {
+	committedResultUnavailableFrame,
 	decodeOperationWireRequest,
 	declaredErrorFrame,
 	failureFrame,

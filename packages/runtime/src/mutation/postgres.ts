@@ -7,6 +7,7 @@ import {
 	isOperationCallId,
 	type PreparedOperation,
 } from "../operation";
+import { CommittedResultUnavailable } from "../operation";
 import {
 	canonicalMutationBytes,
 	deterministicUuid,
@@ -16,7 +17,6 @@ import {
 	createPostgresCollectionMutationData,
 	type TransactionQuery,
 } from "./collection";
-import { CommittedResultUnavailable } from "./committed-result-unavailable";
 import {
 	createReactionDispatch,
 	type LinkedReactionProjection,

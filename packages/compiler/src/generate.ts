@@ -439,6 +439,16 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 ${renderMutationFactory()}
 ${otherFactories}
 
+export interface CommittedResultUnavailable extends Error {
+	readonly name: "CommittedResultUnavailable";
+	readonly code: "COMMITTED_RESULT_UNAVAILABLE";
+	readonly retryable: true;
+	readonly payload: Readonly<{
+		readonly callId: string;
+		readonly transactionId: string;
+	}>;
+}
+
 export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(

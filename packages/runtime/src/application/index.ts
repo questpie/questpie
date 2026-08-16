@@ -14,11 +14,14 @@ import { createApplicationRuntime, type RuntimeProgram } from "../execution";
 import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
+	CommittedResultUnavailable,
+	committedResultUnavailableFrame,
 	DeclaredOperationError,
 	declaredErrorFrame,
 	decodeOperationWireRequest,
 	encodeDeclaredOperationError,
 	failureFrame,
+	isOperationCallId,
 	normalizeOperationError,
 	OperationFailure,
 	operationFailureStatus,
@@ -318,6 +321,7 @@ export async function createRuntimeApplication<
 				throw controlled.controller.signal.reason;
 			return result;
 		} catch (error) {
+			if (error instanceof CommittedResultUnavailable) throw error;
 			if (controlled.deadlineExpired && !committedMutation)
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
 			throw error;
@@ -347,12 +351,12 @@ export async function createRuntimeApplication<
 					}>,
 				) => {
 					const prepared = operationEngine.prepare(identity, operationInput);
-					if (prepared.binding.kind === "mutation")
-						return invoke(
-							prepared,
-							options?.callId ?? crypto.randomUUID(),
-							options,
-						);
+					if (prepared.binding.kind === "mutation") {
+						const callId = options?.callId ?? crypto.randomUUID();
+						if (!isOperationCallId(callId))
+							throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+						return invoke(prepared, callId, options);
+					}
 					callSequence += 1;
 					return invoke(prepared, `direct:${callSequence}`);
 				},
@@ -387,12 +391,22 @@ export async function createRuntimeApplication<
 			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
 		if (frame.application !== artifacts.runtimeBuild.application)
 			return operationWireResponse(rejectionFrame("APPLICATION_MISMATCH"), 409);
+		const retainedV1 =
+			artifacts.wireContract.version === 2 &&
+			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
 		if (
 			frame.clientContractDigest !==
 				artifacts.runtimeBuild.clientContractDigest ||
-			frame.wireDigest !== artifacts.wireContract.digest
+			(frame.wireDigest !== artifacts.wireContract.digest && !retainedV1)
 		)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
+		if (retainedV1) {
+			const binding = queryBindings.find(
+				(candidate) => candidate.identity === frame.operation,
+			);
+			if (binding?.kind !== "query")
+				return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
+		}
 		let prepared: PreparedOperation<OperationView>;
 		let contextInput: ContextInputOf<Context>;
 		try {
@@ -454,6 +468,11 @@ export async function createRuntimeApplication<
 				);
 			return operationWireResponse(framed, 200);
 		} catch (error) {
+			if (error instanceof CommittedResultUnavailable)
+				return operationWireResponse(
+					committedResultUnavailableFrame(frame, error),
+					500,
+				);
 			if (request.signal.aborted) throw request.signal.reason;
 			if (isAbort(error)) throw error;
 			let operationError: unknown = error;
@@ -469,6 +488,11 @@ export async function createRuntimeApplication<
 				}
 			}
 			const normalized = normalizeOperationError(operationError);
+			if (normalized instanceof CommittedResultUnavailable)
+				return operationWireResponse(
+					committedResultUnavailableFrame(frame, normalized),
+					500,
+				);
 			const failure =
 				normalized instanceof OperationFailure
 					? normalized

@@ -15,6 +15,7 @@ import {
 	decodeRuntimeExecutables,
 	type RuntimeExecutablesV1,
 } from "./executable-artifact";
+import { validateOperationWireV2 } from "./wire-v2-artifact";
 
 type RuntimeBuildV1 = Readonly<{
 	format: "questpie.runtime-build";
@@ -62,9 +63,9 @@ type RuntimeBuildV1 = Readonly<{
 	digest: string;
 }>;
 
-type OperationWireContractV1 = Readonly<{
+type OperationWireContractBase = Readonly<{
 	format: "questpie.operation-wire";
-	version: 1;
+	version: 1 | 2;
 	application: string;
 	path: string;
 	mediaType: string;
@@ -80,10 +81,21 @@ type OperationWireContractV1 = Readonly<{
 	digest: string;
 }>;
 
+type OperationWireContractV1 = OperationWireContractBase &
+	Readonly<{ version: 1 }>;
+
+type OperationWireContractV2 = OperationWireContractBase &
+	Readonly<{
+		version: 2;
+		compatibility: Readonly<{ wireV1Digest: string }>;
+	}>;
+
+type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;
+
 export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
-	wireContract: OperationWireContractV1;
+	wireContract: OperationWireContract;
 }>;
 
 export function decodeOperationWireContract(
@@ -148,8 +160,9 @@ export function decodeOperationWireContract(
 	});
 }
 
-function decodeWire(value: unknown): OperationWireContractV1 {
+function decodeWire(value: unknown): OperationWireContract {
 	const wire = record(value, "wire contract");
+	const isV2 = wire.version === 2;
 	exact(
 		wire,
 		[
@@ -167,13 +180,23 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 			"principalSource",
 			"mutationAutomaticRetry",
 			"clientContractDigest",
+			...(isV2
+				? [
+						"failureDetails",
+						"resultKinds",
+						"callIdentity",
+						"transactionIdentity",
+						"committedResultUnavailable",
+						"compatibility",
+					]
+				: []),
 			"digest",
 		],
 		"wire contract",
 	);
 	if (
 		wire.format !== "questpie.operation-wire" ||
-		wire.version !== 1 ||
+		(wire.version !== 1 && wire.version !== 2) ||
 		typeof wire.application !== "string" ||
 		wire.path !== "/_questpie/operation" ||
 		wire.mediaType !== "application/vnd.questpie.operation+json;version=1" ||
@@ -234,14 +257,34 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 		)
 	)
 		fail("wire operations must be unique and sorted");
+	if (isV2) validateOperationWireV2(wire);
+	else if (
+		JSON.stringify(wire.failures) !==
+		JSON.stringify([
+			"APPLICATION_MISMATCH",
+			"CLIENT_OUTDATED",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+		])
+	)
+		fail("wire failures are invalid");
 	const digest = digestValue(wire.digest, "wire digest");
 	const { digest: _digest, ...unsigned } = wire;
-	if (artifactDigest("questpie-operation-wire-v1", unsigned) !== digest)
+	if (
+		artifactDigest(
+			isV2 ? "questpie-operation-wire-v2" : "questpie-operation-wire-v1",
+			unsigned,
+		) !== digest
+	)
 		fail("wire digest does not match");
 	return Object.freeze({
 		...wire,
 		operations: Object.freeze(operations),
-	}) as OperationWireContractV1;
+	}) as OperationWireContract;
 }
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {

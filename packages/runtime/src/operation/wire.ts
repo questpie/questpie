@@ -1,4 +1,5 @@
 import { isOperationCallId } from "./call-identity";
+import type { CommittedResultUnavailable } from "./committed-result-unavailable";
 import type { OperationFailureCode } from "./index";
 
 export const operationMediaType =
@@ -89,6 +90,23 @@ export function failureFrame(
 		operation: frame.operation,
 		callId: frame.callId,
 		error: Object.freeze({ code, retryable }),
+	});
+}
+
+export function committedResultUnavailableFrame(
+	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
+	error: CommittedResultUnavailable,
+) {
+	return Object.freeze({
+		protocol: operationProtocol,
+		kind: "failure" as const,
+		operation: frame.operation,
+		callId: frame.callId,
+		error: Object.freeze({
+			code: error.code,
+			retryable: error.retryable,
+			transactionId: error.payload.transactionId,
+		}),
 	});
 }
 
