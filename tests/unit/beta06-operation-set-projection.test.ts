@@ -81,6 +81,10 @@ export const messageOperations = defineCollectionOperations(messages, {
 			compilation.generatedFiles["collection-operation-programs.json"] ??
 				"null",
 		);
+		const postgresPlans = JSON.parse(
+			compilation.generatedFiles["postgres-collection-operation-plans.json"] ??
+				"null",
+		);
 
 		expect(sets).toEqual({
 			format: "questpie.collection-operation-set-projections",
@@ -251,6 +255,20 @@ export const messageOperations = defineCollectionOperations(messages, {
 			},
 			dataQueryDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 		});
+		expect(postgresPlans).toMatchObject({
+			format: "questpie.postgres-collection-operation-plans",
+			version: 1,
+			plans: [
+				expect.objectContaining({
+					identity: "mutation:messages.create",
+					member: "create",
+				}),
+				expect.objectContaining({
+					identity: "query:messages.get",
+					member: "get",
+				}),
+			],
+		});
 		const originMap = JSON.parse(
 			compilation.generatedFiles["origin-map.json"] ?? "null",
 		);
@@ -282,6 +300,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 						"collection-operation-programs.json",
 						"collection-operation-set-projections.json",
 						"field-normalizer-programs.json",
+						"postgres-collection-operation-plans.json",
 						"server-value-programs.json",
 					].includes(entry.path),
 				)
@@ -290,6 +309,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			"collection-operation-programs.json",
 			"collection-operation-set-projections.json",
 			"field-normalizer-programs.json",
+			"postgres-collection-operation-plans.json",
 			"server-value-programs.json",
 		]);
 	} finally {

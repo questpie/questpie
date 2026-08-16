@@ -14,6 +14,7 @@ import {
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
 import {
+	lowerPostgresCollectionOperationPlans,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
 	projectMutations,
@@ -346,6 +347,18 @@ export async function createArtifacts(
 		generated["collection-operation-programs.json"] = canonicalBytes(
 			operationSets.programs,
 		);
+		const postgresCollectionOperationPlans =
+			lowerPostgresCollectionOperationPlans({
+				collectionOperations: operationSets.programs,
+				schemaProjection: schema,
+				policyProjection: relational.policy,
+				normalizerPrograms: operationSets.normalizers,
+				serverValuePrograms: operationSets.serverValues,
+			});
+		if (postgresCollectionOperationPlans.plans.length > 0)
+			generated["postgres-collection-operation-plans.json"] = canonicalBytes(
+				postgresCollectionOperationPlans,
+			);
 	}
 	let postgresQueryPlans: unknown = {
 		format: "questpie.postgres-query-plans",
