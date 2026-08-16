@@ -458,13 +458,25 @@ describe.skipIf(databases.length === 0)(
 					bindingIdentity: "binding:resume",
 				});
 				expect(resumedWatch?.latest).not.toBeNull();
-				expect(evaluations).toBe(beforeResume);
+				expect(evaluations).toBe(beforeResume + 1);
 				expect(await nextFrame(resumedReader)).toMatchObject({
 					kind: "delivery",
 					delivery: "initial",
 					resetReason: null,
 					resumeToken: update?.resumeToken,
 				});
+				await coordinators[0]!.reconcile();
+				const [resumedGenerations] = await databases[0]!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.realtime_binding_generations
+					where application_name = ${applicationName}
+					  and scope_identity = 'scope:resume'
+					  and binding_identity = 'binding:resume'
+				`;
+				// One fresh authority evaluation publishes the retained initial exactly once;
+				// a subsequent scan neither re-evaluates nor creates a duplicate generation.
+				expect(evaluations).toBe(beforeResume + 1);
+				expect(resumedGenerations?.count).toBe(1);
 
 				const resetStream = await carriers[0]!.fetch(
 					request("GET", undefined, "scope:reset"),
@@ -495,7 +507,7 @@ describe.skipIf(databases.length === 0)(
 					delivery: "reset",
 					resetReason: "resume-unavailable",
 				});
-				expect(evaluations).toBe(beforeResume + 1);
+				expect(evaluations).toBe(beforeResume + 2);
 				expect(
 					(
 						await carriers[1]!.fetch(

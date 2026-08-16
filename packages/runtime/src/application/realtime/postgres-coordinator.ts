@@ -174,7 +174,18 @@ export function createPostgresDurableLiveQueryCoordinator(
 							delivery: "initial",
 							resetReason: null,
 						});
-						if (staged)
+						if (!staged) return;
+						const published = await holder.attachment.publish(
+							watch,
+							Object.freeze({
+								payload: evaluated.payload,
+								observedPlan: evaluated.observedPlan,
+								delivery: "initial",
+								resetReason: null,
+								resumeToken: watch.requestedResumeToken,
+							}),
+						);
+						if (published)
 							holder.framed.set(
 								watch.bindingIdentity,
 								sha256Digest(watch.requestedResumeToken),
