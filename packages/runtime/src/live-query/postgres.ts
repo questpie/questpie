@@ -24,7 +24,7 @@ export type ChangeLedgerFactV1 = Readonly<{
 	factId: string;
 	transactionId: string;
 	collection: string;
-	kind: "delete" | "insert" | "truncate" | "update";
+	kind: "collection" | "delete" | "insert" | "truncate" | "update";
 	oldKey: Readonly<Record<string, unknown>> | null;
 	newKey: Readonly<Record<string, unknown>> | null;
 	conservative: boolean;
@@ -90,6 +90,7 @@ function decodeFact(row: Row, index: number): ChangeLedgerFactV1 {
 	if (!collection.startsWith("collection:"))
 		throw new TypeError(`${path} Collection identity is invalid`);
 	if (
+		row.kind !== "collection" &&
 		row.kind !== "delete" &&
 		row.kind !== "insert" &&
 		row.kind !== "truncate" &&
@@ -215,16 +216,21 @@ ORDER BY transaction_id, fact_id`,
 			prior: horizon.priorHorizon,
 			next: horizon.nextHorizon,
 		});
-		await execute(
-			session,
-			`INSERT INTO questpie_internal.processed_change_facts
+		if (facts.length > 0) {
+			const factIdentities = `{${facts
+				.map(({ factIdentity }) => factIdentity)
+				.join(",")}}`;
+			await execute(
+				session,
+				`INSERT INTO questpie_internal.processed_change_facts
   (application_name, consumer_id, fact_identity, processed_at)
 SELECT $1, $2, fact_identity, pg_catalog.clock_timestamp()
 FROM pg_catalog.unnest($3::uuid[]) AS fact_identity
 ON CONFLICT DO NOTHING`,
-			[application, consumer, facts.map(({ factIdentity }) => factIdentity)],
-			input.signal,
-		);
+				[application, consumer, factIdentities],
+				input.signal,
+			);
+		}
 		await execute(
 			session,
 			`UPDATE questpie_internal.reconciliation_consumers
