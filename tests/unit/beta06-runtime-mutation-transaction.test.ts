@@ -181,6 +181,29 @@ test("executes only linked Collection plans and projection-derived Reaction inte
 	).toBe(false);
 });
 
+test("rejects the same non-canonical call identity as the wire adapter", async () => {
+	const database = postgres();
+	const invoke = createPostgresMutationInvoker<View>({
+		sql: database.sql,
+		application: "application:generic",
+		collectionPlans,
+		reactions: linkReactionProjection(reactionProjection),
+		facts: {
+			principal: principal.user({ id: principalId }),
+			authority: { kind: "ordinary" },
+			tenant: { id: tenantId },
+			values: {},
+			signal: new AbortController().signal,
+			deadline: null,
+		},
+	});
+
+	await expect(invoke(operation, "call-e\u0301")).rejects.toThrow(
+		"Mutation call identity is invalid",
+	);
+	expect(database.statements).toHaveLength(0);
+});
+
 test("runtime transaction implementation contains no collaboration fixture nouns", async () => {
 	const source = await readFile(
 		new URL("../../packages/runtime/src/mutation/postgres.ts", import.meta.url),

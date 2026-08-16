@@ -1,3 +1,4 @@
+import { isOperationCallId } from "./call-identity";
 import type { OperationFailureCode } from "./index";
 
 export const operationMediaType =
@@ -58,10 +59,7 @@ export function decodeOperationWireRequest(
 		return null;
 	if (
 		typeof frame.application !== "string" ||
-		typeof frame.callId !== "string" ||
-		frame.callId.length === 0 ||
-		frame.callId.length > 256 ||
-		frame.callId !== frame.callId.normalize("NFC") ||
+		!isOperationCallId(frame.callId) ||
 		typeof frame.clientContractDigest !== "string" ||
 		typeof frame.operation !== "string" ||
 		typeof frame.wireDigest !== "string" ||

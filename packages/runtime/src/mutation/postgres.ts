@@ -2,7 +2,11 @@ import type { SQL } from "bun";
 
 import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
 import type { ExecutionFacts } from "../execution";
-import { DeclaredOperationError, type PreparedOperation } from "../operation";
+import {
+	DeclaredOperationError,
+	isOperationCallId,
+	type PreparedOperation,
+} from "../operation";
 import {
 	canonicalMutationBytes,
 	deterministicUuid,
@@ -134,11 +138,7 @@ export function createPostgresMutationInvoker<View>(
 	}>,
 ): MutationInvoker<View> {
 	return async (operation, callId, options) => {
-		if (
-			operation.binding.kind !== "mutation" ||
-			callId.length === 0 ||
-			callId.length > 256
-		)
+		if (operation.binding.kind !== "mutation" || !isOperationCallId(callId))
 			throw new TypeError("Mutation call identity is invalid");
 		const encodedInput = encodeRuntimeCodec(
 			operation.inputCodec,

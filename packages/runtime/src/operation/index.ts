@@ -189,6 +189,7 @@ export function createOperationEngine<View>(
 }
 
 export { readBoundedRequestBody } from "./body";
+export { isOperationCallId } from "./call-identity";
 export { bindIngressPrincipal, readIngressPrincipal } from "./ingress";
 export {
 	decodeOperationWireRequest,
