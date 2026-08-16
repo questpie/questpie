@@ -140,7 +140,10 @@ export function resultFrame(
 	});
 }
 
-export function operationFailureStatus(code: OperationFailureCode): number {
+export function operationFailureStatus(
+	code: OperationFailureCode | "COMMITTED_RESULT_UNAVAILABLE",
+): number {
+	if (code === "COMMITTED_RESULT_UNAVAILABLE") return 500;
 	if (code === "NOT_FOUND") return 404;
 	if (code === "PROTOCOL_UNSUPPORTED") return 400;
 	if (code === "APPLICATION_MISMATCH" || code === "CLIENT_OUTDATED") return 409;

@@ -90,14 +90,38 @@ postgresTest(
 			]);
 
 			const { digest: _wireDigest, ...unsignedWire } = JSON.parse(wireBytes);
+			const {
+				failureDetails: _failureDetails,
+				resultKinds: _resultKinds,
+				callIdentity: _callIdentity,
+				transactionIdentity: _transactionIdentity,
+				committedResultUnavailable: _committedResultUnavailable,
+				compatibility: originalCompatibility,
+				...sharedWire
+			} = unsignedWire;
+			const forgedV1Sibling = {
+				...sharedWire,
+				version: 1,
+				application: "application:forged",
+				failures: unsignedWire.failures.filter(
+					(code: string) => code !== "COMMITTED_RESULT_UNAVAILABLE",
+				),
+			};
 			const forgedUnsignedWire = {
 				...unsignedWire,
 				application: "application:forged",
+				compatibility: {
+					...originalCompatibility,
+					wireV1Digest: artifactDigest(
+						"questpie-operation-wire-v1",
+						forgedV1Sibling,
+					),
+				},
 			};
 			const forgedWire = {
 				...forgedUnsignedWire,
 				digest: artifactDigest(
-					"questpie-operation-wire-v1",
+					"questpie-operation-wire-v2",
 					forgedUnsignedWire,
 				),
 			};

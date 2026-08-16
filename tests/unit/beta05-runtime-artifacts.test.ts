@@ -94,7 +94,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		expect(wire).toMatchObject({
 			format: "questpie.operation-wire",
-			version: 1,
+			version: 2,
 			path: "/_questpie/operation",
 			protocol: { name: "questpie.operation", version: 1 },
 		});
@@ -119,6 +119,9 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		expect(first.generatedFiles["app.ts"]).toContain(
 			"export const defineQuery: QueryFactory",
+		);
+		expect(first.generatedFiles["app.ts"]).toContain(
+			"export interface CommittedResultUnavailable extends Error",
 		);
 		expect(first.generatedFiles["client.ts"]).toContain(
 			"export function createClient",
