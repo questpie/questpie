@@ -102,6 +102,7 @@ export function renderClientContract(
 			),
 		]),
 	);
+	const mutationOperations = mutations.map((resource) => resource.identity);
 	return `import type { AppContextInput } from "./app";
 
 export interface CallOptions {
@@ -140,6 +141,7 @@ export class CommittedResultUnavailable extends Error {
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
+const mutationOperations = new Set(${canonicalBytes(mutationOperations).trim()});
 const failureCodes = new Set([
 	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
@@ -263,7 +265,7 @@ export function createClient(input: Readonly<{
 			if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
 				if (rejection) protocolFailure();
 				exactKeys(detail, ["code", "retryable", "transactionId"]);
-				if (detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) protocolFailure();
+				if (!mutationOperations.has(operation) || detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) protocolFailure();
 				throw new CommittedResultUnavailable(callId, detail.transactionId);
 			}
 			exactKeys(detail, ["code", "retryable"]);

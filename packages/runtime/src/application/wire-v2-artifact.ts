@@ -141,6 +141,7 @@ export function validateOperationWireV2(
 	exact(
 		compatibility,
 		[
+			"clientContractDigest",
 			"wireV1Digest",
 			"wireV1Source",
 			"wireV1MutationExecution",
@@ -148,6 +149,10 @@ export function validateOperationWireV2(
 			"wireV1RejectionCode",
 		],
 		"wire compatibility",
+	);
+	digestValue(
+		compatibility.clientContractDigest,
+		"wire v1 compatibility client contract digest",
 	);
 	digestValue(compatibility.wireV1Digest, "wire v1 compatibility digest");
 	if (
@@ -172,6 +177,7 @@ export function validateOperationWireV2(
 	const siblingV1 = {
 		...sharedWire,
 		version: 1,
+		clientContractDigest: compatibility.clientContractDigest,
 		failures: (wire.failures as readonly unknown[]).filter(
 			(code) => code !== "COMMITTED_RESULT_UNAVAILABLE",
 		),

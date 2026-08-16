@@ -393,12 +393,14 @@ export async function createRuntimeApplication<
 			return operationWireResponse(rejectionFrame("APPLICATION_MISMATCH"), 409);
 		const retainedV1 =
 			artifacts.wireContract.version === 2 &&
+			frame.clientContractDigest ===
+				artifacts.wireContract.compatibility.clientContractDigest &&
 			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
-		if (
-			frame.clientContractDigest !==
-				artifacts.runtimeBuild.clientContractDigest ||
-			(frame.wireDigest !== artifacts.wireContract.digest && !retainedV1)
-		)
+		const currentV2 =
+			frame.clientContractDigest ===
+				artifacts.runtimeBuild.clientContractDigest &&
+			frame.wireDigest === artifacts.wireContract.digest;
+		if (!currentV2 && !retainedV1)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
 		if (retainedV1) {
 			const binding = queryBindings.find(

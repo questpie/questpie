@@ -255,6 +255,43 @@ test("generated client carries CRU exactly, freezes it, and never retries", asyn
 	}
 });
 
+test("generated client rejects a CRU frame for a Query without retrying", async () => {
+	const generated = await generatedClientModule();
+	try {
+		let requests = 0;
+		const client = generated.module.createClient({
+			baseUrl: "http://runtime.test",
+			fetch: async (request) => {
+				requests += 1;
+				const sent = (await request.json()) as Readonly<{
+					callId: string;
+					operation: string;
+				}>;
+				return wireResponse(
+					{
+						protocol,
+						kind: "failure",
+						operation: sent.operation,
+						callId: sent.callId,
+						error: {
+							code: "COMMITTED_RESULT_UNAVAILABLE",
+							retryable: true,
+							transactionId: "901",
+						},
+					},
+					500,
+				);
+			},
+		});
+		await expect(
+			client.withContext({}).queries["health.read"]({}),
+		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
+		expect(requests).toBe(1);
+	} finally {
+		await rm(generated.directory, { force: true, recursive: true });
+	}
+});
+
 test("generated client rejects every wrong CRU frame without widening failures", async () => {
 	const generated = await generatedClientModule();
 	try {

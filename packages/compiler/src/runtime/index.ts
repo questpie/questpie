@@ -256,6 +256,7 @@ export function projectRuntimeContract(
 			causeDisclosure: "forbidden",
 		},
 		compatibility: {
+			clientContractDigest,
 			wireV1Digest,
 			wireV1Source: "sameApplicationClientContractAndOperations",
 			wireV1MutationExecution: "rejectBeforeContextAndOperation",

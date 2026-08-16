@@ -87,7 +87,10 @@ type OperationWireContractV1 = OperationWireContractBase &
 type OperationWireContractV2 = OperationWireContractBase &
 	Readonly<{
 		version: 2;
-		compatibility: Readonly<{ wireV1Digest: string }>;
+		compatibility: Readonly<{
+			clientContractDigest: string;
+			wireV1Digest: string;
+		}>;
 	}>;
 
 type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;

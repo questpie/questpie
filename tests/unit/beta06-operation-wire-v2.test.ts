@@ -44,6 +44,7 @@ test("compiler emits exact wire v2 and binds its same-contract v1 sibling", asyn
 			committedResultUnavailable: ["code", "retryable", "transactionId"],
 		});
 		expect(wire.compatibility).toMatchObject({
+			clientContractDigest: wire.clientContractDigest,
 			wireV1Source: "sameApplicationClientContractAndOperations",
 			wireV1MutationExecution: "rejectBeforeContextAndOperation",
 			wireV1QueryExecution: "allowed",
@@ -97,6 +98,13 @@ test("compiler emits exact wire v2 and binds its same-contract v1 sibling", asyn
 			{
 				...wire,
 				compatibility: { ...wire.compatibility, wireV1Digest: "0".repeat(64) },
+			},
+			{
+				...wire,
+				compatibility: {
+					...wire.compatibility,
+					clientContractDigest: "0".repeat(64),
+				},
 			},
 		])
 			expect(() =>

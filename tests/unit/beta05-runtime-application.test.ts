@@ -236,6 +236,102 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 	};
 }
 
+function runtimeArtifactsWithRetainedQueryPair() {
+	const original = runtimeArtifacts();
+	const { digest: _wireDigest, ...wireV1 } = original.wireContract;
+	const retainedClientContractDigest = sha("9");
+	const retainedWireV1 = {
+		...wireV1,
+		clientContractDigest: retainedClientContractDigest,
+	};
+	const wireV2WithoutDigest = {
+		...wireV1,
+		version: 2,
+		resultKinds: ["declaredError", "failure", "result"],
+		failureDetails: {
+			ordinary: ["code", "retryable"],
+			committedResultUnavailable: ["code", "retryable", "transactionId"],
+		},
+		callIdentity: {
+			kind: "text",
+			minimumUnicodeScalars: 1,
+			maximumUnicodeScalars: 256,
+			maximumUtf8Bytes: 1_024,
+			normalization: "NFC",
+			normalizationBehavior: "rejectNotRewrite",
+			loneSurrogates: "forbidden",
+			nullScalar: "forbidden",
+			uuidRequired: false,
+			runtimeDefaultWhenAbsent: "crypto.randomUUID",
+			equality: "exactUtf8AfterValidation",
+		},
+		transactionIdentity: {
+			kind: "postgresXid8Text",
+			canonicalPattern: "^[1-9][0-9]{0,19}$",
+			maximum: "18446744073709551615",
+			clientInterpretation: "opaque",
+		},
+		committedResultUnavailable: {
+			classification: "frameworkTransactionOutcome",
+			httpStatus: 500,
+			retryable: true,
+			transactionOutcome: "committed",
+			automaticRetry: false,
+			recovery: "replayExactMutationWithSameCallIdentity",
+			frameCallIdSource: "acceptedRequest",
+			transactionIdSource: "committedReceipt",
+			causeDisclosure: "forbidden",
+		},
+		compatibility: {
+			clientContractDigest: retainedClientContractDigest,
+			wireV1Digest: digest("questpie-operation-wire-v1", retainedWireV1),
+			wireV1Source: "sameApplicationClientContractAndOperations",
+			wireV1MutationExecution: "rejectBeforeContextAndOperation",
+			wireV1QueryExecution: "allowed",
+			wireV1RejectionCode: "CLIENT_OUTDATED",
+		},
+		failures: [
+			"APPLICATION_MISMATCH",
+			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+		],
+	};
+	const wireContract = {
+		...wireV2WithoutDigest,
+		digest: digest("questpie-operation-wire-v2", wireV2WithoutDigest),
+	};
+	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
+		original.runtimeBuild;
+	const reboundBuild = {
+		...runtimeBuildWithoutDigest,
+		wireDigest: wireContract.digest,
+		inventory: runtimeBuildWithoutDigest.inventory.map((item) =>
+			item.path === "wire-contract.json"
+				? { ...item, digest: fileDigest(wireBytes) }
+				: item,
+		),
+	};
+	return {
+		...original,
+		artifactFiles: {
+			...original.artifactFiles,
+			"wire-contract.json": wireBytes,
+		},
+		runtimeBuild: {
+			...reboundBuild,
+			digest: digest("questpie-runtime-build-v1", reboundBuild),
+		},
+		wireContract,
+	};
+}
+
 function queryExecutable<View>(
 	execute: (
 		input: Readonly<{ input: unknown; ctx: View }>,
@@ -1116,6 +1212,112 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		"drainStarted",
 		"stopped",
 	]);
+});
+
+test("executes a retained v1 Query only for its exact compiler-owned digest pair", async () => {
+	let bootstrapReads = 0;
+	let contextResolves = 0;
+	let handlerCalls = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => {
+			contextResolves += 1;
+			return { tenant: { id: input.companyId }, values: {} };
+		},
+	});
+	const artifacts = runtimeArtifactsWithRetainedQueryPair();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(({ input }) => {
+			handlerCalls += 1;
+			return { count: (input as Readonly<{ first: number }>).first };
+		}),
+	];
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts as never),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts as never, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: {
+				get: async () => {
+					bootstrapReads += 1;
+					return null;
+				},
+			},
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+		},
+	});
+	const compatibility = artifacts.wireContract.compatibility;
+	const baseFrame = {
+		application: artifacts.runtimeBuild.application,
+		callId: "retained:exact-pair",
+		clientContractDigest: compatibility.clientContractDigest,
+		context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+		input: { first: 2 },
+		operation: "query:messages.page",
+		protocol: { name: "questpie.operation", version: 1 },
+		timeoutMilliseconds: 5_000,
+		wireDigest: compatibility.wireV1Digest,
+	};
+	const send = (frame: unknown) =>
+		app.fetch(
+			new Request("http://runtime.test/_questpie/operation", {
+				method: "POST",
+				headers: {
+					"content-type": "application/vnd.questpie.operation+json;version=1",
+				},
+				body: JSON.stringify(frame),
+			}),
+		);
+
+	try {
+		for (const mismatched of [
+			{
+				...baseFrame,
+				clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+			},
+			{ ...baseFrame, wireDigest: artifacts.runtimeBuild.wireDigest },
+		]) {
+			const response = await send(mismatched);
+			expect(response.status).toBe(409);
+			expect(await response.json()).toEqual({
+				kind: "failure",
+				error: { code: "CLIENT_OUTDATED", retryable: false },
+			});
+		}
+		expect({ bootstrapReads, contextResolves, handlerCalls }).toEqual({
+			bootstrapReads: 0,
+			contextResolves: 0,
+			handlerCalls: 0,
+		});
+
+		const response = await send(baseFrame);
+		expect(response.status).toBe(200);
+		expect(await response.json()).toMatchObject({
+			kind: "result",
+			callId: baseFrame.callId,
+			operation: baseFrame.operation,
+			payload: { count: 2 },
+		});
+		expect({ bootstrapReads, contextResolves, handlerCalls }).toEqual({
+			bootstrapReads: 0,
+			contextResolves: 1,
+			handlerCalls: 1,
+		});
+	} finally {
+		await app.close();
+	}
 });
 
 async function createHoldingRuntime(
