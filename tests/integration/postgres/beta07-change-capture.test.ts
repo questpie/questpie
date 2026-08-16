@@ -197,13 +197,28 @@ $$;`);
 						 deployment_digest, authority_partition_digest, principal_kind,
 						 principal_id, active_slot, query_identity, query_bytes,
 						 input_bytes, input_digest, context_input_bytes, wire_version,
-						 opened_at, state)
+						 resume_requested, requested_resume_token, opened_at, state)
 						values ('collaboration', 'scope:one', 'binding:mismatched-context',
 						        ${deployment}, ${"d".repeat(64)}, 'user', 'user:one', 1,
 						        'messages.page', 'query'::bytea, '{}'::bytea, ${"f".repeat(64)},
-						        '{}'::bytea, 1, ${openedAt}, 'open')
+						        '{}'::bytea, 1, false, null, ${openedAt}, 'open')
 					`,
 					"23503",
+				);
+				await expectPostgresError(
+					database!`
+						insert into questpie_internal.realtime_watch_bindings
+						(application_name, scope_identity, binding_identity,
+						 deployment_digest, authority_partition_digest, principal_kind,
+						 principal_id, active_slot, query_identity, query_bytes,
+						 input_bytes, input_digest, context_input_bytes, wire_version,
+						 resume_requested, requested_resume_token, opened_at, state)
+						values ('collaboration', 'scope:one', 'binding:invalid-resume',
+						        ${deployment}, ${authority}, 'user', 'user:one', 1,
+						        'messages.page', 'query'::bytea, '{}'::bytea, ${"f".repeat(64)},
+						        '{}'::bytea, 1, true, null, ${openedAt}, 'open')
+					`,
+					"23514",
 				);
 				await database!`
 					insert into questpie_internal.realtime_watch_bindings
@@ -211,12 +226,14 @@ $$;`);
 					 deployment_digest, authority_partition_digest, principal_kind,
 					 principal_id, active_slot, query_identity, query_bytes,
 					 input_bytes, input_digest, context_input_bytes, wire_version,
-					 opened_at, state)
+					 resume_requested, requested_resume_token, opened_at, state)
 					select 'collaboration', 'scope:one', 'binding:' || slot,
 					       ${deployment}, ${authority}, 'user', 'user:one', slot,
 					       'messages.page', 'query:messages.page'::bytea,
 					       '{"first":20}'::bytea, ${"f".repeat(64)},
-					       '{"tenant":"company:one"}'::bytea, 1, ${openedAt}, 'open'
+					       '{"tenant":"company:one"}'::bytea, 1, slot = 1,
+					       case when slot = 1 then 'opaque-requested-resume' else null end,
+					       ${openedAt}, 'open'
 					from generate_series(1, 64) slot
 				`;
 
@@ -227,11 +244,11 @@ $$;`);
 						 deployment_digest, authority_partition_digest, principal_kind,
 						 principal_id, active_slot, query_identity, query_bytes,
 						 input_bytes, input_digest, context_input_bytes, wire_version,
-						 opened_at, state)
+						 resume_requested, requested_resume_token, opened_at, state)
 						values ('collaboration', 'scope:one', 'binding:overflow',
 						        ${deployment}, ${authority}, 'user', 'user:one', 65,
 						        'messages.page', 'query'::bytea, '{}'::bytea, ${"f".repeat(64)},
-						        '{}'::bytea, 1, ${openedAt}, 'open')
+						        '{}'::bytea, 1, false, null, ${openedAt}, 'open')
 					`,
 					"23514",
 				);
@@ -243,9 +260,16 @@ $$;`);
 					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
 				`;
 				const [state] = await database!<
-					{ state: string; hasCredentialColumn: boolean }[]
+					{
+						state: string;
+						resumeRequested: boolean;
+						requestedResumeToken: string | null;
+						hasCredentialColumn: boolean;
+					}[]
 				>`
 					select binding.state,
+					       binding.resume_requested as "resumeRequested",
+					       binding.requested_resume_token as "requestedResumeToken",
 					       exists (
 					         select 1 from information_schema.columns
 					         where table_schema = 'questpie_internal'
@@ -258,6 +282,8 @@ $$;`);
 				`;
 				expect(state).toEqual({
 					state: "withdrawn",
+					resumeRequested: true,
+					requestedResumeToken: "opaque-requested-resume",
 					hasCredentialColumn: false,
 				});
 				await database!`
@@ -306,11 +332,12 @@ $$;`);
 					(application_name, scope_identity, binding_identity,
 					 deployment_digest, authority_partition_digest, principal_kind,
 					 principal_id, active_slot, query_identity, query_bytes, input_bytes,
-					 input_digest, context_input_bytes, wire_version, opened_at, state)
+					 input_digest, context_input_bytes, wire_version, resume_requested,
+					 requested_resume_token, opened_at, state)
 					values ('collaboration', 'scope:clock', 'binding:clock',
 					        ${deployment}, ${authority}, 'user', 'user:clock', 1,
 					        'messages.page', 'query'::bytea, '{}'::bytea, ${inputDigest},
-					        '{}'::bytea, 1, ${forged}, 'open')
+					        '{}'::bytea, 1, false, null, ${forged}, 'open')
 				`;
 				await database!`
 					insert into questpie_internal.realtime_binding_generations

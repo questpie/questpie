@@ -46,6 +46,8 @@ const internalProtocolV3RealtimeColumns = [
 	["realtime_watch_bindings", "input_digest", "text", true],
 	["realtime_watch_bindings", "context_input_bytes", "bytea", true],
 	["realtime_watch_bindings", "wire_version", "integer", true],
+	["realtime_watch_bindings", "resume_requested", "boolean", true],
+	["realtime_watch_bindings", "requested_resume_token", "text", false],
 	["realtime_watch_bindings", "opened_at", "timestamp with time zone", true],
 	["realtime_watch_bindings", "state", "text", true],
 	[

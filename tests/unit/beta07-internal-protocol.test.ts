@@ -14,7 +14,7 @@ describe("BETA-07 questpie.internal.v3 contract", () => {
 			"4f125ab85f16891c072f1b734e023938b7f2a2eb56c5e17dfd8acafbd71f98ff",
 		);
 		expect(internalProtocolV3Checksum).toBe(
-			"a94c7de4fa869f2b8e15e6f3a65326f2cf8c0ac8bd83a72b76db949f3141f1a3",
+			"abc43ea90d0798b7cb5fa4dc7d467abeac782490505cbc2a549bc44e29e33c0c",
 		);
 		for (const table of [
 			"change_ledger",
@@ -30,6 +30,16 @@ describe("BETA-07 questpie.internal.v3 contract", () => {
 				`CREATE TABLE questpie_internal.${table}`,
 			);
 		expect(internalProtocolV3Sql).toContain("existing_count >= 16");
+		expect(internalProtocolV3Sql).toContain(
+			"resume_requested boolean NOT NULL",
+		);
+		expect(internalProtocolV3Sql).toContain("requested_resume_token text");
+		expect(internalProtocolV3Sql).toContain(
+			"(NOT resume_requested AND requested_resume_token IS NULL)",
+		);
+		expect(internalProtocolV3Sql).toContain(
+			"octet_length(requested_resume_token) <= 4096",
+		);
 		expect(internalProtocolV3Sql).toContain("SECURITY DEFINER");
 		expect(internalProtocolV3Sql).toContain(
 			"REVOKE ALL ON ALL TABLES IN SCHEMA questpie_internal FROM PUBLIC",

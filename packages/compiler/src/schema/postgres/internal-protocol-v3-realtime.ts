@@ -59,6 +59,8 @@ CREATE TABLE questpie_internal.realtime_watch_bindings (
   input_digest text NOT NULL,
   context_input_bytes bytea NOT NULL,
   wire_version integer NOT NULL,
+  resume_requested boolean NOT NULL,
+  requested_resume_token text,
   opened_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
   state text NOT NULL,
   withdrawn_at timestamptz,
@@ -94,6 +96,14 @@ CREATE TABLE questpie_internal.realtime_watch_bindings (
   ),
   CONSTRAINT realtime_watch_binding_input_digest_sha256 CHECK (input_digest ~ '^[0-9a-f]{64}$'),
   CONSTRAINT realtime_watch_binding_wire_version_positive CHECK (wire_version > 0),
+  CONSTRAINT realtime_watch_binding_resume_shape CHECK (
+    (NOT resume_requested AND requested_resume_token IS NULL)
+    OR (
+      resume_requested AND requested_resume_token IS NOT NULL
+      AND length(requested_resume_token) >= 1
+      AND octet_length(requested_resume_token) <= 4096
+    )
+  ),
   CONSTRAINT realtime_watch_binding_payload_bounded CHECK (
     octet_length(query_bytes) + octet_length(input_bytes) + octet_length(context_input_bytes) <= 1048576
   ),
@@ -243,10 +253,12 @@ BEGIN
   ELSE
     IF ROW(NEW.application_name, NEW.scope_identity, NEW.binding_identity, NEW.deployment_digest,
            NEW.authority_partition_digest, NEW.principal_kind, NEW.principal_id, NEW.query_identity,
-           NEW.query_bytes, NEW.input_bytes, NEW.input_digest, NEW.context_input_bytes, NEW.wire_version)
+           NEW.query_bytes, NEW.input_bytes, NEW.input_digest, NEW.context_input_bytes, NEW.wire_version,
+           NEW.resume_requested, NEW.requested_resume_token)
        IS DISTINCT FROM ROW(OLD.application_name, OLD.scope_identity, OLD.binding_identity, OLD.deployment_digest,
            OLD.authority_partition_digest, OLD.principal_kind, OLD.principal_id, OLD.query_identity,
-           OLD.query_bytes, OLD.input_bytes, OLD.input_digest, OLD.context_input_bytes, OLD.wire_version) THEN
+           OLD.query_bytes, OLD.input_bytes, OLD.input_digest, OLD.context_input_bytes, OLD.wire_version,
+           OLD.resume_requested, OLD.requested_resume_token) THEN
       RAISE EXCEPTION 'realtime binding authority is immutable';
     END IF;
     NEW.opened_at := OLD.opened_at;
@@ -453,6 +465,12 @@ const internalProtocolV3RealtimeConstraints = [
 		"realtime_watch_binding_query_identity_bounded",
 		"c",
 		"CHECK (length(query_identity) >= 1 AND length(query_identity) <= 256 AND octet_length(query_identity) <= 1024)",
+	],
+	[
+		"realtime_watch_bindings",
+		"realtime_watch_binding_resume_shape",
+		"c",
+		"CHECK (NOT resume_requested AND requested_resume_token IS NULL OR resume_requested AND requested_resume_token IS NOT NULL AND length(requested_resume_token) >= 1 AND octet_length(requested_resume_token) <= 4096)",
 	],
 	[
 		"realtime_watch_bindings",
