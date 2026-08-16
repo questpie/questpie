@@ -148,7 +148,7 @@ const outputPath = checkedRepositoryPath(
 	"review output",
 );
 try {
-	requireAbsentReviewOutput(outputPath);
+	requireAbsentReviewOutput(outputPath, process.cwd());
 } catch (error) {
 	if (error instanceof AcceptanceReviewSafetyError) fail(error.message);
 	throw error;
@@ -215,6 +215,8 @@ const recordSecret = findAcceptancePacketSecret(JSON.stringify(record));
 if (recordSecret)
 	fail(`review record contains a prohibited ${recordSecret.name}`);
 mkdirSync(dirname(outputPath), { recursive: true });
-writeFileSync(outputPath, `${JSON.stringify(record, null, "\t")}\n`);
+writeFileSync(outputPath, `${JSON.stringify(record, null, "\t")}\n`, {
+	flag: "wx",
+});
 console.log(`acceptance review ${verdict}: ${prepared.manifest.reviewOutput}`);
 if (verdict === "BLOCKED") process.exit(2);

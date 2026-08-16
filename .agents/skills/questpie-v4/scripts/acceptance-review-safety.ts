@@ -1,4 +1,5 @@
-import { lstatSync } from "node:fs";
+import { lstatSync, realpathSync } from "node:fs";
+import { dirname, relative, resolve, sep } from "node:path";
 
 export class AcceptanceReviewSafetyError extends Error {
 	constructor(message: string) {
@@ -12,9 +13,38 @@ export function requireCleanReviewTree(status: string): void {
 		throw new AcceptanceReviewSafetyError("review worktree is not clean");
 }
 
-export function requireAbsentReviewOutput(path: string): void {
+export function requireAbsentReviewOutput(
+	path: string,
+	repositoryRoot: string,
+): void {
+	const root = realpathSync(resolve(repositoryRoot));
+	const absolutePath = resolve(path);
+	const fromRoot = relative(root, absolutePath);
+	if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`))
+		throw new AcceptanceReviewSafetyError("review output escapes repository");
+	let current = root;
+	for (const component of relative(root, dirname(absolutePath)).split(sep)) {
+		if (component === "" || component === ".") continue;
+		current = resolve(current, component);
+		try {
+			const stat = lstatSync(current);
+			if (stat.isSymbolicLink() || !stat.isDirectory())
+				throw new AcceptanceReviewSafetyError(
+					"review output parent is not a real directory",
+				);
+		} catch (error) {
+			if (
+				typeof error === "object" &&
+				error !== null &&
+				"code" in error &&
+				error.code === "ENOENT"
+			)
+				break;
+			throw error;
+		}
+	}
 	try {
-		lstatSync(path);
+		lstatSync(absolutePath);
 	} catch (error) {
 		if (
 			typeof error === "object" &&

@@ -95,14 +95,20 @@ describe("acceptance packet v2", () => {
 		const directory = mkdtempSync(join(tmpdir(), "qp-review-output-"));
 		const existing = join(directory, "REVIEW.json");
 		writeFileSync(existing, "{}");
-		expect(() => requireAbsentReviewOutput(existing)).toThrow(
+		expect(() => requireAbsentReviewOutput(existing, directory)).toThrow(
 			AcceptanceReviewSafetyError,
 		);
 		const link = join(directory, "REVIEW-LINK.json");
 		symlinkSync(join(directory, "missing"), link);
-		expect(() => requireAbsentReviewOutput(link)).toThrow(
+		expect(() => requireAbsentReviewOutput(link, directory)).toThrow(
 			AcceptanceReviewSafetyError,
 		);
+		const outside = mkdtempSync(join(tmpdir(), "qp-review-outside-"));
+		const parentLink = join(directory, "linked-parent");
+		symlinkSync(outside, parentLink);
+		expect(() =>
+			requireAbsentReviewOutput(join(parentLink, "REVIEW.json"), directory),
+		).toThrow(AcceptanceReviewSafetyError);
 	});
 
 	test("re-derives byte-identical packet bytes from one exact commit", () => {
@@ -175,5 +181,20 @@ describe("acceptance packet v2", () => {
 			"HEAD",
 		]);
 		expect(() => prepareAcceptancePacket(input)).toThrow(AcceptancePacketError);
+	});
+
+	test("ignores hostile user diff formatting configuration", () => {
+		const input = fixture();
+		const expected = prepareAcceptancePacket(input);
+		for (const [key, value] of [
+			["diff.noprefix", "true"],
+			["diff.renames", "true"],
+			["diff.algorithm", "histogram"],
+			["diff.mnemonicPrefix", "true"],
+		])
+			run(input.repositoryPath, ["git", "config", key, value]);
+		const hostile = prepareAcceptancePacket(input);
+		expect(hostile.packet).toBe(expected.packet);
+		expect(hostile.packetDigest).toBe(expected.packetDigest);
 	});
 });
