@@ -10,12 +10,12 @@ const input = {
 	postgresSchema: "collaboration",
 	collections: [
 		{
-			identity: "messages",
+			identity: "collection:messages",
 			postgresName: "messages",
 			keyColumns: ["id"],
 		},
 		{
-			identity: "spaces",
+			identity: "collection:spaces",
 			postgresName: "spaces",
 			keyColumns: ["company_id", "code"],
 		},
@@ -37,14 +37,14 @@ describe("BETA-07 PostgreSQL Change Ledger capture projection", () => {
 			postgresSchema: "collaboration",
 			collections: [
 				{
-					identity: "messages",
+					identity: "collection:messages",
 					postgresName: "messages",
 					keyColumns: ["id"],
 					rowTrigger: "messages_questpie_capture_row",
 					truncateTrigger: "messages_questpie_capture_truncate",
 				},
 				{
-					identity: "spaces",
+					identity: "collection:spaces",
 					postgresName: "spaces",
 					keyColumns: ["company_id", "code"],
 					rowTrigger: "spaces_questpie_capture_row",
@@ -58,7 +58,7 @@ describe("BETA-07 PostgreSQL Change Ledger capture projection", () => {
 		);
 		expect(projected.sql).toContain("AFTER TRUNCATE ON collaboration.spaces");
 		expect(projected.sql).toContain(
-			"questpie_internal.capture_reactive_row('collaboration', 'spaces', 'company_id', 'code')",
+			"questpie_internal.capture_reactive_row('collaboration', 'collection:spaces', 'company_id', 'code')",
 		);
 	});
 
@@ -73,7 +73,7 @@ describe("BETA-07 PostgreSQL Change Ledger capture projection", () => {
 		expect(() =>
 			project([
 				{
-					identity: "messages",
+					identity: "collection:messages",
 					postgresName: "messages",
 					keyColumns: ["id"],
 					partitioned: true,
@@ -86,7 +86,7 @@ describe("BETA-07 PostgreSQL Change Ledger capture projection", () => {
 		expect(() =>
 			project([
 				{
-					identity: "messages",
+					identity: "collection:messages",
 					postgresName: "messages",
 					keyColumns: [],
 				},

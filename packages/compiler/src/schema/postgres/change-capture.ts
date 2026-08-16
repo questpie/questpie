@@ -48,6 +48,7 @@ export type PostgresChangeCaptureV1 = Readonly<{
 }>;
 
 const qualifiedResourceName = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
+const collectionIdentity = /^collection:[a-z][A-Za-z0-9]*$/;
 
 function invalidDefinition(message: string): never {
 	throw new CompilerDiagnosticError(
@@ -144,7 +145,7 @@ export function projectPostgresChangeCapture(
 	const collections = [...input.collections]
 		.sort((left, right) => compareAscii(left.identity, right.identity))
 		.map((collection): PostgresChangeCaptureCollectionV1 => {
-			if (!qualifiedResourceName.test(collection.identity))
+			if (!collectionIdentity.test(collection.identity))
 				return invalidDefinition(
 					`reactive Collection identity ${collection.identity} is invalid`,
 				);
