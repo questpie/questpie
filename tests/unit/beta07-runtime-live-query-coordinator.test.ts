@@ -144,7 +144,6 @@ test("keeps Live Query opens unavailable until startup reconciliation completes"
 		wireVersion: 1,
 		retention,
 		reconcile: async () => latch.promise,
-		now: () => new Date(0),
 	});
 
 	const startup = coordinator.start();
@@ -170,7 +169,6 @@ test("reconciles a matching fact into one complete update and replaces the plan"
 		reconcile: async (apply) => {
 			await apply(pendingFacts);
 		},
-		now: () => new Date(0),
 	});
 	await coordinator.start();
 	await coordinator.open(
@@ -220,7 +218,6 @@ test("makes failed or revoked recomputation roll reconciliation back and preserv
 			await apply(pendingFacts);
 			if (pendingFacts.length > 0) durableFrontier += 1;
 		},
-		now: () => new Date(0),
 	});
 	await coordinator.start();
 	const initial = plan("collection:messages", "1");
@@ -260,7 +257,6 @@ test("publishes no staged update when a sibling watch makes the durable batch ro
 			await apply(pendingFacts);
 			if (pendingFacts.length > 0) durableFrontier += 1;
 		},
-		now: () => new Date(0),
 	});
 	await coordinator.start();
 	const firstInitial = plan("collection:messages", "1");
@@ -324,7 +320,6 @@ test("persists ACK state, resumes an authenticated complete result, and resets u
 		wireVersion: 1,
 		retention,
 		reconcile: async () => {},
-		now: () => new Date(0),
 	});
 	await coordinator.start();
 	const first = await coordinator.open(openInput());

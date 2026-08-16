@@ -205,7 +205,6 @@ export function createLiveQueryCoordinator<Context>(
 		wireVersion: number;
 		retention: PostgresLiveQueryRetention;
 		reconcile: Reconcile;
-		now?: () => Date;
 	}>,
 ): LiveQueryCoordinator<Context> {
 	const invalidation = createLiveQueryInvalidation(input.program);
@@ -373,7 +372,6 @@ export function createLiveQueryCoordinator<Context>(
 				const retained = await input.retention.resume({
 					binding: durableBinding,
 					resumeToken: opened.resumeToken,
-					now: input.now?.() ?? new Date(),
 				});
 				if (retained.status === "available") {
 					if (opened.signal.aborted) throw opened.signal.reason;
@@ -414,7 +412,6 @@ export function createLiveQueryCoordinator<Context>(
 				return false;
 			await input.retention.acknowledge({
 				...binding.complete,
-				acknowledgedAt: input.now?.() ?? new Date(),
 			});
 			return true;
 		},
@@ -442,7 +439,6 @@ export function createPostgresLiveQueryCoordinator<Context>(
 		consumer: string;
 		deploymentDigest: string;
 		wireVersion: number;
-		now?: () => Date;
 		signal?: AbortSignal;
 	}>,
 ): LiveQueryCoordinator<Context> {
@@ -456,7 +452,6 @@ export function createPostgresLiveQueryCoordinator<Context>(
 		deploymentDigest: input.deploymentDigest,
 		wireVersion: input.wireVersion,
 		retention,
-		now: input.now,
 		reconcile: async (apply) => {
 			await reconcilePostgresChangeLedger({
 				sql: input.sql,
