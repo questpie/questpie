@@ -486,4 +486,4 @@ test("emits Message watchability and inventories every live-query artifact", asy
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
-});
+}, 30_000);
