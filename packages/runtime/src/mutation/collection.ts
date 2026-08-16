@@ -1,78 +1,16 @@
 import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
 import type { TransactionQuery } from "./data";
+import type {
+	LinkedPostgresCollectionOperationPlanV1,
+	LinkedPostgresCollectionOperationPlansV1,
+	LinkedPostgresCreateOperationPlanV1,
+	LinkedPostgresGetOperationPlanV1,
+} from "./postgres-program";
 
 type Row = Readonly<Record<string, unknown>>;
 type Path = readonly string[];
-
-type Parameter = Readonly<{
-	position: number;
-	postgresType: string;
-	kind: "callerInput" | "executionFact" | "key" | "literal";
-	path?: Path;
-	codec: ScalarCodecV1 | string;
-	source?: string;
-	value?: null | boolean | number | string;
-}>;
-
-type Result = Readonly<{
-	path: Path;
-	column: string;
-	codec: ScalarCodecV1;
-	nullable: boolean;
-	guardColumn?: string;
-}>;
-
-type LinkedOperation = Readonly<{
-	target: string;
-	member: "create" | "get";
-	keyFields: readonly Path[];
-	callerInputFields: readonly Path[];
-}>;
-
-type GetPlan = Readonly<{
-	identity: string;
-	target: string;
-	member: "get";
-	operation: LinkedOperation;
-	lock: Readonly<{ sql: string; parameters: readonly Parameter[] }>;
-	read: Readonly<{
-		sql: string;
-		parameters: readonly Parameter[];
-		result: readonly Result[];
-	}>;
-	limits: Readonly<{ rows: number; durationMilliseconds: number }>;
-}>;
-
-type CreatePlan = Readonly<{
-	identity: string;
-	target: string;
-	member: "create";
-	operation: LinkedOperation;
-	candidate: Readonly<{
-		fields: readonly Readonly<{
-			path: Path;
-			codec: ScalarCodecV1;
-			nullable: boolean;
-		}>[];
-	}>;
-	fieldAuthority: Readonly<{
-		checks: readonly Readonly<{
-			path: Path;
-			sql: string;
-			parameters: readonly Parameter[];
-		}>[];
-	}>;
-	write: Readonly<{
-		sql: string;
-		parameters: readonly Parameter[];
-		result: readonly Result[];
-	}>;
-	limits: Readonly<{ rows: number; durationMilliseconds: number }>;
-}>;
-
-type LinkedPlans = Readonly<{
-	plans: readonly (CreatePlan | GetPlan)[];
-}>;
+type Parameter = LinkedPostgresGetOperationPlanV1["lock"]["parameters"][number];
+type Result = LinkedPostgresGetOperationPlanV1["read"]["result"][number];
 
 type ExecutionFacts = Readonly<{
 	principal: Readonly<{ id: string; kind: string }>;
@@ -239,7 +177,7 @@ function collectionMember(target: string): string {
 
 export function createPostgresCollectionMutationData(
 	input: Readonly<{
-		plans: LinkedPlans;
+		plans: LinkedPostgresCollectionOperationPlansV1;
 		query: TransactionQuery;
 		facts: ExecutionFacts;
 		operationTime: Date;
@@ -247,7 +185,7 @@ export function createPostgresCollectionMutationData(
 	}>,
 ) {
 	const execute = async (
-		plan: CreatePlan | GetPlan,
+		plan: LinkedPostgresCollectionOperationPlanV1,
 		started: number,
 		statement: string,
 		parameters: readonly unknown[],
@@ -259,7 +197,13 @@ export function createPostgresCollectionMutationData(
 			throw new TypeError("Collection operation exceeded its duration limit");
 		return rows;
 	};
-	const collections = new Map<string, { create?: CreatePlan; get?: GetPlan }>();
+	const collections = new Map<
+		string,
+		{
+			create?: LinkedPostgresCreateOperationPlanV1;
+			get?: LinkedPostgresGetOperationPlanV1;
+		}
+	>();
 	for (const plan of input.plans.plans) {
 		const name = collectionMember(plan.target);
 		const members = collections.get(name) ?? {};
