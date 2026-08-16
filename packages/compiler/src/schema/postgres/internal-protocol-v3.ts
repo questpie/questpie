@@ -769,8 +769,4 @@ export async function ensureInternalProtocolV3(
 	}
 }
 
-export {
-	internalProtocolV3Catalog,
-	internalProtocolV3Checksum,
-	internalProtocolV3Sql,
-};
+export { internalProtocolV3Checksum, internalProtocolV3Sql };
