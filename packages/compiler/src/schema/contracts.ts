@@ -1,4 +1,5 @@
 import type { MigrationClassification } from "./migration-classification";
+import type { PostgresChangeCaptureV1 } from "./postgres/change-capture";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -13,6 +14,7 @@ export interface SchemaProjectionV1 extends JsonRecord {
 		extensions: readonly Readonly<{ name: string }>[];
 	}>;
 	readonly collections: readonly JsonRecord[];
+	readonly changeCapture?: PostgresChangeCaptureV1;
 }
 
 export type RenameIdentityV1 =
