@@ -321,7 +321,7 @@ postgresTest(
 						body: "one atomic publish",
 						createdAt: replay.createdAt.toISOString(),
 					},
-					recordId: "715f3092-1322-586a-ad55-e134de60361d",
+					recordId: "e6b69be2-3b11-54b4-a08e-39eac72a9e1c",
 					sourceOperation: "mutation:message.publish",
 					state: "pending",
 					tenantId: beta05Ids.company,
