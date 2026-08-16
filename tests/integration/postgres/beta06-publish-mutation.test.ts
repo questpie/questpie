@@ -47,9 +47,9 @@ async function mutationCounts(callId: string) {
 		`SELECT
   (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
   (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1) AS facts,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents,
-  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1::text) AS facts,
+  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1::text) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1::text) AS receipts`,
 		[callId],
 	);
 	return counts;

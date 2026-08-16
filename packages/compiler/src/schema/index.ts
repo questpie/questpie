@@ -30,6 +30,7 @@ export { bootstrap } from "./postgres/bootstrap";
 export {
 	ensureInternalProtocolV2,
 	internalProtocolV2Checksum,
+	verifyInternalProtocolV2,
 } from "./postgres/internal-protocol-v2";
 export {
 	assertSchemaMatches,

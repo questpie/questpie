@@ -6,13 +6,14 @@ import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import {
 	ensureInternalProtocolV2,
 	internalProtocolV2Checksum,
+	verifyInternalProtocolV2,
 } from "../../../packages/compiler/src/schema";
 import { bootstrap } from "../../../packages/compiler/src/schema/postgres/bootstrap";
 
 const database = process.env.PGHOST ? new SQL() : undefined;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 5_000 } as const;
 const expectedV2Checksum =
-	"5d800e18f3a225f1045984797ea88b1716ae047c036016749b221b098b7273ec";
+	"5e7e6ae37dba4887f31887333274c59f236840f224a19fbabbee4f2c6a841d45";
 
 async function protocolCatalog(sql: SQL): Promise<unknown> {
 	const [catalog] = await sql<{ value: unknown }[]>`
@@ -139,6 +140,34 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 		}
 	});
 
+	test("readiness verification rejects v1 without mutating it", async () => {
+		const session = await database!.reserve();
+		try {
+			const [current] = await session<{ name: string }[]>`
+				select current_database() as name
+			`;
+			await bootstrap(
+				session,
+				current!.name,
+				await backendPid(session),
+				control,
+			);
+			await expect(verifyInternalProtocolV2(session)).rejects.toMatchObject({
+				code: "QP-SCHEMA-023",
+			});
+			const [state] = await session<
+				{ version: number; receipts: string | null }[]
+			>`
+				select version,
+				       pg_catalog.to_regclass('questpie_internal.mutation_call_receipts')::text as receipts
+				from questpie_internal.protocol where singleton = true
+			`;
+			expect(state).toEqual({ version: 1, receipts: null });
+		} finally {
+			session.release();
+		}
+	});
+
 	test("rejects v1 or v2 catalog tampering without partially upgrading", async () => {
 		const session = await database!.reserve();
 		try {
@@ -186,10 +215,10 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 				session
 					.unsafe(`
 					insert into questpie_internal.mutation_call_receipts
-					(application_name, tenant_id, operation_name, principal_id, call_id,
+					(application_name, tenant_id, operation_name, principal_kind, principal_id, call_id,
 					 input_digest, transaction_id, operation_time, outcome)
-					values ('collaboration', 'tenant-one', 'message.publish', 'principal-one',
-					 '00000000-0000-4000-8000-000000000001', repeat('a', 64),
+					values ('collaboration', 'tenant-one', 'message.publish', 'user', 'principal-one',
+					 'call-one', repeat('a', 64),
 					 pg_current_xact_id(), transaction_timestamp(), 'committed')
 				`)
 					.execute(),
@@ -202,7 +231,7 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 					(application_name, transaction_id, sequence, operation_name, call_id,
 					 collection_name, record_key_bytes, kind, committed_at)
 					values ('collaboration', pg_current_xact_id(), 1, 'message.publish',
-					 '00000000-0000-4000-8000-000000000001', 'messages',
+					 'call-one', 'messages',
 					 decode(repeat('00', 65537), 'hex'), 'insert', transaction_timestamp())
 				`)
 					.execute(),
@@ -212,11 +241,11 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 				session
 					.unsafe(`
 					insert into questpie_internal.pending_reaction_intents
-					(application_name, tenant_id, source_operation, principal_id, call_id,
+					(application_name, tenant_id, source_operation, principal_kind, principal_id, call_id,
 					 dispatch_slot, intent_id, reaction_name, input_digest, payload_bytes,
 					 transaction_id, accepted_at, state)
-					values ('collaboration', 'tenant-one', 'message.publish', 'principal-one',
-					 '00000000-0000-4000-8000-000000000001', 'messagePublished',
+					values ('collaboration', 'tenant-one', 'message.publish', 'user', 'principal-one',
+					 'call-one', 'messagePublished',
 					 '00000000-0000-4000-8000-000000000002', 'message.published',
 					 repeat('b', 64), decode(repeat('00', 262145), 'hex'),
 					 pg_current_xact_id(), transaction_timestamp(), 'ready')

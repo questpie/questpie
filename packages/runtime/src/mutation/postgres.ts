@@ -104,6 +104,7 @@ function inputScopeBytes(
 		application: string;
 		tenantId: string;
 		operation: string;
+		principalKind: string;
 		principalId: string;
 		callId: string;
 		dispatchSlot: string;
@@ -125,9 +126,8 @@ export function createPostgresMutationInvoker<View>(
 	return async (operation, callId, options) => {
 		if (
 			operation.binding.kind !== "mutation" ||
-			!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-				callId,
-			)
+			callId.length === 0 ||
+			callId.length > 256
 		)
 			throw new TypeError("Mutation call identity is invalid");
 		const encodedInput = encodeRuntimeCodec(
@@ -162,14 +162,15 @@ export function createPostgresMutationInvoker<View>(
 			await execute(session, "BEGIN ISOLATION LEVEL READ COMMITTED");
 			const owners = await query(
 				`INSERT INTO questpie_internal.mutation_call_receipts
-  (application_name, tenant_id, operation_name, principal_id, call_id, input_digest, transaction_id, operation_time, outcome)
-VALUES ($1, $2, $3, $4, $5, $6, pg_catalog.pg_current_xact_id(), pg_catalog.transaction_timestamp(), 'executing')
+  (application_name, tenant_id, operation_name, principal_kind, principal_id, call_id, input_digest, transaction_id, operation_time, outcome)
+VALUES ($1, $2, $3, $4, $5, $6, $7, pg_catalog.pg_current_xact_id(), pg_catalog.transaction_timestamp(), 'executing')
 ON CONFLICT DO NOTHING
 RETURNING transaction_id::text AS "transactionId", operation_time AS "operationTime"`,
 				[
 					input.application,
 					facts.tenant.id,
 					operation.binding.identity,
+					facts.principal.kind,
 					facts.principal.id,
 					callId,
 					inputDigest,
@@ -179,11 +180,12 @@ RETURNING transaction_id::text AS "transactionId", operation_time AS "operationT
 				const receipts = await query(
 					`SELECT input_digest AS "inputDigest", outcome, result_bytes AS "resultBytes"
 FROM questpie_internal.mutation_call_receipts
-WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND principal_id = $4 AND call_id = $5`,
+WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND principal_kind = $4 AND principal_id = $5 AND call_id = $6`,
 					[
 						input.application,
 						facts.tenant.id,
 						operation.binding.identity,
+						facts.principal.kind,
 						facts.principal.id,
 						callId,
 					],
@@ -271,18 +273,20 @@ VALUES ($1, pg_catalog.pg_current_xact_id(), 1, $2, $3, $4, $5, 'insert', $6)`,
 				application: input.application,
 				tenantId: facts.tenant.id,
 				operation: operation.binding.identity,
+				principalKind: facts.principal.kind,
 				principalId: facts.principal.id,
 				callId,
 				dispatchSlot: dispatch.slot,
 			});
 			await query(
 				`INSERT INTO questpie_internal.pending_reaction_intents
-  (application_name, tenant_id, source_operation, principal_id, call_id, dispatch_slot, intent_id, reaction_name, input_digest, payload_bytes, transaction_id, accepted_at, state)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.pg_current_xact_id(), $11, 'pending')`,
+  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, intent_id, reaction_name, input_digest, payload_bytes, transaction_id, accepted_at, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.pg_current_xact_id(), $12, 'pending')`,
 				[
 					input.application,
 					facts.tenant.id,
 					operation.binding.identity,
+					facts.principal.kind,
 					facts.principal.id,
 					callId,
 					dispatch.slot,
@@ -295,12 +299,13 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.pg_current_xact_id()
 			);
 			await query(
 				`UPDATE questpie_internal.mutation_call_receipts
-SET outcome = 'committed', result_bytes = $6, committed_at = $7
-WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND principal_id = $4 AND call_id = $5`,
+SET outcome = 'committed', result_bytes = $7, committed_at = $8
+WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND principal_kind = $4 AND principal_id = $5 AND call_id = $6`,
 				[
 					input.application,
 					facts.tenant.id,
 					operation.binding.identity,
+					facts.principal.kind,
 					facts.principal.id,
 					callId,
 					resultBytes,

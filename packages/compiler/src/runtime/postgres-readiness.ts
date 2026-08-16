@@ -2,9 +2,9 @@ import type { SQL } from "bun";
 
 import { digest } from "../canonical";
 import {
-	ensureInternalProtocolV2,
 	fingerprint,
 	type SchemaProjectionV1,
+	verifyInternalProtocolV2,
 } from "../schema";
 
 type RuntimeBuildReadiness = Readonly<{
@@ -128,20 +128,7 @@ export async function verifyPostgresRuntimeReadiness(
 		expected: RuntimeBuildReadiness;
 	}>,
 ): Promise<void> {
-	const session = await input.sql.reserve();
-	try {
-		const [database] = await session<
-			Readonly<{ name: string; pid: number }>[]
-		>`select current_database() as name, pg_catalog.pg_backend_pid() as pid`;
-		if (!database)
-			throw new TypeError("PostgreSQL readiness session is missing");
-		await ensureInternalProtocolV2(session, database.name, database.pid, {
-			lockTimeoutMs: 5_000,
-			statementTimeoutMs: 30_000,
-		});
-	} finally {
-		await session.release();
-	}
+	await verifyInternalProtocolV2(input.sql);
 	const committed = decodeCommittedMigrations(input.committedMigrations);
 	if (committed.head !== input.expected.migrationHead)
 		throw new TypeError(

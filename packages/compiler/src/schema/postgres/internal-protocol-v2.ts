@@ -22,15 +22,18 @@ const internalProtocolV2Sql = `CREATE TABLE questpie_internal.mutation_call_rece
   application_name text NOT NULL,
   tenant_id text NOT NULL,
   operation_name text NOT NULL,
+  principal_kind text NOT NULL,
   principal_id text NOT NULL,
-  call_id uuid NOT NULL,
+  call_id text NOT NULL,
   input_digest text NOT NULL,
   transaction_id xid8 NOT NULL,
   operation_time timestamptz NOT NULL,
   outcome text NOT NULL,
   result_bytes bytea,
   committed_at timestamptz,
-  PRIMARY KEY (application_name, tenant_id, operation_name, principal_id, call_id),
+  PRIMARY KEY (application_name, tenant_id, operation_name, principal_kind, principal_id, call_id),
+  CONSTRAINT mutation_receipt_principal_kind_known CHECK (principal_kind IN ('anonymous', 'service', 'user')),
+  CONSTRAINT mutation_receipt_call_id_bounded CHECK (length(call_id) BETWEEN 1 AND 256),
   CONSTRAINT mutation_receipt_input_digest_sha256 CHECK (input_digest ~ '^[0-9a-f]{64}$'),
   CONSTRAINT mutation_receipt_outcome_known CHECK (outcome IN ('executing', 'committed')),
   CONSTRAINT mutation_receipt_outcome_shape CHECK (
@@ -47,12 +50,13 @@ CREATE TABLE questpie_internal.committed_change_facts (
   transaction_id xid8 NOT NULL,
   sequence smallint NOT NULL,
   operation_name text NOT NULL,
-  call_id uuid NOT NULL,
+  call_id text NOT NULL,
   collection_name text NOT NULL,
   record_key_bytes bytea NOT NULL,
   kind text NOT NULL,
   committed_at timestamptz NOT NULL,
   PRIMARY KEY (application_name, transaction_id, sequence),
+  CONSTRAINT change_fact_call_id_bounded CHECK (length(call_id) BETWEEN 1 AND 256),
   CONSTRAINT change_fact_sequence_positive CHECK (sequence > 0),
   CONSTRAINT change_fact_kind_known CHECK (kind IN ('insert', 'update', 'delete')),
   CONSTRAINT change_fact_record_key_bytes_bounded CHECK (
@@ -64,8 +68,9 @@ CREATE TABLE questpie_internal.pending_reaction_intents (
   application_name text NOT NULL,
   tenant_id text NOT NULL,
   source_operation text NOT NULL,
+  principal_kind text NOT NULL,
   principal_id text NOT NULL,
-  call_id uuid NOT NULL,
+  call_id text NOT NULL,
   dispatch_slot text NOT NULL,
   intent_id uuid NOT NULL,
   reaction_name text NOT NULL,
@@ -76,8 +81,10 @@ CREATE TABLE questpie_internal.pending_reaction_intents (
   state text NOT NULL,
   PRIMARY KEY (application_name, intent_id),
   CONSTRAINT reaction_intent_origin_key UNIQUE (
-    application_name, tenant_id, source_operation, principal_id, call_id, dispatch_slot
+    application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot
   ),
+  CONSTRAINT reaction_intent_principal_kind_known CHECK (principal_kind IN ('anonymous', 'service', 'user')),
+  CONSTRAINT reaction_intent_call_id_bounded CHECK (length(call_id) BETWEEN 1 AND 256),
   CONSTRAINT reaction_intent_input_digest_sha256 CHECK (input_digest ~ '^[0-9a-f]{64}$'),
   CONSTRAINT reaction_intent_payload_bytes_bounded CHECK (
     octet_length(payload_bytes) <= 262144
@@ -106,7 +113,7 @@ const v2Columns = [
 	["committed_change_facts", "transaction_id", "xid8", true],
 	["committed_change_facts", "sequence", "smallint", true],
 	["committed_change_facts", "operation_name", "text", true],
-	["committed_change_facts", "call_id", "uuid", true],
+	["committed_change_facts", "call_id", "text", true],
 	["committed_change_facts", "collection_name", "text", true],
 	["committed_change_facts", "record_key_bytes", "bytea", true],
 	["committed_change_facts", "kind", "text", true],
@@ -114,8 +121,9 @@ const v2Columns = [
 	["mutation_call_receipts", "application_name", "text", true],
 	["mutation_call_receipts", "tenant_id", "text", true],
 	["mutation_call_receipts", "operation_name", "text", true],
+	["mutation_call_receipts", "principal_kind", "text", true],
 	["mutation_call_receipts", "principal_id", "text", true],
-	["mutation_call_receipts", "call_id", "uuid", true],
+	["mutation_call_receipts", "call_id", "text", true],
 	["mutation_call_receipts", "input_digest", "text", true],
 	["mutation_call_receipts", "transaction_id", "xid8", true],
 	[
@@ -130,8 +138,9 @@ const v2Columns = [
 	["pending_reaction_intents", "application_name", "text", true],
 	["pending_reaction_intents", "tenant_id", "text", true],
 	["pending_reaction_intents", "source_operation", "text", true],
+	["pending_reaction_intents", "principal_kind", "text", true],
 	["pending_reaction_intents", "principal_id", "text", true],
-	["pending_reaction_intents", "call_id", "uuid", true],
+	["pending_reaction_intents", "call_id", "text", true],
 	["pending_reaction_intents", "dispatch_slot", "text", true],
 	["pending_reaction_intents", "intent_id", "uuid", true],
 	["pending_reaction_intents", "reaction_name", "text", true],
@@ -143,6 +152,12 @@ const v2Columns = [
 ] as const;
 
 const v2Constraints = [
+	[
+		"committed_change_facts",
+		"change_fact_call_id_bounded",
+		"c",
+		"CHECK (length(call_id) >= 1 AND length(call_id) <= 256)",
+	],
 	[
 		"committed_change_facts",
 		"change_fact_kind_known",
@@ -171,7 +186,19 @@ const v2Constraints = [
 		"mutation_call_receipts",
 		"mutation_call_receipts_pkey",
 		"p",
-		"PRIMARY KEY (application_name, tenant_id, operation_name, principal_id, call_id)",
+		"PRIMARY KEY (application_name, tenant_id, operation_name, principal_kind, principal_id, call_id)",
+	],
+	[
+		"mutation_call_receipts",
+		"mutation_receipt_call_id_bounded",
+		"c",
+		"CHECK (length(call_id) >= 1 AND length(call_id) <= 256)",
+	],
+	[
+		"mutation_call_receipts",
+		"mutation_receipt_principal_kind_known",
+		"c",
+		"CHECK (principal_kind = ANY (ARRAY['anonymous'::text, 'service'::text, 'user'::text]))",
 	],
 	[
 		"mutation_call_receipts",
@@ -201,7 +228,19 @@ const v2Constraints = [
 		"pending_reaction_intents",
 		"reaction_intent_origin_key",
 		"u",
-		"UNIQUE (application_name, tenant_id, source_operation, principal_id, call_id, dispatch_slot)",
+		"UNIQUE (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot)",
+	],
+	[
+		"pending_reaction_intents",
+		"reaction_intent_call_id_bounded",
+		"c",
+		"CHECK (length(call_id) >= 1 AND length(call_id) <= 256)",
+	],
+	[
+		"pending_reaction_intents",
+		"reaction_intent_principal_kind_known",
+		"c",
+		"CHECK (principal_kind = ANY (ARRAY['anonymous'::text, 'service'::text, 'user'::text]))",
 	],
 	[
 		"pending_reaction_intents",
@@ -244,7 +283,7 @@ const v2Indexes = [
 		"btree",
 		true,
 		true,
-		"CREATE UNIQUE INDEX mutation_call_receipts_pkey ON questpie_internal.mutation_call_receipts USING btree (application_name, tenant_id, operation_name, principal_id, call_id)",
+		"CREATE UNIQUE INDEX mutation_call_receipts_pkey ON questpie_internal.mutation_call_receipts USING btree (application_name, tenant_id, operation_name, principal_kind, principal_id, call_id)",
 	],
 	[
 		"pending_reaction_intents",
@@ -252,7 +291,7 @@ const v2Indexes = [
 		"btree",
 		true,
 		false,
-		"CREATE UNIQUE INDEX reaction_intent_origin_key ON questpie_internal.pending_reaction_intents USING btree (application_name, tenant_id, source_operation, principal_id, call_id, dispatch_slot)",
+		"CREATE UNIQUE INDEX reaction_intent_origin_key ON questpie_internal.pending_reaction_intents USING btree (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot)",
 	],
 	[
 		"pending_reaction_intents",
@@ -310,6 +349,23 @@ async function protocolRow(
 		where singleton = true
 	`;
 	return protocol;
+}
+
+export async function verifyInternalProtocolV2(sql: SQL): Promise<void> {
+	const protocol = await protocolRow(sql);
+	if (
+		protocol?.version !== 2 ||
+		protocol.checksum !== internalProtocolV2Checksum
+	)
+		return fail(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			"questpie_internal protocol v2 is not installed",
+		);
+	await verifyInternalProtocolCatalog(sql, internalProtocolV2Catalog, {
+		version: 2,
+		checksum: internalProtocolV2Checksum,
+	});
 }
 
 export async function ensureInternalProtocolV2(
