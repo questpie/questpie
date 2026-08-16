@@ -7,7 +7,7 @@ export type {
 } from "./cursor";
 
 export { DataQueryExecutionError, executePostgresQuery } from "./query";
-export { decodeRelationalScalar } from "./scalar";
+export { decodeRelationalScalar, decodeRelationalScalarCodec } from "./scalar";
 export { createPostgresContextBootstrap } from "./bootstrap";
 export type {
 	DataQueryBindingV1,

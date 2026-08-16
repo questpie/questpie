@@ -196,6 +196,23 @@ test("reconstructs and deeply freezes a linked Data Query", () => {
 	expect(query.parameters).toHaveLength(2);
 });
 
+test("rejects an out-of-range scalar codec in a linked Data Query", () => {
+	const input = artifacts();
+	const list = input.collectionOperations.operations[1]!;
+	const parameter = list.dataQuery!.parameters[1]!;
+	if (parameter.kind !== "scalar" || parameter.codec.kind !== "integer")
+		throw new TypeError("fixture has no integer scalar parameter");
+	parameter.codec.minimum = -2_147_483_649;
+	list.dataQueryDigest = digest(
+		"questpie-data-query-template-v1",
+		list.dataQuery,
+	);
+
+	expect(() => linkCollectionMutationPrograms(input)).toThrow(
+		"bounds are invalid",
+	);
+});
+
 test("rejects an unknown envelope member", () => {
 	const input = artifacts();
 	Object.assign(input.collectionOperations, { collections: [] });

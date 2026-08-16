@@ -1,8 +1,8 @@
+import { decodeRelationalScalarCodec } from "../relational";
 import { canonicalMutationBytes } from "./canonical";
 import {
 	decodePostgresExecutionFact,
 	decodePostgresLiteralCodec,
-	decodePostgresScalarCodec,
 	decodePostgresStatement as statement,
 	postgresTypeForScalarCodec,
 } from "./postgres-program-codec";
@@ -106,7 +106,7 @@ function parameters(
 				["position", "postgresType", "kind", "path", "codec"],
 				`${label} parameter ${index}`,
 			);
-			const decodedCodec = decodePostgresScalarCodec(
+			const decodedCodec = decodeRelationalScalarCodec(
 				source.codec,
 				`${label} parameter ${index} codec`,
 			);
@@ -260,7 +260,7 @@ function results(
 		return Object.freeze({
 			path: path(source.path, `${label} result ${index} path`),
 			column,
-			codec: decodePostgresScalarCodec(
+			codec: decodeRelationalScalarCodec(
 				source.codec,
 				`${label} result ${index} codec`,
 			),
@@ -463,7 +463,7 @@ function createPlan(
 				field.path,
 				`${operation.identity} candidate field ${index} path`,
 			),
-			codec: decodePostgresScalarCodec(
+			codec: decodeRelationalScalarCodec(
 				field.codec,
 				`${operation.identity} candidate field ${index} codec`,
 			),

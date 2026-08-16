@@ -1,3 +1,5 @@
+import { decodeRelationalScalarCodec } from "../relational";
+
 type RecordValue = Readonly<Record<string, unknown>>;
 
 const digestPattern = /^[0-9a-f]{64}$/;
@@ -59,50 +61,8 @@ function reconstructFrozen(value: unknown): unknown {
 	return value;
 }
 
-function nullableInteger(value: unknown, label: string): void {
-	if (value !== null && !Number.isSafeInteger(value)) fail(label);
-}
-
 function codec(value: unknown, label: string): void {
-	const item = record(value, label);
-	if (["uuid", "boolean", "date"].includes(String(item.kind))) {
-		exact(item, ["kind"], label);
-		return;
-	}
-	if (item.kind === "text") {
-		exact(item, ["kind", "minLength", "maxLength", "collation"], label);
-		nullableInteger(item.minLength, `${label} minLength`);
-		nullableInteger(item.maxLength, `${label} maxLength`);
-		if (item.collation !== "questpie.binary") fail(`${label} collation`);
-		return;
-	}
-	if (item.kind === "integer") {
-		exact(item, ["kind", "minimum", "maximum"], label);
-		nullableInteger(item.minimum, `${label} minimum`);
-		nullableInteger(item.maximum, `${label} maximum`);
-		return;
-	}
-	if (item.kind === "bigint") {
-		exact(item, ["kind", "minimum", "maximum"], label);
-		for (const key of ["minimum", "maximum"])
-			if (item[key] !== null && typeof item[key] !== "string") fail(label);
-		return;
-	}
-	if (item.kind === "numeric") {
-		exact(item, ["kind", "precision", "scale"], label);
-		if (
-			!Number.isSafeInteger(item.precision) ||
-			!Number.isSafeInteger(item.scale)
-		)
-			fail(label);
-		return;
-	}
-	if (item.kind === "timestamp") {
-		exact(item, ["kind", "withTimezone"], label);
-		if (typeof item.withTimezone !== "boolean") fail(label);
-		return;
-	}
-	fail(`${label} kind`);
+	decodeRelationalScalarCodec(value, label);
 }
 
 function parameter(value: unknown, label: string): void {
