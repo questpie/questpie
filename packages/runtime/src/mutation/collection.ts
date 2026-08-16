@@ -59,8 +59,13 @@ function inputPaths(
 	prefix: string[] = [],
 ): Path[] {
 	const source = record(value, label);
+	const prototype = Object.getPrototypeOf(source);
+	if (prototype !== null && prototype !== Object.prototype)
+		throw new TypeError(`${label} must have exactly the compiled Fields`);
 	const paths: Path[] = [];
-	for (const key of Object.keys(source).sort()) {
+	const keys = Object.keys(source).sort();
+	if (keys.length === 0 && prefix.length > 0) return [prefix];
+	for (const key of keys) {
 		const next = [...prefix, key];
 		const child = source[key];
 		if (

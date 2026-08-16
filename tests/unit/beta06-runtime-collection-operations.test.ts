@@ -429,6 +429,16 @@ test("rejects widened requests, unknown caller Fields, and invalid caller scalar
 		}),
 	).rejects.toThrow("exactly the compiled Fields");
 	await expect(
+		data.records.create({
+			input: { title: "Title", body: "Body", smuggled: {} },
+		}),
+	).rejects.toThrow("exactly the compiled Fields");
+	await expect(
+		data.records.create({
+			input: { title: "Title", body: "Body", smuggled: new Map() },
+		}),
+	).rejects.toThrow("exactly the compiled Fields");
+	await expect(
 		data.records.create({ input: { title: "", body: "Body" } }),
 	).rejects.toThrow("invalid relational scalar");
 	expect(calls).toBe(0);
