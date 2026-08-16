@@ -88,7 +88,7 @@ describe("BETA-01 generated contract", () => {
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
 			"internal/application-346fcckz.js",
-			"internal/application-hjw1s6se.js",
+			"internal/application-76r2a4tk.js",
 			"internal/application-ts7bt2g5.js",
 			"internal/application-ymctkg35.js",
 			"internal/application.d.ts",
