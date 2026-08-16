@@ -252,6 +252,23 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 				`)
 					.execute(),
 			).rejects.toMatchObject({ errno: "23514" });
+
+			await session.unsafe(`
+				insert into questpie_internal.mutation_call_receipts
+				(application_name, tenant_id, operation_name, principal_kind, principal_id, call_id,
+				 input_digest, transaction_id, operation_time, outcome)
+				values
+				('collaboration', 'tenant-one', 'message.publish', 'user', 'shared-principal',
+				 'stable-call-id', repeat('c', 64), pg_current_xact_id(), transaction_timestamp(), 'executing'),
+				('collaboration', 'tenant-one', 'message.publish', 'service', 'shared-principal',
+				 'stable-call-id', repeat('c', 64), pg_current_xact_id(), transaction_timestamp(), 'executing')
+			`);
+			const [scoped] = await session<
+				{ receipts: number }[]
+			>`select count(*)::integer as receipts
+			  from questpie_internal.mutation_call_receipts
+			  where principal_id = 'shared-principal' and call_id = 'stable-call-id'`;
+			expect(scoped).toEqual({ receipts: 2 });
 		} finally {
 			session.release();
 		}

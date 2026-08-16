@@ -32,7 +32,7 @@ are only transaction-joined acceptance records needed by those later slices.
 
 ## Public seam
 
-The only new authored Operation is the already accepted generated factory:
+The only new network Operation is the already accepted generated factory:
 
 ```ts
 export const publishMessage = defineMutation({
@@ -82,6 +82,16 @@ Policy programs, dispatch slots, limits, fixed lifecycle, and executable
 binding. Transaction-bound generated Context methods execute those closed
 programs.
 
+Those facts must have declarative owners outside the opaque handler. The
+accepted `defineCollectionOperations(collection, body)` shorthand owns the
+normalization, server-value, selection, and Policy-aware Collection operation
+programs used by this handler. An authored `defineReaction` contract owns the
+`messagePublished` dispatch identity and payload codec. BETA-06 compiles and
+persists only its pending intent; BETA-08 still owns Reaction execution,
+attempts, leases, retry, and the handler's durable runtime. Neither compiler
+nor Runtime may infer these facts from the Mutation name, source syntax, or the
+collaboration fixture.
+
 ## Transaction and receipt algorithm
 
 The PostgreSQL owner uses one pinned `READ COMMITTED` transaction. It is not a
@@ -91,7 +101,7 @@ retry loop.
 1. Decode exact input and compute its canonical digest before SQL.
 2. Resolve Context and Operation admission.
 3. Insert an `executing` receipt keyed by application, Tenant, Operation,
-   Principal, and call ID with `ON CONFLICT DO NOTHING RETURNING`.
+   Principal kind and ID, and call ID with `ON CONFLICT DO NOTHING RETURNING`.
 4. A conflict loser waits on the unique index. Its next statement sees the
    committed receipt, rejects a different input digest, or returns the exact
    stored result bytes.
