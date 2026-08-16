@@ -1,13 +1,16 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
-import { compileApplication } from "@questpie/compiler";
+import { compileApplication, createMigrationPlan } from "@questpie/compiler";
 
 import { projectLiveQueryCompilation } from "../../packages/compiler/src/live-query";
+import { renderMigrationSql } from "../../packages/compiler/src/schema/migration-renderer";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
+
+const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 const query = {
 	identity: "query:messages.page",
@@ -225,11 +228,7 @@ test("keeps a Query with declared raw reads one-shot only", () => {
 test("emits Message watchability and inventories every live-query artifact", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-live-query-"));
 	try {
-		await cp(
-			resolve(import.meta.dir, "../../fixtures/collaboration"),
-			temporary,
-			{ recursive: true },
-		);
+		await cp(fixtureRoot, temporary, { recursive: true });
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 			outputDirectory: join(temporary, ".questpie/generated"),
@@ -239,6 +238,9 @@ test("emits Message watchability and inventories every live-query artifact", asy
 		);
 		const runtimeBuild = JSON.parse(
 			compilation.generatedFiles["runtime-build.json"]!,
+		);
+		const schema = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"]!,
 		);
 		const message = watchability.queries.find(
 			(entry: { query: string }) => entry.query === "query:messages.page",
@@ -263,6 +265,49 @@ test("emits Message watchability and inventories every live-query artifact", asy
 		expect(structural.relations).toEqual([
 			"collection:messages/relation:author",
 		]);
+		expect(schema.changeCapture).toMatchObject({
+			version: 1,
+			applicationName: "collaboration",
+			collections: [
+				expect.objectContaining({ identity: "collection:channels" }),
+				expect.objectContaining({ identity: "collection:companies" }),
+				expect.objectContaining({ identity: "collection:memberships" }),
+				expect.objectContaining({ identity: "collection:messages" }),
+				expect.objectContaining({ identity: "collection:spaces" }),
+			],
+		});
+		expect(schema.changeCapture.collections).not.toContainEqual(
+			expect.objectContaining({ identity: "collection:messageEvents" }),
+		);
+		const baseSchema = JSON.parse(
+			await readFile(
+				resolve(
+					fixtureRoot,
+					"questpie/migrations/000003_publish-message-transaction/target-schema.json",
+				),
+				"utf8",
+			),
+		);
+		const migration = createMigrationPlan({
+			baseSchema,
+			targetSchema: schema,
+			baseMigration: "000003_publish-message-transaction",
+			slug: "watch-message-query",
+		});
+		expect(migration.status).toBe("planned");
+		if (migration.status !== "planned") throw new Error("expected migration");
+		expect(migration.plan.steps).toEqual([
+			expect.objectContaining({
+				kind: "addChangeCapture",
+				targetIdentity: "application:collaboration/changeCapture",
+			}),
+		]);
+		const sql = renderMigrationSql(migration.plan, schema, baseSchema);
+		expect(sql).toContain(
+			"AFTER INSERT OR UPDATE OR DELETE ON collaboration.messages",
+		);
+		expect(sql).toContain("'collaboration', 'collection:messages', 'id'");
+		expect(sql).not.toContain("collaboration.message_events");
 		expect(message).toMatchObject({
 			contractDigest:
 				"0c372ac93ba55280f20ec7646d408fdd0edf5c4f5717b92201432693da2ad94f",

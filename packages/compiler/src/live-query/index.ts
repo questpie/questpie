@@ -4,6 +4,10 @@ import {
 	contentDigest,
 	digest,
 } from "../canonical";
+import {
+	projectPostgresChangeCapture,
+	type SchemaProjectionV1,
+} from "../schema";
 import type { NormalizedResource } from "../types";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
@@ -408,4 +412,57 @@ export function projectLiveQueryCompilation(
 			limits: digest("questpie:p4:limitsProjection:v1", limits),
 		},
 	};
+}
+
+export function projectLiveQueryChangeCapture(
+	schema: SchemaProjectionV1,
+	projection: ReturnType<typeof projectLiveQueryCompilation>,
+) {
+	const reactiveIdentities = new Set<string>();
+	for (const query of projection.artifacts["query-watchability.json"]
+		.queries as readonly Readonly<{
+		watchable: boolean;
+		possibleObservationSlots: readonly Readonly<{
+			kind: string;
+			collections?: readonly string[];
+		}>[];
+	}>[])
+		if (query.watchable)
+			for (const slot of query.possibleObservationSlots)
+				if (slot.kind === "structuralQuery")
+					for (const identity of slot.collections ?? [])
+						reactiveIdentities.add(identity);
+	return projectPostgresChangeCapture({
+		applicationName: schema.application.name,
+		postgresSchema: schema.application.postgresSchema,
+		collections: schema.collections
+			.filter((collection) =>
+				reactiveIdentities.has(String(collection.identity)),
+			)
+			.map((collection) => {
+				const constraints = collection.constraints as readonly JsonRecord[];
+				const fields = collection.fields as readonly JsonRecord[];
+				const primary = constraints.find(
+					(constraint) => constraint.kind === "primaryKey",
+				);
+				if (!primary || !Array.isArray(primary.fields))
+					throw new TypeError(
+						`reactive Collection ${String(collection.identity)} has no primary key`,
+					);
+				return {
+					identity: String(collection.identity),
+					postgresName: String(collection.postgresName),
+					keyColumns: primary.fields.map((identity) => {
+						const field = fields.find(
+							(candidate) => candidate.identity === identity,
+						);
+						if (!field)
+							throw new TypeError(
+								`reactive Collection key ${String(identity)} is missing`,
+							);
+						return String(field.postgresName);
+					}),
+				};
+			}),
+	});
 }

@@ -13,7 +13,10 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
-import { projectLiveQueryCompilation } from "./live-query";
+import {
+	projectLiveQueryChangeCapture,
+	projectLiveQueryCompilation,
+} from "./live-query";
 import {
 	lowerPostgresCollectionOperationPlans,
 	projectCollectionOperationSets,
@@ -96,11 +99,11 @@ export async function createArtifacts(
 ): Promise<Readonly<Record<string, string>>> {
 	const baseManifest = projectManifest(input.configuration, input.resources);
 	const executionComposition = projectExecutionComposition(input.resources);
-	const schema = baseManifest.schema;
+	const baseSchema = baseManifest.schema as SchemaProjectionV1;
 	const operationSets = projectCollectionOperationSets({
 		exports: input.evaluatedExports,
 		resources: input.resources,
-		schema,
+		schema: baseSchema,
 		data: baseManifest.data,
 	});
 	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
@@ -126,7 +129,7 @@ export async function createArtifacts(
 	const relational = projectRelationalCompilation({
 		exports: input.evaluatedExports,
 		resources: input.resources,
-		schema,
+		schema: baseSchema,
 		data: manifest.data,
 	});
 	const liveQuery = projectLiveQueryCompilation({
@@ -135,6 +138,12 @@ export async function createArtifacts(
 		dataProjection: manifest.data as Readonly<Record<string, unknown>>,
 		policyProjection: relational.policy,
 		queryProjection: relational.query,
+	});
+	const changeCapture = projectLiveQueryChangeCapture(baseSchema, liveQuery);
+	const schema = Object.freeze({ ...baseSchema, changeCapture });
+	const finalManifest: Readonly<Record<string, unknown>> = Object.freeze({
+		...manifest,
+		schema,
 	});
 	const mutationDeclarations = projectMutationGeneratedContract(
 		operationSets.programs,
@@ -354,7 +363,7 @@ export async function createArtifacts(
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
 			input.resources,
-			manifest.data,
+			finalManifest.data,
 			schema,
 			input.configuration.source.root,
 			relational.declarations,
@@ -373,7 +382,7 @@ export async function createArtifacts(
 		"context-projection.json": canonicalBytes(executionComposition.context),
 		"execution-composition-explain.json": canonicalBytes(executionExplanation),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
-		"manifest.json": canonicalBytes(manifest),
+		"manifest.json": canonicalBytes(finalManifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),

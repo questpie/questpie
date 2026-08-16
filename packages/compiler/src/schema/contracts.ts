@@ -32,6 +32,8 @@ export type MigrationStepKindV1 =
 	| "addConstraint"
 	| "addRelation"
 	| "addIndex"
+	| "addChangeCapture"
+	| "dropChangeCapture"
 	| "dropIndex"
 	| "dropRelation"
 	| "dropConstraint"
