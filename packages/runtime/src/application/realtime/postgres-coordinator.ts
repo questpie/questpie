@@ -284,6 +284,7 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 			applicationName: input.applicationName,
 			deploymentDigest: input.deploymentDigest,
 		});
+		await retention.prune({ applicationName: input.applicationName });
 	};
 	const wake = createPostgresReconciliationWake({
 		reconcile,

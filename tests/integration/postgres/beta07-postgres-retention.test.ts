@@ -4,6 +4,12 @@ import { SQL } from "bun";
 
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import { ensureInternalProtocolV3 } from "../../../packages/compiler/src/schema";
+import { createPostgresLiveQueryCoordinator } from "../../../packages/runtime/src/application/realtime";
+import {
+	reconcilePostgresChangeLedger,
+	type LinkedLiveQueryProgramV1,
+	type PostgresWakeTickSource,
+} from "../../../packages/runtime/src/live-query";
 import {
 	createPostgresLiveQueryRetention,
 	type RetainedLiveQueryBinding,
@@ -11,6 +17,7 @@ import {
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const concurrentDatabase = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
+const snapshotDatabase = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
 const hmacKey = new Uint8Array(32).fill(29);
@@ -26,6 +33,20 @@ const binding = {
 } as const;
 const resultBytes = new TextEncoder().encode('{"messages":[]}\n');
 const dependencyPlanBytes = new TextEncoder().encode('{"tokens":[]}\n');
+const runtimeProgram = {
+	limits: { fanoutPerBatch: 1_024 },
+} as LinkedLiveQueryProgramV1;
+
+function dormantTicks(): PostgresWakeTickSource {
+	return {
+		armInterval() {
+			return () => {};
+		},
+		armDeadline() {
+			return () => {};
+		},
+	};
+}
 
 async function ensure(sql: SQL): Promise<void> {
 	const [current] = await sql<
@@ -52,6 +73,7 @@ afterAll(async () => {
 	await database?.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	await database?.close({ timeout: 0 });
 	await concurrentDatabase?.close({ timeout: 0 });
+	await snapshotDatabase?.close({ timeout: 0 });
 });
 
 describe.skipIf(!database)(
@@ -185,48 +207,158 @@ describe.skipIf(!database)(
 		);
 
 		postgresTest(
-			"prunes ledger facts only below the minimum acknowledged consumer xid8 horizon",
+			"retains below an unrelated PostgreSQL snapshot, then prunes after every consumer advances",
 			async () => {
 				const retention = createPostgresLiveQueryRetention({
 					sql: database!,
 					hmacKey,
 				});
-				const [fact] = await database!<
-					{ factIdentity: string; transactionId: string }[]
-				>`
+				const snapshotStarted = Promise.withResolvers<string>();
+				const releaseSnapshot = Promise.withResolvers<void>();
+				const unrelatedSnapshot = snapshotDatabase!.begin(
+					"isolation level repeatable read",
+					async (transaction) => {
+						const [identity] = await transaction<
+							{ transactionId: string }[]
+						>`select pg_catalog.pg_current_xact_id()::text as "transactionId"`;
+						await transaction`select pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot())`;
+						snapshotStarted.resolve(identity!.transactionId);
+						await releaseSnapshot.promise;
+					},
+				);
+				const snapshotTransactionId = await snapshotStarted.promise;
+				try {
+					const [fact] = await database!<
+						{ factIdentity: string; transactionId: string }[]
+					>`
 			insert into questpie_internal.change_ledger
 			(application_name, transaction_id, collection_identity, change_kind, conservative)
-			values ('collaboration', pg_current_xact_id(), 'messages', 'collection', true)
+			values ('collaboration', pg_current_xact_id(), 'collection:messages', 'collection', true)
 			returning fact_identity::text as "factIdentity", transaction_id::text as "transactionId"
 		`;
-				await database!`
-			insert into questpie_internal.reconciliation_consumers
-			(application_name, consumer_id, xid_horizon, acknowledged_at)
-			values
-			('collaboration', 'primary', pg_snapshot_xmin(pg_current_snapshot()), transaction_timestamp()),
-			('collaboration', 'lagging', ${fact!.transactionId}::xid8, transaction_timestamp())
-		`;
-				await database!`
-			insert into questpie_internal.processed_change_facts
-			(application_name, consumer_id, fact_identity, processed_at)
-			values ('collaboration', 'primary', ${fact!.factIdentity}::uuid, transaction_timestamp())
-		`;
+					expect(BigInt(fact!.transactionId)).toBeGreaterThan(
+						BigInt(snapshotTransactionId),
+					);
+					for (const consumer of ["primary", "lagging"])
+						expect(
+							await reconcilePostgresChangeLedger({
+								sql: database!,
+								application: "collaboration",
+								consumer,
+								apply: () => undefined,
+							}),
+						).toMatchObject({
+							priorHorizon: snapshotTransactionId,
+							nextHorizon: snapshotTransactionId,
+							facts: [],
+						});
 
-				expect(
-					await retention.prune({ applicationName: "collaboration" }),
-				).toEqual({ retainedResults: 0, ledgerFacts: 0 });
-				await database!`
-			update questpie_internal.reconciliation_consumers
-			set xid_horizon = pg_snapshot_xmin(pg_current_snapshot()), acknowledged_at = transaction_timestamp()
-			where application_name = 'collaboration' and consumer_id = 'lagging'
-		`;
-				expect(
-					await retention.prune({ applicationName: "collaboration" }),
-				).toEqual({ retainedResults: 0, ledgerFacts: 1 });
-				const [processed] = await database!<{ count: number }[]>`
+					expect(
+						await retention.prune({ applicationName: "collaboration" }),
+					).toEqual({ retainedResults: 0, ledgerFacts: 0 });
+					const [retained] = await database!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.change_ledger
+					where fact_identity = ${fact!.factIdentity}::uuid
+				`;
+					expect(retained).toEqual({ count: 1 });
+
+					releaseSnapshot.resolve();
+					await unrelatedSnapshot;
+					for (const consumer of ["primary", "lagging"])
+						expect(
+							(
+								await reconcilePostgresChangeLedger({
+									sql: database!,
+									application: "collaboration",
+									consumer,
+									apply: () => undefined,
+								})
+							).facts.map(({ factIdentity }) => factIdentity),
+						).toEqual([fact!.factIdentity]);
+					expect(
+						await retention.prune({ applicationName: "collaboration" }),
+					).toEqual({ retainedResults: 0, ledgerFacts: 1 });
+					const [processed] = await database!<{ count: number }[]>`
 			select count(*)::integer as count from questpie_internal.processed_change_facts
 		`;
-				expect(processed).toEqual({ count: 0 });
+					expect(processed).toEqual({ count: 0 });
+
+					const [controlFact] = await database!<{ factIdentity: string }[]>`
+					insert into questpie_internal.change_ledger
+					(application_name, transaction_id, collection_identity, change_kind, conservative)
+					values ('collaboration', pg_current_xact_id(), 'collection:messages', 'collection', true)
+					returning fact_identity::text as "factIdentity"
+				`;
+					for (const consumer of ["primary", "lagging"])
+						await reconcilePostgresChangeLedger({
+							sql: database!,
+							application: "collaboration",
+							consumer,
+							apply: () => undefined,
+						});
+					expect(
+						await retention.prune({ applicationName: "collaboration" }),
+					).toEqual({ retainedResults: 0, ledgerFacts: 1 });
+					const [control] = await database!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.change_ledger
+					where fact_identity = ${controlFact!.factIdentity}::uuid
+				`;
+					expect(control).toEqual({ count: 0 });
+				} finally {
+					releaseSnapshot.resolve();
+					await unrelatedSnapshot.catch(() => undefined);
+				}
+			},
+			15_000,
+		);
+
+		postgresTest(
+			"runs PostgreSQL-clock retention pruning from the production wake scan",
+			async () => {
+				const retention = createPostgresLiveQueryRetention({
+					sql: database!,
+					hmacKey,
+				});
+				const result = completeResult();
+				await retention.acknowledge({
+					...result,
+					resumeToken: retention.mint(result),
+				});
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.retained_live_query_results DISABLE TRIGGER retained_live_query_result_clock",
+				);
+				await database!`
+					update questpie_internal.retained_live_query_results
+					set created_at = transaction_timestamp() - interval '25 hours',
+					    expires_at = transaction_timestamp() - interval '1 hour'
+					where application_name = 'collaboration'
+				`;
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.retained_live_query_results ENABLE TRIGGER retained_live_query_result_clock",
+				);
+
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: runtimeProgram,
+					sql: database!,
+					hmacKey,
+					applicationName: "collaboration",
+					deploymentDigest: binding.deploymentDigest,
+					wireVersion: binding.wireVersion,
+					tickSource: dormantTicks(),
+				});
+				try {
+					await coordinator.start();
+					const [remaining] = await database!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.retained_live_query_results
+					where application_name = 'collaboration'
+				`;
+					expect(remaining).toEqual({ count: 0 });
+				} finally {
+					await coordinator.drain();
+				}
 			},
 		);
 	},
