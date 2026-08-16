@@ -1,5 +1,15 @@
 import type { PreparedOperation } from "../operation";
 
+export { linkCollectionMutationPrograms } from "./program";
+export type {
+	CollectionOperationProgramV1,
+	FieldNormalizerProgramV1,
+	LinkedCollectionMutationProgramsV1,
+	LinkedCollectionOperationProgramV1,
+	MutationPolicyLinkV1,
+	ServerValueProgramV1,
+} from "./program";
+
 export type MutationCallOptions = Readonly<{
 	signal?: AbortSignal;
 	deadline?: number;
