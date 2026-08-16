@@ -13,6 +13,10 @@ import type {
 	DecodedRealtimeQueryV1,
 	DecodedRealtimeWireContractV1,
 } from "./contract";
+import type {
+	LiveQueryCoordinator,
+	LiveQueryCoordinatorDelivery,
+} from "./coordinator";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 type WireRecord = Readonly<Record<string, unknown>>;
@@ -22,6 +26,15 @@ type FailureCode =
 	| "RESOURCE_LIMIT"
 	| "TRANSPORT_FAILED"
 	| "VERSION_INCOMPATIBLE";
+
+class CarrierEvaluationFailure extends Error {
+	readonly code: FailureCode;
+
+	constructor(code: FailureCode) {
+		super(code);
+		this.code = code;
+	}
+}
 
 export type RealtimeCarrierEvaluation<Context> = Readonly<{
 	principal: Principal;
@@ -278,6 +291,7 @@ export function createRealtimeCarrier<Context>(
 			input: RealtimeCarrierEvaluation<Context>,
 		): Promise<RealtimeCarrierEvaluationResult>;
 		onObservedPlan?(input: RealtimeCarrierObservedPlan): MaybePromise<void>;
+		coordinator?: LiveQueryCoordinator<Context>;
 	}>,
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
@@ -287,6 +301,7 @@ export function createRealtimeCarrier<Context>(
 		const binding = session.bindings.get(bindingId);
 		if (!binding) return;
 		binding.controller.abort(new DOMException("Watch closed", "AbortError"));
+		input.coordinator?.close(session.scopeId, bindingId);
 		session.bindings.delete(bindingId);
 		const remaining = (activeByPrincipal.get(session.principalKey) ?? 1) - 1;
 		if (remaining === 0) activeByPrincipal.delete(session.principalKey);
@@ -315,36 +330,77 @@ export function createRealtimeCarrier<Context>(
 		binding: Binding,
 		context: Context,
 		queryInput: unknown,
-		reset: boolean,
+		resumeToken: string | null,
 	) => {
 		try {
-			const evaluation = await input.evaluate({
-				principal: session.principal,
-				context,
-				query: binding.query.identity,
-				input: queryInput,
-				signal: binding.controller.signal,
-			});
+			const evaluateComplete = async () => {
+				const evaluation = await input.evaluate({
+					principal: session.principal,
+					context,
+					query: binding.query.identity,
+					input: queryInput,
+					signal: binding.controller.signal,
+				});
+				let payload: unknown;
+				try {
+					payload = encodeRuntimeCodec(
+						binding.query.output,
+						evaluation.result,
+						"$result",
+					);
+				} catch (error) {
+					if (!(error instanceof RuntimeCodecError)) throw error;
+					throw new CarrierEvaluationFailure("OUTPUT_INVALID");
+				}
+				if (
+					Buffer.byteLength(JSON.stringify(payload)) >
+					input.contract.limits.resultBytes
+				)
+					throw new CarrierEvaluationFailure("RESOURCE_LIMIT");
+				return Object.freeze({
+					payload,
+					observedPlan: evaluation.observedPlan,
+				});
+			};
+			const publish = async (
+				delivery: LiveQueryCoordinatorDelivery,
+			): Promise<boolean> => {
+				await input.onObservedPlan?.({
+					scopeId: session.scopeId,
+					bindingId: binding.id,
+					query: binding.query.identity,
+					plan: delivery.observedPlan,
+				});
+				binding.observedPlan = delivery.observedPlan;
+				binding.token = delivery.resumeToken;
+				return session.enqueue({
+					protocol: input.contract.protocol,
+					kind: "delivery",
+					bindingId: binding.id,
+					query: binding.query.identity,
+					delivery: delivery.delivery,
+					resetReason: delivery.resetReason,
+					payload: delivery.payload,
+					resumeToken: delivery.resumeToken,
+				});
+			};
+			const coordinated = input.coordinator
+				? await input.coordinator.open({
+						scopeId: session.scopeId,
+						bindingId: binding.id,
+						principal: session.principal,
+						context,
+						query: binding.query.identity,
+						input: queryInput,
+						resumeToken,
+						signal: binding.controller.signal,
+						evaluate: evaluateComplete,
+						publish,
+					})
+				: undefined;
+			const evaluation = coordinated ?? (await evaluateComplete());
 			if (binding.controller.signal.aborted) return;
-			let payload: unknown;
-			try {
-				payload = encodeRuntimeCodec(
-					binding.query.output,
-					evaluation.result,
-					"$result",
-				);
-			} catch (error) {
-				if (!(error instanceof RuntimeCodecError)) throw error;
-				frameFailure(session, binding, "OUTPUT_INVALID");
-				return;
-			}
-			if (
-				Buffer.byteLength(JSON.stringify(payload)) >
-				input.contract.limits.resultBytes
-			) {
-				frameFailure(session, binding, "RESOURCE_LIMIT");
-				return;
-			}
+			const token = coordinated?.resumeToken ?? crypto.randomUUID();
 			await input.onObservedPlan?.({
 				scopeId: session.scopeId,
 				bindingId: binding.id,
@@ -352,24 +408,31 @@ export function createRealtimeCarrier<Context>(
 				plan: evaluation.observedPlan,
 			});
 			binding.observedPlan = evaluation.observedPlan;
-			const token = crypto.randomUUID();
 			binding.token = token;
 			session.enqueue({
 				protocol: input.contract.protocol,
 				kind: "delivery",
 				bindingId: binding.id,
 				query: binding.query.identity,
-				delivery: reset ? "reset" : "initial",
-				resetReason: reset ? "resume-unavailable" : null,
-				payload,
+				delivery:
+					coordinated?.delivery ?? (resumeToken === null ? "initial" : "reset"),
+				resetReason:
+					coordinated !== undefined
+						? coordinated.resetReason
+						: resumeToken === null
+							? null
+							: "resume-unavailable",
+				payload: evaluation.payload,
 				resumeToken: token,
 			});
 		} catch (error) {
 			if (binding.controller.signal.aborted) return;
 			const code =
-				record(error)?.code === "AUTHORIZATION_FAILED"
-					? "AUTHORIZATION_FAILED"
-					: "TRANSPORT_FAILED";
+				error instanceof CarrierEvaluationFailure
+					? error.code
+					: record(error)?.code === "AUTHORIZATION_FAILED"
+						? "AUTHORIZATION_FAILED"
+						: "TRANSPORT_FAILED";
 			frameFailure(session, binding, code);
 		}
 	};
@@ -457,6 +520,15 @@ export function createRealtimeCarrier<Context>(
 		if (kind === "ack") {
 			const binding = session.bindings.get(bindingId);
 			if (!binding || binding.token !== frame.resumeToken) return empty(409);
+			if (
+				input.coordinator &&
+				!(await input.coordinator.acknowledge(
+					scopeId,
+					bindingId,
+					frame.resumeToken as string,
+				))
+			)
+				return empty(409);
 			return empty(202);
 		}
 		if (session.bindings.has(bindingId)) return empty(409);
@@ -489,7 +561,7 @@ export function createRealtimeCarrier<Context>(
 			binding,
 			decodedContext,
 			decodedInput,
-			frame.resumeToken !== null,
+			frame.resumeToken as string | null,
 		);
 		return empty(202);
 	};

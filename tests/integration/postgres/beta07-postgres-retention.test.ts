@@ -67,7 +67,10 @@ describe.skipIf(!database)(
 				});
 				const result = completeResult();
 				const resumeToken = retention.mint(result);
-				expect(await retention.resume({ binding, resumeToken, now })).toEqual({
+				const { retainedGeneration: _generation, ...lookupBinding } = binding;
+				expect(
+					await retention.resume({ binding: lookupBinding, resumeToken, now }),
+				).toEqual({
 					status: "unavailable",
 				});
 
@@ -76,7 +79,11 @@ describe.skipIf(!database)(
 					resumeToken,
 					acknowledgedAt: now,
 				});
-				const resumed = await retention.resume({ binding, resumeToken, now });
+				const resumed = await retention.resume({
+					binding: lookupBinding,
+					resumeToken,
+					now,
+				});
 				expect(resumed).toEqual({
 					status: "available",
 					resultBytes,
@@ -87,15 +94,18 @@ describe.skipIf(!database)(
 				const unavailable = { status: "unavailable" } as const;
 				const tampered = `${resumeToken.slice(0, -1)}${resumeToken.endsWith("a") ? "b" : "a"}`;
 				expect(
-					await retention.resume({ binding, resumeToken: tampered, now }),
+					await retention.resume({
+						binding: lookupBinding,
+						resumeToken: tampered,
+						now,
+					}),
 				).toEqual(unavailable);
 				for (const incompatible of [
-					{ ...binding, deploymentDigest: digest("d") },
-					{ ...binding, authorityPartitionDigest: digest("d") },
-					{ ...binding, queryIdentity: "messages.other" },
-					{ ...binding, inputDigest: digest("d") },
-					{ ...binding, wireVersion: 3 },
-					{ ...binding, retainedGeneration: 2n },
+					{ ...lookupBinding, deploymentDigest: digest("d") },
+					{ ...lookupBinding, authorityPartitionDigest: digest("d") },
+					{ ...lookupBinding, queryIdentity: "messages.other" },
+					{ ...lookupBinding, inputDigest: digest("d") },
+					{ ...lookupBinding, wireVersion: 3 },
 				])
 					expect(
 						await retention.resume({
@@ -106,7 +116,7 @@ describe.skipIf(!database)(
 					).toEqual(unavailable);
 				expect(
 					await retention.resume({
-						binding,
+						binding: lookupBinding,
 						resumeToken,
 						now: new Date(now.getTime() + 86_400_000),
 					}),
@@ -135,6 +145,7 @@ describe.skipIf(!database)(
 					sql: concurrentDatabase!,
 					hmacKey,
 				});
+				const { retainedGeneration: _generation, ...lookupBinding } = binding;
 				const tokens: string[] = [];
 				const acknowledgements: Promise<void>[] = [];
 				for (let generation = 1n; generation <= 129n; generation += 1n) {
@@ -160,15 +171,14 @@ describe.skipIf(!database)(
 				expect(count).toEqual({ retained: 128 });
 				expect(
 					await retention.resume({
-						binding,
+						binding: lookupBinding,
 						resumeToken: tokens[0]!,
 						now,
 					}),
 				).toEqual({ status: "unavailable" });
-				const secondBinding = { ...binding, retainedGeneration: 2n };
 				expect(
 					await retention.resume({
-						binding: secondBinding,
+						binding: lookupBinding,
 						resumeToken: tokens[1]!,
 						now,
 					}),

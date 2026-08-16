@@ -10,6 +10,7 @@ export type {
 	LiveQueryInvalidation,
 	LiveQueryInvalidationResultV1,
 	LiveQueryRecomputeResultV1,
+	PreparedLiveQueryInvalidationV1,
 } from "./invalidation";
 export { reconcilePostgresChangeLedger } from "./postgres";
 export type {

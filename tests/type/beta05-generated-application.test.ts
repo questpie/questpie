@@ -109,7 +109,12 @@ handlerOutput.nodes[0]!.createdAt satisfies Date;
 handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
-	const app = await createApp({ postgres: { url: "postgres://localhost/questpie" } });
+	// @ts-expect-error watchable builds require deployment-owned resume signing material
+	createApp({ postgres: { url: "postgres://localhost/questpie" } });
+	const app = await createApp({
+		postgres: { url: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+	});
 	const response: Response = await app.fetch(new Request("http://runtime.test/_questpie/operation"));
 	const page = await app.execution(
 		{

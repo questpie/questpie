@@ -48,6 +48,7 @@ import { createEventEmitter, type ExecutionEventV1 } from "./events";
 import {
 	createRealtimeCarrier,
 	decodeRealtimeWireContract,
+	type LiveQueryCoordinator,
 	type RealtimeCarrierObservedPlan,
 } from "./realtime";
 import {
@@ -83,6 +84,7 @@ export interface RuntimeApplicationProgram<
 	readonly onLiveQueryObserved?: (
 		input: RealtimeCarrierObservedPlan,
 	) => MaybePromise<void>;
+	readonly liveQueryCoordinator?: LiveQueryCoordinator<ContextInputOf<Context>>;
 }
 
 export interface RuntimeOperations {
@@ -174,6 +176,7 @@ export async function createRuntimeApplication<
 		artifacts.wireContract.operations,
 	);
 	await input.program.verifyReadiness?.(artifacts);
+	await input.program.liveQueryCoordinator?.start();
 	const core = createApplicationRuntime({
 		services: input.program.services,
 		context: input.program.context,
@@ -466,6 +469,7 @@ export async function createRuntimeApplication<
 					return Object.freeze({ result, observedPlan: observation.finish() });
 				},
 				onObservedPlan: input.program.onLiveQueryObserved,
+				coordinator: input.program.liveQueryCoordinator,
 			})
 		: null;
 

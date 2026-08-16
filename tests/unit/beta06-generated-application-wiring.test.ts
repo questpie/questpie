@@ -9,7 +9,7 @@ import { compileApplication } from "@questpie/compiler";
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const repositoryRoot = resolve(import.meta.dir, "../..");
 
-test("relocated generated application links inventoried Mutation programs and plans", async () => {
+test("relocated generated application links Mutation and private Live Query programs", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta06-wiring-"));
 	try {
 		await cp(fixtureRoot, temporary, {
@@ -54,6 +54,22 @@ test("relocated generated application links inventoried Mutation programs and pl
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
 		expect(bundle).toContain("linkReactionProjection");
 		expect(bundle).toContain("createPostgresCollectionMutationData");
+		expect(bundle).toContain("createPostgresLiveQueryCoordinator");
+		expect(bundle).toContain("linkLiveQueryProgram");
+		expect(bundle).toContain("input.realtime.hmacKey");
+		expect(bundle.indexOf("hmacKey.byteLength")).toBeLessThan(
+			bundle.indexOf("new SQL"),
+		);
+		for (const path of [
+			"query-watchability.json",
+			"live-query-dependency-algebra.json",
+			"change-ledger.json",
+			"change-reconciliation.json",
+			"live-query-resume.json",
+			"change-capture-boundary.json",
+			"live-query-limits.json",
+		])
+			expect(bundle).toContain(`artifactFiles["${path}"]`);
 		for (const path of [
 			"collection-operation-programs.json",
 			"field-normalizer-programs.json",
@@ -75,6 +91,12 @@ test("relocated generated application links inventoried Mutation programs and pl
 			"bindIngressPrincipalForRequest",
 			"createApplication",
 		]);
+		await expect(
+			internalApplication.createApplication({
+				postgres: { url: "postgres://must-not-open.invalid/questpie" },
+				realtime: { hmacKey: new Uint8Array(31) },
+			}),
+		).rejects.toThrow("HMAC key must contain at least 32 bytes");
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

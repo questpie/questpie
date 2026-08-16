@@ -189,6 +189,7 @@ postgresTest(
 		try {
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();
@@ -383,6 +384,7 @@ postgresTest(
 		try {
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();
@@ -474,6 +476,7 @@ postgresTest(
 			);
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();

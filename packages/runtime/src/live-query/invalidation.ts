@@ -16,6 +16,11 @@ export type LiveQueryInvalidationResultV1 = Readonly<{
 	revoked: readonly string[];
 }>;
 
+export type PreparedLiveQueryInvalidationV1 = Readonly<{
+	result: LiveQueryInvalidationResultV1;
+	commit(): void;
+}>;
+
 export interface LiveQueryInvalidation {
 	register(
 		input: Readonly<{
@@ -29,6 +34,9 @@ export interface LiveQueryInvalidation {
 	invalidate(
 		facts: readonly ChangeLedgerFactV1[],
 	): Promise<LiveQueryInvalidationResultV1>;
+	prepare(
+		facts: readonly ChangeLedgerFactV1[],
+	): Promise<PreparedLiveQueryInvalidationV1>;
 	currentPlan(watch: string): ObservedLiveQueryPlanV1 | undefined;
 }
 
@@ -126,6 +134,59 @@ export function createLiveQueryInvalidation(
 					});
 			}
 			return drainPromise;
+		},
+		async prepare(facts) {
+			const matching = [...watches].filter(([, watch]) =>
+				matches(watch.plan, facts),
+			);
+			const batches: number[] = [];
+			const failed: string[] = [];
+			const revoked: string[] = [];
+			const successful: Array<
+				readonly [string, Watch, ObservedLiveQueryPlanV1]
+			> = [];
+			for (
+				let offset = 0;
+				offset < matching.length;
+				offset += program.limits.fanoutPerBatch
+			) {
+				const batch = matching.slice(
+					offset,
+					offset + program.limits.fanoutPerBatch,
+				);
+				batches.push(batch.length);
+				await Promise.all(
+					batch.map(async ([identity, watch]) => {
+						try {
+							const result = await watch.recompute();
+							if (result.status === "success") {
+								assertPlanWithinLimit(result.plan);
+								successful.push([identity, watch, result.plan]);
+							} else if (result.status === "failed") failed.push(identity);
+							else revoked.push(identity);
+						} catch {
+							failed.push(identity);
+						}
+					}),
+				);
+			}
+			const result = Object.freeze({
+				batches: Object.freeze(batches),
+				recomputed: matching.length,
+				failed: Object.freeze(failed.toSorted()),
+				revoked: Object.freeze(revoked.toSorted()),
+			});
+			return Object.freeze({
+				result,
+				commit() {
+					if (failed.length > 0 || revoked.length > 0)
+						throw new TypeError(
+							"failed Live Query invalidation cannot be committed",
+						);
+					for (const [identity, watch, plan] of successful)
+						if (watches.get(identity) === watch) watch.plan = plan;
+				},
+			});
 		},
 		currentPlan(watch) {
 			return watches.get(watch)?.plan;

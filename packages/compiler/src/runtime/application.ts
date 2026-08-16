@@ -64,6 +64,7 @@ function applicationEntry(
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		realtime: boolean;
 	}>,
 ): string {
 	const definitions = new Map<string, number>();
@@ -193,7 +194,7 @@ function applicationEntry(
 		reactions: [],
 	});
 	return `import { SQL } from "bun";
-import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery, linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } from "questpie:runtime";
+import { createPostgresLiveQueryCoordinator, createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery, linkCollectionMutationPrograms, linkLiveQueryProgram, linkPostgresCollectionOperationPlans, linkReactionProjection } from "questpie:runtime";
 import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
@@ -254,9 +255,27 @@ function linkMutationArtifacts(artifactFiles) {
 	});
 }
 
+function linkLiveQueryArtifacts(artifactFiles) {
+	return linkLiveQueryProgram({
+		watchability: JSON.parse(artifactFiles["query-watchability.json"]),
+		dependencyAlgebra: JSON.parse(artifactFiles["live-query-dependency-algebra.json"]),
+		changeLedger: JSON.parse(artifactFiles["change-ledger.json"]),
+		reconciliation: JSON.parse(artifactFiles["change-reconciliation.json"]),
+		resume: JSON.parse(artifactFiles["live-query-resume.json"]),
+		captureBoundary: JSON.parse(artifactFiles["change-capture-boundary.json"]),
+		limits: JSON.parse(artifactFiles["live-query-limits.json"]),
+	});
+}
+
 export const bindIngressPrincipalForRequest = bindIngressPrincipal;
 
 export async function createApplication(input) {
+	${
+		input.realtime
+			? `if (!(input.realtime?.hmacKey instanceof Uint8Array) || input.realtime.hmacKey.byteLength < 32)
+		throw new TypeError("resume-token HMAC key must contain at least 32 bytes");`
+			: ""
+	}
 	const sql = new SQL(input.postgres.url);
 	const postgresController = new AbortController();
 	const loaded = await loadRuntimeArtifacts();
@@ -267,9 +286,24 @@ export async function createApplication(input) {
 		schema: schemaProjection,
 		signal: postgresController.signal,
 	});
+	let liveQueryCoordinator;
 	let mutationArtifacts;
 	let runtime;
 	try {
+		liveQueryCoordinator = ${
+			input.realtime
+				? `createPostgresLiveQueryCoordinator({
+		program: linkLiveQueryArtifacts(loaded.artifactFiles),
+		sql,
+		hmacKey: input.realtime.hmacKey,
+		applicationName: ${JSON.stringify(input.configuration.application.name)},
+		consumer: ${JSON.stringify(`${input.configuration.application.name}.liveQuery`)},
+		deploymentDigest: loaded.artifacts.runtimeBuild.digest,
+		wireVersion: JSON.parse(loaded.artifactFiles["realtime-wire-contract.json"]).version,
+		signal: postgresController.signal,
+	})`
+				: "undefined"
+		};
 		runtime = await createRuntimeApplication({
 		artifacts: loaded.artifacts,
 		artifactFiles: loaded.artifactFiles,
@@ -284,6 +318,7 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap,
 			resolvePrincipal: readIngressPrincipal,
+			liveQueryCoordinator,
 			verifyReadiness: (artifacts) => {
 				mutationArtifacts = linkMutationArtifacts(loaded.artifactFiles);
 				return verifyPostgresRuntimeReadiness({
@@ -377,6 +412,7 @@ export async function renderApplicationBundle(
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		realtime: boolean;
 		readinessEntry: string;
 		runtimeBundleEntry: string;
 	}>,

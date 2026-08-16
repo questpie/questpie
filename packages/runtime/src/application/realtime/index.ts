@@ -10,3 +10,11 @@ export {
 	type DecodedRealtimeQueryV1,
 	type DecodedRealtimeWireContractV1,
 } from "./contract";
+export {
+	createLiveQueryCoordinator,
+	createPostgresLiveQueryCoordinator,
+	type LiveQueryCoordinator,
+	type LiveQueryCoordinatorDelivery,
+	type LiveQueryCoordinatorEvaluation,
+	type LiveQueryCoordinatorOpen,
+} from "./coordinator";

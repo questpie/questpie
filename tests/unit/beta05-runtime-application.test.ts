@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 
 import { codec, defineContext, defineService, principal } from "questpie";
 
-import { createRuntimeApplication } from "../../packages/runtime/src";
+import {
+	createRuntimeApplication,
+	type ExecutionEventV1,
+} from "../../packages/runtime/src";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -830,6 +833,77 @@ test("runs one valid build through the direct operation engine", async () => {
 	expect(result).toEqual({ count: 2 });
 	expect(handlerCalls).toBe(1);
 	expect(projectionCalls).toBe(1);
+	await app.close();
+});
+
+test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	let releaseStartup!: () => void;
+	let reportStarted!: () => void;
+	const startupReleased = new Promise<void>((resolve) => {
+		releaseStartup = resolve;
+	});
+	const startupEntered = new Promise<void>((resolve) => {
+		reportStarted = resolve;
+	});
+	const events: ExecutionEventV1[] = [];
+	const creation = createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: { get: async () => null },
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+			liveQueryCoordinator: {
+				async start() {
+					reportStarted();
+					await startupReleased;
+				},
+				async open() {
+					throw new Error("not used");
+				},
+				async acknowledge() {
+					return false;
+				},
+				close() {},
+				async reconcile() {},
+				currentPlan() {
+					return undefined;
+				},
+			},
+		},
+		events: (event) => events.push(event),
+	});
+	await startupEntered;
+	expect(events).toEqual([]);
+	releaseStartup();
+	const app = await creation;
+	expect(events.map(({ event }) => event)).toContainEqual({
+		family: "runtime",
+		kind: "ready",
+	});
 	await app.close();
 });
 

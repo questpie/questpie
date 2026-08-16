@@ -66,4 +66,18 @@ describe("BETA-07 PostgreSQL retained Live Query result", () => {
 			}),
 		).toThrow(/retained generation/);
 	});
+
+	test("rejects caller-supplied generation from the opaque resume lookup", async () => {
+		const retention = createPostgresLiveQueryRetention({
+			sql: {} as SQL,
+			hmacKey: new Uint8Array(32),
+		});
+		await expect(
+			retention.resume({
+				binding,
+				resumeToken: "opaque",
+				now: new Date(0),
+			}),
+		).rejects.toThrow("lookup binding keys are invalid");
+	});
 });

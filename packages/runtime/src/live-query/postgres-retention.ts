@@ -25,6 +25,11 @@ export type RetainedLiveQueryBinding = Readonly<{
 	retainedGeneration: bigint;
 }>;
 
+export type RetainedLiveQueryLookupBinding = Omit<
+	RetainedLiveQueryBinding,
+	"retainedGeneration"
+>;
+
 export type RetainedLiveQueryCompleteResult = Readonly<{
 	binding: RetainedLiveQueryBinding;
 	resultBytes: Uint8Array;
@@ -53,7 +58,7 @@ export type PostgresLiveQueryRetention = Readonly<{
 	): Promise<void>;
 	resume(
 		input: Readonly<{
-			binding: RetainedLiveQueryBinding;
+			binding: RetainedLiveQueryLookupBinding;
 			resumeToken: string;
 			now: Date;
 		}>,
@@ -115,6 +120,15 @@ function validateBinding(binding: RetainedLiveQueryBinding): void {
 		binding.retainedGeneration > postgresBigintMaximum
 	)
 		throw new TypeError("retained generation is invalid");
+}
+
+function validateLookupBinding(binding: RetainedLiveQueryLookupBinding): void {
+	if (
+		Object.keys(binding).toSorted().join(",") !==
+		"applicationName,authorityPartitionDigest,deploymentDigest,inputDigest,queryIdentity,wireVersion"
+	)
+		throw new TypeError("retained Live Query lookup binding keys are invalid");
+	validateBinding({ ...binding, retainedGeneration: 1n });
 }
 
 function validateCompleteResult(result: RetainedLiveQueryCompleteResult): void {
@@ -197,6 +211,20 @@ function payloadMatchesBinding(
 		payload.input === binding.inputDigest &&
 		payload.wire === binding.wireVersion &&
 		payload.generation === binding.retainedGeneration.toString()
+	);
+}
+
+function payloadMatchesLookupBinding(
+	payload: ResumeTokenPayloadV1,
+	binding: RetainedLiveQueryLookupBinding,
+): boolean {
+	return (
+		payload.application === binding.applicationName &&
+		payload.deployment === binding.deploymentDigest &&
+		payload.authority === binding.authorityPartitionDigest &&
+		payload.query === binding.queryIdentity &&
+		payload.input === binding.inputDigest &&
+		payload.wire === binding.wireVersion
 	);
 }
 
@@ -332,7 +360,7 @@ export function createPostgresLiveQueryRetention(
 			});
 		},
 		async resume({ binding, resumeToken, now }) {
-			validateBinding(binding);
+			validateLookupBinding(binding);
 			validDate(now, "resume time");
 			const candidateToken = typeof resumeToken === "string" ? resumeToken : "";
 			const payload = decode(candidateToken);
@@ -361,14 +389,13 @@ export function createPostgresLiveQueryRetention(
 				  and query_identity = ${binding.queryIdentity}
 				  and input_digest = ${binding.inputDigest}
 				  and wire_version = ${binding.wireVersion}
-				  and retained_generation = ${binding.retainedGeneration}
 				  and expires_at > ${now}
 			`;
 			const resultBytes = bytes(row?.resultBytes);
 			const dependencyPlanBytes = bytes(row?.dependencyPlanBytes);
 			if (
 				!payload ||
-				!payloadMatchesBinding(payload, binding) ||
+				!payloadMatchesLookupBinding(payload, binding) ||
 				!row ||
 				!resultBytes ||
 				!dependencyPlanBytes ||
@@ -377,7 +404,7 @@ export function createPostgresLiveQueryRetention(
 				row.queryIdentity !== binding.queryIdentity ||
 				row.inputDigest !== binding.inputDigest ||
 				row.wireVersion !== binding.wireVersion ||
-				BigInt(row.retainedGeneration) !== binding.retainedGeneration ||
+				BigInt(row.retainedGeneration) !== BigInt(payload.generation) ||
 				payload.result !== sha256Digest(resultBytes) ||
 				payload.dependencies !== sha256Digest(dependencyPlanBytes)
 			)
@@ -386,7 +413,7 @@ export function createPostgresLiveQueryRetention(
 				status: "available" as const,
 				resultBytes,
 				dependencyPlanBytes,
-				retainedGeneration: binding.retainedGeneration,
+				retainedGeneration: BigInt(row.retainedGeneration),
 			});
 		},
 		async prune({ applicationName, now }) {

@@ -355,6 +355,7 @@ export async function createArtifacts(
 			.filter(({ watchable }) => watchable)
 			.map(({ query }) => query),
 	});
+	const realtimeEnabled = realtime.watchableQueries.length > 0;
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
@@ -368,6 +369,7 @@ export async function createArtifacts(
 			input.configuration.source.root,
 			relational.declarations,
 			mutationDeclarations,
+			realtimeEnabled,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources, {
@@ -477,6 +479,7 @@ export async function createArtifacts(
 		schemaProjection: schema,
 		collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 		reactionArtifact: runtime.reactions.reactions.length > 0,
+		realtime: realtimeEnabled,
 		readinessEntry,
 		runtimeBundleEntry,
 	});
