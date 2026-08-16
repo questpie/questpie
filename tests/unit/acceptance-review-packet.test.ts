@@ -198,6 +198,8 @@ describe("acceptance packet v2", () => {
 			["diff.renames", "true"],
 			["diff.algorithm", "histogram"],
 			["diff.mnemonicPrefix", "true"],
+			["diff.context", "50"],
+			["diff.interHunkContext", "50"],
 		])
 			run(input.repositoryPath, ["git", "config", key, value]);
 		const hostile = prepareAcceptancePacket(input);

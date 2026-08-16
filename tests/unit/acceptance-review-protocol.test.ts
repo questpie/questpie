@@ -57,6 +57,28 @@ function completedResponse(
 	};
 }
 
+function replaceFinalResponse(
+	response: ReturnType<typeof completedResponse>,
+	finalResponse: string,
+): ReturnType<typeof completedResponse> {
+	const events = response.events
+		.split("\n")
+		.map((line) => {
+			const event = JSON.parse(line) as {
+				type: string;
+				item?: { type?: string; text?: string };
+			};
+			if (
+				event.type === "item.completed" &&
+				event.item?.type === "agent_message"
+			)
+				event.item.text = finalResponse;
+			return JSON.stringify(event);
+		})
+		.join("\n");
+	return { ...response, events, finalResponse };
+}
+
 function transport(
 	change?: (
 		request: AcceptanceReviewRequestV2,
@@ -198,17 +220,29 @@ describe("acceptance review protocol v2", () => {
 			}),
 		},
 		{
+			name: "empty response",
+			change: (
+				_request: AcceptanceReviewRequestV2,
+				response: ReturnType<typeof completedResponse>,
+			) => replaceFinalResponse(response, ""),
+		},
+		{
+			name: "malformed JSON response",
+			change: (
+				_request: AcceptanceReviewRequestV2,
+				response: ReturnType<typeof completedResponse>,
+			) => replaceFinalResponse(response, "{"),
+		},
+		{
 			name: "response binding mismatch",
 			change: (
 				_request: AcceptanceReviewRequestV2,
 				response: ReturnType<typeof completedResponse>,
-			) => ({
-				...response,
-				finalResponse: response.finalResponse.replace(
-					packetDigest,
-					"d".repeat(64),
+			) =>
+				replaceFinalResponse(
+					response,
+					response.finalResponse.replace(packetDigest, "d".repeat(64)),
 				),
-			}),
 		},
 		{
 			name: "malformed response shape with missing axis",
@@ -221,7 +255,7 @@ describe("acceptance review protocol v2", () => {
 					unknown
 				>;
 				delete decoded.axis;
-				return { ...response, finalResponse: JSON.stringify(decoded) };
+				return replaceFinalResponse(response, JSON.stringify(decoded));
 			},
 		},
 		{
@@ -229,13 +263,14 @@ describe("acceptance review protocol v2", () => {
 			change: (
 				_request: AcceptanceReviewRequestV2,
 				response: ReturnType<typeof completedResponse>,
-			) => ({
-				...response,
-				finalResponse: response.finalResponse.replace(
-					"No blocking findings.",
-					"VERDICT: PASS",
+			) =>
+				replaceFinalResponse(
+					response,
+					response.finalResponse.replace(
+						"No blocking findings.",
+						"VERDICT: PASS",
+					),
 				),
-			}),
 		},
 	])("records no result for $name", async ({ change }) => {
 		await expect(
