@@ -21,6 +21,10 @@ const exact = {
 	reviewedHead: "deea51ba2799867825b120ec46ec5d8944991d1b",
 	reviewEvidence: "cb568dc402462163d632a2d689da709a087f64ae",
 	projectionReapplication: "d5bf7d0adadcda0f5b932e6b1a7c20df0e4102a6",
+	beta06ServiceBoundaryRepair: "76016e581f72ea9058a1fed3c784317934ff695d",
+	beta06ServiceBoundaryRepairParent: "c5662143c69d3818a97c7430906dff30db1cfd74",
+	beta06ServiceBoundarySha256:
+		"29a9d97eaefde8f6532d07ff7bd6b1728a41f65018947cc866a0c12d09f40f79",
 	projectionSha256:
 		"9f82a90a2fe17bf764aa0bec4e8c8844d2254ba30c25a6b4337cb307596dc108",
 } as const;
@@ -35,6 +39,12 @@ const allowedProjectionPaths = [
 	"docs/v4/query-mutation-and-lifecycle.md",
 	"docs/v4/runtime-client-envelope-and-studio.md",
 ] as const;
+
+const beta06ServiceBoundaryPath =
+	"docs/v4/implementation/beta06/design-context.md";
+const immutableProjectionPaths = allowedProjectionPaths.filter(
+	(path) => path !== beta06ServiceBoundaryPath,
+);
 
 function record(value: unknown, name: string): JsonRecord {
 	if (!value || typeof value !== "object" || Array.isArray(value))
@@ -497,6 +507,7 @@ async function verifyRepositoryEvidence(): Promise<void> {
 		exact.reviewedHead,
 		exact.reviewEvidence,
 		exact.projectionReapplication,
+		exact.beta06ServiceBoundaryRepair,
 	])
 		command(["git", "merge-base", "--is-ancestor", commit, "HEAD"]);
 	if (
@@ -559,7 +570,45 @@ async function verifyRepositoryEvidence(): Promise<void> {
 		exact.projectionReapplication,
 		"HEAD",
 		"--",
-		...allowedProjectionPaths,
+		...immutableProjectionPaths,
+	]);
+	if (
+		command(["git", "rev-parse", `${exact.beta06ServiceBoundaryRepair}^`]) !==
+		exact.beta06ServiceBoundaryRepairParent
+	)
+		throw new Error("BETA-06 Service boundary repair parent changed");
+	if (
+		!equal(
+			command([
+				"git",
+				"diff-tree",
+				"--no-commit-id",
+				"--name-only",
+				"-r",
+				exact.beta06ServiceBoundaryRepair,
+			]),
+			beta06ServiceBoundaryPath,
+		)
+	)
+		throw new Error("BETA-06 Service boundary repair scope changed");
+	const beta06ServiceBoundary = commandBytes([
+		"git",
+		"show",
+		`${exact.beta06ServiceBoundaryRepair}:${beta06ServiceBoundaryPath}`,
+	]);
+	if (
+		createHash("sha256").update(beta06ServiceBoundary).digest("hex") !==
+		exact.beta06ServiceBoundarySha256
+	)
+		throw new Error("BETA-06 Service boundary authority changed");
+	command([
+		"git",
+		"diff",
+		"--quiet",
+		exact.beta06ServiceBoundaryRepair,
+		"HEAD",
+		"--",
+		beta06ServiceBoundaryPath,
 	]);
 	if (
 		commandBytesWithInput(["git", "hash-object", "--stdin"], source)
