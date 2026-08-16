@@ -24,7 +24,8 @@
 		"BETA-02": "b630fb01c6966b97fb3ac265bd416c4cfe0f1908",
 		"BETA-03": "a7d24541c433ab502316b34906d97c9dd51f7ee1",
 		"BETA-04": "275cad0c1d25251dc5d1ca1835a1316769218d7c",
-		"BETA-05": "740f2e0049a64f5a541f33ab8da44cf8e114041b"
+		"BETA-05": "740f2e0049a64f5a541f33ab8da44cf8e114041b",
+		"BETA-06": "0d1f35dd8685fdeb55c76547a6775df994f41315"
 	},
 	"issues": [
 		{
@@ -286,7 +287,7 @@
 			"id": "BETA-06",
 			"title": "BETA-06 Publish one Message in an idempotent transaction",
 			"blockedBy": ["BETA-05"],
-			"agentReady": true,
+			"agentReady": false,
 			"authority": ["ADR-0010", "ADR-0011", "ADR-0013", "ADR-0016", "ADR-0021"],
 			"artifacts": [
 				"Mutation/value/transaction programs",
@@ -337,7 +338,7 @@
 			"id": "BETA-07",
 			"title": "BETA-07 Watch the Message Query through the Change Ledger",
 			"blockedBy": ["BETA-06"],
-			"agentReady": false,
+			"agentReady": true,
 			"authority": ["ADR-0012", "ADR-0014", "ADR-0017", "ADR-0021"],
 			"artifacts": [
 				"Change Ledger DDL/triggers",

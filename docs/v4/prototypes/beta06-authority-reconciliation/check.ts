@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
-	loadQueue,
 	type Queue,
 	validate as validateQueue,
 } from "../implementation-collapse-p16/check";
@@ -24,6 +23,7 @@ type Revision = {
 const root = resolve(import.meta.dir, "../../../..");
 const exact = {
 	projectionBase: "6006800b694bd2751e4f431b4be727245f5398c1",
+	projectionHead: "a49eb3c6914f35fa1d7e3757909e6a2b330a7cec",
 	authorityHeads: {
 		P3: "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
 		P4: "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
@@ -124,15 +124,27 @@ export function loadRevision(): Revision {
 if (import.meta.main) {
 	const revision = loadRevision();
 	validateRevision(revision);
-	for (const head of Object.values(exact.authorityHeads))
+	for (const head of [
+		...Object.values(exact.authorityHeads),
+		exact.projectionHead,
+	])
 		command(["git", "cat-file", "-e", `${head}^{commit}`]);
 	for (const head of [
 		exact.authorityHeads.P16,
 		exact.authorityHeads.BETA05Merge,
+		exact.projectionHead,
 	])
 		command(["git", "merge-base", "--is-ancestor", head, "HEAD"]);
 	command(["git", "merge-base", "--is-ancestor", exact.projectionBase, "HEAD"]);
-	validateBoundary(loadQueue());
+	validateBoundary(
+		JSON.parse(
+			command([
+				"git",
+				"show",
+				`${exact.projectionHead}:docs/v4/prototypes/implementation-collapse-p16/QUEUE.json`,
+			]),
+		) as Queue,
+	);
 	console.log(
 		"BETA-06 authority reconciliation: ledger boundary and readiness PASS",
 	);
