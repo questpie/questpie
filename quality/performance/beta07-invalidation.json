@@ -1,0 +1,39 @@
+{
+	"id": "beta07-invalidation",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta07-invalidation.test.ts"],
+	"budgetOwner": "BETA-07",
+	"metrics": {
+		"postgresReconcile20Ms": {
+			"direction": "max",
+			"budget": 2500,
+			"unit": "ms"
+		},
+		"maximumReconciliationResultBytes": {
+			"direction": "max",
+			"budget": 2048,
+			"unit": "bytes"
+		},
+		"observedPlanBytes": {
+			"direction": "max",
+			"budget": 262144,
+			"unit": "bytes"
+		},
+		"planBytesPerReconciliation": {
+			"direction": "max",
+			"budget": 16777216,
+			"unit": "bytes"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}

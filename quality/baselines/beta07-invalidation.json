@@ -1,0 +1,67 @@
+{
+	"format": "questpie.performance-baseline",
+	"version": 1,
+	"scenario": "beta07-invalidation",
+	"budgetOwner": "BETA-07",
+	"toolchain": {
+		"bun": "1.3.14",
+		"typescript": "6.0.2",
+		"postgres": "17"
+	},
+	"reference": {
+		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"postgres": "local Docker postgres:17",
+		"recordedAt": "2026-08-16",
+		"samples": 3,
+		"aggregation": "median by postgresReconcile20Ms"
+	},
+	"evidence": {
+		"localBaseline": "PASS",
+		"selectedPrPostgres17": "PENDING_CI",
+		"taggedStableRunner": "PENDING"
+	},
+	"workload": {
+		"warmChanges": 1,
+		"measuredChanges": 20,
+		"activeWatches": 64,
+		"expectedMeasuredFacts": 20,
+		"expectedInvalidatedWatchRows": 1280,
+		"timingExcludes": ["compilation", "schema install", "watch setup"]
+	},
+	"samples": {
+		"postgresReconcile20Ms": [476.0416500000001, 463.78011000000015, 428.872621]
+	},
+	"observed": {
+		"postgresReconcile20Ms": 463.78011000000015,
+		"maximumReconciliationResultBytes": 303,
+		"observedPlanBytes": 269,
+		"planBytesPerReconciliation": 17216,
+		"publicDeclarationBytes": 51105,
+		"typescriptInstantiations": 19762
+	},
+	"budgetDerivation": {
+		"postgresReconcile20Ms": {
+			"referenceObservedMs": 463.78011000000015,
+			"multiplier": 5,
+			"roundUpQuantumMs": 250
+		}
+	},
+	"sizeBudgetDerivation": {
+		"maximumReconciliationResultBytes": {
+			"referenceObservedBytes": 303,
+			"multiplier": 4,
+			"roundUpQuantumBytes": 1024
+		}
+	},
+	"budgets": {
+		"postgresReconcile20Ms": 2500,
+		"maximumReconciliationResultBytes": 2048,
+		"observedPlanBytes": 262144,
+		"planBytesPerReconciliation": 16777216,
+		"publicDeclarationBytes": 125000,
+		"typescriptInstantiations": 125000
+	},
+	"status": "PASS"
+}
