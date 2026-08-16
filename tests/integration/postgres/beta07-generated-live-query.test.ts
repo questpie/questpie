@@ -171,6 +171,40 @@ function cutStreamAfter(response: Response, delivery: "initial" | "update") {
 	);
 }
 
+function crashableStream(response: Response) {
+	if (!response.body)
+		throw new Error("generated realtime response has no body");
+	const reader = response.body.getReader();
+	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
+	let crashed = false;
+	return Object.freeze({
+		response: new Response(
+			new ReadableStream<Uint8Array>({
+				start(value) {
+					controller = value;
+				},
+				async pull(value) {
+					const part = await reader.read();
+					if (crashed) return;
+					if (part.done) value.close();
+					else value.enqueue(part.value);
+				},
+				cancel(reason) {
+					return reader.cancel(reason);
+				},
+			}),
+			{ headers: response.headers, status: response.status },
+		),
+		async crash() {
+			if (crashed) return;
+			crashed = true;
+			const reason = new DOMException("Runtime A crashed", "AbortError");
+			controller?.error(reason);
+			await reader.cancel(reason);
+		},
+	});
+}
+
 function deferred() {
 	let resolvePromise!: () => void;
 	const promise = new Promise<void>((resolve) => {
@@ -187,6 +221,45 @@ function valueDeferred<Value>() {
 	return { promise, resolve: resolvePromise };
 }
 
+async function blockCurrentHolderDetach(database: SQL) {
+	const [attachment] = await database<
+		{
+			deploymentDigest: string;
+			principalId: string;
+			principalKind: string;
+		}[]
+	>`
+		select deployment_digest as "deploymentDigest",
+		       principal_kind as "principalKind", principal_id as "principalId"
+		from questpie_internal.realtime_scope_attachments
+		where application_name = 'collaboration' and state = 'open'
+	`;
+	if (!attachment) throw new Error("active durable realtime holder is missing");
+	const connection = await database.reserve();
+	await connection.unsafe("BEGIN");
+	await connection`
+		select pg_catalog.pg_advisory_xact_lock(
+		  pg_catalog.hashtextextended(
+		    ${`questpie-realtime-scope-v1:collaboration:${attachment.deploymentDigest}:${attachment.principalKind}:${attachment.principalId}`},
+		    0
+		  )
+		)
+	`;
+	return connection;
+}
+
+async function staleDetachBlocked(database: SQL): Promise<boolean> {
+	const [result] = await database<{ blocked: boolean }[]>`
+		select exists (
+		  select 1 from pg_catalog.pg_stat_activity
+		  where pid <> pg_catalog.pg_backend_pid()
+		    and wait_event = 'advisory'
+		    and query ilike '%pg_advisory_xact_lock%'
+		) as blocked
+	`;
+	return result?.blocked === true;
+}
+
 afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
@@ -198,6 +271,7 @@ postgresTest(
 		const timers = installDeterministicNetworkTimers();
 		const applications: GeneratedApplication[] = [];
 		let blocker: Awaited<ReturnType<SQL["reserve"]>> | undefined;
+		let detachBlocker: Awaited<ReturnType<SQL["reserve"]>> | undefined;
 		try {
 			const migrations = await Promise.all(
 				[
@@ -244,6 +318,7 @@ postgresTest(
 			let initialScanRequested = false;
 			let reconnectRuntime: GeneratedApplication | undefined;
 			let reconnectResponse = valueDeferred<number>();
+			let crashRuntimeA: (() => Promise<void>) | undefined;
 			const transport = async (request: Request): Promise<Response> => {
 				const ingress = internal.bindIngressPrincipalForRequest(request, user);
 				if (request.method === "GET") {
@@ -252,7 +327,11 @@ postgresTest(
 					if (!runtime) throw new Error("fresh reconnect Runtime is not ready");
 					const response = await runtime.fetch(ingress);
 					if (downstream > 1) reconnectResponse.resolve(response.status);
-					if (downstream === 1) return cutStreamAfter(response, "initial");
+					if (downstream === 1) {
+						const crashable = crashableStream(response);
+						crashRuntimeA = crashable.crash;
+						return crashable.response;
+					}
 					if (downstream === 2) return cutStreamAfter(response, "update");
 					return response;
 				}
@@ -314,13 +393,46 @@ postgresTest(
 			expect(timers.armedIntervals).toBe(3);
 			expect(timers.invokedIntervals).toBe(1);
 			expect(deliveries).toHaveLength(1);
+			if (!crashRuntimeA) throw new Error("Runtime A stream is not crashable");
+			detachBlocker = await blockCurrentHolderDetach(database!);
+			await crashRuntimeA();
+			let detachReachedFence = false;
+			for (let attempt = 0; attempt < 200; attempt += 1) {
+				if (await staleDetachBlocked(database!)) {
+					detachReachedFence = true;
+					break;
+				}
+			}
+			expect(detachReachedFence).toBe(true);
 
 			reconnectRuntime = await createApplication();
 			timers.runReconnect();
 			expect(await reconnectResponse.promise).toBe(200);
+			await detachBlocker.unsafe("COMMIT");
+			await detachBlocker.release();
+			detachBlocker = undefined;
+			let staleDetachFinished = false;
+			for (let attempt = 0; attempt < 200; attempt += 1) {
+				if (!(await staleDetachBlocked(database!))) {
+					staleDetachFinished = true;
+					break;
+				}
+			}
+			expect(staleDetachFinished).toBe(true);
+			const [replacement] = await database!<
+				{ holderGeneration: string; state: string }[]
+			>`
+				select holder_generation::text as "holderGeneration", state
+				from questpie_internal.realtime_scope_attachments
+				where application_name = 'collaboration'
+			`;
+			expect(replacement).toEqual({ holderGeneration: "2", state: "open" });
 			await updateDelivered.promise;
 			await updateAcknowledged.promise;
 			expect(deliveries).toHaveLength(2);
+			expect(
+				deliveries.filter((delivery) => delivery.kind === "update"),
+			).toHaveLength(1);
 			expect(deliveries[1]).toEqual(
 				expect.objectContaining({
 					kind: "update",
@@ -403,6 +515,10 @@ postgresTest(
 			expect(await closeResponse.promise).toBe(202);
 			expect(downstream).toBe(3);
 		} finally {
+			if (detachBlocker) {
+				await detachBlocker.unsafe("ROLLBACK").catch(() => {});
+				await detachBlocker.release();
+			}
 			if (blocker) {
 				await blocker.unsafe("ROLLBACK").catch(() => {});
 				await blocker.release();
