@@ -19,7 +19,6 @@ import {
 	type RealtimeCarrierSession as Session,
 } from "./carrier-wire";
 import type { DecodedRealtimeWireContractV1 } from "./contract";
-import type { LiveQueryCoordinatorDelivery } from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
