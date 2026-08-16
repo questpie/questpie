@@ -109,6 +109,13 @@ describe("acceptance packet v2", () => {
 		expect(() =>
 			requireAbsentReviewOutput(join(parentLink, "REVIEW.json"), directory),
 		).toThrow(AcceptanceReviewSafetyError);
+		const gitDirectory = join(directory, ".git");
+		mkdirSync(gitDirectory);
+		expect(() =>
+			requireAbsentReviewOutput(join(gitDirectory, "HEAD.lock"), directory, [
+				gitDirectory,
+			]),
+		).toThrow(AcceptanceReviewSafetyError);
 	});
 
 	test("re-derives byte-identical packet bytes from one exact commit", () => {

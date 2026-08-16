@@ -148,7 +148,10 @@ const outputPath = checkedRepositoryPath(
 	"review output",
 );
 try {
-	requireAbsentReviewOutput(outputPath, process.cwd());
+	requireAbsentReviewOutput(outputPath, process.cwd(), [
+		shell(["git", "rev-parse", "--absolute-git-dir"]),
+		shell(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"]),
+	]);
 } catch (error) {
 	if (error instanceof AcceptanceReviewSafetyError) fail(error.message);
 	throw error;

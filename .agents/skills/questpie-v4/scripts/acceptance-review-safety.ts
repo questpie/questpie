@@ -13,15 +13,27 @@ export function requireCleanReviewTree(status: string): void {
 		throw new AcceptanceReviewSafetyError("review worktree is not clean");
 }
 
+function isWithin(path: string, parent: string): boolean {
+	const child = relative(parent, path);
+	return child === "" || (child !== ".." && !child.startsWith(`..${sep}`));
+}
+
 export function requireAbsentReviewOutput(
 	path: string,
 	repositoryRoot: string,
+	gitAdministrativePaths: readonly string[] = [],
 ): void {
 	const root = realpathSync(resolve(repositoryRoot));
 	const absolutePath = resolve(path);
 	const fromRoot = relative(root, absolutePath);
 	if (fromRoot === ".." || fromRoot.startsWith(`..${sep}`))
 		throw new AcceptanceReviewSafetyError("review output escapes repository");
+	for (const administrativePath of gitAdministrativePaths) {
+		if (isWithin(absolutePath, resolve(administrativePath)))
+			throw new AcceptanceReviewSafetyError(
+				"review output enters Git administrative storage",
+			);
+	}
 	let current = root;
 	for (const component of relative(root, dirname(absolutePath)).split(sep)) {
 		if (component === "" || component === ".") continue;
