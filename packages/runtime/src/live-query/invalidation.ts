@@ -1,3 +1,4 @@
+import { matchesObservedLiveQueryPlan } from "./dependency-plan";
 import type { ObservedLiveQueryPlanV1 } from "./observation";
 import type { ChangeLedgerFactV1 } from "./postgres";
 import type { LinkedLiveQueryProgramV1 } from "./program";
@@ -49,9 +50,7 @@ function matches(
 	plan: ObservedLiveQueryPlanV1,
 	facts: readonly ChangeLedgerFactV1[],
 ): boolean {
-	return plan.tokens.some((token) =>
-		facts.some((fact) => fact.collection === token.collection),
-	);
+	return facts.some((fact) => matchesObservedLiveQueryPlan(plan, fact));
 }
 
 export function createLiveQueryInvalidation(

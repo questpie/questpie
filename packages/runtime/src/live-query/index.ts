@@ -1,4 +1,8 @@
 export { createLiveQueryObservation } from "./observation";
+export {
+	decodeObservedLiveQueryPlan,
+	matchesObservedLiveQueryPlan,
+} from "./dependency-plan";
 export type {
 	LiveQueryDependencyTokenKind,
 	LiveQueryDependencyTokenV1,
@@ -17,6 +21,8 @@ export type {
 	ChangeLedgerFactV1,
 	ChangeReconciliationResultV1,
 } from "./postgres";
+export { createPostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
+export type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 export { createPostgresReconciliationWake } from "./postgres-wake";
 export type {
 	PostgresReconciliationWake,

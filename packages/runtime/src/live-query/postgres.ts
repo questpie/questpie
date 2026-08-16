@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 
 import { isPostgresTransactionId } from "../operation";
+import type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 
 type Row = Readonly<Record<string, unknown>>;
 
@@ -150,11 +151,16 @@ export async function reconcilePostgresChangeLedger(
 			facts: readonly ChangeLedgerFactV1[],
 			horizon: Readonly<{ prior: string; next: string }>,
 		): void | Promise<void>;
+		effect?: PostgresLiveQueryInvalidationEffect;
 		signal?: AbortSignal;
 	}>,
 ): Promise<ChangeReconciliationResultV1> {
 	const application = text(input.application, "Change Ledger application");
 	const consumer = text(input.consumer, "Change Ledger consumer");
+	if (input.effect && input.effect.consumer !== consumer)
+		throw new TypeError(
+			"Change Ledger consumer must match the deployment invalidation effect",
+		);
 	const session = await (input.sql as unknown as PostgresPool).reserve();
 	let transaction = false;
 	try {
@@ -215,6 +221,12 @@ ORDER BY transaction_id, fact_id`,
 		await input.apply(facts, {
 			prior: horizon.priorHorizon,
 			next: horizon.nextHorizon,
+		});
+		await input.effect?.apply({
+			application,
+			facts,
+			execute: (statement, parameters = []) =>
+				execute(session, statement, parameters, input.signal),
 		});
 		if (facts.length > 0) {
 			const factIdentities = `{${facts
