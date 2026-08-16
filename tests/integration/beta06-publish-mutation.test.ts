@@ -156,7 +156,12 @@ test("projects the authored message.publish Mutation into the executable applica
 	);
 	const migration = await loadCommittedMigration(migrationRoot);
 	expect(migration.plan.baseMigration).toBe("000002_authorize-message-pages");
+	const currentSchema = JSON.parse(
+		compilation.generatedFiles["schema-projection.json"]!,
+	) as Readonly<Record<string, unknown>>;
+	const { changeCapture, ...beta06Schema } = currentSchema;
+	expect(changeCapture).toBeDefined();
 	expect(
 		await readFile(resolve(migrationRoot, "target-schema.json"), "utf8"),
-	).toBe(compilation.generatedFiles["schema-projection.json"]);
+	).toBe(`${JSON.stringify(beta06Schema)}\n`);
 });
