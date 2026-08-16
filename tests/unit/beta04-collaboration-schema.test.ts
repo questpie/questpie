@@ -93,7 +93,10 @@ test("extends the frozen authorization schema with the publish migration", async
 		resolve(fixtureRoot, "questpie/migrations/000002_authorize-message-pages"),
 	);
 	const publication = await loadCommittedMigration(
-		resolve(fixtureRoot, "questpie/migrations/000003_publish-message-transaction"),
+		resolve(
+			fixtureRoot,
+			"questpie/migrations/000003_publish-message-transaction",
+		),
 	);
 
 	expect(() =>
