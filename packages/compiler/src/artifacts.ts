@@ -13,6 +13,7 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
+import { projectLiveQueryCompilation } from "./live-query";
 import {
 	lowerPostgresCollectionOperationPlans,
 	projectCollectionOperationSets,
@@ -126,6 +127,13 @@ export async function createArtifacts(
 		resources: input.resources,
 		schema,
 		data: manifest.data,
+	});
+	const liveQuery = projectLiveQueryCompilation({
+		resources: input.resources,
+		contextProjection: executionComposition.context,
+		dataProjection: manifest.data as Readonly<Record<string, unknown>>,
+		policyProjection: relational.policy,
+		queryProjection: relational.query,
 	});
 	const mutationDeclarations = projectMutationGeneratedContract(
 		operationSets.programs,
@@ -327,6 +335,7 @@ export async function createArtifacts(
 	);
 	const mutations = projectMutations(input.resources);
 	const generated: Record<string, string> = {
+		...liveQuery.bytes,
 		"app.ts": renderAppContract(
 			input.resources,
 			manifest.data,
