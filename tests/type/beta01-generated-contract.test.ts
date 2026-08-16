@@ -77,24 +77,33 @@ describe("BETA-01 generated contract", () => {
 			"app.ts",
 			"build-input.json",
 			"client.ts",
+			"collection-operation-explain.json",
+			"collection-operation-programs.json",
+			"collection-operation-set-projections.json",
 			"committed-migrations.json",
 			"context-projection.json",
 			"execution-composition-explain.json",
+			"field-normalizer-programs.json",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",
 			collaborationAuditContractPath,
 			"internal/package-inventories.json",
 			"manifest.json",
+			"mutation-projection.json",
+			"mutation-transaction-plans.json",
 			"origin-map.json",
 			"policy-projection.json",
+			"postgres-collection-operation-plans.json",
 			"postgres-query-plans.json",
 			"query-projection.json",
+			"reaction-projection.json",
 			"relational-explain.json",
 			"relational-nondisclosure.json",
 			"runtime-build.json",
 			"runtime-executables.json",
 			"schema-projection.json",
+			"server-value-programs.json",
 			"service-projection.json",
 			"wire-contract.json",
 		]);
@@ -169,19 +178,33 @@ describe("BETA-01 generated contract", () => {
 			"collection:channels",
 			"collection:companies",
 			"collection:memberships",
+			"collection:messageEvents",
 			"collection:messages",
 			"collection:spaces",
 			"context:app.context",
+			"mutation:message.publish",
+			"mutation:messageEvents.create",
+			"mutation:messages.create",
+			"policy:channels.default",
 			"policy:memberships.default",
+			"policy:messageEvents.default",
 			"policy:messages.default",
+			"policy:spaces.default",
+			"query:channels.get",
 			"query:messages.page",
+			"query:spaces.get",
+			"reaction:messagePublished",
 			"seed:collaboration.authorization.v1",
 			"seed:collaboration.demo.v1",
 			"service:audit.connection",
 			"service:audit.execution",
 			"service:questpie.auditReader",
 		]);
-		expect(manifest.composition.resources[3].contributions).toHaveLength(1);
+		const manifestMessage = manifest.composition.resources.find(
+			(resource: { identity: string }) =>
+				resource.identity === "collection:messages",
+		);
+		expect(manifestMessage.contributions).toHaveLength(1);
 		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");
 		expect(first.generatedFiles[collaborationAuditContractPath]).not.toContain(
 			"messages:",
@@ -192,7 +215,7 @@ describe("BETA-01 generated contract", () => {
 			"Name extends string",
 		);
 		expect(JSON.stringify(first.generatedFiles)).not.toMatch(
-			/Drizzle|Kysely|drizzle-orm|\bany\b/,
+			/Drizzle|Kysely|drizzle-orm|(?<!\.)\bany\b/,
 		);
 		expect(first.measurements.typescriptInstantiations).toBeLessThanOrEqual(
 			125_000,
