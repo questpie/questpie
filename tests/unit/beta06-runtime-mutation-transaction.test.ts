@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import type { SQL } from "bun";
 import { principal } from "questpie";
 
+import { linkReactionProjection } from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
 import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
@@ -154,7 +155,7 @@ test("executes only linked Collection plans and projection-derived Reaction inte
 		sql: database.sql,
 		application: "application:generic",
 		collectionPlans,
-		reactionProjection,
+		reactions: linkReactionProjection(reactionProjection),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
@@ -207,7 +208,7 @@ test("rejects payloads outside the compiled Reaction codec before commit", async
 		sql: database.sql,
 		application: "application:generic",
 		collectionPlans,
-		reactionProjection,
+		reactions: linkReactionProjection(reactionProjection),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
@@ -223,22 +224,8 @@ test("rejects payloads outside the compiled Reaction codec before commit", async
 	expect(database.statements.map(({ sql }) => sql)).toContain("ROLLBACK");
 });
 
-test("strictly rejects widened Reaction projection artifacts at startup", () => {
-	const database = postgres();
+test("strictly rejects widened Reaction projection before root construction", () => {
 	expect(() =>
-		createPostgresMutationInvoker<View>({
-			sql: database.sql,
-			application: "application:generic",
-			collectionPlans,
-			reactionProjection: { ...reactionProjection, runtimeRegistry: {} },
-			facts: {
-				principal: principal.user({ id: principalId }),
-				authority: { kind: "ordinary" },
-				tenant: { id: tenantId },
-				values: {},
-				signal: new AbortController().signal,
-				deadline: null,
-			},
-		}),
+		linkReactionProjection({ ...reactionProjection, runtimeRegistry: {} }),
 	).toThrow("Invalid Reaction projection: artifact has invalid keys");
 });

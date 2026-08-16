@@ -3,7 +3,10 @@ import { expect, test } from "bun:test";
 import type { SQL } from "bun";
 import { principal } from "questpie";
 
-import { CommittedResultUnavailable } from "../../packages/runtime/src/mutation";
+import {
+	CommittedResultUnavailable,
+	linkReactionProjection,
+} from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
 import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
@@ -163,7 +166,7 @@ function invoker(database: ReturnType<typeof postgres>) {
 	return createPostgresMutationInvoker<MutationView>({
 		sql: database.sql,
 		collectionPlans,
-		reactionProjection,
+		reactions: linkReactionProjection(reactionProjection),
 		application: "application:collaboration",
 		facts: {
 			principal: principal.user({

@@ -13,7 +13,10 @@ import {
 	type TransactionQuery,
 } from "./collection";
 import { CommittedResultUnavailable } from "./committed-result-unavailable";
-import { createReactionDispatch, linkReactionProjection } from "./dispatch";
+import {
+	createReactionDispatch,
+	type LinkedReactionProjection,
+} from "./dispatch";
 import type { MutationInvoker } from "./index";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 
@@ -124,13 +127,12 @@ export function createPostgresMutationInvoker<View>(
 		sql: SQL;
 		application: string;
 		collectionPlans: LinkedPostgresCollectionOperationPlansV1;
-		reactionProjection: unknown;
+		reactions: LinkedReactionProjection;
 		facts: ExecutionFacts<
 			Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
 		>;
 	}>,
 ): MutationInvoker<View> {
-	const reactionProjection = linkReactionProjection(input.reactionProjection);
 	return async (operation, callId, options) => {
 		if (
 			operation.binding.kind !== "mutation" ||
@@ -232,7 +234,7 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 						throw new TypeError("Mutation exceeded its business row limit");
 				},
 			});
-			const reactions = createReactionDispatch(reactionProjection);
+			const reactions = createReactionDispatch(input.reactions);
 			const ctx = Object.freeze({
 				principal: facts.principal,
 				authority: facts.authority,

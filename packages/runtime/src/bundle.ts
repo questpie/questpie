@@ -8,4 +8,5 @@ export { createPostgresMutationInvoker } from "./mutation/postgres";
 export {
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
+	linkReactionProjection,
 } from "./mutation";

@@ -3,6 +3,8 @@ import type { PreparedOperation } from "../operation";
 export { CommittedResultUnavailable } from "./committed-result-unavailable";
 export type { CommittedResultUnavailablePayload } from "./committed-result-unavailable";
 export { createPostgresCollectionMutationData } from "./collection";
+export { linkReactionProjection } from "./dispatch";
+export type { LinkedReactionProjection } from "./dispatch";
 export { linkCollectionMutationPrograms } from "./program";
 export { linkPostgresCollectionOperationPlans } from "./postgres-program";
 export type {
