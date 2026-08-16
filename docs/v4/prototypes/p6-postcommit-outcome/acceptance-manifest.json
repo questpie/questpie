@@ -28,22 +28,22 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check docs/v4/prototypes/p6-postcommit-outcome",
+			"command": "bunx oxfmt --check docs/v4/prototypes/p6-postcommit-outcome/{DECISION.md,README.md,REVISION.json,acceptance-manifest.json,wire-v1.json,wire-v2.json,check.ts,negative-control.ts,portable-check.ts,tsconfig.json}",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run --cwd apps/docs types:check (at retained projection commit fa7ee83d)",
+			"command": "bun run --cwd apps/docs types:check (at retained projection commit 823d199e)",
 			"result": "PASS"
 		},
 		{ "command": "git diff --check", "result": "PASS" }
 	],
 	"acceptanceCriteria": [
 		"Accepted P6 Operation Wire v1 source bytes and digest remain immutable historical inputs and are never reinterpreted.",
-		"Operation Wire v2 adds exactly one framework transaction outcome, COMMITTED_RESULT_UNAVAILABLE, and does not create an authored declared error or a new frame kind.",
+		"Operation Wire v2 adds exactly one framework transaction outcome, COMMITTED_RESULT_UNAVAILABLE, carries forward every v1 result kind and declared error, and does not create an authored declared error or a new frame kind.",
 		"The correlated v2 failure retains v1 top-level keys and has exact error detail {code,retryable,transactionId}; HTTP 500 never claims rollback and retryable true authorizes only caller-controlled exact same-call recovery.",
 		"Direct and generated-client carriers expose literal code, retryable true, and frozen {callId,transactionId}; causes, database detail, stack traces, and transaction identity on every other failure remain undisclosed.",
 		"Generated transport performs zero automatic Mutation retries; exact same-scope replay recovers byte-identical committed result with one business execution.",
-		"A v1 wire digest receives a v1-readable CLIENT_OUTDATED rejection before Context Resolution or Operation execution and cannot execute a Mutation that might require a v2-only outcome.",
+		"A retained v1 Query pair remains executable; a v1 Mutation receives a v1-readable CLIENT_OUTDATED rejection before Context Resolution or Operation execution and cannot require a v2-only outcome after execution. This is the only retained-pair execution rule narrowed from ADR-0014.",
 		"Call Identity is general non-UUID text with exact valid-Unicode, scalar-count, NFC, U+0000, and UTF-8 bounds; runtime rejects rather than rewrites and crypto.randomUUID is only the omitted default.",
 		"Transaction identity is canonical nonzero PostgreSQL xid8 decimal text through uint64 maximum and remains opaque to clients.",
 		"The exact reviewed authority/public/BETA-06 projection is portable, byte-pinned, absent from the pre-review head, and changes no production Runtime, compiler, SQL, provider, host, or automatic-retry behavior."

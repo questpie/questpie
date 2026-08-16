@@ -32,6 +32,13 @@ for (const [name, mutate] of [
 	["wire version", (value: any) => (value.version = 1)],
 	["failure code", (value: any) => value.failures.splice(2, 1)],
 	[
+		"declared-error continuity",
+		(value: any) =>
+			delete value.declaredErrors["mutation:messages.submit"]
+				.IDEMPOTENCY_CONFLICT,
+	],
+	["result-kind continuity", (value: any) => value.resultKinds.pop()],
+	[
 		"status",
 		(value: any) => (value.committedResultUnavailable.httpStatus = 409),
 	],
@@ -53,7 +60,7 @@ for (const [name, mutate] of [
 		(value: any) => (value.callIdentity.normalizationBehavior = "rewrite"),
 	],
 	[
-		"code-unit bound",
+		"scalar bound",
 		(value: any) => (value.callIdentity.maximumUnicodeScalars = 128),
 	],
 	[
@@ -61,9 +68,13 @@ for (const [name, mutate] of [
 		(value: any) => (value.compatibility.wireV1MutationExecution = "execute"),
 	],
 	[
+		"wire v1 Query execution",
+		(value: any) => (value.compatibility.wireV1QueryExecution = "reject"),
+	],
+	[
 		"retained v1 result",
 		(value: any) =>
-			(value.compatibility.retainedV1ResultCompatibility = "allowed"),
+			(value.compatibility.retainedV1ResultCompatibility = "allOperations"),
 	],
 ] as const) {
 	const candidate = clone(wire);
@@ -81,6 +92,10 @@ for (const [name, mutate] of [
 	[
 		"projection digest",
 		(value: any) => (value.projection.diffSha256 = "0".repeat(64)),
+	],
+	[
+		"wire v2 digest",
+		(value: any) => (value.artifacts.wireV2Digest = "0".repeat(64)),
 	],
 ] as const) {
 	const candidate = clone(revision);
@@ -118,4 +133,4 @@ for (const [name, mutate] of [
 }
 
 assertExecutableSemantics();
-console.log("P6R1 post-commit negative controls PASS (20 branches)");
+console.log("P6R1 post-commit negative controls PASS (24 branches)");

@@ -24,6 +24,17 @@
 		"failure": ["callId", "error", "kind", "operation", "protocol"],
 		"rejection": ["error", "kind"]
 	},
+	"declaredErrors": {
+		"mutation:messages.submit": {
+			"IDEMPOTENCY_CONFLICT": {
+				"status": 409,
+				"payload": ["callId"]
+			}
+		},
+		"query:archives.record": {},
+		"query:channels.overview": {}
+	},
+	"resultKinds": ["declaredError", "failure", "result"],
 	"failureDetails": {
 		"ordinary": ["code", "retryable"],
 		"committedResultUnavailable": ["code", "retryable", "transactionId"]
@@ -81,9 +92,10 @@
 		"wireV1Bytes": "preserved",
 		"wireV1Digest": "d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c",
 		"wireV1MutationExecution": "rejectBeforeContextAndOperation",
+		"wireV1QueryExecution": "allowedWhenCurrentOrRetainedPair",
 		"wireV1RejectionCode": "CLIENT_OUTDATED",
 		"wireV1RejectionFrame": "wireV1CompatibleUncorrelatedFailure",
-		"retainedV1ResultCompatibility": "forbidden"
+		"retainedV1ResultCompatibility": "queryOnly"
 	},
 	"limits": { "requestBytes": 1048576, "responseBytes": 1048576 },
 	"principalSource": "credentialResolverOutsideBody",

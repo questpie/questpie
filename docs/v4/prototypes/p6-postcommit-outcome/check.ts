@@ -15,16 +15,17 @@ const exact = {
 		"82651aa7fd3697050792c40e3cd24a167eeb097652c3f9041cedb0a2b4051017",
 	p6WireDigest:
 		"d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c",
-	projection: "fa7ee83d240d1da32bf7b6b49ae90434a3e090bc",
-	projectionParent: "e505505c77f11f66dd3f4e0530621d040774b574",
-	projectionRevert: "df044e5a1dbac9a424101fb6a462eb95d78b5985",
+	projection: "823d199efd8658a1c896056c2b9ae9da622de173",
+	projectionParent: "e8105b25534d99441c4beea6f3357cf1bf9001f8",
+	projectionRevert: "64e7cf11fd74e4db02943e70e28667cd0914df92",
 	projectionSha256:
-		"ef962de08f89cf64b4a00ae78e397335d0ec56a06b245147493ad1c7e0ea661e",
+		"9f82a90a2fe17bf764aa0bec4e8c8844d2254ba30c25a6b4337cb307596dc108",
 } as const;
 
 const allowedProjectionPaths = [
 	"apps/docs/content/docs/v4/queries-and-mutations.mdx",
 	"apps/docs/content/docs/v4/runtime-and-studio.mdx",
+	"docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
 	"docs/adr/0023-freeze-post-commit-operation-outcome.md",
 	"docs/adr/README.md",
 	"docs/v4/implementation/beta06/design-context.md",
@@ -99,6 +100,24 @@ function commandBytes(args: string[], cwd = root): Buffer {
 	return Buffer.from(result.stdout);
 }
 
+function commandBytesWithInput(
+	args: string[],
+	input: Uint8Array,
+	cwd = root,
+): Buffer {
+	const result = Bun.spawnSync(args, {
+		cwd,
+		stdin: input,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	if (result.exitCode !== 0)
+		throw new Error(
+			`${args.join(" ")} failed: ${result.stderr.toString().trim()}`,
+		);
+	return Buffer.from(result.stdout);
+}
+
 function hasLoneSurrogate(value: string): boolean {
 	for (let index = 0; index < value.length; index += 1) {
 		const code = value.charCodeAt(index);
@@ -142,6 +161,8 @@ export function validateWireV2(value: unknown): string {
 			"path",
 			"request",
 			"response",
+			"declaredErrors",
+			"resultKinds",
 			"failureDetails",
 			"failures",
 			"committedResultUnavailable",
@@ -186,6 +207,17 @@ export function validateWireV2(value: unknown): string {
 		})
 	)
 		throw new Error("wire frame keys changed");
+	if (
+		!equal(wire.declaredErrors, {
+			"mutation:messages.submit": {
+				IDEMPOTENCY_CONFLICT: { status: 409, payload: ["callId"] },
+			},
+			"query:archives.record": {},
+			"query:channels.overview": {},
+		}) ||
+		!equal(wire.resultKinds, ["declaredError", "failure", "result"])
+	)
+		throw new Error("v1 result or declared-error continuity changed");
 	if (
 		!equal(wire.failureDetails, {
 			ordinary: ["code", "retryable"],
@@ -262,9 +294,10 @@ export function validateWireV2(value: unknown): string {
 			wireV1Bytes: "preserved",
 			wireV1Digest: exact.p6WireDigest,
 			wireV1MutationExecution: "rejectBeforeContextAndOperation",
+			wireV1QueryExecution: "allowedWhenCurrentOrRetainedPair",
 			wireV1RejectionCode: "CLIENT_OUTDATED",
 			wireV1RejectionFrame: "wireV1CompatibleUncorrelatedFailure",
-			retainedV1ResultCompatibility: "forbidden",
+			retainedV1ResultCompatibility: "queryOnly",
 		}) ||
 		!equal(wire.limits, {
 			requestBytes: 1_048_576,
@@ -316,6 +349,8 @@ export function decodeCommittedFailure(
 		status !== 500 ||
 		frame.kind !== "failure" ||
 		frame.operation !== "mutation:messages.submit" ||
+		!isCallIdentity(expectedCallId) ||
+		!isCallIdentity(frame.callId) ||
 		frame.callId !== expectedCallId ||
 		!equal(frame.protocol, protocol) ||
 		error.code !== "COMMITTED_RESULT_UNAVAILABLE" ||
@@ -373,29 +408,7 @@ export function assertExecutableSemantics(): void {
 	)
 		throw new Error("recovery carrier is mutable or incomplete");
 
-	const contextResolutions: string[] = [];
 	const operationExecutions = new Set<string>();
-	const oldWireRequest = () => {
-		const rejection = Object.freeze({
-			kind: "failure" as const,
-			error: Object.freeze({
-				code: "CLIENT_OUTDATED" as const,
-				retryable: false,
-			}),
-		});
-		return rejection;
-	};
-	const rejection = oldWireRequest();
-	if (
-		contextResolutions.length !== 0 ||
-		operationExecutions.size !== 0 ||
-		!equal(rejection, {
-			kind: "failure",
-			error: { code: "CLIENT_OUTDATED", retryable: false },
-		})
-	)
-		throw new Error("wire v1 was not rejected before execution");
-
 	const receipts = new Map<string, string>();
 	const invoke = (callId: string, loseResponse: boolean) => {
 		const key = `application:collaboration\0tenant:1\0mutation:messages.submit\0user:1\0${callId}`;
@@ -441,7 +454,7 @@ export function validateRevision(value: unknown): void {
 			wireV1: "wire-v1.json",
 			wireV2: "wire-v2.json",
 			wireV2Digest:
-				"76fa80c30428f4ae18e9911bf3f44c57ed01c668284a28dfdef1de64bba1d436",
+				"2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28",
 		}) ||
 		!equal(revision.projection, {
 			commit: exact.projection,
@@ -484,6 +497,14 @@ async function verifyRepositoryEvidence(): Promise<void> {
 		throw new Error("projection parent changed");
 	const projection = commandBytes([
 		"git",
+		"-c",
+		"core.abbrev=40",
+		"-c",
+		"diff.noprefix=false",
+		"-c",
+		"diff.algorithm=myers",
+		"-c",
+		"diff.context=3",
 		"show",
 		"--format=",
 		"--binary",
@@ -500,6 +521,12 @@ async function verifyRepositoryEvidence(): Promise<void> {
 	);
 	if (!projection.equals(portableProjection))
 		throw new Error("portable projection does not equal retained commit bytes");
+	if (
+		commandBytesWithInput(["git", "hash-object", "--stdin"], source)
+			.toString()
+			.trim() !== exact.p6WireBlob
+	)
+		throw new Error("portable Accepted P6 source blob identity changed");
 	const paths = command([
 		"git",
 		"diff-tree",
@@ -559,6 +586,11 @@ async function main(): Promise<void> {
 	)
 		throw new Error("Operation Wire v1 bytes or digest changed");
 	const wireV2Digest = validateWireV2(wireV2);
+	if (
+		wireV2Digest !==
+		record(revision.artifacts, "revision artifacts").wireV2Digest
+	)
+		throw new Error("Operation Wire v2 digest changed");
 	assertExecutableSemantics();
 	await verifyRepositoryEvidence();
 	console.log(`P6R1 post-commit outcome PASS; wireV2Digest=${wireV2Digest}`);

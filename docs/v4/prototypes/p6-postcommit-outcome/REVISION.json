@@ -14,15 +14,15 @@
 		"p6WireSource": "P6-GOLDENS.mjs.b64",
 		"wireV1": "wire-v1.json",
 		"wireV2": "wire-v2.json",
-		"wireV2Digest": "76fa80c30428f4ae18e9911bf3f44c57ed01c668284a28dfdef1de64bba1d436"
+		"wireV2Digest": "2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28"
 	},
 	"projection": {
-		"commit": "fa7ee83d240d1da32bf7b6b49ae90434a3e090bc",
-		"parent": "e505505c77f11f66dd3f4e0530621d040774b574",
-		"revertedBy": "df044e5a1dbac9a424101fb6a462eb95d78b5985",
+		"commit": "823d199efd8658a1c896056c2b9ae9da622de173",
+		"parent": "e8105b25534d99441c4beea6f3357cf1bf9001f8",
+		"revertedBy": "64e7cf11fd74e4db02943e70e28667cd0914df92",
 		"path": "PROJECTION.patch.b64",
 		"encoding": "base64",
-		"diffSha256": "ef962de08f89cf64b4a00ae78e397335d0ec56a06b245147493ad1c7e0ea661e"
+		"diffSha256": "9f82a90a2fe17bf764aa0bec4e8c8844d2254ba30c25a6b4337cb307596dc108"
 	},
 	"nonGoals": [
 		"production Runtime implementation",
