@@ -12,7 +12,6 @@ import type {
 	PostgresCollectionOperationPlansV1,
 	PostgresCreateOperationPlanV1,
 	PostgresGetOperationPlanV1,
-	PostgresOutputAuthorityEntryV1,
 } from "./postgres-contract";
 import {
 	executionParameter,
@@ -31,6 +30,13 @@ import {
 	Parameters,
 	type RecordValue,
 } from "./postgres-shared";
+
+type OutputAuthorityEntry = Readonly<{
+	path: readonly string[];
+	conditional: boolean;
+	guardColumn?: string;
+	mutableEvidenceCollections: readonly `collection:${string}`[];
+}>;
 
 function getPlan(
 	operation: CollectionOperationProgramV1,
@@ -74,7 +80,7 @@ function getPlan(
 	const baseOutput = result(collection, operation.selectedFieldPaths);
 	let guardIndex = 0;
 	const joins: string[] = [];
-	const outputAuthority: PostgresOutputAuthorityEntryV1[] = [];
+	const outputAuthority: OutputAuthorityEntry[] = [];
 	const output = baseOutput.map((item, index) => {
 		const rule = outputRules[index];
 		if (!rule) {
@@ -324,7 +330,7 @@ function createPlan(
 	);
 	let guardIndex = 0;
 	const joins: string[] = [];
-	const outputAuthority: PostgresOutputAuthorityEntryV1[] = [];
+	const outputAuthority: OutputAuthorityEntry[] = [];
 	const output = baseOutput.map((item, index) => {
 		const rule = outputRules[index];
 		if (!rule) {
@@ -361,18 +367,6 @@ function createPlan(
 			`CASE WHEN ${quote(guardAlias)}.${quote("allowed")} THEN ${value} ELSE NULL END AS ${quote(item.column)}`,
 			`${quote(guardAlias)}.${quote("allowed")} AS ${quote(item.guardColumn)}`,
 		];
-	});
-	const recordKey = collection.primaryKey.map((field, index) =>
-		Object.freeze({
-			path: field.path,
-			column: `qp_record_key_${index}`,
-			codec: field.codec,
-			nullable: false as const,
-		}),
-	);
-	const internalKeySelection = recordKey.map((key, index) => {
-		const field = collection.primaryKey[index]!;
-		return `${quote("qp_row")}.${quote(field.column)} AS ${quote(key.column)}`;
 	});
 	return Object.freeze({
 		identity: operation.identity,
@@ -419,9 +413,8 @@ function createPlan(
 			freshAfterRowLockWait: true as const,
 			selectedPaths: Object.freeze(outputAuthority),
 		}),
-		recordKey: Object.freeze(recordKey),
 		write: Object.freeze({
-			sql: `WITH ${candidateCte}, ${quote("qp_inserted")} AS (INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${candidateCheck.sql} RETURNING *) SELECT ${[...selected, ...internalKeySelection].join(", ")} FROM ${quote("qp_inserted")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
+			sql: `WITH ${candidateCte}, ${quote("qp_inserted")} AS (INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${candidateCheck.sql} RETURNING *) SELECT ${selected.join(", ")} FROM ${quote("qp_inserted")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
 			parameters: parameters.values(),
 			result: output,
 		}),

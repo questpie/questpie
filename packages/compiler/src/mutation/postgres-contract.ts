@@ -32,13 +32,6 @@ export interface PostgresOperationResultV1 {
 	readonly guardColumn?: string;
 }
 
-export interface PostgresOutputAuthorityEntryV1 {
-	readonly path: readonly string[];
-	readonly conditional: boolean;
-	readonly guardColumn?: string;
-	readonly mutableEvidenceCollections: readonly `collection:${string}`[];
-}
-
 export interface PostgresGetOperationPlanV1 {
 	readonly identity: CollectionOperationProgramV1["identity"];
 	readonly target: CollectionOperationProgramV1["target"];
@@ -68,7 +61,12 @@ export interface PostgresGetOperationPlanV1 {
 	}>;
 	readonly outputAuthority: Readonly<{
 		freshAfterRowLockWait: true;
-		selectedPaths: readonly PostgresOutputAuthorityEntryV1[];
+		selectedPaths: readonly Readonly<{
+			path: readonly string[];
+			conditional: boolean;
+			guardColumn?: string;
+			mutableEvidenceCollections: readonly `collection:${string}`[];
+		}>[];
 	}>;
 	readonly limits: Readonly<{ rows: 1; durationMilliseconds: number }>;
 }
@@ -116,14 +114,13 @@ export interface PostgresCreateOperationPlanV1 {
 	}>;
 	readonly outputAuthority: Readonly<{
 		freshAfterRowLockWait: true;
-		selectedPaths: readonly PostgresOutputAuthorityEntryV1[];
+		selectedPaths: readonly Readonly<{
+			path: readonly string[];
+			conditional: boolean;
+			guardColumn?: string;
+			mutableEvidenceCollections: readonly `collection:${string}`[];
+		}>[];
 	}>;
-	readonly recordKey: readonly Readonly<{
-		path: readonly string[];
-		column: string;
-		codec: ScalarCodecV1;
-		nullable: false;
-	}>[];
 	readonly write: Readonly<{
 		sql: string;
 		parameters: readonly PostgresOperationParameterV1[];
