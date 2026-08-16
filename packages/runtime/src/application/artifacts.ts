@@ -98,7 +98,7 @@ export type RuntimeArtifactsV1 = Readonly<{
 	wireContract: OperationWireContract;
 }>;
 
-export function decodeOperationWireContract(
+function decodeOperationWireContract(
 	value: unknown,
 	index: number,
 ): RuntimeOperationContract {

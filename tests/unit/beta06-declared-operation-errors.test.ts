@@ -4,8 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { compileApplication } from "@questpie/compiler";
+
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
-import { decodeOperationWireContract } from "../../packages/runtime/src/application/artifacts";
+import { decodeRuntimeArtifacts } from "../../packages/runtime/src/application/artifacts";
 import {
 	createOperationEngine,
 	DeclaredOperationError,
@@ -15,39 +17,36 @@ import {
 
 const callId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
 const timestamp = new Date("2026-08-16T08:09:10.000Z");
+const fixtureRoot = join(import.meta.dir, "../../fixtures/collaboration");
 
-function wireOperation(declaredErrors: unknown) {
-	return {
-		identity: "mutation:message.publish",
-		input: { kind: "object", properties: {} },
-		output: { kind: "object", properties: {} },
-		declaredErrors,
-	};
+let fixtureArtifacts:
+	| Promise<ReturnType<typeof decodeRuntimeArtifacts>>
+	| undefined;
+
+function loadFixtureArtifacts() {
+	fixtureArtifacts ??= compileApplication({
+		applicationRoot: fixtureRoot,
+	}).then((compilation) =>
+		decodeRuntimeArtifacts({
+			runtimeBuild: JSON.parse(
+				compilation.generatedFiles["runtime-build.json"]!,
+			),
+			runtimeExecutables: JSON.parse(
+				compilation.generatedFiles["runtime-executables.json"]!,
+			),
+			wireContract: JSON.parse(
+				compilation.generatedFiles["wire-contract.json"]!,
+			),
+		}),
+	);
+	return fixtureArtifacts;
 }
 
-test("decodes exact declared-error contracts from the operation wire artifact", () => {
-	const decoded = decodeOperationWireContract(
-		wireOperation({
-			committedResultUnavailable: {
-				code: "COMMITTED_RESULT_UNAVAILABLE",
-				status: 503,
-				payload: {
-					kind: "object",
-					properties: {
-						at: { kind: "timestamp" },
-						callId: { kind: "uuid" },
-					},
-				},
-			},
-			channelUnavailable: {
-				code: "CHANNEL_UNAVAILABLE",
-				status: 404,
-				payload: null,
-			},
-		}),
-		0,
-	);
-
+test("decodes exact declared-error contracts from the complete Runtime artifacts", async () => {
+	const artifacts = await loadFixtureArtifacts();
+	const decoded = artifacts.wireContract.operations.find(
+		({ identity }) => identity === "mutation:message.publish",
+	)!;
 	expect(decoded.declaredErrors).toEqual([
 		{
 			key: "channelUnavailable",
@@ -56,19 +55,19 @@ test("decodes exact declared-error contracts from the operation wire artifact", 
 			payload: null,
 		},
 		{
-			key: "committedResultUnavailable",
-			code: "COMMITTED_RESULT_UNAVAILABLE",
-			status: 503,
+			key: "idempotencyConflict",
+			code: "IDEMPOTENCY_CONFLICT",
+			status: 409,
 			payload: {
 				kind: "object",
 				properties: {
-					at: { kind: "timestamp" },
-					callId: { kind: "uuid" },
+					callId: { kind: "text" },
 				},
 			},
 		},
 	]);
 
+	const rawWire = artifacts.wireContract;
 	for (const declaredErrors of [
 		{
 			bad: { code: "BAD", status: 400, payload: null, authority: "system" },
@@ -81,27 +80,26 @@ test("decodes exact declared-error contracts from the operation wire artifact", 
 		},
 	])
 		expect(() =>
-			decodeOperationWireContract(wireOperation(declaredErrors), 0),
+			decodeRuntimeArtifacts({
+				runtimeBuild: artifacts.runtimeBuild,
+				runtimeExecutables: artifacts.runtimeExecutables,
+				wireContract: {
+					...rawWire,
+					operations: rawWire.operations.map((operation) =>
+						operation.identity === decoded.identity
+							? { ...operation, declaredErrors }
+							: operation,
+					),
+				},
+			}),
 		).toThrow();
 });
 
-test("prepares normalized contracts and encodes only exact declared errors", () => {
-	const contract = decodeOperationWireContract(
-		wireOperation({
-			committedResultUnavailable: {
-				code: "COMMITTED_RESULT_UNAVAILABLE",
-				status: 503,
-				payload: {
-					kind: "object",
-					properties: {
-						at: { kind: "timestamp" },
-						callId: { kind: "uuid" },
-					},
-				},
-			},
-		}),
-		0,
-	);
+test("prepares normalized contracts and encodes only exact declared errors", async () => {
+	const artifacts = await loadFixtureArtifacts();
+	const contract = artifacts.wireContract.operations.find(
+		({ identity }) => identity === "mutation:message.publish",
+	)!;
 	const engine = createOperationEngine(
 		[
 			{
@@ -116,33 +114,27 @@ test("prepares normalized contracts and encodes only exact declared errors", () 
 		],
 		[contract],
 	);
-	const prepared = engine.prepare(contract.identity, {});
+	const prepared = engine.prepare(contract.identity, {
+		channelId: callId,
+		body: "published body",
+	});
 
 	expect(prepared.declaredErrors).toEqual(contract.declaredErrors);
 	expect(
 		encodeDeclaredOperationError(
 			prepared,
-			new DeclaredOperationError("COMMITTED_RESULT_UNAVAILABLE", 503, {
-				at: timestamp,
-				callId,
-			}),
+			new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, { callId }),
 		),
 	).toEqual({
-		code: "COMMITTED_RESULT_UNAVAILABLE",
-		status: 503,
-		payload: { at: timestamp.toISOString(), callId },
+		code: "IDEMPOTENCY_CONFLICT",
+		status: 409,
+		payload: { callId },
 	});
 
 	for (const error of [
-		new DeclaredOperationError("NOT_DECLARED", 503, { at: timestamp, callId }),
-		new DeclaredOperationError("COMMITTED_RESULT_UNAVAILABLE", 409, {
-			at: timestamp,
-			callId,
-		}),
-		new DeclaredOperationError("COMMITTED_RESULT_UNAVAILABLE", 503, {
-			at: "not-a-Date",
-			callId,
-		}),
+		new DeclaredOperationError("NOT_DECLARED", 409, { callId }),
+		new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 503, { callId }),
+		new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, { callId: 42 }),
 	]) {
 		try {
 			encodeDeclaredOperationError(prepared, error);
