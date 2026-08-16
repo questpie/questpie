@@ -1,5 +1,6 @@
 import {
 	decodeRuntimeCodec,
+	encodeRuntimeCodec,
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
@@ -70,14 +71,58 @@ export type PreparedOperation<View> = Readonly<{
 	binding: RuntimeExecutableBinding<View>;
 	inputCodec: RuntimeCodec;
 	output: RuntimeCodec;
+	declaredErrors: readonly RuntimeDeclaredErrorContract[];
 	input: unknown;
+}>;
+
+export type RuntimeDeclaredErrorContract = Readonly<{
+	key: string;
+	code: string;
+	status: number;
+	payload: RuntimeCodec | null;
 }>;
 
 export type RuntimeOperationContract = Readonly<{
 	identity: string;
 	input: RuntimeCodec;
 	output: RuntimeCodec;
+	declaredErrors: readonly RuntimeDeclaredErrorContract[];
 }>;
+
+export function encodeDeclaredOperationError<View>(
+	operation: PreparedOperation<View>,
+	error: DeclaredOperationError,
+): Readonly<{ code: string; status: number; payload: unknown }> {
+	const contract = operation.declaredErrors.find(
+		(candidate) => candidate.code === error.code,
+	);
+	if (!contract || contract.status !== error.status)
+		throw new OperationFailure("INTERNAL");
+	try {
+		if (contract.payload === null) {
+			if (error.payload !== null) throw new OperationFailure("INTERNAL");
+			return Object.freeze({
+				code: contract.code,
+				status: contract.status,
+				payload: null,
+			});
+		}
+		return Object.freeze({
+			code: contract.code,
+			status: contract.status,
+			payload: encodeRuntimeCodec(
+				contract.payload,
+				error.payload,
+				`$declaredError.${contract.key}.payload`,
+			),
+		});
+	} catch (caught) {
+		if (caught instanceof OperationFailure) throw caught;
+		if (caught instanceof RuntimeCodecError)
+			throw new OperationFailure("INTERNAL");
+		throw caught;
+	}
+}
 
 export interface OperationEngine<View> {
 	prepare(identity: string, input: unknown): PreparedOperation<View>;
@@ -116,6 +161,7 @@ export function createOperationEngine<View>(
 				binding: operation,
 				inputCodec: contract.input,
 				output: contract.output,
+				declaredErrors: contract.declaredErrors,
 				input: decode(contract.input, input),
 			});
 		},

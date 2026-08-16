@@ -1,4 +1,8 @@
-import { decodeRuntimeCodecDescriptor, type RuntimeCodec } from "../codec";
+import { decodeRuntimeCodecDescriptor } from "../codec";
+import type {
+	RuntimeDeclaredErrorContract,
+	RuntimeOperationContract,
+} from "../operation";
 import {
 	exactRuntimeArtifactKeys as exact,
 	failRuntimeArtifact as fail,
@@ -67,12 +71,7 @@ type OperationWireContractV1 = Readonly<{
 	protocol: Readonly<{ name: "questpie.operation"; version: 1 }>;
 	requestKeys: readonly string[];
 	responseKeys: Readonly<Record<string, readonly string[]>>;
-	operations: readonly Readonly<{
-		identity: string;
-		input: RuntimeCodec;
-		output: RuntimeCodec;
-		declaredErrors: Readonly<Record<string, unknown>>;
-	}>[];
+	operations: readonly RuntimeOperationContract[];
 	failures: readonly string[];
 	limits: Readonly<{ requestBytes: number; responseBytes: number }>;
 	principalSource: "ingressOutsideBody";
@@ -86,6 +85,68 @@ export type RuntimeArtifactsV1 = Readonly<{
 	runtimeExecutables: RuntimeExecutablesV1;
 	wireContract: OperationWireContractV1;
 }>;
+
+export function decodeOperationWireContract(
+	value: unknown,
+	index: number,
+): RuntimeOperationContract {
+	const operation = record(value, `wire operation ${index}`);
+	exact(
+		operation,
+		["identity", "input", "output", "declaredErrors"],
+		`wire operation ${index}`,
+	);
+	const rawDeclaredErrors = record(
+		operation.declaredErrors,
+		`wire operation ${index} declared errors`,
+	);
+	const declaredErrors: RuntimeDeclaredErrorContract[] = Object.entries(
+		rawDeclaredErrors,
+	)
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+		.map(([key, raw]) => {
+			const path = `wire operation ${index} declared error ${key}`;
+			const declaredError = record(raw, path);
+			exact(declaredError, ["code", "status", "payload"], path);
+			const status = declaredError.status;
+			if (
+				typeof status !== "number" ||
+				!Number.isInteger(status) ||
+				status < 400 ||
+				status > 599
+			)
+				fail(`${path} status is invalid`);
+			return Object.freeze({
+				key: string(key, `${path} key`),
+				code: string(declaredError.code, `${path} code`),
+				status,
+				payload:
+					declaredError.payload === null
+						? null
+						: decodeRuntimeCodecDescriptor(
+								declaredError.payload,
+								`$wire.operations[${index}].declaredErrors.${key}.payload`,
+							),
+			});
+		});
+	if (
+		new Set(declaredErrors.map(({ code }) => code)).size !==
+		declaredErrors.length
+	)
+		fail(`wire operation ${index} declared error codes must be unique`);
+	return Object.freeze({
+		identity: string(operation.identity, `wire operation ${index} identity`),
+		input: decodeRuntimeCodecDescriptor(
+			operation.input,
+			`$wire.operations[${index}].input`,
+		),
+		output: decodeRuntimeCodecDescriptor(
+			operation.output,
+			`$wire.operations[${index}].output`,
+		),
+		declaredErrors: Object.freeze(declaredErrors),
+	});
+}
 
 function decodeWire(value: unknown): OperationWireContractV1 {
 	const wire = record(value, "wire contract");
@@ -164,30 +225,7 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 	for (const [key, expected] of Object.entries(responseShape))
 		if (JSON.stringify(responseKeys[key]) !== JSON.stringify(expected))
 			fail("wire response keys are invalid");
-	const operations = wire.operations.map((raw, index) => {
-		const operation = record(raw, `wire operation ${index}`);
-		exact(
-			operation,
-			["identity", "input", "output", "declaredErrors"],
-			`wire operation ${index}`,
-		);
-		const declaredErrors = record(
-			operation.declaredErrors,
-			`wire operation ${index} declared errors`,
-		);
-		return Object.freeze({
-			identity: string(operation.identity, `wire operation ${index} identity`),
-			input: decodeRuntimeCodecDescriptor(
-				operation.input,
-				`$wire.operations[${index}].input`,
-			),
-			output: decodeRuntimeCodecDescriptor(
-				operation.output,
-				`$wire.operations[${index}].output`,
-			),
-			declaredErrors: Object.freeze({ ...declaredErrors }),
-		});
-	});
+	const operations = wire.operations.map(decodeOperationWireContract);
 	const operationIds = operations.map((operation) => operation.identity);
 	if (
 		new Set(operationIds).size !== operationIds.length ||

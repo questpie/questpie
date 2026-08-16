@@ -17,6 +17,7 @@ import {
 	DeclaredOperationError,
 	declaredErrorFrame,
 	decodeOperationWireRequest,
+	encodeDeclaredOperationError,
 	failureFrame,
 	OperationFailure,
 	operationFailureStatus,
@@ -445,14 +446,21 @@ export async function createRuntimeApplication<
 		} catch (error) {
 			if (request.signal.aborted) throw request.signal.reason;
 			if (isAbort(error)) throw error;
-			if (error instanceof DeclaredOperationError)
-				return operationWireResponse(
-					declaredErrorFrame(frame, error),
-					error.status,
-				);
+			let operationError: unknown = error;
+			if (error instanceof DeclaredOperationError) {
+				try {
+					const declared = encodeDeclaredOperationError(prepared, error);
+					return operationWireResponse(
+						declaredErrorFrame(frame, declared),
+						declared.status,
+					);
+				} catch (caught) {
+					operationError = caught;
+				}
+			}
 			const failure =
-				error instanceof OperationFailure
-					? error
+				operationError instanceof OperationFailure
+					? operationError
 					: new OperationFailure("INTERNAL");
 			return operationWireResponse(
 				failureFrame(frame, failure.code, failure.retryable),

@@ -87,11 +87,18 @@ export function renderClientContract(
 			resource.contract.output,
 		]),
 	);
-	const declaredErrorCodes = Object.fromEntries(
+	const declaredErrorContracts = Object.fromEntries(
 		[...queries, ...mutations].map((resource) => [
 			resource.identity,
 			Object.values(record(resource.contract.declaredErrors ?? {})).map(
-				(error) => String(record(error).code),
+				(error) => {
+					const contract = record(error);
+					return {
+						code: String(contract.code),
+						status: contract.status,
+						payload: contract.payload,
+					};
+				},
 			),
 		]),
 	);
@@ -120,7 +127,7 @@ export interface GeneratedClient {
 
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
-const declaredErrorCodes: WireRecord = ${canonicalBytes(declaredErrorCodes).trim()};
+const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const failureCodes = new Set([
 	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
@@ -231,9 +238,14 @@ export function createClient(input: Readonly<{
 			const detail = wireRecord(frame.error);
 			exactKeys(detail, ["code", "payload", "status"]);
 			if (typeof detail.code !== "string" || typeof detail.status !== "number") protocolFailure();
-			const allowed = declaredErrorCodes[operation];
-			if (!Array.isArray(allowed) || !allowed.includes(detail.code)) protocolFailure();
-			throw Object.assign(new Error(detail.code), detail);
+			const allowed = declaredErrorContracts[operation];
+			if (!Array.isArray(allowed)) protocolFailure();
+			const contract = allowed.map(wireRecord).find((candidate) => candidate.code === detail.code);
+			if (!contract || detail.status !== contract.status || response.status !== contract.status) protocolFailure();
+			const payload = contract.payload === null
+				? detail.payload === null ? null : protocolFailure()
+				: decode(contract.payload, detail.payload);
+			throw Object.assign(new Error(detail.code), { code: detail.code, status: detail.status, payload });
 		}
 		return protocolFailure();
 	};
