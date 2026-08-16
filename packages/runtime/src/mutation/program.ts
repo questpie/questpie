@@ -5,7 +5,6 @@ import { decodeMutationDataQueryTemplate } from "./query-template";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 type FieldPath = readonly string[];
-type MutationMember = "create" | "delete" | "update";
 type OperationMember = "create" | "delete" | "get" | "list" | "update";
 
 export type MutationPolicyLinkV1 = Readonly<{
@@ -622,10 +621,4 @@ export function linkCollectionMutationPrograms(
 			ReadonlyMap<OperationMember, LinkedCollectionOperationProgramV1>
 		>,
 	});
-}
-
-export function isMutationMember(
-	member: OperationMember,
-): member is MutationMember {
-	return member === "create" || member === "update" || member === "delete";
 }
