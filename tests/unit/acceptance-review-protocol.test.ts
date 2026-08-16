@@ -296,6 +296,51 @@ describe("acceptance review protocol v2", () => {
 		).rejects.toBeInstanceOf(AcceptanceReviewNoResult);
 	});
 
+	test.each([
+		{
+			name: "message before thread",
+			mutate: (lines: string[]) => [lines[2]!, lines[0]!, lines[1]!, lines[3]!],
+		},
+		{
+			name: "completion before message",
+			mutate: (lines: string[]) => [lines[0]!, lines[1]!, lines[3]!, lines[2]!],
+		},
+		{
+			name: "missing turn start",
+			mutate: (lines: string[]) => [lines[0]!, lines[2]!, lines[3]!],
+		},
+		{
+			name: "duplicate turn start",
+			mutate: (lines: string[]) => [
+				lines[0]!,
+				lines[1]!,
+				lines[1]!,
+				lines[2]!,
+				lines[3]!,
+			],
+		},
+		{
+			name: "event after completion",
+			mutate: (lines: string[]) => [
+				...lines,
+				JSON.stringify({
+					type: "item.completed",
+					item: { id: "late", type: "reasoning", text: "late" },
+				}),
+			],
+		},
+	])("rejects transcript lifecycle: $name", async ({ mutate }) => {
+		await expect(
+			runContingencyAcceptanceReview(
+				{ packet, packetDigest, reviewedHead, diffBase, timeoutMs: 300_000 },
+				transport((_request, response) => ({
+					...response,
+					events: mutate(response.events.split("\n")).join("\n"),
+				})),
+			),
+		).rejects.toBeInstanceOf(AcceptanceReviewNoResult);
+	});
+
 	test("does not invoke contingency after a primary verdict", async () => {
 		for (const verdict of ["PASS", "BLOCKED"] as const) {
 			let calls = 0;

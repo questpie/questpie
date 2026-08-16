@@ -108,8 +108,8 @@ function exactKeys(
 
 function parseEvents(events: string, finalResponse: string): string {
 	let invocationId: string | undefined;
-	let completed = false;
 	let agentMessage: string | undefined;
+	let state: "thread" | "turn" | "items" | "completion" | "complete" = "thread";
 
 	for (const line of events.split("\n")) {
 		if (line.trim() === "") continue;
@@ -124,14 +124,23 @@ function parseEvents(events: string, finalResponse: string): string {
 
 		switch (event.type) {
 			case "thread.started":
-				if (invocationId || typeof event.thread_id !== "string")
+				if (
+					state !== "thread" ||
+					invocationId ||
+					typeof event.thread_id !== "string"
+				)
 					noResult("Codex emitted an invalid invocation identity");
 				invocationId = event.thread_id;
+				state = "turn";
 				break;
 			case "turn.started":
+				if (state !== "turn") noResult("Codex emitted an invalid turn start");
+				state = "items";
 				break;
 			case "item.started":
 			case "item.completed": {
+				if (state !== "items")
+					noResult("Codex emitted an item outside the active turn");
 				if (!isRecord(event.item) || typeof event.item.type !== "string")
 					noResult("Codex emitted an invalid item event");
 				if (event.item.type === "reasoning") break;
@@ -142,18 +151,20 @@ function parseEvents(events: string, finalResponse: string): string {
 				if (typeof event.item.text !== "string")
 					noResult("Codex final message is not text");
 				agentMessage = event.item.text;
+				state = "completion";
 				break;
 			}
 			case "turn.completed":
-				if (completed) noResult("Codex emitted duplicate completion events");
-				completed = true;
+				if (state !== "completion")
+					noResult("Codex emitted an invalid turn completion");
+				state = "complete";
 				break;
 			default:
 				noResult(`Codex emitted unsupported event ${event.type}`);
 		}
 	}
 
-	if (!invocationId || !completed || agentMessage !== finalResponse)
+	if (!invocationId || state !== "complete" || agentMessage !== finalResponse)
 		noResult("Codex event transcript does not bind the final response");
 	return invocationId;
 }
