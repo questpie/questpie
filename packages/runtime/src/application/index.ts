@@ -176,7 +176,12 @@ export async function createRuntimeApplication<
 		artifacts.wireContract.operations,
 	);
 	await input.program.verifyReadiness?.(artifacts);
-	await input.program.liveQueryCoordinator?.start();
+	try {
+		await input.program.liveQueryCoordinator?.start();
+	} catch (error) {
+		await input.program.liveQueryCoordinator?.drain().catch(() => {});
+		throw error;
+	}
 	const core = createApplicationRuntime({
 		services: input.program.services,
 		context: input.program.context,
@@ -653,6 +658,7 @@ export async function createRuntimeApplication<
 				await Promise.allSettled(activeRoots);
 			}
 			await realtime?.drain();
+			await input.program.liveQueryCoordinator?.drain();
 			await core.close();
 			state = "closed";
 			emit({ family: "runtime", kind: "stopped" });

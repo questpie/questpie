@@ -17,6 +17,11 @@ export type {
 	ChangeLedgerFactV1,
 	ChangeReconciliationResultV1,
 } from "./postgres";
+export { createPostgresReconciliationWake } from "./postgres-wake";
+export type {
+	PostgresReconciliationWake,
+	PostgresWakeTickSource,
+} from "./postgres-wake";
 export { linkLiveQueryProgram } from "./program";
 export type {
 	LinkedContextObservationSlotV1,

@@ -4,10 +4,12 @@ import type { Principal } from "questpie";
 import { canonicalJsonLine, sha256Digest } from "../../canonical-json";
 import {
 	createLiveQueryInvalidation,
+	createPostgresReconciliationWake,
 	reconcilePostgresChangeLedger,
 	type ChangeLedgerFactV1,
 	type LinkedLiveQueryProgramV1,
 	type ObservedLiveQueryPlanV1,
+	type PostgresReconciliationWake,
 } from "../../live-query";
 import {
 	createPostgresLiveQueryRetention,
@@ -46,6 +48,7 @@ export type LiveQueryCoordinatorOpen<Context> = Readonly<{
 
 export interface LiveQueryCoordinator<Context> {
 	start(): Promise<void>;
+	drain(): Promise<void>;
 	open(
 		input: LiveQueryCoordinatorOpen<Context>,
 	): Promise<LiveQueryCoordinatorDelivery>;
@@ -64,6 +67,7 @@ export interface LiveQueryCoordinator<Context> {
 
 type Reconcile = (
 	apply: (facts: readonly ChangeLedgerFactV1[]) => Promise<void>,
+	signal?: AbortSignal,
 ) => Promise<void>;
 
 type Binding<Context> = {
@@ -197,26 +201,31 @@ function delivery(
 	});
 }
 
-export function createLiveQueryCoordinator<Context>(
-	input: Readonly<{
-		program: LinkedLiveQueryProgramV1;
-		applicationName: string;
-		deploymentDigest: string;
-		wireVersion: number;
-		retention: PostgresLiveQueryRetention;
-		reconcile: Reconcile;
-	}>,
+type LiveQueryCoordinatorInput = Readonly<{
+	program: LinkedLiveQueryProgramV1;
+	applicationName: string;
+	deploymentDigest: string;
+	wireVersion: number;
+	retention: PostgresLiveQueryRetention;
+	reconcile: Reconcile;
+}>;
+
+function createLiveQueryCoordinatorInternal<Context>(
+	input: LiveQueryCoordinatorInput,
+	postgresWake?: Readonly<{ signal?: AbortSignal }>,
 ): LiveQueryCoordinator<Context> {
 	const invalidation = createLiveQueryInvalidation(input.program);
 	const bindings = new Map<string, Binding<Context>>();
-	let state: "idle" | "starting" | "ready" | "failed" = "idle";
+	let state: "drained" | "draining" | "failed" | "idle" | "ready" | "starting" =
+		"idle";
 	let startup: Promise<void> | undefined;
 	let reconciliation: Promise<void> | undefined;
+	let wake: PostgresReconciliationWake | undefined;
 
 	const discardPending = (): void => {
 		for (const binding of bindings.values()) binding.pending = undefined;
 	};
-	const reconcile = (): Promise<void> => {
+	const reconcile = (signal?: AbortSignal): Promise<void> => {
 		if (reconciliation) return reconciliation;
 		let commitPlans: (() => void) | undefined;
 		reconciliation = input
@@ -228,7 +237,7 @@ export function createLiveQueryCoordinator<Context>(
 				)
 					throw new Error("Live Query reconciliation did not complete");
 				commitPlans = prepared.commit;
-			})
+			}, signal)
 			.then(async () => {
 				commitPlans?.();
 				const pending = [...bindings.values()].flatMap((binding) =>
@@ -254,6 +263,12 @@ export function createLiveQueryCoordinator<Context>(
 			});
 		return reconciliation;
 	};
+	if (postgresWake) {
+		wake = createPostgresReconciliationWake({
+			reconcile,
+			signal: postgresWake.signal,
+		});
+	}
 	const register = (
 		opened: LiveQueryCoordinatorOpen<Context>,
 		initial: LiveQueryCoordinatorEvaluation,
@@ -337,7 +352,7 @@ export function createLiveQueryCoordinator<Context>(
 		start() {
 			if (startup) return startup;
 			state = "starting";
-			startup = reconcile().then(
+			startup = (wake ? wake.start() : reconcile()).then(
 				() => {
 					state = "ready";
 				},
@@ -347,6 +362,15 @@ export function createLiveQueryCoordinator<Context>(
 				},
 			);
 			return startup;
+		},
+		async drain() {
+			if (state === "drained" || state === "draining") {
+				await wake?.drain();
+				return;
+			}
+			state = "draining";
+			await wake?.drain();
+			state = "drained";
 		},
 		async open(opened) {
 			if (state !== "ready")
@@ -430,6 +454,12 @@ export function createLiveQueryCoordinator<Context>(
 	return Object.freeze(coordinator);
 }
 
+export function createLiveQueryCoordinator<Context>(
+	input: LiveQueryCoordinatorInput,
+): LiveQueryCoordinator<Context> {
+	return createLiveQueryCoordinatorInternal(input);
+}
+
 export function createPostgresLiveQueryCoordinator<Context>(
 	input: Readonly<{
 		program: LinkedLiveQueryProgramV1;
@@ -446,20 +476,23 @@ export function createPostgresLiveQueryCoordinator<Context>(
 		sql: input.sql,
 		hmacKey: input.hmacKey,
 	});
-	return createLiveQueryCoordinator({
-		program: input.program,
-		applicationName: input.applicationName,
-		deploymentDigest: input.deploymentDigest,
-		wireVersion: input.wireVersion,
-		retention,
-		reconcile: async (apply) => {
-			await reconcilePostgresChangeLedger({
-				sql: input.sql,
-				application: input.applicationName,
-				consumer: input.consumer,
-				apply: (facts) => apply(facts),
-				signal: input.signal,
-			});
+	return createLiveQueryCoordinatorInternal(
+		{
+			program: input.program,
+			applicationName: input.applicationName,
+			deploymentDigest: input.deploymentDigest,
+			wireVersion: input.wireVersion,
+			retention,
+			reconcile: async (apply, signal) => {
+				await reconcilePostgresChangeLedger({
+					sql: input.sql,
+					application: input.applicationName,
+					consumer: input.consumer,
+					apply: (facts) => apply(facts),
+					signal,
+				});
+			},
 		},
-	});
+		{ signal: input.signal },
+	);
 }

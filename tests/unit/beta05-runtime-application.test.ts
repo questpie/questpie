@@ -866,6 +866,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 		reportStarted = resolve;
 	});
 	const events: ExecutionEventV1[] = [];
+	let coordinatorDrains = 0;
 	const creation = createRuntimeApplication({
 		artifacts: runtimeArtifactEnvelope(artifacts),
 		artifactFiles: artifacts.artifactFiles,
@@ -880,6 +881,9 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 				async start() {
 					reportStarted();
 					await startupReleased;
+				},
+				async drain() {
+					coordinatorDrains += 1;
 				},
 				async open() {
 					throw new Error("not used");
@@ -905,6 +909,45 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 		kind: "ready",
 	});
 	await app.close();
+	expect(coordinatorDrains).toBe(1);
+
+	const startupFailure = new Error("startup reconciliation failed");
+	const failedLifecycle: string[] = [];
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program: {
+				services: [],
+				context,
+				bootstrap: { get: async () => null },
+				project: ({ facts }) => ({ signal: facts.signal }),
+				resolvePrincipal: async () => principal.anonymous(),
+				liveQueryCoordinator: {
+					async start() {
+						failedLifecycle.push("start");
+						throw startupFailure;
+					},
+					async drain() {
+						failedLifecycle.push("drain");
+					},
+					async open() {
+						throw new Error("not used");
+					},
+					async acknowledge() {
+						return false;
+					},
+					close() {},
+					async reconcile() {},
+					currentPlan() {
+						return undefined;
+					},
+				},
+			},
+		}),
+	).rejects.toBe(startupFailure);
+	expect(failedLifecycle).toEqual(["start", "drain"]);
 });
 
 test("sanitizes unknown operation errors identically for direct and wire calls", async () => {
