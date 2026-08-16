@@ -62,6 +62,15 @@ export type {
 	OperationErrorFactories,
 	OperationErrorMap,
 } from "./operation";
+export { defineCollectionOperations, mutation } from "./operation-set";
+export type {
+	CollectionOperationSelection,
+	CollectionOperationSetBody,
+	CollectionOperationSetDefinition,
+	NormalizedValue,
+	ServerValue,
+	ValueProgramOperand,
+} from "./operation-set";
 export type { DataFieldDescriptor, FieldDefinition } from "./field-contract";
 export type {
 	CollectionAugmentation,
