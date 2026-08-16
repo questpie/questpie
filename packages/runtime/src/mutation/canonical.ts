@@ -10,10 +10,16 @@ export function canonicalMutationBytes(value: unknown): Uint8Array {
 	} catch (error) {
 		if (!(error instanceof CanonicalJsonError)) throw error;
 		if (error.reason === "invalid-number")
-			throw new TypeError("Mutation canonical JSON rejects this number");
+			throw new TypeError("Mutation canonical JSON rejects this number", {
+				cause: error,
+			});
 		if (error.reason === "invalid-unicode")
-			throw new TypeError("Mutation canonical JSON rejects lone surrogates");
-		throw new TypeError("Mutation canonical JSON rejects this value");
+			throw new TypeError("Mutation canonical JSON rejects lone surrogates", {
+				cause: error,
+			});
+		throw new TypeError("Mutation canonical JSON rejects this value", {
+			cause: error,
+		});
 	}
 }
 
