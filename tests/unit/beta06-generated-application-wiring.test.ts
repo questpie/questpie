@@ -109,7 +109,7 @@ test("relocated generated application links Mutation and private Live Query prog
 		]);
 		await expect(
 			internalApplication.createApplication({
-				postgres: { url: "postgres://must-not-open.invalid/questpie" },
+				postgres: { url: "postgres://localhost:1/questpie" },
 				realtime: { hmacKey: new Uint8Array(31) },
 			}),
 		).rejects.toThrow("HMAC key must contain at least 32 bytes");
