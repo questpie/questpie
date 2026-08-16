@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "356015752e62bac276c04f712fb27770c74b1489",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "2162c97b93be2046667a9cad4e3614e885c1d1d71ecf54bee76ef22ed2e22e0f",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "826d31ab-d877-464e-af9c-6ba6342b841c",
+				"invocationId": "01a00a76-553a-7c83-b328-0b3dc287199c",
+				"packetDigest": "2162c97b93be2046667a9cad4e3614e885c1d1d71ecf54bee76ef22ed2e22e0f",
+				"reviewedHead": "356015752e62bac276c04f712fb27770c74b1489",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` does not produce configuration-independent canonical diff bytes. Its `git diff` invocation leaves rename detection, prefixes, diff algorithm, and related formatting subject to repository or user Git configuration. Consequently, the same reviewed commit can produce a different packet digest locally and in CI, contradicting the deterministic packet and credential-free re-derivation requirements. Pin all byte-affecting diff behavior explicitly or run Git under a closed configuration, and add a negative control proving identical packet bytes under hostile `diff.noprefix`, `diff.renames`, and `diff.algorithm` settings.\n\n2. `.agents/skills/questpie-v4/scripts/acceptance-review.ts` and `acceptance-review-safety.ts` validate only the lexical output path and the final filesystem entry. A clean reviewed commit can contain a symlinked parent directory, allowing an absent `reviewOutput` such as `link/REVIEW.json` to resolve outside the repository and be written there. This violates ADR-0020's requirement to validate every path and fails the proof's path/output safety claim. Reject symlinks in every existing output-path component, verify the real parent remains beneath the repository root, and add a parent-symlink escape control.\n\nNon-blocking observations: The prior authority-head ancestry, exact deterministic-gate commands, and bounded subprocess findings are repaired. Primary-verdict precedence, the fixed two-axis contingency, request and packet binding, distinct reviewer identities, hostile event rejection, aggregate validation, and preservation of the earlier blocked records otherwise align with ADR-0024."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "4c12ecd0-f545-4cf4-994b-df2fecfd9b68",
+				"invocationId": "01a00a76-553b-71e3-857e-3f937eb53ff4",
+				"packetDigest": "2162c97b93be2046667a9cad4e3614e885c1d1d71ecf54bee76ef22ed2e22e0f",
+				"reviewedHead": "356015752e62bac276c04f712fb27770c74b1489",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "PASS",
+				"findings": "VERDICT: PASS\n\nNo blocking Standards findings remain. The revision preserves the protocol-v1 implementation, binds every authority head to reviewed ancestry, records exact full/release and focused gates, and routes both primary and contingency processes through bounded concurrent stream draining with termination escalation. The negative controls cover dirty state, empty diffs, authority substitution, unrelated authority commits, output replacement, large output, non-cooperative termination, prohibited and unknown events, malformed or mismatched responses, missing axes, reused identities, aggregation, and record tampering. Packet construction, reviewer profiles, ephemeral read-only workspaces, record validation, and credential-free re-derivation remain closed and repository-owned without introducing a public provider seam or production behavior."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:07:27.418Z"
+}
