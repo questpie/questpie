@@ -127,6 +127,8 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 		install("@questpie/runtime", "packages/runtime", {
 			".": "./dist/index.js",
 			"./bundle": "./dist/bundle.js",
+			"./bundle-core": "./dist/bundle-core.js",
+			"./bundle-realtime": "./dist/bundle-realtime.js",
 		});
 		install("@questpie/compiler", "packages/compiler", {
 			".": "./dist/index.js",
