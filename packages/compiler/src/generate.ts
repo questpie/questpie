@@ -1,6 +1,11 @@
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
-import { renderMutationDeclarations, renderMutationFactory } from "./mutation";
+import {
+	renderGeneratedMutationData,
+	renderMutationDeclarations,
+	renderMutationFactory,
+	type CollectionOperationProgramsV1,
+} from "./mutation";
 import type {
 	RelationalGeneratedContractV1,
 	RelationalGeneratedSelectionV1,
@@ -258,6 +263,7 @@ export function renderAppContract(
 	schema: unknown,
 	sourceRoot: string,
 	relational: RelationalGeneratedContractV1,
+	collectionOperations: CollectionOperationProgramsV1,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -322,6 +328,11 @@ export function renderAppContract(
 			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
 		})
 		.join("\n\t");
+	const mutationData = renderGeneratedMutationData(collectionOperations, {
+		field: (target, path) =>
+			fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
+		fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),
+	});
 	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
@@ -330,19 +341,13 @@ export interface ReadCollection<Row, Key> {
 	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
 }
 
-export interface WriteCollection<Row, Key> extends ReadCollection<Row, Key> {
-	create<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ input: Partial<Row>; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>>>;
-	update<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; patch: Partial<Row>; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
-	delete<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
-}
-
 export interface GeneratedData {
 	${renderData(resources)}
 	${queryRuns}
 }
 
 export interface GeneratedMutationData {
-	${renderData(resources).replaceAll(": ReadCollection<", ": WriteCollection<")}
+	${mutationData}
 }
 
 export interface GeneratedQueries {

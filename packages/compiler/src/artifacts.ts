@@ -294,6 +294,7 @@ export async function createArtifacts(
 			schema,
 			input.configuration.source.root,
 			relational.declarations,
+			operationSets.programs,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources, {
