@@ -23,7 +23,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta06 on local PostgreSQL 17 (execute20 166.395275 ms, maximum result 168 bytes)",
+			"command": "bun run bench:micro -- --scenario beta06 on local PostgreSQL 17 under the committed 1100 ms execute20 budget",
 			"result": "PASS"
 		},
 		{
@@ -36,10 +36,6 @@
 		},
 		{
 			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/check.ts and negative-control.ts (19 branches)",
-			"result": "PASS"
-		},
-		{
-			"command": "parallel replacement Standards and Spec reviews against diff base 6006800b694bd2751e4f431b4be727245f5398c1",
 			"result": "PASS"
 		},
 		{
