@@ -27,6 +27,13 @@ function plan(value: ReturnType<typeof artifact>, identity: string) {
 	return result;
 }
 
+function parameters(value: MutableRecord, member: string): MutableRecord[] {
+	const statement = record(value[member]);
+	if (!Array.isArray(statement.parameters))
+		throw new TypeError(`fixture ${member} has no parameters`);
+	return statement.parameters.map(record);
+}
+
 test("rejects extra executable-plan keys", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
@@ -116,4 +123,82 @@ test("rejects collapsing keyed lock and fresh Policy read", async () => {
 			operations: fixture.operations,
 		}),
 	).toThrow("lock and fresh Policy read were collapsed");
+});
+
+test.each([
+	{ codec: { kind: "integer", minimum: -2_147_483_649, maximum: null } },
+	{ codec: { kind: "bigint", minimum: "not-a-bigint", maximum: null } },
+	{ codec: { kind: "numeric", precision: 1_001, scale: 0 } },
+])(
+	"rejects a scalar descriptor outside the PostgreSQL contract",
+	async ({ codec }) => {
+		const fixture = await compilation;
+		const hostile = artifact(fixture.artifact);
+		const create = plan(hostile, "mutation:messages.create");
+		const candidate = record(create.candidate);
+		if (!Array.isArray(candidate.fields))
+			throw new TypeError("fixture candidate has no fields");
+		record(candidate.fields[0]).codec = codec;
+		expect(() =>
+			linkPostgresCollectionOperationPlans({
+				artifact: hostile,
+				operations: fixture.operations,
+			}),
+		).toThrow(/bounds are invalid|bigint is invalid/);
+	},
+);
+
+test("rejects an execution fact whose source and path do not form a closed fact", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const write = parameters(plan(hostile, "mutation:messages.create"), "write");
+	const fact = write.find((parameter) => parameter.kind === "executionFact");
+	if (!fact) throw new TypeError("fixture write has no execution fact");
+	fact.path = ["unknown"];
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("execution source is invalid");
+});
+
+test("rejects a literal whose value disagrees with its codec", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const write = parameters(plan(hostile, "mutation:messages.create"), "write");
+	const literal = write.find(
+		(parameter) => parameter.kind === "literal" && parameter.codec === "uuid",
+	);
+	if (!literal) throw new TypeError("fixture write has no UUID literal");
+	literal.value = "not-a-uuid";
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("literal is invalid");
+});
+
+test("rejects a literal whose PostgreSQL type disagrees with its codec", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const create = plan(hostile, "mutation:messages.create");
+	const write = record(create.write);
+	const literal = parameters(create, "write").find(
+		(parameter) => parameter.kind === "literal" && parameter.codec === "uuid",
+	);
+	if (!literal) throw new TypeError("fixture write has no UUID literal");
+	const position = Number(literal.position);
+	write.sql = String(write.sql).replaceAll(
+		`$${position}::uuid`,
+		`$${position}::text`,
+	);
+	literal.postgresType = "text";
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("codec or PostgreSQL type is invalid");
 });

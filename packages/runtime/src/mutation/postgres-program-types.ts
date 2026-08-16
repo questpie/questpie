@@ -1,3 +1,4 @@
+import type { ScalarCodecV1 } from "../relational";
 import type {
 	FieldNormalizerProgramV1,
 	LinkedCollectionOperationProgramV1,
@@ -7,36 +8,29 @@ import type {
 export type RecordValue = Readonly<Record<string, unknown>>;
 export type FieldPath = readonly string[];
 
-export type ScalarCodecV1 =
-	| Readonly<{ kind: "uuid" | "boolean" | "date" }>
+export type PostgresParameterV1 =
 	| Readonly<{
-			kind: "text";
-			minLength: number | null;
-			maxLength: number | null;
-			collation: "questpie.binary";
+			position: number;
+			postgresType: string;
+			kind: "callerInput" | "key";
+			path: FieldPath;
+			codec: ScalarCodecV1;
 	  }>
 	| Readonly<{
-			kind: "integer";
-			minimum: number | null;
-			maximum: number | null;
+			position: number;
+			postgresType: string;
+			kind: "executionFact";
+			path: FieldPath;
+			codec: ScalarCodecV1["kind"];
+			source: string;
 	  }>
 	| Readonly<{
-			kind: "bigint";
-			minimum: string | null;
-			maximum: string | null;
-	  }>
-	| Readonly<{ kind: "numeric"; precision: number; scale: number }>
-	| Readonly<{ kind: "timestamp"; withTimezone: boolean }>;
-
-export type PostgresParameterV1 = Readonly<{
-	position: number;
-	postgresType: string;
-	kind: "callerInput" | "executionFact" | "key" | "literal";
-	path?: FieldPath;
-	codec: ScalarCodecV1 | string;
-	source?: string;
-	value?: null | boolean | number | string;
-}>;
+			position: number;
+			postgresType: string;
+			kind: "literal";
+			codec: ScalarCodecV1["kind"];
+			value: null | boolean | number | string;
+	  }>;
 
 export type PostgresResultV1 = Readonly<{
 	path: FieldPath;

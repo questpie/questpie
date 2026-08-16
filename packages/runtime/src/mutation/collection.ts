@@ -9,6 +9,7 @@ import type {
 type Row = Readonly<Record<string, unknown>>;
 type Path = readonly string[];
 type Parameter = LinkedPostgresGetOperationPlanV1["lock"]["parameters"][number];
+type ExecutionFactParameter = Extract<Parameter, { kind: "executionFact" }>;
 type Result = LinkedPostgresGetOperationPlanV1["read"]["result"][number];
 
 export type TransactionQuery = (
@@ -132,14 +133,10 @@ function decodeRow(row: Row, result: readonly Result[]) {
 }
 
 function executionFact(
-	parameter: Parameter,
+	parameter: ExecutionFactParameter,
 	facts: ExecutionFacts,
 	operationTime: Date,
 ): unknown {
-	if (!parameter.source || !parameter.path)
-		throw new TypeError(
-			"Compiled Collection plan references an invalid execution fact",
-		);
 	const key = `${parameter.source}.${parameter.path.join(".")}`;
 	if (key === "authority.kind") return facts.authority.kind;
 	if (key === "principal.id") return facts.principal.id;
@@ -165,7 +162,7 @@ function bind(
 		if (parameter.kind === "executionFact")
 			return executionFact(parameter, facts, operationTime);
 		const source = parameter.kind === "key" ? values.key : values.callerInput;
-		if (!source || !parameter.path || typeof parameter.codec === "string")
+		if (!source)
 			throw new TypeError("Compiled Collection parameter has no value source");
 		return inputScalar(
 			valueAt(source, parameter.path),

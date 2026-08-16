@@ -1,4 +1,5 @@
-import type { RecordValue, ScalarCodecV1 } from "./postgres-program-types";
+import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
+import type { RecordValue } from "./postgres-program-types";
 
 function fail(message: string): never {
 	throw new TypeError(
@@ -26,10 +27,52 @@ function exact(
 		fail(`${label} has invalid keys`);
 }
 
+export function decodePostgresStatement(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.length === 0 || value.includes("\0"))
+		fail(`${label} is invalid`);
+	if (
+		Buffer.byteLength(value) > 1_048_576 ||
+		value.includes(";") ||
+		value.includes("--") ||
+		value.includes("/*") ||
+		value.includes("*/")
+	)
+		fail(`${label} is not one static statement`);
+	return value;
+}
+
 function nullableInteger(value: unknown, label: string): number | null {
 	if (value === null) return null;
 	if (!Number.isSafeInteger(value)) fail(`${label} is invalid`);
 	return value as number;
+}
+
+function boundedNullableInteger(
+	value: unknown,
+	label: string,
+	minimum: number,
+	maximum: number,
+): number | null {
+	const result = nullableInteger(value, label);
+	if (result !== null && (result < minimum || result > maximum))
+		fail(`${label} bounds are invalid`);
+	return result;
+}
+
+function nullableBigint(value: unknown, label: string): string | null {
+	if (value === null) return null;
+	if (
+		typeof value !== "string" ||
+		!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)
+	)
+		fail(`${label} bigint is invalid`);
+	const result = BigInt(value);
+	if (
+		result < -9_223_372_036_854_775_808n ||
+		result > 9_223_372_036_854_775_807n
+	)
+		fail(`${label} bigint is invalid`);
+	return value;
 }
 
 export function decodePostgresScalarCodec(
@@ -65,21 +108,36 @@ export function decodePostgresScalarCodec(
 	}
 	if (source.kind === "integer") {
 		exact(source, ["kind", "minimum", "maximum"], label);
-		const minimum = nullableInteger(source.minimum, `${label} minimum`);
-		const maximum = nullableInteger(source.maximum, `${label} maximum`);
+		const minimum = boundedNullableInteger(
+			source.minimum,
+			`${label} minimum`,
+			-2_147_483_648,
+			2_147_483_647,
+		);
+		const maximum = boundedNullableInteger(
+			source.maximum,
+			`${label} maximum`,
+			-2_147_483_648,
+			2_147_483_647,
+		);
 		if (minimum !== null && maximum !== null && minimum > maximum)
 			fail(`${label} bounds are invalid`);
 		return Object.freeze({ kind: "integer", minimum, maximum });
 	}
 	if (source.kind === "bigint") {
 		exact(source, ["kind", "minimum", "maximum"], label);
-		for (const key of ["minimum", "maximum"])
-			if (source[key] !== null && typeof source[key] !== "string")
-				fail(`${label} ${key} is invalid`);
+		const minimum = nullableBigint(source.minimum, `${label} minimum`);
+		const maximum = nullableBigint(source.maximum, `${label} maximum`);
+		if (
+			minimum !== null &&
+			maximum !== null &&
+			BigInt(minimum) > BigInt(maximum)
+		)
+			fail(`${label} bounds are invalid`);
 		return Object.freeze({
 			kind: "bigint",
-			minimum: source.minimum as string | null,
-			maximum: source.maximum as string | null,
+			minimum,
+			maximum,
 		});
 	}
 	if (source.kind === "numeric") {
@@ -88,6 +146,7 @@ export function decodePostgresScalarCodec(
 			!Number.isSafeInteger(source.precision) ||
 			!Number.isSafeInteger(source.scale) ||
 			(source.precision as number) <= 0 ||
+			(source.precision as number) > 1_000 ||
 			(source.scale as number) < 0 ||
 			(source.scale as number) > (source.precision as number)
 		)
@@ -113,4 +172,94 @@ export function postgresTypeForScalarCodec(codec: ScalarCodecV1): string {
 	if (codec.kind === "timestamp")
 		return codec.withTimezone ? "timestamptz" : "timestamp";
 	return codec.kind === "text" ? "text" : codec.kind;
+}
+
+const executionFactContracts: Readonly<
+	Record<
+		string,
+		Readonly<{ codec: ScalarCodecV1["kind"]; postgresType: string }>
+	>
+> = Object.freeze({
+	"authority.kind": { codec: "text", postgresType: "text" },
+	"operationTime.": { codec: "timestamp", postgresType: "timestamptz" },
+	"principal.id": { codec: "uuid", postgresType: "uuid" },
+	"principal.kind": { codec: "text", postgresType: "text" },
+	"tenant.id": { codec: "uuid", postgresType: "uuid" },
+});
+
+export function decodePostgresExecutionFact(
+	source: string,
+	path: readonly string[],
+	codec: unknown,
+	postgresType: string,
+	label: string,
+): ScalarCodecV1["kind"] {
+	const contract = executionFactContracts[`${source}.${path.join(".")}`];
+	if (
+		!contract ||
+		contract.codec !== codec ||
+		contract.postgresType !== postgresType
+	)
+		fail(`${label} execution source is invalid`);
+	return contract.codec;
+}
+
+function literalDescriptor(
+	kind: string,
+	postgresType: string,
+): ScalarCodecV1 | null {
+	switch (`${kind}:${postgresType}`) {
+		case "uuid:uuid":
+			return { kind: "uuid" };
+		case "boolean:boolean":
+			return { kind: "boolean" };
+		case "integer:integer":
+			return { kind: "integer", minimum: null, maximum: null };
+		case "bigint:bigint":
+			return { kind: "bigint", minimum: null, maximum: null };
+		case "text:text":
+			return {
+				kind: "text",
+				minLength: null,
+				maxLength: null,
+				collation: "questpie.binary",
+			};
+		case "date:date":
+			return { kind: "date" };
+		case "timestamp:timestamp":
+			return { kind: "timestamp", withTimezone: false };
+		case "timestamp:timestamptz":
+			return { kind: "timestamp", withTimezone: true };
+		default:
+			return null;
+	}
+}
+
+export function decodePostgresLiteralCodec(
+	value: unknown,
+	postgresType: string,
+	literal: null | boolean | number | string,
+	label: string,
+): ScalarCodecV1["kind"] {
+	if (typeof value !== "string" || value.length === 0)
+		fail(`${label} codec is invalid`);
+	if (value === "numeric" && postgresType === "numeric") {
+		if (
+			literal !== null &&
+			(typeof literal !== "string" ||
+				!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(literal))
+		)
+			fail(`${label} literal is invalid`);
+		return "numeric";
+	}
+	const descriptor = literalDescriptor(value, postgresType);
+	if (descriptor === null) fail(`${label} codec or PostgreSQL type is invalid`);
+	if (literal !== null) {
+		try {
+			decodeRelationalScalar(literal, descriptor);
+		} catch {
+			fail(`${label} literal is invalid`);
+		}
+	}
+	return descriptor.kind;
 }

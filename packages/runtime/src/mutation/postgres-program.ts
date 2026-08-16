@@ -1,6 +1,9 @@
 import { canonicalMutationBytes } from "./canonical";
 import {
+	decodePostgresExecutionFact,
+	decodePostgresLiteralCodec,
 	decodePostgresScalarCodec,
+	decodePostgresStatement as statement,
 	postgresTypeForScalarCodec,
 } from "./postgres-program-codec";
 import type {
@@ -83,19 +86,6 @@ function same(left: unknown, right: unknown): boolean {
 	);
 }
 
-function sql(value: unknown, label: string): string {
-	const result = text(value, label);
-	if (
-		Buffer.byteLength(result) > 1_048_576 ||
-		result.includes(";") ||
-		result.includes("--") ||
-		result.includes("/*") ||
-		result.includes("*/")
-	)
-		fail(`${label} is not one static statement`);
-	return result;
-}
-
 function parameters(
 	value: unknown,
 	statement: string,
@@ -153,13 +143,20 @@ function parameters(
 				factPath.some((part) => typeof part !== "string" || part.length === 0)
 			)
 				fail(`${label} parameter ${index} path is invalid`);
+			const codec = decodePostgresExecutionFact(
+				factSource,
+				factPath as readonly string[],
+				source.codec,
+				postgresType,
+				`${label} parameter ${index}`,
+			);
 			return Object.freeze({
 				position,
 				postgresType,
 				kind: "executionFact" as const,
 				source: factSource,
 				path: Object.freeze(factPath as string[]),
-				codec: text(source.codec, `${label} parameter ${index} codec`),
+				codec,
 			});
 		}
 		if (source.kind === "literal") {
@@ -178,12 +175,18 @@ function parameters(
 				(!Number.isFinite(source.value) || Object.is(source.value, -0))
 			)
 				fail(`${label} parameter ${index} literal is invalid`);
+			const literalValue = source.value as null | boolean | number | string;
 			return Object.freeze({
 				position,
 				postgresType,
 				kind: "literal" as const,
-				value: source.value as null | boolean | number | string,
-				codec: text(source.codec, `${label} parameter ${index} codec`),
+				value: literalValue,
+				codec: decodePostgresLiteralCodec(
+					source.codec,
+					postgresType,
+					literalValue,
+					`${label} parameter ${index}`,
+				),
 			});
 		}
 		fail(`${label} parameter ${index} kind is invalid`);
@@ -500,16 +503,16 @@ function createPlan(
 			["path", "sql", "parameters"],
 			`${operation.identity} Field check ${index}`,
 		);
-		const statement = sql(
+		const sql = statement(
 			check.sql,
 			`${operation.identity} Field check ${index} SQL`,
 		);
 		return Object.freeze({
 			path: path(check.path, `${operation.identity} Field check ${index} path`),
-			sql: statement,
+			sql,
 			parameters: parameters(
 				check.parameters,
-				statement,
+				sql,
 				`${operation.identity} Field check ${index}`,
 			),
 		});
@@ -532,13 +535,13 @@ function createPlan(
 	);
 	if (candidatePolicy.freshAfterRowLockWait !== true)
 		fail(`${operation.identity} candidate Policy is not fresh`);
-	const candidatePolicySql = sql(
+	const candidatePolicySql = statement(
 		candidatePolicy.sql,
 		`${operation.identity} candidate Policy SQL`,
 	);
 	const write = record(plan.write, `${operation.identity} write`);
 	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
-	const writeSql = sql(write.sql, `${operation.identity} write SQL`);
+	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
 	if (!writeSql.includes(candidatePolicySql))
 		fail(`${operation.identity} write omits candidate Policy`);
 	const writeParameters = parameters(
@@ -652,7 +655,7 @@ function getPlan(
 		fail(`${operation.identity} lifecycle is invalid`);
 	const lock = record(plan.lock, `${operation.identity} lock`);
 	exact(lock, ["sql", "parameters", "outcome"], `${operation.identity} lock`);
-	const lockSql = sql(lock.sql, `${operation.identity} lock SQL`);
+	const lockSql = statement(lock.sql, `${operation.identity} lock SQL`);
 	if (
 		lock.outcome !== "internalLockedOrAbsent" ||
 		!/\bFOR\s+UPDATE\b/i.test(lockSql)
@@ -666,7 +669,9 @@ function getPlan(
 	if (
 		lockParameters.some(({ kind }) => kind !== "key") ||
 		!same(
-			lockParameters.map(({ path }) => path),
+			lockParameters.map((parameter) =>
+				parameter.kind === "key" ? parameter.path : [],
+			),
 			operation.keyFields,
 		)
 	)
@@ -679,7 +684,7 @@ function getPlan(
 	);
 	if (read.freshAfterRowLockWait !== true)
 		fail(`${operation.identity} read is not fresh`);
-	const readSql = sql(read.sql, `${operation.identity} read SQL`);
+	const readSql = statement(read.sql, `${operation.identity} read SQL`);
 	if (/\bFOR\s+UPDATE\b/i.test(readSql) || readSql === lockSql)
 		fail(`${operation.identity} lock and fresh Policy read were collapsed`);
 	const readParameters = parameters(
