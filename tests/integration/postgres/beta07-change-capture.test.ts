@@ -19,8 +19,16 @@ const projection = projectPostgresChangeCapture({
 	applicationName: "collaboration",
 	postgresSchema: "collaboration",
 	collections: [
-		{ identity: "channels", postgresName: "channels", keyColumns: ["id"] },
-		{ identity: "messages", postgresName: "messages", keyColumns: ["id"] },
+		{
+			identity: "collection:channels",
+			postgresName: "channels",
+			keyColumns: ["id"],
+		},
+		{
+			identity: "collection:messages",
+			postgresName: "messages",
+			keyColumns: ["id"],
+		},
 	],
 });
 
@@ -168,55 +176,55 @@ DELETE FROM collaboration.channels WHERE id = 'general';`);
 		`;
 				expect(facts).toEqual([
 					{
-						collection: "channels",
+						collection: "collection:channels",
 						kind: "insert",
 						oldId: null,
 						newId: "general",
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "insert",
 						oldId: null,
 						newId: "inserted",
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "update",
 						oldId: "inserted",
 						newId: "inserted",
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "insert",
 						oldId: null,
 						newId: "merged",
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "insert",
 						oldId: null,
 						newId: "copied",
 					},
 					{
-						collection: "channels",
+						collection: "collection:channels",
 						kind: "delete",
 						oldId: "general",
 						newId: null,
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "delete",
 						oldId: "inserted",
 						newId: null,
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "delete",
 						oldId: "merged",
 						newId: null,
 					},
 					{
-						collection: "messages",
+						collection: "collection:messages",
 						kind: "delete",
 						oldId: "copied",
 						newId: null,
@@ -256,7 +264,7 @@ SELECT 'message-' || value, 'bulk', 'body' FROM generate_series(1, 17) value;`);
 			select count(*)::integer as count, min(change_kind) as kind,
 			       bool_and(conservative) as conservative
 			from questpie_internal.change_ledger
-			where collection_identity = 'messages'
+			where collection_identity = 'collection:messages'
 		`;
 				expect(widened).toEqual({
 					count: 1,
@@ -268,7 +276,7 @@ SELECT 'message-' || value, 'bulk', 'body' FROM generate_series(1, 17) value;`);
 				const [truncated] = await database!<{ kind: string }[]>`
 			select change_kind as kind
 			from questpie_internal.change_ledger
-			where collection_identity = 'messages'
+			where collection_identity = 'collection:messages'
 			order by fact_id desc limit 1
 		`;
 				expect(truncated).toEqual({ kind: "truncate" });
