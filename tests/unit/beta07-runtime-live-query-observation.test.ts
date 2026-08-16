@@ -1,0 +1,119 @@
+import { expect, test } from "bun:test";
+
+import {
+	createLiveQueryObservation,
+	type LinkedQueryWatchabilityV1,
+} from "../../packages/runtime/src/live-query";
+
+const sha = (digit: string) => digit.repeat(64);
+
+const query: LinkedQueryWatchabilityV1 = {
+	identity: "query:messages.page",
+	watchable: true,
+	inputCodec: {},
+	outputCodec: {},
+	contractDigest: sha("1"),
+	context: {
+		kind: "context",
+		identity: "context:request",
+		projectionDigest: sha("2"),
+		tokens: ["contextBootstrapPoint", "tenantPartition"],
+	},
+	structuralQueries: new Map([
+		[
+			sha("3"),
+			{
+				kind: "structuralQuery",
+				templateDigest: sha("3"),
+				policy: "policy:messages.default",
+				policyProgramDigest: sha("4"),
+				collections: [
+					"collection:channels",
+					"collection:memberships",
+					"collection:messages",
+				],
+				relations: ["collection:messages/relation:author"],
+				tokens: [
+					"collectionRange",
+					"orderingBoundary",
+					"pageSentinel",
+					"policyEvidencePoint",
+					"relationEndpoint",
+					"relationMiss",
+					"tenantPartition",
+				],
+			},
+		],
+	]),
+	maximumTokensPerPlan: 256,
+	unsupportedReason: null,
+};
+
+test("records only reached and compiler-declared Live Query dependencies", () => {
+	const observation = createLiveQueryObservation(query);
+	observation.recordContext("context:request", [
+		{
+			kind: "contextBootstrapPoint",
+			collection: "collection:memberships",
+			detail: {
+				companyId: "company-northwind",
+				principalId: "principal-alice",
+				scopeKey: "company",
+			},
+		},
+		{
+			kind: "tenantPartition",
+			collection: "collection:companies",
+			detail: { id: "company-northwind" },
+		},
+	]);
+	observation.recordStructuralQuery(sha("3"), [
+		{
+			kind: "collectionRange",
+			collection: "collection:messages",
+			detail: { channelId: "channel-general", after: null },
+		},
+		{
+			kind: "pageSentinel",
+			collection: "collection:messages",
+			detail: { first: 20, observed: 0 },
+		},
+		{
+			kind: "relationMiss",
+			collection: "collection:memberships",
+			detail: { relation: "collection:messages/relation:author" },
+		},
+		{
+			kind: "pageSentinel",
+			collection: "collection:messages",
+			detail: { observed: 0, first: 20 },
+		},
+	]);
+
+	const plan = observation.finish();
+	expect(plan.query).toBe("query:messages.page");
+	expect(plan.tokens).toHaveLength(5);
+	expect(plan.tokens.map(({ kind }) => kind)).toEqual([
+		"tenantPartition",
+		"contextBootstrapPoint",
+		"relationMiss",
+		"collectionRange",
+		"pageSentinel",
+	]);
+	expect(plan.digest).toMatch(/^[0-9a-f]{64}$/);
+	expect(Object.isFrozen(plan)).toBe(true);
+	expect(Object.isFrozen(plan.tokens[0]?.detail)).toBe(true);
+});
+
+test("rejects an undeclared Collection before it can widen invalidation", () => {
+	const observation = createLiveQueryObservation(query);
+	expect(() =>
+		observation.recordStructuralQuery(sha("3"), [
+			{
+				kind: "policyEvidencePoint",
+				collection: "collection:messageEvents",
+				detail: {},
+			},
+		]),
+	).toThrow("is not declared by the structural Query observation slot");
+});
