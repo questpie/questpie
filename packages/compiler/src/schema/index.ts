@@ -33,6 +33,21 @@ export {
 	verifyInternalProtocolV2,
 } from "./postgres/internal-protocol-v2";
 export {
+	ensureInternalProtocolV3,
+	internalProtocolV3Checksum,
+	verifyInternalProtocolV3,
+} from "./postgres/internal-protocol-v3";
+export {
+	projectPostgresChangeCapture,
+	verifyPostgresChangeCapture,
+} from "./postgres/change-capture";
+export type {
+	PostgresChangeCaptureCollectionV1,
+	PostgresChangeCaptureTriggerV1,
+	PostgresChangeCaptureV1,
+	PostgresReactiveCollection,
+} from "./postgres/change-capture";
+export {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	fingerprint,
