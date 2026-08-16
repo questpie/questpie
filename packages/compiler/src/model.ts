@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { normalizeReactionContract } from "./reaction";
 import { normalizeBoundPolicy } from "./relational";
 import {
 	fieldPath,
@@ -499,6 +500,22 @@ export function normalizeResources(
 				kind,
 				name,
 				contract: operationContract(kind, item.value),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "reaction") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: normalizeReactionContract(item.value, codecContract),
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

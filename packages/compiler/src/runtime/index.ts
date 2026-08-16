@@ -7,6 +7,10 @@ import {
 	contentDigest,
 	digest,
 } from "../canonical";
+import {
+	projectReactionContracts,
+	type ReactionProjectionV1,
+} from "../reaction";
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
 export { renderClientContract, renderCodecType } from "./client";
@@ -41,6 +45,8 @@ export interface RuntimeContractProjection {
 		slots: readonly RuntimeExecutableSlotV1[];
 	}>;
 	readonly runtimeExecutablesDigest: string;
+	readonly reactions: ReactionProjectionV1;
+	readonly reactionDigest: string;
 	readonly wire: Readonly<Record<string, unknown>>;
 	readonly wireDigest: string;
 }
@@ -75,6 +81,8 @@ export function projectRuntimeContract(
 ): RuntimeContractProjection {
 	const application = `application:${input.configuration.application.name}`;
 	const operations = operationContracts(input.resources);
+	const reactions = projectReactionContracts(input.resources);
+	const reactionDigest = digest("questpie-reaction-projection-v1", reactions);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -211,6 +219,8 @@ export function projectRuntimeContract(
 		clientContractDigest,
 		executables,
 		runtimeExecutablesDigest,
+		reactions,
+		reactionDigest,
 		wire: { ...wireWithoutDigest, digest: wireDigest },
 		wireDigest,
 	};

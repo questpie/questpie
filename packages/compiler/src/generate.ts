@@ -201,10 +201,56 @@ function renderQueryOperations(
 const factoryNames = [
 	"defineAction",
 	"defineRoute",
-	"defineReaction",
 	"defineJob",
 	"defineWorkflow",
 ] as const;
+
+function reactions(resources: readonly NormalizedResource[]) {
+	return resources.filter((resource) => resource.kind === "reaction");
+}
+
+function renderReactionDeclarations(
+	resources: readonly NormalizedResource[],
+): string {
+	const definitions = reactions(resources)
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(resource.contract.input)}; }>;`,
+		)
+		.join("\n\t");
+	return `export interface GeneratedReactions {
+	${definitions}
+}
+
+export type ReactionDefinition<Name extends keyof GeneratedReactions> = Readonly<{
+	readonly kind: "reaction";
+	readonly identity: \`reaction:\${Name & string}\`;
+	readonly name: Name;
+	readonly input: Codec<GeneratedReactions[Name]["input"]>;
+}>;
+
+export type ReactionFactory = <const Name extends keyof GeneratedReactions>(
+	definition: Readonly<{
+		name: Name;
+		input: Codec<GeneratedReactions[Name]["input"]>;
+	}>,
+) => ReactionDefinition<Name>;
+
+export const defineReaction: ReactionFactory = ((definition) => Object.freeze({
+	...definition,
+	kind: "reaction" as const,
+	identity: \`reaction:\${definition.name}\` as const,
+})) as ReactionFactory;`;
+}
+
+function renderDispatch(resources: readonly NormalizedResource[]): string {
+	return reactions(resources)
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}(input: ${renderCodecType(resource.contract.input)}): Promise<void>;`,
+		)
+		.join("\n\t\t");
+}
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -305,6 +351,8 @@ export interface GeneratedQueries {
 
 ${renderMutationDeclarations(resources)}
 
+${renderReactionDeclarations(resources)}
+
 export type GeneratedQueryOperations = Readonly<{
 	${renderQueryOperations(resources)}
 }>;
@@ -320,7 +368,7 @@ export interface MutationContext extends Omit<RootExecution, "services"> {
 	readonly callId: string;
 	readonly transactionId: string;
 	readonly dispatch: Readonly<{
-		messagePublished(input: Readonly<{ companyId: string; messageId: string }>): Promise<void>;
+		${renderDispatch(resources)}
 	}>;
 }
 
