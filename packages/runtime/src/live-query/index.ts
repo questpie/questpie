@@ -5,6 +5,11 @@ export type {
 	LiveQueryObservation,
 	ObservedLiveQueryPlanV1,
 } from "./observation";
+export { reconcilePostgresChangeLedger } from "./postgres";
+export type {
+	ChangeLedgerFactV1,
+	ChangeReconciliationResultV1,
+} from "./postgres";
 export { linkLiveQueryProgram } from "./program";
 export type {
 	LinkedContextObservationSlotV1,
