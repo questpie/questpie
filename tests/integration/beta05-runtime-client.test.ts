@@ -11,6 +11,10 @@ import {
 	type ExecutionEventV1,
 } from "../../packages/runtime/src";
 import {
+	CommittedResultUnavailable,
+	type MutationInvoker,
+} from "../../packages/runtime/src/mutation";
+import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
 } from "../../packages/runtime/src/operation/ingress";
@@ -234,7 +238,9 @@ function artifactFiles(): Readonly<Record<string, string>> {
 	);
 }
 
-async function runtimeHarness() {
+async function runtimeHarness(
+	mutationInvoker?: MutationInvoker<Readonly<Record<string, unknown>>>,
+) {
 	let bootstrapGets = 0;
 	let dataRuns = 0;
 	const events: ExecutionEventV1[] = [];
@@ -279,6 +285,9 @@ async function runtimeHarness() {
 					}),
 					signal: facts.signal,
 				}),
+			...(mutationInvoker === undefined
+				? {}
+				: { projectMutation: () => mutationInvoker }),
 		},
 		events: (event) => events.push(event),
 	});
@@ -455,4 +464,101 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 	const eventBytes = JSON.stringify(harness.events);
 	expect(eventBytes).not.toContain("companyId");
 	expect(eventBytes).not.toContain("one engine");
+});
+
+test("executes retained v1 Queries but rejects v1 Mutations and unknown operations before context", async () => {
+	const harness = await runtimeHarness();
+	const input = { channelId, first: 20, after: null };
+	const compatibility = wireContract.compatibility as Readonly<{
+		wireV1Digest: string;
+	}>;
+	try {
+		const query = await harness.runtime.fetch(
+			operationRequest(
+				operationFrame(input, {
+					callId: "retained:v1:query",
+					wireDigest: compatibility.wireV1Digest,
+				}),
+			),
+		);
+		expect(query.status).toBe(200);
+		expect(await query.json()).toMatchObject({
+			kind: "result",
+			callId: "retained:v1:query",
+			operation: "query:messages.page",
+		});
+		expect({
+			bootstrap: harness.bootstrapGets(),
+			data: harness.dataRuns(),
+		}).toEqual({ bootstrap: 1, data: 1 });
+
+		for (const operation of [
+			"mutation:message.publish",
+			"query:messages.unknown",
+		]) {
+			const rejected = await harness.runtime.fetch(
+				operationRequest(
+					operationFrame(input, {
+						callId: `retained:v1:${operation}`,
+						operation,
+						wireDigest: compatibility.wireV1Digest,
+					}),
+				),
+			);
+			expect(rejected.status).toBe(409);
+			expect(await rejected.json()).toEqual({
+				kind: "failure",
+				error: { code: "CLIENT_OUTDATED", retryable: false },
+			});
+		}
+		expect({
+			bootstrap: harness.bootstrapGets(),
+			data: harness.dataRuns(),
+		}).toEqual({ bootstrap: 1, data: 1 });
+	} finally {
+		await harness.runtime.close();
+	}
+});
+
+test("request abort cannot mask a known post-commit Mutation outcome", async () => {
+	const callId = "abort:after:commit";
+	const controller = new AbortController();
+	const harness = await runtimeHarness(async (_operation, actualCallId) => {
+		expect(actualCallId).toBe(callId);
+		controller.abort(new DOMException("caller disconnected", "AbortError"));
+		throw new CommittedResultUnavailable(
+			actualCallId,
+			"18446744073709551615",
+			new Error("result serialization failed"),
+		);
+	});
+	try {
+		const request = operationRequest(
+			operationFrame(
+				{ channelId, first: 20, after: null },
+				{
+					callId,
+					operation: "mutation:message.publish",
+					input: { channelId, body: "committed before abort" },
+				},
+			),
+		);
+		const correlated = new Request(request, { signal: controller.signal });
+		bindIngressPrincipal(correlated, principal.user({ id: principalId }));
+		const response = await harness.runtime.fetch(correlated);
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			protocol: wireContract.protocol,
+			kind: "failure",
+			operation: "mutation:message.publish",
+			callId,
+			error: {
+				code: "COMMITTED_RESULT_UNAVAILABLE",
+				retryable: true,
+				transactionId: "18446744073709551615",
+			},
+		});
+	} finally {
+		await harness.runtime.close();
+	}
 });
