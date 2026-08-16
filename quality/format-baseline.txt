@@ -1,1 +1,3 @@
-docs/v4/schema-lifecycle.md
+docs/v4/prototypes/beta06-authority-reconciliation/REVIEW.json
+docs/v4/prototypes/p6-postcommit-outcome/REVIEW-02.json
+docs/v4/prototypes/p6-postcommit-outcome/REVIEW.json

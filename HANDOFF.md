@@ -157,9 +157,9 @@ Do not skip a blocked issue or parallelize dependent implementation.
   `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c`
   and accepts Wire v2 digest
   `2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28`.
-   Wire v2 adds the exact post-commit transaction outcome while carrying v1
-   result kinds and declared errors forward. Retained v1 Queries may execute;
-   v1 Mutations fail before Context Resolution or Operation execution.
+  Wire v2 adds the exact post-commit transaction outcome while carrying v1
+  result kinds and declared errors forward. Retained v1 Queries may execute;
+  v1 Mutations fail before Context Resolution or Operation execution.
 
 - #291 initial reviewed head `f2c1f7be06deaf6ebca9e934c64be0a290034172`
   received a valid fresh stateless Opus-medium `BLOCKED` with three findings:
