@@ -437,6 +437,7 @@ export function validateRevision(value: unknown): void {
 			wireDigest: exact.p6WireDigest,
 		}) ||
 		!equal(revision.artifacts, {
+			p6WireSource: "P6-GOLDENS.mjs.b64",
 			wireV1: "wire-v1.json",
 			wireV2: "wire-v2.json",
 			wireV2Digest:
@@ -465,18 +466,15 @@ export function validateRevision(value: unknown): void {
 }
 
 async function verifyRepositoryEvidence(): Promise<void> {
-	const sourcePath = "docs/v4/prototypes/runtime-client-studio/p6-goldens.mjs";
-	if (
-		command(["git", "rev-parse", `${exact.p6}:${sourcePath}`]) !==
-		exact.p6WireBlob
-	)
-		throw new Error("Accepted P6 wire source blob changed");
-	const source = commandBytes(["git", "show", `${exact.p6}:${sourcePath}`]);
+	const source = Buffer.from(
+		await readFile(join(import.meta.dir, "P6-GOLDENS.mjs.b64"), "utf8"),
+		"base64",
+	);
 	if (
 		createHash("sha256").update(source).digest("hex") !==
 		exact.p6WireSourceSha256
 	)
-		throw new Error("Accepted P6 wire source bytes changed");
+		throw new Error("portable Accepted P6 wire source bytes changed");
 	for (const commit of [exact.projection, exact.projectionRevert])
 		command(["git", "merge-base", "--is-ancestor", commit, "HEAD"]);
 	if (

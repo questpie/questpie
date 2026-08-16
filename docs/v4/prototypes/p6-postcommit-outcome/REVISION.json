@@ -11,6 +11,7 @@
 		"wireDigest": "d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c"
 	},
 	"artifacts": {
+		"p6WireSource": "P6-GOLDENS.mjs.b64",
 		"wireV1": "wire-v1.json",
 		"wireV2": "wire-v2.json",
 		"wireV2Digest": "76fa80c30428f4ae18e9911bf3f44c57ed01c668284a28dfdef1de64bba1d436"

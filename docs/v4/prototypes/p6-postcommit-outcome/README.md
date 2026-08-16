@@ -4,6 +4,8 @@ This bounded proof closes the one conflict between Accepted P3 post-commit
 recovery and the closed Accepted P6 Operation Wire v1. It preserves v1, freezes
 one v2 framework transaction outcome, proves exact general Call Identity text,
 and retains the reviewed authority projection as an ancestor commit.
+`P6-GOLDENS.mjs.b64` preserves the exact Accepted P6 source blob inside the
+packet because the historical proof head is not an ancestor of BETA-06.
 
 Run:
 
