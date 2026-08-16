@@ -2,7 +2,7 @@
 
 - Status: implementation decision record for issue #293
 - Base: `740f2e0049a64f5a541f33ab8da44cf8e114041b`
-- Authority: ADR-0010, ADR-0011, ADR-0013, ADR-0016, ADR-0021,
+- Authority: ADR-0010, ADR-0011, ADR-0012, ADR-0013, ADR-0016, ADR-0021,
   `docs/v4/query-mutation-and-lifecycle.md`, and
   `docs/v4/transactional-dispatch-and-reaction.md`
 
@@ -15,7 +15,6 @@ current Membership after any row-lock wait, and atomically records:
 
 - the Message;
 - its transactional audit row;
-- one bounded committed Message change fact;
 - one immutable pending Reaction intent; and
 - the exact Operation result receipt.
 
@@ -25,10 +24,14 @@ input fails. Cancellation before commit rolls everything back. Cancellation or
 response loss after commit never claims rollback; replay with the same call
 identity recovers the committed result.
 
-This slice does not implement Change Ledger reconciliation or triggers. BETA-07
-owns them. It does not create a Durable Run, attempt, lease, worker, retry, or
-Reaction handler. BETA-08 owns those. The change fact and pending intent here
-are only transaction-joined acceptance records needed by those later slices.
+This slice does not implement Change Ledger capture, reconciliation, or
+triggers. BETA-07 owns them. In particular, BETA-06 does not synthesize a
+change fact in the Mutation Runtime: ADR-0012 assigns committed-fact capture to
+compiler-owned PostgreSQL triggers for reactive Collections, and the accepted
+authority does not yet define the reactive-Collection predicate. The pending
+intent here is the transaction-joined acceptance record needed by the later
+Reaction slice. BETA-06 does not create a Durable Run, attempt, lease, worker,
+retry, or Reaction handler. BETA-08 owns those.
 
 ## Public seam
 
@@ -108,8 +111,7 @@ retry loop.
 5. The owner freezes `operationTime` and transaction identity, locks the target
    row, then performs current-row, Membership-evidence, supplied-Field, complete
    candidate, and candidate-Policy checks in fresh statements after the lock.
-6. Business, audit, change-fact, pending-intent, and final result-receipt writes
-   commit once.
+6. Business, audit, pending-intent, and final result-receipt writes commit once.
 
 An `executing` receipt is never durably stranded because its insertion and
 finalization share the business transaction. A winner rollback releases the
@@ -123,13 +125,15 @@ encoding.
 
 ## Internal PostgreSQL ownership
 
-Operation receipts, bounded change facts, and pending intents are framework
-truth under `questpie_internal`, not application-authored Collections or an
-outbox. The existing checksum-pinned internal protocol cannot be silently
-mutated. BETA-06 must add a deterministic, advisory-lock-protected protocol
-upgrade and verify the exact catalog, ownership, privileges, constraints, and
-B-tree indexes. Fresh bootstrap and v1 upgrade must converge to identical
-bytes and catalog shape.
+Operation receipts and pending intents are framework truth under
+`questpie_internal`, not application-authored Collections or an outbox. The
+existing checksum-pinned internal protocol cannot be silently mutated.
+BETA-06 must add a deterministic, advisory-lock-protected protocol upgrade and
+verify the exact catalog, ownership, privileges, constraints, and B-tree
+indexes. Fresh bootstrap and v1 upgrade must converge to identical bytes and
+catalog shape. The protocol may reserve a bounded committed-fact table for the
+BETA-07 upgrade path, but BETA-06 neither writes it nor claims Change Ledger
+capture.
 
 The application still evolves through an ordinary committed migration for its
 transactional audit Collection. Previously accepted migrations and Seeds stay
@@ -161,8 +165,9 @@ The first RED is `tests/integration/beta06-publish-mutation.test.ts`. It authors
 the real fixture Mutation and crosses compilation, generated direct/client
 contracts, the shared Operation engine, and PostgreSQL. It proves sequential
 and concurrent duplicate delivery plus discarded-response replay produce one
-Message, audit, change fact, pending intent, and result receipt with one shared
-transaction identity and byte-identical result.
+Message, audit, pending intent, and result receipt with one shared transaction
+identity and byte-identical result. It also proves that BETA-06 emits no
+committed change fact; BETA-07 owns the compiler-trigger capture proof.
 
 Focused evidence then adds:
 
@@ -181,5 +186,5 @@ Focused evidence then adds:
 
 No generic lifecycle hooks, transaction callbacks, application outbox, raw SQL
 authoring, provider matrix, automatic transaction retry, Action, generic Job,
-Change Ledger reconciliation, Reaction execution, worker, lease, Queue client,
-non-B-tree Index, or RLS claim enters BETA-06.
+Change Ledger capture or reconciliation, Reaction execution, worker, lease,
+Queue client, non-B-tree Index, or RLS claim enters BETA-06.
