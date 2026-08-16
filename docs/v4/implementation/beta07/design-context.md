@@ -3,6 +3,7 @@
 - Status: implementation decision record for issue #294
 - Base: `c193e7e5c566852e571944c5f360c98be7240770`
 - Authority: ADR-0012, ADR-0014, ADR-0017, ADR-0021,
+  `docs/v4/context-and-policy.md`,
   `docs/v4/live-query-and-change-ledger.md`, and
   `docs/v4/multi-instance-and-optional-acceleration.md`
 
@@ -82,7 +83,14 @@ advisory-lock-protected protocol v3 upgrade. Fresh bootstrap and v2 upgrade
 converge to one exact catalog. Protocol v3 owns application-qualified Change
 Ledger facts, reconciliation consumers and their exclusive `xid8` horizons,
 processed effects, successful dependency/result generations, retained resume
-state, acknowledgements, and expiry metadata.
+state, acknowledgements, expiry metadata, and current-deployment realtime scope
+attachments and watch bindings. A scope attachment binds only canonical
+Principal identity and authority-partition facts established from an
+already-resolved Principal at network ingress; it never stores a credential,
+resolved Context, Policy evidence, or an object that application code can
+decode. A watch binding stores the exact generated Query/input/Context-input
+bytes needed by the SSE holder to create a fresh root, plus bounded open,
+withdrawn, acknowledged, and expiry state.
 
 Compiler-owned row and truncate triggers are installed only by reviewed
 application migration `000004_watch-message-query`. Runtime readiness never
@@ -138,6 +146,22 @@ fresh authorized reset without an oracle. The client acknowledges only after
 accepting the complete result. Connection and buffer state is disposable;
 retained correctness remains PostgreSQL-owned and requires no affinity.
 
+The SSE connection and its byte buffer remain local, but scope and binding
+authority do not. The SSE holder records one bounded attachment after trusted
+ingress. An `open`, `ack`, or `close` POST may reach any compatible instance;
+that instance resolves trusted ingress, verifies the durable scope binding, and
+commits the command state in PostgreSQL. The SSE holder discovers committed
+commands and complete retained generations by bounded scans and frames them
+only after matching its in-memory already-resolved Principal to the durable
+authority partition. Reconciliation may preserve durable facts and mark a
+binding dirty without a holder, but it cannot recompute or frame that binding
+until a live holder supplies the matching already-resolved Principal and creates
+a fresh root. Durable scope state is therefore not a P5 run-as recipe.
+`LISTEN`/`NOTIFY` may accelerate this scan but never carries the command or
+result authority. If the holder dies, the SSE disconnect creates a new network
+ingress root on another instance; the old attachment expires and is never used
+to reconstruct a Principal or resolved Context.
+
 Resume signing material is deployment input, not a generated fixture secret or
 public application capability. BETA-07 supports current deployment-local
 resume only; persistent offline resume remains absent.
@@ -148,6 +172,13 @@ The accepted defaults are enforced: 64 active watches per Principal, 256
 dependency tokens per plan, 1,048,576 result bytes, 2,097,152 buffered bytes
 per client, 1,024 fanout per batch, 30,000 ms unreconciled lag, 128 retained
 tokens per Principal, and 86,400,000 ms retained age.
+
+The 64-watch Principal budget is enforced transactionally across compatible
+instances from PostgreSQL scope/watch state, not from a process-local counter.
+An SSE holder renews only its local scope attachment; an unrenewed attachment
+and its active-watch budget expire after the 30,000 ms unreconciled-lag bound.
+Withdrawal or drain closes it earlier. Acknowledged retained results remain
+independently bounded by the 86,400,000 ms retained age.
 
 Hot invalidations coalesce to the latest complete result. Slow consumers reset
 or disconnect before an unbounded buffer forms. Runtime readiness remains false
@@ -163,6 +194,11 @@ authority.” It must cross the real collaboration compilation, generated client
 SSE/POST carrier, accepted Message Query and Mutation, PostgreSQL capture, and a
 second Runtime. Deterministic latches surround commit, wake consumption, and
 restart; no timing sleep is evidence.
+
+The same tracer routes the SSE GET to instance A, `open` and `close` POSTs to
+instance B, acknowledgement to instance C, and reconnects through a fresh
+instance after A exits. Sticky routing is an optional optimization and cannot
+be correctness authority.
 
 Focused evidence then adds compiler artifact/type negatives, exact internal-v3
 catalog and migration bytes, dependency replacement/failure tests, the full
