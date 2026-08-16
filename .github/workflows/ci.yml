@@ -224,11 +224,12 @@ jobs:
 
       - name: Run realtime driver and security matrix
         working-directory: packages/questpie
-        run: bun test test/ --test-name-pattern "matrix|storm|dos|channel"
+        run: |
+          QUESTPIE_SOKETI_INTEGRATION=1 bun test test/integration/realtime-soketi.test.ts
+          QUESTPIE_SOKETI_INTEGRATION=0 bun test test/ --test-name-pattern "matrix|storm|dos|channel"
         env:
           QUESTPIE_MIGRATIONS_SILENT: "1"
           QUESTPIE_REALTIME_DRIVER_INTEGRATION: "1"
-          QUESTPIE_SOKETI_INTEGRATION: "1"
           QUESTPIE_REALTIME_POSTGRES_URL: postgresql://questpie:questpie@127.0.0.1:54329/questpie_realtime
           QUESTPIE_REALTIME_REDIS_URL: redis://127.0.0.1:6379
 
