@@ -57,6 +57,17 @@ export class OperationFailure extends Error {
 	}
 }
 
+export function normalizeOperationError(
+	error: unknown,
+): OperationFailure | DeclaredOperationError {
+	if (
+		error instanceof OperationFailure ||
+		error instanceof DeclaredOperationError
+	)
+		return error;
+	return new OperationFailure("INTERNAL");
+}
+
 function decode(codec: RuntimeCodec, value: unknown): unknown {
 	try {
 		return decodeRuntimeCodec(codec, value);

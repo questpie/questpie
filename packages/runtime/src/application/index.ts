@@ -19,6 +19,7 @@ import {
 	decodeOperationWireRequest,
 	encodeDeclaredOperationError,
 	failureFrame,
+	normalizeOperationError,
 	OperationFailure,
 	operationFailureStatus,
 	operationMediaType,
@@ -302,7 +303,8 @@ export async function createRuntimeApplication<
 								},
 								eventFacts,
 							);
-							throw error;
+							if (isAbort(error)) throw error;
+							throw normalizeOperationError(error);
 						}
 					},
 				}),
@@ -466,9 +468,10 @@ export async function createRuntimeApplication<
 					operationError = caught;
 				}
 			}
+			const normalized = normalizeOperationError(operationError);
 			const failure =
-				operationError instanceof OperationFailure
-					? operationError
+				normalized instanceof OperationFailure
+					? normalized
 					: new OperationFailure("INTERNAL");
 			return operationWireResponse(
 				failureFrame(frame, failure.code, failure.retryable),

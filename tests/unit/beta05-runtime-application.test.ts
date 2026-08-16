@@ -678,6 +678,85 @@ test("runs one valid build through the direct operation engine", async () => {
 	await app.close();
 });
 
+test("sanitizes unknown operation errors identically for direct and wire calls", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => {
+			throw new Error("postgres duplicate key detail");
+		}),
+	];
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: { get: async () => null },
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+		},
+	});
+	const user = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const contextInput = {
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	};
+	const direct = app.execution(
+		{ principal: user, context: contextInput },
+		(operations) => operations.invoke("query:messages.page", { first: 2 }),
+	);
+	await expect(direct).rejects.toMatchObject({ code: "INTERNAL" });
+	await direct.catch((error: unknown) => {
+		expect(String(error)).not.toContain("duplicate key");
+	});
+
+	const request = new Request("http://runtime.test/_questpie/operation", {
+		method: "POST",
+		headers: {
+			"content-type": "application/vnd.questpie.operation+json;version=1",
+		},
+		body: JSON.stringify({
+			application: artifacts.runtimeBuild.application,
+			callId: "wire-call",
+			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+			context: contextInput,
+			input: { first: 2 },
+			operation: "query:messages.page",
+			protocol: { name: "questpie.operation", version: 1 },
+			timeoutMilliseconds: null,
+			wireDigest: artifacts.wireContract.digest,
+		}),
+	});
+	bindIngressPrincipal(request, user);
+	const response = await app.fetch(request);
+	const responseText = await response.text();
+	expect(response.status).toBe(500);
+	expect(JSON.parse(responseText)).toMatchObject({
+		kind: "failure",
+		error: { code: "INTERNAL" },
+	});
+	expect(responseText).not.toContain("duplicate key");
+	await app.close();
+});
+
 test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", async () => {
 	let resolves = 0;
 	let handlerCalls = 0;
