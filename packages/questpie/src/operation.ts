@@ -1,4 +1,5 @@
 import type { Codec, CodecValue } from "./codec";
+import type { ValueProgramOperand } from "./operation-set";
 
 export interface OperationErrorDefinition<
 	Code extends string,
@@ -49,4 +50,19 @@ function error(
 	});
 }
 
-export const operation = Object.freeze({ error });
+const text = Object.freeze({
+	trim: (source: ValueProgramOperand<string>) =>
+		Object.freeze({
+			kind: "normalizedValue",
+			transform: "trim",
+			source,
+		}),
+	trimIfPresent: (source: ValueProgramOperand<string | undefined>) =>
+		Object.freeze({
+			kind: "normalizedValue",
+			transform: "trimIfPresent",
+			source,
+		}),
+});
+
+export const operation = Object.freeze({ error, text });
