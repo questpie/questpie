@@ -8,27 +8,15 @@ import {
 	type CursorScalar,
 } from "./cursor";
 import { executePostgresStatement } from "./postgres";
+import {
+	decodeRelationalScalar,
+	isValidRelationalScalar,
+	type ScalarCodecV1,
+} from "./scalar";
+
+export type { ScalarCodecV1 } from "./scalar";
 
 type ScalarValue = boolean | number | string;
-
-export type ScalarCodecV1 =
-	| Readonly<{ kind: "uuid" }>
-	| Readonly<{
-			kind: "text";
-			minLength: number | null;
-			maxLength: number | null;
-			collation: "questpie.binary";
-	  }>
-	| Readonly<{ kind: "boolean" }>
-	| Readonly<{
-			kind: "integer";
-			minimum: number | null;
-			maximum: number | null;
-	  }>
-	| Readonly<{ kind: "bigint"; minimum: string | null; maximum: string | null }>
-	| Readonly<{ kind: "numeric"; precision: number; scale: number }>
-	| Readonly<{ kind: "timestamp"; withTimezone: boolean }>
-	| Readonly<{ kind: "date" }>;
 
 export type QueryParameterV1 =
 	| Readonly<{
@@ -182,8 +170,6 @@ export type DataQueryPage = Readonly<{
 }>;
 
 const digestPattern = /^[0-9a-f]{64}$/;
-const uuidPattern =
-	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 function hasLoneUnicodeSurrogate(value: string): boolean {
 	for (let index = 0; index < value.length; index += 1) {
@@ -196,72 +182,6 @@ function hasLoneUnicodeSurrogate(value: string): boolean {
 		}
 		if (codeUnit >= 0xdc00 && codeUnit <= 0xdfff) return true;
 	}
-	return false;
-}
-
-function validTimestamp(value: string, withTimezone: boolean): boolean {
-	const pattern = withTimezone
-		? /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
-		: /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}$/;
-	if (!pattern.test(value)) return false;
-	const comparable = withTimezone ? value : `${value}Z`;
-	return new Date(comparable).toISOString() === comparable;
-}
-
-function validScalar(
-	value: unknown,
-	codec: ScalarCodecV1,
-): value is ScalarValue {
-	if (codec.kind === "boolean") return typeof value === "boolean";
-	if (codec.kind === "integer")
-		return (
-			typeof value === "number" &&
-			Number.isSafeInteger(value) &&
-			!Object.is(value, -0) &&
-			value >= -2_147_483_648 &&
-			value <= 2_147_483_647 &&
-			(codec.minimum === null || value >= codec.minimum) &&
-			(codec.maximum === null || value <= codec.maximum)
-		);
-	if (typeof value !== "string" || hasLoneUnicodeSurrogate(value)) return false;
-	if (codec.kind === "uuid") return uuidPattern.test(value);
-	if (codec.kind === "text") {
-		const length = Array.from(value).length;
-		return (
-			value.normalize("NFC") === value &&
-			(codec.minLength === null || length >= codec.minLength) &&
-			(codec.maxLength === null || length <= codec.maxLength)
-		);
-	}
-	if (codec.kind === "bigint") {
-		if (!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return false;
-		const parsed = BigInt(value);
-		return (
-			parsed >= -9_223_372_036_854_775_808n &&
-			parsed <= 9_223_372_036_854_775_807n &&
-			(codec.minimum === null || parsed >= BigInt(codec.minimum)) &&
-			(codec.maximum === null || parsed <= BigInt(codec.maximum))
-		);
-	}
-	if (codec.kind === "numeric") {
-		const pattern =
-			codec.scale === 0
-				? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/
-				: new RegExp(
-						`^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\.[0-9]{${codec.scale}}$`,
-					);
-		return (
-			pattern.test(value) &&
-			value.replace(/[-.]/g, "").length <= codec.precision
-		);
-	}
-	if (codec.kind === "timestamp")
-		return validTimestamp(value, codec.withTimezone);
-	if (codec.kind === "date")
-		return (
-			/^\d{4}-\d{2}-\d{2}$/.test(value) &&
-			new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) === value
-		);
 	return false;
 }
 
@@ -319,7 +239,8 @@ function normalizeSet(
 	if (value.length > parameter.maximumItems) bindError("QP-DATA-006");
 	const unique = new Map<string, ScalarValue>();
 	for (const item of value) {
-		if (!validScalar(item, parameter.codec)) bindError("QP-DATA-006");
+		if (!isValidRelationalScalar(item, parameter.codec))
+			bindError("QP-DATA-006");
 		unique.set(canonicalScalar(item), item);
 	}
 	return [...unique.entries()]
@@ -368,7 +289,8 @@ function normalizeBinding(
 			normalized.set(parameter.name, normalizeSet(value, parameter));
 			continue;
 		}
-		if (!validScalar(value, parameter.codec)) bindError("QP-DATA-001");
+		if (!isValidRelationalScalar(value, parameter.codec))
+			bindError("QP-DATA-001");
 		normalized.set(parameter.name, value);
 	}
 	const first = normalized.get(plan.page.first.parameter);
@@ -471,17 +393,13 @@ function decodeField(
 	row: PostgresQueryRow,
 	field: ResultFieldV1,
 ): ScalarValue | null {
-	let value = row[field.column];
+	const value = row[field.column];
 	if (value === null && field.nullable) return null;
-	if (field.codec.kind === "timestamp" && value instanceof Date) {
-		if (Number.isNaN(value.getTime()))
-			throw new DataQueryExecutionError("QP-DATA-001", "execute");
-		const timestamp = value.toISOString();
-		value = field.codec.withTimezone ? timestamp : timestamp.slice(0, -1);
-	}
-	if (!validScalar(value, field.codec))
+	try {
+		return decodeRelationalScalar(value, field.codec) as ScalarValue;
+	} catch {
 		throw new DataQueryExecutionError("QP-DATA-001", "execute");
-	return value;
+	}
 }
 
 function decodeRow(

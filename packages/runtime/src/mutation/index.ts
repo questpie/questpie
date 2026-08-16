@@ -2,6 +2,7 @@ import type { PreparedOperation } from "../operation";
 
 export { CommittedResultUnavailable } from "./committed-result-unavailable";
 export type { CommittedResultUnavailablePayload } from "./committed-result-unavailable";
+export { createPostgresCollectionMutationData } from "./collection";
 export { linkCollectionMutationPrograms } from "./program";
 export type {
 	CollectionOperationProgramV1,
