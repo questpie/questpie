@@ -193,6 +193,10 @@ describe("acceptance packet v2", () => {
 	test("ignores hostile user diff formatting configuration", () => {
 		const input = fixture();
 		const expected = prepareAcceptancePacket(input);
+		writeFileSync(
+			join(input.repositoryPath, "hostile-diff-order"),
+			"proof/**\nimplementation.ts\n",
+		);
 		for (const [key, value] of [
 			["diff.noprefix", "true"],
 			["diff.renames", "true"],
@@ -200,6 +204,7 @@ describe("acceptance packet v2", () => {
 			["diff.mnemonicPrefix", "true"],
 			["diff.context", "50"],
 			["diff.interHunkContext", "50"],
+			["diff.orderFile", "hostile-diff-order"],
 		])
 			run(input.repositoryPath, ["git", "config", key, value]);
 		const hostile = prepareAcceptancePacket(input);

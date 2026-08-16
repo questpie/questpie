@@ -3,7 +3,7 @@
 	"ticket": "#317",
 	"proof": "P22R1 provider-contingent acceptance bootstrap",
 	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
-	"reviewOutput": "docs/v4/prototypes/acceptance-protocol-v2/REVIEW-05.json",
+	"reviewOutput": "docs/v4/prototypes/acceptance-protocol-v2/REVIEW-06.json",
 	"authorityHeads": {
 		"AcceptedFeatV4": "c193e7e5c566852e571944c5f360c98be7240770",
 		"P22R1Candidate": "a68e551f225ee422bd8e25eae81a9399c2de8978"
