@@ -347,7 +347,10 @@ export function projectRuntimeBuild(
 			changeLedgerDigest: null,
 			resumeDigest: null,
 			durableCompatibilityDigest: null,
-			reactionDigest: null,
+			reactionDigest:
+				input.runtime.reactions.reactions.length === 0
+					? null
+					: input.runtime.reactionDigest,
 		},
 		inventory,
 	};

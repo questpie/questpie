@@ -65,4 +65,12 @@ export function verifyRuntimeArtifactFiles(
 			build.wireDigest
 	)
 		fail("wire-contract.json semantic digest does not match");
+	if (
+		build.later.reactionDigest !== null &&
+		artifactDigest(
+			"questpie-reaction-projection-v1",
+			parseJsonFile("reaction-projection.json"),
+		) !== build.later.reactionDigest
+	)
+		fail("reaction-projection.json semantic digest does not match");
 }

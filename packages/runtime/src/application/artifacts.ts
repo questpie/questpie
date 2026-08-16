@@ -48,7 +48,7 @@ type RuntimeBuildV1 = Readonly<{
 		changeLedgerDigest: null;
 		resumeDigest: null;
 		durableCompatibilityDigest: null;
-		reactionDigest: null;
+		reactionDigest: string | null;
 	}>;
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
@@ -320,8 +320,14 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		],
 		"later compatibility",
 	);
-	if (Object.values(later).some((item) => item !== null))
-		fail("later compatibility must be absent");
+	for (const key of [
+		"changeLedgerDigest",
+		"resumeDigest",
+		"durableCompatibilityDigest",
+	] as const)
+		if (later[key] !== null) fail(`${key} is not owned by this Runtime ABI`);
+	if (later.reactionDigest !== null)
+		digestValue(later.reactionDigest, "reactionDigest");
 	const compiler = record(build.compiler, "compiler");
 	exact(
 		compiler,
@@ -426,6 +432,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		if (expected !== actual)
 			fail(`${field} does not match inventory path ${path}`);
 	}
+	if (
+		(later.reactionDigest === null) !==
+		!inventoryDigests.has("reaction-projection.json")
+	)
+		fail("reactionDigest does not match reaction-projection inventory");
 	if (compiler.buildInputDigest !== inventoryDigests.get("build-input.json"))
 		fail(
 			"compiler buildInputDigest does not match inventory path build-input.json",

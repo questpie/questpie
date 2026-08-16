@@ -314,6 +314,8 @@ export async function createArtifacts(
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
+	if (runtime.reactions.reactions.length > 0)
+		generated["reaction-projection.json"] = canonicalBytes(runtime.reactions);
 	if (mutations.projection.mutations.length > 0) {
 		generated["mutation-projection.json"] = canonicalBytes(
 			mutations.projection,

@@ -16,6 +16,12 @@ test("derives the typed pending-intent target from one authored Reaction", async
 	});
 	const manifest = JSON.parse(compilation.generatedFiles["manifest.json"]!);
 	const originMap = JSON.parse(compilation.generatedFiles["origin-map.json"]!);
+	const runtimeBuild = JSON.parse(
+		compilation.generatedFiles["runtime-build.json"]!,
+	);
+	const projected = JSON.parse(
+		compilation.generatedFiles["reaction-projection.json"]!,
+	);
 
 	expect(
 		manifest.composition.resources.some(
@@ -49,6 +55,14 @@ test("derives the typed pending-intent target from one authored Reaction", async
 				slot.identity === "reaction:messagePublished",
 		),
 	).toBe(false);
+	expect(projected).toMatchObject({
+		format: "questpie.reaction-projection",
+		reactions: [{ identity: "reaction:messagePublished" }],
+	});
+	expect(runtimeBuild.later.reactionDigest).toMatch(/^[0-9a-f]{64}$/);
+	expect(runtimeBuild.inventory).toContainEqual(
+		expect.objectContaining({ path: "reaction-projection.json" }),
+	);
 
 	const projection = projectReactionContracts([
 		{

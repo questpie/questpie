@@ -37,9 +37,12 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				changeLedgerDigest: null,
 				resumeDigest: null,
 				durableCompatibilityDigest: null,
-				reactionDigest: null,
+				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
 		});
+		expect(runtimeBuild.inventory).toContainEqual(
+			expect.objectContaining({ path: "reaction-projection.json" }),
+		);
 		expect(runtimeBuild.compilerRuntimeBuildDigest).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.serverBundleDigest).toBe(
