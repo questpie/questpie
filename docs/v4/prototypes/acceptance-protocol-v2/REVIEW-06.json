@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "d980c1c964bc58bcdc14d01f66123e3debb7222f",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "856edaf6408ac1860d5aa7418259e8874f2c3226d58963f651f246213e69ff0a",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "2928f1ab-e2de-4de6-a466-f410d5e3e567",
+				"invocationId": "01a00a82-4168-7280-a5ec-3cecd7ac924d",
+				"packetDigest": "856edaf6408ac1860d5aa7418259e8874f2c3226d58963f651f246213e69ff0a",
+				"reviewedHead": "d980c1c964bc58bcdc14d01f66123e3debb7222f",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts` does not fully derive canonical diff bytes from the exact reviewed commit. The command neutralizes `core.attributesFile`, but Git can still apply local `$GIT_DIR/info/attributes`; during later record verification, repository `.gitattributes` resolution can also depend on the verifier’s current checkout rather than solely on `reviewedHead`. Attributes can change text/binary classification and diff-driver behavior, producing different packet bytes for the same base and reviewed head. This contradicts ADR-0024’s exact-commit packet and credential-free re-derivation requirements. Generate the diff in an isolated Git environment whose attributes are fixed to the reviewed tree, or fail closed on noncanonical administrative attributes and otherwise bind attribute resolution to that tree. Add a negative control showing byte-identical packets and digests with hostile `info/attributes`, including text/binary and diff-driver mutations, and when verification runs from a descendant whose `.gitattributes` differs.\n\nNon-blocking observations: The revision otherwise preserves valid primary-verdict precedence, confines contingency to the fixed Spec and Standards pair after primary no-result, binds responses and records to the request, packet, head, and base, rejects prohibited event kinds and reused identities, validates authority ancestry and output paths, and remains within repository-quality scope."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "6e963182-8193-442a-a3a6-9d8bece36db6",
+				"invocationId": "01a00a82-415d-7e00-bf91-e998e5ac1a11",
+				"packetDigest": "856edaf6408ac1860d5aa7418259e8874f2c3226d58963f651f246213e69ff0a",
+				"reviewedHead": "d980c1c964bc58bcdc14d01f66123e3debb7222f",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/verify-acceptance-review.ts` treats a structurally valid aggregate `BLOCKED` record as a successful verification: `decodeAcceptanceReviewRecord` accepts either verdict, after which the command prints `acceptance review verification PASS` and exits zero without checking `record.verdict`. Consequently, the credential-free CI seam can pass the current manifest output even when either contingency axis blocked, contradicting the bootstrap criterion requiring unanimous independent PASS and the proof procedure permitting projection only after PASS. Make the acceptance-verification command fail unless the decoded aggregate verdict is `PASS` (or separate archival structural validation from the blocking acceptance gate), add a negative control showing that a committed packet-bound BLOCKED record exits nonzero, and rerun the manifest gates.\n\nNon-blocking observations: The revision otherwise keeps the primary verdict final, confines contingency to the fixed two-axis profile after primary NO_RESULT, binds reviewer responses and records to the packet/head/base, rejects prohibited transcript events and reused identities, uses isolated read-only Codex workspaces, preserves the protocol-v1 entrypoint, and adds substantial deterministic controls for diff configuration, ancestry, output paths, subprocess termination, and response validation."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:20:05.926Z"
+}
