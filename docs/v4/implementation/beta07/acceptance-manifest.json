@@ -26,6 +26,10 @@
 			"result": "PASS"
 		},
 		{
+			"command": "GitHub Actions CI run 31941043777 at 21ca8877ee00ee17aab59e366ca3cdb728966212 (full quality, PostgreSQL 16/17/18, TypeScript 7, and selected-PR PostgreSQL 17 performance: 20 facts, 64 watches, 1280 durable invalidations, 227.503 ms under the committed 2500 ms budget)",
+			"result": "PASS"
+		},
+		{
 			"command": "bun run test:load -- --scenario beta07 on local PostgreSQL 17 (2050 complete recomputations in exact [1024, 1024, 2] waves, 7603.304 ms under the committed 20000 ms budget)",
 			"result": "PASS"
 		},
@@ -52,6 +56,6 @@
 		"A real child Runtime is SIGKILLed after Message commit and before wake; PostgreSQL state remains durable, a fresh Runtime reconciles at startup, takes over the scope, emits exactly one complete update under fresh Context and Policy, and emits no result after Membership revocation.",
 		"The accepted 64-watch Principal budget, 256 dependency limit, 1 MiB result, 2 MiB connection buffer, 128 retained results, 24-hour retention, 30-second attachment lease, 1024 recompute fanout, and bounded wake and transaction deadlines fail closed.",
 		"The implementation keeps PostgreSQL as the sole correctness authority, LISTEN or timers as lossy hints only, one relational execution kernel, one durable realtime coordinator, no public provider matrix, no raw ledger API, and no cache or broker correctness dependency.",
-		"Correctness, micro, and load evidence are distinct; local performance is honestly labelled reference-local and selected-PR or nightly stable-runner evidence remains external until CI completes."
+		"Correctness, micro, and load evidence are distinct; local performance is honestly labelled reference-local, selected-PR GitHub-hosted PostgreSQL 17 evidence is recorded from successful run 31941043777, and nightly or tagged stable-runner evidence remains external."
 	]
 }
