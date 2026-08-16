@@ -16,7 +16,9 @@ import {
 const CODEX_VERSION = "codex-cli 0.147.0";
 const CODEX_PATH = resolve("node_modules/.bin/codex");
 
-function responseSchema(request: Parameters<AcceptanceReviewerTransport>[0]) {
+export function createAcceptanceResponseSchema(
+	request: Parameters<AcceptanceReviewerTransport>[0],
+) {
 	return {
 		$schema: "https://json-schema.org/draft/2020-12/schema",
 		type: "object",
@@ -34,15 +36,21 @@ function responseSchema(request: Parameters<AcceptanceReviewerTransport>[0]) {
 			"findings",
 		],
 		properties: {
-			protocolVersion: { const: 2 },
-			axis: { const: request.axis },
-			model: { const: ACCEPTANCE_REVIEW_PROFILE_V2.model },
-			effort: { const: ACCEPTANCE_REVIEW_PROFILE_V2.effort },
-			requestId: { const: request.requestId },
-			packetDigest: { const: request.packetDigest },
-			reviewedHead: { const: request.reviewedHead },
-			diffBase: { const: request.diffBase },
-			verdict: { enum: ["PASS", "BLOCKED"] },
+			protocolVersion: { type: "integer", const: 2 },
+			axis: { type: "string", const: request.axis },
+			model: {
+				type: "string",
+				const: ACCEPTANCE_REVIEW_PROFILE_V2.model,
+			},
+			effort: {
+				type: "string",
+				const: ACCEPTANCE_REVIEW_PROFILE_V2.effort,
+			},
+			requestId: { type: "string", const: request.requestId },
+			packetDigest: { type: "string", const: request.packetDigest },
+			reviewedHead: { type: "string", const: request.reviewedHead },
+			diffBase: { type: "string", const: request.diffBase },
+			verdict: { type: "string", enum: ["PASS", "BLOCKED"] },
 			findings: { type: "string", minLength: 1 },
 		},
 	};
@@ -73,7 +81,7 @@ export function createCodexAcceptanceReviewer(): AcceptanceReviewerTransport {
 		try {
 			writeFileSync(
 				schemaPath,
-				`${JSON.stringify(responseSchema(request), null, 2)}\n`,
+				`${JSON.stringify(createAcceptanceResponseSchema(request), null, 2)}\n`,
 			);
 			const child = Bun.spawn(
 				[

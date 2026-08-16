@@ -12,6 +12,7 @@ import {
 	AcceptanceRecordError,
 	decodeAcceptanceReviewRecord,
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-review-record";
+import { createAcceptanceResponseSchema } from "../../.agents/skills/questpie-v4/scripts/codex-acceptance-reviewer";
 
 const packet = "<documents>bounded acceptance packet</documents>";
 const packetDigest = "a".repeat(64);
@@ -68,6 +69,27 @@ function transport(
 }
 
 describe("acceptance review protocol v2", () => {
+	test("emits a closed structured-output schema with an explicit type for every property", () => {
+		const request: AcceptanceReviewRequestV2 = {
+			axis: "spec",
+			requestId: "request",
+			packet,
+			packetDigest,
+			reviewedHead,
+			diffBase,
+			timeoutMs: 300_000,
+			prompt: "review",
+		};
+		const schema = createAcceptanceResponseSchema(request);
+		expect(schema.additionalProperties).toBe(false);
+		expect(Object.keys(schema.properties).sort()).toEqual(
+			[...schema.required].sort(),
+		);
+		expect(
+			Object.values(schema.properties).every((property) => property.type),
+		).toBe(true);
+	});
+
 	test("requires independent unanimous Spec and Standards reviews over one packet", async () => {
 		const result = await runContingencyAcceptanceReview(
 			{ packet, packetDigest, reviewedHead, diffBase, timeoutMs: 300_000 },
