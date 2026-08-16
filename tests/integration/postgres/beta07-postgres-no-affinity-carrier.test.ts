@@ -3,6 +3,7 @@ import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { principal } from "questpie";
 
+import { projectLiveQueryCompilation } from "../../../packages/compiler/src/live-query";
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import { projectRealtimeWireContract } from "../../../packages/compiler/src/runtime";
 import { ensureInternalProtocolV3 } from "../../../packages/compiler/src/schema";
@@ -15,7 +16,10 @@ import {
 	canonicalJsonLine,
 	sha256Digest,
 } from "../../../packages/runtime/src/canonical-json";
-import type { PostgresWakeTickSource } from "../../../packages/runtime/src/live-query";
+import {
+	linkLiveQueryProgram,
+	type PostgresWakeTickSource,
+} from "../../../packages/runtime/src/live-query";
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
 
 const databases = process.env.PGHOST
@@ -92,6 +96,24 @@ const observedPlan = Object.freeze({
 			canonicalJsonLine(planWithoutDigest),
 		]),
 	),
+});
+
+const projectedLiveQuery = projectLiveQueryCompilation({
+	resources: [],
+	contextProjection: {},
+	dataProjection: {},
+	policyProjection: {},
+	queryProjection: {},
+});
+const liveQueryProgram = linkLiveQueryProgram({
+	watchability: projectedLiveQuery.artifacts["query-watchability.json"],
+	dependencyAlgebra:
+		projectedLiveQuery.artifacts["live-query-dependency-algebra.json"],
+	changeLedger: projectedLiveQuery.artifacts["change-ledger.json"],
+	reconciliation: projectedLiveQuery.artifacts["change-reconciliation.json"],
+	resume: projectedLiveQuery.artifacts["live-query-resume.json"],
+	captureBoundary: projectedLiveQuery.artifacts["change-capture-boundary.json"],
+	limits: projectedLiveQuery.artifacts["live-query-limits.json"],
 });
 
 function ticks() {
@@ -198,7 +220,7 @@ describe.skipIf(databases.length === 0)(
 				const tickSources = [ticks(), ticks(), ticks()] as const;
 				const coordinators = databases.map((sql, index) =>
 					createPostgresLiveQueryCoordinator({
-						program: {} as never,
+						program: liveQueryProgram,
 						sql,
 						hmacKey: new Uint8Array(32).fill(7),
 						applicationName,
@@ -210,7 +232,7 @@ describe.skipIf(databases.length === 0)(
 				);
 				for (const coordinator of coordinators) await coordinator.start();
 				const wrongDeployment = createPostgresLiveQueryCoordinator({
-					program: {} as never,
+					program: liveQueryProgram,
 					sql: databases[1]!,
 					hmacKey: new Uint8Array(32).fill(7),
 					applicationName,
