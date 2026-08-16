@@ -546,6 +546,19 @@ the managed claim without credential environment, and the TypeScript/editor,
 docs typecheck, oxfmt, oxlint, link, ancestry, clean-status, and
 `git diff --check` gates passed.
 
+The focused sibling `P6R1/PostCommitOutcome` revision was reviewed at
+`deea51ba2799867825b120ec46ec5d8944991d1b` and recorded at
+`cb568dc402462163d632a2d689da709a087f64ae` after initial head `d5c562d8`
+was validly `BLOCKED`. The single replacement Opus-medium review passed.
+P6R1 preserves Operation Wire v1 bytes and digest, accepts Wire v2 digest
+`2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28`,
+adds only the exact `COMMITTED_RESULT_UNAVAILABLE` framework transaction
+outcome, and carries every v1 result kind and declared error forward. Retained
+v1 Queries remain executable; v1 Mutations receive v1-readable
+`CLIENT_OUTDATED` before Context Resolution or Operation execution. ADR-0023
+records that Mutation-only compatibility narrowing and the general bounded NFC
+Call Identity contract.
+
 ### Candidate surface this chapter may accept
 
 - generated `createApp()` with `fetch`, `execution`, and idempotent `close`;
