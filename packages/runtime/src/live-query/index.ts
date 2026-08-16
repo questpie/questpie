@@ -5,6 +5,12 @@ export type {
 	LiveQueryObservation,
 	ObservedLiveQueryPlanV1,
 } from "./observation";
+export { createLiveQueryInvalidation } from "./invalidation";
+export type {
+	LiveQueryInvalidation,
+	LiveQueryInvalidationResultV1,
+	LiveQueryRecomputeResultV1,
+} from "./invalidation";
 export { reconcilePostgresChangeLedger } from "./postgres";
 export type {
 	ChangeLedgerFactV1,
