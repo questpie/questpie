@@ -36,6 +36,20 @@ test("projects the authored message.publish Mutation into the executable applica
 	const transactions = JSON.parse(
 		compilation.generatedFiles["mutation-transaction-plans.json"]!,
 	) as Readonly<{ plans: readonly unknown[] }>;
+	const policies = JSON.parse(
+		compilation.generatedFiles["policy-projection.json"]!,
+	) as Readonly<{
+		policies: readonly Readonly<{
+			program: Readonly<{
+				identity: string;
+				operations: Readonly<Record<string, unknown>>;
+			}>;
+			scopeBindings: readonly Readonly<{
+				scope: string;
+				parentScope: string | null;
+			}>[];
+		}>[];
+	}>;
 
 	expect(runtimeExecutables.slots).toContainEqual(
 		expect.objectContaining({
@@ -88,6 +102,29 @@ test("projects the authored message.publish Mutation into the executable applica
 				writtenInOwnerTransaction: true,
 			},
 		}),
+	);
+	expect(policies.policies.map(({ program }) => program.identity)).toEqual([
+		"policy:channels.default",
+		"policy:memberships.default",
+		"policy:messageEvents.default",
+		"policy:messages.default",
+		"policy:spaces.default",
+	]);
+	const messagePolicy = policies.policies.find(
+		({ program }) => program.identity === "policy:messages.default",
+	)!;
+	expect(messagePolicy.program.operations).toMatchObject({
+		create: {
+			admission: { kind: "authenticated" },
+			candidate: { kind: "and" },
+		},
+		read: { admission: { kind: "authenticated" } },
+	});
+	expect(messagePolicy.scopeBindings).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ scope: "candidate", parentScope: null }),
+			expect.objectContaining({ scope: "row", parentScope: null }),
+		]),
 	);
 	const migrationRoot = resolve(
 		fixtureRoot,

@@ -8,8 +8,10 @@ import { createApplicationRuntime } from "../../packages/runtime/src";
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 const foreignCompanyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61ff";
 const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
+const membershipId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5";
 
 type Membership = Readonly<{
+	id: string;
 	companyId: string;
 	principalId: string;
 	role: string;
@@ -55,6 +57,7 @@ test("Context authorizes only a current active company Membership", async () => 
 	});
 
 	const membership: Membership = {
+		id: membershipId,
 		companyId,
 		principalId,
 		role: "member",
@@ -81,6 +84,7 @@ test("Context authorizes only a current active company Membership", async () => 
 	);
 	expect(facts.tenant).toEqual({ id: companyId });
 	expect(facts.values).toEqual({
+		selectedMembershipId: membershipId,
 		selectedMembershipPrincipalId: principalId,
 		selectedMembershipScope: "company",
 		selectedRole: "member",
@@ -90,6 +94,7 @@ test("Context authorizes only a current active company Membership", async () => 
 			collection: "memberships",
 			key: { companyId, principalId, scopeKey: "company" },
 			select: {
+				id: true,
 				companyId: true,
 				principalId: true,
 				role: true,

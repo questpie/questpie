@@ -41,6 +41,7 @@ type ResolvedContext = Expect<Equal<
 	Readonly<{
 		tenant: Readonly<{ id: string }>;
 		values: Readonly<{
+			selectedMembershipId: string;
 			selectedMembershipPrincipalId: string;
 			selectedMembershipScope: string;
 			selectedRole: string;

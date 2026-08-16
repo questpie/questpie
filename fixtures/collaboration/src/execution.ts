@@ -50,6 +50,7 @@ export const collaborationContext = defineContext({
 				scopeKey: "company",
 			},
 			select: {
+				id: true,
 				companyId: true,
 				principalId: true,
 				role: true,
@@ -62,6 +63,7 @@ export const collaborationContext = defineContext({
 		return {
 			tenant: context.tenant({ id: membership.companyId }),
 			values: {
+				selectedMembershipId: membership.id,
 				selectedMembershipPrincipalId: membership.principalId,
 				selectedMembershipScope: membership.scopeKey,
 				selectedRole: membership.role,
