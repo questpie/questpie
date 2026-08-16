@@ -166,9 +166,12 @@ bounded NFC text rather than UUID-only; a generated UUID is only the omitted
 default. The declared `IDEMPOTENCY_CONFLICT` payload therefore uses bounded
 text and must preserve a non-UUID caller identity.
 
-The generated Mutation Service projection contains only the transitive `read`
-Service subgraph. An external-effect Service is absent at type level and is
-also rejected defensively when Runtime bindings are verified.
+The BETA-06 generated Mutation Context contains no Service projection. It uses
+only compiler-owned Collection operations and dispatch; a transaction-safe
+`read` Service projection remains deferred until a later slice owns and proves
+that capability. Every Service is therefore absent at type level, and a forged
+Mutation executable binding that adds a Service capability is rejected before
+Runtime readiness.
 
 ## First tracer and evidence
 
