@@ -11,11 +11,7 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
-import {
-	createLiveQueryObservation,
-	linkLiveQueryProgram,
-	type LiveQueryObservation,
-} from "../live-query";
+import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
@@ -45,11 +41,9 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
-import {
-	createRealtimeCarrier,
-	decodeRealtimeWireContract,
-	type LiveQueryCoordinator,
-	type RealtimeCarrierObservedPlan,
+import type {
+	LiveQueryCoordinator,
+	RealtimeCarrierObservedPlan,
 } from "./realtime";
 import {
 	matchesRetainedClientPair,
@@ -57,6 +51,7 @@ import {
 	type RetainedClientPair,
 } from "./retained-clients";
 import { controlledRoot } from "./root";
+import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
 export type { ExecutionEventV1 } from "./events";
 export type {
@@ -85,6 +80,7 @@ export interface RuntimeApplicationProgram<
 		input: RealtimeCarrierObservedPlan,
 	) => MaybePromise<void>;
 	readonly liveQueryCoordinator?: LiveQueryCoordinator<ContextInputOf<Context>>;
+	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
 }
 
 export interface RuntimeOperations {
@@ -394,89 +390,38 @@ export async function createRuntimeApplication<
 			});
 			return use(scope);
 		});
-	const realtimeContract = (() => {
-		if (artifacts.runtimeBuild.realtimeWireDigest === null) return null;
-		const bytes = input.artifactFiles["realtime-wire-contract.json"];
-		if (bytes === undefined)
-			throw new TypeError("missing realtime-wire-contract.json");
-		const raw = JSON.parse(
-			typeof bytes === "string"
-				? bytes
-				: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-		);
-		const contract = decodeRealtimeWireContract(raw);
-		if (
-			contract.application !== artifacts.runtimeBuild.application ||
-			contract.clientContractDigest !==
-				artifacts.runtimeBuild.clientContractDigest ||
-			contract.operationWireDigest !== artifacts.wireContract.digest ||
-			contract.digest !== artifacts.runtimeBuild.realtimeWireDigest
-		)
-			throw new TypeError("realtime wire binding does not match");
-		return contract;
-	})();
-	const liveQueryProgram = (() => {
-		if (realtimeContract === null) return null;
-		const read = (path: string): unknown => {
-			const bytes = input.artifactFiles[path];
-			if (bytes === undefined) throw new TypeError(`missing ${path}`);
-			return JSON.parse(
-				typeof bytes === "string"
-					? bytes
-					: new TextDecoder("utf-8", { fatal: true }).decode(bytes),
-			);
-		};
-		return linkLiveQueryProgram({
-			watchability: read("query-watchability.json"),
-			dependencyAlgebra: read("live-query-dependency-algebra.json"),
-			changeLedger: read("change-ledger.json"),
-			reconciliation: read("change-reconciliation.json"),
-			resume: read("live-query-resume.json"),
-			captureBoundary: read("change-capture-boundary.json"),
-			limits: read("live-query-limits.json"),
-		});
-	})();
 	let realtimeCallSequence = 0;
-	const realtime = realtimeContract
-		? createRealtimeCarrier({
-				contract: realtimeContract,
-				resolvePrincipal: input.program.resolvePrincipal,
-				decodeContext: (value: unknown) =>
-					decodeRuntimeCodec<ContextInputOf<Context>>(
-						input.program.context.input as never,
-						value,
-						"$context",
-					),
-				evaluate: async ({
-					principal: caller,
-					context,
-					query,
-					input: value,
-					signal,
-				}) => {
-					const prepared = operationEngine.prepare(query, value);
-					if (prepared.binding.kind !== "query")
-						throw new OperationFailure("NOT_FOUND");
-					const linked = liveQueryProgram?.queries.get(query);
-					if (!linked?.watchable) throw new OperationFailure("NOT_FOUND");
-					const observation = createLiveQueryObservation(linked);
-					realtimeCallSequence += 1;
-					const result = await executeRoot(
-						{
-							principal: caller,
-							context,
-							signal,
-							liveQueryObservation: observation,
-						},
-						({ invoke }) =>
-							invoke(prepared, `realtime:${realtimeCallSequence}`),
-					);
-					return Object.freeze({ result, observedPlan: observation.finish() });
-				},
-				onObservedPlan: input.program.onLiveQueryObserved,
-				coordinator: input.program.liveQueryCoordinator,
-			})
-		: null;
+	const realtime =
+		input.program.createRealtime?.({
+			artifacts,
+			artifactFiles: input.artifactFiles,
+			contextInput: input.program.context.input,
+			resolvePrincipal: input.program.resolvePrincipal,
+			evaluate: async ({
+				principal: caller,
+				context,
+				query,
+				input: value,
+				signal,
+				observation,
+			}) => {
+				const prepared = operationEngine.prepare(query, value);
+				if (prepared.binding.kind !== "query")
+					throw new OperationFailure("NOT_FOUND");
+				realtimeCallSequence += 1;
+				return executeRoot(
+					{
+						principal: caller,
+						context,
+						signal,
+						liveQueryObservation: observation,
+					},
+					({ invoke }) => invoke(prepared, `realtime:${realtimeCallSequence}`),
+				);
+			},
+			onObservedPlan: input.program.onLiveQueryObserved,
+			coordinator: input.program.liveQueryCoordinator,
+		}) ?? null;
 
 	const fetch = async (request: Request): Promise<Response> => {
 		if (realtime) {

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -11,6 +11,10 @@ import { renderMigrationSql } from "../../packages/compiler/src/schema/migration
 import type { NormalizedResource } from "../../packages/compiler/src/types";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
+const beta05ServerBundleBudget = 311_296;
+const beta07RealtimeBundleReferenceBytes = 434_688;
+const beta07RealtimeBundleBudget =
+	Math.ceil((beta07RealtimeBundleReferenceBytes * 1.2) / 65_536) * 65_536;
 
 const query = {
 	identity: "query:messages.page",
@@ -238,6 +242,96 @@ test("emits Message watchability and inventories every live-query artifact", asy
 		);
 		const runtimeBuild = JSON.parse(
 			compilation.generatedFiles["runtime-build.json"]!,
+		);
+		const serverBundle = compilation.generatedFiles["internal/application.js"]!;
+		expect(Buffer.byteLength(serverBundle)).toBeLessThanOrEqual(
+			beta05ServerBundleBudget,
+		);
+		const applicationBundles = Object.entries(compilation.generatedFiles)
+			.filter(
+				([path]) =>
+					path === "internal/application.js" ||
+					(path.startsWith("internal/application-") && path.endsWith(".js")),
+			)
+			.sort(([left], [right]) => left.localeCompare(right));
+		expect(applicationBundles.length).toBeGreaterThan(1);
+		expect(
+			applicationBundles.reduce(
+				(total, [, bytes]) => total + Buffer.byteLength(bytes),
+				0,
+			),
+		).toBeLessThanOrEqual(beta07RealtimeBundleBudget);
+		expect(beta07RealtimeBundleBudget).toBe(524_288);
+		expect(
+			runtimeBuild.inventory
+				.map(({ path }: { path: string }) => path)
+				.filter(
+					(path: string) =>
+						path.startsWith("internal/application") && path.endsWith(".js"),
+				),
+		).toEqual(applicationBundles.map(([path]) => path));
+		const checksums = JSON.parse(
+			compilation.generatedFiles["internal/checksums.json"]!,
+		);
+		expect(
+			checksums.files
+				.map(({ path }: { path: string }) => path)
+				.filter(
+					(path: string) =>
+						path.startsWith("internal/application") && path.endsWith(".js"),
+				),
+		).toEqual(applicationBundles.map(([path]) => path));
+		expect(
+			applicationBundles.map(([, bytes]) => bytes).join("\n"),
+		).not.toContain("@questpie/runtime");
+		const repeated = await compileApplication({
+			applicationRoot: temporary,
+			outputDirectory: join(temporary, ".questpie/generated"),
+		});
+		expect(
+			Object.fromEntries(
+				Object.entries(repeated.generatedFiles).filter(
+					([path]) =>
+						path === "internal/application.js" ||
+						(path.startsWith("internal/application-") && path.endsWith(".js")),
+				),
+			),
+		).toEqual(Object.fromEntries(applicationBundles));
+		await expect(stat(resolve("internal"))).rejects.toMatchObject({
+			code: "ENOENT",
+		});
+
+		const consumerPath = join(temporary, "src/consumer.ts");
+		await writeFile(
+			consumerPath,
+			(await readFile(consumerPath, "utf8")).replace(
+				"network: true",
+				"network: false",
+			),
+		);
+		const ordinary = await compileApplication({ applicationRoot: temporary });
+		const ordinaryBundles = Object.entries(ordinary.generatedFiles).filter(
+			([path]) =>
+				path === "internal/application.js" ||
+				(path.startsWith("internal/application-") && path.endsWith(".js")),
+		);
+		expect(
+			JSON.parse(ordinary.generatedFiles["realtime-wire-contract.json"]!)
+				.watchableQueries,
+		).toEqual([]);
+		expect(ordinaryBundles.map(([, bytes]) => bytes).join("\n")).not.toMatch(
+			/createPostgresLiveQueryCoordinator|createRuntimeRealtime/,
+		);
+		expect(
+			ordinaryBundles.reduce(
+				(total, [, bytes]) => total + Buffer.byteLength(bytes),
+				0,
+			),
+		).toBeLessThan(
+			applicationBundles.reduce(
+				(total, [, bytes]) => total + Buffer.byteLength(bytes),
+				0,
+			),
 		);
 		const schema = JSON.parse(
 			compilation.generatedFiles["schema-projection.json"]!,

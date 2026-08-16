@@ -35,6 +35,15 @@ test("relocated generated application links Mutation and private Live Query prog
 			applicationRoot: temporary,
 		});
 		const bundle = compilation.generatedFiles["internal/application.js"]!;
+		const applicationChunks = Object.entries(compilation.generatedFiles)
+			.filter(
+				([path]) =>
+					path.startsWith("internal/application-") && path.endsWith(".js"),
+			)
+			.sort(([left], [right]) => left.localeCompare(right))
+			.map(([, bytes]) => bytes)
+			.join("\n");
+		const linkedApplication = `${bundle}\n${applicationChunks}`;
 		const runtimeBuild = JSON.parse(
 			compilation.generatedFiles["runtime-build.json"]!,
 		) as Readonly<{
@@ -53,7 +62,7 @@ test("relocated generated application links Mutation and private Live Query prog
 		expect(bundle).toContain("linkCollectionMutationPrograms");
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
 		expect(bundle).toContain("linkReactionProjection");
-		expect(bundle).toContain("createPostgresCollectionMutationData");
+		expect(linkedApplication).toContain("createPostgresCollectionMutationData");
 		expect(bundle).toContain("createPostgresLiveQueryCoordinator");
 		expect(bundle).toContain("linkLiveQueryProgram");
 		expect(bundle).toContain("input.realtime.hmacKey");
@@ -79,14 +88,21 @@ test("relocated generated application links Mutation and private Live Query prog
 			"reaction-projection.json",
 		])
 			expect(bundle).toContain(`artifactFiles["${path}"]`);
-		expect(bundle).not.toContain("createPostgresMutationData");
-		expect(bundle).not.toContain("@questpie/runtime");
+		expect(linkedApplication).not.toContain("createPostgresMutationData");
+		expect(linkedApplication).not.toContain("@questpie/runtime");
 
 		const internalApplication = await import(
 			pathToFileURL(
 				join(temporary, ".questpie/generated/internal/application.js"),
 			).href
 		);
+		for (const path of Object.keys(compilation.generatedFiles).filter(
+			(path) =>
+				path.startsWith("internal/application-") && path.endsWith(".js"),
+		))
+			await import(
+				pathToFileURL(join(temporary, ".questpie/generated", path)).href
+			);
 		expect(Object.keys(internalApplication).sort()).toEqual([
 			"bindIngressPrincipalForRequest",
 			"createApplication",

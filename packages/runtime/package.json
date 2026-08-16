@@ -5,7 +5,9 @@
 	"type": "module",
 	"exports": {
 		".": "./src/index.ts",
-		"./bundle": "./src/bundle.ts"
+		"./bundle": "./src/bundle.ts",
+		"./bundle-core": "./src/bundle-core.ts",
+		"./bundle-realtime": "./src/bundle-realtime.ts"
 	},
 	"scripts": {
 		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json",

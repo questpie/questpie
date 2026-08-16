@@ -378,7 +378,7 @@ export async function createArtifacts(
 			wireDigest: runtime.wireDigest,
 			path: String(runtime.wire.path),
 			mediaType: String(runtime.wire.mediaType),
-			realtime,
+			realtime: realtimeEnabled ? realtime : undefined,
 		}),
 		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),
@@ -460,29 +460,36 @@ export async function createArtifacts(
 			compilation.resources,
 		);
 	generated["internal/application.d.ts"] = renderApplicationDeclaration();
-	const runtimeBundleEntry = fileURLToPath(
-		import.meta.resolve("@questpie/runtime/bundle"),
+	const runtimeCoreBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle-core"),
+	);
+	const runtimeRealtimeBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle-realtime"),
 	);
 	const readinessEntry = join(
 		import.meta.dir,
 		"runtime",
 		`postgres-readiness${extname(fileURLToPath(import.meta.url))}`,
 	);
-	generated["internal/application.js"] = await renderApplicationBundle({
-		applicationRoot: input.applicationRoot,
-		configuration: input.configuration,
-		resources: input.resources,
-		slots: runtime.executables.slots,
-		inventories: input.inventories,
-		queryProjection: relational.query,
-		postgresQueryPlans,
-		schemaProjection: schema,
-		collectionOperationArtifacts: operationSets.sets.sets.length > 0,
-		reactionArtifact: runtime.reactions.reactions.length > 0,
-		realtime: realtimeEnabled,
-		readinessEntry,
-		runtimeBundleEntry,
-	});
+	Object.assign(
+		generated,
+		await renderApplicationBundle({
+			applicationRoot: input.applicationRoot,
+			configuration: input.configuration,
+			resources: input.resources,
+			slots: runtime.executables.slots,
+			inventories: input.inventories,
+			queryProjection: relational.query,
+			postgresQueryPlans,
+			schemaProjection: schema,
+			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
+			reactionArtifact: runtime.reactions.reactions.length > 0,
+			realtime: realtimeEnabled,
+			readinessEntry,
+			runtimeCoreBundleEntry,
+			runtimeRealtimeBundleEntry,
+		}),
+	);
 	generated["runtime-build.json"] = runtimeArtifactBytes(
 		projectRuntimeBuild({
 			configuration: input.configuration,
