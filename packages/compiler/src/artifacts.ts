@@ -13,7 +13,7 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
-import { projectMutations } from "./mutation";
+import { projectCollectionOperationSets, projectMutations } from "./mutation";
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
@@ -90,6 +90,12 @@ export async function createArtifacts(
 	const executionComposition = projectExecutionComposition(input.resources);
 	const schema = manifest.schema;
 	const relational = projectRelationalCompilation({
+		exports: input.evaluatedExports,
+		resources: input.resources,
+		schema,
+		data: manifest.data,
+	});
+	const operationSets = projectCollectionOperationSets({
 		exports: input.evaluatedExports,
 		resources: input.resources,
 		schema,
@@ -232,8 +238,14 @@ export async function createArtifacts(
 				};
 			}),
 		})),
-		...(relational.structuralOrigins.length > 0
-			? { structuralPlans: relational.structuralOrigins }
+		...(relational.structuralOrigins.length > 0 ||
+		operationSets.origins.length > 0
+			? {
+					structuralPlans: [
+						...relational.structuralOrigins,
+						...operationSets.origins,
+					],
+				}
 			: {}),
 	};
 	const originMapBytes = canonicalBytes(originMap);
@@ -308,6 +320,20 @@ export async function createArtifacts(
 		);
 		generated["mutation-transaction-plans.json"] = canonicalBytes(
 			mutations.transactions,
+		);
+	}
+	if (operationSets.sets.sets.length > 0) {
+		generated["collection-operation-set-projections.json"] = canonicalBytes(
+			operationSets.sets,
+		);
+		generated["field-normalizer-programs.json"] = canonicalBytes(
+			operationSets.normalizers,
+		);
+		generated["server-value-programs.json"] = canonicalBytes(
+			operationSets.serverValues,
+		);
+		generated["collection-operation-programs.json"] = canonicalBytes(
+			operationSets.programs,
 		);
 	}
 	let postgresQueryPlans: unknown = {

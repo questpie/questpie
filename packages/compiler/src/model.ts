@@ -393,7 +393,8 @@ export function normalizeResources(
 	const resources: NormalizedResource[] = [];
 	for (const item of exports) {
 		if (
-			item.value.kind === "dataQuery" &&
+			(item.value.kind === "dataQuery" ||
+				item.value.kind === "collectionOperationSet") &&
 			item.value["__questpie"] === undefined
 		)
 			continue;

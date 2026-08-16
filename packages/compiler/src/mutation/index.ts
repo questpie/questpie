@@ -1,6 +1,13 @@
 import { compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
 
+export { mutationDiscoverySource } from "./discovery";
+export { projectCollectionOperationSets } from "./operation-set";
+export type {
+	CollectionOperationProgramsV1,
+	CollectionOperationProgramV1,
+} from "./operation-set-contract";
+
 export {
 	renderMutationDeclarations,
 	renderMutationFactory,

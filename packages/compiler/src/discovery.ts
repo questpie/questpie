@@ -14,6 +14,7 @@ import ts from "typescript";
 
 import { compareAscii } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { mutationDiscoverySource } from "./mutation";
 import { relationalDiscoverySource } from "./relational";
 import type {
 	ApplicationConfiguration,
@@ -158,38 +159,48 @@ async function directExportMetadata(
 					continue;
 				const memberSpans: Record<string, SourceSpan> = {};
 				const acceptanceSpans: Array<SourceSpan | null> = [];
-				if (
-					ts.isCallExpression(declaration.initializer) &&
-					declaration.initializer.arguments[0] &&
-					ts.isObjectLiteralExpression(declaration.initializer.arguments[0])
-				) {
-					const definition = declaration.initializer.arguments[0];
-					for (const property of definition.properties) {
-						if (!ts.isPropertyAssignment(property)) continue;
-						const section = propertyName(property.name);
-						if (
-							section &&
-							["fields", "constraints", "indexes", "relations"].includes(
-								section,
-							) &&
-							ts.isObjectLiteralExpression(property.initializer)
-						) {
-							const kind =
-								section === "indexes" ? "index" : section.slice(0, -1);
-							for (const member of property.initializer.properties) {
-								if (!ts.isPropertyAssignment(member)) continue;
-								const name = propertyName(member.name);
-								if (name)
-									memberSpans[`${kind}:${name}`] = sourceSpan(source, member);
+				if (ts.isCallExpression(declaration.initializer)) {
+					const call = declaration.initializer;
+					const first = call.arguments[0];
+					const second = call.arguments[1];
+					const definition =
+						first && ts.isObjectLiteralExpression(first)
+							? first
+							: second && ts.isObjectLiteralExpression(second)
+								? second
+								: null;
+					if (definition)
+						for (const property of definition.properties) {
+							if (!ts.isPropertyAssignment(property)) continue;
+							const section = propertyName(property.name);
+							if (
+								section &&
+								["list", "get", "create", "update", "delete"].includes(section)
+							)
+								memberSpans[section] = sourceSpan(source, property);
+							if (
+								section &&
+								["fields", "constraints", "indexes", "relations"].includes(
+									section,
+								) &&
+								ts.isObjectLiteralExpression(property.initializer)
+							) {
+								const kind =
+									section === "indexes" ? "index" : section.slice(0, -1);
+								for (const member of property.initializer.properties) {
+									if (!ts.isPropertyAssignment(member)) continue;
+									const name = propertyName(member.name);
+									if (name)
+										memberSpans[`${kind}:${name}`] = sourceSpan(source, member);
+								}
 							}
+							if (
+								section === "augmentations" &&
+								ts.isArrayLiteralExpression(property.initializer)
+							)
+								for (const element of property.initializer.elements)
+									acceptanceSpans.push(sourceSpan(source, element));
 						}
-						if (
-							section === "augmentations" &&
-							ts.isArrayLiteralExpression(property.initializer)
-						)
-							for (const element of property.initializer.elements)
-								acceptanceSpans.push(sourceSpan(source, element));
-					}
 				}
 				metadata.set(
 					`${logicalPath(applicationRoot, path)}\0${declaration.name.text}`,
@@ -556,10 +567,11 @@ for (const record of records) for (const value of Object.values(record.exports))
   resourceIdentities.set(identity, value);
 }
 ${relationalDiscoverySource}
+${mutationDiscoverySource}
 const direct = new Set(${JSON.stringify(directKeys)});
 const candidates = new Map();
 for (const record of records) for (const [exportName, value] of Object.entries(record.exports)) {
-  if (!value || typeof value !== "object" || ((!value.__questpie || typeof value.__questpie !== "object") && value.kind !== "dataQuery")) continue;
+  if (!value || typeof value !== "object" || ((!value.__questpie || typeof value.__questpie !== "object") && value.kind !== "dataQuery" && value.kind !== "collectionOperationSet")) continue;
   const list = candidates.get(value) ?? [];
   list.push({ logicalPath: record.logicalPath, exportName, value });
   candidates.set(value, list);
@@ -571,7 +583,7 @@ for (const list of candidates.values()) {
     const rightDirect = direct.has(right.logicalPath + "\\0" + right.exportName) ? 0 : 1;
     return leftDirect - rightDirect || (left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
   });
-  found.push({ ...list[0], value: projectRelationalValue(list[0].value) });
+  found.push({ ...list[0], value: projectMutationValue(list[0].value) });
 }
 found.sort((left, right) => left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
 process.stdout.write(JSON.stringify(found));
