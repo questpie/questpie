@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import {
 	AcceptancePacketError,
 	prepareAcceptancePacket,
+	requireNonEmptyReviewDiff,
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-review-packet";
+import {
+	AcceptanceReviewSafetyError,
+	requireAbsentReviewOutput,
+	requireCleanReviewTree,
+	requireCommittedReviewBytes,
+} from "../../.agents/skills/questpie-v4/scripts/acceptance-review-safety";
 
 function run(repositoryPath: string, args: string[]): string {
 	const result = Bun.spawnSync(args, {
@@ -71,6 +78,33 @@ function fixture() {
 }
 
 describe("acceptance packet v2", () => {
+	test("rejects an empty review diff", () => {
+		expect(() => requireNonEmptyReviewDiff("")).toThrow(AcceptancePacketError);
+	});
+
+	test("rejects dirty trees, output replacement, symlinks, and record drift", () => {
+		expect(() => requireCleanReviewTree(" M tracked.ts")).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+		expect(() => requireCleanReviewTree("?? untracked.ts")).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+		expect(() => requireCommittedReviewBytes("changed", "committed")).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+		const directory = mkdtempSync(join(tmpdir(), "qp-review-output-"));
+		const existing = join(directory, "REVIEW.json");
+		writeFileSync(existing, "{}");
+		expect(() => requireAbsentReviewOutput(existing)).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+		const link = join(directory, "REVIEW-LINK.json");
+		symlinkSync(join(directory, "missing"), link);
+		expect(() => requireAbsentReviewOutput(link)).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+	});
+
 	test("re-derives byte-identical packet bytes from one exact commit", () => {
 		const input = fixture();
 		const first = prepareAcceptancePacket(input);

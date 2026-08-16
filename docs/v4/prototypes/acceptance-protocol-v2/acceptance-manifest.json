@@ -3,7 +3,7 @@
 	"ticket": "#317",
 	"proof": "P22R1 provider-contingent acceptance bootstrap",
 	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
-	"reviewOutput": "docs/v4/prototypes/acceptance-protocol-v2/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/acceptance-protocol-v2/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
 		"P22": "17008b0547f24b53d456530b798e8d96ae2e2b1e",
 		"P22R1Candidate": "a68e551f225ee422bd8e25eae81a9399c2de8978"
@@ -56,6 +56,10 @@
 		},
 		{
 			"command": "bun run check-types",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck <P22R1 protocol and negative-control files>",
 			"result": "PASS"
 		},
 		{

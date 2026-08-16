@@ -10,6 +10,10 @@ import {
 	AcceptanceRecordError,
 	decodeAcceptanceReviewRecord,
 } from "./acceptance-review-record";
+import {
+	AcceptanceReviewSafetyError,
+	requireCommittedReviewBytes,
+} from "./acceptance-review-safety";
 
 function fail(message: string): never {
 	console.error(`acceptance review verification: ${message}`);
@@ -46,7 +50,12 @@ if (argv.length !== 2 || argv[0] !== "--record")
 const recordPath = checkedPath(argv[1]!);
 const trackedRecord = shell(["git", "show", `HEAD:${recordPath}`]);
 const localRecord = readFileSync(recordPath, "utf8");
-if (trackedRecord !== localRecord) fail("record differs from committed HEAD");
+try {
+	requireCommittedReviewBytes(localRecord, trackedRecord);
+} catch (error) {
+	if (error instanceof AcceptanceReviewSafetyError) fail(error.message);
+	throw error;
+}
 
 let raw: unknown;
 try {

@@ -12,6 +12,7 @@ import {
 	AcceptanceRecordError,
 	decodeAcceptanceReviewRecord,
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-review-record";
+import { runBoundedReviewProcess } from "../../.agents/skills/questpie-v4/scripts/bounded-review-process";
 import { createAcceptanceResponseSchema } from "../../.agents/skills/questpie-v4/scripts/codex-acceptance-reviewer";
 
 const packet = "<documents>bounded acceptance packet</documents>";
@@ -69,6 +70,31 @@ function transport(
 }
 
 describe("acceptance review protocol v2", () => {
+	test("drains large reviewer output without blocking process exit", async () => {
+		const result = await runBoundedReviewProcess({
+			command: ["sh", "-c", "head -c 2097152 /dev/zero"],
+			cwd: process.cwd(),
+			stdin: "",
+			timeoutMs: 5_000,
+		});
+		expect(result.timedOut).toBe(false);
+		expect(result.exitCode).toBe(0);
+		expect(result.stdout.length).toBe(2_097_152);
+	});
+
+	test("bounds and escalates a reviewer that ignores termination", async () => {
+		const started = performance.now();
+		const result = await runBoundedReviewProcess({
+			command: ["sh", "-c", "trap '' TERM; while :; do :; done"],
+			cwd: process.cwd(),
+			stdin: "",
+			timeoutMs: 50,
+			terminationGraceMs: 50,
+		});
+		expect(result.timedOut).toBe(true);
+		expect(performance.now() - started).toBeLessThan(1_000);
+	});
+
 	test("emits a closed structured-output schema with an explicit type for every property", () => {
 		const request: AcceptanceReviewRequestV2 = {
 			axis: "spec",
@@ -162,6 +188,16 @@ describe("acceptance review protocol v2", () => {
 			}),
 		},
 		{
+			name: "unknown event",
+			change: (
+				_request: AcceptanceReviewRequestV2,
+				response: ReturnType<typeof completedResponse>,
+			) => ({
+				...response,
+				events: `${response.events}\n${JSON.stringify({ type: "future.event" })}`,
+			}),
+		},
+		{
 			name: "response binding mismatch",
 			change: (
 				_request: AcceptanceReviewRequestV2,
@@ -173,6 +209,20 @@ describe("acceptance review protocol v2", () => {
 					"d".repeat(64),
 				),
 			}),
+		},
+		{
+			name: "malformed response shape with missing axis",
+			change: (
+				_request: AcceptanceReviewRequestV2,
+				response: ReturnType<typeof completedResponse>,
+			) => {
+				const decoded = JSON.parse(response.finalResponse) as Record<
+					string,
+					unknown
+				>;
+				delete decoded.axis;
+				return { ...response, finalResponse: JSON.stringify(decoded) };
+			},
 		},
 		{
 			name: "duplicate verdict",

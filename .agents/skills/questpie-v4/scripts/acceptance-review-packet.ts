@@ -52,6 +52,11 @@ export class AcceptancePacketError extends Error {
 	}
 }
 
+export function requireNonEmptyReviewDiff(diff: string): string {
+	if (diff === "") invalid("review diff is empty");
+	return diff;
+}
+
 function invalid(message: string): never {
 	throw new AcceptancePacketError(message);
 }
@@ -226,19 +231,20 @@ export function prepareAcceptancePacket(input: {
 	const manifestSecret = findAcceptancePacketSecret(JSON.stringify(manifest));
 	if (manifestSecret)
 		invalid(`manifest contains a prohibited ${manifestSecret.name}`);
-	const diff = shell(
-		[
-			"git",
-			"diff",
-			"--binary",
-			"--no-ext-diff",
-			`${manifest.diffBase}..${input.reviewedHead}`,
-			"--",
-			".",
-		],
-		repositoryPath,
+	const diff = requireNonEmptyReviewDiff(
+		shell(
+			[
+				"git",
+				"diff",
+				"--binary",
+				"--no-ext-diff",
+				`${manifest.diffBase}..${input.reviewedHead}`,
+				"--",
+				".",
+			],
+			repositoryPath,
+		),
 	);
-	if (diff === "") invalid("review diff is empty");
 	const diffSecret = findAcceptanceGitDiffSecret(diff);
 	if (diffSecret)
 		invalid(`review diff contains a prohibited ${diffSecret.name}`);

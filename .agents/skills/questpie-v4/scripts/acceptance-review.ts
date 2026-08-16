@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, normalize, relative, resolve } from "node:path";
 
 import { findAcceptancePacketSecret } from "./acceptance-packet-secrets";
@@ -13,6 +13,11 @@ import {
 	type PrimaryAcceptanceReviewV2,
 } from "./acceptance-review-protocol";
 import { decodeAcceptanceReviewRecord } from "./acceptance-review-record";
+import {
+	AcceptanceReviewSafetyError,
+	requireAbsentReviewOutput,
+	requireCleanReviewTree,
+} from "./acceptance-review-safety";
 import { createCodexAcceptanceReviewer } from "./codex-acceptance-reviewer";
 
 type Options = {
@@ -124,8 +129,14 @@ async function runPrimaryReview(
 
 const options = parseArgs(Bun.argv.slice(2));
 const head = shell(["git", "rev-parse", "HEAD"]);
-if (shell(["git", "status", "--porcelain=v1", "--untracked-files=all"]) !== "")
-	fail("review worktree is not clean");
+try {
+	requireCleanReviewTree(
+		shell(["git", "status", "--porcelain=v1", "--untracked-files=all"]),
+	);
+} catch (error) {
+	if (error instanceof AcceptanceReviewSafetyError) fail(error.message);
+	throw error;
+}
 
 let prepared: ReturnType<typeof prepareAcceptancePacket>;
 try {
@@ -141,7 +152,12 @@ const outputPath = checkedRepositoryPath(
 	prepared.manifest.reviewOutput,
 	"review output",
 );
-if (existsSync(outputPath)) fail("review output already exists");
+try {
+	requireAbsentReviewOutput(outputPath);
+} catch (error) {
+	if (error instanceof AcceptanceReviewSafetyError) fail(error.message);
+	throw error;
+}
 
 if (options.dryRun) {
 	console.log(
