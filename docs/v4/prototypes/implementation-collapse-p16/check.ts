@@ -146,6 +146,28 @@ export function validate(queue: Queue): void {
 	])
 		if (ownedScope.includes(forbidden))
 			throw new Error(`forbidden beta-owned scope: ${forbidden}`);
+	const beta06 = queue.issues.find(({ id }) => id === "BETA-06")!;
+	const beta07 = queue.issues.find(({ id }) => id === "BETA-07")!;
+	const beta06Owned = [
+		...beta06.artifacts,
+		beta06.fixture,
+		beta06.redTest,
+	].join(" ");
+	if (/committed change fact|Message\/audit\/change/i.test(beta06Owned))
+		throw new Error("BETA-06 crosses the BETA-07 Change Ledger boundary");
+	if (!beta06.artifacts.includes("pending Reaction intent"))
+		throw new Error("BETA-06 loses its transaction-owned pending intent");
+	if (
+		!beta06.nonGoals.includes(
+			"Change Ledger capture and compiler-owned triggers",
+		)
+	)
+		throw new Error("BETA-06 lacks the explicit Change Ledger non-goal");
+	if (
+		!beta07.authority.includes("ADR-0012") ||
+		!beta07.artifacts.includes("Change Ledger DDL/triggers")
+	)
+		throw new Error("BETA-07 loses compiler-trigger Change Ledger ownership");
 	const encoded = JSON.stringify(queue);
 	for (const required of [
 		"Company/Space/Channel/Membership/Message",

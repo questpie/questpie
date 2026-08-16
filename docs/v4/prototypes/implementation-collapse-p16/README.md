@@ -8,6 +8,13 @@ cycles, invalid completion or readiness evidence, missing fixture coverage,
 missing performance ownership, and forbidden beta scope. `render-issue.ts`
 renders the accepted GitHub body.
 
+The BETA-06/BETA-07 boundary is mechanically fixed. BETA-06 owns the
+transaction-bound pending Reaction intent accepted by P3/P5, but it does not
+own a committed Change Ledger fact. ADR-0012 assigns that capture to
+compiler-owned PostgreSQL triggers, and BETA-07 owns those triggers together
+with the reactive-Collection capture proof. The queue checker and four hostile
+mutations prevent either slice from absorbing or losing the boundary.
+
 ```sh
 bun run docs/v4/prototypes/implementation-collapse-p16/check.ts
 bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts

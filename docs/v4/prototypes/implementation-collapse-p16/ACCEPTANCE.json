@@ -46,6 +46,18 @@
 				"bun run --cwd apps/docs types:check",
 				"bun run --cwd apps/docs build"
 			]
+		},
+		{
+			"identity": "P16R1/BETA06LedgerBoundary",
+			"proof": "docs/v4/prototypes/beta06-authority-reconciliation",
+			"change": "Remove the contradictory BETA-06 committed-fact requirement while preserving its transaction-owned pending Reaction intent; keep compiler-trigger Change Ledger capture with ADR-0012 and BETA-07.",
+			"verification": [
+				"bun run docs/v4/prototypes/implementation-collapse-p16/check.ts",
+				"bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts",
+				"bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/implementation-collapse-p16/tsconfig.json",
+				"bunx oxlint --deny-warnings docs/v4/prototypes/implementation-collapse-p16/*.ts",
+				"bunx oxfmt --check docs/v4/prototypes/implementation-collapse-p16"
+			]
 		}
 	],
 	"verification": [
