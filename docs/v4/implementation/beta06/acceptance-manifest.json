@@ -23,7 +23,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta06 on local PostgreSQL 17 (execute20 122.231286 ms, maximum result 168 bytes)",
+			"command": "bun run bench:micro -- --scenario beta06 on local PostgreSQL 17 (execute20 166.395275 ms, maximum result 168 bytes)",
 			"result": "PASS"
 		},
 		{
