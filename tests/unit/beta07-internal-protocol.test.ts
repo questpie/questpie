@@ -14,13 +14,16 @@ describe("BETA-07 questpie.internal.v3 contract", () => {
 			"4f125ab85f16891c072f1b734e023938b7f2a2eb56c5e17dfd8acafbd71f98ff",
 		);
 		expect(internalProtocolV3Checksum).toBe(
-			"df082cc1175429dcfba8338f7e700d29c6116dcc1c4fcc093122c3a23333b14d",
+			"a94c7de4fa869f2b8e15e6f3a65326f2cf8c0ac8bd83a72b76db949f3141f1a3",
 		);
 		for (const table of [
 			"change_ledger",
 			"reconciliation_consumers",
 			"processed_change_facts",
 			"observed_dependency_plans",
+			"realtime_binding_generations",
+			"realtime_scope_attachments",
+			"realtime_watch_bindings",
 			"retained_live_query_results",
 		])
 			expect(internalProtocolV3Sql).toContain(

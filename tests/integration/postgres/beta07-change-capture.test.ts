@@ -132,6 +132,7 @@ describe.skipIf(!database)(
 					"change_ledger",
 					"observed_dependency_plans",
 					"processed_change_facts",
+					"realtime_binding_generations",
 					"realtime_scope_attachments",
 					"realtime_watch_bindings",
 					"reconciliation_consumers",
@@ -195,11 +196,12 @@ $$;`);
 						(application_name, scope_identity, binding_identity,
 						 deployment_digest, authority_partition_digest, principal_kind,
 						 principal_id, active_slot, query_identity, query_bytes,
-						 input_bytes, context_input_bytes, opened_at, state)
+						 input_bytes, input_digest, context_input_bytes, wire_version,
+						 opened_at, state)
 						values ('collaboration', 'scope:one', 'binding:mismatched-context',
 						        ${deployment}, ${"d".repeat(64)}, 'user', 'user:one', 1,
-						        'messages.page', 'query'::bytea, '{}'::bytea, '{}'::bytea,
-						        ${openedAt}, 'open')
+						        'messages.page', 'query'::bytea, '{}'::bytea, ${"f".repeat(64)},
+						        '{}'::bytea, 1, ${openedAt}, 'open')
 					`,
 					"23503",
 				);
@@ -208,12 +210,13 @@ $$;`);
 					(application_name, scope_identity, binding_identity,
 					 deployment_digest, authority_partition_digest, principal_kind,
 					 principal_id, active_slot, query_identity, query_bytes,
-					 input_bytes, context_input_bytes, opened_at, state)
+					 input_bytes, input_digest, context_input_bytes, wire_version,
+					 opened_at, state)
 					select 'collaboration', 'scope:one', 'binding:' || slot,
 					       ${deployment}, ${authority}, 'user', 'user:one', slot,
 					       'messages.page', 'query:messages.page'::bytea,
-					       '{"first":20}'::bytea, '{"tenant":"company:one"}'::bytea,
-					       ${openedAt}, 'open'
+					       '{"first":20}'::bytea, ${"f".repeat(64)},
+					       '{"tenant":"company:one"}'::bytea, 1, ${openedAt}, 'open'
 					from generate_series(1, 64) slot
 				`;
 
@@ -223,23 +226,16 @@ $$;`);
 						(application_name, scope_identity, binding_identity,
 						 deployment_digest, authority_partition_digest, principal_kind,
 						 principal_id, active_slot, query_identity, query_bytes,
-						 input_bytes, context_input_bytes, opened_at, state)
+						 input_bytes, input_digest, context_input_bytes, wire_version,
+						 opened_at, state)
 						values ('collaboration', 'scope:one', 'binding:overflow',
 						        ${deployment}, ${authority}, 'user', 'user:one', 65,
-						        'messages.page', 'query'::bytea, '{}'::bytea, '{}'::bytea,
-						        ${openedAt}, 'open')
+						        'messages.page', 'query'::bytea, '{}'::bytea, ${"f".repeat(64)},
+						        '{}'::bytea, 1, ${openedAt}, 'open')
 					`,
 					"23514",
 				);
 
-				await database!`
-					update questpie_internal.realtime_watch_bindings
-					set acknowledged_generation = 1,
-					    acknowledged_token_digest = ${"c".repeat(64)},
-					    acknowledged_at = ${openedAt}
-					where application_name = 'collaboration'
-					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
-				`;
 				await database!`
 					update questpie_internal.realtime_watch_bindings
 					set state = 'withdrawn', active_slot = null, withdrawn_at = ${openedAt}
@@ -247,10 +243,9 @@ $$;`);
 					  and scope_identity = 'scope:one' and binding_identity = 'binding:1'
 				`;
 				const [state] = await database!<
-					{ state: string; generation: string; hasCredentialColumn: boolean }[]
+					{ state: string; hasCredentialColumn: boolean }[]
 				>`
 					select binding.state,
-					       binding.acknowledged_generation as generation,
 					       exists (
 					         select 1 from information_schema.columns
 					         where table_schema = 'questpie_internal'
@@ -263,12 +258,12 @@ $$;`);
 				`;
 				expect(state).toEqual({
 					state: "withdrawn",
-					generation: "1",
 					hasCredentialColumn: false,
 				});
 				await database!`
-					delete from questpie_internal.realtime_scope_attachments
-					where application_name = 'collaboration' and expires_at <= ${expiresAt}
+					update questpie_internal.realtime_scope_attachments
+					set state = 'withdrawn'
+					where application_name = 'collaboration' and scope_identity = 'scope:one'
 				`;
 				const [expired] = await database!<{ watches: number }[]>`
 					select count(*)::integer as watches
@@ -287,6 +282,172 @@ $$;`);
 				);
 			},
 			15_000,
+		);
+
+		postgresTest(
+			"uses PostgreSQL clocks and retains latest plus acknowledged complete generations",
+			async () => {
+				await ensure(database!);
+				const deployment = "a".repeat(64);
+				const authority = "b".repeat(64);
+				const inputDigest = "c".repeat(64);
+				const tokenDigest = "d".repeat(64);
+				const forged = new Date("2000-01-01T00:00:00.000Z");
+				await database!`
+					insert into questpie_internal.realtime_scope_attachments
+					(application_name, scope_identity, deployment_digest,
+					 authority_partition_digest, principal_kind, principal_id,
+					 opened_at, renewed_at, state)
+					values ('collaboration', 'scope:clock', ${deployment}, ${authority},
+					        'user', 'user:clock', ${forged}, ${forged}, 'open')
+				`;
+				await database!`
+					insert into questpie_internal.realtime_watch_bindings
+					(application_name, scope_identity, binding_identity,
+					 deployment_digest, authority_partition_digest, principal_kind,
+					 principal_id, active_slot, query_identity, query_bytes, input_bytes,
+					 input_digest, context_input_bytes, wire_version, opened_at, state)
+					values ('collaboration', 'scope:clock', 'binding:clock',
+					        ${deployment}, ${authority}, 'user', 'user:clock', 1,
+					        'messages.page', 'query'::bytea, '{}'::bytea, ${inputDigest},
+					        '{}'::bytea, 1, ${forged}, 'open')
+				`;
+				await database!`
+					insert into questpie_internal.realtime_binding_generations
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, query_identity, input_digest, wire_version,
+					 generation, token_digest, result_bytes, dependency_plan_bytes,
+					 delivery_kind, reset_reason, latest_slot, created_at)
+					values ('collaboration', 'scope:clock', 'binding:clock', ${deployment},
+					        ${authority}, 'messages.page', ${inputDigest}, 1, 1,
+					        ${tokenDigest}, '{"messages":[]}'::bytea, '{"tokens":[]}'::bytea,
+					        'initial', null, 1, ${forged})
+				`;
+				await database!`
+					update questpie_internal.realtime_binding_generations
+					set ack_slot = 1, acknowledged_at = ${forged}
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					  and binding_identity = 'binding:clock' and generation = 1
+				`;
+				const [clock] = await database!<
+					{
+						openedAt: Date;
+						expiresAt: Date;
+						createdAt: Date;
+						acknowledgedAt: Date;
+					}[]
+				>`
+					select scope.opened_at as "openedAt", scope.expires_at as "expiresAt",
+					       generation.created_at as "createdAt",
+					       generation.acknowledged_at as "acknowledgedAt"
+					from questpie_internal.realtime_scope_attachments scope
+					join questpie_internal.realtime_binding_generations generation
+					  using (application_name, scope_identity)
+					where scope.application_name = 'collaboration'
+				`;
+				expect(clock!.openedAt).not.toEqual(forged);
+				expect(clock!.createdAt).not.toEqual(forged);
+				expect(clock!.acknowledgedAt).not.toEqual(forged);
+				expect(clock!.expiresAt.getTime() - clock!.openedAt.getTime()).toBe(
+					30_000,
+				);
+				await database!`
+					update questpie_internal.realtime_binding_generations
+					set latest_slot = null
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					  and binding_identity = 'binding:clock' and generation = 1
+				`;
+				await database!`
+					insert into questpie_internal.realtime_binding_generations
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, query_identity, input_digest, wire_version,
+					 generation, token_digest, result_bytes, dependency_plan_bytes,
+					 delivery_kind, reset_reason, latest_slot)
+					values ('collaboration', 'scope:clock', 'binding:clock', ${deployment},
+					        ${authority}, 'messages.page', ${inputDigest}, 1, 2,
+					        ${"f".repeat(64)}, '{"messages":[1]}'::bytea,
+					        '{"tokens":[]}'::bytea, 'update', null, 1)
+				`;
+				const generations = await database!<
+					{
+						generation: string;
+						latest: number | null;
+						acknowledged: number | null;
+					}[]
+				>`
+					select generation::text as generation, latest_slot as latest,
+					       ack_slot as acknowledged
+					from questpie_internal.realtime_binding_generations
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					order by generation
+				`;
+				expect(generations).toEqual([
+					{ generation: "1", latest: null, acknowledged: 1 },
+					{ generation: "2", latest: 1, acknowledged: null },
+				]);
+
+				await database!`
+					insert into questpie_internal.observed_dependency_plans
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, query_identity, input_digest, wire_version,
+					 retained_generation, plan_digest, plan_bytes)
+					values ('collaboration', 'scope:clock', 'binding:clock', ${deployment},
+					        ${authority}, 'messages.page', ${inputDigest}, 1, 1,
+					        ${"e".repeat(64)}, '{"tokens":[]}'::bytea)
+				`;
+				await database!`
+					update questpie_internal.realtime_watch_bindings
+					set invalidation_generation = 2
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					  and binding_identity = 'binding:clock'
+				`;
+				await database!`
+					update questpie_internal.realtime_watch_bindings
+					set invalidation_generation = 3
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					  and binding_identity = 'binding:clock'
+				`;
+				await database!`
+					update questpie_internal.realtime_watch_bindings
+					set evaluated_invalidation_generation = 2
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+					  and binding_identity = 'binding:clock'
+					  and evaluated_invalidation_generation < 2
+					  and invalidation_generation >= 2
+				`;
+				const [dirty] = await database!<
+					{ invalidation: string; evaluated: string; invalidatedAt: Date }[]
+				>`
+					select invalidation_generation as invalidation,
+					       evaluated_invalidation_generation as evaluated,
+					       invalidated_at as "invalidatedAt"
+					from questpie_internal.realtime_watch_bindings
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+				`;
+				expect(dirty).toEqual({
+					invalidation: "3",
+					evaluated: "2",
+					invalidatedAt: expect.any(Date),
+				});
+
+				await database!`
+					update questpie_internal.realtime_scope_attachments
+					set state = 'withdrawn', withdrawn_at = ${forged}
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+				`;
+				const [withdrawn] = await database!<{ watches: number }[]>`
+					select count(*)::integer as watches
+					from questpie_internal.realtime_watch_bindings
+					where application_name = 'collaboration' and scope_identity = 'scope:clock'
+				`;
+				expect(withdrawn).toEqual({ watches: 0 });
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.retained_live_query_results DISABLE TRIGGER retained_live_query_result_clock",
+				);
+				await expect(verifyInternalProtocolV3(database!)).rejects.toMatchObject(
+					{ code: "QP-SCHEMA-023" },
+				);
+			},
 		);
 
 		postgresTest(
@@ -455,6 +616,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON collaboration.channels, collaboration.me
 						"reconciliation_consumers",
 						"processed_change_facts",
 						"observed_dependency_plans",
+						"realtime_binding_generations",
 						"realtime_scope_attachments",
 						"realtime_watch_bindings",
 						"retained_live_query_results",

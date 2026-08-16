@@ -68,19 +68,6 @@ CREATE TABLE questpie_internal.processed_change_facts (
     ON DELETE CASCADE
 );
 
-CREATE TABLE questpie_internal.observed_dependency_plans (
-  application_name text NOT NULL,
-  watch_identity text NOT NULL,
-  retained_generation bigint NOT NULL,
-  plan_digest text NOT NULL,
-  plan_bytes bytea NOT NULL,
-  replaced_at timestamptz NOT NULL,
-  PRIMARY KEY (application_name, watch_identity),
-  CONSTRAINT dependency_generation_positive CHECK (retained_generation > 0),
-  CONSTRAINT dependency_plan_digest_sha256 CHECK (plan_digest ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT dependency_plan_bytes_bounded CHECK (octet_length(plan_bytes) <= 262144)
-);
-
 CREATE TABLE questpie_internal.retained_live_query_results (
   application_name text NOT NULL,
   token_digest text NOT NULL,
@@ -92,8 +79,8 @@ CREATE TABLE questpie_internal.retained_live_query_results (
   retained_generation bigint NOT NULL,
   result_bytes bytea NOT NULL,
   dependency_plan_bytes bytea NOT NULL,
-  created_at timestamptz NOT NULL,
-  expires_at timestamptz NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT transaction_timestamp(),
+  expires_at timestamptz NOT NULL DEFAULT transaction_timestamp() + interval '24 hours',
   PRIMARY KEY (application_name, token_digest),
   CONSTRAINT retained_token_digest_sha256 CHECK (token_digest ~ '^[0-9a-f]{64}$'),
   CONSTRAINT retained_authority_digest_sha256 CHECK (authority_partition_digest ~ '^[0-9a-f]{64}$'),
@@ -191,10 +178,33 @@ BEGIN
 END;
 $$;
 
+CREATE FUNCTION questpie_internal.stamp_retained_live_query_result()
+RETURNS trigger LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = pg_catalog, questpie_internal AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    NEW.created_at := transaction_timestamp();
+  ELSE
+    NEW.created_at := OLD.created_at;
+  END IF;
+  NEW.expires_at := NEW.created_at + interval '24 hours';
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER retained_live_query_result_clock
+BEFORE INSERT OR UPDATE ON questpie_internal.retained_live_query_results
+FOR EACH ROW EXECUTE FUNCTION questpie_internal.stamp_retained_live_query_result();
+
 REVOKE ALL ON ALL TABLES IN SCHEMA questpie_internal FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA questpie_internal FROM PUBLIC;
 REVOKE ALL ON FUNCTION questpie_internal.capture_reactive_row() FROM PUBLIC;
 REVOKE ALL ON FUNCTION questpie_internal.capture_reactive_truncate() FROM PUBLIC;
+REVOKE ALL ON FUNCTION questpie_internal.stamp_observed_dependency_plan() FROM PUBLIC;
+REVOKE ALL ON FUNCTION questpie_internal.stamp_realtime_scope_attachment() FROM PUBLIC;
+REVOKE ALL ON FUNCTION questpie_internal.stamp_realtime_watch_binding() FROM PUBLIC;
+REVOKE ALL ON FUNCTION questpie_internal.stamp_realtime_binding_generation() FROM PUBLIC;
+REVOKE ALL ON FUNCTION questpie_internal.stamp_retained_live_query_result() FROM PUBLIC;
 `;
 
 const internalProtocolV3Checksum = createHash("sha256")
@@ -206,7 +216,6 @@ const internalProtocolV3Checksum = createHash("sha256")
 
 const tables = [
 	"change_ledger",
-	"observed_dependency_plans",
 	"processed_change_facts",
 	"reconciliation_consumers",
 	"retained_live_query_results",
@@ -224,17 +233,6 @@ const columns = [
 	["change_ledger", "new_key", "jsonb", false],
 	["change_ledger", "conservative", "boolean", true],
 	["change_ledger", "captured_at", "timestamp with time zone", true],
-	["observed_dependency_plans", "application_name", "text", true],
-	["observed_dependency_plans", "watch_identity", "text", true],
-	["observed_dependency_plans", "retained_generation", "bigint", true],
-	["observed_dependency_plans", "plan_digest", "text", true],
-	["observed_dependency_plans", "plan_bytes", "bytea", true],
-	[
-		"observed_dependency_plans",
-		"replaced_at",
-		"timestamp with time zone",
-		true,
-	],
 	["processed_change_facts", "application_name", "text", true],
 	["processed_change_facts", "consumer_id", "text", true],
 	["processed_change_facts", "fact_identity", "uuid", true],
@@ -285,30 +283,6 @@ const constraints = [
 		"change_ledger_pkey",
 		"p",
 		"PRIMARY KEY (application_name, fact_identity)",
-	],
-	[
-		"observed_dependency_plans",
-		"dependency_generation_positive",
-		"c",
-		"CHECK (retained_generation > 0)",
-	],
-	[
-		"observed_dependency_plans",
-		"dependency_plan_bytes_bounded",
-		"c",
-		"CHECK (octet_length(plan_bytes) <= 262144)",
-	],
-	[
-		"observed_dependency_plans",
-		"dependency_plan_digest_sha256",
-		"c",
-		"CHECK (plan_digest ~ '^[0-9a-f]{64}$'::text)",
-	],
-	[
-		"observed_dependency_plans",
-		"observed_dependency_plans_pkey",
-		"p",
-		"PRIMARY KEY (application_name, watch_identity)",
 	],
 	[
 		"processed_change_facts",
@@ -421,14 +395,6 @@ const indexes = [
 		"CREATE INDEX change_ledger_reconcile_idx ON questpie_internal.change_ledger USING btree (application_name, transaction_id, collection_identity, fact_id)",
 	],
 	[
-		"observed_dependency_plans",
-		"observed_dependency_plans_pkey",
-		"btree",
-		true,
-		true,
-		"CREATE UNIQUE INDEX observed_dependency_plans_pkey ON questpie_internal.observed_dependency_plans USING btree (application_name, watch_identity)",
-	],
-	[
 		"processed_change_facts",
 		"processed_change_facts_pkey",
 		"btree",
@@ -509,6 +475,11 @@ async function protocolRow(
 const captureFunctionNames = [
 	"capture_reactive_row",
 	"capture_reactive_truncate",
+	"stamp_observed_dependency_plan",
+	"stamp_realtime_binding_generation",
+	"stamp_realtime_scope_attachment",
+	"stamp_realtime_watch_binding",
+	"stamp_retained_live_query_result",
 ] as const;
 
 function captureFunctionBody(
@@ -613,6 +584,97 @@ async function verifyCaptureFunctionCatalog(sql: SQL): Promise<void> {
 		);
 }
 
+async function verifyRealtimeClockCatalog(sql: SQL): Promise<void> {
+	const defaults = await sql<
+		{ tableName: string; name: string; expression: string }[]
+	>`
+		select c.relname as "tableName", a.attname as name,
+		       pg_catalog.pg_get_expr(d.adbin, d.adrelid) as expression
+		from pg_catalog.pg_class c
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		join pg_catalog.pg_attribute a on a.attrelid = c.oid
+		join pg_catalog.pg_attrdef d on d.adrelid = c.oid and d.adnum = a.attnum
+		where n.nspname = 'questpie_internal'
+		  and c.relname in ('observed_dependency_plans', 'realtime_binding_generations',
+		                    'realtime_scope_attachments', 'realtime_watch_bindings',
+		                    'retained_live_query_results')
+		order by c.relname, a.attname
+	`;
+	const triggers = await sql<
+		{ tableName: string; name: string; enabled: string; definition: string }[]
+	>`
+		select c.relname as "tableName", t.tgname as name, t.tgenabled as enabled,
+		       pg_catalog.pg_get_triggerdef(t.oid, true) as definition
+		from pg_catalog.pg_trigger t
+		join pg_catalog.pg_class c on c.oid = t.tgrelid
+		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+		where n.nspname = 'questpie_internal' and not t.tgisinternal
+		order by c.relname, t.tgname
+	`;
+	const expectedDefaults = [
+		["observed_dependency_plans", "replaced_at", "transaction_timestamp()"],
+		["realtime_binding_generations", "created_at", "transaction_timestamp()"],
+		[
+			"realtime_scope_attachments",
+			"expires_at",
+			"(transaction_timestamp() + '00:00:30'::interval)",
+		],
+		["realtime_scope_attachments", "opened_at", "transaction_timestamp()"],
+		["realtime_scope_attachments", "renewed_at", "transaction_timestamp()"],
+		["realtime_watch_bindings", "evaluated_invalidation_generation", "0"],
+		["realtime_watch_bindings", "invalidated_at", "transaction_timestamp()"],
+		["realtime_watch_bindings", "invalidation_generation", "1"],
+		["realtime_watch_bindings", "opened_at", "transaction_timestamp()"],
+		["retained_live_query_results", "created_at", "transaction_timestamp()"],
+		[
+			"retained_live_query_results",
+			"expires_at",
+			"(transaction_timestamp() + '24:00:00'::interval)",
+		],
+	].map(([tableName, name, expression]) => ({ tableName, name, expression }));
+	const expectedTriggers = [
+		[
+			"observed_dependency_plans",
+			"observed_dependency_plan_clock",
+			"stamp_observed_dependency_plan",
+		],
+		[
+			"realtime_binding_generations",
+			"realtime_binding_generation_clock",
+			"stamp_realtime_binding_generation",
+		],
+		[
+			"realtime_scope_attachments",
+			"realtime_scope_attachment_clock",
+			"stamp_realtime_scope_attachment",
+		],
+		[
+			"realtime_watch_bindings",
+			"realtime_watch_binding_clock",
+			"stamp_realtime_watch_binding",
+		],
+		[
+			"retained_live_query_results",
+			"retained_live_query_result_clock",
+			"stamp_retained_live_query_result",
+		],
+	].map(([tableName, name, functionName]) => ({
+		tableName,
+		name,
+		enabled: "O",
+		definition: `CREATE TRIGGER ${name} BEFORE INSERT OR UPDATE ON questpie_internal.${tableName} FOR EACH ROW EXECUTE FUNCTION questpie_internal.${functionName}()`,
+	}));
+	if (
+		canonicalBytes(defaults) !== canonicalBytes(expectedDefaults) ||
+		canonicalBytes(triggers) !== canonicalBytes(expectedTriggers)
+	)
+		return fail(
+			"QP-SCHEMA-023",
+			"checksumMismatch",
+			"questpie.internal.v3 realtime clock catalog changed",
+		);
+}
+
 export async function verifyInternalProtocolV3(sql: SQL): Promise<void> {
 	const protocol = await protocolRow(sql);
 	if (
@@ -626,6 +688,7 @@ export async function verifyInternalProtocolV3(sql: SQL): Promise<void> {
 		);
 	await verifyInternalProtocolCatalog(sql, internalProtocolV3Catalog, protocol);
 	await verifyCaptureFunctionCatalog(sql);
+	await verifyRealtimeClockCatalog(sql);
 }
 
 export async function ensureInternalProtocolV3(
