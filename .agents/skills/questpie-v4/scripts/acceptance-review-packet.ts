@@ -210,6 +210,10 @@ export function prepareAcceptancePacket(input: {
 			["git", "cat-file", "-e", `${authorityHead}^{commit}`],
 			repositoryPath,
 		);
+		shell(
+			["git", "merge-base", "--is-ancestor", authorityHead, input.reviewedHead],
+			repositoryPath,
+		);
 	}
 
 	const documents = manifest.authorityDocuments

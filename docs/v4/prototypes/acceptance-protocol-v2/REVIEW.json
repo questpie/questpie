@@ -1,55 +1,52 @@
 {
-  "protocolVersion": 2,
-  "ticket": "#317",
-  "profile": "questpie.acceptance.v2",
-  "manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
-  "reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
-  "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
-  "packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
-  "primary": {
-    "profile": "claude-opus-medium-v1",
-    "disposition": "NO_RESULT",
-    "category": "transport"
-  },
-  "contingency": {
-    "profile": {
-      "protocolVersion": 2,
-      "transport": "codex-cli",
-      "model": "gpt-5.6-sol",
-      "effort": "medium",
-      "axes": [
-        "spec",
-        "standards"
-      ]
-    },
-    "verdict": "BLOCKED",
-    "reviews": [
-      {
-        "axis": "spec",
-        "model": "gpt-5.6-sol",
-        "effort": "medium",
-        "requestId": "1e49402c-3c4d-44e9-b1bb-7939e1812744",
-        "invocationId": "01a00a69-efe6-78c0-9343-d26acd9eb1a5",
-        "packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
-        "reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
-        "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
-        "verdict": "BLOCKED",
-        "findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/claude-acceptance-review.ts` is deleted, contradicting the candidate’s explicit claims that every protocol-v1 artifact/byte is preserved and historical protocol authority remains immutable. Preserve the v1 implementation byte-identically at its existing path (the package entrypoint may separately select v2), or narrow and re-authorize the preservation requirement before acceptance.\n\n2. `package.json`, `tests/unit/acceptance-review-packet.test.ts`, and `tests/unit/acceptance-review-protocol.test.ts` do not provide all deterministic negative controls required by ADR-0024 and the proof README. The declared negative-control command lacks direct cases for an empty diff, unknown JSON events, malformed response shapes, missing-axis behavior, dirty-worktree rejection, and committed-record/output-replacement verification. Add deterministic tests for those required hostile cases and rerun the manifest gates.\n\nNon-blocking observation: The implemented state machine otherwise keeps primary PASS/BLOCKED final, activates exactly two fixed contingency axes only after NO_RESULT, binds both responses to the packet/head/base/request, and rejects reused invocation identities."
-      },
-      {
-        "axis": "standards",
-        "model": "gpt-5.6-sol",
-        "effort": "medium",
-        "requestId": "b198cbcf-3ef5-4bc3-90ca-e692303b916b",
-        "invocationId": "01a00a69-efe3-7942-8d95-3dafdb6b6ad9",
-        "packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
-        "reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
-        "diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
-        "verdict": "BLOCKED",
-        "findings": "VERDICT: BLOCKED\n\nBlocking finding:\n- `.agents/skills/questpie-v4/scripts/codex-acceptance-reviewer.ts` does not implement a reliably bounded timeout. It waits for the child to exit before draining stdout and stderr, so a sufficiently large JSON transcript can fill a pipe and deadlock until timeout. After timeout it sends `child.kill()` and then performs unbounded full reads of both pipes without awaiting bounded termination or escalating the kill; a process that does not close those pipes can therefore hang instead of producing the required no result. The timeout unit test in `tests/unit/acceptance-review-protocol.test.ts` only supplies a synthetic completed transport result and does not exercise this lifecycle. Drain both streams concurrently from spawn, and on timeout terminate the process, await shutdown with a bounded grace period, escalate if necessary, and prove with a subprocess negative control that large output and a non-cooperative timed-out child both return no result without hanging.\n\nNon-blocking observations:\n- The profile, model, effort, axes, schema, request bindings, packet digest, and aggregate rules are closed and validated consistently.\n- Packet reconstruction and record decoding use exact shapes and appropriately reject substituted authority digests, reused reviewer identities, and verdict mismatches."
-      }
-    ]
-  },
-  "verdict": "BLOCKED",
-  "recordedAt": "2026-08-16T11:52:50.261Z"
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "1e49402c-3c4d-44e9-b1bb-7939e1812744",
+				"invocationId": "01a00a69-efe6-78c0-9343-d26acd9eb1a5",
+				"packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
+				"reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/claude-acceptance-review.ts` is deleted, contradicting the candidate’s explicit claims that every protocol-v1 artifact/byte is preserved and historical protocol authority remains immutable. Preserve the v1 implementation byte-identically at its existing path (the package entrypoint may separately select v2), or narrow and re-authorize the preservation requirement before acceptance.\n\n2. `package.json`, `tests/unit/acceptance-review-packet.test.ts`, and `tests/unit/acceptance-review-protocol.test.ts` do not provide all deterministic negative controls required by ADR-0024 and the proof README. The declared negative-control command lacks direct cases for an empty diff, unknown JSON events, malformed response shapes, missing-axis behavior, dirty-worktree rejection, and committed-record/output-replacement verification. Add deterministic tests for those required hostile cases and rerun the manifest gates.\n\nNon-blocking observation: The implemented state machine otherwise keeps primary PASS/BLOCKED final, activates exactly two fixed contingency axes only after NO_RESULT, binds both responses to the packet/head/base/request, and rejects reused invocation identities."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "b198cbcf-3ef5-4bc3-90ca-e692303b916b",
+				"invocationId": "01a00a69-efe3-7942-8d95-3dafdb6b6ad9",
+				"packetDigest": "7aab1bdec05ea57afc73a452e34c6b34caed8a832ac4e75bd64650b17dd35a6d",
+				"reviewedHead": "bb3455df06074f4d8f4401bcf42069819979787c",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\nBlocking finding:\n- `.agents/skills/questpie-v4/scripts/codex-acceptance-reviewer.ts` does not implement a reliably bounded timeout. It waits for the child to exit before draining stdout and stderr, so a sufficiently large JSON transcript can fill a pipe and deadlock until timeout. After timeout it sends `child.kill()` and then performs unbounded full reads of both pipes without awaiting bounded termination or escalating the kill; a process that does not close those pipes can therefore hang instead of producing the required no result. The timeout unit test in `tests/unit/acceptance-review-protocol.test.ts` only supplies a synthetic completed transport result and does not exercise this lifecycle. Drain both streams concurrently from spawn, and on timeout terminate the process, await shutdown with a bounded grace period, escalate if necessary, and prove with a subprocess negative control that large output and a non-cooperative timed-out child both return no result without hanging.\n\nNon-blocking observations:\n- The profile, model, effort, axes, schema, request bindings, packet digest, and aggregate rules are closed and validated consistently.\n- Packet reconstruction and record decoding use exact shapes and appropriately reject substituted authority digests, reused reviewer identities, and verdict mismatches."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T11:52:50.261Z"
 }

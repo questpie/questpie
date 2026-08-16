@@ -147,4 +147,33 @@ describe("acceptance packet v2", () => {
 			);
 		}
 	});
+
+	test("rejects an existing authority commit outside reviewed ancestry", () => {
+		const input = fixture();
+		const tree = run(input.repositoryPath, [
+			"git",
+			"rev-parse",
+			`${input.reviewedHead}^{tree}`,
+		]);
+		const unrelated = run(input.repositoryPath, [
+			"git",
+			"commit-tree",
+			tree,
+			"-m",
+			"unrelated authority",
+		]);
+		input.manifest.authorityHeads.foundation = unrelated;
+		writeFileSync(
+			join(input.repositoryPath, input.manifestPath),
+			`${JSON.stringify(input.manifest, null, 2)}\n`,
+		);
+		run(input.repositoryPath, ["git", "add", "."]);
+		run(input.repositoryPath, ["git", "commit", "--quiet", "-m", "tamper"]);
+		input.reviewedHead = run(input.repositoryPath, [
+			"git",
+			"rev-parse",
+			"HEAD",
+		]);
+		expect(() => prepareAcceptancePacket(input)).toThrow(AcceptancePacketError);
+	});
 });

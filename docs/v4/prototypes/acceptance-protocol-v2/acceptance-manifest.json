@@ -55,11 +55,15 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run check-types",
+			"command": "bun run quality:full",
 			"result": "PASS"
 		},
 		{
-			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck <P22R1 protocol and negative-control files>",
+			"command": "bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-protocol.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/codex-acceptance-reviewer.ts tests/unit/acceptance-review-protocol.test.ts tests/unit/acceptance-review-packet.test.ts",
 			"result": "PASS"
 		},
 		{
@@ -71,11 +75,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxlint --deny-warnings <P22R1 changed TypeScript files>",
+			"command": "bunx oxlint --deny-warnings .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-protocol.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/acceptance-review.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/codex-acceptance-reviewer.ts .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts tests/unit/acceptance-review-protocol.test.ts tests/unit/acceptance-review-packet.test.ts",
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check <P22R1 changed files>",
+			"command": "bunx oxfmt --check .agents/skills/questpie-v4/scripts/claude-acceptance-review.ts .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-protocol.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/acceptance-review.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/codex-acceptance-reviewer.ts .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts tests/unit/acceptance-review-protocol.test.ts tests/unit/acceptance-review-packet.test.ts docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
 			"result": "PASS"
 		},
 		{

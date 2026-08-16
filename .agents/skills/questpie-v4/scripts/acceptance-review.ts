@@ -18,6 +18,7 @@ import {
 	requireAbsentReviewOutput,
 	requireCleanReviewTree,
 } from "./acceptance-review-safety";
+import { runBoundedReviewProcess } from "./bounded-review-process";
 import { createCodexAcceptanceReviewer } from "./codex-acceptance-reviewer";
 
 type Options = {
@@ -81,10 +82,10 @@ async function runPrimaryReview(
 	packet: string,
 	timeoutMs: number,
 ): Promise<PrimaryAcceptanceReviewV2> {
-	let child: ReturnType<typeof Bun.spawn>;
+	let completed: Awaited<ReturnType<typeof runBoundedReviewProcess>>;
 	try {
-		child = Bun.spawn(
-			[
+		completed = await runBoundedReviewProcess({
+			command: [
 				"claude",
 				"--print",
 				"--model",
@@ -97,22 +98,16 @@ async function runPrimaryReview(
 				"--tools",
 				"",
 			],
-			{ stdin: "pipe", stdout: "pipe", stderr: "pipe" },
-		);
+			cwd: process.cwd(),
+			stdin: packet,
+			timeoutMs,
+		});
 	} catch {
 		return { disposition: "NO_RESULT", category: "transport" };
 	}
-	child.stdin.write(packet);
-	child.stdin.end();
-	const completed = await Promise.race([
-		child.exited.then((exitCode) => ({ exitCode, timedOut: false })),
-		Bun.sleep(timeoutMs).then(() => ({ exitCode: -1, timedOut: true })),
-	]);
-	if (completed.timedOut) {
-		child.kill();
+	if (completed.timedOut)
 		return { disposition: "NO_RESULT", category: "timeout" };
-	}
-	const raw = (await new Response(child.stdout).text()).trim();
+	const raw = completed.stdout.trim();
 	if (completed.exitCode !== 0)
 		return { disposition: "NO_RESULT", category: "transport" };
 	if (raw === "") return { disposition: "NO_RESULT", category: "empty" };
@@ -220,6 +215,6 @@ const recordSecret = findAcceptancePacketSecret(JSON.stringify(record));
 if (recordSecret)
 	fail(`review record contains a prohibited ${recordSecret.name}`);
 mkdirSync(dirname(outputPath), { recursive: true });
-writeFileSync(outputPath, `${JSON.stringify(record, null, 2)}\n`);
+writeFileSync(outputPath, `${JSON.stringify(record, null, "\t")}\n`);
 console.log(`acceptance review ${verdict}: ${prepared.manifest.reviewOutput}`);
 if (verdict === "BLOCKED") process.exit(2);
