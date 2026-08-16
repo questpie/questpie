@@ -14,7 +14,7 @@ const widgetId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b63a0";
 
 type Row = Readonly<Record<string, unknown>>;
 
-function postgres() {
+function postgres(denial: "candidatePolicy" | "fieldAuthority" | null = null) {
 	const statements: Array<
 		Readonly<{ sql: string; parameters: readonly unknown[] }>
 	> = [];
@@ -30,7 +30,10 @@ function postgres() {
 					operationTime: new Date("2026-08-16T00:00:00.000Z"),
 				},
 			];
-		if (statement === "INSERT_WIDGET") return [{ qp_result_0: widgetId }];
+		if (statement === "CHECK_WIDGET_FIELD")
+			return denial === "fieldAuthority" ? [] : [{ allowed: true }];
+		if (statement === "INSERT_WIDGET")
+			return denial === "candidatePolicy" ? [] : [{ qp_result_0: widgetId }];
 		return [];
 	};
 	const session = {
@@ -69,7 +72,15 @@ const collectionPlans = {
 			candidate: {
 				fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
 			},
-			fieldAuthority: { checks: [] },
+			fieldAuthority: {
+				checks: [
+					{
+						path: ["id"],
+						sql: "CHECK_WIDGET_FIELD",
+						parameters: [],
+					},
+				],
+			},
 			write: {
 				sql: "INSERT_WIDGET",
 				parameters: [
@@ -268,6 +279,43 @@ test("rejects payloads outside the compiled Reaction codec before commit", async
 		"must be a canonical UUID",
 	);
 	expect(database.statements.map(({ sql }) => sql)).toContain("ROLLBACK");
+});
+
+test("rolls back the receipt and every sibling on Field or candidate Policy denial", async () => {
+	for (const denial of ["fieldAuthority", "candidatePolicy"] as const) {
+		const database = postgres(denial);
+		const invoke = createPostgresMutationInvoker<View>({
+			sql: database.sql,
+			application: "application:generic",
+			collectionPlans,
+			reactions: linkReactionProjection(reactionProjection),
+			facts: {
+				principal: principal.user({ id: principalId }),
+				authority: { kind: "ordinary" },
+				tenant: { id: tenantId },
+				values: {},
+				signal: new AbortController().signal,
+				deadline: null,
+			},
+		});
+
+		await expect(invoke(operation, `denied:${denial}`)).rejects.toThrow(
+			"Collection operation is unavailable",
+		);
+		const statements = database.statements.map(({ sql }) => sql);
+		expect(statements).toContain("ROLLBACK");
+		expect(statements).not.toContain(
+			expect.stringContaining(
+				"INSERT INTO questpie_internal.pending_reaction_intents",
+			),
+		);
+		expect(statements).not.toContain(
+			expect.stringContaining("SET outcome = 'committed'"),
+		);
+		expect(statements.includes("INSERT_WIDGET")).toBe(
+			denial === "candidatePolicy",
+		);
+	}
 });
 
 test("strictly rejects widened Reaction projection before root construction", () => {

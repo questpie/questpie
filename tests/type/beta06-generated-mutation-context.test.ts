@@ -35,6 +35,8 @@ test("emits only plan-backed Mutation Collection capabilities", async () => {
 			`import type { MutationContext } from "#questpie/app";
 
 declare const ctx: MutationContext;
+// @ts-expect-error BETA-06 Mutation Context exposes no Service capability
+ctx.services;
 const channel = await ctx.data.channels.get({
 	key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2" },
 });

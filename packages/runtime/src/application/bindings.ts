@@ -111,6 +111,14 @@ export function validateRuntimeExecutableBindings<View>(
 	)
 		throw new TypeError("Runtime operation executable binding does not match");
 	if (
+		candidates.some(
+			(binding) =>
+				binding.kind === "mutation" &&
+				Object.hasOwn(binding.definition, "services"),
+		)
+	)
+		throw new TypeError("Mutation executable binding exposes Services");
+	if (
 		candidates.some((binding) => {
 			let implementation: unknown;
 			switch (binding.kind) {

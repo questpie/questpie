@@ -607,6 +607,70 @@ test("rejects a mismatched Runtime Build before Context or handler disclosure", 
 	expect({ handlerCalls, resolves }).toEqual({ handlerCalls: 0, resolves: 0 });
 });
 
+test("rejects a forged Mutation Service capability before readiness", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const execute = async () => ({ ok: true });
+	const mutationSlot = {
+		identity: "mutation:messages.publish",
+		kind: "mutation" as const,
+		slot: "handler" as const,
+		origin: {
+			path: "src/message-publish.ts",
+			exportName: "publishMessage",
+			packageId: null,
+		},
+		sourceDigest: sha("9"),
+		contractDigest: sha("a"),
+		runtimeGraphDigest: sha("b"),
+		bundleExport: "mutation_messages_publish_handler",
+	};
+	const artifacts = runtimeArtifacts([mutationSlot]);
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+		{
+			identity: mutationSlot.identity,
+			kind: mutationSlot.kind,
+			slot: mutationSlot.slot,
+			runtimeGraphDigest: mutationSlot.runtimeGraphDigest,
+			bundleExport: mutationSlot.bundleExport,
+			execute,
+			definition: {
+				name: "messages.publish",
+				handler: execute,
+				errors: {},
+				services: { mail: { effect: "external" } },
+			},
+		},
+	];
+
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program: {
+				services: [],
+				context,
+				bootstrap: { get: async () => null },
+				project: ({ facts }) => ({ signal: facts.signal }),
+				resolvePrincipal: async () => principal.anonymous(),
+			},
+		}),
+	).rejects.toThrow("Mutation executable binding exposes Services");
+});
+
 test("rejects a changed inventory file before readiness or executable disclosure", async () => {
 	let readiness = 0;
 	let resolves = 0;
