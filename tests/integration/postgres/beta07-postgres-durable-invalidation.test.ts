@@ -1,19 +1,25 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { SQL } from "bun";
+import { principal } from "questpie";
 
+import { projectLiveQueryCompilation } from "../../../packages/compiler/src/live-query";
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import {
 	ensureInternalProtocolV3,
 	projectPostgresChangeCapture,
 } from "../../../packages/compiler/src/schema";
+import { createPostgresLiveQueryCoordinator } from "../../../packages/runtime/src/application/realtime";
 import {
 	canonicalJsonLine,
 	sha256Digest,
 } from "../../../packages/runtime/src/canonical-json";
 import {
 	createPostgresLiveQueryInvalidationEffect,
+	linkLiveQueryProgram,
 	reconcilePostgresChangeLedger,
+	type ObservedLiveQueryPlanV1,
+	type PostgresWakeTickSource,
 } from "../../../packages/runtime/src/live-query";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
@@ -24,6 +30,24 @@ const deploymentA = "a".repeat(64);
 const deploymentB = "b".repeat(64);
 const authority = "c".repeat(64);
 const inputDigest = "d".repeat(64);
+const hmacKey = new Uint8Array(32).fill(17);
+const projectedLiveQuery = projectLiveQueryCompilation({
+	resources: [],
+	contextProjection: {},
+	dataProjection: {},
+	policyProjection: {},
+	queryProjection: {},
+});
+const runtimeProgram = linkLiveQueryProgram({
+	watchability: projectedLiveQuery.artifacts["query-watchability.json"],
+	dependencyAlgebra:
+		projectedLiveQuery.artifacts["live-query-dependency-algebra.json"],
+	changeLedger: projectedLiveQuery.artifacts["change-ledger.json"],
+	reconciliation: projectedLiveQuery.artifacts["change-reconciliation.json"],
+	resume: projectedLiveQuery.artifacts["live-query-resume.json"],
+	captureBoundary: projectedLiveQuery.artifacts["change-capture-boundary.json"],
+	limits: projectedLiveQuery.artifacts["live-query-limits.json"],
+});
 const projection = projectPostgresChangeCapture({
 	applicationName: application,
 	postgresSchema: "durable_invalidation_probe",
@@ -58,6 +82,17 @@ function planBytes(collection: string): Uint8Array {
 			]),
 		),
 	});
+}
+
+function dormantTicks(): PostgresWakeTickSource {
+	return {
+		armInterval() {
+			return () => {};
+		},
+		armDeadline() {
+			return () => {};
+		},
+	};
 }
 
 async function ensure(sql: SQL): Promise<void> {
@@ -400,6 +435,102 @@ describe.skipIf(!database)(
 				expect(invalidated?.count).toBe(2_050);
 			},
 			30_000,
+		);
+
+		postgresTest(
+			"recomputes 2,050 durable PostgreSQL watches in exact linked-program fanout batches",
+			async () => {
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: runtimeProgram,
+					sql: database!,
+					hmacKey,
+					applicationName: application,
+					deploymentDigest: deploymentA,
+					wireVersion: 1,
+					tickSource: dormantTicks(),
+				});
+				await coordinator.start();
+
+				const waves: number[] = [];
+				let activeWave = 0;
+				let waveScheduled = false;
+				const observedPlan = JSON.parse(
+					new TextDecoder().decode(planBytes("collection:messages")),
+				) as ObservedLiveQueryPlanV1;
+				const attachments = Array.from({ length: 2_050 }, (_, index) => {
+					const identity = index + 1;
+					return Object.freeze({
+						scopeId: `scope:recompute:${identity}`,
+						principal: principal.user({
+							id: `principal:recompute:${identity}`,
+						}),
+						prepare() {
+							return Object.freeze({
+								authorityPartitionDigest: authority,
+								async evaluate() {
+									activeWave += 1;
+									if (!waveScheduled) {
+										waveScheduled = true;
+										queueMicrotask(() => {
+											waves.push(activeWave);
+											activeWave = 0;
+											waveScheduled = false;
+										});
+									}
+									return { payload: { identity }, observedPlan };
+								},
+							});
+						},
+						publish() {
+							return true;
+						},
+						synchronize() {},
+					});
+				});
+				const attached = await Promise.all(
+					attachments.map((attachment) =>
+						coordinator.durable.attach(attachment),
+					),
+				);
+				expect(attached.every(Boolean)).toBe(true);
+				await coordinator.reconcile();
+
+				await database!`
+					update questpie_internal.realtime_scope_attachments
+					set authority_partition_digest = ${authority}, state = 'open'
+					where application_name = ${application}
+					  and scope_identity like 'scope:recompute:%'
+				`;
+				await database!`
+					insert into questpie_internal.realtime_watch_bindings
+					(application_name, scope_identity, binding_identity, deployment_digest,
+					 authority_partition_digest, principal_kind, principal_id, active_slot,
+					 query_identity, query_bytes, input_bytes, input_digest,
+					 context_input_bytes, wire_version, resume_requested,
+					 requested_resume_token, state)
+					select ${application}, 'scope:recompute:' || candidate::text,
+					       'binding:recompute:' || candidate::text, ${deploymentA}, ${authority},
+					       'user', 'principal:recompute:' || candidate::text, 1,
+					       'messages.page', ${new TextEncoder().encode('"query:messages.page"\n')},
+					       ${new TextEncoder().encode("{}\n")}, ${inputDigest},
+					       ${new TextEncoder().encode("{}\n")}, 1, false, null, 'open'
+					from pg_catalog.generate_series(1, 2050) candidate
+				`;
+
+				await coordinator.reconcile();
+				await Promise.resolve();
+				expect(waves).toEqual([1_024, 1_024, 2]);
+				const [recomputed] = await database!<{ count: number }[]>`
+					select count(*)::integer as count
+					from questpie_internal.realtime_watch_bindings
+					where application_name = ${application}
+					  and binding_identity like 'binding:recompute:%'
+					  and evaluated_invalidation_generation = invalidation_generation
+				`;
+				expect(recomputed?.count).toBe(2_050);
+				await coordinator.drain();
+			},
+			120_000,
 		);
 	},
 );

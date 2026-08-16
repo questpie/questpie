@@ -313,6 +313,28 @@ export function createPostgresDurableLiveQueryCoordinator(
 			effect,
 			signal,
 		});
+		let batch: Array<
+			readonly [
+				holder: Holder,
+				authority: PostgresRealtimeScopeLease,
+				watch: PostgresRealtimeWatch,
+			]
+		> = [];
+		const flushBatch = async (): Promise<void> => {
+			if (batch.length === 0) return;
+			const current = batch;
+			batch = [];
+			const settled = await Promise.allSettled(
+				current.map(([holder, authority, watch]) =>
+					processWatch(holder, authority, watch, signal),
+				),
+			);
+			const failed = settled.find(
+				(result): result is PromiseRejectedResult =>
+					result.status === "rejected",
+			);
+			if (failed) throw failed.reason;
+		};
 		for (const [scopeId, holder] of attachments) {
 			signal.throwIfAborted();
 			const authority = holder.lease;
@@ -324,9 +346,13 @@ export function createPostgresDurableLiveQueryCoordinator(
 			holder.attachment.synchronize(
 				new Set(watches.map((watch) => watch.bindingIdentity)),
 			);
-			for (const watch of watches)
-				await processWatch(holder, authority, watch, signal);
+			for (const watch of watches) {
+				batch.push([holder, authority, watch]);
+				if (batch.length === input.program.limits.fanoutPerBatch)
+					await flushBatch();
+			}
 		}
+		await flushBatch();
 		await store.expireScopes({
 			applicationName: input.applicationName,
 			deploymentDigest: input.deploymentDigest,
