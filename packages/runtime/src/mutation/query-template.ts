@@ -44,6 +44,21 @@ function text(value: unknown, label: string, pattern?: RegExp): string {
 	return value;
 }
 
+function reconstructFrozen(value: unknown): unknown {
+	if (Array.isArray(value))
+		return Object.freeze(value.map((item) => reconstructFrozen(item)));
+	if (value && typeof value === "object")
+		return Object.freeze(
+			Object.fromEntries(
+				Object.entries(value).map(([key, item]) => [
+					key,
+					reconstructFrozen(item),
+				]),
+			),
+		);
+	return value;
+}
+
 function nullableInteger(value: unknown, label: string): void {
 	if (value !== null && !Number.isSafeInteger(value)) fail(label);
 }
@@ -283,5 +298,5 @@ export function decodeMutationDataQueryTemplate(
 		`${label} page uniqueConstraint`,
 		identity("constraint"),
 	);
-	return query;
+	return reconstructFrozen(query) as RecordValue;
 }

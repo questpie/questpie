@@ -177,6 +177,25 @@ test("links exact plan-owned Collection Mutation programs", () => {
 	expect(Object.isFrozen(create)).toBe(true);
 });
 
+test("reconstructs and deeply freezes a linked Data Query", () => {
+	const input = artifacts();
+	const linked = linkCollectionMutationPrograms(input);
+	const query = linked.byTarget
+		.get("collection:messages")
+		?.get("list")?.dataQuery;
+	if (!query) throw new TypeError("fixture has no linked Data Query");
+
+	expect(Object.isFrozen(query)).toBe(true);
+	expect(Object.isFrozen(query.parameters)).toBe(true);
+	expect(Object.isFrozen(query.page)).toBe(true);
+	input.collectionOperations.operations[1]!.dataQuery!.parameters.push({
+		name: "smuggled",
+		kind: "cursor",
+		nullable: true,
+	});
+	expect(query.parameters).toHaveLength(2);
+});
+
 test("rejects an unknown envelope member", () => {
 	const input = artifacts();
 	Object.assign(input.collectionOperations, { collections: [] });
