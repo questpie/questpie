@@ -17,6 +17,14 @@ export type {
 } from "./nondisclosure";
 export { lowerPostgresQueryPlans } from "./postgres";
 export type { PostgresQueryPlanV1, PostgresQueryPlansV1 } from "./postgres";
+export {
+	lowerPostgresMutationPolicyCheck,
+	postgresMutationCollection,
+} from "./postgres-mutation-seam";
+export type {
+	PostgresMutationCollectionV1,
+	PostgresMutationFieldV1,
+} from "./postgres-mutation-seam";
 
 export {
 	normalizePolicyPrograms,
@@ -25,8 +33,10 @@ export {
 export { normalizeDataQueryTemplate } from "./normalize-query";
 export type {
 	DataQueryTemplateV1,
+	PolicyExpressionV1,
 	PolicyProgramV1,
 	RootQueryFilterV1,
+	ScalarCodecV1,
 } from "./types";
 
 export function policyProgramDigest(program: PolicyProgramV1): string {

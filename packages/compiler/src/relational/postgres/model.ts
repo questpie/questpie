@@ -13,6 +13,10 @@ export interface PostgresField {
 	readonly postgresName: string;
 	readonly nullable: boolean;
 	readonly codec: ScalarCodecV1;
+	readonly defaultValue:
+		| null
+		| Readonly<{ kind: "literal"; value: boolean | number | string }>
+		| Readonly<{ kind: "now" | "randomUuid" }>;
 }
 
 export interface PostgresRelation {
@@ -132,6 +136,8 @@ export function buildPostgresCatalog(schema: unknown): PostgresCatalog {
 				postgresName: string(fieldValue.postgresName, "Field PostgreSQL name"),
 				nullable: fieldValue.nullable === true,
 				codec: record(fieldValue.type, "Field codec") as ScalarCodecV1,
+				defaultValue: (fieldValue.default ??
+					null) as PostgresField["defaultValue"],
 			};
 			collectionFields.set(field.identity, field);
 			fieldsByPath.set(JSON.stringify(path), field);
