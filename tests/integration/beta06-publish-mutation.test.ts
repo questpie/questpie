@@ -43,6 +43,11 @@ test("projects the authored message.publish Mutation into the executable applica
 			program: Readonly<{
 				identity: string;
 				operations: Readonly<Record<string, unknown>>;
+				fields?: Readonly<{
+					callerInput: Readonly<{
+						create: readonly Readonly<{ path: readonly string[] }>[];
+					}>;
+				}>;
 			}>;
 			scopeBindings: readonly Readonly<{
 				scope: string;
@@ -120,6 +125,9 @@ test("projects the authored message.publish Mutation into the executable applica
 		},
 		read: { admission: { kind: "authenticated" } },
 	});
+	expect(
+		messagePolicy.program.fields?.callerInput.create.map(({ path }) => path),
+	).toEqual([["authorMembershipId"], ["body"], ["channelId"]]);
 	expect(messagePolicy.scopeBindings).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ scope: "candidate", parentScope: null }),

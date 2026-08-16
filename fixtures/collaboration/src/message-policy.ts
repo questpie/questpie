@@ -70,6 +70,15 @@ export const messagePolicy = definePolicy(messages, {
 	},
 	fields: {
 		create: ({ candidate, principal, tenant }) => ({
+			authorMembershipId: policy.exists(memberships, ({ row: membership }) =>
+				query.and(
+					membership.id.equal(candidate.authorMembershipId),
+					membership.companyId.equal(tenant.id),
+					membership.principalId.equal(principal.id),
+					membership.scopeKey.equal("company"),
+					membership.status.equal("active"),
+				),
+			),
 			channelId: policy.exists(memberships, ({ row: membership }) =>
 				query.and(
 					membership.companyId.equal(tenant.id),
