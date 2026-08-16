@@ -28,6 +28,11 @@ export type { CliExplanationV1 } from "./explain";
 export { applyCommittedMigrations } from "./postgres/apply";
 export { bootstrap } from "./postgres/bootstrap";
 export {
+	ensureInternalProtocolV2,
+	internalProtocolV2Checksum,
+	verifyInternalProtocolV2,
+} from "./postgres/internal-protocol-v2";
+export {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	fingerprint,

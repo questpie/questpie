@@ -1,0 +1,54 @@
+{
+	"ticket": "P16R1/BETA06LedgerBoundary",
+	"proof": "docs/v4/prototypes/beta06-authority-reconciliation",
+	"authorityHeads": {
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P4": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P16": "1d9303a58c9557aac3da648895c817fa039478ba",
+		"BETA05Merge": "740f2e0049a64f5a541f33ab8da44cf8e114041b"
+	},
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/beta06-authority-reconciliation/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta06-authority-reconciliation/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/beta06-authority-reconciliation/tsconfig.json",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc -p docs/v4/prototypes/implementation-collapse-p16/tsconfig.json",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/beta06-authority-reconciliation/*.ts docs/v4/prototypes/implementation-collapse-p16/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/beta06-authority-reconciliation docs/v4/prototypes/implementation-collapse-p16",
+			"result": "PASS"
+		},
+		{ "command": "git diff --check", "result": "PASS" }
+	],
+	"acceptanceCriteria": [
+		"Accepted ADR-0012/P4 compiler-trigger Change Ledger ownership remains with BETA-07; BETA-06 does not synthesize or reserve a committed fact.",
+		"BETA-06 retains P3/P5 transaction-owned pending Reaction intent, exact receipts, atomic rollback, and independent fixture value.",
+		"The P16 queue mechanically rejects four regressions across the BETA-06/BETA-07 ownership boundary.",
+		"The exact issue #293 replacement body is rendered from the queue and changes no unrelated scope, hostile case, budget, verification command, or readiness state.",
+		"Accepted BETA-05 merge evidence derives BETA-06 as the sole agent-ready issue without advancing BETA-07.",
+		"The revision contains no production Runtime, Change Ledger schema, trigger design, Reaction execution, or implementation acceptance."
+	]
+}

@@ -85,6 +85,33 @@ const invalid = [
 		);
 		return value;
 	},
+	() => {
+		const value = clone();
+		at(value, 5).artifacts.push("committed change fact");
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 5).artifacts = at(value, 5).artifacts.filter(
+			(artifact) => artifact !== "pending Reaction intent",
+		);
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 5).nonGoals = at(value, 5).nonGoals.filter(
+			(nonGoal) =>
+				nonGoal !== "Change Ledger capture and compiler-owned triggers",
+		);
+		return value;
+	},
+	() => {
+		const value = clone();
+		at(value, 6).artifacts = at(value, 6).artifacts.filter(
+			(artifact) => artifact !== "Change Ledger DDL/triggers",
+		);
+		return value;
+	},
 ];
 
 for (const mutate of invalid) {

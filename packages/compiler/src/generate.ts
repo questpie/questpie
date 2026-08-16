@@ -1,5 +1,11 @@
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
+import {
+	renderGeneratedMutationData,
+	renderMutationDeclarations,
+	renderMutationFactory,
+	type MutationGeneratedContractV1,
+} from "./mutation";
 import type {
 	RelationalGeneratedContractV1,
 	RelationalGeneratedSelectionV1,
@@ -15,7 +21,10 @@ function record(value: unknown): RecordValue {
 	return value as RecordValue;
 }
 
-function fieldType(field: RecordValue): string {
+function fieldType(
+	field: RecordValue,
+	timestampType: "Date" | "string" = "string",
+): string {
 	const scalar = field.scalar;
 	let type =
 		scalar === "boolean"
@@ -23,7 +32,7 @@ function fieldType(field: RecordValue): string {
 			: scalar === "integer"
 				? "number"
 				: scalar === "timestamp"
-					? "string"
+					? timestampType
 					: scalar === "object"
 						? embeddedFieldType(field)
 						: scalar === "array"
@@ -35,13 +44,16 @@ function fieldType(field: RecordValue): string {
 	return type;
 }
 
-function fieldNodeType(field: RecordValue): string {
-	if (field.kind !== "inlineShape") return fieldType(field);
+function fieldNodeType(
+	field: RecordValue,
+	timestampType: "Date" | "string" = "string",
+): string {
+	if (field.kind !== "inlineShape") return fieldType(field, timestampType);
 	return `Readonly<{ ${Object.entries(record(field.fields))
 		.sort(([left], [right]) => compareAscii(left, right))
 		.map(
 			([key, child]) =>
-				`readonly ${JSON.stringify(key)}: ${fieldNodeType(record(child))};`,
+				`readonly ${JSON.stringify(key)}: ${fieldNodeType(record(child), timestampType)};`,
 		)
 		.join(" ")} }>`;
 }
@@ -153,7 +165,7 @@ function renderData(resources: readonly NormalizedResource[]): string {
 			const row = fields
 				.map(
 					([key, field]) =>
-						`readonly ${JSON.stringify(key)}: ${fieldNodeType(field)};`,
+						`readonly ${JSON.stringify(key)}: ${fieldNodeType(field, "Date")};`,
 				)
 				.join(" ");
 			const constraints = record(resource.value.constraints);
@@ -192,13 +204,58 @@ function renderQueryOperations(
 }
 
 const factoryNames = [
-	"defineMutation",
 	"defineAction",
 	"defineRoute",
-	"defineReaction",
 	"defineJob",
 	"defineWorkflow",
 ] as const;
+
+function reactions(resources: readonly NormalizedResource[]) {
+	return resources.filter((resource) => resource.kind === "reaction");
+}
+
+function renderReactionDeclarations(
+	resources: readonly NormalizedResource[],
+): string {
+	const definitions = reactions(resources)
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(resource.contract.input)}; }>;`,
+		)
+		.join("\n\t");
+	return `export interface GeneratedReactions {
+	${definitions}
+}
+
+export type ReactionDefinition<Name extends keyof GeneratedReactions> = Readonly<{
+	readonly kind: "reaction";
+	readonly identity: \`reaction:\${Name & string}\`;
+	readonly name: Name;
+	readonly input: Codec<GeneratedReactions[Name]["input"]>;
+}>;
+
+export type ReactionFactory = <const Name extends keyof GeneratedReactions>(
+	definition: Readonly<{
+		name: Name;
+		input: Codec<GeneratedReactions[Name]["input"]>;
+	}>,
+) => ReactionDefinition<Name>;
+
+export const defineReaction: ReactionFactory = ((definition) => Object.freeze({
+	...definition,
+	kind: "reaction" as const,
+	identity: \`reaction:\${definition.name}\` as const,
+})) as ReactionFactory;`;
+}
+
+function renderDispatch(resources: readonly NormalizedResource[]): string {
+	return reactions(resources)
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}(input: ${renderCodecType(resource.contract.input)}): Promise<void>;`,
+		)
+		.join("\n\t\t");
+}
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -206,6 +263,7 @@ export function renderAppContract(
 	schema: unknown,
 	sourceRoot: string,
 	relational: RelationalGeneratedContractV1,
+	mutationContract: MutationGeneratedContractV1,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -270,12 +328,17 @@ export function renderAppContract(
 			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
 		})
 		.join("\n\t");
-	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
+	const mutationData = renderGeneratedMutationData(mutationContract, {
+		field: (target, path) =>
+			fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
+		fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),
+	});
+	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
 export interface ReadCollection<Row, Key> {
-	get(input: Readonly<{ key: Key }>): Promise<Row | null>;
+	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ key: Key; select: Select }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
 }
 
 export interface GeneratedData {
@@ -283,9 +346,17 @@ export interface GeneratedData {
 	${queryRuns}
 }
 
+export interface GeneratedMutationData {
+	${mutationData}
+}
+
 export interface GeneratedQueries {
 	${renderQueries(resources)}
 }
+
+${renderMutationDeclarations(resources)}
+
+${renderReactionDeclarations(resources)}
 
 export type GeneratedQueryOperations = Readonly<{
 	${renderQueryOperations(resources)}
@@ -294,6 +365,16 @@ export type GeneratedQueryOperations = Readonly<{
 export interface QueryContext {
 	readonly data: Readonly<GeneratedData>;
 	readonly signal: AbortSignal;
+}
+
+export interface MutationContext extends Omit<RootExecution, "services"> {
+	readonly data: Readonly<GeneratedMutationData>;
+	readonly operationTime: Date;
+	readonly callId: string;
+	readonly transactionId: string;
+	readonly dispatch: Readonly<{
+		${renderDispatch(resources)}
+	}>;
 }
 
 type ApplicationContextDefinition = ${contextDefinition};
@@ -355,13 +436,24 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	identity: \`query:\${definition.name}\` as const,
 	network: definition.network === true,
 })) as QueryFactory;
+${renderMutationFactory()}
 ${otherFactories}
+
+export interface CommittedResultUnavailable extends Error {
+	readonly name: "CommittedResultUnavailable";
+	readonly code: "COMMITTED_RESULT_UNAVAILABLE";
+	readonly retryable: true;
+	readonly payload: Readonly<{
+		readonly callId: string;
+		readonly transactionId: string;
+	}>;
+}
 
 export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations }>) => Result | Promise<Result>,
+		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
 }

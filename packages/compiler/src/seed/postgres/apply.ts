@@ -16,8 +16,8 @@ import type { SchemaProjectionV1 } from "../../schema";
 import {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
-	bootstrap,
 	childRecords,
+	ensureInternalProtocolV2,
 	fail,
 	providerObservations,
 } from "../../schema";
@@ -239,7 +239,13 @@ export async function applyCommittedSeeds(
 				"current database is unavailable",
 			);
 		await providerObservations(session, input.schema);
-		await bootstrap(session, database.name, expectedPid, control, input.signal);
+		await ensureInternalProtocolV2(
+			session,
+			database.name,
+			expectedPid,
+			control,
+			input.signal,
+		);
 		await assertBackendPid(session, expectedPid, "Seed bootstrap");
 		const application = input.schema.application.name;
 		const applicationKey = lockKey(

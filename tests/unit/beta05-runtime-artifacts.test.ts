@@ -37,9 +37,12 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				changeLedgerDigest: null,
 				resumeDigest: null,
 				durableCompatibilityDigest: null,
-				reactionDigest: null,
+				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
 		});
+		expect(runtimeBuild.inventory).toContainEqual(
+			expect.objectContaining({ path: "reaction-projection.json" }),
+		);
 		expect(runtimeBuild.compilerRuntimeBuildDigest).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.serverBundleDigest).toBe(
@@ -91,31 +94,34 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		expect(wire).toMatchObject({
 			format: "questpie.operation-wire",
-			version: 1,
+			version: 2,
 			path: "/_questpie/operation",
 			protocol: { name: "questpie.operation", version: 1 },
-			operations: [
-				{
-					identity: "query:messages.page",
-					input: {
-						kind: "object",
-						properties: {
-							after: { kind: "nullable", codec: { kind: "text" } },
-							channelId: { kind: "uuid" },
-							first: { kind: "integer" },
-						},
-					},
-					output: {
-						kind: "object",
-						properties: {
-							nodes: { kind: "array" },
-						},
+		});
+		expect(wire.operations).toContainEqual(
+			expect.objectContaining({
+				identity: "query:messages.page",
+				input: {
+					kind: "object",
+					properties: {
+						after: { kind: "nullable", codec: { kind: "text" } },
+						channelId: { kind: "uuid" },
+						first: { kind: "integer" },
 					},
 				},
-			],
-		});
+				output: expect.objectContaining({
+					kind: "object",
+					properties: expect.objectContaining({
+						nodes: expect.objectContaining({ kind: "array" }),
+					}),
+				}),
+			}),
+		);
 		expect(first.generatedFiles["app.ts"]).toContain(
 			"export const defineQuery: QueryFactory",
+		);
+		expect(first.generatedFiles["app.ts"]).toContain(
+			"export interface CommittedResultUnavailable extends Error",
 		);
 		expect(first.generatedFiles["client.ts"]).toContain(
 			"export function createClient",

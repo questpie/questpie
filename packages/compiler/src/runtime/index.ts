@@ -7,6 +7,10 @@ import {
 	contentDigest,
 	digest,
 } from "../canonical";
+import {
+	projectReactionContracts,
+	type ReactionProjectionV1,
+} from "../reaction";
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
 export { renderClientContract, renderCodecType } from "./client";
@@ -41,21 +45,24 @@ export interface RuntimeContractProjection {
 		slots: readonly RuntimeExecutableSlotV1[];
 	}>;
 	readonly runtimeExecutablesDigest: string;
+	readonly reactions: ReactionProjectionV1;
+	readonly reactionDigest: string;
 	readonly wire: Readonly<Record<string, unknown>>;
 	readonly wireDigest: string;
 }
 
-function queryOperations(resources: readonly NormalizedResource[]) {
+function operationContracts(resources: readonly NormalizedResource[]) {
 	return resources
 		.filter(
 			(resource) =>
-				resource.kind === "query" && resource.contract.exposure === "network",
+				(resource.kind === "query" || resource.kind === "mutation") &&
+				resource.contract.exposure === "network",
 		)
 		.map((resource) => ({
 			identity: resource.identity,
 			input: resource.contract.input,
 			output: resource.contract.output,
-			declaredErrors: {},
+			declaredErrors: resource.contract.declaredErrors ?? {},
 		}))
 		.sort((left, right) => compareAscii(left.identity, right.identity));
 }
@@ -73,7 +80,9 @@ export function projectRuntimeContract(
 	}>,
 ): RuntimeContractProjection {
 	const application = `application:${input.configuration.application.name}`;
-	const operations = queryOperations(input.resources);
+	const operations = operationContracts(input.resources);
+	const reactions = projectReactionContracts(input.resources);
+	const reactionDigest = digest("questpie-reaction-projection-v1", reactions);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -93,7 +102,7 @@ export function projectRuntimeContract(
 	);
 	const slots = input.resources
 		.filter((resource) =>
-			["context", "query", "service"].includes(resource.kind),
+			["context", "mutation", "query", "service"].includes(resource.kind),
 		)
 		.flatMap((resource) => {
 			const origin = {
@@ -111,7 +120,7 @@ export function projectRuntimeContract(
 				resource.contract,
 			);
 			const executableSlots =
-				resource.kind === "query"
+				resource.kind === "query" || resource.kind === "mutation"
 					? ["handler"]
 					: (resource.contract.executableSlots as readonly string[]);
 			return executableSlots.map((slot) => {
@@ -164,7 +173,7 @@ export function projectRuntimeContract(
 		"questpie-runtime-executables-v1",
 		executables,
 	);
-	const wireWithoutDigest = {
+	const wireV1WithoutDigest = {
 		format: "questpie.operation-wire",
 		version: 1,
 		application,
@@ -204,12 +213,76 @@ export function projectRuntimeContract(
 		mutationAutomaticRetry: false,
 		clientContractDigest,
 	};
-	const wireDigest = digest("questpie-operation-wire-v1", wireWithoutDigest);
+	const wireV1Digest = digest(
+		"questpie-operation-wire-v1",
+		wireV1WithoutDigest,
+	);
+	const wireWithoutDigest = {
+		...wireV1WithoutDigest,
+		version: 2,
+		resultKinds: ["declaredError", "failure", "result"],
+		failureDetails: {
+			ordinary: ["code", "retryable"],
+			committedResultUnavailable: ["code", "retryable", "transactionId"],
+		},
+		callIdentity: {
+			kind: "text",
+			minimumUnicodeScalars: 1,
+			maximumUnicodeScalars: 256,
+			maximumUtf8Bytes: 1_024,
+			normalization: "NFC",
+			normalizationBehavior: "rejectNotRewrite",
+			loneSurrogates: "forbidden",
+			nullScalar: "forbidden",
+			uuidRequired: false,
+			runtimeDefaultWhenAbsent: "crypto.randomUUID",
+			equality: "exactUtf8AfterValidation",
+		},
+		transactionIdentity: {
+			kind: "postgresXid8Text",
+			canonicalPattern: "^[1-9][0-9]{0,19}$",
+			maximum: "18446744073709551615",
+			clientInterpretation: "opaque",
+		},
+		committedResultUnavailable: {
+			classification: "frameworkTransactionOutcome",
+			httpStatus: 500,
+			retryable: true,
+			transactionOutcome: "committed",
+			automaticRetry: false,
+			recovery: "replayExactMutationWithSameCallIdentity",
+			frameCallIdSource: "acceptedRequest",
+			transactionIdSource: "committedReceipt",
+			causeDisclosure: "forbidden",
+		},
+		compatibility: {
+			clientContractDigest,
+			wireV1Digest,
+			wireV1Source: "sameApplicationClientContractAndOperations",
+			wireV1MutationExecution: "rejectBeforeContextAndOperation",
+			wireV1QueryExecution: "allowed",
+			wireV1RejectionCode: "CLIENT_OUTDATED",
+		},
+		failures: [
+			"APPLICATION_MISMATCH",
+			"CLIENT_OUTDATED",
+			"COMMITTED_RESULT_UNAVAILABLE",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+		],
+	};
+	const wireDigest = digest("questpie-operation-wire-v2", wireWithoutDigest);
 	return {
 		clientContract,
 		clientContractDigest,
 		executables,
 		runtimeExecutablesDigest,
+		reactions,
+		reactionDigest,
 		wire: { ...wireWithoutDigest, digest: wireDigest },
 		wireDigest,
 	};
@@ -336,7 +409,10 @@ export function projectRuntimeBuild(
 			changeLedgerDigest: null,
 			resumeDigest: null,
 			durableCompatibilityDigest: null,
-			reactionDigest: null,
+			reactionDigest:
+				input.runtime.reactions.reactions.length === 0
+					? null
+					: input.runtime.reactionDigest,
 		},
 		inventory,
 	};

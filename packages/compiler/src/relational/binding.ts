@@ -50,24 +50,6 @@ function scopeBinding(value: unknown): PolicyScopeBindingV1 {
 	};
 }
 
-function expressions(program: PolicyProgramV1): readonly PolicyExpressionV1[] {
-	const result: PolicyExpressionV1[] = [];
-	for (const operation of Object.values(program.operations))
-		for (const key of ["rows", "current", "candidate"] as const) {
-			const candidate = operation?.[key];
-			if (candidate && candidate.kind !== "sameRelationalScopeAsRead")
-				result.push(candidate);
-		}
-	for (const rule of program.fields?.selectedOutput ?? [])
-		result.push(rule.when);
-	for (const rules of [
-		program.fields?.callerInput.create ?? [],
-		program.fields?.callerInput.update ?? [],
-	])
-		for (const rule of rules) result.push(rule.when);
-	return result;
-}
-
 function validateScopes(
 	program: PolicyProgramV1,
 	scopes: readonly PolicyScopeBindingV1[],
@@ -82,15 +64,17 @@ function validateScopes(
 			);
 		byName.set(binding.scope, binding);
 	}
-	const root = byName.get("row");
-	if (!root || root.collection !== program.target || root.parentScope !== null)
-		throw new CompilerDiagnosticError(
-			"QP-COMPOSE-013",
-			"structuralTypeError",
-			`Policy ${program.identity} has no exact root scope`,
-		);
+	const rootScopes = new Set(["row", "current", "candidate"]);
 	for (const binding of scopes) {
-		if (binding.scope === "row") continue;
+		if (rootScopes.has(binding.scope)) {
+			if (binding.collection !== program.target || binding.parentScope !== null)
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					`Policy ${program.identity} has an invalid root scope ${binding.scope}`,
+				);
+			continue;
+		}
 		if (!binding.parentScope || !byName.has(binding.parentScope))
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",
@@ -160,8 +144,46 @@ function validateScopes(
 				return;
 		}
 	};
-	for (const expression of expressions(program))
-		validateExpression(expression, "row", new Set(["row"]));
+	const validateFrom = (
+		expression:
+			| PolicyExpressionV1
+			| Readonly<{ kind: "sameRelationalScopeAsRead" }>
+			| undefined,
+		currentScope: string,
+		visibleScopes: readonly string[],
+	): void => {
+		if (!expression || expression.kind === "sameRelationalScopeAsRead") return;
+		for (const scope of visibleScopes) {
+			const binding = byName.get(scope);
+			if (
+				!binding ||
+				binding.collection !== program.target ||
+				binding.parentScope !== null
+			)
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					`Policy ${program.identity} has no exact ${scope} root scope`,
+				);
+		}
+		validateExpression(expression, currentScope, new Set(visibleScopes));
+	};
+	validateFrom(program.operations.read?.rows, "row", ["row"]);
+	validateFrom(program.operations.create?.candidate, "candidate", [
+		"candidate",
+	]);
+	validateFrom(program.operations.update?.current, "current", ["current"]);
+	validateFrom(program.operations.update?.candidate, "candidate", [
+		"current",
+		"candidate",
+	]);
+	validateFrom(program.operations.delete?.current, "current", ["current"]);
+	for (const rule of program.fields?.selectedOutput ?? [])
+		validateFrom(rule.when, "row", ["row"]);
+	for (const rule of program.fields?.callerInput.create ?? [])
+		validateFrom(rule.when, "candidate", ["candidate"]);
+	for (const rule of program.fields?.callerInput.update ?? [])
+		validateFrom(rule.when, "candidate", ["current", "candidate"]);
 }
 
 export function normalizeBoundPolicy(value: unknown): BoundPolicyProgramV1 {

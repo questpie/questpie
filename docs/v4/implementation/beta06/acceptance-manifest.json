@@ -1,0 +1,56 @@
+{
+	"ticket": "#293",
+	"proof": "BETA-06 compiles and executes one Policy-authorized message.publish Mutation through generated direct, Fetch, and client surfaces with one READ COMMITTED PostgreSQL transaction, exact call identity replay, atomic receipt/business/audit/pending-intent state, and no BETA-07 Change Ledger ownership.",
+	"authorityHeads": {
+		"P3 Query Mutation lifecycle": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P5 dispatch Reaction": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P6 Runtime client": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"P6R1 accepted projection": "d5bf7d0adadcda0f5b932e6b1a7c20df0e4102a6",
+		"BETA-05 accepted merge": "740f2e0049a64f5a541f33ab8da44cf8e114041b",
+		"BETA-06 ledger reconciliation": "35d48eb8cc5fd6548f00201322138741a2c677fa"
+	},
+	"verification": [
+		{
+			"command": "bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:typescript-forward",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run test:postgres -- --scenario beta06 on PostgreSQL 16, 17, and 18 (10 tests and 50 assertions per major)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run bench:micro -- --scenario beta06 on local PostgreSQL 17 under the committed 1100 ms execute20 budget",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/p6-postcommit-outcome/check.ts and negative-control.ts (24 branches)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta06-authority-reconciliation/check.ts and negative-control.ts (6 branches)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/implementation-collapse-p16/check.ts and negative-control.ts (19 branches)",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"One authored semantic message.publish Mutation is compiled into exact generated application and client contracts and executes through the same direct and Fetch operation engine.",
+		"The compiler owns closed Collection operation, normalization, server-value, Policy, PostgreSQL statement, Reaction target, and Runtime Build artifacts; Runtime validates exact linked bytes before readiness.",
+		"A successful first call commits Message, transactional audit, receipt, and one pending Reaction intent atomically in one READ COMMITTED transaction; BETA-06 creates no Change Ledger table or committed fact.",
+		"Sequential duplicate, concurrent duplicate, and lost response with the same scoped call identity replay the exact stored result without rerunning business writes; changed canonical input yields the declared IDEMPOTENCY_CONFLICT.",
+		"Sparse supplied Field authority, post-lock fresh Membership and candidate Policy, output Field authority, constraints, cancellation, row and time budgets all fail closed without partial durable state.",
+		"Operation Wire v2 carries COMMITTED_RESULT_UNAVAILABLE with exact call and PostgreSQL transaction identity, while generated clients make no automatic Mutation retry; retained v1 Queries remain exact-pair compatible and v1 Mutations reject before Context resolution.",
+		"PostgreSQL 16, 17, and 18 execute the same correctness matrix, while performance evidence is honestly local and selected-PR or tagged stable-runner evidence remains external.",
+		"The implementation keeps PostgreSQL as the sole durable adapter, uses internal domain index seams rather than a provider matrix, preserves one canonical and scalar kernel, and passes architecture, package, Knip strict, format, lint, type, build, and exact-byte gates."
+	]
+}

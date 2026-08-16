@@ -1,6 +1,8 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { parseScenarioFilter, selectScenarioIds } from "./scenario-filter";
+
 type Kind = "micro" | "load" | "soak";
 type Scenario = {
 	id: string;
@@ -55,6 +57,12 @@ function validate(scenario: Scenario): void {
 }
 
 const command = Bun.argv[2];
+let requested: string | undefined;
+try {
+	requested = parseScenarioFilter(Bun.argv.slice(3));
+} catch (error) {
+	fail(error instanceof Error ? error.message : String(error));
+}
 const scenarios = manifests();
 for (const scenario of scenarios) validate(scenario);
 if (command === "check") {
@@ -64,7 +72,19 @@ if (command === "check") {
 const kind = command as Kind;
 if (!["micro", "load", "soak"].includes(kind))
 	fail("use check, micro, load, or soak");
-const selected = scenarios.filter((scenario) => scenario.kind === kind);
+const available = scenarios.filter((scenario) => scenario.kind === kind);
+let selected: Scenario[];
+try {
+	const selectedIds = new Set(
+		selectScenarioIds(
+			available.map(({ id }) => id),
+			requested,
+		),
+	);
+	selected = available.filter(({ id }) => selectedIds.has(id));
+} catch (error) {
+	fail(error instanceof Error ? error.message : String(error));
+}
 if (selected.length === 0) {
 	console.log(
 		`performance ${kind}: no accepted implementation-slice scenarios yet`,

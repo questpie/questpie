@@ -1,5 +1,9 @@
 # ADR 0014: Freeze Runtime, Client, Execution Envelope, and Minimal Studio
 
+> Partially superseded by [ADR-0023](./0023-freeze-post-commit-operation-outcome.md)
+> for the post-commit Operation outcome and Wire v1 Mutation retained-pair
+> execution. Wire v1 Query retention remains unchanged.
+
 - Status: Accepted
 - Date: 2026-08-13
 

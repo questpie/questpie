@@ -291,11 +291,10 @@
 			"artifacts": [
 				"Mutation/value/transaction programs",
 				"call/result receipts",
-				"committed change fact",
 				"pending Reaction intent",
 				"generated Mutation client declarations"
 			],
-			"fixture": "message.publish normalizes pure input, assigns server values, rechecks mutable Membership, writes Message/audit/change/Reaction intent in one transaction.",
+			"fixture": "message.publish normalizes pure input, assigns server values, rechecks mutable Membership, and writes Message/audit/pending Reaction intent/result receipt in one transaction.",
 			"redTest": "Duplicate delivery or lost response applies message.publish twice or emits intent outside the business transaction.",
 			"hostile": [
 				"forbidden sparse Field",
@@ -310,6 +309,7 @@
 			"nonGoals": [
 				"generic lifecycle hooks",
 				"automatic transaction retry around effects",
+				"Change Ledger capture and compiler-owned triggers",
 				"Action",
 				"generic Job"
 			],

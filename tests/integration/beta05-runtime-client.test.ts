@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { codec, principal } from "questpie";
+import { codec, operation, policy, principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
@@ -10,6 +10,10 @@ import {
 	createRuntimeApplication,
 	type ExecutionEventV1,
 } from "../../packages/runtime/src";
+import {
+	CommittedResultUnavailable,
+	type MutationInvoker,
+} from "../../packages/runtime/src/mutation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -24,7 +28,7 @@ const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1";
 type GeneratedCompilation = Awaited<ReturnType<typeof compileApplication>>;
 type RuntimeSlot = Readonly<{
 	identity: string;
-	kind: "context" | "query" | "service";
+	kind: "context" | "mutation" | "query" | "service";
 	slot: "create" | "dispose" | "handler" | "resolve";
 	runtimeGraphDigest: string;
 	bundleExport: string;
@@ -55,6 +59,7 @@ let collaborationContext: Definition;
 let auditConnection: Definition;
 let executionAudit: Definition;
 let auditReader: Definition;
+let publishMessage: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
 
@@ -109,6 +114,35 @@ beforeAll(async () => {
 	executionAudit = execution.executionAudit;
 	auditReader = audit.auditReader;
 	channelMessagePage = structural.channelMessagePage;
+	publishMessage = generatedApp.defineMutation({
+		name: "message.publish",
+		network: true,
+		input: codec.object({
+			channelId: codec.uuid(),
+			body: codec.text(),
+		}),
+		output: codec.object({
+			id: codec.uuid(),
+			channelId: codec.uuid(),
+			body: codec.text(),
+			createdAt: codec.timestamp(),
+		}),
+		policy: policy.authenticated(),
+		errors: {
+			channelUnavailable: operation.error({
+				code: "CHANNEL_UNAVAILABLE",
+				status: 404,
+			}),
+			idempotencyConflict: operation.error({
+				code: "IDEMPOTENCY_CONFLICT",
+				status: 409,
+				payload: codec.object({ callId: codec.uuid() }),
+			}),
+		},
+		handler: () => {
+			throw new Error("mutation is outside this Query-only runtime harness");
+		},
+	});
 	messagePage = generatedApp.defineQuery({
 		name: "messages.page",
 		network: true,
@@ -155,6 +189,7 @@ beforeAll(async () => {
 function definitions(): ReadonlyMap<string, Definition> {
 	return new Map([
 		["context:app.context", collaborationContext],
+		["mutation:message.publish", publishMessage],
 		["query:messages.page", messagePage],
 		["service:audit.connection", auditConnection],
 		["service:audit.execution", executionAudit],
@@ -169,7 +204,9 @@ function executableBindings() {
 		const definition = byIdentity.get(slot.identity);
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
-			slot.kind === "query" ? definition.handler : definition[slot.slot];
+			slot.kind === "query" || slot.kind === "mutation"
+				? definition.handler
+				: definition[slot.slot];
 		serverExports[slot.bundleExport] = implementation;
 		return Object.freeze({
 			identity: slot.identity,
@@ -178,7 +215,9 @@ function executableBindings() {
 			runtimeGraphDigest: slot.runtimeGraphDigest,
 			bundleExport: slot.bundleExport,
 			definition,
-			...(slot.kind === "query" ? { execute: implementation } : {}),
+			...(slot.kind === "query" || slot.kind === "mutation"
+				? { execute: implementation }
+				: {}),
 		});
 	});
 	return { serverExports: Object.freeze(serverExports), slots };
@@ -199,7 +238,9 @@ function artifactFiles(): Readonly<Record<string, string>> {
 	);
 }
 
-async function runtimeHarness() {
+async function runtimeHarness(
+	mutationInvoker?: MutationInvoker<Readonly<Record<string, unknown>>>,
+) {
 	let bootstrapGets = 0;
 	let dataRuns = 0;
 	const events: ExecutionEventV1[] = [];
@@ -244,6 +285,9 @@ async function runtimeHarness() {
 					}),
 					signal: facts.signal,
 				}),
+			...(mutationInvoker === undefined
+				? {}
+				: { projectMutation: () => mutationInvoker }),
 		},
 		events: (event) => events.push(event),
 	});
@@ -420,4 +464,101 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 	const eventBytes = JSON.stringify(harness.events);
 	expect(eventBytes).not.toContain("companyId");
 	expect(eventBytes).not.toContain("one engine");
+});
+
+test("executes retained v1 Queries but rejects v1 Mutations and unknown operations before context", async () => {
+	const harness = await runtimeHarness();
+	const input = { channelId, first: 20, after: null };
+	const compatibility = wireContract.compatibility as Readonly<{
+		wireV1Digest: string;
+	}>;
+	try {
+		const query = await harness.runtime.fetch(
+			operationRequest(
+				operationFrame(input, {
+					callId: "retained:v1:query",
+					wireDigest: compatibility.wireV1Digest,
+				}),
+			),
+		);
+		expect(query.status).toBe(200);
+		expect(await query.json()).toMatchObject({
+			kind: "result",
+			callId: "retained:v1:query",
+			operation: "query:messages.page",
+		});
+		expect({
+			bootstrap: harness.bootstrapGets(),
+			data: harness.dataRuns(),
+		}).toEqual({ bootstrap: 1, data: 1 });
+
+		for (const operation of [
+			"mutation:message.publish",
+			"query:messages.unknown",
+		]) {
+			const rejected = await harness.runtime.fetch(
+				operationRequest(
+					operationFrame(input, {
+						callId: `retained:v1:${operation}`,
+						operation,
+						wireDigest: compatibility.wireV1Digest,
+					}),
+				),
+			);
+			expect(rejected.status).toBe(409);
+			expect(await rejected.json()).toEqual({
+				kind: "failure",
+				error: { code: "CLIENT_OUTDATED", retryable: false },
+			});
+		}
+		expect({
+			bootstrap: harness.bootstrapGets(),
+			data: harness.dataRuns(),
+		}).toEqual({ bootstrap: 1, data: 1 });
+	} finally {
+		await harness.runtime.close();
+	}
+});
+
+test("request abort cannot mask a known post-commit Mutation outcome", async () => {
+	const callId = "abort:after:commit";
+	const controller = new AbortController();
+	const harness = await runtimeHarness(async (_operation, actualCallId) => {
+		expect(actualCallId).toBe(callId);
+		controller.abort(new DOMException("caller disconnected", "AbortError"));
+		throw new CommittedResultUnavailable(
+			actualCallId,
+			"18446744073709551615",
+			new Error("result serialization failed"),
+		);
+	});
+	try {
+		const request = operationRequest(
+			operationFrame(
+				{ channelId, first: 20, after: null },
+				{
+					callId,
+					operation: "mutation:message.publish",
+					input: { channelId, body: "committed before abort" },
+				},
+			),
+		);
+		const correlated = new Request(request, { signal: controller.signal });
+		bindIngressPrincipal(correlated, principal.user({ id: principalId }));
+		const response = await harness.runtime.fetch(correlated);
+		expect(response.status).toBe(500);
+		expect(await response.json()).toEqual({
+			protocol: wireContract.protocol,
+			kind: "failure",
+			operation: "mutation:message.publish",
+			callId,
+			error: {
+				code: "COMMITTED_RESULT_UNAVAILABLE",
+				retryable: true,
+				transactionId: "18446744073709551615",
+			},
+		});
+	} finally {
+		await harness.runtime.close();
+	}
 });

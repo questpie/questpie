@@ -1,4 +1,8 @@
-import { createHash } from "node:crypto";
+import {
+	canonicalJsonLine,
+	CanonicalJsonError,
+	sha256Digest,
+} from "../canonical-json";
 
 export type RecordValue = Readonly<Record<string, unknown>>;
 
@@ -47,57 +51,19 @@ export function runtimeArtifactDigestValue(
 	return result;
 }
 
-function hasLoneUnicodeSurrogate(value: string): boolean {
-	for (let index = 0; index < value.length; index += 1) {
-		const unit = value.charCodeAt(index);
-		if (unit >= 0xd800 && unit <= 0xdbff) {
-			const next = value.charCodeAt(index + 1);
-			if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
-			index += 1;
-		} else if (unit >= 0xdc00 && unit <= 0xdfff) return true;
-	}
-	return false;
-}
-
-function canonicalProtocolBytes(value: unknown): string {
-	const active = new Set<object>();
-	const encode = (item: unknown): string => {
-		if (item === null || typeof item === "boolean") return JSON.stringify(item);
-		if (typeof item === "number") {
-			if (!Number.isFinite(item) || Object.is(item, -0))
-				failRuntimeArtifact("invalid number");
-			return JSON.stringify(item);
-		}
-		if (typeof item === "string") {
-			if (hasLoneUnicodeSurrogate(item)) failRuntimeArtifact("invalid Unicode");
-			return JSON.stringify(item);
-		}
-		if (!item || typeof item !== "object")
-			failRuntimeArtifact("invalid canonical value");
-		if (active.has(item))
-			failRuntimeArtifact("canonical value contains a cycle");
-		active.add(item);
-		let encoded: string;
-		if (Array.isArray(item)) encoded = `[${item.map(encode).join(",")}]`;
-		else {
-			const source = item as RecordValue;
-			encoded = `{${Object.keys(source)
-				.sort()
-				.map((key) => {
-					if (hasLoneUnicodeSurrogate(key))
-						failRuntimeArtifact("invalid Unicode");
-					return `${JSON.stringify(key)}:${encode(source[key])}`;
-				})
-				.join(",")}}`;
-		}
-		active.delete(item);
-		return encoded;
-	};
-	return `${encode(value)}\n`;
-}
-
 export function runtimeArtifactDigest(domain: string, value: unknown): string {
-	return createHash("sha256")
-		.update(`${domain}\0${canonicalProtocolBytes(value)}`)
-		.digest("hex");
+	let bytes: Uint8Array;
+	try {
+		bytes = canonicalJsonLine(value);
+	} catch (error) {
+		if (!(error instanceof CanonicalJsonError)) throw error;
+		if (error.reason === "invalid-number")
+			failRuntimeArtifact("invalid number");
+		if (error.reason === "invalid-unicode")
+			failRuntimeArtifact("invalid Unicode");
+		if (error.reason === "cycle")
+			failRuntimeArtifact("canonical value contains a cycle");
+		failRuntimeArtifact("invalid canonical value");
+	}
+	return sha256Digest(Buffer.concat([Buffer.from(`${domain}\0`), bytes]));
 }

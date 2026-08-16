@@ -34,6 +34,19 @@ type PolicyScope<Collection> = ExecutionOperands & {
 	readonly row: PolicyRow<CollectionFields<Collection>>;
 };
 
+type PolicyCreateScope<Collection> = ExecutionOperands & {
+	readonly candidate: PolicyRow<CollectionFields<Collection>>;
+};
+
+type PolicyUpdateScope<Collection> = ExecutionOperands & {
+	readonly current: PolicyRow<CollectionFields<Collection>>;
+	readonly candidate: PolicyRow<CollectionFields<Collection>>;
+};
+
+type PolicyDeleteScope<Collection> = ExecutionOperands & {
+	readonly current: PolicyRow<CollectionFields<Collection>>;
+};
+
 type FieldDecisionMap<Collection> = Partial<{
 	readonly [Key in keyof CollectionFields<Collection>]: BooleanExpression;
 }>;
@@ -62,8 +75,27 @@ export interface PolicyBody<Collection, Name extends string> {
 		admit: BooleanExpression;
 		rows: PolicyRowRule<Collection>;
 	}>;
+	readonly create?: Readonly<{
+		admit: BooleanExpression;
+		candidate: (scope: PolicyCreateScope<Collection>) => BooleanExpression;
+	}>;
+	readonly update?: Readonly<{
+		admit: BooleanExpression;
+		rows: (scope: PolicyDeleteScope<Collection>) => BooleanExpression;
+		candidate: (scope: PolicyUpdateScope<Collection>) => BooleanExpression;
+	}>;
+	readonly delete?: Readonly<{
+		admit: BooleanExpression;
+		rows: (scope: PolicyDeleteScope<Collection>) => BooleanExpression;
+	}>;
 	readonly fields?: Readonly<{
 		output?: (scope: PolicyScope<Collection>) => FieldDecisionMap<Collection>;
+		create?: (
+			scope: PolicyCreateScope<Collection>,
+		) => FieldDecisionMap<Collection>;
+		update?: (
+			scope: PolicyUpdateScope<Collection>,
+		) => FieldDecisionMap<Collection>;
 	}>;
 }
 

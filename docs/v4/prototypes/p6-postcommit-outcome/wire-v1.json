@@ -1,0 +1,44 @@
+{
+	"artifact": "questpie.operation-wire",
+	"version": 1,
+	"path": "/_questpie/operation",
+	"mediaType": "application/vnd.questpie.operation+json;version=1",
+	"request": [
+		"application",
+		"callId",
+		"clientContractDigest",
+		"context",
+		"input",
+		"operation",
+		"protocol",
+		"timeoutMilliseconds",
+		"wireDigest"
+	],
+	"response": {
+		"result": ["callId", "kind", "operation", "payload", "protocol"],
+		"declaredError": ["callId", "error", "kind", "operation", "protocol"],
+		"failure": ["callId", "error", "kind", "operation", "protocol"],
+		"rejection": ["error", "kind"]
+	},
+	"declaredErrors": {
+		"mutation:messages.submit": {
+			"IDEMPOTENCY_CONFLICT": { "status": 409, "payload": ["callId"] }
+		},
+		"query:archives.record": {},
+		"query:channels.overview": {}
+	},
+	"resultKinds": ["declaredError", "failure", "result"],
+	"failures": [
+		"APPLICATION_MISMATCH",
+		"CLIENT_OUTDATED",
+		"DEADLINE_EXCEEDED",
+		"INTERNAL",
+		"NOT_FOUND",
+		"PROTOCOL_UNSUPPORTED",
+		"RESOURCE_LIMIT",
+		"RUNTIME_UNAVAILABLE"
+	],
+	"limits": { "requestBytes": 1048576, "responseBytes": 1048576 },
+	"principalSource": "credentialResolverOutsideBody",
+	"mutationAutomaticRetry": false
+}

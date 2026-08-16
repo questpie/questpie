@@ -14,6 +14,13 @@ import {
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
 import {
+	lowerPostgresCollectionOperationPlans,
+	projectCollectionOperationSets,
+	projectMutationGeneratedContract,
+	projectCollectionOperationResourceMetadata,
+	projectMutations,
+} from "./mutation";
+import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
 	projectRelationalNondisclosure,
@@ -85,15 +92,45 @@ export async function createArtifacts(
 		}>[];
 	}>,
 ): Promise<Readonly<Record<string, string>>> {
-	const manifest = projectManifest(input.configuration, input.resources);
+	const baseManifest = projectManifest(input.configuration, input.resources);
 	const executionComposition = projectExecutionComposition(input.resources);
-	const schema = manifest.schema;
+	const schema = baseManifest.schema;
+	const operationSets = projectCollectionOperationSets({
+		exports: input.evaluatedExports,
+		resources: input.resources,
+		schema,
+		data: baseManifest.data,
+	});
+	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
+		sets: operationSets.sets,
+		programs: operationSets.programs,
+		origins: operationSets.origins,
+	});
+	const baseComposition = baseManifest.composition as Readonly<{
+		resources: readonly Readonly<Record<string, unknown>>[];
+	}>;
+	const manifest: Readonly<Record<string, unknown>> = {
+		...baseManifest,
+		composition: {
+			...baseComposition,
+			resources: [
+				...baseComposition.resources,
+				...operationResourceMetadata.compositionResources,
+			].sort((left, right) =>
+				compareAscii(String(left.identity), String(right.identity)),
+			),
+		},
+	};
 	const relational = projectRelationalCompilation({
 		exports: input.evaluatedExports,
 		resources: input.resources,
 		schema,
 		data: manifest.data,
 	});
+	const mutationDeclarations = projectMutationGeneratedContract(
+		operationSets.programs,
+		input.resources,
+	);
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
 	const packageGraphs = await Promise.all(
@@ -174,7 +211,7 @@ export async function createArtifacts(
 		),
 	};
 	const buildInputDigest = digest("questpie-build-input-v1", inputs);
-	const originMap = {
+	const baseOriginMap = {
 		format: "questpie.origin-map",
 		version: 1,
 		buildInputDigest,
@@ -231,9 +268,24 @@ export async function createArtifacts(
 				};
 			}),
 		})),
-		...(relational.structuralOrigins.length > 0
-			? { structuralPlans: relational.structuralOrigins }
+		...(relational.structuralOrigins.length > 0 ||
+		operationSets.origins.length > 0
+			? {
+					structuralPlans: [
+						...relational.structuralOrigins,
+						...operationSets.origins,
+					],
+				}
 			: {}),
+	};
+	const originMap = {
+		...baseOriginMap,
+		resources: [
+			...baseOriginMap.resources,
+			...operationResourceMetadata.resourceOrigins,
+		].sort((left, right) =>
+			compareAscii(String(left.identity), String(right.identity)),
+		),
 	};
 	const originMapBytes = canonicalBytes(originMap);
 	const executionExplanation = explainExecutionComposition(
@@ -273,6 +325,7 @@ export async function createArtifacts(
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
+	const mutations = projectMutations(input.resources);
 	const generated: Record<string, string> = {
 		"app.ts": renderAppContract(
 			input.resources,
@@ -280,6 +333,7 @@ export async function createArtifacts(
 			schema,
 			input.configuration.source.root,
 			relational.declarations,
+			mutationDeclarations,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources, {
@@ -300,6 +354,45 @@ export async function createArtifacts(
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
+	if (runtime.reactions.reactions.length > 0)
+		generated["reaction-projection.json"] = canonicalBytes(runtime.reactions);
+	if (mutations.projection.mutations.length > 0) {
+		generated["mutation-projection.json"] = canonicalBytes(
+			mutations.projection,
+		);
+		generated["mutation-transaction-plans.json"] = canonicalBytes(
+			mutations.transactions,
+		);
+	}
+	if (operationSets.sets.sets.length > 0) {
+		generated["collection-operation-set-projections.json"] = canonicalBytes(
+			operationSets.sets,
+		);
+		generated["field-normalizer-programs.json"] = canonicalBytes(
+			operationSets.normalizers,
+		);
+		generated["server-value-programs.json"] = canonicalBytes(
+			operationSets.serverValues,
+		);
+		generated["collection-operation-programs.json"] = canonicalBytes(
+			operationSets.programs,
+		);
+		const postgresCollectionOperationPlans =
+			lowerPostgresCollectionOperationPlans({
+				collectionOperations: operationSets.programs,
+				schemaProjection: schema,
+				policyProjection: relational.policy,
+				normalizerPrograms: operationSets.normalizers,
+				serverValuePrograms: operationSets.serverValues,
+			});
+		if (postgresCollectionOperationPlans.plans.length > 0)
+			generated["postgres-collection-operation-plans.json"] = canonicalBytes(
+				postgresCollectionOperationPlans,
+			);
+		generated["collection-operation-explain.json"] = canonicalBytes(
+			operationResourceMetadata.explain,
+		);
+	}
 	let postgresQueryPlans: unknown = {
 		format: "questpie.postgres-query-plans",
 		version: 1,
@@ -346,6 +439,8 @@ export async function createArtifacts(
 		queryProjection: relational.query,
 		postgresQueryPlans,
 		schemaProjection: schema,
+		collectionOperationArtifacts: operationSets.sets.sets.length > 0,
+		reactionArtifact: runtime.reactions.reactions.length > 0,
 		readinessEntry,
 		runtimeBundleEntry,
 	});

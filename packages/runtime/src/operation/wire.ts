@@ -1,3 +1,5 @@
+import { isOperationCallId } from "./call-identity";
+import type { CommittedResultUnavailable } from "./committed-result-unavailable";
 import type { OperationFailureCode } from "./index";
 
 export const operationMediaType =
@@ -58,10 +60,7 @@ export function decodeOperationWireRequest(
 		return null;
 	if (
 		typeof frame.application !== "string" ||
-		typeof frame.callId !== "string" ||
-		frame.callId.length === 0 ||
-		frame.callId.length > 256 ||
-		frame.callId !== frame.callId.normalize("NFC") ||
+		!isOperationCallId(frame.callId) ||
 		typeof frame.clientContractDigest !== "string" ||
 		typeof frame.operation !== "string" ||
 		typeof frame.wireDigest !== "string" ||
@@ -94,6 +93,40 @@ export function failureFrame(
 	});
 }
 
+export function committedResultUnavailableFrame(
+	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
+	error: CommittedResultUnavailable,
+) {
+	return Object.freeze({
+		protocol: operationProtocol,
+		kind: "failure" as const,
+		operation: frame.operation,
+		callId: frame.callId,
+		error: Object.freeze({
+			code: error.code,
+			retryable: error.retryable,
+			transactionId: error.payload.transactionId,
+		}),
+	});
+}
+
+export function declaredErrorFrame(
+	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
+	error: Readonly<{ code: string; status: number; payload: unknown }>,
+) {
+	return Object.freeze({
+		protocol: operationProtocol,
+		kind: "declaredError" as const,
+		operation: frame.operation,
+		callId: frame.callId,
+		error: Object.freeze({
+			code: error.code,
+			status: error.status,
+			payload: error.payload,
+		}),
+	});
+}
+
 export function resultFrame(
 	frame: Pick<OperationWireRequestV1, "callId" | "operation">,
 	payload: unknown,
@@ -107,7 +140,10 @@ export function resultFrame(
 	});
 }
 
-export function operationFailureStatus(code: OperationFailureCode): number {
+export function operationFailureStatus(
+	code: OperationFailureCode | "COMMITTED_RESULT_UNAVAILABLE",
+): number {
+	if (code === "COMMITTED_RESULT_UNAVAILABLE") return 500;
 	if (code === "NOT_FOUND") return 404;
 	if (code === "PROTOCOL_UNSUPPORTED") return 400;
 	if (code === "APPLICATION_MISMATCH" || code === "CLIENT_OUTDATED") return 409;

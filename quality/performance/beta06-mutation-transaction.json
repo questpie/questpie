@@ -1,0 +1,33 @@
+{
+	"id": "beta06-mutation-transaction",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": [
+		"bun",
+		"test",
+		"tests/performance/beta06-mutation-transaction.test.ts"
+	],
+	"budgetOwner": "BETA-06",
+	"metrics": {
+		"postgresExecute20Ms": {
+			"direction": "max",
+			"budget": 1100,
+			"unit": "ms"
+		},
+		"maxResultBytes": {
+			"direction": "max",
+			"budget": 1048576,
+			"unit": "bytes"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}

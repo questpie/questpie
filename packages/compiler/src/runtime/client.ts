@@ -51,6 +51,10 @@ export function renderClientContract(
 		(resource) =>
 			resource.kind === "query" && resource.contract.exposure === "network",
 	);
+	const mutations = resources.filter(
+		(resource) =>
+			resource.kind === "mutation" && resource.contract.exposure === "network",
+	);
 	const declarations = queries
 		.map(
 			(resource) =>
@@ -64,12 +68,41 @@ export function renderClientContract(
 			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
 		})
 		.join("\n\t\t\t");
+	const mutationDeclarations = mutations
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}(operationInput: ${renderCodecType(resource.contract.input)}, options?: CallOptions): Promise<${renderCodecType(resource.contract.output)}>;`,
+		)
+		.join("\n\t\t");
+	const mutationImplementations = mutations
+		.map((resource) => {
+			const operationInput = renderCodecType(resource.contract.input);
+			const operationOutput = renderCodecType(resource.contract.output);
+			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
+		})
+		.join("\n\t\t\t");
 	const outputCodecs = Object.fromEntries(
-		queries.map((resource) => [resource.identity, resource.contract.output]),
+		[...queries, ...mutations].map((resource) => [
+			resource.identity,
+			resource.contract.output,
+		]),
 	);
-	const declaredErrorCodes = Object.fromEntries(
-		queries.map((resource) => [resource.identity, []]),
+	const declaredErrorContracts = Object.fromEntries(
+		[...queries, ...mutations].map((resource) => [
+			resource.identity,
+			Object.values(record(resource.contract.declaredErrors ?? {})).map(
+				(error) => {
+					const contract = record(error);
+					return {
+						code: String(contract.code),
+						status: contract.status,
+						payload: contract.payload,
+					};
+				},
+			),
+		]),
 	);
+	const mutationOperations = mutations.map((resource) => resource.identity);
 	return `import type { AppContextInput } from "./app";
 
 export interface CallOptions {
@@ -83,6 +116,9 @@ export interface GeneratedClientScope {
 	readonly queries: Readonly<{
 		${declarations}
 	}>;
+	readonly mutations: Readonly<{
+		${mutationDeclarations}
+	}>;
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
 
@@ -90,11 +126,24 @@ export interface GeneratedClient {
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
 
+export class CommittedResultUnavailable extends Error {
+	readonly name = "CommittedResultUnavailable" as const;
+	readonly code = "COMMITTED_RESULT_UNAVAILABLE" as const;
+	readonly retryable = true as const;
+	readonly payload: Readonly<{ readonly callId: string; readonly transactionId: string }>;
+	constructor(callId: string, transactionId: string) {
+		super("COMMITTED_RESULT_UNAVAILABLE");
+		this.payload = Object.freeze({ callId, transactionId });
+		Object.freeze(this);
+	}
+}
+
 type WireRecord = Readonly<Record<string, unknown>>;
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
-const declaredErrorCodes: WireRecord = ${canonicalBytes(declaredErrorCodes).trim()};
+const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
+const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
 const failureCodes = new Set([
-	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "DEADLINE_EXCEEDED", "INTERNAL",
+	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
 ]);
 
@@ -108,6 +157,25 @@ function exactKeys(value: WireRecord, expected: readonly string[]): void {
 	const sorted = [...expected].sort();
 	if (actual.length !== sorted.length || actual.some((key, index) => key !== sorted[index]))
 		protocolFailure();
+}
+function isCallIdentity(value: unknown): value is string {
+	if (typeof value !== "string" || value.length === 0 || value.includes("\\0")) return false;
+	let scalars = 0;
+	for (let index = 0; index < value.length; index += 1) {
+		const unit = value.charCodeAt(index);
+		if (unit >= 0xd800 && unit <= 0xdbff) {
+			if (index + 1 >= value.length) return false;
+			const next = value.charCodeAt(index + 1);
+			if (next < 0xdc00 || next > 0xdfff) return false;
+			index += 1;
+		} else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+		scalars += 1;
+		if (scalars > 256) return false;
+	}
+	return value === value.normalize("NFC") && new TextEncoder().encode(value).byteLength <= 1024;
+}
+function isTransactionIdentity(value: unknown): value is string {
+	return typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value) && BigInt(value) <= 18446744073709551615n;
 }
 function decode(codecValue: unknown, value: unknown): unknown {
 	const descriptor = wireRecord(codecValue);
@@ -175,6 +243,7 @@ export function createClient(input: Readonly<{
 	const transport = input.fetch ?? globalThis.fetch;
 	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
+		if (!isCallIdentity(callId)) protocolFailure();
 		const response = await transport(new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
 			method: "POST",
 			headers: { "content-type": ${JSON.stringify(input.mediaType)} },
@@ -193,6 +262,12 @@ export function createClient(input: Readonly<{
 			exactKeys(frame, rejection ? ["error", "kind"] : ["callId", "error", "kind", "operation", "protocol"]);
 			if (!rejection) verifyCorrelation(frame, operation, callId);
 			const detail = wireRecord(frame.error);
+			if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
+				if (rejection) protocolFailure();
+				exactKeys(detail, ["code", "retryable", "transactionId"]);
+				if (!mutationOperations.has(operation) || detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) protocolFailure();
+				throw new CommittedResultUnavailable(callId, detail.transactionId);
+			}
 			exactKeys(detail, ["code", "retryable"]);
 			if (typeof detail.code !== "string" || !failureCodes.has(detail.code) || typeof detail.retryable !== "boolean") protocolFailure();
 			throw Object.assign(new Error(detail.code), detail);
@@ -203,9 +278,14 @@ export function createClient(input: Readonly<{
 			const detail = wireRecord(frame.error);
 			exactKeys(detail, ["code", "payload", "status"]);
 			if (typeof detail.code !== "string" || typeof detail.status !== "number") protocolFailure();
-			const allowed = declaredErrorCodes[operation];
-			if (!Array.isArray(allowed) || !allowed.includes(detail.code)) protocolFailure();
-			throw Object.assign(new Error(detail.code), detail);
+			const allowed = declaredErrorContracts[operation];
+			if (!Array.isArray(allowed)) protocolFailure();
+			const contract = allowed.map(wireRecord).find((candidate) => candidate.code === detail.code);
+			if (!contract || detail.status !== contract.status || response.status !== contract.status) protocolFailure();
+			const payload = contract.payload === null
+				? detail.payload === null ? null : protocolFailure()
+				: decode(contract.payload, detail.payload);
+			throw Object.assign(new Error(detail.code), { code: detail.code, status: detail.status, payload });
 		}
 		return protocolFailure();
 	};
@@ -213,6 +293,8 @@ export function createClient(input: Readonly<{
 		const context = immutableContext(next);
 		return Object.freeze({ context, queries: Object.freeze({
 			${implementations}
+		}), mutations: Object.freeze({
+			${mutationImplementations}
 		}), withContext: scope });
 	};
 	return Object.freeze({ withContext: scope });

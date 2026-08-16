@@ -62,6 +62,8 @@ function applicationEntry(
 		queryProjection: unknown;
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
+		collectionOperationArtifacts: boolean;
+		reactionArtifact: boolean;
 	}>,
 ): string {
 	const definitions = new Map<string, number>();
@@ -80,16 +82,16 @@ function applicationEntry(
 	};
 	const bindingEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
-		const implementation =
-			slot.kind === "query"
-				? `${definition}.handler`
-				: `${definition}.${slot.slot}`;
-		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${slot.kind === "query" ? `, execute: ${implementation}` : ""} })`;
+		const operation = slot.kind === "query" || slot.kind === "mutation";
+		const implementation = operation
+			? `${definition}.handler`
+			: `${definition}.${slot.slot}`;
+		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${operation ? `, execute: ${implementation}` : ""} })`;
 	});
 	const serverEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
 		const implementation =
-			slot.kind === "query"
+			slot.kind === "query" || slot.kind === "mutation"
 				? `${definition}.handler`
 				: `${definition}.${slot.slot}`;
 		return `${JSON.stringify(slot.bundleExport)}: ${implementation}`;
@@ -132,6 +134,15 @@ function applicationEntry(
 				`${JSON.stringify(resource.name)}: (operationInput) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput)`,
 		)
 		.join(",\n");
+	const mutations = input.resources
+		.filter((resource) => resource.kind === "mutation")
+		.sort((left, right) => compareAscii(left.name, right.name));
+	const directMutations = mutations
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: (operationInput, options) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput, options)`,
+		)
+		.join(",\n");
 	const queryProjection = record(input.queryProjection, "Query Projection");
 	const structuralQueries = queryProjection.queries as readonly RecordValue[];
 	const structuralImports = structuralQueries.map((query, index) => {
@@ -153,8 +164,36 @@ function applicationEntry(
 				`[structuralQuery${index}, ${JSON.stringify(String(query.digest))}]`,
 		)
 		.join(",\n");
+	const emptyCollectionArtifacts = JSON.stringify({
+		programs: {
+			format: "questpie.collection-operation-programs",
+			version: 1,
+			operations: [],
+		},
+		normalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		plans: {
+			format: "questpie.postgres-collection-operation-plans",
+			version: 1,
+			plans: [],
+		},
+		policies: [],
+	});
+	const emptyReactionProjection = JSON.stringify({
+		format: "questpie.reaction-projection",
+		version: 1,
+		reactions: [],
+	});
 	return `import { SQL } from "bun";
-import { createRuntimeApplication, executePostgresQuery } from "questpie:runtime";
+import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery, linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } from "questpie:runtime";
 import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
@@ -185,6 +224,36 @@ async function loadRuntimeArtifacts() {
 	};
 }
 
+function linkMutationArtifacts(artifactFiles) {
+	const raw = ${
+		input.collectionOperationArtifacts
+			? `{
+		programs: JSON.parse(artifactFiles["collection-operation-programs.json"]),
+		normalizers: JSON.parse(artifactFiles["field-normalizer-programs.json"]),
+		serverValues: JSON.parse(artifactFiles["server-value-programs.json"]),
+		plans: JSON.parse(artifactFiles["postgres-collection-operation-plans.json"]),
+		policies: JSON.parse(artifactFiles["policy-projection.json"]).policies.map(({ program }) => ({
+			identity: program.identity,
+			target: program.target,
+		})),
+	}`
+			: emptyCollectionArtifacts
+	};
+	const operations = linkCollectionMutationPrograms({
+		collectionOperations: raw.programs,
+		fieldNormalizers: raw.normalizers,
+		serverValues: raw.serverValues,
+		policies: raw.policies,
+	});
+	return Object.freeze({
+		collectionPlans: linkPostgresCollectionOperationPlans({
+			artifact: raw.plans,
+			operations,
+		}),
+		reactions: linkReactionProjection(${input.reactionArtifact ? `JSON.parse(artifactFiles["reaction-projection.json"])` : emptyReactionProjection}),
+	});
+}
+
 export const bindIngressPrincipalForRequest = bindIngressPrincipal;
 
 export async function createApplication(input) {
@@ -198,6 +267,7 @@ export async function createApplication(input) {
 		schema: schemaProjection,
 		signal: postgresController.signal,
 	});
+	let mutationArtifacts;
 	let runtime;
 	try {
 		runtime = await createRuntimeApplication({
@@ -214,12 +284,15 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap,
 			resolvePrincipal: readIngressPrincipal,
-			verifyReadiness: (artifacts) => verifyPostgresRuntimeReadiness({
-				sql,
-				schema: schemaProjection,
-				committedMigrations,
-				expected: artifacts.runtimeBuild,
-			}),
+			verifyReadiness: (artifacts) => {
+				mutationArtifacts = linkMutationArtifacts(loaded.artifactFiles);
+				return verifyPostgresRuntimeReadiness({
+					sql,
+					schema: schemaProjection,
+					committedMigrations,
+					expected: artifacts.runtimeBuild,
+				});
+			},
 			project: ({ facts }) => Object.freeze({
 				data: Object.freeze({
 					run: (definition, operationInput) => {
@@ -244,6 +317,17 @@ export async function createApplication(input) {
 				}),
 				signal: facts.signal,
 			}),
+			projectMutation: ({ facts }) => {
+				if (!mutationArtifacts)
+					throw new TypeError("Mutation artifacts are not linked");
+				return createPostgresMutationInvoker({
+					sql,
+					application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
+					facts,
+					collectionPlans: mutationArtifacts.collectionPlans,
+					reactions: mutationArtifacts.reactions,
+				});
+			},
 			projectExecution: async ({ facts, service }) => Object.freeze({
 				principal: facts.principal,
 				authority: facts.authority,
@@ -266,6 +350,7 @@ export async function createApplication(input) {
 		execution: (root, use) => runtime.execution(root, ({ execution, ...operations }) => use(Object.freeze({
 			...execution,
 			queries: Object.freeze({${directQueries}}),
+			mutations: Object.freeze({${directMutations}}),
 		}))),
 		close: () => {
 			if (!closePromise) closePromise = runtime.close().finally(() => {
@@ -289,6 +374,8 @@ export async function renderApplicationBundle(
 		queryProjection: unknown;
 		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
+		collectionOperationArtifacts: boolean;
+		reactionArtifact: boolean;
 		readinessEntry: string;
 		runtimeBundleEntry: string;
 	}>,
@@ -332,7 +419,7 @@ export async function renderApplicationBundle(
 						{ filter: /.*/, namespace: "questpie-authoring" },
 						() => ({
 							contents:
-								'export const defineQuery = (definition) => Object.freeze({ ...definition, kind: "query", identity: `query:${definition.name}`, network: definition.network === true });',
+								'const define = (kind) => (definition) => Object.freeze({ ...definition, kind, identity: `${kind}:${definition.name}`, network: definition.network === true }); export const defineQuery = define("query"); export const defineMutation = define("mutation");',
 							loader: "js",
 						}),
 					);

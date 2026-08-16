@@ -30,6 +30,9 @@ Fixed accepted proof authority:
 | P4 Live Query/ledger                 | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
 | P5 dispatch/Reaction                 | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
 | P6 Runtime/client/Studio             | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
+| P6R1 post-commit reviewed            | `deea51ba2799867825b120ec46ec5d8944991d1b` |
+| P6R1 review evidence                 | `cb568dc402462163d632a2d689da709a087f64ae` |
+| P6R1 accepted projection             | `d5bf7d0adadcda0f5b932e6b1a7c20df0e4102a6` |
 | Post-P6 gates                        | `a164e33e752ab54d48fcf903371938ecff3dc082` |
 | Reviewed post-P6 repair              | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
 | #17 Service/Route/Auth               | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
@@ -51,7 +54,7 @@ Fixed accepted proof authority:
 | #292 BETA-05 reviewed implementation | `884b5d8a5f051b23d34705be9916140629187509` |
 | #292 BETA-05 evidence                | `61f4ae85b8ebebc1c5fb888707cd4f7e589ed985` |
 
-ADR-0008 through ADR-0021 and their accepted workbench/public projections are
+ADR-0008 through ADR-0023 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
 commands, measurements, and remaining implementation edges live in
 `docs/v4/research/framework-api-atlas/PROOF-MAP.md` and each proof acceptance
@@ -143,6 +146,20 @@ Do not skip a blocked issue or parallelize dependent implementation.
 - #292 PR #311 merged normally to `feat/v4` at
   `740f2e0049a64f5a541f33ab8da44cf8e114041b`, and issue #292 is closed. P16
   now derives BETA-06 as the sole agent-ready frontier.
+- P6R1 initial reviewed head `d5c562d8e70e140f9736a5ab56815cb76cc313c5`
+  received a valid fresh stateless Opus-medium `BLOCKED` for an unbound v2
+  digest, missing v1 declared-error/result-kind continuity, and inconsistent
+  v1 retirement. Repaired clean head
+  `deea51ba2799867825b120ec46ec5d8944991d1b` received the single replacement
+  `PASS`; raw reviews are byte-preserved in
+  `docs/v4/prototypes/p6-postcommit-outcome/REVIEW*.json`.
+- P6R1 preserves Operation Wire v1 digest
+  `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c`
+  and accepts Wire v2 digest
+  `2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28`.
+  Wire v2 adds the exact post-commit transaction outcome while carrying v1
+  result kinds and declared errors forward. Retained v1 Queries may execute;
+  v1 Mutations fail before Context Resolution or Operation execution.
 
 - #291 initial reviewed head `f2c1f7be06deaf6ebca9e934c64be0a290034172`
   received a valid fresh stateless Opus-medium `BLOCKED` with three findings:

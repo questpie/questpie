@@ -1,4 +1,8 @@
-import { decodeRuntimeCodecDescriptor, type RuntimeCodec } from "../codec";
+import { decodeRuntimeCodecDescriptor } from "../codec";
+import type {
+	RuntimeDeclaredErrorContract,
+	RuntimeOperationContract,
+} from "../operation";
 import {
 	exactRuntimeArtifactKeys as exact,
 	failRuntimeArtifact as fail,
@@ -11,6 +15,7 @@ import {
 	decodeRuntimeExecutables,
 	type RuntimeExecutablesV1,
 } from "./executable-artifact";
+import { validateOperationWireV2 } from "./wire-v2-artifact";
 
 type RuntimeBuildV1 = Readonly<{
 	format: "questpie.runtime-build";
@@ -44,12 +49,12 @@ type RuntimeBuildV1 = Readonly<{
 		changeLedgerDigest: null;
 		resumeDigest: null;
 		durableCompatibilityDigest: null;
-		reactionDigest: null;
+		reactionDigest: string | null;
 	}>;
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
 		identity: string;
-		kind: "context" | "query" | "service";
+		kind: "context" | "mutation" | "query" | "service";
 		slot: "create" | "dispose" | "handler" | "resolve";
 		runtimeGraphDigest: string;
 		bundleExport: string;
@@ -58,21 +63,16 @@ type RuntimeBuildV1 = Readonly<{
 	digest: string;
 }>;
 
-type OperationWireContractV1 = Readonly<{
+type OperationWireContractBase = Readonly<{
 	format: "questpie.operation-wire";
-	version: 1;
+	version: 1 | 2;
 	application: string;
 	path: string;
 	mediaType: string;
 	protocol: Readonly<{ name: "questpie.operation"; version: 1 }>;
 	requestKeys: readonly string[];
 	responseKeys: Readonly<Record<string, readonly string[]>>;
-	operations: readonly Readonly<{
-		identity: string;
-		input: RuntimeCodec;
-		output: RuntimeCodec;
-		declaredErrors: Readonly<Record<string, unknown>>;
-	}>[];
+	operations: readonly RuntimeOperationContract[];
 	failures: readonly string[];
 	limits: Readonly<{ requestBytes: number; responseBytes: number }>;
 	principalSource: "ingressOutsideBody";
@@ -81,14 +81,91 @@ type OperationWireContractV1 = Readonly<{
 	digest: string;
 }>;
 
+type OperationWireContractV1 = OperationWireContractBase &
+	Readonly<{ version: 1 }>;
+
+type OperationWireContractV2 = OperationWireContractBase &
+	Readonly<{
+		version: 2;
+		compatibility: Readonly<{
+			clientContractDigest: string;
+			wireV1Digest: string;
+		}>;
+	}>;
+
+type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;
+
 export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
-	wireContract: OperationWireContractV1;
+	wireContract: OperationWireContract;
 }>;
 
-function decodeWire(value: unknown): OperationWireContractV1 {
+function decodeOperationWireContract(
+	value: unknown,
+	index: number,
+): RuntimeOperationContract {
+	const operation = record(value, `wire operation ${index}`);
+	exact(
+		operation,
+		["identity", "input", "output", "declaredErrors"],
+		`wire operation ${index}`,
+	);
+	const rawDeclaredErrors = record(
+		operation.declaredErrors,
+		`wire operation ${index} declared errors`,
+	);
+	const declaredErrors: RuntimeDeclaredErrorContract[] = Object.entries(
+		rawDeclaredErrors,
+	)
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+		.map(([key, raw]) => {
+			const path = `wire operation ${index} declared error ${key}`;
+			const declaredError = record(raw, path);
+			exact(declaredError, ["code", "status", "payload"], path);
+			const status = declaredError.status;
+			if (
+				typeof status !== "number" ||
+				!Number.isInteger(status) ||
+				status < 400 ||
+				status > 599
+			)
+				fail(`${path} status is invalid`);
+			return Object.freeze({
+				key: string(key, `${path} key`),
+				code: string(declaredError.code, `${path} code`),
+				status,
+				payload:
+					declaredError.payload === null
+						? null
+						: decodeRuntimeCodecDescriptor(
+								declaredError.payload,
+								`$wire.operations[${index}].declaredErrors.${key}.payload`,
+							),
+			});
+		});
+	if (
+		new Set(declaredErrors.map(({ code }) => code)).size !==
+		declaredErrors.length
+	)
+		fail(`wire operation ${index} declared error codes must be unique`);
+	return Object.freeze({
+		identity: string(operation.identity, `wire operation ${index} identity`),
+		input: decodeRuntimeCodecDescriptor(
+			operation.input,
+			`$wire.operations[${index}].input`,
+		),
+		output: decodeRuntimeCodecDescriptor(
+			operation.output,
+			`$wire.operations[${index}].output`,
+		),
+		declaredErrors: Object.freeze(declaredErrors),
+	});
+}
+
+function decodeWire(value: unknown): OperationWireContract {
 	const wire = record(value, "wire contract");
+	const isV2 = wire.version === 2;
 	exact(
 		wire,
 		[
@@ -106,13 +183,23 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 			"principalSource",
 			"mutationAutomaticRetry",
 			"clientContractDigest",
+			...(isV2
+				? [
+						"failureDetails",
+						"resultKinds",
+						"callIdentity",
+						"transactionIdentity",
+						"committedResultUnavailable",
+						"compatibility",
+					]
+				: []),
 			"digest",
 		],
 		"wire contract",
 	);
 	if (
 		wire.format !== "questpie.operation-wire" ||
-		wire.version !== 1 ||
+		(wire.version !== 1 && wire.version !== 2) ||
 		typeof wire.application !== "string" ||
 		wire.path !== "/_questpie/operation" ||
 		wire.mediaType !== "application/vnd.questpie.operation+json;version=1" ||
@@ -164,30 +251,7 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 	for (const [key, expected] of Object.entries(responseShape))
 		if (JSON.stringify(responseKeys[key]) !== JSON.stringify(expected))
 			fail("wire response keys are invalid");
-	const operations = wire.operations.map((raw, index) => {
-		const operation = record(raw, `wire operation ${index}`);
-		exact(
-			operation,
-			["identity", "input", "output", "declaredErrors"],
-			`wire operation ${index}`,
-		);
-		const declaredErrors = record(
-			operation.declaredErrors,
-			`wire operation ${index} declared errors`,
-		);
-		return Object.freeze({
-			identity: string(operation.identity, `wire operation ${index} identity`),
-			input: decodeRuntimeCodecDescriptor(
-				operation.input,
-				`$wire.operations[${index}].input`,
-			),
-			output: decodeRuntimeCodecDescriptor(
-				operation.output,
-				`$wire.operations[${index}].output`,
-			),
-			declaredErrors: Object.freeze({ ...declaredErrors }),
-		});
-	});
+	const operations = wire.operations.map(decodeOperationWireContract);
 	const operationIds = operations.map((operation) => operation.identity);
 	if (
 		new Set(operationIds).size !== operationIds.length ||
@@ -196,14 +260,34 @@ function decodeWire(value: unknown): OperationWireContractV1 {
 		)
 	)
 		fail("wire operations must be unique and sorted");
+	if (isV2) validateOperationWireV2(wire);
+	else if (
+		JSON.stringify(wire.failures) !==
+		JSON.stringify([
+			"APPLICATION_MISMATCH",
+			"CLIENT_OUTDATED",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+		])
+	)
+		fail("wire failures are invalid");
 	const digest = digestValue(wire.digest, "wire digest");
 	const { digest: _digest, ...unsigned } = wire;
-	if (artifactDigest("questpie-operation-wire-v1", unsigned) !== digest)
+	if (
+		artifactDigest(
+			isV2 ? "questpie-operation-wire-v2" : "questpie-operation-wire-v1",
+			unsigned,
+		) !== digest
+	)
 		fail("wire digest does not match");
 	return Object.freeze({
 		...wire,
 		operations: Object.freeze(operations),
-	}) as OperationWireContractV1;
+	}) as OperationWireContract;
 }
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
@@ -282,8 +366,14 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		],
 		"later compatibility",
 	);
-	if (Object.values(later).some((item) => item !== null))
-		fail("later compatibility must be absent");
+	for (const key of [
+		"changeLedgerDigest",
+		"resumeDigest",
+		"durableCompatibilityDigest",
+	] as const)
+		if (later[key] !== null) fail(`${key} is not owned by this Runtime ABI`);
+	if (later.reactionDigest !== null)
+		digestValue(later.reactionDigest, "reactionDigest");
 	const compiler = record(build.compiler, "compiler");
 	exact(
 		compiler,
@@ -388,6 +478,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		if (expected !== actual)
 			fail(`${field} does not match inventory path ${path}`);
 	}
+	if (
+		(later.reactionDigest === null) !==
+		!inventoryDigests.has("reaction-projection.json")
+	)
+		fail("reactionDigest does not match reaction-projection inventory");
 	if (compiler.buildInputDigest !== inventoryDigests.get("build-input.json"))
 		fail(
 			"compiler buildInputDigest does not match inventory path build-input.json",

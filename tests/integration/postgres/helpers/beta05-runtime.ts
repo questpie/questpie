@@ -105,6 +105,12 @@ export async function prepareBeta05PostgresApplication(database: SQL) {
 				"questpie/migrations/000002_authorize-message-pages",
 			),
 		),
+		loadCommittedMigration(
+			resolve(
+				beta05FixtureRoot,
+				"questpie/migrations/000003_publish-message-transaction",
+			),
+		),
 	]);
 	const applied = await applyCommittedMigrations({ migrations });
 	if (applied.status !== "applied")

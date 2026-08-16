@@ -1,0 +1,35 @@
+{
+	"format": "questpie.p6-postcommit-outcome-revision",
+	"version": 1,
+	"identity": "P6R1/PostCommitOutcome",
+	"projectionBase": "f0565bfbff5fe33c99f81d1d721e828cfc421dc8",
+	"originalP6": {
+		"status": "preserved",
+		"proofHead": "94c237c9aa910a60a332b1ef97473f34fe89d65b",
+		"wireSourceBlob": "22dd964052690579b606dfe0d2f97c264809aa7b",
+		"wireSourceSha256": "82651aa7fd3697050792c40e3cd24a167eeb097652c3f9041cedb0a2b4051017",
+		"wireDigest": "d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c"
+	},
+	"artifacts": {
+		"p6WireSource": "P6-GOLDENS.mjs.b64",
+		"wireV1": "wire-v1.json",
+		"wireV2": "wire-v2.json",
+		"wireV2Digest": "2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28"
+	},
+	"projection": {
+		"commit": "823d199efd8658a1c896056c2b9ae9da622de173",
+		"parent": "e8105b25534d99441c4beea6f3357cf1bf9001f8",
+		"revertedBy": "64e7cf11fd74e4db02943e70e28667cd0914df92",
+		"path": "PROJECTION.patch.b64",
+		"encoding": "base64",
+		"diffSha256": "9f82a90a2fe17bf764aa0bec4e8c8844d2254ba30c25a6b4337cb307596dc108"
+	},
+	"nonGoals": [
+		"production Runtime implementation",
+		"automatic Mutation retry",
+		"authored declared error",
+		"wire v1 reinterpretation",
+		"provider or host adapter",
+		"PostgreSQL schema change"
+	]
+}

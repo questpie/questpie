@@ -20,7 +20,6 @@ import type {
 	ApplyMigrationsResult,
 	SchemaDiagnosticV1,
 } from "../postgres-types";
-import { bootstrap } from "./bootstrap";
 import {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
@@ -28,6 +27,7 @@ import {
 	providerObservations,
 	schemaExists,
 } from "./fingerprint";
+import { ensureInternalProtocolV2 } from "./internal-protocol-v2";
 import { fail } from "./shared";
 
 const schemaDiagnosticCodes = new Set<string>([
@@ -259,7 +259,13 @@ export async function applyCommittedMigrations(
 				"current database is unavailable",
 			);
 		await providerObservations(session, target);
-		await bootstrap(session, database.name, firstPid, control, input.signal);
+		await ensureInternalProtocolV2(
+			session,
+			database.name,
+			firstPid,
+			control,
+			input.signal,
+		);
 		const applicationKey = lockKey(
 			"questpie-application-lock-v1",
 			database.name,

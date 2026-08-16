@@ -81,7 +81,7 @@ test("projects the mutable membership evidence and stable Message page index", a
 	]);
 });
 
-test("commits the authorization schema evolution after the frozen Genesis", async () => {
+test("extends the frozen authorization schema with the publish migration", async () => {
 	const compilation = await compiledFixture;
 	const current = JSON.parse(
 		compilation.generatedFiles["schema-projection.json"] ?? "null",
@@ -92,11 +92,23 @@ test("commits the authorization schema evolution after the frozen Genesis", asyn
 	const authorization = await loadCommittedMigration(
 		resolve(fixtureRoot, "questpie/migrations/000002_authorize-message-pages"),
 	);
+	const publication = await loadCommittedMigration(
+		resolve(
+			fixtureRoot,
+			"questpie/migrations/000003_publish-message-transaction",
+		),
+	);
 
 	expect(() =>
-		verifyCommittedMigrationChain([genesis, authorization]),
+		verifyCommittedMigrationChain([genesis, authorization, publication]),
 	).not.toThrow();
-	expect(authorization.targetSchema).toEqual(current);
+	expect(authorization.targetSchema).toEqual(publication.baseSchema);
+	expect(publication.targetSchema).toEqual(current);
+	expect(publication.plan.baseMigration).toBe(authorization.identity);
+	expect(publication.plan.classification).toBe("guarded");
+	expect(publication.files["up.sql"]).toContain(
+		'CREATE TABLE "collaboration"."message_events"',
+	);
 	expect(authorization.plan.classification).toBe("destructive");
 	expect(authorization.files["up.sql"]).toContain(
 		'CREATE INDEX "qp_ix_messages_page"',

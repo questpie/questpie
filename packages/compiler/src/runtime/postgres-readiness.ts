@@ -1,7 +1,11 @@
 import type { SQL } from "bun";
 
 import { digest } from "../canonical";
-import { fingerprint, type SchemaProjectionV1 } from "../schema";
+import {
+	fingerprint,
+	type SchemaProjectionV1,
+	verifyInternalProtocolV2,
+} from "../schema";
 
 type RuntimeBuildReadiness = Readonly<{
 	migrationHead: string | null;
@@ -124,6 +128,7 @@ export async function verifyPostgresRuntimeReadiness(
 		expected: RuntimeBuildReadiness;
 	}>,
 ): Promise<void> {
+	await verifyInternalProtocolV2(input.sql);
 	const committed = decodeCommittedMigrations(input.committedMigrations);
 	if (committed.head !== input.expected.migrationHead)
 		throw new TypeError(

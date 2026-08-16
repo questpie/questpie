@@ -1,0 +1,41 @@
+{
+	"format": "questpie.beta06-authority-reconciliation",
+	"version": 1,
+	"identity": "P16R1/BETA06LedgerBoundary",
+	"projectionBase": "6006800b694bd2751e4f431b4be727245f5398c1",
+	"authorityHeads": {
+		"P3": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
+		"P4": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
+		"P5": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
+		"P16": "1d9303a58c9557aac3da648895c817fa039478ba",
+		"BETA05Merge": "740f2e0049a64f5a541f33ab8da44cf8e114041b"
+	},
+	"sourceIssue": {
+		"number": 293,
+		"stateObserved": "OPEN",
+		"bodySha256Observed": "37cc4d2b033b1d67e4f1f4341376501669491c4ac7866b5698fc2e8b9dd3eeda",
+		"blockedByIssue": 292,
+		"blockedByStateObserved": "CLOSED"
+	},
+	"ownership": {
+		"beta06Required": "pending Reaction intent",
+		"beta06Forbidden": "committed change fact",
+		"beta07Required": "Change Ledger DDL/triggers",
+		"captureOwner": "compiler-owned PostgreSQL triggers"
+	},
+	"issueProjection": "ISSUE-293.expected.md",
+	"projectionPaths": [
+		"docs/v4/prototypes/implementation-collapse-p16/ACCEPTANCE.json",
+		"docs/v4/prototypes/implementation-collapse-p16/QUEUE.json",
+		"docs/v4/prototypes/implementation-collapse-p16/README.md",
+		"docs/v4/prototypes/implementation-collapse-p16/check.ts",
+		"docs/v4/prototypes/implementation-collapse-p16/negative-control.ts"
+	],
+	"nonGoals": [
+		"production Runtime implementation",
+		"Change Ledger schema or trigger design",
+		"Reaction execution",
+		"BETA-07 readiness",
+		"closing issue #293"
+	]
+}
