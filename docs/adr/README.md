@@ -28,7 +28,6 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 20. [Repository Foundation](./0020-establish-the-repository-foundation.md)
 21. [Beta.1 Release Slice](./0021-slice-the-beta-one-release.md)
 22. [API Ergonomics and Operation Projection](./0022-freeze-api-ergonomics-and-operation-projection.md)
-23. [Post-Commit Operation Outcome](./0023-freeze-post-commit-operation-outcome.md)
 
 ## Open decisions
 
@@ -55,9 +54,6 @@ explicit absence stories for later breadth.
 ADR-0022 keeps named factories, preserves exact Resource Identity, accepts
 nested-only generated server Operation calls, closes their leaf/prefix and
 final-`then` diagnostics, and publishes the permanent capability ownership map.
-ADR-0023 preserves Operation Wire v1 and accepts the versioned framework
-post-commit outcome, exact recovery identities, and general bounded Call
-Identity text.
 Complete Workflow, Action, split
 Runtime roles, host/provider SPIs, and remote/fleet Studio remain later
 verticals.

@@ -1,8 +1,7 @@
 # Runtime, client, Execution Envelope, and minimal Studio
 
 Status: accepted by ADR-0014 and proof head
-`94c237c9aa910a60a332b1ef97473f34fe89d65b`, with the focused post-commit
-outcome revision accepted by ADR-0023 and `P6R1/PostCommitOutcome`.
+`94c237c9aa910a60a332b1ef97473f34fe89d65b`.
 
 ## Accepted contract
 
@@ -32,20 +31,6 @@ frames. The accepted declared error is operation-specialized
 `RESOURCE_LIMIT` and `RUNTIME_UNAVAILABLE`. Reaction slots are not network
 operations. Mutation response loss reuses stable call identity and does not
 authorize automatic retry.
-
-Operation Wire v1 remains byte-for-byte fixed. Wire v2 adds the framework
-transaction outcome `COMMITTED_RESULT_UNAVAILABLE`. Its correlated failure
-keeps the ordinary top-level `callId` and carries the committed PostgreSQL
-transaction identity in exact error detail. HTTP `500` reports that result
-production failed after commit; `retryable: true` permits only caller-controlled
-exact replay with the same scoped Call Identity. Generated transport never
-automatically retries a Mutation. A v1 wire digest is rejected with a
-v1-readable `CLIENT_OUTDATED` result before Context Resolution or execution.
-
-A caller-supplied Call Identity is general validated text, not a UUID contract:
-1–256 Unicode scalar values, already NFC, no lone surrogate or U+0000, and at
-most 1,024 UTF-8 bytes. Runtime rejects rather than rewrites it. Generated
-clients use `crypto.randomUUID()` only when the caller omits the identity.
 
 Startup rejects mismatched bundle, ABI, application, schema, migration,
 executable, wire, Change Ledger, resume, and durable-compatibility facts. No
@@ -80,10 +65,7 @@ idempotency, expected-version fencing, a typed winner, and append-only audit.
 | Runtime Build            | `f638d2def0f05df397600d6c0073425c042fae1be625e6bc8a51273e47c92e6e` |
 | schema binding           | `5cb2f6fa1ef7544fb073091e2e21e865ee55e994b221a6060ae04b7d9db5dd48` |
 | minimal Studio           | `a52bc427d7f1a327340ed11899ca1b74418685b6693bd9a467458fe59841ac1b` |
-| operation wire v1        | `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c` |
-
-The P6R1 proof records the separate Operation Wire v2 digest without changing
-the v1 row.
+| operation wire           | `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c` |
 
 ## Evidence and boundaries
 
