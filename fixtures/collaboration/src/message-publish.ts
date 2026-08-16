@@ -31,55 +31,37 @@ export const publishMessage = defineMutation({
 		ctx.signal.throwIfAborted();
 		const channel = await ctx.data.channels.get({
 			key: { id: input.channelId },
-			select: { id: true, spaceId: true },
 		});
 		const space = channel
 			? await ctx.data.spaces.get({
 					key: { id: channel.spaceId },
-					select: { companyId: true },
 				})
 			: null;
-		const membership = await ctx.data.memberships.get({
-			key: {
-				companyId: ctx.tenant.id,
-				principalId: ctx.principal.id,
-				scopeKey: "company",
-			},
-			select: { id: true, role: true, status: true },
-		});
-		if (
-			membership === null ||
-			membership.status !== "active" ||
-			channel === null ||
-			space === null ||
-			space.companyId !== ctx.tenant.id
-		)
+		if (channel === null || space === null || space.companyId !== ctx.tenant.id)
 			throw errors.channelUnavailable();
 		const message = await ctx.data.messages.create({
 			input: {
-				id: ctx.callId,
 				channelId: channel.id,
-				authorMembershipId: membership.id,
-				body: input.body.trim(),
-				createdAt: ctx.operationTime,
-				auditId: ctx.callId,
-				auditedAt: ctx.operationTime,
+				authorMembershipId: ctx.values.selectedMembershipId,
+				body: input.body,
 			},
-			select: { id: true, channelId: true, body: true, createdAt: true },
 		});
+		if (message.body === undefined) throw errors.channelUnavailable();
 		await ctx.data.messageEvents.create({
 			input: {
-				id: ctx.callId,
 				messageId: message.id,
 				kind: "published",
-				occurredAt: ctx.operationTime,
 			},
-			select: { id: true },
 		});
 		await ctx.dispatch.messagePublished({
 			companyId: ctx.tenant.id,
 			messageId: message.id,
 		});
-		return message;
+		return {
+			id: message.id,
+			channelId: message.channelId,
+			body: message.body,
+			createdAt: message.createdAt,
+		};
 	},
 });
