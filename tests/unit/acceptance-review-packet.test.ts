@@ -14,6 +14,7 @@ import {
 	requireAbsentReviewOutput,
 	requireCleanReviewTree,
 	requireCommittedReviewBytes,
+	requirePassingAcceptanceRecord,
 } from "../../.agents/skills/questpie-v4/scripts/acceptance-review-safety";
 
 function run(repositoryPath: string, args: string[]): string {
@@ -92,6 +93,10 @@ describe("acceptance packet v2", () => {
 		expect(() => requireCommittedReviewBytes("changed", "committed")).toThrow(
 			AcceptanceReviewSafetyError,
 		);
+		expect(() => requirePassingAcceptanceRecord("BLOCKED")).toThrow(
+			AcceptanceReviewSafetyError,
+		);
+		expect(() => requirePassingAcceptanceRecord("PASS")).not.toThrow();
 		const directory = mkdtempSync(join(tmpdir(), "qp-review-output-"));
 		const existing = join(directory, "REVIEW.json");
 		writeFileSync(existing, "{}");
@@ -210,5 +215,26 @@ describe("acceptance packet v2", () => {
 		const hostile = prepareAcceptancePacket(input);
 		expect(hostile.packet).toBe(expected.packet);
 		expect(hostile.packetDigest).toBe(expected.packetDigest);
+	});
+
+	test("binds attributes to the reviewed tree and rejects administrative overlays", () => {
+		const input = fixture();
+		const expected = prepareAcceptancePacket(input);
+		writeFileSync(join(input.repositoryPath, ".gitattributes"), "* binary\n");
+		run(input.repositoryPath, ["git", "add", ".gitattributes"]);
+		run(input.repositoryPath, [
+			"git",
+			"commit",
+			"--quiet",
+			"-m",
+			"descendant attributes",
+		]);
+		const descendant = prepareAcceptancePacket(input);
+		expect(descendant.packet).toBe(expected.packet);
+		writeFileSync(
+			join(input.repositoryPath, ".git", "info", "attributes"),
+			"* binary\n",
+		);
+		expect(() => prepareAcceptancePacket(input)).toThrow(AcceptancePacketError);
 	});
 });

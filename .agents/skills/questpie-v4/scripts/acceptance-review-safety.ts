@@ -77,3 +77,10 @@ export function requireCommittedReviewBytes(
 	if (workingBytes !== committedBytes)
 		throw new AcceptanceReviewSafetyError("record differs from committed HEAD");
 }
+
+export function requirePassingAcceptanceRecord(verdict: string): void {
+	if (verdict !== "PASS")
+		throw new AcceptanceReviewSafetyError(
+			"acceptance record aggregate verdict is not PASS",
+		);
+}

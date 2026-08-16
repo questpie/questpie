@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, normalize, resolve } from "node:path";
 
 import {
@@ -61,9 +62,14 @@ function invalid(message: string): never {
 	throw new AcceptancePacketError(message);
 }
 
-function shell(args: string[], cwd: string): string {
+function shell(
+	args: string[],
+	cwd: string,
+	environment: Record<string, string> = {},
+): string {
 	const process = Bun.spawnSync(args, {
 		cwd,
+		env: { ...Bun.env, ...environment },
 		stdout: "pipe",
 		stderr: "pipe",
 	});
@@ -235,6 +241,18 @@ export function prepareAcceptancePacket(input: {
 	const manifestSecret = findAcceptancePacketSecret(JSON.stringify(manifest));
 	if (manifestSecret)
 		invalid(`manifest contains a prohibited ${manifestSecret.name}`);
+	const administrativeAttributes = shell(
+		["git", "rev-parse", "--git-path", "info/attributes"],
+		repositoryPath,
+	).trim();
+	if (
+		existsSync(resolve(repositoryPath, administrativeAttributes)) &&
+		readFileSync(
+			resolve(repositoryPath, administrativeAttributes),
+			"utf8",
+		).trim() !== ""
+	)
+		invalid("Git administrative attributes are not allowed during review");
 	const diff = requireNonEmptyReviewDiff(
 		shell(
 			[
@@ -271,6 +289,7 @@ export function prepareAcceptancePacket(input: {
 				".",
 			],
 			repositoryPath,
+			{ GIT_ATTR_SOURCE: input.reviewedHead },
 		),
 	);
 	const diffSecret = findAcceptanceGitDiffSecret(diff);

@@ -13,6 +13,7 @@ import {
 import {
 	AcceptanceReviewSafetyError,
 	requireCommittedReviewBytes,
+	requirePassingAcceptanceRecord,
 } from "./acceptance-review-safety";
 
 function fail(message: string): never {
@@ -85,15 +86,20 @@ try {
 if (prepared.manifest.reviewOutput !== recordPath)
 	fail("manifest review output does not match the committed record path");
 try {
-	decodeAcceptanceReviewRecord(raw, {
+	const record = decodeAcceptanceReviewRecord(raw, {
 		ticket: prepared.manifest.ticket,
 		manifestPath,
 		reviewedHead,
 		diffBase: prepared.manifest.diffBase,
 		packetDigest: prepared.packetDigest,
 	});
+	requirePassingAcceptanceRecord(record.verdict);
 } catch (error) {
-	if (error instanceof AcceptanceRecordError) fail(error.message);
+	if (
+		error instanceof AcceptanceRecordError ||
+		error instanceof AcceptanceReviewSafetyError
+	)
+		fail(error.message);
 	throw error;
 }
 const secret = findAcceptancePacketSecret(localRecord);
