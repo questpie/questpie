@@ -8,7 +8,7 @@ import { canonicalMutationBytes } from "./canonical";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
-export type PendingReactionDispatch = Readonly<{
+type PendingReactionDispatch = Readonly<{
 	slot: string;
 	target: string;
 	payloadBytes: Uint8Array;

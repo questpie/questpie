@@ -1,10 +1,13 @@
 import type { PreparedOperation } from "../operation";
 
-export { CommittedResultUnavailable } from "./committed-result-unavailable";
-export type { CommittedResultUnavailablePayload } from "./committed-result-unavailable";
+export {
+	CommittedResultUnavailable,
+	type CommittedResultUnavailablePayload,
+} from "../operation";
 export { createPostgresCollectionMutationData } from "./collection";
 export { linkReactionProjection } from "./dispatch";
 export type { LinkedReactionProjection } from "./dispatch";
+export { createPostgresMutationInvoker } from "./postgres";
 export { linkCollectionMutationPrograms } from "./program";
 export { linkPostgresCollectionOperationPlans } from "./postgres-program";
 export type {

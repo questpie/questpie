@@ -22,7 +22,7 @@ export interface MutationGeneratedContractV1 {
 	>[];
 }
 
-export interface MutationDataTypeRenderer {
+interface MutationDataTypeRenderer {
 	field(target: `collection:${string}`, path: FieldPath): string;
 	fieldIdentity(identity: string): string;
 }

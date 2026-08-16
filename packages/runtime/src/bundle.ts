@@ -4,8 +4,8 @@ export {
 	createPostgresContextBootstrap,
 	executePostgresQuery,
 } from "./relational";
-export { createPostgresMutationInvoker } from "./mutation/postgres";
 export {
+	createPostgresMutationInvoker,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
 	linkReactionProjection,
