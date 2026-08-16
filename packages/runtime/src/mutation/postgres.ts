@@ -155,7 +155,9 @@ export function createPostgresMutationInvoker<View>(
 		const facts = Object.freeze({ ...input.facts, signal });
 		const pool = input.sql as unknown as PostgresPool;
 		const session = await pool.reserve();
-		let committed = false;
+		let transactionState: "preCommit" | "commitSent" | "committed" =
+			"preCommit";
+		let transactionId: string | null = null;
 		const query: TransactionQuery = (statement, parameters = []) =>
 			execute(session, statement, parameters, facts.signal);
 		try {
@@ -178,7 +180,7 @@ RETURNING transaction_id::text AS "transactionId", operation_time AS "operationT
 			);
 			if (owners.length === 0) {
 				const receipts = await query(
-					`SELECT input_digest AS "inputDigest", outcome, result_bytes AS "resultBytes"
+					`SELECT input_digest AS "inputDigest", outcome, result_bytes AS "resultBytes", transaction_id::text AS "transactionId"
 FROM questpie_internal.mutation_call_receipts
 WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND principal_kind = $4 AND principal_id = $5 AND call_id = $6`,
 					[
@@ -198,12 +200,14 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 						callId,
 					});
 				const replay = replayResult(operation, receipt.resultBytes);
+				transactionId = text(receipt.transactionId, "transaction id");
+				transactionState = "commitSent";
 				await execute(session, "COMMIT");
-				committed = true;
-				return replay;
+				transactionState = "committed";
+				return Object.freeze({ committed: true, value: replay });
 			}
 			const owner = owners[0]!;
-			const transactionId = text(owner.transactionId, "transaction id");
+			transactionId = text(owner.transactionId, "transaction id");
 			if (!(owner.operationTime instanceof Date))
 				throw new TypeError("operation time must be a PostgreSQL timestamp");
 			const changes: Array<
@@ -313,11 +317,18 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 				],
 			);
 			facts.signal.throwIfAborted();
+			transactionState = "commitSent";
 			await execute(session, "COMMIT");
-			committed = true;
-			return validated;
+			transactionState = "committed";
+			return Object.freeze({ committed: true, value: validated });
 		} catch (error) {
-			if (!committed) {
+			if (transactionState === "commitSent")
+				throw new DeclaredOperationError(
+					"COMMITTED_RESULT_UNAVAILABLE",
+					503,
+					Object.freeze({ callId, transactionId }),
+				);
+			if (transactionState === "preCommit") {
 				try {
 					await execute(session, "ROLLBACK");
 				} catch {

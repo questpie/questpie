@@ -5,8 +5,13 @@ export type MutationCallOptions = Readonly<{
 	deadline?: number;
 }>;
 
+export type MutationInvocationResult = Readonly<{
+	committed: true;
+	value: unknown;
+}>;
+
 export type MutationInvoker<View> = (
 	operation: PreparedOperation<View>,
 	callId: string,
 	options?: MutationCallOptions,
-) => Promise<unknown>;
+) => Promise<MutationInvocationResult>;

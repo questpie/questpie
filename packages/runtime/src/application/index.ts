@@ -227,6 +227,7 @@ export async function createRuntimeApplication<
 		rootSequence += 1;
 		const executionId = `execution:${rootSequence}`;
 		const controlled = controlledRoot({ ...root, now: nowMilliseconds });
+		let committedMutation = false;
 		rootControllers.add(controlled.controller);
 		const pending = core.execution(
 			{
@@ -260,22 +261,29 @@ export async function createRuntimeApplication<
 							eventFacts,
 						);
 						try {
-							const result =
-								operation.binding.kind === "mutation"
-									? await view.mutation?.(operation, callId, options)
-									: await operationEngine.invokePrepared(
-											operation,
-											view.operation,
-										);
-							if (
-								operation.binding.kind === "mutation" &&
-								view.mutation === undefined
-							)
-								throw new OperationFailure("INTERNAL");
+							let result: unknown;
+							if (operation.binding.kind === "mutation") {
+								if (view.mutation === undefined)
+									throw new OperationFailure("INTERNAL");
+								const invocation = await view.mutation(
+									operation,
+									callId,
+									options,
+								);
+								committedMutation = invocation.committed;
+								result = invocation.value;
+							} else {
+								result = await operationEngine.invokePrepared(
+									operation,
+									view.operation,
+								);
+							}
 							if (controlled.deadlineExpired)
-								throw new OperationFailure("DEADLINE_EXCEEDED", true);
+								if (!committedMutation)
+									throw new OperationFailure("DEADLINE_EXCEEDED", true);
 							if (controlled.controller.signal.aborted)
-								throw controlled.controller.signal.reason;
+								if (!committedMutation)
+									throw controlled.controller.signal.reason;
 							emit(
 								{
 									family: "operation",
@@ -302,13 +310,13 @@ export async function createRuntimeApplication<
 		activeRoots.add(pending);
 		try {
 			const result = await pending;
-			if (controlled.deadlineExpired)
+			if (controlled.deadlineExpired && !committedMutation)
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
-			if (controlled.controller.signal.aborted)
+			if (controlled.controller.signal.aborted && !committedMutation)
 				throw controlled.controller.signal.reason;
 			return result;
 		} catch (error) {
-			if (controlled.deadlineExpired)
+			if (controlled.deadlineExpired && !committedMutation)
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
 			throw error;
 		} finally {
