@@ -13,7 +13,7 @@ import { bootstrap } from "../../../packages/compiler/src/schema/postgres/bootst
 const database = process.env.PGHOST ? new SQL() : undefined;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 5_000 } as const;
 const expectedV2Checksum =
-	"5e7e6ae37dba4887f31887333274c59f236840f224a19fbabbee4f2c6a841d45";
+	"4f125ab85f16891c072f1b734e023938b7f2a2eb56c5e17dfd8acafbd71f98ff";
 
 async function protocolCatalog(sql: SQL): Promise<unknown> {
 	const [catalog] = await sql<{ value: unknown }[]>`
@@ -84,7 +84,6 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 			protocol: { version: 2, checksum: expectedV2Checksum },
 			tables: [
 				{ name: "application_bindings" },
-				{ name: "committed_change_facts" },
 				{ name: "mutation_call_receipts" },
 				{ name: "pending_reaction_intents" },
 				{ name: "protocol" },
@@ -133,7 +132,7 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 				   join pg_catalog.pg_namespace n on n.oid = c.relnamespace
 				   where n.nspname = 'questpie_internal' and c.relkind = 'r') as tables
 			`;
-			expect(state).toEqual({ protocolRows: 1, version: 2, tables: 8 });
+			expect(state).toEqual({ protocolRows: 1, version: 2, tables: 7 });
 		} finally {
 			left.release();
 			right.release();
@@ -207,7 +206,7 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 		}
 	});
 
-	test("enforces bounded receipts, committed facts, and pending-only intents", async () => {
+	test("enforces bounded receipts and pending-only dispatch records", async () => {
 		const session = await database!.reserve();
 		try {
 			await ensure(session);
@@ -227,23 +226,10 @@ describe.skipIf(!database)("BETA-06 questpie_internal protocol v2", () => {
 			await expect(
 				session
 					.unsafe(`
-					insert into questpie_internal.committed_change_facts
-					(application_name, transaction_id, sequence, operation_name, call_id,
-					 collection_name, record_key_bytes, kind, committed_at)
-					values ('collaboration', pg_current_xact_id(), 1, 'message.publish',
-					 'call-one', 'messages',
-					 decode(repeat('00', 65537), 'hex'), 'insert', transaction_timestamp())
-				`)
-					.execute(),
-			).rejects.toMatchObject({ errno: "23514" });
-
-			await expect(
-				session
-					.unsafe(`
 					insert into questpie_internal.pending_reaction_intents
 					(application_name, tenant_id, source_operation, principal_kind, principal_id, call_id,
-					 dispatch_slot, intent_id, reaction_name, input_digest, payload_bytes,
-					 transaction_id, accepted_at, state)
+					 dispatch_slot, record_id, reaction_name, input_digest, payload_bytes,
+					 transaction_id, recorded_at, state)
 					values ('collaboration', 'tenant-one', 'message.publish', 'user', 'principal-one',
 					 'call-one', 'messagePublished',
 					 '00000000-0000-4000-8000-000000000002', 'message.published',

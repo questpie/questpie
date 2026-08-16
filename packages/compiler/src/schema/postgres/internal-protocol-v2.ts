@@ -45,25 +45,6 @@ const internalProtocolV2Sql = `CREATE TABLE questpie_internal.mutation_call_rece
   )
 );
 
-CREATE TABLE questpie_internal.committed_change_facts (
-  application_name text NOT NULL,
-  transaction_id xid8 NOT NULL,
-  sequence smallint NOT NULL,
-  operation_name text NOT NULL,
-  call_id text NOT NULL,
-  collection_name text NOT NULL,
-  record_key_bytes bytea NOT NULL,
-  kind text NOT NULL,
-  committed_at timestamptz NOT NULL,
-  PRIMARY KEY (application_name, transaction_id, sequence),
-  CONSTRAINT change_fact_call_id_bounded CHECK (length(call_id) BETWEEN 1 AND 256),
-  CONSTRAINT change_fact_sequence_positive CHECK (sequence > 0),
-  CONSTRAINT change_fact_kind_known CHECK (kind IN ('insert', 'update', 'delete')),
-  CONSTRAINT change_fact_record_key_bytes_bounded CHECK (
-    octet_length(record_key_bytes) <= 65536
-  )
-);
-
 CREATE TABLE questpie_internal.pending_reaction_intents (
   application_name text NOT NULL,
   tenant_id text NOT NULL,
@@ -72,14 +53,14 @@ CREATE TABLE questpie_internal.pending_reaction_intents (
   principal_id text NOT NULL,
   call_id text NOT NULL,
   dispatch_slot text NOT NULL,
-  intent_id uuid NOT NULL,
+  record_id uuid NOT NULL,
   reaction_name text NOT NULL,
   input_digest text NOT NULL,
   payload_bytes bytea NOT NULL,
   transaction_id xid8 NOT NULL,
-  accepted_at timestamptz NOT NULL,
+  recorded_at timestamptz NOT NULL,
   state text NOT NULL,
-  PRIMARY KEY (application_name, intent_id),
+  PRIMARY KEY (application_name, record_id),
   CONSTRAINT reaction_intent_origin_key UNIQUE (
     application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot
   ),
@@ -103,21 +84,11 @@ const internalProtocolV2Checksum = createHash("sha256")
 	.digest("hex");
 
 const v2Tables = [
-	"committed_change_facts",
 	"mutation_call_receipts",
 	"pending_reaction_intents",
 ] as const;
 
 const v2Columns = [
-	["committed_change_facts", "application_name", "text", true],
-	["committed_change_facts", "transaction_id", "xid8", true],
-	["committed_change_facts", "sequence", "smallint", true],
-	["committed_change_facts", "operation_name", "text", true],
-	["committed_change_facts", "call_id", "text", true],
-	["committed_change_facts", "collection_name", "text", true],
-	["committed_change_facts", "record_key_bytes", "bytea", true],
-	["committed_change_facts", "kind", "text", true],
-	["committed_change_facts", "committed_at", "timestamp with time zone", true],
 	["mutation_call_receipts", "application_name", "text", true],
 	["mutation_call_receipts", "tenant_id", "text", true],
 	["mutation_call_receipts", "operation_name", "text", true],
@@ -142,46 +113,16 @@ const v2Columns = [
 	["pending_reaction_intents", "principal_id", "text", true],
 	["pending_reaction_intents", "call_id", "text", true],
 	["pending_reaction_intents", "dispatch_slot", "text", true],
-	["pending_reaction_intents", "intent_id", "uuid", true],
+	["pending_reaction_intents", "record_id", "uuid", true],
 	["pending_reaction_intents", "reaction_name", "text", true],
 	["pending_reaction_intents", "input_digest", "text", true],
 	["pending_reaction_intents", "payload_bytes", "bytea", true],
 	["pending_reaction_intents", "transaction_id", "xid8", true],
-	["pending_reaction_intents", "accepted_at", "timestamp with time zone", true],
+	["pending_reaction_intents", "recorded_at", "timestamp with time zone", true],
 	["pending_reaction_intents", "state", "text", true],
 ] as const;
 
 const v2Constraints = [
-	[
-		"committed_change_facts",
-		"change_fact_call_id_bounded",
-		"c",
-		"CHECK (length(call_id) >= 1 AND length(call_id) <= 256)",
-	],
-	[
-		"committed_change_facts",
-		"change_fact_kind_known",
-		"c",
-		"CHECK (kind = ANY (ARRAY['insert'::text, 'update'::text, 'delete'::text]))",
-	],
-	[
-		"committed_change_facts",
-		"change_fact_record_key_bytes_bounded",
-		"c",
-		"CHECK (octet_length(record_key_bytes) <= 65536)",
-	],
-	[
-		"committed_change_facts",
-		"change_fact_sequence_positive",
-		"c",
-		"CHECK (sequence > 0)",
-	],
-	[
-		"committed_change_facts",
-		"committed_change_facts_pkey",
-		"p",
-		"PRIMARY KEY (application_name, transaction_id, sequence)",
-	],
 	[
 		"mutation_call_receipts",
 		"mutation_call_receipts_pkey",
@@ -246,7 +187,7 @@ const v2Constraints = [
 		"pending_reaction_intents",
 		"pending_reaction_intents_pkey",
 		"p",
-		"PRIMARY KEY (application_name, intent_id)",
+		"PRIMARY KEY (application_name, record_id)",
 	],
 	[
 		"pending_reaction_intents",
@@ -270,14 +211,6 @@ const v2Constraints = [
 
 const v2Indexes = [
 	[
-		"committed_change_facts",
-		"committed_change_facts_pkey",
-		"btree",
-		true,
-		true,
-		"CREATE UNIQUE INDEX committed_change_facts_pkey ON questpie_internal.committed_change_facts USING btree (application_name, transaction_id, sequence)",
-	],
-	[
 		"mutation_call_receipts",
 		"mutation_call_receipts_pkey",
 		"btree",
@@ -299,7 +232,7 @@ const v2Indexes = [
 		"btree",
 		true,
 		true,
-		"CREATE UNIQUE INDEX pending_reaction_intents_pkey ON questpie_internal.pending_reaction_intents USING btree (application_name, intent_id)",
+		"CREATE UNIQUE INDEX pending_reaction_intents_pkey ON questpie_internal.pending_reaction_intents USING btree (application_name, record_id)",
 	],
 ] as const;
 

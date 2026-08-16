@@ -29,9 +29,11 @@ triggers. BETA-07 owns them. In particular, BETA-06 does not synthesize a
 change fact in the Mutation Runtime: ADR-0012 assigns committed-fact capture to
 compiler-owned PostgreSQL triggers for reactive Collections, and the accepted
 authority does not yet define the reactive-Collection predicate. The pending
-intent here is the transaction-joined acceptance record needed by the later
-Reaction slice. BETA-06 does not create a Durable Run, attempt, lease, worker,
-retry, or Reaction handler. BETA-08 owns those.
+intent here is P3's transaction-owned dispatch record, keyed by Mutation Call
+Identity plus the static dispatch slot. It is not yet P5's fact-derived durable
+Reaction acceptance identity; transaction identity is an attribute, never an
+idempotency-key component. BETA-06 does not create a Durable Run, attempt,
+lease, worker, retry, or Reaction handler. BETA-08 owns those.
 
 ## Public seam
 
@@ -131,9 +133,9 @@ existing checksum-pinned internal protocol cannot be silently mutated.
 BETA-06 must add a deterministic, advisory-lock-protected protocol upgrade and
 verify the exact catalog, ownership, privileges, constraints, and B-tree
 indexes. Fresh bootstrap and v1 upgrade must converge to identical bytes and
-catalog shape. The protocol may reserve a bounded committed-fact table for the
-BETA-07 upgrade path, but BETA-06 neither writes it nor claims Change Ledger
-capture.
+catalog shape. BETA-06 does not reserve a speculative committed-fact schema:
+BETA-07 must derive its exact trigger-compatible shape from ADR-0012's reactive
+Collection and external-writer requirements.
 
 The application still evolves through an ordinary committed migration for its
 transactional audit Collection. Previously accepted migrations and Seeds stay

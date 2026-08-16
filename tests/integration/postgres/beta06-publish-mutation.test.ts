@@ -38,7 +38,6 @@ async function mutationCounts(callId: string) {
 			Array<{
 				messages: number;
 				audit: number;
-				facts: number;
 				intents: number;
 				receipts: number;
 			}>
@@ -47,7 +46,6 @@ async function mutationCounts(callId: string) {
 		`SELECT
   (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
   (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.committed_change_facts WHERE call_id = $1::text) AS facts,
   (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1::text) AS intents,
   (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1::text) AS receipts`,
 		[callId],
@@ -155,7 +153,6 @@ postgresTest(
 				expect(counts).toEqual({
 					messages: 1,
 					audit: 1,
-					facts: 0,
 					intents: 1,
 					receipts: 1,
 				});
@@ -163,7 +160,6 @@ postgresTest(
 				expect(concurrentCounts).toEqual({
 					messages: 1,
 					audit: 1,
-					facts: 0,
 					intents: 1,
 					receipts: 1,
 				});
@@ -179,7 +175,6 @@ postgresTest(
 				expect(await mutationCounts(constraintCallId)).toEqual({
 					messages: 0,
 					audit: 0,
-					facts: 0,
 					intents: 0,
 					receipts: 0,
 				});
@@ -240,7 +235,6 @@ postgresTest(
 				expect(counts).toEqual({
 					messages: 0,
 					audit: 0,
-					facts: 0,
 					intents: 0,
 					receipts: 0,
 				});
@@ -269,7 +263,6 @@ postgresTest(
 				expect(await mutationCounts(cancelledCallId)).toEqual({
 					messages: 0,
 					audit: 0,
-					facts: 0,
 					intents: 0,
 					receipts: 0,
 				});
