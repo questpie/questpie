@@ -24,8 +24,12 @@ const literalCodec = (value, fallback) => fallback ?? (typeof value === "boolean
 
 function compilePolicy(value) {
   const body = value.body;
-  const scopes = [{ scope: "row", collection: value.target, parentScope: null }];
+  const scopes = [];
   let nextScope = 0;
+  const ensureRootScope = (scope) => {
+    if (!scopes.some((item) => item.scope === scope))
+      scopes.push({ scope, collection: value.target, parentScope: null });
+  };
   const executionOperand = (source, path, codec) => ({ kind: "executionFact", source, path, codec });
   const literalOperand = (candidate, codec) => ({ kind: "literal", codec: literalCodec(candidate, codec), value: candidate });
   const operand = (candidate, codec) => candidate?.__policyOperand ?? literalOperand(candidate, codec);
@@ -39,8 +43,7 @@ function compilePolicy(value) {
       isNull: () => ({ kind: "equal", left: canonical, right: literalOperand(null, field.scalar) }),
     };
   };
-  const makeScope = (collection, scope) => ({
-    row: Object.fromEntries(Object.entries(collection.fields).map(([name, field]) => [name, makeOperand(scope, collection, name, field)])),
+  const executionScope = () => ({
     principal: {
       id: { __policyOperand: executionOperand("principal", ["id"], "uuid"), equal(right) { return { kind: "equal", left: this.__policyOperand, right: operand(right, "uuid") }; }, notEqual(right) { return { kind: "notEqual", left: this.__policyOperand, right: operand(right, "uuid") }; }, in(values) { return { kind: "in", operand: this.__policyOperand, values: values.map((item) => literalOperand(item, "uuid")) }; } },
       kind: { __policyOperand: executionOperand("principal", ["kind"], "text"), equal(right) { return { kind: "equal", left: this.__policyOperand, right: operand(right, "text") }; }, notEqual(right) { return { kind: "notEqual", left: this.__policyOperand, right: operand(right, "text") }; }, in(values) { return { kind: "in", operand: this.__policyOperand, values: values.map((item) => literalOperand(item, "text")) }; } },
@@ -50,6 +53,11 @@ function compilePolicy(value) {
       isOrdinary: () => ({ kind: "equal", left: executionOperand("authority", ["kind"], "authority"), right: literalOperand("ordinary", "authority") }),
       isSystem: () => ({ kind: "equal", left: executionOperand("authority", ["kind"], "authority"), right: literalOperand("system", "authority") }),
     },
+  });
+  const fieldsFor = (collection, scope) => Object.fromEntries(Object.entries(collection.fields).map(([name, field]) => [name, makeOperand(scope, collection, name, field)]));
+  const makeScope = (collection, bindings) => ({
+    ...executionScope(),
+    ...Object.fromEntries(Object.entries(bindings).map(([name, scope]) => [name, fieldsFor(collection, scope)])),
   });
   const expression = (candidate, parentScope) => {
     if (!candidate || typeof candidate !== "object") throw new Error("QP-POLICY invalid expression");
@@ -64,7 +72,7 @@ function compilePolicy(value) {
       const predicate = operands[1];
       const scope = "evidence" + nextScope++;
       scopes.push({ scope, collection: collectionIdentity(collection), parentScope });
-      return { kind: "exists", collection: collectionIdentity(collection), scope, semantics: "policyEvidenceBooleanOnly", targetDisclosurePolicy: "notApplied", predicate: expression(predicate(makeScope(collection, scope)), scope) };
+      return { kind: "exists", collection: collectionIdentity(collection), scope, semantics: "policyEvidenceBooleanOnly", targetDisclosurePolicy: "notApplied", predicate: expression(predicate(makeScope(collection, { row: scope })), scope) };
     }
     throw new Error("QP-DATA-005 unknownOperator " + String(operator));
   };
@@ -73,22 +81,61 @@ function compilePolicy(value) {
     if (candidate?.operator === "public") return { kind: "public" };
     throw new Error("QP-POLICY unsupported admission");
   };
-  const rows = body.read?.rows;
   const rootCollection = relationalCollections.get(value.target.slice("collection:".length));
-  const rootRows = rows?.kind === "policyRows"
-    ? expression(rows.predicate(makeScope(rows.collection, "row")), "row")
-    : expression(typeof rows === "function" ? rows(makeScope(rootCollection, "row")) : rows, "row");
+  const operations = {};
+  if (body.read) {
+    ensureRootScope("row");
+    const rows = body.read.rows;
+    const rootRows = rows?.kind === "policyRows"
+      ? expression(rows.predicate(makeScope(rows.collection, { row: "row" })), "row")
+      : expression(typeof rows === "function" ? rows(makeScope(rootCollection, { row: "row" })) : rows, "row");
+    operations.read = { admission: admission(body.read.admit), rows: rootRows };
+  }
+  if (body.create) {
+    ensureRootScope("candidate");
+    operations.create = {
+      admission: admission(body.create.admit),
+      candidate: expression(body.create.candidate(makeScope(rootCollection, { candidate: "candidate" })), "candidate"),
+    };
+  }
+  if (body.update) {
+    ensureRootScope("current");
+    ensureRootScope("candidate");
+    operations.update = {
+      admission: admission(body.update.admit),
+      current: expression(body.update.rows(makeScope(rootCollection, { current: "current" })), "current"),
+      candidate: expression(body.update.candidate(makeScope(rootCollection, { current: "current", candidate: "candidate" })), "candidate"),
+    };
+  }
+  if (body.delete) {
+    ensureRootScope("current");
+    operations.delete = {
+      admission: admission(body.delete.admit),
+      current: expression(body.delete.rows(makeScope(rootCollection, { current: "current" })), "current"),
+    };
+  }
+  if (body.fields?.output) ensureRootScope("row");
+  if (body.fields?.create) ensureRootScope("candidate");
+  if (body.fields?.update) {
+    ensureRootScope("current");
+    ensureRootScope("candidate");
+  }
   const selectedOutput = body.fields?.output
-    ? Object.entries(body.fields.output(makeScope(rootCollection, "row")))
+    ? Object.entries(body.fields.output(makeScope(rootCollection, { row: "row" })))
         .map(([name, when]) => ({ path: [name], when: expression(when, "row"), deniedEncoding: "omitProperty" }))
     : [];
+  const callerInput = { suppliedPathsOnly: true };
+  if (body.fields?.create) callerInput.create = Object.entries(body.fields.create(makeScope(rootCollection, { candidate: "candidate" })))
+    .map(([name, when]) => ({ path: [name], when: expression(when, "candidate") }));
+  if (body.fields?.update) callerInput.update = Object.entries(body.fields.update(makeScope(rootCollection, { current: "current", candidate: "candidate" })))
+    .map(([name, when]) => ({ path: [name], when: expression(when, "candidate") }));
   return {
     program: {
       identity: value.identity,
       target: value.target,
       attachment: { kind: "default", requiredForNormalDataAccess: true },
-      operations: body.read ? { read: { admission: admission(body.read.admit), rows: rootRows } } : {},
-      ...(selectedOutput.length ? { fields: { callerInput: { suppliedPathsOnly: true }, selectedOutput } } : {}),
+      operations,
+      ...((selectedOutput.length || callerInput.create || callerInput.update) ? { fields: { callerInput, selectedOutput } } : {}),
     },
     scopes,
   };
