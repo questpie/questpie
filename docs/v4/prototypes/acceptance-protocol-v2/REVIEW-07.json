@@ -1,0 +1,52 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"profile": "questpie.acceptance.v2",
+	"manifestPath": "docs/v4/prototypes/acceptance-protocol-v2/acceptance-manifest.json",
+	"reviewedHead": "378a1b070568f5ab7803a121818ff55d20bcd6a4",
+	"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+	"packetDigest": "2af1b46f1439b8388e02b4afa039659d9d04b040c83d6753e6645f3d40a466b6",
+	"primary": {
+		"profile": "claude-opus-medium-v1",
+		"disposition": "NO_RESULT",
+		"category": "transport"
+	},
+	"contingency": {
+		"profile": {
+			"protocolVersion": 2,
+			"transport": "codex-cli",
+			"model": "gpt-5.6-sol",
+			"effort": "medium",
+			"axes": ["spec", "standards"]
+		},
+		"verdict": "BLOCKED",
+		"reviews": [
+			{
+				"axis": "spec",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "14898ba9-1eec-4248-936a-fbbdad490a3d",
+				"invocationId": "01a00a85-74ec-7cf0-8fd2-0e6465532a92",
+				"packetDigest": "2af1b46f1439b8388e02b4afa039659d9d04b040c83d6753e6645f3d40a466b6",
+				"reviewedHead": "378a1b070568f5ab7803a121818ff55d20bcd6a4",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `docs/v4/prototypes/acceptance-protocol-v2/REVIEW.json`, `REVIEW-REPLACEMENT.json`, and `REVIEW-02.json` through `REVIEW-06.json` demonstrate repeated repair/review rounds after valid `BLOCKED` dispositions, culminating in the requested `REVIEW-07.json`. This contradicts ADR-0024 and `.agents/skills/questpie-v4/references/proof.md`, which authorize one replacement round after a valid `BLOCKED`, not an open-ended sequence of fresh heads and reviews until one passes. Stop this acceptance sequence and obtain explicit authority for a new bounded review attempt or revise and independently bootstrap the replacement-round rule before treating a later verdict as acceptance evidence.\n\nNon-blocking observations: The implementation otherwise keeps valid primary verdicts final, activates only the fixed Spec/Standards contingency after a sanitized primary no-result, binds reviews and records to the packet/head/base, rejects prohibited transcript behavior, preserves protocol-v1 artifacts, and remains confined to repository-quality infrastructure."
+			},
+			{
+				"axis": "standards",
+				"model": "gpt-5.6-sol",
+				"effort": "medium",
+				"requestId": "9098b9c9-018a-4db6-a52a-1d3ff0c40c7b",
+				"invocationId": "01a00a85-74de-7aa3-9d80-091be0b67c28",
+				"packetDigest": "2af1b46f1439b8388e02b4afa039659d9d04b040c83d6753e6645f3d40a466b6",
+				"reviewedHead": "378a1b070568f5ab7803a121818ff55d20bcd6a4",
+				"diffBase": "c193e7e5c566852e571944c5f360c98be7240770",
+				"verdict": "BLOCKED",
+				"findings": "VERDICT: BLOCKED\n\n1. `.agents/skills/questpie-v4/scripts/acceptance-review-protocol.ts` does not fully validate the Codex event transcript as required by ADR-0024. `parseEvents` permits invalid lifecycle order and multiplicity: an agent message may precede `thread.started`, follow `turn.completed`, or appear without `turn.started`; multiple `turn.started` events and reasoning events after completion are also accepted. The parser merely checks that one thread identity, one completion, and one matching final message exist somewhere in the transcript. Consequently, malformed or out-of-order JSON event streams can be accepted as valid reviews, contradicting the requirement that every event be validated and malformed transcripts make the round no result. Implement an explicit closed transcript state machine that validates event ordering, allowed multiplicity, and item placement, and add negative controls in `tests/unit/acceptance-review-protocol.test.ts` for message-before-thread, completion-before-message, missing/duplicate turn start, and events after completion.\n\nNon-blocking observations: The revision otherwise closes the previously recorded deterministic-diff, reviewed-tree attribute, output-path, aggregate-PASS, subprocess-bounding, response-binding, and hostile-response issues. The fixed model/effort/axis profile, separate ephemeral workspaces, packet/head/base bindings, distinct reviewer identities, primary-verdict precedence, and credential-free committed-record reconstruction are coherent."
+			}
+		]
+	},
+	"verdict": "BLOCKED",
+	"recordedAt": "2026-08-16T12:23:30.731Z"
+}
