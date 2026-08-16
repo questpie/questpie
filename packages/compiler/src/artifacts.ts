@@ -13,7 +13,11 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
-import { projectCollectionOperationSets, projectMutations } from "./mutation";
+import {
+	projectCollectionOperationSets,
+	projectMutationGeneratedContract,
+	projectMutations,
+} from "./mutation";
 import {
 	lowerPostgresQueryPlans,
 	projectRelationalCompilation,
@@ -101,6 +105,10 @@ export async function createArtifacts(
 		schema,
 		data: manifest.data,
 	});
+	const mutationDeclarations = projectMutationGeneratedContract(
+		operationSets.programs,
+		input.resources,
+	);
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
 	const packageGraphs = await Promise.all(
@@ -294,7 +302,7 @@ export async function createArtifacts(
 			schema,
 			input.configuration.source.root,
 			relational.declarations,
-			operationSets.programs,
+			mutationDeclarations,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources, {

@@ -49,9 +49,13 @@ const message = await ctx.data.messages.create({
 message satisfies Readonly<{
 	id: string;
 	channelId: string;
-	body: string;
+	body?: string;
 	createdAt: Date;
 }>;
+message.id satisfies string;
+message.body satisfies string | undefined;
+// @ts-expect-error conditional output denial omits body instead of encoding null
+const deniedBody: null = message.body;
 // @ts-expect-error output contains only the compiler-fixed selection
 message.authorMembershipId;
 // @ts-expect-error Membership has no compiled Mutation operation

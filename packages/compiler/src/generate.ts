@@ -4,7 +4,7 @@ import {
 	renderGeneratedMutationData,
 	renderMutationDeclarations,
 	renderMutationFactory,
-	type CollectionOperationProgramsV1,
+	type MutationGeneratedContractV1,
 } from "./mutation";
 import type {
 	RelationalGeneratedContractV1,
@@ -263,7 +263,7 @@ export function renderAppContract(
 	schema: unknown,
 	sourceRoot: string,
 	relational: RelationalGeneratedContractV1,
-	collectionOperations: CollectionOperationProgramsV1,
+	mutationContract: MutationGeneratedContractV1,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -328,7 +328,7 @@ export function renderAppContract(
 			return `run(plan: ${definition}, input: ${definition}["parameters"]): Promise<${result}>;`;
 		})
 		.join("\n\t");
-	const mutationData = renderGeneratedMutationData(collectionOperations, {
+	const mutationData = renderGeneratedMutationData(mutationContract, {
 		field: (target, path) =>
 			fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
 		fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),

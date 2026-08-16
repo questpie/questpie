@@ -7,7 +7,11 @@ export type {
 	CollectionOperationProgramsV1,
 	CollectionOperationProgramV1,
 } from "./operation-set-contract";
-export { renderGeneratedMutationData } from "./generated-contract";
+export {
+	projectMutationGeneratedContract,
+	renderGeneratedMutationData,
+} from "./generated-contract";
+export type { MutationGeneratedContractV1 } from "./generated-contract";
 export { lowerPostgresCollectionOperationPlans } from "./postgres";
 export type {
 	PostgresCollectionOperationPlansV1,
