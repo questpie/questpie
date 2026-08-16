@@ -84,7 +84,13 @@ export function createPostgresRealtimeScopeStore(
 					values (${scope.applicationName}, ${scope.scopeIdentity},
 					 ${scope.deploymentDigest}, null, ${scope.principal.kind},
 					 ${scope.principal.id}, 'attached')
-					on conflict (application_name, scope_identity) do nothing
+					on conflict (application_name, scope_identity) do update
+					set renewed_at = transaction_timestamp()
+					where realtime_scope_attachments.deployment_digest = excluded.deployment_digest
+					  and realtime_scope_attachments.principal_kind = excluded.principal_kind
+					  and realtime_scope_attachments.principal_id = excluded.principal_id
+					  and realtime_scope_attachments.state <> 'withdrawn'
+					  and realtime_scope_attachments.expires_at > transaction_timestamp()
 					returning scope_identity as "scopeIdentity"
 				`;
 				return attached.length === 1

@@ -294,13 +294,16 @@ type RealtimeBinding = {
 				if (closed) return;
 				closed = true;
 				bindings.delete(bindingId);
-				void command({ ...commandBase, command: "close", bindingId }).catch(() => undefined);
+				const closing = command({ ...commandBase, command: "close", bindingId }).catch(() => undefined);
 				if (bindings.size === 0) {
-					streamAbort?.abort();
-					if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
-					reconnectTimer = undefined;
-					streamStarted = false;
-					streamReady = false;
+					void closing.finally(() => {
+						if (bindings.size !== 0) return;
+						streamAbort?.abort();
+						if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
+						reconnectTimer = undefined;
+						streamStarted = false;
+						streamReady = false;
+					});
 				}
 			};
 			if (options.signal?.aborted) close();

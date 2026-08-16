@@ -19,6 +19,7 @@ const nextDeploymentDigest = "b".repeat(64);
 const authorityPartitionDigest = "c".repeat(64);
 const otherAuthorityPartitionDigest = "d".repeat(64);
 const user = principal.user({ id: "user:ada" });
+const otherUser = principal.user({ id: "user:grace" });
 const queryBytes = new TextEncoder().encode('{"query":"messages.page"}\n');
 const inputBytes = new TextEncoder().encode('{"first":20}\n');
 const inputDigest = sha256Digest(inputBytes);
@@ -78,6 +79,38 @@ afterAll(async () => {
 describe.skipIf(databases.length === 0)(
 	"BETA-07 PostgreSQL realtime scope authority",
 	() => {
+		postgresTest(
+			"renews a live scope on a fresh holder only for the same deployment and trusted Principal",
+			async () => {
+				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
+				const fresh = createPostgresRealtimeScopeStore({ sql: databases[1]! });
+				const scope = attachInput("scope:takeover");
+				expect(await first.attachScope(scope)).toEqual({ status: "attached" });
+				expect(
+					await first.openWatch(
+						openInput("scope:takeover", "binding:takeover"),
+					),
+				).toEqual({ status: "opened", activeSlot: 1 });
+
+				expect(await fresh.attachScope(scope)).toEqual({ status: "attached" });
+				expect(await fresh.scanOpenWatches(scope)).toHaveLength(1);
+				expect(
+					await fresh.attachScope({
+						...scope,
+						deploymentDigest: nextDeploymentDigest,
+					}),
+				).toEqual({ status: "unavailable" });
+				expect(
+					await fresh.attachScope({ ...scope, principal: otherUser }),
+				).toEqual({ status: "unavailable" });
+
+				expect(await first.withdrawScope(scope)).toBe(true);
+				expect(await fresh.attachScope(scope)).toEqual({
+					status: "unavailable",
+				});
+			},
+		);
+
 		postgresTest(
 			"routes attach, open, scan, acknowledgement, and close across instances without reconstructing a Principal",
 			async () => {
