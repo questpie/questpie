@@ -1,5 +1,6 @@
 import questpiePackage from "../../../../../packages/questpie/package.json";
 import { CodeSample } from "./code";
+import { HeroCodeRotator } from "./hero-code-rotator";
 import { SnippetExplorer } from "./snippet-explorer";
 
 const GITHUB_URL = "https://github.com/questpie/questpie";
@@ -13,6 +14,98 @@ export const posts = collection("posts")
     author: f.relation("user").required(),
   }))
   .access({ read: true });`;
+
+const HERO_SNIPPETS = [
+	{
+		annotations: [
+			{
+				description:
+					"Declares the fields that drive storage, validation and generated types.",
+				match: ".fields",
+			},
+			{
+				description:
+					"Makes the field mandatory across writes, generated APIs and clients.",
+				match: ".required",
+			},
+			{
+				description: "Keeps authorization next to the model it protects.",
+				match: ".access",
+			},
+		],
+		code: MODEL,
+		description:
+			"Fields, relations and access rules become the shared contract for the database, API and client.",
+		file: "collections/posts.ts",
+		key: "model",
+		label: "Model",
+		mark: "4,5,6",
+	},
+	{
+		annotations: [
+			{
+				description: "Validates the request before the handler runs.",
+				match: ".schema",
+			},
+			{
+				description:
+					"Uses the same access boundary as the rest of the application.",
+				match: ".access",
+			},
+			{
+				description:
+					"Receives typed input and collections through the application context.",
+				match: ".handler",
+			},
+		],
+		code: `export default route()
+  .post()
+  .schema(z.object({ title: z.string() }))
+  .access(({ session }) => !!session?.user)
+  .handler(async ({ input, collections }) => {
+    const post = await collections.posts.create(input);
+    return { id: post.id };
+  });`,
+		description:
+			"Validated input and typed collections meet inside a route that is discovered from its file.",
+		file: "routes/create-post.ts",
+		key: "route",
+		label: "Route",
+		mark: "3,4,5,6,7",
+	},
+	{
+		annotations: [
+			{
+				description: "Validates the payload before the job is accepted.",
+				match: "schema:",
+			},
+			{
+				description: "Injects typed services when the background job runs.",
+				match: "handler:",
+			},
+			{
+				description:
+					"Uses the configured mail service without rebuilding the integration.",
+				match: "email.send",
+			},
+		],
+		code: `export default job({
+  name: "daily-digest",
+  schema: z.object({ recipient: z.email() }),
+  handler: async ({ payload, email }) =>
+    email.send({
+      to: payload.recipient,
+      subject: "Daily digest",
+    }),
+});`,
+		description:
+			"Background work receives a validated payload and the same typed services as the request path.",
+		file: "jobs/daily-digest.ts",
+		key: "job",
+		label: "Job",
+		mark: "3,4,5,6,7",
+	},
+] as const;
 
 const REST = `GET    /api/posts
 GET    /api/posts/:id
@@ -158,13 +251,7 @@ export function FrameworkPage() {
 						</p>
 					</div>
 
-					<div className="hero-card model-preview">
-						<div className="hero-card-head">
-							<span className="qp-eyebrow">collections/posts.ts</span>
-							<span className="count">one source of truth</span>
-						</div>
-						<CodeSample bare code={MODEL} mark="4,5,6" numbers />
-					</div>
+					<HeroCodeRotator items={HERO_SNIPPETS} />
 				</div>
 			</section>
 

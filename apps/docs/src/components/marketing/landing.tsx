@@ -136,7 +136,7 @@ export function Landing() {
 			</section>
 
 			<section className="band">
-				<div className="wrap editorial-split">
+				<div className="wrap editorial-split editorial-split-reversed">
 					<div className="head">
 						<p className="qp-aside">open where ownership matters</p>
 						<h2 className="qp-display-m">Your application remains yours</h2>
