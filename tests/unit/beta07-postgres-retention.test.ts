@@ -76,7 +76,6 @@ describe("BETA-07 PostgreSQL retained Live Query result", () => {
 			retention.resume({
 				binding,
 				resumeToken: "opaque",
-				now: new Date(0),
 			}),
 		).rejects.toThrow("lookup binding keys are invalid");
 	});

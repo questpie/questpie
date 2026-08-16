@@ -15,7 +15,6 @@ const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
 const hmacKey = new Uint8Array(32).fill(29);
 const digest = (value: string): string => value.repeat(64);
-const now = new Date("2026-08-16T00:00:00.000Z");
 const binding = {
 	applicationName: "collaboration",
 	deploymentDigest: digest("a"),
@@ -69,7 +68,7 @@ describe.skipIf(!database)(
 				const resumeToken = retention.mint(result);
 				const { retainedGeneration: _generation, ...lookupBinding } = binding;
 				expect(
-					await retention.resume({ binding: lookupBinding, resumeToken, now }),
+					await retention.resume({ binding: lookupBinding, resumeToken }),
 				).toEqual({
 					status: "unavailable",
 				});
@@ -77,12 +76,10 @@ describe.skipIf(!database)(
 				await retention.acknowledge({
 					...result,
 					resumeToken,
-					acknowledgedAt: now,
 				});
 				const resumed = await retention.resume({
 					binding: lookupBinding,
 					resumeToken,
-					now,
 				});
 				expect(resumed).toEqual({
 					status: "available",
@@ -97,7 +94,6 @@ describe.skipIf(!database)(
 					await retention.resume({
 						binding: lookupBinding,
 						resumeToken: tampered,
-						now,
 					}),
 				).toEqual(unavailable);
 				for (const incompatible of [
@@ -111,28 +107,34 @@ describe.skipIf(!database)(
 						await retention.resume({
 							binding: incompatible,
 							resumeToken,
-							now,
 						}),
 					).toEqual(unavailable);
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.retained_live_query_results DISABLE TRIGGER retained_live_query_result_clock",
+				);
+				await database!`
+					update questpie_internal.retained_live_query_results
+					set created_at = transaction_timestamp() - interval '25 hours',
+					    expires_at = transaction_timestamp() - interval '1 hour'
+					where application_name = 'collaboration'
+				`;
+				await database!.unsafe(
+					"ALTER TABLE questpie_internal.retained_live_query_results ENABLE TRIGGER retained_live_query_result_clock",
+				);
 				expect(
 					await retention.resume({
 						binding: lookupBinding,
 						resumeToken,
-						now: new Date(now.getTime() + 86_400_000),
 					}),
 				).toEqual(unavailable);
 				expect(
-					await retention.prune({
-						applicationName: "collaboration",
-						now: new Date(now.getTime() + 86_400_000),
-					}),
+					await retention.prune({ applicationName: "collaboration" }),
 				).toEqual({ retainedResults: 1, ledgerFacts: 0 });
 				await expect(
 					retention.acknowledge({
 						...result,
 						resultBytes: new TextEncoder().encode('{"messages":["forged"]}\n'),
 						resumeToken,
-						acknowledgedAt: now,
 					}),
 				).rejects.toThrow(/does not bind/);
 			},
@@ -157,7 +159,6 @@ describe.skipIf(!database)(
 						retention.acknowledge({
 							...result,
 							resumeToken,
-							acknowledgedAt: new Date(now.getTime() + Number(generation)),
 						}),
 					);
 				}
@@ -169,20 +170,17 @@ describe.skipIf(!database)(
 			  and authority_partition_digest = ${binding.authorityPartitionDigest}
 		`;
 				expect(count).toEqual({ retained: 128 });
+				const resumed = await Promise.all(
+					tokens.map((resumeToken) =>
+						retention.resume({ binding: lookupBinding, resumeToken }),
+					),
+				);
 				expect(
-					await retention.resume({
-						binding: lookupBinding,
-						resumeToken: tokens[0]!,
-						now,
-					}),
-				).toEqual({ status: "unavailable" });
+					resumed.filter(({ status }) => status === "unavailable"),
+				).toHaveLength(1);
 				expect(
-					await retention.resume({
-						binding: lookupBinding,
-						resumeToken: tokens[1]!,
-						now,
-					}),
-				).toMatchObject({ status: "available", retainedGeneration: 2n });
+					resumed.filter(({ status }) => status === "available"),
+				).toHaveLength(128);
 			},
 		);
 
@@ -205,25 +203,25 @@ describe.skipIf(!database)(
 			insert into questpie_internal.reconciliation_consumers
 			(application_name, consumer_id, xid_horizon, acknowledged_at)
 			values
-			('collaboration', 'primary', pg_snapshot_xmin(pg_current_snapshot()), ${now}),
-			('collaboration', 'lagging', ${fact!.transactionId}::xid8, ${now})
+			('collaboration', 'primary', pg_snapshot_xmin(pg_current_snapshot()), transaction_timestamp()),
+			('collaboration', 'lagging', ${fact!.transactionId}::xid8, transaction_timestamp())
 		`;
 				await database!`
 			insert into questpie_internal.processed_change_facts
 			(application_name, consumer_id, fact_identity, processed_at)
-			values ('collaboration', 'primary', ${fact!.factIdentity}::uuid, ${now})
+			values ('collaboration', 'primary', ${fact!.factIdentity}::uuid, transaction_timestamp())
 		`;
 
 				expect(
-					await retention.prune({ applicationName: "collaboration", now }),
+					await retention.prune({ applicationName: "collaboration" }),
 				).toEqual({ retainedResults: 0, ledgerFacts: 0 });
 				await database!`
 			update questpie_internal.reconciliation_consumers
-			set xid_horizon = pg_snapshot_xmin(pg_current_snapshot()), acknowledged_at = ${now}
+			set xid_horizon = pg_snapshot_xmin(pg_current_snapshot()), acknowledged_at = transaction_timestamp()
 			where application_name = 'collaboration' and consumer_id = 'lagging'
 		`;
 				expect(
-					await retention.prune({ applicationName: "collaboration", now }),
+					await retention.prune({ applicationName: "collaboration" }),
 				).toEqual({ retainedResults: 0, ledgerFacts: 1 });
 				const [processed] = await database!<{ count: number }[]>`
 			select count(*)::integer as count from questpie_internal.processed_change_facts

@@ -9,7 +9,6 @@ const identityPattern = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
 const retainedResultBytesLimit = 1_048_576;
 const dependencyPlanBytesLimit = 262_144;
 const retainedTokensPerPrincipal = 128;
-const retentionMilliseconds = 86_400_000;
 const postgresBigintMaximum = 9_223_372_036_854_775_807n;
 const postgresIntegerMaximum = 2_147_483_647;
 const unavailable = Object.freeze({ status: "unavailable" as const });
@@ -53,20 +52,17 @@ export type PostgresLiveQueryPruneResult = Readonly<{
 export type PostgresLiveQueryRetention = Readonly<{
 	mint(result: RetainedLiveQueryCompleteResult): string;
 	acknowledge(
-		result: RetainedLiveQueryCompleteResult &
-			Readonly<{ resumeToken: string; acknowledgedAt: Date }>,
+		result: RetainedLiveQueryCompleteResult & Readonly<{ resumeToken: string }>,
 	): Promise<void>;
 	resume(
 		input: Readonly<{
 			binding: RetainedLiveQueryLookupBinding;
 			resumeToken: string;
-			now: Date;
 		}>,
 	): Promise<PostgresRetainedResult>;
 	prune(
 		input: Readonly<{
 			applicationName: string;
-			now: Date;
 		}>,
 	): Promise<PostgresLiveQueryPruneResult>;
 }>;
@@ -83,12 +79,6 @@ type ResumeTokenPayloadV1 = Readonly<{
 	v: 1;
 	wire: number;
 }>;
-
-function validDate(value: Date, label: string): Date {
-	if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
-		throw new TypeError(`${label} is invalid`);
-	return value;
-}
 
 function validDigest(value: string, label: string): string {
 	if (!digestPattern.test(value)) throw new TypeError(`${label} is invalid`);
@@ -287,10 +277,6 @@ export function createPostgresLiveQueryRetention(
 		mint,
 		async acknowledge(result) {
 			validateCompleteResult(result);
-			const acknowledgedAt = validDate(
-				result.acknowledgedAt,
-				"acknowledgement time",
-			);
 			const payload = decode(result.resumeToken);
 			if (
 				!payload ||
@@ -302,10 +288,6 @@ export function createPostgresLiveQueryRetention(
 					"resume token does not bind the acknowledged result",
 				);
 			const tokenDigest = sha256Digest(result.resumeToken);
-			const expiresAt = new Date(
-				acknowledgedAt.getTime() + retentionMilliseconds,
-			);
-			validDate(expiresAt, "retained-result expiry");
 			await input.sql.begin(async (transaction) => {
 				await transaction`
 					select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
@@ -317,20 +299,20 @@ export function createPostgresLiveQueryRetention(
 					delete from questpie_internal.retained_live_query_results
 					where application_name = ${result.binding.applicationName}
 					  and authority_partition_digest = ${result.binding.authorityPartitionDigest}
-					  and expires_at <= ${acknowledgedAt}
+					  and expires_at <= transaction_timestamp()
 				`;
 				const inserted = await transaction<{ tokenDigest: string }[]>`
 					insert into questpie_internal.retained_live_query_results
 					(application_name, token_digest, authority_partition_digest, deployment_digest,
 					 query_identity, input_digest, wire_version, retained_generation, result_bytes,
-					 dependency_plan_bytes, created_at, expires_at)
+					 dependency_plan_bytes)
 					values (${result.binding.applicationName}, ${tokenDigest},
 					 ${result.binding.authorityPartitionDigest}, ${result.binding.deploymentDigest},
 					 ${result.binding.queryIdentity}, ${result.binding.inputDigest},
 					 ${result.binding.wireVersion}, ${result.binding.retainedGeneration},
-					 ${result.resultBytes}, ${result.dependencyPlanBytes}, ${acknowledgedAt}, ${expiresAt})
+					 ${result.resultBytes}, ${result.dependencyPlanBytes})
 					on conflict (application_name, token_digest) do update
-					set created_at = excluded.created_at, expires_at = excluded.expires_at
+					set token_digest = excluded.token_digest
 					where retained_live_query_results.authority_partition_digest = excluded.authority_partition_digest
 					  and retained_live_query_results.deployment_digest = excluded.deployment_digest
 					  and retained_live_query_results.query_identity = excluded.query_identity
@@ -359,9 +341,8 @@ export function createPostgresLiveQueryRetention(
 				`;
 			});
 		},
-		async resume({ binding, resumeToken, now }) {
+		async resume({ binding, resumeToken }) {
 			validateLookupBinding(binding);
-			validDate(now, "resume time");
 			const candidateToken = typeof resumeToken === "string" ? resumeToken : "";
 			const payload = decode(candidateToken);
 			const [row] = await input.sql<
@@ -389,7 +370,7 @@ export function createPostgresLiveQueryRetention(
 				  and query_identity = ${binding.queryIdentity}
 				  and input_digest = ${binding.inputDigest}
 				  and wire_version = ${binding.wireVersion}
-				  and expires_at > ${now}
+				  and expires_at > transaction_timestamp()
 			`;
 			const resultBytes = bytes(row?.resultBytes);
 			const dependencyPlanBytes = bytes(row?.dependencyPlanBytes);
@@ -416,14 +397,14 @@ export function createPostgresLiveQueryRetention(
 				retainedGeneration: BigInt(row.retainedGeneration),
 			});
 		},
-		async prune({ applicationName, now }) {
+		async prune({ applicationName }) {
 			validIdentity(applicationName, "application identity");
-			validDate(now, "retention time");
 			return input.sql.begin(async (transaction) => {
 				const [retained] = await transaction<{ count: number }[]>`
 					with deleted as (
 					  delete from questpie_internal.retained_live_query_results
-					  where application_name = ${applicationName} and expires_at <= ${now}
+					  where application_name = ${applicationName}
+					    and expires_at <= transaction_timestamp()
 					  returning 1
 					)
 					select count(*)::integer as count from deleted
