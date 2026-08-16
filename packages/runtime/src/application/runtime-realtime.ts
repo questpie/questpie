@@ -48,6 +48,8 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 	input,
 ) => {
 	if (input.artifacts.runtimeBuild.realtimeWireDigest === null) return null;
+	if (!input.coordinator?.durable)
+		throw new TypeError("realtime requires durable PostgreSQL coordination");
 	const contractBytes = input.artifactFiles["realtime-wire-contract.json"];
 	if (contractBytes === undefined)
 		throw new TypeError("missing realtime-wire-contract.json");
@@ -104,6 +106,6 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 			return Object.freeze({ result, observedPlan: observation.finish() });
 		},
 		onObservedPlan: input.onObservedPlan,
-		durableCoordinator: input.coordinator?.durable,
+		durableCoordinator: input.coordinator.durable,
 	});
 };

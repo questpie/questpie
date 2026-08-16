@@ -15,7 +15,10 @@ import {
 	type PostgresWakeTickSource,
 	type RetainedLiveQueryCompleteResult,
 } from "../../live-query";
-import type { LiveQueryCoordinator } from "./coordinator";
+import {
+	LiveQueryEvaluationFailure,
+	type LiveQueryCoordinator,
+} from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
@@ -89,7 +92,6 @@ export function createPostgresDurableLiveQueryCoordinator(
 		sql: SQL;
 		hmacKey: Uint8Array;
 		applicationName: string;
-		consumer?: string;
 		deploymentDigest: string;
 		wireVersion: number;
 		tickSource?: PostgresWakeTickSource;
@@ -153,7 +155,9 @@ export function createPostgresDurableLiveQueryCoordinator(
 					let evaluated;
 					try {
 						evaluated = await prepared.evaluate();
-					} catch {
+					} catch (error) {
+						if (error instanceof LiveQueryEvaluationFailure)
+							await holder.attachment.publishFailure(watch, error.code);
 						return;
 					}
 					signal.throwIfAborted();
@@ -233,7 +237,9 @@ export function createPostgresDurableLiveQueryCoordinator(
 			let evaluated;
 			try {
 				evaluated = await prepared.evaluate();
-			} catch {
+			} catch (error) {
+				if (error instanceof LiveQueryEvaluationFailure)
+					await holder.attachment.publishFailure(watch, error.code);
 				return;
 			}
 			signal.throwIfAborted();
@@ -493,6 +499,5 @@ export function createPostgresDurableLiveQueryCoordinator(
 			await wake.drain();
 			state = "drained";
 		},
-		reconcile: () => wake.requestScan(),
 	});
 }

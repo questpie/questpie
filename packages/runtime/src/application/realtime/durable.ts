@@ -24,6 +24,10 @@ export type DurableRealtimeAttachment = Readonly<{
 		watch: PostgresRealtimeWatch,
 		delivery: LiveQueryCoordinatorDelivery,
 	): MaybePromise<boolean>;
+	publishFailure(
+		watch: PostgresRealtimeWatch,
+		code: "OUTPUT_INVALID" | "RESOURCE_LIMIT",
+	): MaybePromise<boolean>;
 	synchronize(bindingIds: ReadonlySet<string>): void;
 }>;
 

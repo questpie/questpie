@@ -277,12 +277,15 @@ describe.skipIf(databases.length === 0)(
 					resetReason: null,
 					acknowledged: false,
 				});
-				expect(
-					await command.invalidateWatch({
-						...lease,
-						bindingIdentity: "binding:a",
-					}),
-				).toBe(2n);
+				const [invalidated] = await databases[1]!<{ generation: bigint }[]>`
+					update questpie_internal.realtime_watch_bindings
+					set invalidation_generation = invalidation_generation + 1
+					where application_name = ${applicationName}
+					  and scope_identity = 'scope:a'
+					  and binding_identity = 'binding:a'
+					returning invalidation_generation as generation
+				`;
+				expect(BigInt(invalidated!.generation)).toBe(2n);
 				expect(
 					await command.stageGeneration({
 						...lease,

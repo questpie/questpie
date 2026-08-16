@@ -1,6 +1,5 @@
 import type { Principal } from "questpie";
 
-import type { ObservedLiveQueryPlanV1 } from "../../live-query";
 import { isOperationCallId } from "../../operation";
 import type {
 	DecodedRealtimeQueryV1,
@@ -13,8 +12,6 @@ export type RealtimeCarrierBinding = {
 	readonly id: string;
 	readonly query: DecodedRealtimeQueryV1;
 	readonly controller: AbortController;
-	token: string | null;
-	observedPlan: ObservedLiveQueryPlanV1 | null;
 };
 
 export type RealtimeCarrierSession = {

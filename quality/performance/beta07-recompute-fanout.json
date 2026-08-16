@@ -1,0 +1,24 @@
+{
+	"id": "beta07-recompute-fanout",
+	"kind": "load",
+	"schedule": "nightly",
+	"command": ["bun", "tests/load/beta07-recompute-fanout.ts"],
+	"budgetOwner": "BETA-07",
+	"metrics": {
+		"postgresRecompute2050Ms": {
+			"direction": "max",
+			"budget": 20000,
+			"unit": "ms"
+		},
+		"recomputedWatches": {
+			"direction": "min",
+			"budget": 2050,
+			"unit": "count"
+		},
+		"fanoutPerBatch": {
+			"direction": "max",
+			"budget": 1024,
+			"unit": "count"
+		}
+	}
+}

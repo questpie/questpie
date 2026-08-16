@@ -18,10 +18,18 @@ export type LiveQueryCoordinatorDelivery = Readonly<{
 	resumeToken: string;
 }>;
 
+export class LiveQueryEvaluationFailure extends Error {
+	readonly code: "OUTPUT_INVALID" | "RESOURCE_LIMIT";
+
+	constructor(code: LiveQueryEvaluationFailure["code"]) {
+		super(code);
+		this.code = code;
+	}
+}
+
 interface LiveQueryCoordinatorLifecycle {
 	start(): Promise<void>;
 	drain(): Promise<void>;
-	reconcile(): Promise<void>;
 }
 
 export type LiveQueryCoordinator = LiveQueryCoordinatorLifecycle &

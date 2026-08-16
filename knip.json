@@ -5,7 +5,8 @@
 	"ignoreFiles": [
 		"apps/docs/src/routeTree.gen.ts",
 		"apps/docs/.source/**",
-		"docs/v4/prototypes/**"
+		"docs/v4/prototypes/**",
+		"tests/load/*.ts"
 	],
 	"ignoreUnresolved": ["/^fumadocs-mdx:collections\\//"],
 	"rules": {

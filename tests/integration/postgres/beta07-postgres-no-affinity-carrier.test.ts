@@ -86,7 +86,13 @@ const planWithoutDigest = Object.freeze({
 	format: "questpie.observed-live-query-plan" as const,
 	version: 1 as const,
 	query: "query:messages.page",
-	tokens: Object.freeze([]),
+	tokens: Object.freeze([
+		Object.freeze({
+			kind: "collectionRange" as const,
+			collection: "collection:messages",
+			detail: Object.freeze({}),
+		}),
+	]),
 });
 const observedPlan = Object.freeze({
 	...planWithoutDigest,
@@ -199,6 +205,15 @@ async function ensure(sql: SQL): Promise<void> {
 	);
 }
 
+async function captureMessageChange(sql: SQL): Promise<void> {
+	await sql`
+		insert into questpie_internal.change_ledger
+		(application_name, transaction_id, collection_identity, change_kind, conservative)
+		values (${applicationName}, pg_catalog.pg_current_xact_id(),
+		        'collection:messages', 'collection', true)
+	`;
+}
+
 beforeEach(async () => {
 	await databases[0]?.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	if (databases[0]) await ensure(databases[0]);
@@ -224,7 +239,6 @@ describe.skipIf(databases.length === 0)(
 						sql,
 						hmacKey: new Uint8Array(32).fill(7),
 						applicationName,
-						consumer: "ignored-process-local-consumer",
 						deploymentDigest,
 						wireVersion: 1,
 						tickSource: tickSources[index]!.source,
@@ -236,7 +250,6 @@ describe.skipIf(databases.length === 0)(
 					sql: databases[1]!,
 					hmacKey: new Uint8Array(32).fill(7),
 					applicationName,
-					consumer: "ignored-process-local-consumer",
 					deploymentDigest: "b".repeat(64),
 					wireVersion: 1,
 					tickSource: ticks().source,
@@ -244,6 +257,7 @@ describe.skipIf(databases.length === 0)(
 				await wrongDeployment.start();
 				let evaluations = 0;
 				let evaluationFails = false;
+				let completeFailure: "OUTPUT_INVALID" | "RESOURCE_LIMIT" | null = null;
 				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
 					createRealtimeCarrier({
 						contract: decodeRealtimeWireContract(projected),
@@ -270,7 +284,18 @@ describe.skipIf(databases.length === 0)(
 							expect(evaluatedPrincipal).toEqual(user);
 							expect(value).toEqual(context);
 							return {
-								result: { nodes: [{ body: "durable result" }] },
+								result: {
+									nodes: [
+										{
+											body:
+												completeFailure === "OUTPUT_INVALID"
+													? 42
+													: completeFailure === "RESOURCE_LIMIT"
+														? "x".repeat(1_048_577)
+														: "durable result",
+										},
+									],
+								},
 								observedPlan,
 							};
 						},
@@ -282,7 +307,7 @@ describe.skipIf(databases.length === 0)(
 				const reader = stream?.body?.getReader();
 				if (!reader) throw new Error("missing realtime stream");
 				expect((await nextFrame(reader))?.kind).toBe("ready");
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 
 				expect(
 					(
@@ -292,7 +317,7 @@ describe.skipIf(databases.length === 0)(
 					)?.status,
 				).toBe(202);
 				expect(evaluations).toBe(0);
-				await coordinators[1]!.reconcile();
+				await coordinators[1]!.durable!.requestScan();
 				expect(
 					(
 						await carriers[1]!.fetch(
@@ -325,11 +350,11 @@ describe.skipIf(databases.length === 0)(
 					)?.status,
 				).toBe(404);
 				expect(evaluations).toBe(0);
-				await coordinators[1]!.reconcile();
-				await wrongDeployment.reconcile();
+				await coordinators[1]!.durable!.requestScan();
+				await wrongDeployment.durable!.requestScan();
 
 				tickSources[0].tick();
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const delivery = await nextFrame(reader);
 				expect(delivery).toMatchObject({
 					kind: "delivery",
@@ -346,14 +371,9 @@ describe.skipIf(databases.length === 0)(
 					deploymentDigest,
 					principal: user,
 				} as const;
-				expect(
-					await store.invalidateWatch({
-						...authority,
-						bindingIdentity: "binding:one",
-					}),
-				).toBe(2n);
+				await captureMessageChange(databases[1]!);
 				tickSources[0].tick();
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const update = await nextFrame(reader);
 				expect(update).toMatchObject({
 					kind: "delivery",
@@ -362,15 +382,49 @@ describe.skipIf(databases.length === 0)(
 				});
 				expect(evaluations).toBe(2);
 
+				for (const [bindingId, code] of [
+					["binding:invalid-output", "OUTPUT_INVALID"],
+					["binding:oversized-output", "RESOURCE_LIMIT"],
+				] as const) {
+					completeFailure = code;
+					expect(
+						(
+							await carriers[1]!.fetch(
+								request("POST", command("open", bindingId)),
+							)
+						)?.status,
+					).toBe(202);
+					await coordinators[1]!.durable!.requestScan();
+					await coordinators[0]!.durable!.requestScan();
+					expect(await nextFrame(reader)).toEqual({
+						protocol: projected.protocol,
+						kind: "failure",
+						bindingId,
+						query: "query:messages.page",
+						error: { code },
+					});
+					const [unstaged] = await databases[0]!<{ count: number }[]>`
+						select count(*)::integer as count
+						from questpie_internal.realtime_binding_generations
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:one'
+						  and binding_identity = ${bindingId}
+					`;
+					expect(unstaged?.count).toBe(0);
+					expect(
+						(
+							await carriers[1]!.fetch(
+								request("POST", command("close", bindingId)),
+							)
+						)?.status,
+					).toBe(202);
+				}
+				completeFailure = null;
+
 				evaluationFails = true;
-				expect(
-					await store.invalidateWatch({
-						...authority,
-						bindingIdentity: "binding:one",
-					}),
-				).toBe(3n);
+				await captureMessageChange(databases[1]!);
 				tickSources[0].tick();
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const [dirty] = await databases[0]!<
 					{
 						evaluated: string;
@@ -427,7 +481,7 @@ describe.skipIf(databases.length === 0)(
 				const resumedReader = resumedStream?.body?.getReader();
 				if (!resumedReader) throw new Error("missing resumed realtime stream");
 				expect((await nextFrame(resumedReader))?.kind).toBe("ready");
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const beforeResume = evaluations;
 				expect(
 					(
@@ -442,7 +496,7 @@ describe.skipIf(databases.length === 0)(
 						)
 					)?.status,
 				).toBe(202);
-				await coordinators[1]!.reconcile();
+				await coordinators[1]!.durable!.requestScan();
 				expect(
 					await store.readOpenWatch({
 						...authority,
@@ -451,7 +505,7 @@ describe.skipIf(databases.length === 0)(
 					}),
 				).toBeDefined();
 				tickSources[0].tick();
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const resumedWatch = await store.readOpenWatch({
 					...authority,
 					scopeIdentity: "scope:resume",
@@ -465,7 +519,7 @@ describe.skipIf(databases.length === 0)(
 					resetReason: null,
 					resumeToken: update?.resumeToken,
 				});
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				const [resumedGenerations] = await databases[0]!<{ count: number }[]>`
 					select count(*)::integer as count
 					from questpie_internal.realtime_binding_generations
@@ -484,7 +538,7 @@ describe.skipIf(databases.length === 0)(
 				const resetReader = resetStream?.body?.getReader();
 				if (!resetReader) throw new Error("missing reset realtime stream");
 				expect((await nextFrame(resetReader))?.kind).toBe("ready");
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				evaluationFails = false;
 				expect(
 					(
@@ -499,9 +553,9 @@ describe.skipIf(databases.length === 0)(
 						)
 					)?.status,
 				).toBe(202);
-				await coordinators[1]!.reconcile();
+				await coordinators[1]!.durable!.requestScan();
 				tickSources[0].tick();
-				await coordinators[0]!.reconcile();
+				await coordinators[0]!.durable!.requestScan();
 				expect(await nextFrame(resetReader)).toMatchObject({
 					kind: "delivery",
 					delivery: "reset",

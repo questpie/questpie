@@ -7,6 +7,12 @@ import {
 	createRealtimeCarrier,
 	decodeRealtimeWireContract,
 } from "../../packages/runtime/src/application/realtime";
+import { LiveQueryEvaluationFailure } from "../../packages/runtime/src/application/realtime/coordinator";
+import type {
+	DurableRealtimeAttachment,
+	DurableRealtimeCoordinator,
+} from "../../packages/runtime/src/application/realtime/durable";
+import type { PostgresRealtimeWatch } from "../../packages/runtime/src/live-query";
 
 const application = "application:collaboration";
 const clientContractDigest = "1".repeat(64);
@@ -147,9 +153,90 @@ function harness(
 ) {
 	let contextDecodes = 0;
 	let principalResolutions = 0;
+	let evaluationFailures = 0;
 	const observedPlans: unknown[] = [];
+	let attachment: DurableRealtimeAttachment | undefined;
+	const watches = new Map<
+		string,
+		Readonly<{ watch: PostgresRealtimeWatch; token: string }>
+	>();
+	const durableCoordinator: DurableRealtimeCoordinator = {
+		async attach(candidate) {
+			attachment = candidate;
+			return true;
+		},
+		async detach(candidate) {
+			if (attachment === candidate) attachment = undefined;
+		},
+		async open(opened) {
+			const holder = attachment;
+			if (
+				!holder ||
+				holder.scopeId !== opened.scopeId ||
+				holder.principal.kind !== opened.principal.kind ||
+				holder.principal.id !== opened.principal.id
+			)
+				return "unavailable";
+			if (watches.has(opened.bindingId)) return "unavailable";
+			if (watches.size >= projected.limits.activeWatchesPerPrincipal)
+				return "limit";
+			const watch: PostgresRealtimeWatch = Object.freeze({
+				bindingIdentity: opened.bindingId,
+				authorityPartitionDigest: opened.authorityPartitionDigest,
+				queryIdentity: opened.queryIdentity,
+				queryBytes: opened.queryBytes,
+				inputBytes: opened.inputBytes,
+				inputDigest: opened.inputDigest,
+				contextInputBytes: opened.contextInputBytes,
+				wireVersion: 1,
+				resumeRequested: opened.resumeRequested,
+				requestedResumeToken: opened.requestedResumeToken,
+				activeSlot: watches.size + 1,
+				invalidationGeneration: 1n,
+				evaluatedInvalidationGeneration: 0n,
+				latest: null,
+			});
+			const token = `token:${opened.bindingId}`;
+			watches.set(opened.bindingId, Object.freeze({ watch, token }));
+			void Promise.resolve().then(async () => {
+				const prepared = await holder.prepare(
+					watch,
+					new AbortController().signal,
+				);
+				if (
+					!prepared ||
+					prepared.authorityPartitionDigest !== watch.authorityPartitionDigest
+				)
+					return;
+				try {
+					const completed = await prepared.evaluate();
+					await holder.publish(watch, {
+						...completed,
+						delivery: opened.resumeRequested ? "reset" : "initial",
+						resetReason: opened.resumeRequested ? "resume-unavailable" : null,
+						resumeToken: token,
+					});
+				} catch (error) {
+					evaluationFailures += 1;
+					if (error instanceof LiveQueryEvaluationFailure)
+						await holder.publishFailure(watch, error.code);
+				}
+			});
+			return "opened";
+		},
+		async acknowledge(_scopeId, bindingId, _principal, resumeToken) {
+			return watches.get(bindingId)?.token === resumeToken;
+		},
+		async close(_scopeId, bindingId) {
+			const closed = watches.delete(bindingId);
+			attachment?.synchronize(new Set(watches.keys()));
+			return closed;
+		},
+		async requestScan() {},
+	};
 	const carrier = createRealtimeCarrier({
 		contract: decodeRealtimeWireContract(projected),
+		durableCoordinator,
 		decodeContext(value) {
 			contextDecodes += 1;
 			return value as typeof context;
@@ -169,6 +256,7 @@ function harness(
 		contextDecodes: () => contextDecodes,
 		principalResolutions: () => principalResolutions,
 		observedPlans,
+		evaluationFailures: () => evaluationFailures,
 	};
 }
 
@@ -276,6 +364,7 @@ test("frames an invalid complete result as an exact failure", async () => {
 		error: { code: "OUTPUT_INVALID" },
 	});
 	expect(value.observedPlans).toEqual([]);
+	expect(value.evaluationFailures()).toBe(1);
 	await value.carrier.drain();
 });
 
@@ -319,6 +408,10 @@ test("resets unavailable private resume state and enforces 64 watches", async ()
 	);
 	await Bun.sleep(0);
 	expect(evaluations).toBe(64);
+	expect(
+		(await value.carrier.fetch(request("POST", command("close", "binding:1"))))
+			?.status,
+	).toBe(202);
 	const replacement = await value.carrier.fetch(request("GET"));
 	const replacementReader = replacement?.body?.getReader();
 	if (!replacementReader) throw new Error("missing replacement stream");

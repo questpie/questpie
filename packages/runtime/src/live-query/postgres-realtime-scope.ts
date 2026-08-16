@@ -47,10 +47,6 @@ export type PostgresRealtimeScopeStore = Readonly<{
 		input: PostgresRealtimeScopeAuthority &
 			Readonly<{ bindingIdentity: string }>,
 	): Promise<PostgresRealtimeWatch | undefined>;
-	invalidateWatch(
-		input: PostgresRealtimeScopeAuthority &
-			Readonly<{ bindingIdentity: string }>,
-	): Promise<bigint | false>;
 	stageGeneration(input: PostgresRealtimeGenerationStage): Promise<boolean>;
 	acknowledgeWatch(input: PostgresRealtimeAcknowledgement): Promise<boolean>;
 	closeWatch(
@@ -472,10 +468,6 @@ export function createPostgresRealtimeScopeStore(
 								acknowledged: row.acknowledged === true,
 							}),
 			});
-		},
-
-		async invalidateWatch(invalidation) {
-			return generations.invalidateWatch(invalidation);
 		},
 
 		async stageGeneration(staged) {

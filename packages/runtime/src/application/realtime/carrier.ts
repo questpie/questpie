@@ -19,27 +19,13 @@ import {
 	type RealtimeCarrierSession as Session,
 } from "./carrier-wire";
 import type { DecodedRealtimeWireContractV1 } from "./contract";
+import { LiveQueryEvaluationFailure } from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
 } from "./durable";
 
 type MaybePromise<Value> = Value | Promise<Value>;
-type FailureCode =
-	| "AUTHORIZATION_FAILED"
-	| "OUTPUT_INVALID"
-	| "RESOURCE_LIMIT"
-	| "TRANSPORT_FAILED"
-	| "VERSION_INCOMPATIBLE";
-
-class CarrierEvaluationFailure extends Error {
-	readonly code: FailureCode;
-
-	constructor(code: FailureCode) {
-		super(code);
-		this.code = code;
-	}
-}
 
 export type RealtimeCarrierEvaluation<Context> = Readonly<{
 	principal: Principal;
@@ -80,7 +66,7 @@ export function createRealtimeCarrier<Context>(
 			input: RealtimeCarrierEvaluation<Context>,
 		): Promise<RealtimeCarrierEvaluationResult>;
 		onObservedPlan?(input: RealtimeCarrierObservedPlan): MaybePromise<void>;
-		durableCoordinator?: DurableRealtimeCoordinator;
+		durableCoordinator: DurableRealtimeCoordinator;
 	}>,
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
@@ -102,7 +88,7 @@ export function createRealtimeCarrier<Context>(
 		for (const bindingId of session.bindings.keys())
 			removeBinding(session, bindingId);
 		const durableAttachment = durableAttachments.get(session);
-		if (input.durableCoordinator && durableAttachment) {
+		if (durableAttachment) {
 			durableAttachments.delete(session);
 			const disposal = input.durableCoordinator
 				.detach(durableAttachment)
@@ -111,18 +97,6 @@ export function createRealtimeCarrier<Context>(
 			pendingDisposals.add(disposal);
 		}
 	};
-	const frameFailure = (
-		session: Session,
-		binding: Binding,
-		code: FailureCode,
-	) =>
-		session.enqueue({
-			protocol: input.contract.protocol,
-			kind: "failure",
-			bindingId: binding.id,
-			query: binding.query.identity,
-			error: { code },
-		});
 	const evaluateComplete = async (
 		session: Session,
 		binding: Binding,
@@ -145,56 +119,14 @@ export function createRealtimeCarrier<Context>(
 			);
 		} catch (error) {
 			if (!(error instanceof RuntimeCodecError)) throw error;
-			throw new CarrierEvaluationFailure("OUTPUT_INVALID");
+			throw new LiveQueryEvaluationFailure("OUTPUT_INVALID");
 		}
 		if (
 			Buffer.byteLength(JSON.stringify(payload)) >
 			input.contract.limits.resultBytes
 		)
-			throw new CarrierEvaluationFailure("RESOURCE_LIMIT");
+			throw new LiveQueryEvaluationFailure("RESOURCE_LIMIT");
 		return Object.freeze({ payload, observedPlan: evaluation.observedPlan });
-	};
-	const evaluate = async (
-		session: Session,
-		binding: Binding,
-		context: Context,
-		queryInput: unknown,
-		resumeToken: string | null,
-	) => {
-		try {
-			const complete = () =>
-				evaluateComplete(session, binding, context, queryInput);
-			const evaluation = await complete();
-			if (binding.controller.signal.aborted) return;
-			const token = crypto.randomUUID();
-			await input.onObservedPlan?.({
-				scopeId: session.scopeId,
-				bindingId: binding.id,
-				query: binding.query.identity,
-				plan: evaluation.observedPlan,
-			});
-			binding.observedPlan = evaluation.observedPlan;
-			binding.token = token;
-			session.enqueue({
-				protocol: input.contract.protocol,
-				kind: "delivery",
-				bindingId: binding.id,
-				query: binding.query.identity,
-				delivery: resumeToken === null ? "initial" : "reset",
-				resetReason: resumeToken === null ? null : "resume-unavailable",
-				payload: evaluation.payload,
-				resumeToken: token,
-			});
-		} catch (error) {
-			if (binding.controller.signal.aborted) return;
-			const code =
-				error instanceof CarrierEvaluationFailure
-					? error.code
-					: realtimeWireRecord(error)?.code === "AUTHORIZATION_FAILED"
-						? "AUTHORIZATION_FAILED"
-						: "TRANSPORT_FAILED";
-			frameFailure(session, binding, code);
-		}
 	};
 	const fetch = async (request: Request): Promise<Response | null> => {
 		const url = new URL(request.url);
@@ -223,110 +155,115 @@ export function createRealtimeCarrier<Context>(
 				principal: resolved,
 				onDispose: disposeSession,
 			});
-			if (input.durableCoordinator) {
-				const attachment: DurableRealtimeAttachment = {
-					scopeId,
-					principal: resolved,
-					prepare(watch) {
-						const queryName = `query:${watch.queryIdentity}`;
-						const query = input.contract.watchableQueries.get(queryName);
+			const attachment: DurableRealtimeAttachment = {
+				scopeId,
+				principal: resolved,
+				prepare(watch) {
+					const queryName = `query:${watch.queryIdentity}`;
+					const query = input.contract.watchableQueries.get(queryName);
+					if (
+						!query ||
+						!Buffer.from(watch.queryBytes).equals(
+							Buffer.from(canonicalJsonLine({ identity: queryName })),
+						)
+					)
+						return null;
+					let contextWire: unknown;
+					let inputWire: unknown;
+					try {
+						contextWire = JSON.parse(
+							new TextDecoder("utf-8", { fatal: true }).decode(
+								watch.contextInputBytes,
+							),
+						);
+						inputWire = JSON.parse(
+							new TextDecoder("utf-8", { fatal: true }).decode(
+								watch.inputBytes,
+							),
+						);
 						if (
-							!query ||
-							!Buffer.from(watch.queryBytes).equals(
-								Buffer.from(canonicalJsonLine({ identity: queryName })),
+							!Buffer.from(canonicalJsonLine(contextWire)).equals(
+								Buffer.from(watch.contextInputBytes),
+							) ||
+							!Buffer.from(canonicalJsonLine(inputWire)).equals(
+								Buffer.from(watch.inputBytes),
 							)
 						)
 							return null;
-						let contextWire: unknown;
-						let inputWire: unknown;
-						try {
-							contextWire = JSON.parse(
-								new TextDecoder("utf-8", { fatal: true }).decode(
-									watch.contextInputBytes,
-								),
-							);
-							inputWire = JSON.parse(
-								new TextDecoder("utf-8", { fatal: true }).decode(
-									watch.inputBytes,
-								),
-							);
-							if (
-								!Buffer.from(canonicalJsonLine(contextWire)).equals(
-									Buffer.from(watch.contextInputBytes),
-								) ||
-								!Buffer.from(canonicalJsonLine(inputWire)).equals(
-									Buffer.from(watch.inputBytes),
-								)
-							)
-								return null;
-							const context = input.decodeContext(contextWire);
-							const queryInput = decodeRuntimeCodec(
-								query.input,
-								inputWire,
-								"$input",
-							);
-							let binding = session.bindings.get(watch.bindingIdentity);
-							if (binding && binding.query.identity !== queryName) return null;
-							if (!binding) {
-								binding = {
-									id: watch.bindingIdentity,
-									query,
-									controller: new AbortController(),
-									token: null,
-									observedPlan: null,
-								};
-								session.bindings.set(watch.bindingIdentity, binding);
-							}
-							return Object.freeze({
-								authorityPartitionDigest: sha256Digest(
-									canonicalJsonLine({
-										principal: {
-											kind: resolved.kind,
-											id: resolved.id,
-										},
-										context,
-									}),
-								),
-								evaluate: () =>
-									evaluateComplete(session, binding, context, queryInput),
-							});
-						} catch {
-							return null;
+						const context = input.decodeContext(contextWire);
+						const queryInput = decodeRuntimeCodec(
+							query.input,
+							inputWire,
+							"$input",
+						);
+						let binding = session.bindings.get(watch.bindingIdentity);
+						if (binding && binding.query.identity !== queryName) return null;
+						if (!binding) {
+							binding = {
+								id: watch.bindingIdentity,
+								query,
+								controller: new AbortController(),
+							};
+							session.bindings.set(watch.bindingIdentity, binding);
 						}
-					},
-					async publish(watch, delivery) {
-						const binding = session.bindings.get(watch.bindingIdentity);
-						if (!binding || binding.controller.signal.aborted) return false;
-						await input.onObservedPlan?.({
-							scopeId,
-							bindingId: binding.id,
-							query: binding.query.identity,
-							plan: delivery.observedPlan,
+						return Object.freeze({
+							authorityPartitionDigest: sha256Digest(
+								canonicalJsonLine({
+									principal: {
+										kind: resolved.kind,
+										id: resolved.id,
+									},
+									context,
+								}),
+							),
+							evaluate: () =>
+								evaluateComplete(session, binding, context, queryInput),
 						});
-						binding.observedPlan = delivery.observedPlan;
-						binding.token = delivery.resumeToken;
-						return session.enqueue({
-							protocol: input.contract.protocol,
-							kind: "delivery",
-							bindingId: binding.id,
-							query: binding.query.identity,
-							delivery: delivery.delivery,
-							resetReason: delivery.resetReason,
-							payload: delivery.payload,
-							resumeToken: delivery.resumeToken,
-						});
-					},
-					synchronize(bindingIds) {
-						for (const bindingId of session.bindings.keys())
-							if (!bindingIds.has(bindingId)) removeBinding(session, bindingId);
-					},
-				};
-				if (!(await input.durableCoordinator.attach(attachment))) {
-					session.close("scope-unavailable", false);
-					return empty(404);
-				}
-				durableAttachments.set(session, attachment);
+					} catch {
+						return null;
+					}
+				},
+				async publish(watch, delivery) {
+					const binding = session.bindings.get(watch.bindingIdentity);
+					if (!binding || binding.controller.signal.aborted) return false;
+					await input.onObservedPlan?.({
+						scopeId,
+						bindingId: binding.id,
+						query: binding.query.identity,
+						plan: delivery.observedPlan,
+					});
+					return session.enqueue({
+						protocol: input.contract.protocol,
+						kind: "delivery",
+						bindingId: binding.id,
+						query: binding.query.identity,
+						delivery: delivery.delivery,
+						resetReason: delivery.resetReason,
+						payload: delivery.payload,
+						resumeToken: delivery.resumeToken,
+					});
+				},
+				publishFailure(watch, code) {
+					const binding = session.bindings.get(watch.bindingIdentity);
+					if (!binding || binding.controller.signal.aborted) return false;
+					return session.enqueue({
+						protocol: input.contract.protocol,
+						kind: "failure",
+						bindingId: binding.id,
+						query: binding.query.identity,
+						error: { code },
+					});
+				},
+				synchronize(bindingIds) {
+					for (const bindingId of session.bindings.keys())
+						if (!bindingIds.has(bindingId)) removeBinding(session, bindingId);
+				},
+			};
+			if (!(await input.durableCoordinator.attach(attachment))) {
+				session.close("scope-unavailable", false);
+				return empty(404);
 			}
+			durableAttachments.set(session, attachment);
 			if (prior) {
 				prior.close("connection-replaced", true);
 				disposeSession(prior);
@@ -369,7 +306,6 @@ export function createRealtimeCarrier<Context>(
 		const scopeId = frame.scopeId as string;
 		const bindingId = frame.bindingId as string;
 		const session = sessions.get(scopeId);
-		if (!session && !input.durableCoordinator) return empty(404);
 		let resolved: Principal | null;
 		try {
 			resolved = await input.resolvePrincipal(request);
@@ -383,82 +319,25 @@ export function createRealtimeCarrier<Context>(
 				realtimePrincipalKey(resolved) !== session.principalKey)
 		)
 			return empty(404);
-		if (input.durableCoordinator) {
-			if (kind === "close")
-				return empty(
-					(await input.durableCoordinator.close(scopeId, bindingId, resolved))
-						? 202
-						: 404,
-				);
-			if (kind === "ack")
-				return empty(
-					(await input.durableCoordinator.acknowledge(
-						scopeId,
-						bindingId,
-						resolved,
-						frame.resumeToken as string,
-					))
-						? 202
-						: 409,
-				);
-			const query = input.contract.watchableQueries.get(frame.query as string);
-			if (!query) return empty(404);
-			let decodedContext: Context;
-			let decodedInput: unknown;
-			try {
-				decodedContext = input.decodeContext(frame.context);
-				decodedInput = decodeRuntimeCodec(query.input, frame.input, "$input");
-			} catch (error) {
-				if (error instanceof RuntimeCodecError || error instanceof TypeError)
-					return empty(400);
-				return empty(500);
-			}
-			const contextInputBytes = canonicalJsonLine(decodedContext);
-			const inputBytes = canonicalJsonLine(decodedInput);
-			const result = await input.durableCoordinator.open({
-				scopeId,
-				bindingId,
-				principal: resolved,
-				authorityPartitionDigest: sha256Digest(
-					canonicalJsonLine({
-						principal: { kind: resolved.kind, id: resolved.id },
-						context: decodedContext,
-					}),
-				),
-				queryIdentity: query.identity.slice("query:".length),
-				queryBytes: canonicalJsonLine({ identity: query.identity }),
-				inputBytes,
-				inputDigest: sha256Digest(inputBytes),
-				contextInputBytes,
-				resumeRequested: frame.resumeToken !== null,
-				requestedResumeToken: frame.resumeToken as string | null,
-			});
-			return empty(result === "opened" ? 202 : result === "limit" ? 429 : 404);
-		}
-		if (!session) return empty(404);
-		if (kind === "close") {
-			if (!session.bindings.has(bindingId)) return empty(404);
-			removeBinding(session, bindingId);
-			return empty(202);
-		}
-		if (kind === "ack") {
-			const binding = session.bindings.get(bindingId);
-			if (!binding || binding.token !== frame.resumeToken) return empty(409);
-			return empty(202);
-		}
-		if (session.bindings.has(bindingId)) return empty(409);
+		if (kind === "close")
+			return empty(
+				(await input.durableCoordinator.close(scopeId, bindingId, resolved))
+					? 202
+					: 404,
+			);
+		if (kind === "ack")
+			return empty(
+				(await input.durableCoordinator.acknowledge(
+					scopeId,
+					bindingId,
+					resolved,
+					frame.resumeToken as string,
+				))
+					? 202
+					: 409,
+			);
 		const query = input.contract.watchableQueries.get(frame.query as string);
 		if (!query) return empty(404);
-		const active = [...sessions.values()].reduce(
-			(count, candidate) =>
-				count +
-				(candidate.principalKey === session.principalKey
-					? candidate.bindings.size
-					: 0),
-			0,
-		);
-		if (active >= input.contract.limits.activeWatchesPerPrincipal)
-			return empty(429);
 		let decodedContext: Context;
 		let decodedInput: unknown;
 		try {
@@ -469,22 +348,27 @@ export function createRealtimeCarrier<Context>(
 				return empty(400);
 			return empty(500);
 		}
-		const binding: Binding = {
-			id: bindingId,
-			query,
-			controller: new AbortController(),
-			token: null,
-			observedPlan: null,
-		};
-		session.bindings.set(bindingId, binding);
-		void evaluate(
-			session,
-			binding,
-			decodedContext,
-			decodedInput,
-			frame.resumeToken as string | null,
-		);
-		return empty(202);
+		const contextInputBytes = canonicalJsonLine(decodedContext);
+		const inputBytes = canonicalJsonLine(decodedInput);
+		const result = await input.durableCoordinator.open({
+			scopeId,
+			bindingId,
+			principal: resolved,
+			authorityPartitionDigest: sha256Digest(
+				canonicalJsonLine({
+					principal: { kind: resolved.kind, id: resolved.id },
+					context: decodedContext,
+				}),
+			),
+			queryIdentity: query.identity.slice("query:".length),
+			queryBytes: canonicalJsonLine({ identity: query.identity }),
+			inputBytes,
+			inputDigest: sha256Digest(inputBytes),
+			contextInputBytes,
+			resumeRequested: frame.resumeToken !== null,
+			requestedResumeToken: frame.resumeToken as string | null,
+		});
+		return empty(result === "opened" ? 202 : result === "limit" ? 429 : 404);
 	};
 	const beginDrain = () => {
 		state = "draining";

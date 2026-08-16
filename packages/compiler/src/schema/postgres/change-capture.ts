@@ -9,14 +9,14 @@ import {
 } from "../physical-name";
 import { fail } from "./shared";
 
-export type PostgresReactiveCollection = Readonly<{
+type PostgresReactiveCollection = Readonly<{
 	identity: string;
 	postgresName: string;
 	keyColumns: readonly string[];
 	partitioned?: boolean;
 }>;
 
-export type PostgresChangeCaptureCollectionV1 = Readonly<{
+type PostgresChangeCaptureCollectionV1 = Readonly<{
 	identity: string;
 	postgresName: string;
 	keyColumns: readonly string[];
@@ -24,7 +24,7 @@ export type PostgresChangeCaptureCollectionV1 = Readonly<{
 	truncateTrigger: string;
 }>;
 
-export type PostgresChangeCaptureTriggerV1 = Readonly<{
+type PostgresChangeCaptureTriggerV1 = Readonly<{
 	table: string;
 	name: string;
 	type: number;

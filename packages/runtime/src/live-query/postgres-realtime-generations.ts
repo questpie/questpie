@@ -5,7 +5,6 @@ import {
 	scopeLockIdentity,
 	type PostgresRealtimeAcknowledgement,
 	type PostgresRealtimeGenerationStage,
-	type PostgresRealtimeScopeAuthority,
 	validBoundedIdentity,
 	validateCompleteGeneration,
 	validateGeneration,
@@ -15,10 +14,6 @@ import {
 } from "./postgres-realtime-scope-contract";
 
 export type PostgresRealtimeGenerationStore = Readonly<{
-	invalidateWatch(
-		input: PostgresRealtimeScopeAuthority &
-			Readonly<{ bindingIdentity: string }>,
-	): Promise<bigint | false>;
 	stageGeneration(input: PostgresRealtimeGenerationStage): Promise<boolean>;
 	acknowledgeWatch(input: PostgresRealtimeAcknowledgement): Promise<boolean>;
 }>;
@@ -27,29 +22,6 @@ export function createPostgresRealtimeGenerationStore(
 	sql: SQL,
 ): PostgresRealtimeGenerationStore {
 	return Object.freeze({
-		async invalidateWatch(invalidation) {
-			validateScope(invalidation);
-			validBoundedIdentity(invalidation.bindingIdentity, "binding identity");
-			const [invalidated] = await sql<{ generation: bigint }[]>`
-				update questpie_internal.realtime_watch_bindings watch
-				set invalidation_generation = watch.invalidation_generation + 1
-				from questpie_internal.realtime_scope_attachments scope
-				where scope.application_name = ${invalidation.applicationName}
-				  and scope.scope_identity = ${invalidation.scopeIdentity}
-				  and scope.deployment_digest = ${invalidation.deploymentDigest}
-				  and scope.principal_kind = ${invalidation.principal.kind}
-				  and scope.principal_id = ${invalidation.principal.id}
-				  and scope.state = 'open'
-				  and scope.expires_at > transaction_timestamp()
-				  and watch.application_name = scope.application_name
-				  and watch.scope_identity = scope.scope_identity
-				  and watch.binding_identity = ${invalidation.bindingIdentity}
-				  and watch.state = 'open'
-				returning watch.invalidation_generation as generation
-			`;
-			return invalidated ? BigInt(invalidated.generation) : false;
-		},
-
 		async stageGeneration(staged) {
 			validateScopeLease(staged);
 			validBoundedIdentity(staged.bindingIdentity, "binding identity");

@@ -303,7 +303,6 @@ export async function createApplication(input) {
 		sql,
 		hmacKey: input.realtime.hmacKey,
 		applicationName: ${JSON.stringify(input.configuration.application.name)},
-		consumer: ${JSON.stringify(`${input.configuration.application.name}.liveQuery`)},
 		deploymentDigest: loaded.artifacts.runtimeBuild.digest,
 		wireVersion: JSON.parse(loaded.artifactFiles["realtime-wire-contract.json"]).version,
 		signal: postgresController.signal,
