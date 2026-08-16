@@ -216,22 +216,28 @@ BEGIN
     NEW.opened_at := clock_time;
     NEW.renewed_at := clock_time;
   ELSE
-    IF OLD.state = 'withdrawn' AND NEW.state <> 'withdrawn' THEN
-      RAISE EXCEPTION 'withdrawn realtime scope is immutable';
-    END IF;
     IF ROW(NEW.application_name, NEW.scope_identity, NEW.deployment_digest, NEW.principal_kind, NEW.principal_id)
        IS DISTINCT FROM ROW(OLD.application_name, OLD.scope_identity, OLD.deployment_digest, OLD.principal_kind, OLD.principal_id) THEN
       RAISE EXCEPTION 'realtime scope identity is immutable';
-    END IF;
-    IF OLD.authority_partition_digest IS NOT NULL
-       AND NEW.authority_partition_digest IS DISTINCT FROM OLD.authority_partition_digest THEN
-      RAISE EXCEPTION 'realtime scope authority is immutable';
     END IF;
     IF NEW.holder_generation < OLD.holder_generation
        OR NEW.holder_generation > OLD.holder_generation + 1 THEN
       RAISE EXCEPTION 'realtime scope holder generation is not a valid fence';
     END IF;
-    NEW.opened_at := OLD.opened_at;
+    IF OLD.state = 'withdrawn' AND NEW.state <> 'withdrawn' THEN
+      IF NEW.state <> 'attached'
+         OR NEW.authority_partition_digest IS NOT NULL
+         OR NEW.holder_generation <> OLD.holder_generation + 1 THEN
+        RAISE EXCEPTION 'withdrawn realtime scope requires a fresh fenced attachment';
+      END IF;
+      NEW.opened_at := clock_time;
+    ELSE
+      IF OLD.authority_partition_digest IS NOT NULL
+         AND NEW.authority_partition_digest IS DISTINCT FROM OLD.authority_partition_digest THEN
+        RAISE EXCEPTION 'realtime scope authority is immutable';
+      END IF;
+      NEW.opened_at := OLD.opened_at;
+    END IF;
     IF NEW.renewed_at IS DISTINCT FROM OLD.renewed_at THEN
       NEW.renewed_at := clock_time;
     END IF;

@@ -79,7 +79,11 @@ function decodePayload(bytes: Uint8Array): unknown {
 	}
 }
 
-export function createPostgresDurableLiveQueryCoordinator<Context>(
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+	return Buffer.from(left).equals(Buffer.from(right));
+}
+
+export function createPostgresDurableLiveQueryCoordinator(
 	input: Readonly<{
 		program: LinkedLiveQueryProgramV1;
 		sql: SQL;
@@ -91,7 +95,7 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 		tickSource?: PostgresWakeTickSource;
 		signal?: AbortSignal;
 	}>,
-): LiveQueryCoordinator<Context> {
+): LiveQueryCoordinator {
 	const store = createPostgresRealtimeScopeStore({ sql: input.sql });
 	const retention = createPostgresLiveQueryRetention({
 		sql: input.sql,
@@ -141,38 +145,77 @@ export function createPostgresDurableLiveQueryCoordinator<Context>(
 					resumeToken: watch.requestedResumeToken,
 				});
 				if (retained.status === "available") {
-					const observedPlan = decodeObservedLiveQueryPlan({
+					decodeObservedLiveQueryPlan({
 						bytes: retained.dependencyPlanBytes,
 						bytesDigest: sha256Digest(retained.dependencyPlanBytes),
 						queryIdentity: watch.queryIdentity,
 					});
+					let evaluated;
+					try {
+						evaluated = await prepared.evaluate();
+					} catch {
+						return;
+					}
+					signal.throwIfAborted();
+					const resultBytes = canonicalJsonLine(evaluated.payload);
+					const dependencyPlanBytes = canonicalJsonLine(evaluated.observedPlan);
+					if (
+						sameBytes(resultBytes, retained.resultBytes) &&
+						sameBytes(dependencyPlanBytes, retained.dependencyPlanBytes)
+					) {
+						const staged = await store.stageGeneration({
+							...authority,
+							bindingIdentity: watch.bindingIdentity,
+							observedInvalidationGeneration: watch.invalidationGeneration,
+							generation: retained.retainedGeneration,
+							resumeToken: watch.requestedResumeToken,
+							resultBytes: retained.resultBytes,
+							dependencyPlanBytes: retained.dependencyPlanBytes,
+							delivery: "initial",
+							resetReason: null,
+						});
+						if (staged)
+							holder.framed.set(
+								watch.bindingIdentity,
+								sha256Digest(watch.requestedResumeToken),
+							);
+						return;
+					}
+
+					const generation = retained.retainedGeneration + 1n;
+					const complete = completeResult(
+						input.applicationName,
+						input.deploymentDigest,
+						watch,
+						generation,
+						resultBytes,
+						dependencyPlanBytes,
+					);
+					const resumeToken = retention.mint(complete);
 					const staged = await store.stageGeneration({
 						...authority,
 						bindingIdentity: watch.bindingIdentity,
 						observedInvalidationGeneration: watch.invalidationGeneration,
-						generation: retained.retainedGeneration,
-						resumeToken: watch.requestedResumeToken,
-						resultBytes: retained.resultBytes,
-						dependencyPlanBytes: retained.dependencyPlanBytes,
-						delivery: "initial",
+						generation,
+						resumeToken,
+						resultBytes,
+						dependencyPlanBytes,
+						delivery: "update",
 						resetReason: null,
 					});
 					if (!staged) return;
 					const published = await holder.attachment.publish(
 						watch,
 						Object.freeze({
-							payload: decodePayload(retained.resultBytes),
-							observedPlan,
-							delivery: "initial",
+							payload: evaluated.payload,
+							observedPlan: evaluated.observedPlan,
+							delivery: "update",
 							resetReason: null,
-							resumeToken: watch.requestedResumeToken,
+							resumeToken,
 						}),
 					);
 					if (published)
-						holder.framed.set(
-							watch.bindingIdentity,
-							sha256Digest(watch.requestedResumeToken),
-						);
+						holder.framed.set(watch.bindingIdentity, sha256Digest(resumeToken));
 					return;
 				}
 			}

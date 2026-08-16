@@ -221,45 +221,6 @@ function valueDeferred<Value>() {
 	return { promise, resolve: resolvePromise };
 }
 
-async function blockCurrentHolderDetach(database: SQL) {
-	const [attachment] = await database<
-		{
-			deploymentDigest: string;
-			principalId: string;
-			principalKind: string;
-		}[]
-	>`
-		select deployment_digest as "deploymentDigest",
-		       principal_kind as "principalKind", principal_id as "principalId"
-		from questpie_internal.realtime_scope_attachments
-		where application_name = 'collaboration' and state = 'open'
-	`;
-	if (!attachment) throw new Error("active durable realtime holder is missing");
-	const connection = await database.reserve();
-	await connection.unsafe("BEGIN");
-	await connection`
-		select pg_catalog.pg_advisory_xact_lock(
-		  pg_catalog.hashtextextended(
-		    ${`questpie-realtime-scope-v1:collaboration:${attachment.deploymentDigest}:${attachment.principalKind}:${attachment.principalId}`},
-		    0
-		  )
-		)
-	`;
-	return connection;
-}
-
-async function staleDetachBlocked(database: SQL): Promise<boolean> {
-	const [result] = await database<{ blocked: boolean }[]>`
-		select exists (
-		  select 1 from pg_catalog.pg_stat_activity
-		  where pid <> pg_catalog.pg_backend_pid()
-		    and wait_event = 'advisory'
-		    and query ilike '%pg_advisory_xact_lock%'
-		) as blocked
-	`;
-	return result?.blocked === true;
-}
-
 afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
@@ -271,7 +232,6 @@ postgresTest(
 		const timers = installDeterministicNetworkTimers();
 		const applications: GeneratedApplication[] = [];
 		let blocker: Awaited<ReturnType<SQL["reserve"]>> | undefined;
-		let detachBlocker: Awaited<ReturnType<SQL["reserve"]>> | undefined;
 		try {
 			const migrations = await Promise.all(
 				[
@@ -394,38 +354,43 @@ postgresTest(
 			expect(timers.invokedIntervals).toBe(1);
 			expect(deliveries).toHaveLength(1);
 			if (!crashRuntimeA) throw new Error("Runtime A stream is not crashable");
-			detachBlocker = await blockCurrentHolderDetach(database!);
 			await crashRuntimeA();
-			let detachReachedFence = false;
+			let normalDetachCommitted = false;
 			for (let attempt = 0; attempt < 200; attempt += 1) {
-				if (await staleDetachBlocked(database!)) {
-					detachReachedFence = true;
+				const [detached] = await database!<
+					{ bindings: number; state: string }[]
+				>`
+					select attachment.state,
+					       count(watch.binding_identity)::integer as bindings
+					from questpie_internal.realtime_scope_attachments attachment
+					left join questpie_internal.realtime_watch_bindings watch
+					  using (application_name, scope_identity)
+					where attachment.application_name = 'collaboration'
+					group by attachment.state
+				`;
+				if (detached?.state === "withdrawn" && detached.bindings === 0) {
+					normalDetachCommitted = true;
 					break;
 				}
 			}
-			expect(detachReachedFence).toBe(true);
+			expect(normalDetachCommitted).toBe(true);
 
 			reconnectRuntime = await createApplication();
 			timers.runReconnect();
 			expect(await reconnectResponse.promise).toBe(200);
-			await detachBlocker.unsafe("COMMIT");
-			await detachBlocker.release();
-			detachBlocker = undefined;
-			let staleDetachFinished = false;
+			let replacement:
+				| Readonly<{ holderGeneration: string; state: string }>
+				| undefined;
 			for (let attempt = 0; attempt < 200; attempt += 1) {
-				if (!(await staleDetachBlocked(database!))) {
-					staleDetachFinished = true;
-					break;
-				}
+				[replacement] = await database!<
+					{ holderGeneration: string; state: string }[]
+				>`
+					select holder_generation::text as "holderGeneration", state
+					from questpie_internal.realtime_scope_attachments
+					where application_name = 'collaboration'
+				`;
+				if (replacement?.state === "open") break;
 			}
-			expect(staleDetachFinished).toBe(true);
-			const [replacement] = await database!<
-				{ holderGeneration: string; state: string }[]
-			>`
-				select holder_generation::text as "holderGeneration", state
-				from questpie_internal.realtime_scope_attachments
-				where application_name = 'collaboration'
-			`;
 			expect(replacement).toEqual({ holderGeneration: "2", state: "open" });
 			await updateDelivered.promise;
 			await updateAcknowledged.promise;
@@ -515,10 +480,6 @@ postgresTest(
 			expect(await closeResponse.promise).toBe(202);
 			expect(downstream).toBe(3);
 		} finally {
-			if (detachBlocker) {
-				await detachBlocker.unsafe("ROLLBACK").catch(() => {});
-				await detachBlocker.release();
-			}
 			if (blocker) {
 				await blocker.unsafe("ROLLBACK").catch(() => {});
 				await blocker.release();

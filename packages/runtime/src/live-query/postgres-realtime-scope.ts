@@ -95,13 +95,24 @@ export function createPostgresRealtimeScopeStore(
 					 ${scope.deploymentDigest}, null, ${scope.principal.kind},
 					 ${scope.principal.id}, 'attached')
 					on conflict (application_name, scope_identity) do update
-					set renewed_at = transaction_timestamp(),
+					set authority_partition_digest = case
+					      when realtime_scope_attachments.state = 'withdrawn' then null
+					      else realtime_scope_attachments.authority_partition_digest
+					    end,
+					    renewed_at = transaction_timestamp(),
+					    state = case
+					      when realtime_scope_attachments.state = 'withdrawn' then 'attached'
+					      else realtime_scope_attachments.state
+					    end,
 					    holder_generation = realtime_scope_attachments.holder_generation + 1
 					where realtime_scope_attachments.deployment_digest = excluded.deployment_digest
 					  and realtime_scope_attachments.principal_kind = excluded.principal_kind
 					  and realtime_scope_attachments.principal_id = excluded.principal_id
-					  and realtime_scope_attachments.state <> 'withdrawn'
-					  and realtime_scope_attachments.expires_at > transaction_timestamp()
+					  and realtime_scope_attachments.holder_generation < 9223372036854775807
+					  and (
+					    realtime_scope_attachments.state = 'withdrawn'
+					    or realtime_scope_attachments.expires_at > transaction_timestamp()
+					  )
 					returning holder_generation as "holderGeneration"
 				`;
 				return attached.length === 1

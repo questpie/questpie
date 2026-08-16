@@ -147,6 +147,61 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"reattaches a normally withdrawn scope only for the same Principal and deployment",
+			async () => {
+				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
+				const fresh = createPostgresRealtimeScopeStore({ sql: databases[1]! });
+				const scope = attachInput("scope:normal-reconnect");
+				expect(await first.attachScope(scope)).toEqual({
+					status: "attached",
+					holderGeneration: 1n,
+				});
+				expect(
+					await first.openWatch(
+						openInput("scope:normal-reconnect", "binding:normal-reconnect"),
+					),
+				).toEqual({ status: "opened", activeSlot: 1 });
+
+				expect(
+					await first.withdrawScope({ ...scope, holderGeneration: 1n }),
+				).toBe(true);
+				expect(
+					await fresh.attachScope({
+						...scope,
+						deploymentDigest: nextDeploymentDigest,
+					}),
+				).toEqual({ status: "unavailable" });
+				expect(
+					await fresh.attachScope({ ...scope, principal: otherUser }),
+				).toEqual({ status: "unavailable" });
+
+				expect(await fresh.attachScope(scope)).toEqual({
+					status: "attached",
+					holderGeneration: 2n,
+				});
+				expect(
+					await fresh.openWatch({
+						...openInput("scope:normal-reconnect", "binding:normal-reconnect"),
+						resumeRequested: true,
+						requestedResumeToken: "opaque.normal-reconnect.token",
+					}),
+				).toEqual({ status: "opened", activeSlot: 1 });
+				expect(
+					await fresh.scanOpenWatches({ ...scope, holderGeneration: 2n }),
+				).toEqual([
+					expect.objectContaining({
+						bindingIdentity: "binding:normal-reconnect",
+						resumeRequested: true,
+						requestedResumeToken: "opaque.normal-reconnect.token",
+					}),
+				]);
+				expect(
+					await first.withdrawScope({ ...scope, holderGeneration: 1n }),
+				).toBe(false);
+			},
+		);
+
+		postgresTest(
 			"routes attach, open, scan, acknowledgement, and close across instances without reconstructing a Principal",
 			async () => {
 				const holder = createPostgresRealtimeScopeStore({ sql: databases[0]! });
