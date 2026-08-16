@@ -41,6 +41,10 @@
 		{
 			"command": "parallel replacement Standards and Spec reviews against diff base 6006800b694bd2751e4f431b4be727245f5398c1",
 			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
 		}
 	],
 	"acceptanceCriteria": [
