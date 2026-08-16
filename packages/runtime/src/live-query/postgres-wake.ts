@@ -71,10 +71,11 @@ export function createPostgresReconciliationWake(
 			return inFlight;
 		}
 		const run = (async () => {
-			do {
+			for (;;) {
 				queued = false;
 				await attempt();
-			} while (queued && state === "armed");
+				if (!queued || state !== "armed") break;
+			}
 		})();
 		inFlight = run.finally(() => {
 			inFlight = undefined;
