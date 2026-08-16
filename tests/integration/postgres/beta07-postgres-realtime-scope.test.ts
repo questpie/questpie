@@ -58,6 +58,8 @@ function openInput(scopeIdentity: string, bindingIdentity: string) {
 		inputDigest,
 		contextInputBytes,
 		wireVersion: 1,
+		resumeRequested: false,
+		requestedResumeToken: null,
 	} as const;
 }
 
@@ -109,6 +111,8 @@ describe.skipIf(databases.length === 0)(
 					contextInputBytes,
 					inputDigest,
 					wireVersion: 1,
+					resumeRequested: false,
+					requestedResumeToken: null,
 					activeSlot: 1,
 					invalidationGeneration: 1n,
 					evaluatedInvalidationGeneration: 0n,

@@ -25,6 +25,8 @@ export type PostgresRealtimeOpenWatch = PostgresRealtimeScopeAuthority &
 		inputDigest: string;
 		contextInputBytes: Uint8Array;
 		wireVersion: number;
+		resumeRequested: boolean;
+		requestedResumeToken: string | null;
 	}>;
 
 export type PostgresRealtimeGeneration = Readonly<{
@@ -50,6 +52,8 @@ export type PostgresRealtimeWatch = Readonly<{
 	inputDigest: string;
 	contextInputBytes: Uint8Array;
 	wireVersion: number;
+	resumeRequested: boolean;
+	requestedResumeToken: string | null;
 	activeSlot: number;
 	invalidationGeneration: bigint;
 	evaluatedInvalidationGeneration: bigint;
@@ -134,6 +138,15 @@ export function validateOpen(input: PostgresRealtimeOpenWatch): void {
 		throw new TypeError("realtime watch payload byte limit exceeded");
 	if (sha256Digest(input.inputBytes) !== input.inputDigest)
 		throw new TypeError("input digest does not bind the canonical input bytes");
+	if (
+		typeof input.resumeRequested !== "boolean" ||
+		(input.resumeRequested
+			? input.requestedResumeToken === null
+			: input.requestedResumeToken !== null)
+	)
+		throw new TypeError("resume request is invalid");
+	if (input.requestedResumeToken !== null)
+		validateResumeToken(input.requestedResumeToken);
 }
 
 export function validateGeneration(value: bigint): void {

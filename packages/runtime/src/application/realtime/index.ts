@@ -12,9 +12,10 @@ export {
 } from "./contract";
 export {
 	createLiveQueryCoordinator,
-	createPostgresLiveQueryCoordinator,
 	type LiveQueryCoordinator,
 	type LiveQueryCoordinatorDelivery,
 	type LiveQueryCoordinatorEvaluation,
 	type LiveQueryCoordinatorOpen,
 } from "./coordinator";
+export { createPostgresDurableLiveQueryCoordinator as createPostgresLiveQueryCoordinator } from "./postgres-coordinator";
+export type { DurableRealtimeCoordinator } from "./durable";

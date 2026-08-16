@@ -23,6 +23,17 @@ export type {
 } from "./postgres";
 export { createPostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 export type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
+export {
+	createPostgresRealtimeScopeStore,
+	type PostgresRealtimeScopeStore,
+	type PostgresRealtimeWatch,
+} from "./postgres-realtime-scope";
+export {
+	createPostgresLiveQueryRetention,
+	type PostgresLiveQueryRetention,
+	type RetainedLiveQueryBinding,
+	type RetainedLiveQueryCompleteResult,
+} from "./postgres-retention";
 export { createPostgresReconciliationWake } from "./postgres-wake";
 export type {
 	PostgresReconciliationWake,

@@ -157,6 +157,8 @@ export function createPostgresRealtimeScopeStore(
 						contextInputBytes: Uint8Array;
 						inputDigest: string;
 						wireVersion: number;
+						resumeRequested: boolean;
+						requestedResumeToken: string | null;
 						state: string;
 					}[]
 				>`
@@ -165,7 +167,8 @@ export function createPostgresRealtimeScopeStore(
 					       query_identity as "queryIdentity", query_bytes as "queryBytes",
 					       input_bytes as "inputBytes", context_input_bytes as "contextInputBytes",
 					       input_digest as "inputDigest", wire_version as "wireVersion",
-					       state
+					       resume_requested as "resumeRequested",
+					       requested_resume_token as "requestedResumeToken", state
 					from questpie_internal.realtime_watch_bindings
 					where application_name = ${open.applicationName}
 					  and scope_identity = ${open.scopeIdentity}
@@ -182,7 +185,9 @@ export function createPostgresRealtimeScopeStore(
 						sameBytes(existing.inputBytes, open.inputBytes) &&
 						sameBytes(existing.contextInputBytes, open.contextInputBytes) &&
 						existing.inputDigest === open.inputDigest &&
-						existing.wireVersion === open.wireVersion
+						existing.wireVersion === open.wireVersion &&
+						existing.resumeRequested === open.resumeRequested &&
+						existing.requestedResumeToken === open.requestedResumeToken
 					)
 						return Object.freeze({
 							status: "opened" as const,
@@ -218,13 +223,15 @@ export function createPostgresRealtimeScopeStore(
 					(application_name, scope_identity, binding_identity, deployment_digest,
 					 authority_partition_digest, principal_kind, principal_id, active_slot,
 					 query_identity, query_bytes, input_bytes, context_input_bytes,
-					 input_digest, wire_version, state)
+					 input_digest, wire_version, resume_requested,
+					 requested_resume_token, state)
 					values (${open.applicationName}, ${open.scopeIdentity},
 					 ${open.bindingIdentity}, ${open.deploymentDigest},
 					 ${open.authorityPartitionDigest}, ${open.principal.kind},
 					 ${open.principal.id}, ${slot.activeSlot}, ${open.queryIdentity},
 					 ${open.queryBytes}, ${open.inputBytes}, ${open.contextInputBytes},
-					 ${open.inputDigest}, ${open.wireVersion}, 'open')
+					 ${open.inputDigest}, ${open.wireVersion}, ${open.resumeRequested},
+					 ${open.requestedResumeToken}, 'open')
 				`;
 				return Object.freeze({
 					status: "opened" as const,
@@ -245,6 +252,8 @@ export function createPostgresRealtimeScopeStore(
 					inputDigest: string;
 					contextInputBytes: Uint8Array;
 					wireVersion: number;
+					resumeRequested: boolean;
+					requestedResumeToken: string | null;
 					activeSlot: number;
 					invalidationGeneration: bigint;
 					evaluatedInvalidationGeneration: bigint;
@@ -264,6 +273,8 @@ export function createPostgresRealtimeScopeStore(
 				       watch.input_digest as "inputDigest",
 				       watch.context_input_bytes as "contextInputBytes",
 				       watch.wire_version as "wireVersion",
+				       watch.resume_requested as "resumeRequested",
+				       watch.requested_resume_token as "requestedResumeToken",
 				       watch.active_slot::integer as "activeSlot",
 				       watch.invalidation_generation as "invalidationGeneration",
 				       watch.evaluated_invalidation_generation as "evaluatedInvalidationGeneration",
@@ -303,6 +314,8 @@ export function createPostgresRealtimeScopeStore(
 						inputDigest: row.inputDigest,
 						contextInputBytes: new Uint8Array(row.contextInputBytes),
 						wireVersion: row.wireVersion,
+						resumeRequested: row.resumeRequested,
+						requestedResumeToken: row.requestedResumeToken,
 						activeSlot: row.activeSlot,
 						invalidationGeneration: BigInt(row.invalidationGeneration),
 						evaluatedInvalidationGeneration: BigInt(

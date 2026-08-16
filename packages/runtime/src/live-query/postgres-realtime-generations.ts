@@ -103,7 +103,8 @@ export function createPostgresRealtimeGenerationStore(
 						BigInt(binding.evaluatedInvalidationGeneration) ||
 					staged.observedInvalidationGeneration >
 						BigInt(binding.invalidationGeneration) ||
-					staged.generation !== BigInt(binding.latestGeneration) + 1n
+					(BigInt(binding.latestGeneration) !== 0n &&
+						staged.generation !== BigInt(binding.latestGeneration) + 1n)
 				)
 					return false;
 

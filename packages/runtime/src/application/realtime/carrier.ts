@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { principal, type Principal } from "questpie";
 
+import { canonicalJsonLine, sha256Digest } from "../../canonical-json";
 import {
 	decodeRuntimeCodec,
 	encodeRuntimeCodec,
@@ -9,17 +10,23 @@ import {
 } from "../../codec";
 import type { ObservedLiveQueryPlanV1 } from "../../live-query";
 import { isOperationCallId, readBoundedRequestBody } from "../../operation";
-import type {
-	DecodedRealtimeQueryV1,
-	DecodedRealtimeWireContractV1,
-} from "./contract";
+import {
+	createRealtimeSession,
+	realtimeCommandKind,
+	realtimePrincipalKey,
+	realtimeWireRecord,
+	type RealtimeCarrierBinding as Binding,
+	type RealtimeCarrierSession as Session,
+	type RealtimeWireRecord as WireRecord,
+} from "./carrier-wire";
+import type { DecodedRealtimeWireContractV1 } from "./contract";
 import type {
 	LiveQueryCoordinator,
 	LiveQueryCoordinatorDelivery,
 } from "./coordinator";
+import type { DurableRealtimeAttachment } from "./durable";
 
 type MaybePromise<Value> = Value | Promise<Value>;
-type WireRecord = Readonly<Record<string, unknown>>;
 type FailureCode =
 	| "AUTHORIZATION_FAILED"
 	| "OUTPUT_INVALID"
@@ -62,224 +69,8 @@ export interface RealtimeCarrier {
 	drain(): Promise<void>;
 }
 
-type Binding = {
-	readonly id: string;
-	readonly query: DecodedRealtimeQueryV1;
-	readonly controller: AbortController;
-	token: string | null;
-	observedPlan: ObservedLiveQueryPlanV1 | null;
-};
-
-type QueuedFrame = Readonly<{ bytes: Uint8Array; size: number }>;
-
-type Session = {
-	readonly scopeId: string;
-	readonly principal: Principal;
-	readonly principalKey: string;
-	readonly response: Response;
-	readonly bindings: Map<string, Binding>;
-	enqueue(frame: WireRecord): boolean;
-	close(reason: string, retryable: boolean): void;
-};
-
-function record(value: unknown): WireRecord | null {
-	return value && typeof value === "object" && !Array.isArray(value)
-		? (value as WireRecord)
-		: null;
-}
-
-function exactKeys(value: WireRecord, expected: readonly string[]): boolean {
-	const actual = Object.keys(value).sort();
-	const sorted = [...expected].sort();
-	return (
-		actual.length === sorted.length &&
-		actual.every((key, index) => key === sorted[index])
-	);
-}
-
-function principalKey(value: Principal): string {
-	return `${value.kind}:${value.id}`;
-}
-
 function empty(status: number): Response {
 	return new Response(null, { status });
-}
-
-function sseBytes(frame: WireRecord): Uint8Array {
-	return new TextEncoder().encode(`data: ${JSON.stringify(frame)}\n\n`);
-}
-
-function createSession(
-	input: Readonly<{
-		contract: DecodedRealtimeWireContractV1;
-		scopeId: string;
-		principal: Principal;
-		onDispose(session: Session): void;
-	}>,
-): Session {
-	const pending: QueuedFrame[] = [];
-	let pendingBytes = 0;
-	let inFlightBytes = 0;
-	let closing = false;
-	let disposed = false;
-	let controller: ReadableStreamDefaultController<Uint8Array> | undefined;
-	const bindings = new Map<string, Binding>();
-	const dispose = () => {
-		if (disposed) return;
-		disposed = true;
-		for (const binding of bindings.values())
-			binding.controller.abort(
-				new DOMException("Realtime session closed", "AbortError"),
-			);
-		input.onDispose(session);
-	};
-	const pump = () => {
-		if (!controller || controller.desiredSize === null) return;
-		if (inFlightBytes > 0 && controller.desiredSize > 0) inFlightBytes = 0;
-		if (controller.desiredSize <= 0) return;
-		const next = pending.shift();
-		if (next) {
-			pendingBytes -= next.size;
-			inFlightBytes = next.size;
-			controller.enqueue(next.bytes);
-			return;
-		}
-		if (closing) {
-			controller.close();
-			dispose();
-		}
-	};
-	const append = (frame: WireRecord): boolean => {
-		if (disposed || closing) return false;
-		const bytes = sseBytes(frame);
-		const total = pendingBytes + inFlightBytes + bytes.byteLength;
-		if (total > input.contract.limits.bufferedBytesPerClient) return false;
-		pending.push({ bytes, size: bytes.byteLength });
-		pendingBytes += bytes.byteLength;
-		pump();
-		return true;
-	};
-	const close = (reason: string, retryable: boolean) => {
-		if (disposed || closing) return;
-		const bytes = sseBytes({
-			protocol: input.contract.protocol,
-			kind: "closed",
-			reason,
-			retryable,
-			scopeId: input.scopeId,
-		});
-		if (
-			pendingBytes + inFlightBytes + bytes.byteLength >
-			input.contract.limits.bufferedBytesPerClient
-		) {
-			pending.length = 0;
-			pendingBytes = 0;
-		}
-		pending.push({ bytes, size: bytes.byteLength });
-		pendingBytes += bytes.byteLength;
-		closing = true;
-		pump();
-	};
-	const stream = new ReadableStream<Uint8Array>({
-		start(value) {
-			controller = value;
-		},
-		pull() {
-			pump();
-		},
-		cancel() {
-			dispose();
-		},
-	});
-	const session: Session = {
-		scopeId: input.scopeId,
-		principal: input.principal,
-		principalKey: principalKey(input.principal),
-		bindings,
-		response: new Response(stream, {
-			status: 200,
-			headers: {
-				"cache-control": "no-cache, no-transform",
-				"content-type": input.contract.streamMediaType,
-			},
-		}),
-		enqueue(frame) {
-			if (append(frame)) return true;
-			close("buffer-limit", true);
-			return false;
-		},
-		close,
-	};
-	return session;
-}
-
-function commandKind(
-	frame: WireRecord,
-	contract: DecodedRealtimeWireContractV1,
-): "ack" | "close" | "open" | null {
-	const protocol = record(frame.protocol);
-	if (
-		!protocol ||
-		!exactKeys(protocol, ["name", "version"]) ||
-		protocol.name !== contract.protocol.name ||
-		protocol.version !== contract.protocol.version ||
-		frame.application !== contract.application ||
-		frame.clientContractDigest !== contract.clientContractDigest ||
-		frame.realtimeWireDigest !== contract.digest ||
-		!isOperationCallId(frame.scopeId) ||
-		!isOperationCallId(frame.bindingId)
-	)
-		return null;
-	if (
-		frame.command === "open" &&
-		exactKeys(frame, [
-			"application",
-			"bindingId",
-			"clientContractDigest",
-			"command",
-			"context",
-			"input",
-			"protocol",
-			"query",
-			"realtimeWireDigest",
-			"resumeToken",
-			"scopeId",
-		]) &&
-		typeof frame.query === "string" &&
-		(frame.resumeToken === null ||
-			(typeof frame.resumeToken === "string" && frame.resumeToken.length > 0))
-	)
-		return "open";
-	if (
-		frame.command === "ack" &&
-		exactKeys(frame, [
-			"application",
-			"bindingId",
-			"clientContractDigest",
-			"command",
-			"protocol",
-			"realtimeWireDigest",
-			"resumeToken",
-			"scopeId",
-		]) &&
-		typeof frame.resumeToken === "string" &&
-		frame.resumeToken.length > 0
-	)
-		return "ack";
-	if (
-		frame.command === "close" &&
-		exactKeys(frame, [
-			"application",
-			"bindingId",
-			"clientContractDigest",
-			"command",
-			"protocol",
-			"realtimeWireDigest",
-			"scopeId",
-		])
-	)
-		return "close";
-	return null;
 }
 
 export function createRealtimeCarrier<Context>(
@@ -296,22 +87,35 @@ export function createRealtimeCarrier<Context>(
 ): RealtimeCarrier {
 	let state: "draining" | "ready" = "ready";
 	const sessions = new Map<string, Session>();
-	const activeByPrincipal = new Map<string, number>();
-	const removeBinding = (session: Session, bindingId: string) => {
+	const disposedSessions = new WeakSet<Session>();
+	const durablyAttachedSessions = new WeakSet<Session>();
+	const pendingDisposals = new Set<Promise<void>>();
+	const removeBinding = (
+		session: Session,
+		bindingId: string,
+		closeCoordinator = true,
+	) => {
 		const binding = session.bindings.get(bindingId);
 		if (!binding) return;
 		binding.controller.abort(new DOMException("Watch closed", "AbortError"));
-		input.coordinator?.close(session.scopeId, bindingId);
+		if (closeCoordinator && !input.coordinator?.durable)
+			input.coordinator?.close(session.scopeId, bindingId);
 		session.bindings.delete(bindingId);
-		const remaining = (activeByPrincipal.get(session.principalKey) ?? 1) - 1;
-		if (remaining === 0) activeByPrincipal.delete(session.principalKey);
-		else activeByPrincipal.set(session.principalKey, remaining);
 	};
 	const disposeSession = (session: Session) => {
+		if (disposedSessions.has(session)) return;
+		disposedSessions.add(session);
 		if (sessions.get(session.scopeId) === session)
 			sessions.delete(session.scopeId);
 		for (const bindingId of session.bindings.keys())
-			removeBinding(session, bindingId);
+			removeBinding(session, bindingId, false);
+		if (input.coordinator?.durable && durablyAttachedSessions.has(session)) {
+			const disposal = input.coordinator.durable
+				.detach(session.scopeId, session.principal)
+				.catch(() => {})
+				.finally(() => pendingDisposals.delete(disposal));
+			pendingDisposals.add(disposal);
+		}
 	};
 	const frameFailure = (
 		session: Session,
@@ -325,6 +129,37 @@ export function createRealtimeCarrier<Context>(
 			query: binding.query.identity,
 			error: { code },
 		});
+	const evaluateComplete = async (
+		session: Session,
+		binding: Binding,
+		context: Context,
+		queryInput: unknown,
+	) => {
+		const evaluation = await input.evaluate({
+			principal: session.principal,
+			context,
+			query: binding.query.identity,
+			input: queryInput,
+			signal: binding.controller.signal,
+		});
+		let payload: unknown;
+		try {
+			payload = encodeRuntimeCodec(
+				binding.query.output,
+				evaluation.result,
+				"$result",
+			);
+		} catch (error) {
+			if (!(error instanceof RuntimeCodecError)) throw error;
+			throw new CarrierEvaluationFailure("OUTPUT_INVALID");
+		}
+		if (
+			Buffer.byteLength(JSON.stringify(payload)) >
+			input.contract.limits.resultBytes
+		)
+			throw new CarrierEvaluationFailure("RESOURCE_LIMIT");
+		return Object.freeze({ payload, observedPlan: evaluation.observedPlan });
+	};
 	const evaluate = async (
 		session: Session,
 		binding: Binding,
@@ -333,35 +168,8 @@ export function createRealtimeCarrier<Context>(
 		resumeToken: string | null,
 	) => {
 		try {
-			const evaluateComplete = async () => {
-				const evaluation = await input.evaluate({
-					principal: session.principal,
-					context,
-					query: binding.query.identity,
-					input: queryInput,
-					signal: binding.controller.signal,
-				});
-				let payload: unknown;
-				try {
-					payload = encodeRuntimeCodec(
-						binding.query.output,
-						evaluation.result,
-						"$result",
-					);
-				} catch (error) {
-					if (!(error instanceof RuntimeCodecError)) throw error;
-					throw new CarrierEvaluationFailure("OUTPUT_INVALID");
-				}
-				if (
-					Buffer.byteLength(JSON.stringify(payload)) >
-					input.contract.limits.resultBytes
-				)
-					throw new CarrierEvaluationFailure("RESOURCE_LIMIT");
-				return Object.freeze({
-					payload,
-					observedPlan: evaluation.observedPlan,
-				});
-			};
+			const complete = () =>
+				evaluateComplete(session, binding, context, queryInput);
 			const publish = async (
 				delivery: LiveQueryCoordinatorDelivery,
 			): Promise<boolean> => {
@@ -394,11 +202,11 @@ export function createRealtimeCarrier<Context>(
 						input: queryInput,
 						resumeToken,
 						signal: binding.controller.signal,
-						evaluate: evaluateComplete,
+						evaluate: complete,
 						publish,
 					})
 				: undefined;
-			const evaluation = coordinated ?? (await evaluateComplete());
+			const evaluation = coordinated ?? (await complete());
 			if (binding.controller.signal.aborted) return;
 			const token = coordinated?.resumeToken ?? crypto.randomUUID();
 			await input.onObservedPlan?.({
@@ -430,7 +238,7 @@ export function createRealtimeCarrier<Context>(
 			const code =
 				error instanceof CarrierEvaluationFailure
 					? error.code
-					: record(error)?.code === "AUTHORIZATION_FAILED"
+					: realtimeWireRecord(error)?.code === "AUTHORIZATION_FAILED"
 						? "AUTHORIZATION_FAILED"
 						: "TRANSPORT_FAILED";
 			frameFailure(session, binding, code);
@@ -454,16 +262,127 @@ export function createRealtimeCarrier<Context>(
 			if (!resolved || !principal.is(resolved)) return empty(404);
 			const prior = sessions.get(scopeId);
 			if (prior) {
-				if (prior.principalKey !== principalKey(resolved)) return empty(404);
+				if (prior.principalKey !== realtimePrincipalKey(resolved))
+					return empty(404);
+				if (input.coordinator?.durable && durablyAttachedSessions.delete(prior))
+					await input.coordinator.durable.detach(
+						prior.scopeId,
+						prior.principal,
+					);
 				prior.close("connection-replaced", true);
 				disposeSession(prior);
 			}
-			const session = createSession({
+			const session = createRealtimeSession({
 				contract: input.contract,
 				scopeId,
 				principal: resolved,
 				onDispose: disposeSession,
 			});
+			if (input.coordinator?.durable) {
+				const attachment: DurableRealtimeAttachment = {
+					scopeId,
+					principal: resolved,
+					prepare(watch) {
+						const queryName = `query:${watch.queryIdentity}`;
+						const query = input.contract.watchableQueries.get(queryName);
+						if (
+							!query ||
+							!Buffer.from(watch.queryBytes).equals(
+								Buffer.from(canonicalJsonLine({ identity: queryName })),
+							)
+						)
+							return null;
+						let contextWire: unknown;
+						let inputWire: unknown;
+						try {
+							contextWire = JSON.parse(
+								new TextDecoder("utf-8", { fatal: true }).decode(
+									watch.contextInputBytes,
+								),
+							);
+							inputWire = JSON.parse(
+								new TextDecoder("utf-8", { fatal: true }).decode(
+									watch.inputBytes,
+								),
+							);
+							if (
+								!Buffer.from(canonicalJsonLine(contextWire)).equals(
+									Buffer.from(watch.contextInputBytes),
+								) ||
+								!Buffer.from(canonicalJsonLine(inputWire)).equals(
+									Buffer.from(watch.inputBytes),
+								)
+							)
+								return null;
+							const context = input.decodeContext(contextWire);
+							const queryInput = decodeRuntimeCodec(
+								query.input,
+								inputWire,
+								"$input",
+							);
+							let binding = session.bindings.get(watch.bindingIdentity);
+							if (binding && binding.query.identity !== queryName) return null;
+							if (!binding) {
+								binding = {
+									id: watch.bindingIdentity,
+									query,
+									controller: new AbortController(),
+									token: null,
+									observedPlan: null,
+								};
+								session.bindings.set(watch.bindingIdentity, binding);
+							}
+							return Object.freeze({
+								authorityPartitionDigest: sha256Digest(
+									canonicalJsonLine({
+										principal: {
+											kind: resolved.kind,
+											id: resolved.id,
+										},
+										context,
+									}),
+								),
+								evaluate: () =>
+									evaluateComplete(session, binding, context, queryInput),
+							});
+						} catch {
+							return null;
+						}
+					},
+					async publish(watch, delivery) {
+						const binding = session.bindings.get(watch.bindingIdentity);
+						if (!binding || binding.controller.signal.aborted) return false;
+						await input.onObservedPlan?.({
+							scopeId,
+							bindingId: binding.id,
+							query: binding.query.identity,
+							plan: delivery.observedPlan,
+						});
+						binding.observedPlan = delivery.observedPlan;
+						binding.token = delivery.resumeToken;
+						return session.enqueue({
+							protocol: input.contract.protocol,
+							kind: "delivery",
+							bindingId: binding.id,
+							query: binding.query.identity,
+							delivery: delivery.delivery,
+							resetReason: delivery.resetReason,
+							payload: delivery.payload,
+							resumeToken: delivery.resumeToken,
+						});
+					},
+					synchronize(bindingIds) {
+						for (const bindingId of session.bindings.keys())
+							if (!bindingIds.has(bindingId))
+								removeBinding(session, bindingId, false);
+					},
+				};
+				if (!(await input.coordinator.durable.attach(attachment))) {
+					session.close("scope-unavailable", false);
+					return empty(404);
+				}
+				durablyAttachedSessions.add(session);
+			}
 			sessions.set(scopeId, session);
 			session.enqueue({
 				protocol: input.contract.protocol,
@@ -472,7 +391,10 @@ export function createRealtimeCarrier<Context>(
 			});
 			request.signal.addEventListener(
 				"abort",
-				() => session.close("connection-aborted", true),
+				() => {
+					session.close("connection-aborted", true);
+					disposeSession(session);
+				},
 				{ once: true },
 			);
 			return session.response;
@@ -492,14 +414,14 @@ export function createRealtimeCarrier<Context>(
 		} catch {
 			return empty(400);
 		}
-		const frame = record(raw);
+		const frame = realtimeWireRecord(raw);
 		if (!frame) return empty(400);
-		const kind = commandKind(frame, input.contract);
+		const kind = realtimeCommandKind(frame, input.contract);
 		if (!kind) return empty(400);
 		const scopeId = frame.scopeId as string;
 		const bindingId = frame.bindingId as string;
 		const session = sessions.get(scopeId);
-		if (!session) return empty(404);
+		if (!session && !input.coordinator?.durable) return empty(404);
 		let resolved: Principal | null;
 		try {
 			resolved = await input.resolvePrincipal(request);
@@ -509,9 +431,63 @@ export function createRealtimeCarrier<Context>(
 		if (
 			!resolved ||
 			!principal.is(resolved) ||
-			principalKey(resolved) !== session.principalKey
+			(session !== undefined &&
+				realtimePrincipalKey(resolved) !== session.principalKey)
 		)
 			return empty(404);
+		if (input.coordinator?.durable) {
+			if (kind === "close")
+				return empty(
+					(await input.coordinator.durable.close(scopeId, bindingId, resolved))
+						? 202
+						: 404,
+				);
+			if (kind === "ack")
+				return empty(
+					(await input.coordinator.durable.acknowledge(
+						scopeId,
+						bindingId,
+						resolved,
+						frame.resumeToken as string,
+					))
+						? 202
+						: 409,
+				);
+			const query = input.contract.watchableQueries.get(frame.query as string);
+			if (!query) return empty(404);
+			let decodedContext: Context;
+			let decodedInput: unknown;
+			try {
+				decodedContext = input.decodeContext(frame.context);
+				decodedInput = decodeRuntimeCodec(query.input, frame.input, "$input");
+			} catch (error) {
+				if (error instanceof RuntimeCodecError || error instanceof TypeError)
+					return empty(400);
+				return empty(500);
+			}
+			const contextInputBytes = canonicalJsonLine(decodedContext);
+			const inputBytes = canonicalJsonLine(decodedInput);
+			const result = await input.coordinator.durable.open({
+				scopeId,
+				bindingId,
+				principal: resolved,
+				authorityPartitionDigest: sha256Digest(
+					canonicalJsonLine({
+						principal: { kind: resolved.kind, id: resolved.id },
+						context: decodedContext,
+					}),
+				),
+				queryIdentity: query.identity.slice("query:".length),
+				queryBytes: canonicalJsonLine({ identity: query.identity }),
+				inputBytes,
+				inputDigest: sha256Digest(inputBytes),
+				contextInputBytes,
+				resumeRequested: frame.resumeToken !== null,
+				requestedResumeToken: frame.resumeToken as string | null,
+			});
+			return empty(result === "opened" ? 202 : result === "limit" ? 429 : 404);
+		}
+		if (!session) return empty(404);
 		if (kind === "close") {
 			if (!session.bindings.has(bindingId)) return empty(404);
 			removeBinding(session, bindingId);
@@ -534,7 +510,14 @@ export function createRealtimeCarrier<Context>(
 		if (session.bindings.has(bindingId)) return empty(409);
 		const query = input.contract.watchableQueries.get(frame.query as string);
 		if (!query) return empty(404);
-		const active = activeByPrincipal.get(session.principalKey) ?? 0;
+		const active = [...sessions.values()].reduce(
+			(count, candidate) =>
+				count +
+				(candidate.principalKey === session.principalKey
+					? candidate.bindings.size
+					: 0),
+			0,
+		);
 		if (active >= input.contract.limits.activeWatchesPerPrincipal)
 			return empty(429);
 		let decodedContext: Context;
@@ -555,7 +538,6 @@ export function createRealtimeCarrier<Context>(
 			observedPlan: null,
 		};
 		session.bindings.set(bindingId, binding);
-		activeByPrincipal.set(session.principalKey, active + 1);
 		void evaluate(
 			session,
 			binding,
@@ -570,8 +552,11 @@ export function createRealtimeCarrier<Context>(
 	};
 	const drain = async () => {
 		beginDrain();
-		for (const session of sessions.values())
+		for (const session of [...sessions.values()]) {
 			session.close("runtime-draining", true);
+			disposeSession(session);
+		}
+		await Promise.allSettled(pendingDisposals);
 	};
 	return Object.freeze({ fetch, beginDrain, drain });
 }

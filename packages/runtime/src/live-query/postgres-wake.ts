@@ -7,6 +7,7 @@ export type PostgresWakeTickSource = Readonly<{
 
 export interface PostgresReconciliationWake {
 	start(): Promise<void>;
+	requestScan(): Promise<void>;
 	drain(): Promise<void>;
 }
 
@@ -119,6 +120,7 @@ export function createPostgresReconciliationWake(
 			});
 			return requestScan();
 		},
+		requestScan,
 		drain,
 	});
 }

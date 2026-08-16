@@ -1,22 +1,19 @@
-import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
 import { canonicalJsonLine, sha256Digest } from "../../canonical-json";
 import {
 	createLiveQueryInvalidation,
 	createPostgresReconciliationWake,
-	reconcilePostgresChangeLedger,
+	decodeObservedLiveQueryPlan,
+	type PostgresLiveQueryRetention,
+	type RetainedLiveQueryBinding,
+	type RetainedLiveQueryCompleteResult,
 	type ChangeLedgerFactV1,
 	type LinkedLiveQueryProgramV1,
 	type ObservedLiveQueryPlanV1,
 	type PostgresReconciliationWake,
 } from "../../live-query";
-import {
-	createPostgresLiveQueryRetention,
-	type PostgresLiveQueryRetention,
-	type RetainedLiveQueryBinding,
-	type RetainedLiveQueryCompleteResult,
-} from "../../live-query/postgres-retention";
+import type { DurableRealtimeCoordinator } from "./durable";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
@@ -29,7 +26,11 @@ export type LiveQueryCoordinatorDelivery = Readonly<{
 	payload: unknown;
 	observedPlan: ObservedLiveQueryPlanV1;
 	delivery: "initial" | "reset" | "update";
-	resetReason: "resume-unavailable" | null;
+	resetReason:
+		| "authority-changed"
+		| "deployment-changed"
+		| "resume-unavailable"
+		| null;
 	resumeToken: string;
 }>;
 
@@ -47,6 +48,7 @@ export type LiveQueryCoordinatorOpen<Context> = Readonly<{
 }>;
 
 export interface LiveQueryCoordinator<Context> {
+	readonly durable?: DurableRealtimeCoordinator;
 	start(): Promise<void>;
 	drain(): Promise<void>;
 	open(
@@ -85,19 +87,6 @@ type Binding<Context> = {
 	unregister(): void;
 };
 
-const digestPattern = /^[0-9a-f]{64}$/;
-const tokenKinds = new Set([
-	"contextBootstrapPoint",
-	"collectionPoint",
-	"collectionRange",
-	"orderingBoundary",
-	"pageSentinel",
-	"policyEvidencePoint",
-	"relationEndpoint",
-	"relationMiss",
-	"tenantPartition",
-]);
-
 function watchIdentity(scopeId: string, bindingId: string): string {
 	return `${scopeId}\0${bindingId}`;
 }
@@ -110,54 +99,11 @@ function decodePlan(
 	bytes: Uint8Array,
 	expectedQuery: string,
 ): ObservedLiveQueryPlanV1 {
-	let value: unknown;
-	try {
-		value = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-	} catch {
-		throw new TypeError("retained Live Query dependency plan is invalid");
-	}
-	if (!value || typeof value !== "object" || Array.isArray(value))
-		throw new TypeError("retained Live Query dependency plan is invalid");
-	const plan = value as Readonly<Record<string, unknown>>;
-	if (
-		Object.keys(plan).toSorted().join(",") !==
-			"digest,format,query,tokens,version" ||
-		plan.format !== "questpie.observed-live-query-plan" ||
-		plan.version !== 1 ||
-		plan.query !== expectedQuery ||
-		typeof plan.digest !== "string" ||
-		!digestPattern.test(plan.digest) ||
-		!Array.isArray(plan.tokens)
-	)
-		throw new TypeError("retained Live Query dependency plan is invalid");
-	const tokens = plan.tokens.map((raw) => {
-		if (!raw || typeof raw !== "object" || Array.isArray(raw))
-			throw new TypeError("retained Live Query dependency token is invalid");
-		const token = raw as Readonly<Record<string, unknown>>;
-		if (
-			Object.keys(token).toSorted().join(",") !== "collection,detail,kind" ||
-			typeof token.kind !== "string" ||
-			!tokenKinds.has(token.kind) ||
-			typeof token.collection !== "string" ||
-			!token.collection.startsWith("collection:") ||
-			!token.detail ||
-			typeof token.detail !== "object" ||
-			Array.isArray(token.detail)
-		)
-			throw new TypeError("retained Live Query dependency token is invalid");
-		return Object.freeze({
-			kind: token.kind,
-			collection: token.collection,
-			detail: Object.freeze({ ...(token.detail as Record<string, unknown>) }),
-		});
+	return decodeObservedLiveQueryPlan({
+		bytes,
+		bytesDigest: sha256Digest(bytes),
+		queryIdentity: expectedQuery,
 	});
-	return Object.freeze({
-		format: "questpie.observed-live-query-plan",
-		version: 1,
-		query: expectedQuery,
-		tokens: Object.freeze(tokens),
-		digest: plan.digest,
-	}) as ObservedLiveQueryPlanV1;
 }
 
 function decodePayload(bytes: Uint8Array): unknown {
@@ -458,41 +404,4 @@ export function createLiveQueryCoordinator<Context>(
 	input: LiveQueryCoordinatorInput,
 ): LiveQueryCoordinator<Context> {
 	return createLiveQueryCoordinatorInternal(input);
-}
-
-export function createPostgresLiveQueryCoordinator<Context>(
-	input: Readonly<{
-		program: LinkedLiveQueryProgramV1;
-		sql: SQL;
-		hmacKey: Uint8Array;
-		applicationName: string;
-		consumer: string;
-		deploymentDigest: string;
-		wireVersion: number;
-		signal?: AbortSignal;
-	}>,
-): LiveQueryCoordinator<Context> {
-	const retention = createPostgresLiveQueryRetention({
-		sql: input.sql,
-		hmacKey: input.hmacKey,
-	});
-	return createLiveQueryCoordinatorInternal(
-		{
-			program: input.program,
-			applicationName: input.applicationName,
-			deploymentDigest: input.deploymentDigest,
-			wireVersion: input.wireVersion,
-			retention,
-			reconcile: async (apply, signal) => {
-				await reconcilePostgresChangeLedger({
-					sql: input.sql,
-					application: input.applicationName,
-					consumer: input.consumer,
-					apply: (facts) => apply(facts),
-					signal,
-				});
-			},
-		},
-		{ signal: input.signal },
-	);
 }

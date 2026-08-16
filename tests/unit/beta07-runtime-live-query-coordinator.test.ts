@@ -6,6 +6,10 @@ import {
 	createLiveQueryCoordinator,
 	type LiveQueryCoordinatorDelivery,
 } from "../../packages/runtime/src/application/realtime/coordinator";
+import {
+	canonicalJsonLine,
+	sha256Digest,
+} from "../../packages/runtime/src/canonical-json";
 import type {
 	ChangeLedgerFactV1,
 	LinkedLiveQueryProgramV1,
@@ -37,7 +41,7 @@ const program: LinkedLiveQueryProgramV1 = {
 };
 
 function plan(collection: string, digit: string): ObservedLiveQueryPlanV1 {
-	return Object.freeze({
+	const withoutDigest = Object.freeze({
 		format: "questpie.observed-live-query-plan",
 		version: 1,
 		query: "query:messages.page",
@@ -45,10 +49,18 @@ function plan(collection: string, digit: string): ObservedLiveQueryPlanV1 {
 			Object.freeze({
 				kind: "collectionRange" as const,
 				collection,
-				detail: Object.freeze({}),
+				detail: Object.freeze({ revision: digit }),
 			}),
 		]),
-		digest: sha(digit),
+	});
+	return Object.freeze({
+		...withoutDigest,
+		digest: sha256Digest(
+			Buffer.concat([
+				Buffer.from("questpie-observed-live-query-plan-v1\0"),
+				canonicalJsonLine(withoutDigest),
+			]),
+		),
 	});
 }
 
