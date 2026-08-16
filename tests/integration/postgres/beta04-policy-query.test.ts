@@ -448,24 +448,33 @@ describe.skipIf(!database)(
 				await holder.unsafe(
 					"LOCK TABLE collaboration.messages IN ACCESS EXCLUSIVE MODE",
 				);
+				const [holderBackend] = await holder<{ pid: number }[]>`
+					select pg_catalog.pg_backend_pid()::integer as pid
+				`;
+				const holderPid = holderBackend?.pid;
+				expect(holderPid).toBeGreaterThan(0);
+				if (holderPid === undefined)
+					throw new Error("lock holder backend is unavailable");
 				const blocked = execute(database!, { signal: controller.signal });
 
 				let observedBlockedQuery = false;
-				for (let attempt = 0; attempt < 100; attempt += 1) {
+				const observationDeadline = performance.now() + 10_000;
+				while (performance.now() < observationDeadline) {
 					const [activity] = await holder<{ blocked: boolean }[]>`
 					select exists (
 						select 1
 						from pg_catalog.pg_stat_activity
 						where pid <> pg_catalog.pg_backend_pid()
-						  and query like '%qp_page%'
 						  and wait_event_type = 'Lock'
+						  and ${holderPid} = any (
+							pg_catalog.pg_blocking_pids(pid)
+						  )
 					) as blocked
 				`;
 					if (activity?.blocked) {
 						observedBlockedQuery = true;
 						break;
 					}
-					await Bun.sleep(10);
 				}
 				expect(observedBlockedQuery).toBe(true);
 				controller.abort(new Error("stop tracer"));
