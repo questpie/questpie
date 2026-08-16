@@ -198,10 +198,33 @@ test("rejects the same non-canonical call identity as the wire adapter", async (
 		},
 	});
 
-	await expect(invoke(operation, "call-e\u0301")).rejects.toThrow(
-		"Mutation call identity is invalid",
-	);
+	for (const invalid of ["", "x".repeat(257), "call-e\u0301"])
+		await expect(invoke(operation, invalid)).rejects.toThrow(
+			"Mutation call identity is invalid",
+		);
 	expect(database.statements).toHaveLength(0);
+});
+
+test("accepts the maximum canonical Mutation call identity", async () => {
+	const database = postgres();
+	const invoke = createPostgresMutationInvoker<View>({
+		sql: database.sql,
+		application: "application:generic",
+		collectionPlans,
+		reactions: linkReactionProjection(reactionProjection),
+		facts: {
+			principal: principal.user({ id: principalId }),
+			authority: { kind: "ordinary" },
+			tenant: { id: tenantId },
+			values: {},
+			signal: new AbortController().signal,
+			deadline: null,
+		},
+	});
+
+	await expect(invoke(operation, "x".repeat(256))).resolves.toMatchObject({
+		committed: true,
+	});
 });
 
 test("runtime transaction implementation contains no collaboration fixture nouns", async () => {

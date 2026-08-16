@@ -21,7 +21,10 @@ test("projects the authored message.publish Mutation into the executable applica
 	}>;
 	const wire = JSON.parse(compilation.generatedFiles["wire-contract.json"]!) as
 		| Readonly<{
-				operations: readonly Readonly<{ identity: string }>[];
+				operations: readonly Readonly<{
+					identity: string;
+					declaredErrors: Readonly<Record<string, unknown>>;
+				}>[];
 		  }>
 		| undefined;
 	const projection = JSON.parse(
@@ -78,6 +81,19 @@ test("projects the authored message.publish Mutation into the executable applica
 			},
 		}),
 	);
+	const publishWire = wire?.operations.find(
+		({ identity }) => identity === "mutation:message.publish",
+	);
+	expect(publishWire?.declaredErrors).toMatchObject({
+		idempotencyConflict: {
+			code: "IDEMPOTENCY_CONFLICT",
+			status: 409,
+			payload: {
+				kind: "object",
+				properties: { callId: { kind: "text" } },
+			},
+		},
+	});
 	expect(compilation.generatedFiles["app.ts"]).toContain(
 		'readonly "message.publish"',
 	);

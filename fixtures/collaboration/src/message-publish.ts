@@ -24,7 +24,7 @@ export const publishMessage = defineMutation({
 		idempotencyConflict: operation.error({
 			code: "IDEMPOTENCY_CONFLICT",
 			status: 409,
-			payload: codec.object({ callId: codec.uuid() }),
+			payload: codec.object({ callId: codec.text() }),
 		}),
 	},
 	handler: async ({ input, ctx, errors }) => {

@@ -201,7 +201,7 @@ postgresTest(
 					id: beta05Ids.principal,
 				});
 				const context = { companyId: beta05Ids.company };
-				const callId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62a0";
+				const callId = "publish:retry:one";
 				const mutationInput = {
 					channelId: beta05Ids.channel,
 					body: "  one atomic publish  ",
