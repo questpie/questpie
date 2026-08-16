@@ -459,7 +459,11 @@ describe.skipIf(!database)(
 
 				let observedBlockedQuery = false;
 				const observationDeadline = performance.now() + 10_000;
-				while (performance.now() < observationDeadline) {
+				for (
+					let attempt = 0;
+					attempt < 1_000 && performance.now() < observationDeadline;
+					attempt += 1
+				) {
 					const [activity] = await holder<{ blocked: boolean }[]>`
 					select exists (
 						select 1
@@ -475,6 +479,7 @@ describe.skipIf(!database)(
 						observedBlockedQuery = true;
 						break;
 					}
+					await Bun.sleep(10);
 				}
 				expect(observedBlockedQuery).toBe(true);
 				controller.abort(new Error("stop tracer"));
