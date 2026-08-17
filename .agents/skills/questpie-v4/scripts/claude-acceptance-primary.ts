@@ -48,10 +48,10 @@ export type PrimaryReviewerProbe = (args: readonly string[]) => {
 };
 
 /**
- * A missing primary executable, or one that does not accept every pinned
- * option, is not a provider outage. It is an invocation that could never have
- * produced a verdict, so it must fail closed instead of activating the closed
- * contingency round.
+ * A missing reviewer executable, or one that does not accept every pinned
+ * option, is not a reviewer that declined to answer. It is an invocation that
+ * could never have produced a verdict, so it is a distinct fail-closed error
+ * rather than a `NO_RESULT`, and it writes no artifact.
  */
 export class PrimaryReviewerUnavailable extends Error {
 	constructor(message: string) {
@@ -84,9 +84,13 @@ function declaresOption(help: string, option: string): boolean {
 }
 
 /**
- * Fail closed before the packet is ever sent. `codex-acceptance-reviewer.ts`
- * already proves its transport this way; without the same proof on the primary
- * path any argument spelling error silently degrades into contingency.
+ * Fail closed before the packet is ever sent. Without this proof an argument
+ * spelling error is indistinguishable from a reviewer that ran and declined to
+ * answer, and the record would attribute a tooling mistake to the reviewer.
+ *
+ * This proves option names against the reviewer's own help output. It does not
+ * prove option values: an unaccepted value still surfaces later as a runtime
+ * `NO_RESULT`, which is fail-closed but coarser than the distinction above.
  */
 export function verifyPrimaryReviewer(probe: PrimaryReviewerProbe): void {
 	const version = probe(["--version"]);
