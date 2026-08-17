@@ -12,6 +12,7 @@ import {
 	createRealtimeCarrier,
 	decodeRealtimeWireContract,
 } from "../../../packages/runtime/src/application/realtime";
+import { LiveQueryEvaluationFailure } from "../../../packages/runtime/src/application/realtime/coordinator";
 import {
 	canonicalJsonLine,
 	sha256Digest,
@@ -649,6 +650,122 @@ describe.skipIf(databases.length === 0)(
 					coordinators.map((coordinator) => coordinator.drain()),
 				);
 				await wrongDeployment.drain();
+			},
+			20_000,
+		);
+
+		postgresTest(
+			"denies a retained generation to a fresh holder when authority is gone",
+			async () => {
+				// A holder takeover finds a durable binding that is not dirty and has
+				// never been framed on this connection. The retained bytes were
+				// authorized by the earlier Execution, which is not authority for this
+				// disclosure, so the fresh holder must create a new root and let Policy
+				// answer before anything is framed.
+				const tickSources = [ticks(), ticks()] as const;
+				const coordinators = [databases[0]!, databases[1]!].map((sql, index) =>
+					createPostgresLiveQueryCoordinator({
+						program: liveQueryProgram,
+						sql,
+						hmacKey: new Uint8Array(32).fill(7),
+						applicationName,
+						deploymentDigest,
+						wireVersion: 1,
+						tickSource: tickSources[index]!.source,
+					}),
+				);
+				for (const coordinator of coordinators) await coordinator.start();
+				let evaluations = 0;
+				let authorityRevoked = false;
+				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
+					createRealtimeCarrier({
+						contract: decodeRealtimeWireContract(projected),
+						durableCoordinator: coordinator.durable,
+						resolvePrincipal: () => user,
+						decodeContext: (value) => value as typeof context,
+						evaluate: async () => {
+							evaluations += 1;
+							if (authorityRevoked)
+								throw new LiveQueryEvaluationFailure("AUTHORIZATION_FAILED");
+							return {
+								result: { nodes: [{ body: "durable result" }] },
+								observedPlan,
+							};
+						},
+					});
+				const carriers = coordinators.map(makeCarrier);
+				try {
+					const firstStream = await carriers[0]!.fetch(
+						request("GET", undefined, "scope:takeover"),
+					);
+					const firstReader = firstStream?.body?.getReader();
+					if (!firstReader) throw new Error("missing realtime stream");
+					expect((await nextFrame(firstReader))?.kind).toBe("ready");
+					await coordinators[0]!.durable!.requestScan();
+					expect(
+						(
+							await carriers[0]!.fetch(
+								request(
+									"POST",
+									command("open", "binding:takeover", {
+										scopeId: "scope:takeover",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					tickSources[0].tick();
+					await coordinators[0]!.durable!.requestScan();
+					expect(await nextFrame(firstReader)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "durable result" }] },
+					});
+					expect(evaluations).toBe(1);
+					// The first holder is never drained or withdrawn. A crashed Runtime
+					// leaves its durable binding behind exactly like this.
+
+					// The binding is clean: the retained generation is fully evaluated.
+					const [clean] = await databases[0]!<
+						{ evaluated: string; invalidation: string }[]
+					>`
+						select invalidation_generation::text as invalidation,
+						       evaluated_invalidation_generation::text as evaluated
+						from questpie_internal.realtime_watch_bindings
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:takeover'
+						  and binding_identity = 'binding:takeover'
+					`;
+					expect(clean?.evaluated).toBe(clean?.invalidation);
+
+					authorityRevoked = true;
+					const takeoverStream = await carriers[1]!.fetch(
+						request("GET", undefined, "scope:takeover"),
+					);
+					const takeoverReader = takeoverStream?.body?.getReader();
+					if (!takeoverReader) throw new Error("missing takeover stream");
+					expect((await nextFrame(takeoverReader))?.kind).toBe("ready");
+					const beforeTakeover = evaluations;
+					tickSources[1].tick();
+					await coordinators[1]!.durable!.requestScan();
+
+					// Before the repair this framed the retained payload with no
+					// evaluation at all. It must now be a denial instead.
+					expect(await nextFrame(takeoverReader)).toEqual({
+						protocol: projected.protocol,
+						kind: "failure",
+						bindingId: "binding:takeover",
+						query: "query:messages.page",
+						error: { code: "AUTHORIZATION_FAILED" },
+					});
+					expect(evaluations).toBeGreaterThan(beforeTakeover);
+					await takeoverReader.cancel();
+				} finally {
+					await Promise.all(carriers.map((carrier) => carrier.drain()));
+					await Promise.all(
+						coordinators.map((coordinator) => coordinator.drain()),
+					);
+				}
 			},
 			20_000,
 		);

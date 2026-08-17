@@ -211,10 +211,15 @@ export function createPostgresRealtimeScopeStore(
 						sameBytes(existing.inputBytes, open.inputBytes) &&
 						sameBytes(existing.contextInputBytes, open.contextInputBytes) &&
 						existing.inputDigest === open.inputDigest &&
-						existing.wireVersion === open.wireVersion &&
-						existing.resumeRequested === open.resumeRequested &&
-						existing.requestedResumeToken === open.requestedResumeToken
+						existing.wireVersion === open.wireVersion
 					)
+						// A reconnect re-opens the same durable binding carrying the
+						// resume token it last accepted, so its requested resume state
+						// legitimately differs from the recorded one. That recorded state
+						// is immutable binding authority and governs only the first
+						// materialization, which already happened, so converge on the
+						// existing binding and leave it untouched rather than refusing and
+						// failing the client transport.
 						return Object.freeze({
 							status: "opened" as const,
 							activeSlot: existing.activeSlot,

@@ -19,8 +19,10 @@
 	},
 	"evidence": {
 		"localBaseline": "PASS",
-		"selectedPrPostgres17": "PENDING_CI",
-		"taggedStableRunner": "PENDING"
+		"selectedPrPostgres17": "PASS",
+		"taggedStableRunner": "PENDING",
+		"selectedPrPostgres17Run": "31941043777 at 21ca8877ee00ee17aab59e366ca3cdb728966212",
+		"selectedPrPostgres17ObservedMs": 227.503
 	},
 	"workload": {
 		"warmChanges": 1,

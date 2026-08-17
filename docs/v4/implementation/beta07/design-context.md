@@ -127,13 +127,18 @@ Startup arms the bounded scan before durable reconciliation and readiness. The
 frozen P4 `wake.mechanism: "listenNotify"` and `startup:
 ["listenCommit", "durableReconcile", "consumeWakeHints"]` bytes continue to
 name the optional hint declaration and its ordering. Bun SQL 1.3.14 cannot
-consume PostgreSQL notifications, so `listenCommit` records an explicitly
-disabled hint source and `consumeWakeHints` consumes an empty stream, which is
-valid under the separate frozen `questpie.change-ledger` artifact's
-`wake.tolerates: ["absent", ...]` contract. The compiler-owned internal-v3
+consume PostgreSQL notifications, so BETA-07 enacts neither hint step: no
+listener is established, no hint source is registered, and no hint stream is
+consumed. `linkLiveQueryProgram` validates the frozen `startup` ordering bytes
+without enacting them, and `createPostgresReconciliationWake.start()` only arms
+the bounded periodic scan. Running with no hint at all is valid under the
+separate frozen `questpie.change-ledger` artifact's
+`wake.tolerates: ["absent", ...]` contract, which is exactly why the tracer can
+crash a Runtime before any refresh and still converge. The compiler-owned internal-v3
 trigger body remains byte-pinned with `pg_notify` for a future compatible
-accelerator; its present cost is one bounded transaction-local hint emission
-per capture-function invocation. Duplicate, coalesced, reordered, delayed, or
+accelerator, and BETA-07 ships no consumer for it; its present cost is one
+bounded transaction-local hint emission per capture-function invocation that
+nothing in the product reads. Duplicate, coalesced, reordered, delayed, or
 absent hints never create or skip authority. No second PostgreSQL driver or
 hidden wake-provider matrix is introduced for this optional acceleration.
 
@@ -170,12 +175,19 @@ authority do not. The SSE holder records one bounded attachment after trusted
 ingress. An `open`, `ack`, or `close` POST may reach any compatible instance;
 that instance resolves trusted ingress, verifies the durable scope binding, and
 commits the command state in PostgreSQL. The SSE holder discovers committed
-commands and complete retained generations by bounded scans and frames them
-only after matching its in-memory already-resolved Principal to the durable
-authority partition. Reconciliation may preserve durable facts and mark a
-binding dirty without a holder, but it cannot recompute or frame that binding
-until a live holder supplies the matching already-resolved Principal and creates
-a fresh root. Durable scope state is therefore not a P5 run-as recipe.
+commands and complete retained generations by bounded scans. Matching its
+in-memory already-resolved Principal to the durable authority partition is a
+necessary precondition, never sufficient authority: the partition digest binds
+Principal identity and Context, so a Principal whose Membership or Policy
+decision has since changed still matches it. Every framing therefore creates a
+fresh root Execution and re-evaluates Context and Policy first, including when a
+new holder re-frames an unchanged retained generation after takeover. A retained
+generation is disclosed only when that fresh evaluation both succeeds and
+reproduces the retained bytes; otherwise the freshly authorized result is
+published in its place, and a denial publishes a failure rather than a frame.
+Reconciliation may preserve durable facts and mark a binding dirty without a
+holder, but it cannot recompute or frame that binding until a live holder
+supplies the matching already-resolved Principal and creates a fresh root. Durable scope state is therefore not a P5 run-as recipe.
 `LISTEN`/`NOTIFY` may accelerate this scan once the durable PostgreSQL adapter
 can consume it, but never carries the command or result authority. If the
 holder dies, the SSE disconnect creates a new network

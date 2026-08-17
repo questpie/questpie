@@ -4,9 +4,14 @@ import { principal } from "questpie";
 
 import { collaborationContext } from "../../fixtures/collaboration/src/execution";
 import { channelMessagePage } from "../../fixtures/collaboration/src/message-page";
+import {
+	canonicalJsonLine,
+	sha256Digest,
+} from "../../packages/runtime/src/canonical-json";
 import { createApplicationRuntime } from "../../packages/runtime/src/execution";
 import {
 	createLiveQueryObservation,
+	decodeObservedLiveQueryPlan,
 	type LinkedQueryWatchabilityV1,
 } from "../../packages/runtime/src/live-query";
 
@@ -197,4 +202,70 @@ test("threads a per-root observation through Context and the reached Message str
 	]);
 
 	await runtime.close();
+});
+
+test("refuses the 257th distinct dependency token and publishes no plan", () => {
+	const observation = createLiveQueryObservation(query);
+	const token = (index: number) => ({
+		kind: "collectionRange" as const,
+		collection: "collection:messages",
+		detail: { channelId: "channel-general", after: `cursor-${index}` },
+	});
+
+	// The accepted budget is 256 tokens per plan, so exactly 256 distinct
+	// tokens must be accepted and the next one must fail closed.
+	observation.recordStructuralQuery(
+		sha("3"),
+		Array.from({ length: 256 }, (_unused, index) => token(index)),
+	);
+	expect(() =>
+		observation.recordStructuralQuery(sha("3"), [token(256)]),
+	).toThrow("Live Query dependency token limit exceeded");
+
+	// A repeat of an already-recorded token is deduplicated, not counted again.
+	expect(() =>
+		observation.recordStructuralQuery(sha("3"), [token(0)]),
+	).not.toThrow();
+	expect(() =>
+		observation.recordStructuralQuery(sha("3"), [token(257)]),
+	).toThrow("Live Query dependency token limit exceeded");
+});
+
+test("strict-decodes at the 256 token bound and rejects a 257 token plan", () => {
+	const encode = (count: number) => {
+		const withoutDigest = {
+			format: "questpie.observed-live-query-plan" as const,
+			version: 1 as const,
+			query: "query:messages.page",
+			tokens: Array.from({ length: count }, (_unused, index) => ({
+				kind: "collectionRange" as const,
+				collection: "collection:messages",
+				detail: { after: `cursor-${index}` },
+			})).sort((left, right) =>
+				Buffer.from(canonicalJsonLine(left))
+					.toString("utf8")
+					.localeCompare(
+						Buffer.from(canonicalJsonLine(right)).toString("utf8"),
+					),
+			),
+		};
+		return canonicalJsonLine({
+			...withoutDigest,
+			digest: sha256Digest(
+				Buffer.concat([
+					Buffer.from("questpie-observed-live-query-plan-v1\0"),
+					canonicalJsonLine(withoutDigest),
+				]),
+			),
+		});
+	};
+	const decode = (bytes: Uint8Array) =>
+		decodeObservedLiveQueryPlan({
+			bytes,
+			bytesDigest: sha256Digest(bytes),
+			queryIdentity: "query:messages.page",
+		});
+
+	expect(decode(encode(256)).tokens).toHaveLength(256);
+	expect(() => decode(encode(257))).toThrow();
 });

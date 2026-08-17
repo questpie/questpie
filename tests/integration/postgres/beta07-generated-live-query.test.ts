@@ -43,6 +43,10 @@ type GeneratedClient = Readonly<{
 						first: number;
 					}>,
 					callback: (page: MessagePage, delivery: Delivery) => void,
+					options?: Readonly<{
+						onStateChange?: (state: Readonly<{ kind: string }>) => void;
+						onError?: (error: Readonly<{ code: string }>) => void;
+					}>,
 				): () => void;
 			}>;
 		}>;
@@ -334,6 +338,11 @@ postgresTest(
 			const scope = client.withContext(context);
 			const deliveries: Array<Readonly<{ page: MessagePage; kind: string }>> =
 				[];
+			// The public seam must stay silent across the crash and reconnect. A
+			// reconnect that re-opens with its accepted resume token previously fell
+			// through to a 404 and surfaced TRANSPORT_FAILED to application code.
+			const failures: string[] = [];
+			const states: string[] = [];
 			const initialDelivered = deferred();
 			const updateDelivered = deferred();
 			const stop = scope.queries["messages.page"].watch(
@@ -342,6 +351,10 @@ postgresTest(
 					deliveries.push({ page, kind: delivery.kind });
 					if (delivery.kind === "initial") initialDelivered.resolve();
 					if (delivery.kind === "update") updateDelivered.resolve();
+				},
+				{
+					onError: (error) => failures.push(error.code),
+					onStateChange: (state) => states.push(state.kind),
 				},
 			);
 			await initialDelivered.promise;
@@ -501,6 +514,11 @@ postgresTest(
 			stop();
 			expect(await closeResponse.promise).toBe(202);
 			expect(downstream).toBe(3);
+			// Two reconnects re-opened every binding carrying the resume token the
+			// client had already accepted. The public seam must have reported no
+			// failure at all across the crash, the takeover, and the revocation.
+			expect(failures).toEqual([]);
+			expect(states).not.toContain("failed");
 		} finally {
 			if (runtimeAProcess) {
 				runtimeAProcess.kill("SIGKILL");

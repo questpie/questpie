@@ -302,32 +302,90 @@ export function createPostgresDurableLiveQueryCoordinator(
 			holder.framed.get(watch.bindingIdentity) === latest.tokenDigest
 		)
 			return;
+		// A holder takeover or reconnect re-frames a retained generation onto a new
+		// connection. The earlier Execution that produced those bytes is not
+		// authority for this disclosure, so evaluate a fresh root and let Policy
+		// deny before anything is framed, exactly as the resume path does.
+		let evaluated;
+		try {
+			evaluated = await prepared.evaluate();
+		} catch (error) {
+			if (error instanceof LiveQueryEvaluationFailure)
+				await holder.attachment.publishFailure(watch, error.code);
+			return;
+		}
+		signal.throwIfAborted();
+		const resultBytes = canonicalJsonLine(evaluated.payload);
+		const dependencyPlanBytes = canonicalJsonLine(evaluated.observedPlan);
+		if (
+			sameBytes(resultBytes, latest.resultBytes) &&
+			sameBytes(dependencyPlanBytes, latest.dependencyPlanBytes)
+		) {
+			const complete = completeResult(
+				input.applicationName,
+				input.deploymentDigest,
+				watch,
+				latest.generation,
+				latest.resultBytes,
+				latest.dependencyPlanBytes,
+			);
+			const resumeToken = retention.mint(complete);
+			if (sha256Digest(resumeToken) !== latest.tokenDigest) return;
+			const observedPlan = decodeObservedLiveQueryPlan({
+				bytes: latest.dependencyPlanBytes,
+				bytesDigest: sha256Digest(latest.dependencyPlanBytes),
+				queryIdentity: watch.queryIdentity,
+			});
+			const published = await holder.attachment.publish(
+				watch,
+				Object.freeze({
+					payload: decodePayload(latest.resultBytes),
+					observedPlan,
+					delivery: latest.delivery,
+					resetReason: latest.resetReason,
+					resumeToken,
+				}),
+			);
+			if (published)
+				holder.framed.set(watch.bindingIdentity, latest.tokenDigest);
+			return;
+		}
+		// The freshly authorized result no longer equals the retained generation,
+		// so those bytes are not disclosable. Publish the fresh generation instead.
+		const generation = latest.generation + 1n;
 		const complete = completeResult(
 			input.applicationName,
 			input.deploymentDigest,
 			watch,
-			latest.generation,
-			latest.resultBytes,
-			latest.dependencyPlanBytes,
+			generation,
+			resultBytes,
+			dependencyPlanBytes,
 		);
 		const resumeToken = retention.mint(complete);
-		if (sha256Digest(resumeToken) !== latest.tokenDigest) return;
-		const observedPlan = decodeObservedLiveQueryPlan({
-			bytes: latest.dependencyPlanBytes,
-			bytesDigest: sha256Digest(latest.dependencyPlanBytes),
-			queryIdentity: watch.queryIdentity,
+		const staged = await store.stageGeneration({
+			...authority,
+			bindingIdentity: watch.bindingIdentity,
+			observedInvalidationGeneration: watch.invalidationGeneration,
+			generation,
+			resumeToken,
+			resultBytes,
+			dependencyPlanBytes,
+			delivery: "update",
+			resetReason: null,
 		});
+		if (!staged) return;
 		const published = await holder.attachment.publish(
 			watch,
 			Object.freeze({
-				payload: decodePayload(latest.resultBytes),
-				observedPlan,
-				delivery: latest.delivery,
-				resetReason: latest.resetReason,
+				payload: evaluated.payload,
+				observedPlan: evaluated.observedPlan,
+				delivery: "update",
+				resetReason: null,
 				resumeToken,
 			}),
 		);
-		if (published) holder.framed.set(watch.bindingIdentity, latest.tokenDigest);
+		if (published)
+			holder.framed.set(watch.bindingIdentity, sha256Digest(resumeToken));
 	};
 
 	const reconcile = async (signal: AbortSignal): Promise<void> => {
