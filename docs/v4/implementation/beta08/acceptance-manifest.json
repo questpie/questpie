@@ -3,7 +3,7 @@
 	"ticket": "#295",
 	"proof": "BETA-08 executes the Reaction that BETA-06 already accepts. One committed message-published fact creates one causally deduplicated durable run, and a worker records a Policy-current result through the shared PostgreSQL durable kernel: run, physical attempt, opaque lease fence, append-only history, stable effect ledger, durable cancellation, and an audited maintenance surface.",
 	"diffBase": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
-	"reviewOutput": "docs/v4/implementation/beta08/REVIEW.json",
+	"reviewOutput": "docs/v4/implementation/beta08/REVIEW-02.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
 		"BETA-06 accepted evidence": "f9879efdfb2921ed747d353b6cb903398e9d67c3",
@@ -27,9 +27,19 @@
 			"sha256": "099aa6347559091cac54b7412c5f318623c4a5d49e50c820b6398c55f1d6a799"
 		},
 		{
-			"name": "accepted transactional dispatch and Reaction contract",
-			"path": "docs/v4/transactional-dispatch-and-reaction.md",
-			"sha256": "208e3e24b1d6bb65cdb04030cea969d6da25f2611d0d3c7b0c42881a747eeaae"
+			"name": "implementation gates",
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "f454048b193c2a851f8fafe7ecc03cb02430d62ccdf2501f342434d91554ae0f"
+		},
+		{
+			"name": "first acceptance round findings",
+			"path": "docs/v4/implementation/beta08/claude-initial-review.json",
+			"sha256": "29c8d6910ca5a49ff5be7ed1290c60e39c20c7a8a59d5f7eb256979df6d8c13e"
+		},
+		{
+			"name": "BETA-08 implementation decision record",
+			"path": "docs/v4/implementation/beta08/design-context.md",
+			"sha256": "519f074277195245ad7059e85c54a23b15f9c5f7e75eaa0aac0618d6b0e893b5"
 		},
 		{
 			"name": "accepted lifecycle jobs and shared durable kernel projection",
@@ -37,14 +47,9 @@
 			"sha256": "fc19ad32fd021aea7af8cb5335071aaa4529e31c04b6af2cb6bea5e02a5255c8"
 		},
 		{
-			"name": "BETA-08 implementation decision record",
-			"path": "docs/v4/implementation/beta08/design-context.md",
-			"sha256": "b5d8da75d70f04d4ae65c88c02512d398598a5c46dae5bf6a98ef04682a018bf"
-		},
-		{
-			"name": "implementation gates",
-			"path": "docs/v4/implementation-gates.md",
-			"sha256": "f454048b193c2a851f8fafe7ecc03cb02430d62ccdf2501f342434d91554ae0f"
+			"name": "accepted transactional dispatch and Reaction contract",
+			"path": "docs/v4/transactional-dispatch-and-reaction.md",
+			"sha256": "208e3e24b1d6bb65cdb04030cea969d6da25f2611d0d3c7b0c42881a747eeaae"
 		}
 	],
 	"verification": [
@@ -53,19 +58,19 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres -- --scenario beta08 (16 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
+			"command": "bun run test:postgres -- --scenario beta08 (21 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (95, 95, and 98 passing; 0 failures; 3 known BETA-02 catalog version skips on 16 and 17)",
+			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (100, 100, and 103 passing; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms 435.042 ms against a 2500 ms budget, 168 maximum run result bytes, 3 events per successful run, 57779 public declaration bytes, 21028 TypeScript instantiations)",
+			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 371.463 ms against a 2000 ms budget, 168 maximum run result bytes, 3 events per successful run, 57779 public declaration bytes, 21028 TypeScript instantiations)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:load -- --scenario beta08 (96 runs against 8 competing workers in 440.106 ms, 96 attempts, 0 superseded leases, 0 duplicate attempts)",
+			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 402.460 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
 			"result": "PASS"
 		},
 		{
@@ -77,7 +82,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun node_modules/typescript/bin/tsc --noEmit -p tests/tsconfig.beta08.json (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own gate over the eight test files it owns)",
+			"command": "bun node_modules/typescript/bin/tsc --noEmit -p tests/tsconfig.beta08.json (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own gate over every test and support file it changes)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/implementation/beta08/acceptance-manifest.json --dry-run",
 			"result": "PASS"
 		},
 		{
@@ -91,12 +100,15 @@
 		"A worker admits at most 64 ready rows, takes each individual claim with FOR UPDATE SKIP LOCKED, writes one attempt plus a lease, and commits before the handler runs; concurrent claims on one ready run produce exactly one attempt.",
 		"Every heartbeat, terminal transition, and effect write compares the current attempt and the lease token, so after a takeover the stale holder can neither heartbeat nor publish success, failure, or cancellation. The prescribed red test is falsified against the unfenced kernel and the exact failing assertion is recorded.",
 		"Every physical attempt builds one fresh root Execution from the persisted Context input, resolves Context once, and evaluates current Policy; revoking the caller's Membership makes the attempt terminal with RUN_AS_DENIED, and an operator retry re-evaluates current Policy rather than replaying the earlier decision.",
-		"The declared retry program is eight attempts with full-jitter exponential backoff clamped by the persisted run horizon; validation, declared Reaction errors, run-as denial, effect conflict, and effect ambiguity are permanent, and exhaustion or permanent failure creates one inspectable dead letter.",
-		"One logical effect keeps one stable effect identity across attempts. A reliable lookup that returns a receipt recovers a lost response, a lookup that proves the provider never accepted the request stays retryable, and an absent or failing lookup records an ambiguity that only an audited acknowledgeAmbiguity can settle. No exactly-once effect claim is made.",
+		"The declared retry program is eight attempts with full-jitter exponential backoff clamped by the persisted run horizon; validation errors, declared Reaction errors, run-as denial, effect conflict, effect ambiguity, and result-limit failure are permanent, and exhaustion or permanent failure creates one inspectable dead letter.",
+		"A cancellation request during a handler competes with success through one fenced compare-and-set, and a cancel-requested run whose holder dies is reaped into `cancelled` rather than admitted for a needless recovered attempt.",
+		"One logical effect keeps one stable effect identity across attempts. A reliable lookup that returns a receipt recovers a lost response, a settled effect is reused by a later attempt without calling the provider again, a lookup that proves the provider never accepted the request stays retryable, and an absent or failing lookup records an ambiguity that only an audited acknowledgeAmbiguity can settle. Reusing one effect identity with different canonical input conflicts. No exactly-once effect claim is made.",
 		"A worker without matching executable bytes refuses the claim and consumes no attempt, leaving the run ready for a compatible worker.",
 		"acknowledgeAmbiguity, cancelRun, and retryRun each elect exactly one winner under concurrency and record every attempt, applied or rejected, in the maintenance audit with its actor and its state transition.",
-		"Direct application and worker writes to dispatch, run, attempt, and event state are rejected; run history rejects update, delete, and truncate even inside a kernel transaction; every questpie_internal index is B-tree with no expression or partial index; and no table enables row-level security.",
+		"Dispatch, run, attempt, and event state reject any statement that does not opt into the durable kernel marker, so an application or worker path that never calls it is refused; run history rejects update, delete, and truncate even inside a kernel transaction; every questpie_internal index is B-tree with no expression or partial index; and no table enables row-level security. The application connects as the schema owner, so this is a structural guard rather than a hostile-role boundary.",
 		"Events carry sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, and a safe error code, and carry no raw payload, credential, secret, or stack trace.",
-		"The slice adds no generic Job client, no Workflow steps, no schedules, and no external Action authoring, and the generated browser client gains no durable control plane."
+		"The slice adds no generic Job client, no Workflow steps, no schedules, and no external Action authoring, and the generated browser client gains no durable control plane.",
+		"Every directly invocable Operation carries its codecs in `operation-contracts.json`, so a server-only Mutation the Reaction calls needs no network exposure and the Fetch path refuses any operation outside the network wire.",
+		"The design record discloses every claim narrower than the accepted contract: the unswept retry horizon, `EXECUTABLE_RETIRED` as a claim refusal, the budgets and retention this slice does not enforce and therefore does not pin, the guard's structural scope, and the deferred Action seam behind the effect callback."
 	]
 }
