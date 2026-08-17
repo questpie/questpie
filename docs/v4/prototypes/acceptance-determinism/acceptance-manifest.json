@@ -32,15 +32,19 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run review:accept:negative-control (52 pass, 0 fail across acceptance-packet-secrets, acceptance-review-packet, and acceptance-primary-transport)",
+			"command": "bun run review:accept:negative-control (62 pass, 0 fail across acceptance-packet-secrets, acceptance-review-packet, acceptance-review-record, and acceptance-primary-transport)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun --lib ES2023,DOM .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/acceptance-review.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/claude-acceptance-primary.ts .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts tests/unit/acceptance-primary-transport.test.ts tests/unit/acceptance-review-packet.test.ts (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own)",
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun --lib ES2023,DOM .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/acceptance-review.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/claude-acceptance-primary.ts .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts tests/unit/acceptance-primary-transport.test.ts tests/unit/acceptance-review-record.test.ts tests/unit/acceptance-review-packet.test.ts (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own)",
 			"result": "PASS"
 		},
 		{
 			"command": "git diff --check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/prototypes/acceptance-determinism/acceptance-manifest-v2.json --dry-run (7 documents, 161471 packet bytes, 88718 diff bytes, packet digest 85120bfe5bc78a60874938b5a833d4070a7940c58670d2e4c972ddeb530b4cc5; credential-free, no model call)",
 			"result": "PASS"
 		}
 	],

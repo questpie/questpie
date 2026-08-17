@@ -53,8 +53,10 @@ A reviewer that could have answered and did not is a terminal `NO_RESULT` that
 writes no artifact and carries a bounded secret-scanned diagnostic. There is one
 reviewer and one verdict; no fallback transport exists.
 
-Commit the resulting record and verify it without model credentials, which is
-what CI runs:
+Commit the resulting record and verify it without model credentials. This seam
+exists so CI can check acceptance evidence without a model account; it is not
+yet wired into a workflow, so run it locally after committing a record and wire
+it into CI when the first v2 record lands on a merged branch:
 
 ```sh
 bun run review:accept:verify -- --record path/to/review.json
