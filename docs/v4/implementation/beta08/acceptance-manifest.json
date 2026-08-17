@@ -71,11 +71,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 405.241 ms against a 2500 ms budget, 168 maximum run result bytes, 4 events per successful run, 57779 public declaration bytes, 21028 TypeScript instantiations)",
+			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 397.655 ms against a 2000 ms budget, 168 maximum run result bytes, 4 events per successful run, 57805 public declaration bytes, 21000 TypeScript instantiations)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 374.261 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
+			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 343.443 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
 			"result": "PASS"
 		},
 		{
