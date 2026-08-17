@@ -28,12 +28,14 @@
 		"quality:typescript-forward": "bun run scripts/quality.ts typescript-forward",
 		"release": "bun run scripts/release.ts",
 		"review:accept": "bun run .agents/skills/questpie-v4/scripts/claude-acceptance-review.ts",
-		"review:accept:negative-control": "bun test tests/unit/acceptance-packet-secrets.test.ts",
+		"review:accept:negative-control": "bun test tests/unit/acceptance-packet-secrets.test.ts tests/unit/acceptance-review-packet.test.ts tests/unit/acceptance-primary-transport.test.ts",
 		"skill:check": "skills-ref validate .agents/skills/questpie-v4",
 		"test": "bun test",
 		"test:postgres": "bun run scripts/quality.ts postgres",
 		"test:load": "bun run scripts/quality.ts load",
-		"test:soak": "bun run scripts/quality.ts soak"
+		"test:soak": "bun run scripts/quality.ts soak",
+		"review:accept:v2": "bun run .agents/skills/questpie-v4/scripts/acceptance-review.ts",
+		"review:accept:verify": "bun run .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts"
 	},
 	"dependencies": {
 		"@iconify/react": "^6.0.2",
