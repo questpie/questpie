@@ -73,6 +73,31 @@ function renderStep(
 	const schemaName = target.application.postgresSchema;
 	if (stepValue.kind === "createApplicationSchema")
 		return `CREATE SCHEMA ${quote(schemaName)};`;
+	if (stepValue.kind === "addChangeCapture") {
+		const capture = target.changeCapture as JsonRecord | undefined;
+		if (!capture || typeof capture.sql !== "string")
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"target Change Ledger capture is missing",
+			);
+		return capture.sql.trimEnd();
+	}
+	if (stepValue.kind === "dropChangeCapture") {
+		const capture = base.changeCapture as JsonRecord | undefined;
+		if (!capture || !Array.isArray(capture.collections))
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"base Change Ledger capture is missing",
+			);
+		return capture.collections
+			.map((value) => {
+				const collection = value as JsonRecord;
+				return `DROP TRIGGER ${String(collection.rowTrigger)} ON ${schemaName}.${String(collection.postgresName)};\nDROP TRIGGER ${String(collection.truncateTrigger)} ON ${schemaName}.${String(collection.postgresName)};`;
+			})
+			.join("\n\n");
+	}
 	if (stepValue.kind === "createCollection") {
 		const collection = collectionFor(target, stepValue.targetIdentity);
 		const columns = childRecords(collection, "fields").map(

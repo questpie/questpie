@@ -1,12 +1,12 @@
 import { SQL } from "bun";
 
 import { canonicalBytes, digest } from "../../canonical";
+import { CompilerDiagnosticError } from "../../diagnostic";
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
-import {
-	readCatalogComparable,
-	readCatalogComparableInOwnedTransaction,
-} from "./catalog-reader";
+import { readCatalogComparableInOwnedTransaction } from "./catalog-reader";
+import type { CatalogFingerprintScope } from "./catalog-reader";
+import { verifyPostgresChangeCapture } from "./change-capture";
 import { expectedComparable } from "./expected-fingerprint";
 import { fail } from "./shared";
 
@@ -17,34 +17,80 @@ export async function assertSchemaMatches(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<JsonRecord> {
-	return compareSchemaToCatalog(sql, schema, readCatalogComparable);
+	return readOnlySnapshot(sql, (transaction) =>
+		compareSchemaToCatalog(transaction, schema),
+	);
+}
+
+async function readOnlySnapshot<Value>(
+	sql: SQL,
+	read: (transaction: SQL) => Promise<Value>,
+): Promise<Value> {
+	let diagnostic: CompilerDiagnosticError | undefined;
+	const value = await sql.begin(
+		"isolation level repeatable read read only",
+		async (transaction) => {
+			try {
+				return await read(transaction);
+			} catch (error) {
+				if (!(error instanceof CompilerDiagnosticError)) throw error;
+				diagnostic = error;
+				return undefined;
+			}
+		},
+	);
+	if (diagnostic) throw diagnostic;
+	return value as Value;
 }
 
 export async function assertSchemaMatchesInOwnedTransaction(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<JsonRecord> {
-	return compareSchemaToCatalog(
-		sql,
-		schema,
-		readCatalogComparableInOwnedTransaction,
-	);
+	return compareSchemaToCatalog(sql, schema);
 }
 
 async function compareSchemaToCatalog(
 	sql: SQL,
 	schema: SchemaProjectionV1,
-	reader: typeof readCatalogComparable,
 ): Promise<JsonRecord> {
 	const expected = expectedComparable(schema);
-	const actual = await reader(sql, {
+	const actual = await readCatalogComparableInOwnedTransaction(
+		sql,
+		catalogScope(schema),
+	);
+	const comparable = compareComparable(expected, actual);
+	await verifyManagedCatalogObjects(sql, schema);
+	return comparable;
+}
+
+function catalogScope(schema: SchemaProjectionV1): CatalogFingerprintScope {
+	return {
 		application: schema.application.name,
 		applicationSchema: schema.application.postgresSchema,
 		requiredExtensionNames: schema.requiredPostgres.extensions.map(
 			(extension) => extension.name,
 		),
-	});
-	return compareComparable(expected, actual);
+		managedTriggerIdentities: managedTriggerIdentities(schema),
+	};
+}
+
+async function verifyManagedCatalogObjects(
+	sql: SQL,
+	schema: SchemaProjectionV1,
+): Promise<void> {
+	if (schema.changeCapture)
+		await verifyPostgresChangeCapture(sql, schema.changeCapture);
+}
+
+function managedTriggerIdentities(
+	schema: SchemaProjectionV1,
+): readonly string[] {
+	if (!schema.changeCapture) return [];
+	return schema.changeCapture.triggerCatalog.map(
+		(trigger) =>
+			`${schema.application.postgresSchema}.${trigger.table}.${trigger.name}`,
+	);
 }
 
 function compareComparable(
@@ -230,24 +276,14 @@ export async function fingerprint(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<SchemaFingerprintV1> {
-	const expected = expectedComparable(schema);
-	const evidence = await sql.begin(
-		"isolation level repeatable read read only",
-		async (transaction) => ({
-			observations: await providerObservations(transaction, schema),
-			actual: await readCatalogComparableInOwnedTransaction(transaction, {
-				application: schema.application.name,
-				applicationSchema: schema.application.postgresSchema,
-				requiredExtensionNames: schema.requiredPostgres.extensions.map(
-					(extension) => extension.name,
-				),
-			}),
-		}),
-	);
+	const evidence = await readOnlySnapshot(sql, async (transaction) => ({
+		observations: await providerObservations(transaction, schema),
+		comparable: await compareSchemaToCatalog(transaction, schema),
+	}));
 	return {
 		format: "questpie.schema-fingerprint",
 		version: 1,
-		comparable: compareComparable(expected, evidence.actual),
+		comparable: evidence.comparable,
 		observations: evidence.observations,
 	};
 }

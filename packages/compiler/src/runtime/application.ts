@@ -1,11 +1,10 @@
-import { resolve } from "node:path";
-
 import { compareAscii } from "../canonical";
 import type {
 	ApplicationConfiguration,
 	NormalizedResource,
 	PackageInventory,
 } from "../types";
+import { bundleApplicationEntry } from "./application-bundle";
 
 type RuntimeExecutableSlot = Readonly<{
 	identity: string;
@@ -64,6 +63,7 @@ function applicationEntry(
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		realtime: boolean;
 	}>,
 ): string {
 	const definitions = new Map<string, number>();
@@ -193,8 +193,6 @@ function applicationEntry(
 		reactions: [],
 	});
 	return `import { SQL } from "bun";
-import { createPostgresMutationInvoker, createRuntimeApplication, executePostgresQuery, linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } from "questpie:runtime";
-import { createPostgresContextBootstrap } from "questpie:runtime-bootstrap";
 import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
 ${imports.join("\n")}
@@ -224,7 +222,8 @@ async function loadRuntimeArtifacts() {
 	};
 }
 
-function linkMutationArtifacts(artifactFiles) {
+function linkMutationArtifacts(runtimeModule, artifactFiles) {
+	const { linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
 	const raw = ${
 		input.collectionOperationArtifacts
 			? `{
@@ -254,9 +253,35 @@ function linkMutationArtifacts(artifactFiles) {
 	});
 }
 
+function linkLiveQueryArtifacts(runtimeModule, artifactFiles) {
+	return runtimeModule.linkLiveQueryProgram({
+		watchability: JSON.parse(artifactFiles["query-watchability.json"]),
+		dependencyAlgebra: JSON.parse(artifactFiles["live-query-dependency-algebra.json"]),
+		changeLedger: JSON.parse(artifactFiles["change-ledger.json"]),
+		reconciliation: JSON.parse(artifactFiles["change-reconciliation.json"]),
+		resume: JSON.parse(artifactFiles["live-query-resume.json"]),
+		captureBoundary: JSON.parse(artifactFiles["change-capture-boundary.json"]),
+		limits: JSON.parse(artifactFiles["live-query-limits.json"]),
+	});
+}
+
 export const bindIngressPrincipalForRequest = bindIngressPrincipal;
 
 export async function createApplication(input) {
+	${
+		input.realtime
+			? `if (!(input.realtime?.hmacKey instanceof Uint8Array) || input.realtime.hmacKey.byteLength < 32)
+		throw new TypeError("resume-token HMAC key must contain at least 32 bytes");`
+			: ""
+	}
+	const runtimeModule = await import("questpie:runtime-core");
+	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
+	const {
+		createPostgresContextBootstrap,
+		createPostgresMutationInvoker,
+		createRuntimeApplication,
+		executePostgresQuery,
+	} = runtimeModule;
 	const sql = new SQL(input.postgres.url);
 	const postgresController = new AbortController();
 	const loaded = await loadRuntimeArtifacts();
@@ -267,9 +292,23 @@ export async function createApplication(input) {
 		schema: schemaProjection,
 		signal: postgresController.signal,
 	});
+	let liveQueryCoordinator;
 	let mutationArtifacts;
 	let runtime;
 	try {
+		liveQueryCoordinator = ${
+			input.realtime
+				? `realtimeModule.createPostgresLiveQueryCoordinator({
+		program: linkLiveQueryArtifacts(realtimeModule, loaded.artifactFiles),
+		sql,
+		hmacKey: input.realtime.hmacKey,
+		applicationName: ${JSON.stringify(input.configuration.application.name)},
+		deploymentDigest: loaded.artifacts.runtimeBuild.digest,
+		wireVersion: JSON.parse(loaded.artifactFiles["realtime-wire-contract.json"]).version,
+		signal: postgresController.signal,
+	})`
+				: "undefined"
+		};
 		runtime = await createRuntimeApplication({
 		artifacts: loaded.artifacts,
 		artifactFiles: loaded.artifactFiles,
@@ -284,8 +323,10 @@ export async function createApplication(input) {
 			context: ${contextDefinition},
 			bootstrap,
 			resolvePrincipal: readIngressPrincipal,
+			liveQueryCoordinator,
+			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {
-				mutationArtifacts = linkMutationArtifacts(loaded.artifactFiles);
+				mutationArtifacts = linkMutationArtifacts(runtimeModule, loaded.artifactFiles);
 				return verifyPostgresRuntimeReadiness({
 					sql,
 					schema: schemaProjection,
@@ -312,6 +353,7 @@ export async function createApplication(input) {
 							},
 							sql,
 							signal: facts.signal,
+							observer: facts.liveQueryObservation ?? undefined,
 						});
 					},
 				}),
@@ -376,88 +418,13 @@ export async function renderApplicationBundle(
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		realtime: boolean;
 		readinessEntry: string;
-		runtimeBundleEntry: string;
+		runtimeCoreBundleEntry: string;
+		runtimeRealtimeBundleEntry: string;
 	}>,
-): Promise<string> {
-	const entry = applicationEntry(input);
-	const packageEntries = new Map(
-		input.inventories.map((inventory) => [
-			`${inventory.package.name}/questpie`,
-			inventory.package.entry,
-		]),
-	);
-	const result = await Bun.build({
-		entrypoints: ["questpie:application-entry"],
-		target: "bun",
-		format: "esm",
-		minify: { whitespace: true },
-		sourcemap: "none",
-		packages: "bundle",
-		external: ["questpie"],
-		plugins: [
-			{
-				name: "questpie-application-bundle",
-				setup(builder) {
-					builder.onResolve({ filter: /^questpie:application-entry$/ }, () => ({
-						path: "application-entry",
-						namespace: "questpie-entry",
-					}));
-					builder.onLoad({ filter: /.*/, namespace: "questpie-entry" }, () => ({
-						contents: entry,
-						loader: "ts",
-					}));
-					builder.onResolve({ filter: /^#questpie\/app$/ }, () => ({
-						path: "authoring-app",
-						namespace: "questpie-authoring",
-					}));
-					builder.onResolve({ filter: /^#questpie\/package$/ }, () => ({
-						path: "authoring-package",
-						namespace: "questpie-authoring",
-					}));
-					builder.onLoad(
-						{ filter: /.*/, namespace: "questpie-authoring" },
-						() => ({
-							contents:
-								'const define = (kind) => (definition) => Object.freeze({ ...definition, kind, identity: `${kind}:${definition.name}`, network: definition.network === true }); export const defineQuery = define("query"); export const defineMutation = define("mutation");',
-							loader: "js",
-						}),
-					);
-					builder.onResolve({ filter: /^#questpie\/source\// }, (args) => ({
-						path: resolve(
-							input.applicationRoot,
-							input.configuration.source.root,
-							args.path.slice("#questpie/source/".length),
-						),
-					}));
-					builder.onResolve({ filter: /^questpie:runtime$/ }, () => ({
-						path: input.runtimeBundleEntry,
-					}));
-					builder.onResolve({ filter: /^questpie:runtime-readiness$/ }, () => ({
-						path: input.readinessEntry,
-					}));
-					builder.onResolve({ filter: /^questpie:runtime-bootstrap$/ }, () => ({
-						path: input.runtimeBundleEntry,
-					}));
-					builder.onResolve({ filter: /^questpie:runtime-ingress$/ }, () => ({
-						path: input.runtimeBundleEntry,
-					}));
-					builder.onResolve({ filter: /.*/ }, (args) => {
-						const packageEntry = packageEntries.get(args.path);
-						return packageEntry ? { path: packageEntry } : undefined;
-					});
-				},
-			},
-		],
-	});
-	if (!result.success)
-		throw new TypeError(
-			`Runtime Application bundle failed: ${result.logs.map((log) => log.message).join("; ")}`,
-		);
-	const output = result.outputs.find((item) => item.kind === "entry-point");
-	if (!output)
-		throw new TypeError("Runtime Application bundle emitted no entry");
-	return output.text();
+): Promise<Readonly<Record<string, string>>> {
+	return bundleApplicationEntry({ ...input, entry: applicationEntry(input) });
 }
 
 export function renderApplicationDeclaration(): string {

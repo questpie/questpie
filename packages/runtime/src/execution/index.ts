@@ -13,6 +13,7 @@ import {
 	ServiceLifetime,
 } from "questpie";
 
+import type { LiveQueryObservation } from "../live-query";
 import { decodeContextInput } from "./context-input";
 import { retainResponseLifetime } from "./response";
 import { decodeOperationWireRoot } from "./wire";
@@ -34,6 +35,7 @@ export type ExecutionFacts<Resolved> = Readonly<{
 	values: Resolved extends Readonly<{ values: infer Values }> ? Values : never;
 	signal: AbortSignal;
 	deadline: number | null;
+	liveQueryObservation: LiveQueryObservation | null;
 }>;
 
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
@@ -59,6 +61,7 @@ export interface ApplicationRuntime<Input, View> {
 			context: Input;
 			signal?: AbortSignal;
 			deadline?: number;
+			liveQueryObservation?: LiveQueryObservation;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -165,6 +168,7 @@ export function createApplicationRuntime<
 			context: ContextInputOf<Context>;
 			signal?: AbortSignal;
 			deadline?: number;
+			liveQueryObservation?: LiveQueryObservation;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
@@ -246,7 +250,28 @@ export function createApplicationRuntime<
 					await program.context.resolve({
 						input: decoded,
 						principal: input.principal,
-						bootstrap: program.bootstrap,
+						bootstrap:
+							input.liveQueryObservation === undefined
+								? program.bootstrap
+								: {
+										get: async (collection, request) => {
+											const value = await program.bootstrap.get(
+												collection,
+												request,
+											);
+											input.liveQueryObservation!.recordContext(
+												`context:${program.context.name}`,
+												[
+													{
+														kind: "contextBootstrapPoint",
+														collection: `collection:${collection.name}`,
+														detail: { key: request.key },
+													},
+												],
+											);
+											return value;
+										},
+									},
 					}),
 				);
 				controller.signal.throwIfAborted();
@@ -257,6 +282,7 @@ export function createApplicationRuntime<
 					values: resolved.values,
 					signal: controller.signal,
 					deadline: input.deadline ?? null,
+					liveQueryObservation: input.liveQueryObservation ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				const view = await program.project({ facts, service: getService });
 				controller.signal.throwIfAborted();

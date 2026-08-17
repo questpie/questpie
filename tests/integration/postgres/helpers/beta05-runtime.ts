@@ -3,6 +3,7 @@ import {
 	mkdir,
 	mkdtemp,
 	readFile,
+	readdir,
 	rm,
 	symlink,
 	writeFile,
@@ -33,6 +34,38 @@ const beta05FixtureRoot = resolve(
 	"../../../../fixtures/collaboration",
 );
 const repositoryRoot = resolve(import.meta.dir, "../../../..");
+const beta06MigrationNames = Object.freeze([
+	"000001_create-collaboration",
+	"000002_authorize-message-pages",
+	"000003_publish-message-transaction",
+]);
+
+async function resetPostgresApplication(database: SQL): Promise<void> {
+	await database.unsafe(
+		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+	);
+}
+
+async function loadFixtureMigrations(names: readonly string[]) {
+	return Promise.all(
+		names.map((name) =>
+			loadCommittedMigration(
+				resolve(beta05FixtureRoot, "questpie/migrations", name),
+			),
+		),
+	);
+}
+
+export async function prepareBeta06PostgresSchema(
+	database: SQL,
+): Promise<void> {
+	await resetPostgresApplication(database);
+	const applied = await applyCommittedMigrations({
+		migrations: await loadFixtureMigrations(beta06MigrationNames),
+	});
+	if (applied.status !== "applied")
+		throw new Error(`failed to apply BETA-06 migrations: ${applied.status}`);
+}
 
 export function beta05PostgresUrl(): string {
 	const url = new URL("postgres://localhost/");
@@ -89,29 +122,13 @@ async function importGenerated(temporary: string) {
 }
 
 export async function prepareBeta05PostgresApplication(database: SQL) {
-	await database.unsafe(
-		'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
-	);
-	const migrations = await Promise.all([
-		loadCommittedMigration(
-			resolve(
-				beta05FixtureRoot,
-				"questpie/migrations/000001_create-collaboration",
-			),
-		),
-		loadCommittedMigration(
-			resolve(
-				beta05FixtureRoot,
-				"questpie/migrations/000002_authorize-message-pages",
-			),
-		),
-		loadCommittedMigration(
-			resolve(
-				beta05FixtureRoot,
-				"questpie/migrations/000003_publish-message-transaction",
-			),
-		),
-	]);
+	await resetPostgresApplication(database);
+	const migrationRoot = resolve(beta05FixtureRoot, "questpie/migrations");
+	const migrationNames = (await readdir(migrationRoot, { withFileTypes: true }))
+		.filter((entry) => entry.isDirectory())
+		.map(({ name }) => name)
+		.sort();
+	const migrations = await loadFixtureMigrations(migrationNames);
 	const applied = await applyCommittedMigrations({ migrations });
 	if (applied.status !== "applied")
 		throw new Error(`failed to apply BETA-05 migrations: ${applied.status}`);

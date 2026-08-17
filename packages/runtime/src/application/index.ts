@@ -11,6 +11,7 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import { createApplicationRuntime, type RuntimeProgram } from "../execution";
+import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
 	createOperationEngine,
@@ -40,12 +41,17 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import type {
+	LiveQueryCoordinator,
+	RealtimeCarrierObservedPlan,
+} from "./realtime";
 import {
 	matchesRetainedClientPair,
 	retainClientPairs,
 	type RetainedClientPair,
 } from "./retained-clients";
 import { controlledRoot } from "./root";
+import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
 export type { ExecutionEventV1 } from "./events";
 export type {
@@ -70,6 +76,11 @@ export interface RuntimeApplicationProgram<
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,
 	) => MaybePromise<void>;
+	readonly onLiveQueryObserved?: (
+		input: RealtimeCarrierObservedPlan,
+	) => MaybePromise<void>;
+	readonly liveQueryCoordinator?: LiveQueryCoordinator;
+	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
 }
 
 export interface RuntimeOperations {
@@ -161,6 +172,12 @@ export async function createRuntimeApplication<
 		artifacts.wireContract.operations,
 	);
 	await input.program.verifyReadiness?.(artifacts);
+	try {
+		await input.program.liveQueryCoordinator?.start();
+	} catch (error) {
+		await input.program.liveQueryCoordinator?.drain().catch(() => {});
+		throw error;
+	}
 	const core = createApplicationRuntime({
 		services: input.program.services,
 		context: input.program.context,
@@ -211,6 +228,7 @@ export async function createRuntimeApplication<
 			context: ContextInputOf<Context>;
 			signal?: AbortSignal;
 			deadline?: number;
+			liveQueryObservation?: LiveQueryObservation;
 		}>,
 		use: (
 			input: Readonly<{
@@ -246,6 +264,7 @@ export async function createRuntimeApplication<
 				context: root.context,
 				signal: controlled.controller.signal,
 				deadline: root.deadline,
+				liveQueryObservation: root.liveQueryObservation,
 			},
 			(view) =>
 				use({
@@ -371,8 +390,44 @@ export async function createRuntimeApplication<
 			});
 			return use(scope);
 		});
+	let realtimeCallSequence = 0;
+	const realtime =
+		input.program.createRealtime?.({
+			artifacts,
+			artifactFiles: input.artifactFiles,
+			contextInput: input.program.context.input,
+			resolvePrincipal: input.program.resolvePrincipal,
+			evaluate: async ({
+				principal: caller,
+				context,
+				query,
+				input: value,
+				signal,
+				observation,
+			}) => {
+				const prepared = operationEngine.prepare(query, value);
+				if (prepared.binding.kind !== "query")
+					throw new OperationFailure("NOT_FOUND");
+				realtimeCallSequence += 1;
+				return executeRoot(
+					{
+						principal: caller,
+						context,
+						signal,
+						liveQueryObservation: observation,
+					},
+					({ invoke }) => invoke(prepared, `realtime:${realtimeCallSequence}`),
+				);
+			},
+			onObservedPlan: input.program.onLiveQueryObserved,
+			coordinator: input.program.liveQueryCoordinator,
+		}) ?? null;
 
 	const fetch = async (request: Request): Promise<Response> => {
+		if (realtime) {
+			const response = await realtime.fetch(request);
+			if (response) return response;
+		}
 		if (new URL(request.url).pathname !== operationPath)
 			return operationWireResponse(rejectionFrame("NOT_FOUND"), 404);
 		if (request.method !== "POST")
@@ -524,6 +579,7 @@ export async function createRuntimeApplication<
 	const close = (): Promise<void> => {
 		if (closePromise) return closePromise;
 		state = "draining";
+		realtime?.beginDrain();
 		emit({ family: "runtime", kind: "drainStarted" });
 		closePromise = (async () => {
 			let timedOut = false;
@@ -546,6 +602,8 @@ export async function createRuntimeApplication<
 					controller.abort(new DOMException("Runtime draining", "AbortError"));
 				await Promise.allSettled(activeRoots);
 			}
+			await realtime?.drain();
+			await input.program.liveQueryCoordinator?.drain();
 			await core.close();
 			state = "closed";
 			emit({ family: "runtime", kind: "stopped" });

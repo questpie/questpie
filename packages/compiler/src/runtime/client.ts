@@ -1,5 +1,7 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
+import { renderClientRealtime } from "./client-realtime";
+import type { RealtimeWireContractV1 } from "./realtime-wire";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
@@ -45,6 +47,7 @@ export function renderClientContract(
 		wireDigest: string;
 		path: string;
 		mediaType: string;
+		realtime?: RealtimeWireContractV1;
 	}>,
 ): string {
 	const queries = resources.filter(
@@ -55,17 +58,26 @@ export function renderClientContract(
 		(resource) =>
 			resource.kind === "mutation" && resource.contract.exposure === "network",
 	);
+	const watchableQueries = new Set(
+		input.realtime?.watchableQueries.map(({ identity }) => identity) ?? [],
+	);
 	const declarations = queries
-		.map(
-			(resource) =>
-				`${JSON.stringify(resource.name)}(operationInput: ${renderCodecType(resource.contract.input)}, options?: CallOptions): Promise<${renderCodecType(resource.contract.output)}>;`,
-		)
+		.map((resource) => {
+			const operationInput = renderCodecType(resource.contract.input);
+			const operationOutput = renderCodecType(resource.contract.output);
+			return watchableQueries.has(resource.identity)
+				? `${JSON.stringify(resource.name)}: WatchableQueryMethod<${operationInput}, ${operationOutput}>;`
+				: `${JSON.stringify(resource.name)}(operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}>;`;
+		})
 		.join("\n\t\t");
 	const implementations = queries
 		.map((resource) => {
 			const operationInput = renderCodecType(resource.contract.input);
 			const operationOutput = renderCodecType(resource.contract.output);
-			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
+			const call = `(operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options)`;
+			return watchableQueries.has(resource.identity)
+				? `${JSON.stringify(resource.name)}: Object.assign(${call}, { watch: (operationInput: ${operationInput}, callback: (result: ${operationOutput}, delivery: QueryDelivery) => void, options?: WatchOptions): (() => void) => watchBinding<${operationOutput}>(${JSON.stringify(resource.identity)}, operationInput, callback, options) }),`
+				: `${JSON.stringify(resource.name)}: ${call},`;
 		})
 		.join("\n\t\t\t");
 	const mutationDeclarations = mutations
@@ -103,6 +115,12 @@ export function renderClientContract(
 		]),
 	);
 	const mutationOperations = mutations.map((resource) => resource.identity);
+	const { watchTypes, realtimeTypes, realtimeScope } = renderClientRealtime({
+		application: input.application,
+		clientContractDigest: input.clientContractDigest,
+		enabled: watchableQueries.size > 0,
+		realtime: input.realtime,
+	});
 	return `import type { AppContextInput } from "./app";
 
 export interface CallOptions {
@@ -110,6 +128,7 @@ export interface CallOptions {
 	readonly signal?: AbortSignal;
 	readonly timeoutMilliseconds?: number;
 }
+${watchTypes}
 
 export interface GeneratedClientScope {
 	readonly context: AppContextInput;
@@ -139,6 +158,7 @@ export class CommittedResultUnavailable extends Error {
 }
 
 type WireRecord = Readonly<Record<string, unknown>>;
+${realtimeTypes}
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
@@ -291,6 +311,7 @@ export function createClient(input: Readonly<{
 	};
 	const scope = (next: AppContextInput): GeneratedClientScope => {
 		const context = immutableContext(next);
+		${realtimeScope}
 		return Object.freeze({ context, queries: Object.freeze({
 			${implementations}
 		}), mutations: Object.freeze({

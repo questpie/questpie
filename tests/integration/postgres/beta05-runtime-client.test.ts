@@ -50,7 +50,10 @@ postgresTest(
 			mismatched.schemaFingerprint = "0".repeat(64);
 			await writeFile(runtimeBuildPath, `${JSON.stringify(mismatched)}\n`);
 			await expect(
-				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
+				generated.app.createApp({
+					postgres: { url: beta05PostgresUrl() },
+					realtime: { hmacKey: new Uint8Array(32) },
+				}),
 			).rejects.toThrow("Runtime Build digest does not match");
 			await writeFile(runtimeBuildPath, runtimeBuildBytes);
 
@@ -80,7 +83,10 @@ postgresTest(
 				writeFile(checksumsPath, `${JSON.stringify(fingerprintChecksums)}\n`),
 			]);
 			await expect(
-				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
+				generated.app.createApp({
+					postgres: { url: beta05PostgresUrl() },
+					realtime: { hmacKey: new Uint8Array(32) },
+				}),
 			).rejects.toThrow(
 				"PostgreSQL Schema Fingerprint does not match Runtime Build",
 			);
@@ -162,7 +168,10 @@ postgresTest(
 				writeFile(checksumsPath, `${JSON.stringify(checksums)}\n`),
 			]);
 			const forgedOutcome = await generated.app
-				.createApp({ postgres: { url: beta05PostgresUrl() } })
+				.createApp({
+					postgres: { url: beta05PostgresUrl() },
+					realtime: { hmacKey: new Uint8Array(32) },
+				})
 				.then(
 					async (forgedApplication: Readonly<{ close(): Promise<void> }>) => {
 						await forgedApplication.close();
@@ -182,6 +191,7 @@ postgresTest(
 
 			const application = await generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await generated.loadInternal();
@@ -296,7 +306,10 @@ postgresTest(
 				where sequence = 2
 			`;
 			await expect(
-				generated.app.createApp({ postgres: { url: beta05PostgresUrl() } }),
+				generated.app.createApp({
+					postgres: { url: beta05PostgresUrl() },
+					realtime: { hmacKey: new Uint8Array(32) },
+				}),
 			).rejects.toThrow(
 				"PostgreSQL migration history does not match Runtime Build",
 			);

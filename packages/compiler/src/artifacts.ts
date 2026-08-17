@@ -14,6 +14,10 @@ import {
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
 import {
+	projectLiveQueryChangeCapture,
+	projectLiveQueryCompilation,
+} from "./live-query";
+import {
 	lowerPostgresCollectionOperationPlans,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
@@ -27,6 +31,7 @@ import {
 } from "./relational";
 import {
 	projectCommittedMigrations,
+	projectRealtimeWireContract,
 	projectRuntimeBuild,
 	projectRuntimeContract,
 	renderApplicationBundle,
@@ -94,11 +99,11 @@ export async function createArtifacts(
 ): Promise<Readonly<Record<string, string>>> {
 	const baseManifest = projectManifest(input.configuration, input.resources);
 	const executionComposition = projectExecutionComposition(input.resources);
-	const schema = baseManifest.schema;
+	const baseSchema = baseManifest.schema as SchemaProjectionV1;
 	const operationSets = projectCollectionOperationSets({
 		exports: input.evaluatedExports,
 		resources: input.resources,
-		schema,
+		schema: baseSchema,
 		data: baseManifest.data,
 	});
 	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
@@ -124,8 +129,21 @@ export async function createArtifacts(
 	const relational = projectRelationalCompilation({
 		exports: input.evaluatedExports,
 		resources: input.resources,
-		schema,
+		schema: baseSchema,
 		data: manifest.data,
+	});
+	const liveQuery = projectLiveQueryCompilation({
+		resources: input.resources,
+		contextProjection: executionComposition.context,
+		dataProjection: manifest.data as Readonly<Record<string, unknown>>,
+		policyProjection: relational.policy,
+		queryProjection: relational.query,
+	});
+	const changeCapture = projectLiveQueryChangeCapture(baseSchema, liveQuery);
+	const schema = Object.freeze({ ...baseSchema, changeCapture });
+	const finalManifest: Readonly<Record<string, unknown>> = Object.freeze({
+		...manifest,
+		schema,
 	});
 	const mutationDeclarations = projectMutationGeneratedContract(
 		operationSets.programs,
@@ -322,18 +340,36 @@ export async function createArtifacts(
 		],
 		contextProjection: executionComposition.context,
 	});
+	const realtime = projectRealtimeWireContract({
+		application: `application:${input.configuration.application.name}`,
+		clientContractDigest: runtime.clientContractDigest,
+		operationWireDigest: runtime.wireDigest,
+		resources: input.resources,
+		watchableQueries: (
+			liveQuery.artifacts["query-watchability.json"]
+				.queries as readonly Readonly<{
+				query: string;
+				watchable: boolean;
+			}>[]
+		)
+			.filter(({ watchable }) => watchable)
+			.map(({ query }) => query),
+	});
+	const realtimeEnabled = realtime.watchableQueries.length > 0;
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
 	const mutations = projectMutations(input.resources);
 	const generated: Record<string, string> = {
+		...liveQuery.bytes,
 		"app.ts": renderAppContract(
 			input.resources,
-			manifest.data,
+			finalManifest.data,
 			schema,
 			input.configuration.source.root,
 			relational.declarations,
 			mutationDeclarations,
+			realtimeEnabled,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(input.resources, {
@@ -342,16 +378,18 @@ export async function createArtifacts(
 			wireDigest: runtime.wireDigest,
 			path: String(runtime.wire.path),
 			mediaType: String(runtime.wire.mediaType),
+			realtime: realtimeEnabled ? realtime : undefined,
 		}),
 		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),
 		"context-projection.json": canonicalBytes(executionComposition.context),
 		"execution-composition-explain.json": canonicalBytes(executionExplanation),
 		"internal/package-inventories.json": canonicalBytes(inventoryArtifact),
-		"manifest.json": canonicalBytes(manifest),
+		"manifest.json": canonicalBytes(finalManifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
+		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
 	if (runtime.reactions.reactions.length > 0)
@@ -422,28 +460,36 @@ export async function createArtifacts(
 			compilation.resources,
 		);
 	generated["internal/application.d.ts"] = renderApplicationDeclaration();
-	const runtimeBundleEntry = fileURLToPath(
-		import.meta.resolve("@questpie/runtime/bundle"),
+	const runtimeCoreBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle-core"),
+	);
+	const runtimeRealtimeBundleEntry = fileURLToPath(
+		import.meta.resolve("@questpie/runtime/bundle-realtime"),
 	);
 	const readinessEntry = join(
 		import.meta.dir,
 		"runtime",
 		`postgres-readiness${extname(fileURLToPath(import.meta.url))}`,
 	);
-	generated["internal/application.js"] = await renderApplicationBundle({
-		applicationRoot: input.applicationRoot,
-		configuration: input.configuration,
-		resources: input.resources,
-		slots: runtime.executables.slots,
-		inventories: input.inventories,
-		queryProjection: relational.query,
-		postgresQueryPlans,
-		schemaProjection: schema,
-		collectionOperationArtifacts: operationSets.sets.sets.length > 0,
-		reactionArtifact: runtime.reactions.reactions.length > 0,
-		readinessEntry,
-		runtimeBundleEntry,
-	});
+	Object.assign(
+		generated,
+		await renderApplicationBundle({
+			applicationRoot: input.applicationRoot,
+			configuration: input.configuration,
+			resources: input.resources,
+			slots: runtime.executables.slots,
+			inventories: input.inventories,
+			queryProjection: relational.query,
+			postgresQueryPlans,
+			schemaProjection: schema,
+			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
+			reactionArtifact: runtime.reactions.reactions.length > 0,
+			realtime: realtimeEnabled,
+			readinessEntry,
+			runtimeCoreBundleEntry,
+			runtimeRealtimeBundleEntry,
+		}),
+	);
 	generated["runtime-build.json"] = runtimeArtifactBytes(
 		projectRuntimeBuild({
 			configuration: input.configuration,
@@ -454,6 +500,11 @@ export async function createArtifacts(
 				"questpie-schema-fingerprint-v1",
 				expectedComparable(schema as SchemaProjectionV1),
 			),
+			liveQueryDigests: {
+				changeLedger: liveQuery.semanticDigests.changeLedger,
+				resume: liveQuery.semanticDigests.resume,
+			},
+			realtimeWireDigest: realtime.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

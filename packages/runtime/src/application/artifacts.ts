@@ -22,7 +22,7 @@ type RuntimeBuildV1 = Readonly<{
 	version: 1;
 	application: string;
 	runtimeAbi: "questpie.runtime.v1";
-	internalProtocol: "questpie.internal.v2";
+	internalProtocol: "questpie.internal.v2" | "questpie.internal.v3";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -45,9 +45,10 @@ type RuntimeBuildV1 = Readonly<{
 	runtimeExecutablesDigest: string;
 	runtimeGraphDigest: string;
 	wireDigest: string;
+	realtimeWireDigest: string | null;
 	later: Readonly<{
-		changeLedgerDigest: null;
-		resumeDigest: null;
+		changeLedgerDigest: string | null;
+		resumeDigest: string | null;
 		durableCompatibilityDigest: null;
 		reactionDigest: string | null;
 	}>;
@@ -292,6 +293,7 @@ function decodeWire(value: unknown): OperationWireContract {
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const build = record(value, "runtime build");
+	const v3 = build.internalProtocol === "questpie.internal.v3";
 	exact(
 		build,
 		[
@@ -317,6 +319,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"runtimeExecutablesDigest",
 			"runtimeGraphDigest",
 			"wireDigest",
+			...(v3 ? ["realtimeWireDigest"] : []),
 			"later",
 			"executableSlots",
 			"slots",
@@ -349,6 +352,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"digest",
 	] as const)
 		digestValue(build[key], key);
+	if (v3) digestValue(build.realtimeWireDigest, "realtimeWireDigest");
 	for (const key of [
 		"policyProjectionDigest",
 		"queryProjectionDigest",
@@ -366,12 +370,13 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		],
 		"later compatibility",
 	);
-	for (const key of [
-		"changeLedgerDigest",
-		"resumeDigest",
-		"durableCompatibilityDigest",
-	] as const)
-		if (later[key] !== null) fail(`${key} is not owned by this Runtime ABI`);
+	if (v3) {
+		digestValue(later.changeLedgerDigest, "changeLedgerDigest");
+		digestValue(later.resumeDigest, "resumeDigest");
+	} else if (later.changeLedgerDigest !== null || later.resumeDigest !== null)
+		fail("Live Query digests require internal protocol v3");
+	if (later.durableCompatibilityDigest !== null)
+		fail("durableCompatibilityDigest is not owned by this Runtime ABI");
 	if (later.reactionDigest !== null)
 		digestValue(later.reactionDigest, "reactionDigest");
 	const compiler = record(build.compiler, "compiler");
@@ -491,14 +496,22 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		string(build[key], key);
 	if (build.runtimeAbi !== "questpie.runtime.v1")
 		fail("unsupported Runtime ABI");
-	if (build.internalProtocol !== "questpie.internal.v2")
+	if (
+		build.internalProtocol !== "questpie.internal.v2" &&
+		build.internalProtocol !== "questpie.internal.v3"
+	)
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
 		string(build.migrationHead, "migrationHead");
 	const { digest: _digest, ...unsigned } = build;
 	if (artifactDigest("questpie-runtime-build-v1", unsigned) !== build.digest)
 		fail("Runtime Build digest does not match");
-	return Object.freeze(build) as RuntimeBuildV1;
+	return Object.freeze({
+		...build,
+		realtimeWireDigest: v3
+			? digestValue(build.realtimeWireDigest, "realtimeWireDigest")
+			: null,
+	}) as RuntimeBuildV1;
 }
 
 export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {

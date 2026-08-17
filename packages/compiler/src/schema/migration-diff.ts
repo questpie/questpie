@@ -39,6 +39,8 @@ const kindRank: readonly MigrationStepKindV1[] = [
 	"addConstraint",
 	"addRelation",
 	"addIndex",
+	"dropChangeCapture",
+	"addChangeCapture",
 	"dropIndex",
 	"dropRelation",
 	"dropConstraint",
@@ -102,7 +104,10 @@ function sortSteps(
 	return sorted;
 }
 
-export function createSteps(target: SchemaProjectionV1): MigrationStepV1[] {
+export function createSteps(
+	target: SchemaProjectionV1,
+	includeChangeCapture = true,
+): MigrationStepV1[] {
 	const steps: MigrationStepV1[] = [
 		step({
 			kind: "createApplicationSchema",
@@ -169,6 +174,19 @@ export function createSteps(target: SchemaProjectionV1): MigrationStepV1[] {
 				}),
 			);
 	}
+	if (includeChangeCapture && target.changeCapture)
+		steps.push(
+			step({
+				kind: "addChangeCapture",
+				targetIdentity: `application:${target.application.name}/changeCapture`,
+				containerIdentity: `application:${target.application.name}`,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
 	return sortSteps(steps);
 }
 
@@ -284,13 +302,46 @@ export function destructiveDeltaSteps(
 		"target Collection",
 	);
 	const steps: MigrationStepV1[] = [];
+	const baseHasChangeCapture = base.changeCapture !== undefined;
+	const targetHasChangeCapture = target.changeCapture !== undefined;
+	if (baseHasChangeCapture !== targetHasChangeCapture) {
+		if (baseHasChangeCapture)
+			steps.push(
+				step({
+					kind: "dropChangeCapture",
+					targetIdentity: `application:${target.application.name}/changeCapture`,
+					containerIdentity: `application:${target.application.name}`,
+					lock: "shareRowExclusive",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "destructive",
+				}),
+			);
+		if (targetHasChangeCapture)
+			steps.push(
+				step({
+					kind: "addChangeCapture",
+					targetIdentity: `application:${target.application.name}/changeCapture`,
+					containerIdentity: `application:${target.application.name}`,
+					lock: "shareRowExclusive",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "safe",
+				}),
+			);
+	}
 	for (const targetCollection of target.collections) {
 		const targetIdentity = String(targetCollection.identity);
 		const baseIdentity = mapIdentityBackward(targetIdentity, renames);
 		const baseCollection = baseCollections.get(baseIdentity);
 		if (!baseCollection) {
 			steps.push(
-				...createSteps({ ...target, collections: [targetCollection] }).slice(1),
+				...createSteps(
+					{ ...target, collections: [targetCollection] },
+					false,
+				).slice(1),
 			);
 			continue;
 		}

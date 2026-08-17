@@ -264,6 +264,7 @@ export function renderAppContract(
 	sourceRoot: string,
 	relational: RelationalGeneratedContractV1,
 	mutationContract: MutationGeneratedContractV1,
+	realtime: boolean,
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -460,6 +461,7 @@ export interface GeneratedApp {
 
 export type CreateAppInput = Readonly<{
 	postgres: Readonly<{ url: string }>;
+	${realtime ? "realtime: Readonly<{ hmacKey: Uint8Array }>;" : ""}
 }>;
 
 export async function createApp(input: CreateAppInput): Promise<GeneratedApp> {

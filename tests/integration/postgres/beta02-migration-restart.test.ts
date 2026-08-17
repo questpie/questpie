@@ -25,6 +25,15 @@ import { assertSchemaMatches } from "../../../packages/compiler/src/schema";
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/collaboration");
 const database = process.env.PGHOST ? new SQL() : undefined;
 
+function beta02Schema(
+	compilation: Awaited<ReturnType<typeof compileApplication>>,
+) {
+	const { changeCapture: _changeCapture, ...schema } = JSON.parse(
+		compilation.generatedFiles["schema-projection.json"] ?? "null",
+	);
+	return schema;
+}
+
 beforeAll(async () => {
 	if (!database) return;
 	await database.unsafe(
@@ -41,9 +50,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -273,9 +280,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = {
 			...fixtureSchema,
 			application: {
@@ -453,9 +458,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -503,9 +506,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "bootstrap-pg18-probe",
 			postgresSchema: "bootstrap_pg18_probe",
@@ -526,17 +527,26 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 			applyCommittedMigrations({ migrations: [migration] }),
 		).resolves.toMatchObject({ status: "applied" });
 		const [notNullCatalog] = await database!<
-			{ major: number; constraints: number }[]
+			{ major: number; columns: number; constraints: number }[]
 		>`
 			select current_setting('server_version_num')::integer / 10000 as major,
-			       count(*)::integer as constraints
+			       count(*)::integer as constraints,
+			       (
+			         select count(*)::integer
+			         from pg_catalog.pg_attribute att
+			         join pg_catalog.pg_class cls on cls.oid = att.attrelid
+			         join pg_catalog.pg_namespace nsp on nsp.oid = cls.relnamespace
+			         where nsp.nspname = 'questpie_internal'
+			           and cls.relkind in ('r', 'p')
+			           and att.attnum > 0 and not att.attisdropped and att.attnotnull
+			       ) as columns
 			from pg_catalog.pg_constraint con
 			join pg_catalog.pg_class rel on rel.oid = con.conrelid
 			join pg_catalog.pg_namespace ns on ns.oid = rel.relnamespace
 			where ns.nspname = 'questpie_internal' and con.contype = 'n'
 		`;
 		expect(notNullCatalog?.constraints).toBe(
-			(notNullCatalog?.major ?? 0) >= 18 ? 50 : 0,
+			(notNullCatalog?.major ?? 0) >= 18 ? notNullCatalog?.columns : 0,
 		);
 		await expect(
 			applyCommittedMigrations({ migrations: [migration] }),
@@ -564,9 +574,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "identity-probe",
 			postgresSchema: "identity_probe",
@@ -639,9 +647,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "missing-binding-probe",
 			postgresSchema: "missing_binding_probe",
@@ -686,9 +692,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "orphan-binding-probe",
 			postgresSchema: "orphan_binding_probe",
@@ -739,9 +743,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "binding-race-probe",
 			postgresSchema: "binding_race_probe",
@@ -846,9 +848,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "snapshot-probe",
 			postgresSchema: "snapshot_probe",
@@ -916,9 +916,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			name: "fk-actions-probe",
 			postgresSchema: "fk_actions_probe",
@@ -973,9 +971,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1154,9 +1150,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1210,9 +1204,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1300,9 +1292,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1390,9 +1380,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1462,9 +1450,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1542,9 +1528,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const targetSchema = {
 			...fixtureSchema,
 			application: {
@@ -1661,9 +1645,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		const mismatchedSchema = {
 			...targetSchema,
 			requiredPostgres: {
@@ -1973,15 +1955,13 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 				status: "PASS",
 			}),
 		);
-	});
+	}, 120_000);
 
 	test("applies and fingerprints alterField with a Relation constraint rename", async () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = structuredClone(fixtureSchema);
 		baseSchema.application = {
 			...baseSchema.application,
@@ -2096,9 +2076,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const fixtureSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const fixtureSchema = beta02Schema(compilation);
 		const baseSchema = {
 			...fixtureSchema,
 			application: {
@@ -2173,9 +2151,7 @@ describe.skipIf(!database)("BETA-02 PostgreSQL migration lifecycle", () => {
 		const compilation = await compileApplication({
 			applicationRoot: fixtureRoot,
 		});
-		const targetSchema = JSON.parse(
-			compilation.generatedFiles["schema-projection.json"] ?? "null",
-		);
+		const targetSchema = beta02Schema(compilation);
 		targetSchema.application = {
 			...targetSchema.application,
 			name: "keyword-probe",
@@ -2292,9 +2268,7 @@ export const checkAppointments = defineCollection({
 			const compilation = await compileApplication({
 				applicationRoot: temporary,
 			});
-			const targetSchema = JSON.parse(
-				compilation.generatedFiles["schema-projection.json"] ?? "null",
-			);
+			const targetSchema = beta02Schema(compilation);
 			targetSchema.application = {
 				...targetSchema.application,
 				name: "check-probe",

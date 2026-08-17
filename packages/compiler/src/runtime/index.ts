@@ -14,6 +14,7 @@ import {
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
 export { renderClientContract, renderCodecType } from "./client";
+export { projectRealtimeWireContract } from "./realtime-wire";
 export {
 	renderApplicationBundle,
 	renderApplicationDeclaration,
@@ -335,6 +336,11 @@ export function projectRuntimeBuild(
 		runtime: RuntimeContractProjection;
 		migrationHead: string | null;
 		schemaFingerprint: string;
+		liveQueryDigests: Readonly<{
+			changeLedger: string;
+			resume: string;
+		}>;
+		realtimeWireDigest: string;
 	}>,
 ): Readonly<Record<string, unknown>> {
 	const fileDigest = (path: string): string | null => {
@@ -374,7 +380,7 @@ export function projectRuntimeBuild(
 		version: 1,
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
-		internalProtocol: "questpie.internal.v2",
+		internalProtocol: "questpie.internal.v3",
 		compiler,
 		compilerRuntimeBuildDigest: digest(
 			"questpie-compiler-runtime-build-v1",
@@ -395,6 +401,7 @@ export function projectRuntimeBuild(
 		runtimeExecutablesDigest: input.runtime.runtimeExecutablesDigest,
 		runtimeGraphDigest,
 		wireDigest: input.runtime.wireDigest,
+		realtimeWireDigest: input.realtimeWireDigest,
 		executableSlots: slots.map((slot) => `${slot.identity}#${slot.slot}`),
 		slots: slots.map(
 			({ identity, kind, slot, runtimeGraphDigest, bundleExport }) => ({
@@ -406,8 +413,8 @@ export function projectRuntimeBuild(
 			}),
 		),
 		later: {
-			changeLedgerDigest: null,
-			resumeDigest: null,
+			changeLedgerDigest: input.liveQueryDigests.changeLedger,
+			resumeDigest: input.liveQueryDigests.resume,
 			durableCompatibilityDigest: null,
 			reactionDigest:
 				input.runtime.reactions.reactions.length === 0

@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 
 import { codec, defineContext, defineService, principal } from "questpie";
 
-import { createRuntimeApplication } from "../../packages/runtime/src";
+import {
+	createRuntimeApplication,
+	type ExecutionEventV1,
+} from "../../packages/runtime/src";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -742,6 +745,40 @@ test("rejects a changed inventory file before readiness or executable disclosure
 	).rejects.toThrow(
 		"manifestDigest does not match inventory path manifest.json",
 	);
+	const forgedExecutables = {
+		...artifacts.runtimeExecutables,
+		slots: artifacts.runtimeExecutables.slots.map((slot, index) =>
+			index === 0 ? { ...slot, sourceDigest: sha("0") } : slot,
+		),
+	};
+	const forgedExecutablesBytes = `${JSON.stringify(forgedExecutables)}\n`;
+	const { digest: _runtimeBuildDigest, ...unsignedRuntimeBuild } =
+		artifacts.runtimeBuild;
+	const forgedInventoryBuild = {
+		...unsignedRuntimeBuild,
+		inventory: unsignedRuntimeBuild.inventory.map((item) =>
+			item.path === "runtime-executables.json"
+				? { ...item, digest: fileDigest(forgedExecutablesBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...forgedInventoryBuild,
+					digest: digest("questpie-runtime-build-v1", forgedInventoryBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"runtime-executables.json": forgedExecutablesBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow("runtime-executables.json semantic digest does not match");
 	expect({ readiness, resolves, handlerCalls }).toEqual({
 		readiness: 0,
 		resolves: 0,
@@ -831,6 +868,100 @@ test("runs one valid build through the direct operation engine", async () => {
 	expect(handlerCalls).toBe(1);
 	expect(projectionCalls).toBe(1);
 	await app.close();
+});
+
+test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	let releaseStartup!: () => void;
+	let reportStarted!: () => void;
+	const startupReleased = new Promise<void>((resolve) => {
+		releaseStartup = resolve;
+	});
+	const startupEntered = new Promise<void>((resolve) => {
+		reportStarted = resolve;
+	});
+	const events: ExecutionEventV1[] = [];
+	let coordinatorDrains = 0;
+	const creation = createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: { get: async () => null },
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+			liveQueryCoordinator: {
+				async start() {
+					reportStarted();
+					await startupReleased;
+				},
+				async drain() {
+					coordinatorDrains += 1;
+				},
+				async reconcile() {},
+			},
+		},
+		events: (event) => events.push(event),
+	});
+	await startupEntered;
+	expect(events).toEqual([]);
+	releaseStartup();
+	const app = await creation;
+	expect(events.map(({ event }) => event)).toContainEqual({
+		family: "runtime",
+		kind: "ready",
+	});
+	await app.close();
+	expect(coordinatorDrains).toBe(1);
+
+	const startupFailure = new Error("startup reconciliation failed");
+	const failedLifecycle: string[] = [];
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program: {
+				services: [],
+				context,
+				bootstrap: { get: async () => null },
+				project: ({ facts }) => ({ signal: facts.signal }),
+				resolvePrincipal: async () => principal.anonymous(),
+				liveQueryCoordinator: {
+					async start() {
+						failedLifecycle.push("start");
+						throw startupFailure;
+					},
+					async drain() {
+						failedLifecycle.push("drain");
+					},
+					async reconcile() {},
+				},
+			},
+		}),
+	).rejects.toBe(startupFailure);
+	expect(failedLifecycle).toEqual(["start", "drain"]);
 });
 
 test("sanitizes unknown operation errors identically for direct and wire calls", async () => {

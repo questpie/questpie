@@ -69,6 +69,7 @@ postgresTest(
 		try {
 			application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			const user = prepared.generated.framework.principal.user({
 				id: beta05Ids.principal,

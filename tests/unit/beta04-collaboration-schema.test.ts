@@ -98,16 +98,29 @@ test("extends the frozen authorization schema with the publish migration", async
 			"questpie/migrations/000003_publish-message-transaction",
 		),
 	);
+	const liveQuery = await loadCommittedMigration(
+		resolve(fixtureRoot, "questpie/migrations/000004_watch-message-query"),
+	);
 
 	expect(() =>
-		verifyCommittedMigrationChain([genesis, authorization, publication]),
+		verifyCommittedMigrationChain([
+			genesis,
+			authorization,
+			publication,
+			liveQuery,
+		]),
 	).not.toThrow();
 	expect(authorization.targetSchema).toEqual(publication.baseSchema);
-	expect(publication.targetSchema).toEqual(current);
+	expect(publication.targetSchema).toEqual(liveQuery.baseSchema);
+	expect(liveQuery.targetSchema).toEqual(current);
 	expect(publication.plan.baseMigration).toBe(authorization.identity);
 	expect(publication.plan.classification).toBe("guarded");
 	expect(publication.files["up.sql"]).toContain(
 		'CREATE TABLE "collaboration"."message_events"',
+	);
+	expect(liveQuery.plan.baseMigration).toBe(publication.identity);
+	expect(liveQuery.files["up.sql"]).toContain(
+		"AFTER INSERT OR UPDATE OR DELETE ON collaboration.messages",
 	);
 	expect(authorization.plan.classification).toBe("destructive");
 	expect(authorization.files["up.sql"]).toContain(

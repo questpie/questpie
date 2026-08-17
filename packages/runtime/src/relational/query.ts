@@ -136,6 +136,31 @@ export type QueryExecutionFacts = Readonly<{
 
 export type PostgresQueryRow = Readonly<Record<string, unknown>>;
 
+export type PostgresQueryObservationV1 = Readonly<{
+	templateDigest: string;
+	primaryCollection: string;
+	tenantId: string;
+	scope: readonly Readonly<{
+		parameter: string;
+		value: null | ScalarValue | readonly ScalarValue[];
+	}>[];
+	after: string | null;
+	first: number;
+	observed: number;
+	hasNextPage: boolean;
+	order: readonly string[];
+	relations: readonly Readonly<{
+		relation: string;
+		collection: string;
+		endpoints: number;
+		misses: number;
+	}>[];
+}>;
+
+export interface PostgresQueryObserver {
+	recordPostgresQuery(observation: PostgresQueryObservationV1): void;
+}
+
 export type DataQueryDiagnosticCode =
 	| "QP-DATA-001"
 	| "QP-DATA-006"
@@ -491,6 +516,74 @@ function cursorValues(
 	});
 }
 
+function collectionOfField(field: string): string {
+	const separator = field.indexOf("/field:");
+	if (separator < 1) throw new TypeError("invalid compiled Collection Field");
+	return field.slice(0, separator);
+}
+
+function queryObservation(
+	plan: PostgresQueryPlanV1,
+	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
+	facts: QueryExecutionFacts,
+	rows: readonly PostgresQueryRow[],
+	visibleRows: readonly PostgresQueryRow[],
+	first: number,
+): PostgresQueryObservationV1 {
+	const primaryCollections = new Set(
+		plan.page.order.map(({ field }) => collectionOfField(field)),
+	);
+	if (primaryCollections.size !== 1)
+		throw new TypeError("invalid compiled Query primary Collection");
+	const primaryCollection = [...primaryCollections][0]!;
+	const scope = plan.page.scopeParameters.map((parameter) => {
+		const value = values.get(parameter);
+		if (value === undefined)
+			throw new TypeError(
+				`invalid compiled Query scope parameter ${parameter}`,
+			);
+		return Object.freeze({ parameter, value });
+	});
+	const relations = plan.result.flatMap((item) => {
+		if (item.kind !== "toOne") return [];
+		const collections = new Set(
+			item.fields.map(({ field }) => collectionOfField(field)),
+		);
+		if (collections.size !== 1)
+			throw new TypeError("invalid compiled Relation target Collection");
+		let endpoints = 0;
+		let misses = 0;
+		for (const row of visibleRows) {
+			const present = row[item.presenceColumn];
+			if (present === true) endpoints += 1;
+			else if (present === null) misses += 1;
+		}
+		return [
+			Object.freeze({
+				relation: item.relation,
+				collection: [...collections][0]!,
+				endpoints,
+				misses,
+			}),
+		];
+	});
+	const after = values.get(plan.page.after.parameter);
+	if (after !== null && typeof after !== "string")
+		throw new TypeError("invalid compiled cursor binding");
+	return Object.freeze({
+		templateDigest: plan.templateDigest,
+		primaryCollection,
+		tenantId: facts.tenant.id,
+		scope: Object.freeze(scope),
+		after,
+		first,
+		observed: visibleRows.length,
+		hasNextPage: rows.length > first,
+		order: Object.freeze(plan.page.order.map(({ field }) => field)),
+		relations: Object.freeze(relations),
+	});
+}
+
 export async function executePostgresQuery(
 	input: Readonly<{
 		plan: PostgresQueryPlanV1;
@@ -499,6 +592,7 @@ export async function executePostgresQuery(
 		sql: SQL;
 		maximumPageSize?: number;
 		signal?: AbortSignal;
+		observer?: PostgresQueryObserver;
 	}>,
 ): Promise<DataQueryPage> {
 	input.signal?.throwIfAborted();
@@ -555,12 +649,23 @@ export async function executePostgresQuery(
 		const visibleRows = rows.slice(0, first);
 		const nodes = visibleRows.map((row) => decodeRow(row, input.plan.result));
 		const last = visibleRows.at(-1);
-		return Object.freeze({
+		const page = Object.freeze({
 			nodes: Object.freeze(nodes),
 			pageInfo: Object.freeze({
 				endCursor: last ? cursor.encode(cursorValues(input.plan, last)) : null,
 				hasNextPage: rows.length > first,
 			}),
 		});
+		input.observer?.recordPostgresQuery(
+			queryObservation(
+				input.plan,
+				values,
+				input.executionFacts,
+				rows,
+				visibleRows,
+				first,
+			),
+		);
+		return page;
 	});
 }

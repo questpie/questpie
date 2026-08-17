@@ -78,4 +78,37 @@ export function verifyRuntimeArtifactFiles(
 		) !== build.later.reactionDigest
 	)
 		fail("reaction-projection.json semantic digest does not match");
+	if (
+		build.realtimeWireDigest !== null &&
+		artifactDigest(
+			"questpie-realtime-wire-v1",
+			(() => {
+				const realtime = record(
+					parseJsonFile("realtime-wire-contract.json"),
+					"realtime-wire-contract.json",
+				);
+				const { digest: realtimeDigest, ...unsigned } = realtime;
+				if (realtimeDigest !== build.realtimeWireDigest)
+					fail("realtime wire digest does not match");
+				return unsigned;
+			})(),
+		) !== build.realtimeWireDigest
+	)
+		fail("realtime-wire-contract.json semantic digest does not match");
+	if (
+		build.later.changeLedgerDigest !== null &&
+		artifactDigest(
+			"questpie:p4:changeLedgerProjection:v1",
+			parseJsonFile("change-ledger.json"),
+		) !== build.later.changeLedgerDigest
+	)
+		fail("change-ledger.json semantic digest does not match");
+	if (
+		build.later.resumeDigest !== null &&
+		artifactDigest(
+			"questpie:p4:resumeProjection:v1",
+			parseJsonFile("live-query-resume.json"),
+		) !== build.later.resumeDigest
+	)
+		fail("live-query-resume.json semantic digest does not match");
 }

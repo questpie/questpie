@@ -15,6 +15,8 @@ export type {
 	DataQueryPage,
 	PostgresQueryParameterV1,
 	PostgresQueryPlanV1,
+	PostgresQueryObservationV1,
+	PostgresQueryObserver,
 	PostgresQueryResultV1,
 	PostgresQueryRow,
 	QueryExecutionFacts,

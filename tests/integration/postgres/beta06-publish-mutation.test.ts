@@ -5,6 +5,7 @@ import { SQL } from "bun";
 import {
 	beta05Ids,
 	beta05PostgresUrl,
+	prepareBeta06PostgresSchema,
 	prepareBeta05PostgresApplication,
 } from "./helpers/beta05-runtime";
 
@@ -79,16 +80,11 @@ async function persistedMutationRows() {
 	return counts;
 }
 
-async function changeLedgerTableCount(): Promise<number> {
-	const [catalog] = await database!.unsafe<
-		Readonly<Array<{ changeLedgerTables: number }>>
-	>(`SELECT count(*)::int AS "changeLedgerTables"
-FROM pg_catalog.pg_class relation
-JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
-WHERE namespace.nspname IN ('collaboration', 'questpie_internal')
-  AND relation.relkind IN ('r', 'p')
-  AND relation.relname LIKE '%change%'`);
-	return catalog?.changeLedgerTables ?? -1;
+async function changeLedgerFactCount(): Promise<number> {
+	const [ledger] = await database!.unsafe<Readonly<Array<{ facts: number }>>>(
+		"SELECT count(*)::int AS facts FROM questpie_internal.change_ledger",
+	);
+	return ledger?.facts ?? -1;
 }
 
 async function atomicBundle(callId: string, messageId: string) {
@@ -178,13 +174,9 @@ postgresTest(
 	},
 );
 
-postgresTest("installs no BETA-07 Change Ledger table", async () => {
-	const prepared = await prepareBeta05PostgresApplication(database!);
-	try {
-		expect(await changeLedgerTableCount()).toBe(0);
-	} finally {
-		await prepared.dispose();
-	}
+postgresTest("does not synthesize a BETA-07 Change Ledger fact", async () => {
+	await prepareBeta06PostgresSchema(database!);
+	expect(await changeLedgerFactCount()).toBe(0);
 });
 
 postgresTest(
@@ -194,8 +186,10 @@ postgresTest(
 		try {
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
+				const ledgerFactsBefore = await changeLedgerFactCount();
 				const internal = await prepared.generated.loadInternal();
 				const user = prepared.generated.framework.principal.user({
 					id: beta05Ids.principal,
@@ -352,7 +346,7 @@ postgresTest(
 					messages: 3,
 					receipts: 2,
 				});
-				expect(await changeLedgerTableCount()).toBe(0);
+				expect(await changeLedgerFactCount()).toBe(ledgerFactsBefore + 2);
 
 				const constraintCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62a2";
 				const beforeConstraint = await persistedMutationRows();
@@ -388,6 +382,7 @@ postgresTest(
 		try {
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();
@@ -479,6 +474,7 @@ postgresTest(
 			);
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32) },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();

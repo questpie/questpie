@@ -27,15 +27,15 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			version: 1,
 			application: "application:collaboration",
 			runtimeAbi: "questpie.runtime.v1",
-			internalProtocol: "questpie.internal.v2",
+			internalProtocol: "questpie.internal.v3",
 			compiler: {
 				version: "4.0.0-beta.1",
 				bunVersion: Bun.version,
 				executableFormat: "bun-esm-bundle-v1",
 			},
 			later: {
-				changeLedgerDigest: null,
-				resumeDigest: null,
+				changeLedgerDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+				resumeDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				durableCompatibilityDigest: null,
 				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
