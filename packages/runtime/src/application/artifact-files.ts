@@ -73,11 +73,24 @@ export function verifyRuntimeArtifactFiles(
 	if (
 		build.later.reactionDigest !== null &&
 		artifactDigest(
-			"questpie-reaction-projection-v1",
+			"questpie-reaction-projection-v2",
 			parseJsonFile("reaction-projection.json"),
 		) !== build.later.reactionDigest
 	)
 		fail("reaction-projection.json semantic digest does not match");
+	if (build.later.durableCompatibilityDigest !== null) {
+		const kernel = record(
+			parseJsonFile("durable-kernel.json"),
+			"durable-kernel.json",
+		);
+		const { digest: kernelDigest, ...unsigned } = kernel;
+		if (
+			kernelDigest !== build.later.durableCompatibilityDigest ||
+			artifactDigest("questpie-durable-kernel-v1", unsigned) !==
+				build.later.durableCompatibilityDigest
+		)
+			fail("durable-kernel.json semantic digest does not match");
+	}
 	if (
 		build.realtimeWireDigest !== null &&
 		artifactDigest(

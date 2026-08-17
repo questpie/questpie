@@ -14,6 +14,8 @@ test("lowers an unbranded Collection Operation Set to exact P3 programs", async 
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
 		await rm(join(temporary, "src/message-publish.ts"));
+		await rm(join(temporary, "src/message-published.ts"));
+		await rm(join(temporary, "src/message-record-delivery.ts"));
 		await writeFile(
 			join(temporary, "src/message-operations.ts"),
 			`import { defineCollectionOperations, mutation } from "questpie";

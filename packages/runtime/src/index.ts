@@ -42,3 +42,38 @@ export type {
 	ScalarCodecV1,
 	UsedExecutionFacts,
 } from "./relational";
+
+export {
+	createDurableReactionWorker,
+	createPostgresDurableEffectLedger,
+	createPostgresDurableKernel,
+	createPostgresDurableMaintenance,
+	DurableEffectAmbiguous,
+	DurableEffectConflict,
+	DurableLeaseLost,
+	durablePrincipal,
+	linkReactionProjection,
+} from "./durable";
+export type {
+	DurableActor,
+	DurableAttemptExecutor,
+	DurableAttemptHandle,
+	DurableAttemptRequest,
+	DurableClaim,
+	DurableEffectHandle,
+	DurableEffectLedger,
+	DurableEffectView,
+	DurableFailureCode,
+	DurableKernel,
+	DurableMaintenance,
+	DurableMaintenanceAuditEntry,
+	DurableMaintenanceOutcome,
+	DurableRunEventView,
+	DurableRunHandle,
+	DurableRunState,
+	DurableRunView,
+	DurableWorker,
+	DurableWorkerTrace,
+	LinkedReactionMember,
+	LinkedReactionProjection,
+} from "./durable";

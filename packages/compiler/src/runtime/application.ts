@@ -80,20 +80,21 @@ function applicationEntry(
 		}
 		return `definition${index}`;
 	};
+	const executable = (kind: string): boolean =>
+		kind === "query" || kind === "mutation" || kind === "reaction";
 	const bindingEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
-		const operation = slot.kind === "query" || slot.kind === "mutation";
-		const implementation = operation
+		const handler = executable(slot.kind);
+		const implementation = handler
 			? `${definition}.handler`
 			: `${definition}.${slot.slot}`;
-		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${operation ? `, execute: ${implementation}` : ""} })`;
+		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${handler ? `, execute: ${implementation}` : ""} })`;
 	});
 	const serverEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
-		const implementation =
-			slot.kind === "query" || slot.kind === "mutation"
-				? `${definition}.handler`
-				: `${definition}.${slot.slot}`;
+		const implementation = executable(slot.kind)
+			? `${definition}.handler`
+			: `${definition}.${slot.slot}`;
 		return `${JSON.stringify(slot.bundleExport)}: ${implementation}`;
 	});
 	const contextSlot = input.slots.find((slot) => slot.kind === "context");
@@ -277,9 +278,14 @@ export async function createApplication(input) {
 	const runtimeModule = await import("questpie:runtime-core");
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
+		createDurableReactionWorker,
 		createPostgresContextBootstrap,
+		createPostgresDurableEffectLedger,
+		createPostgresDurableKernel,
+		createPostgresDurableMaintenance,
 		createPostgresMutationInvoker,
 		createRuntimeApplication,
+		durablePrincipal,
 		executePostgresQuery,
 	} = runtimeModule;
 	const sql = new SQL(input.postgres.url);
@@ -368,6 +374,8 @@ export async function createApplication(input) {
 					facts,
 					collectionPlans: mutationArtifacts.collectionPlans,
 					reactions: mutationArtifacts.reactions,
+					contextInputCodec: ${contextDefinition}.input,
+					runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 				});
 			},
 			projectExecution: async ({ facts, service }) => Object.freeze({
@@ -386,6 +394,83 @@ export async function createApplication(input) {
 		await sql.close();
 		throw error;
 	}
+	const reactionBindings = new Map(slotBindings
+		.filter((binding) => binding.kind === "reaction")
+		.map((binding) => [binding.identity, binding]));
+	const durableApplication = ${JSON.stringify(`application:${input.configuration.application.name}`)};
+	const durableKernel = createPostgresDurableKernel({
+		sql,
+		application: durableApplication,
+		reactions: mutationArtifacts.reactions,
+	});
+	const durableLedger = createPostgresDurableEffectLedger({ sql, application: durableApplication });
+	const durableMaintenance = createPostgresDurableMaintenance({ sql, application: durableApplication });
+	const durableExecute = ({ reaction, input: reactionInput, contextInput, principal, signal, run, attempt, errors }) => {
+		const binding = reactionBindings.get(reaction.identity);
+		if (!binding) throw new TypeError("Reaction executable is unavailable");
+		return runtime.execution(
+			{ principal: durablePrincipal(principal), context: contextInput, signal },
+			({ execution, ...operations }) => binding.execute({
+				input: reactionInput,
+				ctx: Object.freeze({
+					...execution,
+					data: Object.freeze({
+						run: (definition, operationInput) => {
+							const queryDigest = structuralQueryDigests.get(definition);
+							const plan = queryDigest && plansByDigest.get(queryDigest);
+							if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
+							return executePostgresQuery({
+								plan,
+								binding: {
+									templateDigest: plan.templateDigest,
+									values: plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
+								},
+								executionFacts: {
+									authority: execution.authority,
+									principal: { id: execution.principal.id },
+									tenant: { id: execution.tenant.id },
+								},
+								sql,
+								signal: execution.signal,
+							});
+						},
+					}),
+					queries: Object.freeze({${directQueries}}),
+					mutations: Object.freeze({${directMutations}}),
+					run,
+					attempt,
+				}),
+				errors,
+			}),
+		);
+	};
+	const durableWorkers = new Set();
+	const createWorker = (options) => {
+		const worker = createDurableReactionWorker({
+			...options,
+			kernel: durableKernel,
+			ledger: durableLedger,
+			reactions: mutationArtifacts.reactions,
+			execute: durableExecute,
+		});
+		durableWorkers.add(worker);
+		return worker;
+	};
+	let defaultWorker;
+	const durable = Object.freeze({
+		worker: createWorker,
+		poll: (options) => {
+			if (options || !defaultWorker) defaultWorker = createWorker(options);
+			return defaultWorker.poll();
+		},
+		inspect: (runId) => durableKernel.inspect(runId),
+		events: (runId) => durableKernel.events(runId),
+		effects: (runId) => durableLedger.read(runId),
+		audit: (runId) => durableMaintenance.audit(runId),
+		cancelRun: (request) => durableMaintenance.cancelRun(request),
+		retryRun: (request) => durableMaintenance.retryRun(request),
+		acknowledgeAmbiguity: (request) => durableMaintenance.acknowledgeAmbiguity(request),
+	});
 	let closePromise;
 	return Object.freeze({
 		fetch: runtime.fetch,
@@ -394,11 +479,15 @@ export async function createApplication(input) {
 			queries: Object.freeze({${directQueries}}),
 			mutations: Object.freeze({${directMutations}}),
 		}))),
+		durable,
 		close: () => {
-			if (!closePromise) closePromise = runtime.close().finally(() => {
-				postgresController.abort(new DOMException("Runtime closed", "AbortError"));
-				return sql.close();
-			});
+			if (!closePromise) {
+				for (const worker of durableWorkers) worker.beginDrain();
+				closePromise = runtime.close().finally(() => {
+					postgresController.abort(new DOMException("Runtime closed", "AbortError"));
+					return sql.close();
+				});
+			}
 			return closePromise;
 		},
 	});

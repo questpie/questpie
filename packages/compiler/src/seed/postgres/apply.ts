@@ -17,7 +17,7 @@ import {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	childRecords,
-	ensureInternalProtocolV3,
+	ensureInternalProtocolV4,
 	fail,
 	providerObservations,
 } from "../../schema";
@@ -239,7 +239,7 @@ export async function applyCommittedSeeds(
 				"current database is unavailable",
 			);
 		await providerObservations(session, input.schema);
-		await ensureInternalProtocolV3(
+		await ensureInternalProtocolV4(
 			session,
 			database.name,
 			expectedPid,

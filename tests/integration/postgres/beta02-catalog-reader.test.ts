@@ -10,6 +10,9 @@ const database = process.env.PGHOST ? new SQL() : undefined;
 
 beforeAll(async () => {
 	if (!database) return;
+	// A newer internal protocol may already be installed by another lane file;
+	// this reader owns its own bootstrap.
+	await database.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	const session = await database.reserve();
 	try {
 		const [connection] = await session<{ database: string; pid: number }[]>`

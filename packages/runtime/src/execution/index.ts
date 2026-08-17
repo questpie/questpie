@@ -31,6 +31,8 @@ type MaybePromise<Value> = Value | Promise<Value>;
 export type ExecutionFacts<Resolved> = Readonly<{
 	principal: Principal;
 	authority: Authority;
+	/** The decoded Context input this root resolved from, never the resolution. */
+	contextInput: unknown;
 	tenant: Resolved extends Readonly<{ tenant: infer Tenant }> ? Tenant : never;
 	values: Resolved extends Readonly<{ values: infer Values }> ? Values : never;
 	signal: AbortSignal;
@@ -278,6 +280,7 @@ export function createApplicationRuntime<
 				const facts = Object.freeze({
 					principal: input.principal,
 					authority: Object.freeze({ kind: "ordinary" as const }),
+					contextInput: decoded,
 					tenant: resolved.tenant,
 					values: resolved.values,
 					signal: controller.signal,

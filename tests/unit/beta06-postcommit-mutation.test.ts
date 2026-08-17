@@ -34,6 +34,12 @@ function postgres(commitFails: boolean): Readonly<{
 			];
 		if (statement.startsWith('INSERT INTO "collaboration"."messages"'))
 			return [{ id: messageId }];
+		if (
+			statement.startsWith("UPDATE questpie_internal.pending_reaction_intents")
+		)
+			return [{ dispatchId: "e6b69be2-3b11-54b4-a08e-39eac72a9e1c" }];
+		if (statement.startsWith("INSERT INTO questpie_internal.durable_runs"))
+			return [{ runId: "5b0f6f2c-2b0a-5e7d-9c1f-2a4d6b8c0e12" }];
 		return [];
 	};
 	const session = {
@@ -60,50 +66,53 @@ function postgres(commitFails: boolean): Readonly<{
 	};
 }
 
-const collectionPlans = {
-	plans: [
-		{
-			identity: "mutation:messages.create",
+const collectionPlanList = [
+	{
+		identity: "mutation:messages.create",
+		target: "collection:messages",
+		member: "create",
+		operation: {
 			target: "collection:messages",
 			member: "create",
-			operation: {
-				target: "collection:messages",
-				member: "create",
-				keyFields: [["id"]],
-				callerInputFields: [["id"]],
-			},
-			candidate: {
-				fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
-			},
-			fieldAuthority: { checks: [] },
-			write: {
-				sql: 'INSERT INTO "collaboration"."messages"',
-				parameters: [
-					{
-						position: 1,
-						postgresType: "uuid",
-						kind: "callerInput",
-						path: ["id"],
-						codec: { kind: "uuid" },
-					},
-				],
-				result: [
-					{
-						path: ["id"],
-						column: "id",
-						codec: { kind: "uuid" },
-						nullable: false,
-					},
-				],
-			},
-			limits: { rows: 100, durationMilliseconds: 5_000 },
+			keyFields: [["id"]],
+			callerInputFields: [["id"]],
 		},
-	],
-} as const;
+		candidate: {
+			fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
+		},
+		fieldAuthority: { checks: [] },
+		write: {
+			sql: 'INSERT INTO "collaboration"."messages"',
+			parameters: [
+				{
+					position: 1,
+					postgresType: "uuid",
+					kind: "callerInput",
+					path: ["id"],
+					codec: { kind: "uuid" },
+				},
+			],
+			result: [
+				{
+					path: ["id"],
+					column: "id",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+			],
+		},
+		limits: { rows: 100, durationMilliseconds: 5_000 },
+	},
+] as const;
+
+const collectionPlans = {
+	plans: collectionPlanList,
+	byIdentity: new Map(collectionPlanList.map((plan) => [plan.identity, plan])),
+};
 
 const reactionProjection = {
 	format: "questpie.reaction-projection",
-	version: 1,
+	version: 2,
 	reactions: [
 		{
 			identity: "reaction:messagePublished",
@@ -111,6 +120,19 @@ const reactionProjection = {
 				kind: "object",
 				properties: { messageId: { kind: "uuid" } },
 			},
+			output: { kind: "object", properties: { messageId: { kind: "uuid" } } },
+			declaredErrors: {},
+			runAs: { actor: "caller", whenDenied: "fail" },
+			retry: {
+				maximumAttempts: 8,
+				initialDelayMilliseconds: 1_000,
+				backoff: "exponential",
+				maximumDelayMilliseconds: 900_000,
+				jitter: "full",
+				horizonMilliseconds: 86_400_000,
+			},
+			effects: [],
+			contractDigest: "c".repeat(64),
 			origin: {
 				path: "src/message-published.ts",
 				exportName: "messagePublished",
@@ -167,6 +189,8 @@ function invoker(database: ReturnType<typeof postgres>) {
 		sql: database.sql,
 		collectionPlans,
 		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
 		application: "application:collaboration",
 		facts: {
 			principal: principal.user({
@@ -175,6 +199,8 @@ function invoker(database: ReturnType<typeof postgres>) {
 			authority: { kind: "ordinary" },
 			tenant: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
 			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
 			signal: new AbortController().signal,
 			deadline: null,
 		},

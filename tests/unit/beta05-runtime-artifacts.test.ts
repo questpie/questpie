@@ -27,7 +27,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			version: 1,
 			application: "application:collaboration",
 			runtimeAbi: "questpie.runtime.v1",
-			internalProtocol: "questpie.internal.v3",
+			internalProtocol: "questpie.internal.v4",
 			compiler: {
 				version: "4.0.0-beta.1",
 				bunVersion: Bun.version,
@@ -36,12 +36,15 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			later: {
 				changeLedgerDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				resumeDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
-				durableCompatibilityDigest: null,
+				durableCompatibilityDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
 		});
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({ path: "reaction-projection.json" }),
+		);
+		expect(runtimeBuild.inventory).toContainEqual(
+			expect.objectContaining({ path: "durable-kernel.json" }),
 		);
 		expect(runtimeBuild.compilerRuntimeBuildDigest).toMatch(/^[0-9a-f]{64}$/);
 		expect(runtimeBuild.schemaFingerprint).toMatch(/^[0-9a-f]{64}$/);

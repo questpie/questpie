@@ -57,6 +57,7 @@ export type { ExecutionEventV1 } from "./events";
 export type {
 	RuntimeExecutableBindings,
 	RuntimeExecutableInventoryBinding,
+	RuntimeReactionBinding,
 } from "./bindings";
 
 type MaybePromise<Value> = Value | Promise<Value>;
@@ -157,7 +158,7 @@ export async function createRuntimeApplication<
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
 	const retainedClients = retainClientPairs(input.retainedClients);
-	const queryBindings = validateRuntimeExecutableBindings(
+	const validatedBindings = validateRuntimeExecutableBindings(
 		artifacts,
 		input.bindings,
 		input.serverExports,
@@ -167,6 +168,7 @@ export async function createRuntimeApplication<
 			ExecutionView
 		>,
 	);
+	const queryBindings = validatedBindings.operations;
 	const operationEngine = createOperationEngine(
 		queryBindings,
 		artifacts.wireContract.operations,

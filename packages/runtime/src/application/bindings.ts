@@ -3,8 +3,22 @@ import type { ContextDefinition, ServiceDefinition } from "questpie";
 import type { RuntimeExecutableBinding } from "../operation";
 import type { RuntimeArtifactsV1 } from "./artifacts";
 
+export type RuntimeReactionBinding = Readonly<{
+	identity: string;
+	kind: "reaction";
+	slot: "handler";
+	runtimeGraphDigest: string;
+	bundleExport: string;
+	definition: Readonly<{
+		name: string;
+		handler: (input: never) => unknown | Promise<unknown>;
+	}>;
+	execute: (input: never) => unknown | Promise<unknown>;
+}>;
+
 export type RuntimeExecutableInventoryBinding<View> =
 	| RuntimeExecutableBinding<View>
+	| RuntimeReactionBinding
 	| Readonly<{
 			identity: string;
 			kind: "context";
@@ -28,6 +42,11 @@ export type RuntimeExecutableBindings<View> = Readonly<{
 	slots: readonly RuntimeExecutableInventoryBinding<View>[];
 }>;
 
+export type ValidatedRuntimeBindings<View> = Readonly<{
+	operations: readonly RuntimeExecutableBinding<View>[];
+	reactions: readonly RuntimeReactionBinding[];
+}>;
+
 export function validateRuntimeExecutableBindings<View>(
 	artifacts: RuntimeArtifactsV1,
 	bindings: RuntimeExecutableBindings<View>,
@@ -36,7 +55,7 @@ export function validateRuntimeExecutableBindings<View>(
 		context: ContextDefinition;
 		services: readonly ServiceDefinition[];
 	}>,
-): readonly RuntimeExecutableBinding<View>[] {
+): ValidatedRuntimeBindings<View> {
 	if (bindings.application !== artifacts.runtimeBuild.application)
 		throw new TypeError(
 			"Runtime executable Application Identity does not match",
@@ -103,7 +122,9 @@ export function validateRuntimeExecutableBindings<View>(
 	if (
 		candidates.some(
 			(binding) =>
-				(binding.kind === "query" || binding.kind === "mutation") &&
+				(binding.kind === "query" ||
+					binding.kind === "mutation" ||
+					binding.kind === "reaction") &&
 				(binding.definition.name !==
 					binding.identity.slice(`${binding.kind}:`.length) ||
 					binding.definition.handler !== binding.execute),
@@ -124,6 +145,7 @@ export function validateRuntimeExecutableBindings<View>(
 			switch (binding.kind) {
 				case "query":
 				case "mutation":
+				case "reaction":
 					implementation = binding.execute;
 					break;
 				case "context":
@@ -139,10 +161,18 @@ export function validateRuntimeExecutableBindings<View>(
 		})
 	)
 		throw new TypeError("Runtime server export pointer does not match");
-	return Object.freeze(
-		candidates.filter(
-			(binding): binding is RuntimeExecutableBinding<View> =>
-				binding.kind === "query" || binding.kind === "mutation",
+	return Object.freeze({
+		operations: Object.freeze(
+			candidates.filter(
+				(binding): binding is RuntimeExecutableBinding<View> =>
+					binding.kind === "query" || binding.kind === "mutation",
+			),
 		),
-	);
+		reactions: Object.freeze(
+			candidates.filter(
+				(binding): binding is RuntimeReactionBinding =>
+					binding.kind === "reaction",
+			),
+		),
+	});
 }

@@ -8,8 +8,11 @@ import {
 	digest,
 } from "../canonical";
 import {
+	durableKernelContract,
+	durableKernelDigest,
 	projectReactionContracts,
-	type ReactionProjectionV1,
+	type DurableKernelContractV1,
+	type ReactionProjectionV2,
 } from "../reaction";
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
@@ -46,8 +49,9 @@ export interface RuntimeContractProjection {
 		slots: readonly RuntimeExecutableSlotV1[];
 	}>;
 	readonly runtimeExecutablesDigest: string;
-	readonly reactions: ReactionProjectionV1;
+	readonly reactions: ReactionProjectionV2;
 	readonly reactionDigest: string;
+	readonly durableKernel: DurableKernelContractV1;
 	readonly wire: Readonly<Record<string, unknown>>;
 	readonly wireDigest: string;
 }
@@ -83,7 +87,7 @@ export function projectRuntimeContract(
 	const application = `application:${input.configuration.application.name}`;
 	const operations = operationContracts(input.resources);
 	const reactions = projectReactionContracts(input.resources);
-	const reactionDigest = digest("questpie-reaction-projection-v1", reactions);
+	const reactionDigest = digest("questpie-reaction-projection-v2", reactions);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -103,7 +107,9 @@ export function projectRuntimeContract(
 	);
 	const slots = input.resources
 		.filter((resource) =>
-			["context", "mutation", "query", "service"].includes(resource.kind),
+			["context", "mutation", "query", "reaction", "service"].includes(
+				resource.kind,
+			),
 		)
 		.flatMap((resource) => {
 			const origin = {
@@ -280,6 +286,7 @@ export function projectRuntimeContract(
 	return {
 		clientContract,
 		clientContractDigest,
+		durableKernel: durableKernelContract,
 		executables,
 		runtimeExecutablesDigest,
 		reactions,
@@ -380,7 +387,7 @@ export function projectRuntimeBuild(
 		version: 1,
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
-		internalProtocol: "questpie.internal.v3",
+		internalProtocol: "questpie.internal.v4",
 		compiler,
 		compilerRuntimeBuildDigest: digest(
 			"questpie-compiler-runtime-build-v1",
@@ -415,7 +422,10 @@ export function projectRuntimeBuild(
 		later: {
 			changeLedgerDigest: input.liveQueryDigests.changeLedger,
 			resumeDigest: input.liveQueryDigests.resume,
-			durableCompatibilityDigest: null,
+			durableCompatibilityDigest:
+				input.runtime.reactions.reactions.length === 0
+					? null
+					: durableKernelDigest,
 			reactionDigest:
 				input.runtime.reactions.reactions.length === 0
 					? null

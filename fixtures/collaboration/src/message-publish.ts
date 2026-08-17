@@ -54,6 +54,7 @@ export const publishMessage = defineMutation({
 			},
 		});
 		await ctx.dispatch.messagePublished({
+			channelId: channel.id,
 			companyId: ctx.tenant.id,
 			messageId: message.id,
 		});

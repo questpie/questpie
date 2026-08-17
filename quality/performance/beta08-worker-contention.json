@@ -1,0 +1,24 @@
+{
+	"id": "beta08-worker-contention",
+	"kind": "load",
+	"schedule": "nightly",
+	"command": ["bun", "tests/load/beta08-worker-contention.ts"],
+	"budgetOwner": "BETA-08",
+	"metrics": {
+		"postgresContention96Ms": {
+			"direction": "max",
+			"budget": 3000,
+			"unit": "ms"
+		},
+		"durableRuns": {
+			"direction": "min",
+			"budget": 96,
+			"unit": "count"
+		},
+		"duplicateAttempts": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		}
+	}
+}

@@ -22,7 +22,10 @@ type RuntimeBuildV1 = Readonly<{
 	version: 1;
 	application: string;
 	runtimeAbi: "questpie.runtime.v1";
-	internalProtocol: "questpie.internal.v2" | "questpie.internal.v3";
+	internalProtocol:
+		| "questpie.internal.v2"
+		| "questpie.internal.v3"
+		| "questpie.internal.v4";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -49,13 +52,13 @@ type RuntimeBuildV1 = Readonly<{
 	later: Readonly<{
 		changeLedgerDigest: string | null;
 		resumeDigest: string | null;
-		durableCompatibilityDigest: null;
+		durableCompatibilityDigest: string | null;
 		reactionDigest: string | null;
 	}>;
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
 		identity: string;
-		kind: "context" | "mutation" | "query" | "service";
+		kind: "context" | "mutation" | "query" | "reaction" | "service";
 		slot: "create" | "dispose" | "handler" | "resolve";
 		runtimeGraphDigest: string;
 		bundleExport: string;
@@ -293,7 +296,8 @@ function decodeWire(value: unknown): OperationWireContract {
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const build = record(value, "runtime build");
-	const v3 = build.internalProtocol === "questpie.internal.v3";
+	const durable = build.internalProtocol === "questpie.internal.v4";
+	const v3 = build.internalProtocol === "questpie.internal.v3" || durable;
 	exact(
 		build,
 		[
@@ -375,8 +379,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		digestValue(later.resumeDigest, "resumeDigest");
 	} else if (later.changeLedgerDigest !== null || later.resumeDigest !== null)
 		fail("Live Query digests require internal protocol v3");
-	if (later.durableCompatibilityDigest !== null)
-		fail("durableCompatibilityDigest is not owned by this Runtime ABI");
+	if (later.durableCompatibilityDigest !== null) {
+		if (!durable)
+			fail("durableCompatibilityDigest requires internal protocol v4");
+		digestValue(later.durableCompatibilityDigest, "durableCompatibilityDigest");
+	}
 	if (later.reactionDigest !== null)
 		digestValue(later.reactionDigest, "reactionDigest");
 	const compiler = record(build.compiler, "compiler");
@@ -488,6 +495,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		!inventoryDigests.has("reaction-projection.json")
 	)
 		fail("reactionDigest does not match reaction-projection inventory");
+	if (
+		(later.durableCompatibilityDigest === null) !==
+		!inventoryDigests.has("durable-kernel.json")
+	)
+		fail("durableCompatibilityDigest does not match durable-kernel inventory");
 	if (compiler.buildInputDigest !== inventoryDigests.get("build-input.json"))
 		fail(
 			"compiler buildInputDigest does not match inventory path build-input.json",
@@ -498,7 +510,8 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		fail("unsupported Runtime ABI");
 	if (
 		build.internalProtocol !== "questpie.internal.v2" &&
-		build.internalProtocol !== "questpie.internal.v3"
+		build.internalProtocol !== "questpie.internal.v3" &&
+		build.internalProtocol !== "questpie.internal.v4"
 	)
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
