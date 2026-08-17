@@ -193,3 +193,63 @@ against the unrepaired code, and the exact assertion that fails is recorded with
 it. Every sentence in this record must trace to a path some test executes; where
 a limit or a refusal is claimed, a hostile case drives it rather than a comment
 asserting it.
+
+## Executed evidence
+
+The prescribed red test is
+`tests/integration/postgres/beta08-durable-kernel.test.ts`, "a worker crash
+after claim cannot let the stale lease holder publish a terminal transition,
+and one fact keeps one Reaction". It publishes one Message, claims the run with
+a 1,000 ms lease, lets that lease expire, takes the run over from a second
+worker, and only then lets the stale holder try to finish.
+
+It was falsified against the unrepaired kernel. Replacing the fenced predicate
+`AND current_attempt_id = $3 AND lease_token_digest = $4` with
+`AND $3::uuid IS NOT NULL AND $4::text IS NOT NULL` in all three
+compare-and-set sites makes it fail at
+`tests/integration/postgres/beta08-durable-kernel.test.ts:111`:
+
+```text
+expect(stale).toEqual({ status: "fenced", state: null, deadLetter: false })
+-   "state": null,       -   "status": "fenced",
++   "state": "succeeded", +   "status": "applied",
+```
+
+The stale holder's `succeed` is applied and the run reaches `succeeded` while a
+fresh worker still holds it. Restoring the fence turns the same assertion green.
+
+`RUN_AS_DENIED` was falsified the same way. Deleting the
+`if (isRunAsDenial(error)) return "RUN_AS_DENIED";` line in
+`packages/runtime/src/durable/worker.ts` makes
+`tests/integration/postgres/beta08-reaction-worker.test.ts:272` report
+`{ outcome: "retryScheduled", failureCode: "HANDLER_FAILED" }` instead of the
+permanent denial, so the test proves the classification rather than the shape of
+the thrown value. The detection matches the frozen `Error` with a `code` of
+`notFound` or `unauthenticated` that `context.error` actually builds; no test
+constructs that value by hand.
+
+Sixteen PostgreSQL tests carry the slice: six kernel cases (stale fence,
+concurrent `SKIP LOCKED` claims, retry exhaustion, cancellation race, executable
+retirement, concurrent maintenance winners), five worker cases (success, refused
+effect and retry, lost response and acknowledged ambiguity, revoked Membership,
+declared Reaction error), and five protocol cases (fresh install and v3 upgrade,
+direct-write rejection, append-only history, B-tree-only with no RLS, tampered
+guard).
+
+Two claims in this record are deliberately narrower than the accepted contract
+allows, because nothing in this slice executes the wider version:
+
+- The 24-hour retry horizon is persisted with every run and is read on every
+  retry schedule, where it clamps `available_at`. This slice runs no horizon
+  sweep, so a run whose horizon passes while it waits is still bounded only by
+  its eight-attempt program.
+- `EXECUTABLE_RETIRED` is a claim refusal, not a run failure code. A worker
+  without matching executable bytes refuses the claim and consumes no attempt;
+  the run stays `ready` for a compatible worker.
+
+Measured on PostgreSQL 17: one 20-run worker batch at 435.042 ms against a
+2,500 ms budget, a maximum 168-byte run result, three events per successful run,
+57,779 public declaration bytes, and 21,028 TypeScript instantiations. The
+nightly contention scenario ran 96 runs against eight competing workers in
+440.106 ms with 96 attempts and zero superseded leases. PostgreSQL 16, 17, and
+18 each report 95, 95, and 98 passing tests with zero failures.
