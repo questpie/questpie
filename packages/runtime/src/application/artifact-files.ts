@@ -54,6 +54,13 @@ export function verifyRuntimeArtifactFiles(
 		) !== build.runtimeExecutablesDigest
 	)
 		fail("runtime-executables.json semantic digest does not match");
+	if (
+		artifactDigest(
+			"questpie-operation-contracts-v1",
+			parseJsonFile("operation-contracts.json"),
+		) !== build.operationContractsDigest
+	)
+		fail("operation-contracts.json semantic digest does not match");
 	const rawWire = record(
 		parseJsonFile("wire-contract.json"),
 		"wire-contract.json",

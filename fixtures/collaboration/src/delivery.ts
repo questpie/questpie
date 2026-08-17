@@ -18,7 +18,10 @@ export async function deliverMessage(
 		throw new Error("delivery provider refused the request");
 	const receipt = `delivery:${input.effectId}`;
 	accepted.set(input.effectId, receipt);
-	if (input.body.startsWith("delivery-lost"))
+	if (
+		input.body.startsWith("delivery-lost") ||
+		input.body.startsWith("delivery-recovered")
+	)
 		throw new Error("delivery response was lost");
 	return receipt;
 }
@@ -26,6 +29,9 @@ export async function deliverMessage(
 export async function lookupDelivery(
 	input: Readonly<{ body: string; effectId: string }>,
 ): Promise<string | null> {
+	// `delivery-lost` has no reliable lookup contract, so a lost response stays
+	// unknown. `delivery-recovered` has one, so the same lost response resolves
+	// into the receipt the provider already issued.
 	if (input.body.startsWith("delivery-lost"))
 		throw new Error("delivery lookup is unavailable");
 	return accepted.get(input.effectId) ?? null;

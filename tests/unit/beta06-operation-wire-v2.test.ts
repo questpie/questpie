@@ -76,10 +76,14 @@ test("compiler emits exact wire v2 and binds its same-contract v1 sibling", asyn
 		const runtimeExecutables = JSON.parse(
 			compilation.generatedFiles["runtime-executables.json"]!,
 		);
+		const operationContracts = JSON.parse(
+			compilation.generatedFiles["operation-contracts.json"]!,
+		);
 		expect(() =>
 			decodeRuntimeArtifacts({
 				runtimeBuild,
 				runtimeExecutables,
+				operationContracts,
 				wireContract: wire,
 			}),
 		).not.toThrow();
@@ -111,6 +115,7 @@ test("compiler emits exact wire v2 and binds its same-contract v1 sibling", asyn
 				decodeRuntimeArtifacts({
 					runtimeBuild,
 					runtimeExecutables,
+					operationContracts,
 					wireContract: hostile,
 				}),
 			).toThrow();

@@ -46,6 +46,7 @@ type RuntimeBuildV1 = Readonly<{
 	schemaFingerprint: string;
 	serverBundleDigest: string;
 	runtimeExecutablesDigest: string;
+	operationContractsDigest: string;
 	runtimeGraphDigest: string;
 	wireDigest: string;
 	realtimeWireDigest: string | null;
@@ -99,11 +100,49 @@ type OperationWireContractV2 = OperationWireContractBase &
 
 type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;
 
+export type OperationContractsV1 = Readonly<{
+	format: "questpie.operation-contracts";
+	version: 1;
+	operations: readonly RuntimeOperationContract[];
+}>;
+
 export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
+	operationContracts: OperationContractsV1;
 	wireContract: OperationWireContract;
 }>;
+
+/**
+ * Every directly invocable Operation carries its codecs here, including the
+ * server-only ones the network wire never exposes.
+ */
+function decodeOperationContracts(value: unknown): OperationContractsV1 {
+	const artifact = record(value, "operation contracts");
+	exact(artifact, ["format", "version", "operations"], "operation contracts");
+	if (
+		artifact.format !== "questpie.operation-contracts" ||
+		artifact.version !== 1 ||
+		!Array.isArray(artifact.operations)
+	)
+		fail("operation contracts artifact is invalid");
+	const operations = artifact.operations.map((operation, index) =>
+		decodeOperationWireContract(operation, index),
+	);
+	const identities = operations.map(({ identity }) => identity);
+	if (
+		new Set(identities).size !== identities.length ||
+		identities.some(
+			(identity, index) => index > 0 && identity <= identities[index - 1]!,
+		)
+	)
+		fail("operation contracts must be unique and identity-sorted");
+	return Object.freeze({
+		format: "questpie.operation-contracts" as const,
+		version: 1 as const,
+		operations: Object.freeze(operations),
+	});
+}
 
 function decodeOperationWireContract(
 	value: unknown,
@@ -321,6 +360,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"schemaFingerprint",
 			"serverBundleDigest",
 			"runtimeExecutablesDigest",
+			"operationContractsDigest",
 			"runtimeGraphDigest",
 			"wireDigest",
 			...(v3 ? ["realtimeWireDigest"] : []),
@@ -351,6 +391,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"schemaFingerprint",
 		"serverBundleDigest",
 		"runtimeExecutablesDigest",
+		"operationContractsDigest",
 		"runtimeGraphDigest",
 		"wireDigest",
 		"digest",
@@ -531,12 +572,20 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 	const envelope = record(value, "artifact envelope");
 	exact(
 		envelope,
-		["runtimeBuild", "runtimeExecutables", "wireContract"],
+		[
+			"runtimeBuild",
+			"runtimeExecutables",
+			"operationContracts",
+			"wireContract",
+		],
 		"artifact envelope",
 	);
 	const runtimeBuild = decodeBuild(envelope.runtimeBuild);
 	const runtimeExecutables = decodeRuntimeExecutables(
 		envelope.runtimeExecutables,
+	);
+	const operationContracts = decodeOperationContracts(
+		envelope.operationContracts,
 	);
 	const wireContract = decodeWire(envelope.wireContract);
 	if (
@@ -544,6 +593,14 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		runtimeBuild.runtimeExecutablesDigest
 	)
 		fail("runtime executable digest does not match");
+	if (
+		!wireContract.operations.every((operation) =>
+			operationContracts.operations.some(
+				(candidate) => candidate.identity === operation.identity,
+			),
+		)
+	)
+		fail("wire operations are not covered by the operation contracts");
 	if (
 		wireContract.digest !== runtimeBuild.wireDigest ||
 		wireContract.application !== runtimeBuild.application ||
@@ -573,5 +630,10 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		})
 	)
 		fail("Runtime Build slots do not match executable inventory");
-	return Object.freeze({ runtimeBuild, runtimeExecutables, wireContract });
+	return Object.freeze({
+		runtimeBuild,
+		runtimeExecutables,
+		operationContracts,
+		wireContract,
+	});
 }

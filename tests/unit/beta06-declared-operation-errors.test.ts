@@ -34,6 +34,9 @@ function loadFixtureArtifacts() {
 			runtimeExecutables: JSON.parse(
 				compilation.generatedFiles["runtime-executables.json"]!,
 			),
+			operationContracts: JSON.parse(
+				compilation.generatedFiles["operation-contracts.json"]!,
+			),
 			wireContract: JSON.parse(
 				compilation.generatedFiles["wire-contract.json"]!,
 			),
@@ -83,6 +86,7 @@ test("decodes exact declared-error contracts from the complete Runtime artifacts
 			decodeRuntimeArtifacts({
 				runtimeBuild: artifacts.runtimeBuild,
 				runtimeExecutables: artifacts.runtimeExecutables,
+				operationContracts: artifacts.operationContracts,
 				wireContract: {
 					...rawWire,
 					operations: rawWire.operations.map((operation) =>

@@ -22,7 +22,6 @@ export interface DurableKernelContractV1 {
 		claimCommitsBeforeHandler: true;
 	}>;
 	readonly budgets: Readonly<Record<string, number>>;
-	readonly retention: Readonly<Record<string, number>>;
 	readonly eventKinds: readonly string[];
 	readonly failureCodes: readonly string[];
 	readonly permanentFailureCodes: readonly string[];
@@ -65,20 +64,16 @@ const withoutDigest = {
 		claimLock: "forUpdateSkipLocked" as const,
 		claimCommitsBeforeHandler: true as const,
 	},
+	// Only the budgets this slice actually enforces are pinned into the
+	// compatibility contract the Runtime Build digests. The accepted per-Principal
+	// attempt, pending-run, dead-letter, and retention budgets arrive with the
+	// slice that enforces them.
 	budgets: {
-		activeAttemptsPerPrincipal: 16,
 		claimBatch: 64,
-		deadLettersPerResource: 10_000,
 		eventsPerRun: 1_024,
 		payloadBytes: 262_144,
-		pendingRunsPerResource: 100_000,
 		resultBytes: 262_144,
 		retryHorizonMilliseconds: 86_400_000,
-	},
-	retention: {
-		attemptHistoryDays: 30,
-		idempotencyIdentityDays: 7,
-		terminalPayloadAndResultDays: 7,
 	},
 	eventKinds: [
 		"accepted",

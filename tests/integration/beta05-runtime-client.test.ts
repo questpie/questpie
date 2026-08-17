@@ -37,6 +37,7 @@ type Definition = Readonly<Record<string, unknown>>;
 
 let compilation: GeneratedCompilation;
 let runtimeBuild: Readonly<Record<string, unknown>>;
+let operationContracts: Readonly<Record<string, unknown>>;
 let runtimeExecutables: Readonly<{
 	slots: readonly RuntimeSlot[];
 }>;
@@ -234,6 +235,9 @@ beforeAll(async () => {
 	runtimeExecutables = JSON.parse(
 		compilation.generatedFiles["runtime-executables.json"]!,
 	);
+	operationContracts = JSON.parse(
+		compilation.generatedFiles["operation-contracts.json"]!,
+	);
 	wireContract = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
 });
 
@@ -306,6 +310,7 @@ async function runtimeHarness(
 		artifacts: {
 			runtimeBuild,
 			runtimeExecutables,
+			operationContracts,
 			wireContract,
 		},
 		artifactFiles: artifactFiles(),
@@ -319,7 +324,7 @@ async function runtimeHarness(
 			services: [auditConnection, executionAudit, auditReader] as never,
 			context: collaborationContext as never,
 			bootstrap: {
-				get: async () => {
+				get: (async () => {
 					bootstrapGets += 1;
 					return Object.freeze({
 						companyId,
@@ -328,7 +333,7 @@ async function runtimeHarness(
 						scopeKey: "company",
 						status: "active",
 					});
-				},
+				}) as never,
 			},
 			resolvePrincipal: readIngressPrincipal,
 			project: ({ facts }) =>
@@ -394,10 +399,10 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 	const context = { companyId };
 	const input = { channelId, first: 20, after: null };
 	try {
-		const direct = await harness.runtime.execution(
-			{ principal: user, context },
+		const direct = (await harness.runtime.execution(
+			{ principal: user, context } as never,
 			(operations) => operations.invoke("query:messages.page", input),
-		);
+		)) as Readonly<{ nodes: readonly Readonly<{ createdAt: unknown }>[] }>;
 		const raw = await harness.runtime.fetch(
 			operationRequest(operationFrame(input), user),
 		);
@@ -416,9 +421,11 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 				return harness.runtime.fetch(bindIngressPrincipal(request, user));
 			},
 		});
-		const clientResult = await client
+		const clientResult = (await client
 			.withContext(context)
-			.queries["messages.page"](input);
+			.queries["messages.page"](input)) as Readonly<{
+			nodes: readonly Readonly<{ createdAt: unknown }>[];
+		}>;
 		expect({ direct, fetch: rawFrame.payload, client: clientResult }).toEqual({
 			direct: expectedPage,
 			fetch: expectedWirePage,

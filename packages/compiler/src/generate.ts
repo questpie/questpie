@@ -387,7 +387,7 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
-${renderReactionDeclarations(resources)}
+${renderReactionDeclarations(resources, queryRuns)}
 
 ${renderDurableDeclarations()}
 

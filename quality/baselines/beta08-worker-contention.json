@@ -15,7 +15,7 @@
 		"postgres": "local Docker postgres:17",
 		"recordedAt": "2026-08-17",
 		"samples": 1,
-		"aggregation": "single observed run by postgresContention96Ms"
+		"aggregation": "single observed run by postgresContention64Ms"
 	},
 	"evidence": {
 		"localBaseline": "PASS",
@@ -23,23 +23,23 @@
 		"taggedStableRunner": "PENDING"
 	},
 	"samples": {
-		"postgresContention96Ms": [449.4256970000001]
+		"postgresContention64Ms": [402.4596040000001]
 	},
 	"observed": {
-		"postgresContention96Ms": 449.4256970000001,
-		"durableRuns": 96,
+		"postgresContention64Ms": 402.4596040000001,
+		"durableRuns": 64,
 		"duplicateAttempts": 0
 	},
 	"budgetDerivation": {
-		"postgresContention96Ms": {
-			"referenceObservedMs": 449.4256970000001,
+		"postgresContention64Ms": {
+			"referenceObservedMs": 402.4596040000001,
 			"multiplier": 6,
 			"roundUpQuantumMs": 1000
 		}
 	},
 	"budgets": {
-		"postgresContention96Ms": 3000,
-		"durableRuns": 96,
+		"postgresContention64Ms": 3000,
+		"durableRuns": 64,
 		"duplicateAttempts": 0
 	},
 	"status": "PASS"

@@ -145,8 +145,14 @@ CREATE TABLE questpie_internal.durable_run_events (
   error_code text,
   PRIMARY KEY (application_name, run_id, sequence),
   FOREIGN KEY (application_name, run_id)
-    REFERENCES questpie_internal.durable_runs (application_name, run_id) ON DELETE CASCADE,
+    REFERENCES questpie_internal.durable_runs (application_name, run_id),
   CONSTRAINT durable_event_sequence_bounded CHECK (sequence BETWEEN 1 AND 1024),
+  CONSTRAINT durable_event_error_code_known CHECK (
+    error_code IS NULL OR error_code IN (
+      'EFFECT_AMBIGUOUS', 'EFFECT_CONFLICT', 'HANDLER_FAILED', 'REACTION_ERROR',
+      'RESOURCE_LIMIT', 'RETRY_EXHAUSTED', 'RUN_AS_DENIED', 'VALIDATION_FAILED'
+    )
+  ),
   CONSTRAINT durable_event_lease_digest_sha256 CHECK (
     lease_token_digest IS NULL OR lease_token_digest ~ '^[0-9a-f]{64}$'
   ),

@@ -35,15 +35,19 @@ type Beta08Durable = Readonly<{
 			leaseMilliseconds?: number;
 			heartbeatMilliseconds?: number;
 			attemptDeadlineMilliseconds?: number;
+			resultBytesLimit?: number;
 		}>,
 	): Readonly<{
 		workerId: string;
 		poll(): Promise<unknown>;
 		beginDrain(): void;
 	}>;
-	poll(options?: Readonly<{ workerId?: string }>): Promise<
+	poll(
+		options?: Readonly<{ workerId?: string; resultBytesLimit?: number }>,
+	): Promise<
 		Readonly<{
 			admitted: number;
+			cancelled: number;
 			claimed: number;
 			refusedIncompatible: number;
 			outcomes: readonly Readonly<{

@@ -171,7 +171,10 @@ export async function createRuntimeApplication<
 	const queryBindings = validatedBindings.operations;
 	const operationEngine = createOperationEngine(
 		queryBindings,
-		artifacts.wireContract.operations,
+		artifacts.operationContracts.operations,
+	);
+	const networkOperations = new Set(
+		artifacts.wireContract.operations.map(({ identity }) => identity),
 	);
 	await input.program.verifyReadiness?.(artifacts);
 	try {
@@ -481,6 +484,11 @@ export async function createRuntimeApplication<
 			if (binding?.kind !== "query")
 				return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
 		}
+		if (!networkOperations.has(frame.operation))
+			return operationWireResponse(
+				failureFrame(frame, "NOT_FOUND"),
+				operationFailureStatus("NOT_FOUND"),
+			);
 		let prepared: PreparedOperation<OperationView>;
 		let contextInput: ContextInputOf<Context>;
 		try {

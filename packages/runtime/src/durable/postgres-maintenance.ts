@@ -272,7 +272,7 @@ WHERE application_name = $1 AND run_id = $2`,
 					});
 				await query(
 					`UPDATE questpie_internal.durable_runs
-SET state = 'ready', dead_letter = false, terminal_at = NULL,
+SET state = 'ready', dead_letter = false, failure_code = NULL, terminal_at = NULL,
     available_at = pg_catalog.transaction_timestamp()
 WHERE application_name = $1 AND run_id = $2`,
 					[input.application, request.runId],

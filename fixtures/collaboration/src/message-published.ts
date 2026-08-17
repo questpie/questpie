@@ -34,7 +34,7 @@ export const messagePublished = defineReaction({
 		}),
 	},
 	handler: async ({ input, ctx, errors }) => {
-		await ctx.attempt.heartbeat({ completed: 0 });
+		await ctx.attempt.heartbeat();
 		const page = await ctx.data.run(channelMessagePage, {
 			channelId: input.channelId,
 			first: 100,

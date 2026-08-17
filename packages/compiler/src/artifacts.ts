@@ -388,6 +388,9 @@ export async function createArtifacts(
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
+		"operation-contracts.json": runtimeArtifactBytes(
+			runtime.operationContracts,
+		),
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),

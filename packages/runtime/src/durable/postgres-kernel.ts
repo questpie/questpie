@@ -220,6 +220,7 @@ VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, 
 export interface DurableKernel {
 	readonly application: string;
 	admit(batch?: number): Promise<readonly DurableAdmission[]>;
+	reapCancelled(limit?: number): Promise<number>;
 	claim(
 		input: Readonly<{
 			runId: string;
@@ -401,6 +402,48 @@ WHERE application_name = $1 AND attempt_id = $2`,
 
 	return Object.freeze<DurableKernel>({
 		application: input.application,
+		async reapCancelled(limit = maximumBatch) {
+			return transaction(async (query) => {
+				const cancelled = await query(
+					`UPDATE questpie_internal.durable_runs
+SET state = 'cancelled', current_attempt_id = NULL, lease_token_digest = NULL,
+    lease_expires_at = NULL, terminal_at = pg_catalog.transaction_timestamp()
+WHERE (application_name, run_id) IN (
+  SELECT application_name, run_id FROM questpie_internal.durable_runs
+  WHERE application_name = $1 AND cancellation_requested
+    AND (state IN ('delayed', 'ready')
+      OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
+  ORDER BY run_id
+  LIMIT $2
+)
+RETURNING run_id::text AS "runId", resource_identity AS "resource",
+          dispatch_id::text AS "dispatchId", causation_id AS "causationId",
+          correlation_id AS "correlationId"`,
+					[input.application, limit],
+				);
+				for (const row of cancelled) {
+					await query(
+						`UPDATE questpie_internal.durable_attempts
+SET outcome = 'cancelled'
+WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL`,
+						[input.application, durableText(row.runId, "run identity")],
+					);
+					await appendEvent(query, {
+						application: input.application,
+						runId: durableText(row.runId, "run identity"),
+						resource: durableText(row.resource, "Resource Identity"),
+						dispatchId: durableText(row.dispatchId, "dispatch identity"),
+						causationId: durableText(row.causationId, "causation identity"),
+						correlationId: durableText(
+							row.correlationId,
+							"correlation identity",
+						),
+						kind: "cancelled",
+					});
+				}
+				return cancelled.length;
+			});
+		},
 		async admit(batch = maximumBatch) {
 			if (!Number.isSafeInteger(batch) || batch < 1 || batch > maximumBatch)
 				throw new TypeError(
@@ -411,6 +454,7 @@ WHERE application_name = $1 AND attempt_id = $2`,
        executable_digest AS "executableDigest"
 FROM questpie_internal.durable_runs
 WHERE application_name = $1
+  AND NOT cancellation_requested
   AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
     OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
 ORDER BY available_at, run_id
@@ -451,6 +495,7 @@ LIMIT $2`,
 					`SELECT ${runSelection}
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
+  AND NOT cancellation_requested
   AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
     OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
 FOR UPDATE SKIP LOCKED`,

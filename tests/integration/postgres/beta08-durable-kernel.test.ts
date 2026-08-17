@@ -3,6 +3,11 @@ import { afterAll, expect, test } from "bun:test";
 import { SQL } from "bun";
 
 import {
+	createDurableReactionWorker,
+	createDurableRunHandle,
+	linkReactionProjection,
+} from "../../../packages/runtime/src/index";
+import {
 	beta05Ids,
 	prepareBeta08Durable,
 	retiredDurableKernel,
@@ -365,18 +370,93 @@ postgresTest(
 );
 
 postgresTest(
-	"concurrent maintenance commands elect one winner and audit every attempt",
+	"a cancel-requested run is reaped instead of starting a needless recovered attempt",
 	async () => {
 		const prepared = await prepareBeta08Durable(database!);
 		try {
-			const callId = "beta08-command-00-0000-000000000006";
-			await publish(prepared, { body: "maintenance", callId });
+			const callId = "beta08-reap-00000-0000-000000000007";
+			await publish(prepared, { body: "cancel after crash", callId });
 			const runId = await runIdentity(callId);
+			const crashed = await prepared.kernel.claim({
+				runId,
+				workerId: "worker:reap-crashed",
+				leaseMilliseconds: 1_000,
+				attemptDeadlineMilliseconds: 1_000,
+			});
+			if (crashed.status !== "claimed") throw new Error("claim failed");
+
+			expect(
+				await prepared.maintenance.cancelRun({
+					runId,
+					reason: "operator stopped the run",
+					actor: { kind: "user", id: beta05Ids.principal },
+				}),
+			).toMatchObject({ outcome: "applied", stateAfter: "running" });
+
+			// The holder never returns and its lease expires. Nothing may start a
+			// second attempt on a run whose cancellation is already durable.
+			await Bun.sleep(1_200);
+			expect(await prepared.kernel.admit()).toEqual([]);
+			expect(
+				await prepared.kernel.claim({ runId, workerId: "worker:reap-fresh" }),
+			).toEqual({ status: "skipped" });
+
+			expect(await prepared.kernel.reapCancelled()).toBe(1);
+			expect(await prepared.kernel.inspect(runId)).toMatchObject({
+				state: "cancelled",
+				attemptCount: 1,
+				currentAttemptId: null,
+			});
+			const [attempts] = await database!.unsafe<
+				readonly Readonly<{ attempts: number; cancelled: number }>[]
+			>(
+				`SELECT count(*)::int AS attempts,
+       count(*) FILTER (WHERE outcome = 'cancelled')::int AS cancelled
+FROM questpie_internal.durable_attempts WHERE run_id = $1`,
+				[runId],
+			);
+			expect(attempts).toEqual({ attempts: 1, cancelled: 1 });
+			expect(
+				await prepared.kernel.succeed(crashed.claim, encoder.encode("{}")),
+			).toMatchObject({ status: "fenced" });
+			expect(await prepared.kernel.reapCancelled()).toBe(0);
+		} finally {
+			await prepared.dispose();
+		}
+	},
+	120_000,
+);
+
+postgresTest(
+	"each maintenance command elects one winner from a state that admits it",
+	async () => {
+		const prepared = await prepareBeta08Durable(database!);
+		try {
 			const actor = { kind: "user", id: beta05Ids.principal } as const;
 
+			// cancelRun races on a genuinely running run.
+			const runningCall = "beta08-command-00-0000-000000000006";
+			await publish(prepared, {
+				body: "maintenance running",
+				callId: runningCall,
+			});
+			const runningRun = await runIdentity(runningCall);
+			const claimed = await prepared.kernel.claim({
+				runId: runningRun,
+				workerId: "worker:maintenance",
+			});
+			expect(claimed.status).toBe("claimed");
 			const cancels = await Promise.all([
-				prepared.maintenance.cancelRun({ runId, reason: "left", actor }),
-				prepared.maintenance.cancelRun({ runId, reason: "right", actor }),
+				prepared.maintenance.cancelRun({
+					runId: runningRun,
+					reason: "left",
+					actor,
+				}),
+				prepared.maintenance.cancelRun({
+					runId: runningRun,
+					reason: "right",
+					actor,
+				}),
 			]);
 			expect(
 				cancels.filter(({ outcome }) => outcome === "applied"),
@@ -384,48 +464,88 @@ postgresTest(
 			expect(
 				cancels.filter(
 					({ outcome, rejectionCode }) =>
-						outcome === "rejected" &&
-						(rejectionCode === "ALREADY_REQUESTED" ||
-							rejectionCode === "RUN_IS_TERMINAL"),
+						outcome === "rejected" && rejectionCode === "ALREADY_REQUESTED",
 				),
 			).toHaveLength(1);
-			expect((await prepared.kernel.inspect(runId))?.state).toBe("cancelled");
+			const [cancellations] = await database!.unsafe<
+				readonly Readonly<{ requests: number }>[]
+			>(
+				`SELECT count(*)::int AS requests FROM questpie_internal.durable_cancellations WHERE run_id = $1`,
+				[runningRun],
+			);
+			expect(cancellations?.requests).toBe(1);
 
-			const retries = await Promise.all([
-				prepared.maintenance.retryRun({ runId, actor }),
-				prepared.maintenance.retryRun({ runId, actor }),
+			// acknowledgeAmbiguity and retryRun race on a genuinely failed run whose
+			// effect is genuinely ambiguous.
+			const failedCall = "beta08-command-00-0000-000000000008";
+			await publish(prepared, {
+				body: "delivery-lost maintenance",
+				callId: failedCall,
+			});
+			const failedRun = await runIdentity(failedCall);
+			await prepared.app.durable.poll();
+			expect(await prepared.kernel.inspect(failedRun)).toMatchObject({
+				state: "failed",
+				failureCode: "EFFECT_AMBIGUOUS",
+			});
+			expect(await prepared.ledger.read(failedRun)).toEqual([
+				expect.objectContaining({ status: "ambiguous" }),
 			]);
-			expect(retries.every(({ outcome }) => outcome === "rejected")).toBe(true);
-			expect(
-				retries.every(
-					({ rejectionCode }) => rejectionCode === "RUN_NOT_FAILED",
-				),
-			).toBe(true);
 
 			const acknowledgements = await Promise.all([
 				prepared.maintenance.acknowledgeAmbiguity({
-					runId,
+					runId: failedRun,
 					effectName: "deliver-message",
 					actor,
 				}),
 				prepared.maintenance.acknowledgeAmbiguity({
-					runId,
+					runId: failedRun,
 					effectName: "deliver-message",
 					actor,
 				}),
 			]);
 			expect(
-				acknowledgements.every(
+				acknowledgements.filter(({ outcome }) => outcome === "applied"),
+			).toHaveLength(1);
+			expect(
+				acknowledgements.filter(
 					({ outcome, rejectionCode }) =>
 						outcome === "rejected" && rejectionCode === "NOT_AMBIGUOUS",
 				),
-			).toBe(true);
+			).toHaveLength(1);
 
-			const audit = await prepared.maintenance.audit(runId);
-			expect(audit).toHaveLength(6);
-			expect(audit.filter(({ outcome }) => outcome === "applied")).toHaveLength(
-				1,
-			);
+			const retries = await Promise.all([
+				prepared.maintenance.retryRun({ runId: failedRun, actor }),
+				prepared.maintenance.retryRun({ runId: failedRun, actor }),
+			]);
+			expect(
+				retries.filter(({ outcome }) => outcome === "applied"),
+			).toHaveLength(1);
+			expect(
+				retries.filter(
+					({ outcome, rejectionCode }) =>
+						outcome === "rejected" && rejectionCode === "RUN_NOT_FAILED",
+				),
+			).toHaveLength(1);
+			const retried = await prepared.kernel.inspect(failedRun);
+			expect(retried).toMatchObject({
+				state: "ready",
+				deadLetter: false,
+				failureCode: null,
+				terminalAt: null,
+			});
+
+			// Racing commands share a transaction timestamp, so the audit records
+			// every attempt but fixes no order between the two contenders.
+			const audit = await prepared.maintenance.audit(failedRun);
+			expect(
+				audit.map(({ command, outcome }) => `${command}:${outcome}`).sort(),
+			).toEqual([
+				"acknowledgeAmbiguity:applied",
+				"acknowledgeAmbiguity:rejected",
+				"retryRun:applied",
+				"retryRun:rejected",
+			]);
 			expect(
 				audit.every(
 					({ actor: recorded }) =>
@@ -436,5 +556,142 @@ postgresTest(
 			await prepared.dispose();
 		}
 	},
-	120_000,
+	180_000,
+);
+
+postgresTest(
+	"one logical effect keeps one identity across attempts and the next attempt recovers its receipt",
+	async () => {
+		const prepared = await prepareBeta08Durable(database!);
+		try {
+			const callId = "beta08-effect-000-0000-000000000009";
+			await publish(prepared, { body: "stable effect identity", callId });
+			const runId = await runIdentity(callId);
+
+			const first = await prepared.kernel.claim({
+				runId,
+				workerId: "worker:effect-first",
+				leaseMilliseconds: 1_000,
+				attemptDeadlineMilliseconds: 1_000,
+			});
+			if (first.status !== "claimed") throw new Error("claim failed");
+			let performed = 0;
+			const firstHandle = createDurableRunHandle({
+				ledger: prepared.ledger,
+				claim: first.claim,
+				declaredEffects: ["deliver-message"],
+				signal: new AbortController().signal,
+			});
+			const receipt = await firstHandle.effect("deliver-message").invoke({
+				input: { messageId: runId },
+				perform: async ({ effectId }): Promise<`delivery:${string}`> => {
+					performed += 1;
+					return `delivery:${effectId}`;
+				},
+			});
+			expect(performed).toBe(1);
+
+			// The holder never publishes a terminal transition; a fresh worker takes
+			// the run over after the lease expires.
+			await Bun.sleep(1_200);
+			const second = await prepared.kernel.claim({
+				runId,
+				workerId: "worker:effect-second",
+			});
+			if (second.status !== "claimed") throw new Error("takeover failed");
+			expect(second.claim.attemptNumber).toBe(2);
+
+			const secondHandle = createDurableRunHandle({
+				ledger: prepared.ledger,
+				claim: second.claim,
+				declaredEffects: ["deliver-message"],
+				signal: new AbortController().signal,
+			});
+			const recovered = await secondHandle.effect("deliver-message").invoke({
+				input: { messageId: runId },
+				perform: async (): Promise<`delivery:${string}`> => {
+					performed += 1;
+					return "delivery:second-call";
+				},
+			});
+			expect(recovered).toBe(receipt);
+			expect(performed).toBe(1);
+
+			const effects = await prepared.ledger.read(runId);
+			expect(effects).toHaveLength(1);
+			expect(effects[0]).toMatchObject({
+				effectName: "deliver-message",
+				status: "succeeded",
+				receipt,
+			});
+			expect(receipt).toBe(`delivery:${effects[0]!.effectId}`);
+
+			// Reusing that identity with different canonical input conflicts.
+			await expect(
+				createDurableRunHandle({
+					ledger: prepared.ledger,
+					claim: second.claim,
+					declaredEffects: ["deliver-message"],
+					signal: new AbortController().signal,
+				})
+					.effect("deliver-message")
+					.invoke({
+						input: { messageId: callId },
+						perform: async () => "delivery:conflict" as const,
+					}),
+			).rejects.toMatchObject({ name: "DurableEffectConflict" });
+			expect(performed).toBe(1);
+		} finally {
+			await prepared.dispose();
+		}
+	},
+	180_000,
+);
+
+postgresTest(
+	"a result outside its declared codec is permanent VALIDATION_FAILED, not eight retries",
+	async () => {
+		const prepared = await prepareBeta08Durable(database!);
+		try {
+			const callId = "beta08-codec-0000-0000-000000000010";
+			await publish(prepared, { body: "codec guard", callId });
+			const runId = await runIdentity(callId);
+
+			// TypeScript is erased at runtime, so a handler can return a value
+			// outside its declared result codec. The worker factory here is the one
+			// the generated application builds; only the executor differs.
+			const worker = createDurableReactionWorker({
+				kernel: prepared.kernel,
+				ledger: prepared.ledger,
+				reactions: linkReactionProjection(
+					JSON.parse(prepared.reactionProjectionBytes),
+				),
+				workerId: "worker:codec",
+				execute: async () => ({ deliveryReceipt: 7 }),
+			});
+			const trace = await worker.poll();
+			expect(trace.outcomes).toEqual([
+				expect.objectContaining({
+					runId,
+					outcome: "failed",
+					failureCode: "VALIDATION_FAILED",
+					attemptNumber: 1,
+				}),
+			]);
+			expect(await prepared.kernel.inspect(runId)).toMatchObject({
+				state: "failed",
+				attemptCount: 1,
+				deadLetter: true,
+				failureCode: "VALIDATION_FAILED",
+			});
+			const events = await prepared.kernel.events(runId);
+			expect(events.at(-1)).toMatchObject({
+				kind: "failed",
+				errorCode: "VALIDATION_FAILED",
+			});
+		} finally {
+			await prepared.dispose();
+		}
+	},
+	180_000,
 );

@@ -4,7 +4,6 @@ import { defineMutation } from "#questpie/app";
 
 export const recordMessageDelivery = defineMutation({
 	name: "message.recordDelivery",
-	network: true,
 	input: codec.object({ messageId: codec.uuid() }),
 	output: codec.object({ eventId: codec.uuid() }),
 	policy: policy.authenticated(),

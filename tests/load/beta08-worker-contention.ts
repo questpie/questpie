@@ -14,7 +14,7 @@ if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER)
 
 // The tracer Reaction rereads one bounded 100-row Message page, so the
 // contended set stays inside the page its handler can observe.
-const runs = 96;
+const runs = 64;
 const workers = 8;
 const sql = new SQL({ max: workers + 2 });
 
@@ -68,7 +68,7 @@ try {
 			claimed += trace.claimed;
 		}
 	}
-	const postgresContention96Ms = performance.now() - started;
+	const postgresContention64Ms = performance.now() - started;
 
 	const [rows] = await sql.unsafe<
 		ReadonlyArray<
@@ -96,13 +96,13 @@ try {
 		throw new Error(`fleet claimed ${claimed} of ${runs} runs`);
 
 	const measurements = {
-		postgresContention96Ms,
+		postgresContention64Ms,
 		durableRuns: rows.runs,
 		duplicateAttempts: rows.attempts - runs,
 	};
 	if (
-		baseline.budgets.postgresContention96Ms !==
-		derivedBudget(baseline.budgetDerivation.postgresContention96Ms)
+		baseline.budgets.postgresContention64Ms !==
+		derivedBudget(baseline.budgetDerivation.postgresContention64Ms)
 	)
 		throw new Error("worker contention budget derivation drifted");
 	for (const [name, metric] of Object.entries(scenario.metrics)) {

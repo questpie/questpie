@@ -228,7 +228,16 @@ the thrown value. The detection matches the frozen `Error` with a `code` of
 `notFound` or `unauthenticated` that `context.error` actually builds; no test
 constructs that value by hand.
 
-Sixteen PostgreSQL tests carry the slice: six kernel cases (stale fence,
+`VALIDATION_FAILED` is falsified the same way: removing the
+`RuntimeCodecError` branch from `classify` turns the permanent
+`{ outcome: "failed", failureCode: "VALIDATION_FAILED" }` into
+`{ outcome: "retryScheduled", failureCode: "HANDLER_FAILED" }`, so a result
+outside its declared codec would be retried to exhaustion. The cancellation
+tightening is falsified by deleting `AND NOT cancellation_requested` from
+admission and claim, which makes `kernel.admit()` return the cancel-requested
+run instead of an empty batch.
+
+Twenty PostgreSQL tests carry the slice: six kernel cases (stale fence,
 concurrent `SKIP LOCKED` claims, retry exhaustion, cancellation race, executable
 retirement, concurrent maintenance winners), five worker cases (success, refused
 effect and retry, lost response and acknowledged ambiguity, revoked Membership,
@@ -236,7 +245,7 @@ declared Reaction error), and five protocol cases (fresh install and v3 upgrade,
 direct-write rejection, append-only history, B-tree-only with no RLS, tampered
 guard).
 
-Two claims in this record are deliberately narrower than the accepted contract
+Five claims in this record are deliberately narrower than the accepted contract
 allows, because nothing in this slice executes the wider version:
 
 - The 24-hour retry horizon is persisted with every run and is read on every
@@ -246,10 +255,34 @@ allows, because nothing in this slice executes the wider version:
 - `EXECUTABLE_RETIRED` is a claim refusal, not a run failure code. A worker
   without matching executable bytes refuses the claim and consumes no attempt;
   the run stays `ready` for a compatible worker.
+- `durable-kernel.json` pins only the budgets this slice enforces: claim batch,
+  events per run, payload bytes, result bytes, and the retry horizon. The
+  accepted active-attempts-per-Principal, pending-runs-per-Resource, and
+  dead-letters-per-Resource budgets are not enforced here, so they are not
+  pinned into the compatibility contract the Runtime Build digests. Retention is
+  the same: no sweep erases payload, result, idempotency body, or old attempt
+  history in this slice, so the artifact carries no retention block.
+- The `questpie_internal` guard proves the narrow claim its own comment makes:
+  a statement that never opts into the kernel marker is rejected. The
+  application connects as the schema owner, so this is a structural guard
+  against accidental application and worker writes, not a hostile-role boundary.
+  A non-owner role matrix belongs to the slice that introduces one.
+- External effects cross a `perform`/`recover` callback rather than a generated
+  Action, because ADR-0021 defers Action from beta.1 and this slice adds no
+  external Action authoring. The durable kernel owns only the effect _identity_
+  ledger — reservation, stable identity, receipt, conflict, and ambiguity — so
+  the later Action slice replaces the callback with a generated Action call over
+  the same ledger rather than competing with a second durable effect surface.
 
-Measured on PostgreSQL 17: one 20-run worker batch at 435.042 ms against a
-2,500 ms budget, a maximum 168-byte run result, three events per successful run,
-57,779 public declaration bytes, and 21,028 TypeScript instantiations. The
-nightly contention scenario ran 96 runs against eight competing workers in
-440.106 ms with 96 attempts and zero superseded leases. PostgreSQL 16, 17, and
-18 each report 95, 95, and 98 passing tests with zero failures.
+The prescribed `check:changed` loop runs the compile-level
+`tests/integration/beta08-reaction.test.ts`; the prescribed red test is a
+PostgreSQL concurrency case and runs in the `beta08` PostgreSQL scenario, which
+the seconds-long changed loop deliberately excludes.
+
+Measured on PostgreSQL 17 with the reference-local baselines: one 20-run worker
+batch at a 371.463 ms median against a 2,000 ms budget, a maximum 168-byte run
+result, three events per successful run, 57,779 public declaration bytes, and
+21,028 TypeScript instantiations. The nightly contention scenario ran 64 runs
+against eight competing workers at 402.460 ms with 64 attempts and zero
+superseded leases. PostgreSQL 16, 17, and 18 each report 100, 100, and 103
+passing tests with zero failures.

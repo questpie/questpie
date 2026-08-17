@@ -43,6 +43,12 @@ interface RuntimeExecutableSlotV1 {
 export interface RuntimeContractProjection {
 	readonly clientContract: Readonly<Record<string, unknown>>;
 	readonly clientContractDigest: string;
+	readonly operationContracts: Readonly<{
+		format: "questpie.operation-contracts";
+		version: 1;
+		operations: readonly Readonly<Record<string, unknown>>[];
+	}>;
+	readonly operationContractsDigest: string;
 	readonly executables: Readonly<{
 		format: "questpie.runtime-executables";
 		version: 1;
@@ -56,12 +62,15 @@ export interface RuntimeContractProjection {
 	readonly wireDigest: string;
 }
 
-function operationContracts(resources: readonly NormalizedResource[]) {
+function operationContracts(
+	resources: readonly NormalizedResource[],
+	exposure: "direct" | "network",
+) {
 	return resources
 		.filter(
 			(resource) =>
 				(resource.kind === "query" || resource.kind === "mutation") &&
-				resource.contract.exposure === "network",
+				(exposure === "direct" || resource.contract.exposure === "network"),
 		)
 		.map((resource) => ({
 			identity: resource.identity,
@@ -85,7 +94,14 @@ export function projectRuntimeContract(
 	}>,
 ): RuntimeContractProjection {
 	const application = `application:${input.configuration.application.name}`;
-	const operations = operationContracts(input.resources);
+	const operations = operationContracts(input.resources, "network");
+	// Every directly invocable Operation needs its codecs, including the
+	// server-only ones the network wire deliberately never exposes.
+	const operationContractsArtifact = {
+		format: "questpie.operation-contracts" as const,
+		version: 1 as const,
+		operations: operationContracts(input.resources, "direct"),
+	};
 	const reactions = projectReactionContracts(input.resources);
 	const reactionDigest = digest("questpie-reaction-projection-v2", reactions);
 	const clientContract = {
@@ -286,6 +302,11 @@ export function projectRuntimeContract(
 	return {
 		clientContract,
 		clientContractDigest,
+		operationContracts: operationContractsArtifact,
+		operationContractsDigest: digest(
+			"questpie-operation-contracts-v1",
+			operationContractsArtifact,
+		),
 		durableKernel: durableKernelContract,
 		executables,
 		runtimeExecutablesDigest,
@@ -406,6 +427,7 @@ export function projectRuntimeBuild(
 		migrationHead: input.migrationHead,
 		serverBundleDigest: fileDigest("internal/application.js"),
 		runtimeExecutablesDigest: input.runtime.runtimeExecutablesDigest,
+		operationContractsDigest: input.runtime.operationContractsDigest,
 		runtimeGraphDigest,
 		wireDigest: input.runtime.wireDigest,
 		realtimeWireDigest: input.realtimeWireDigest,

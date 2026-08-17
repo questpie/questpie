@@ -1,4 +1,8 @@
-import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
+import {
+	decodeRuntimeCodec,
+	encodeRuntimeCodec,
+	RuntimeCodecError,
+} from "../codec";
 import { canonicalMutationBytes } from "../mutation/canonical";
 import { DeclaredOperationError } from "../operation";
 import {
@@ -21,7 +25,7 @@ import type {
 
 export type DurableAttemptHandle = Readonly<{
 	number: number;
-	heartbeat(progress?: Readonly<{ completed: number }>): Promise<void>;
+	heartbeat(): Promise<void>;
 }>;
 
 export type DurableAttemptRequest = Readonly<{
@@ -58,6 +62,7 @@ export type DurableWorkerOutcome = Readonly<{
 export type DurableWorkerTrace = Readonly<{
 	workerId: string;
 	admitted: number;
+	cancelled: number;
 	claimed: number;
 	refusedIncompatible: number;
 	outcomes: readonly DurableWorkerOutcome[];
@@ -91,6 +96,9 @@ function isRunAsDenial(error: unknown): boolean {
 }
 
 function classify(error: unknown): DurableFailureCode {
+	// A payload or result outside its compiled codec can never become valid on a
+	// later attempt, so it is permanent rather than retried to exhaustion.
+	if (error instanceof RuntimeCodecError) return "VALIDATION_FAILED";
 	if (error instanceof DeclaredOperationError) return "REACTION_ERROR";
 	if (error instanceof DurableEffectAmbiguous) return "EFFECT_AMBIGUOUS";
 	if (error instanceof DurableEffectConflict) return "EFFECT_CONFLICT";
@@ -123,6 +131,12 @@ export function createDurableReactionWorker(
 	const attemptDeadlineMilliseconds =
 		input.attemptDeadlineMilliseconds ?? 300_000;
 	const resultBytesLimit = input.resultBytesLimit ?? 262_144;
+	if (
+		!Number.isSafeInteger(resultBytesLimit) ||
+		resultBytesLimit < 1 ||
+		resultBytesLimit > 262_144
+	)
+		throw new TypeError("durable result limit must be between 1 and 262144");
 	let draining = false;
 
 	const runAttempt = async (
@@ -132,7 +146,9 @@ export function createDurableReactionWorker(
 		const controller = new AbortController();
 		let fenced = false;
 		let cancelled = claim.cancellationRequested;
+		let deadlineExpired = false;
 		const observe = async (): Promise<void> => {
+			if (deadlineExpired) return;
 			const beat = await input.kernel.heartbeat(claim);
 			if (beat.status === "fenced") {
 				fenced = true;
@@ -143,10 +159,15 @@ export function createDurableReactionWorker(
 				cancelled = true;
 				controller.abort(new DOMException("Run cancelled", "AbortError"));
 			}
-			if (beat.deadlineExpired)
+			if (beat.deadlineExpired) {
+				// A non-cooperative handler must not keep renewing its own lease past
+				// the attempt deadline; stop renewing and let the lease expire.
+				deadlineExpired = true;
+				clearInterval(timer);
 				controller.abort(new DOMException("Attempt deadline", "AbortError"));
+			}
 		};
-		const timer = setInterval(() => {
+		const timer: ReturnType<typeof setInterval> = setInterval(() => {
 			void observe().catch(() => undefined);
 		}, heartbeatMilliseconds);
 		let failureCode: DurableFailureCode | null = null;
@@ -254,10 +275,12 @@ export function createDurableReactionWorker(
 				return Object.freeze({
 					workerId,
 					admitted: 0,
+					cancelled: 0,
 					claimed: 0,
 					refusedIncompatible: 0,
 					outcomes: Object.freeze([]),
 				});
+			const cancelled = await input.kernel.reapCancelled(claimBatch);
 			const admissions = await input.kernel.admit(claimBatch);
 			const outcomes: DurableWorkerOutcome[] = [];
 			let claimed = 0;
@@ -317,6 +340,7 @@ export function createDurableReactionWorker(
 			return Object.freeze({
 				workerId,
 				admitted: admissions.length,
+				cancelled,
 				claimed,
 				refusedIncompatible,
 				outcomes: Object.freeze(outcomes),

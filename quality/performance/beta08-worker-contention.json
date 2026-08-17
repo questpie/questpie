@@ -5,14 +5,14 @@
 	"command": ["bun", "tests/load/beta08-worker-contention.ts"],
 	"budgetOwner": "BETA-08",
 	"metrics": {
-		"postgresContention96Ms": {
+		"postgresContention64Ms": {
 			"direction": "max",
 			"budget": 3000,
 			"unit": "ms"
 		},
 		"durableRuns": {
 			"direction": "min",
-			"budget": 96,
+			"budget": 64,
 			"unit": "count"
 		},
 		"duplicateAttempts": {

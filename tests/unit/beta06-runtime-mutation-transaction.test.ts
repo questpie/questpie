@@ -5,6 +5,7 @@ import type { SQL } from "bun";
 import { principal } from "questpie";
 
 import { linkReactionProjection } from "../../packages/runtime/src/mutation";
+import type { LinkedPostgresCollectionOperationPlansV1 } from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
 import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
@@ -110,10 +111,12 @@ const collectionPlanList = [
 	},
 ] as const;
 
+// A deliberately partial plan double: these tests exercise the Mutation
+// invoker's statement order, not Collection plan linking.
 const collectionPlans = {
 	plans: collectionPlanList,
 	byIdentity: new Map(collectionPlanList.map((plan) => [plan.identity, plan])),
-};
+} as unknown as LinkedPostgresCollectionOperationPlansV1;
 
 const reactionProjection = {
 	format: "questpie.reaction-projection",
@@ -327,11 +330,15 @@ test("rolls back the receipt and every sibling on Field or candidate Policy deni
 			application: "application:generic",
 			collectionPlans,
 			reactions: linkReactionProjection(reactionProjection),
+			contextInputCodec: { kind: "object", properties: {} },
+			runtimeBuildDigest: "d".repeat(64),
 			facts: {
 				principal: principal.user({ id: principalId }),
 				authority: { kind: "ordinary" },
 				tenant: { id: tenantId },
 				values: {},
+				contextInput: {},
+				liveQueryObservation: null,
 				signal: new AbortController().signal,
 				deadline: null,
 			},

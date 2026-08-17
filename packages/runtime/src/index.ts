@@ -45,6 +45,7 @@ export type {
 
 export {
 	createDurableReactionWorker,
+	createDurableRunHandle,
 	createPostgresDurableEffectLedger,
 	createPostgresDurableKernel,
 	createPostgresDurableMaintenance,

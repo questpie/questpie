@@ -63,7 +63,6 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		states: readonly string[];
 		terminalStates: readonly string[];
 		budgets: Readonly<Record<string, number>>;
-		retention: Readonly<Record<string, number>>;
 		lease: Readonly<Record<string, unknown>>;
 		failureCodes: readonly string[];
 		permanentFailureCodes: readonly string[];
@@ -91,21 +90,16 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		heartbeatMilliseconds: 10_000,
 		minimumMilliseconds: 1_000,
 	});
+	// Only enforced budgets are pinned into the compatibility contract the
+	// Runtime Build digests.
 	expect(kernel.budgets).toEqual({
-		activeAttemptsPerPrincipal: 16,
 		claimBatch: 64,
-		deadLettersPerResource: 10_000,
 		eventsPerRun: 1_024,
 		payloadBytes: 262_144,
-		pendingRunsPerResource: 100_000,
 		resultBytes: 262_144,
 		retryHorizonMilliseconds: 86_400_000,
 	});
-	expect(kernel.retention).toEqual({
-		attemptHistoryDays: 30,
-		idempotencyIdentityDays: 7,
-		terminalPayloadAndResultDays: 7,
-	});
+	expect(kernel).not.toHaveProperty("retention");
 	expect(kernel.claimRefusalCodes).toEqual(["EXECUTABLE_RETIRED"]);
 	expect(kernel.failureCodes).not.toContain("EXECUTABLE_RETIRED");
 	expect(kernel.maintenanceCommands).toEqual([

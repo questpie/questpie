@@ -23,6 +23,7 @@ export function renderReactionDispatch(
  */
 export function renderReactionDeclarations(
 	resources: readonly NormalizedResource[],
+	structuralQueryRuns: string,
 ): string {
 	const members = reactions(resources);
 	const definitions = members
@@ -43,7 +44,11 @@ export function renderReactionDeclarations(
 				};`,
 		)
 		.join("\n\t");
-	return `export interface GeneratedReactions {
+	return `export interface GeneratedReactionData {
+	${structuralQueryRuns}
+}
+
+export interface GeneratedReactions {
 	${definitions}
 }
 
@@ -73,11 +78,16 @@ export type ReactionRun<Name extends keyof GeneratedReactions> = Readonly<{
 
 export type ReactionAttempt = Readonly<{
 	number: number;
-	heartbeat(progress?: Readonly<{ completed: number }>): Promise<void>;
+	heartbeat(): Promise<void>;
 }>;
 
+/**
+ * ADR-0013 gives the Reaction Context read-only Policy-aware data, generated
+ * nested Mutations, and generated Queries. It has no raw Collection write, so
+ * \`data\` exposes exactly the structural Query runner the attempt is given.
+ */
 export type ReactionContext<Name extends keyof GeneratedReactions> = Omit<RootExecution, "services"> & Readonly<{
-	data: Readonly<GeneratedData>;
+	data: Readonly<GeneratedReactionData>;
 	queries: GeneratedQueryOperations;
 	mutations: GeneratedMutationOperations;
 	run: ReactionRun<Name>;
@@ -141,6 +151,7 @@ export type DurableWorkerOutcome = Readonly<{
 export type DurableWorkerTrace = Readonly<{
 	workerId: string;
 	admitted: number;
+	cancelled: number;
 	claimed: number;
 	refusedIncompatible: number;
 	outcomes: readonly DurableWorkerOutcome[];
@@ -201,6 +212,7 @@ export type DurableWorkerOptions = Readonly<{
 	leaseMilliseconds?: number;
 	heartbeatMilliseconds?: number;
 	attemptDeadlineMilliseconds?: number;
+	resultBytesLimit?: number;
 }>;
 
 export interface DurableWorkerHandle {

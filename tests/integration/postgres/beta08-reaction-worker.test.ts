@@ -388,3 +388,79 @@ postgresTest(
 	},
 	180_000,
 );
+
+postgresTest(
+	"a reliable lookup recovers a lost response and a later attempt reuses the settled receipt",
+	async () => {
+		const prepared = await prepareBeta08Durable(database!);
+		try {
+			const callId = "beta08-worker-000-0000-000000000006";
+			const messageId = await publish(prepared, {
+				body: "delivery-recovered after loss",
+				callId,
+			});
+			const runId = await runIdentity(callId);
+
+			// The provider accepted the request and then lost its response; the
+			// lookup contract resolves it inside the same attempt.
+			const trace = await prepared.app.durable.poll();
+			expect(trace.outcomes).toEqual([
+				expect.objectContaining({ outcome: "succeeded", attemptNumber: 1 }),
+			]);
+			const effects = await prepared.ledger.read(runId);
+			expect(effects).toEqual([
+				expect.objectContaining({
+					effectName: "deliver-message",
+					status: "succeeded",
+				}),
+			]);
+			const recovered = effects[0]!;
+			expect(recovered.receipt).toBe(`delivery:${recovered.effectId}`);
+			expect(await deliveredEvents(messageId)).toBe(1);
+		} finally {
+			await prepared.dispose();
+		}
+	},
+	180_000,
+);
+
+postgresTest(
+	"a result outside its byte budget fails permanently with RESOURCE_LIMIT",
+	async () => {
+		const prepared = await prepareBeta08Durable(database!);
+		try {
+			const callId = "beta08-worker-000-0000-000000000007";
+			const messageId = await publish(prepared, {
+				body: "oversized result",
+				callId,
+			});
+			const runId = await runIdentity(callId);
+			const trace = await prepared.app.durable.poll({
+				workerId: "worker:bounded-result",
+				resultBytesLimit: 8,
+			});
+			expect(trace.outcomes).toEqual([
+				expect.objectContaining({
+					outcome: "failed",
+					failureCode: "RESOURCE_LIMIT",
+				}),
+			]);
+			expect(await prepared.kernel.inspect(runId)).toMatchObject({
+				state: "failed",
+				attemptCount: 1,
+				deadLetter: true,
+				failureCode: "RESOURCE_LIMIT",
+				resultBytes: null,
+			});
+			// The bounded result never reaches application state, but the effect the
+			// handler already performed stays recorded.
+			expect(await deliveredEvents(messageId)).toBe(1);
+			expect(await prepared.ledger.read(runId)).toEqual([
+				expect.objectContaining({ status: "succeeded" }),
+			]);
+		} finally {
+			await prepared.dispose();
+		}
+	},
+	180_000,
+);

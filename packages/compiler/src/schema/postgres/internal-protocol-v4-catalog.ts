@@ -274,6 +274,12 @@ export const internalProtocolV4Constraints = [
 	],
 	[
 		"durable_run_events",
+		"durable_event_error_code_known",
+		"c",
+		"CHECK (error_code IS NULL OR (error_code = ANY (ARRAY['EFFECT_AMBIGUOUS'::text, 'EFFECT_CONFLICT'::text, 'HANDLER_FAILED'::text, 'REACTION_ERROR'::text, 'RESOURCE_LIMIT'::text, 'RETRY_EXHAUSTED'::text, 'RUN_AS_DENIED'::text, 'VALIDATION_FAILED'::text])))",
+	],
+	[
+		"durable_run_events",
 		"durable_event_kind_known",
 		"c",
 		"CHECK (kind = ANY (ARRAY['accepted'::text, 'ambiguityAcknowledged'::text, 'attemptStarted'::text, 'cancellationRequested'::text, 'cancelled'::text, 'effectAmbiguous'::text, 'effectSettled'::text, 'failed'::text, 'leaseSuperseded'::text, 'retryScheduled'::text, 'succeeded'::text]))",
@@ -294,7 +300,7 @@ export const internalProtocolV4Constraints = [
 		"durable_run_events",
 		"durable_run_events_application_name_run_id_fkey",
 		"f",
-		"FOREIGN KEY (application_name, run_id) REFERENCES questpie_internal.durable_runs(application_name, run_id) ON DELETE CASCADE",
+		"FOREIGN KEY (application_name, run_id) REFERENCES questpie_internal.durable_runs(application_name, run_id)",
 	],
 	[
 		"durable_run_events",

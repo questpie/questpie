@@ -8,13 +8,24 @@
 		}
 	},
 	"files": [
+		"integration/beta05-runtime-client.test.ts",
 		"integration/beta08-reaction.test.ts",
+		"integration/postgres/beta02-catalog-reader.test.ts",
+		"integration/postgres/beta06-publish-mutation.test.ts",
 		"integration/postgres/beta08-durable-kernel.test.ts",
 		"integration/postgres/beta08-internal-protocol.test.ts",
 		"integration/postgres/beta08-reaction-worker.test.ts",
 		"integration/postgres/helpers/beta08-durable.ts",
 		"load/beta08-worker-contention.ts",
 		"performance/beta08-durable-worker.test.ts",
-		"unit/beta06-reaction-contract.test.ts"
+		"support/beta06-runtime-postgres-program.ts",
+		"type/beta01-generated-contract.test.ts",
+		"type/beta06-reaction-contract.test.ts",
+		"unit/beta05-runtime-artifacts.test.ts",
+		"unit/beta06-operation-set-projection.test.ts",
+		"unit/beta06-postcommit-mutation.test.ts",
+		"unit/beta06-reaction-contract.test.ts",
+		"unit/beta06-runtime-mutation-transaction.test.ts",
+		"unit/beta07-live-query-projection.test.ts"
 	]
 }

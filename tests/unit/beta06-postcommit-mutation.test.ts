@@ -7,6 +7,7 @@ import {
 	CommittedResultUnavailable,
 	linkReactionProjection,
 } from "../../packages/runtime/src/mutation";
+import type { LinkedPostgresCollectionOperationPlansV1 } from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
 import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
@@ -105,10 +106,12 @@ const collectionPlanList = [
 	},
 ] as const;
 
+// A deliberately partial plan double: these tests exercise the Mutation
+// invoker's statement order, not Collection plan linking.
 const collectionPlans = {
 	plans: collectionPlanList,
 	byIdentity: new Map(collectionPlanList.map((plan) => [plan.identity, plan])),
-};
+} as unknown as LinkedPostgresCollectionOperationPlansV1;
 
 const reactionProjection = {
 	format: "questpie.reaction-projection",
