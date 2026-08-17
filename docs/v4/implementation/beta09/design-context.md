@@ -24,8 +24,11 @@ From the issue's non-goals, unchanged: no second backend, no raw SQL, no
 internal-table CRUD, no remote or fleet Studio, no Operator App framework. To
 those this record adds three that follow from the base:
 
-- No new durable mechanism, schema, or internal protocol version. BETA-08 owns
-  the kernel; BETA-09 reads it and authorizes commands against it.
+- No new durable mechanism. BETA-08 owns the kernel; BETA-09 reads it and
+  authorizes commands against it. It does own one minimal internal protocol
+  extension — the maintenance reason — because the accepted contract requires a
+  bounded reason per command and an append-only audit, and at this base there
+  is nowhere to put one. See `maintenance-decisions.md` in this directory.
 - No tenant-share or noisy-neighbour mechanism. That decision is recorded
   separately in `docs/v4/prototypes/tenant-share-control/DECISION.md` and its
   implementation is not this slice.
@@ -59,8 +62,10 @@ absent Authority evaluation and assigns it to the minimal Studio slice, and the
 BETA-09 issue independently carries "maintenance Authority denial" as a hostile
 case. The two agree, so the boundary is unambiguous.
 
-**BETA-09 therefore owns exactly two gaps against the accepted maintenance
-contract**, and nothing else in the kernel:
+**BETA-09 therefore owns three gaps against the accepted maintenance
+contract**, and nothing else in the kernel. The third was found while grounding
+the decisions in `maintenance-decisions.md` and was not surfaced by any of
+BETA-08's four review rounds:
 
 1. Maintenance Authority for the three shipped commands. A brand proves the
    value came from the application's own module; it proves nothing about
@@ -71,8 +76,16 @@ contract**, and nothing else in the kernel:
    winner, or audit. Either it becomes a real command carrying all seven
    properties, or the projection is corrected to say drain is Runtime lifecycle
    and not a Studio-reachable maintenance command. Both are defensible; leaving
-   the contract and the code disagreeing is not. Recorded as an owner decision
-   below.
+   the contract and the code disagreeing is not. Decided in
+   `maintenance-decisions.md`.
+3. The bounded reason, on every command, recorded in the audit. `reason` exists
+   only on `cancelRun` (`packages/runtime/src/durable/postgres-maintenance.ts:61`)
+   and lands in `durable_cancellations`, not in the audit. `retryRun` and
+   `acknowledgeAmbiguity` take no reason at all, and
+   `durable_maintenance_commands` has no reason column
+   (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:213`).
+   The audit therefore records who did what to which run and what happened, but
+   never why, for any command.
 
 ## What changed underneath the Studio research
 
@@ -280,21 +293,20 @@ unchanged:
   A label added after the trigger does not fire it; the pull request must be
   reopened or re-pushed.
 
-## Open for the owner
+## Where the remaining decisions are taken
 
-Surfaced, not decided:
+`maintenance-decisions.md` in this directory settles the four decisions this
+slice cannot avoid — the handoff's Q3 (read versus maintenance Authority), Q10
+(reason contract), Q12 (retry safety disclosure), and Q14 (fence conflict
+disclosure) — plus `drainRuntime` and Studio's job-first purpose. Each is
+decided against what BETA-08 shipped rather than deferred, and each records the
+code that forces or fails to force it.
 
-1. **`drainRuntime`** — promote it to a real maintenance command with all seven
-   properties, or correct the public projection to say drain is Runtime
-   lifecycle only. The contract and the code currently disagree.
-2. **Studio's job-first purpose** — the owner's steer reopens the handoff's Q1
-   and Q5. The answer determines navigation and should be settled before screen
-   work.
-3. **The handoff's seventeen open decisions** stand unanswered in
-   `docs/v4/research/minimal-studio-handoff/OPEN-DECISIONS.md`. Q3 (read versus
-   maintenance Authority), Q10 (reason contract), Q12 (retry safety
-   disclosure), and Q14 (fence conflict disclosure) are the four this slice
-   cannot avoid, because BETA-08 shipped the mechanisms they describe.
-4. **The three tenant-share items** in
-   `docs/v4/prototypes/tenant-share-control/DECISION.md` remain open; only the
-   Tenant-keying edge above binds this slice.
+The remaining thirteen decisions in
+`docs/v4/research/minimal-studio-handoff/OPEN-DECISIONS.md` are visual and
+navigational and do not bind the contract this slice implements; they are
+settled by the purpose decision and the screen work that follows it.
+
+The three tenant-share items in
+`docs/v4/prototypes/tenant-share-control/DECISION.md` remain open and are not
+this slice's to take; only the Tenant-keying edge above binds it.
