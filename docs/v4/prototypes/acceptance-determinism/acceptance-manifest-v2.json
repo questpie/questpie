@@ -74,7 +74,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run review:accept:v2 -- --manifest docs/v4/prototypes/acceptance-determinism/acceptance-manifest-v2.json --dry-run (7 documents, 161471 packet bytes, 88718 diff bytes, packet digest 85120bfe5bc78a60874938b5a833d4070a7940c58670d2e4c972ddeb530b4cc5; credential-free, no model call)",
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/prototypes/acceptance-determinism/acceptance-manifest-v2.json --dry-run (decodes the committed v2 manifest, resolves 7 packet documents, verifies every pinned authority digest and ancestry, and scans for secret-like material with no model call. The reported packet digest is deliberately not pinned here: the manifest is itself a packet document, so a digest recorded inside it could never match the packet it describes.)",
 			"result": "PASS"
 		}
 	],
