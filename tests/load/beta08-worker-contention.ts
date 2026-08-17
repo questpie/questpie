@@ -4,7 +4,8 @@ import baseline from "../../quality/baselines/beta08-worker-contention.json";
 import scenario from "../../quality/performance/beta08-worker-contention.json";
 import {
 	beta05Ids,
-	prepareBeta08Durable,
+	beta08Harness,
+	disposeBeta08Harness,
 } from "../integration/postgres/helpers/beta08-durable";
 
 if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER)
@@ -32,7 +33,7 @@ function derivedBudget(
 	);
 }
 
-const prepared = await prepareBeta08Durable(sql);
+const prepared = await beta08Harness(sql);
 try {
 	for (let index = 0; index < runs; index += 1)
 		await prepared.app.execution(
@@ -129,6 +130,6 @@ try {
 		}),
 	);
 } finally {
-	await prepared.dispose();
+	await disposeBeta08Harness();
 	await sql.close({ timeout: 0 });
 }

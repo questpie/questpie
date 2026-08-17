@@ -407,7 +407,8 @@ WHERE application_name = $1 AND attempt_id = $2`,
 				const cancelled = await query(
 					`UPDATE questpie_internal.durable_runs
 SET state = 'cancelled', current_attempt_id = NULL, lease_token_digest = NULL,
-    lease_expires_at = NULL, terminal_at = pg_catalog.transaction_timestamp()
+    lease_expires_at = NULL, failure_code = NULL,
+    terminal_at = pg_catalog.transaction_timestamp()
 WHERE (application_name, run_id) IN (
   SELECT application_name, run_id FROM questpie_internal.durable_runs
   WHERE application_name = $1 AND cancellation_requested

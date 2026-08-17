@@ -110,6 +110,7 @@ type Beta08Durable = Readonly<{
 }>;
 
 type Beta08Application = Readonly<{
+	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: Readonly<{
 			principal: unknown;
@@ -132,6 +133,12 @@ type Beta08Application = Readonly<{
 
 export type Beta08Harness = Readonly<{
 	app: Beta08Application;
+	fetch(request: Request): Promise<Response>;
+	bindPrincipal(request: Request): Request;
+	wireFrame(
+		operation: string,
+		input: unknown,
+	): Readonly<{ body: string; mediaType: string }>;
 	compilation: Readonly<{
 		measurements: Readonly<{
 			publicDeclarationBytes: number;
@@ -141,9 +148,11 @@ export type Beta08Harness = Readonly<{
 	kernel: DurableKernel;
 	ledger: DurableEffectLedger;
 	maintenance: DurableMaintenance;
+	kernelWith(
+		options: Readonly<{ random?: () => number; claimBatch?: number }>,
+	): DurableKernel;
 	reactionProjectionBytes: string;
 	principal: unknown;
-	dispose(): Promise<void>;
 }>;
 
 /**
@@ -151,15 +160,39 @@ export type Beta08Harness = Readonly<{
  * fresh PostgreSQL schema, plus the same durable kernel factories the generated
  * application wires internally.
  */
-export async function prepareBeta08Durable(
+async function buildBeta08Durable(
 	database: SQL,
-	options?: Readonly<{ random?: () => number; claimBatch?: number }>,
-): Promise<Beta08Harness> {
+): Promise<Readonly<{ harness: Beta08Harness; dispose: () => Promise<void> }>> {
+	// The lane runs one process per file back to back, and rebuilding the
+	// application schema takes an exclusive lock. A departing process that has
+	// not released its connections yet would deadlock the reset, so this one
+	// closes them and waits for the backends to actually go.
+	for (let attempt = 0; attempt < 200; attempt += 1) {
+		const [remaining] = await database.unsafe<
+			readonly Readonly<{ others: number }>[]
+		>(
+			`SELECT count(*)::int AS others FROM pg_catalog.pg_stat_activity
+WHERE datname = pg_catalog.current_database()
+  AND pid <> pg_catalog.pg_backend_pid()`,
+		);
+		if ((remaining?.others ?? 0) === 0) break;
+		await database.unsafe(
+			`SELECT pg_catalog.pg_terminate_backend(pid)
+FROM pg_catalog.pg_stat_activity
+WHERE datname = pg_catalog.current_database()
+  AND pid <> pg_catalog.pg_backend_pid()`,
+		);
+		await Bun.sleep(25);
+	}
 	const prepared = await prepareBeta05PostgresApplication(database);
 	const framework = prepared.generated.framework as Readonly<{
 		principal: Readonly<{ user(input: Readonly<{ id: string }>): unknown }>;
 	}>;
 	const internal = (await prepared.generated.loadInternal()) as Readonly<{
+		bindIngressPrincipalForRequest(
+			request: Request,
+			principal: unknown,
+		): Request;
 		createApplication(
 			input: Readonly<{
 				postgres: Readonly<{ url: string }>;
@@ -174,17 +207,54 @@ export async function prepareBeta08Durable(
 	const reactionProjectionBytes = await Bun.file(
 		resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
 	).text();
+	const runtimeBuild = JSON.parse(prepared.runtimeBuildBytes) as Readonly<{
+		application: string;
+		clientContractDigest: string;
+		wireDigest: string;
+	}>;
+	const wire = JSON.parse(
+		await Bun.file(
+			resolve(prepared.generated.generatedRoot, "wire-contract.json"),
+		).text(),
+	) as Readonly<{ mediaType: string; protocol: unknown }>;
+	const principal = framework.principal.user({ id: beta05Ids.principal });
 	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
-	return Object.freeze({
+	const harness = Object.freeze({
 		app,
+		fetch: (request: Request) => app.fetch(request),
+		bindPrincipal: (request: Request) =>
+			internal.bindIngressPrincipalForRequest(request, principal),
+		wireFrame: (operation: string, input: unknown) =>
+			Object.freeze({
+				mediaType: wire.mediaType,
+				body: JSON.stringify({
+					application: runtimeBuild.application,
+					callId: crypto.randomUUID(),
+					clientContractDigest: runtimeBuild.clientContractDigest,
+					context: { companyId: beta05Ids.company },
+					input,
+					operation,
+					protocol: wire.protocol,
+					timeoutMilliseconds: 5_000,
+					wireDigest: runtimeBuild.wireDigest,
+				}),
+			}),
 		compilation: prepared.compilation,
 		kernel: createPostgresDurableKernel({
 			sql: database,
 			application: beta08Application,
 			reactions,
-			claimBatch: options?.claimBatch,
-			random: options?.random,
 		}),
+		kernelWith: (
+			options: Readonly<{ random?: () => number; claimBatch?: number }>,
+		) =>
+			createPostgresDurableKernel({
+				sql: database,
+				application: beta08Application,
+				reactions,
+				claimBatch: options.claimBatch,
+				random: options.random,
+			}),
 		ledger: createPostgresDurableEffectLedger({
 			sql: database,
 			application: beta08Application,
@@ -194,12 +264,35 @@ export async function prepareBeta08Durable(
 			application: beta08Application,
 		}),
 		reactionProjectionBytes,
-		principal: framework.principal.user({ id: beta05Ids.principal }),
+		principal,
+	});
+	return Object.freeze({
+		harness,
 		dispose: async () => {
 			await app.close();
 			await prepared.dispose();
 		},
 	});
+}
+
+let building: Promise<
+	Readonly<{ harness: Beta08Harness; dispose: () => Promise<void> }>
+> | null = null;
+
+/**
+ * One relocated application per test process. Every test in a file shares it
+ * and scopes its assertions by run identity: rebuilding it per test would drop
+ * the schema under the previous test's live application.
+ */
+export async function beta08Harness(database: SQL): Promise<Beta08Harness> {
+	building ??= buildBeta08Durable(database);
+	return (await building).harness;
+}
+
+export async function disposeBeta08Harness(): Promise<void> {
+	const built = building;
+	building = null;
+	if (built) await (await built).dispose();
 }
 
 /**

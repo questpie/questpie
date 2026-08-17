@@ -64,6 +64,7 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		terminalStates: readonly string[];
 		budgets: Readonly<Record<string, number>>;
 		lease: Readonly<Record<string, unknown>>;
+		transitions: readonly Readonly<{ from: string; to: string }>[];
 		failureCodes: readonly string[];
 		permanentFailureCodes: readonly string[];
 		claimRefusalCodes: readonly string[];
@@ -81,6 +82,36 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		"succeeded",
 	]);
 	expect(kernel.terminalStates).toEqual(["cancelled", "failed", "succeeded"]);
+	// The compatibility identity a later Job or Workflow slice inherits must
+	// describe the state machine and history vocabulary this kernel implements.
+	expect(kernel.transitions).toEqual([
+		{ from: "delayed", to: "cancelled" },
+		{ from: "delayed", to: "running" },
+		{ from: "failed", to: "ready" },
+		{ from: "ready", to: "cancelled" },
+		{ from: "ready", to: "running" },
+		{ from: "running", to: "cancelled" },
+		{ from: "running", to: "delayed" },
+		{ from: "running", to: "failed" },
+		{ from: "running", to: "succeeded" },
+	]);
+	expect(kernel.eventKinds).toEqual([
+		"accepted",
+		"ambiguityAcknowledged",
+		"attemptStarted",
+		"cancellationRequested",
+		"cancelled",
+		"effectAmbiguous",
+		"effectSettled",
+		"failed",
+		"leaseSuperseded",
+		"retryScheduled",
+		"succeeded",
+	]);
+	for (const transition of kernel.transitions) {
+		expect(kernel.states).toContain(transition.from);
+		expect(kernel.states).toContain(transition.to);
+	}
 	expect(kernel.lease).toEqual({
 		attemptDeadlineMilliseconds: 300_000,
 		claimCommitsBeforeHandler: true,

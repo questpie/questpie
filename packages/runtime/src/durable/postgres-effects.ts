@@ -3,6 +3,7 @@ import type { SQL } from "bun";
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
 import type { DurableClaim } from "./postgres-kernel";
 import {
+	appendDurableRunEvent,
 	durableText,
 	effectIdentity,
 	leaseTokenDigest,
@@ -145,12 +146,13 @@ WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
 		async settle(claim, request) {
 			return transaction(async (query) => {
 				if (await fenced(query, claim)) return "fenced" as const;
-				await query(
+				const settled = await query(
 					`UPDATE questpie_internal.durable_effects
 SET status = 'succeeded', receipt = $4, settled_attempt_id = $5,
     settled_at = pg_catalog.transaction_timestamp()
 WHERE application_name = $1 AND run_id = $2 AND effect_name = $3
-  AND status IN ('ambiguous', 'pending')`,
+  AND status IN ('ambiguous', 'pending')
+RETURNING effect_id`,
 					[
 						input.application,
 						claim.runId,
@@ -159,18 +161,31 @@ WHERE application_name = $1 AND run_id = $2 AND effect_name = $3
 						claim.attemptId,
 					],
 				);
+				if (settled.length > 0)
+					await appendDurableRunEvent(query, {
+						application: input.application,
+						claim,
+						kind: "effectSettled",
+					});
 				return "applied" as const;
 			});
 		},
 		async markAmbiguous(claim, request) {
 			return transaction(async (query) => {
 				if (await fenced(query, claim)) return "fenced" as const;
-				await query(
+				const ambiguous = await query(
 					`UPDATE questpie_internal.durable_effects
 SET status = 'ambiguous'
-WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'pending'`,
+WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'pending'
+RETURNING effect_id`,
 					[input.application, claim.runId, request.effectName],
 				);
+				if (ambiguous.length > 0)
+					await appendDurableRunEvent(query, {
+						application: input.application,
+						claim,
+						kind: "effectAmbiguous",
+					});
 				return "applied" as const;
 			});
 		},

@@ -115,6 +115,55 @@ export function leaseTokenDigest(token: string): string {
 	return mutationDigest(new TextEncoder().encode(token));
 }
 
+export type DurableEventClaim = Readonly<{
+	runId: string;
+	dispatchId: string;
+	resource: string;
+	attemptId: string;
+	leaseToken: string;
+	causationId: string;
+	correlationId: string;
+}>;
+
+/** One append-only writer for every durable transition. */
+export async function appendDurableRunEvent(
+	query: DurableQuery,
+	input: Readonly<{
+		application: string;
+		claim: DurableEventClaim;
+		kind: string;
+		errorCode?: string | null;
+	}>,
+): Promise<void> {
+	const [bumped] = await query(
+		`UPDATE questpie_internal.durable_runs
+SET event_sequence = event_sequence + 1
+WHERE application_name = $1 AND run_id = $2
+RETURNING event_sequence AS "sequence"`,
+		[input.application, input.claim.runId],
+	);
+	if (!bumped) throw new TypeError("durable run history has no run");
+	await query(
+		`INSERT INTO questpie_internal.durable_run_events
+  (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
+   attempt_id, lease_token_digest, causation_id, correlation_id, kind, error_code)
+VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, $10, $11)`,
+		[
+			input.application,
+			input.claim.runId,
+			durableInteger(bumped.sequence, "run event sequence"),
+			input.claim.resource,
+			input.claim.dispatchId,
+			input.claim.attemptId,
+			leaseTokenDigest(input.claim.leaseToken),
+			input.claim.causationId,
+			input.claim.correlationId,
+			input.kind,
+			input.errorCode ?? null,
+		],
+	);
+}
+
 export function effectIdentity(
 	application: string,
 	runId: string,

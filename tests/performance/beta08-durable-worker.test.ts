@@ -6,7 +6,8 @@ import baseline from "../../quality/baselines/beta08-durable-worker.json";
 import scenario from "../../quality/performance/beta08-durable-worker.json";
 import {
 	beta05Ids,
-	prepareBeta08Durable,
+	beta08Harness,
+	disposeBeta08Harness,
 } from "../integration/postgres/helpers/beta08-durable";
 
 const database = process.env.PGHOST ? new SQL({ max: 4 }) : undefined;
@@ -45,7 +46,7 @@ postgresTest(
 		expect(recordedSamples).toHaveLength(baseline.reference.samples);
 		expect(baseline.observed.postgresDurable20Ms).toBe(recordedSamples[1]!);
 
-		const prepared = await prepareBeta08Durable(database!);
+		const prepared = await beta08Harness(database!);
 		try {
 			for (let index = 0; index < 20; index += 1)
 				await prepared.app.execution(
@@ -136,7 +137,7 @@ postgresTest(
 				}),
 			);
 		} finally {
-			await prepared.dispose();
+			await disposeBeta08Harness();
 		}
 	},
 	120_000,

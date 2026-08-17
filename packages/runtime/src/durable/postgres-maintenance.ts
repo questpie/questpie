@@ -221,7 +221,7 @@ VALUES ($1, $2, $3, $4, $5, $6, pg_catalog.transaction_timestamp())`,
 SET cancellation_requested = true
 WHERE application_name = $1 AND run_id = $2`
 						: `UPDATE questpie_internal.durable_runs
-SET cancellation_requested = true, state = 'cancelled',
+SET cancellation_requested = true, state = 'cancelled', failure_code = NULL,
     terminal_at = pg_catalog.transaction_timestamp()
 WHERE application_name = $1 AND run_id = $2`,
 					[input.application, request.runId],

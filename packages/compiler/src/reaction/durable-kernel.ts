@@ -46,13 +46,13 @@ const withoutDigest = {
 	terminalStates: ["cancelled", "failed", "succeeded"] as const,
 	transitions: [
 		{ from: "delayed", to: "cancelled" },
-		{ from: "delayed", to: "ready" },
+		{ from: "delayed", to: "running" },
+		{ from: "failed", to: "ready" },
 		{ from: "ready", to: "cancelled" },
 		{ from: "ready", to: "running" },
 		{ from: "running", to: "cancelled" },
 		{ from: "running", to: "delayed" },
 		{ from: "running", to: "failed" },
-		{ from: "running", to: "ready" },
 		{ from: "running", to: "succeeded" },
 	] as const,
 	lease: {

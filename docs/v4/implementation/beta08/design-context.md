@@ -237,15 +237,21 @@ tightening is falsified by deleting `AND NOT cancellation_requested` from
 admission and claim, which makes `kernel.admit()` return the cancel-requested
 run instead of an empty batch.
 
-Twenty PostgreSQL tests carry the slice: six kernel cases (stale fence,
+Twenty-three PostgreSQL tests carry the slice. Nine kernel cases: stale fence,
 concurrent `SKIP LOCKED` claims, retry exhaustion, cancellation race, executable
-retirement, concurrent maintenance winners), five worker cases (success, refused
-effect and retry, lost response and acknowledged ambiguity, revoked Membership,
-declared Reaction error), and five protocol cases (fresh install and v3 upgrade,
-direct-write rejection, append-only history, B-tree-only with no RLS, tampered
-guard).
+retirement, cancellation reaping, single-winner maintenance, cross-attempt
+effect identity with recovery and conflict, and permanent codec validation.
+Nine worker cases: success, refused effect and retry, lost response and
+acknowledged ambiguity, revoked Membership, declared Reaction error, recovered
+lost response, bounded result, refused network exposure, and terminal effect
+conflict. Five protocol cases: fresh install and v3 upgrade, direct-write
+rejection, append-only history, B-tree-only with no RLS, and a tampered guard.
 
-Five claims in this record are deliberately narrower than the accepted contract
+Each PostgreSQL file builds the relocated application once and scopes every
+assertion by run identity: rebuilding it per test dropped the schema under the
+previous test's live application and deadlocked the reset.
+
+Eight claims in this record are deliberately narrower than the accepted contract
 allows, because nothing in this slice executes the wider version:
 
 - The 24-hour retry horizon is persisted with every run and is read on every
@@ -267,6 +273,17 @@ allows, because nothing in this slice executes the wider version:
   application connects as the schema owner, so this is a structural guard
   against accidental application and worker writes, not a hostile-role boundary.
   A non-owner role matrix belongs to the slice that introduces one.
+- The artifact does not retain executable bytes for nonterminal runs, and
+  readiness does not scan `durable_runs.executable_digest` against the current
+  build. A run whose executable contract no longer matches is refused at claim
+  time, which is narrower claim 2 above and is the only disposition this slice
+  implements.
+- `RESOURCE_LIMIT` is the explicit failure for a result outside its byte budget.
+  The 1,024-event bound is a `durable_event_sequence_bounded` CHECK rather than
+  an explicit limit failure; the eight-attempt program keeps it unreachable.
+- `IDEMPOTENCY_CONFLICT` for a different payload in the same scope is BETA-06
+  behavior, proved by its accepted `f9879efd` evidence. This slice neither
+  produces nor tests it.
 - External effects cross a `perform`/`recover` callback rather than a generated
   Action, because ADR-0021 defers Action from beta.1 and this slice adds no
   external Action authoring. The durable kernel owns only the effect _identity_
@@ -280,9 +297,9 @@ PostgreSQL concurrency case and runs in the `beta08` PostgreSQL scenario, which
 the seconds-long changed loop deliberately excludes.
 
 Measured on PostgreSQL 17 with the reference-local baselines: one 20-run worker
-batch at a 371.463 ms median against a 2,000 ms budget, a maximum 168-byte run
-result, three events per successful run, 57,779 public declaration bytes, and
+batch at a 405.241 ms median against a 2,500 ms budget, a maximum 168-byte run
+result, four events per successful run, 57,779 public declaration bytes, and
 21,028 TypeScript instantiations. The nightly contention scenario ran 64 runs
-against eight competing workers at 402.460 ms with 64 attempts and zero
-superseded leases. PostgreSQL 16, 17, and 18 each report 100, 100, and 103
-passing tests with zero failures.
+against eight competing workers at 374.261 ms against a 3,000 ms budget, with 64
+attempts and zero superseded leases. PostgreSQL 16, 17, and 18 each report 102,
+102, and 105 passing tests with zero failures.

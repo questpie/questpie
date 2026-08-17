@@ -461,7 +461,10 @@ export async function createApplication(input) {
 	const durable = Object.freeze({
 		worker: createWorker,
 		poll: (options) => {
-			if (options || !defaultWorker) defaultWorker = createWorker(options);
+			// An option-bearing poll is its own worker; it must not rebind the
+			// default one for later callers.
+			if (options) return createWorker(options).poll();
+			defaultWorker ??= createWorker();
 			return defaultWorker.poll();
 		},
 		inspect: (runId) => durableKernel.inspect(runId),

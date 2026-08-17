@@ -24,11 +24,11 @@
 	},
 	"samples": {
 		"postgresDurable20Ms": [
-			363.41828699999996, 395.3331390000003, 371.46259800000007
+			395.34864500000003, 421.98137099999985, 405.2413419999998
 		]
 	},
 	"observed": {
-		"postgresDurable20Ms": 371.46259800000007,
+		"postgresDurable20Ms": 405.2413419999998,
 		"claimBatch": 64,
 		"maxEventsPerRun": 3,
 		"maxRunResultBytes": 168,
@@ -37,13 +37,13 @@
 	},
 	"budgetDerivation": {
 		"postgresDurable20Ms": {
-			"referenceObservedMs": 371.46259800000007,
+			"referenceObservedMs": 405.2413419999998,
 			"multiplier": 5,
 			"roundUpQuantumMs": 500
 		}
 	},
 	"budgets": {
-		"postgresDurable20Ms": 2000,
+		"postgresDurable20Ms": 2500,
 		"claimBatch": 64,
 		"maxEventsPerRun": 1024,
 		"maxRunResultBytes": 262144,
