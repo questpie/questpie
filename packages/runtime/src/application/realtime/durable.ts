@@ -4,6 +4,7 @@ import type { PostgresRealtimeWatch } from "../../live-query";
 import type {
 	LiveQueryCoordinatorDelivery,
 	LiveQueryCoordinatorEvaluation,
+	LiveQueryEvaluationFailure,
 } from "./coordinator";
 
 type MaybePromise<Value> = Value | Promise<Value>;
@@ -26,7 +27,7 @@ export type DurableRealtimeAttachment = Readonly<{
 	): MaybePromise<boolean>;
 	publishFailure(
 		watch: PostgresRealtimeWatch,
-		code: "OUTPUT_INVALID" | "RESOURCE_LIMIT",
+		code: LiveQueryEvaluationFailure["code"],
 	): MaybePromise<boolean>;
 	synchronize(bindingIds: ReadonlySet<string>): void;
 }>;

@@ -19,7 +19,7 @@ export type LiveQueryCoordinatorDelivery = Readonly<{
 }>;
 
 export class LiveQueryEvaluationFailure extends Error {
-	readonly code: "OUTPUT_INVALID" | "RESOURCE_LIMIT";
+	readonly code: "AUTHORIZATION_FAILED" | "OUTPUT_INVALID" | "RESOURCE_LIMIT";
 
 	constructor(code: LiveQueryEvaluationFailure["code"]) {
 		super(code);

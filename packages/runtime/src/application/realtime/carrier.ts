@@ -9,7 +9,11 @@ import {
 	RuntimeCodecError,
 } from "../../codec";
 import type { ObservedLiveQueryPlanV1 } from "../../live-query";
-import { isOperationCallId, readBoundedRequestBody } from "../../operation";
+import {
+	DeclaredOperationError,
+	isOperationCallId,
+	readBoundedRequestBody,
+} from "../../operation";
 import {
 	createRealtimeSession,
 	realtimeCommandKind,
@@ -103,13 +107,22 @@ export function createRealtimeCarrier<Context>(
 		context: Context,
 		queryInput: unknown,
 	) => {
-		const evaluation = await input.evaluate({
-			principal: session.principal,
-			context,
-			query: binding.query.identity,
-			input: queryInput,
-			signal: binding.controller.signal,
-		});
+		let evaluation: Awaited<ReturnType<typeof input.evaluate>>;
+		try {
+			evaluation = await input.evaluate({
+				principal: session.principal,
+				context,
+				query: binding.query.identity,
+				input: queryInput,
+				signal: binding.controller.signal,
+			});
+		} catch (error) {
+			// A Context or Policy denial is a declared refusal of this Principal, not
+			// a coordinator fault. It has to reach the client as the contracted
+			// failure frame instead of escaping the reconciliation tick.
+			if (!(error instanceof DeclaredOperationError)) throw error;
+			throw new LiveQueryEvaluationFailure("AUTHORIZATION_FAILED");
+		}
 		let payload: unknown;
 		try {
 			payload = encodeRuntimeCodec(

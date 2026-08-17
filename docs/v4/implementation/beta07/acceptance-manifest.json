@@ -18,11 +18,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres on fresh PostgreSQL 16, 17, and 18 databases (PG16 78 pass and 3 PG18-only skips; PG17 78 pass and 3 skips; PG18 81 pass)",
+			"command": "bun run test:postgres on fresh PostgreSQL 16, 17, and 18 databases (PG16 79 pass and 3 PG18-only skips; PG17 79 pass and 3 skips; PG18 82 pass)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta07 on local PostgreSQL 17 (20 facts, 64 watches, 1280 durable invalidations, 175.653 ms under the committed 2500 ms budget)",
+			"command": "bun run bench:micro -- --scenario beta07 on local PostgreSQL 17 (20 facts, 64 watches, 1280 durable invalidations, 187.434 ms under the committed 2500 ms budget)",
 			"result": "PASS"
 		},
 		{
@@ -30,7 +30,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:load -- --scenario beta07 on local PostgreSQL 17 (2050 complete recomputations in exact [1024, 1024, 2] waves, 7404.624 ms under the committed budget)",
+			"command": "bun run test:load -- --scenario beta07 on local PostgreSQL 17 (2050 complete recomputations in exact [1024, 1024, 2] waves, 7528.707 ms under the committed budget)",
 			"result": "PASS"
 		},
 		{
@@ -38,15 +38,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "exploratory GPT-5.6-sol Spec and Standards reads plus timeout/golden delta reads, used as construction feedback only; ADR-0024 forbids counting these as acceptance evidence and the acceptance verdict comes solely from the protocol v1 Opus-medium record",
-			"result": "PASS"
-		},
-		{
 			"command": "git diff --check",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run review:accept -- --manifest docs/v4/implementation/beta07/acceptance-manifest.json (protocol v1 Opus-medium, head 0a420838, BLOCKED, recorded byte-preserved in docs/v4/implementation/beta07/claude-initial-review.json; all five blockers repaired on this head)",
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun --lib ES2023,DOM tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts tests/unit/beta07-runtime-live-query-observation.test.ts packages/runtime/src/application/realtime/postgres-coordinator.ts packages/runtime/src/application/realtime/carrier.ts packages/runtime/src/application/realtime/coordinator.ts packages/runtime/src/application/realtime/durable.ts (tests/** has no root tsconfig and is not covered by check-types, which is how round 1 shipped a LiveQueryEvaluationFailure code outside its declared union; this gate closes that hole for the files this slice changes and caught an incomplete widening of publishFailure)",
 			"result": "PASS"
 		}
 	],
@@ -57,7 +53,7 @@
 		"Reconciliation advances an exclusive xid8 horizon below pg_snapshot_xmin, applies durable invalidation and processed-fact state atomically, survives opposite allocation and commit order, wake loss, duplicate hints, local sequence wrap, recompute failure, and retention pruning below the minimum consumer horizon.",
 		"The generated Query watch uses a private sibling SSE carrier with complete initial, update, reset, failure, and closed frames; ACK makes an HMAC-bound complete result resumable, while tamper, expiry, eviction, input or wire mismatch collapse nondisclosingly and authenticated deployment or authority changes cause a fresh authorized reset.",
 		"No-affinity scope, watch, generation, and acknowledgement state is PostgreSQL-owned and holder-generation fenced; GET, open, frame, ACK, close, takeover, and reconnect may run on different Runtime instances without sticky routing or reconstructing a Principal.",
-		"Every framing creates a fresh root Execution and re-evaluates Context and Policy before disclosure, including when a new holder re-frames an unchanged retained generation after takeover; the authority partition digest is a necessary precondition and never sufficient authority. A retained generation is disclosed only when the fresh evaluation succeeds and reproduces the retained bytes, a denial publishes a failure instead of a frame, and a reconnect that re-opens a durable binding with the resume token it already accepted converges without mutating immutable binding authority and without surfacing a transport failure to application code.",
+		"Every framing creates a fresh root Execution and re-evaluates Context and Policy before disclosure, including when a new holder re-frames an unchanged retained generation after takeover; the authority partition digest is a necessary precondition and never sufficient authority. A retained generation is disclosed only when that fresh evaluation succeeds and reproduces the retained bytes. A declared Context or Policy refusal becomes an AUTHORIZATION_FAILED failure frame rather than a frame or an escaped reconciliation error, and scope expiry and retention pruning still run on a tick whose batch rejected. When the fresh bytes diverge from the retained generation while the binding is clean, nothing is disclosed and no generation is staged, because staging requires an observed invalidation above the evaluated one; the holder withholds that exact retained token so the binding is not recomputed on every tick and the fence lifts once a real invalidation produces a different one. A reconnect that re-opens a durable binding with the resume token it already accepted converges without mutating immutable binding authority and without surfacing a transport failure to application code.",
 		"A real child Runtime is SIGKILLed after Message commit and before wake; PostgreSQL state remains durable, a fresh Runtime reconciles at startup, takes over the scope, emits exactly one complete update under fresh Context and Policy, and emits no result after Membership revocation.",
 		"The accepted 64-watch Principal budget, 256 dependency limit, 1 MiB result, 2 MiB connection buffer, 128 retained results, 24-hour retention, 30-second attachment lease, 1024 recompute fanout, and bounded wake and transaction deadlines fail closed.",
 		"The implementation keeps PostgreSQL as the sole correctness authority, LISTEN or timers as lossy hints only, one relational execution kernel, one durable realtime coordinator, no public provider matrix, no raw ledger API, and no cache or broker correctness dependency.",

@@ -12,7 +12,6 @@ import {
 	createRealtimeCarrier,
 	decodeRealtimeWireContract,
 } from "../../../packages/runtime/src/application/realtime";
-import { LiveQueryEvaluationFailure } from "../../../packages/runtime/src/application/realtime/coordinator";
 import {
 	canonicalJsonLine,
 	sha256Digest,
@@ -22,6 +21,7 @@ import {
 	type PostgresWakeTickSource,
 } from "../../../packages/runtime/src/live-query";
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
+import { DeclaredOperationError } from "../../../packages/runtime/src/operation";
 
 const databases = process.env.PGHOST
 	? [new SQL({ max: 1 }), new SQL({ max: 1 }), new SQL({ max: 1 })]
@@ -263,7 +263,7 @@ describe.skipIf(databases.length === 0)(
 				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
 					createRealtimeCarrier({
 						contract: decodeRealtimeWireContract(projected),
-						durableCoordinator: coordinator.durable,
+						durableCoordinator: coordinator.durable!,
 						resolvePrincipal: (request) =>
 							request.headers.get("x-test-principal") === otherUser.id
 								? otherUser
@@ -680,13 +680,15 @@ describe.skipIf(databases.length === 0)(
 				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
 					createRealtimeCarrier({
 						contract: decodeRealtimeWireContract(projected),
-						durableCoordinator: coordinator.durable,
+						durableCoordinator: coordinator.durable!,
 						resolvePrincipal: () => user,
 						decodeContext: (value) => value as typeof context,
 						evaluate: async () => {
 							evaluations += 1;
 							if (authorityRevoked)
-								throw new LiveQueryEvaluationFailure("AUTHORIZATION_FAILED");
+								// Exactly what a revoked Membership raises out of executeRoot:
+								// a declared Context refusal, not a coordinator-internal class.
+								throw new DeclaredOperationError("tenant.notFound", 404);
 							return {
 								result: { nodes: [{ body: "durable result" }] },
 								observedPlan,
@@ -760,6 +762,147 @@ describe.skipIf(databases.length === 0)(
 					});
 					expect(evaluations).toBeGreaterThan(beforeTakeover);
 					await takeoverReader.cancel();
+				} finally {
+					await Promise.all(carriers.map((carrier) => carrier.drain()));
+					await Promise.all(
+						coordinators.map((coordinator) => coordinator.drain()),
+					);
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
+			"withholds a retained generation whose fresh root does not reproduce it",
+			async () => {
+				// Every change is supposed to reach a binding through the Change Ledger.
+				// A clean binding whose fresh root yields different bytes therefore
+				// means a change escaped capture: the retained bytes are not
+				// reproducible and a new generation cannot be staged while the binding
+				// is clean. Nothing may be disclosed, and the tick must not recompute
+				// the same binding forever.
+				const tickSources = [ticks(), ticks()] as const;
+				const coordinators = [databases[0]!, databases[1]!].map((sql, index) =>
+					createPostgresLiveQueryCoordinator({
+						program: liveQueryProgram,
+						sql,
+						hmacKey: new Uint8Array(32).fill(7),
+						applicationName,
+						deploymentDigest,
+						wireVersion: 1,
+						tickSource: tickSources[index]!.source,
+					}),
+				);
+				for (const coordinator of coordinators) await coordinator.start();
+				let evaluations = 0;
+				let body = "durable result";
+				const makeCarrier = (coordinator: (typeof coordinators)[number]) =>
+					createRealtimeCarrier({
+						contract: decodeRealtimeWireContract(projected),
+						durableCoordinator: coordinator.durable!,
+						resolvePrincipal: () => user,
+						decodeContext: (value) => value as typeof context,
+						evaluate: async () => {
+							evaluations += 1;
+							return { result: { nodes: [{ body }] }, observedPlan };
+						},
+					});
+				const carriers = coordinators.map(makeCarrier);
+				try {
+					const firstStream = await carriers[0]!.fetch(
+						request("GET", undefined, "scope:diverge"),
+					);
+					const firstReader = firstStream?.body?.getReader();
+					if (!firstReader) throw new Error("missing realtime stream");
+					expect((await nextFrame(firstReader))?.kind).toBe("ready");
+					await coordinators[0]!.durable!.requestScan();
+					expect(
+						(
+							await carriers[0]!.fetch(
+								request(
+									"POST",
+									command("open", "binding:diverge", {
+										scopeId: "scope:diverge",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					tickSources[0].tick();
+					await coordinators[0]!.durable!.requestScan();
+					expect(await nextFrame(firstReader)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+					});
+					expect(evaluations).toBe(1);
+
+					const [generationsBefore] = await databases[0]!<{ count: number }[]>`
+						select count(*)::integer as count
+						from questpie_internal.realtime_binding_generations
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:diverge'
+						  and binding_identity = 'binding:diverge'
+					`;
+					expect(generationsBefore?.count).toBe(1);
+
+					// The fresh root now yields different bytes for the same clean
+					// binding. The first holder is left in place, as after a crash.
+					body = "diverged result";
+					const takeoverStream = await carriers[1]!.fetch(
+						request("GET", undefined, "scope:diverge"),
+					);
+					const takeoverReader = takeoverStream?.body?.getReader();
+					if (!takeoverReader) throw new Error("missing takeover stream");
+					expect((await nextFrame(takeoverReader))?.kind).toBe("ready");
+					tickSources[1].tick();
+					await coordinators[1]!.durable!.requestScan();
+					const afterFirstScan = evaluations;
+					expect(afterFirstScan).toBeGreaterThan(1);
+
+					// The fence holds: further ticks must not recompute the same
+					// withheld generation, and nothing may be staged or disclosed.
+					for (let attempt = 0; attempt < 3; attempt += 1) {
+						tickSources[1].tick();
+						await coordinators[1]!.durable!.requestScan();
+					}
+					expect(evaluations).toBe(afterFirstScan);
+					const [generationsAfter] = await databases[0]!<{ count: number }[]>`
+						select count(*)::integer as count
+						from questpie_internal.realtime_binding_generations
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:diverge'
+						  and binding_identity = 'binding:diverge'
+					`;
+					expect(generationsAfter?.count).toBe(1);
+
+					// Freezing evaluations and the generation count does not by itself
+					// prove nothing was disclosed: framing the retained bytes would also
+					// stop recomputation and stage nothing. Prove non-disclosure by its
+					// content. A real invalidation lifts the fence, and the very next
+					// frame this connection ever receives must be the freshly authorized
+					// result. If the withheld generation had been framed, the first frame
+					// here would instead be the stale initial carrying "durable result".
+					await captureMessageChange(databases[1]!);
+					tickSources[1].tick();
+					await coordinators[1]!.durable!.requestScan();
+					expect(await nextFrame(takeoverReader)).toMatchObject({
+						kind: "delivery",
+						bindingId: "binding:diverge",
+						payload: { nodes: [{ body: "diverged result" }] },
+					});
+					const [generationsLifted] = await databases[0]!<
+						{ count: number; latest: string }[]
+					>`
+						select count(*)::integer as count,
+						       max(generation)::text as latest
+						from questpie_internal.realtime_binding_generations
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:diverge'
+						  and binding_identity = 'binding:diverge'
+					`;
+					expect(generationsLifted?.latest).toBe("2");
+					await takeoverReader.cancel();
+					await firstReader.cancel();
 				} finally {
 					await Promise.all(carriers.map((carrier) => carrier.drain()));
 					await Promise.all(

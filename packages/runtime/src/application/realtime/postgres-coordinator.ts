@@ -35,6 +35,12 @@ type ScopeAuthority = Readonly<{
 type Holder = Readonly<{
 	attachment: DurableRealtimeAttachment;
 	framed: Map<string, string>;
+	/**
+	 * Retained generations this holder refused to disclose because a fresh root
+	 * did not reproduce them. Keyed by binding, valued by the exact retained
+	 * token digest, so a later real invalidation lifts the fence on its own.
+	 */
+	withheld: Map<string, string>;
 	lease: PostgresRealtimeScopeLease;
 }>;
 
@@ -299,7 +305,8 @@ export function createPostgresDurableLiveQueryCoordinator(
 		const latest = watch.latest;
 		if (
 			!latest ||
-			holder.framed.get(watch.bindingIdentity) === latest.tokenDigest
+			holder.framed.get(watch.bindingIdentity) === latest.tokenDigest ||
+			holder.withheld.get(watch.bindingIdentity) === latest.tokenDigest
 		)
 			return;
 		// A holder takeover or reconnect re-frames a retained generation onto a new
@@ -350,42 +357,15 @@ export function createPostgresDurableLiveQueryCoordinator(
 				holder.framed.set(watch.bindingIdentity, latest.tokenDigest);
 			return;
 		}
-		// The freshly authorized result no longer equals the retained generation,
-		// so those bytes are not disclosable. Publish the fresh generation instead.
-		const generation = latest.generation + 1n;
-		const complete = completeResult(
-			input.applicationName,
-			input.deploymentDigest,
-			watch,
-			generation,
-			resultBytes,
-			dependencyPlanBytes,
-		);
-		const resumeToken = retention.mint(complete);
-		const staged = await store.stageGeneration({
-			...authority,
-			bindingIdentity: watch.bindingIdentity,
-			observedInvalidationGeneration: watch.invalidationGeneration,
-			generation,
-			resumeToken,
-			resultBytes,
-			dependencyPlanBytes,
-			delivery: "update",
-			resetReason: null,
-		});
-		if (!staged) return;
-		const published = await holder.attachment.publish(
-			watch,
-			Object.freeze({
-				payload: evaluated.payload,
-				observedPlan: evaluated.observedPlan,
-				delivery: "update",
-				resetReason: null,
-				resumeToken,
-			}),
-		);
-		if (published)
-			holder.framed.set(watch.bindingIdentity, sha256Digest(resumeToken));
+		// The freshly authorized result no longer equals the retained generation, so
+		// those bytes are not disclosable. A new generation cannot be staged either:
+		// this branch runs only while the binding is clean, and staging requires an
+		// observed invalidation above the evaluated one. Every change is supposed to
+		// reach the binding through the Change Ledger, so divergence here means a
+		// change escaped capture. Withhold the generation, and record the exact
+		// retained token so the fence lifts by itself once a real invalidation
+		// produces a different one instead of recomputing on every tick forever.
+		holder.withheld.set(watch.bindingIdentity, latest.tokenDigest);
 	};
 
 	const reconcile = async (signal: AbortSignal): Promise<void> => {
@@ -419,29 +399,40 @@ export function createPostgresDurableLiveQueryCoordinator(
 			);
 			if (failed) throw failed.reason;
 		};
-		for (const [scopeId, holder] of attachments) {
-			signal.throwIfAborted();
-			const authority = holder.lease;
-			if (!(await store.renewScope(authority))) {
-				if (attachments.get(scopeId) === holder) attachments.delete(scopeId);
-				continue;
+		// Scope expiry and retention pruning are tick-level obligations. One watch
+		// that fails for its own reasons must not starve the 30-second attachment
+		// lease or the 24-hour retention prune on this instance, so they run even
+		// when a batch rejects and the rejection still propagates afterwards.
+		try {
+			for (const [scopeId, holder] of attachments) {
+				signal.throwIfAborted();
+				const authority = holder.lease;
+				if (!(await store.renewScope(authority))) {
+					if (attachments.get(scopeId) === holder) attachments.delete(scopeId);
+					continue;
+				}
+				const watches = await store.scanOpenWatches(authority);
+				const open = new Set(watches.map((watch) => watch.bindingIdentity));
+				holder.attachment.synchronize(open);
+				for (const bindingIdentity of holder.framed.keys())
+					if (!open.has(bindingIdentity)) holder.framed.delete(bindingIdentity);
+				for (const bindingIdentity of holder.withheld.keys())
+					if (!open.has(bindingIdentity))
+						holder.withheld.delete(bindingIdentity);
+				for (const watch of watches) {
+					batch.push([holder, authority, watch]);
+					if (batch.length === input.program.limits.fanoutPerBatch)
+						await flushBatch();
+				}
 			}
-			const watches = await store.scanOpenWatches(authority);
-			holder.attachment.synchronize(
-				new Set(watches.map((watch) => watch.bindingIdentity)),
-			);
-			for (const watch of watches) {
-				batch.push([holder, authority, watch]);
-				if (batch.length === input.program.limits.fanoutPerBatch)
-					await flushBatch();
-			}
+			await flushBatch();
+		} finally {
+			await store.expireScopes({
+				applicationName: input.applicationName,
+				deploymentDigest: input.deploymentDigest,
+			});
+			await retention.prune({ applicationName: input.applicationName });
 		}
-		await flushBatch();
-		await store.expireScopes({
-			applicationName: input.applicationName,
-			deploymentDigest: input.deploymentDigest,
-		});
-		await retention.prune({ applicationName: input.applicationName });
 	};
 	const wake = createPostgresReconciliationWake({
 		reconcile,
@@ -465,7 +456,12 @@ export function createPostgresDurableLiveQueryCoordinator(
 			leases.set(attachment, lease);
 			attachments.set(
 				attachment.scopeId,
-				Object.freeze({ attachment, framed: new Map(), lease }),
+				Object.freeze({
+					attachment,
+					framed: new Map(),
+					withheld: new Map(),
+					lease,
+				}),
 			);
 			void wake.requestScan().catch(() => {});
 			return true;

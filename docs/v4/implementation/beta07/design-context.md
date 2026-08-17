@@ -183,8 +183,23 @@ decision has since changed still matches it. Every framing therefore creates a
 fresh root Execution and re-evaluates Context and Policy first, including when a
 new holder re-frames an unchanged retained generation after takeover. A retained
 generation is disclosed only when that fresh evaluation both succeeds and
-reproduces the retained bytes; otherwise the freshly authorized result is
-published in its place, and a denial publishes a failure rather than a frame.
+reproduces the retained bytes.
+
+A declared Context or Policy refusal becomes an `AUTHORIZATION_FAILED` failure
+frame. It is a refusal of this Principal, not a coordinator fault, so it must
+not escape the reconciliation tick; scope expiry and retention pruning run even
+when a batch rejects, so one failing watch cannot starve the attachment lease or
+the retention prune on that instance.
+
+Divergence is different and fails closed. When the fresh bytes do not reproduce
+the retained generation while the binding is still clean, nothing is disclosed
+and no generation is staged: staging requires an observed invalidation above the
+evaluated one, which by definition does not hold for a clean binding. Every
+change is supposed to reach a binding through the Change Ledger, so divergence
+here means a change escaped capture. The holder records that exact retained
+token as withheld, which stops the binding from being recomputed on every tick
+and lets the fence lift by itself once a real invalidation produces a different
+token.
 Reconciliation may preserve durable facts and mark a binding dirty without a
 holder, but it cannot recompute or frame that binding until a live holder
 supplies the matching already-resolved Principal and creates a fresh root. Durable scope state is therefore not a P5 run-as recipe.
@@ -253,3 +268,39 @@ kernel, public resume-token input, raw ledger access, application-authored
 trigger SQL, hidden migration apply, Channel, WebSocket, Redis, cross-Query
 atomicity, durable Reaction worker, Studio, RLS, or generic realtime Definition
 enters BETA-07.
+
+## Review history
+
+The acceptance manifest lists only deterministic gates, so it cannot record a
+review that blocked. This is that record.
+
+Round 1 reviewed head `0a420838` and returned `BLOCKED` with five blockers:
+retained generations were re-framed onto a fresh holder with no fresh root, a
+reconnect carrying its accepted resume token was refused and surfaced a
+transport failure to application code, the performance baseline and the manifest
+disagreed about the hosted gate, the 256 dependency-token cap had no test, and
+this record described wake behaviour the Runtime never enacts. Raw findings are
+byte-preserved in `claude-initial-review.json`.
+
+Round 2 reviewed the repair head `4f01bef3`, confirmed all five closed, and
+returned `BLOCKED` with two blockers caused by the round 1 repair itself. The
+widened denial path was never reachable, because `LiveQueryEvaluationFailure`
+declared only `OUTPUT_INVALID` and `RESOURCE_LIMIT`, so a real Context or Policy
+refusal was rethrown and abandoned the rest of the reconciliation tick. And the
+"publish the fresh generation instead" branch could never stage, because a clean
+binding fails the staging precondition by definition, so the binding was
+recomputed on every tick with no output. Raw findings are byte-preserved in
+`claude-review-02.json`.
+
+Round 1 also shipped a hostile test that constructed a
+`LiveQueryEvaluationFailure` with a code outside its declared union, which
+production could never raise, so it proved only that the coordinator forwards a
+class it cannot receive. `tests/**` has no root tsconfig and is not covered by
+`check-types`, which is why that never failed to compile. The manifest now
+carries an explicit typecheck of the files this slice changes, and that gate
+immediately caught an incomplete widening of `publishFailure`.
+
+Exploratory GPT-5.6-sol reads were used as construction feedback during
+implementation. ADR-0024 forbids counting them as acceptance evidence and they
+are not gates; the acceptance verdict comes solely from the protocol v1
+Opus-medium records in this directory.
