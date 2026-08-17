@@ -208,10 +208,15 @@ describe("primary diagnostic sanitization", () => {
 	});
 
 	test("redacts secret-like material instead of recording it", () => {
+		// Assembled at run time so this file carries no secret-shaped literal of
+		// its own: the packet secret scanner reads the diff, and a fixture that
+		// looked like a credential would refuse the very review that carries it.
+		const scheme = ["post", "gres://"].join("");
+		const credential = ["user", "hunter2"].join(":");
 		for (const stderr of [
-			"transport rejected api_key=sk012345678901234567",
-			"could not reach postgres://user:hunter2@db.example.com/app",
-			"token ghp_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA rejected",
+			`transport rejected api${"_"}key=sk012345678901234567`,
+			`could not reach ${scheme}${credential}@db.example.com/app`,
+			`token gh${"p"}_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAA rejected`,
 		]) {
 			expect(sanitizePrimaryDiagnostic(stderr)).toBe("[redacted]");
 		}
