@@ -41,6 +41,14 @@ type Holder = Readonly<{
 	 * token digest, so a later real invalidation lifts the fence on its own.
 	 */
 	withheld: Map<string, string>;
+	/**
+	 * Bindings whose fresh root was refused by Context or Policy. A refusal never
+	 * stages, so the binding stays dirty and would otherwise be recomputed in
+	 * full on every tick and re-emit an identical failure. Keyed by binding,
+	 * valued by the invalidation generation the refusal was observed at, so the
+	 * next real invalidation lifts the fence on its own.
+	 */
+	denied: Map<string, bigint>;
 	lease: PostgresRealtimeScopeLease;
 }>;
 
@@ -132,6 +140,10 @@ export function createPostgresDurableLiveQueryCoordinator(
 			prepared.authorityPartitionDigest !== watch.authorityPartitionDigest
 		)
 			return;
+		if (
+			holder.denied.get(watch.bindingIdentity) === watch.invalidationGeneration
+		)
+			return;
 		const dirty =
 			watch.latest === null ||
 			watch.invalidationGeneration > watch.evaluatedInvalidationGeneration;
@@ -167,8 +179,13 @@ export function createPostgresDurableLiveQueryCoordinator(
 					try {
 						evaluated = await prepared.evaluate();
 					} catch (error) {
-						if (error instanceof LiveQueryEvaluationFailure)
+						if (error instanceof LiveQueryEvaluationFailure) {
 							await holder.attachment.publishFailure(watch, error.code);
+							holder.denied.set(
+								watch.bindingIdentity,
+								watch.invalidationGeneration,
+							);
+						}
 						return;
 					}
 					signal.throwIfAborted();
@@ -250,8 +267,13 @@ export function createPostgresDurableLiveQueryCoordinator(
 			try {
 				evaluated = await prepared.evaluate();
 			} catch (error) {
-				if (error instanceof LiveQueryEvaluationFailure)
+				if (error instanceof LiveQueryEvaluationFailure) {
 					await holder.attachment.publishFailure(watch, error.code);
+					holder.denied.set(
+						watch.bindingIdentity,
+						watch.invalidationGeneration,
+					);
+				}
 				return;
 			}
 			signal.throwIfAborted();
@@ -317,8 +339,10 @@ export function createPostgresDurableLiveQueryCoordinator(
 		try {
 			evaluated = await prepared.evaluate();
 		} catch (error) {
-			if (error instanceof LiveQueryEvaluationFailure)
+			if (error instanceof LiveQueryEvaluationFailure) {
 				await holder.attachment.publishFailure(watch, error.code);
+				holder.denied.set(watch.bindingIdentity, watch.invalidationGeneration);
+			}
 			return;
 		}
 		signal.throwIfAborted();
@@ -399,10 +423,12 @@ export function createPostgresDurableLiveQueryCoordinator(
 			);
 			if (failed) throw failed.reason;
 		};
-		// Scope expiry and retention pruning are tick-level obligations. One watch
-		// that fails for its own reasons must not starve the 30-second attachment
-		// lease or the 24-hour retention prune on this instance, so they run even
-		// when a batch rejects and the rejection still propagates afterwards.
+		// Scope expiry and retention pruning are tick-level obligations, so they run
+		// even when a batch rejects. A refusal is already published and fenced
+		// before reaching here, so this covers genuine faults rather than denials.
+		// The rejection has to survive: an error raised by the maintenance work
+		// itself must not silently replace the fault that ended the tick.
+		let maintenanceFailure: unknown;
 		try {
 			for (const [scopeId, holder] of attachments) {
 				signal.throwIfAborted();
@@ -419,6 +445,8 @@ export function createPostgresDurableLiveQueryCoordinator(
 				for (const bindingIdentity of holder.withheld.keys())
 					if (!open.has(bindingIdentity))
 						holder.withheld.delete(bindingIdentity);
+				for (const bindingIdentity of holder.denied.keys())
+					if (!open.has(bindingIdentity)) holder.denied.delete(bindingIdentity);
 				for (const watch of watches) {
 					batch.push([holder, authority, watch]);
 					if (batch.length === input.program.limits.fanoutPerBatch)
@@ -427,12 +455,17 @@ export function createPostgresDurableLiveQueryCoordinator(
 			}
 			await flushBatch();
 		} finally {
-			await store.expireScopes({
-				applicationName: input.applicationName,
-				deploymentDigest: input.deploymentDigest,
-			});
-			await retention.prune({ applicationName: input.applicationName });
+			try {
+				await store.expireScopes({
+					applicationName: input.applicationName,
+					deploymentDigest: input.deploymentDigest,
+				});
+				await retention.prune({ applicationName: input.applicationName });
+			} catch (error) {
+				maintenanceFailure = error;
+			}
 		}
+		if (maintenanceFailure !== undefined) throw maintenanceFailure;
 	};
 	const wake = createPostgresReconciliationWake({
 		reconcile,
@@ -460,6 +493,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 					attachment,
 					framed: new Map(),
 					withheld: new Map(),
+					denied: new Map(),
 					lease,
 				}),
 			);

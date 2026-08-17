@@ -1,7 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { SQL } from "bun";
-import { principal } from "questpie";
+import { context as contextHelpers, principal } from "questpie";
 
 import { projectLiveQueryCompilation } from "../../../packages/compiler/src/live-query";
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
@@ -21,7 +21,6 @@ import {
 	type PostgresWakeTickSource,
 } from "../../../packages/runtime/src/live-query";
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
-import { DeclaredOperationError } from "../../../packages/runtime/src/operation";
 
 const databases = process.env.PGHOST
 	? [new SQL({ max: 1 }), new SQL({ max: 1 }), new SQL({ max: 1 })]
@@ -686,9 +685,10 @@ describe.skipIf(databases.length === 0)(
 						evaluate: async () => {
 							evaluations += 1;
 							if (authorityRevoked)
-								// Exactly what a revoked Membership raises out of executeRoot:
-								// a declared Context refusal, not a coordinator-internal class.
-								throw new DeclaredOperationError("tenant.notFound", 404);
+								// The exact value a revoked Membership raises out of executeRoot:
+								// context.error builds a frozen plain Error carrying `code`, with
+								// no class to test, which is why the mapping is shape-based.
+								throw contextHelpers.error.notFound("tenant");
 							return {
 								result: { nodes: [{ body: "durable result" }] },
 								observedPlan,
@@ -761,6 +761,29 @@ describe.skipIf(databases.length === 0)(
 						error: { code: "AUTHORIZATION_FAILED" },
 					});
 					expect(evaluations).toBeGreaterThan(beforeTakeover);
+
+					// A refusal never stages, so the binding stays dirty. Without the
+					// fence it would be recomputed in full on every tick and re-emit an
+					// identical failure forever.
+					const afterRefusal = evaluations;
+					for (let attempt = 0; attempt < 3; attempt += 1) {
+						tickSources[1].tick();
+						await coordinators[1]!.durable!.requestScan();
+					}
+					expect(evaluations).toBe(afterRefusal);
+
+					// A real invalidation lifts the fence: authority is restored and the
+					// next frame this connection receives is the freshly authorized
+					// result, not a repeat of the refusal.
+					authorityRevoked = false;
+					await captureMessageChange(databases[1]!);
+					tickSources[1].tick();
+					await coordinators[1]!.durable!.requestScan();
+					expect(await nextFrame(takeoverReader)).toMatchObject({
+						kind: "delivery",
+						bindingId: "binding:takeover",
+						payload: { nodes: [{ body: "durable result" }] },
+					});
 					await takeoverReader.cancel();
 				} finally {
 					await Promise.all(carriers.map((carrier) => carrier.drain()));

@@ -185,11 +185,25 @@ new holder re-frames an unchanged retained generation after takeover. A retained
 generation is disclosed only when that fresh evaluation both succeeds and
 reproduces the retained bytes.
 
-A declared Context or Policy refusal becomes an `AUTHORIZATION_FAILED` failure
-frame. It is a refusal of this Principal, not a coordinator fault, so it must
-not escape the reconciliation tick; scope expiry and retention pruning run even
-when a batch rejects, so one failing watch cannot starve the attachment lease or
-the retention prune on that instance.
+A Context refusal becomes an `AUTHORIZATION_FAILED` failure frame. Before this
+slice it was caught and dropped, so the client received nothing at all; it was
+never rethrown and no tick was ever abandoned by it. A Query Policy denial is
+not part of this path at all: Policy compiles to SQL predicates that filter
+rows, so it narrows a result rather than raising. The refusal is recognised by
+shape, not by class, because `context.error` builds a frozen plain `Error`
+carrying `code`; nothing in the framework declares that shape, so the mapping is
+nominal and deliberately narrow, and it fails closed to a failure frame rather
+than to disclosure.
+
+A refusal never stages, so the binding stays dirty and would be recomputed in
+full on every tick and re-emit an identical failure. The holder records the
+invalidation generation the refusal was observed at, which stops the loop and
+lifts by itself at the next real invalidation, exactly as withholding does.
+
+Scope expiry and retention pruning run even when a batch rejects, so a genuine
+fault in one watch cannot starve the attachment lease or the retention prune on
+that instance. A fault raised by that maintenance work is preserved rather than
+allowed to replace the fault that ended the tick.
 
 Divergence is different and fails closed. When the fresh bytes do not reproduce
 the retained generation while the binding is still clean, nothing is disclosed
@@ -292,13 +306,38 @@ binding fails the staging precondition by definition, so the binding was
 recomputed on every tick with no output. Raw findings are byte-preserved in
 `claude-review-02.json`.
 
-Round 1 also shipped a hostile test that constructed a
-`LiveQueryEvaluationFailure` with a code outside its declared union, which
-production could never raise, so it proved only that the coordinator forwards a
-class it cannot receive. `tests/**` has no root tsconfig and is not covered by
-`check-types`, which is why that never failed to compile. The manifest now
-carries an explicit typecheck of the files this slice changes, and that gate
-immediately caught an incomplete widening of `publishFailure`.
+Round 3 reviewed head `9318b819` and returned `BLOCKED` with two blockers. The
+round 2 repair mapped a refusal by `instanceof DeclaredOperationError`, but
+`context.error` builds a frozen plain `Error` with no class, so that mapping
+could never fire and no refusal ever reached a client. The review found it not
+by reading the code but by noticing that this record and the tracer's own
+passing assertion claimed opposite outcomes. The second blocker was that no gate
+in the manifest was recorded at the reviewed head. Raw findings are
+byte-preserved in `claude-review-03.json`.
+
+The round 3 repair recognises a refusal by the exact shape `context.error`
+builds, verified by instrumenting the coordinator and observing what a real
+revoked Membership actually raises, and fences a refused binding at its
+invalidation generation. This record and the tracer now agree: exactly one
+`AUTHORIZATION_FAILED` reaches the client across the revocation phase.
+
+Three rounds shipped a test that proved something other than what it claimed.
+Round 1 constructed a `LiveQueryEvaluationFailure` with a code outside its
+declared union, which production could never raise. Round 2 repaired a branch
+that could never execute. Round 3 injected a class the Query path never
+constructs. `tests/**` has no root tsconfig and is not covered by
+`check-types`, which is why the first of those never failed to compile. The
+manifest now carries an explicit typecheck of the files this slice changes, and
+that gate immediately caught an incomplete widening of `publishFailure`. Every
+repair in the current head is falsified against the unrepaired code: the exact
+assertion that fails, and how it fails, is recorded per repair.
+
+Round counting note. BETA-07 is reviewed under the accepted protocol v1, whose
+procedure is repair, a new clean head, and one replacement round, with no
+numeric bound. The three-consecutive-`BLOCKED` bound discussed during this work
+belongs to candidate ADR-0024 on the separate `proof/v4-acceptance-v2` branch,
+which is not accepted and does not govern this slice. For reference, accepted
+BETA-02 took five consecutive `BLOCKED` rounds before its `PASS`.
 
 Exploratory GPT-5.6-sol reads were used as construction feedback during
 implementation. ADR-0024 forbids counting them as acceptance evidence and they

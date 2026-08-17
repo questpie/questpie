@@ -9,11 +9,7 @@ import {
 	RuntimeCodecError,
 } from "../../codec";
 import type { ObservedLiveQueryPlanV1 } from "../../live-query";
-import {
-	DeclaredOperationError,
-	isOperationCallId,
-	readBoundedRequestBody,
-} from "../../operation";
+import { isOperationCallId, readBoundedRequestBody } from "../../operation";
 import {
 	createRealtimeSession,
 	realtimeCommandKind,
@@ -59,6 +55,20 @@ export interface RealtimeCarrier {
 
 function empty(status: number): Response {
 	return new Response(null, { status });
+}
+
+const CONTEXT_REFUSAL_CODES = new Set(["notFound", "unauthenticated"]);
+
+/**
+ * `context.error.notFound` and `context.error.unauthenticated` produce a frozen
+ * plain Error carrying `code` and an optional `resource`, so a declared Context
+ * refusal has no class to test. Match that exact shape and nothing wider: any
+ * other thrown value stays a fault and keeps propagating.
+ */
+function isContextRefusal(error: unknown): boolean {
+	if (!(error instanceof Error)) return false;
+	const code = (error as Error & { code?: unknown }).code;
+	return typeof code === "string" && CONTEXT_REFUSAL_CODES.has(code);
 }
 
 export function createRealtimeCarrier<Context>(
@@ -117,10 +127,14 @@ export function createRealtimeCarrier<Context>(
 				signal: binding.controller.signal,
 			});
 		} catch (error) {
-			// A Context or Policy denial is a declared refusal of this Principal, not
-			// a coordinator fault. It has to reach the client as the contracted
-			// failure frame instead of escaping the reconciliation tick.
-			if (!(error instanceof DeclaredOperationError)) throw error;
+			// A Context or Policy refusal of this Principal is not a coordinator
+			// fault, so it reaches the client as the contracted failure frame rather
+			// than being dropped. It has to be recognised by shape: `context.error`
+			// builds a frozen plain Error carrying `code` and an optional `resource`
+			// (packages/questpie/src/context.ts), not a distinguishable class, so an
+			// `instanceof` test against DeclaredOperationError never matches a real
+			// revocation. Anything else still propagates untouched.
+			if (!isContextRefusal(error)) throw error;
 			throw new LiveQueryEvaluationFailure("AUTHORIZATION_FAILED");
 		}
 		let payload: unknown;

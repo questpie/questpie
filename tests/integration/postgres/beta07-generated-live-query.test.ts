@@ -84,7 +84,7 @@ function installDeterministicNetworkTimers() {
 		const handle = { unref() {} };
 		intervals.push({ callback, handle });
 		return handle as never;
-	}) as typeof globalThis.setInterval;
+	}) as unknown as typeof globalThis.setInterval;
 	globalThis.clearInterval = ((handle: unknown) => {
 		const index = intervals.findIndex((interval) => interval.handle === handle);
 		if (index >= 0) {
@@ -92,7 +92,7 @@ function installDeterministicNetworkTimers() {
 			return;
 		}
 		originalClearInterval(handle as never);
-	}) as typeof globalThis.clearInterval;
+	}) as unknown as typeof globalThis.clearInterval;
 	globalThis.setTimeout = ((
 		callback: TimerCallback,
 		milliseconds?: number,
@@ -111,7 +111,7 @@ function installDeterministicNetworkTimers() {
 		});
 		reconnectArmed.resolve();
 		return handle as never;
-	}) as typeof globalThis.setTimeout;
+	}) as unknown as typeof globalThis.setTimeout;
 	globalThis.clearTimeout = ((handle: unknown) => {
 		const index = reconnects.findIndex((pending) => pending.handle === handle);
 		if (index >= 0) {
@@ -119,7 +119,7 @@ function installDeterministicNetworkTimers() {
 			return;
 		}
 		originalClearTimeout(handle as never);
-	}) as typeof globalThis.clearTimeout;
+	}) as unknown as typeof globalThis.clearTimeout;
 
 	return Object.freeze({
 		get armedIntervals() {
@@ -515,9 +515,12 @@ postgresTest(
 			expect(await closeResponse.promise).toBe(202);
 			expect(downstream).toBe(3);
 			// Two reconnects re-opened every binding carrying the resume token the
-			// client had already accepted. The public seam must have reported no
-			// failure at all across the crash, the takeover, and the revocation.
-			expect(failures).toEqual([]);
+			// client had already accepted, so no transport failure may ever surface.
+			// The revoked Membership is different: a declared Context refusal is
+			// contracted to reach the client as exactly one AUTHORIZATION_FAILED
+			// frame, and no further result is published after it.
+			expect(failures).toEqual(["AUTHORIZATION_FAILED"]);
+			expect(failures).not.toContain("TRANSPORT_FAILED");
 			expect(states).not.toContain("failed");
 		} finally {
 			if (runtimeAProcess) {
