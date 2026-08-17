@@ -3,7 +3,7 @@
 	"ticket": "#295",
 	"proof": "BETA-08 executes the Reaction that BETA-06 already accepts. One committed message-published fact creates one causally deduplicated durable run, and a worker records a Policy-current result through the shared PostgreSQL durable kernel: run, physical attempt, opaque lease fence, append-only history, stable effect ledger, durable cancellation, and an audited maintenance surface.",
 	"diffBase": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
-	"reviewOutput": "docs/v4/implementation/beta08/REVIEW-02.json",
+	"reviewOutput": "docs/v4/implementation/beta08/REVIEW-03.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
 		"BETA-06 accepted evidence": "f9879efdfb2921ed747d353b6cb903398e9d67c3",
@@ -37,9 +37,14 @@
 			"sha256": "29c8d6910ca5a49ff5be7ed1290c60e39c20c7a8a59d5f7eb256979df6d8c13e"
 		},
 		{
+			"name": "second acceptance round findings",
+			"path": "docs/v4/implementation/beta08/claude-review-02.json",
+			"sha256": "d7eead301b0bbf4200f618826c915c869278b6e63d982186d1b6c47470e481b7"
+		},
+		{
 			"name": "BETA-08 implementation decision record",
 			"path": "docs/v4/implementation/beta08/design-context.md",
-			"sha256": "519f074277195245ad7059e85c54a23b15f9c5f7e75eaa0aac0618d6b0e893b5"
+			"sha256": "51ce07cd67c1128a358594b31c78b5eca05ae53b62d9c3001897120f69b4c3c9"
 		},
 		{
 			"name": "accepted lifecycle jobs and shared durable kernel projection",
@@ -58,19 +63,19 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres -- --scenario beta08 (21 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
+			"command": "bun run test:postgres -- --scenario beta08 (23 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (100, 100, and 103 passing; 0 failures)",
+			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (102, 102, and 105 passing; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 371.463 ms against a 2000 ms budget, 168 maximum run result bytes, 3 events per successful run, 57779 public declaration bytes, 21028 TypeScript instantiations)",
+			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 405.241 ms against a 2500 ms budget, 168 maximum run result bytes, 4 events per successful run, 57779 public declaration bytes, 21028 TypeScript instantiations)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 402.460 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
+			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 374.261 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
 			"result": "PASS"
 		},
 		{
@@ -82,7 +87,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun node_modules/typescript/bin/tsc --noEmit -p tests/tsconfig.beta08.json (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own gate over every test and support file it changes)",
+			"command": "bun node_modules/typescript/bin/tsc --noEmit -p tests/tsconfig.beta08.json (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own gate over the 21 test and support files it changes. tests/unit/beta05-runtime-application.test.ts is the one changed file outside the gate: its BETA-05 fixture builder carries 23 pre-existing type errors this slice did not introduce and does not repair.)",
 			"result": "PASS"
 		},
 		{
@@ -109,6 +114,7 @@
 		"Events carry sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, and a safe error code, and carry no raw payload, credential, secret, or stack trace.",
 		"The slice adds no generic Job client, no Workflow steps, no schedules, and no external Action authoring, and the generated browser client gains no durable control plane.",
 		"Every directly invocable Operation carries its codecs in `operation-contracts.json`, so a server-only Mutation the Reaction calls needs no network exposure and the Fetch path refuses any operation outside the network wire.",
-		"The design record discloses every claim narrower than the accepted contract: the unswept retry horizon, `EXECUTABLE_RETIRED` as a claim refusal, the budgets and retention this slice does not enforce and therefore does not pin, the guard's structural scope, and the deferred Action seam behind the effect callback."
+		"The design record discloses every claim narrower than the accepted contract: the unswept retry horizon, `EXECUTABLE_RETIRED` as a claim refusal, the budgets and retention this slice does not enforce and therefore does not pin, the guard's structural scope, and the deferred Action seam behind the effect callback.",
+		"The pinned durable-kernel contract describes the state machine and history vocabulary the kernel implements: every listed transition is performed by the kernel or a maintenance command, every declared event kind is appended, and the compile-level test pins both."
 	]
 }

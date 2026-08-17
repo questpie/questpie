@@ -5,8 +5,9 @@ docs/v4/implementation/beta07/claude-initial-review.json
 docs/v4/implementation/beta07/claude-review-02.json
 docs/v4/implementation/beta07/claude-review-03.json
 docs/v4/implementation/beta07/claude-review-04.json
-docs/v4/implementation/beta08/REVIEW-02.json
+docs/v4/implementation/beta08/REVIEW-03.json
 docs/v4/implementation/beta08/claude-initial-review.json
+docs/v4/implementation/beta08/claude-review-02.json
 docs/v4/prototypes/acceptance-determinism/REVIEW-02.json
 docs/v4/prototypes/acceptance-determinism/REVIEW-03.json
 docs/v4/prototypes/acceptance-determinism/REVIEW.json

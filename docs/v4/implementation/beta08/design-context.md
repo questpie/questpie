@@ -297,9 +297,9 @@ PostgreSQL concurrency case and runs in the `beta08` PostgreSQL scenario, which
 the seconds-long changed loop deliberately excludes.
 
 Measured on PostgreSQL 17 with the reference-local baselines: one 20-run worker
-batch at a 405.241 ms median against a 2,500 ms budget, a maximum 168-byte run
-result, four events per successful run, 57,779 public declaration bytes, and
-21,028 TypeScript instantiations. The nightly contention scenario ran 64 runs
-against eight competing workers at 374.261 ms against a 3,000 ms budget, with 64
+batch at a 397.655 ms median against a 2,000 ms budget, a maximum 168-byte run
+result, four events per successful run, 57,805 public declaration bytes, and
+21,000 TypeScript instantiations. The nightly contention scenario ran 64 runs
+against eight competing workers at 343.443 ms against a 3,000 ms budget, with 64
 attempts and zero superseded leases. PostgreSQL 16, 17, and 18 each report 102,
 102, and 105 passing tests with zero failures.

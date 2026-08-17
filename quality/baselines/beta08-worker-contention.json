@@ -23,16 +23,16 @@
 		"taggedStableRunner": "PENDING"
 	},
 	"samples": {
-		"postgresContention64Ms": [374.2607479999997]
+		"postgresContention64Ms": [343.44270700000015]
 	},
 	"observed": {
-		"postgresContention64Ms": 374.2607479999997,
+		"postgresContention64Ms": 343.44270700000015,
 		"durableRuns": 64,
 		"duplicateAttempts": 0
 	},
 	"budgetDerivation": {
 		"postgresContention64Ms": {
-			"referenceObservedMs": 374.2607479999997,
+			"referenceObservedMs": 343.44270700000015,
 			"multiplier": 6,
 			"roundUpQuantumMs": 1000
 		}
