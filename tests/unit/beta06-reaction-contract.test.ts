@@ -10,7 +10,24 @@ import {
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
-test("derives the typed pending-intent target from one authored Reaction", async () => {
+const acceptedContract = {
+	name: "messagePublished",
+	input: { kind: "object", properties: { messageId: { kind: "uuid" } } },
+	output: { kind: "object", properties: { messageId: { kind: "uuid" } } },
+	runAs: { kind: "durableRunAs", actor: "caller", whenDenied: "fail" },
+	retry: {
+		kind: "durableRetry",
+		maximumAttempts: 8,
+		initialDelayMilliseconds: 1_000,
+		backoff: "exponential",
+		maximumDelayMilliseconds: 900_000,
+		jitter: "full",
+		horizonMilliseconds: 86_400_000,
+	},
+	effects: ["deliver-message"],
+} as const;
+
+test("derives the typed dispatch target and the executed handler from one authored Reaction", async () => {
 	const compilation = await compileApplication({
 		applicationRoot: fixtureRoot,
 	});
@@ -41,22 +58,20 @@ test("derives the typed pending-intent target from one authored Reaction", async
 		exportName: "messagePublished",
 	});
 	expect(compilation.generatedFiles["app.ts"]).toContain(
-		'"messagePublished"(input: Readonly<{ readonly "companyId": string; readonly "messageId": string; }>): Promise<void>;',
-	);
-	expect(compilation.generatedFiles["app.ts"]).not.toContain(
-		"messagePublished(input: Readonly<{ companyId: string; messageId: string }>",
+		'"messagePublished"(input: Readonly<{ readonly "channelId": string; readonly "companyId": string; readonly "messageId": string; }>): Promise<void>;',
 	);
 	const executables = JSON.parse(
 		compilation.generatedFiles["runtime-executables.json"]!,
 	);
 	expect(
-		executables.slots.some(
+		executables.slots.filter(
 			(slot: { identity: string }) =>
 				slot.identity === "reaction:messagePublished",
 		),
-	).toBe(false);
+	).toMatchObject([{ kind: "reaction", slot: "handler" }]);
 	expect(projected).toMatchObject({
 		format: "questpie.reaction-projection",
+		version: 2,
 		reactions: [{ identity: "reaction:messagePublished" }],
 	});
 	expect(runtimeBuild.later.reactionDigest).toMatch(/^[0-9a-f]{64}$/);
@@ -64,24 +79,16 @@ test("derives the typed pending-intent target from one authored Reaction", async
 		expect.objectContaining({ path: "reaction-projection.json" }),
 	);
 
+	const contract = normalizeReactionContract(
+		acceptedContract,
+		(value) => value,
+	);
 	const projection = projectReactionContracts([
 		{
 			identity: "reaction:messagePublished",
 			kind: "reaction",
 			name: "messagePublished",
-			contract: {
-				format: "questpie.reaction-definition-contract",
-				version: 1,
-				name: "messagePublished",
-				input: {
-					kind: "object",
-					properties: {
-						companyId: { kind: "uuid" },
-						messageId: { kind: "uuid" },
-					},
-				},
-				executableSlots: [],
-			},
+			contract,
 			contributions: [],
 			origin: {
 				logicalPath: "src/message-published.ts",
@@ -95,17 +102,24 @@ test("derives the typed pending-intent target from one authored Reaction", async
 	]);
 	expect(projection).toEqual({
 		format: "questpie.reaction-projection",
-		version: 1,
+		version: 2,
 		reactions: [
 			{
 				identity: "reaction:messagePublished",
-				input: {
-					kind: "object",
-					properties: {
-						companyId: { kind: "uuid" },
-						messageId: { kind: "uuid" },
-					},
+				input: acceptedContract.input,
+				output: acceptedContract.output,
+				declaredErrors: {},
+				runAs: { actor: "caller", whenDenied: "fail" },
+				retry: {
+					maximumAttempts: 8,
+					initialDelayMilliseconds: 1_000,
+					backoff: "exponential",
+					maximumDelayMilliseconds: 900_000,
+					jitter: "full",
+					horizonMilliseconds: 86_400_000,
 				},
+				effects: ["deliver-message"],
+				contractDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				origin: {
 					path: "src/message-published.ts",
 					exportName: "messagePublished",
@@ -116,15 +130,37 @@ test("derives the typed pending-intent target from one authored Reaction", async
 	});
 });
 
-test("rejects executable Reaction behavior before the BETA-08 owner", () => {
+test("rejects a Reaction outside the accepted run-as, retry, and effect contract", () => {
+	const normalize = (value: Readonly<Record<string, unknown>>) =>
+		normalizeReactionContract(value, (candidate) => candidate);
 	expect(() =>
-		normalizeReactionContract(
-			{
-				name: "messagePublished",
-				input: { kind: "uuid" },
-				handler: () => undefined,
-			},
-			(value) => value,
-		),
-	).toThrow("reaction.handler is outside the BETA-06 static dispatch contract");
+		normalize({ ...acceptedContract, schedule: "0 * * * *" }),
+	).toThrow("reaction.schedule is outside the Reaction contract");
+	expect(() =>
+		normalize({
+			...acceptedContract,
+			runAs: { kind: "durableRunAs", actor: "system", whenDenied: "fail" },
+		}),
+	).toThrow('reaction.runAs must be durable.caller({ whenDenied: "fail" })');
+	expect(() =>
+		normalize({
+			...acceptedContract,
+			retry: { ...acceptedContract.retry, maximumAttempts: 9 },
+		}),
+	).toThrow("reaction.retry.maximumAttempts exceeds the accepted 8 bound");
+	expect(() =>
+		normalize({
+			...acceptedContract,
+			retry: { ...acceptedContract.retry, maximumDelayMilliseconds: 900_001 },
+		}),
+	).toThrow("reaction.retry.maximumDelay exceeds the accepted 900000 ms cap");
+	expect(() =>
+		normalize({ ...acceptedContract, effects: ["Deliver Message"] }),
+	).toThrow("reaction.effects[0] is not a literal effect name");
+	expect(() =>
+		normalize({
+			...acceptedContract,
+			effects: ["deliver-message", "deliver-message"],
+		}),
+	).toThrow("reaction.effects contains a duplicate effect name");
 });

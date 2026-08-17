@@ -57,6 +57,7 @@ export type { ExecutionEventV1 } from "./events";
 export type {
 	RuntimeExecutableBindings,
 	RuntimeExecutableInventoryBinding,
+	RuntimeReactionBinding,
 } from "./bindings";
 
 type MaybePromise<Value> = Value | Promise<Value>;
@@ -157,7 +158,7 @@ export async function createRuntimeApplication<
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
 	const retainedClients = retainClientPairs(input.retainedClients);
-	const queryBindings = validateRuntimeExecutableBindings(
+	const validatedBindings = validateRuntimeExecutableBindings(
 		artifacts,
 		input.bindings,
 		input.serverExports,
@@ -167,9 +168,13 @@ export async function createRuntimeApplication<
 			ExecutionView
 		>,
 	);
+	const queryBindings = validatedBindings.operations;
 	const operationEngine = createOperationEngine(
 		queryBindings,
-		artifacts.wireContract.operations,
+		artifacts.operationContracts.operations,
+	);
+	const networkOperations = new Set(
+		artifacts.wireContract.operations.map(({ identity }) => identity),
 	);
 	await input.program.verifyReadiness?.(artifacts);
 	try {
@@ -479,6 +484,11 @@ export async function createRuntimeApplication<
 			if (binding?.kind !== "query")
 				return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
 		}
+		if (!networkOperations.has(frame.operation))
+			return operationWireResponse(
+				failureFrame(frame, "NOT_FOUND"),
+				operationFailureStatus("NOT_FOUND"),
+			);
 		let prepared: PreparedOperation<OperationView>;
 		let contextInput: ContextInputOf<Context>;
 		try {

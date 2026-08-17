@@ -41,6 +41,12 @@ export type {
 	ServiceInstances,
 	ServiceLifetime,
 } from "./service";
+export { durable } from "./durable";
+export type {
+	DurableDuration,
+	DurableRetryDefinition,
+	DurableRunAsDefinition,
+} from "./durable";
 export { context, defineContext, principal } from "./context";
 export type {
 	Authority,

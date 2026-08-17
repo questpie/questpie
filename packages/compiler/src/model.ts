@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { normalizeDeclaredErrors } from "./operation-errors";
 import { normalizeReactionContract } from "./reaction";
 import { normalizeBoundPolicy } from "./relational";
 import {
@@ -232,42 +233,10 @@ function operationContract(
 	kind: "mutation" | "query",
 	value: RecordValue,
 ): RecordValue {
-	const errors = record(value.errors ?? {}, `${kind}.errors`);
-	const declaredErrors = Object.fromEntries(
-		Object.entries(errors)
-			.sort(([left], [right]) => compareAscii(left, right))
-			.map(([key, candidate]) => {
-				const definition = record(candidate, `${kind}.errors.${key}`);
-				if (definition.kind !== "operationError")
-					throw new CompilerDiagnosticError(
-						"QP-COMPOSE-013",
-						"structuralTypeError",
-						`${kind}.errors.${key} is not an Operation Error`,
-					);
-				const status = definition.status;
-				if (
-					typeof status !== "number" ||
-					!Number.isInteger(status) ||
-					status < 400 ||
-					status > 599
-				)
-					throw new CompilerDiagnosticError(
-						"QP-COMPOSE-013",
-						"structuralTypeError",
-						`${kind}.errors.${key}.status is invalid`,
-					);
-				return [
-					key,
-					{
-						code: string(definition.code, `${kind}.errors.${key}.code`),
-						status,
-						payload:
-							definition.payload === null
-								? null
-								: codecContract(definition.payload),
-					},
-				];
-			}),
+	const declaredErrors = normalizeDeclaredErrors(
+		value.errors,
+		kind,
+		codecContract,
 	);
 	let policyContract: RecordValue | null = null;
 	if (kind === "mutation") {

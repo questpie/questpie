@@ -388,12 +388,17 @@ export async function createArtifacts(
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
 		"service-projection.json": canonicalBytes(executionComposition.services),
+		"operation-contracts.json": runtimeArtifactBytes(
+			runtime.operationContracts,
+		),
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
-	if (runtime.reactions.reactions.length > 0)
+	if (runtime.reactions.reactions.length > 0) {
 		generated["reaction-projection.json"] = canonicalBytes(runtime.reactions);
+		generated["durable-kernel.json"] = canonicalBytes(runtime.durableKernel);
+	}
 	if (mutations.projection.mutations.length > 0) {
 		generated["mutation-projection.json"] = canonicalBytes(
 			mutations.projection,

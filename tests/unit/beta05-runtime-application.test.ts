@@ -134,6 +134,11 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 		...unsignedWire,
 		digest: digest("questpie-operation-wire-v1", unsignedWire),
 	};
+	const operationContracts = {
+		format: "questpie.operation-contracts",
+		version: 1,
+		operations: unsignedWire.operations,
+	};
 	const artifactFiles = {
 		"app.ts": "export type App = unknown;\n",
 		"build-input.json": '{"format":"questpie.build-input"}\n',
@@ -142,6 +147,7 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 		"internal/package-inventories.json": "[]\n",
 		"internal/server.ts": "export const executable = true;\n",
 		"manifest.json": '{"format":"questpie.manifest"}\n',
+		"operation-contracts.json": `${JSON.stringify(operationContracts)}\n`,
 		"policy-projection.json": "{}\n",
 		"postgres-query-plans.json": "{}\n",
 		"query-projection.json": "{}\n",
@@ -205,6 +211,10 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 			"questpie-runtime-executables-v1",
 			runtimeExecutables,
 		),
+		operationContractsDigest: digest(
+			"questpie-operation-contracts-v1",
+			operationContracts,
+		),
 		runtimeGraphDigest,
 		wireDigest: wireContract.digest,
 		executableSlots: slots.map((slot) => `${slot.identity}#${slot.slot}`),
@@ -223,6 +233,7 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 	return {
 		artifactFiles,
 		runtimeExecutables,
+		operationContracts,
 		wireContract,
 		runtimeBuild: {
 			...runtimeBuildWithoutDigest,
@@ -235,6 +246,7 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 	return {
 		runtimeBuild: value.runtimeBuild,
 		runtimeExecutables: value.runtimeExecutables,
+		operationContracts: value.operationContracts,
 		wireContract: value.wireContract,
 	};
 }

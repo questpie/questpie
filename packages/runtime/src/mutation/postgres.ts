@@ -1,6 +1,12 @@
 import type { SQL } from "bun";
 
+import type { RuntimeCodec } from "../codec";
 import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
+import {
+	acceptDurableDispatch,
+	markDurableKernelTransaction,
+} from "../durable";
+import type { LinkedReactionProjection } from "../durable";
 import type { ExecutionFacts } from "../execution";
 import {
 	DeclaredOperationError,
@@ -17,10 +23,7 @@ import {
 	createPostgresCollectionMutationData,
 	type TransactionQuery,
 } from "./collection";
-import {
-	createReactionDispatch,
-	type LinkedReactionProjection,
-} from "./dispatch";
+import { createReactionDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 
@@ -132,6 +135,8 @@ export function createPostgresMutationInvoker<View>(
 		application: string;
 		collectionPlans: LinkedPostgresCollectionOperationPlansV1;
 		reactions: LinkedReactionProjection;
+		contextInputCodec: RuntimeCodec;
+		runtimeBuildDigest: string;
 		facts: ExecutionFacts<
 			Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
 		>;
@@ -273,6 +278,7 @@ WHERE application_name = $1 AND tenant_id = $2 AND operation_name = $3 AND princ
 					dispatchSlot: dispatch.slot,
 				});
 				const recordId = deterministicUuid(originKey);
+				await markDurableKernelTransaction(query);
 				await query(
 					`INSERT INTO questpie_internal.pending_reaction_intents
   (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, record_id, reaction_name, input_digest, payload_bytes, transaction_id, recorded_at, state)
@@ -286,12 +292,30 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.pg_current_xact
 						callId,
 						dispatch.slot,
 						recordId,
-						dispatch.target,
+						dispatch.reaction.identity,
 						mutationDigest(dispatch.payloadBytes),
 						dispatch.payloadBytes,
 						owner.operationTime,
 					],
 				);
+				const accepted = await acceptDurableDispatch({
+					query,
+					application: input.application,
+					dispatchId: recordId,
+					reaction: dispatch.reaction,
+					tenantId: facts.tenant.id,
+					principal: facts.principal,
+					contextInputBytes: canonicalMutationBytes(
+						encodeRuntimeCodec(input.contextInputCodec, facts.contextInput),
+					),
+					payloadBytes: dispatch.payloadBytes,
+					runtimeBuildDigest: input.runtimeBuildDigest,
+					causationId: callId,
+					correlationId: callId,
+					acceptedAt: owner.operationTime,
+				});
+				if (accepted === null)
+					throw new TypeError("Reaction dispatch acceptance did not advance");
 			}
 			await query(
 				`UPDATE questpie_internal.mutation_call_receipts

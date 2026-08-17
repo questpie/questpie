@@ -303,6 +303,7 @@ postgresTest(
 					messageAuthorMembershipId: beta05Ids.membership,
 					outcome: "committed",
 					payload: {
+						channelId: beta05Ids.channel,
 						companyId: beta05Ids.company,
 						messageId: replay.id,
 					},
@@ -317,7 +318,9 @@ postgresTest(
 					},
 					recordId: "e6b69be2-3b11-54b4-a08e-39eac72a9e1c",
 					sourceOperation: "mutation:message.publish",
-					state: "pending",
+					// BETA-08 accepts the dispatch inside the same transaction, so the
+					// recorded intent is already the durable kernel's acceptance fact.
+					state: "accepted",
 					tenantId: beta05Ids.company,
 				});
 				expect(bundle.recordId).not.toBe(replay.id);

@@ -22,7 +22,10 @@ type RuntimeBuildV1 = Readonly<{
 	version: 1;
 	application: string;
 	runtimeAbi: "questpie.runtime.v1";
-	internalProtocol: "questpie.internal.v2" | "questpie.internal.v3";
+	internalProtocol:
+		| "questpie.internal.v2"
+		| "questpie.internal.v3"
+		| "questpie.internal.v4";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -43,19 +46,20 @@ type RuntimeBuildV1 = Readonly<{
 	schemaFingerprint: string;
 	serverBundleDigest: string;
 	runtimeExecutablesDigest: string;
+	operationContractsDigest: string;
 	runtimeGraphDigest: string;
 	wireDigest: string;
 	realtimeWireDigest: string | null;
 	later: Readonly<{
 		changeLedgerDigest: string | null;
 		resumeDigest: string | null;
-		durableCompatibilityDigest: null;
+		durableCompatibilityDigest: string | null;
 		reactionDigest: string | null;
 	}>;
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
 		identity: string;
-		kind: "context" | "mutation" | "query" | "service";
+		kind: "context" | "mutation" | "query" | "reaction" | "service";
 		slot: "create" | "dispose" | "handler" | "resolve";
 		runtimeGraphDigest: string;
 		bundleExport: string;
@@ -96,11 +100,49 @@ type OperationWireContractV2 = OperationWireContractBase &
 
 type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;
 
+export type OperationContractsV1 = Readonly<{
+	format: "questpie.operation-contracts";
+	version: 1;
+	operations: readonly RuntimeOperationContract[];
+}>;
+
 export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
+	operationContracts: OperationContractsV1;
 	wireContract: OperationWireContract;
 }>;
+
+/**
+ * Every directly invocable Operation carries its codecs here, including the
+ * server-only ones the network wire never exposes.
+ */
+function decodeOperationContracts(value: unknown): OperationContractsV1 {
+	const artifact = record(value, "operation contracts");
+	exact(artifact, ["format", "version", "operations"], "operation contracts");
+	if (
+		artifact.format !== "questpie.operation-contracts" ||
+		artifact.version !== 1 ||
+		!Array.isArray(artifact.operations)
+	)
+		fail("operation contracts artifact is invalid");
+	const operations = artifact.operations.map((operation, index) =>
+		decodeOperationWireContract(operation, index),
+	);
+	const identities = operations.map(({ identity }) => identity);
+	if (
+		new Set(identities).size !== identities.length ||
+		identities.some(
+			(identity, index) => index > 0 && identity <= identities[index - 1]!,
+		)
+	)
+		fail("operation contracts must be unique and identity-sorted");
+	return Object.freeze({
+		format: "questpie.operation-contracts" as const,
+		version: 1 as const,
+		operations: Object.freeze(operations),
+	});
+}
 
 function decodeOperationWireContract(
 	value: unknown,
@@ -293,7 +335,8 @@ function decodeWire(value: unknown): OperationWireContract {
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const build = record(value, "runtime build");
-	const v3 = build.internalProtocol === "questpie.internal.v3";
+	const durable = build.internalProtocol === "questpie.internal.v4";
+	const v3 = build.internalProtocol === "questpie.internal.v3" || durable;
 	exact(
 		build,
 		[
@@ -317,6 +360,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"schemaFingerprint",
 			"serverBundleDigest",
 			"runtimeExecutablesDigest",
+			"operationContractsDigest",
 			"runtimeGraphDigest",
 			"wireDigest",
 			...(v3 ? ["realtimeWireDigest"] : []),
@@ -347,6 +391,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"schemaFingerprint",
 		"serverBundleDigest",
 		"runtimeExecutablesDigest",
+		"operationContractsDigest",
 		"runtimeGraphDigest",
 		"wireDigest",
 		"digest",
@@ -375,8 +420,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		digestValue(later.resumeDigest, "resumeDigest");
 	} else if (later.changeLedgerDigest !== null || later.resumeDigest !== null)
 		fail("Live Query digests require internal protocol v3");
-	if (later.durableCompatibilityDigest !== null)
-		fail("durableCompatibilityDigest is not owned by this Runtime ABI");
+	if (later.durableCompatibilityDigest !== null) {
+		if (!durable)
+			fail("durableCompatibilityDigest requires internal protocol v4");
+		digestValue(later.durableCompatibilityDigest, "durableCompatibilityDigest");
+	}
 	if (later.reactionDigest !== null)
 		digestValue(later.reactionDigest, "reactionDigest");
 	const compiler = record(build.compiler, "compiler");
@@ -488,6 +536,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		!inventoryDigests.has("reaction-projection.json")
 	)
 		fail("reactionDigest does not match reaction-projection inventory");
+	if (
+		(later.durableCompatibilityDigest === null) !==
+		!inventoryDigests.has("durable-kernel.json")
+	)
+		fail("durableCompatibilityDigest does not match durable-kernel inventory");
 	if (compiler.buildInputDigest !== inventoryDigests.get("build-input.json"))
 		fail(
 			"compiler buildInputDigest does not match inventory path build-input.json",
@@ -498,7 +551,8 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		fail("unsupported Runtime ABI");
 	if (
 		build.internalProtocol !== "questpie.internal.v2" &&
-		build.internalProtocol !== "questpie.internal.v3"
+		build.internalProtocol !== "questpie.internal.v3" &&
+		build.internalProtocol !== "questpie.internal.v4"
 	)
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
@@ -518,12 +572,20 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 	const envelope = record(value, "artifact envelope");
 	exact(
 		envelope,
-		["runtimeBuild", "runtimeExecutables", "wireContract"],
+		[
+			"runtimeBuild",
+			"runtimeExecutables",
+			"operationContracts",
+			"wireContract",
+		],
 		"artifact envelope",
 	);
 	const runtimeBuild = decodeBuild(envelope.runtimeBuild);
 	const runtimeExecutables = decodeRuntimeExecutables(
 		envelope.runtimeExecutables,
+	);
+	const operationContracts = decodeOperationContracts(
+		envelope.operationContracts,
 	);
 	const wireContract = decodeWire(envelope.wireContract);
 	if (
@@ -531,6 +593,14 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		runtimeBuild.runtimeExecutablesDigest
 	)
 		fail("runtime executable digest does not match");
+	if (
+		!wireContract.operations.every((operation) =>
+			operationContracts.operations.some(
+				(candidate) => candidate.identity === operation.identity,
+			),
+		)
+	)
+		fail("wire operations are not covered by the operation contracts");
 	if (
 		wireContract.digest !== runtimeBuild.wireDigest ||
 		wireContract.application !== runtimeBuild.application ||
@@ -560,5 +630,10 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		})
 	)
 		fail("Runtime Build slots do not match executable inventory");
-	return Object.freeze({ runtimeBuild, runtimeExecutables, wireContract });
+	return Object.freeze({
+		runtimeBuild,
+		runtimeExecutables,
+		operationContracts,
+		wireContract,
+	});
 }

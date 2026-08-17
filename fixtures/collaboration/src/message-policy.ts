@@ -194,7 +194,7 @@ export const messageEventPolicy = definePolicy(messageEvents, {
 					candidate.messageId.notEqual("00000000-0000-0000-0000-000000000000"),
 				),
 			),
-			kind: candidate.kind.equal("published"),
+			kind: candidate.kind.in(["delivered", "published"]),
 		}),
 	},
 });

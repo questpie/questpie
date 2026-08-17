@@ -12,6 +12,8 @@ export async function runtimePostgresProgramFixture() {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-runtime-program-"));
 	await cp(fixtureRoot, temporary, { recursive: true });
 	await rm(join(temporary, "src/message-publish.ts"));
+	await rm(join(temporary, "src/message-published.ts"));
+	await rm(join(temporary, "src/message-record-delivery.ts"));
 	try {
 		const generated = (await compileApplication({ applicationRoot: temporary }))
 			.generatedFiles;

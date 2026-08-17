@@ -10,3 +10,10 @@ export {
 	linkPostgresCollectionOperationPlans,
 	linkReactionProjection,
 } from "./mutation";
+export {
+	createDurableReactionWorker,
+	createPostgresDurableEffectLedger,
+	createPostgresDurableKernel,
+	createPostgresDurableMaintenance,
+	durablePrincipal,
+} from "./durable";

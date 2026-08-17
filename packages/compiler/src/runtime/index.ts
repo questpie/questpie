@@ -8,8 +8,11 @@ import {
 	digest,
 } from "../canonical";
 import {
+	durableKernelContract,
+	durableKernelDigest,
 	projectReactionContracts,
-	type ReactionProjectionV1,
+	type DurableKernelContractV1,
+	type ReactionProjectionV2,
 } from "../reaction";
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
 
@@ -40,24 +43,34 @@ interface RuntimeExecutableSlotV1 {
 export interface RuntimeContractProjection {
 	readonly clientContract: Readonly<Record<string, unknown>>;
 	readonly clientContractDigest: string;
+	readonly operationContracts: Readonly<{
+		format: "questpie.operation-contracts";
+		version: 1;
+		operations: readonly Readonly<Record<string, unknown>>[];
+	}>;
+	readonly operationContractsDigest: string;
 	readonly executables: Readonly<{
 		format: "questpie.runtime-executables";
 		version: 1;
 		slots: readonly RuntimeExecutableSlotV1[];
 	}>;
 	readonly runtimeExecutablesDigest: string;
-	readonly reactions: ReactionProjectionV1;
+	readonly reactions: ReactionProjectionV2;
 	readonly reactionDigest: string;
+	readonly durableKernel: DurableKernelContractV1;
 	readonly wire: Readonly<Record<string, unknown>>;
 	readonly wireDigest: string;
 }
 
-function operationContracts(resources: readonly NormalizedResource[]) {
+function operationContracts(
+	resources: readonly NormalizedResource[],
+	exposure: "direct" | "network",
+) {
 	return resources
 		.filter(
 			(resource) =>
 				(resource.kind === "query" || resource.kind === "mutation") &&
-				resource.contract.exposure === "network",
+				(exposure === "direct" || resource.contract.exposure === "network"),
 		)
 		.map((resource) => ({
 			identity: resource.identity,
@@ -81,9 +94,16 @@ export function projectRuntimeContract(
 	}>,
 ): RuntimeContractProjection {
 	const application = `application:${input.configuration.application.name}`;
-	const operations = operationContracts(input.resources);
+	const operations = operationContracts(input.resources, "network");
+	// Every directly invocable Operation needs its codecs, including the
+	// server-only ones the network wire deliberately never exposes.
+	const operationContractsArtifact = {
+		format: "questpie.operation-contracts" as const,
+		version: 1 as const,
+		operations: operationContracts(input.resources, "direct"),
+	};
 	const reactions = projectReactionContracts(input.resources);
-	const reactionDigest = digest("questpie-reaction-projection-v1", reactions);
+	const reactionDigest = digest("questpie-reaction-projection-v2", reactions);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -103,7 +123,9 @@ export function projectRuntimeContract(
 	);
 	const slots = input.resources
 		.filter((resource) =>
-			["context", "mutation", "query", "service"].includes(resource.kind),
+			["context", "mutation", "query", "reaction", "service"].includes(
+				resource.kind,
+			),
 		)
 		.flatMap((resource) => {
 			const origin = {
@@ -280,6 +302,12 @@ export function projectRuntimeContract(
 	return {
 		clientContract,
 		clientContractDigest,
+		operationContracts: operationContractsArtifact,
+		operationContractsDigest: digest(
+			"questpie-operation-contracts-v1",
+			operationContractsArtifact,
+		),
+		durableKernel: durableKernelContract,
 		executables,
 		runtimeExecutablesDigest,
 		reactions,
@@ -380,7 +408,7 @@ export function projectRuntimeBuild(
 		version: 1,
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
-		internalProtocol: "questpie.internal.v3",
+		internalProtocol: "questpie.internal.v4",
 		compiler,
 		compilerRuntimeBuildDigest: digest(
 			"questpie-compiler-runtime-build-v1",
@@ -399,6 +427,7 @@ export function projectRuntimeBuild(
 		migrationHead: input.migrationHead,
 		serverBundleDigest: fileDigest("internal/application.js"),
 		runtimeExecutablesDigest: input.runtime.runtimeExecutablesDigest,
+		operationContractsDigest: input.runtime.operationContractsDigest,
 		runtimeGraphDigest,
 		wireDigest: input.runtime.wireDigest,
 		realtimeWireDigest: input.realtimeWireDigest,
@@ -415,7 +444,10 @@ export function projectRuntimeBuild(
 		later: {
 			changeLedgerDigest: input.liveQueryDigests.changeLedger,
 			resumeDigest: input.liveQueryDigests.resume,
-			durableCompatibilityDigest: null,
+			durableCompatibilityDigest:
+				input.runtime.reactions.reactions.length === 0
+					? null
+					: durableKernelDigest,
 			reactionDigest:
 				input.runtime.reactions.reactions.length === 0
 					? null

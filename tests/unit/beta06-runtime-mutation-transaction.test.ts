@@ -5,6 +5,7 @@ import type { SQL } from "bun";
 import { principal } from "questpie";
 
 import { linkReactionProjection } from "../../packages/runtime/src/mutation";
+import type { LinkedPostgresCollectionOperationPlansV1 } from "../../packages/runtime/src/mutation";
 import { createPostgresMutationInvoker } from "../../packages/runtime/src/mutation/postgres";
 import type { PreparedOperation } from "../../packages/runtime/src/operation";
 
@@ -30,6 +31,12 @@ function postgres(denial: "candidatePolicy" | "fieldAuthority" | null = null) {
 					operationTime: new Date("2026-08-16T00:00:00.000Z"),
 				},
 			];
+		if (
+			statement.startsWith("UPDATE questpie_internal.pending_reaction_intents")
+		)
+			return [{ dispatchId: "e6b69be2-3b11-54b4-a08e-39eac72a9e1c" }];
+		if (statement.startsWith("INSERT INTO questpie_internal.durable_runs"))
+			return [{ runId: "5b0f6f2c-2b0a-5e7d-9c1f-2a4d6b8c0e12" }];
 		if (statement === "CHECK_WIDGET_FIELD")
 			return denial === "fieldAuthority" ? [] : [{ allowed: true }];
 		if (statement === "INSERT_WIDGET")
@@ -57,58 +64,63 @@ function postgres(denial: "candidatePolicy" | "fieldAuthority" | null = null) {
 	};
 }
 
-const collectionPlans = {
-	plans: [
-		{
-			identity: "mutation:widgets.create",
+const collectionPlanList = [
+	{
+		identity: "mutation:widgets.create",
+		target: "collection:widgets",
+		member: "create",
+		operation: {
 			target: "collection:widgets",
 			member: "create",
-			operation: {
-				target: "collection:widgets",
-				member: "create",
-				keyFields: [["id"]],
-				callerInputFields: [["id"]],
-			},
-			candidate: {
-				fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
-			},
-			fieldAuthority: {
-				checks: [
-					{
-						path: ["id"],
-						sql: "CHECK_WIDGET_FIELD",
-						parameters: [],
-					},
-				],
-			},
-			write: {
-				sql: "INSERT_WIDGET",
-				parameters: [
-					{
-						position: 1,
-						postgresType: "uuid",
-						kind: "callerInput",
-						path: ["id"],
-						codec: { kind: "uuid" },
-					},
-				],
-				result: [
-					{
-						path: ["id"],
-						column: "qp_result_0",
-						codec: { kind: "uuid" },
-						nullable: false,
-					},
-				],
-			},
-			limits: { rows: 100, durationMilliseconds: 5_000 },
+			keyFields: [["id"]],
+			callerInputFields: [["id"]],
 		},
-	],
-} as const;
+		candidate: {
+			fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
+		},
+		fieldAuthority: {
+			checks: [
+				{
+					path: ["id"],
+					sql: "CHECK_WIDGET_FIELD",
+					parameters: [],
+				},
+			],
+		},
+		write: {
+			sql: "INSERT_WIDGET",
+			parameters: [
+				{
+					position: 1,
+					postgresType: "uuid",
+					kind: "callerInput",
+					path: ["id"],
+					codec: { kind: "uuid" },
+				},
+			],
+			result: [
+				{
+					path: ["id"],
+					column: "qp_result_0",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+			],
+		},
+		limits: { rows: 100, durationMilliseconds: 5_000 },
+	},
+] as const;
+
+// A deliberately partial plan double: these tests exercise the Mutation
+// invoker's statement order, not Collection plan linking.
+const collectionPlans = {
+	plans: collectionPlanList,
+	byIdentity: new Map(collectionPlanList.map((plan) => [plan.identity, plan])),
+} as unknown as LinkedPostgresCollectionOperationPlansV1;
 
 const reactionProjection = {
 	format: "questpie.reaction-projection",
-	version: 1,
+	version: 2,
 	reactions: [
 		{
 			identity: "reaction:notifyWidget",
@@ -116,6 +128,19 @@ const reactionProjection = {
 				kind: "object",
 				properties: { widgetId: { kind: "uuid" } },
 			},
+			output: { kind: "object", properties: { id: { kind: "uuid" } } },
+			declaredErrors: {},
+			runAs: { actor: "caller", whenDenied: "fail" },
+			retry: {
+				maximumAttempts: 8,
+				initialDelayMilliseconds: 1_000,
+				backoff: "exponential",
+				maximumDelayMilliseconds: 900_000,
+				jitter: "full",
+				horizonMilliseconds: 86_400_000,
+			},
+			effects: [],
+			contractDigest: "c".repeat(64),
 			origin: {
 				path: "src/renamed-export.ts",
 				exportName: "notTheDispatchMember",
@@ -167,11 +192,15 @@ test("executes only linked Collection plans and projection-derived Reaction inte
 		application: "application:generic",
 		collectionPlans,
 		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
 			tenant: { id: tenantId },
 			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
 			signal: new AbortController().signal,
 			deadline: null,
 		},
@@ -199,11 +228,15 @@ test("rejects the same non-canonical call identity as the wire adapter", async (
 		application: "application:generic",
 		collectionPlans,
 		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
 			tenant: { id: tenantId },
 			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
 			signal: new AbortController().signal,
 			deadline: null,
 		},
@@ -223,11 +256,15 @@ test("accepts the maximum canonical Mutation call identity", async () => {
 		application: "application:generic",
 		collectionPlans,
 		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
 			tenant: { id: tenantId },
 			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
 			signal: new AbortController().signal,
 			deadline: null,
 		},
@@ -266,11 +303,15 @@ test("rejects payloads outside the compiled Reaction codec before commit", async
 		application: "application:generic",
 		collectionPlans,
 		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
 		facts: {
 			principal: principal.user({ id: principalId }),
 			authority: { kind: "ordinary" },
 			tenant: { id: tenantId },
 			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
 			signal: new AbortController().signal,
 			deadline: null,
 		},
@@ -289,11 +330,15 @@ test("rolls back the receipt and every sibling on Field or candidate Policy deni
 			application: "application:generic",
 			collectionPlans,
 			reactions: linkReactionProjection(reactionProjection),
+			contextInputCodec: { kind: "object", properties: {} },
+			runtimeBuildDigest: "d".repeat(64),
 			facts: {
 				principal: principal.user({ id: principalId }),
 				authority: { kind: "ordinary" },
 				tenant: { id: tenantId },
 				values: {},
+				contextInput: {},
+				liveQueryObservation: null,
 				signal: new AbortController().signal,
 				deadline: null,
 			},

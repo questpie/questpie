@@ -16,17 +16,19 @@ test("types Mutation dispatch from the authored Reaction input", async () => {
 			`import type { MutationContext, ReactionDefinition } from "#questpie/app";
 
 declare const ctx: MutationContext;
-declare const reaction: ReactionDefinition<"messagePublished">;
+declare const reaction: ReactionDefinition<"messagePublished", Record<never, never>>;
 
 async function exerciseDispatch() {
 	reaction.identity satisfies "reaction:messagePublished";
 	await ctx.dispatch.messagePublished({
+		channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
 		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
 		messageId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3",
 	});
 
 	// @ts-expect-error the Reaction codec requires the tenant identity
 	await ctx.dispatch.messagePublished({
+		channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
 		messageId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3",
 	});
 

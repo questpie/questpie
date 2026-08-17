@@ -2,7 +2,7 @@ import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { codec, operation, policy, principal } from "questpie";
+import { codec, durable, operation, policy, principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
@@ -28,7 +28,7 @@ const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1";
 type GeneratedCompilation = Awaited<ReturnType<typeof compileApplication>>;
 type RuntimeSlot = Readonly<{
 	identity: string;
-	kind: "context" | "mutation" | "query" | "service";
+	kind: "context" | "mutation" | "query" | "reaction" | "service";
 	slot: "create" | "dispose" | "handler" | "resolve";
 	runtimeGraphDigest: string;
 	bundleExport: string;
@@ -37,6 +37,7 @@ type Definition = Readonly<Record<string, unknown>>;
 
 let compilation: GeneratedCompilation;
 let runtimeBuild: Readonly<Record<string, unknown>>;
+let operationContracts: Readonly<Record<string, unknown>>;
 let runtimeExecutables: Readonly<{
 	slots: readonly RuntimeSlot[];
 }>;
@@ -60,6 +61,8 @@ let auditConnection: Definition;
 let executionAudit: Definition;
 let auditReader: Definition;
 let publishMessage: Definition;
+let recordDelivery: Definition;
+let messagePublished: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
 
@@ -109,6 +112,7 @@ beforeAll(async () => {
 	const audit = await import(
 		pathToFileURL(resolve(fixtureRoot, "packages/audit/src/questpie.ts")).href
 	);
+
 	collaborationContext = execution.collaborationContext;
 	auditConnection = execution.auditConnection;
 	executionAudit = execution.executionAudit;
@@ -142,6 +146,54 @@ beforeAll(async () => {
 		handler: () => {
 			throw new Error("mutation is outside this Query-only runtime harness");
 		},
+	});
+	recordDelivery = generatedApp.defineMutation({
+		name: "message.recordDelivery",
+		network: true,
+		input: codec.object({ messageId: codec.uuid() }),
+		output: codec.object({ eventId: codec.uuid() }),
+		policy: policy.authenticated(),
+		errors: {
+			deliveryUnavailable: operation.error({
+				code: "DELIVERY_UNAVAILABLE",
+				status: 404,
+			}),
+		},
+		handler: () => ({ eventId: messageId }),
+	});
+	messagePublished = generatedApp.defineReaction({
+		name: "messagePublished",
+		input: codec.object({
+			channelId: codec.uuid(),
+			companyId: codec.uuid(),
+			messageId: codec.uuid(),
+		}),
+		output: codec.object({
+			deliveryReceipt: codec.text(),
+			eventId: codec.uuid(),
+			messageId: codec.uuid(),
+		}),
+		runAs: durable.caller({ whenDenied: "fail" }),
+		retry: durable.retry({
+			maximumAttempts: 8,
+			initialDelay: "1s",
+			backoff: "exponential",
+			maximumDelay: "900s",
+			jitter: "full",
+			horizon: "24h",
+		}),
+		effects: ["deliver-message"],
+		errors: {
+			messageUnavailable: operation.error({
+				code: "MESSAGE_UNAVAILABLE",
+				status: 404,
+			}),
+		},
+		handler: () => ({
+			deliveryReceipt: "delivery:none",
+			eventId: messageId,
+			messageId,
+		}),
 	});
 	messagePage = generatedApp.defineQuery({
 		name: "messages.page",
@@ -183,6 +235,9 @@ beforeAll(async () => {
 	runtimeExecutables = JSON.parse(
 		compilation.generatedFiles["runtime-executables.json"]!,
 	);
+	operationContracts = JSON.parse(
+		compilation.generatedFiles["operation-contracts.json"]!,
+	);
 	wireContract = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
 });
 
@@ -190,7 +245,9 @@ function definitions(): ReadonlyMap<string, Definition> {
 	return new Map([
 		["context:app.context", collaborationContext],
 		["mutation:message.publish", publishMessage],
+		["mutation:message.recordDelivery", recordDelivery],
 		["query:messages.page", messagePage],
+		["reaction:messagePublished", messagePublished],
 		["service:audit.connection", auditConnection],
 		["service:audit.execution", executionAudit],
 		["service:questpie.auditReader", auditReader],
@@ -204,7 +261,9 @@ function executableBindings() {
 		const definition = byIdentity.get(slot.identity);
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
-			slot.kind === "query" || slot.kind === "mutation"
+			slot.kind === "query" ||
+			slot.kind === "mutation" ||
+			slot.kind === "reaction"
 				? definition.handler
 				: definition[slot.slot];
 		serverExports[slot.bundleExport] = implementation;
@@ -215,7 +274,9 @@ function executableBindings() {
 			runtimeGraphDigest: slot.runtimeGraphDigest,
 			bundleExport: slot.bundleExport,
 			definition,
-			...(slot.kind === "query" || slot.kind === "mutation"
+			...(slot.kind === "query" ||
+			slot.kind === "mutation" ||
+			slot.kind === "reaction"
 				? { execute: implementation }
 				: {}),
 		});
@@ -249,6 +310,7 @@ async function runtimeHarness(
 		artifacts: {
 			runtimeBuild,
 			runtimeExecutables,
+			operationContracts,
 			wireContract,
 		},
 		artifactFiles: artifactFiles(),
@@ -262,7 +324,7 @@ async function runtimeHarness(
 			services: [auditConnection, executionAudit, auditReader] as never,
 			context: collaborationContext as never,
 			bootstrap: {
-				get: async () => {
+				get: (async () => {
 					bootstrapGets += 1;
 					return Object.freeze({
 						companyId,
@@ -271,7 +333,7 @@ async function runtimeHarness(
 						scopeKey: "company",
 						status: "active",
 					});
-				},
+				}) as never,
 			},
 			resolvePrincipal: readIngressPrincipal,
 			project: ({ facts }) =>
@@ -337,10 +399,10 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 	const context = { companyId };
 	const input = { channelId, first: 20, after: null };
 	try {
-		const direct = await harness.runtime.execution(
-			{ principal: user, context },
+		const direct = (await harness.runtime.execution(
+			{ principal: user, context } as never,
 			(operations) => operations.invoke("query:messages.page", input),
-		);
+		)) as Readonly<{ nodes: readonly Readonly<{ createdAt: unknown }>[] }>;
 		const raw = await harness.runtime.fetch(
 			operationRequest(operationFrame(input), user),
 		);
@@ -359,9 +421,11 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 				return harness.runtime.fetch(bindIngressPrincipal(request, user));
 			},
 		});
-		const clientResult = await client
+		const clientResult = (await client
 			.withContext(context)
-			.queries["messages.page"](input);
+			.queries["messages.page"](input)) as Readonly<{
+			nodes: readonly Readonly<{ createdAt: unknown }>[];
+		}>;
 		expect({ direct, fetch: rawFrame.payload, client: clientResult }).toEqual({
 			direct: expectedPage,
 			fetch: expectedWirePage,

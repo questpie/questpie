@@ -38,6 +38,11 @@ export {
 	verifyInternalProtocolV3,
 } from "./postgres/internal-protocol-v3";
 export {
+	ensureInternalProtocolV4,
+	internalProtocolV4Checksum,
+	verifyInternalProtocolV4,
+} from "./postgres/internal-protocol-v4";
+export {
 	projectPostgresChangeCapture,
 	verifyPostgresChangeCapture,
 } from "./postgres/change-capture";

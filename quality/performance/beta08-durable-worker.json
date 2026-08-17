@@ -1,0 +1,39 @@
+{
+	"id": "beta08-durable-worker",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta08-durable-worker.test.ts"],
+	"budgetOwner": "BETA-08",
+	"metrics": {
+		"postgresDurable20Ms": {
+			"direction": "max",
+			"budget": 2500,
+			"unit": "ms"
+		},
+		"claimBatch": {
+			"direction": "max",
+			"budget": 64,
+			"unit": "count"
+		},
+		"maxEventsPerRun": {
+			"direction": "max",
+			"budget": 1024,
+			"unit": "count"
+		},
+		"maxRunResultBytes": {
+			"direction": "max",
+			"budget": 262144,
+			"unit": "bytes"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}
