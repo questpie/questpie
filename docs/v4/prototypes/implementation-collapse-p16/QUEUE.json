@@ -26,7 +26,8 @@
 		"BETA-04": "275cad0c1d25251dc5d1ca1835a1316769218d7c",
 		"BETA-05": "740f2e0049a64f5a541f33ab8da44cf8e114041b",
 		"BETA-06": "0d1f35dd8685fdeb55c76547a6775df994f41315",
-		"BETA-07": "8edfa11a8d62afbd867c4a1e1b6551241d89667e"
+		"BETA-07": "8edfa11a8d62afbd867c4a1e1b6551241d89667e",
+		"BETA-08": "8389cf5f80b1e2a4684dfb00faa10bcd83c93605"
 	},
 	"issues": [
 		{
@@ -391,7 +392,7 @@
 			"id": "BETA-08",
 			"title": "BETA-08 Recover one committed Message Reaction through the durable kernel",
 			"blockedBy": ["BETA-07"],
-			"agentReady": true,
+			"agentReady": false,
 			"authority": ["ADR-0013", "ADR-0016", "ADR-0017", "ADR-0021"],
 			"artifacts": [
 				"Durable Run/attempt/lease/history schema",
@@ -441,7 +442,7 @@
 			"id": "BETA-09",
 			"title": "BETA-09 Inspect the connected tracer through minimal Studio",
 			"blockedBy": ["BETA-08"],
-			"agentReady": false,
+			"agentReady": true,
 			"authority": ["ADR-0003", "ADR-0014", "ADR-0021"],
 			"artifacts": [
 				"independent Studio projection producer",

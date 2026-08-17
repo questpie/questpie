@@ -23,6 +23,10 @@ Accepted BETA-07 adds the first watchable Message Query through compiler-owned
 change capture, a durable Change Ledger, no-affinity SSE delivery, and crash
 recovery at reviewed head `d25d9388`, evidence head `dfa46116`, and merge
 `8edfa11a`.
+Accepted BETA-08 executes the Reaction that BETA-06 accepts through the shared
+durable kernel: run, physical attempt, opaque lease fence, append-only history,
+stable effect ledger, durable cancellation, and an audited maintenance surface,
+at reviewed head `d0aedd54`, evidence head `78e81b67`, and merge `8389cf5f`.
 
 Fixed accepted proof authority:
 
@@ -64,6 +68,8 @@ Fixed accepted proof authority:
 | #293 BETA-06 evidence                | `f9879efdfb2921ed747d353b6cb903398e9d67c3` |
 | #294 BETA-07 reviewed implementation | `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` |
 | #294 BETA-07 evidence                | `dfa461162fdb211382708b9ad2a30cf10b564015` |
+| #295 BETA-08 reviewed implementation | `d0aedd54dc6420b48e632590a6c2319f8516bc9f` |
+| #295 BETA-08 evidence                | `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce` |
 | #317 P22R1 reviewed implementation   | `4463708e56a72e26f65b8d1d3a2c5d0bf5cd6d4b` |
 | #317 P22R1 evidence                  | `27d6f4f9`                                 |
 
@@ -116,6 +122,11 @@ capabilities, never durable authority or a provider matrix.
   reviewed head `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` and evidence
   head `dfa461162fdb211382708b9ad2a30cf10b564015`. PR #313 merged it to
   `feat/v4` at `8edfa11a8d62afbd867c4a1e1b6551241d89667e`; issue #294 is closed.
+- The accepted BETA-08 implementation worktree is
+  `/home/drepkovsky/code/questpie-v4-beta-08`, branch `feat/v4-beta-08`, at
+  reviewed head `d0aedd54dc6420b48e632590a6c2319f8516bc9f` and evidence
+  head `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce`. PR #320 merged it to
+  `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`; issue #295 is closed.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -141,8 +152,9 @@ repository-quality gate #317 is accepted through PR #319 and tracker closure; it
 pins the acceptance packet, proves the pinned reviewer before the packet is sent,
 makes a no result terminal, and adds credential-free record verification, while
 keeping exactly one reviewer and introducing no second provider and no new ADR.
-It does not count toward the native implementation queue. BETA-08 issue #295
-is now the active frontier. The accepted foundation
+It does not count toward the native implementation queue. BETA-08 issue #295 is
+accepted through PR #320 and tracker closure. BETA-09 issue #296 is now the
+active frontier. The accepted foundation
 includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
@@ -161,6 +173,44 @@ review, CI, merge, and tracker state before enabling its immediate successor.
 Do not skip a blocked issue or parallelize dependent implementation.
 
 ## Latest verification
+
+- #295 took four fresh stateless Opus-medium protocol v2 rounds, all
+  byte-preserved in `docs/v4/implementation/beta08/`. Initial head `e1fec4eb`
+  received `BLOCKED` with eleven findings. The first was procedural and blocked
+  reading the rest: two changed `.ts` files carried literal NUL separators, so
+  git classified them binary and the reviewer never saw the acceptance and
+  protocol paths. The others included a codec failure classified
+  `HANDLER_FAILED` and retried to exhaustion, a cancel-requested run re-admitted
+  for a needless recovered attempt, a maintenance winner test that proved
+  precondition rejection rather than single-winner election, an effect recovery
+  clause with no executed path, and budgets pinned into the compatibility
+  contract that nothing enforced. Head `8f538203` closed all eleven and received
+  `BLOCKED` for four more, all introduced or exposed by that repair. Head
+  `29a6861c` closed those and received `BLOCKED` for one: the published
+  maintenance surface implements four of the seven properties Gate 8 names and
+  disclosed none of the gap. Reviewed head `d0aedd54` implements expected-version
+  fencing and the append-only maintenance audit, discloses the absent
+  maintenance Authority as a narrower claim naming BETA-09 as its owner, and
+  received `PASS`.
+- #295 lesson recorded for later slices: the round-1 finding that a budget table
+  can be pinned without an enforcing path generalizes. The accepted head pins
+  only `claimBatch`, `eventsPerRun`, `payloadBytes`, `resultBytes`, and the retry
+  horizon, and deliberately drops `activeAttemptsPerPrincipal`,
+  `pendingRunsPerResource`, `deadLettersPerResource`, and the whole retention
+  block from the compatibility contract the Runtime Build digests. That is
+  correct for the slice and leaves the durable kernel pinning no
+  noisy-neighbour budget at all; `durable_runs` stores `tenant_id` while
+  admission orders only by `(available_at, run_id)`.
+- #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
+  across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
+  forward conformance, and the selected-PR PostgreSQL microbenchmark gate, which
+  needs the `performance` label on the pull request to run at all. Local
+  PostgreSQL 16/17/18 measured 105/105/108 passing with zero failures across 26
+  beta08 scenario tests; `bench:micro` measured 400.075 ms against a 2500 ms
+  budget and `test:load` 330.045 ms against 2000 ms.
+- #295 PR #320 merged normally to `feat/v4` at
+  `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
+  derives BETA-09 as the sole agent-ready frontier.
 
 - #294 took four fresh stateless Opus-medium protocol v1 rounds, all
   byte-preserved in `docs/v4/implementation/beta07/`. Initial head `0a420838`
