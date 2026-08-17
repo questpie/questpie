@@ -19,6 +19,10 @@ direct, Fetch, and client paths at reviewed head `884b5d8a`, evidence head
 Accepted BETA-06 adds the first idempotent Message Mutation, compiler-owned
 write programs, transactional receipt, and pending Reaction intent at reviewed
 head `ef37bd6b`, evidence head `f9879efd`, and merge `0d1f35dd`.
+Accepted BETA-07 adds the first watchable Message Query through compiler-owned
+change capture, a durable Change Ledger, no-affinity SSE delivery, and crash
+recovery at reviewed head `d25d9388`, evidence head `dfa46116`, and merge
+`8edfa11a`.
 
 Fixed accepted proof authority:
 
@@ -58,6 +62,8 @@ Fixed accepted proof authority:
 | #292 BETA-05 evidence                | `61f4ae85b8ebebc1c5fb888707cd4f7e589ed985` |
 | #293 BETA-06 reviewed implementation | `ef37bd6b5fedef555f39e2e02a6e08fa1f2bce3c` |
 | #293 BETA-06 evidence                | `f9879efdfb2921ed747d353b6cb903398e9d67c3` |
+| #294 BETA-07 reviewed implementation | `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` |
+| #294 BETA-07 evidence                | `dfa461162fdb211382708b9ad2a30cf10b564015` |
 
 ADR-0008 through ADR-0023 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -103,6 +109,11 @@ capabilities, never durable authority or a provider matrix.
   head `f9879efdfb2921ed747d353b6cb903398e9d67c3`. PR #312 merged its final
   CI repair head `281e3d25ff1b1f80f399c61e38eb496d0686cc7d` to `feat/v4`
   at `0d1f35dd8685fdeb55c76547a6775df994f41315`; issue #293 is closed.
+- The accepted BETA-07 implementation worktree is
+  `/home/drepkovsky/code/questpie-v4-beta-07`, branch `feat/v4-beta-07`, at
+  reviewed head `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` and evidence
+  head `dfa461162fdb211382708b9ad2a30cf10b564015`. PR #313 merged it to
+  `feat/v4` at `8edfa11a8d62afbd867c4a1e1b6551241d89667e`; issue #294 is closed.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -123,7 +134,8 @@ native N=5 implementation queue. BETA-02 issue #289 is accepted through PR
 tracker closure. BETA-04 issue #291 is accepted through PR #308 and tracker
 closure. BETA-05 issue #292 is accepted through PR #311 and tracker closure.
 BETA-06 issue #293 is accepted through PR #312 and tracker closure. BETA-07
-issue #294 is now the active frontier. The accepted foundation
+issue #294 is accepted through PR #313 and tracker closure. BETA-08 issue #295
+is now the active frontier. The accepted foundation
 includes:
 
 - Bun 1.3.14; TypeScript 6.0.2 as canonical bridge; native TypeScript 7.0.2 as
@@ -142,6 +154,37 @@ review, CI, merge, and tracker state before enabling its immediate successor.
 Do not skip a blocked issue or parallelize dependent implementation.
 
 ## Latest verification
+
+- #294 took four fresh stateless Opus-medium protocol v1 rounds, all
+  byte-preserved in `docs/v4/implementation/beta07/`. Initial head `0a420838`
+  received `BLOCKED` for re-framing a retained generation onto a fresh holder
+  with no fresh root, a reconnect that was refused and surfaced a transport
+  failure to application code, a baseline that disagreed with the manifest on
+  the hosted gate, an untested 256 dependency-token cap, and wake prose the
+  Runtime never enacts. Head `4f01bef3` closed all five and received `BLOCKED`
+  for two defects introduced by that repair: a widened denial union that no
+  production error could reach, and a re-frame branch that could never stage.
+  Head `9318b819` received `BLOCKED` because its refusal mapping tested
+  `instanceof DeclaredOperationError` while `context.error` builds a frozen
+  plain `Error` with no class, so no refusal ever reached a client; the review
+  found it by noticing that the design record and the tracer's passing
+  assertion claimed opposite outcomes. Reviewed head `d25d9388` maps a refusal
+  by the shape `context.error` actually builds, fences a refused binding at its
+  invalidation generation, and received `PASS`.
+- #294 lesson recorded for later slices: three consecutive rounds shipped a
+  test that proved something other than what it claimed, because each injected
+  a construct the production path cannot produce. Every repair in the accepted
+  head is falsified against the unrepaired code, and the manifest pins an
+  explicit typecheck of the changed test files because `tests/**` has no root
+  tsconfig and is not covered by `check-types`.
+- #294 GitHub Actions run `32029361604` is green on evidence head `dfa46116`
+  across full quality, PostgreSQL 16/17/18, TypeScript 7 forward conformance,
+  and the selected-PR performance gate. Local PostgreSQL 16/17/18 measured
+  79/79/82 passing with zero failures; `bench:micro` measured 178.344 ms and
+  `test:load` 7645.066 ms, both inside the committed budgets.
+- #294 PR #313 merged normally to `feat/v4` at
+  `8edfa11a8d62afbd867c4a1e1b6551241d89667e`, and issue #294 is closed. P16 now
+  derives BETA-08 as the sole agent-ready frontier.
 
 - #293 initial reviewed head `a550c3ac3d25965f4391b5a32fba29d0cfe4ce4a`
   received a fresh stateless Opus-medium `BLOCKED` for an untrue Mutation
