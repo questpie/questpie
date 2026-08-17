@@ -3,7 +3,7 @@
 	"ticket": "#295",
 	"proof": "BETA-08 executes the Reaction that BETA-06 already accepts. One committed message-published fact creates one causally deduplicated durable run, and a worker records a Policy-current result through the shared PostgreSQL durable kernel: run, physical attempt, opaque lease fence, append-only history, stable effect ledger, durable cancellation, and an audited maintenance surface.",
 	"diffBase": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
-	"reviewOutput": "docs/v4/implementation/beta08/REVIEW-03.json",
+	"reviewOutput": "docs/v4/implementation/beta08/REVIEW-04.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "141417bc96dcb56ab6ce88a8521a11dd323fe76e",
 		"BETA-06 accepted evidence": "f9879efdfb2921ed747d353b6cb903398e9d67c3",
@@ -42,9 +42,14 @@
 			"sha256": "d7eead301b0bbf4200f618826c915c869278b6e63d982186d1b6c47470e481b7"
 		},
 		{
+			"name": "third acceptance round findings",
+			"path": "docs/v4/implementation/beta08/claude-review-03.json",
+			"sha256": "5ac25280bbfcdcfec253dc4f9e87ef0d045d95623cf9ec785529d45d1fb8c2b6"
+		},
+		{
 			"name": "BETA-08 implementation decision record",
 			"path": "docs/v4/implementation/beta08/design-context.md",
-			"sha256": "51ce07cd67c1128a358594b31c78b5eca05ae53b62d9c3001897120f69b4c3c9"
+			"sha256": "f23c88c685547ee351f860895bd8bec3b6ce5337f8c4b55f5629efb152e10e84"
 		},
 		{
 			"name": "accepted lifecycle jobs and shared durable kernel projection",
@@ -63,19 +68,19 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres -- --scenario beta08 (23 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
+			"command": "bun run test:postgres -- --scenario beta08 (26 tests across beta08-durable-kernel, beta08-internal-protocol, and beta08-reaction-worker; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (102, 102, and 105 passing; 0 failures)",
+			"command": "bun run test:postgres on PostgreSQL 16, 17, and 18 (105, 105, and 108 passing; 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 397.655 ms against a 2000 ms budget, 168 maximum run result bytes, 4 events per successful run, 57805 public declaration bytes, 21000 TypeScript instantiations)",
+			"command": "bun run bench:micro -- --scenario beta08 (postgresDurable20Ms median 400.075 ms against a 2500 ms budget, 168 maximum run result bytes, 4 events per successful run, 57892 public declaration bytes, 21000 TypeScript instantiations)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 343.443 ms against a 3000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
+			"command": "bun run test:load -- --scenario beta08 (64 runs against 8 competing workers at 330.045 ms against a 2000 ms budget, 64 attempts, 0 superseded leases, 0 duplicate attempts)",
 			"result": "PASS"
 		},
 		{
@@ -109,8 +114,8 @@
 		"A cancellation request during a handler competes with success through one fenced compare-and-set, and a cancel-requested run whose holder dies is reaped into `cancelled` rather than admitted for a needless recovered attempt.",
 		"One logical effect keeps one stable effect identity across attempts. A reliable lookup that returns a receipt recovers a lost response, a settled effect is reused by a later attempt without calling the provider again, a lookup that proves the provider never accepted the request stays retryable, and an absent or failing lookup records an ambiguity that only an audited acknowledgeAmbiguity can settle. Reusing one effect identity with different canonical input conflicts. No exactly-once effect claim is made.",
 		"A worker without matching executable bytes refuses the claim and consumes no attempt, leaving the run ready for a compatible worker.",
-		"acknowledgeAmbiguity, cancelRun, and retryRun each elect exactly one winner under concurrency and record every attempt, applied or rejected, in the maintenance audit with its actor and its state transition.",
-		"Dispatch, run, attempt, and event state reject any statement that does not opt into the durable kernel marker, so an application or worker path that never calls it is refused; run history rejects update, delete, and truncate even inside a kernel transaction; every questpie_internal index is B-tree with no expression or partial index; and no table enables row-level security. The application connects as the schema owner, so this is a structural guard rather than a hostile-role boundary.",
+		"acknowledgeAmbiguity, cancelRun, and retryRun each elect exactly one winner under concurrency, fence on the run's append-only version so a command bound to a stale reading is refused with VERSION_MISMATCH, take a trusted Principal rather than a caller-supplied identity pair, and record every attempt, applied or rejected, in an append-only maintenance audit with its actor and its state transition. The commands evaluate no maintenance Authority; the design record discloses that gap and names the slice that owns it.",
+		"Dispatch, run, attempt, and event state reject any statement that does not opt into the durable kernel marker, so an application or worker path that never calls it is refused; the run history and the maintenance audit both reject update, delete, and truncate even inside a kernel transaction; every questpie_internal index is B-tree with no expression or partial index; and no table enables row-level security. The application connects as the schema owner, so this is a structural guard rather than a hostile-role boundary.",
 		"Events carry sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, and a safe error code, and carry no raw payload, credential, secret, or stack trace.",
 		"The slice adds no generic Job client, no Workflow steps, no schedules, and no external Action authoring, and the generated browser client gains no durable control plane.",
 		"Every directly invocable Operation carries its codecs in `operation-contracts.json`, so a server-only Mutation the Reaction calls needs no network exposure and the Fetch path refuses any operation outside the network wire.",
