@@ -64,6 +64,8 @@ Fixed accepted proof authority:
 | #293 BETA-06 evidence                | `f9879efdfb2921ed747d353b6cb903398e9d67c3` |
 | #294 BETA-07 reviewed implementation | `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` |
 | #294 BETA-07 evidence                | `dfa461162fdb211382708b9ad2a30cf10b564015` |
+| #317 P22R1 reviewed implementation   | `4463708e56a72e26f65b8d1d3a2c5d0bf5cd6d4b` |
+| #317 P22R1 evidence                  | `27d6f4f9`                                 |
 
 ADR-0008 through ADR-0023 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
@@ -134,7 +136,12 @@ native N=5 implementation queue. BETA-02 issue #289 is accepted through PR
 tracker closure. BETA-04 issue #291 is accepted through PR #308 and tracker
 closure. BETA-05 issue #292 is accepted through PR #311 and tracker closure.
 BETA-06 issue #293 is accepted through PR #312 and tracker closure. BETA-07
-issue #294 is accepted through PR #313 and tracker closure. BETA-08 issue #295
+issue #294 is accepted through PR #313 and tracker closure. Interstitial
+repository-quality gate #317 is accepted through PR #319 and tracker closure; it
+pins the acceptance packet, proves the pinned reviewer before the packet is sent,
+makes a no result terminal, and adds credential-free record verification, while
+keeping exactly one reviewer and introducing no second provider and no new ADR.
+It does not count toward the native implementation queue. BETA-08 issue #295
 is now the active frontier. The accepted foundation
 includes:
 
