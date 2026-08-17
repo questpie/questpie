@@ -62,10 +62,9 @@ for (const reference of ["design.md", "proof.md", "implementation.md"]) {
 if (!proof.includes("bun run review:accept"))
 	fail("proof branch cannot locate acceptance command");
 for (const required of [
-	"GPT-5.6-sol",
-	"Spec",
-	"Standards",
+	"review:accept:v2",
 	"review:accept:verify",
+	"NO_RESULT",
 ]) {
 	if (!proof.includes(required))
 		fail(`proof branch does not pin acceptance protocol member ${required}`);
