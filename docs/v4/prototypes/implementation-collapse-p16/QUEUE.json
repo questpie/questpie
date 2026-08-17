@@ -25,7 +25,8 @@
 		"BETA-03": "a7d24541c433ab502316b34906d97c9dd51f7ee1",
 		"BETA-04": "275cad0c1d25251dc5d1ca1835a1316769218d7c",
 		"BETA-05": "740f2e0049a64f5a541f33ab8da44cf8e114041b",
-		"BETA-06": "0d1f35dd8685fdeb55c76547a6775df994f41315"
+		"BETA-06": "0d1f35dd8685fdeb55c76547a6775df994f41315",
+		"BETA-07": "8edfa11a8d62afbd867c4a1e1b6551241d89667e"
 	},
 	"issues": [
 		{
@@ -338,7 +339,7 @@
 			"id": "BETA-07",
 			"title": "BETA-07 Watch the Message Query through the Change Ledger",
 			"blockedBy": ["BETA-06"],
-			"agentReady": true,
+			"agentReady": false,
 			"authority": ["ADR-0012", "ADR-0014", "ADR-0017", "ADR-0021"],
 			"artifacts": [
 				"Change Ledger DDL/triggers",
@@ -390,7 +391,7 @@
 			"id": "BETA-08",
 			"title": "BETA-08 Recover one committed Message Reaction through the durable kernel",
 			"blockedBy": ["BETA-07"],
-			"agentReady": false,
+			"agentReady": true,
 			"authority": ["ADR-0013", "ADR-0016", "ADR-0017", "ADR-0021"],
 			"artifacts": [
 				"Durable Run/attempt/lease/history schema",
