@@ -1,0 +1,88 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#317",
+	"proof": "P22R1 pins the acceptance packet to one exact reviewed commit, proves the pinned reviewer before the packet is sent, treats a no result as terminal, and makes the committed record verifiable without model credentials, while keeping exactly one reviewer and one verdict.",
+	"diffBase": "d07b04d508a3af469c8b3ccaae8f67a82c911d66",
+	"reviewOutput": "docs/v4/prototypes/acceptance-determinism/REVIEW-V2.json",
+	"authorityHeads": {
+		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f",
+		"BETA-07 accepted evidence": "dfa461162fdb211382708b9ad2a30cf10b564015",
+		"accepted feat/v4 base": "d07b04d508a3af469c8b3ccaae8f67a82c911d66"
+	},
+	"authorityDocuments": [
+		{
+			"name": "accepted repository foundation",
+			"path": "docs/adr/0020-establish-the-repository-foundation.md",
+			"sha256": "55f2cb05cac8005dc66de9090c487506ffabd16a4ba4ab84e1d3fa289ec4d9d7"
+		},
+		{
+			"name": "proof procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "b497d33a90503db2bb9f3aa3e28cd449bdda2edefbc4651e784ecd4d48f26ad8"
+		},
+		{
+			"name": "repository quality procedure",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "905493727c85d0aca1381a6dd8defb8cbc9a4e6744b7fc8d7989751fea85d3c9"
+		},
+		{
+			"name": "acceptance determinism decision",
+			"path": "docs/v4/prototypes/acceptance-determinism/DECISION.md",
+			"sha256": "f3d47bce8a107e12223c69b6e54f5b52e23e507bfa839c0b8ea232451c227891"
+		},
+		{
+			"name": "proof map",
+			"path": "docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"sha256": "27c5c3a67f3df71c570ed96fb6f537fac1dd887603da935b79de4f95eb59c6b6"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run quality:full",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:typescript-forward",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run build && bun run package:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run scripts/agent-context-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:negative-control (52 pass, 0 fail across acceptance-packet-secrets, acceptance-review-packet, and acceptance-primary-transport)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun --lib ES2023,DOM .agents/skills/questpie-v4/scripts/acceptance-review-packet.ts .agents/skills/questpie-v4/scripts/acceptance-review-record.ts .agents/skills/questpie-v4/scripts/acceptance-review-safety.ts .agents/skills/questpie-v4/scripts/acceptance-review.ts .agents/skills/questpie-v4/scripts/bounded-review-process.ts .agents/skills/questpie-v4/scripts/claude-acceptance-primary.ts .agents/skills/questpie-v4/scripts/verify-acceptance-review.ts tests/unit/acceptance-primary-transport.test.ts tests/unit/acceptance-review-packet.test.ts (tests/** has no root tsconfig and is not covered by check-types, so this slice pins its own)",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"A committed manifest owns the exact diff base, review output path, proof heads, ordered authority paths with SHA-256 digests, PASS-only deterministic gates, and acceptance criteria; a caller selects no model, effort, provider, axis, prompt, or authority file.",
+		"Every packet byte is read from the exact reviewed commit through git show rather than the working tree, authority digests must match, and a dirty worktree, an escaping or symlinked output path, a Git administrative attributes file, or an empty diff fails closed before any model call.",
+		"The diff is canonical: prefixes, rename detection, algorithm, context and inter-hunk context, an empty order file, an empty attributes file, and GIT_ATTR_SOURCE are pinned, so no local Git configuration can reorder, elide, or reshape what the reviewer reads.",
+		"Authority documents, the manifest, the diff, and the record are scanned for secret-like material, and a match refuses the run rather than redacting it.",
+		"The pinned reviewer proves itself before the packet is sent: it must report a version and declare every pinned option in its own help output. An absent or argument-rejecting reviewer is a distinct fail-closed error, never a review outcome, because such an invocation could never have produced a verdict.",
+		"A reviewer that could have answered and did not is a terminal NO_RESULT that writes no artifact, carrying a bounded, secret-scanned, single-line transport diagnostic so its provenance is auditable. No fallback transport exists and no second provider is introduced.",
+		"The committed record binds ticket, manifest path, reviewed head, diff base, packet digest, sanitized primary disposition, verdict, and timestamp, and verify-acceptance-review.ts re-derives the packet from the reviewed commit and validates it with no model credentials, failing closed on tampering, output replacement, or a non-PASS aggregate.",
+		"The revision adds no production Runtime behavior, no public QUESTPIE API, no provider registry, and no reusable model-selection seam; it is repository-quality internals only.",
+		"Protocol v1 evidence and the accepted v1 wrapper remain untouched and valid, and this slice is reviewed by that accepted wrapper rather than by itself."
+	]
+}
