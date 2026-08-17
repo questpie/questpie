@@ -69,6 +69,8 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		permanentFailureCodes: readonly string[];
 		claimRefusalCodes: readonly string[];
 		maintenanceCommands: readonly string[];
+		maintenanceFencedOn: string;
+		maintenanceRejectionCodes: readonly string[];
 		eventKinds: readonly string[];
 	}>;
 	expect(kernel.format).toBe("questpie.durable-kernel");
@@ -137,6 +139,15 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		"acknowledgeAmbiguity",
 		"cancelRun",
 		"retryRun",
+	]);
+	expect(kernel.maintenanceFencedOn).toBe("runVersion");
+	expect(kernel.maintenanceRejectionCodes).toEqual([
+		"ALREADY_REQUESTED",
+		"ATTEMPTS_EXHAUSTED",
+		"NOT_AMBIGUOUS",
+		"RUN_IS_TERMINAL",
+		"RUN_NOT_FAILED",
+		"VERSION_MISMATCH",
 	]);
 	for (const code of kernel.permanentFailureCodes)
 		expect(kernel.failureCodes).toContain(code);

@@ -229,6 +229,12 @@ CREATE TABLE questpie_internal.durable_maintenance_commands (
     command IN ('acknowledgeAmbiguity', 'cancelRun', 'retryRun')
   ),
   CONSTRAINT durable_command_outcome_known CHECK (outcome IN ('applied', 'rejected')),
+  CONSTRAINT durable_command_rejection_known CHECK (
+    rejection_code IS NULL OR rejection_code IN (
+      'ALREADY_REQUESTED', 'ATTEMPTS_EXHAUSTED', 'NOT_AMBIGUOUS', 'RUN_IS_TERMINAL',
+      'RUN_NOT_FAILED', 'VERSION_MISMATCH'
+    )
+  ),
   CONSTRAINT durable_command_outcome_shape CHECK (
     (outcome = 'applied' AND rejection_code IS NULL)
     OR (outcome = 'rejected' AND rejection_code IS NOT NULL)
@@ -291,6 +297,10 @@ FOR EACH STATEMENT EXECUTE FUNCTION questpie_internal.guard_durable_kernel_write
 
 CREATE TRIGGER durable_run_events_append_only
 BEFORE UPDATE OR DELETE OR TRUNCATE ON questpie_internal.durable_run_events
+FOR EACH STATEMENT EXECUTE FUNCTION questpie_internal.guard_durable_append_only();
+
+CREATE TRIGGER durable_maintenance_commands_append_only
+BEFORE UPDATE OR DELETE OR TRUNCATE ON questpie_internal.durable_maintenance_commands
 FOR EACH STATEMENT EXECUTE FUNCTION questpie_internal.guard_durable_append_only();
 
 REVOKE ALL ON ALL TABLES IN SCHEMA questpie_internal FROM PUBLIC;

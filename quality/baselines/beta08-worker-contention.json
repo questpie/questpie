@@ -13,7 +13,7 @@
 		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
 		"runnerClass": "reference-local",
 		"postgres": "local Docker postgres:17",
-		"recordedAt": "2026-08-17",
+		"recordedAt": "2026-08-18",
 		"samples": 1,
 		"aggregation": "single observed run by postgresContention64Ms"
 	},
@@ -23,22 +23,22 @@
 		"taggedStableRunner": "PENDING"
 	},
 	"samples": {
-		"postgresContention64Ms": [343.44270700000015]
+		"postgresContention64Ms": [330.045474]
 	},
 	"observed": {
-		"postgresContention64Ms": 343.44270700000015,
+		"postgresContention64Ms": 330.045474,
 		"durableRuns": 64,
 		"duplicateAttempts": 0
 	},
 	"budgetDerivation": {
 		"postgresContention64Ms": {
-			"referenceObservedMs": 343.44270700000015,
+			"referenceObservedMs": 330.045474,
 			"multiplier": 6,
 			"roundUpQuantumMs": 1000
 		}
 	},
 	"budgets": {
-		"postgresContention64Ms": 3000,
+		"postgresContention64Ms": 2000,
 		"durableRuns": 64,
 		"duplicateAttempts": 0
 	},

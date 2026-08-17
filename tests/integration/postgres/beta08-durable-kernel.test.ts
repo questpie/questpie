@@ -328,7 +328,7 @@ postgresTest(
 		const requested = await prepared.maintenance.cancelRun({
 			runId,
 			reason: "operator stopped the run",
-			actor: { kind: "user", id: beta05Ids.principal },
+			actor: prepared.principal,
 		});
 		expect(requested).toMatchObject({
 			outcome: "applied",
@@ -417,7 +417,7 @@ postgresTest(
 			await prepared.maintenance.cancelRun({
 				runId,
 				reason: "operator stopped the run",
-				actor: { kind: "user", id: beta05Ids.principal },
+				actor: prepared.principal,
 			}),
 		).toMatchObject({ outcome: "applied", stateAfter: "running" });
 
@@ -460,7 +460,7 @@ postgresTest(
 	"each maintenance command elects one winner from a state that admits it",
 	async () => {
 		const prepared = await harness();
-		const actor = { kind: "user", id: beta05Ids.principal } as const;
+		const actor = prepared.principal;
 
 		// cancelRun races on a genuinely running run.
 		const runningCall = "beta08-command-00-0000-000000000006";
@@ -705,6 +705,163 @@ postgresTest(
 			kind: "failed",
 			errorCode: "VALIDATION_FAILED",
 		});
+	},
+	180_000,
+);
+
+postgresTest(
+	"a maintenance command bound to a stale run version is refused and audited",
+	async () => {
+		const prepared = await harness();
+		const actor = prepared.principal;
+		const callId = "beta08-version-00-0000-000000000011";
+		await publish(prepared, { body: "version fencing", callId });
+		const runId = await runIdentity(callId);
+
+		// An operator reads the run, the run moves, and the command it bound to
+		// that reading is refused rather than applied to a run it never saw.
+		const observed = await prepared.kernel.inspect(runId);
+		expect(observed?.version).toBeGreaterThan(0);
+		const claimed = await prepared.kernel.claim({
+			runId,
+			workerId: "worker:version",
+		});
+		expect(claimed.status).toBe("claimed");
+		expect((await prepared.kernel.inspect(runId))?.version).toBeGreaterThan(
+			observed!.version,
+		);
+
+		expect(
+			await prepared.maintenance.cancelRun({
+				runId,
+				reason: "acting on a stale reading",
+				actor,
+				expectedVersion: observed!.version,
+			}),
+		).toMatchObject({
+			outcome: "rejected",
+			rejectionCode: "VERSION_MISMATCH",
+		});
+		expect((await prepared.kernel.inspect(runId))?.cancellationRequested).toBe(
+			false,
+		);
+
+		const current = await prepared.kernel.inspect(runId);
+		expect(
+			await prepared.maintenance.cancelRun({
+				runId,
+				reason: "acting on the current reading",
+				actor,
+				expectedVersion: current!.version,
+			}),
+		).toMatchObject({ outcome: "applied", rejectionCode: null });
+
+		const audit = await prepared.maintenance.audit(runId);
+		expect(
+			audit.map(
+				({ command, outcome, rejectionCode }) =>
+					`${command}:${outcome}:${rejectionCode ?? "none"}`,
+			),
+		).toEqual([
+			"cancelRun:rejected:VERSION_MISMATCH",
+			"cancelRun:applied:none",
+		]);
+		expect(
+			audit.every(
+				({ actor: recorded }) =>
+					recorded.kind === "user" && recorded.id === beta05Ids.principal,
+			),
+		).toBe(true);
+	},
+	180_000,
+);
+
+postgresTest(
+	"cancelling a never-claimed run prevents the handler outright",
+	async () => {
+		const prepared = await harness();
+		const callId = "beta08-precancel-0-0000-000000000012";
+		const messageId = await publish(prepared, {
+			body: "cancel before claim",
+			callId,
+		});
+		const runId = await runIdentity(callId);
+		expect((await prepared.kernel.inspect(runId))?.state).toBe("ready");
+
+		expect(
+			await prepared.maintenance.cancelRun({
+				runId,
+				reason: "stopped before any attempt",
+				actor: prepared.principal,
+			}),
+		).toMatchObject({
+			outcome: "applied",
+			stateBefore: "ready",
+			stateAfter: "cancelled",
+		});
+		expect(await prepared.kernel.inspect(runId)).toMatchObject({
+			state: "cancelled",
+			attemptCount: 0,
+			currentAttemptId: null,
+			failureCode: null,
+		});
+		expect(
+			await prepared.kernel.claim({ runId, workerId: "worker:precancel" }),
+		).toEqual({ status: "skipped" });
+		expect(
+			(await prepared.kernel.events(runId)).map(({ kind }) => kind),
+		).toEqual(["accepted", "cancelled"]);
+		const [rows] = await database!.unsafe<
+			readonly Readonly<{ attempts: number; delivered: number }>[]
+		>(
+			`SELECT
+  (SELECT count(*)::int FROM questpie_internal.durable_attempts WHERE run_id = $1) AS attempts,
+  (SELECT count(*)::int FROM collaboration.message_events
+    WHERE message_id = $2 AND kind = 'delivered') AS delivered`,
+			[runId, messageId],
+		);
+		expect(rows).toEqual({ attempts: 0, delivered: 0 });
+	},
+	180_000,
+);
+
+postgresTest(
+	"an effect with no lookup contract is ambiguous the moment its provider call is lost",
+	async () => {
+		const prepared = await harness();
+		const callId = "beta08-nolookup-0-0000-000000000013";
+		await publish(prepared, { body: "no lookup contract", callId });
+		const runId = await runIdentity(callId);
+		const claimed = await prepared.kernel.claim({
+			runId,
+			workerId: "worker:no-lookup",
+		});
+		if (claimed.status !== "claimed") throw new Error("claim failed");
+
+		// Without `recover` the kernel has no way to learn whether the provider
+		// accepted the request, so the effect stays ambiguous rather than retried.
+		await expect(
+			createDurableRunHandle({
+				ledger: prepared.ledger,
+				claim: claimed.claim,
+				declaredEffects: ["deliver-message"],
+				signal: new AbortController().signal,
+			})
+				.effect("deliver-message")
+				.invoke({
+					input: { runId },
+					perform: async (): Promise<`delivery:${string}`> => {
+						throw new Error("delivery response was lost");
+					},
+				}),
+		).rejects.toMatchObject({ name: "DurableEffectAmbiguous" });
+		expect(await prepared.ledger.read(runId)).toEqual([
+			expect.objectContaining({
+				effectName: "deliver-message",
+				status: "ambiguous",
+				receipt: null,
+			}),
+		]);
 	},
 	180_000,
 );

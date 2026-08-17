@@ -133,7 +133,8 @@ describe.skipIf(!database)("BETA-08 questpie_internal protocol v4", () => {
 		try {
 			await ensure(session);
 			// The kernel marker admits an insert: the guard no longer refuses it,
-			// so the statement now fails on the row contract instead.
+			// so the statement now fails on the row contract instead. The run
+			// history and the maintenance audit are both append only.
 			await expect(
 				marked(
 					`INSERT INTO questpie_internal.durable_run_events (application_name) VALUES ('application:collaboration')`,
@@ -143,6 +144,9 @@ describe.skipIf(!database)("BETA-08 questpie_internal protocol v4", () => {
 				"UPDATE questpie_internal.durable_run_events SET kind = 'failed'",
 				"DELETE FROM questpie_internal.durable_run_events",
 				"TRUNCATE questpie_internal.durable_run_events",
+				"UPDATE questpie_internal.durable_maintenance_commands SET outcome = 'applied'",
+				"DELETE FROM questpie_internal.durable_maintenance_commands",
+				"TRUNCATE questpie_internal.durable_maintenance_commands",
 			])
 				await expect(marked(statement)).rejects.toMatchObject({
 					errno: "42501",

@@ -262,6 +262,12 @@ export const internalProtocolV4Constraints = [
 	],
 	[
 		"durable_maintenance_commands",
+		"durable_command_rejection_known",
+		"c",
+		"CHECK (rejection_code IS NULL OR (rejection_code = ANY (ARRAY['ALREADY_REQUESTED'::text, 'ATTEMPTS_EXHAUSTED'::text, 'NOT_AMBIGUOUS'::text, 'RUN_IS_TERMINAL'::text, 'RUN_NOT_FAILED'::text, 'VERSION_MISMATCH'::text])))",
+	],
+	[
+		"durable_maintenance_commands",
 		"durable_maintenance_commands_application_name_run_id_fkey",
 		"f",
 		"FOREIGN KEY (application_name, run_id) REFERENCES questpie_internal.durable_runs(application_name, run_id) ON DELETE CASCADE",

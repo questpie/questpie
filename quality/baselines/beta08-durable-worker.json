@@ -13,7 +13,7 @@
 		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
 		"runnerClass": "reference-local",
 		"postgres": "local Docker postgres:17",
-		"recordedAt": "2026-08-17",
+		"recordedAt": "2026-08-18",
 		"samples": 3,
 		"aggregation": "median by postgresDurable20Ms"
 	},
@@ -24,26 +24,26 @@
 	},
 	"samples": {
 		"postgresDurable20Ms": [
-			357.2185730000001, 397.6551480000003, 415.5244590000002
+			400.0752950000001, 432.7810669999999, 364.9662579999999
 		]
 	},
 	"observed": {
-		"postgresDurable20Ms": 397.6551480000003,
+		"postgresDurable20Ms": 400.0752950000001,
 		"claimBatch": 64,
 		"maxEventsPerRun": 4,
 		"maxRunResultBytes": 168,
-		"publicDeclarationBytes": 57805,
+		"publicDeclarationBytes": 57892,
 		"typescriptInstantiations": 21000
 	},
 	"budgetDerivation": {
 		"postgresDurable20Ms": {
-			"referenceObservedMs": 397.6551480000003,
+			"referenceObservedMs": 400.0752950000001,
 			"multiplier": 5,
 			"roundUpQuantumMs": 500
 		}
 	},
 	"budgets": {
-		"postgresDurable20Ms": 2000,
+		"postgresDurable20Ms": 2500,
 		"claimBatch": 64,
 		"maxEventsPerRun": 1024,
 		"maxRunResultBytes": 262144,

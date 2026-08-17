@@ -94,6 +94,8 @@ export type DurableTransition = Readonly<{
 
 export type DurableRunView = Readonly<{
 	runId: string;
+	/** The append-only history length: the run version a command may fence on. */
+	version: number;
 	dispatchId: string;
 	resource: string;
 	state: DurableRunState;
@@ -688,7 +690,8 @@ RETURNING deadline_at <= pg_catalog.transaction_timestamp() AS "deadlineExpired"
        current_attempt_id::text AS "currentAttemptId",
        cancellation_requested AS "cancellationRequested", dead_letter AS "deadLetter",
        failure_code AS "failureCode", result_bytes AS "resultBytes",
-       available_at AS "availableAt", terminal_at AS "terminalAt"
+       available_at AS "availableAt", terminal_at AS "terminalAt",
+       event_sequence AS "version"
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2`,
 				[input.application, runId],
@@ -696,6 +699,7 @@ WHERE application_name = $1 AND run_id = $2`,
 			if (!row) return null;
 			return Object.freeze({
 				runId: durableText(row.runId, "run identity"),
+				version: durableInteger(row.version, "run version"),
 				dispatchId: durableText(row.dispatchId, "dispatch identity"),
 				resource: durableText(row.resource, "Resource Identity"),
 				state: durableText(row.state, "run state") as DurableRunState,

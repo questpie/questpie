@@ -1,7 +1,10 @@
 import type { SQL } from "bun";
+import { principal as principalKernel, type Principal } from "questpie";
 
 import type { DurableRunState } from "./postgres-kernel";
 import {
+	appendDurableRunEvent,
+	durableInteger,
 	durableText,
 	markDurableKernelTransaction,
 	type DurableActor,
@@ -19,7 +22,8 @@ export type DurableMaintenanceRejection =
 	| "ATTEMPTS_EXHAUSTED"
 	| "NOT_AMBIGUOUS"
 	| "RUN_IS_TERMINAL"
-	| "RUN_NOT_FAILED";
+	| "RUN_NOT_FAILED"
+	| "VERSION_MISMATCH";
 
 export type DurableMaintenanceOutcome = Readonly<{
 	commandId: string;
@@ -52,16 +56,26 @@ const terminalStates: ReadonlySet<string> = new Set([
  */
 export interface DurableMaintenance {
 	cancelRun(
-		input: Readonly<{ runId: string; reason: string; actor: DurableActor }>,
+		input: Readonly<{
+			runId: string;
+			reason: string;
+			actor: Principal;
+			expectedVersion?: number;
+		}>,
 	): Promise<DurableMaintenanceOutcome>;
 	retryRun(
-		input: Readonly<{ runId: string; actor: DurableActor }>,
+		input: Readonly<{
+			runId: string;
+			actor: Principal;
+			expectedVersion?: number;
+		}>,
 	): Promise<DurableMaintenanceOutcome>;
 	acknowledgeAmbiguity(
 		input: Readonly<{
 			runId: string;
 			effectName: string;
-			actor: DurableActor;
+			actor: Principal;
+			expectedVersion?: number;
 		}>,
 	): Promise<DurableMaintenanceOutcome>;
 	audit(runId: string): Promise<readonly DurableMaintenanceAuditEntry[]>;
@@ -90,7 +104,8 @@ export function createPostgresDurableMaintenance(
 			`SELECT state, attempt_count AS "attemptCount", dead_letter AS "deadLetter",
        resource_identity AS "resource", dispatch_id::text AS "dispatchId",
        causation_id AS "causationId", correlation_id AS "correlationId",
-       cancellation_requested AS "cancellationRequested"
+       cancellation_requested AS "cancellationRequested",
+       event_sequence AS "version"
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
 FOR UPDATE`,
@@ -100,35 +115,43 @@ FOR UPDATE`,
 		return row;
 	};
 
+	/**
+	 * Gate 8 expected-version fencing. `inspect()` reports the run version, and a
+	 * command bound to a stale one is refused rather than applied to a run that
+	 * moved underneath the operator who read it.
+	 */
+	const staleVersion = (
+		run: DurableRow,
+		expectedVersion: number | undefined,
+	): boolean =>
+		expectedVersion !== undefined &&
+		expectedVersion !== durableInteger(run.version, "run version");
+
+	const actorOf = (actor: Principal): DurableActor => {
+		if (!principalKernel.is(actor))
+			throw new TypeError("durable maintenance requires a trusted Principal");
+		return Object.freeze({ kind: actor.kind, id: actor.id });
+	};
+
 	const appendEvent = async (
 		query: DurableQuery,
 		run: DurableRow,
 		runId: string,
 		kind: string,
 	): Promise<void> => {
-		const [bumped] = await query(
-			`UPDATE questpie_internal.durable_runs
-SET event_sequence = event_sequence + 1
-WHERE application_name = $1 AND run_id = $2
-RETURNING event_sequence AS "sequence"`,
-			[input.application, runId],
-		);
-		await query(
-			`INSERT INTO questpie_internal.durable_run_events
-  (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
-   causation_id, correlation_id, kind)
-VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8)`,
-			[
-				input.application,
+		await appendDurableRunEvent(query, {
+			application: input.application,
+			claim: {
 				runId,
-				bumped?.sequence,
-				durableText(run.resource, "Resource Identity"),
-				durableText(run.dispatchId, "dispatch identity"),
-				durableText(run.causationId, "causation identity"),
-				durableText(run.correlationId, "correlation identity"),
-				kind,
-			],
-		);
+				dispatchId: durableText(run.dispatchId, "dispatch identity"),
+				resource: durableText(run.resource, "Resource Identity"),
+				attemptId: null,
+				leaseToken: null,
+				causationId: durableText(run.causationId, "causation identity"),
+				correlationId: durableText(run.correlationId, "correlation identity"),
+			},
+			kind,
+		});
 	};
 
 	const record = async (
@@ -174,19 +197,30 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.transaction_timestam
 
 	return Object.freeze<DurableMaintenance>({
 		async cancelRun(request) {
+			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				const run = await lockRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (staleVersion(run, request.expectedVersion))
+					return record(query, {
+						runId: request.runId,
+						command: "cancelRun",
+						outcome: "rejected",
+						rejectionCode: "VERSION_MISMATCH",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				if (terminalStates.has(stateBefore))
 					return record(query, {
 						runId: request.runId,
 						command: "cancelRun",
 						outcome: "rejected",
 						rejectionCode: "RUN_IS_TERMINAL",
-						actor: request.actor,
+						actor,
 						stateBefore,
 						stateAfter: stateBefore,
 					});
@@ -196,7 +230,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.transaction_timestam
 						command: "cancelRun",
 						outcome: "rejected",
 						rejectionCode: "ALREADY_REQUESTED",
-						actor: request.actor,
+						actor,
 						stateBefore,
 						stateAfter: stateBefore,
 					});
@@ -237,26 +271,37 @@ WHERE application_name = $1 AND run_id = $2`,
 					command: "cancelRun",
 					outcome: "applied",
 					rejectionCode: null,
-					actor: request.actor,
+					actor,
 					stateBefore,
 					stateAfter: claimed ? stateBefore : "cancelled",
 				});
 			});
 		},
 		async retryRun(request) {
+			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				const run = await lockRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (staleVersion(run, request.expectedVersion))
+					return record(query, {
+						runId: request.runId,
+						command: "retryRun",
+						outcome: "rejected",
+						rejectionCode: "VERSION_MISMATCH",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				if (stateBefore !== "failed")
 					return record(query, {
 						runId: request.runId,
 						command: "retryRun",
 						outcome: "rejected",
 						rejectionCode: "RUN_NOT_FAILED",
-						actor: request.actor,
+						actor,
 						stateBefore,
 						stateAfter: stateBefore,
 					});
@@ -266,7 +311,7 @@ WHERE application_name = $1 AND run_id = $2`,
 						command: "retryRun",
 						outcome: "rejected",
 						rejectionCode: "ATTEMPTS_EXHAUSTED",
-						actor: request.actor,
+						actor,
 						stateBefore,
 						stateAfter: stateBefore,
 					});
@@ -282,19 +327,30 @@ WHERE application_name = $1 AND run_id = $2`,
 					command: "retryRun",
 					outcome: "applied",
 					rejectionCode: null,
-					actor: request.actor,
+					actor,
 					stateBefore,
 					stateAfter: "ready",
 				});
 			});
 		},
 		async acknowledgeAmbiguity(request) {
+			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				const run = await lockRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (staleVersion(run, request.expectedVersion))
+					return record(query, {
+						runId: request.runId,
+						command: "acknowledgeAmbiguity",
+						outcome: "rejected",
+						rejectionCode: "VERSION_MISMATCH",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				const acknowledged = await query(
 					`UPDATE questpie_internal.durable_effects
 SET status = 'acknowledged', settled_at = pg_catalog.transaction_timestamp()
@@ -308,7 +364,7 @@ RETURNING effect_id::text AS "effectId"`,
 						command: "acknowledgeAmbiguity",
 						outcome: "rejected",
 						rejectionCode: "NOT_AMBIGUOUS",
-						actor: request.actor,
+						actor,
 						stateBefore,
 						stateAfter: stateBefore,
 					});
@@ -318,7 +374,7 @@ RETURNING effect_id::text AS "effectId"`,
 					command: "acknowledgeAmbiguity",
 					outcome: "applied",
 					rejectionCode: null,
-					actor: request.actor,
+					actor,
 					stateBefore,
 					stateAfter: stateBefore,
 				});

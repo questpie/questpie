@@ -27,6 +27,7 @@ export interface DurableKernelContractV1 {
 	readonly permanentFailureCodes: readonly string[];
 	readonly claimRefusalCodes: readonly string[];
 	readonly maintenanceRejectionCodes: readonly string[];
+	readonly maintenanceFencedOn: string;
 	readonly maintenanceCommands: readonly string[];
 	readonly effectStatuses: readonly string[];
 	readonly digest: string;
@@ -113,7 +114,9 @@ const withoutDigest = {
 		"NOT_AMBIGUOUS",
 		"RUN_IS_TERMINAL",
 		"RUN_NOT_FAILED",
+		"VERSION_MISMATCH",
 	] as const,
+	maintenanceFencedOn: "runVersion" as const,
 	maintenanceCommands: [
 		"acknowledgeAmbiguity",
 		"cancelRun",

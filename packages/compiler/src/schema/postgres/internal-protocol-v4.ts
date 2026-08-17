@@ -124,6 +124,11 @@ const expectedGuardTriggers = [
 	],
 	[
 		"durable_maintenance_commands",
+		"durable_maintenance_commands_append_only",
+		"DELETE OR UPDATE OR TRUNCATE",
+	],
+	[
+		"durable_maintenance_commands",
 		"durable_maintenance_commands_kernel_guard",
 		"INSERT OR DELETE OR UPDATE",
 	],

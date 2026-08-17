@@ -7,7 +7,7 @@
 	"metrics": {
 		"postgresDurable20Ms": {
 			"direction": "max",
-			"budget": 2000,
+			"budget": 2500,
 			"unit": "ms"
 		},
 		"claimBatch": {

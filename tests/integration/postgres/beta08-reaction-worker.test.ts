@@ -233,7 +233,7 @@ postgresTest(
 		]);
 		expect(await deliveredEvents(messageId)).toBe(0);
 
-		const actor = { kind: "user", id: beta05Ids.principal } as const;
+		const actor = prepared.principal;
 		expect(
 			await prepared.maintenance.acknowledgeAmbiguity({
 				runId,
@@ -301,7 +301,7 @@ postgresTest(
 
 		// The run-as denial is permanent: an operator retry re-evaluates
 		// current Policy rather than replaying the earlier decision.
-		const actor = { kind: "user", id: beta05Ids.principal } as const;
+		const actor = prepared.principal;
 		expect(await prepared.maintenance.retryRun({ runId, actor })).toMatchObject(
 			{
 				outcome: "applied",

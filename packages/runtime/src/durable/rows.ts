@@ -119,8 +119,9 @@ export type DurableEventClaim = Readonly<{
 	runId: string;
 	dispatchId: string;
 	resource: string;
-	attemptId: string;
-	leaseToken: string;
+	/** A maintenance transition belongs to no physical attempt. */
+	attemptId: string | null;
+	leaseToken: string | null;
 	causationId: string;
 	correlationId: string;
 }>;
@@ -155,7 +156,9 @@ VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, 
 			input.claim.resource,
 			input.claim.dispatchId,
 			input.claim.attemptId,
-			leaseTokenDigest(input.claim.leaseToken),
+			input.claim.leaseToken === null
+				? null
+				: leaseTokenDigest(input.claim.leaseToken),
 			input.claim.causationId,
 			input.claim.correlationId,
 			input.kind,

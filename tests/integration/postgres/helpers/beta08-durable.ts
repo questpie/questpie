@@ -1,15 +1,14 @@
 import { resolve } from "node:path";
 
 import type { SQL } from "bun";
+import type { Principal } from "questpie";
 
 import {
 	createPostgresDurableEffectLedger,
 	createPostgresDurableKernel,
-	createPostgresDurableMaintenance,
 	linkReactionProjection,
 	type DurableEffectLedger,
 	type DurableKernel,
-	type DurableMaintenance,
 } from "../../../../packages/runtime/src/index";
 import {
 	beta05Ids,
@@ -60,6 +59,7 @@ type Beta08Durable = Readonly<{
 		}>
 	>;
 	inspect(runId: string): Promise<Readonly<{
+		version: number;
 		state: string;
 		attemptCount: number;
 		deadLetter: boolean;
@@ -85,26 +85,32 @@ type Beta08Durable = Readonly<{
 			command: string;
 			outcome: string;
 			rejectionCode: string | null;
+			actor: Readonly<{ kind: string; id: string }>;
+			stateBefore: string;
+			stateAfter: string;
 		}>[]
 	>;
 	cancelRun(
 		input: Readonly<{
 			runId: string;
 			reason: string;
-			actor: Readonly<{ kind: string; id: string }>;
+			actor: unknown;
+			expectedVersion?: number;
 		}>,
 	): Promise<Beta08MaintenanceOutcome>;
 	retryRun(
 		input: Readonly<{
 			runId: string;
-			actor: Readonly<{ kind: string; id: string }>;
+			actor: unknown;
+			expectedVersion?: number;
 		}>,
 	): Promise<Beta08MaintenanceOutcome>;
 	acknowledgeAmbiguity(
 		input: Readonly<{
 			runId: string;
 			effectName: string;
-			actor: Readonly<{ kind: string; id: string }>;
+			actor: unknown;
+			expectedVersion?: number;
 		}>,
 	): Promise<Beta08MaintenanceOutcome>;
 }>;
@@ -113,7 +119,7 @@ type Beta08Application = Readonly<{
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: Readonly<{
-			principal: unknown;
+			principal: Principal;
 			context: Readonly<{ companyId: string }>;
 		}>,
 		use: (
@@ -147,12 +153,12 @@ export type Beta08Harness = Readonly<{
 	}>;
 	kernel: DurableKernel;
 	ledger: DurableEffectLedger;
-	maintenance: DurableMaintenance;
+	maintenance: Beta08Durable;
 	kernelWith(
 		options: Readonly<{ random?: () => number; claimBatch?: number }>,
 	): DurableKernel;
 	reactionProjectionBytes: string;
-	principal: unknown;
+	principal: Principal;
 }>;
 
 /**
@@ -185,8 +191,10 @@ WHERE datname = pg_catalog.current_database()
 		await Bun.sleep(25);
 	}
 	const prepared = await prepareBeta05PostgresApplication(database);
+	// The relocated fixture links its own `questpie` module, so its branded
+	// Principal is the trusted value the maintenance surface requires.
 	const framework = prepared.generated.framework as Readonly<{
-		principal: Readonly<{ user(input: Readonly<{ id: string }>): unknown }>;
+		principal: Readonly<{ user(input: Readonly<{ id: string }>): Principal }>;
 	}>;
 	const internal = (await prepared.generated.loadInternal()) as Readonly<{
 		bindIngressPrincipalForRequest(
@@ -259,10 +267,10 @@ WHERE datname = pg_catalog.current_database()
 			sql: database,
 			application: beta08Application,
 		}),
-		maintenance: createPostgresDurableMaintenance({
-			sql: database,
-			application: beta08Application,
-		}),
+		// The maintenance surface the generated application publishes: its
+		// Principal brand is the one the relocated fixture mints, so a test drives
+		// the same object an operator would.
+		maintenance: app.durable,
 		reactionProjectionBytes,
 		principal,
 	});

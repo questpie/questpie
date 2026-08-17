@@ -159,6 +159,7 @@ export type DurableWorkerTrace = Readonly<{
 
 export type DurableRunView = Readonly<{
 	runId: string;
+	version: number;
 	dispatchId: string;
 	resource: string;
 	state: DurableRunState;
@@ -230,8 +231,8 @@ export interface GeneratedDurable {
 	events(runId: string): Promise<readonly DurableRunEventView[]>;
 	effects(runId: string): Promise<readonly DurableEffectView[]>;
 	audit(runId: string): Promise<readonly DurableMaintenanceAuditEntry[]>;
-	cancelRun(input: Readonly<{ runId: string; reason: string; actor: DurableActor }>): Promise<DurableMaintenanceOutcome>;
-	retryRun(input: Readonly<{ runId: string; actor: DurableActor }>): Promise<DurableMaintenanceOutcome>;
-	acknowledgeAmbiguity(input: Readonly<{ runId: string; effectName: string; actor: DurableActor }>): Promise<DurableMaintenanceOutcome>;
+	cancelRun(input: Readonly<{ runId: string; reason: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
+	retryRun(input: Readonly<{ runId: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
+	acknowledgeAmbiguity(input: Readonly<{ runId: string; effectName: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
 }`;
 }

@@ -170,10 +170,11 @@ dispatch, run, attempt, lease-token digest, causation, correlation, kind, and a
 safe error code where applicable. Events carry no raw payload, credential,
 secret, or stack trace.
 
-A run stores its Runtime Build identity and required executable digest. The
-artifact keeps matching executable bytes while any nonterminal run references
-them, and readiness fails when those bytes are missing or incompatible. Drain
-stops new claims, then lets current claims finish or leases expire.
+A run stores its Runtime Build identity and required executable digest, and a
+worker without matching bytes refuses the claim. Narrower claim 5 records what
+this slice does not do: it retains no executable bytes for nonterminal runs and
+readiness scans no run digest. Drain stops new claims, then lets current claims
+finish or leases expire.
 
 Direct application and worker writes to run, attempt, event, and dispatch state
 are rejected. Every index stays B-tree with no expression or partial index, no
@@ -237,10 +238,12 @@ tightening is falsified by deleting `AND NOT cancellation_requested` from
 admission and claim, which makes `kernel.admit()` return the cancel-requested
 run instead of an empty batch.
 
-Twenty-three PostgreSQL tests carry the slice. Nine kernel cases: stale fence,
+Twenty-six PostgreSQL tests carry the slice. Twelve kernel cases: stale fence,
 concurrent `SKIP LOCKED` claims, retry exhaustion, cancellation race, executable
 retirement, cancellation reaping, single-winner maintenance, cross-attempt
-effect identity with recovery and conflict, and permanent codec validation.
+effect identity with recovery and conflict, permanent codec validation,
+expected-version fencing, cancellation before any claim, and an effect with no
+lookup contract.
 Nine worker cases: success, refused effect and retry, lost response and
 acknowledged ambiguity, revoked Membership, declared Reaction error, recovered
 lost response, bounded result, refused network exposure, and terminal effect
@@ -251,7 +254,7 @@ Each PostgreSQL file builds the relocated application once and scopes every
 assertion by run identity: rebuilding it per test dropped the schema under the
 previous test's live application and deadlocked the reset.
 
-Eight claims in this record are deliberately narrower than the accepted contract
+Nine claims in this record are deliberately narrower than the accepted contract
 allows, because nothing in this slice executes the wider version:
 
 - The 24-hour retry horizon is persisted with every run and is read on every
@@ -284,6 +287,19 @@ allows, because nothing in this slice executes the wider version:
 - `IDEMPOTENCY_CONFLICT` for a different payload in the same scope is BETA-06
   behavior, proved by its accepted `f9879efd` evidence. This slice neither
   produces nor tests it.
+- Gate 8 names seven properties for `acknowledgeAmbiguity`, `cancelRun`,
+  `drainRuntime`, and `retryRun`. This slice ships three of the four commands
+  with exact identity, bounded reason, idempotency, a typed winner,
+  expected-version fencing against the run's append-only history length, and an
+  append-only audit. It does not evaluate maintenance Authority: the surface is
+  server-side only, reachable through the application object rather than any
+  generated client, and it takes a trusted `Principal` whose brand only the
+  application's own `questpie` module can mint. The Authority evaluation and its
+  hostile-role matrix belong to the minimal Studio slice that ADR-0003 and
+  ADR-0014 assign the Policy-protected inspection and maintenance protocol. That
+  slice resolves the same `Principal` from an authenticated Execution and passes
+  it to this signature unchanged, so the seam is compatible rather than
+  re-shaped. `drainRuntime` is not published here.
 - External effects cross a `perform`/`recover` callback rather than a generated
   Action, because ADR-0021 defers Action from beta.1 and this slice adds no
   external Action authoring. The durable kernel owns only the effect _identity_
@@ -297,9 +313,9 @@ PostgreSQL concurrency case and runs in the `beta08` PostgreSQL scenario, which
 the seconds-long changed loop deliberately excludes.
 
 Measured on PostgreSQL 17 with the reference-local baselines: one 20-run worker
-batch at a 397.655 ms median against a 2,000 ms budget, a maximum 168-byte run
-result, four events per successful run, 57,805 public declaration bytes, and
-21,000 TypeScript instantiations. The nightly contention scenario ran 64 runs
-against eight competing workers at 343.443 ms against a 3,000 ms budget, with 64
-attempts and zero superseded leases. PostgreSQL 16, 17, and 18 each report 102,
-102, and 105 passing tests with zero failures.
+batch at a 400.075 ms median against a 2,500 ms budget, a maximum 168-byte
+run result, four events per successful run, 57,892 public declaration bytes,
+and 21,000 TypeScript instantiations. The nightly contention scenario ran 64 runs
+against eight competing workers at 330.045 ms against a 2,000 ms budget, with 64
+attempts and zero superseded leases. PostgreSQL 16, 17, and 18 each report 105,
+105, and 108 passing tests with zero failures.
