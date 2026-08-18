@@ -116,9 +116,17 @@ The concrete deltas the implementing slice must reconcile:
 
 - **BETA-06** made the Mutation receipt and stable Call Identity real, so
   post-response recovery is an inspectable identity rather than an assumption.
-- **BETA-07** made the Change Ledger, no-affinity SSE, Resume Tokens, and
-  generation-based resets real, so Live Query reset reasons are observable
-  facts with a source.
+- **BETA-07** made the Change Ledger, no-affinity SSE, and Resume Tokens real.
+  It did **not** make reset history observable, and an earlier revision of this
+  record wrongly said it did. `reset_reason` is a closed three-value vocabulary
+  (`packages/compiler/src/schema/postgres/internal-protocol-v3-realtime.ts:169`,
+  `:191`) living on `realtime_binding_generations`, which is not an event log:
+  generations are hard-deleted rather than tombstoned
+  (`packages/runtime/src/live-query/postgres-realtime-generations.ts:129`), and
+  scope attachments carry a CHECK-pinned 30-second TTL
+  (`internal-protocol-v3-realtime.ts:16`, `:43`). Studio can show the current
+  reset reason for a currently live subscription and nothing older. A "Live
+  Query resets" tile would be a count over a 30-second window.
 - **BETA-08** made run, attempt, lease, effect, cancellation, and the
   maintenance audit real — **and dropped budgets that nothing enforces**.
   `activeAttemptsPerPrincipal`, `pendingRunsPerResource`,
@@ -184,9 +192,21 @@ Carried from `docs/v4/prototypes/tenant-share-control/DECISION.md` (commit
 authorization identity. `durable_runs.tenant_id` is `text NOT NULL`
 (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:20`) and is
 already selected by the kernel
-(`packages/runtime/src/durable/postgres-kernel.ts:123`), so keying on it costs
-nothing here. ADR-0017 already accepts "scheduler contention" as an Execution
-Envelope item, and Studio is where per-tenant backlog becomes observable.
+(`packages/runtime/src/durable/postgres-kernel.ts:123`). ADR-0017 already
+accepts "scheduler contention" as an Execution Envelope item, and Studio is
+where per-tenant backlog becomes observable.
+
+An earlier revision of this record said keying on Tenant "costs nothing here."
+That is wrong on the read path and both adversarial teams caught it
+independently. `tenant_id` appears in **no index**: the three on `durable_runs`
+are `(application_name, state, available_at, run_id)`,
+`(application_name, state, lease_expires_at)`, and
+`(application_name, resource_identity, state)`
+(`internal-protocol-v4-sql.ts:98`–`:103`). A tenant-first listing is a
+sequential scan at this base. Tenant remains the correct axis to _display_ and
+to scope authorization by; it is not yet an axis to _drive a query from_. Any
+tenant-scoped list must filter within a bounded slice selected by an indexed
+predicate, or the slice must take an explicit, measured exception.
 
 Shipping an operator surface keyed on Principal would harden the wrong axis
 into the place operators look, and correcting it afterwards means changing a
