@@ -145,7 +145,9 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 	expect(kernel.maintenanceRejectionCodes).toEqual([
 		"ALREADY_REQUESTED",
 		"ATTEMPTS_EXHAUSTED",
+		"AUTHORITY_DENIED",
 		"NOT_AMBIGUOUS",
+		"REASON_INVALID",
 		"RUN_IS_TERMINAL",
 		"RUN_NOT_FAILED",
 		"VERSION_MISMATCH",

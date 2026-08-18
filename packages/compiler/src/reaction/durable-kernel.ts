@@ -111,7 +111,9 @@ const withoutDigest = {
 	maintenanceRejectionCodes: [
 		"ALREADY_REQUESTED",
 		"ATTEMPTS_EXHAUSTED",
+		"AUTHORITY_DENIED",
 		"NOT_AMBIGUOUS",
+		"REASON_INVALID",
 		"RUN_IS_TERMINAL",
 		"RUN_NOT_FAILED",
 		"VERSION_MISMATCH",
@@ -122,6 +124,36 @@ const withoutDigest = {
 		"cancelRun",
 		"retryRun",
 	] as const,
+	/**
+	 * What the operational reads may disclose.
+	 *
+	 * Pinned here rather than in an artifact of its own: this file is already
+	 * compiled, digested and semantically verified at startup, and a separate
+	 * constant with a digest around it would be ceremony. Widening any commitment
+	 * moves the digest the Runtime Build pins, so it cannot change quietly.
+	 *
+	 * Operational facts are not Collection rows, so no Policy reaches them and
+	 * these commitments are the whole of what bounds the lane.
+	 */
+	nondisclosure: {
+		/** A denied run and a missing run answer the same thing. */
+		runAbsence: "indistinguishable" as const,
+		/** A total is a scan and an existence oracle; `hasMore` is neither. */
+		countOracle: "absent" as const,
+		/** A list may not surface a run the caller could not inspect one by one. */
+		listDisclosure: "individuallyInspectableOnly" as const,
+		/** The Reaction result never leaves as bytes. */
+		result: "presenceLengthDigest" as const,
+		/** A provider receipt is provider text; presence is the operator's fact. */
+		receipt: "presenceOnly" as const,
+		/** Events carry a closed code and no free text. */
+		eventPayload: "closedErrorCodeOnly" as const,
+		/**
+		 * The maintenance reason is the first operator-authored free text in the
+		 * durable record, so it is named rather than left implicit.
+		 */
+		operatorText: "maintenanceReasonOnly" as const,
+	},
 	effectStatuses: [
 		"acknowledged",
 		"ambiguous",
