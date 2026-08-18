@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 
 import {
+	studioArtifactPath,
+	studioArtifactResponse,
 	studioAssetPath,
 	studioBundleResponse,
 } from "../../packages/runtime/src/application/studio-mount";
@@ -44,4 +46,52 @@ test("the mount serves reads only", async () => {
 	);
 	expect(response).not.toBeNull();
 	expect(response!.status).toBe(405);
+});
+
+/**
+ * A shell that shows nothing is half an artifact. The page needs the compiled
+ * contract to project, and those artifacts are public contract rather than
+ * operational fact, so serving them raises no disclosure question — the same
+ * reason the explain lane is buildable while the operational reads are not.
+ *
+ * The allow-list is the safety property. `artifactFiles` also holds the wire
+ * contract, the durable kernel contract, and the executable inventory; the
+ * mount names the artifacts Studio projects and serves nothing else, so a
+ * future artifact cannot become browser-reachable by being added.
+ */
+const artifactFiles = {
+	"manifest.json": '{"application":{"name":"x"}}',
+	"operation-contracts.json": '{"operations":[]}',
+	"runtime-executables.json": '{"secret":"must not be served"}',
+};
+
+test("the mount serves only the allow-listed contract artifacts", async () => {
+	const response = await studioArtifactResponse(
+		new Request(`https://app.example${studioArtifactPath}`),
+		artifactFiles,
+	);
+	expect(response).not.toBeNull();
+	expect(response!.status).toBe(200);
+	expect(response!.headers.get("content-type")).toContain("application/json");
+
+	const served = (await response!.json()) as Record<string, unknown>;
+	expect(Object.keys(served)).toContain("manifest.json");
+	expect(Object.keys(served)).toContain("operation-contracts.json");
+	// Present in artifactFiles, absent from the allow-list, so never served.
+	expect(Object.keys(served)).not.toContain("runtime-executables.json");
+	expect(JSON.stringify(served)).not.toContain("must not be served");
+});
+
+test("the artifact path declines writes and unknown paths", async () => {
+	const posted = await studioArtifactResponse(
+		new Request(`https://app.example${studioArtifactPath}`, { method: "POST" }),
+		artifactFiles,
+	);
+	expect(posted!.status).toBe(405);
+
+	const elsewhere = await studioArtifactResponse(
+		new Request("https://app.example/_questpie/operation"),
+		artifactFiles,
+	);
+	expect(elsewhere).toBeNull();
 });

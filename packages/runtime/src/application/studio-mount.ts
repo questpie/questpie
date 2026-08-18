@@ -50,3 +50,53 @@ export async function studioBundleResponse(
 		},
 	});
 }
+
+export const studioArtifactPath = "/_questpie/studio/artifacts";
+
+/**
+ * The artifacts Studio projects, named one by one.
+ *
+ * An allow-list rather than a passthrough is the safety property here.
+ * `artifactFiles` also carries the wire contract, the durable kernel contract,
+ * and the executable inventory; naming what Studio needs means a future
+ * artifact cannot become browser-reachable merely by being added to the build.
+ *
+ * Every entry is compiled public contract — what the application declares, not
+ * what it has done — so serving it raises no disclosure question. Operational
+ * facts never appear here and are not reachable from the browser at all.
+ */
+const studioArtifactAllowList: readonly string[] = Object.freeze([
+	"collection-operation-explain.json",
+	"committed-migrations.json",
+	"manifest.json",
+	"operation-contracts.json",
+	"relational-explain.json",
+]);
+
+export async function studioArtifactResponse(
+	request: Request,
+	artifactFiles: Readonly<Record<string, Uint8Array | string>>,
+): Promise<Response | null> {
+	if (new URL(request.url).pathname !== studioArtifactPath) return null;
+	if (request.method !== "GET" && request.method !== "HEAD")
+		return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
+	const decoder = new TextDecoder();
+	const served: Record<string, unknown> = {};
+	for (const path of studioArtifactAllowList) {
+		const bytes = artifactFiles[path];
+		if (bytes === undefined) continue;
+		const text = typeof bytes === "string" ? bytes : decoder.decode(bytes);
+		served[path] = JSON.parse(text);
+	}
+	return new Response(
+		request.method === "HEAD" ? null : JSON.stringify(served),
+		{
+			status: 200,
+			headers: {
+				"content-type": "application/json; charset=utf-8",
+				"cache-control": "no-store",
+				"x-content-type-options": "nosniff",
+			},
+		},
+	);
+}

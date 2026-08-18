@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 
 import { SQL } from "bun";
 
+import { projectStudioCatalog } from "../../../apps/studio/src/projection";
 import {
 	beta05Ids,
 	beta08Harness,
@@ -174,5 +175,38 @@ postgresTest(
 			new Request("https://app.example/nothing-here"),
 		);
 		expect(missing.status).toBe(404);
+	},
+);
+
+/**
+ * The end-to-end claim: the real application serves the artifacts, and the
+ * independent producer turns exactly those bytes into the catalog Studio
+ * renders. Nothing operational crosses the wire on this path.
+ */
+postgresTest(
+	"the served artifacts project into the Studio catalog",
+	async () => {
+		const prepared = await harness();
+		const response = await prepared.fetch(
+			new Request("https://app.example/_questpie/studio/artifacts"),
+		);
+		expect(response.status).toBe(200);
+		const served = (await response.json()) as Record<string, unknown>;
+
+		// Re-encode what the wire delivered and feed it to the producer, so the
+		// projection is a function of the bytes a browser actually receives.
+		const bytes = Object.fromEntries(
+			Object.entries(served).map(([path, value]) => [
+				path,
+				JSON.stringify(value),
+			]),
+		);
+		const catalog = projectStudioCatalog(bytes);
+		expect(catalog.application).toBe("collaboration");
+		expect(catalog.operations.length).toBeGreaterThan(0);
+
+		// The executable inventory is in artifactFiles and must never be served.
+		expect(Object.keys(served)).not.toContain("runtime-executables.json");
+		expect(JSON.stringify(served)).not.toContain("bundleExport");
 	},
 );
