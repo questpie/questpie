@@ -124,7 +124,7 @@ which is the surface that exists.
 
 **Falsification against unrepaired code:** the command applies. `actorOf`
 checks only `principalKernel.is(actor)`
-(`packages/runtime/src/durable/postgres-maintenance.ts:130`) — a brand proving
+(`packages/runtime/src/durable/postgres-maintenance.ts:192`) — a brand proving
 the value came from the application's own module, not a decision about this
 actor and this run. Any branded Principal succeeds, so an assertion that the
 outcome is a denial fails because the outcome is `applied`.

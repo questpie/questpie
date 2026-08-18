@@ -337,6 +337,68 @@ audited `AUTHORITY_DENIED` outcome, the deny-before-lock ordering, and the
 proof that lowering the kernel marker re-arms the guard. All of it is driven
 against the runtime factory, which is the surface that exists.
 
+### A fourth route was reconsidered and refuted
+
+After the option-3 decision, one route looked wrongly foreclosed: having the
+application supply a `maintenanceAuthority` callback to
+`createRuntimeApplication`, whose options bag already carries `events`, `now`,
+`drainMilliseconds`, `maximumActiveRootsPerPrincipal`, and `retainedClients`.
+If callbacks already pass through there, one more is not a new kind of surface.
+
+**That reasoning is wrong, and adversarial review killed it on a fact neither
+this record nor the reconsideration had checked: no application ever calls
+`createRuntimeApplication`.** The only production call site is compiler-emitted
+(`packages/compiler/src/runtime/application.ts:321`), and it passes none of the
+five — they exist for the runtime package's own tests. The bag is a
+compiler-to-runtime interface, not an authoring surface, so it is no precedent
+at all.
+
+That leaves a fork with no good branch. Author-supplied means inventing the
+authoring surface Gate 8 forbids under the name `defineStudio`.
+Compiler-supplied means the author did not write the decision, so ADR-0014's
+"explicitly authorized" is unsatisfied on its own terms.
+
+Two further reasons it should not ship even if threaded. None of the five
+existing options is a _decision_: every one constrains or observes, and none
+can grant — a wrong `drainMilliseconds` costs availability, a wrong
+`maintenanceAuthority` hands a stranger `cancelRun`. And ADR-0010 names Policy
+"the sole authored product model" and lists "a separate Admin access model,
+handler-selected Policy" among its rejected alternatives. A host closure
+deciding who may cancel a run is that rejected thing.
+
+The asymmetry with Policy is the sharpest part. The compiler lowers Policy to
+SQL, digests it as `questpie-policy-program-v1`, binds that digest into cursors
+so one cannot be replayed under a different Policy, and re-derives it in
+`relational-nondisclosure.json`. A closure gets none of it: two deployments with
+byte-identical artifacts and identical Runtime Build digests could authorize
+differently, and nothing would show the difference. That is the opposite of what
+`inspection-contract.md` D1 exists to establish.
+
+### The deferral is not free, and nothing currently owns it
+
+Stated plainly, because "carries it forward" was too comfortable:
+
+**BETA-09 fails a criterion it wrote for itself.** `acceptance-shape.md`
+criterion 2 requires that a caller lacking maintenance Authority is refused with
+a typed `AUTHORITY_DENIED`. That holds against the runtime factory contract and
+**never against the generated application**, which supplies no `authorize`
+(`packages/compiler/src/runtime/application.ts:410`). Gate 8 requires explicit
+maintenance Authority for these commands. It is unmet at this base and this
+slice does not meet it.
+
+**And nothing downstream is queued to close it.** BETA-10 is ten-instance
+correctness, BETA-11 archive portability, BETA-12 the release candidate. None
+widens Mutation admission Policy, which is the only route that closes this
+properly. So "wait for the right slice" is, against the current queue, an
+indefinite deferral that would let beta.1 cut with a Gate 8 property unmet and
+no owner.
+
+The disclosure therefore has to be expensive rather than tidy: it belongs in
+release-visible authority, not only in this directory, and widening Mutation
+admission Policy needs a queue entry before #299 cuts the release candidate.
+That is a tracker change this slice does not make, and it is named here so the
+projection after acceptance carries it.
+
 ### The hostile case is re-aimed, not deleted
 
 `hostile-cases.md` case 5 drove `app.durable.cancelRun` expecting a denial. That

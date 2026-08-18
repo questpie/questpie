@@ -51,7 +51,7 @@ reasoning rather than against the prose.
    Authority does not confer it. A caller lacking it is refused with a typed
    `AUTHORITY_DENIED`, and the attempt is recorded in the append-only audit.
    Falsifiable: `actorOf` today checks only a brand
-   (`packages/runtime/src/durable/postgres-maintenance.ts:130`). →
+   (`packages/runtime/src/durable/postgres-maintenance.ts:192`). →
    `maintenance-decisions.md` Q3, `hostile-cases.md` case 5.
 3. **Denial specificity follows the missing Authority.** A caller without
    inspection Authority cannot distinguish denial from absence; a caller with

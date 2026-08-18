@@ -80,7 +80,7 @@ are narrow, explicitly authorized, idempotent, expected-version fenced, and
 audited," repeated at Gate 8. Explicit authorization cannot be derived from the
 ability to read, or it would not be explicit. The code today derives it from
 nothing at all — `actorOf` checks only `principalKernel.is(actor)`, a brand
-(`postgres-maintenance.ts:130`) — so BETA-09 has a clear field.
+(`postgres-maintenance.ts:192`) — so BETA-09 has a clear field.
 
 The handoff's Q3 recommends separate server-supplied capability facts, with a
 read-only user seeing actions disabled and a generic denial rather than
