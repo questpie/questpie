@@ -266,6 +266,21 @@ Do not skip a blocked issue or parallelize dependent implementation.
     A reviewer re-listing prior observations without re-checking them produces a
     list whose currency cannot be assumed. Anything carried forward from an earlier
     round should be re-verified before it is acted on or repeated.
+- #295 round 4's lock-order inversion observation is **refuted**. It carries
+  forward a claim that `durable_effects` → `durable_runs` in the effect ledger
+  inverts `durable_runs FOR UPDATE` → `durable_effects` in maintenance, leaving a
+  deadlock untested. Checked: **the effect ledger takes no row lock on
+  `durable_runs` at all.** `FOR UPDATE` appears nowhere in
+  `packages/runtime/src/durable/postgres-effects.ts`; its only `durable_runs`
+  access is the plain fence `SELECT 1 AS held` at `:86`, and a bare `SELECT`
+  under READ COMMITTED acquires no row lock. Its writes are confined to
+  `durable_effects` (`:113`, `:150`, `:177`). `FOR UPDATE` appears once in the
+  whole durable surface, at `postgres-maintenance.ts:111` inside `lockRun`. Two
+  transactions cannot deadlock by acquiring resources in opposite order when one
+  of them never acquires the first resource, so the named inversion is not
+  reachable. Two caveats stated rather than glossed: a bare `SELECT` still takes
+  an `ACCESS SHARE` table lock, which conflicts only with DDL and not with these
+  paths; and this refutes the _claimed_ inversion, not deadlock in general.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
