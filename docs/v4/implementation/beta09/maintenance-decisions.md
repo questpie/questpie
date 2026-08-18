@@ -293,3 +293,54 @@ the hostile case should assert the lock is released rather than held.
 **What would overturn it:** an audit table keyed independently of `durable_runs`
 — which is a larger schema change than this slice owns, and which would need
 its own retention story given that nothing sweeps the audit today.
+
+## The fence is inconsistent in both directions
+
+BETA-08's review round 4 recorded as a minor observation that the
+expected-version fence cannot see an applied `retryRun`. Verified here, and the
+consequence is sharper than that framing.
+
+`appendEvent` has exactly two call sites in
+`packages/runtime/src/durable/postgres-maintenance.ts` — `:263` inside
+`cancelRun` and `:371` inside `acknowledgeAmbiguity`. `retryRun` appends
+nothing. Since the version _is_ `event_sequence`, and every append bumps it
+(`packages/runtime/src/durable/rows.ts:139`):
+
+| Applied command        | Appends an event | Held version afterwards                                  |
+| ---------------------- | ---------------- | -------------------------------------------------------- |
+| `cancelRun`            | yes              | **stale** — a second command bound to it is fenced out   |
+| `acknowledgeAmbiguity` | yes              | **stale**                                                |
+| `retryRun`             | **no**           | **still current**, though the run moved `failed → ready` |
+
+So the fence **over-fences** after two commands and **under-fences** after the
+third. An operator holding version V can retry a failed run and then issue
+another command still bound to V, which passes the fence even though the run
+changed state underneath the reading.
+
+That makes criterion 10's "a command bound to a stale reading is refused with
+`VERSION_MISMATCH`" false for exactly one of the three commands. A reading taken
+before a retry is stale in fact and current by the mechanism.
+
+**Second consequence, which the review did not name.** The run's append-only
+history carries no evidence it was ever retried by an operator. The audit records
+it in `durable_maintenance_commands`, but `durable_run_events` — the history an
+operator reads to explain a run — shows nothing. For the one transition a human
+caused, the history is silent.
+
+**Decision: the version must change on every applied command, and a retry must
+appear in the history.** Appending a `retryRequested` event does both at once and
+needs no new mechanism: it reuses the one guarded writer, bumps `event_sequence`
+as a side effect, and fills the gap in the history. That is strictly better than
+bumping the sequence without an event, which would move the fence while leaving
+the history incomplete.
+
+This strengthens the applied-outcome decision above with a second reason. That
+one said an applied outcome must return the new version so two commands can
+chain. This one says the version must actually _change_ when a command applies,
+or the returned value is current-looking and wrong.
+
+**What would overturn it:** a decision that operator-caused transitions belong
+only in the audit and never in the run history. That is defensible — the history
+is the kernel's own transitions — but it has to be stated, because at that point
+the fence needs its own counter rather than borrowing `event_sequence`, and the
+"version is the history length" story stops being true.
