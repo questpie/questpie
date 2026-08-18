@@ -385,3 +385,17 @@ qualifier expires and the hostile case becomes fully drivable. Nothing here
 argues against building the evaluation now — an inert-but-correct mechanism
 behind a future route is the right order, and the alternative is a route that
 arrives with no Authority behind it.
+
+**Three acceptance criteria depend on this qualifier.** `acceptance-shape.md`
+criteria 1, 2 and 3 assert that inspection and maintenance Authority are
+evaluated, distinct, and specific in their denials, and it carries the same
+caveat at `:78` because that is where a reviewer reads it. The two must move
+together: if a durable route lands and this qualifier expires, those three
+criteria stop needing it, and if this qualifier changes, they are wrong until
+they change with it.
+
+That reverse pointer is the point of writing it here. This slice has already
+shipped one correction applied in one place and not the other — the Live Query
+reset claim in `design-context.md`, which contradicted its own corrected bullet
+twelve lines away — and a caveat duplicated across two records with only a
+one-way link is the same shape waiting to happen.
