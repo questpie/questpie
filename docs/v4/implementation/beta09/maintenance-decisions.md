@@ -344,3 +344,44 @@ only in the audit and never in the run history. That is defensible — the histo
 is the kernel's own transitions — but it has to be stated, because at that point
 the fence needs its own counter rather than borrowing `event_sequence`, and the
 "version is the history length" story stops being true.
+
+## Authority evaluation is only meaningful behind a route that does not exist
+
+Q3 above decides that inspection and maintenance Authority are separately
+evaluated. That decision stands, but it needs a qualifier this record did not
+have, verified on `feat/v4` at `b387e74f`:
+
+- `packages/runtime/src/application/index.ts` contains **no reference to
+  `durable`**. The Fetch router exposes no durable route.
+- `apps/studio/src/` still contains only `index.ts`, the one-line stub.
+
+The durable reads and commands are in-process methods frozen onto the
+application object. **No wire path reaches them.** So at this base a maintenance
+command can only be issued by host code running inside the process — and host
+code supplies its own `Principal`.
+
+That is the sharp consequence: **Authority evaluation currently evaluates a
+claim the caller made about itself.** A denial is real, typed, and auditable,
+and it denies whatever the in-process caller chose to assert. There is nothing
+adversarial for it to refuse, because the only caller is trusted by construction
+and could equally have asserted a Principal that passes.
+
+This does not make the mechanism wrong or premature. It makes it **incomplete in
+a specific, nameable way**: it becomes meaningful the moment Authority arrives
+from an authenticated Execution across a wire, and it is inert until then. The
+glossary already anticipates exactly this — System Authority "cannot be derived
+from request input" — which is a rule about a request path that has not been
+built yet.
+
+**What this changes for the hostile case.** BETA-09's issue lists "maintenance
+Authority denial" as a case to drive. Driven in-process, it proves the branch
+executes and the audit records it; it cannot prove the property the case exists
+to test, which is that a caller who should not pass does not. That distinction
+belongs in the evidence rather than being discovered by a reviewer, and a test
+that drives it in-process should say plainly which half it proves.
+
+**What would overturn this:** a durable route landing, at which point the
+qualifier expires and the hostile case becomes fully drivable. Nothing here
+argues against building the evaluation now — an inert-but-correct mechanism
+behind a future route is the right order, and the alternative is a route that
+arrives with no Authority behind it.
