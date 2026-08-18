@@ -218,6 +218,18 @@ Do not skip a blocked issue or parallelize dependent implementation.
   PostgreSQL 16/17/18 measured 105/105/108 passing with zero failures across 26
   beta08 scenario tests; `bench:micro` measured 400.075 ms against a 2500 ms
   budget and `test:load` 330.045 ms against 2000 ms.
+- #295 review round 4 left one observation unexplained: PostgreSQL 18 reports
+  three more passing tests than 16 and 17, with no note on which are
+  version-gated. **Closed, and verified against the tree.** They are the three
+  cases in `tests/integration/postgres/beta02-catalog-reader.test.ts` gated by
+  `test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")` — "rejects a
+  PostgreSQL 18 NOT ENFORCED check constraint", "rejects PostgreSQL 18 PERIOD
+  constraints", and "rejects a non-inherited PostgreSQL 18 NOT NULL catalog
+  constraint". Each drives a construct that exists only in 18, so on 16 and 17
+  there is nothing to reject and the assertion would target a feature the server
+  cannot express. The difference is evidence the version gate works rather than a
+  coverage gap, and the same shape should be expected of any future matrix rather
+  than read as drift.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
