@@ -133,9 +133,22 @@ run_id)`, `(application_name, state, lease_expires_at)`, and
 (`internal-protocol-v4-sql.ts:98`–`:103`). So this axis requires a schema
 addition, `(application_name, tenant_id, state)`, and BETA-10 owns it.
 
-With that index the count is cheap for the reason that matters: it is bounded
-by the cap itself plus however many leases have expired but not yet been
-reaped. It never scans the backlog.
+With that index the count is cheap for the reason that matters: it is bounded by
+the cap itself plus however many leases have expired but not yet been reaped. It
+never scans the backlog.
+
+**Measured, and it is also what quantifies the index.** One tenant holding a
+50,000-run ready backlog and 16 runs actually running, on PostgreSQL 17.10:
+
+| Counting that tenant's in-flight runs       | Plan            | Rows touched                 | Time        |
+| ------------------------------------------- | --------------- | ---------------------------- | ----------- |
+| with `(application_name, tenant_id, state)` | Index Only Scan | **16**                       | **0.07 ms** |
+| without it                                  | Seq Scan        | 16 returned, 50,016 examined | 4.70 ms     |
+
+The indexed count touches exactly the running rows and never sees the backlog,
+which is the claim. Without the index the same count costs 65× more and its cost
+scales with the backlog rather than with the cap — which is the argument for
+the schema addition, stated as a number rather than as a preference.
 
 **Rejected: a per-tenant counter row.** It would avoid the count, and it would
 serialize every claim for a tenant on one row. That converts a
