@@ -190,8 +190,29 @@ Policy would not catch it, because Policy is never consulted on this path, and
 nothing in the compiler or runtime reports the difference.
 
 The distinction between those two Contexts is one identifier's provenance. That
-is the whole safety property, it is unstated anywhere, and it is invisible in
-review unless the reader already knows to look for it.
+is the whole safety property.
+
+**Checked against the accepted projection, and the result splits.** The _bounds_
+are documented: `docs/v4/context-and-policy.md:74`–`:79` states that "Bootstrap
+accepts one known Collection, its exact key, and an explicit selection" and that
+"it can neither enumerate application Collections nor reach raw SQL, the
+database, writes, Services, Queue, or System Authority." So the section above is
+confirmed by accepted authority, not only by reading the code.
+
+**The provenance rule is not documented anywhere.** Nothing in that projection or
+in ADR-0010 says where key values may come from. And the projection's own worked
+example (`context-and-policy.md:40`–`:46`) uses `principalId: principal.id` —
+demonstrating the safe pattern without ever naming it as the safety property.
+
+That is the sharper version of the finding. A reader who _copies_ the example is
+safe by imitation. A reader who _adapts_ it — swapping `principal.id` for an
+input field, which the surrounding prose gives no reason not to do — loses the
+property silently.
+
+Nothing reports it either: the compiler emits no Context-resolver or bootstrap
+analysis at all. Neither `packages/compiler/src/model.ts` nor
+`packages/compiler/src/artifacts.ts` references bootstrap, and resolver bodies
+are inline functions the compiler never inspects.
 
 ### What this does not claim
 
