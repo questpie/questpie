@@ -144,6 +144,23 @@ keyed-lookup commitment is independently enforced at
 have no equivalent. D2 is therefore narrowed to: give the remaining four
 commitments an enforcement site, or drop the artifact's claim to be a proof.
 
+**Independently corroborated, by a better method.** `feat/v4-beta-09` reached
+the same conclusion at `c50b9dbc` without seeing this correction, and proved it
+rather than re-reading it: the branch **tampered** with the artifact and
+asserted the refusal, driving the real generated build so that one flipped
+character inside the nondisclosure proof is rejected with a digest mismatch.
+
+That is stronger evidence than the reading behind this section, and the record
+should say so. It also names the original error's cause exactly — "reading for a
+name instead of reading the code", since the artifact is verified by being in
+`build.inventory` rather than by being mentioned in `artifact-files.ts`.
+
+Worth carrying forward: two earlier attempts at that test failed on their own
+synthetic inventories rather than on the claim, and driving the real artifact set
+removed the fixture from the argument. That is the BETA-07 failure mode —
+injecting a construct the production path never produces — caught before it
+shipped rather than after three rounds.
+
 ### D3 — the inspection surface is exactly the four reads plus one worklist
 
 `inspect`, `events`, `effects`, `audit`, plus the bounded run worklist
