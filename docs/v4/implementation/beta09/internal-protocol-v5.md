@@ -53,13 +53,23 @@ about the record.
 The bound reuses 1–256 from `durable_cancellation_reason_bounded`
 (`internal-protocol-v4-sql.ts:210`) rather than introducing a second number.
 
-## The rejection code, and the second edge
+## The rejection codes, and the second edge
 
-`REASON_INVALID` joins `DurableMaintenanceRejection`
+**Two** codes join `DurableMaintenanceRejection`
 (`packages/runtime/src/durable/postgres-maintenance.ts:20`) and the
 `durable_command_rejection_known` CHECK, which currently admits
 `ALREADY_REQUESTED`, `ATTEMPTS_EXHAUSTED`, `NOT_AMBIGUOUS`, `RUN_IS_TERMINAL`,
 `RUN_NOT_FAILED`, and `VERSION_MISMATCH` (`internal-protocol-v4-sql.ts:232`).
+
+`REASON_INVALID` is the one this record was written for. `AUTHORITY_DENIED`
+was added later, when `hostile-cases.md` worked through the maintenance
+Authority denial case: if a denial is audited — and it must be, since the
+audit's purpose is that every attempt is recorded, applied or rejected — then
+the denial needs a code the CHECK admits. Six members becomes eight.
+
+Auditing a denial records the denied caller's identity against a run they
+cannot see. That is correct: the audit is not visible to them, and an audit
+that omits rejected attempts is the artifact this slice is trying not to ship.
 
 The edge: **a command rejected for an invalid reason has no valid reason to
 record.** The audit column cannot hold the offending value — that is what makes
