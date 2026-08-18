@@ -126,3 +126,63 @@ Execution Envelope gains a store, three of the five sources become genuinely
 clockable and a header starts carrying real information. Both are plausible
 later slices. Neither is this one, and per-answer provenance remains correct
 underneath a header if one is ever added — it is the more primitive of the two.
+
+## The sixth source nobody enumerated, and the one real lag
+
+Merged from a concurrent tick that reached this deliverable under a different
+filename. It does not contradict the decision above; it sharpens it.
+
+The handoff names five sources and the section above evaluates those five. The
+Change Ledger's **reconciliation frontier** is not among them, and it is the
+one place in the system where a genuine lag figure exists.
+
+`reconciliation_consumers` stores `(application_name, consumer_id, xid_horizon,
+acknowledged_at)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v3.ts:49`). The ledger
+carries `fact_id bigint GENERATED ALWAYS AS IDENTITY`, `transaction_id xid8`,
+and `captured_at` (`internal-protocol-v3.ts:29`–`:39`). Newest captured fact
+against each consumer's acknowledged horizon is therefore a real, durable,
+readable comparison: _this consumer has acknowledged through transaction H, as
+of time T, while the ledger has captured beyond it._
+
+It is also the one threshold Studio does not have to invent. The ledger is
+pruned below `min(xid_horizon)` across all consumers
+(`packages/runtime/src/live-query/postgres-retention.ts:443`–`:449`), so a
+lagging consumer is not merely behind — it is what holds retention open for
+everyone else. The consequence is already attached to the mechanism.
+
+**This does not restore the freshness header.** One honest lag among six
+sources is precisely the case the decision above rejects: a header carrying one
+real number and five decorative ones. It is rendered as what it is — a fact
+about the reconciliation frontier, carrying `source: ledger`, the trailing
+consumer, its horizon, and its `acknowledged_at` — under the same per-answer
+provenance rule as everything else.
+
+**Judgment call:** surfacing the _trailing consumer_ rather than an averaged
+lag exposes consumer identities to anyone holding inspection Authority. Taken
+because the trailing consumer is the one with a consequence attached, and an
+average hides exactly the consumer that matters. What would overturn it:
+consumer ids turning out to carry tenant or customer information, in which case
+the surface reports the horizon without naming who holds it.
+
+## Q8 — how far back Studio can inspect
+
+Also merged from that tick. The answer differs per source, and each surface
+displays the bound its own source supplies rather than promising a retention
+length in copy.
+
+- **Run history and the maintenance audit:** unbounded in time. **No retention
+  sweeper exists** — there is no `DELETE` against any `durable_*` table
+  anywhere in the tree. BETA-08 dropped the retention block precisely because
+  nothing enforced it, and nothing enforces it now. The only bound is
+  structural: `event_sequence` is CHECK-constrained to 0–1024 per run
+  (`internal-protocol-v4-sql.ts:59`), so a run's history is capped in length,
+  never in age.
+- **Change Ledger:** back to `min(xid_horizon)`, which moves as consumers
+  acknowledge.
+- **Realtime:** approximately thirty seconds.
+- **Receipts:** never pruned, and currently unreachable.
+
+Studio must not imply a retention window anywhere, because for the two lanes an
+operator will look at most there is none. Cursor pages with no totals, matching
+`countOracle: "absent"` in the application lane.
