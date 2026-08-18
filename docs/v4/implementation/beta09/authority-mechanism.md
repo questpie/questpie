@@ -256,6 +256,67 @@ matches an operator action, and is the only one that gets both a durable audit
 row and no in-transaction guard toggling. It is the right target for a later
 slice, not this one, and ADR-0016:32 and ADR-0013 both already constrain it.
 
+## The decision does not survive contact: a Mutation Policy cannot express Authority
+
+Building the seam found the blocker underneath the blocker, and it invalidates
+this record's central decision rather than merely delaying it.
+
+**A Mutation's admission Policy must be exactly `policy.authenticated()`.** The
+compiler rejects anything else:
+
+```
+policy.kind !== "booleanExpression" ||
+policy.operator !== "authenticated" ||
+policy.operands.length !== 0
+  → QP-COMPOSE-013 "<kind>.policy is outside the accepted authenticated
+    admission scope"
+```
+
+at `packages/compiler/src/model.ts:242`–`:255`, which then stores the contract
+as the constant `{ kind: "authenticated" }`. Every `defineMutation` in the tree
+is `policy: policy.authenticated()`, and nothing else compiles.
+
+So the decision recorded above — that maintenance Authority is the ordinary
+Policy on the exposing Operation — **cannot be implemented for a Mutation.**
+That Policy can say "someone is signed in" and nothing more. Exposing
+`cancelRun` through it would let every authenticated caller of any role cancel
+any run in the application. That is not an Authority decision; it is the
+absence of one wearing the word Policy.
+
+Row and Field Policy _can_ express roles — `messagePolicy` restricts `body`
+output to `owner` and `admin` through `policy.exists` over memberships — but
+those attach to a Collection, and a maintenance command operates a run, which is
+not a Collection row. The expressive Policy is attached to the wrong thing.
+
+### What this leaves
+
+Three shapes, none of them free, and this record does not choose between them
+because the choice is larger than BETA-09:
+
+1. **Widen Mutation admission Policy** to the relational expression grammar the
+   Collection policies already use. The grammar exists and is compiled; what is
+   missing is permission to use it at Operation admission. This is the smallest
+   change that makes ADR-0016:62 true as written, and it is a change to the
+   accepted Operation contract, not to this slice.
+2. **Evaluate authority in the handler** — read a membership through
+   `ctx.data`, refuse on the wrong role. Honest and available today, but it is
+   handler code rather than Policy, so ADR-0014's "explicitly authorized" is
+   satisfied by convention rather than by contract, and nothing stops the next
+   author omitting it.
+3. **Keep maintenance off the Operation surface entirely** and treat
+   `app.durable` as a server-internal capability whose caller is trusted by
+   construction — which is what BETA-08 shipped and disclosed, and which the
+   `authorize` hook already supports.
+
+### What was built and reverted
+
+The seam itself works: the maintenance factory borrowing a caller's transaction,
+a `durable` member on `MutationContext`, and a runtime-owned marker window that
+raises and lowers the guard around one command. All of it compiled. It is
+reverted rather than committed for the same reason as the previous tick — it is
+capability nothing can use, and the bundle budget is a real gate that dead code
+should not spend. It returns with whichever of the three shapes above is chosen.
+
 ## Judgment call
 
 Choosing Policy over extending the Authority union is mine, and it is the more
