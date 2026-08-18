@@ -246,6 +246,26 @@ Do not skip a blocked issue or parallelize dependent implementation.
   redundant provider call — but the fence exists to prevent a stale holder
   settling an effect the fresh holder is also performing, and the cost of proving
   it is one test. Whoever next touches the effect ledger should add it.
+- #295 review round 4's item 10 is labelled "carried forward unchanged, fourth
+  round" and was re-listed without re-verification. **Checked: it is a mix of
+  live and already-closed claims**, so it must not be treated as a live
+  checklist.
+  - _Stale._ It says `postgres-maintenance.ts::appendEvent` inserts
+    `bumped?.sequence` with no null guard. `bumped` exists only in
+    `packages/runtime/src/durable/rows.ts` and is guarded at `:146` before use at
+    `:155`; the maintenance file has none. Round 3's repair routed the audit
+    append through the one shared writer and removed it, and the observation
+    describes the code before that.
+  - _Closed since._ It says `quality/format-baseline.txt` pre-registers
+    `REVIEW-04.json` while the file is absent. The record was committed with the
+    acceptance; both now exist.
+  - _Live._ `tests/integration/postgres/helpers/beta08-durable.ts:186` still
+    terminates every other backend on the database in a retry loop. Nothing
+    in-tree proves the PostgreSQL lane is sequential, so this remains a real
+    hazard for anyone running that suite beside another consumer.
+    A reviewer re-listing prior observations without re-checking them produces a
+    list whose currency cannot be assumed. Anything carried forward from an earlier
+    round should be re-verified before it is acted on or repeated.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
