@@ -155,8 +155,15 @@ const addedColumns = live.columns.filter(
 const addedIndexes = live.indexes.filter(
 	(entry) => !baseIndexes.has(key(entry, 2)),
 );
+/**
+ * A constraint counts as added when the base did not declare it at all, and
+ * also when the base declared the same name with a different definition — a
+ * version may drop and re-add a CHECK under its original name, and the module
+ * filters the base entry out, so the new definition has to come back here or
+ * the constraint disappears from the catalog entirely.
+ */
 const addedConstraints = live.constraints.filter(
-	(entry) => !baseConstraints.has(key(entry, 2)),
+	(entry) => baseConstraints.get(key(entry, 2)) !== entry[3],
 );
 /** A constraint the base declared that this version redefines or drops. */
 const replacedConstraints = base.constraints.filter((entry) => {
