@@ -68,10 +68,18 @@ standing, the earlier record is corrected and points at the later authority:
   file; `freshness-and-provenance.md` absorbed a second freshness record
   written under a different name.
 
-## Still open
+## Status
 
-Nothing in these records is waiting on a decision. What remains is
-implementation, which no record here begins:
+Nothing in these records is waiting on a decision.
+
+Implementation has begun on branch `feat/v4-beta-09`, worktree
+`/home/drepkovsky/code/questpie-v4-beta-09`, which is not merged to `feat/v4`.
+These records describe decisions; that branch carries the code and its tests.
+Where the two disagree, the branch is the evidence and the record is corrected
+— that already happened once, when the events projection here was found to
+describe what `durable_run_events` stores rather than what `events()` returns.
+
+What the branch still owes:
 
 - The maintenance Authority evaluation itself.
 - The `operational-nondisclosure.json` producer and the runtime verification

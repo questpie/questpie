@@ -48,14 +48,14 @@ properties.
 
 What BETA-08 actually shipped, read out of the tree:
 
-| Accepted                                                  | Shipped at this base                                                                                              | Where                                                                                                                                                          |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| four commands                                             | **three** — `acknowledgeAmbiguity`, `cancelRun`, `retryRun`                                                       | `packages/compiler/src/reaction/durable-kernel.ts:120`                                                                                                         |
-| `drainRuntime`                                            | **absent by that name.** `beginDrain()` is an internal lifecycle method reachable only through `close()`          | `packages/runtime/src/durable/worker.ts:270`, driven at `packages/runtime/src/application/index.ts:592` and `packages/compiler/src/runtime/application.ts:489` |
-| exact identity, bounded reason, idempotency, typed winner | shipped                                                                                                           | `packages/runtime/src/durable/postgres-maintenance.ts`                                                                                                         |
-| expected-version fencing                                  | shipped — `inspect()` reports the run's append-only history length, stale commands refuse with `VERSION_MISMATCH` | `postgres-maintenance.ts` `staleVersion`                                                                                                                       |
-| append-only audit                                         | shipped — `durable_maintenance_commands` carries the same guard as run history                                    | internal protocol v4                                                                                                                                           |
-| **maintenance Authority**                                 | **not evaluated.** `actorOf` accepts a `Principal` and checks only `principalKernel.is(actor)` — a brand check    | `packages/runtime/src/durable/postgres-maintenance.ts:130`                                                                                                     |
+| Accepted                                                  | Shipped at this base                                                                                                              | Where                                                                                                                                                          |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| four commands                                             | **three** — `acknowledgeAmbiguity`, `cancelRun`, `retryRun`                                                                       | `packages/compiler/src/reaction/durable-kernel.ts:120`                                                                                                         |
+| `drainRuntime`                                            | **absent by that name.** `beginDrain()` is a lifecycle method; in the compiled application it is reachable only through `close()` | `packages/runtime/src/durable/worker.ts:270`, driven at `packages/runtime/src/application/index.ts:592` and `packages/compiler/src/runtime/application.ts:489` |
+| exact identity, bounded reason, idempotency, typed winner | shipped                                                                                                                           | `packages/runtime/src/durable/postgres-maintenance.ts`                                                                                                         |
+| expected-version fencing                                  | shipped — `inspect()` reports the run's append-only history length, stale commands refuse with `VERSION_MISMATCH`                 | `postgres-maintenance.ts` `staleVersion`                                                                                                                       |
+| append-only audit                                         | shipped — `durable_maintenance_commands` carries the same guard as run history                                                    | internal protocol v4                                                                                                                                           |
+| **maintenance Authority**                                 | **not evaluated.** `actorOf` accepts a `Principal` and checks only `principalKernel.is(actor)` — a brand check                    | `packages/runtime/src/durable/postgres-maintenance.ts:130`                                                                                                     |
 
 BETA-08 disclosed this rather than hiding it: its narrower claim 8 names the
 absent Authority evaluation and assigns it to the minimal Studio slice, and the
@@ -92,7 +92,7 @@ BETA-08's four review rounds:
 There is an unmerged design handoff at worktree
 `/home/drepkovsky/code/questpie-v4-minimal-studio-handoff`, branch
 `research/minimal-studio-handoff-20260815`, dated 2026-08-15: sixteen files and
-about 2,283 lines under `docs/v4/research/minimal-studio-handoff/`. It is
+about 2,204 lines of Markdown under `docs/v4/research/minimal-studio-handoff/`. It is
 labelled "research, not accepted UI or implementation authority," it separates
 fixed authority from reversible defaults, and it carries seventeen open owner
 decisions in its own `OPEN-DECISIONS.md`.
@@ -324,10 +324,11 @@ disclosure) — plus `drainRuntime` and Studio's job-first purpose. Each is
 decided against what BETA-08 shipped rather than deferred, and each records the
 code that forces or fails to force it.
 
-The remaining thirteen decisions in
-`docs/v4/research/minimal-studio-handoff/OPEN-DECISIONS.md` are visual and
-navigational and do not bind the contract this slice implements; they are
-settled by the purpose decision and the screen work that follows it.
+The handoff carries seventeen open decisions, Q1 through Q17. This slice
+settles or reopens Q1, Q3, Q5, Q6, Q7, Q8, Q10, Q12, Q13, and Q14, so at most
+seven remain, and those are visual and navigational rather than contract-
+binding. An earlier revision said thirteen remained, which double-counted the
+ones this record had already settled twelve lines above.
 
 The three tenant-share items in
 `docs/v4/prototypes/tenant-share-control/DECISION.md` remain open and are not

@@ -65,8 +65,11 @@ answer on its own: **`runId` is not obtainable through any shipped API.**
 
 - All four durable reads take `runId` alone: `inspect`, `events`, effects
   `read`, and `audit`.
-- `admit(batch)` is the only multi-row read of `durable_runs`
-  (`packages/runtime/src/durable/postgres-kernel.ts:455`), and its predicate
+- `admit(batch)` is the only multi-row **read** of `durable_runs`
+  (`packages/runtime/src/durable/postgres-kernel.ts:455`). `reapCancelled`
+  (`:407`) also spans multiple rows, but it is a write and its predicate
+  excludes terminal states too, so neither surfaces a failed run. `admit`'s
+  predicate
   structurally excludes every state an operator cares about — it returns only
   runs eligible for claiming, never `failed`, `succeeded`, `cancelled`, or
   dead-lettered. It is the opposite of a symptom feed.
@@ -153,7 +156,9 @@ already-indexed facts, not new mechanisms.
 - **"Which subscriptions did this deploy reset?"** No source. Reset history
   survives ~30 seconds. This kills the handoff's Q5 reset tile.
 - **"Show me recent Executions / trace this correlation id."** No source. The
-  Execution Envelope is unstored telemetry with hardcoded-null correlation
+  Execution Envelope is unstored telemetry with hardcoded-null trace, causation
+  and tenant references — `correlationId` itself is populated, so it is the
+  missing store and not a null correlation
   fields. Gate 8 already requires that missing telemetry stay explicit, so
   Studio must say so rather than render an empty lane.
 - **"Who changed this row and why?"** No source. The Change Ledger carries no

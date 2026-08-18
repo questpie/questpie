@@ -114,8 +114,12 @@ against a run that moved. The preconditions are already server-side and typed,
 so a client that re-derives them can only be wrong in a new way.
 
 The exactly-once wording is not a UX nicety; it is accepted contract. ADR-0013
-states plainly that "QUESTPIE does not claim exactly-once effects," and response
-loss becomes an explicit `ambiguous` terminal outcome.
+rejects "claiming exactly-once arbitrary code or unknowable provider effects"
+(`docs/adr/0013-freeze-transactional-dispatch-and-reaction.md:82`) and makes
+response loss "an explicit ambiguous terminal outcome" (`:38`). The blunter
+sentence "it does not claim exactly-once effects" is a code comment
+(`packages/runtime/src/durable/postgres-effects.ts:38`), not ADR text; an
+earlier revision of this record quoted it as though it were ADR text.
 
 **The sharper consequence: retry is not the remedy for ambiguity.** An
 ambiguous effect has its own settlement path, `acknowledgeAmbiguity`, and its
@@ -157,9 +161,15 @@ The contract contradicts itself. ADR-0014 describes drain as lifecycle bound to
 `close`: "Drain refuses new roots and claims, closes watches with a retryable
 reset, waits bounded owned work, aborts remaining Executions, fences durable
 attempts, disposes resources in reverse order, and stops. `close` is
-idempotent." The same ADR's Studio sentence, and Gate 8, then list
-`drainRuntime` among the maintenance commands that require exact identity,
-expected-version fencing, and a typed winner.
+idempotent." The accepted **projection**
+(`docs/v4/runtime-client-envelope-and-studio.md:69`) and Gate 8
+(`docs/v4/implementation-gates.md:272`) then list `drainRuntime` among the
+maintenance commands that require exact identity, expected-version fencing, and
+a typed winner. Note precisely where that list lives: **no ADR names
+`drainRuntime` at all** — a grep across `docs/adr/` returns nothing. The tension
+is between an ADR's lifecycle paragraph and a projection plus a gate, which is a
+weaker conflict than an ADR contradicting itself, and it makes the projection
+the natural thing to correct.
 
 Those seven properties are run-scoped and do not apply to a process:
 

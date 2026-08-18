@@ -172,8 +172,10 @@ displays the bound its own source supplies rather than promising a retention
 length in copy.
 
 - **Run history and the maintenance audit:** unbounded in time. **No retention
-  sweeper exists** — there is no `DELETE` against any `durable_*` table
-  anywhere in the tree. BETA-08 dropped the retention block precisely because
+  sweeper exists** — there is no `DELETE` against any `durable_*` table anywhere
+  in `packages/`. The only such statements in the repository are negative
+  controls in `tests/integration/postgres/beta08-internal-protocol.test.ts`,
+  which assert the append-only guard refuses them. BETA-08 dropped the retention block precisely because
   nothing enforced it, and nothing enforces it now. The only bound is
   structural: `event_sequence` is CHECK-constrained to 0–1024 per run
   (`internal-protocol-v4-sql.ts:59`), so a run's history is capped in length,

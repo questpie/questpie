@@ -151,9 +151,22 @@ Nothing Studio can reach returns them.
 | Kernel read      | Inspection projection returns                                                                                                                           | Removed                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `inspect(runId)` | run, dispatch, Resource, state, attempt count, current attempt, cancellation-requested, dead-letter, failure code, availability, terminal time, version | **`resultBytes`** → presence, byte length, digest                                                                         |
-| `events(runId)`  | sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, safe error code                                | nothing; already safe by construction, `error_code` CHECK-constrained to a closed set (`internal-protocol-v4-sql.ts:150`) |
+| `events(runId)`  | sequence, kind, attempt, lease-token digest, safe error code — the five fields the kernel read already returns (`postgres-kernel.ts:112`, `:730`)       | nothing; already safe by construction, `error_code` CHECK-constrained to a closed set (`internal-protocol-v4-sql.ts:150`) |
 | `effects(runId)` | effect name, effect identity, status, receipt presence                                                                                                  | **`receipt`** → presence                                                                                                  |
 | `audit(runId)`   | command, outcome, rejection code, actor, state before and after, requested-at, and the bounded reason once internal protocol v5 lands                   | nothing further                                                                                                           |
+
+**A correction to an earlier revision of this table.** It listed eleven fields
+for `events(runId)` — sequence, timestamp, Resource, dispatch, run, attempt,
+lease-token digest, causation, correlation, kind, error code. That is what
+`durable_run_events` **stores** (`internal-protocol-v4-sql.ts:133`–`:145`), not
+what `events()` **returns**. The shipped read selects five
+(`packages/runtime/src/durable/postgres-kernel.ts:730`) into a five-field view
+(`:112`–`:118`). Transplanting the accepted contract's description of the
+stored row into a table about return values made the projection look _wider_
+than the kernel read, which would have falsified this slice's own criterion
+that the projection is strictly narrower. The store-versus-return distinction
+is the thing to hold onto: `causation_id` and `correlation_id` are
+application-supplied strings, and they stay unreturned.
 
 **Presence rather than redaction.** A truncated or masked payload is still a
 payload path, and it invites a later change that widens it. Presence plus

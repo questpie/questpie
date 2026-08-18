@@ -29,8 +29,11 @@ these — the validator rejects any other set.
   defined against it.
 - **`authorityDocuments`** ADR-0003, ADR-0014, ADR-0021,
   `docs/v4/implementation-gates.md`,
-  `docs/v4/runtime-client-envelope-and-studio.md`, and **the seven BETA-09
-  design records in this directory**. Each with a pinned `sha256`.
+  `docs/v4/runtime-client-envelope-and-studio.md`, and **every BETA-09 design
+  record in this directory**. At the time of writing that is nine files, the
+  eight `README.md` enumerates plus `README.md` itself; an earlier revision said
+  seven, which predated two of them. Pin the list by enumerating the directory
+  at manifest time rather than by carrying a count, and give each a `sha256`.
 - **`reviewOutput`** the round's record path. Preserve every review record
   byte-identically and add each to `quality/format-baseline.txt`.
 - **`proof`** one paragraph: what the slice demonstrates end to end.

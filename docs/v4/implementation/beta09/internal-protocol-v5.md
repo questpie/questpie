@@ -34,7 +34,14 @@ CONSTRAINT durable_command_reason_bounded CHECK (
 ```
 
 **Nullable at the schema, required at the surface.** This is the interesting
-part and it is forced rather than chosen.
+part, and it is forced once one premise is stated: the audit stays **one
+table** and v4 rows survive in it. A fourth option exists and is rejected on
+that premise rather than on impossibility — a new v5 table with
+`reason text NOT NULL`, leaving v4 rows behind in the old one. `CREATE TABLE`
+clears the guards exactly as `ADD COLUMN` does. It is rejected because splitting
+an append-only audit across two tables to satisfy a constraint is a worse
+artifact than a nullable column whose null carries a precise meaning. Within
+that premise the nullability is forced; the premise itself is the choice.
 
 `durable_maintenance_commands` is append-only, guarded by
 `durable_maintenance_commands_append_only`
