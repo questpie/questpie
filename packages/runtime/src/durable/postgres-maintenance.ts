@@ -146,6 +146,16 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 		return row;
 	};
 
+	/**
+	 * The accepted contract requires a bounded reason. Enforcing it only in the
+	 * DDL makes an over-long reason a raw PostgreSQL error, while every other
+	 * refusal on this surface is a typed, audited outcome. The bound is the same
+	 * 1–256 the schema uses; stating it twice is deliberate, since the CHECK is
+	 * the backstop and this is the contract.
+	 */
+	const reasonOutOfBound = (reason: string): boolean =>
+		reason.length < 1 || reason.length > 256;
+
 	/** The denial path: audited, and taking no lock on the way. */
 	const refuseUnauthorized = async (
 		query: DurableQuery,
@@ -269,6 +279,25 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 						{ runId: request.runId, actor },
 						"cancelRun",
 					);
+				if (reasonOutOfBound(request.reason)) {
+					const unbounded = await readRun(query, request.runId, false);
+					const state = durableText(
+						unbounded.state,
+						"run state",
+					) as DurableRunState;
+					// A command refused for an invalid reason has no valid reason to
+					// record, so the audit keeps a null one rather than the offending
+					// text.
+					return record(query, {
+						runId: request.runId,
+						command: "cancelRun",
+						outcome: "rejected",
+						rejectionCode: "REASON_INVALID",
+						actor,
+						stateBefore: state,
+						stateAfter: state,
+					});
+				}
 				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,

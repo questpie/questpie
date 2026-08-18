@@ -152,3 +152,55 @@ WHERE application_name = $1 AND run_id = $2`;
 		expect(unmarkedRefused).toBe(true);
 	},
 );
+
+/**
+ * `REASON_INVALID` was added to the rejection union and to the v5 CHECK and
+ * nothing produced it — a typed member no path could reach, which is the exact
+ * failure BETA-08's first round was blocked for, committed here.
+ *
+ * The bound belongs before the statement, not only in the DDL: enforced only by
+ * the database CHECK, an over-long reason surfaces as a raw PostgreSQL error
+ * rather than as the typed, audited outcome the command surface promises
+ * everywhere else.
+ */
+postgresTest(
+	"an out-of-bound reason is a typed rejection, not a database error",
+	async () => {
+		const prepared = await harness();
+		const runId = await publishedRun(prepared, "beta09-reason-1");
+		const actor = principal.user({ id: beta05Ids.principal });
+		const maintenance = createPostgresDurableMaintenance({
+			sql: database!,
+			application: "application:collaboration",
+		});
+
+		const tooLong = await maintenance.cancelRun({
+			runId,
+			reason: "x".repeat(257),
+			actor,
+		});
+		expect(tooLong.outcome).toBe("rejected");
+		expect(tooLong.rejectionCode).toBe("REASON_INVALID");
+		expect(tooLong.stateAfter).toBe(tooLong.stateBefore);
+
+		const empty = await maintenance.cancelRun({ runId, reason: "", actor });
+		expect(empty.rejectionCode).toBe("REASON_INVALID");
+
+		// Every attempt is recorded, and a rejection with no valid reason records a
+		// null one rather than the offending value.
+		const audited = await maintenance.audit(runId);
+		const refusals = audited.filter(
+			(entry) => entry.rejectionCode === "REASON_INVALID",
+		);
+		expect(refusals).toHaveLength(2);
+
+		// A reason at the bound is accepted, so the refusal is the bound and not the
+		// command being broken.
+		const applied = await maintenance.cancelRun({
+			runId,
+			reason: "y".repeat(256),
+			actor,
+		});
+		expect(applied.outcome).toBe("applied");
+	},
+);
