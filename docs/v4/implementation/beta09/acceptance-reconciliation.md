@@ -16,6 +16,8 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 | 11  | Internal protocol v5 adds the bounded reason                                                  | nullable column, CHECK, v4→v5 upgrade verified end to end on PostgreSQL 17                                                                                         |
 | 12  | `REASON_INVALID` and `AUTHORITY_DENIED` are typed, enforced before the statement, and audited | both reachable and driven; the first was unreachable until the repair that produced this record                                                                    |
 | 13  | A fenced loser receives the run's current version                                             | `version` on every outcome, read after the command settles so an applied command reports the number that exists now                                                |
+| 8   | The surface is exactly four reads plus one worklist                                           | `worklist({state, first})` on the kernel and the published surface; no other read shape added                                                                      |
+| 9   | The worklist is bounded and index-backed                                                      | bounded 1–100, ordered `available_at, run_id` against `durable_runs_claim_idx`, `hasMore` from one row past the bound and never a total                            |
 | 7   | `relational-nondisclosure.json` joins the verified set                                        | already met, and the reconciliation was wrong about it. Verification walks the whole inventory rather than a name list, so tampering with one character is refused |
 | 15  | A stale build is explained                                                                    | `explainRunExecutable` joins a run's pinned digest against the reaction projection; driven against a really-retired run whose history says only `accepted`         |
 
@@ -27,8 +29,6 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 | 2   | Maintenance Authority evaluated, typed denial, audited        | **partial.** Driven against the runtime factory; the generated application supplies no `authorize`, so it never holds for the shipped surface                  |
 | 3   | Denial specificity follows the missing Authority              | **not built.** Requires 1 and 2                                                                                                                                |
 | 6   | `operational-nondisclosure.json` compiled and digest-verified | **not built.** No such artifact exists                                                                                                                         |
-| 8   | The surface is exactly four reads plus one worklist           | **not built.** The worklist does not exist                                                                                                                     |
-| 9   | The worklist is bounded and index-backed                      | **not built.** Requires 8                                                                                                                                      |
 | 10  | Every rendered fact carries its source                        | **not built.** The interface renders a catalog and no provenance                                                                                               |
 | 14  | Retry is never offered as the remedy for ambiguity            | **not built.** This is an interface property and the interface has no run view                                                                                 |
 | 16  | The Studio projection producer is independent                 | **partial.** The producer exists, derives from bytes, and a mutated byte moves its digest. Byte parity against the compiler's own artifact is **not asserted** |
@@ -36,16 +36,15 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 
 ## The honest count
 
-Seven of seventeen met. Two more partial. Eight not built.
+Nine of seventeen met. Two more partial. Six not built.
 
 Three of the eleven are blocked on decisions that are not this slice's to make:
 inspection Authority needs an ADR-0010 amendment, maintenance Authority needs
 the same or an owner ruling, and the Studio asset packaging fork decides whether
 the interface can be served at all.
 
-The remaining five are ordinary unbuilt work: the operational nondisclosure
-artifact, the run worklist and its bound, provenance in the interface, and the
-retry disclosure.
+The remaining three are ordinary unbuilt work: the operational nondisclosure
+artifact, provenance in the interface, and the retry disclosure.
 
 ## What this changes
 

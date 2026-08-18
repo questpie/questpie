@@ -265,3 +265,67 @@ postgresTest(
 		expect(explained.reason).toBe("executableRetired");
 	},
 );
+
+/**
+ * Criteria 8 and 9: the one bounded worklist `studio-purpose.md` decided.
+ *
+ * The entrance is identity-first, but `runId` is not obtainable from any shipped
+ * read — `admit()` is the only multi-row query and its predicate excludes every
+ * terminal state — so a purely identity-first Studio has detail pages nothing
+ * can navigate to. This is the bridge, and it is deliberately one read.
+ *
+ * Bounded, never counted, and index-backed: `durable_runs_claim_idx` is
+ * `(application_name, state, available_at, run_id)`, so filtering by state and
+ * ordering by `available_at, run_id` is a prefix scan. `hasMore` rather than a
+ * total, because a count is a scan and `studio-purpose.md` forbids one on
+ * disclosure grounds as well as cost.
+ */
+postgresTest(
+	"the worklist is bounded, ordered, and discloses no payload",
+	async () => {
+		const prepared = await harness();
+		for (const index of [1, 2, 3]) {
+			const callId = `beta09-worklist-${index}`;
+			await publish(prepared, {
+				body: `delivery-refused-always ${index}`,
+				callId,
+			});
+		}
+		// Drive them to a terminal failure so they belong on a worklist at all.
+		for (let attempt = 0; attempt < 9; attempt += 1)
+			await prepared.app.durable.poll();
+
+		const page = await prepared.app.durable.worklist({
+			state: "failed",
+			first: 2,
+		});
+		expect(page.runs.length).toBeLessThanOrEqual(2);
+		expect(page.hasMore).toBeBoolean();
+		// No total: a count over this table is a scan, and the record forbids it.
+		expect(page).not.toHaveProperty("total");
+
+		for (const entry of page.runs) {
+			expect(entry.state).toBe("failed");
+			expect(entry.runId).toBeString();
+			expect(entry.resource).toBeString();
+			// Identities and codes only. The worklist is a way in, not a way around
+			// the inspection projection.
+			expect(entry).not.toHaveProperty("resultBytes");
+			expect(entry).not.toHaveProperty("result");
+		}
+
+		const wide = await prepared.app.durable.worklist({
+			state: "failed",
+			first: 50,
+		});
+		expect(wide.runs.length).toBeGreaterThanOrEqual(page.runs.length);
+		if (wide.runs.length > 1) {
+			const ordered = [...wide.runs].sort((left, right) =>
+				left.runId < right.runId ? -1 : 1,
+			);
+			expect(wide.runs.map((entry) => entry.runId).sort()).toEqual(
+				ordered.map((entry) => entry.runId),
+			);
+		}
+	},
+);

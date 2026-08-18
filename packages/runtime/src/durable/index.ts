@@ -26,6 +26,8 @@ export type {
 	DurableEffectStatus,
 	DurableEffectView,
 } from "./postgres-effects";
+export { readDurableWorklist } from "./worklist";
+export type { DurableWorklistEntry, DurableWorklistPage } from "./worklist";
 export { createPostgresDurableKernel } from "./postgres-kernel";
 export type {
 	DurableAdmission,

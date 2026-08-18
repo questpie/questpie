@@ -58,6 +58,21 @@ type Beta08Durable = Readonly<{
 			}>[];
 		}>
 	>;
+	worklist(request: Readonly<{ state: string; first: number }>): Promise<
+		Readonly<{
+			runs: readonly Readonly<{
+				runId: string;
+				resource: string;
+				state: string;
+				attemptCount: number;
+				deadLetter: boolean;
+				failureCode: string | null;
+				tenantId: string;
+				version: number;
+			}>[];
+			hasMore: boolean;
+		}>
+	>;
 	inspect(runId: string): Promise<Readonly<{
 		version: number;
 		state: string;

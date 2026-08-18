@@ -18,4 +18,5 @@ export {
 	durablePrincipal,
 	projectDurableEffectInspection,
 	projectDurableRunInspection,
+	readDurableWorklist,
 } from "./durable";

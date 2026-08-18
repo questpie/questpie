@@ -290,6 +290,7 @@ export async function createApplication(input) {
 		executePostgresQuery,
 		projectDurableEffectInspection,
 		projectDurableRunInspection,
+		readDurableWorklist,
 	} = runtimeModule;
 	const sql = new SQL(input.postgres.url);
 	const postgresController = new AbortController();
@@ -469,6 +470,7 @@ export async function createApplication(input) {
 			defaultWorker ??= createWorker();
 			return defaultWorker.poll();
 		},
+		worklist: (request) => readDurableWorklist({ sql, application: durableApplication }, request),
 		inspect: async (runId) => {
 			const view = await durableKernel.inspect(runId);
 			return view === null ? null : projectDurableRunInspection(view);
