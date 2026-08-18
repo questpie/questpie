@@ -122,6 +122,52 @@ for the case where a server path reaches a command it should not — defence in
 depth, not the primary gate. Both are worth having; only the first is what a
 Studio user encounters.
 
+## The seam ADR-0016 assumes does not exist
+
+Implementing the declared path found the next gap, and it is structural rather
+than a matter of wiring.
+
+**A Mutation handler cannot reach a maintenance command.** The generated
+`MutationContext` is `RootExecution` minus `services`, plus `data`,
+`operationTime`, `callId`, `transactionId`, and `dispatch`
+(`packages/compiler/src/generate.ts:327`). `RootExecution` itself is
+`principal`, `authority`, `tenant`, `values`, `services`, `signal`, `deadline`
+(`:352`). Nothing in either exposes `cancelRun`, `retryRun`,
+`acknowledgeAmbiguity`, or any durable control surface.
+
+So ADR-0016:62 names a path — "applications expose selected request, status,
+cancellation, and signal jobs through ordinary Policy-protected Query and
+Mutation Operations" — that an author cannot currently write. `ctx.dispatch`
+lets a Mutation _create_ durable work; nothing lets it _operate_ durable work.
+
+That asymmetry looks deliberate rather than forgotten, and the reason matters
+for whoever closes it: `ctx.dispatch` writes intent inside the Mutation's own
+transaction, which is exactly ADR-0013's atomicity guarantee. A maintenance
+command manages its own transaction — `createPostgresDurableMaintenance` opens
+one per command and marks it as a kernel transaction. Handing a Mutation a
+surface that opens a second transaction inside the first would either nest
+transactions or silently escape the Mutation's atomicity, and neither is
+something to add by reflex.
+
+**This blocks the maintenance Authority red test**, and the block is honest:
+the guard added alongside it is defence in depth, the primary gate is the
+Policy on an exposing Operation, and no such Operation can be authored today.
+
+Three ways out, none taken here because each is a contract decision rather than
+an implementation detail:
+
+1. **A Mutation-side seam that joins the Mutation transaction.** Cancellation
+   becomes atomic with a business write. Needs the maintenance commands to
+   accept a caller-supplied transaction, which they currently refuse by design.
+2. **A Query-side seam.** ADR-0016 names Query as well as Mutation. Inspection
+   fits a Query cleanly; commands do not, since a Query is read-only.
+3. **An Operation kind whose handler runs after the transaction commits.**
+   Closest to what an operator action actually is, and the largest new concept.
+
+Recorded rather than decided, because BETA-09's own records do not settle it
+and choosing here would be inventing the seam at the point of needing it — the
+failure this slice has twice avoided.
+
 ## Judgment call
 
 Choosing Policy over extending the Authority union is mine, and it is the more
