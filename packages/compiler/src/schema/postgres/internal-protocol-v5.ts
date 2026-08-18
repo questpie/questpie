@@ -127,7 +127,7 @@ export async function ensureInternalProtocolV5(
 			signal,
 		);
 	const key = lockKey(databaseName, "questpie.internal-protocol");
-	await acquireSessionLock(sql, key, signal);
+	await acquireSessionLock(sql, key, control, signal);
 	try {
 		const protocol = await protocolRow(sql);
 		if (
