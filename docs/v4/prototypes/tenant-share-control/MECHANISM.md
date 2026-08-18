@@ -52,13 +52,40 @@ LIMIT $batch
 precedes any tenant's second. A tenant with a thousand ready runs contributes
 one before contributing two.
 
-**The cost is real and it is the reason this note exists.** A window function
-cannot stop early. The existing query walks `durable_runs_claim_idx`
-(`application_name, state, available_at, run_id` —
-`internal-protocol-v4-sql.ts:98`) and stops at 64 rows. The ranked version must
-read **every eligible row** to rank it, then discard almost all of them. The
-index still serves the `WHERE`, so this is an index scan rather than a heap
-scan, but its cost scales with the ready backlog rather than with the batch.
+**The cost is real, and measuring it corrected two claims an earlier revision of
+this note made from reasoning alone.** Measured on PostgreSQL 17.10 against a
+table shaped like `durable_runs` with the same index, one noisy tenant holding
+50,000 ready runs and 200 quiet tenants holding one each:
+
+| Query                                      | Plan                        | Rows scanned | Time        |
+| ------------------------------------------ | --------------------------- | ------------ | ----------- |
+| current, real predicate                    | Seq Scan + top-N heapsort   | 50,200       | 16.0 ms     |
+| ranked, real predicate                     | Seq Scan + Sort + WindowAgg | 50,200       | 42.7 ms     |
+| current, single state                      | **Index Only Scan**         | **64**       | **0.09 ms** |
+| ranked, single state, tenant-leading index | Index Only Scan + WindowAgg | 50,200       | 21.5 ms     |
+
+**Correction 1: a window function _can_ stop early.** PostgreSQL 15 added run
+conditions for monotonic window functions, and the plan confirms it —
+`Run Condition: (row_number() OVER (?) <= 8)` — emitting 208 rows from 50,200.
+What cannot stop early is the scan and sort _beneath_ the WindowAgg, because
+every partition must be visited to know its first rows.
+
+**Correction 2: the existing query does not stop at 64 either.** With the real
+predicate it seq-scans all 50,200 rows. The `OR` between the two eligibility
+branches defeats `durable_runs_claim_idx`. Only the single-state form uses the
+index and stops at 64, at 0.09 ms — **170× faster than the shipped shape**.
+
+So admission is _already_ backlog-proportional, before any fairness change. That
+strengthens rather than weakens the point below: backlog refusal is not merely
+what funds fair admission, it is what the current query needs too.
+
+**A separate finding, independent of fairness.** Splitting the `OR` into two
+index-friendly branches — a `UNION ALL` of the ready case and the expired-lease
+case — would let each use `durable_runs_claim_idx` and stop early. On this
+dataset that is the difference between 16.0 ms and 0.09 ms. It is a defect in
+admission as shipped, it belongs to whoever touches the claim predicate next,
+and it should be fixed before fairness is measured or the fairness number will
+carry the OR's cost.
 
 **This is where the three axes stop being independent.** Backlog refusal at
 acceptance is what makes the ranking scan affordable — it is the bound on the
@@ -133,7 +160,10 @@ are specific to fairness and do not exist in that harness yet:
 
 1. **Distribution, not throughput.** With one tenant holding a large backlog and
    several holding one run each, every small tenant is admitted before the large
-   tenant's second run. Assert the admission order, not the elapsed time.
+   tenant's second run. Assert the admission order, not the elapsed time. The
+   probe above already shows the shape this must reproduce in the real harness:
+   of 64 admitted rows, the unranked query gave quiet tenants **0** and the
+   ranked query gave them **63**.
 2. **Falsify against the unranked predicate.** Restore `ORDER BY available_at,
 run_id` and the same scenario must fail with the small tenants starved.
    Without that, the test proves only that the query still returns rows.
