@@ -90,3 +90,69 @@ execution path. At that point `isSystem()` becomes satisfiable, the fixture's
 membership policy silently changes meaning from "nobody" to "system callers",
 and that change would be invisible in the Policy source — which is the sharpest
 reason to settle this before such a site is added rather than after.
+
+## What actually keeps memberships safe, and it is not the Policy
+
+Following the finding one step further changes its shape. Memberships are read
+at runtime — just not through a Query.
+
+`packages/runtime/src/relational/bootstrap.ts` is 411 lines and contains **no
+reference to Policy of any kind**. It builds a keyed lookup straight against the
+collection's PostgreSQL table. That is a necessity rather than an oversight:
+Context Resolution has to run before Policy can be evaluated, because Policy
+needs the resolved Context.
+
+The collaboration Context uses it (`fixtures/collaboration/src/execution.ts:44`):
+
+```ts
+const membership = await bootstrap.get(memberships, {
+	key: {
+		companyId: input.companyId,
+		principalId: principal.id,
+		scopeKey: "company",
+	},
+	select: {
+		id: true,
+		companyId: true,
+		principalId: true,
+		role: true,
+		scopeKey: true,
+		status: true,
+	},
+});
+```
+
+and puts four of those fields into `values` (`:64`–`:69`) —
+`selectedMembershipId`, `selectedMembershipPrincipalId`,
+`selectedMembershipScope`, `selectedRole` — which reach every handler as
+`ctx.values` through `ExecutionFacts`
+(`packages/runtime/src/execution/index.ts:285`).
+
+So a collection whose read Policy denies everyone hands four of its columns to
+every handler on every Execution.
+
+**This is not a disclosure hole, and the reason matters.** The bootstrap key is
+`principalId: principal.id` — the caller's own identity. A caller can only reach
+their own membership row. The scoping is correct.
+
+But it is correct because **the application author wrote a caller-scoped key**,
+not because any Policy checked it. `membershipPolicy` contributes nothing here:
+it is unsatisfiable, so it denies every path, including the one nobody uses.
+
+### The generalizable finding
+
+**There is a third read path, and no Policy governs it.**
+`inspection-contract.md` reasons about two lanes — application data through
+generated Operations and Collection Policy, and operational facts through their
+own inspection Authority. Context bootstrap is a third, and it is the only one
+that reads Collection rows with no authorization layer at all.
+
+An author who writes a bootstrap key that is not caller-scoped gets no
+protection from Policy, because Policy is never consulted. Nothing in the
+compiler or the runtime reports that, and the collaboration fixture's safety
+would look identical either way.
+
+That is worth knowing for BETA-09's red test, which asks whether Studio can
+disclose something not available through the equivalent generated Operation. The
+same question applied to Context bootstrap has a different and less comfortable
+answer, and it is not BETA-09's to fix.
