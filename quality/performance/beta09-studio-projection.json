@@ -1,0 +1,28 @@
+{
+	"id": "beta09-studio-projection",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": [
+		"bun",
+		"test",
+		"tests/performance/beta09-studio-projection.test.ts"
+	],
+	"budgetOwner": "BETA-09",
+	"metrics": {
+		"worklistMedianMs": {
+			"direction": "max",
+			"budget": 5,
+			"unit": "ms"
+		},
+		"studioBundleBytes": {
+			"direction": "max",
+			"budget": 327680,
+			"unit": "bytes"
+		},
+		"catalogProjectionBytes": {
+			"direction": "max",
+			"budget": 65536,
+			"unit": "bytes"
+		}
+	}
+}
