@@ -156,3 +156,47 @@ That is worth knowing for BETA-09's red test, which asks whether Studio can
 disclose something not available through the equivalent generated Operation. The
 same question applied to Context bootstrap has a different and less comfortable
 answer, and it is not BETA-09's to fix.
+
+## How far the third path actually reaches
+
+"No Policy governs it" is true and, left alone, overstates the exposure. The
+path is tightly bounded by construction, and the bounds are worth stating
+because they change what the risk actually is.
+
+Every bootstrap read is validated before it runs
+(`packages/runtime/src/relational/bootstrap.ts`):
+
+- the Collection must be known — `unknown ContextBootstrap Collection` (`:328`,
+  `:330`);
+- every selected Field must exist and be a supported codec (`:308`, `:310`), and
+  the selection must be explicit and `true` (`:359`, `:362`);
+- **the key must be the complete primary key** — `ContextBootstrap requires the
+exact primary key` (`:356`). No partial key, no predicate, no scan;
+- the generated statement is `SELECT <named fields> FROM <collection> WHERE
+<every primary-key column> = $n ... LIMIT 1` (`:368`–`:382`);
+- zero rows returns `null`, and anything other than one row throws (`:391`,
+  `:393`).
+
+So the path is: **one row, named by its exact primary key, with an explicit
+field list, and no Policy check.** It cannot enumerate, filter, or scan.
+
+**That narrows the risk to a specific authoring mistake.** The collaboration
+Context is safe because its key mixes a trusted value into the lookup —
+`principalId: principal.id` comes from the Principal, not from Context input
+(`fixtures/collaboration/src/execution.ts:47`–`:51`). An author who instead
+keyed entirely on Context input would read any row whose primary key a caller
+could name, with the selected fields landing in `ctx.values` for every handler.
+Policy would not catch it, because Policy is never consulted on this path, and
+nothing in the compiler or runtime reports the difference.
+
+The distinction between those two Contexts is one identifier's provenance. That
+is the whole safety property, it is unstated anywhere, and it is invisible in
+review unless the reader already knows to look for it.
+
+### What this does not claim
+
+Not that the design is wrong. Trusted Context is what ADR-0010 froze, and a
+keyed pre-Policy read is the only way Context Resolution can work at all. The
+finding is that the safety of a bootstrap read rests entirely on where its key
+values come from, and that this is currently an unwritten convention rather than
+a checked property.
