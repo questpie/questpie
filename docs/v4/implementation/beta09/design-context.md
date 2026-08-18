@@ -323,7 +323,7 @@ slice's most consequential finding and it reframes what BETA-09 can deliver.
 | independent Studio projection producer | **built** — `apps/studio/src/projection.ts`, driven against the real compiled artifacts |
 | same-origin Studio bundle              | **built** — `app.fetch` serves `/_questpie/studio`                                      |
 | Policy-protected inspection Operations | **no Policy can reach operational facts**                                               |
-| safe event/explain views               | projectable as data; not servable as a view                                             |
+| safe event/explain views               | **explain lane built**; the event lane stays server-internal                            |
 
 **Corrected: the mount was built, and calling it unbuildable was wrong.** The
 reasoning below described an absence and treated it as a prohibition.
@@ -356,6 +356,15 @@ HTML path, and no second mount. The escape hatch that would provide one,
 `defineRoute`, is a reserved `EmptyDefinitionFactory` that accepts no
 definition. So a same-origin Studio bundle cannot be mounted by any authored
 means at this base.
+
+**Inspection Operations are the one genuine prohibition, not an absence.** The
+lens that corrected the bundle mount was applied here and reaches the opposite
+answer. ADR-0010:41 states that "`definePolicy(collection, body)` binds one
+closed typed Policy program to one Collection" — Policy is Collection-bound by
+contract, not by accident — and Gate 8 forbids the move that would make runs a
+Collection, naming "internal-table CRUD" among what Studio must not have. So
+closing this needs an ADR-0010 amendment, which is a different act from adding a
+path to `fetch` that accepted authority had already asked for.
 
 **Inspection Operations have no Policy**, for the reason
 `inspection-contract.md` now records: a Query has no admission Policy at all and

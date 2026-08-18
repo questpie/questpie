@@ -143,3 +143,78 @@ export function studioProjectionDigest(artifacts: StudioArtifactBytes): string {
 		.update(studioProjectionBytes(artifacts))
 		.digest("hex");
 }
+
+export type StudioExplainedPolicy = Readonly<{
+	identity: string;
+	target: string;
+	origin: string | null;
+}>;
+
+export type StudioExplainedOperation = Readonly<{
+	identity: string;
+	owner: string | null;
+	origin: string | null;
+}>;
+
+export type StudioExplain = Readonly<{
+	policies: readonly StudioExplainedPolicy[];
+	operations: readonly StudioExplainedOperation[];
+}>;
+
+/**
+ * The compiler records where each Policy and Collection Operation came from.
+ * Studio's job is to explain the compiled application, and an explanation
+ * without provenance is a listing — so the projection keeps identity, what it
+ * targets or owns, and the recorded origin, and drops the lowered programs,
+ * which are compiler detail rather than something an operator reads.
+ *
+ * Explain artifacts are public contract, not operational fact, so this lane
+ * carries no disclosure question. That is why it is buildable at this base
+ * while the operational reads stay server-internal.
+ */
+function originOf(value: Readonly<Record<string, unknown>>): string | null {
+	const origin = value.origin;
+	if (typeof origin === "string") return origin;
+	if (origin && typeof origin === "object" && !Array.isArray(origin)) {
+		const path = (origin as Readonly<Record<string, unknown>>).logicalPath;
+		if (typeof path === "string") return path;
+	}
+	return null;
+}
+
+export function projectStudioExplain(
+	artifacts: StudioArtifactBytes,
+): StudioExplain {
+	const relational = parsed(artifacts, "relational-explain.json");
+	const operations = parsed(artifacts, "collection-operation-explain.json");
+	return Object.freeze({
+		policies: Object.freeze(
+			entries(relational, "policies", "relational-explain.json")
+				.map((entry) =>
+					Object.freeze({
+						identity: text(entry, "identity", "policy"),
+						target: text(entry, "target", "policy"),
+						origin: originOf(entry),
+					}),
+				)
+				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
+		),
+		operations: Object.freeze(
+			entries(operations, "resources", "collection-operation-explain.json")
+				.map((entry) =>
+					Object.freeze({
+						identity: text(entry, "identity", "operation"),
+						owner: typeof entry.owner === "string" ? entry.owner : null,
+						origin: originOf(entry),
+					}),
+				)
+				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
+		),
+	});
+}
+
+export function studioExplainDigest(artifacts: StudioArtifactBytes): string {
+	return new Bun.CryptoHasher("sha256")
+		.update(canonical(projectStudioExplain(artifacts)))
+		.digest("hex");
+}

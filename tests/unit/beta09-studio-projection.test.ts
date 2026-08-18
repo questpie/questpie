@@ -4,6 +4,8 @@ import { resolve } from "node:path";
 
 import {
 	projectStudioCatalog,
+	projectStudioExplain,
+	studioExplainDigest,
 	studioProjectionDigest,
 } from "../../apps/studio/src/projection";
 
@@ -82,4 +84,56 @@ test("the projection is canonical: input key order cannot change it", () => {
 	expect(studioProjectionDigest(reordered)).toBe(
 		studioProjectionDigest(artifacts),
 	);
+});
+
+/**
+ * The explain lane. `studio-purpose.md` decides the entrance is the compiled
+ * contract, and explain artifacts are exactly that: compiler output describing
+ * how the application was lowered. They are public contract rather than
+ * operational fact, so they carry no disclosure question — which is why this
+ * lane is buildable while the operational one is not.
+ *
+ * Provenance is the point. A Policy or a Collection Operation is only
+ * explicable if Studio can say where it came from, so the projection keeps the
+ * origin the compiler recorded and drops everything else.
+ */
+test("the explain projection carries identity and origin from the compiler", () => {
+	const explained = projectStudioExplain({
+		"relational-explain.json": artifact("relational-explain.json"),
+		"collection-operation-explain.json": artifact(
+			"collection-operation-explain.json",
+		),
+	});
+
+	expect(explained.policies.length).toBeGreaterThan(0);
+	for (const entry of explained.policies) {
+		expect(entry.identity.startsWith("policy:")).toBe(true);
+		expect(entry.target.startsWith("collection:")).toBe(true);
+	}
+	const messagePolicy = explained.policies.find(
+		(entry) => entry.identity === "policy:messages.default",
+	);
+	expect(messagePolicy?.target).toBe("collection:messages");
+
+	expect(explained.operations.length).toBeGreaterThan(0);
+	for (const entry of explained.operations)
+		expect(entry.identity.length).toBeGreaterThan(0);
+});
+
+test("the explain projection is canonical and byte-stable", () => {
+	const input = {
+		"relational-explain.json": artifact("relational-explain.json"),
+		"collection-operation-explain.json": artifact(
+			"collection-operation-explain.json",
+		),
+	};
+	expect(studioExplainDigest(input)).toBe(studioExplainDigest({ ...input }));
+	const mutated = {
+		...input,
+		"relational-explain.json": input["relational-explain.json"].replace(
+			"policy:messages.default",
+			"policy:messages.defaulT",
+		),
+	};
+	expect(studioExplainDigest(mutated)).not.toBe(studioExplainDigest(input));
 });
