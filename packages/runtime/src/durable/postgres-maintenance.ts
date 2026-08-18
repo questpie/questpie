@@ -34,6 +34,16 @@ export type DurableMaintenanceOutcome = Readonly<{
 	rejectionCode: DurableMaintenanceRejection | null;
 	stateBefore: DurableRunState;
 	stateAfter: DurableRunState;
+	/**
+	 * The run's append-only history length once this command settled.
+	 *
+	 * A fenced loser needs it to re-issue: without it, `VERSION_MISMATCH` says
+	 * the caller is stale without saying what current is, so the only recovery
+	 * is another `inspect()` and another chance to lose the same race. It
+	 * discloses nothing new, being the same number `inspect()` reports to any
+	 * caller that may reach this command at all.
+	 */
+	version: number;
 }>;
 
 export type DurableMaintenanceAuditEntry = Readonly<{
@@ -259,6 +269,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 				entry.reason ?? null,
 			],
 		);
+		// Read after the command settled: an applied command appends an event, so
+		// the number a loser re-issues with is the one that exists now, not the
+		// one this transaction started from.
+		const [settled] = await query(
+			`SELECT event_sequence AS "version" FROM questpie_internal.durable_runs
+WHERE application_name = $1 AND run_id = $2`,
+			[input.application, entry.runId],
+		);
 		return Object.freeze({
 			commandId,
 			command: entry.command,
@@ -266,6 +284,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 			rejectionCode: entry.rejectionCode,
 			stateBefore: entry.stateBefore,
 			stateAfter: entry.stateAfter,
+			version: durableInteger(settled?.version, "run version"),
 		});
 	};
 

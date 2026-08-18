@@ -204,3 +204,44 @@ postgresTest(
 		expect(applied.outcome).toBe("applied");
 	},
 );
+
+/**
+ * `maintenance-decisions.md` Q14: a fenced loser learns the run's current
+ * version. Without it the loser must call `inspect()` again to re-issue, which
+ * is a second round trip and a second chance to lose the same race — so the
+ * fence tells a caller it is stale without telling it what stale means.
+ *
+ * The version discloses nothing new: it is the run's own append-only history
+ * length, and any caller that may reach this command may already read it.
+ */
+postgresTest("a fenced loser is told the run's current version", async () => {
+	const prepared = await harness();
+	const runId = await publishedRun(prepared, "beta09-fence-1");
+	const actor = principal.user({ id: beta05Ids.principal });
+	const maintenance = createPostgresDurableMaintenance({
+		sql: database!,
+		application: "application:collaboration",
+	});
+
+	const current = await prepared.app.durable.inspect(runId);
+	expect(current?.version).toBeNumber();
+	const stale = current!.version - 1;
+
+	const refused = await maintenance.cancelRun({
+		runId,
+		reason: "stale version probe",
+		actor,
+		expectedVersion: stale,
+	});
+	expect(refused.rejectionCode).toBe("VERSION_MISMATCH");
+	// The loser can re-issue from what it received, without inspecting again.
+	expect(refused.version).toBe(current!.version);
+
+	const applied = await maintenance.cancelRun({
+		runId,
+		reason: "re-issued at the version the refusal reported",
+		actor,
+		expectedVersion: refused.version,
+	});
+	expect(applied.outcome).toBe("applied");
+});
