@@ -79,13 +79,35 @@ So admission is _already_ backlog-proportional, before any fairness change. That
 strengthens rather than weakens the point below: backlog refusal is not merely
 what funds fair admission, it is what the current query needs too.
 
-**A separate finding, independent of fairness.** Splitting the `OR` into two
-index-friendly branches — a `UNION ALL` of the ready case and the expired-lease
-case — would let each use `durable_runs_claim_idx` and stop early. On this
-dataset that is the difference between 16.0 ms and 0.09 ms. It is a defect in
-admission as shipped, it belongs to whoever touches the claim predicate next,
-and it should be fixed before fairness is measured or the fairness number will
-carry the OR's cost.
+**A separate finding, independent of fairness — and the first attempt to state
+it was wrong three ways.** An earlier revision claimed a two-branch `UNION ALL`
+would fix admission at 16.0 ms against 0.09 ms, 170×. Measuring it disproved
+that, so here is what the plans actually show, on 50,000 ready runs with both
+shipped indexes present:
+
+| Predicate shape                  | Plan                                    | Rows scanned | Time        |
+| -------------------------------- | --------------------------------------- | ------------ | ----------- |
+| shipped `OR`                     | Seq Scan                                | 50,000       | 13.07 ms    |
+| two-branch `UNION ALL`           | Seq Scan + one Index Scan               | 50,000       | 13.29 ms    |
+| **three index-ordered branches** | **Merge Append over three Index Scans** | **64**       | **0.42 ms** |
+
+Two branches do not help, because `state IN ('delayed','ready')` is itself two
+index ranges and PostgreSQL cannot walk them in `available_at` order from one
+scan. **Each state needs its own branch**, and the planner then produces a
+`Merge Append` that pulls in order across all three and stops at the limit.
+
+The real figure is **31×**, not 170×, and the 0.09 ms in the earlier revision
+came from a different query entirely — a single-state probe with
+`cancellation_requested` added to the index — not from any `UNION ALL`.
+
+Two things this rules out along the way, both tested rather than assumed:
+`NOT cancellation_requested` does **not** defeat the index (single-state with it
+still stops at 64, 0.31 ms), and adding that column to the index is a modest
+win, not the fix (0.31 ms → 0.10 ms).
+
+It is a defect in admission as shipped, it belongs to whoever touches the claim
+predicate next, and it should land before fairness is measured or the fairness
+number carries the `OR`'s cost.
 
 **This is where the three axes stop being independent.** Backlog refusal at
 acceptance is what makes the ranking scan affordable — it is the bound on the
