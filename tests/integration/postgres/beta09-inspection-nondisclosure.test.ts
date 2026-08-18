@@ -152,3 +152,27 @@ postgresTest(
 		expect(disclosedText(effects)).not.toContain(body);
 	},
 );
+
+/**
+ * Same-origin means the application itself serves it. This drives the real
+ * generated `app.fetch`, not the mount function, so the claim is about the
+ * shipped surface rather than about a helper.
+ */
+postgresTest(
+	"the application serves the Studio shell same-origin",
+	async () => {
+		const prepared = await harness();
+		const shell = await prepared.fetch(
+			new Request("https://app.example/_questpie/studio"),
+		);
+		expect(shell.status).toBe(200);
+		expect(shell.headers.get("content-type")).toContain("text/html");
+		expect(await shell.text()).toContain("<!doctype html>");
+
+		// The Operation wire is untouched by the new path.
+		const missing = await prepared.fetch(
+			new Request("https://app.example/nothing-here"),
+		);
+		expect(missing.status).toBe(404);
+	},
+);

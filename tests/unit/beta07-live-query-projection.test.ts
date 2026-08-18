@@ -12,9 +12,24 @@ import type { NormalizedResource } from "../../packages/compiler/src/types";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const beta05ServerBundleBudget = 311_296;
-const beta07RealtimeBundleReferenceBytes = 434_688;
+/**
+ * Re-derived by BETA-09, which added the same-origin Studio mount to
+ * `app.fetch`. BETA-07's reference left the bundle 30 bytes below its own
+ * budget, so its 1.2 headroom was already spent: the first BETA-09 runtime
+ * addition of any size breached it. Re-measuring rather than nudging the
+ * reference keeps the derivation honest.
+ *
+ * The jump from 512 KiB to 640 KiB is the 64 KiB quantum, not the size of the
+ * addition — the mount and its shell are roughly 540 bytes.
+ *
+ * This headroom is not for Studio's interface. The mount serves a static shell
+ * and must keep doing so; a real Studio UI belongs in `apps/studio` build
+ * output served as an asset, never inlined into every application's runtime
+ * bundle. An application that never opens Studio should not carry it.
+ */
+const beta09RealtimeBundleReferenceBytes = 524_828;
 const beta07RealtimeBundleBudget =
-	Math.ceil((beta07RealtimeBundleReferenceBytes * 1.2) / 65_536) * 65_536;
+	Math.ceil((beta09RealtimeBundleReferenceBytes * 1.2) / 65_536) * 65_536;
 
 const query = {
 	identity: "query:messages.page",
@@ -261,7 +276,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 				0,
 			),
 		).toBeLessThanOrEqual(beta07RealtimeBundleBudget);
-		expect(beta07RealtimeBundleBudget).toBe(524_288);
+		expect(beta07RealtimeBundleBudget).toBe(655_360);
 		expect(
 			runtimeBuild.inventory
 				.map(({ path }: { path: string }) => path)

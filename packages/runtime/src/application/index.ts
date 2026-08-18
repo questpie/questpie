@@ -52,6 +52,7 @@ import {
 } from "./retained-clients";
 import { controlledRoot } from "./root";
 import type { RuntimeRealtimeFactory } from "./runtime-realtime";
+import { studioBundleResponse } from "./studio-mount";
 
 export type { ExecutionEventV1 } from "./events";
 export type {
@@ -433,6 +434,10 @@ export async function createRuntimeApplication<
 			const response = await realtime.fetch(request);
 			if (response) return response;
 		}
+		// The same-origin Studio shell. It claims one path and returns null for
+		// every other, so the Operation wire below is unaffected.
+		const studio = await studioBundleResponse(request);
+		if (studio) return studio;
 		if (new URL(request.url).pathname !== operationPath)
 			return operationWireResponse(rejectionFrame("NOT_FOUND"), 404);
 		if (request.method !== "POST")

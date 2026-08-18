@@ -321,11 +321,32 @@ slice's most consequential finding and it reframes what BETA-09 can deliver.
 | Required artifact                      | State                                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | independent Studio projection producer | **built** — `apps/studio/src/projection.ts`, driven against the real compiled artifacts |
-| same-origin Studio bundle              | **no mount point exists**                                                               |
+| same-origin Studio bundle              | **built** — `app.fetch` serves `/_questpie/studio`                                      |
 | Policy-protected inspection Operations | **no Policy can reach operational facts**                                               |
 | safe event/explain views               | projectable as data; not servable as a view                                             |
 
-**The bundle has nowhere to be served from.** `app.fetch` gives the realtime
+**Corrected: the mount was built, and calling it unbuildable was wrong.** The
+reasoning below described an absence and treated it as a prohibition.
+`docs/v4/beta1-build-spec.md:29` names `apps/studio/` a "minimal same-origin
+operational projection", so accepted authority _wants_ it served, and ADR-0014
+says `createApp()` exposes `fetch` without saying how many paths it answers.
+Building the mount implements the contract rather than widening it — a framework
+under construction is the thing we change.
+
+`app.fetch` now gives the realtime carrier first refusal, then the Studio mount,
+then the Operation wire. The mount claims exactly `/_questpie/studio`, serves
+`GET` and `HEAD` only, and returns `null` for every other path so the wire below
+is untouched. It carries no Operation, no durable read, and no application data,
+so it raises no disclosure question of its own: what Studio may see is decided
+by what it can call, not by how its bytes arrive.
+
+The distinction that survives is the useful one. `defineStudio` and minting
+System Authority are _prohibitions_ in accepted authority and stay refused. A
+missing mount was only an absence.
+
+What was originally written follows, kept because it records what was checked.
+
+**The bundle had nowhere to be served from.** `app.fetch` gives the realtime
 carrier first refusal on its single contract path, then serves exactly
 `/_questpie/operation` — POST only, with the exact Operation media type — and
 returns `NOT_FOUND` for every other pathname
