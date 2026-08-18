@@ -95,11 +95,26 @@ BY available_at, run_id` as an index scan. Both opposing teams identified this
 index independently. One read method over an index that already exists is the
 cheapest correction that makes the durable kernel reachable at all.
 
+**The index claim is verified, not assumed.** Measured on PostgreSQL 17.10
+against 207,000 runs, the worklist query plans as
+`Index Scan using durable_runs_claim_idx`, returns 64 rows, and runs in
+0.13 ms. The leftmost prefix carries it and no schema is needed — which is the
+premise this whole decision rests on, so it is checked rather than argued.
+
 Constraints on it, each forced:
 
-- **First N with `hasMore`, never a count.** A total is a scan.
-- **Not tenant-keyed.** `tenant_id` is in no index; see the correction in
-  `design-context.md`. Tenant is displayed and authorized on, not driven from.
+- **First N with `hasMore`, never a count.** The reason is disclosure, not
+  cost. Measured, a count over the same indexed predicate is an Index Only Scan
+  at 0.47 ms for 2,000 failed runs — affordable. But `countOracle: "absent"` is
+  a nondisclosure commitment in the application lane
+  (`packages/compiler/src/relational/nondisclosure.ts`), and the operational
+  lane matches it so a total cannot be used as an existence oracle. An earlier
+  revision justified this as "a total is a scan," which measurement does not
+  support.
+- **Tenant-filtered, not tenant-keyed.** `tenant_id` is in no index, so a
+  tenant-scoped list selects through the indexed state predicate and filters —
+  0.31 ms measured, cost proportional to the matching state set rather than the
+  table. Tenant is displayed and authorized on; it does not drive the query.
 - **Inspection Authority evaluated at the entrance, not the leaf.** A list
   leaks the existence of runs, so the Authority decision `design-context.md`
   assigns to this slice becomes the first thing evaluated rather than the last.

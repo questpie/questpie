@@ -215,11 +215,21 @@ independently. `tenant_id` appears in **no index**: the three on `durable_runs`
 are `(application_name, state, available_at, run_id)`,
 `(application_name, state, lease_expires_at)`, and
 `(application_name, resource_identity, state)`
-(`internal-protocol-v4-sql.ts:98`–`:103`). A tenant-first listing is a
-sequential scan at this base. Tenant remains the correct axis to _display_ and
-to scope authorization by; it is not yet an axis to _drive a query from_. Any
-tenant-scoped list must filter within a bounded slice selected by an indexed
-predicate, or the slice must take an explicit, measured exception.
+(`internal-protocol-v4-sql.ts:98`–`:103`).
+
+An earlier revision called a tenant-first listing a sequential scan. **Measured,
+it is not.** On PostgreSQL 17.10 with 207,000 runs across 300 tenants,
+`WHERE application_name='app' AND state='failed' AND tenant_id='t-7'` plans as
+an Index Scan with a filter — 0.31 ms, removing 1,993 rows to return 7. The cost
+scales with the _matching state set_, not with the table.
+
+So the correction is smaller than first stated and still points the same way:
+Tenant is the correct axis to display and to scope authorization by, and a
+tenant-scoped list is affordable today by filtering inside an indexed state
+predicate. A dedicated index becomes worthwhile when the failed set grows, not
+because the query is unusable now. Any tenant-scoped list must select through an
+indexed predicate first; the slice does not need a measured exception to ship
+one.
 
 Shipping an operator surface keyed on Principal would harden the wrong axis
 into the place operators look, and correcting it afterwards means changing a
