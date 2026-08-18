@@ -136,9 +136,25 @@ would come back if the branch's copy wins:
   effects" as ADR-0013 text. That string is a code comment in
   `packages/runtime/src/durable/postgres-effects.ts:38`.
 
-**The cheap fix is to rebase the branch onto current `feat/v4` now**, while the
-divergence is six files, rather than resolving it at merge time when the
-implementation diff is large enough to hide a documentation regression.
+**The cheap fix is to rebase the branch onto current `feat/v4` now**, rather than
+resolving it at merge time when the implementation diff is large enough to hide a
+documentation regression.
+
+**Measured, and the shape is not what the first version of this note assumed.**
+At `9bbac960` against branch `0181e2a4`: **41 commits on `feat/v4` and 39 on the
+branch since the fork at `219758a4`**, and the set of files both sides have
+touched is **still exactly five** — `acceptance-shape.md`, `design-context.md`,
+`hostile-cases.md`, `inspection-contract.md`, `maintenance-decisions.md`.
+
+So eighty commits of divergence has **not widened the conflict surface**. Both
+sides keep returning to the same five records. The urgency is therefore not that
+the conflict is spreading, which it is not; it is that the reconciliation inside
+those five files gets **denser** with every commit, and a dense conflict in a
+documentation file is where a verified correction quietly loses to a plausible
+alternative.
+
+That is a different argument from the one this note first made, and the weaker
+one — "rebase while it is small" — was wrong on the facts.
 
 The branch also carries a tenth record, `authority-mechanism.md`, which has no
 counterpart here. Nothing on `feat/v4` conflicts with it; it should arrive
