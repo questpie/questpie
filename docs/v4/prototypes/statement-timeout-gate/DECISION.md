@@ -50,6 +50,28 @@ backend from another connection. The runtime carries **neither**. Its
 `query.cancel()` is the client-side abort inside `executeAbortable`
 (`postgres-session.ts:57`–`:62`), which asks the driver to stop waiting.
 
+**Measured, not asserted.** Against PostgreSQL 17.10 through Bun 1.3.14, a
+`SELECT pg_sleep(20)` was started, then cancelled through the same
+`query.cancel()` the runtime uses, while a second connection watched
+`pg_stat_activity`:
+
+| moment                                                 | active sleeping backends |
+| ------------------------------------------------------ | ------------------------ |
+| before the client cancel                               | 1                        |
+| **2 s after `query.cancel()`**                         | **1**                    |
+| after `pg_cancel_backend(pid)` from another connection | 0                        |
+
+The client gave up and the backend kept running. Only the server-side cancel
+ended it, rejecting with errno `57014`, `canceling statement due to user
+request`, from `ProcessInterrupts`. This is the claim the whole gate rests on
+and it is the one that survived checking.
+
+The GUC mechanism was checked the same way: inside a transaction,
+`set_config('statement_timeout','150ms',true)` aborts a two-second sleep with
+`canceling statement due to statement timeout`, and after `ROLLBACK`
+`statement_timeout` reads `0` — enforced, and transaction-scoped without
+leaking to the pooled connection.
+
 An earlier revision of this record described the gap as a missing timeout. It is
 a missing layer _and_ a missing timeout, and the second half was already built.
 
