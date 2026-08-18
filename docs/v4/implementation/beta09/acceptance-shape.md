@@ -62,6 +62,22 @@ reasoning rather than against the prose.
    Falsifiable: `actorOf` today checks only a brand
    (`packages/runtime/src/durable/postgres-maintenance.ts:130`). →
    `maintenance-decisions.md` Q3, `hostile-cases.md` case 5.
+   **Criteria 1, 2 and 3 carry a reachability caveat, verified after they were
+   written.** `packages/runtime/src/application/index.ts` contains no reference to
+   `durable`, so the Fetch router exposes no durable route and the operational
+   surface is in-process only. Every demonstration of these three therefore runs as
+   host code that **supplies its own `Principal`**. That proves the decision is
+   evaluated, the denial is typed, and the audit records the attempt. It cannot
+   prove the property the criteria exist for — that a caller who should not pass
+   does not — because the only caller is trusted by construction and could equally
+   have asserted an Authority that passes.
+
+This is stated here rather than left for a reviewer to find, because a criterion
+demonstrated by a weaker case than it claims is what previous rounds blocked on.
+The evidence for these three should say plainly which half it proves. See the
+qualifier in `maintenance-decisions.md`; the caveat expires the moment a durable
+route exists.
+
 3. **Denial specificity follows the missing Authority.** A caller without
    inspection Authority cannot distinguish denial from absence; a caller with
    inspection but not maintenance Authority receives a specific denial. →
