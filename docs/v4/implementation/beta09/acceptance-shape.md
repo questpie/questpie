@@ -42,6 +42,25 @@ these — the validator rejects any other set.
   at manifest time rather than by carrying a count, and give each a `sha256`.
 - **`reviewOutput`** the round's record path. Preserve every review record
   byte-identically and add each to `quality/format-baseline.txt`.
+- **`verification`** every entry must be exactly `{command, result}` and
+  **`result` must be `"PASS"`**. The validator rejects the whole manifest
+  otherwise — `every verification entry must be PASS`
+  (`.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts:137`–`:145`),
+  and it fails the packet build, before any model call.
+
+  **This is a trap for this slice specifically.** A lane that is pending cannot
+  be recorded here at all. BETA-08's round 4 observed exactly this shape — both
+  CI lanes sat at `PENDING_CI` in its baselines while the manifest said nothing
+  about the Gate 10 selected-PR and nightly lanes being unmet — and BETA-09 owns
+  a Studio build-size and query-latency baseline plus a stable-runner budget
+  report, which are the lanes most likely to be incomplete when the manifest is
+  first written.
+
+  So a lane that has not passed is not a verification entry with a different
+  result; it is **not a verification entry**, and it belongs in the narrower
+  claims instead, named as unmet. Omitting it silently is what a reviewer
+  finds.
+
 - **`proof`** one paragraph: what the slice demonstrates end to end.
 - **`verification`** every gate command with its result, including the
   PostgreSQL matrix and the pinned tsc gate over changed test files.
