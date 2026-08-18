@@ -90,7 +90,10 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, accepted merge head `0d1f35dd8685fdeb55c76547a6775df994f41315`.
+  `feat/v4`, latest accepted merge head
+  `8389cf5f80b1e2a4684dfb00faa10bcd83c93605` (BETA-08, PR #320). An earlier
+  revision of this line still named BETA-06's merge `0d1f35dd`, two accepted
+  slices behind.
 - The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
@@ -127,6 +130,13 @@ capabilities, never durable authority or a provider matrix.
   reviewed head `d0aedd54dc6420b48e632590a6c2319f8516bc9f` and evidence
   head `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce`. PR #320 merged it to
   `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`; issue #295 is closed.
+- **In progress, not accepted:** the BETA-09 implementation worktree is
+  `/home/drepkovsky/code/questpie-v4-beta-09`, branch `feat/v4-beta-09`. It
+  carries unmerged production source and its own working-tree changes. It forked
+  from `219758a4`, before several correction commits landed on `feat/v4`, and
+  both sides have since edited the same BETA-09 records — read
+  `docs/v4/implementation/beta09/README.md` before touching it. Do not discard
+  or reset this worktree.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
