@@ -193,6 +193,69 @@ Recorded rather than decided, because BETA-09's own records do not settle it
 and choosing here would be inventing the seam at the point of needing it — the
 failure this slice has twice avoided.
 
+## The seam decision, after adversarial review
+
+Two teams argued the fork. The team assigned the separate-path position
+**conceded**, and did so on an argument it found against itself, which is the
+strongest form the concession could take.
+
+**Decision: the seam passes the Mutation's transaction into the command.** A
+member on `MutationContext` beside `dispatch`, returning the frozen
+`DurableMaintenanceOutcome` the commands already build. `RootExecution` does not
+change; this is Mutation-only, as `dispatch` is.
+
+### What decided it
+
+Not the transaction argument, which turned out to be a non-issue, but
+**idempotency**. The Mutation's call receipt is written _inside_ the Mutation
+transaction with `outcome = 'executing'`
+(`packages/runtime/src/mutation/postgres.ts:183`). Under a separately-transacted
+command, a Mutation rollback erases the receipt while the command has already
+committed — so a client retry on the same `callId` re-enters the handler and
+issues a **second** maintenance command. That converts exactly-once into
+at-least-once and writes a spurious `ALREADY_REQUESTED` row into the very audit
+`hostile-cases.md` exists to protect. Joining the Mutation transaction gets
+exactly-once from the receipt for free.
+
+The rolled-back-audit objection, which looked like the strongest case for a
+separate transaction, survives but does not decide. A rejection does not throw —
+`AUTHORITY_DENIED`, `VERSION_MISMATCH`, `RUN_IS_TERMINAL` and
+`ALREADY_REQUESTED` all return an outcome — so an author who returns it commits
+the audit row. The row is lost only when the whole attempt is lost, and then the
+operator gets an error, the run is untouched, and the audit is silent.
+Consistent-and-silent beats the separate path's cancelled-run-plus-rolled-back-
+business-write-plus-error.
+
+### Two repairs the seam must ship with
+
+1. **The runtime raises and lowers the kernel marker around the command call,
+   never author-reachable control flow.** This is the one objection from the
+   losing side that stands. `set_config('questpie.durable_kernel', 'on', true)`
+   is `is_local` (`packages/runtime/src/durable/rows.ts:23`), so its lifetime is
+   subtransaction-scoped; the runtime already sets it unconditionally after the
+   handler and never clears it (`mutation/postgres.ts:281`); and the handler
+   shares one reserved session, so `Promise.all([ctx.durable.cancelRun(…),
+ctx.data.x.update(…)])` interleaves user statements into the armed window.
+   The guard triggers are `FOR EACH STATEMENT` and the predicate is only "is the
+   flag on right now" — it cannot tell a kernel statement from a user statement
+   inside that window. A `finally` block cannot be asked to carry that.
+2. **The authorization check moves ahead of the lock, and the lock takes
+   `NOWAIT`.** Today `lockRun` runs before `denied()`
+   (`packages/runtime/src/durable/postgres-maintenance.ts:239` against `:244`),
+   so an unauthorized caller takes `FOR UPDATE` on a run it may not touch. Under
+   a Mutation-held transaction that lock is held for the Mutation's remaining
+   lifetime, and `lockRun` has no `SKIP LOCKED`, so a second maintenance command
+   waits out `lock_timeout`. That is a denial-of-service surface handed to
+   exactly the caller who was refused. It is a defect in the guard committed at
+   `decb3a39` and is independent of which seam wins.
+
+### What stays open
+
+Option 3 — a handler that runs after commit — remains the shape that actually
+matches an operator action, and is the only one that gets both a durable audit
+row and no in-transaction guard toggling. It is the right target for a later
+slice, not this one, and ADR-0016:32 and ADR-0013 both already constrain it.
+
 ## Judgment call
 
 Choosing Policy over extending the Authority union is mine, and it is the more
