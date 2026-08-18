@@ -281,6 +281,26 @@ Do not skip a blocked issue or parallelize dependent implementation.
   reachable. Two caveats stated rather than glossed: a bare `SELECT` still takes
   an `ACCESS SHARE` table lock, which conflicts only with DDL and not with these
   paths; and this refutes the _claimed_ inversion, not deadlock in general.
+- #295 round 4's observations 3 and 9 are both **confirmed**, and both are the
+  same shape as the effect-fence gap: declared, implemented, undriven.
+  - _The maintenance brand refusal has no driving case._ `actorOf` throws
+    "durable maintenance requires a trusted Principal", and the only test
+    matching that string is
+    `tests/integration/beta03-execution-services.test.ts:450`, which passes
+    `{...} as never` into a **runtime execution** and trips the Execution root's
+    own brand check. Same wording, different code path. A grep for the message
+    looks like coverage and is not — which is the same trap as reading for a name
+    instead of reading the code. This compounds with the Q3 qualifier in
+    `docs/v4/implementation/beta09/maintenance-decisions.md`: the brand is both
+    untested and, since the only caller is in-process and mints its own
+    `Principal`, weaker than it reads.
+  - _The `cancellationRequested` event is appended and never read back._ Event
+    kinds are asserted from `events()` at
+    `tests/integration/postgres/beta08-durable-kernel.test.ts:204`, `:308`, and
+    `:812`, and `cancellationRequested` appears in none of them. The two hits at
+    `:340` and `:745` assert the **field** on `inspect()`, not the **kind** in
+    the history. So criterion 16's "every declared event kind is appended" holds
+    by execution and not by assertion for this one.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
