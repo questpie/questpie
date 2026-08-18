@@ -15,6 +15,8 @@ import {
 	projectStudioExplain,
 	type StudioCatalog,
 	type StudioExplain,
+	type StudioProvenance,
+	type StudioResource,
 } from "./projection";
 
 /**
@@ -46,26 +48,74 @@ async function loadProjection(): Promise<Loaded> {
 	};
 }
 
+/**
+ * The sources actually present in a set of facts, derived rather than assumed.
+ *
+ * Every fact in one group shares an artifact today, so this renders as a single
+ * line. It is computed from the facts anyway: if a group ever draws on two
+ * artifacts, the view says both instead of naming one and being wrong.
+ */
+function sourcesOf(
+	facts: readonly Readonly<{ provenance: StudioProvenance }>[],
+): readonly string[] {
+	return [...new Set(facts.map((fact) => fact.provenance.artifact))].sort();
+}
+
+function Provenance({
+	facts,
+}: Readonly<{ facts: readonly Readonly<{ provenance: StudioProvenance }>[] }>) {
+	return (
+		<span className="text-muted-foreground/70 text-xs">
+			from {sourcesOf(facts).join(", ")}
+		</span>
+	);
+}
+
 function ResourceGroup({
 	kind,
-	identities,
-}: Readonly<{ kind: string; identities: readonly string[] }>) {
+	resources,
+}: Readonly<{ kind: string; resources: readonly StudioResource[] }>) {
 	return (
 		<Card>
 			<CardHeader>
 				<CardTitle className="capitalize">{kind}</CardTitle>
-				<CardDescription>
-					{identities.length} declared in this build
+				<CardDescription className="flex flex-wrap items-baseline gap-2">
+					<span>{resources.length} declared in this build</span>
+					<Provenance facts={resources} />
 				</CardDescription>
 			</CardHeader>
 			<CardContent className="flex flex-wrap gap-2">
-				{identities.map((identity) => (
-					<Badge key={identity} variant="secondary">
-						{identity.slice(kind.length + 1)}
+				{resources.map((resource) => (
+					<Badge key={resource.identity} variant="secondary">
+						{resource.identity.slice(kind.length + 1)}
 					</Badge>
 				))}
 			</CardContent>
 		</Card>
+	);
+}
+
+/**
+ * One counted fact and the artifact it came from.
+ *
+ * The header joins three artifacts into one line, which is precisely the shape
+ * `freshness-and-provenance.md` refuses to present as a single authoritative
+ * record. Each count carries its own source instead.
+ */
+function Stat({
+	label,
+	facts,
+}: Readonly<{
+	label: string;
+	facts: readonly Readonly<{ provenance: StudioProvenance }>[];
+}>) {
+	return (
+		<span className="flex flex-col">
+			<span>
+				{facts.length} {label}
+			</span>
+			<Provenance facts={facts} />
+		</span>
 	);
 }
 
@@ -95,10 +145,10 @@ export function StudioApp() {
 	if (!loaded)
 		return <main className="mx-auto max-w-3xl p-8">Reading the build…</main>;
 
-	const byKind = new Map<string, string[]>();
+	const byKind = new Map<string, StudioResource[]>();
 	for (const resource of loaded.catalog.resources) {
 		const group = byKind.get(resource.kind) ?? [];
-		group.push(resource.identity);
+		group.push(resource);
 		byKind.set(resource.kind, group);
 	}
 
@@ -106,17 +156,17 @@ export function StudioApp() {
 		<main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
 			<header className="flex flex-col gap-1">
 				<h1 className="text-2xl font-semibold">{loaded.catalog.application}</h1>
-				<p className="text-muted-foreground text-sm">
-					{loaded.catalog.operations.length} operations ·{" "}
-					{loaded.catalog.migrations.length} migrations ·{" "}
-					{loaded.explain.policies.length} policies
-				</p>
+				<div className="text-muted-foreground flex flex-wrap gap-x-6 gap-y-2 text-sm">
+					<Stat label="operations" facts={loaded.catalog.operations} />
+					<Stat label="migrations" facts={loaded.catalog.migrations} />
+					<Stat label="policies" facts={loaded.explain.policies} />
+				</div>
 			</header>
 			<Separator />
 			{[...byKind.entries()]
 				.sort(([left], [right]) => (left < right ? -1 : 1))
-				.map(([kind, identities]) => (
-					<ResourceGroup key={kind} kind={kind} identities={identities} />
+				.map(([kind, resources]) => (
+					<ResourceGroup key={kind} kind={kind} resources={resources} />
 				))}
 		</main>
 	);

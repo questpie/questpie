@@ -13,19 +13,54 @@
  * shows up as a digest difference instead of cancelling out.
  */
 
-export type StudioResource = Readonly<{ identity: string; kind: string }>;
+/**
+ * Where one projected fact came from.
+ *
+ * `freshness-and-provenance.md` decided per-answer provenance rather than a
+ * global freshness header, and a contract fact's source is the artifact that
+ * declared it. There is deliberately no timestamp: a compiled artifact has no
+ * meaningful clock, and the record chose identity over time precisely because
+ * a staleness figure nothing can honestly populate teaches operators to trust
+ * decoration.
+ *
+ * It sits on the fact rather than on the catalog because Studio lifts facts out
+ * of the catalog into detail views. Container-level provenance would satisfy
+ * the criterion and lose the property it exists for — that a joined view is
+ * never presented as one authoritative record.
+ */
+export type StudioProvenance = Readonly<{
+	source: "artifact";
+	artifact: string;
+}>;
+
+export type StudioResource = Readonly<{
+	identity: string;
+	kind: string;
+	provenance: StudioProvenance;
+}>;
 
 export type StudioOperation = Readonly<{
 	identity: string;
 	/** Recorded, not used to hide: Studio explains server-only Operations too. */
 	network: boolean;
+	provenance: StudioProvenance;
+}>;
+
+/**
+ * A migration is an object rather than a bare identity string only so it can
+ * carry its source. A string cannot, and "a fact with no source is not
+ * rendered" is the load-bearing half of the provenance decision.
+ */
+export type StudioMigration = Readonly<{
+	identity: string;
+	provenance: StudioProvenance;
 }>;
 
 export type StudioCatalog = Readonly<{
 	application: string;
 	resources: readonly StudioResource[];
 	operations: readonly StudioOperation[];
-	migrations: readonly string[];
+	migrations: readonly StudioMigration[];
 }>;
 
 export type StudioArtifactBytes = Readonly<Record<string, string>>;
@@ -51,6 +86,14 @@ function entries(
 	const list = value[key];
 	if (!Array.isArray(list)) throw new TypeError(`${path} has no ${key}`);
 	return list as readonly Readonly<Record<string, unknown>>[];
+}
+
+/**
+ * Built from the same `path` constant the bytes were read through, so a fact
+ * cannot be attributed to an artifact it did not come from.
+ */
+function from(path: string): StudioProvenance {
+	return Object.freeze({ source: "artifact" as const, artifact: path });
 }
 
 function text(
@@ -98,6 +141,7 @@ export function projectStudioCatalog(
 					return Object.freeze({
 						identity,
 						kind: identity.slice(0, separator),
+						provenance: from("manifest.json"),
 					});
 				})
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -108,14 +152,20 @@ export function projectStudioCatalog(
 					Object.freeze({
 						identity: text(entry, "identity", "operation"),
 						network: entry.network === true,
+						provenance: from("operation-contracts.json"),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
 		),
 		migrations: Object.freeze(
 			entries(migrations, "migrations", "committed-migrations.json")
-				.map((entry) => text(entry, "identity", "migration"))
-				.sort(),
+				.map((entry) =>
+					Object.freeze({
+						identity: text(entry, "identity", "migration"),
+						provenance: from("committed-migrations.json"),
+					}),
+				)
+				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
 		),
 	});
 }
@@ -142,12 +192,14 @@ export type StudioExplainedPolicy = Readonly<{
 	identity: string;
 	target: string;
 	origin: string | null;
+	provenance: StudioProvenance;
 }>;
 
 export type StudioExplainedOperation = Readonly<{
 	identity: string;
 	owner: string | null;
 	origin: string | null;
+	provenance: StudioProvenance;
 }>;
 
 export type StudioExplain = Readonly<{
@@ -189,6 +241,7 @@ export function projectStudioExplain(
 						identity: text(entry, "identity", "policy"),
 						target: text(entry, "target", "policy"),
 						origin: originOf(entry),
+						provenance: from("relational-explain.json"),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -200,6 +253,7 @@ export function projectStudioExplain(
 						identity: text(entry, "identity", "operation"),
 						owner: typeof entry.owner === "string" ? entry.owner : null,
 						origin: originOf(entry),
+						provenance: from("collection-operation-explain.json"),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),

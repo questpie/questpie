@@ -25,14 +25,14 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 
 ## Not met, and why
 
-| #   | Criterion                                              | State                                                                                                                                                          |
-| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Inspection Authority is evaluated                      | **unbuildable.** A Query has no admission Policy; operational facts are not Collection rows                                                                    |
-| 2   | Maintenance Authority evaluated, typed denial, audited | **partial.** Driven against the runtime factory; the generated application supplies no `authorize`, so it never holds for the shipped surface                  |
-| 3   | Denial specificity follows the missing Authority       | **not built.** Requires 1 and 2                                                                                                                                |
-| 10  | Every rendered fact carries its source                 | **not built.** The interface renders a catalog and no provenance                                                                                               |
-| 14  | Retry is never offered as the remedy for ambiguity     | **not built.** This is an interface property and the interface has no run view                                                                                 |
-| 16  | The Studio projection producer is independent          | **partial.** The producer exists, derives from bytes, and a mutated byte moves its digest. Byte parity against the compiler's own artifact is **not asserted** |
+| #   | Criterion                                              | State                                                                                                                                                                                                                                  |
+| --- | ------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Inspection Authority is evaluated                      | **blocked, and the recorded reason is stale.** Not an ADR-0010 amendment: `owner-decisions.md` D1 settled that operational facts get an operator surface carrying its own Authority. It is blocked on that surface having no transport |
+| 2   | Maintenance Authority evaluated, typed denial, audited | **partial.** Driven against the runtime factory; the generated application supplies no `authorize`, so it never holds for the shipped surface                                                                                          |
+| 3   | Denial specificity follows the missing Authority       | **not built.** Requires 1 and 2                                                                                                                                                                                                        |
+| 10  | Every rendered fact carries its source                 | **partial.** Every contract fact now carries `source: artifact` and the artifact that declared it, in the producer and in the rendering. The Runtime Build identity the record also asks for is not servable — see below               |
+| 14  | Retry is never offered as the remedy for ambiguity     | **not built.** This is an interface property and the interface has no run view                                                                                                                                                         |
+| 16  | The Studio projection producer is independent          | **partial.** The producer exists, derives from bytes, and a mutated byte moves its digest. Byte parity against the compiler's own artifact is **not asserted**                                                                         |
 
 ## The honest count
 
@@ -70,3 +70,38 @@ in the build rather than of being mentioned.
 Settled by tampering rather than by reading a second time, since reading was the
 mistake. The artifact is verified and unconsumed — checked for integrity, and
 read by nothing — which is a weaker and different problem than being unverified.
+
+## Criterion 10, and the half of it that is not servable
+
+`freshness-and-provenance.md` asks a contract fact to carry two things: the
+source that produced it, and the Runtime Build identity — "not a timestamp,
+because the identity is the stronger statement".
+
+The first half is built. Every fact in `projectStudioCatalog` and
+`projectStudioExplain` carries `provenance: { source: "artifact", artifact }`,
+naming the file it was read from, and the interface renders it — per resource
+group, and per counted fact in the header, which is the one place the view joins
+three artifacts into a single line.
+
+Provenance sits on the fact rather than on the catalog deliberately. Studio
+lifts facts out of the catalog into detail views, so container-level provenance
+would satisfy the criterion as written and lose the property it exists for.
+
+**The second half cannot be served at this base.** The Runtime Build identity is
+`runtime-build.json`'s `digest`, and that artifact is not in
+`studioArtifactAllowListed` — for a reason that survives inspection. It carries
+`bundleExport`, and `beta09-inspection-nondisclosure.test.ts` asserts the served
+payload contains no such string. Adding the artifact to the allow-list would
+serve the executable inventory to any browser that can reach Studio, defeating
+a guard this slice wrote on purpose.
+
+So the identity needs a narrowed projection of `runtime-build.json` — digest and
+compiler identity, without `inventory`, `slots` or `executableSlots` — either as
+a new compiled artifact or as a narrowing in the mount. That is a real, small,
+well-scoped piece of work, and it is **not** blocked by the transport question:
+it is contract metadata on the path Studio already fetches.
+
+It is left undone here rather than guessed at, because which of the two shapes
+is right depends on whether the operator surface arrives as Operations, and that
+is the open question in `owner-decisions.md`. A narrowing in the mount is wasted
+if the artifact set is about to gain a served projection anyway.

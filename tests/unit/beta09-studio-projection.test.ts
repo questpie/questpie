@@ -59,8 +59,11 @@ test("the Studio catalog derives from the real compiled artifact bytes", () => {
 	expect(operations).toContain("mutation:message.publish");
 	expect(operations).toContain("mutation:message.recordDelivery");
 
-	expect(catalog.migrations).toContain("000001_create-collaboration");
-	expect([...catalog.migrations].sort()).toEqual([...catalog.migrations]);
+	// A migration carries its source, so the identity is a member rather than
+	// the element itself.
+	const migrations = catalog.migrations.map((entry) => entry.identity);
+	expect(migrations).toContain("000001_create-collaboration");
+	expect([...migrations].sort()).toEqual(migrations);
 });
 
 test("mutating an artifact byte alone changes the projection digest", () => {
@@ -224,4 +227,62 @@ test("tampering with the nondisclosure artifact is refused at startup", async ()
 			[path]: files[path]!.replace("outcomeOnly", "outcomeOnlY"),
 		}),
 	).toThrow(/digest does not match/);
+});
+
+/**
+ * Criterion 10: every rendered fact carries its source.
+ *
+ * `freshness-and-provenance.md` decided per-answer provenance over a global
+ * freshness header, and named the load-bearing half: **a fact with no source is
+ * not rendered.** A catalog whose provenance sat on the container rather than
+ * on the fact would satisfy the letter and lose the property, because Studio
+ * lifts facts out of the catalog into detail views — and the whole point is
+ * that a joined view is never presented as one authoritative record.
+ *
+ * So the assertion is per fact, not per catalog, and it names the artifact each
+ * fact actually came from rather than merely asserting the key exists.
+ */
+test("every projected fact names the artifact it came from", () => {
+	const catalog = projectStudioCatalog(artifacts);
+
+	expect(catalog.resources.length).toBeGreaterThan(0);
+	for (const resource of catalog.resources)
+		expect(resource.provenance).toEqual({
+			source: "artifact",
+			artifact: "manifest.json",
+		});
+
+	expect(catalog.operations.length).toBeGreaterThan(0);
+	for (const operation of catalog.operations)
+		expect(operation.provenance).toEqual({
+			source: "artifact",
+			artifact: "operation-contracts.json",
+		});
+
+	expect(catalog.migrations.length).toBeGreaterThan(0);
+	for (const migration of catalog.migrations)
+		expect(migration.provenance).toEqual({
+			source: "artifact",
+			artifact: "committed-migrations.json",
+		});
+
+	const explain = projectStudioExplain({
+		"relational-explain.json": artifact("relational-explain.json"),
+		"collection-operation-explain.json": artifact(
+			"collection-operation-explain.json",
+		),
+	});
+	expect(explain.policies.length).toBeGreaterThan(0);
+	for (const policy of explain.policies)
+		expect(policy.provenance).toEqual({
+			source: "artifact",
+			artifact: "relational-explain.json",
+		});
+
+	expect(explain.operations.length).toBeGreaterThan(0);
+	for (const operation of explain.operations)
+		expect(operation.provenance).toEqual({
+			source: "artifact",
+			artifact: "collection-operation-explain.json",
+		});
 });
