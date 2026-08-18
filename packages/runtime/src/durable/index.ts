@@ -12,6 +12,14 @@ export type {
 	DurableEffectScope,
 	DurableRunHandle,
 } from "./effects";
+export {
+	projectDurableEffectInspection,
+	projectDurableRunInspection,
+} from "./inspection";
+export type {
+	DurableEffectInspection,
+	DurableRunInspection,
+} from "./inspection";
 export { createPostgresDurableEffectLedger } from "./postgres-effects";
 export type {
 	DurableEffectLedger,

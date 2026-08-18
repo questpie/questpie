@@ -64,7 +64,11 @@ type Beta08Durable = Readonly<{
 		attemptCount: number;
 		deadLetter: boolean;
 		failureCode: string | null;
-		resultBytes: Uint8Array | null;
+		result: Readonly<{
+			present: boolean;
+			bytes: number;
+			digest: string | null;
+		}>;
 	}> | null>;
 	events(runId: string): Promise<
 		readonly Readonly<{
@@ -77,7 +81,7 @@ type Beta08Durable = Readonly<{
 		readonly Readonly<{
 			effectName: string;
 			status: string;
-			receipt: string | null;
+			receiptPresent: boolean;
 		}>[]
 	>;
 	audit(runId: string): Promise<

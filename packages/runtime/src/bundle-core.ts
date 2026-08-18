@@ -16,4 +16,6 @@ export {
 	createPostgresDurableKernel,
 	createPostgresDurableMaintenance,
 	durablePrincipal,
+	projectDurableEffectInspection,
+	projectDurableRunInspection,
 } from "./durable";

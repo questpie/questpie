@@ -54,6 +54,8 @@ export {
 	DurableLeaseLost,
 	durablePrincipal,
 	linkReactionProjection,
+	projectDurableEffectInspection,
+	projectDurableRunInspection,
 } from "./durable";
 export type {
 	DurableActor,
