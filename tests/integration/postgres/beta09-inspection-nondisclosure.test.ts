@@ -212,6 +212,20 @@ postgresTest(
 		// The executable inventory is in artifactFiles and must never be served.
 		expect(Object.keys(served)).not.toContain("runtime-executables.json");
 		expect(JSON.stringify(served)).not.toContain("bundleExport");
+
+		// The Runtime Build identity reaches the browser as a projection of the
+		// verified loaded build. `runtime-build.json` itself stays unserved,
+		// because it carries the executable inventory the assertions above
+		// exclude — so the identity arrives without its file coming with it.
+		expect(Object.keys(served)).not.toContain("runtime-build.json");
+		const identity = served["runtime-build-identity.json"] as Readonly<{
+			digest: string;
+		}>;
+		expect(identity.digest).toMatch(/^[0-9a-f]{64}$/);
+		// Every projected fact carries that same build, so no view can join facts
+		// from two builds without saying so.
+		for (const operation of catalog.operations)
+			expect(operation.provenance.runtimeBuild).toBe(identity.digest);
 	},
 );
 

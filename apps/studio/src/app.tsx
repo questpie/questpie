@@ -61,12 +61,31 @@ function sourcesOf(
 	return [...new Set(facts.map((fact) => fact.provenance.artifact))].sort();
 }
 
+/**
+ * The Runtime Build a set of facts came from, or `null` when they disagree.
+ *
+ * Disagreement is the case worth rendering: facts from two builds joined into
+ * one view is exactly what carrying the identity is meant to make visible.
+ */
+function buildOf(
+	facts: readonly Readonly<{ provenance: StudioProvenance }>[],
+): string | null {
+	const builds = new Set(facts.map((fact) => fact.provenance.runtimeBuild));
+	return builds.size === 1 ? [...builds][0]! : null;
+}
+
 function Provenance({
 	facts,
 }: Readonly<{ facts: readonly Readonly<{ provenance: StudioProvenance }>[] }>) {
+	const build = buildOf(facts);
 	return (
 		<span className="text-muted-foreground/70 text-xs">
 			from {sourcesOf(facts).join(", ")}
+			{build === null ? (
+				<strong className="text-destructive"> · mixed builds</strong>
+			) : (
+				<> · build {build.slice(0, 12)}</>
+			)}
 		</span>
 	);
 }

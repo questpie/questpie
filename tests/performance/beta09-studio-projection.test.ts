@@ -93,6 +93,17 @@ postgresTest(
 		const catalogProjectionBytes = Buffer.byteLength(
 			JSON.stringify(
 				projectStudioCatalog({
+					// The identity the mount projects from the verified loaded build;
+					// the projection requires it, so the measurement includes it.
+					"runtime-build-identity.json": JSON.stringify({
+						format: "questpie.runtime-build-identity",
+						version: 1,
+						digest: (
+							JSON.parse(
+								readFileSync(join(generated, "runtime-build.json"), "utf8"),
+							) as Readonly<{ digest: string }>
+						).digest,
+					}),
 					"manifest.json": readFileSync(
 						join(generated, "manifest.json"),
 						"utf8",

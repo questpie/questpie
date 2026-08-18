@@ -34,7 +34,34 @@ function artifact(path: string): string {
 	return readFileSync(resolve(generated, path), "utf8");
 }
 
+/**
+ * The Runtime Build identity cannot be a compiled artifact of its own.
+ * `packages/compiler/src/runtime/index.ts:380` builds the inventory by
+ * *excluding* `runtime-build.json` and digesting every other generated file, so
+ * a new inventoried file carrying the build digest would feed the very digest
+ * it contains. The mount projects it from the verified loaded build instead,
+ * and this mirrors that projection.
+ */
+const buildIdentity = (
+	JSON.parse(artifact("runtime-build.json")) as Readonly<{ digest: string }>
+).digest;
+
+const buildIdentityArtifact = JSON.stringify({
+	format: "questpie.runtime-build-identity",
+	version: 1,
+	digest: buildIdentity,
+});
+
+const explainArtifacts = Object.freeze({
+	"runtime-build-identity.json": buildIdentityArtifact,
+	"relational-explain.json": artifact("relational-explain.json"),
+	"collection-operation-explain.json": artifact(
+		"collection-operation-explain.json",
+	),
+});
+
 const artifacts = Object.freeze({
+	"runtime-build-identity.json": buildIdentityArtifact,
 	"manifest.json": artifact("manifest.json"),
 	"operation-contracts.json": artifact("operation-contracts.json"),
 	"committed-migrations.json": artifact("committed-migrations.json"),
@@ -86,6 +113,7 @@ test("the projection is canonical: input key order cannot change it", () => {
 		"committed-migrations.json": artifacts["committed-migrations.json"],
 		"operation-contracts.json": artifacts["operation-contracts.json"],
 		"manifest.json": artifacts["manifest.json"],
+		"runtime-build-identity.json": artifacts["runtime-build-identity.json"],
 	};
 	expect(studioProjectionDigest(reordered)).toBe(
 		studioProjectionDigest(artifacts),
@@ -104,12 +132,7 @@ test("the projection is canonical: input key order cannot change it", () => {
  * origin the compiler recorded and drops everything else.
  */
 test("the explain projection carries identity and origin from the compiler", () => {
-	const explained = projectStudioExplain({
-		"relational-explain.json": artifact("relational-explain.json"),
-		"collection-operation-explain.json": artifact(
-			"collection-operation-explain.json",
-		),
-	});
+	const explained = projectStudioExplain(explainArtifacts);
 
 	expect(explained.policies.length).toBeGreaterThan(0);
 	for (const entry of explained.policies) {
@@ -127,12 +150,7 @@ test("the explain projection carries identity and origin from the compiler", () 
 });
 
 test("the explain projection is canonical and byte-stable", () => {
-	const input = {
-		"relational-explain.json": artifact("relational-explain.json"),
-		"collection-operation-explain.json": artifact(
-			"collection-operation-explain.json",
-		),
-	};
+	const input = { ...explainArtifacts };
 	expect(studioExplainDigest(input)).toBe(studioExplainDigest({ ...input }));
 	const mutated = {
 		...input,
@@ -250,6 +268,7 @@ test("every projected fact names the artifact it came from", () => {
 		expect(resource.provenance).toEqual({
 			source: "artifact",
 			artifact: "manifest.json",
+			runtimeBuild: buildIdentity,
 		});
 
 	expect(catalog.operations.length).toBeGreaterThan(0);
@@ -257,6 +276,7 @@ test("every projected fact names the artifact it came from", () => {
 		expect(operation.provenance).toEqual({
 			source: "artifact",
 			artifact: "operation-contracts.json",
+			runtimeBuild: buildIdentity,
 		});
 
 	expect(catalog.migrations.length).toBeGreaterThan(0);
@@ -264,19 +284,16 @@ test("every projected fact names the artifact it came from", () => {
 		expect(migration.provenance).toEqual({
 			source: "artifact",
 			artifact: "committed-migrations.json",
+			runtimeBuild: buildIdentity,
 		});
 
-	const explain = projectStudioExplain({
-		"relational-explain.json": artifact("relational-explain.json"),
-		"collection-operation-explain.json": artifact(
-			"collection-operation-explain.json",
-		),
-	});
+	const explain = projectStudioExplain(explainArtifacts);
 	expect(explain.policies.length).toBeGreaterThan(0);
 	for (const policy of explain.policies)
 		expect(policy.provenance).toEqual({
 			source: "artifact",
 			artifact: "relational-explain.json",
+			runtimeBuild: buildIdentity,
 		});
 
 	expect(explain.operations.length).toBeGreaterThan(0);
@@ -284,5 +301,6 @@ test("every projected fact names the artifact it came from", () => {
 		expect(operation.provenance).toEqual({
 			source: "artifact",
 			artifact: "collection-operation-explain.json",
+			runtimeBuild: buildIdentity,
 		});
 });

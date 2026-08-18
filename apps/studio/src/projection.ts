@@ -31,6 +31,12 @@
 export type StudioProvenance = Readonly<{
 	source: "artifact";
 	artifact: string;
+	/**
+	 * The Runtime Build the artifact came from, so two facts can never be joined
+	 * across builds without it being visible. `freshness-and-provenance.md` chose
+	 * this over a timestamp deliberately: the identity is the stronger statement.
+	 */
+	runtimeBuild: string;
 }>;
 
 export type StudioResource = Readonly<{
@@ -89,11 +95,34 @@ function entries(
 }
 
 /**
+ * The Runtime Build these artifacts came from.
+ *
+ * Served as a projection rather than read from `runtime-build.json`, which the
+ * mount does not serve: that artifact carries the executable inventory. The
+ * identity also cannot be a compiled artifact of its own — the compiler builds
+ * the inventory by excluding `runtime-build.json` and digesting every other
+ * generated file, so a file containing the build digest would feed the digest
+ * it contains.
+ *
+ * Required, not optional. A build that will not say which build it is cannot
+ * have its facts rendered, which is the same rule as "a fact with no source is
+ * not rendered" applied one level up.
+ */
+function buildIdentity(artifacts: StudioArtifactBytes): string {
+	const identity = parsed(artifacts, "runtime-build-identity.json");
+	return text(identity, "digest", "runtime-build-identity.json");
+}
+
+/**
  * Built from the same `path` constant the bytes were read through, so a fact
  * cannot be attributed to an artifact it did not come from.
  */
-function from(path: string): StudioProvenance {
-	return Object.freeze({ source: "artifact" as const, artifact: path });
+function from(path: string, runtimeBuild: string): StudioProvenance {
+	return Object.freeze({
+		source: "artifact" as const,
+		artifact: path,
+		runtimeBuild,
+	});
 }
 
 function text(
@@ -110,6 +139,7 @@ function text(
 export function projectStudioCatalog(
 	artifacts: StudioArtifactBytes,
 ): StudioCatalog {
+	const build = buildIdentity(artifacts);
 	const manifest = parsed(artifacts, "manifest.json");
 	const contracts = parsed(artifacts, "operation-contracts.json");
 	const migrations = parsed(artifacts, "committed-migrations.json");
@@ -141,7 +171,7 @@ export function projectStudioCatalog(
 					return Object.freeze({
 						identity,
 						kind: identity.slice(0, separator),
-						provenance: from("manifest.json"),
+						provenance: from("manifest.json", build),
 					});
 				})
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -152,7 +182,7 @@ export function projectStudioCatalog(
 					Object.freeze({
 						identity: text(entry, "identity", "operation"),
 						network: entry.network === true,
-						provenance: from("operation-contracts.json"),
+						provenance: from("operation-contracts.json", build),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -162,7 +192,7 @@ export function projectStudioCatalog(
 				.map((entry) =>
 					Object.freeze({
 						identity: text(entry, "identity", "migration"),
-						provenance: from("committed-migrations.json"),
+						provenance: from("committed-migrations.json", build),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -231,6 +261,7 @@ function originOf(value: Readonly<Record<string, unknown>>): string | null {
 export function projectStudioExplain(
 	artifacts: StudioArtifactBytes,
 ): StudioExplain {
+	const build = buildIdentity(artifacts);
 	const relational = parsed(artifacts, "relational-explain.json");
 	const operations = parsed(artifacts, "collection-operation-explain.json");
 	return Object.freeze({
@@ -241,7 +272,7 @@ export function projectStudioExplain(
 						identity: text(entry, "identity", "policy"),
 						target: text(entry, "target", "policy"),
 						origin: originOf(entry),
-						provenance: from("relational-explain.json"),
+						provenance: from("relational-explain.json", build),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
@@ -253,7 +284,7 @@ export function projectStudioExplain(
 						identity: text(entry, "identity", "operation"),
 						owner: typeof entry.owner === "string" ? entry.owner : null,
 						origin: originOf(entry),
-						provenance: from("collection-operation-explain.json"),
+						provenance: from("collection-operation-explain.json", build),
 					}),
 				)
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),

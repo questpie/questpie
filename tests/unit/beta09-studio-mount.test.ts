@@ -60,6 +60,8 @@ test("the mount serves reads only", async () => {
  * mount names the artifacts Studio projects and serves nothing else, so a
  * future artifact cannot become browser-reachable by being added.
  */
+const buildDigest = "b".repeat(64);
+
 const artifactFiles = {
 	"manifest.json": '{"application":{"name":"x"}}',
 	"operation-contracts.json": '{"operations":[]}',
@@ -70,6 +72,7 @@ test("the mount serves only the allow-listed contract artifacts", async () => {
 	const response = await studioArtifactResponse(
 		new Request(`https://app.example${studioArtifactPath}`),
 		artifactFiles,
+		buildDigest,
 	);
 	expect(response).not.toBeNull();
 	expect(response!.status).toBe(200);
@@ -83,18 +86,30 @@ test("the mount serves only the allow-listed contract artifacts", async () => {
 	// Present in artifactFiles, absent from the allow-list, so never served.
 	expect(Object.keys(served)).not.toContain("runtime-executables.json");
 	expect(JSON.stringify(served)).not.toContain("must not be served");
+
+	// The Runtime Build identity is projected, not allow-listed: the artifact
+	// that holds it also holds the executable inventory, so the file stays
+	// unserved while the identity reaches the browser.
+	expect(studioArtifactAllowListed).not.toContain("runtime-build.json");
+	expect(served["runtime-build-identity.json"]).toEqual({
+		format: "questpie.runtime-build-identity",
+		version: 1,
+		digest: buildDigest,
+	});
 });
 
 test("the artifact path declines writes and unknown paths", async () => {
 	const posted = await studioArtifactResponse(
 		new Request(`https://app.example${studioArtifactPath}`, { method: "POST" }),
 		artifactFiles,
+		buildDigest,
 	);
 	expect(posted!.status).toBe(405);
 
 	const elsewhere = await studioArtifactResponse(
 		new Request("https://app.example/_questpie/operation"),
 		artifactFiles,
+		buildDigest,
 	);
 	expect(elsewhere).toBeNull();
 });

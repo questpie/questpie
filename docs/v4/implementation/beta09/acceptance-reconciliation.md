@@ -30,21 +30,27 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 | 1   | Inspection Authority is evaluated                      | **blocked, and the recorded reason is stale.** Not an ADR-0010 amendment: `owner-decisions.md` D1 settled that operational facts get an operator surface carrying its own Authority. It is blocked on that surface having no transport |
 | 2   | Maintenance Authority evaluated, typed denial, audited | **partial.** Driven against the runtime factory; the generated application supplies no `authorize`, so it never holds for the shipped surface                                                                                          |
 | 3   | Denial specificity follows the missing Authority       | **not built.** Requires 1 and 2                                                                                                                                                                                                        |
-| 10  | Every rendered fact carries its source                 | **partial.** Every contract fact now carries `source: artifact` and the artifact that declared it, in the producer and in the rendering. The Runtime Build identity the record also asks for is not servable — see below               |
+| 10  | Every rendered fact carries its source                 | **met for the contract lane.** Every fact carries `source: artifact`, the artifact that declared it, and the Runtime Build it came from, in the producer and in the rendering. Operational facts have no lane to render in yet         |
 | 14  | Retry is never offered as the remedy for ambiguity     | **not built.** This is an interface property and the interface has no run view                                                                                                                                                         |
 | 16  | The Studio projection producer is independent          | **partial.** The producer exists, derives from bytes, and a mutated byte moves its digest. Byte parity against the compiler's own artifact is **not asserted**                                                                         |
 
 ## The honest count
 
-Eleven of seventeen met. Two more partial. Four not built.
+Twelve of seventeen met. One more partial. Four not built.
 
-Three of the eleven are blocked on decisions that are not this slice's to make:
-inspection Authority needs an ADR-0010 amendment, maintenance Authority needs
-the same or an owner ruling, and the Studio asset packaging fork decides whether
-the interface can be served at all.
+Criterion 10 joined the met set once the Runtime Build identity was projected
+from the verified loaded build rather than served as a file.
 
-Nothing ordinary remains. All four are behind one of the four prohibitions in
-`narrower-claims.md` or behind the packaging fork.
+The rest are blocked on one decision, not three. The earlier reading — that
+inspection Authority needed an ADR-0010 amendment and the packaging fork decided
+whether the interface could be served — was superseded by `owner-decisions.md`.
+D1 settled that operational facts get an operator surface carrying its own
+Authority, so no amendment is wanted; and the same-origin mount already serves
+the interface, so packaging is not what blocks it. What remains is that the
+operator surface has no wire transport, which is the open question there.
+
+Criteria 1, 2, 3 and 14 all reduce to that one blocker. Criterion 16 is
+independent of it and needs a second producer that does not exist.
 
 ## What this changes
 
@@ -71,7 +77,7 @@ Settled by tampering rather than by reading a second time, since reading was the
 mistake. The artifact is verified and unconsumed — checked for integrity, and
 read by nothing — which is a weaker and different problem than being unverified.
 
-## Criterion 10, and the half of it that is not servable
+## Criterion 10, and the two designs that had to be falsified first
 
 `freshness-and-provenance.md` asks a contract fact to carry two things: the
 source that produced it, and the Runtime Build identity — "not a timestamp,
@@ -87,21 +93,35 @@ Provenance sits on the fact rather than on the catalog deliberately. Studio
 lifts facts out of the catalog into detail views, so container-level provenance
 would satisfy the criterion as written and lose the property it exists for.
 
-**The second half cannot be served at this base.** The Runtime Build identity is
-`runtime-build.json`'s `digest`, and that artifact is not in
-`studioArtifactAllowListed` — for a reason that survives inspection. It carries
-`bundleExport`, and `beta09-inspection-nondisclosure.test.ts` asserts the served
-payload contains no such string. Adding the artifact to the allow-list would
-serve the executable inventory to any browser that can reach Studio, defeating
-a guard this slice wrote on purpose.
+**The second half is now built too, and getting there falsified two designs.**
+The Runtime Build identity is `runtime-build.json`'s `digest`, and that artifact
+is not in `studioArtifactAllowListed` — for a reason that survives inspection.
+It carries `bundleExport`, and `beta09-inspection-nondisclosure.test.ts` asserts
+the served payload contains no such string. Adding it to the allow-list would
+serve the executable inventory to any browser that can reach Studio.
 
-So the identity needs a narrowed projection of `runtime-build.json` — digest and
-compiler identity, without `inventory`, `slots` or `executableSlots` — either as
-a new compiled artifact or as a narrowing in the mount. That is a real, small,
-well-scoped piece of work, and it is **not** blocked by the transport question:
-it is contract metadata on the path Studio already fetches.
+The first replacement design was a **new compiled artifact** holding the
+identity, allow-listed by name, so that the mount's stated property held
+unchanged: whole files only, each public in its entirety. That is impossible.
+`packages/compiler/src/runtime/index.ts:380` builds the inventory by _excluding_
+`runtime-build.json` and digesting every other generated file, so an inventoried
+file containing the build digest would feed the digest it contains.
 
-It is left undone here rather than guessed at, because which of the two shapes
-is right depends on whether the operator surface arrives as Operations, and that
-is the open question in `owner-decisions.md`. A narrowing in the mount is wasted
-if the artifact set is about to gain a served projection anyway.
+The second was a **field-level narrowing of `runtime-build.json` in the mount**.
+That is possible but degrades the allow-list's guarantee. Today it means "a
+future artifact cannot become browser-reachable merely by being added to the
+build". Narrowed, it would mean the same thing about _fields_ — a far harder
+property to hold, because fields are added to artifacts routinely and nobody
+adding one would think to check the Studio mount.
+
+What is built instead: the mount projects the identity from
+`artifacts.runtimeBuild.digest`, the already-verified loaded build it reaches at
+`packages/runtime/src/application/index.ts:441`. It inherits that verification
+rather than needing its own, no mixed-sensitivity artifact is narrowed, and the
+allow-list keeps its property exactly — every served entry is still public in
+its entirety.
+
+An earlier revision of this section deferred the work on the grounds that the
+right shape "depends on whether the operator surface arrives as Operations".
+That was wrong. Q4 governs _operational_ facts; under all three of its answers
+the contract-artifact path is unchanged, so nothing here was waiting on it.

@@ -441,6 +441,7 @@ export async function createRuntimeApplication<
 		const studioArtifacts = await studioArtifactResponse(
 			request,
 			input.artifactFiles,
+			artifacts.runtimeBuild.digest,
 		);
 		if (studioArtifacts) return studioArtifacts;
 		if (new URL(request.url).pathname !== operationPath)

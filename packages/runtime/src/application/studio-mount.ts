@@ -74,15 +74,47 @@ export const studioArtifactAllowListed: readonly string[] = Object.freeze([
 	"relational-explain.json",
 ]);
 
+/**
+ * The Runtime Build identity, served as a projection rather than as a file.
+ *
+ * `freshness-and-provenance.md` requires every contract fact to carry the
+ * Runtime Build it came from. That identity is `runtime-build.json`'s `digest`,
+ * and it can reach the browser in neither of the two obvious ways.
+ *
+ * It cannot be served as an allow-listed artifact: `runtime-build.json` also
+ * carries `inventory`, `slots` and `executableSlots` with their `bundleExport`
+ * entries, which is the executable inventory this mount exists to keep away
+ * from a browser.
+ *
+ * It cannot be a compiled artifact of its own either.
+ * `packages/compiler/src/runtime/index.ts:380` builds the inventory by
+ * *excluding* `runtime-build.json` and digesting every other generated file, so
+ * a new inventoried file containing the build digest would feed the digest it
+ * contains.
+ *
+ * So it is projected here from the already-verified loaded build. It inherits
+ * that verification rather than needing its own, and the allow-list keeps its
+ * stated property: every served entry is public in its entirety, so no field
+ * becomes browser-reachable merely by being added to an artifact.
+ */
+export const studioBuildIdentityPath = "runtime-build-identity.json";
+
 export async function studioArtifactResponse(
 	request: Request,
 	artifactFiles: Readonly<Record<string, Uint8Array | string>>,
+	runtimeBuildDigest: string,
 ): Promise<Response | null> {
 	if (new URL(request.url).pathname !== studioArtifactPath) return null;
 	if (request.method !== "GET" && request.method !== "HEAD")
 		return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
 	const decoder = new TextDecoder();
-	const served: Record<string, unknown> = {};
+	const served: Record<string, unknown> = {
+		[studioBuildIdentityPath]: {
+			format: "questpie.runtime-build-identity",
+			version: 1,
+			digest: runtimeBuildDigest,
+		},
+	};
 	for (const path of studioArtifactAllowListed) {
 		const bytes = artifactFiles[path];
 		if (bytes === undefined) continue;
