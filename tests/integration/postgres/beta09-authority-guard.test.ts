@@ -5,6 +5,10 @@ import { principal } from "questpie";
 
 import { createPostgresDurableMaintenance } from "../../../packages/runtime/src/durable/postgres-maintenance";
 import {
+	durableKernelMarkerStatement,
+	durableKernelUnmarkStatement,
+} from "../../../packages/runtime/src/durable/rows";
+import {
 	beta05Ids,
 	beta08Harness,
 	disposeBeta08Harness,
@@ -104,5 +108,47 @@ postgresTest(
 			actor,
 		});
 		expect(applied.outcome).toBe("applied");
+	},
+);
+
+/**
+ * The marker discipline rests on this and nothing in the tree exercised it.
+ * `withDurableKernelMarker` lowers the flag in a `finally`, which is only worth
+ * anything if lowering it actually re-arms the guard for the rest of the
+ * transaction. The guard compares against `'on'`, so any other value should
+ * refuse — this proves it rather than trusting the predicate by reading.
+ */
+postgresTest(
+	"lowering the kernel marker re-arms the guard mid-transaction",
+	async () => {
+		await harness();
+		const [row] = await database!.unsafe<
+			readonly Readonly<{ app: string; id: string }>[]
+		>(
+			`SELECT application_name AS app, run_id::text AS id
+FROM questpie_internal.durable_runs LIMIT 1`,
+		);
+		expect(row?.id).toBeString();
+		const update = `UPDATE questpie_internal.durable_runs SET event_sequence = event_sequence
+WHERE application_name = $1 AND run_id = $2`;
+		let markedAccepted = false;
+		let unmarkedRefused = false;
+		await database!
+			.begin(async (session) => {
+				await session.unsafe(durableKernelMarkerStatement);
+				await session.unsafe(update, [row!.app, row!.id]);
+				markedAccepted = true;
+				await session.unsafe(durableKernelUnmarkStatement);
+				try {
+					await session.unsafe(update, [row!.app, row!.id]);
+				} catch {
+					unmarkedRefused = true;
+				}
+				// Never commit a probe write.
+				throw new Error("rollback");
+			})
+			.catch(() => undefined);
+		expect(markedAccepted).toBe(true);
+		expect(unmarkedRefused).toBe(true);
 	},
 );

@@ -29,6 +29,14 @@ export async function markDurableKernelTransaction(
 	await query(durableKernelMarkerStatement);
 }
 
+/**
+ * Lowers the marker again, re-arming the guard for the rest of the transaction.
+ *
+ * The guard compares against `'on'`, so any other value refuses the write.
+ */
+export const durableKernelUnmarkStatement =
+	"SELECT set_config('questpie.durable_kernel', 'off', true)";
+
 export function durableText(value: unknown, label: string): string {
 	if (typeof value !== "string" || value.length === 0)
 		throw new TypeError(`${label} must be nonempty text`);
