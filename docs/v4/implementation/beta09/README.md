@@ -187,3 +187,47 @@ predicate is an Index Only Scan at 0.47 ms for 2,000 failed runs, recorded in
 its own. Two justifications where one is false is worse than one that holds,
 because a reviewer who knocks over the weak one has grounds to doubt the
 decision.
+
+## A projection landed ahead of acceptance
+
+Recorded because it is checkable and because a reviewer will check it.
+
+`f092d618` added an **Operational Fact** entry to `CONTEXT.md`. Three facts,
+each verified:
+
+- The term appears in **no Accepted ADR and no public projection under
+  `docs/v4/`**. It is new vocabulary, not a glossary catching up to something
+  already frozen.
+- The design branch is explicit: "Project ADR, **terms**, public docs, gates,
+  and tracker state only after the proof branch's acceptance protocol returns
+  `PASS`" (`.agents/skills/questpie-v4/references/design.md:17`).
+- **BETA-09 has never been reviewed.** This directory contains no review record
+  of any kind, so no `PASS` exists to have unlocked the projection.
+
+So a term was projected before the gate that governs terms. The glossary edit
+itself is defensible on its merits — the operational lane genuinely needed a
+name, and this record set spent several documents talking around the absence of
+one — but the ordering is what the rule constrains, and the rule was written
+because a term that ships before its slice is accepted becomes authority nothing
+reviewed.
+
+**Not decided here, because it is not this record's to decide.** Either the
+glossary entry is reverted until BETA-09 returns `PASS`, or the slice records
+an explicit, argued exception. What must not happen is that it sits unremarked
+and is later cited as accepted vocabulary on the strength of being in
+`CONTEXT.md`.
+
+### One attribution a reviewer must confirm
+
+`owner-decisions.md` and its commit message state that "the owner answered all
+three questions." That attribution cannot be verified from this repository, and
+it is load-bearing: three decisions in that record rest on owner authority
+rather than on evidence, and a reviewer reading them will treat them as settled
+input rather than as autonomous judgment.
+
+Two of the three are also grounded independently in the record — D1 in
+`ADR-0010:41` and `CONTEXT.md:405`, D2 in `CONTEXT.md:400`–`:403` — so their
+substance stands on citations regardless of who chose them. The attribution
+still needs confirming before the record goes to review, because a decision
+credited to an absent owner is worse than the same decision recorded honestly as
+a judgment call with its reasoning attached.
