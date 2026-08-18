@@ -74,7 +74,23 @@ Three resolutions are visible and each belongs to a different owner:
 
 - **Construct a system Authority** where a trusted path warrants it. That
   changes the public `Authority` contract and belongs to the ADR that froze it,
-  not to a slice.
+  not to a slice. **Measured, the mechanical cost is two lines**, and the whole
+  difficulty is the design question rather than the refactor. Widening the type
+  (`packages/questpie/src/context.ts:26`) and branching at the sole construction
+  site (`packages/runtime/src/execution/index.ts:282`) is the entire code change.
+  **No consumer needs touching**: the three sites that read `authority.kind` —
+  `packages/runtime/src/relational/query.ts:338`, `:377`, and
+  `packages/runtime/src/mutation/collection.ts:141` — all pass the value through
+  rather than branching on it, and every other site forwards the whole object.
+  The lower layer already types it `"ordinary" | "system"`
+  (`relational/query.ts:132`).
+
+  One detail worth noticing: `authorityKind` is already carried as a scope value
+  into the query cursor (`relational/query.ts:372`, `relational/cursor.ts:27`,
+  `:113`), so a result computed under one Authority class cannot be served to
+  the other. The plumbing anticipated a second class; only the type and the
+  constructor did not.
+
 - **Remove `isSystem()` from the authoring surface** until something can satisfy
   it. That narrows a published Policy vocabulary, which is an API decision.
   **Measured: it touches exactly three sites** — the declaration
@@ -85,8 +101,13 @@ Three resolutions are visible and each belongs to a different owner:
   worth stating because "narrows a published vocabulary" sounds expensive and in
   this case is three lines and a fixture Policy that would have to say what it
   means instead.
-- **Leave it and document that it is always false.** Cheapest, and it leaves an
-  authoring surface whose plain reading is wrong.
+- **Leave it and document that it is always false.** Cheapest in code — nothing
+  changes — and the cost is entirely that a published authoring surface keeps a
+  plain reading that is wrong. It also decays: the moment anyone constructs a
+  system Authority, every `isSystem()` Policy silently changes meaning from
+  "nobody" to "system callers", and the change is invisible in the Policy
+  source. That makes this the only one of the three options whose cost grows
+  while nothing is done.
 
 BETA-09 does not own any of them, which is exactly why its own record set
 declines the question and this one records it instead.
