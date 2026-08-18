@@ -34,7 +34,24 @@ from exactly two places, both compiler-side:
 `packages/compiler/src/seed/postgres/apply.ts:231`. `statement_timeout` appears
 nowhere in `packages/runtime/src`.
 
-So the migration and seed paths are protected and the serving path is not.
+So the migration and seed paths are protected and the serving path is not — and
+the asymmetry is wider than a missing timeout.
+
+**The compiler also issues a real server-side cancel; the runtime does not.**
+`cancelBackendOnAbort` (`packages/compiler/src/postgres-session.ts:71`) runs
+`select pg_catalog.pg_cancel_backend($pid)` from a _second_ connection when the
+signal aborts (`:80`). It is called from exactly the same two places as the
+timeouts — `packages/compiler/src/schema/postgres/apply.ts:245` and
+`packages/compiler/src/seed/postgres/apply.ts:225`.
+
+So the compiler's DDL and seed sessions carry **two** independent defences: a
+server-side `statement_timeout`, and an out-of-band cancel that reaches the
+backend from another connection. The runtime carries **neither**. Its
+`query.cancel()` is the client-side abort inside `executeAbortable`
+(`postgres-session.ts:57`–`:62`), which asks the driver to stop waiting.
+
+An earlier revision of this record described the gap as a missing timeout. It is
+a missing layer _and_ a missing timeout, and the second half was already built.
 
 ## The mechanism already exists in the runtime
 
@@ -160,7 +177,12 @@ distribution.
    mechanism cannot reach.
 5. **Prove the lock bound.** Two concurrent maintenance commands on one run,
    with the loser asserted to fail on `lock_timeout` rather than wait.
-6. **Report what the change would have killed.** Run the measured tail against
+6. **Prove the cancel layer independently of the timeout.** A statement aborted
+   client-side must be shown to actually stop server-side — assert the backend
+   is gone from `pg_stat_activity`, not merely that the client promise
+   rejected. This is the assertion that distinguishes a real cancel from a
+   client giving up, and nothing in the runtime asserts it today.
+7. **Report what the change would have killed.** Run the measured tail against
    the proposed bound and state how many observed statements would now fail.
    If that number is not zero, the bound is wrong or the query is.
 
@@ -169,8 +191,19 @@ distribution.
 **Wrapping five bare reads in transactions purely to carry a GUC.** It costs a
 round trip on the operator-facing reads. Taken because the alternative is a
 timeout contract with a hole in exactly the surface an operator uses against an
-unhealthy database. What would overturn it: a per-statement mechanism that does
-not need a transaction, which would be strictly better and which I did not find.
+unhealthy database.
+
+I named as the thing that would overturn this "a per-statement mechanism that
+does not need a transaction." Verifying the record afterwards found one:
+`cancelBackendOnAbort` needs a **reserved connection**, not a transaction. That
+refines the call rather than reversing it, because for the five bare durable
+reads a reservation costs what a transaction costs — they run straight on the
+pool today (`input.sql.unsafe(...)`) and would have to reserve either way.
+
+Where it does change the answer is the relational path, which **already**
+reserves (`packages/runtime/src/relational/postgres.ts:80`). That path can carry
+both defences at no additional round trip, and should, since it is the
+highest-volume statement in the system.
 
 **Pinning Mutation and attempt timeouts now while deferring the query one.** It
 ships an asymmetric contract, which is less tidy than waiting and pinning all
