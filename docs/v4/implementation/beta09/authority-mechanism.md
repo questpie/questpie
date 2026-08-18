@@ -93,6 +93,35 @@ signature; it was that nothing evaluated a decision before the call.
   `hostile-cases.md` case 5 and `internal-protocol-v5.md`. Nothing about the
   rejection changes; only the question of what produced it.
 
+## Where the Policy is declared
+
+The mechanism above left one thing implicit — _where_ the author writes the
+Policy. Accepted authority already answers it, at ADR-0016:62:
+
+> Applications expose selected request, status, cancellation, and signal jobs
+> through ordinary Policy-protected Query and Mutation Operations.
+
+So there is no maintenance-Policy declaration site to invent. **The author
+writes an ordinary Mutation, gives it ordinary Policy, and that Mutation calls
+the durable command.** The Policy on that Operation _is_ the maintenance
+Authority decision.
+
+This has a consequence worth stating plainly, because it changes what the
+surface is for:
+
+**`app.durable.cancelRun` is not the Studio path.** It is a server-internal
+capability, in the same class as the kernel itself — reachable only from server
+code, never from a client, and not the thing Studio calls. Studio calls a
+generated Operation whose Policy the application declared. A caller that has
+reached `app.durable.*` has already passed whatever Operation exposed it.
+
+That resolves the tension in `hostile-cases.md` case 5 differently than a naive
+reading suggests. The denial the hostile case drives is a Policy denial on the
+exposing Operation, and `AUTHORITY_DENIED` is the durable surface's own guard
+for the case where a server path reaches a command it should not — defence in
+depth, not the primary gate. Both are worth having; only the first is what a
+Studio user encounters.
+
 ## Judgment call
 
 Choosing Policy over extending the Authority union is mine, and it is the more
