@@ -188,3 +188,40 @@ test("a run pinned to a retired executable is explained, not shown as healthy", 
 	expect(unknown.reason).toBe("resourceAbsent");
 	expect(unknown.expectedDigest).toBeNull();
 });
+
+/**
+ * Criterion 7 said `relational-nondisclosure.json` must join the verified set,
+ * and the reconciliation recorded it as not built because the artifact is named
+ * nowhere in `artifact-files.ts`. That reading was wrong: verification is not
+ * per-name. It walks the whole inventory and refuses any file whose bytes do
+ * not match, so every artifact is covered by the act of being in the build.
+ *
+ * Driven against the real generated set rather than a hand-built one. A
+ * synthetic inventory kept failing on other preconditions, which is the trap of
+ * injecting a construct the production path never produces.
+ */
+test("tampering with the nondisclosure artifact is refused at startup", async () => {
+	const { verifyRuntimeArtifactFiles } =
+		await import("../../packages/runtime/src/application/artifact-files");
+	const build = JSON.parse(artifact("runtime-build.json")) as {
+		inventory: readonly { path: string }[];
+	};
+	const files = Object.fromEntries(
+		build.inventory.map((item) => [item.path, artifact(item.path)]),
+	);
+	const artifacts = { runtimeBuild: build } as never;
+
+	// The real build verifies as it stands.
+	expect(() => verifyRuntimeArtifactFiles(artifacts, files)).not.toThrow();
+
+	// One flipped character in the nondisclosure proof is refused, so it cannot
+	// drift from the build that produced it even though nothing reads it.
+	const path = "relational-nondisclosure.json";
+	expect(files[path]).toContain("outcomeOnly");
+	expect(() =>
+		verifyRuntimeArtifactFiles(artifacts, {
+			...files,
+			[path]: files[path]!.replace("outcomeOnly", "outcomeOnlY"),
+		}),
+	).toThrow(/digest does not match/);
+});
