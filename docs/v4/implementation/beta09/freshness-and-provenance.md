@@ -82,8 +82,12 @@ Overview freshness tile and no global staleness clock.
 
 Concretely:
 
-- A run's state carries `source: durable` and the run's own `accepted_at` or
-  `terminal_at`.
+- A run's state carries `source: durable` and the run's own `available_at` or
+  `terminal_at` — the two `inspect()` actually selects
+  (`packages/runtime/src/durable/postgres-kernel.ts:693`). `accepted_at` exists
+  as a column (`internal-protocol-v4-sql.ts:44`, written at
+  `packages/runtime/src/durable/acceptance.ts:58`) but no read returns it, so an
+  earlier revision naming it required a field the surface cannot supply.
 - A maintenance entry carries `source: audit` and its `requested_at`.
 - A contract fact carries `source: artifact` and the Runtime Build identity —
   **not** a timestamp, because the identity is the stronger statement.
