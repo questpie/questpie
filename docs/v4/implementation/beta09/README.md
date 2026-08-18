@@ -31,6 +31,9 @@ Base for every record: `feat/v4` at
    assertion each must fail on before it passes.
 8. **[acceptance-shape.md](./acceptance-shape.md)** — the protocol v2 manifest
    shape and the acceptance criteria.
+9. **[owner-decisions.md](./owner-decisions.md)** — the three decisions
+   autonomous work could not settle, now answered, and the one consequence they
+   share: the operator surface has no wire transport.
 
 ## What this slice decided
 
@@ -71,7 +74,12 @@ standing, the earlier record is corrected and points at the later authority:
 
 ## Status
 
-Nothing in these records is waiting on a decision.
+Nothing in these records is waiting on a decision. Three that were waiting are
+answered in [owner-decisions.md](./owner-decisions.md), which also records the
+finding those answers exposed: the operational reads and commands are in-process
+methods on the compiled application and no route carries them to a browser, so
+what this slice has built is a contract browser rather than an operational
+control surface. Packaging cannot be settled before that transport is.
 
 Implementation has begun on branch `feat/v4-beta-09`, worktree
 `/home/drepkovsky/code/questpie-v4-beta-09`, which is not merged to `feat/v4`.
@@ -89,6 +97,9 @@ What the branch still owes:
   `ensureInternalProtocol` refuses a same-version different-checksum install.
 - The Studio bundle, on the shadcn and Base UI primitives already in
   `apps/docs`, whose gaps `maintenance-decisions.md` names.
+- A transport for the operator surface. The reads and commands exist and are
+  tested; nothing carries them to a browser. See
+  [owner-decisions.md](./owner-decisions.md).
 
 ## Merge hazard: the implementation branch forked before these corrections
 
