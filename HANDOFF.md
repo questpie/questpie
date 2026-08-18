@@ -230,6 +230,22 @@ Do not skip a blocked issue or parallelize dependent implementation.
   cannot express. The difference is evidence the version gate works rather than a
   coverage gap, and the same shape should be expected of any future matrix rather
   than read as drift.
+- #295 review round 4's first observation is **correct, and verified here**.
+  Criterion 4 claims that "every heartbeat, terminal transition, and effect write
+  compares the current attempt and the lease token." The effect write is a
+  genuinely separate compare-and-set —
+  `packages/runtime/src/durable/postgres-effects.ts:86`, a
+  `SELECT 1 AS held ... AND current_attempt_id = $3 AND lease_token_digest = $4`
+  — and nothing drives it. All five `"fenced"` assertions in
+  `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces:
+  `succeed`, `fail`, `cancel`, and `heartbeat` at `:160`–`:179`, and the
+  `succeed`-versus-`cancel` race at `:344`. `DurableLeaseLost`, the error the
+  effect handle raises when fenced, appears in no test at all. So one quarter of
+  that criterion rests on code reading. The review judged it benign under
+  at-least-once, which is defensible — a stale `reserve` only prevents a
+  redundant provider call — but the fence exists to prevent a stale holder
+  settling an effect the fresh holder is also performing, and the cost of proving
+  it is one test. Whoever next touches the effect ledger should add it.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
