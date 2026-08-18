@@ -149,16 +149,39 @@ transaction, so the business write rolls back with the dispatch. The insert
 already runs there (`acceptance.ts:58`, `ON CONFLICT DO NOTHING`), so the
 refusal is a count against the same new index before it.
 
-**The cap is approximate under concurrency, and the record must say so.** Under
-READ COMMITTED two Mutations accepting for the same tenant can both observe a
-count below the cap and both insert. The overshoot is bounded by the number of
-concurrent accepters, not by the backlog.
+**The cap is approximate under concurrency, and it was measured rather than
+assumed.** Under READ COMMITTED two Mutations accepting for the same tenant can
+both observe a count below the cap and both insert. Ten concurrent accepts
+against a cap of five, on PostgreSQL 17.10:
 
-Making it exact costs more than it is worth: an advisory lock per tenant would
-serialize acceptance for that tenant, which is a throughput cost on the write
-path to make a coarse guard precise. A backlog cap is a guard against
-unbounded growth, not an invariant, and claiming exactness it does not have is
-the failure mode this project keeps blocking on.
+| Isolation      | Window between check and insert | Rows admitted |
+| -------------- | ------------------------------- | ------------- |
+| READ COMMITTED | realistic (adjacent statements) | **6**         |
+| READ COMMITTED | widened to 200 ms               | **10**        |
+| SERIALIZABLE   | realistic                       | **3**         |
+
+Three things follow, and only the first was expected.
+
+**The realistic overshoot is small.** One row past a cap of five, not the
+doubling a contrived window suggests. The cap behaves as a guard, which is what
+it is for.
+
+**The window width dominates.** Widening the gap between the count and the
+insert to 200 ms took the overshoot from one row to five. So the implementation
+constraint is concrete: **the count must sit adjacent to the dispatch insert**,
+not at the top of a Mutation that then does other work. Overshoot scales with
+whatever runs in between.
+
+**SERIALIZABLE is worse, not stricter.** It admitted _three_ — fewer than the
+cap — because conflicting transactions abort with serialization failures rather
+than being cleanly refused. That converts a one-row overshoot into transient
+errors the Mutation caller must retry, on the write path, to make a coarse guard
+precise. An advisory lock per tenant has the same shape of cost by serializing
+that tenant's acceptance.
+
+So the decision stands and now has evidence behind it: a backlog cap is a guard
+against unbounded growth, not an invariant, and claiming exactness it does not
+have is the failure mode this project keeps blocking on.
 
 ## What must not be built
 
