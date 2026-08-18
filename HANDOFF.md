@@ -417,12 +417,56 @@ Do not skip a blocked issue or parallelize dependent implementation.
   historical file and permits no new drift. Knip report baseline is 17 unused files, two dependency groups,
   and three unused exports; these noisy classes remain report-only.
 
+## Open cross-slice findings
+
+Recorded during BETA-09 design work, verified against the tree, and **owned by
+nobody yet**. Each names its owner and takes no decision. They live under
+`docs/v4/prototypes/` and are listed here because the skill routes here first
+and would otherwise never surface them.
+
+- **`authority.isSystem()` can never be true at runtime.** The public
+  `Authority` type has one member and the only construction site always builds
+  it, while the glossary, the relational layer, and the Policy authoring surface
+  all assume two classes. The collaboration fixture's membership Policy is
+  therefore satisfied by nobody, expressed as though it were satisfied by system
+  callers. `docs/v4/prototypes/authority-contract-gap/FINDING.md`
+- **Context bootstrap is a third read path with no Policy.** It is tightly
+  bounded — one row, exact primary key, explicit selection — and its bounds are
+  documented. What is not documented is that a bootstrap read's safety depends
+  entirely on the provenance of its key values, a property the accepted
+  projection's own example demonstrates without naming. Same record.
+- **Durable admission scans the whole eligible set.** The `OR` between the two
+  eligibility branches defeats `durable_runs_claim_idx`; three index-ordered
+  branches merged run 31× faster on 50,000 ready runs. Measured.
+  `docs/v4/prototypes/tenant-share-control/MECHANISM.md`
+- **The runtime enforces no server-side statement or lock timeout.** Two
+  accepted bounds are client-side hopes, measured: a client cancel leaves the
+  backend running, and only `pg_cancel_backend` stops it. Maintenance can block
+  without bound on `FOR UPDATE`.
+  `docs/v4/prototypes/statement-timeout-gate/DECISION.md`
+- **The accepted budget table measures on the wrong axis.** It bounds a
+  Principal where the glossary makes Tenant the isolation identity.
+  `docs/v4/prototypes/tenant-share-control/DECISION.md`
+
 ## Next invocation
 
+BETA-09 issue #296 is the active frontier. Its design record set is committed on
+`feat/v4` under `docs/v4/implementation/beta09/`, starting at `README.md`, and
+implementation is already under way on branch `feat/v4-beta-09`.
+
+**Read `docs/v4/implementation/beta09/README.md` before touching that branch.**
+It records a merge hazard: the branch forked at `219758a4`, before several
+correction commits landed on `feat/v4`, and both sides have since edited the
+same records. The branch still carries defects that were found and verified
+against the tree, including an inspection projection specified wider than the
+kernel read it claims to narrow. Rebasing the branch is cheaper now than
+resolving it at merge time.
+
 ```text
-Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-07 issue #294
-from merge base `0d1f35dd8685fdeb55c76547a6775df994f41315` without widening
-its bounded Change Ledger and Message Query watch tracer. Preserve the
-#289/#290/#291/#292/#293 review evidence, docs-hygiene branch, marketing
+Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
+`feat/v4-beta-09`, rebasing it onto current `feat/v4` first and preserving every
+correction listed in `docs/v4/implementation/beta09/README.md`. Do not reopen
+the decisions in that record set; extend or correct them only on new evidence.
+Preserve the #289–#295 review evidence, the docs-hygiene branch, marketing
 worktree, scalar-research worktree, Studio handoff worktree, and archive branch.
 ```
