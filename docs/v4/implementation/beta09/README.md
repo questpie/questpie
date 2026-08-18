@@ -97,7 +97,10 @@ What the branch still owes:
 will conflict in all five, and resolving toward the branch would silently
 reintroduce defects that were found and verified against the tree.
 
-Corrections on `feat/v4` that must survive any merge:
+Corrections on `feat/v4` that must survive any merge (the list below was the
+first six; more have landed since, so treat `git log 219758a4..feat/v4 --
+docs/v4/implementation/beta09/ HANDOFF.md` as authoritative rather than this
+table):
 
 | Commit     | What it fixed                                                        |
 | ---------- | -------------------------------------------------------------------- |
@@ -129,3 +132,33 @@ implementation diff is large enough to hide a documentation regression.
 The branch also carries a tenth record, `authority-mechanism.md`, which has no
 counterpart here. Nothing on `feat/v4` conflicts with it; it should arrive
 intact.
+
+## Implementation reconciliation
+
+Checked read-only against `feat/v4-beta-09` at `b05bcbe7`. The branch is
+implementing the decisions in this record set, and on the two checkable points
+it matches them exactly rather than drifting.
+
+- **D4, the projection narrower than the kernel read: built.**
+  `packages/runtime/src/durable/inspection.ts` exposes
+  `result: { present, bytes, digest }` and `receiptPresent: boolean` — presence,
+  length and digest for the result, presence for the receipt, exactly as
+  `inspection-contract.md` D4 decided. Its own comment reproduces the reasoning,
+  including why the kernel keeps `resultBytes` while nothing Studio reaches
+  returns it.
+- **D1, the operational nondisclosure commitments: built.** The branch adds
+  `tests/unit/beta09-operational-nondisclosure.test.ts` pinning absence and
+  denial as indistinguishable and no count oracle.
+- **D3, four reads plus one worklist: partial.** The projection functions exist;
+  **the worklist does not.** `inspection.ts` contains no worklist, failed-run, or
+  needs-attention read.
+
+That last gap is worth naming precisely, because it is the piece `studio-purpose.md`
+identifies as making the durable kernel reachable at all: every shipped durable
+read takes `runId`, and `runId` is not obtainable through any API. Without the
+worklist, the narrowed projections are correct and unreachable.
+
+It is also the cheapest remaining piece. The query was measured at 0.13 ms as an
+`Index Scan using durable_runs_claim_idx` against 207,000 runs, needing no
+schema — see `studio-purpose.md`. Nothing about it is unresolved; it is simply
+not written yet.
