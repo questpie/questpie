@@ -40,6 +40,26 @@ these — the validator rejects any other set.
   eight `README.md` enumerates plus `README.md` itself; an earlier revision said
   seven, which predated two of them. Pin the list by enumerating the directory
   at manifest time rather than by carrying a count, and give each a `sha256`.
+- **`authorityDocuments` digests are read at the reviewed head**, not at `HEAD`
+  or from the working tree. The builder runs
+  `git show <reviewedHead>:<path>` and fails on
+  `authority document digest mismatch`
+  (`.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts:224`–`:231`).
+
+  **This is what makes repinning unavoidable, and BETA-08 paid it three times** —
+  `8f538203`, `baea3450`, and `d0aedd54` are all "repin the acceptance manifest".
+  Any commit that touches a pinned document after the digests are computed
+  invalidates them, including a commit that only repairs a record. Compute
+  digests last, and treat the manifest commit as the reviewed head. Every entry
+  must also be exactly `{name, path, sha256}` with a 64-hex digest and a unique
+  path.
+
+- **The packet is scanned for secrets**, both every authority document and the
+  manifest itself, and a match fails the build — `database URL` and
+  `credential assignment` are the guarded classes
+  (`acceptance-packet-secrets.ts:77`, `:93`). A local PostgreSQL URL is
+  permitted; anything else in that shape is not. Worth knowing before pinning a
+  document that quotes a connection string as an example.
 - **`reviewOutput`** the round's record path. Preserve every review record
   byte-identically and add each to `quality/format-baseline.txt`.
 - **`verification`** every entry must be exactly `{command, result}` and
