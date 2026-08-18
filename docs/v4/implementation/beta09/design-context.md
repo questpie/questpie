@@ -7,6 +7,12 @@ in `docs/v4/implementation-gates.md`.
 This record fixes the boundary and the identities. It opens no slice branch,
 changes no ADR, no public projection, no gate, and no tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at BETA-08 acceptance merge
 `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
@@ -124,10 +130,14 @@ The concrete deltas the implementing slice must reconcile:
   `:191`) living on `realtime_binding_generations`, which is not an event log:
   generations are hard-deleted rather than tombstoned
   (`packages/runtime/src/live-query/postgres-realtime-generations.ts:129`), and
-  scope attachments carry a CHECK-pinned 30-second TTL
+  a superseded generation is deleted at once, and idle scope attachments carry a
+  CHECK-pinned 30-second renewal TTL
   (`internal-protocol-v3-realtime.ts:16`, `:43`). Studio can show the current
   reset reason for a currently live subscription and nothing older. A "Live
-  Query resets" tile would be a count over a 30-second window.
+  Query resets" tile would have no history behind it at all. An earlier
+  revision described this as a thirty-second window, which conflated two
+  mechanisms: the TTL runs from the last renewal, so a live subscription never
+  expires, while a superseded generation is gone immediately.
 - **BETA-08** made run, attempt, lease, effect, cancellation, and the
   maintenance audit real — **and dropped budgets that nothing enforces**.
   `activeAttemptsPerPrincipal`, `pendingRunsPerResource`,

@@ -11,6 +11,12 @@ replaces it is better.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## First, there are five sources, not four
@@ -182,7 +188,12 @@ length in copy.
   never in age.
 - **Change Ledger:** back to `min(xid_horizon)`, which moves as consumers
   acknowledge.
-- **Realtime:** approximately thirty seconds.
+- **Realtime:** no history. A superseded generation is deleted at once
+  (`postgres-realtime-generations.ts:129`, whose predicate spares only the rows
+  still holding `latest_slot` or `ack_slot`), and an idle scope is swept thirty
+  seconds after its last renewal (`internal-protocol-v3-realtime.ts:43`). Only
+  the current generation's reason is readable, and only while its binding
+  lives.
 - **Receipts:** never pruned, and currently unreachable.
 
 Studio must not imply a retention window anywhere, because for the two lanes an

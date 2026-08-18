@@ -9,6 +9,12 @@ This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state; those projections move only after the
 acceptance protocol returns `PASS`.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## The finding that reframes three of these
@@ -249,3 +255,41 @@ use.
 
 Decided separately in `studio-purpose.md` in this directory, after an
 adversarial review of the two candidate framings.
+
+## The denial that cannot be audited
+
+Found by adversarial pre-review and verified here. It qualifies two decisions
+above rather than overturning them.
+
+`durable_maintenance_commands` carries
+`FOREIGN KEY (application_name, run_id) REFERENCES durable_runs`
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:226`), and
+`lockRun` throws before any write when the run is absent
+(`packages/runtime/src/durable/postgres-maintenance.ts:114`). So **an
+`AUTHORITY_DENIED` attempt against a run that does not exist cannot be
+recorded at all** — there is no run row for the audit entry to reference.
+
+That is exactly the case Q3's disclosure rule needs. A caller without
+inspection Authority must not distinguish a denied run from a nonexistent one;
+but a denial against a real run is audited and a denial against a phantom one
+is not, so the **audit itself** distinguishes them. The outward response can
+still be identical, and that is what the hostile case asserts — but "every
+attempt is recorded, applied or rejected" is not literally achievable, and the
+records should not claim it is.
+
+**Decision.** Scope the claim rather than widen the schema. The audit records
+every attempt _against an existing run_. A command naming a run that does not
+exist is refused without an audit entry, and the operational-nondisclosure
+artifact states that explicitly, so the gap is declared rather than discovered.
+Widening would mean dropping the foreign key — trading a real integrity
+guarantee for an audit row about nothing.
+
+**The second consequence, also recorded.** Auditing a denial at all requires
+evaluating Authority _after_ `SELECT ... FOR UPDATE`, so a denied caller takes
+a row lock on a run they may not be allowed to see. That is brief and
+uncontended in practice, but it is a real disclosure-adjacent side effect and
+the hostile case should assert the lock is released rather than held.
+
+**What would overturn it:** an audit table keyed independently of `durable_runs`
+— which is a larger schema change than this slice owns, and which would need
+its own retention story given that nothing sweeps the audit today.

@@ -12,6 +12,12 @@ entries, 10 authority documents
 
 This record decides. It opens no slice branch and writes no production code.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## The nine keys, and what BETA-09 puts in each
@@ -126,7 +132,7 @@ Fixed now so the implementing slice does not have to rediscover them:
   and its absence is stated rather than drawn.
 - **The receipt lane is unreachable.** `mutation_call_receipts.committed_at` is
   durable and never pruned, and no public read exists.
-- **Live Query reset history survives roughly thirty seconds.**
+- **Live Query reset history is not retained.**
 - **The maintenance audit is not globally listable** at acceptable cost;
   `run_id` precedes `requested_at` in its index.
 - **The redacted-envelope hostile case is structurally satisfied already** and
@@ -144,3 +150,28 @@ hostile to an authorized reader, and a uniformly specific one leaks existence.
 Merging them hides that tension. What would overturn it: a reviewer judging the
 manifest padded, in which case 3 folds into 1 and the tension moves into
 criterion 1's wording.
+
+## The criteria this record was missing
+
+Issue #296 carries a Budgets block and a Performance ownership block that no
+criterion above mapped. An acceptance manifest that omits the ticket's own
+budget contract is the failure this record exists to prevent, so they are added
+here rather than left to the implementing slice to rediscover.
+
+18. **The changed loop stays under 5 s**, measured rather than asserted.
+    BETA-08's round 4 observed this budget had gone two slices without a
+    recorded measurement; this slice either measures it or stops carrying it.
+19. **Studio build-size and query-latency baselines are recorded**, with each
+    budget derived mechanically as `ceil(observed × multiplier / quantum) ×
+quantum` and the derivation asserted in-test, the way BETA-08's were.
+20. **No secret or raw-payload snapshot enters any baseline or golden.** This is
+    the performance-evidence counterpart of the disclosure decision: a
+    build-size or latency artifact must not embed a result body or a receipt.
+21. **The same-origin Studio bundle exists and matches the accepted contract** —
+    one of the issue's own acceptance criteria, previously unmapped.
+22. **The slice is independently demoable through its stated fixture** — the
+    other previously unmapped issue criterion.
+
+The performance manifests this slice owns are the Studio build-size and query
+baseline measurement manifest, and the BETA-09 stable-runner budget report.
+Both are named by the issue's Performance ownership block.

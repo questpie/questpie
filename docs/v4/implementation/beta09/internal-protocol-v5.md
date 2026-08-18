@@ -8,6 +8,12 @@ the two edges the schema forces.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state. It writes no production code.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## Why a protocol version at all
@@ -160,3 +166,27 @@ a worse artifact than one with an explicit null. What would overturn it:
 evidence that an unbounded-reason rejection is a client bug rather than an
 operator action, in which case it belongs in the typed error path and not in
 the operational record at all.
+
+## The fourth upgrade consequence, which the mechanics section missed
+
+Adding `REASON_INVALID` and `AUTHORITY_DENIED` touches **three** sites, not two.
+The union (`packages/runtime/src/durable/postgres-maintenance.ts:20`) and the
+`durable_command_rejection_known` CHECK
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:232`) are
+the two this record already named. The third is
+`maintenanceRejectionCodes` in the compiled durable-kernel contract
+(`packages/compiler/src/reaction/durable-kernel.ts:111`), which today lists
+exactly six.
+
+That array feeds `durableKernelDigest` into `durable-kernel.json`, which the
+runtime verifies semantically at startup
+(`packages/runtime/src/application/artifact-files.ts:90`) and which is pinned by
+exact equality in the compile-level test and in
+`tests/goldens/beta01/generated-digests.json`.
+
+**So this change moves a deployment-compatibility digest.** Six members becoming
+eight is not only a schema and a type change; it changes the bytes that decide
+whether a running instance considers a build compatible. That belongs in the
+upgrade mechanics beside the protocol version bump, and an implementer working
+only from the two sites named above would discover it as a failing golden rather
+than as a planned step.

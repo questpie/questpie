@@ -10,6 +10,12 @@ corrections land in the same commit.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## The decision
@@ -42,7 +48,7 @@ exist at this base:
 | A failed Query execution      | **none.** There is no query receipt, log, or execution table                                                                                                                                       | —                                                                                     |
 | A failed Mutation             | **none.** `CHECK (outcome IN ('executing','committed'))` admits no failure, and the receipt is inserted inside the Mutation's own transaction, so a pre-commit failure rolls back its own evidence | `packages/compiler/src/schema/postgres/internal-protocol-v2.ts:38`                    |
 | An Execution error            | **none stored.** `durability: "telemetry"`, an optional in-process sink, with `traceId`, `causationId`, and `tenantRef` typed as hardcoded `null` and a per-process sequence counter               | `packages/runtime/src/application/events.ts:1`–`:34`                                  |
-| A Live Query reset            | **~30 seconds.** `reset_reason` lives on `realtime_binding_generations`, which is hard-deleted rather than tombstoned, under a CHECK-pinned 30-second scope TTL                                    | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129` |
+| A Live Query reset            | **current only.** A superseded generation is deleted at once, not after a delay; an idle scope is swept 30 s after its last renewal. No reset history is retained either way                       | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129` |
 | A change nobody can explain   | **no attribution.** `change_ledger` carries no correlation, causation, call, principal, or tenant column                                                                                           | `internal-protocol-v3.ts:29`                                                          |
 | A failed or dead-lettered run | **yes**                                                                                                                                                                                            | `durable_runs`                                                                        |
 
@@ -171,7 +177,9 @@ already-indexed facts, not new mechanisms.
 ### Not answerable — recorded as findings, not deferred
 
 - **"Which subscriptions did this deploy reset?"** No source. Reset history
-  survives ~30 seconds. This kills the handoff's Q5 reset tile.
+  is not retained at all: a superseded generation is deleted immediately, and
+  an idle scope is swept thirty seconds after its last renewal. This kills the
+  handoff's Q5 reset tile.
 - **"Show me recent Executions / trace this correlation id."** No source. The
   Execution Envelope is unstored telemetry with hardcoded-null trace, causation
   and tenant references — `correlationId` itself is populated, so it is the
