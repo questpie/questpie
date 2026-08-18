@@ -74,7 +74,8 @@ reasoning rather than against the prose.
    asserts the absence of result and receipt explicitly, so a later widening is
    a visible diff in a digested artifact. → `inspection-contract.md` D1.
 7. **`relational-nondisclosure.json` joins the verified set.** It is compiled
-   today and consumed nowhere. → `inspection-contract.md` D2.
+   today, byte-verified through the build inventory, and read by nothing. →
+   `inspection-contract.md` D2.
 8. **The surface is exactly four reads plus one worklist.** No additional read
    shapes, no raw SQL, no internal-table CRUD. → `inspection-contract.md` D3.
 9. **The worklist is bounded and index-backed.** Keyed on

@@ -41,9 +41,10 @@ Base for every record: `feat/v4` at
 - **The prescribed red test already passes on the shipped surface.**
   `inspect()` returns the Reaction result unfiltered and `effects()` returns
   the provider receipt raw. Both become presence rather than bytes.
-- **`relational-nondisclosure.json` is produced and never consumed.** It joins
-  the artifacts verified at startup, and the operational lane gets an
-  equivalent.
+- **`relational-nondisclosure.json` is byte-verified but never read.** It is in
+  the build inventory, so startup fails if its bytes are tampered with — but no
+  code consults its commitments. The operational lane gets an equivalent
+  artifact; the relational one needs a reader, not a digest.
 - **`drainRuntime` corrects the projection, not the code.** Its seven required
   properties are run-scoped and cannot apply to a process.
 - **No global freshness header.** Per-answer provenance instead, because four

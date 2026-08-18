@@ -6,7 +6,7 @@ test.
 
 This record merges two concurrent work ticks that reached the same file from
 different directions. One established that the compiler already emits a
-nondisclosure contract for the application lane and that nothing consumes it;
+nondisclosure contract for the application lane and that no code reads it;
 the other found a live disclosure path in the shipped operational reads. Both
 findings were re-verified against the tree before merging. Neither is
 discarded.
@@ -75,7 +75,14 @@ a closed set of disclosure commitments per query (`nondisclosure.ts:3`–`:28`):
   relation and a Policy-invisible one are the same value.
 - `selectedFieldDenied: "omitProperty"` — a denied Field is absent, not null.
 
-**The finding is that nothing consumes the artifact.**
+**The finding is that no code reads the artifact.** It is not unverified: the
+build inventory covers every generated file except `runtime-build.json` and
+`internal/checksums.json` (`packages/compiler/src/runtime/index.ts:378`), and
+startup sha256-verifies every inventory entry
+(`packages/runtime/src/application/artifact-files.ts:16`–`:28`). For canonical
+bytes that is stricter than a semantic digest. An earlier revision said nothing
+consumed it, which was wrong. What is true is narrower: nothing _consults_ its
+commitments.
 `relational-nondisclosure.json` appears nowhere in `packages/runtime`. The
 runtime verifies eight artifacts by semantic digest at startup —
 `runtime-executables.json`, `operation-contracts.json`, `wire-contract.json`,
@@ -129,8 +136,13 @@ field list directly is the simpler equivalent.
 ### D2 — `relational-nondisclosure.json` gains runtime verification
 
 It joins the eight artifacts verified by semantic digest at startup. A
-nondisclosure proof that nothing checks is not a proof. Small, independent, and
-does not depend on D1.
+**Corrected:** it is already byte-verified through the inventory, so it does
+not need a semantic digest, and an earlier revision of this decision rested on
+the false premise that nothing checked it. What it lacks is a _reader_ — the
+keyed-lookup commitment is independently enforced at
+`packages/runtime/src/relational/postgres.ts:121`–`:130`, and the other four
+have no equivalent. D2 is therefore narrowed to: give the remaining four
+commitments an enforcement site, or drop the artifact's claim to be a proof.
 
 ### D3 — the inspection surface is exactly the four reads plus one worklist
 

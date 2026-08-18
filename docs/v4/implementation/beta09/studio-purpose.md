@@ -114,6 +114,23 @@ schema guarantee rather than an inference. `audit(runId)` shows whether someone
 already tried. The action is two fenced steps: `acknowledgeAmbiguity`, then
 `retryRun`, both bound to `version`.
 
+**This job does not execute as written, and that is a finding this slice owes.**
+`acknowledgeAmbiguity`'s applied path appends an `ambiguityAcknowledged` event
+(`packages/runtime/src/durable/postgres-maintenance.ts:371`), and every append
+bumps `event_sequence` (`packages/runtime/src/durable/rows.ts:139`). The run's
+version therefore changes. `DurableMaintenanceOutcome` (`postgres-maintenance.ts:28`)
+carries no version, and `maintenance-decisions.md` only returns one on a
+`VERSION_MISMATCH`. So a caller who reads version V, acknowledges, then retries
+bound to V is _guaranteed_ to be fenced out — the flagship job fails on its
+second step by construction.
+
+The fix is small and belongs with the fence decision: an **applied** outcome
+must return the run's new version too, not only a rejected one. Then the two
+steps chain without a second `inspect()` and without a race. Recorded here
+rather than quietly repaired because this is exactly the class of defect
+BETA-08 was blocked for — a path asserted in a record that no execution
+supports.
+
 This is the job that justifies the whole slice, and it is exactly the job
 `maintenance-decisions.md` warns Studio must not get wrong by offering
 `retryRun` as the remedy for ambiguity.

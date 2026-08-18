@@ -18,8 +18,14 @@ Gate 8 both require that each maintenance command carry "maintenance Authority,
 exact identity, bounded reason, idempotency, expected-version fencing, a typed
 winner, and append-only audit."
 
-**The bounded reason is not there, and none of BETA-08's four review rounds
-surfaced it.** Read out of the tree:
+**The bounded reason is not there — and BETA-08's round 3 already looked at it
+and accepted it on evidence that does not hold.** That review counted "bounded
+reason (`durable_cancellation_reason_bounded`)" among the four satisfied
+properties (`docs/v4/implementation/beta08/claude-review-03.json`). The bound is
+real, but it is on one command, and it lands in `durable_cancellations` rather
+than in the audit. An earlier revision of this record claimed no round surfaced
+it; the true finding is stronger and is a correction to an accepted review
+rather than a discovery. Read out of the tree:
 
 - `reason` appears on exactly one command, `cancelRun`
   (`packages/runtime/src/durable/postgres-maintenance.ts:61`), and is written to
@@ -147,6 +153,12 @@ nothing new, because the version is the run's own append-only history length
 and any caller holding inspection Authority can already read it from
 `inspect()` — and per Q3, a caller without inspection Authority should not
 reach the command at all.
+
+**An applied outcome must return the new version as well.** Every applied
+command that appends an event bumps `event_sequence`, so a caller chaining two
+commands from one `inspect()` is fenced out of the second by its own first
+command — see the flagship job in `studio-purpose.md`. Returning the version on
+both outcomes, not only on `VERSION_MISMATCH`, is what makes chaining possible.
 
 The winning actor is another Principal's identity and stays undisclosed. The
 handoff's Q14 reaches the same place; this decision differs only by returning

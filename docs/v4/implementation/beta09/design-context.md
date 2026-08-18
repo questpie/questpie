@@ -64,8 +64,9 @@ case. The two agree, so the boundary is unambiguous.
 
 **BETA-09 therefore owns three gaps against the accepted maintenance
 contract**, and nothing else in the kernel. The third was found while grounding
-the decisions in `maintenance-decisions.md` and was not surfaced by any of
-BETA-08's four review rounds:
+the decisions in `maintenance-decisions.md`. BETA-08's round 3 had examined that
+property and accepted it on evidence that does not hold, so this is a correction
+to an accepted review rather than a new discovery:
 
 1. Maintenance Authority for the three shipped commands. A brand proves the
    value came from the application's own module; it proves nothing about
