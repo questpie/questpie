@@ -29,6 +29,20 @@ export interface DurableKernelContractV1 {
 	readonly maintenanceRejectionCodes: readonly string[];
 	readonly maintenanceFencedOn: string;
 	readonly maintenanceCommands: readonly string[];
+	/**
+	 * What the operational reads may disclose. Part of the interface, not only of
+	 * the value: a consumer typing against this contract must be able to see the
+	 * commitments, or the pin is invisible to everything but a digest.
+	 */
+	readonly nondisclosure: Readonly<{
+		runAbsence: string;
+		countOracle: string;
+		listDisclosure: string;
+		result: string;
+		receipt: string;
+		eventPayload: string;
+		operatorText: string;
+	}>;
 	readonly effectStatuses: readonly string[];
 	readonly digest: string;
 }

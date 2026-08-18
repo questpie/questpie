@@ -143,6 +143,19 @@ type Beta08Application = Readonly<{
 		}>,
 		use: (
 			scope: Readonly<{
+				queries: Readonly<{
+					"messages.page"(
+						input: Readonly<{
+							channelId: string;
+							first: number;
+							after: string | null;
+						}>,
+					): Promise<
+						Readonly<{
+							nodes: readonly Readonly<{ id: string; body?: string }>[];
+						}>
+					>;
+				}>;
 				mutations: Readonly<{
 					"message.publish"(
 						input: Readonly<{ channelId: string; body: string }>,

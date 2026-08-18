@@ -234,16 +234,17 @@ postgresTest(
 			prepared.reactionProjectionBytes,
 		);
 		const admitted = await retired.admit(8);
-		const target = admitted.find((entry) => entry.runId === runId);
-		expect(target).toBeDefined();
+		expect(admitted.some((entry) => entry.runId === runId)).toBe(true);
 		const claim = await retired.claim({
 			runId,
 			workerId: "beta09-retired-worker",
-			executableDigest: target!.executableDigest,
 			leaseMilliseconds: 5_000,
 			attemptDeadlineMilliseconds: 5_000,
 		});
+		// Narrowed before reading the code: `code` lives only on the refused
+		// variant, and the pinned typecheck refuses the unnarrowed read.
 		expect(claim.status).toBe("refused");
+		if (claim.status !== "refused") throw new Error("claim was not refused");
 		expect(claim.code).toBe("EXECUTABLE_RETIRED");
 
 		// The defect: nothing was written, so the run is indistinguishable from a

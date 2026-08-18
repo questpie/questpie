@@ -1,0 +1,24 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"@questpie/compiler": ["../packages/compiler/src/index.ts"],
+			"questpie": ["../packages/questpie/src/index.ts"]
+		}
+	},
+	"files": [
+		"integration/beta08-reaction.test.ts",
+		"integration/postgres/beta02-catalog-reader.test.ts",
+		"integration/postgres/beta09-authority-guard.test.ts",
+		"integration/postgres/beta09-inspection-nondisclosure.test.ts",
+		"integration/postgres/helpers/beta05-runtime.ts",
+		"integration/postgres/helpers/beta08-durable.ts",
+		"type/beta01-generated-contract.test.ts",
+		"unit/beta07-live-query-projection.test.ts",
+		"unit/beta09-operational-nondisclosure.test.ts",
+		"unit/beta09-studio-mount.test.ts",
+		"unit/beta09-studio-projection.test.ts",
+		"unit/helpers/studio-digest.ts"
+	]
+}
