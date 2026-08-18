@@ -90,10 +90,32 @@ browser, its Authority arrives as request input, and the glossary forbids
 deriving System Authority from it. So the command must be an evaluated decision
 against a resolved Principal and Context, refusing with a typed, audited code.
 
-That is what the branch already built, so this decision ratifies working code
-rather than commissioning new work: `AUTHORITY_DENIED` in the rejection union
-with `DurableMaintenanceAuthority` in
-`packages/runtime/src/durable/postgres-maintenance.ts`.
+The branch built the mechanism — `AUTHORITY_DENIED` in the rejection union with
+`DurableMaintenanceAuthority` in
+`packages/runtime/src/durable/postgres-maintenance.ts` — but **it is not
+reachable on any shipped path**, and an earlier revision of this record
+overstated it as working code this decision merely ratifies.
+
+The guard is conditional on an optional hook
+(`packages/runtime/src/durable/postgres-maintenance.ts:209`–`:210`: the denial
+fires only when `input.authorize !== undefined`), and the sole production
+construction site passes no authorizer
+(`packages/compiler/src/runtime/application.ts:411`). Every site that supplies
+one is a test constructing its own instance. So a maintenance command reached
+through `app.durable.cancelRun` today applies without an Authority decision, and
+records an actor the system never verified.
+
+The branch knows this and says so rather than hiding it —
+`tests/integration/postgres/beta09-authority-guard.test.ts:60`–`:63` records
+that the guard "is unreachable through `app.durable` … until an exposing
+Operation exists", and drives the factory contract directly instead.
+
+That deferral is the same blocker as the section above, which sharpens what is
+actually at stake in the transport decision: it does not only gate Studio's
+operational half, it gates the Authority enforcement D2 just mandated. An
+evaluated decision needs a caller whose Authority arrives as request input.
+While the only caller is host process code supplying its own `actor`, there is
+nothing for the guard to evaluate that the caller did not assert about itself.
 
 ## D3 — the divergences are batched into one interstitial gate
 
@@ -131,8 +153,12 @@ together states that once instead of seven times in seven different voices.
 
 ## What this does and does not unblock
 
-Unblocked, and both ratify code already on the branch: the maintenance Authority
-evaluation (D2), and the decision not to amend ADR-0010 (D1).
+Unblocked: the decision not to amend ADR-0010 (D1), which ratifies the shape the
+branch already has.
+
+Decided but **not** unblocked: the maintenance Authority evaluation (D2). The
+decision is settled; wiring it needs a caller that is not host process code,
+which is the transport question.
 
 Still blocked, and now for a better-stated reason than "Studio asset packaging":
 the operator surface has no transport. Packaging is a question about where
