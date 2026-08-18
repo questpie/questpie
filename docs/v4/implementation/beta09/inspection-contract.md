@@ -132,6 +132,49 @@ It joins the eight artifacts verified by semantic digest at startup. A
 nondisclosure proof that nothing checks is not a proof. Small, independent, and
 does not depend on D1.
 
+### D3 is falsified: "Policy-protected inspection Operations" is not authorable
+
+D3 as written below says every read is "Policy-protected by an **evaluated
+inspection Authority**". Implementing it found that neither Operation kind can
+carry such a thing.
+
+**A Query has no admission Policy at all.** `QueryFactory` accepts `name`,
+`network`, `input`, `output`, and `handler`
+(`packages/compiler/src/generate.ts:375`–`:386`), and the compiler validates a
+`policy` member only when `kind === "mutation"`
+(`packages/compiler/src/model.ts:241`). A Query's protection is entirely the
+Collection Policy on the data it reads through `ctx.data`.
+
+**A Mutation's admission Policy can only say `authenticated`**, which
+`authority-mechanism.md` established for the maintenance axis.
+
+So the root cause is one thing, and it explains both: **QUESTPIE's authorization
+model is Collection-bound, and operational facts are not Collection rows.** A
+run has no Collection, so no Policy reaches it, and an inspection Query
+returning run state would be protected by nothing at all — reachable by any
+caller the wire admits.
+
+That is worse than the maintenance gap, because maintenance at least sits behind
+a server-internal object. A `defineQuery` with `network: true` is on the wire.
+
+**Consequence for this slice.** "Policy-protected inspection Operations" is one
+of BETA-09's four required artifacts and it cannot be built as named. Combined
+with the maintenance Authority finding, **two of the four are unauthorable at
+this base for the same structural reason.**
+
+What BETA-09 can honestly ship on this axis is what it has shipped: the
+inspection _projection_, strictly narrower than the kernel read, so that
+whatever reaches a reader carries no result body and no provider receipt; and
+the independent projection producer over compiled artifacts, which are public
+contract rather than operational fact and therefore raise no disclosure question
+at all.
+
+The operational reads stay server-internal, reachable through the application
+object and never through the wire, on exactly the terms `authority-mechanism.md`
+settled for maintenance. Disclosure equivalence then holds by construction —
+not because a Policy enforces it, but because no wire Operation exposes the lane.
+That is a weaker guarantee than D3 claimed and it is the true one.
+
 ### D3 — the inspection surface is exactly the four reads plus one worklist
 
 `inspect`, `events`, `effects`, `audit`, plus the bounded run worklist
