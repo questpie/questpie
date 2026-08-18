@@ -59,8 +59,13 @@ Concretely:
   at `internal-protocol-v4-sql.ts:210`. Do not introduce a second number.
 - `retryRun` and `acknowledgeAmbiguity` gain a required `reason`.
 - Internal protocol v5 adds a bounded `reason` column to
-  `durable_maintenance_commands` with the same CHECK, so every command — applied
-  or rejected — records why it was attempted.
+  `durable_maintenance_commands`, so every command — applied or rejected —
+  records why it was attempted. **The column is nullable at the schema and
+  required at the surface**, which `internal-protocol-v5.md` shows is forced
+  rather than chosen: making it `NOT NULL` needs a backfill or a `DEFAULT`, and
+  both fabricate audit content no operator supplied. A `NULL` therefore means
+  exactly "written before v5." That record is the authority on the column
+  shape; this bullet is the requirement it satisfies.
 - **Enforce the bound before the statement, not only in the DDL.** Today
   `cancelRun`'s only enforcement is the database CHECK, so an over-long reason
   surfaces as a raw PostgreSQL error rather than a typed maintenance rejection.
@@ -68,7 +73,9 @@ Concretely:
   `REASON_INVALID` member to `DurableMaintenanceRejection`
   (`postgres-maintenance.ts:20`). Extending the kernel's own existing rejection
   union is not inventing authority; it is making an accepted property — "bounded
-  reason" — a typed contract instead of a database accident.
+  reason" — a typed contract instead of a database accident. `hostile-cases.md`
+  later established that `AUTHORITY_DENIED` must join it for the same reason, so
+  the union and the CHECK gain two members, not one.
 
 ## Q3 — read versus maintenance Authority
 

@@ -136,10 +136,12 @@ The concrete deltas the implementing slice must reconcile:
   path enforces. That is the exact failure BETA-08's first review round
   blocked, one layer up.
 
-The handoff's recommended Overview tiles include "Reaction ambiguity" and
-"Live Query resets," both of which are now genuinely available. Its freshness
-and retention treatments (its Q7 and Q8) are the ones that need re-grounding
-against the dropped retention block.
+Of the handoff's recommended Overview tiles, "Reaction ambiguity" is genuinely
+available and "Live Query resets" is not, for the reason recorded in the
+BETA-07 bullet above. An earlier revision of this record listed both as
+available; that was wrong. Its freshness and retention treatments, its Q7 and
+Q8, are settled in `freshness-and-provenance.md`, which replaces the whole
+per-source freshness idea with per-answer provenance.
 
 ## Identities
 
