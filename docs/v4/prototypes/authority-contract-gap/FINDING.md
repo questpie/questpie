@@ -77,6 +77,14 @@ Three resolutions are visible and each belongs to a different owner:
   not to a slice.
 - **Remove `isSystem()` from the authoring surface** until something can satisfy
   it. That narrows a published Policy vocabulary, which is an API decision.
+  **Measured: it touches exactly three sites** — the declaration
+  (`packages/questpie/src/relational/model.ts:34`), the lowering
+  (`packages/compiler/src/relational/discovery.ts:54`), and the one caller
+  (`fixtures/collaboration/src/message-policy.ts:206`). Nothing in `tests/` or
+  `apps/` references it. So the cost of this option is small and known, which is
+  worth stating because "narrows a published vocabulary" sounds expensive and in
+  this case is three lines and a fixture Policy that would have to say what it
+  means instead.
 - **Leave it and document that it is always false.** Cheapest, and it leaves an
   authoring surface whose plain reading is wrong.
 

@@ -560,6 +560,14 @@ and would otherwise never surface them.
 - **The accepted budget table measures on the wrong axis.** It bounds a
   Principal where the glossary makes Tenant the isolation identity.
   `docs/v4/prototypes/tenant-share-control/DECISION.md`
+- **Three accepted durable properties are driven by no test.** The effect fence,
+  the maintenance brand refusal, and the `cancellationRequested` event are each
+  named in a criterion, present in code, and asserted by nothing. Each has a
+  falsification written out — what to break and what must then fail.
+  `docs/v4/prototypes/durable-evidence-gaps/FINDING.md`
+
+This list is maintained by hand and has already gone stale once. Treat
+`ls docs/v4/prototypes/` as authoritative for what exists.
 
 ## Next invocation
 
