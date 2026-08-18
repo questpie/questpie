@@ -1,162 +1,167 @@
-# BETA-09: the inspection surface and how nondisclosure is proven
+# BETA-09 inspection contract and the red test
 
-Decides what Policy-protected inspection BETA-09 exposes, what each read
-returns, and how the prescribed red test is answered by something stronger than
-a hand-written assertion.
-
-The red test: _Studio can disclose a hidden Message or internal payload not
-available through the equivalent generated Operation._
+Decides what Policy-protected inspection Operations BETA-09 exposes, what each
+returns, and how nondisclosure equivalence is proven against the prescribed red
+test. Companion to `design-context.md`, `maintenance-decisions.md`, and
+`studio-purpose.md`.
 
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state.
 
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
-## Two lanes, and only one of them is closed
+## The prescribed red test already passes on the shipped surface
 
-**Application data** flows through ordinary generated Operations and ordinary
-Collection Policy. If Studio has no second path to rows, disclosure equivalence
-is definitional — there is nothing to diverge from.
+> Studio can disclose a hidden Message or internal payload not available
+> through the equivalent generated Operation.
+
+It passes today, through a path nobody has had to look for.
+
+**`inspect(runId)` returns `resultBytes`** — the Reaction's encoded result, up
+to 262,144 bytes. The projection selects it explicitly
+(`packages/runtime/src/durable/postgres-kernel.ts:692`) and hands it back
+unmodified (`:717`). It is written by `succeed()` (`:654`), stored on
+`durable_runs.result_bytes` (`internal-protocol-v4-sql.ts:41`), and bounded
+only by size (`:63`).
+
+Nothing filters it. A Reaction declares an output codec, but a codec is a shape
+contract, not an authorization filter. If a handler returns a Message body, a
+recipient address, or any other application value, `inspect()` discloses that
+value to every caller who can reach the durable surface — bypassing the
+Collection output Field Policy that governs the same data through its ordinary
+Query.
+
+**`effects(runId)` returns `receipt` raw** — provider-supplied external text,
+bounded at 256 characters (`internal-protocol-v4-sql.ts:184`) and returned
+unmodified by `effectView` (`packages/runtime/src/durable/postgres-effects.ts:61`).
+A provider receipt is not application data, but it is external data the
+application never authored and never had a chance to classify.
+
+**The asymmetry is the tell.** `inspect()` deliberately does _not_ select
+`payload_bytes` — the Reaction _input_, stored on the same row and bounded the
+same way (`internal-protocol-v4-sql.ts:25`, `:60`). Someone was careful about
+the input and not about the result. That looks unintentional rather than
+decided, which is exactly why it should be decided here.
+
+## Two lanes need two proofs
+
+**Application data** flows through ordinary generated Operations and Collection
+Policy. ADR-0014 fixes this: "Studio reads application data through ordinary
+generated Operations and Policy." If Studio opens no second path to data, the
+equivalence the red test asks about is definitional rather than something to
+test into existence.
+
+That lane already carries a compiler-produced nondisclosure proof.
+`relational-nondisclosure.json` (`packages/compiler/src/artifacts.ts:453`,
+produced by `packages/compiler/src/relational/nondisclosure.ts`) pins a precise
+vocabulary per Query:
+
+- keyed lookups disclose `outcomeOnly`, mapping authorized to `found` and
+  unavailable to `notFound`;
+- `countOracle: "absent"`;
+- pages return `authorizedBaseOnly` rows, including the first-plus-one
+  sentinel;
+- a missing relation and a policy-invisible relation both project `null`, so
+  they are indistinguishable;
+- a denied selected Field is `omitProperty` — omitted, not nulled.
 
 **Operational facts** — runs, events, effects, the maintenance audit — are not
-Collection rows. No Collection Policy covers them. They are read through four
-methods that today evaluate no Authority whatsoever:
+Collection rows. Collection Policy does not reach them. They have their own
+evaluated inspection Authority, and at this base they have **no nondisclosure
+proof of any kind**.
 
-| Read    | Signature                                                        | Where                                                     |
-| ------- | ---------------------------------------------------------------- | --------------------------------------------------------- |
-| run     | `inspect(runId): Promise<DurableRunView \| null>`                | `packages/runtime/src/durable/postgres-kernel.ts:244`     |
-| history | `events(runId): Promise<readonly DurableRunEventView[]>`         | `postgres-kernel.ts:245`                                  |
-| effects | `read(runId): Promise<readonly DurableEffectView[]>`             | `packages/runtime/src/durable/postgres-effects.ts:53`     |
-| audit   | `audit(runId): Promise<readonly DurableMaintenanceAuditEntry[]>` | `packages/runtime/src/durable/postgres-maintenance.ts:81` |
+That asymmetry is the whole finding: the lane with a compiler-verified
+disclosure contract is the safe one, and the lane with none is the one shipping
+raw payloads.
 
-**So the red test bites on the operational lane, not the application lane.**
-Driving it against application data proves a tautology. The honest version
-asks whether a caller can learn from a run, an event, an effect, or an audit
-entry something the equivalent generated Operation would have denied them.
+## Decision: what the inspection projection returns
 
-## What the compiler already proves, and the finding underneath it
+BETA-09 exposes the operational lane through inspection Operations whose
+projection is strictly narrower than the kernel's internal read. The kernel
+methods stay as they are — the worker needs `resultBytes` to exist — but
+nothing Studio can reach returns them.
 
-The application lane is not merely closed by argument. The compiler emits a
-per-query, machine-readable nondisclosure contract,
-`relational-nondisclosure.json` (`packages/compiler/src/artifacts.ts:453`,
-projected by `packages/compiler/src/relational/nondisclosure.ts:82`). Its shape
-is a closed set of disclosure commitments per query
-(`nondisclosure.ts:3`–`:28`):
+| Kernel read      | Inspection projection returns                                                                                                                           | Removed                                                                                                                                         |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `inspect(runId)` | run, dispatch, Resource, state, attempt count, current attempt, cancellation-requested, dead-letter, failure code, availability, terminal time, version | **`resultBytes`** — replaced by presence, byte length, and a digest                                                                             |
+| `events(runId)`  | sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, safe error code                                | nothing; the event union is already safe by construction and CHECK-constrained to a closed `error_code` set (`internal-protocol-v4-sql.ts:150`) |
+| `effects(runId)` | effect name, effect identity, status, receipt presence                                                                                                  | **`receipt`** — replaced by presence                                                                                                            |
+| `audit(runId)`   | command, outcome, rejection code, actor, state before and after, requested-at, and the bounded reason once internal protocol v5 lands                   | nothing further                                                                                                                                 |
 
-- `keyedLookup.disclosure: "outcomeOnly"` with outcomes `authorized: "found"`
-  and `unavailable: "notFound"` — a keyed lookup discloses only whether the
-  caller may have it, never why not.
-- `countOracle: "absent"` — no count can be used as an existence oracle.
-- `page.rows: "authorizedBaseOnly"` and the same for the `first + 1` sentinel,
-  so the pagination sentinel cannot leak the existence of a denied next row.
-- `relation.missing: null` and `relation.policyInvisible: null` — a missing
-  relation and a Policy-invisible one are the same value, so they cannot be
-  told apart.
-- `selectedFieldDenied: "omitProperty"` — a denied Field is absent, not null.
+**Why presence rather than redaction.** A truncated or masked payload is still
+a payload path, and it invites a later change that widens it. Presence plus
+length plus digest answers every operational question the result is actually
+needed for — did it succeed, how large was it, is it the same result the
+receipt refers to — without ever moving the bytes.
 
-This is the right shape and it is already built. **The finding is that nothing
-consumes it.** `relational-nondisclosure.json` appears in `packages/compiler`
-and nowhere in `packages/runtime`. The runtime verifies eight artifacts by
-semantic digest — `runtime-executables.json`, `operation-contracts.json`,
-`wire-contract.json`, `reaction-projection.json`, `durable-kernel.json`,
-`realtime-wire-contract.json`, `change-ledger.json`, and
-`live-query-resume.json` (`packages/runtime/src/application/artifact-files.ts:53`–`:133`)
-— and the nondisclosure projection is not among them. It is a proof no one
-checks at startup and no code reads at run time.
+**Where the result becomes visible.** Through an ordinary Policy-protected
+Query the application chose to write, which is what ADR-0014 already requires.
+An application that wants a Reaction result in Studio exposes it as data,
+under the Policy that governs that data. The framework does not decide that
+the durable kernel is a disclosure channel.
 
-## Decisions
+**The judgment call, stated as one.** Removing `receipt` from the operational
+projection costs a real diagnostic: an operator settling an ambiguity would
+like to see what the provider said. The trade is taken because a receipt is
+unclassified external text — the application never authored it and never had a
+chance to say whether it carries a recipient, a token, or a customer
+identifier. What would overturn it: a receipt contract that constrains the text
+to a declared safe shape, at which point disclosure becomes a decision the
+application makes rather than one the framework makes for it.
 
-### D1 — the operational lane gets the same kind of artifact
+## The artifact: `operational-nondisclosure.json`
 
-BETA-09 compiles an operational nondisclosure projection with the same
-commitment shape as the relational one, covering the four reads and the run
-worklist. Concretely it must commit, per read:
+BETA-09 produces the operational lane's equivalent of
+`relational-nondisclosure.json`, digested into the Runtime Build like every
+other artifact, and pinned by a compile-level test.
 
-- **absence and denial are one value.** `inspect` already returns
-  `DurableRunView | null` (`postgres-kernel.ts:244`), so the shape exists; the
-  commitment is that an unauthorized caller receives the same `null` a missing
-  run produces.
-- **no count oracle**, matching `countOracle: "absent"`. The worklist returns
-  first-N-with-`hasMore` and never a total. This is already required by
-  `studio-purpose.md` on cost grounds; here it is required again on disclosure
-  grounds, which is a stronger reason.
-- **the list discloses no run the caller could not `inspect` individually.**
-  A worklist is an enumeration, and enumeration is the classic way a
-  per-identity guard is defeated in aggregate.
-- **event payload commitments.** `durable_run_events` carries a closed
-  `error_code` enum and no free text
-  (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:145`,
-  `:150`), so this commitment is cheap to make and already true — but it must be
-  _stated_, because the maintenance reason this slice adds
-  (`maintenance-decisions.md`) is the first operator-authored free text to enter
-  the durable record, and it will be readable through `audit`.
+It states, per inspection Operation, the same class of facts the relational
+projection states per Query:
 
-Why an artifact rather than tests alone: BETA-08's review found repeatedly that
-a passing test can assert something other than what it claims. A compiled
-commitment that the runtime verifies by digest cannot drift from the code
-silently, and a reviewer can read it without reading the tests.
+- which fields the projection returns, as an exact closed list;
+- that `resultBytes` and `receipt` are absent, named explicitly rather than
+  merely missing, so a later widening is a visible diff in a digested artifact;
+- the unauthorized outcome vocabulary, matching the relational lane's
+  `outcomeOnly` shape: a caller without inspection Authority cannot distinguish
+  a denied run from a nonexistent one;
+- that no listing surface exposes a count, matching `countOracle: "absent"`.
 
-**Judgment call, stated as one.** Nothing in accepted authority requires an
-operational nondisclosure artifact; the accepted contract requires the
-_property_, not this mechanism. I am choosing it because the mechanism already
-exists for the neighbouring lane and because BETA-08's four rounds showed
-hand-written proof is the weak link. What would overturn it: if the operational
-reads turn out to have so few disclosure degrees of freedom that the artifact is
-a constant, then it is ceremony and a driven hostile case is enough.
+Making absence an _asserted_ property rather than an implementation detail is
+the point. BETA-08's first round was blocked for pinning what nothing enforces;
+this is the inverse discipline — enforcing what the contract already claims,
+and pinning the enforcement where a regression shows up as a digest change.
 
-### D2 — `relational-nondisclosure.json` gains runtime verification
+## Driving and falsifying the red test
 
-It joins the eight artifacts verified by semantic digest at startup. A
-nondisclosure proof that nothing checks is not a proof. This is a small,
-independent correction and it does not depend on D1.
+The red test must fail for the real reason before anything is built.
 
-### D3 — the inspection surface is exactly the four reads plus one worklist
+**Setup.** A Reaction whose result contains a Message field that the calling
+Principal's Collection Policy denies on the equivalent Query. Two callers: one
+holding inspection Authority, one not.
 
-No new read shapes. Every one is Policy-protected by an **evaluated inspection
-Authority**, distinct from maintenance Authority per `maintenance-decisions.md`
-Q3. The worklist is the single addition `studio-purpose.md` decided, keyed on
-`(application_name, state)` against the existing `durable_runs_claim_idx`.
+**The assertion.** The caller holding inspection Authority reads the run and
+cannot obtain the denied field by any route the inspection surface offers. The
+same caller reads the Message through its ordinary generated Query and receives
+the field omitted, per `selectedFieldDenied: "omitProperty"`. The two agree.
 
-Adding read shapes beyond these is how an inspection surface becomes the
-internal-table CRUD the issue names as a non-goal.
+**Falsification, which is the part that proves it.** Restore `resultBytes` to
+the inspection projection and re-run. The test must fail with a named assertion
+showing the denied field's value recovered from the run result. Record that
+exact assertion in the evidence, per the discipline carried from BETA-08 —
+three consecutive BETA-07 rounds shipped tests proving something other than
+what they claimed, and the guard against that is falsifying every repair
+against the unrepaired code.
 
-### D4 — the red test is driven on the operational lane
+**The second hostile case**, from the issue's own list: a foreign Principal.
+A caller without inspection Authority receives the same outcome for a run that
+exists and a run that does not. This is where inspection Authority is
+evaluated, and per `studio-purpose.md` it is evaluated at the entrance — the
+bounded worklist — not only at the leaf, because a list leaks existence.
 
-The hostile case constructs a caller who is denied the equivalent generated
-Operation for a Message, then attempts each of the five operational reads for a
-run that touched that Message, and asserts that none of them discloses the
-Message, its payload, or its existence. Falsify it first against the
-unauthorized code — where today every read returns everything to anyone holding
-the object — and record the exact assertion that fails.
+## What this does not settle
 
-That falsification is trivially available right now, which is the point: at
-this base the red test _passes in the wrong direction_, because there is no
-Authority to deny with.
-
-## What the operational reads may safely return
-
-Grounded in what the columns actually hold:
-
-- **Run**: state, attempt count, dead-letter flag, failure code, version,
-  Resource, and Tenant. Identities and codes, no payload.
-- **History**: sequence, timestamp, Resource, dispatch, run, attempt,
-  lease-token digest, causation, correlation, kind, and the closed error code.
-  The accepted contract already forbids raw payload, credential, secret, and
-  stack trace here, and the schema enforces the closed code.
-- **Effects**: effect name, status, and receipt. `receipt IS NULL` is _forced_
-  for `ambiguous` by `durable_effect_settled_shape`
-  (`internal-protocol-v4-sql.ts:188`), which is what makes "is retrying safe"
-  answerable rather than a guess.
-- **Audit**: command, outcome, rejection code, actor, state before and after,
-  requested-at — plus the bounded reason this slice adds. The reason is
-  operator-authored free text and is therefore the one field in the whole
-  operational lane that can carry something a nondisclosure commitment must
-  actively bound rather than merely observe.
-
-## Correction carried from this work
-
-`design-context.md` says the application lane is "closed by construction." That
-remains true, but it undersold the evidence: the compiler already emits a
-per-query nondisclosure contract for it. The weakness is not the lane, it is
-that the contract is unverified — recorded as D2 above rather than restated
-there.
+The maintenance Authority evaluation itself — who may cancel, retry, or
+acknowledge — is a separate decision from who may read, per
+`maintenance-decisions.md` Q3. This record fixes the read side and the
+disclosure proof. The command side inherits the same two-Authority split and
+the same denial-specificity rule.
