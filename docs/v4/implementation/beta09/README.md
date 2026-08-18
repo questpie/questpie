@@ -149,16 +149,30 @@ it matches them exactly rather than drifting.
 - **D1, the operational nondisclosure commitments: built.** The branch adds
   `tests/unit/beta09-operational-nondisclosure.test.ts` pinning absence and
   denial as indistinguishable and no count oracle.
-- **D3, four reads plus one worklist: partial.** The projection functions exist;
-  **the worklist does not.** `inspection.ts` contains no worklist, failed-run, or
-  needs-attention read.
+- **D3, four reads plus one worklist: built.** An earlier revision of this
+  section, written one tick earlier, said the worklist did not exist. It does, at
+  `packages/runtime/src/durable/worklist.ts`, exported as `readDurableWorklist`.
+  This note went stale inside a tick, which is worth recording rather than
+  quietly overwriting.
 
-That last gap is worth naming precisely, because it is the piece `studio-purpose.md`
-identifies as making the durable kernel reachable at all: every shipped durable
-read takes `runId`, and `runId` is not obtainable through any API. Without the
-worklist, the narrowed projections are correct and unreachable.
+It matches every constraint the decision set: it carries identities and codes and
+nothing that could hold a result, its `hasMore` is found by reading one row past
+the bound rather than by counting, its `first` is clamped to 100, it returns
+`tenantId` for display, and its `WHERE application_name = $1 AND state = $2 ORDER
+BY available_at, run_id` is exactly the prefix scan measured here at 0.13 ms
+against 207,000 runs.
 
-It is also the cheapest remaining piece. The query was measured at 0.13 ms as an
-`Index Scan using durable_runs_claim_idx` against 207,000 runs, needing no
-schema — see `studio-purpose.md`. Nothing about it is unresolved; it is simply
-not written yet.
+It also adds a reason the decision set did not have: the worklist is deliberately
+**not** on `DurableKernel`, because the kernel is the claim, lease, fence and
+transition state machine while this is an operator read that changes for
+different reasons. That split was found by the architecture gate rather than
+designed, which is a better provenance than a preference.
+
+**One divergence, small and worth fixing at the source.** Its `hasMore` comment
+gives two justifications — that a count is a scan, and that a total is an
+existence oracle. Measurement killed the first: a count over the same indexed
+predicate is an Index Only Scan at 0.47 ms for 2,000 failed runs, recorded in
+`studio-purpose.md`. Only the disclosure reason survives, and it is sufficient on
+its own. Two justifications where one is false is worse than one that holds,
+because a reviewer who knocks over the weak one has grounds to doubt the
+decision.
