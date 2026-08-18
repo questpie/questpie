@@ -313,6 +313,59 @@ unchanged:
   A label added after the trigger does not fire it; the pull request must be
   reopened or re-pushed.
 
+## Three of the four required artifacts cannot be built at this base
+
+Verified while implementing, in the order the issue lists them. This is the
+slice's most consequential finding and it reframes what BETA-09 can deliver.
+
+| Required artifact                      | State                                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| independent Studio projection producer | **built** — `apps/studio/src/projection.ts`, driven against the real compiled artifacts |
+| same-origin Studio bundle              | **no mount point exists**                                                               |
+| Policy-protected inspection Operations | **no Policy can reach operational facts**                                               |
+| safe event/explain views               | projectable as data; not servable as a view                                             |
+
+**The bundle has nowhere to be served from.** `app.fetch` gives the realtime
+carrier first refusal on its single contract path, then serves exactly
+`/_questpie/operation` — POST only, with the exact Operation media type — and
+returns `NOT_FOUND` for every other pathname
+(`packages/runtime/src/application/index.ts:431`–`:441`, `operationPath` at
+`packages/runtime/src/operation/wire.ts:7`). There is no static asset path, no
+HTML path, and no second mount. The escape hatch that would provide one,
+`defineRoute`, is a reserved `EmptyDefinitionFactory` that accepts no
+definition. So a same-origin Studio bundle cannot be mounted by any authored
+means at this base.
+
+**Inspection Operations have no Policy**, for the reason
+`inspection-contract.md` now records: a Query has no admission Policy at all and
+a Mutation's can only say `authenticated`, while operational facts are not
+Collection rows so no Collection Policy reaches them.
+
+**The explain and event lanes are projectable but not viewable.**
+`collection-operation-explain.json`, `execution-composition-explain.json`, and
+`relational-explain.json` are compiled artifacts, so the producer can project
+them exactly as it projects the catalog. Durable events are readable
+server-side. What cannot happen is a human opening a page, because that needs
+the bundle mount that does not exist.
+
+### What this means for the slice
+
+BETA-09 can produce everything Studio would render and can deliver no Studio.
+The projection producer is real and tested; the surface that would show it to an
+operator is not reachable.
+
+One root cause runs under all three, and it is worth naming plainly rather than
+as three separate gaps: **the accepted contract describes Studio as an
+application of the framework, and the framework has no seam for an application
+that is not Operations over Collections.** Policy binds to Collections, the wire
+serves one Operation path, and the three factories that would widen either —
+`defineRoute`, `defineAction`, `defineJob` — are reserved names.
+
+This is disclosed rather than worked around. Mounting a bundle by widening
+`app.fetch`, or authorizing inspection by widening Policy, are both Operation-
+contract changes, and `authority-mechanism.md` already refused to invent the
+smaller of the two inside a Studio slice.
+
 ## Where the remaining decisions are taken
 
 `maintenance-decisions.md` in this directory settles the four decisions this
