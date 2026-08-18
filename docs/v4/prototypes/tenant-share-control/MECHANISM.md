@@ -155,6 +155,29 @@ serialize every claim for a tenant on one row. That converts a
 `SKIP LOCKED`-based design, chosen precisely so workers never block each other,
 into one with a contention point per tenant.
 
+**Measured, because rejecting an option on an asserted cost is how a wrong
+rejection survives.** Sixteen concurrent claim-shaped transactions against
+PostgreSQL 17.10, each holding for 2 ms, driven concurrently from one client:
+
+| In-flight check                                           | 16 concurrent |
+| --------------------------------------------------------- | ------------- |
+| indexed count over `(application_name, tenant_id, state)` | **6.7 ms**    |
+| `UPDATE` of a per-tenant counter row                      | **63.6 ms**   |
+
+The rejection holds, and the shape confirms the mechanism rather than merely the
+verdict: 16 × 2 ms of hold is ~32 ms of pure serialization, and 63.6 ms is that
+plus per-transaction overhead. The counted reads do not block each other and
+finish in roughly one hold time. **9.5× at a 2 ms hold, and it worsens as the
+hold grows** — a real claim transaction writes an attempt row and a lease, so it
+holds longer than this probe does.
+
+_A first attempt at this measurement was discarded._ It spawned sixteen
+`docker exec` processes and reported the counter as marginally **faster**, which
+is process-startup time swamping a 2 ms hold — a measurement answering a
+different question than the one asked, which is the same failure this repository
+keeps blocking tests for. Driving the concurrency from one client removed the
+spawn cost from the comparison.
+
 ## 3. Backlog refusal at acceptance
 
 The decision record settled that backlog is refused inside the Mutation
