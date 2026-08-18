@@ -87,6 +87,11 @@ read-only user seeing actions disabled and a generic denial rather than
 client-side hiding. That is adopted, with one refinement the disclosure logic
 forces:
 
+**What the Authority is evaluated against is decided separately.** This record
+said Authority must be evaluated without saying against what, because it was
+written without checking that `Authority` is a one-member union at this base.
+`authority-mechanism.md` closes that gap and decides ordinary Policy.
+
 **Denial specificity depends on which Authority is missing.** A caller without
 _inspection_ Authority must not be able to distinguish a denied run from a
 nonexistent one, or the denial leaks existence. A caller who holds inspection
