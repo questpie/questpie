@@ -26,6 +26,12 @@ export const beta05Ids = Object.freeze({
 	channel: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
 	membership: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3",
 	principal: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	// A second active member whose role is not owner or admin, so the Message
+	// output Field Policy withholds `body` from them. BETA-09 needs a caller for
+	// whom the ordinary Query omits a field, to prove the durable surface does
+	// not hand it over instead.
+	readerMembership: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5",
+	readerPrincipal: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a6",
 	message: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1",
 });
 
@@ -148,7 +154,8 @@ export async function prepareBeta05PostgresApplication(database: SQL) {
 		insert into collaboration.memberships
 			(id, company_id, principal_id, role, scope_key, status)
 		values
-			(${beta05Ids.membership}, ${beta05Ids.company}, ${beta05Ids.principal}, 'admin', 'company', 'active')
+			(${beta05Ids.membership}, ${beta05Ids.company}, ${beta05Ids.principal}, 'admin', 'company', 'active'),
+			(${beta05Ids.readerMembership}, ${beta05Ids.company}, ${beta05Ids.readerPrincipal}, 'member', 'company', 'active')
 	`;
 	await database`
 		insert into collaboration.messages

@@ -163,6 +163,13 @@ export type Beta08Harness = Readonly<{
 	): DurableKernel;
 	reactionProjectionBytes: string;
 	principal: Principal;
+	/**
+	 * An active `member` whose role the Message output Field Policy does not
+	 * admit for `body`. Minted from the generated application's own framework
+	 * module, because `principal.is` is a brand check and a Principal built by a
+	 * different module instance is refused as NOT_FOUND.
+	 */
+	readerPrincipal: Principal;
 }>;
 
 /**
@@ -230,6 +237,9 @@ WHERE datname = pg_catalog.current_database()
 		).text(),
 	) as Readonly<{ mediaType: string; protocol: unknown }>;
 	const principal = framework.principal.user({ id: beta05Ids.principal });
+	const readerPrincipal = framework.principal.user({
+		id: beta05Ids.readerPrincipal,
+	});
 	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
 	const harness = Object.freeze({
 		app,
@@ -277,6 +287,7 @@ WHERE datname = pg_catalog.current_database()
 		maintenance: app.durable,
 		reactionProjectionBytes,
 		principal,
+		readerPrincipal,
 	});
 	return Object.freeze({
 		harness,

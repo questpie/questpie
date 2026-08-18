@@ -21,6 +21,19 @@ afterAll(async () => {
 	await database?.close();
 });
 
+/**
+ * `JSON.stringify` renders a byte array as numbers, so a naive substring check
+ * over the stringified view silently passes while the payload is right there.
+ * This decodes every byte array it finds, so a leak in any shape is caught.
+ */
+function disclosedText(value: unknown): string {
+	if (value instanceof Uint8Array) return new TextDecoder().decode(value);
+	if (Array.isArray(value)) return value.map(disclosedText).join("\u0000");
+	if (value && typeof value === "object")
+		return Object.values(value).map(disclosedText).join("\u0000");
+	return String(value);
+}
+
 async function publish(
 	prepared: Beta08Harness,
 	input: Readonly<{ body: string; callId: string }>,
@@ -91,5 +104,51 @@ postgresTest(
 		// A provider receipt is arbitrary provider text. Presence is the fact an
 		// operator needs; the text itself is not this surface's to disclose.
 		expect(effects[0]).not.toHaveProperty("receipt");
+	},
+);
+
+/**
+ * The same defect, stated against the equivalent generated Operation, which is
+ * the form the prescribed red test actually names.
+ *
+ * The Reaction runs as its caller, an `admin` member, so its result carries the
+ * Message body. `readerPrincipal` is an active `member`, and the Message output
+ * Field Policy admits `body` only for `owner` or `admin`. So the ordinary Query
+ * omits the property for this caller entirely — and the durable surface must
+ * not hand back the same bytes the Policy just withheld.
+ */
+postgresTest(
+	"a caller whose Query omits a Field cannot obtain it from the durable surface",
+	async () => {
+		const prepared = await harness();
+		const callId = "beta09-nondisclosure-2";
+		const body = "beta09 policy governed body";
+		const messageId = await publish(prepared, { body, callId });
+		const runId = await runIdentity(callId);
+		await prepared.app.durable.poll();
+
+		const page = await prepared.app.execution(
+			{
+				principal: prepared.readerPrincipal,
+				context: { companyId: beta05Ids.company },
+			},
+			async ({ queries }) =>
+				queries["messages.page"]({
+					channelId: beta05Ids.channel,
+					first: 100,
+					after: null,
+				}),
+		);
+		const node = page.nodes.find((entry) => entry.id === messageId);
+		expect(node).toBeDefined();
+		// The Policy withholds the Field by omitting the property outright.
+		expect(node).not.toHaveProperty("body");
+
+		const view = await prepared.app.durable.inspect(runId);
+		expect(view?.state).toBe("succeeded");
+		expect(disclosedText(view)).not.toContain(body);
+
+		const effects = await prepared.app.durable.effects(runId);
+		expect(disclosedText(effects)).not.toContain(body);
 	},
 );

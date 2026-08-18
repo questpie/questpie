@@ -13,6 +13,11 @@ export const messagePublished = defineReaction({
 		messageId: codec.uuid(),
 	}),
 	output: codec.object({
+		// A delivery confirmation echoes what was delivered. `body` is governed by
+		// the Message output Field Policy, which withholds it from members whose
+		// role is not owner or admin — so this result carries content the
+		// equivalent Query would omit for such a caller.
+		deliveredBody: codec.text(),
 		deliveryReceipt: codec.text(),
 		eventId: codec.uuid(),
 		messageId: codec.uuid(),
@@ -54,6 +59,7 @@ export const messagePublished = defineReaction({
 			{ callId: `run:${ctx.run.id}` },
 		);
 		return {
+			deliveredBody: body,
 			deliveryReceipt,
 			eventId: recorded.eventId,
 			messageId: input.messageId,

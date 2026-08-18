@@ -49,6 +49,7 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 	expect(reaction.output).toEqual({
 		kind: "object",
 		properties: {
+			deliveredBody: { kind: "text" },
 			deliveryReceipt: { kind: "text" },
 			eventId: { kind: "uuid" },
 			messageId: { kind: "uuid" },
