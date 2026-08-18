@@ -140,18 +140,43 @@ cancellation, and signal jobs through ordinary Policy-protected Query and
 Mutation Operations" — that an author cannot currently write. `ctx.dispatch`
 lets a Mutation _create_ durable work; nothing lets it _operate_ durable work.
 
-That asymmetry looks deliberate rather than forgotten, and the reason matters
-for whoever closes it: `ctx.dispatch` writes intent inside the Mutation's own
-transaction, which is exactly ADR-0013's atomicity guarantee. A maintenance
-command manages its own transaction — `createPostgresDurableMaintenance` opens
-one per command and marks it as a kernel transaction. Handing a Mutation a
-surface that opens a second transaction inside the first would either nest
-transactions or silently escape the Mutation's atomicity, and neither is
-something to add by reflex.
+An earlier revision of this record explained the asymmetry by saying a
+maintenance command "manages its own transaction", so a Mutation-side seam
+would nest transactions or escape the Mutation's atomicity. **That reasoning
+was wrong, and adversarial review caught it.** Two facts kill it:
 
-**This blocks the maintenance Authority red test**, and the block is honest:
-the guard added alongside it is defence in depth, the primary gate is the
-Policy on an exposing Operation, and no such Operation can be authored today.
+- **A Mutation transaction already carries the kernel marker.**
+  `markDurableKernelTransaction(query)` runs inside the Mutation's own
+  `BEGIN`/`COMMIT` (`packages/runtime/src/mutation/postgres.ts:281`).
+- **A kernel write path already accepts a caller's transaction.**
+  `acceptDurableDispatch` takes a caller-supplied `query`, marks it, and inserts
+  into `durable_runs` — the most protected table in the internal protocol — and
+  its docstring says so: "inside the caller's transaction"
+  (`packages/runtime/src/durable/acceptance.ts:24`, `:45`, `:59`).
+
+So kernel-owned transactions are not an invariant of the kernel. They are a
+local choice in `postgres-maintenance.ts` that another kernel write path
+already declines. A Mutation-side seam would pass the Mutation's transaction
+in, not open a second one, and the command bodies are already written against a
+`DurableQuery` rather than against `sql`.
+
+The real objections are different and are recorded below with the options.
+
+**This blocks the maintenance Authority red test**, and the block is worse than
+"defence in depth is waiting for its primary gate". The generated application
+constructs `createPostgresDurableMaintenance({ sql, application })` with no
+`authorize` (`packages/compiler/src/runtime/application.ts:410`), so the guard
+is **inert in the shipped Runtime**. The Policy on an exposing Operation is not
+the primary gate today; it is the only conceivable gate, and it cannot be
+written. Nothing authorizes a maintenance command at this base.
+
+There is also no fourth Operation kind to escape into. `defineRoute`,
+`defineAction`, `defineJob`, and `defineWorkflow` are emitted as
+`export declare const … : EmptyDefinitionFactory`, where
+`EmptyDefinitionFactory` is `(definition: never) => never`
+(`packages/compiler/src/generate.ts:255`, `:388`) — reserved names that accept
+no definition. Query, Mutation, and Reaction are the only authorable kinds, and
+none of them can reach a maintenance command.
 
 Three ways out, none taken here because each is a contract decision rather than
 an implementation detail:
