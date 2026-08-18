@@ -118,10 +118,38 @@ against a large or unhealthy database.
 
 **Decision.** The gate covers both, by two different means rather than by
 pretending one mechanism suffices: transaction-scoped `set_config` where a
-transaction already exists, and an explicit wrap for those five. Wrapping a
-single-statement read in a transaction to carry a GUC is a real cost — an extra
-round trip each — which is why it is named here rather than discovered during
-implementation.
+transaction already exists, and an explicit wrap for those five.
+
+**The wrap's cost is measured rather than asserted.** 300 iterations after 50
+warm-up rounds, against PostgreSQL 17.10 over TCP to a container on the same
+machine, reading one `durable_runs` row by primary key:
+
+| Shape                                          | Per read                      |
+| ---------------------------------------------- | ----------------------------- |
+| bare statement on the pool                     | 0.142 ms                      |
+| wrapped in a transaction carrying `set_config` | 0.376 ms                      |
+| **delta**                                      | **0.234 ms, a 2.6× increase** |
+
+**The number that matters is not 0.234 ms.** The delta is round-trip-bound: the
+wrap turns one statement into four — `BEGIN`, `set_config`, the read, `COMMIT` —
+so it scales with network latency rather than with the query. On this loopback
+measurement a round trip is worth roughly 0.08 ms and the cost is negligible.
+Against a managed PostgreSQL at 1–5 ms round trip, the same wrap costs 3–15 ms
+per read.
+
+That sharpens the trade rather than settling it. ADR-0014 names a managed
+PostgreSQL project as a conformance target, and these five are the
+operator-facing reads — the ones run against a database that is already
+unhealthy, where added latency is least welcome. So the wrap is nearly free
+locally and materially expensive remotely, and the gate should measure against
+the managed target before fixing the shape, not only against a container.
+
+**What this rules out.** Any mechanism that adds statements pays the same
+round-trip tax, including the `cancelBackendOnAbort` alternative below, which
+needs a reserved connection. The only shape that avoids it entirely is a
+connection-level `SET` applied once per checkout — which the framework cannot do,
+because it does not own the pool. That constraint is the reason this gate is
+awkward, and it is worth stating plainly rather than rediscovering.
 
 ## A second finding: maintenance can block without bound
 
