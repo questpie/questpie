@@ -94,6 +94,16 @@ Concretely:
 **Decision: two distinct Authorities, separately evaluated. Neither implies the
 other.**
 
+_Provenance._ `owner-decisions.md` D1 and D2 record this as settled — D2 states
+"evaluated, distinct from read Authority," following from D1's split rather than
+needing a separate answer. That record is currently reachable only from
+`README.md`: no record that depends on those decisions points at it, which is
+why the link is here. **Its attribution needs confirming before review** — it
+states the owner answered, which cannot be verified from this repository, and
+the caveat recorded in `README.md` travels with any citation of it. The
+reasoning below stands on `ADR-0010` and `CONTEXT.md` regardless of who chose
+it.
+
 Forced by the word "explicitly" in ADR-0014's "the accepted maintenance commands
 are narrow, explicitly authorized, idempotent, expected-version fenced, and
 audited," repeated at Gate 8. Explicit authorization cannot be derived from the
