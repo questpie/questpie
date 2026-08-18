@@ -65,11 +65,12 @@ export const studioArtifactPath = "/_questpie/studio/artifacts";
  * what it has done — so serving it raises no disclosure question. Operational
  * facts never appear here and are not reachable from the browser at all.
  */
-const studioArtifactAllowList: readonly string[] = Object.freeze([
+export const studioArtifactAllowListed: readonly string[] = Object.freeze([
 	"collection-operation-explain.json",
 	"committed-migrations.json",
 	"manifest.json",
 	"operation-contracts.json",
+	"reaction-projection.json",
 	"relational-explain.json",
 ]);
 
@@ -82,7 +83,7 @@ export async function studioArtifactResponse(
 		return new Response(null, { status: 405, headers: { allow: "GET, HEAD" } });
 	const decoder = new TextDecoder();
 	const served: Record<string, unknown> = {};
-	for (const path of studioArtifactAllowList) {
+	for (const path of studioArtifactAllowListed) {
 		const bytes = artifactFiles[path];
 		if (bytes === undefined) continue;
 		const text = typeof bytes === "string" ? bytes : decoder.decode(bytes);

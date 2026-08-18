@@ -206,3 +206,54 @@ export function projectStudioExplain(
 		),
 	});
 }
+
+export type StudioRunExecutable = Readonly<{
+	compatible: boolean;
+	/**
+	 * `resourceAbsent` and `executableRetired` are different operator problems.
+	 * The first means the Reaction is gone from this build; the second means it
+	 * is present but the run pins bytes this build no longer carries. Collapsing
+	 * them would tell an operator to look in the wrong place.
+	 */
+	reason: "executableRetired" | "resourceAbsent" | null;
+	expectedDigest: string | null;
+}>;
+
+/**
+ * Explains why a run is not progressing when the durable log cannot.
+ *
+ * A claim whose executable digest no longer matches returns `EXECUTABLE_RETIRED`
+ * from a transaction that has only selected, so it writes nothing: the run stays
+ * `ready` with a history containing only `accepted`, and looks healthy. The
+ * compiled contract is the only witness, which is why this is a join against
+ * the reaction projection rather than a durable read.
+ *
+ * Deliberately not a kernel change. Recording the refusal durably would need a
+ * schema and would still leave every already-refused run unexplained.
+ */
+export function explainRunExecutable(
+	run: Readonly<{ resource: string; executableDigest: string }>,
+	artifacts: StudioArtifactBytes,
+): StudioRunExecutable {
+	const projection = parsed(artifacts, "reaction-projection.json");
+	const declared = entries(
+		projection,
+		"reactions",
+		"reaction-projection.json",
+	).find((entry) => text(entry, "identity", "reaction") === run.resource);
+	if (!declared)
+		return Object.freeze({
+			compatible: false,
+			reason: "resourceAbsent" as const,
+			expectedDigest: null,
+		});
+	const expectedDigest = text(declared, "contractDigest", "reaction");
+	return Object.freeze({
+		compatible: expectedDigest === run.executableDigest,
+		reason:
+			expectedDigest === run.executableDigest
+				? null
+				: ("executableRetired" as const),
+		expectedDigest,
+	});
+}

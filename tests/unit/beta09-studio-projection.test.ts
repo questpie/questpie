@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import {
+	explainRunExecutable,
 	projectStudioCatalog,
 	projectStudioExplain,
 } from "../../apps/studio/src/projection";
@@ -138,4 +139,52 @@ test("the explain projection is canonical and byte-stable", () => {
 		),
 	};
 	expect(studioExplainDigest(mutated)).not.toBe(studioExplainDigest(input));
+});
+
+/**
+ * Criterion 15: a stale build is explained.
+ *
+ * A run whose executable was retired sits at `ready` with an append-only
+ * history that says only `accepted`. The claim refusal writes nothing — it
+ * returns from a transaction that has only selected — so the durable log cannot
+ * say why the run is not progressing. The only witness is the compiled
+ * contract, which is what makes explanation primary rather than decorative.
+ *
+ * The explanation is a join, so it belongs beside the projection rather than in
+ * the kernel: no schema changes, and it works for a run the kernel has already
+ * refused without recording anything.
+ */
+test("a run pinned to a retired executable is explained, not shown as healthy", () => {
+	const reactions = artifact("reaction-projection.json");
+	const live = JSON.parse(reactions) as {
+		reactions: readonly { identity: string; contractDigest: string }[];
+	};
+	const known = live.reactions[0]!;
+
+	const current = explainRunExecutable(
+		{ resource: known.identity, executableDigest: known.contractDigest },
+		{ "reaction-projection.json": reactions },
+	);
+	expect(current.compatible).toBe(true);
+	expect(current.reason).toBeNull();
+
+	const retired = explainRunExecutable(
+		{ resource: known.identity, executableDigest: "0".repeat(64) },
+		{ "reaction-projection.json": reactions },
+	);
+	expect(retired.compatible).toBe(false);
+	// The run pins bytes this build no longer carries, which is why no worker
+	// claims it and why its history stops at `accepted`.
+	expect(retired.reason).toBe("executableRetired");
+	expect(retired.expectedDigest).toBe(known.contractDigest);
+
+	const unknown = explainRunExecutable(
+		{ resource: "reaction:removed", executableDigest: known.contractDigest },
+		{ "reaction-projection.json": reactions },
+	);
+	expect(unknown.compatible).toBe(false);
+	// A different failure: the Reaction itself is gone from the build, not just
+	// its bytes, and an operator needs those told apart.
+	expect(unknown.reason).toBe("resourceAbsent");
+	expect(unknown.expectedDigest).toBeNull();
 });

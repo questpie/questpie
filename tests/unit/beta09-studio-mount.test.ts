@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import {
+	studioArtifactAllowListed,
 	studioArtifactPath,
 	studioArtifactResponse,
 	studioAssetPath,
@@ -77,6 +78,8 @@ test("the mount serves only the allow-listed contract artifacts", async () => {
 	const served = (await response!.json()) as Record<string, unknown>;
 	expect(Object.keys(served)).toContain("manifest.json");
 	expect(Object.keys(served)).toContain("operation-contracts.json");
+	// Needed to explain why a run pinned to retired bytes is not progressing.
+	expect(studioArtifactAllowListed).toContain("reaction-projection.json");
 	// Present in artifactFiles, absent from the allow-list, so never served.
 	expect(Object.keys(served)).not.toContain("runtime-executables.json");
 	expect(JSON.stringify(served)).not.toContain("must not be served");

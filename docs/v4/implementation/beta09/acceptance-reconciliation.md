@@ -9,13 +9,14 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 
 ## Met
 
-| #   | Criterion                                                                                     | Evidence                                                                                                                                 |
-| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| 4   | The inspection projection is strictly narrower than the kernel read                           | `projectDurableRunInspection` and `projectDurableEffectInspection`; result becomes presence, length and digest, receipt becomes presence |
-| 5   | The prescribed red test fails first, then passes                                              | falsified twice — once structurally, once materially with a Policy-governed body a `member` caller's Query omits                         |
-| 11  | Internal protocol v5 adds the bounded reason                                                  | nullable column, CHECK, v4→v5 upgrade verified end to end on PostgreSQL 17                                                               |
-| 12  | `REASON_INVALID` and `AUTHORITY_DENIED` are typed, enforced before the statement, and audited | both reachable and driven; the first was unreachable until the repair that produced this record                                          |
-| 13  | A fenced loser receives the run's current version                                             | `version` on every outcome, read after the command settles so an applied command reports the number that exists now                      |
+| #   | Criterion                                                                                     | Evidence                                                                                                                                                   |
+| --- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 4   | The inspection projection is strictly narrower than the kernel read                           | `projectDurableRunInspection` and `projectDurableEffectInspection`; result becomes presence, length and digest, receipt becomes presence                   |
+| 5   | The prescribed red test fails first, then passes                                              | falsified twice — once structurally, once materially with a Policy-governed body a `member` caller's Query omits                                           |
+| 11  | Internal protocol v5 adds the bounded reason                                                  | nullable column, CHECK, v4→v5 upgrade verified end to end on PostgreSQL 17                                                                                 |
+| 12  | `REASON_INVALID` and `AUTHORITY_DENIED` are typed, enforced before the statement, and audited | both reachable and driven; the first was unreachable until the repair that produced this record                                                            |
+| 13  | A fenced loser receives the run's current version                                             | `version` on every outcome, read after the command settles so an applied command reports the number that exists now                                        |
+| 15  | A stale build is explained                                                                    | `explainRunExecutable` joins a run's pinned digest against the reaction projection; driven against a really-retired run whose history says only `accepted` |
 
 ## Not met, and why
 
@@ -30,23 +31,21 @@ Verified by reading the tree, not from memory. Base: `feat/v4-beta-09` at the
 | 9   | The worklist is bounded and index-backed                      | **not built.** Requires 8                                                                                                                                      |
 | 10  | Every rendered fact carries its source                        | **not built.** The interface renders a catalog and no provenance                                                                                               |
 | 14  | Retry is never offered as the remedy for ambiguity            | **not built.** This is an interface property and the interface has no run view                                                                                 |
-| 15  | A stale build is explained                                    | **not built.** `EXECUTABLE_RETIRED` still writes nothing and nothing joins the contract to explain it                                                          |
 | 16  | The Studio projection producer is independent                 | **partial.** The producer exists, derives from bytes, and a mutated byte moves its digest. Byte parity against the compiler's own artifact is **not asserted** |
 | 17  | Every narrower claim is disclosed and the count matches       | **cannot be closed yet.** The claim set is still moving                                                                                                        |
 
 ## The honest count
 
-Five of seventeen met. Two more partial. Ten not built.
+Six of seventeen met. Two more partial. Nine not built.
 
 Three of the eleven are blocked on decisions that are not this slice's to make:
 inspection Authority needs an ADR-0010 amendment, maintenance Authority needs
 the same or an owner ruling, and the Studio asset packaging fork decides whether
 the interface can be served at all.
 
-The remaining seven are ordinary unbuilt work: the operational nondisclosure
+The remaining six are ordinary unbuilt work: the operational nondisclosure
 artifact, the relational one joining the verified set, the run worklist and its
-bound, provenance in the interface, the retry disclosure, and the stale-build
-explanation.
+bound, provenance in the interface, and the retry disclosure.
 
 ## What this changes
 

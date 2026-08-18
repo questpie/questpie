@@ -2,11 +2,15 @@ import { afterAll, expect, test } from "bun:test";
 
 import { SQL } from "bun";
 
-import { projectStudioCatalog } from "../../../apps/studio/src/projection";
+import {
+	explainRunExecutable,
+	projectStudioCatalog,
+} from "../../../apps/studio/src/projection";
 import {
 	beta05Ids,
 	beta08Harness,
 	disposeBeta08Harness,
+	retiredDurableKernel,
 	type Beta08Harness,
 } from "./helpers/beta08-durable";
 
@@ -208,5 +212,56 @@ postgresTest(
 		// The executable inventory is in artifactFiles and must never be served.
 		expect(Object.keys(served)).not.toContain("runtime-executables.json");
 		expect(JSON.stringify(served)).not.toContain("bundleExport");
+	},
+);
+
+/**
+ * Criterion 15, driven against a really-retired run rather than a synthetic
+ * digest. This is the case where the durable log is silent by construction: the
+ * claim refusal returns from a transaction that has only selected, so the run
+ * stays `ready` with a history containing only `accepted` and looks healthy.
+ */
+postgresTest(
+	"a really-retired run looks healthy and is explained anyway",
+	async () => {
+		const prepared = await harness();
+		const callId = "beta09-retired-1";
+		await publish(prepared, { body: "beta09 retired probe", callId });
+		const runId = await runIdentity(callId);
+
+		const retired = retiredDurableKernel(
+			database!,
+			prepared.reactionProjectionBytes,
+		);
+		const admitted = await retired.admit(8);
+		const target = admitted.find((entry) => entry.runId === runId);
+		expect(target).toBeDefined();
+		const claim = await retired.claim({
+			runId,
+			workerId: "beta09-retired-worker",
+			executableDigest: target!.executableDigest,
+			leaseMilliseconds: 5_000,
+			attemptDeadlineMilliseconds: 5_000,
+		});
+		expect(claim.status).toBe("refused");
+		expect(claim.code).toBe("EXECUTABLE_RETIRED");
+
+		// The defect: nothing was written, so the run is indistinguishable from a
+		// healthy one waiting its turn.
+		const view = await prepared.app.durable.inspect(runId);
+		expect(view?.state).toBe("ready");
+		const events = await prepared.app.durable.events(runId);
+		expect(events.map((entry) => entry.kind)).toEqual(["accepted"]);
+
+		// The compiled contract is the only witness, and it explains it.
+		const explained = explainRunExecutable(
+			{
+				resource: "reaction:messagePublished",
+				executableDigest: "0".repeat(64),
+			},
+			{ "reaction-projection.json": prepared.reactionProjectionBytes },
+		);
+		expect(explained.compatible).toBe(false);
+		expect(explained.reason).toBe("executableRetired");
 	},
 );
