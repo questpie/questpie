@@ -211,6 +211,26 @@ Do not skip a blocked issue or parallelize dependent implementation.
   correct for the slice and leaves the durable kernel pinning no
   noisy-neighbour budget at all; `durable_runs` stores `tenant_id` while
   admission orders only by `(available_at, run_id)`.
+- #295 second lesson, from auditing round 4's twelve observations against the
+  tree: **grep-shaped conclusions failed three times in one audit, in three
+  different directions, for three different actors.** The pattern is concluding
+  from the presence or absence of a _name_ what can only be concluded from
+  reading the _code_.
+  - _Absent name, wrong "no"._ `relational-nondisclosure.json` is named nowhere
+    in `artifact-files.ts`, which read as "nothing verifies it". It is verified,
+    through `build.inventory`, which covers every generated file without naming
+    any. Settled on `feat/v4-beta-09` by tampering with the artifact and
+    asserting the refusal, rather than by reading a second time.
+  - _Present name, wrong "yes"._ `"durable maintenance requires a trusted
+Principal"` matches a test, which read as coverage. That test trips the
+    Execution root's brand check in a different file on a different code path.
+  - _Present name, wrong subject._ Five `"fenced"` assertions exist, which read
+    as the fence being driven. All five are kernel surfaces; the effect ledger's
+    separate compare-and-set has none.
+    The cheap defence is the one the branch used: when a claim is about whether
+    something is _enforced_, break it and assert the failure. A test that breaks
+    the thing cannot be satisfied by a name appearing somewhere. Reading is for
+    finding candidates, not for settling enforcement.
 - #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
   across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
   forward conformance, and the selected-PR PostgreSQL microbenchmark gate, which
