@@ -24,6 +24,10 @@
 		"apps/docs": {
 			"entry": ["src/start.ts!", "vite.config.ts!", "source.config.ts!"],
 			"project": ["src/**/*.{ts,tsx}!", "*.ts!"]
+		},
+		"apps/studio": {
+			"entry": ["src/main.tsx!", "vite.config.ts!"],
+			"project": ["src/**/*.{ts,tsx}!", "*.ts!"]
 		}
 	}
 }

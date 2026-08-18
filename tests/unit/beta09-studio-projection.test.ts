@@ -5,9 +5,11 @@ import { resolve } from "node:path";
 import {
 	projectStudioCatalog,
 	projectStudioExplain,
+} from "../../apps/studio/src/projection";
+import {
 	studioExplainDigest,
 	studioProjectionDigest,
-} from "../../apps/studio/src/projection";
+} from "./helpers/studio-digest";
 
 /**
  * BETA-09's first required artifact is an *independent* Studio projection

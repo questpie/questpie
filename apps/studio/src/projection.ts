@@ -124,7 +124,7 @@ export function projectStudioCatalog(
  * Canonical bytes of the catalog, so two producers can be compared for byte
  * parity without depending on object key order or on how either got there.
  */
-function canonical(value: unknown): string {
+export function canonical(value: unknown): string {
 	if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
 	if (value && typeof value === "object")
 		return `{${Object.entries(value as Record<string, unknown>)
@@ -136,12 +136,6 @@ function canonical(value: unknown): string {
 
 export function studioProjectionBytes(artifacts: StudioArtifactBytes): string {
 	return canonical(projectStudioCatalog(artifacts));
-}
-
-export function studioProjectionDigest(artifacts: StudioArtifactBytes): string {
-	return new Bun.CryptoHasher("sha256")
-		.update(studioProjectionBytes(artifacts))
-		.digest("hex");
 }
 
 export type StudioExplainedPolicy = Readonly<{
@@ -211,10 +205,4 @@ export function projectStudioExplain(
 				.sort((left, right) => (left.identity < right.identity ? -1 : 1)),
 		),
 	});
-}
-
-export function studioExplainDigest(artifacts: StudioArtifactBytes): string {
-	return new Bun.CryptoHasher("sha256")
-		.update(canonical(projectStudioExplain(artifacts)))
-		.digest("hex");
 }

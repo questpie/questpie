@@ -4,7 +4,24 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
-		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"build": "vite build",
+		"dev": "vite",
 		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@base-ui/react": "^1.0.0",
+		"class-variance-authority": "^0.7.1",
+		"clsx": "^2.1.1",
+		"react": "^19.2.3",
+		"react-dom": "^19.2.3",
+		"tailwind-merge": "^3.4.1"
+	},
+	"devDependencies": {
+		"@tailwindcss/vite": "^4.1.18",
+		"@types/react": "^19.2.7",
+		"@types/react-dom": "^19.2.3",
+		"@vitejs/plugin-react": "^6.0.1",
+		"tailwindcss": "^4.1.18",
+		"vite": "^8.0.16"
 	}
 }
