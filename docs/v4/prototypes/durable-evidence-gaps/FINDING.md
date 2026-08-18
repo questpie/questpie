@@ -95,3 +95,28 @@ entries. One observation was explained and closed, one was refuted outright,
 and one carried-forward list turned out to be part stale. Those needed reading.
 These three needed breaking, and that is the whole distinction the lesson
 records.
+
+## All three are constructible today
+
+A falsification nobody can build is worse than none, so each was checked against
+the existing harness and test patterns rather than left as a description.
+
+`Beta08Harness`
+(`tests/integration/postgres/helpers/beta08-durable.ts:140`) already exposes
+`kernel`, `ledger`, `maintenance`, and `kernelWith`. Nothing new is needed.
+
+| Spec                       | Extends                                                                          | What is already there                                                                                                                                                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1, effect fence            | kernel test 1 plus the cross-attempt effect test                                 | `claimAfterLeaseExpiry` (`:78`) produces the stale/fresh claim pair, and `createDurableRunHandle` is already used with two different claims at `:603` and `:628`. Build a handle from the **crashed** claim rather than the fresh one and invoke an effect. |
+| 2, brand refusal           | any maintenance test                                                             | `prepared.maintenance` is the published surface. Pass a plain object shaped like a `Principal` instead of `prepared.principal`.                                                                                                                             |
+| 3, `cancellationRequested` | kernel test 1's claimed run, plus the `events()` reads at `:204`, `:308`, `:812` | Cancel while the run is **claimed**, then assert the kind is among those returned.                                                                                                                                                                          |
+
+So each is a variation on a test that exists, not a new harness. Spec 1 is the
+one with real content — it needs the stale claim to reach the ledger rather than
+the kernel, which is precisely the path nothing currently drives.
+
+One caveat worth stating before someone starts. Spec 2 proves the guard fires;
+it cannot prove anything adversarial is stopped, for the reason recorded in
+`docs/v4/implementation/beta09/maintenance-decisions.md` — with no wire route the
+only caller is in-process and mints its own `Principal`. Write the assertion, and
+write down which half it proves.
