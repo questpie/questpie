@@ -112,6 +112,16 @@ require.
 **Asserts:** a caller without maintenance Authority is refused, the refusal is
 typed, and the attempt is recorded in the append-only audit.
 
+**Re-aimed after implementation.** This case originally drove
+`app.durable.cancelRun` expecting a denial. `authority-mechanism.md` rejected
+that design on evidence: the accepted Operation path cannot carry the Authority
+decision, because a Mutation's admission Policy must be exactly
+`policy.authenticated()` and a Mutation handler cannot look up a role. Under the
+decision taken there, `app.durable` is a server-internal capability whose caller
+is trusted by construction, so the generated application supplies no
+`authorize` and should not. The case now drives the runtime factory's contract,
+which is the surface that exists.
+
 **Falsification against unrepaired code:** the command applies. `actorOf`
 checks only `principalKernel.is(actor)`
 (`packages/runtime/src/durable/postgres-maintenance.ts:130`) — a brand proving

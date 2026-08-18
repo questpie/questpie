@@ -288,10 +288,23 @@ output to `owner` and `admin` through `policy.exists` over memberships — but
 those attach to a Collection, and a maintenance command operates a run, which is
 not a Collection row. The expressive Policy is attached to the wrong thing.
 
+### Option 2 is not available either
+
+Evaluating authority in the handler needs the handler to read the caller's
+role. It cannot. `GeneratedMutationData` exposes per-Collection `get` by key and
+`create`, and nothing else — no list, no find, no structural Query runner. A
+Mutation handler holds a `principal.id` and has no way to reach the membership
+row that carries the role: `memberships` appears in the schema and as a
+`ReadCollection` for Policy scope, and does not appear in the Mutation data
+facade at all.
+
+`get` by key would not rescue it even if `memberships` were exposed, because the
+handler knows a Principal, not a membership id, and the facade offers no lookup
+by any other column.
+
 ### What this leaves
 
-Three shapes, none of them free, and this record does not choose between them
-because the choice is larger than BETA-09:
+Three shapes, one of which is now eliminated:
 
 1. **Widen Mutation admission Policy** to the relational expression grammar the
    Collection policies already use. The grammar exists and is compiled; what is
@@ -307,6 +320,36 @@ because the choice is larger than BETA-09:
    `app.durable` as a server-internal capability whose caller is trusted by
    construction — which is what BETA-08 shipped and disclosed, and which the
    `authorize` hook already supports.
+
+**Decision: option 3, for BETA-09.** Option 1 changes the accepted Operation
+contract and is not this slice's to make. Option 2 is unavailable, verified
+above. Option 3 is the only shape that exists, and it is the one BETA-08 already
+chose and disclosed.
+
+So **BETA-09 does not close BETA-08's disclosed Authority gap.** It carries it
+forward, with the reason upgraded from "not implemented yet" to a verified
+structural account: the accepted path runs through a Policy that cannot express
+authority, over a handler that cannot look up a role. That is worth more to the
+slice that eventually closes it than another round of trying.
+
+What BETA-09 does ship on this axis is the mechanism: the `authorize` hook, its
+audited `AUTHORITY_DENIED` outcome, the deny-before-lock ordering, and the
+proof that lowering the kernel marker re-arms the guard. All of it is driven
+against the runtime factory, which is the surface that exists.
+
+### The hostile case is re-aimed, not deleted
+
+`hostile-cases.md` case 5 drove `app.durable.cancelRun` expecting a denial. That
+asserted the design this record has now rejected on evidence — the generated
+application supplies no `authorize`, and under option 3 it should not, because a
+server-internal capability's caller is trusted by construction. A test asserting
+a rejected design is worse than no test.
+
+The mechanism it was meant to prove is proven, by
+`beta09-authority-guard.test.ts`, against the factory contract: a refusing
+surface rejects with `AUTHORITY_DENIED`, leaves the run untouched, and records
+exactly one audit row naming the denied actor, while an authorizing surface
+applies the same command.
 
 ### What was built and reverted
 
