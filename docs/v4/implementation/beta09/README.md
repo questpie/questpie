@@ -89,3 +89,43 @@ What the branch still owes:
   `ensureInternalProtocol` refuses a same-version different-checksum install.
 - The Studio bundle, on the shadcn and Base UI primitives already in
   `apps/docs`, whose gaps `maintenance-decisions.md` names.
+
+## Merge hazard: the implementation branch forked before these corrections
+
+`feat/v4-beta-09` forked from `219758a4`, before the six commits below landed on
+`feat/v4`. Both sides have since edited five of the same records, so a merge
+will conflict in all five, and resolving toward the branch would silently
+reintroduce defects that were found and verified against the tree.
+
+Corrections on `feat/v4` that must survive any merge:
+
+| Commit     | What it fixed                                                        |
+| ---------- | -------------------------------------------------------------------- |
+| `1c26b9bc` | reconciled the set, added this index                                 |
+| `c8abf9ed` | nine defects from adversarial pre-review                             |
+| `83dffe36` | four more, including a flagship job that cannot execute              |
+| `538c16d1` | five, including the unauditable denial                               |
+| `c2b24b74` | the fair-admission mechanism note                                    |
+| `8e77abe6` | measured the worklist premise; dropped two claims measurement killed |
+
+**Verified still present on the branch at the time of writing**, each of which
+would come back if the branch's copy wins:
+
+- `maintenance-decisions.md` attributing the four-command list to ADR-0014. No
+  ADR names `drainRuntime`; it appears only in the projection and Gate 8.
+- `inspection-contract.md`'s eleven-field `events(runId)` row. The shipped read
+  returns five, so that row specifies a projection **wider** than the kernel
+  read and falsifies `acceptance-shape.md` criterion 4 by itself.
+- `design-context.md`'s "thirteen decisions" and "2,283 lines", both counting
+  errors.
+- `maintenance-decisions.md` quoting "QUESTPIE does not claim exactly-once
+  effects" as ADR-0013 text. That string is a code comment in
+  `packages/runtime/src/durable/postgres-effects.ts:38`.
+
+**The cheap fix is to rebase the branch onto current `feat/v4` now**, while the
+divergence is six files, rather than resolving it at merge time when the
+implementation diff is large enough to hide a documentation regression.
+
+The branch also carries a tenth record, `authority-mechanism.md`, which has no
+counterpart here. Nothing on `feat/v4` conflicts with it; it should arrive
+intact.
