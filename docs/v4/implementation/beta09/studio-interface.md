@@ -39,6 +39,47 @@ already in the QUESTPIE design system.
    built in `apps/studio/src/projection.ts`. That keeps one producer rather
    than a second in-browser projection.
 
+## Step 2 is a packaging decision, and it is not taken here
+
+Serving the build output turned out to hide a fork that has nothing to do with
+file reading. The mechanism is the same in all three shapes — the mount reads
+assets from a root instead of returning a constant — so none of it is wasted by
+the delay. What differs is **where the assets live for a deployed application**,
+and that decides whether every application carries Studio.
+
+At runtime the generated app reads its artifacts from
+`new URL("../", import.meta.url)`, the `.questpie/generated/` directory
+(`packages/compiler/src/runtime/application.ts:209`). So the three candidate
+roots are:
+
+1. **Studio assets become build artifacts**, written into the generated output
+   and flowing through the existing inventory and digest machinery. The mount
+   then serves them from `artifactFiles`, exactly as it already serves the
+   contract artifacts, and startup verification covers them for free. The cost
+   is that **every** application build carries roughly 230 KB of interface,
+   including applications that never open Studio.
+2. **Studio stays a package the application may depend on**, resolved at build
+   time the way `@questpie/runtime/bundle-core` already is
+   (`packages/compiler/src/artifacts.ts:468`). Only an application that wants
+   Studio installs it. The cost is that `apps/studio` is `private: true` and
+   unpublished, so this needs a real publication decision, and the resolve must
+   fail softly when it is absent.
+3. **The mount takes an asset root supplied by the host.** Smallest change,
+   decides nothing, and puts an operational path in the deployer's hands rather
+   than the framework's — which is where the accepted contract has generally
+   refused to put things.
+
+**Not decided here.** `design-context.md` already records that this slice's own
+budget note says an application that never opens Studio should not carry its
+interface, which argues against (1); ADR-0021's publication surface argues
+against (2) without a release decision; and (3) is the kind of host-supplied
+seam ADR-0014 has consistently refused. Picking one at the point of needing it
+is the failure this slice has twice paid for, and each time stopping was right.
+
+What is true today: `apps/studio` builds real assets, the mount serves a shell,
+and the two are not connected. Artifact 2 is therefore built as a mechanism and
+incomplete as a product, which the acceptance record must say in those words.
+
 ## Constraints this increment inherits
 
 - **The runtime bundle must not grow with the interface.** The realtime bundle
