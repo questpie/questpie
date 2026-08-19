@@ -23,8 +23,8 @@ What actually enforces them: a client-side `AbortSignal.timeout(5_000)`
 (`packages/runtime/src/mutation/postgres.ts:159`) and `query.cancel()` (`:66`).
 A PostgreSQL cancel request is advisory and racy — it asks the backend to stop
 and the backend may not. So a pathological statement holds a backend and a pool
-slot for as long as PostgreSQL wants, and the declared bound is a client-side
-hope.
+slot for as long as PostgreSQL wants, and the declared bound is enforced
+nowhere — measured below, it does not even bound the caller's wait.
 
 `configurePostgresTimeouts` already exists
 (`packages/compiler/src/postgres-session.ts:39`) with defaults of 5,000 ms
@@ -61,10 +61,40 @@ backend from another connection. The runtime carries **neither**. Its
 | **2 s after `query.cancel()`**                         | **1**                    |
 | after `pg_cancel_backend(pid)` from another connection | 0                        |
 
-The client gave up and the backend kept running. Only the server-side cancel
-ended it, rejecting with errno `57014`, `canceling statement due to user
-request`, from `ProcessInterrupts`. This is the claim the whole gate rests on
-and it is the one that survived checking.
+The backend kept running. Only the server-side cancel ended it, rejecting with
+errno `57014`, `canceling statement due to user request`, from
+`ProcessInterrupts`. This is the claim the whole gate rests on and it is the one
+that survived checking.
+
+**Re-verified, and the client does not give up either.** An earlier revision of
+this section read "the client gave up and the backend kept running", which
+implies the caller at least stops waiting. Re-measured in the exact shape the
+Mutation path uses — `session.unsafe(...).execute()` inside `sql.begin`, awaited
+directly, with an abort listener calling `query.cancel()` — against PostgreSQL
+17.10 through Bun 1.3.14, cancelling 800 ms into a `pg_sleep(9)`:
+
+| moment        | sleeping backend | caller                   |
+| ------------- | ---------------- | ------------------------ |
+| t = 3,000 ms  | still active     | still pending            |
+| t = 10,000 ms | ended on its own | **resolved at 9,015 ms** |
+
+The statement ran its full duration and returned **success**. Neither call site
+races the signal against the query: `packages/runtime/src/mutation/postgres.ts:72`
+and the compiler's `executeAbortable`
+(`packages/compiler/src/postgres-session.ts:66`) both `return await query`. The
+abort listener fires, `cancel()` does nothing, and the code keeps awaiting the
+same promise.
+
+So the declared 5,000 ms bound holds neither the backend, nor the pool slot, nor
+the caller's wait, and exceeding it raises no error anywhere: a Mutation that
+runs ten times its declared budget returns a normal result late. That also
+sharpens "what this risks breaking" below — today's failure mode is a silent
+slow success, and the gate converts it into a visible rollback.
+
+The stand-in is disclosed: the probe drove an `AbortController` rather than the
+shipped `AbortSignal.timeout(5_000)`, since both deliver the same event to the
+same listener. What is measured is the shape, not the shipped Mutation end to
+end.
 
 The GUC mechanism was checked the same way: inside a transaction,
 `set_config('statement_timeout','150ms',true)` aborts a two-second sleep with
