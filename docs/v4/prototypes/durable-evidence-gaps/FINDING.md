@@ -141,16 +141,38 @@ enforces" (`:68`–`:71`).
 `available_at = LEAST(transaction_timestamp() + interval, horizon_at)`. Nothing
 compares it to the current time as a termination condition.
 
-**It is not merely absent; it inverts.** Once `horizon_at` is in the past,
+**The clamp has an ordering consequence.** Once `horizon_at` is in the past,
 `LEAST` sets `available_at` to a past timestamp, and `admit` orders
-`available_at` ascending (`postgres-kernel.ts:461`–`:463`). A run past its
-horizon therefore retries with zero backoff **at the head of the admission
-queue**, ahead of healthy work.
+`available_at` ascending (`postgres-kernel.ts:463`). A run past its horizon
+therefore takes its remaining retries with zero backoff **at the head of the
+admission queue**, ahead of healthy work.
 
-BETA-08 partially disclosed this — `docs/v4/implementation/beta08/design-context.md:260`–`:263`
-records that no horizon sweep runs — but the same file at `:267`–`:268` counts
-the horizon among the budgets the slice enforces, and `durable-kernel.ts:68`
-carries the wrong half.
+**This entry was first written more strongly than the tree supports, on an
+agent's framing that was not checked against the surrounding text.** Two
+corrections, both from reading
+`docs/v4/implementation/beta08/design-context.md:259`–`:268` in full:
+
+- **It is not a self-contradiction, and calling it one was unfair.** The record
+  discloses the gap in the same bullet that describes the clamp: "This slice
+  runs no horizon sweep, so a run whose horizon passes while it waits is still
+  bounded only by its eight-attempt program" (`:260`–`:263`). Counting the
+  horizon among the pinned budgets at `:266`–`:268` is consistent with that,
+  because the horizon _is_ read and applied on every retry schedule. "Enforces"
+  there means clamps, not terminates.
+- **The head-of-queue effect is bounded, not permanent.** The eight-attempt
+  program stops the retries; `claim` returns `skipped` once
+  `attemptNumber > retry.maximumAttempts` (`postgres-kernel.ts:522`–`:523`).
+
+So the accurate finding is narrower than "a pinned budget with no enforcing
+path": the clamp is a path. What is missing is a **termination** condition —
+nothing compares `horizon_at` to the current time to end a run — and the clamp's
+interaction with ascending admission order means an over-horizon run's remaining
+attempts jump the queue.
+
+It compounds with §5 rather than standing alone: once those attempts are
+exhausted the run is `skipped` on every claim, still carries a past
+`available_at`, and is therefore re-admitted at the head of the queue **forever**.
+That permanence comes from §5, not from the horizon.
 
 ### 5. A refused claim writes nothing, and the run is re-admitted forever
 
