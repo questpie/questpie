@@ -741,6 +741,29 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `fumadocs-mdx && tsc --noEmit` over the app's own sources; fenced code in
      MDX is highlighted by shiki and never compiled. A guide example can be
      arbitrarily wrong and every gate stays green.
+     **The Context is thin the same way, so this is one gap and not two.**
+     `QueryContext` in the generated contract is two members —
+     `{ data, signal }`. `MutationContext` is `Omit<RootExecution, "services">`
+     plus `data`, `operationTime`, `callId`, `transactionId`, `dispatch`, and
+     `RootExecution` carries `principal`, `authority`, `tenant`, `values`,
+     `signal`, `deadline`. So a Query handler cannot reach the Principal or the
+     Tenant at all. The guide's opening Query uses both —
+     `queries-and-mutations.mdx:77` and `:82` for `ctx.tenant.id`, `:83` for
+     `ctx.principal.id`. Design fiction has the same lines in the same example
+     (`design-fiction/queries-and-mutations.md:67`, `:73`, `:74`), so this is
+     accepted-but-unbuilt like the rest, not a slip.
+     **Counted end to end, that one example fails on seven points:**
+     `operation.input`, `policy`, `errors`, missing required `output`, a handler
+     destructuring `errors`, `ctx.tenant`, `ctx.principal`.
+     **The Mutation example beside it is correct on all seven**, which is the
+     tell: Query is implemented as a much thinner thing than the accepted design
+     and the guides were written against the design.
+     Two positive controls, since a thin result is worthless if the instrument
+     cannot see a thick one. The same reading method finds five members on
+     `MutationContext` and two on `QueryContext`. And the only Query in the
+     compiling fixture, `fixtures/collaboration/src/consumer.ts`, uses exactly
+     `ctx.data` and nothing else — the tree is self-consistent; only the docs
+     and the design run ahead of it.
    - **One more accepted-but-unbuilt bound, same class as the codes above.**
      `data-and-queries.mdx:79` says a JSONB-backed Field has at most 1,048,576
      canonical UTF-8 JSON bytes. The projection agrees —
