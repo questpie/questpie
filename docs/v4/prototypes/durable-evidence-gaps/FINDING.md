@@ -178,7 +178,26 @@ That permanence comes from §5, not from the horizon.
 
 Two claim outcomes return without touching the row:
 `refused / EXECUTABLE_RETIRED` (`postgres-kernel.ts:514`–`:518`) and `skipped`
-when `attemptNumber > retry.maximumAttempts` (`:522`–`:523`). The worker mirrors
+when `attemptNumber > retry.maximumAttempts` (`:522`–`:523`).
+
+**The two leave the run in different states, and the second is rarer than it
+looks — both worth stating precisely, because a first draft of this entry was
+vaguer than the tree.** Ordinary retry exhaustion does _not_ reach the `skipped`
+path: `fail()` terminalizes at `claim.attemptNumber >= claim.retry.maximumAttempts`,
+writing `state = 'failed'` with `RETRY_EXHAUSTED` and `deadLetter: true`
+(`postgres-kernel.ts:663`–`:675`). So an exhausted run normally ends `failed`,
+which is correct and reachable.
+
+The `skipped` branch uses `>` against `attempt_count + 1`, so it fires only when
+`attempt_count` already reached `maximumAttempts` **without** `fail()` ever being
+called — a worker that died after the attempt incremented the count and before it
+reported an outcome. The lease then expires, `admit` re-selects the row through
+`state = 'running' AND lease_expires_at <= transaction_timestamp()` (`:462`),
+`claim` skips it, nothing is written, and the cycle repeats indefinitely.
+
+So the two stuck classes settle at **`ready`** (retired executable) and
+**`running` with an expired lease** (crash at the exhaustion boundary).
+Neither is `failed`. The worker mirrors
 this, counting the refusal and continuing
 (`packages/runtime/src/durable/worker.ts:300`–`:304`). `available_at` never
 advances, so `admit` re-selects the row on every poll of every worker and it

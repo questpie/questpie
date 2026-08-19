@@ -101,6 +101,42 @@ against 207,000 runs, the worklist query plans as
 0.13 ms. The leftmost prefix carries it and no schema is needed — which is the
 premise this whole decision rests on, so it is checked rather than argued.
 
+**A gap this predicate cannot see, found after the decision and recorded rather
+than folded in.** `state = 'failed'` covers the dead-letter case, which is the
+operator need that justified the worklist, and ordinary retry exhaustion does
+reach it — `fail()` writes `state = 'failed'` with `RETRY_EXHAUSTED` and
+`deadLetter: true` once `attemptNumber >= maximumAttempts`
+(`packages/runtime/src/durable/postgres-kernel.ts:663`–`:675`).
+
+Two classes of permanently non-progressing run never reach `failed`, so this
+worklist cannot show them:
+
+- **Retired executable.** The claim is refused and nothing is written
+  (`postgres-kernel.ts:514`–`:518`); the run stays `ready`. BETA-08 asserts this
+  state (`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391`).
+- **Crash at the exhaustion boundary.** `claim` returns `skipped` without writing
+  when `attempt_count + 1 > maximumAttempts` (`:522`–`:523`), reachable only if a
+  worker died after incrementing the count and before reporting an outcome. The
+  run stays `running` with an expired lease and is re-admitted forever through
+  `:462`.
+
+Both are described in `docs/v4/prototypes/durable-evidence-gaps/FINDING.md` §5.
+They matter here because the worklist's stated purpose is runs that need a human,
+and a run that can never progress is exactly that while being invisible to a
+`failed`-keyed read.
+
+**The decision stands as scoped, and the scope is now stated:** this worklist
+answers "what failed", not "what is stuck". Widening it is cheap on the same
+indexes — `state = 'ready'` uses the same `durable_runs_claim_idx` prefix, and
+the expired-lease class is served by
+`durable_runs_lease_idx (application_name, state, lease_expires_at)`
+(`internal-protocol-v4-sql.ts:100`) — but it is a second read shape, and D3 fixes
+the inspection surface at four reads plus one worklist. Adding it belongs to
+whichever slice owns the progress bound, not to this one. What would overturn
+the scoping: evidence that either class occurs in practice rather than only
+after a crash or a rolling deploy, in which case "what failed" is the wrong
+question for the only multi-row read an operator has.
+
 Constraints on it, each forced:
 
 - **First N with `hasMore`, never a count.** The reason is disclosure, not
