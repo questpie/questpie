@@ -7,7 +7,30 @@ gate's shape, its measured evidence plan, and what it risks breaking.
 This record decides. It writes no production code, opens no slice branch, and
 changes no ADR, public projection, gate, or tracker state.
 
-Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
+Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`. **That base is 148
+commits behind current `feat/v4` and every code claim below still holds**:
+`git diff --name-only <base>..HEAD -- packages/ tests/` is empty, so the surface
+this record cites has not moved at all. The distance is documentation work.
+
+## What this record decides, in three parts
+
+Stated here because the reasoning below reached it through several corrections,
+and a reader should not have to reconstruct the current position from them.
+
+1. **Transaction-scoped `set_config` wherever a transaction already exists** —
+   Mutation, relational, and the durable kernel transactions. This is the only
+   part that gives the framework a bound it _guarantees_ rather than inherits.
+2. **A database- or role-level baseline for everything else**, as a deployment
+   requirement asserted in conformance rather than serving-path code. It reaches
+   the five bare-statement reads, which the transaction-scoped mechanism cannot.
+3. **No wrap for those five reads.** Four are `run_id` point lookups that cannot
+   grow with the table and the fifth, `admit`, is the scheduler rather than an
+   operator surface.
+
+Item 3 reversed an earlier decision to wrap them, and the section at "The edge
+that decides the gate's real scope" records why and what would restore it — the
+run worklist shipping as a bare statement, or a deployment target that cannot set
+a database default.
 
 ## This is a defect, not a feature
 
