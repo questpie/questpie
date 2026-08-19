@@ -101,9 +101,15 @@ directly, with an abort listener calling `query.cancel()` — against PostgreSQL
 | t = 10,000 ms | ended on its own | **resolved at 9,015 ms** |
 
 The statement ran its full duration and returned **success**. Neither call site
-races the signal against the query: `packages/runtime/src/mutation/postgres.ts:72`
+races the signal against the query: `packages/runtime/src/mutation/postgres.ts:70`
 and the compiler's `executeAbortable`
-(`packages/compiler/src/postgres-session.ts:66`) both `return await query`. The
+(`packages/compiler/src/postgres-session.ts:65`) both `return await query`.
+
+_Both line numbers were wrong here until checked against content._ They pointed
+at `:72` and `:66`, which are the `removeEventListener` and `} finally {` lines
+two and one below the statements the sentence describes. Each resolved to a real
+line inside the right function, so an audit that checks a citation exists and is
+within the file passes them. Only reading the cited line catches it. The
 abort listener fires, `cancel()` does nothing, and the code keeps awaiting the
 same promise.
 
