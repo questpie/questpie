@@ -534,11 +534,20 @@ and would otherwise never surface them.
   and assets inside the checksum-verified Runtime bundle inherit its integrity
   guarantee while assets read from a resolved root at request time do not.
   `docs/v4/prototypes/studio-packaging/FINDING.md`
-- **Four of seven authoring factories have no runtime behind them.** Action,
-  Job, Workflow, and Route are generated names with no module under
-  `packages/runtime/src`. Deferred by accepted authority and not a defect, but it
-  caused three separate corrections in one record set, because an authored name
-  is not evidence of a runtime.
+- **Four of seven authoring factories have no runtime behind them, and the
+  absence is typed rather than merely missing.** Action, Job, Workflow, and
+  Route are generated into `#questpie/app` as
+  `type EmptyDefinitionFactory = (definition: never) => never`
+  (`fixtures/collaboration/.questpie/generated/app.ts:184`, applied at
+  `:198`–`:201`). Nothing is assignable to `never`, so authoring one is a
+  **compile error at the call site, not a silent no-op**. The runtime end is
+  closed too: `RuntimeExecutableInventoryBinding`
+  (`packages/runtime/src/application/bindings.ts:19`–`:35`) is a union of
+  query/mutation, reaction, context and service only, its switch at `:146`–`:158`
+  has no other case, and `:163`–`:176` returns just `operations` and
+  `reactions`. Deferred by accepted authority and not a defect, but it caused
+  three separate corrections in one record set, because an authored name is not
+  evidence of a runtime.
   `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`
 - **Three accepted durable properties are driven by no test.** The effect fence,
   the maintenance brand refusal, and the `cancellationRequested` event are each
@@ -559,9 +568,12 @@ it. Read `docs/v4/implementation/beta09/README.md` before touching
 
 **What blocks building a real application on this framework is not Studio.** Of
 the seven generated authoring factories, three have a runtime — Query, Mutation,
-Reaction. `defineAction`, `defineJob`, `defineWorkflow`, and `defineRoute` have
-no module under `packages/runtime/src`, and ADR-0021:30-33 lists them absent
-from beta.1. `beta-slice-p15/SLICE.json` names "raw Route and reference Auth
+Reaction. `defineAction`, `defineJob`, `defineWorkflow`, and `defineRoute` are
+generated as uncallable stubs — `(definition: never) => never` at
+`fixtures/collaboration/.questpie/generated/app.ts:184`,`:198`–`:201` — and the
+runtime binding union has no member that could represent them
+(`packages/runtime/src/application/bindings.ts:19`–`:35`). ADR-0021:30-33 lists
+them absent from beta.1. `beta-slice-p15/SLICE.json` names "raw Route and reference Auth
 composition" and "Job and checkpointed Workflow vertical" under `laterBetas` —
 planned, seamed, and with **no slice in `QUEUE.json`**, which covers only
 `4.0.0-beta.1`.
@@ -721,8 +733,12 @@ host actually gets is root-mount or an explicit rewrite, not a subtree.
    `routes` map already exposes `direct()`, but `direct` deliberately does not
    resolve credentials, so it is not that adapter.
 
-Nothing here is built — no module under `packages/runtime/src` for `route`,
-`action`, `job`, or `workflow` — so this is a live decision, not a sunk cost.
+Nothing here is built — `route`, `action`, `job` and `workflow` have no runtime
+binding the union can represent (`application/bindings.ts:19`–`:35`) and their
+generated factories are uncallable by construction
+(`generated/app.ts:184`,`:198`–`:201`) — so this is a live decision, not a sunk
+cost. It also sets the floor on the Route + Auth slice: the work starts at the
+binding union and the compiler's emitted inventory, not at a missing module.
 
 ### Still open from this slice
 
@@ -750,10 +766,15 @@ queue chain 09 <- 10 <- 11 <- 12 is strictly linear.
 
 THE THING THAT MATTERS. Studio is not what blocks building an application on
 this framework. defineRoute, defineJob, defineWorkflow and defineAction are
-generated factories with no runtime module (packages/compiler/src/discovery.ts
-:27-33 and :402-406 allocate them; nothing under packages/runtime/src runs
-them); ADR-0021:30-33 lists them absent from beta.1; SLICE.json names Route+Auth
-and Job+Workflow under laterBetas with no slice in QUEUE.json.
+generated as UNCALLABLE stubs -- (definition: never) => never at
+fixtures/collaboration/.questpie/generated/app.ts:184, applied at :198-201 --
+so authoring one is a compile error, not a silent no-op. The runtime end is
+closed too: RuntimeExecutableInventoryBinding
+(packages/runtime/src/application/bindings.ts:19-35) has no member that could
+represent them. ADR-0021:30-33 lists them absent from beta.1; SLICE.json names
+Route+Auth and Job+Workflow under laterBetas with no slice in QUEUE.json.
+Scope those slices from the binding union and the generated declaration, not
+from "a missing module" -- the floor is higher than that phrasing suggests.
 
 The apps/docs guides no longer document them. That cut landed at 1d85b472:
 13 guides remain, scoped by removal, not by callout -- the owner rejected
