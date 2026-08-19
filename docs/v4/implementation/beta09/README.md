@@ -101,64 +101,33 @@ What the branch still owes:
   tested; nothing carries them to a browser. See
   [owner-decisions.md](./owner-decisions.md).
 
-## Merge hazard: the implementation branch forked before these corrections
+## Merge hazard: largely resolved, and this note was stale
 
-`feat/v4-beta-09` forked from `219758a4`, before the six commits below landed on
-`feat/v4`. Both sides have since edited five of the same records, so a merge
-will conflict in all five, and resolving toward the branch would silently
-reintroduce defects that were found and verified against the tree.
+**`feat/v4-beta-09` has merged `feat/v4`.** The merge is `5066187a`, and the
+merge base has advanced from `219758a4` to **`4078c057`**, leaving only seven
+`feat/v4` commits unmerged at the time of writing.
 
-Corrections on `feat/v4` that must survive any merge (the list below was the
-first six; more have landed since, so treat `git log 219758a4..feat/v4 --
-docs/v4/implementation/beta09/ HANDOFF.md` as authoritative rather than this
-table):
+Every defect this section previously warned about is gone from the branch,
+verified rather than assumed: the four-command list attributed to ADR-0014 and
+the exactly-once sentence quoted as ADR text both return **zero** hits. Two
+patterns still match — "thirteen decisions" and the eleven-field events list —
+but both are inside the _retraction_ text the merge carried over, which is what
+the retracted-claim sweep recorded in this file predicts.
 
-| Commit     | What it fixed                                                        |
-| ---------- | -------------------------------------------------------------------- |
-| `1c26b9bc` | reconciled the set, added this index                                 |
-| `c8abf9ed` | nine defects from adversarial pre-review                             |
-| `83dffe36` | four more, including a flagship job that cannot execute              |
-| `538c16d1` | five, including the unauditable denial                               |
-| `c2b24b74` | the fair-admission mechanism note                                    |
-| `8e77abe6` | measured the worklist premise; dropped two claims measurement killed |
+**An earlier version of this section is preserved in history rather than
+restated.** It said the branch forked at `219758a4` and still carried four named
+regressions, and it advised rebasing "while it is small". All of that was true
+when written and none of it is now. A stale warning is worse than no warning: it
+directs a merger's attention at defects that have already been resolved, and its
+confidence is indistinguishable from a live one.
 
-**Verified still present on the branch at the time of writing**, each of which
-would come back if the branch's copy wins:
-
-- `maintenance-decisions.md` attributing the four-command list to ADR-0014. No
-  ADR names `drainRuntime`; it appears only in the projection and Gate 8.
-- `inspection-contract.md`'s eleven-field `events(runId)` row. The shipped read
-  returns five, so that row specifies a projection **wider** than the kernel
-  read and falsifies `acceptance-shape.md` criterion 4 by itself.
-- `design-context.md`'s "thirteen decisions" and "2,283 lines", both counting
-  errors.
-- `maintenance-decisions.md` quoting "QUESTPIE does not claim exactly-once
-  effects" as ADR-0013 text. That string is a code comment in
-  `packages/runtime/src/durable/postgres-effects.ts:38`.
-
-**The cheap fix is to rebase the branch onto current `feat/v4` now**, rather than
-resolving it at merge time when the implementation diff is large enough to hide a
-documentation regression.
-
-**Measured, and the shape is not what the first version of this note assumed.**
-At `9bbac960` against branch `0181e2a4`: **41 commits on `feat/v4` and 39 on the
-branch since the fork at `219758a4`**, and the set of files both sides have
-touched is **still exactly five** — `acceptance-shape.md`, `design-context.md`,
-`hostile-cases.md`, `inspection-contract.md`, `maintenance-decisions.md`.
-
-So eighty commits of divergence has **not widened the conflict surface**. Both
-sides keep returning to the same five records. The urgency is therefore not that
-the conflict is spreading, which it is not; it is that the reconciliation inside
-those five files gets **denser** with every commit, and a dense conflict in a
-documentation file is where a verified correction quietly loses to a plausible
-alternative.
-
-That is a different argument from the one this note first made, and the weaker
-one — "rebase while it is small" — was wrong on the facts.
-
-The branch also carries a tenth record, `authority-mechanism.md`, which has no
-counterpart here. Nothing on `feat/v4` conflicts with it; it should arrive
-intact.
+**What actually remains.** Seven `feat/v4` commits are unmerged, all of them
+documentation corrections made after `4078c057` — including two that fix figures
+this record set itself got wrong. The branch also carries five records with no
+counterpart here (`acceptance-reconciliation.md`, `authority-mechanism.md`,
+`narrower-claims.md`, `postgres-matrix.md`, `studio-interface.md`), which nothing
+on `feat/v4` conflicts with. The useful action is no longer a rebase; it is a
+second merge when those seven land.
 
 ## Implementation reconciliation
 
