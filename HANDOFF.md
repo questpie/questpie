@@ -620,7 +620,33 @@ their _Deferred seams_ sections; the guides did not inherit it.
    Two counts in this file were also wrong: it said 17 guides in one place and
    fourteen in another. The directory held 15, all `kind: guide`.
 
-2. **The cut left two dangling references, and the first needs the owner.**
+2. **Three things `apps/docs` still needs; the first two need the owner.**
+   - **Half of one Runtime limits table is invented.**
+     `runtime-and-studio.mdx:224`–`:232` presents eight "Defaults". Four are
+     exact: active root Executions per Principal 64 and drain deadline 30 s are
+     `packages/runtime/src/application/index.ts:205` and `:206` (the only two
+     numeric defaults in that module), and request/response body 1 MiB is
+     `packages/compiler/src/runtime/index.ts:234`. **The other four have no
+     constant in the tree and no source anywhere in the record set** — Runtime
+     event 64 KiB, events per Execution 2,048, telemetry exporter queue 4,096,
+     startup deadline 30 s. `packages/runtime/src/application/events.ts` is 93
+     lines and holds no cap at all; the only `limits: {…}` block in
+     `packages/*/src` is the wire one at `:234`; there is no exporter module and
+     no startup-deadline constant. The 2,048 and 4,096 that do exist elsewhere
+     are the ADR-0008 cursor envelope and a Convex comparison — different
+     things.
+     **Not a systemic docs problem, which is why it is worth the space.** The
+     realtime table at `realtime.mdx:203`–`:212` is eight for eight against
+     `packages/compiler/src/live-query/index.ts:134`–`:143`, key by key. One
+     table is grounded; this one is half-invented.
+     **I did not cut them, deliberately.** The removal criterion is what the
+     BETA-01–BETA-12 passes deliver, _not_ what has an implementation today —
+     that distinction is the one this record already had to correct once. The
+     Execution Envelope is BETA-05 and accepted, so an unbuilt envelope limit
+     may be intended rather than out of scope, and SLICE.json says nothing about
+     these four either way. Establishing which needs the owner, and cutting a
+     user-facing table on my own reading of the tree would repeat the exact
+     mistake the criterion exists to prevent.
    - `durable-reactions.mdx:233` links to `./durable-jobs-and-workflows`, now
      removed. This is the same open defect already recorded for that file: a
      shipped BETA-08 guide explaining itself through deferred capabilities —
