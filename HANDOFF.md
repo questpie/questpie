@@ -1040,6 +1040,24 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   each names its search scope in the record, so the claim and its check are the
   same shape.
 
+- A sweep that finds nothing is only worth reporting if you have shown the
+  instrument can find something. Run it against a case you already know is
+  positive first. Three times this run that step decided whether a clean result
+  was real:
+  (a) the Accepted-ADR sweep at eeec5093 first returned zero defects. The
+  identifier regex excluded hyphens, so it could not have matched
+  QP-COMPOSE-023 -- the one gap already known. Fixed, re-run, and only then
+  reported;
+  (b) the guard probe at 6327ca25 issued an unguarded INSERT and required it to
+  fail with 42501 before testing that ALTER TABLE ADD COLUMN passes. Without
+  that step a passing DDL against absent guards looks identical to one against
+  live guards;
+  (c) the CHECK migration at b5a4285e asserted the widened constraint still
+  rejects an unknown code, because a constraint dropped and never replaced
+  would let the migration "pass" just as convincingly.
+  The cost is one extra command. The failure it prevents is reporting a green
+  result produced by a broken check, which is worse than not checking.
+
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
 ```
