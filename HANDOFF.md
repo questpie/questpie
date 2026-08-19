@@ -644,6 +644,14 @@ their _Deferred seams_ sections; the guides did not inherit it.
      arrived with the API ergonomics amendment
      (`docs/v4/prototypes/api-ergonomics-gate/`), which is the likely reason the
      projection ran ahead.
+     For 023 and 024 the authority is stronger than the projection and was
+     checked separately: **ADR-0022 is `Status: Accepted`** and states in its own
+     voice that "the compiler reports `QP-COMPOSE-023 operationProjectionCollision`"
+     (`docs/adr/0022-freeze-api-ergonomics-and-operation-projection.md:28`) and
+     the same for `QP-COMPOSE-024` (`:32`). Both are absent from every file under
+     `packages/`, and the declared union stops at 020. So for these two the gap is
+     an Accepted ADR asserting compiler behaviour that cannot occur, not a
+     projection running ahead of a tree that will catch up.
      **`QP-COMPOSE-003` is the one with substance behind it: the Resource Name
      grammar is not enforced at all.** `definition-composition.mdx:103`–`:113`
      documents segments of 1–63 characters, a 255-character total, and names
