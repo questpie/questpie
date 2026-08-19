@@ -665,6 +665,34 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `booking____availability` and `Appointments` becomes `appointments`, both of
      which then pass `validatedPhysicalName`. Whoever implements 003 should
      expect to be changing what currently compiles, not only adding a code.
+   - **The flagship guide's first Query example does not compile, and neither
+     does its recursive-output example.** Higher severity than everything else
+     in this item, because these are copy-paste starting points rather than
+     prose a reader can route around.
+     `queries-and-mutations.mdx:67` is `input: operation.input(channelMessagePage)`
+     inside the guide's opening `defineQuery`. `packages/questpie/src/operation.ts:68`
+     is the whole namespace: `Object.freeze({ error, text })`. There is no
+     `input` member. (`operation.error` at `:69` of the same example is fine.)
+     `queries-and-mutations.mdx:147` is
+     `const threadNode: Codec<ThreadNode> = codec.lazy(() => …)`. `codec`
+     (`packages/questpie/src/codec/index.ts:55`) has nine members — uuid, text,
+     boolean, integer, timestamp, object, array, nullable, optional. `lazy`
+     appears nowhere in `packages/questpie/src`.
+     **They are different classes, so check before fixing either.**
+     `operation.input` is accepted-but-unbuilt: it is the design-fiction
+     shorthand at `docs/v4/design-fiction/queries-and-mutations.md:57`, `:145`,
+     `:191` and `realtime.md:45`, `:175`. `codec.lazy` has no authority
+     anywhere in the record set — invented.
+     **The working fixture shows what the real API is today, which makes this
+     actionable rather than just wrong.** `fixtures/collaboration/src/consumer.ts`
+     is the same query as the guide's example. It writes the input codec out
+     explicitly — `codec.object({ channelId, first, after })` at `:10`–`:14` —
+     and reaches the plan through `ctx.data.run(channelMessagePage, input)` at
+     `:32`, rather than deriving the input from the plan.
+     Verified the imports around them are clean, so this is two symbols and not
+     a general rot: all 23 symbols the guides import from `questpie` are real
+     exports, and of 37 distinct namespace members used across every `ts` block,
+     these two are the only ones that do not exist.
    - **One more accepted-but-unbuilt bound, same class as the codes above.**
      `data-and-queries.mdx:79` says a JSONB-backed Field has at most 1,048,576
      canonical UTF-8 JSON bytes. The projection agrees —
