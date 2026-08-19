@@ -331,3 +331,23 @@ correct; only their addresses were.
 All six now carry the `feat/v4-beta-09:` prefix. The check is worth repeating
 before any manifest is pinned, and it is one pass over the records extracting
 `(packages|fixtures|tests|apps)/…:N` and testing each against the tree.
+
+**Existence is the weak half of that check, so content was checked too.** A line
+number can resolve and still point at the wrong construct once a file has moved
+underneath it. Twenty load-bearing code citations — the exposure mapping, the
+client network filter, `defineQuery`, `actorOf`, the maintenance `FOR UPDATE`,
+the effect fence, `result_bytes` in `inspect`, the ordinary-Authority
+construction site, the `Authority` type, `defineRoute`, the `durable_runs`
+indexes, the audit foreign key, `isSystem` in both its declaration and its
+lowering, `configurePostgresTimeouts`, `maintenanceCommands`, and the artifact
+inventory — were checked for the expected token within two lines of the cited
+position. **Zero mismatches.**
+
+The doc and ADR citations were audited on the same terms: eighteen checked for
+existence and range, none unresolvable, and four load-bearing ones spot-checked
+for content — the maintenance sentence in the accepted projection, Gate 8's
+command list, ADR-0003's "optional", and the glossary's. **Zero mismatches.**
+
+So the record set's addresses are verified as well as its claims, which is worth
+stating because a reviewer who finds one bad citation reasonably discounts the
+rest, and this set had exactly one class of bad citation and it is fixed.
