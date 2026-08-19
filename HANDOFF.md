@@ -580,8 +580,43 @@ sections; the guides do not inherit it.
 
 ### Ordered work
 
-1. **Availability callouts on the three affected guides in `apps/docs`.** Cheap,
-   and it removes the worst class of surprise.
+1. **Scope `apps/docs` to beta.1 by removal, not by callout.** Owner decision:
+   the guides must read as a finished product, so anything outside beta.1 does
+   not belong in them at all. The criterion is what the BETA-01–BETA-12 passes
+   deliver, not what has a runtime module today.
+
+   `beta-slice-p15/SLICE.json` names the boundary — `deferred` covers Action,
+   raw Route with credential Auth, and Job/Workflow breadth; `laterBetas` adds
+   Channel and carrier, File and Search verticals, OpenAPI/MCP/skill
+   projections, optional acceleration, and broader Studio.
+
+   Mapped against the fourteen guides, and the shape is not two files:
+   - **Wholly outside beta.1:** `durable-jobs-and-workflows.mdx`,
+     `files-search-and-contract-projections.mdx`.
+   - **Needs surgery, part ships:** `services-routes-and-auth.mdx` (Service is
+     in beta.1, raw Route and Auth are not) and
+     `multi-instance-and-acceleration.mdx` (multi-instance is BETA-10, optional
+     acceleration is deferred).
+   - **Enumerate the deferred vocabulary and need pruning, not deletion:**
+     `semantic-kernels-and-public-surface.mdx`, `executable-definitions.mdx`,
+     `definition-composition.mdx`, `index.mdx`.
+
+   **One structural surprise, and it is the reason this is not mechanical.**
+   `durable-reactions.mdx` documents BETA-08, which is accepted and shipping,
+   but explains external effects _through_ the deferred Action capability — "a
+   generated server Action capability projection" (`:86`), "through a generated
+   Action. It cannot write a Collection directly" (`:97`), and the receipt reuse
+   at `:170`. Removing Action leaves the shipped guide without its explanation
+   of how a Reaction performs an effect. That needs a content decision, not a
+   cut.
+
+   **Verify before cutting.** A grep for the deferred vocabulary overstates:
+   `Channel` in `realtime.mdx`, `queries-and-mutations.mdx`, and
+   `context-and-policy.mdx` is the collaboration fixture's own
+   Company/Space/Channel/Membership/Message graph, not the deferred Channel
+   capability. Those three guides are unaffected. Read each match; counting them
+   produces the wrong list.
+
 2. **Prove the embedding.** `createApp()` exposes
    `fetch(request: Request): Promise<Response>`
    (`packages/runtime/src/application/index.ts:111`), so Hono, Elysia, Next route
