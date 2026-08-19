@@ -73,7 +73,13 @@ every partition must be visited to know its first rows.
 **Correction 2: the existing query does not stop at 64 either.** With the real
 predicate it seq-scans all 50,200 rows. The `OR` between the two eligibility
 branches defeats `durable_runs_claim_idx`. Only the single-state form uses the
-index and stops at 64, at 0.09 ms — **170× faster than the shipped shape**.
+index and stops at 64.
+
+_That single-state figure is not the fix, and an earlier revision of this
+paragraph presented it as one._ Comparing the shipped `OR` against a
+single-state probe compares two different queries; the section below measures
+the shipped predicate against a shape that answers the same question, and the
+usable figure is **31×**, not the 170× this paragraph once claimed.
 
 So admission is _already_ backlog-proportional, before any fairness change. That
 strengthens rather than weakens the point below: backlog refusal is not merely
@@ -140,10 +146,10 @@ never scans the backlog.
 **Measured, and it is also what quantifies the index.** One tenant holding a
 50,000-run ready backlog and 16 runs actually running, on PostgreSQL 17.10:
 
-| Counting that tenant's in-flight runs       | Plan            | Rows touched                 | Time        |
-| ------------------------------------------- | --------------- | ---------------------------- | ----------- |
-| with `(application_name, tenant_id, state)` | Index Only Scan | **16**                       | **0.07 ms** |
-| without it                                  | Seq Scan        | 16 returned, 50,016 examined | 4.70 ms     |
+| Counting that tenant's in-flight runs       | Plan            | Rows touched                 | Time         |
+| ------------------------------------------- | --------------- | ---------------------------- | ------------ |
+| with `(application_name, tenant_id, state)` | Index Only Scan | **16**                       | **0.072 ms** |
+| without it                                  | Seq Scan        | 16 returned, 50,016 examined | 4.704 ms     |
 
 The indexed count touches exactly the running rows and never sees the backlog,
 which is the claim. Without the index the same count costs 65× more and its cost
