@@ -144,8 +144,13 @@ ADR-0013's "attempt timeout ... finite," the Mutation's 5,000 ms — that nothin
 server-side makes true. It is the highest-value, lowest-cost item in this
 entire record, it is independent of every axis decision here, and it should not
 wait on them. `configurePostgresTimeouts` already exists at
-`packages/compiler/src/postgres-session.ts:39`; the runtime simply never calls
-it.
+`packages/compiler/src/postgres-session.ts:39`, but "the runtime simply never
+calls it", which an earlier revision said, understates what adopting it takes.
+It sets both GUCs with `set_config(..., false)` (`:44`–`:45`) — **session**
+scope, not transaction-local — so on a pooled connection it leaks the timeout to
+the next borrower. The runtime needs the transaction-local form the durable
+kernel already uses (`packages/runtime/src/durable/rows.ts:23`). The helper is a
+precedent for the shape, not something the runtime can call as it stands.
 
 Recorded here as a **newly discovered blocking edge**, not as part of the share
 decision.
@@ -241,8 +246,13 @@ So this does not become a general quota engine:
 - No billing, metering, or usage accounting.
 - No per-tenant connection pools and no per-tenant databases.
 - No cross-instance token bucket, no leader, and no Redis or broker as the
-  authority for share — ADR-0017 forbids all three, and a share mechanism that
-  needed one would be reopening it.
+  authority for share. ADR-0017 names two of these directly — the leader and
+  broker-or-cache-as-durable-truth
+  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:89`–`:90`);
+  a cross-instance token bucket is the second of those under another name once
+  it holds share authority. A share mechanism that needed one would be reopening
+  the ADR. Note the ADR _permits_ a broker to carry notifications (`:47`) — what
+  it forbids is a broker as authority.
 - No group partitioning or per-tenant FIFO in this decision.
 - No provider-quota modelling behind the effect ledger.
 
