@@ -620,7 +620,30 @@ their _Deferred seams_ sections; the guides did not inherit it.
    Two counts in this file were also wrong: it said 17 guides in one place and
    fourteen in another. The directory held 15, all `kind: guide`.
 
-2. **Three things `apps/docs` still needs; the first two need the owner.**
+2. **Four things `apps/docs` exposes; two are docs defects and two are not.**
+   **The distinction matters more than either finding:** the same symptom — a
+   guide documenting behavior the tree does not produce — has opposite remedies
+   depending on whether accepted authority backs the claim. Check that before
+   reaching for a cut.
+   - **Eleven diagnostic codes the compiler cannot emit. Backed by authority,
+     so the gap is in `packages/`, not the guide.**
+     `docs/v4/definition-composition.md:1163` calls the composition diagnostics
+     a "closed code registry", tabulates 24 `QP-COMPOSE-*` codes at
+     `:1165`–`:1189`, and specifies the exact union `CompositionDiagnosticCodeV1`
+     at `:1200`+ with all 24 — binding, in its own words: "this mapping is part
+     of v1 and an implementation cannot choose a different severity or blocking
+     effect". `packages/compiler/src/diagnostic.ts` declares **13**: 002, 004,
+     005, 006, 008, 010, 011, 012, 013, 014, 015, 017, 020. Missing: 001, 003,
+     007, 009, 016, 018, 019, 021, 022, 023, 024 — absent from the declared
+     union, so no throw site can reach them, and absent from all of
+     `packages/*/src`.
+     `definition-composition.mdx` cites every one of the eleven;
+     `semantic-kernels-and-public-surface.mdx` cites 023 and 024.
+     **The guides are right against the contract and wrong against the tree, so
+     do not cut them.** The remedy is finishing the registry. Codes 023 and 024
+     arrived with the API ergonomics amendment
+     (`docs/v4/prototypes/api-ergonomics-gate/`), which is the likely reason the
+     projection ran ahead.
    - **Half of one Runtime limits table is invented.**
      `runtime-and-studio.mdx:224`–`:232` presents eight "Defaults". Four are
      exact: active root Executions per Principal 64 and drain deadline 30 s are
