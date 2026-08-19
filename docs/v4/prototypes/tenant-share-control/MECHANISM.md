@@ -100,7 +100,26 @@ shipped indexes present:
 Two branches do not help, because `state IN ('delayed','ready')` is itself two
 index ranges and PostgreSQL cannot walk them in `available_at` order from one
 scan. **Each state needs its own branch**, and the planner then produces a
-`Merge Append` that pulls in order across all three and stops at the limit.
+`Merge Append` that pulls in order across all three.
+
+**"Stops at the limit" is true of the Merge Append and not of every branch under
+it.** Re-measured with 640 expired-lease `running` rows present — the ten
+instances × batch 64 ceiling — the plan is a `Merge Append` feeding a `Limit`,
+but only the `available_at`-ordered branches arrive pre-sorted:
+
+- `state = 'ready'` — `Index Scan using durable_runs_claim_idx`, stops after one
+  row.
+- `state = 'running'` — a **quicksort** over the matching rows, because the
+  branch filters on `lease_expires_at` while the Merge Append needs
+  `available_at` order, and `durable_runs_lease_idx` is
+  `(application_name, state, lease_expires_at)` (`internal-protocol-v4-sql.ts:100`).
+  No shipped index supplies that order.
+
+Total was 0.299 ms, so the rewrite's conclusion survives intact. What does not
+survive is the implication that all three branches stop early: the `running`
+branch's cost is proportional to the number of expired leases, not bounded by the
+limit. That is cheap at the ceiling this fixture models and worth knowing before
+someone assumes it is bounded.
 
 The real figure is **31×**, not 170×, and the 0.09 ms in the earlier revision
 came from a different query entirely — a single-state probe with
@@ -111,9 +130,23 @@ Two things this rules out along the way, both tested rather than assumed:
 still stops at 64, 0.31 ms), and adding that column to the index is a modest
 win, not the fix (0.31 ms → 0.10 ms).
 
-It is a defect in admission as shipped, it belongs to whoever touches the claim
-predicate next, and it should land before fairness is measured or the fairness
-number carries the `OR`'s cost.
+It is a defect in admission as shipped and it belongs to whoever touches the
+claim predicate next.
+
+**The sequencing reason an earlier revision gave is contradicted by this
+record's own tables.** It said the rewrite "should land before fairness is
+measured or the fairness number carries the `OR`'s cost". But the ranked query
+scans every eligible row in all measured variants — 50,200 rows at 42.7 ms with
+the shipped index and 21.5 ms with a tenant-leading one — for the reason stated
+two paragraphs up: the scan and sort beneath the WindowAgg cannot stop early,
+because every partition must be visited to know its first rows. The three-branch
+rewrite's entire benefit is an ordered `Merge Append` that stops at the limit,
+and ranking removes the stopping. Once fairness lands there is no `OR` cost left
+for it to carry.
+
+Sequencing it first may still be right — a clean baseline, and a predicate the
+next slice inherits rather than rewrites — but those are the reasons, and the
+measured one was not.
 
 **This is where the three axes stop being independent.** Backlog refusal at
 acceptance is what makes the ranking scan affordable — it is the bound on the

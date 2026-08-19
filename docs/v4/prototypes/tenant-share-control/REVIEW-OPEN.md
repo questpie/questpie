@@ -28,7 +28,9 @@ Base: `feat/v4` at `1d1cb53d`.
 | Retry horizon pinned and enforced nowhere                        | `e1af84fd` |
 | Refused claims write nothing and are re-admitted forever         | `e1af84fd` |
 | Both numbers the gate proposed to pin were scope errors          | `1d1cb53d` |
-| `sliceHint` below the batch starves the single-tenant case       | see item 1 |
+| `sliceHint` below the batch starves the single-tenant case       | `5d472f3d` |
+| `OR`-fix sequencing rationale contradicted by own tables         | see item 3 |
+| "Stops at the limit" overstated for the `running` branch         | see item 4 |
 
 ## Open — verified, not yet acted on
 
@@ -58,6 +60,13 @@ not an operator surface. The gate justifies wrapping five reads as protecting
 "the surface an operator uses against an unhealthy database"; the surface that
 would actually be unbounded is the worklist, which does not exist in the tree.
 
+**3. CLOSED — sequencing rationale contradicted by the record's own tables.**
+Corrected in `MECHANISM.md`: the ranked query scans every eligible row in all
+measured variants, so ranking removes the stopping the three-branch rewrite
+buys, and there is no `OR` cost left for fairness to carry. The sequencing may
+still be right for other reasons, which the record now states instead. Original
+finding below, unedited.
+
 **3. The `OR`-predicate fix is sequenced on a rationale the record's own tables
 contradict.** The record says the three-branch rewrite "should land before
 fairness is measured or the fairness number carries the `OR`'s cost". But its own
@@ -65,6 +74,14 @@ tables show the ranked query scanning every eligible row in all variants, becaus
 the scan and sort beneath the WindowAgg cannot stop early. Once ranking lands
 there is no `OR` cost left to avoid. The sequencing may still be right for other
 reasons; the stated reason is not one.
+
+**4. CLOSED — "stops at the limit" overstated for the third branch.**
+Re-measured with 640 expired-lease `running` rows: the `Merge Append` does stop
+at the limit, but the `running` branch reaches it through a quicksort, because
+it filters on `lease_expires_at` while the merge needs `available_at` order and
+`durable_runs_lease_idx` cannot supply it. Total 0.299 ms, so the rewrite's
+conclusion holds; its cost on that branch scales with expired-lease count rather
+than the limit. Original finding below, unedited.
 
 **4. "Each state needs its own branch" is stated more strongly than measured.**
 Only the two `available_at`-ordered branches stop at the limit. The `running`
