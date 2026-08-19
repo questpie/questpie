@@ -53,9 +53,8 @@ QUESTPIE compiles exact values, structural filters, Relations, and cursor pages.
 
 ## Context and Policy
 
-Credential authentication resolves a trusted request or token into a
-Principal. QUESTPIE then owns the Principal, Tenant, Authority, and Policy
-boundary.
+Every root Execution enters with an explicit ingress Principal. QUESTPIE then
+owns the Principal, Tenant, Authority, and Policy boundary.
 
 Each root Execution resolves one immutable Context before application work
 runs. Collection-bound Policy checks current relational evidence and applies
@@ -65,11 +64,9 @@ the same authorization decision to every execution surface.
 
 ## Operations
 
-QUESTPIE has seven executable Definition kinds: Query, Mutation, Action, Route,
-Reaction, Job, and Workflow. They import application-specialized factories from
-`#questpie/app`; the compiler binds every handler statically in a matched
-Runtime Build. The Workflow contract uses the shared durable kernel and
-contains only named steps, timers, and typed signals.
+QUESTPIE has three executable Definition kinds: Query, Mutation, and Reaction.
+They import application-specialized factories from `#questpie/app`; the
+compiler binds every handler statically in a matched Runtime Build.
 
 A Mutation owns its PostgreSQL transaction and can add durable work to the same
 commit. Query reads and Mutation writes use exact generated contracts and the
@@ -101,31 +98,18 @@ unknowable provider outcome remains explicitly ambiguous.
 
 [Run a durable Reaction after commit](/docs/v4/durable-reactions)
 
-[Dispatch Jobs and design durable Workflows](/docs/v4/durable-jobs-and-workflows)
+[Run multiple instances without optional authority](/docs/v4/multi-instance)
+explains arbitrary routing, SSE reconnect, and rolling compatibility with
+PostgreSQL as the sole durable truth.
 
-[Run multiple instances without optional authority](/docs/v4/multi-instance-and-acceleration)
-explains arbitrary routing, cache and wake loss, SSE reconnect, rolling
-compatibility, and typed Channels with PostgreSQL as the sole durable truth.
-
-## Services, Routes, and Auth
+## Services
 
 Services own application or Execution lifetime with compiler-checked dependency
-and effect boundaries. Routes preserve exact Fetch requests, responses, and
-streams while entering normal application work only through an explicit
-Execution. Credential Auth produces Principal; Policy remains the only
-authorization model, and applications retain their Auth Collections and native
-client.
+and effect boundaries. The compiler rejects a cycle, an application Service
+that depends on an execution Service, and a transaction-safe Service that
+depends on an external-effect Service.
 
-[Compose Services, raw Routes, and Auth](/docs/v4/services-routes-and-auth)
-
-## Files, Search, and generated integrations
-
-File metadata remains an ordinary Policy-protected Collection. A narrow byte
-capability handles storage only after metadata authorization. Search rejoins
-ranked candidates to current source Policy before paging, totals, or facets.
-OpenAPI, MCP, and skills are compiler projections, not alternate handlers.
-
-[Store files, search authorized rows, and project contracts](/docs/v4/files-search-and-contract-projections)
+[Compose Services](/docs/v4/services)
 
 ## Public API ownership
 

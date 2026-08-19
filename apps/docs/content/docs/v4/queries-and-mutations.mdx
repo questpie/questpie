@@ -384,7 +384,7 @@ remain ordinary Fields and change only through explicit assignments.
 
 The generated Mutation Context also contains the stable `callId`, the
 `transactionId`, `ctx.signal`, and the immutable deadline. It exposes no raw
-transaction handle, Policy bypass, external Action bag, or ordinary-call System
+transaction handle, Policy bypass, external-effect bag, or ordinary-call System
 elevation.
 
 `ctx.dispatch` contains one typed member for each dispatchable Reaction in the
@@ -424,8 +424,8 @@ database detail.
 
 There is no general `before*` or `after*` hook catalogue. Use closed Field
 normalization for local canonicalization, closed server values for server-owned
-Fields, a named Mutation for cross-Collection work and transactional audit,
-typed dispatch for durable follow-up, and an Action for an external effect.
+Fields, a named Mutation for cross-Collection work and transactional audit, and
+typed dispatch for durable follow-up.
 
 ## Handle cancellation and response loss
 

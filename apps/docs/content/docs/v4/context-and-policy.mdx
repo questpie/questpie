@@ -240,10 +240,9 @@ direct execution, Studio, or worker location never implies System Authority.
 Only a trusted Runtime capability constructs System Authority. System Authority
 does not disable Policy.
 
-Network requests, Route transitions,
-[realtime recomputations](./realtime), durable attempts, and Studio actions
-construct a fresh root. Nested operations inherit their root instead of
-replacing its Context.
+Network requests, [realtime recomputations](./realtime), durable attempts, and
+Studio actions construct a fresh root. Nested operations inherit their root
+instead of replacing its Context.
 
 ## Bind Policy to a Collection
 

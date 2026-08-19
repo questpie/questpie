@@ -1,0 +1,50 @@
+---
+title: Compose Services
+description: Own integration lifetimes with compiler-checked dependency and effect boundaries.
+kind: guide
+---
+
+QUESTPIE compiles integrations into the same application graph as Collections
+and Operations. Services own runtime dependencies with an explicit lifetime and
+an explicit effect classification. Policy remains the only authorization model.
+
+## Own a dependency for the right lifetime
+
+A Service declares an application or execution lifetime and whether it is safe
+inside transactions:
+
+```ts title="src/services/audit.ts"
+import { defineService } from "questpie";
+
+export const auditService = defineService({
+	name: "audit",
+	lifetime: "execution",
+	effect: "read",
+	create: ({ signal }) => createAuditReader({ signal }),
+	dispose: (audit) => audit.close(),
+});
+```
+
+Application Services are created lazily once for each running Runtime.
+Execution Services are created lazily once for each root Execution. Concurrent
+consumers share the same creation. Cleanup runs once in reverse dependency
+order after success, error, cancellation, or a returned stream finishes.
+
+The compiler rejects dependency cycles and unsafe directions. An application
+Service cannot depend on an execution Service. A transaction-safe Service
+cannot depend on an external-effect Service. Query and Mutation contexts
+therefore cannot hide a provider call behind a Service.
+
+Service instances are runtime state. They are not serialized in Context,
+artifacts, durable rows, or the Execution Envelope.
+
+## Know the boundary
+
+- Application lifetime is per Runtime instance, not a process or cluster
+  singleton.
+- Execution lifetime includes a returned stream until EOF, error, or
+  cancellation.
+- Service creation does not silently retry external effects.
+- Service instances never enter safe telemetry.
+- Structural factories come from `questpie`. Application-specialized
+  executable factories come from `#questpie/app`.
