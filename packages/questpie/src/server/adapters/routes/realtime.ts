@@ -1117,13 +1117,20 @@ export async function realtimeSubscribe(
 		);
 	}
 
-	// Initial sessions may carry live-query topics, framework channels, or both.
+	// Initial sessions may carry live-query topics, framework channels, a CRDT
+	// hold, or any combination of them. `crdtHold` is ADDITIVE and not exclusive:
+	// one SSE connection multiplexes every resource a page holds, so a screen that
+	// edits a collaborative document while subscribed to a channel legitimately
+	// opens with all three. `openTopology()` in the client builds exactly that
+	// payload, and rejecting it here made a CRDT document unopenable on any page
+	// that also had a subscription.
+	//
+	// The only request with nothing to do is one that asks for no topic, no
+	// channel and no hold, which is the last clause.
 	if (
 		(body.crdtHold !== undefined && body.crdtHold !== true) ||
 		(topics !== undefined && !Array.isArray(topics)) ||
 		(channelInputs !== undefined && !Array.isArray(channelInputs)) ||
-		(crdtHold &&
-			((topics?.length ?? 0) !== 0 || (channelInputs?.length ?? 0) !== 0)) ||
 		(!crdtHold &&
 			(topics?.length ?? 0) === 0 &&
 			(channelInputs?.length ?? 0) === 0)
