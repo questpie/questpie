@@ -273,12 +273,20 @@ The performance manifests this slice owns are the Studio build-size and query
 baseline measurement manifest, and the BETA-09 stable-runner budget report.
 Both are named by the issue's Performance ownership block.
 
-**These five sit outside the branch's status derivation, and that is worth
-knowing before a manifest is written.** `feat/v4-beta-09` re-derived criteria
-status at `cdd5193c`, finding fourteen of **seventeen** met with three carrying
-the Q3 qualifier. Both copies of this file hold twenty-two criteria — seventeen
-in the section above and these five — so the derivation is complete for what it
-covers and silent on 18 through 22.
+**Four of these five sit outside the branch's status derivation, and that is
+worth knowing before a manifest is written.** `feat/v4-beta-09` re-derived
+criteria status at `cdd5193c`, finding fourteen of **seventeen** met with three
+carrying the Q3 qualifier. Both copies of this file hold twenty-two criteria —
+seventeen in the section above and these five.
+
+**Criterion 18 is covered, in a different file.** The branch's
+`narrower-claims.md:107` records "Criterion 18 is now measured: 255 ms against a
+5,000 ms budget", so the changed loop is tied to its criterion. An earlier
+revision of this section said the branch was silent on 18 through 22; it was
+silent on **19 through 22**, and I had read only the reconciliation record before
+concluding about the whole branch. Criteria status is spread across at least
+`acceptance-reconciliation.md` and `narrower-claims.md`, so neither file alone
+answers what is covered.
 
 Some of the evidence already exists on that branch, though **not at the figures
 its commit message gives, and an earlier revision of this section repeated them
