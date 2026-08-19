@@ -1039,6 +1039,15 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   `durable_*` table. What makes these sound where BETA-08's were not is that
   each names its search scope in the record, so the claim and its check are the
   same shape.
+  **Re-checked under the positive-control rule below, since four of these rested
+  on a grep returning empty and an empty result proves nothing on its own.** Each
+  pattern was re-run against a case known to be positive: the index pattern finds
+  0 for `tenant` and 8 for `state`; the `statement_timeout` grep finds 0 under
+  packages/runtime/src and 1 under packages/compiler/src; `grep durable` finds 0
+  in runtime/src/application/index.ts and 23 in
+  compiler/src/runtime/application.ts; the delete-target pattern finds 0 against
+  `durable_*` and 12 against `questpie_internal.*` overall. All four instruments
+  demonstrably fire, so all four absences are real.
 
 - A sweep that finds nothing is only worth reporting if you have shown the
   instrument can find something. Run it against a case you already know is
