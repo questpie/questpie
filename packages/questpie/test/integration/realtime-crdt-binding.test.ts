@@ -360,6 +360,77 @@ describe("realtime CRDT edge bindings", () => {
 			}),
 		).rejects.toThrow("Realtime session is not authorized");
 	});
+
+	/**
+	 * A CRDT hold is ADDITIVE, not exclusive.
+	 *
+	 * One SSE connection multiplexes every resource a page holds, and the client's
+	 * own `openTopology()` sets `crdtHold: true` whenever a CRDT resource exists
+	 * WHILE still sending the topics and channels array. The bootstrap guard used
+	 * to reject exactly that payload with `realtime.topicsRequired`, so a screen
+	 * that edited a collaborative document while subscribed to anything could not
+	 * open its document at all.
+	 *
+	 * Reported from an app whose Knowledge editor holds a document and a channel
+	 * on the same connection.
+	 */
+	it("bootstraps a CRDT hold that arrives alongside a live-query topic", async () => {
+		setup = await buildMockApp(
+			{},
+			{ realtime: { retentionDays: 0 }, secret: "s".repeat(32) },
+		);
+		await runTestDbMigrations(setup.app);
+		const controller = new AbortController();
+		const opened = await realtimeSubscribe(
+			setup.app,
+			new Request("http://localhost/realtime", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({
+					topics: [
+						{
+							id: "posts-topic",
+							resourceType: "collection",
+							resource: "posts",
+							operation: "find",
+						},
+					],
+					channels: [],
+					crdtHold: true,
+				}),
+				signal: controller.signal,
+			}),
+			{},
+			undefined,
+		);
+
+		// The bug returned 400 `realtime.topicsRequired` here.
+		expect(opened.status).toBe(200);
+		const reader = sseReader(opened.body!);
+		await reader.read("session");
+		await reader.close();
+		controller.abort();
+	});
+
+	/** The one request with nothing to do is still refused. */
+	it("still refuses a bootstrap that asks for no topic, no channel and no hold", async () => {
+		setup = await buildMockApp(
+			{},
+			{ realtime: { retentionDays: 0 }, secret: "s".repeat(32) },
+		);
+		await runTestDbMigrations(setup.app);
+		const refused = await realtimeSubscribe(
+			setup.app,
+			new Request("http://localhost/realtime", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ topics: [], channels: [] }),
+			}),
+			{},
+			undefined,
+		);
+		expect(refused.status).toBe(400);
+	});
 });
 
 function topologyRequest(
