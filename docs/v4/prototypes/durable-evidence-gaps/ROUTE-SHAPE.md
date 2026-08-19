@@ -58,21 +58,47 @@ it calls is an Operation, the existing wire refusal already applies — the Fetc
 path rejects any operation outside the network wire, which BETA-08 built and
 `inspection-contract.md` criterion 14 pins.
 
-## The one thing this does not settle
+## Where the authorization decision lives
 
-**Which Authority the inspection Operations evaluate.** They are Operations, so
-they get Context and a root Execution — but `maintenance-decisions.md` Q3
-decides inspection Authority is _distinct_ from Collection Policy, and an
-Operation's ordinary authorization is Policy. So the reads need an authorization
-that is evaluated per-Operation rather than per-Collection, and nothing in the
-accepted surface obviously supplies it.
+An earlier revision left this open. It is decidable, and the shape of the hole
+is sharper than "nothing obviously supplies it".
 
-That is a real gap and it is not this record's to close. It is also smaller than
-it looks: the Operation engine supplies the _inputs_ an inspection Authority
-needs — a resolved Principal, a Tenant, a fresh Execution — and what is missing
-is only the decision function, not the plumbing to reach one.
+**A Query declares no authorization of its own.** `QueryFactory`
+(`packages/compiler/src/generate.ts:377`–`:384`) takes exactly `name`,
+`network?`, `input`, `output`, and `handler`. Every `admit:` in the fixture is on
+a `definePolicy` bound to a Collection
+(`fixtures/collaboration/src/message-policy.ts:42`, `:46`, `:118`, `:140`,
+`:159`). So a Query's authorization is entirely inherited from the Collection
+Policies of the data it touches.
+
+**A Query that touches no Collection therefore has none.** An inspection read
+over `durable_runs` is exactly that. Making the reads Operations buys a resolved
+Principal, a Tenant and a fresh Execution — and zero authorization.
+
+**Decision: the inspection Authority decision is evaluated in the handler,
+against the resolved facts the engine supplies, raising a declared error.** No
+contract widening, and it has a precedent in the accepted surface rather than
+being invented: the Context resolver already makes authorization decisions in
+code against resolved facts, throwing `context.error.unauthenticated()` at
+`fixtures/collaboration/src/execution.ts:45` and `context.error.notFound("tenant")`
+at `:62`.
+
+**The cost, stated rather than buried.** A handler-evaluated decision is not
+declarative, so it does not appear in a projection the way Policy does. Nothing
+compiles it, nothing digests it, and a reviewer cannot read the authorization
+off an artifact — it has to be read off code and driven by a test. That is a
+genuine loss against how the application lane works, and it is the price of
+authorizing something that is not a Collection.
+
+**What would overturn it:** widening the Operation contract to declare
+non-Collection admission, which would restore the declarative property and make
+the authorization projectable. That is new authoring surface and belongs to an
+ADR, not to this slice — but if it is coming, doing it before the route lands
+avoids authorizing the same reads twice.
 
 **What would overturn the whole shape:** a demonstration that an Operation
-cannot carry a non-Policy authorization without widening the Operation contract.
-At that point the separate route becomes the cheaper option, and ADR-0014's
-one-engine rule would need an argued exception rather than being quietly broken.
+cannot carry a handler-evaluated authorization acceptably — for instance if the
+hostile case cannot distinguish a denial from a miss without a declarative
+contract. At that point the separate route becomes the cheaper option, and
+ADR-0014's one-engine rule would need an argued exception rather than being
+quietly broken.
