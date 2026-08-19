@@ -176,13 +176,24 @@ run must join to the contract to do it.
 
 ### Answerable: "the Mutation committed — what happened to its Reaction?"
 
-Pure function, no lookup: `callId` → canonical bytes → `dispatchId` →
-`durableRunIdentity(dispatchId)` → `runId` → `effectIdentity(application,
-runId, effectName)`. Every hop is a deterministic digest
+Pure function, no lookup — but **not a function of `callId` alone**, and an
+earlier revision wrote it that way. The dispatch identity is
+`deterministicUuid(inputScopeBytes({...}))` over **seven** inputs: application,
+`tenantId`, operation identity, principal kind, principal id, `callId`, and the
+`dispatchSlot`
+(`packages/runtime/src/mutation/postgres.ts:271`–`:280`). From there
+`durableRunIdentity(dispatchId)` → `runId` → `effectIdentity(application, runId,
+effectName)` are each a deterministic digest
 (`packages/runtime/src/durable/acceptance.ts:18`,
-`packages/runtime/src/durable/rows.ts:170`), and every landing is a primary
-key. The identities are handed to the user by the system — `callId` rides the
-wire response — rather than memorised.
+`packages/runtime/src/durable/rows.ts:170`), and every landing is a primary key.
+
+The correction matters for whether the job is usable. Six of the seven inputs are
+facts the caller's own Execution already fixes — application, tenant, operation,
+principal, and the slot the Reaction is declared in — so a support flow that
+knows _which operation a known principal called in a known tenant_ can derive the
+rest. A flow holding only a `callId` cannot. "`callId` rides the wire response"
+is still true and still useful; it is one of seven inputs rather than the whole
+key.
 
 Two things stand between this chain and being usable, and they are not the same
 kind of thing.
