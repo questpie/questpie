@@ -621,16 +621,22 @@ BETA-09 issue #296 is the active frontier. Its design record set is committed on
 implementation is already under way on branch `feat/v4-beta-09`.
 
 **Read `docs/v4/implementation/beta09/README.md` before touching that branch.**
-It records a merge hazard: the branch forked at `219758a4`, before several
-correction commits landed on `feat/v4`, and both sides have since edited the
-same records. The branch still carries defects that were found and verified
-against the tree, including an inspection projection specified wider than the
-kernel read it claims to narrow. Rebasing the branch is cheaper now than
-resolving it at merge time.
+It records the current merge state: the branch **has merged `feat/v4`** at
+`5066187a`, the merge base has advanced to `4078c057`, and the four defects an
+earlier version of this paragraph named are verified gone. Seven documentation
+commits remain unmerged, so the action is a second merge when they land — **not**
+a rebase.
+
+An earlier version of this paragraph said the branch forked at `219758a4` and
+still carried those defects, and told the next session to rebase. That was true
+when written and became false when the branch merged. It is corrected here rather
+than only in the slice README, because that is where it was first written and
+correcting only where a staleness is noticed is a failure this record set has now
+logged four times.
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
-`feat/v4-beta-09`, rebasing it onto current `feat/v4` first and preserving every
+`feat/v4-beta-09`, merging current `feat/v4` first and preserving every
 correction listed in `docs/v4/implementation/beta09/README.md`. Do not reopen
 the decisions in that record set; extend or correct them only on new evidence.
 Preserve the #289–#295 review evidence, the docs-hygiene branch, marketing
