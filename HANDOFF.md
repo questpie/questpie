@@ -741,6 +741,28 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `fumadocs-mdx && tsc --noEmit` over the app's own sources; fenced code in
      MDX is highlighted by shiki and never compiled. A guide example can be
      arbitrarily wrong and every gate stays green.
+     **And the release gate that should catch it has no instrument.**
+     `beta-slice-p15/SLICE.json` `releaseGates` ends with "public finished-product
+     beta.1 docs and explicit absence documentation". `release.yml:29` runs
+     `quality:release`, which is `full()` plus `knip:strict`, `package:check`
+     and `scripts/performance.ts check` (`scripts/quality.ts:200`–`:204`).
+     Nothing in that path reads `apps/docs/content`. The only `apps/docs`
+     reference in all of `scripts/` and `tests/` is the tsconfig path at
+     `scripts/quality.ts:215`, in the `typescript-forward` lane, and it compiles
+     the site's own TSX.
+     Positive control, because "no check exists" is exactly the claim a bad
+     search invents: the sibling gates in the same list ARE mechanically
+     enforced — `tests/type/beta01-generated-contract.test.ts:233` asserts the
+     generated declarations match no `Drizzle|Kysely|drizzle-orm|any`, which is
+     the "no ORM types" gate. My first pass looked only in `scripts/` and found
+     nothing for that gate either; the instrument was wrong, not the tree. Once
+     pointed at `tests/`, it fires for the siblings and still finds nothing for
+     docs.
+     **That is why seven compile errors sit in the flagship guide with every
+     gate green**, and it is the cheapest thing on this list to fix: one check
+     that extracts `ts` blocks and compiles them would have caught every example
+     finding above, and the numeric and symbol findings are the kind a second
+     check could reach.
      **The Context is thin the same way, so this is one gap and not two.**
      `QueryContext` in the generated contract is two members —
      `{ data, signal }`. `MutationContext` is `Omit<RootExecution, "services">`
