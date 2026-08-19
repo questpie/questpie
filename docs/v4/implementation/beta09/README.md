@@ -352,6 +352,19 @@ So the record set's addresses are verified as well as its claims, which is worth
 stating because a reviewer who finds one bad citation reasonably discounts the
 rest, and this set had exactly one class of bad citation and it is fixed.
 
+**Text-level breakage was swept for too, after one garbled sentence was found
+surviving several passes** — `studio-purpose.md`'s correlation bullet had ended
+mid-clause since an earlier edit. The sweep looked for unbalanced inline code,
+doubled words, and markdown tables with inconsistent columns. **Nothing real.**
+
+Its three findings were all noise, and they are named so the next person does not
+chase them: inline code spans legally wrap across lines, so a per-line backtick
+count reports forty false positives; `BEGIN ISOLATION LEVEL REPEATABLE READ READ
+ONLY` is correct SQL rather than a doubled word; and pipes inside code spans are
+escaped as `\|`, so a naive pipe count reports a column mismatch in a table that
+is well formed. A checker that produces forty false positives will not be run
+twice, which is worse than not having one.
+
 ## The retracted claims were swept for, not just patched
 
 Three times in this record set a correction was applied where it was noticed and
