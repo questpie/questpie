@@ -102,3 +102,47 @@ hostile case cannot distinguish a denial from a miss without a declarative
 contract. At that point the separate route becomes the cheaper option, and
 ADR-0014's one-engine rule would need an argued exception rather than being
 quietly broken.
+
+## The exposure flag is binary, and that splits the decision
+
+Testing this record's own claim that "the existing wire refusal already applies"
+turned up a constraint it missed.
+
+**`network: true` puts an Operation in the generated browser client.** The
+exposure mapping is binary — `exposure: value.network === true ? "network" :
+"server"` (`packages/compiler/src/model.ts:264`) — and the client is built from
+exactly the resources whose `contract.exposure === "network"`
+(`packages/compiler/src/runtime/client.ts:55`, `:59`). There is no third state:
+an Operation is server-only and unreachable over Fetch, or it is on the wire
+**and** in every application's generated client.
+
+BETA-08's accepted criterion 13 says "the generated browser client gains no
+durable control plane"
+(`docs/v4/implementation/beta08/acceptance-manifest.json:120`), and its round-3
+review noted that criterion "disclaims only a _browser_ durable control plane".
+
+So the Operations shape splits:
+
+- **Inspection reads** as `network: true` Queries are arguably permitted — reads
+  are not a control plane — but they would still add durable inspection methods
+  to every generated client, which no application asked for.
+- **The maintenance commands are not permitted this way.** `cancelRun`,
+  `retryRun`, and `acknowledgeAmbiguity` are unambiguously a control plane.
+  Exposing them as `network: true` Mutations puts them in every browser client
+  and violates criterion 13 directly.
+
+**Correction to the shape above.** "Expose the inspection reads as generated
+Operations" survives with a caveat about unrequested client surface. "Route the
+whole durable surface through the Operation engine" does not — the commands
+cannot go that way while the exposure flag is binary.
+
+**The narrowed options.** Either the commands arrive through a Route, which
+ADR-0015 accepts as "an explicit HTTP escape hatch" and which SPEC mounts into
+`app.fetch`; or the Operation contract gains a third exposure state meaning
+on-the-wire-but-not-in-the-client, which is new authoring surface and an ADR
+decision. The second is tidier and larger; the first uses an accepted mechanism
+and costs the one-engine property for the command half.
+
+This does not reopen the reads decision or the handler-evaluated authorization
+below it. It reopens only how the **commands** arrive, which the earlier
+revision folded into the same answer without checking that it could.
