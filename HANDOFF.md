@@ -836,6 +836,20 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   reports correctly-prefixed branch citations as missing files. Both
   studio-mount.ts citations are already correct.
 
+  Axis two does NOT automate, and this was tried rather than assumed. A checker
+  that pulls backticked identifiers from the sentence and looks for them within
+  three lines of the cited position flagged 33 of 149 citations. Excluding
+  markdown table rows -- whose neighbouring cells contribute unrelated
+  identifiers -- still left 25 of 125. Six were spot-checked against the source
+  and all six were false, from three causes the heuristic cannot separate from a
+  real defect: a range citation `:464`-`:483` whose identifier sits later in the
+  range; a sentence citing two files where the identifier belongs to the other
+  one; and a dotted name like `ctx.values` whose head is not what appears in the
+  code. A 20% false-positive rate is the "forty false positives" trap this
+  repository already learned once -- such a checker gets run once and ignored.
+  Read a sample instead: nine read by hand produced the two real defects at
+  81907d85.
+
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
 ```
