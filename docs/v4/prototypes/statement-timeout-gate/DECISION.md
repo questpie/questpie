@@ -410,13 +410,23 @@ distribution.
    measured maximum by the same rule BETA-08 used —
    `ceil(observed × multiplier / quantum) × quantum` — with the derivation
    asserted in-test rather than stated in prose.
-3. **Falsify the enforcement.** A test that issues a deliberately slow statement
+3. **Falsify the enforcement, on both mechanisms.** The transaction-local
+   `set_config` and the deployment baseline fail differently and must each be
+   driven; a test that only exercises the first proves nothing about the bare
+   reads. A test that issues a deliberately slow statement
    — `pg_sleep` beyond the bound — must fail with a PostgreSQL timeout, and must
    fail _differently_ with the GUC removed. Without that, the gate proves only
    that nothing broke.
-4. **Prove the five uncovered reads are covered.** Same probe against each of
-   the bare-statement reads, since those are the ones the transaction-scoped
-   mechanism cannot reach.
+4. **Prove the baseline covers the five bare reads — not that a wrap does.**
+   This item was written for the superseded decision to wrap them, and the
+   revision above removed that wrap; leaving it would have the gate prove a
+   mechanism it no longer ships. What replaces it is a conformance assertion,
+   because the baseline is a deployment property rather than framework code:
+   connect as the application role, `SHOW statement_timeout`, assert it is
+   finite, and assert a deliberately slow bare statement is cancelled by it.
+   The assertion must fail when the database or role default is absent, which is
+   the whole point of moving the guarantee out of the serving path — a
+   deployment that skips it must not pass silently.
 5. **Prove the lock bound.** Two concurrent maintenance commands on one run,
    with the loser asserted to fail on `lock_timeout` rather than wait.
 6. **Prove the cancel layer independently of the timeout.** A statement aborted
