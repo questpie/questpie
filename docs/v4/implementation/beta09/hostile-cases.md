@@ -132,6 +132,31 @@ assertion should therefore be on _the explanation Studio produces_, not on the
 presence of an event, or it will force a schema change that the case does not
 require.
 
+**Reachability gap, found after this case was written and worth stating before
+someone drives it.** The case says Studio explains the run. Studio cannot
+currently reach it. The run sits at `state = 'ready'`; the inspection surface is
+four `runId`-keyed reads plus one worklist (`inspection-contract.md` D3); and the
+worklist as decided is keyed on `state = 'failed'` (`studio-purpose.md`), which
+this run is not. `studio-purpose.md`'s own counter-finding is that **`runId` is
+not obtainable through any shipped API** — that is why the worklist exists at
+all. So nothing lists a stuck `ready` run and nothing yields its identity.
+
+**This matters because the test will pass anyway.** A fixture knows the `runId`
+it created, so an assertion driven as `inspect(thatRunId)` proves the projection
+explains a run whose identity was handed to it — not that an operator can find
+one. That is the shape this project keeps blocking rounds for: a test proving
+something other than what it claims.
+
+**Decision: scope the assertion, do not widen the surface here.** Drive case 4
+as "given a run's identity, the projection explains why it is not progressing",
+and say in the test what it does not prove. Widening the worklist to cover
+non-progressing `ready` and expired-lease `running` rows is the real fix, it is
+cheap on the same indexes, and it belongs to whichever slice owns the progress
+bound — the same disposition `studio-purpose.md` records and the same one
+`docs/v4/prototypes/durable-evidence-gaps/FINDING.md` §5 argues for. What would
+overturn it: that slice landing first, in which case case 4 should assert the
+operator path end to end rather than from a known identity.
+
 ## 5. Maintenance Authority denial
 
 **Asserts:** a caller without maintenance Authority is refused, the refusal is
