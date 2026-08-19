@@ -231,6 +231,29 @@ Principal"` matches a test, which read as coverage. That test trips the
     something is _enforced_, break it and assert the failure. A test that breaks
     the thing cannot be satisfied by a name appearing somewhere. Reading is for
     finding candidates, not for settling enforcement.
+- #295 third lesson, from measuring the BETA-09 design records: **a decision
+  carrying both a correctness reason and a performance reason kept leading with
+  the performance one, and the performance one kept failing measurement.** Three
+  instances, each measured on PostgreSQL 17.10:
+  - _"A total is a scan"_ justified omitting counts. A count over the same
+    indexed predicate is an Index Only Scan at 0.47 ms for 2,000 rows. The
+    surviving reason is that `countOracle: "absent"` is a nondisclosure
+    commitment the operational lane matches.
+  - _Cost_ justified rejecting `SERIALIZABLE` for the backlog cap. It admits
+    **fewer** than the cap — three against a cap of five — because conflicting
+    transactions abort. The surviving objection is the caller experience:
+    transient retryable errors on the write path.
+  - _Planner pruning_ justified deriving the fair-admission slice hint from the
+    batch. The planner is nearly indifferent between `turn <= 8` and
+    `turn <= 1000` (21.1 ms against 19.3 ms). The surviving reason is fairness —
+    the hint bounds one tenant's contribution to a round.
+
+  In all three the decision was right and the stated reason was wrong, which is
+  the dangerous shape: a reviewer who disproves the reason has grounds to doubt
+  the decision. The rule is to measure a performance justification before writing
+  it, or lead with the correctness one and let the performance claim follow only
+  if it has a number.
+
 - #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
   across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
   forward conformance, and the selected-PR PostgreSQL microbenchmark gate, which
