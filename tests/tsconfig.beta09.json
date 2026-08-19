@@ -18,6 +18,7 @@
 		"type/beta01-generated-contract.test.ts",
 		"unit/beta07-live-query-projection.test.ts",
 		"unit/beta09-operational-nondisclosure.test.ts",
+		"unit/beta09-redacted-envelope.test.ts",
 		"unit/beta09-studio-mount.test.ts",
 		"unit/beta09-studio-projection.test.ts",
 		"unit/helpers/studio-digest.ts"

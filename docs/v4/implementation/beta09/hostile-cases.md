@@ -196,3 +196,35 @@ to act.
 - Case 2 is disclosed as the weakest of the six. It is not strengthened by
   rewording, and pretending otherwise is the failure mode BETA-07 hit three
   times.
+
+### Driven, and the protection is bounding rather than redaction
+
+`tests/unit/beta09-redacted-envelope.test.ts`, 20 assertions, falsified by
+removing the scalar bound in `isOperationCallId` — the test then fails on
+`"x".repeat(257)` passing.
+
+Building it sharpened the case a third time. The correction above said the four
+free-form fields "are filled by identities". Two of them are not.
+`packages/runtime/src/application/index.ts:279`–`:289` sets
+`correlationId: callId` and adds `{ kind: "operationCall", id: callId }` — and
+**`callId` is supplied by the caller**, arriving on the wire frame.
+
+`isOperationCallId` (`packages/runtime/src/operation/call-identity.ts:1`–`:20`)
+bounds it: non-empty, no NUL, no lone surrogate, NFC-normalized, at most 256
+Unicode scalars and 1,024 UTF-8 bytes. **It does not filter content.** An
+assertion that a readable sentence is refused fails, because it is accepted —
+that was the first draft of this test and the tree corrected it.
+
+So the case's real content is narrower and more useful than either earlier
+reading:
+
+- **The envelope carries no operation payload**, because no field exists for
+  one. The event union is closed and `traceId`, `causationId` and `tenantRef`
+  are typed `null`.
+- **Its one caller-controlled field is bounded in shape, not in meaning.** A
+  host shipping these events anywhere must treat `correlationId` and the
+  `operationCall` link as untrusted caller input capped at 1,024 bytes.
+
+Nothing is redacted, which makes the case's name misleading. What protects the
+envelope is that there is nowhere to put a payload, plus a validator that keeps
+the one open field from carrying unbounded or malformed text.
