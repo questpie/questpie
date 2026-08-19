@@ -247,3 +247,38 @@ substance stands on citations regardless of who chose them. The attribution
 still needs confirming before the record goes to review, because a decision
 credited to an absent owner is worse than the same decision recorded honestly as
 a judgment call with its reasoning attached.
+
+## What is reachable, as distinct from what is built
+
+Three findings in this set converge on one status that none of them states, and
+a reader assessing the slice's four required artifacts needs it in one place.
+
+- The Fetch router contains **no reference to `durable`**, verified on `feat/v4`.
+- The Studio mount on `feat/v4-beta-09` serves a read-only asset surface at
+  `/_questpie/studio` and says so in its own comment: "no Operation, no durable
+  read, and no application data."
+- `owner-decisions.md` D3 records that packaging **cannot be answered yet**, for
+  exactly this reason.
+
+So the same-origin Studio bundle — required artifact 2 — **exists and reaches
+nothing operational**. The shell is served, the inspection projections are
+built, the nondisclosure commitments are pinned, and there is no path by which
+Studio obtains an Operational Fact.
+
+**This is not a criticism of the mount**, which is deliberately scoped and
+argues its separation well: disclosure is decided by what Studio may call, not
+by how its bytes arrive, which keeps the nondisclosure contract in one place.
+The gap is that the calling half does not exist yet.
+
+**Why it matters for assessment rather than for blame.** Four of this slice's
+required artifacts can be demonstrated in isolation and three of them are —
+the projection producer, the Policy-protected reads, the safe views. A reviewer
+counting artifacts will find the bundle present. A reviewer asking whether the
+slice's fixture is _demoable end to end_, which is its own acceptance
+criterion, will not, and the honest answer is that it is not yet, for one
+nameable reason.
+
+The same reason expires the Q3 qualifier in `maintenance-decisions.md`, unblocks
+D3, and makes the maintenance Authority hostile case fully drivable. One route
+closes four open items, which is worth knowing when deciding what to build
+next.
