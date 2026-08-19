@@ -14,28 +14,28 @@ Base: `feat/v4` at `1d1cb53d`.
 
 ## Acted on
 
-| Finding                                                          | Commit     |
-| ---------------------------------------------------------------- | ---------- |
-| Lock-timeout argument stated twice in one section                | `abfec489` |
-| Four-item list said "forbids all three", uncited                 | `e666c733` |
-| `query.cancel()` leaves the caller pending, not only the backend | `9fa0cfbf` |
-| In-flight count table measured the wrong baseline                | `31268fc0` |
-| Lock finding is not specific to maintenance                      | `86c0c58b` |
-| `executeAbortable` misattributed to compiler code                | `86c0c58b` |
-| A database/role default is a second tax-free shape               | `86c0c58b` |
-| Same "forbids all three" left standing in the sibling record     | `000ab2a6` |
-| `configurePostgresTimeouts` is session-scoped, not callable      | `000ab2a6` |
-| Retry horizon pinned and enforced nowhere                        | `e1af84fd` |
-| Refused claims write nothing and are re-admitted forever         | `e1af84fd` |
-| Both numbers the gate proposed to pin were scope errors          | `1d1cb53d` |
-| `sliceHint` below the batch starves the single-tenant case       | `5d472f3d` |
-| `OR`-fix sequencing rationale contradicted by own tables         | see item 3 |
-| "Stops at the limit" overstated for the `running` branch         | see item 4 |
-| The five bare reads are not all operator-facing or unbounded     | see item 2 |
-| Three runtime readers of the 5,000 ms, not one                   | see item 5 |
-| Pool checkout unbounded and abort-blind                          | see item 6 |
-| Maintenance audit has no row bound                               | see item 7 |
-| Tenant cardinality is unbounded and unstated                     | see item 8 |
+| Finding                                                             | Commit     |
+| ------------------------------------------------------------------- | ---------- |
+| Lock-timeout argument stated twice in one section                   | `abfec489` |
+| Four-item list said "forbids all three", uncited                    | `e666c733` |
+| `query.cancel()` leaves the caller pending, not only the backend    | `9fa0cfbf` |
+| In-flight count table measured the wrong baseline                   | `31268fc0` |
+| Lock finding is not specific to maintenance                         | `86c0c58b` |
+| `executeAbortable` misattributed to compiler code                   | `86c0c58b` |
+| A database/role default is a second tax-free shape                  | `86c0c58b` |
+| Same "forbids all three" left standing in the sibling record        | `000ab2a6` |
+| `configurePostgresTimeouts` is session-scoped, not callable         | `000ab2a6` |
+| Retry horizon has no termination condition (narrowed in `d8dc0069`) | `e1af84fd` |
+| Refused claims write nothing and are re-admitted forever            | `e1af84fd` |
+| Both numbers the gate proposed to pin were scope errors             | `1d1cb53d` |
+| `sliceHint` below the batch starves the single-tenant case          | `5d472f3d` |
+| `OR`-fix sequencing rationale contradicted by own tables            | see item 3 |
+| "Stops at the limit" overstated for the `running` branch            | see item 4 |
+| The five bare reads are not all operator-facing or unbounded        | see item 2 |
+| Three runtime readers of the 5,000 ms, not one                      | see item 5 |
+| Pool checkout unbounded and abort-blind                             | see item 6 |
+| Maintenance audit has no row bound                                  | see item 7 |
+| Tenant cardinality is unbounded and unstated                        | see item 8 |
 
 **All twenty findings from the adversarial pair are now closed** — the twelve in
 the table above plus the eight raised as open. Counted rather than estimated: of

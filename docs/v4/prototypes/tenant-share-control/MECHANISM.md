@@ -225,8 +225,15 @@ A cap needs to count a tenant's `running` runs. **`tenant_id` is in no index** �
 the three on `durable_runs` are `(application_name, state, available_at,
 run_id)`, `(application_name, state, lease_expires_at)`, and
 `(application_name, resource_identity, state)`
-(`internal-protocol-v4-sql.ts:98`–`:103`). So this axis requires a schema
-addition, `(application_name, tenant_id, state)`, and BETA-10 owns it.
+(`internal-protocol-v4-sql.ts:98`–`:103`).
+
+**That does not make a schema addition necessary, and an earlier revision of this
+sentence concluded it did — directly above the measurement that refutes it.** The
+count filters `state = 'running'` first, which `durable_runs_lease_idx` serves
+through its `(application_name, state)` prefix; `tenant_id` is then a filter over
+the matching rows, not a search key. So `(application_name, tenant_id, state)` is
+**optional**, BETA-10 owns the decision rather than the obligation, and what the
+index actually buys is measured below rather than assumed here.
 
 **An earlier revision of this section measured this wrong, and the wrong table
 was the argument for the index.** It reported the unindexed count as a Seq Scan
