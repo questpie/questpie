@@ -137,7 +137,8 @@ whole durable surface through the Operation engine" does not — the commands
 cannot go that way while the exposure flag is binary.
 
 **The narrowed options.** Either the commands arrive through a Route, which
-ADR-0015 accepts as "an explicit HTTP escape hatch" and which SPEC mounts into
+ADR-0015 calls "the bounded raw Fetch escape hatch"
+(`docs/adr/0015-freeze-service-route-and-auth.md:30`) and which SPEC mounts into
 `app.fetch`; or the Operation contract gains a third exposure state meaning
 on-the-wire-but-not-in-the-client, which is new authoring surface and an ADR
 decision. The second is tidier and larger; the first uses an accepted mechanism
