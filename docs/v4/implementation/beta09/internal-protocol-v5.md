@@ -114,7 +114,14 @@ Mirror the v3 → v4 upgrade exactly
 3. Inside `withPinnedTransaction`: verify the v4 catalog against the recorded
    protocol row, apply the v5 SQL, `update questpie_internal.protocol set
 version = 5, checksum = <v5>`, then verify v5.
-4. Release the advisory lock and assert the backend pid, as v4 does.
+4. In a `finally`, **assert the backend pid first, then release** the advisory
+   lock — `assertBackendPid(sql, expectedPid, "internal protocol v4 unlock")`
+   precedes `pg_advisory_unlock`
+   (`packages/compiler/src/schema/postgres/internal-protocol-v4.ts:311`–`:313`).
+   An earlier revision of this step said release-then-assert, which is the wrong
+   order and would have been copied. The order matters: asserting first proves
+   the unlock is being issued on the same backend that took the lock, and
+   unlocking first would release it before that is established.
 
 Three consequences worth stating before the implementing slice hits them:
 
