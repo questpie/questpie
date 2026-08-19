@@ -622,12 +622,48 @@ their _Deferred seams_ sections; the guides did not inherit it.
      historical record of a past amendment's scope, not a live claim, and
      concurrent ticks are active under `docs/v4/prototypes`.
 
-3. **Prove the embedding.** `createApp()` exposes
-   `fetch(request: Request): Promise<Response>`
-   (`packages/runtime/src/application/index.ts:111`), so Hono, Elysia, Next route
-   handlers and TanStack Start server routes all mount it mechanically. **No test
-   drives it under any of them**, so this is inference from the contract, not a
-   measured fact — the exact shape this record set spent a session logging.
+3. **Prove the embedding — and the claim it was going to prove is false.**
+   `createApp()` exposes `fetch(request: Request): Promise<Response>`
+   (`packages/runtime/src/application/index.ts:111`). An earlier revision of
+   this line said Hono, Elysia, Next route handlers and TanStack Start server
+   routes "all mount it mechanically". **They do not, at a sub-path.**
+
+   `packages/runtime/src/application/index.ts:436` gates on exact pathname
+   equality — `if (new URL(request.url).pathname !== operationPath)` → 404 —
+   with `operationPath = "/_questpie/operation"`
+   (`packages/runtime/src/operation/wire.ts:7`). The realtime carrier does the
+   same at `packages/runtime/src/application/realtime/carrier.ts:159-160`.
+   There is no base-path, prefix, or mount option anywhere in
+   `packages/runtime/src` — the only `prefix` hits are key paths in
+   `mutation/collection.ts:60` and filesystem Origin prefixes in
+   `compiler/src/runtime/application.ts:45-50`.
+
+   So `app.fetch` mounts mechanically **at the host root only**, where the
+   pathname arrives unmodified. A Next route handler is at a sub-path by
+   construction, and `app.route('/api', …)` in Hono or `.group()` in Elysia
+   produce the same thing: inbound `/api/_questpie/operation`, which 404s
+   unless the host rewrites the URL back to app-absolute.
+
+   This was never a discovery — `docs/v4/design-fiction/run-and-deploy.md:285-290`
+   already says it, in accepted text: "it is not a Hono, Elysia, Next.js,
+   Express, or Cloudflare adapter… QUESTPIE does not promise lifecycle parity
+   across a host adapter matrix." The handoff asserted the opposite of its own
+   projection, and the tree sides with the projection.
+
+   **Still unmeasured, and now the measurement is worth more:** no test drives
+   `app.fetch` behind any outer router. The existing coverage in
+   `tests/integration/beta05-runtime-client.test.ts` drives it with real
+   `Request`s (`:406`, `:444`, `:455`, `:462`, `:540`, `:563`, `:612`), so the
+   `Request → Response` contract itself IS measured; the `fetch:` callbacks at
+   `:419` and `:474` are the generated client's outbound transport, not a host
+   mount. What needs a test is the mount boundary: root-mount passes,
+   sub-path-mount 404s. **Blocked in-tick** — that suite needs a workspace
+   build first (`packages/questpie/dist` is stale: "Export named 'durable' not
+   found"), and building writes under `packages/`.
+
+   This lands on open ADR question 2 below. "How much router must the compiler
+   own" is not abstract: literal path identity is enforced at runtime today.
+
 4. **Decide BETA-09.** Finish narrowly or descope. Descope costs an ADR-0021:23
    amendment plus `implementation-gates.md:438` and `:451`, and needs
    `blockedBy` on BETA-10 repointed to BETA-08 — the chain 09 ← 10 ← 11 ← 12 is
@@ -661,11 +697,19 @@ its `action`.
 **Provider primitives do not replace Route; they compose with it.** `createApp()`
 exposes `fetch(request: Request): Promise<Response>`
 (`packages/runtime/src/application/index.ts:111`), so the host framework owns the
-outer router and `app.fetch` mounts as a subtree. Routes then live inside the
+outer server and forwards Requests to that seam. Routes then live inside the
 compiled app and keep the credential resolver, cancellation, deadline,
 Route-safe Service scoping, and compiler overlap diagnostics. Moving them out to
 a host route inverts the framework's value: the riskiest code — webhooks,
 callbacks, uploads — would get the fewest guarantees.
+
+**This composition is narrower than "mounts as a subtree", which is what an
+earlier revision of this line said.** Item 3 above has the grounding: pathname
+equality is exact (`application/index.ts:436`,
+`realtime/carrier.ts:159-160`) and no mount-prefix option exists, so a subtree
+mount 404s until the host rewrites the URL. The argument for keeping Route
+survives unchanged — it never depended on sub-path mounting — but the seam a
+host actually gets is root-mount or an explicit rewrite, not a subtree.
 
 **Two questions this leaves, both ADR-level rather than implementation choices:**
 
@@ -721,9 +765,14 @@ DO, IN ORDER.
    external effects through the deferred Action capability (:86, :97, :170),
    and its :233 link to ./durable-jobs-and-workflows now points at a removed
    page. Deciding how a shipped Reaction performs an effect settles both.
-2. Write one test that mounts createApp().fetch under Hono or a Next route
-   handler and drives a real request. The seam is standard so it should pass;
-   the point is that nothing currently proves it.
+2. Write one test for the app.fetch mount boundary, and do not expect it to
+   pass everywhere. app.fetch gates on exact pathname equality
+   (application/index.ts:436 against operationPath "/_questpie/operation" at
+   operation/wire.ts:7; realtime/carrier.ts:159-160 does the same) and has no
+   mount-prefix option, so it works at the host ROOT and 404s under a sub-path
+   -- which is where a Next route handler lives by construction. Assert both
+   halves. Needs a workspace build first: packages/questpie/dist is stale
+   ("Export named 'durable' not found").
 3. Bring the owner the BETA-09 decision with its cost stated: finish narrowly,
    or descope via an ADR-0021:23 amendment plus implementation-gates.md:438 and
    :451, repointing BETA-10's blockedBy to BETA-08.
