@@ -37,8 +37,11 @@ Base: `feat/v4` at `1d1cb53d`.
 | Maintenance audit has no row bound                                  | see item 7 |
 | Tenant cardinality is unbounded and unstated                        | see item 8 |
 
-**All twenty findings from the adversarial pair are now closed** — the twelve in
-the table above plus the eight raised as open. Counted rather than estimated: of
+**All twenty findings from the adversarial pair are now closed.** The table above
+lists all twenty: it began as the twelve acted on immediately, and gained a row
+for each of the eight below as that one closed. An earlier version of this
+sentence said "the twelve in the table above plus the eight raised as open",
+which was true when written and stopped being true as the rows were added. Counted rather than estimated: of
 the twenty, **fifteen were defects in these records** and are corrected in place,
 **four were runtime gaps** recorded in `durable-evidence-gaps/FINDING.md` §4–§7,
 and **one is closed as a stated precondition** rather than a fix.
