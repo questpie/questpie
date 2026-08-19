@@ -168,9 +168,46 @@ coincidentally, four of the five surfaces BETA-09's inspection contract is built
 on — the operator-facing reads, which are exactly the ones an operator runs
 against a large or unhealthy database.
 
-**Decision.** The gate covers both, by two different means rather than by
+**Decision, revised — and the revision is the point.** An earlier version of this
+line read: "the gate covers both, by two different means rather than by
 pretending one mechanism suffices: transaction-scoped `set_config` where a
-transaction already exists, and an explicit wrap for those five.
+transaction already exists, and an explicit wrap for those five." Three of that
+sentence's premises were later corrected in this same record, and the conclusion
+was left standing on them. Correcting a premise without revisiting what it
+carried is its own failure, distinct from leaving a stale claim in a second file,
+and this record had it.
+
+What changed beneath it:
+
+- The wrap was justified by latency on operator-facing reads run against an
+  unhealthy database. Four of the five are `run_id` point lookups that cannot
+  grow with the database.
+- The tax was said to be unavoidable without pool ownership. A database- or
+  role-level default avoids it entirely, fires on bare statements, needs no
+  superuser, and still lets a transaction set something tighter.
+- The two numbers the wrap would have installed were a wrong unit and a wrong
+  scope.
+
+**So the decision is now:**
+
+1. **Transaction-scoped `set_config` on every path that already has a
+   transaction** — Mutation, relational, and the durable kernel transactions.
+   Unchanged, and it is the only part that gives the framework a bound it
+   guarantees rather than inherits.
+2. **A database- or role-level baseline for everything else**, named as a
+   deployment requirement and asserted in conformance rather than implemented in
+   the serving path. It covers the five bare reads at no round-trip cost.
+3. **No wrap for the five bare reads.** It buys a framework guarantee over a
+   deployment-supplied baseline, on four reads that are structurally bounded and
+   one — `admit` — that is the scheduler rather than an operator surface.
+
+**What would overturn item 3**, and it is worth stating because it is the part
+that reversed: the run worklist landing as a bare statement. That is the one read
+in this design whose cost grows with the table, it does not exist yet
+(`docs/v4/implementation/beta09/inspection-contract.md:164`–`:166`), and if it
+ships without a transaction the wrap becomes the cheapest way to bound it. A
+deployment target that cannot set a database default would also restore item 3,
+since the baseline is then unavailable.
 
 **The wrap's cost is measured rather than asserted.** 300 iterations after 50
 warm-up rounds, against PostgreSQL 17.10 over TCP to a container on the same
