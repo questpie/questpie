@@ -272,3 +272,20 @@ quantum` and the derivation asserted in-test, the way BETA-08's were.
 The performance manifests this slice owns are the Studio build-size and query
 baseline measurement manifest, and the BETA-09 stable-runner budget report.
 Both are named by the issue's Performance ownership block.
+
+**These five sit outside the branch's status derivation, and that is worth
+knowing before a manifest is written.** `feat/v4-beta-09` re-derived criteria
+status at `cdd5193c`, finding fourteen of **seventeen** met with three carrying
+the Q3 qualifier. Both copies of this file hold twenty-two criteria — seventeen
+in the section above and these five — so the derivation is complete for what it
+covers and silent on 18 through 22.
+
+Some of the evidence already exists on that branch: it records **245,540 bundle
+bytes against a 327,680 budget** and a **0.151 ms worklist median against 5 ms**,
+which is most of what criterion 19 asks for. What is missing is the derivation
+tying that evidence to these criteria, plus the 5 s changed-loop measurement in
+its flagged form (see `design-context.md`) and an explicit statement for criteria
+20, 21 and 22.
+
+A count a reviewer checks first should not have two answers depending on which
+section they read.
