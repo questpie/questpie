@@ -652,6 +652,19 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `packages/`, and the declared union stops at 020. So for these two the gap is
      an Accepted ADR asserting compiler behaviour that cannot occur, not a
      projection running ahead of a tree that will catch up.
+     **And those two are the whole of it, checked rather than assumed.** All 23
+     Accepted ADRs were swept for code-like identifiers they name -- 48 distinct
+     ones. Eight are absent from `packages/*/src`, and six are explainable:
+     `COPY`, `MERGE`, `LISTEN`, `NOTIFY` are PostgreSQL keywords in prose
+     describing the capture boundary, not symbols the tree must contain
+     (ADR-0012:35 permits `LISTEN`/`NOTIFY` as "a lossy wake hint only" rather
+     than requiring it); `upload(file)` is ADR-0018 File/Search, which
+     `beta-slice-p15/SLICE.json` puts in `laterBetas`; and `DataCursorV1` is
+     named by ADR-0008:95 as deliberately frozen for the accepted proofs, with
+     `DataCursorV2` -- the one it says execution emits -- present at
+     `packages/runtime/src/relational/cursor.ts:65`, `:124` and `:287`. So the
+     Accepted ADR surface asserts nothing else the tree fails to provide. Do not
+     re-derive this; it is a bounded corpus and the sweep was cheap.
      **`QP-COMPOSE-003` is the one with substance behind it: the Resource Name
      grammar is not enforced at all.** `definition-composition.mdx:103`–`:113`
      documents segments of 1–63 characters, a 255-character total, and names
