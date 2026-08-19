@@ -816,6 +816,16 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
 - Verify every claim with file:line. Cite branch-only paths as
   feat/v4-beta-09:path, since the acceptance packet reads git show
   <reviewedHead>:<path> and a bare path will not resolve.
+- The packages/*.ts:NNN citations currently all resolve -- audited at 3a084099,
+  121 v4-tree citations, none past EOF, none naming a missing file. Do not
+  re-derive that; spot-check when you touch a record instead. Two traps if you
+  do rerun it, both of which produced false positives the first time:
+  (a) 66 further citations point at v3 paths -- packages/questpie/src/server|cli
+  |client/, packages/workflows/, packages/admin/ -- which are ABSENT from
+  feat/v4 on purpose, because v3 is behavioral evidence; they are not broken;
+  (b) a regex for packages/... matches inside feat/v4-beta-09:packages/... and
+  reports correctly-prefixed branch citations as missing files. Both
+  studio-mount.ts citations are already correct.
 
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
