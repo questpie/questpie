@@ -61,7 +61,30 @@ these — the validator rejects any other set.
   permitted; anything else in that shape is not. Worth knowing before pinning a
   document that quotes a connection string as an example.
 - **`reviewOutput`** the round's record path. Preserve every review record
-  byte-identically and add each to `quality/format-baseline.txt`.
+  byte-identically and add each to `quality/format-baseline.txt`. **The path
+  must not already exist** — `requireAbsentReviewOutput` runs before the
+  transport (`.agents/skills/questpie-v4/scripts/acceptance-review.ts:104`), so a
+  round cannot be re-run into an occupied path. That is why BETA-08 carries four
+  differently named records for four rounds:
+  `claude-initial-review.json`, `claude-review-02.json`, `claude-review-03.json`,
+  and `REVIEW-04.json`. Each repaired head needs a **fresh** `reviewOutput` path
+  as well as recomputed document digests, and the two are easy to remember
+  separately and forget together.
+
+### The dry run is free and validates everything
+
+`--dry-run` runs the whole path — manifest decode, ancestry, document digests,
+secret scan, verification semantics, and the review-output absence check — then
+prints the packet summary and exits **before any model call**
+(`acceptance-review.ts:114`–`:126`). Every rule in this section fails there
+rather than in a review round.
+
+That is worth stating plainly because knowing the rules has not been enough.
+BETA-08 knew the digest rule and repinned three times anyway, because each
+repair arrived after the digests were computed. The sequence that actually pays
+is: repair, then compute digests, then commit, then dry run, and only then spend
+the call.
+
 - **`verification`** every entry must be exactly `{command, result}` and
   **`result` must be `"PASS"`**. The validator rejects the whole manifest
   otherwise — `every verification entry must be PASS`
