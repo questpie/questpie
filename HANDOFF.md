@@ -693,6 +693,33 @@ their _Deferred seams_ sections; the guides did not inherit it.
      a general rot: all 23 symbols the guides import from `questpie` are real
      exports, and of 37 distinct namespace members used across every `ts` block,
      these two are the only ones that do not exist.
+     **The shape is worse than the symbols, and it is one gap rather than many.**
+     `defineQuery` takes five keys. The template is static —
+     `packages/compiler/src/generate.ts:375`–`:386`, no conditional — so every
+     generated `#questpie/app` says the same thing: `name`, `network?`, `input`,
+     `output`, `handler({ input, ctx })`. **No `policy`, no `errors`, and the
+     handler input has no `errors` to destructure.** `MutationFactory` is where
+     those live: the generated contract gives it `policy` and `errors`, both
+     **required**, and puts `errors` in the handler input. Every `defineQuery`
+     example in the guides is shaped like a Mutation —
+     `queries-and-mutations.mdx:65` and `executable-definitions.mdx:19` both
+     pass `policy` and `errors`, and neither passes `output`, which is required.
+     **Accepted-but-unbuilt, and the accepted side is unambiguous.**
+     `docs/v4/query-mutation-and-lifecycle.md:36`–`:38`: "Each local exported
+     Definition owns its Resource Identity, input, output, declared errors,
+     Policy, exposure, limits, Origin, Executable Slot, and inline handler" —
+     each Definition, Query included. `:39`–`:40` also makes `output` the
+     override rather than a requirement: "The compiler can infer a closed
+     supported output. Use `output` when the contract must remain independent of
+     inference or is recursive." Both factories require it, and the fixture
+     always passes it, so **output inference is unimplemented too**.
+     So the guides are not sloppy here; they document the accepted authoring
+     API, and the compiler emits a narrower one. The fix is in `packages/`, and
+     it is one change — Query's factory shape — not a list of examples.
+     **Nothing would have caught this.** `apps/docs` `types:check` runs
+     `fumadocs-mdx && tsc --noEmit` over the app's own sources; fenced code in
+     MDX is highlighted by shiki and never compiled. A guide example can be
+     arbitrarily wrong and every gate stays green.
    - **One more accepted-but-unbuilt bound, same class as the codes above.**
      `data-and-queries.mdx:79` says a JSONB-backed Field has at most 1,048,576
      canonical UTF-8 JSON bytes. The projection agrees —
