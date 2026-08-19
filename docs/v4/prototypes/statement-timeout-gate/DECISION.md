@@ -46,9 +46,23 @@ timeouts — `packages/compiler/src/schema/postgres/apply.ts:245` and
 
 So the compiler's DDL and seed sessions carry **two** independent defences: a
 server-side `statement_timeout`, and an out-of-band cancel that reaches the
-backend from another connection. The runtime carries **neither**. Its
-`query.cancel()` is the client-side abort inside `executeAbortable`
-(`postgres-session.ts:57`–`:62`), which asks the driver to stop waiting.
+backend from another connection. The runtime carries **neither**.
+
+An earlier revision attributed the runtime's cancel to `executeAbortable` at
+`postgres-session.ts:57`–`:62`. That is **compiler** code, and the runtime does
+not import it — `grep -rn "postgres-session" packages/runtime/src` is empty. The
+runtime has two independently written helpers, and they differ in a way that
+matters:
+
+- `packages/runtime/src/mutation/postgres.ts:58`–`:74` calls `query.cancel()`
+  and nothing else.
+- `packages/runtime/src/relational/postgres.ts:38`–`:58` takes a `disconnect`
+  callback, which the relational path supplies as
+  `transaction.close({ timeout: 0 })` (`:91`–`:93`) — it drops the connection.
+
+So the Mutation path is the weaker of the two, which is consistent with the
+measurement below: closing the socket at least settles the caller's promise,
+while `cancel()` alone leaves it pending. Neither stops the backend.
 
 **Measured, not asserted.** Against PostgreSQL 17.10 through Bun 1.3.14, a
 `SELECT pg_sleep(20)` was started, then cancelled through the same
@@ -176,10 +190,33 @@ the managed target before fixing the shape, not only against a container.
 
 **What this rules out.** Any mechanism that adds statements pays the same
 round-trip tax, including the `cancelBackendOnAbort` alternative below, which
-needs a reserved connection. The only shape that avoids it entirely is a
-connection-level `SET` applied once per checkout — which the framework cannot do,
-because it does not own the pool. That constraint is the reason this gate is
-awkward, and it is worth stating plainly rather than rediscovering.
+needs a reserved connection.
+
+**An earlier revision claimed the only tax-free shape is a connection-level
+`SET` per checkout, which the framework cannot do. That is false, and measuring
+it changes what the wrap is for.** A database- or role-level default needs no
+pool ownership and no superuser. Measured on PostgreSQL 17.10 with a
+non-superuser role (`rolsuper = f`):
+
+| probe                                                          | result                   |
+| -------------------------------------------------------------- | ------------------------ |
+| `ALTER ROLE lowpriv SET statement_timeout='150ms'`, new login  | `SHOW` reads **150ms**   |
+| bare `SELECT pg_sleep(2)`, outside any transaction             | **canceled by timeout**  |
+| `set_config('statement_timeout','50ms',true)` in a transaction | still overrides, tighter |
+
+The third row is what keeps the per-path design intact: a baseline does not
+prevent a path from setting a stricter bound. The second row is the important
+one — **a default fires on bare statements**, which is exactly the hole the five
+uncovered reads represent and which transaction-scoped `set_config` cannot
+reach.
+
+What the framework cannot do is _guarantee_ it, since it is a deployment-time
+action rather than serving-path code. So the honest framing is not "the tax is
+unavoidable" but: a deployment can supply a free baseline covering every path
+including the bare reads, and the wrap is only needed where the framework must
+guarantee a bound itself, or wants one tighter than the baseline. That weakens
+the case for wrapping the five reads specifically, and it is the question the
+evidence plan should settle before the wrap is built.
 
 ## A second finding: maintenance can block without bound
 
@@ -216,8 +253,33 @@ error.
 
 So the two halves of the lock analysis are both evidenced: maintenance waits for
 the holder's full duration with no timeout, and the claim path steps around a
-held row immediately. The finding is specific to maintenance, and that scoping is
-a measurement rather than a reading of the SQL.
+held row immediately.
+
+**But "specific to maintenance" was wrong, and the search behind it was too
+narrow.** An earlier revision scoped the finding to maintenance on the strength
+of having checked the durable claim path. It did not check the Mutation
+lowering, which generates a second bare `FOR UPDATE` for every keyed collection
+`get` — `SELECT TRUE AS "qp_locked" FROM <table> WHERE <key predicates> LIMIT 1
+FOR UPDATE` (`packages/compiler/src/mutation/postgres.ts:138`), with no
+`SKIP LOCKED` and no `NOWAIT`. It executes at
+`packages/runtime/src/mutation/collection.ts:242` inside
+`BEGIN ISOLATION LEVEL READ COMMITTED`
+(`packages/runtime/src/mutation/postgres.ts:181`), and the lock is held until
+`COMMIT` (`:339`).
+
+Two things make this the worse case rather than the milder one. Its predicates
+come from `operation.keyFields` alone
+(`packages/compiler/src/mutation/postgres.ts:72`–`:75`), while Policy predicates
+go into the _read_ that runs after it — the lifecycle is literally
+`["keyedRowLock", "freshPolicyRead", …]` (`:131`–`:136`). So a caller reaches a
+blocking, unbounded row lock on a row named by a supplied key **before Policy is
+evaluated**, holding a reserved pool slot for the whole wait. And it sits on the
+highest-volume tenant-reachable path rather than on an operator command.
+
+The compounding argument above applies here verbatim, which makes this the
+strongest single case for the `lock_timeout` half of the gate. What the earlier
+scoping got right is narrower than what it claimed: the durable _claim_ path is
+unaffected.
 
 ## The value is per path, and one of them must be measured
 
