@@ -8,6 +8,12 @@ from the constraints rather than from the options.
 
 A finding, not a decision. It writes no code and opens no slice.
 
+_Relocated from `docs/v4/prototypes/durable-evidence-gaps/`, where it was filed
+for convenience rather than because it belonged. That directory is about durable
+properties no test drives; this is about where Studio's bytes live. Misfiling is
+the discoverability failure this record set keeps documenting, so it is corrected
+rather than left._
+
 Base: `feat/v4` at `6e64c9e5`.
 
 ## Studio is optional, and that is contract rather than preference

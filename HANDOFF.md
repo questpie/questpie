@@ -560,6 +560,11 @@ and would otherwise never surface them.
 - **The accepted budget table measures on the wrong axis.** It bounds a
   Principal where the glossary makes Tenant the isolation identity.
   `docs/v4/prototypes/tenant-share-control/DECISION.md`
+- **The Studio packaging fork is narrower than it looks.** Studio is optional in
+  ADR-0003 and the glossary, so always-bundled-with-no-opt-out is unavailable;
+  and assets inside the checksum-verified Runtime bundle inherit its integrity
+  guarantee while assets read from a resolved root at request time do not.
+  `docs/v4/prototypes/studio-packaging/FINDING.md`
 - **Four of seven authoring factories have no runtime behind them.** Action,
   Job, Workflow, and Route are generated names with no module under
   `packages/runtime/src`. Deferred by accepted authority and not a defect, but it
