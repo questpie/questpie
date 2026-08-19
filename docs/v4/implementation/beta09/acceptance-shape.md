@@ -237,8 +237,11 @@ Fixed now so the implementing slice does not have to rediscover them:
   sequential scan. An earlier revision of this entry said "not globally listable
   at acceptable cost"; measurement disproved the cost half — 31.8 ms over 200,000
   rows is usable. The accurate disclosure is that the cost is **linear in audit
-  size and nothing prunes the audit** (no retention sweeper exists against any
-  `durable_*` table), so it grows without bound, while one
+  size and nothing prunes the audit** — every `delete from questpie_internal.*`
+  across `packages/*/src/` targets one of `change_ledger`,
+  `retained_live_query_results`, `realtime_binding_generations`,
+  `realtime_scope_attachments`, or `realtime_watch_bindings`, and no `durable_*`
+  table appears among them — so it grows without bound, while one
   `(application_name, requested_at DESC)` index removes it at 0.072 ms.
   Measured in `studio-purpose.md`.
 - **The redacted-envelope hostile case is structurally satisfied already** and
