@@ -230,8 +230,17 @@ Fixed now so the implementing slice does not have to rediscover them:
 - **The receipt lane is unreachable.** `mutation_call_receipts.committed_at` is
   durable and never pruned, and no public read exists.
 - **Live Query reset history is not retained.**
-- **The maintenance audit is not globally listable** at acceptable cost;
-  `run_id` precedes `requested_at` in its index.
+- **The maintenance audit is answerable per run, not as a global time-ordered
+  feed.** `run_id` precedes `requested_at` in
+  `durable_maintenance_commands_run_idx` (`internal-protocol-v4-sql.ts:246`), so
+  a global `ORDER BY requested_at DESC` cannot use the index and plans as a
+  sequential scan. An earlier revision of this entry said "not globally listable
+  at acceptable cost"; measurement disproved the cost half — 31.8 ms over 200,000
+  rows is usable. The accurate disclosure is that the cost is **linear in audit
+  size and nothing prunes the audit** (no retention sweeper exists against any
+  `durable_*` table), so it grows without bound, while one
+  `(application_name, requested_at DESC)` index removes it at 0.072 ms.
+  Measured in `studio-purpose.md`.
 - **The redacted-envelope hostile case is structurally satisfied already** and
   is the weakest of the six.
 
