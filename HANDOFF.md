@@ -603,6 +603,43 @@ sections; the guides do not inherit it.
 domain. Valuable for the framework, not on the path to shipping one application
 — the strongest candidate to defer.
 
+### Route: decided, with two questions left open
+
+Decided with the owner, grounded in ADR-0015 and the tree.
+
+**Route stays, and the reason is narrower than "raw HTTP is sometimes needed".**
+Query, Mutation, and Action all assume the caller is the generated client. Route
+is for callers you do not control — a payment provider, an OAuth server, a
+browser upload. ADR-0015:30 frames it the same way, and its non-goals forbid
+"Modeling a raw Route as an Action or generated JSON Operation". The concrete
+case is the signature check in
+`docs/v4/service-route-and-auth-composition.md:44`: it reads the exact body bytes
+before any parsing, which a typed input contract cannot supply. Convex, the model
+the Query/Mutation/Action trio draws on, needed the same escape hatch alongside
+its `action`.
+
+**Provider primitives do not replace Route; they compose with it.** `createApp()`
+exposes `fetch(request: Request): Promise<Response>`
+(`packages/runtime/src/application/index.ts:111`), so the host framework owns the
+outer router and `app.fetch` mounts as a subtree. Routes then live inside the
+compiled app and keep the credential resolver, cancellation, deadline,
+Route-safe Service scoping, and compiler overlap diagnostics. Moving them out to
+a host route inverts the framework's value: the riskiest code — webhooks,
+callbacks, uploads — would get the fewest guarantees.
+
+**Two questions this leaves, both ADR-level rather than implementation choices:**
+
+1. **Must `app.fetch` remain the only server entrypoint?** ADR-0015 says yes and
+   lists "authored server entrypoints" under non-goals. Mounting one Route
+   natively in a host router is an amendment.
+2. **How much router must the compiler own?** Overlap diagnostics need literal
+   path identity; mounting could be a thin per-provider adapter. The emitted
+   `routes` map already exposes `direct()`, but `direct` deliberately does not
+   resolve credentials, so it is not that adapter.
+
+Nothing here is built — no module under `packages/runtime/src` for `route`,
+`action`, `job`, or `workflow` — so this is a live decision, not a sunk cost.
+
 ### Still open from this slice
 
 - A **term was projected before its gate**: `Operational Fact` was added to
