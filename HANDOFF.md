@@ -665,6 +665,25 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `booking____availability` and `Appointments` becomes `appointments`, both of
      which then pass `validatedPhysicalName`. Whoever implements 003 should
      expect to be changing what currently compiles, not only adding a code.
+   - **One more accepted-but-unbuilt bound, same class as the codes above.**
+     `data-and-queries.mdx:79` says a JSONB-backed Field has at most 1,048,576
+     canonical UTF-8 JSON bytes. The projection agrees —
+     `docs/v4/data-model-and-query-grammar.md:325`, "a maximum canonical UTF-8
+     JSON size of 1,048,576 bytes". Nothing enforces it: there is no JSON byte
+     check in `packages/runtime/src/relational` or `.../codec` and none in
+     `packages/compiler/src`; the only `byteLength` on that path is the 63-byte
+     name check at `relational/bootstrap.ts:72`. The 1_048_576 literals that do
+     exist are operation payload limits (`compiler/src/mutation/index.ts:65`,
+     `:66`) and the realtime result cap — different contracts. Guide right,
+     tree behind; do not cut.
+   - **`data-and-queries.mdx:175` overstates one word.** "The hard v1 page
+     maximum is 100 rows. A deployment can set a lower limit." 100 is the
+     _default_: `runtime/src/relational/query.ts:599` is
+     `input.maximumPageSize ?? 100`, and `:600` rejects only `< 1`, so it can be
+     raised as well as lowered. It is enforced per request — `:328`,
+     `first > maximumPageSize` → `QP-DATA-012` — so "hard maximum" is right for
+     the default configuration and wrong as a bound. Small, and a cut is not the
+     fix; a word is.
    - **Half of one Runtime limits table is invented.**
      `runtime-and-studio.mdx:224`–`:232` presents eight "Defaults". Four are
      exact: active root Executions per Principal 64 and drain deadline 30 s are
@@ -897,6 +916,16 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   is refusedIncompatible += 1 at :294 and :300 is a field inside the pushed
   record. All three resolve, all three sit in the right function, all three
   point at the wrong statement. "None is stale" was never a claim about content.
+  Numbers are a third axis and that one IS worth automating, because it
+  converges. Roughly thirty figures across the guides are now checked against
+  the tree; the results are in item 2 above. Grounded exactly: the whole
+  realtime table, maximumItems 1-1,000 and container depth 8
+  (field-contract.ts:197-202), callId 1-256 scalars / 1,024 bytes / NFC
+  (call-identity.ts:14,:17-19), physical name 63 bytes, heartbeat 10 s and
+  attempt deadline 5 min (durable-kernel.ts:61-62), payload and result 256 KiB,
+  active roots 64 and drain 30 s. Not grounded: the four Runtime limits, the
+  JSONB byte bound, the 255-character Resource Name bound, and one overstated
+  word about page size. Do not re-derive the grounded ones.
   Two traps if you rerun axis one, both of which produced false positives the
   first time:
   (a) 66 further citations point at v3 paths -- packages/questpie/src/server|cli
