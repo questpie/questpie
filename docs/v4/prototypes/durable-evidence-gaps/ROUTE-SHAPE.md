@@ -153,9 +153,16 @@ The previous section offered the commands "a Route, which ADR-0015 accepts as an
 explicit HTTP escape hatch." Checking whether a Route can carry anything today
 changes that framing.
 
-**`defineRoute` exists as a name and nothing behind it.** The factory is
+**`defineRoute` exists as a name that cannot be called.** The factory is
 generated (`packages/compiler/src/discovery.ts:403`, listed at
-`packages/compiler/src/generate.ts:213` and `:450`), but:
+`packages/compiler/src/generate.ts:213` and `:450`), and it lands in the
+application's generated surface typed as
+`EmptyDefinitionFactory = (definition: never) => never`
+(`fixtures/collaboration/.questpie/generated/app.ts:184`, applied at `:199`).
+Nothing is assignable to `never`, so authoring a Route is a **compile error at
+the call site, not a silent no-op** — an earlier phrasing here, "a name and
+nothing behind it", invited the opposite reading. The runtime end is empty as
+well:
 
 - `packages/runtime/src/application/index.ts` contains **no reference to
   `route`** — the Fetch path dispatches nothing to one;
