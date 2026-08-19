@@ -10,6 +10,34 @@ ADR, public projection, gate, or tracker state.
 
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
+## What BETA-10 inherits, in one place
+
+The three axes below each changed position while this record was being checked,
+two of them substantially. Stated here so the implementing slice reads the
+current answer rather than reconstructing it from the corrections.
+
+1. **Fair admission — build it.** Rank within tenant with
+   `row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id)` and
+   order the batch by `turn` first. `ORDER BY turn` is the entire fairness
+   mechanism; the `turn <= $sliceHint` filter only prunes emission. **Set
+   `sliceHint = claimBatch`** — anything smaller starves a single-tenant batch,
+   which is the shape of the load scenario that passes today.
+2. **Per-tenant in-flight cap — decide, do not assume.** The `(application_name,
+tenant_id, state)` index this record once called necessary is **optional**:
+   the shipped `durable_runs_lease_idx` answers the count through its
+   `(application_name, state)` prefix at 0.083 ms, and the new index buys nothing
+   at reachable scale. The open question handed over is whether a per-tenant cap
+   binds at all below ten instances, given `worker.ts` runs one attempt at a time.
+3. **Backlog refusal at acceptance — build it, as a guard.** Count against the
+   cap adjacent to the dispatch insert, inside the Mutation transaction. It is
+   approximate under READ COMMITTED by about one row, and that is accepted:
+   `SERIALIZABLE` admits fewer than the cap by aborting, which is worse.
+
+**And one precondition the mechanism does not enforce:** nothing bounds how many
+tenants one actor can resolve to, so fair share is share among the tenants that
+exist. See the section near the end for what would make that a framework
+property rather than an application one.
+
 ## What admission does today
 
 `admit(batch)` (`packages/runtime/src/durable/postgres-kernel.ts:455`):
