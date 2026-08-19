@@ -280,6 +280,13 @@ receives the same outcome for a run that exists and one that does not.
 Inspection Authority is evaluated at the entrance — the bounded worklist — not
 only at the leaf, because a list leaks existence.
 
+That placement is unaffected by a later finding, but the mechanism under it is
+open: the worklist is a Query, and a Query handler receives no Principal
+(`packages/compiler/src/generate.ts:322`–`:325`). Entrance-versus-leaf is still
+the right call for the reason given; _what_ performs the evaluation there is
+decided in `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, which
+rules out the handler and leaves widening `QueryContext` or the durable route.
+
 ## Corrections carried from this work
 
 `design-context.md` says the application lane is "closed by construction." That

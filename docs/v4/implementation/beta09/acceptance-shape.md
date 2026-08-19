@@ -222,10 +222,19 @@ Fixed now so the implementing slice does not have to rediscover them:
   `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`.
 
   **So this slice should scope the command half as deferred and name the owner,
-  rather than carry criteria it cannot satisfy.** The inspection _reads_ are
-  unaffected — Queries are wired, so they work over the wire today with
-  handler-evaluated Authority. Only the commands are blocked, and no accepted
-  slice currently owns the unblocking work. A criterion asserting a
+  rather than carry criteria it cannot satisfy.** Queries are wired, so the
+  inspection _reads_ reach the wire today.
+
+  **But "with handler-evaluated Authority", which an earlier revision said here,
+  is not available.** `QueryContext` is `data` and `signal` only
+  (`packages/compiler/src/generate.ts:322`–`:325`), so a Query handler is handed
+  no Principal and cannot evaluate an Authority at all; the mechanism and the
+  alternatives are worked through in
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`. The reads reaching
+  the wire is still true and is what that sentence needed; the reads being
+  _authorized_ is not settled, and criterion 1 depends on it.
+  Only the commands are blocked, and no accepted slice currently owns the
+  unblocking work. A criterion asserting a
   wire-reachable command would be false at acceptance for a reason no repair
   inside BETA-09 can close.
 
