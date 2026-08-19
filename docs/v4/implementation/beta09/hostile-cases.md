@@ -208,6 +208,12 @@ to act.
   in both the rejection union and the CHECK. Amended in the same commit.
 - Case 3 adds an entry to the slice's narrower-claims list: BETA-09 does not
   build `questpie explain`, which accepted authority names in three places.
+- Case 4 is scoped to "given a run's identity", because Studio cannot reach a
+  stuck `ready` run: the worklist keys on `state = 'failed'` and `runId` is
+  obtainable from no shipped API. The test must say what it does not prove.
+  Widening the worklist to cover non-progressing runs belongs to the slice that
+  owns the progress bound, not to this one. `acceptance-shape.md` criterion 15
+  carries the same scope.
 - Case 2 is disclosed as the weakest of the six. It is not strengthened by
   rewording, and pretending otherwise is the failure mode BETA-07 hit three
   times.

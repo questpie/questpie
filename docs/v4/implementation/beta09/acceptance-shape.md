@@ -186,9 +186,15 @@ route exists.
 14. **Retry is never offered as the remedy for ambiguity**, and retry copy
     states that no exactly-once guarantee is created. →
     `maintenance-decisions.md` Q12.
-15. **A stale build is explained.** A run pinned to a retired executable digest
-    is not presented as healthy. Falsifiable: `EXECUTABLE_RETIRED` writes
-    nothing, so the history says only `accepted`. → `hostile-cases.md` case 4.
+15. **A stale build is explained, given the run's identity.** A run pinned to a
+    retired executable digest is not presented as healthy. Falsifiable:
+    `EXECUTABLE_RETIRED` writes nothing, so the history says only `accepted`.
+    **Scoped deliberately:** the criterion is about what the projection says
+    about a run it was handed, not about an operator finding one. Nothing lists
+    a stuck `ready` run — the worklist keys on `state = 'failed'` and `runId`
+    comes from no shipped API — so a criterion asserting the operator path would
+    pass on a fixture that already knows the identity. →
+    `hostile-cases.md` case 4.
 16. **The Studio projection producer is independent.** Given the same compiled
     input it emits bytes identical to the compiler's artifact, and mutating the
     artifact bytes alone makes the parity test fail. → `hostile-cases.md`
