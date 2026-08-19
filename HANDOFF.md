@@ -248,11 +248,22 @@ Principal"` matches a test, which read as coverage. That test trips the
     `turn <= 1000` (21.1 ms against 19.3 ms). The surviving reason is fairness —
     the hint bounds one tenant's contribution to a round.
 
-  In all three the decision was right and the stated reason was wrong, which is
+  A fourth was found afterwards **by applying the rule rather than by stumbling
+  into it**, which is the evidence that it works. Sweeping the records for
+  performance-shaped words with no number nearby turned up "who cancelled what
+  today has no source at acceptable cost". Measured, a global time-ordered audit
+  feed over 200,000 rows costs 31.8 ms from the shipped indexes and 0.072 ms with
+  a time-leading one — usable, not unacceptable. The true statement is that the
+  cost is linear in audit size and nothing prunes the audit, so it grows without
+  bound while one index removes it.
+
+  In all four the decision was right and the stated reason was wrong, which is
   the dangerous shape: a reviewer who disproves the reason has grounds to doubt
   the decision. The rule is to measure a performance justification before writing
   it, or lead with the correctness one and let the performance claim follow only
-  if it has a number.
+  if it has a number. The sweep that finds these is one pass for words like
+  cheap, expensive, faster, scan, or proportional with no figure within a few
+  lines; expect most hits to be noise, since "scan" is also a verb.
 
 - #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
   across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
