@@ -50,10 +50,10 @@ freezes `worklist`, `inspect`, `events`, `effects`, `audit`, `cancelRun`,
 Studio shell, then the Studio artifacts, then the Operation wire, then 404.
 There is no durable route in it; `grep durable` over that file returns nothing.
 
-The Studio client agrees. `apps/studio/src/app.tsx:28`–`:33` fetches exactly one
+The Studio client agrees. `feat/v4-beta-09:apps/studio/src/app.tsx:28`–`:33` fetches exactly one
 endpoint, `/_questpie/studio/artifacts`, and the mount's own comment states the
 property plainly: that path involves "no Operation, no durable read, and no
-application data" (`packages/runtime/src/application/studio-mount.ts:11`).
+application data" (`feat/v4-beta-09:packages/runtime/src/application/studio-mount.ts:11`).
 
 So what this slice has built is a **contract browser**. It renders the compiled
 manifest, operations, migrations and origin map from static served bytes. It
@@ -64,7 +64,7 @@ operational half currently has no transport.
 
 The test file shows the seam exactly. Nondisclosure is asserted against
 `prepared.app.durable.*`, in-process
-(`tests/integration/postgres/beta09-inspection-nondisclosure.test.ts:100`,
+(`feat/v4-beta-09:tests/integration/postgres/beta09-inspection-nondisclosure.test.ts:100`,
 `:107`, `:152`, `:156`), while the Studio-serving claims use `prepared.fetch`
 (`:170`, `:194`). The two halves never meet in a single test, which is why the
 gap survived thirty-seven commits: every individual claim is true.
@@ -106,7 +106,7 @@ through `app.durable.cancelRun` today applies without an Authority decision, and
 records an actor the system never verified.
 
 The branch knows this and says so rather than hiding it —
-`tests/integration/postgres/beta09-authority-guard.test.ts:60`–`:63` records
+`feat/v4-beta-09:tests/integration/postgres/beta09-authority-guard.test.ts:60`–`:63` records
 that the guard "is unreachable through `app.durable` … until an exposing
 Operation exists", and drives the factory contract directly instead.
 

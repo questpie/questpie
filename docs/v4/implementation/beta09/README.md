@@ -295,7 +295,7 @@ At `0181e2a4`:
   nothing has been exposed in the shape criterion 13 forbids.
 - `studio-interface.md` plans the page to fetch **`/_questpie/studio/artifacts`**,
   a static path the mount serves
-  (`packages/runtime/src/application/studio-mount.ts:54`), and to run the
+  (`feat/v4-beta-09:packages/runtime/src/application/studio-mount.ts:54`), and to run the
   producer at `apps/studio/src/projection.ts`, whose own comment says it "turns
   the canonical artifact bytes the Runtime already digest-verifies into the flat
   catalogs `studio-purpose.md` decided the entrance opens onto".
@@ -314,3 +314,20 @@ what `studio-purpose.md` decided.
 The one thing to watch is that this makes the slice's demoability claim narrower
 than it reads: what can be demonstrated end to end is _explaining a compiled
 application_, not _operating a durable run_.
+
+## Citations were audited mechanically
+
+131 `file:line` citations across this record set and the four prototype records
+were checked for existence and range. **125 resolve on `feat/v4`. Six did not**,
+and all six were the same defect rather than six defects: a path that exists only
+on `feat/v4-beta-09`, cited as though it were on `feat/v4`.
+
+That matters for one specific reason. The acceptance packet is built with
+`git show <reviewedHead>:<path>`, so a branch-only path cited bare does not
+resolve at a `feat/v4` reviewed head — a reviewer opens it, finds nothing, and
+has grounds to treat the citation as fabricated. The claims themselves were
+correct; only their addresses were.
+
+All six now carry the `feat/v4-beta-09:` prefix. The check is worth repeating
+before any manifest is pinned, and it is one pass over the records extracting
+`(packages|fixtures|tests|apps)/…:N` and testing each against the tree.
