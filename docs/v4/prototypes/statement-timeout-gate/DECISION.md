@@ -286,11 +286,30 @@ unaffected.
 A single global runtime timeout would be wrong, because the paths have
 different legitimate durations and only some of them have an accepted bound.
 
-- **Mutation: 5,000 ms**, because that is the bound the Mutation program already
-  declares. The GUC makes an existing declared number true rather than
-  introducing one.
-- **Durable attempt: the attempt deadline the kernel already computes**, for the
-  same reason.
+**Both numbers an earlier revision proposed to ship were scope errors, and the
+record's own "derive, do not choose" rule is what they break.**
+
+- **Mutation: 5,000 ms — wrong unit.** `statement_timeout` bounds a _statement_;
+  `durationMilliseconds: 5_000` bounds a _transaction_. A Mutation transaction
+  runs many statements between `BEGIN`
+  (`packages/runtime/src/mutation/postgres.ts:181`) and `COMMIT` (`:339`) — the
+  receipt insert, the business statements, the kernel marker, the dispatch
+  acceptance, the receipt update. Setting the GUC to 5,000 permits a transaction
+  of 5,000 ms × the statement count. It does not make the declared number true;
+  it installs a looser, differently shaped bound and calls it the same number.
+- **Durable attempt: wrong scope.** The attempt does not run inside a statement
+  or a transaction. The claim transaction commits first — ADR-0013 states it as
+  a decision, "commits before user code" (`docs/adr/0013:32`) — and
+  `worker.ts:338` invokes `runAttempt` after that commit. No `statement_timeout`
+  can bound it. The attempt deadline is already enforced, by the heartbeat
+  aborting on `deadlineExpired`.
+
+So neither of the two "already-accepted numbers that are currently untrue" is a
+number this gate can install. What the GUC _can_ bound is a single statement,
+and the honest derivation is per-path from the measured statement tail — which
+is what the evidence plan below already asks for, and which the earlier bullets
+short-circuited.
+
 - **Query: unknown, and it must not be invented.** The framework fixes no query
   duration. The `first` page bound is author-declared — the compiler requires a
   codec `maximum` and fixes no number
@@ -298,8 +317,9 @@ different legitimate durations and only some of them have an accepted bound.
   query timeout without measuring is precisely the failure BETA-08's first round
   was blocked for: pinning a number nothing derives.
 
-So the gate ships the two derived values and **measures** the third before
-pinning it.
+So the gate measures **all three** before pinning any, rather than transplanting
+two numbers across a unit and a scope boundary. That is slower than the earlier
+plan and it is the plan the record's own rule requires.
 
 ## What this risks breaking
 
