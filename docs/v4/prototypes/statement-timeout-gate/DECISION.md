@@ -19,8 +19,16 @@ Two accepted bounds exist and nothing server-side makes either true.
 - The Mutation program declares `limits: { rows: 100, durationMilliseconds:
 5_000 }` (`packages/runtime/src/mutation/postgres-program-types.ts:132`).
 
-What actually enforces them: a client-side `AbortSignal.timeout(5_000)`
-(`packages/runtime/src/mutation/postgres.ts:159`) and `query.cancel()` (`:66`).
+What actually enforces them: three client-side readers, not the one an earlier
+revision named. `AbortSignal.timeout(5_000)`
+(`packages/runtime/src/mutation/postgres.ts:159`) with `query.cancel()` (`:66`);
+a wall-clock check immediately before `COMMIT` (`:336`); and two more in
+`packages/runtime/src/mutation/collection.ts:199` and `:202`, sandwiching the
+`await input.query(...)` between them. All three are assertions taken _around_ an
+uninterruptible await, so they convert a sixty-second transaction into a
+sixty-second transaction followed by a throw. The threefold appearance of
+enforcement is worth naming as a plausible reason this gap survived, and as three
+checks an implementer must reconcile when a real bound lands.
 A PostgreSQL cancel request is advisory and racy — it asks the backend to stop
 and the backend may not. So a pathological statement holds a backend and a pool
 slot for as long as PostgreSQL wants, and the declared bound is enforced
@@ -182,11 +190,25 @@ Against a managed PostgreSQL at 1–5 ms round trip, the same wrap costs 3–15 
 per read.
 
 That sharpens the trade rather than settling it. ADR-0014 names a managed
-PostgreSQL project as a conformance target, and these five are the
-operator-facing reads — the ones run against a database that is already
-unhealthy, where added latency is least welcome. So the wrap is nearly free
-locally and materially expensive remotely, and the gate should measure against
-the managed target before fixing the shape, not only against a container.
+PostgreSQL project as a conformance target, so the wrap is nearly free locally
+and materially expensive remotely, and the gate should measure against the
+managed target before fixing the shape, not only against a container.
+
+**But "these five are the operator-facing reads … run against a database that is
+already unhealthy" overstated what they are.** Their predicates say otherwise:
+`inspect` (`postgres-kernel.ts:687`), `events` (`:729`), effects `read`
+(`postgres-effects.ts:193`), and `audit` (`postgres-maintenance.ts:384`) are all
+`WHERE application_name = $1 AND run_id = $2` — point lookups against one run's
+primary key or its prefix. Only `admit` (`postgres-kernel.ts:455`) is
+`WHERE application_name = $1` with no run scope, and `admit` is the scheduler,
+not a surface an operator calls.
+
+So four of the five are structurally bounded and do not grow with the database,
+which weakens the latency worry for exactly the reads the wrap is aimed at. The
+surface that would genuinely be unbounded is the run worklist BETA-09 decided
+(`docs/v4/implementation/beta09/inspection-contract.md:164`–`:166`), and it does
+not exist in the tree yet. The gate should say plainly that its expensive case is
+a read nobody has written.
 
 **What this rules out.** Any mechanism that adds statements pays the same
 round-trip tax, including the `cancelBackendOnAbort` alternative below, which

@@ -31,6 +31,8 @@ Base: `feat/v4` at `1d1cb53d`.
 | `sliceHint` below the batch starves the single-tenant case       | `5d472f3d` |
 | `OR`-fix sequencing rationale contradicted by own tables         | see item 3 |
 | "Stops at the limit" overstated for the `running` branch         | see item 4 |
+| The five bare reads are not all operator-facing or unbounded     | see item 2 |
+| Three runtime readers of the 5,000 ms, not one                   | see item 5 |
 
 ## Open — verified, not yet acted on
 
@@ -52,6 +54,12 @@ existing green scenario. `tenant-share-control/DECISION.md` cites that scenario'
 and the collision is in completion count, which no budget measures. **This is the
 most consequential open item** — it says the mechanism as recorded breaks
 something that currently passes.
+
+**2. CLOSED — the wrap is aimed at four bounded reads.**
+Verified the predicates: `inspect`, `events`, effects `read`, and `audit` are all
+`WHERE application_name = $1 AND run_id = $2`; only `admit` is table-scoped and
+it is the scheduler. Corrected in the gate record, which now says its expensive
+case is the worklist — a read that does not exist yet. Original below, unedited.
 
 **2. Four of the five bare reads are run-id scoped, not table-scoped.**
 `inspect`, `events`, effects `read`, and `audit` are all PK or PK-prefix lookups
@@ -88,6 +96,11 @@ Only the two `available_at`-ordered branches stop at the limit. The `running`
 branch filters on `lease_expires_at` and sorts on `available_at`, so no shipped
 index supplies its order and it top-N sorts every expired lease. The 0.42 ms
 conclusion survives; the mechanism claim does not hold for the third branch.
+
+**5. CLOSED — three readers named in the gate record.**
+Verified `mutation/postgres.ts:336` before `COMMIT` and
+`mutation/collection.ts:199`, `:202` sandwiching the await. All three are
+wall-clock assertions around an uninterruptible await. Original below, unedited.
 
 **5. Three runtime readers of the 5,000 ms, not one.** Beyond
 `AbortSignal.timeout(5_000)` and `query.cancel()`, there are wall-clock checks at
