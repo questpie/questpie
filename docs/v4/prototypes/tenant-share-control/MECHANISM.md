@@ -435,9 +435,27 @@ scan is unaffordable even at the backlog cap, in which case the cap is the thing
 to lower.
 
 **Requiring a new index rather than deriving in-flight count from the existing
-ones.** `(application_name, state, lease_expires_at)` could enumerate running
-runs and filter tenant in memory, at a cost proportional to total in-flight work
-rather than to one tenant's. Taken because the whole point is isolation, and a
+ones — OVERTURNED by its own stated condition.** The original call read:
+`(application_name, state, lease_expires_at)` could enumerate running runs and
+filter tenant in memory, at a cost proportional to total in-flight work rather
+than to one tenant's; taken because the whole point is isolation, and a
 per-tenant decision whose cost scales with other tenants' load reintroduces the
-coupling it removes. What would overturn it: total in-flight work proving small
-enough in practice that the distinction is theoretical.
+coupling it removes. **What would overturn it: total in-flight work proving small
+enough in practice that the distinction is theoretical.**
+
+That condition is now met by measurement. At 16 runs in flight fleet-wide the
+shipped `durable_runs_lease_idx` answers the count in 0.083 ms and the proposed
+index gives no measurable gain; at 5,016 — far above what the shipped bounds
+permit, since `worker.ts` runs one attempt at a time and ADR-0017 targets ten
+instances — it is 0.650 ms against 0.090 ms. Both sub-millisecond.
+
+The isolation argument stays true and stops being decisive: the cost does scale
+with other tenants' load, and the magnitude of that coupling is immaterial at
+every reachable scale. So the index is **optional**, and this record no longer
+asks BETA-10 to add one.
+
+Recorded this way rather than quietly edited, because a judgment call that names
+what would change its mind and is then changed by exactly that is the case the
+practice exists for. What would overturn the reversal: a fleet-wide in-flight
+figure from the ten-instance fixture landing in the thousands, which would need
+either many more instances or a worker that claims concurrently.
