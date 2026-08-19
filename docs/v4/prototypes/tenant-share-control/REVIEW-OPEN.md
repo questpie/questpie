@@ -28,8 +28,17 @@ Base: `feat/v4` at `1d1cb53d`.
 | Retry horizon pinned and enforced nowhere                        | `e1af84fd` |
 | Refused claims write nothing and are re-admitted forever         | `e1af84fd` |
 | Both numbers the gate proposed to pin were scope errors          | `1d1cb53d` |
+| `sliceHint` below the batch starves the single-tenant case       | see item 1 |
 
 ## Open — verified, not yet acted on
+
+**1. CLOSED — a batch-derived `sliceHint` collapses the single-tenant batch.**
+Resolved in `MECHANISM.md` by deriving `sliceHint = claimBatch` rather than a
+smaller value. Measured: fairness is identical at `turn <= 8` and `turn <= 64`
+(63 quiet tenants of 64 admitted, against 0 unranked), because `ORDER BY turn`
+allocates share and the filter only prunes emission; and the single-tenant batch
+admits 64 at the larger hint against 8 at the smaller. Cost 27.8 ms against
+25.3 ms. The finding as originally stated is below, unedited.
 
 **1. A batch-derived `sliceHint` collapses the single-tenant batch.** With
 `turn <= 8` and one eligible tenant, a batch of 64 admits 8. That is the shape of

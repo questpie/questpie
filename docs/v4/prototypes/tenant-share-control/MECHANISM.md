@@ -140,11 +140,47 @@ the run condition genuinely prunes the emission. Its **value** does not: 8 and
 1,000 are within noise of each other, and the larger bound was marginally
 faster. The scan and sort beneath are unchanged in all three.
 
-**So the hint must be derived from the batch for fairness, not for cost.** It is
-the bound on one tenant's contribution to a round: too large and a noisy tenant
-reclaims the batch it was meant to share, too small and the batch cannot fill. A
-fixed number chosen for planner reasons would be tuning the wrong property, and
-the planner is nearly indifferent between the values that matter for fairness.
+**So the hint is derived from the batch — and the value is `sliceHint = batch`,
+not something smaller.** An earlier revision said the hint "is the bound on one
+tenant's contribution to a round: too large and a noisy tenant reclaims the batch
+it was meant to share, too small and the batch cannot fill." The second half is
+right and the first half is wrong, and measurement settles both.
+
+**The hint has no fairness role.** `ORDER BY turn` does all of it, which this
+record already said two sections up and then did not follow through. Measured on
+the 50,000-plus-200 fixture, batch 64, counting how many of the 64 admitted rows
+belong to quiet tenants:
+
+| Admission            | Quiet tenants admitted |
+| -------------------- | ---------------------- |
+| unranked (today)     | **0**                  |
+| ranked, `turn <= 8`  | **63**                 |
+| ranked, `turn <= 64` | **63**                 |
+
+Identical. A larger hint does not let the noisy tenant reclaim the batch, because
+every tenant's `turn = 1` sorts ahead of its `turn = 2` regardless of where the
+filter sits. The hint prunes emission; it does not allocate share.
+
+**A hint below the batch starves the low-tenant-count case, and that case is a
+scenario that passes today.** With one eligible tenant holding 64 ready runs,
+`turn <= 8` admits 8 and `turn <= 64` admits 64 — measured, same fixture. That is
+exactly the shape of `tests/load/beta08-worker-contention.ts`: `runs = 64`,
+`workers = 8` (`:18`–`:19`), every execution passing one `companyId` (`:42`) which
+becomes the tenant at `fixtures/collaboration/src/execution.ts:64`, each worker
+built with `claimBatch: 64` (`:57`). It polls `Math.ceil(64 / 64) + 1 = 2` rounds
+(`:63`) and requires all 64 to have succeeded (`:88`). At `sliceHint = 8` the
+fleet would claim 8 per round and finish 16 of 64, failing an assertion that
+passes today.
+
+Cost does not argue against the larger value: 27.8 ms at `turn <= 64` against
+25.3 ms at `turn <= 8` on the same fixture, with the run condition still pruning
+in both.
+
+**So: `sliceHint = claimBatch`.** It preserves fairness exactly, it can never
+starve a batch that today fills, and it keeps the emission pruning the filter
+exists for. What would overturn it: a fixture where a single tenant's turn-N rows
+crowd out a tenant that becomes eligible mid-round — which this ordering cannot
+produce, since eligibility is re-evaluated per admission call.
 
 ## 2. Per-tenant in-flight concurrency
 
