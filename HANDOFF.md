@@ -570,68 +570,73 @@ So an application built on beta.1 gets Queries, Mutations, Reactions, Policy,
 live query, migrations, and three call paths — and cannot define a custom HTTP
 route or a scheduled job.
 
-**The user-facing docs do not say this.** `apps/docs/content/docs/v4/` holds 17
-guides, all `kind: guide`; `durable-jobs-and-workflows.mdx` and
-`services-routes-and-auth.mdx` document Jobs, Workflows and raw Routes with no
-`deferred` / `not yet` / `beta.1` marker anywhere, and `index.mdx` states no
-availability. A reader follows the Jobs guide, writes one, and nothing runs it.
-The `docs/v4/` projections do disclose the deferral, in their _Deferred seams_
-sections; the guides do not inherit it.
+**The user-facing docs did not say this**, and that is now fixed — see the
+first item below. The `docs/v4/` projections always disclosed the deferral in
+their _Deferred seams_ sections; the guides did not inherit it.
 
 ### Ordered work
 
-1. **Scope `apps/docs` to beta.1 by removal, not by callout.** Owner decision:
-   the guides must read as a finished product, so anything outside beta.1 does
-   not belong in them at all. The criterion is what the BETA-01–BETA-12 passes
-   deliver, not what has a runtime module today.
+1. ~~**Scope `apps/docs` to beta.1 by removal, not by callout.**~~ **Done at
+   `1d85b472`.** The guides now read as a finished product; the boundary came
+   from `beta-slice-p15/SLICE.json` `deferred` + `laterBetas`, not from what
+   has a runtime module.
 
-   `beta-slice-p15/SLICE.json` names the boundary — `deferred` covers Action,
-   raw Route with credential Auth, and Job/Workflow breadth; `laterBetas` adds
-   Channel and carrier, File and Search verticals, OpenAPI/MCP/skill
-   projections, optional acceleration, and broader Studio.
+   `apps/docs/content/docs/v4/` now holds 13 guides. Removed wholly:
+   `durable-jobs-and-workflows.mdx`, `files-search-and-contract-projections.mdx`.
+   Renamed after surgery, because the slug promised what the page no longer
+   delivers: `services-routes-and-auth.mdx` → `services.mdx`,
+   `multi-instance-and-acceleration.mdx` → `multi-instance.mdx`. Enumerations
+   pruned in `index.mdx`, `semantic-kernels-and-public-surface.mdx`,
+   `executable-definitions.mdx`, `definition-composition.mdx`.
 
-   Mapped against the fourteen guides, and the shape is not two files:
-   - **Wholly outside beta.1:** `durable-jobs-and-workflows.mdx`,
-     `files-search-and-contract-projections.mdx`.
-   - **Needs surgery, part ships:** `services-routes-and-auth.mdx` (Service is
-     in beta.1, raw Route and Auth are not) and
-     `multi-instance-and-acceleration.mdx` (multi-instance is BETA-10, optional
-     acceleration is deferred).
-   - **Enumerate the deferred vocabulary and need pruning, not deletion:**
-     `semantic-kernels-and-public-surface.mdx`, `executable-definitions.mdx`,
-     `definition-composition.mdx`, `index.mdx`.
+   **The mapped list this file carried was wrong in both directions, from one
+   sentence.** The warning that `Channel` in `realtime.mdx`,
+   `queries-and-mutations.mdx` and `context-and-policy.mdx` is the
+   collaboration fixture's own Company/Space/Channel/Membership/Message graph
+   holds — all three read, all three confirmed. But it generalised to "those
+   three guides are unaffected", and that is false for a _different_ token:
+   `queries-and-mutations.mdx:428` prescribed "an Action for an external
+   effect" and `:387` named an "external Action bag";
+   `context-and-policy.mdx:243` listed "Route transitions" among the entry
+   points constructing a fresh root. Both cut at `1d85b472`. The warning was
+   about one token; it was applied to whole files. Verify per token, not per
+   guide: `schema-lifecycle.mdx`'s three hits are all "file" meaning source
+   file, and `runtime-and-studio.mdx`'s four are a fetch `credentials` option,
+   a lowercase Studio route, and two negative telemetry statements — those two
+   are genuinely unaffected.
 
-   **One structural surprise, and it is the reason this is not mechanical.**
-   `durable-reactions.mdx` documents BETA-08, which is accepted and shipping,
-   but explains external effects _through_ the deferred Action capability — "a
-   generated server Action capability projection" (`:86`), "through a generated
-   Action. It cannot write a Collection directly" (`:97`), and the receipt reuse
-   at `:170`. Removing Action leaves the shipped guide without its explanation
-   of how a Reaction performs an effect. That needs a content decision, not a
-   cut.
+   Two counts in this file were also wrong: it said 17 guides in one place and
+   fourteen in another. The directory held 15, all `kind: guide`.
 
-   **Verify before cutting.** A grep for the deferred vocabulary overstates:
-   `Channel` in `realtime.mdx`, `queries-and-mutations.mdx`, and
-   `context-and-policy.mdx` is the collaboration fixture's own
-   Company/Space/Channel/Membership/Message graph, not the deferred Channel
-   capability. Those three guides are unaffected. Read each match; counting them
-   produces the wrong list.
+2. **The cut left two dangling references, and the first needs the owner.**
+   - `durable-reactions.mdx:233` links to `./durable-jobs-and-workflows`, now
+     removed. This is the same open defect already recorded for that file: a
+     shipped BETA-08 guide explaining itself through deferred capabilities —
+     "a generated server Action capability projection" (`:86`), "through a
+     generated Action. It cannot write a Collection directly" (`:97`), and the
+     receipt reuse at `:170`. Removing Action leaves the shipped guide with no
+     account of how a Reaction performs an effect. **One content decision
+     settles the link and the Action explanation together.**
+   - `docs/v4/prototypes/api-ergonomics-gate/AMENDMENT.md:124` names
+     `services-routes-and-auth.mdx` in a work-list. Left deliberately: it is a
+     historical record of a past amendment's scope, not a live claim, and
+     concurrent ticks are active under `docs/v4/prototypes`.
 
-2. **Prove the embedding.** `createApp()` exposes
+3. **Prove the embedding.** `createApp()` exposes
    `fetch(request: Request): Promise<Response>`
    (`packages/runtime/src/application/index.ts:111`), so Hono, Elysia, Next route
    handlers and TanStack Start server routes all mount it mechanically. **No test
    drives it under any of them**, so this is inference from the contract, not a
    measured fact — the exact shape this record set spent a session logging.
-3. **Decide BETA-09.** Finish narrowly or descope. Descope costs an ADR-0021:23
+4. **Decide BETA-09.** Finish narrowly or descope. Descope costs an ADR-0021:23
    amendment plus `implementation-gates.md:438` and `:451`, and needs
    `blockedBy` on BETA-10 repointed to BETA-08 — the chain 09 ← 10 ← 11 ← 12 is
    strictly linear, so nothing after it moves until this is settled. **Owner
    decision.**
-4. **BETA-10**, multi-instance correctness. Not optional for any real
+5. **BETA-10**, multi-instance correctness. Not optional for any real
    deployment.
-5. **BETA-12**, managed PostgreSQL and the release cut.
-6. **Open slices for Route + Auth and for Job + Workflow.** These do not exist
+6. **BETA-12**, managed PostgreSQL and the release cut.
+7. **Open slices for Route + Auth and for Job + Workflow.** These do not exist
    and are what the goal actually needs.
 
 **BETA-11** (archive portability) proves the kernel generalises to a second
@@ -701,15 +706,21 @@ queue chain 09 <- 10 <- 11 <- 12 is strictly linear.
 
 THE THING THAT MATTERS. Studio is not what blocks building an application on
 this framework. defineRoute, defineJob, defineWorkflow and defineAction are
-generated factories with no runtime module; ADR-0021:30-33 lists them absent
-from beta.1; SLICE.json names Route+Auth and Job+Workflow under laterBetas with
-no slice in QUEUE.json. The apps/docs guides document Jobs, Workflows and raw
-Routes as available, with no deferral marker anywhere.
+generated factories with no runtime module (packages/compiler/src/discovery.ts
+:27-33 and :402-406 allocate them; nothing under packages/runtime/src runs
+them); ADR-0021:30-33 lists them absent from beta.1; SLICE.json names Route+Auth
+and Job+Workflow under laterBetas with no slice in QUEUE.json.
+
+The apps/docs guides no longer document them. That cut landed at 1d85b472:
+13 guides remain, scoped by removal, not by callout -- the owner rejected
+callouts because the guides must read as a finished product.
 
 DO, IN ORDER.
-1. Add availability callouts to apps/docs/content/docs/v4/durable-jobs-and-
-   workflows.mdx and services-routes-and-auth.mdx stating what runs in beta.1.
-   Match the existing guide voice; do not restructure the docs.
+1. Settle durable-reactions.mdx with the owner. It is the one guide the cut
+   could not touch, and it now has two problems with one root: it explains
+   external effects through the deferred Action capability (:86, :97, :170),
+   and its :233 link to ./durable-jobs-and-workflows now points at a removed
+   page. Deciding how a shipped Reaction performs an effect settles both.
 2. Write one test that mounts createApp().fetch under Hono or a Next route
    handler and drives a real request. The seam is standard so it should pass;
    the point is that nothing currently proves it.
