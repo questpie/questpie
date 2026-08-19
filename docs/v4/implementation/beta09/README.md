@@ -351,3 +351,26 @@ command list, ADR-0003's "optional", and the glossary's. **Zero mismatches.**
 So the record set's addresses are verified as well as its claims, which is worth
 stating because a reviewer who finds one bad citation reasonably discounts the
 rest, and this set had exactly one class of bad citation and it is fixed.
+
+## The retracted claims were swept for, not just patched
+
+Three times in this record set a correction was applied where it was noticed and
+the earlier statement was left standing — the Live Query reset claim in
+`design-context.md`, the worklist status in this file, and a retracted 170×
+figure in `docs/v4/prototypes/tenant-share-control/MECHANISM.md`. Each time the
+contradiction survived several re-readings, because reading finds what a document
+says and not what it still says elsewhere.
+
+So the defence is mechanical. Every claim this set has retracted was searched for
+across all records: "a total is a scan", "consumed nowhere", "nothing consumes
+it", Tenant "costs nothing here", "2,283 lines", "thirteen decisions", "seven
+BETA-09 design records", Live Query resets "genuinely available", and the 170×
+figure.
+
+**Each now appears only inside its own retraction**, or in this file's
+merge-hazard list where the branch still carries it. No live claim survives that
+the set elsewhere disproves.
+
+Worth repeating whenever a figure or a claim is corrected, because the pattern is
+not carelessness that more care fixes — a retraction reads as complete from the
+paragraph that contains it, and only a search over the whole set shows otherwise.
