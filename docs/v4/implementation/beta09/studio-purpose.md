@@ -184,10 +184,29 @@ runId, effectName)`. Every hop is a deterministic digest
 key. The identities are handed to the user by the system — `callId` rides the
 wire response — rather than memorised.
 
-Two disclosures are missing to make it usable: there is no public read of
-`mutation_call_receipts` outside the idempotency-conflict branch, and
-`durableRunIdentity` is not exported. Both are disclosures of already-durable,
-already-indexed facts, not new mechanisms.
+Two things stand between this chain and being usable, and they are not the same
+kind of thing.
+
+`durableRunIdentity` is not exported from the package root. That is a disclosure
+of an existing deterministic derivation and costs nothing.
+
+A public read of `mutation_call_receipts` is **not** available to this slice, and
+an earlier revision listed it beside the export as though it were. It is a fifth
+read shape over an internal table, which `inspection-contract.md` D3 forbids in
+terms — "adding read shapes beyond these is how an inspection surface becomes the
+internal-table CRUD the issue names as a non-goal" — and internal-table CRUD is
+one of the issue's own non-goals. D3 wins: the surface stays at four reads plus
+the worklist, and this job stays partly unanswerable rather than being made
+answerable by widening the surface.
+
+One correction to how the receipt was described. It is not "already-indexed" in
+the sense that implies. `mutation_call_receipts` carries a single index, the
+six-column primary key `(application_name, tenant_id, operation_name,
+principal_kind, principal_id, call_id)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v2.ts:34`), with
+`call_id` **last**. A lookup by `callId` alone cannot use it. The chain above
+works because it arrives knowing the five preceding columns, not because a
+receipt is addressable by its call identity.
 
 ### Not answerable — recorded as findings, not deferred
 
