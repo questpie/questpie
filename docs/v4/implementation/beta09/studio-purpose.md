@@ -225,12 +225,24 @@ receipt is addressable by its call identity.
   is not retained at all: a superseded generation is deleted immediately, and
   an idle scope is swept thirty seconds after its last renewal. This kills the
   handoff's Q5 reset tile.
-- **"Show me recent Executions / trace this correlation id."** No source. The
-  Execution Envelope is unstored telemetry with hardcoded-null trace, causation
-  and tenant references — `correlationId` itself is populated, so it is the
-  missing store and not a null correlation
-  fields. Gate 8 already requires that missing telemetry stay explicit, so
-  Studio must say so rather than render an empty lane.
+- **"Show me recent Executions / trace this correlation id."** No source, and
+  for **two** reasons rather than one. The Execution Envelope is unstored
+  telemetry with hardcoded-null trace, causation and tenant references —
+  `correlationId` itself is populated, so what defeats it is the missing store
+  rather than a null field.
+
+  The second reason is stronger and was missing here. `correlation_id` **is**
+  durably stored, on `durable_runs` and on `durable_run_events`
+  (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:31`,
+  `:143`) — and it is unqueryable: **no index mentions it, and no `WHERE` clause
+  anywhere in `packages/runtime` filters on it.** It is write-only propagation
+  data. So even where a correlation is durably recorded, tracing one is a
+  sequential scan rather than a lookup.
+
+  Gate 8 already requires that missing telemetry stay explicit, so Studio must
+  say so rather than render an empty lane. An earlier revision of this bullet was
+  also garbled mid-sentence by a previous edit.
+
 - **"Who changed this row and why?"** No source. The Change Ledger carries no
   caller attribution.
 - **"Who cancelled what today?"** No source at acceptable cost.
