@@ -189,12 +189,6 @@ the holder's full duration with no timeout, and the claim path steps around a
 held row immediately. The finding is specific to maintenance, and that scoping is
 a measurement rather than a reading of the SQL.
 
-The compiler's helper already pairs the two timeouts and enforces
-`lockTimeoutMs < statementTimeoutMs`
-(`packages/compiler/src/postgres-session.ts:29`–`:34`). The gate sets both, for
-the same reason the compiler does: a statement timeout alone converts an
-unbounded lock wait into a slower unbounded wait.
-
 ## The value is per path, and one of them must be measured
 
 A single global runtime timeout would be wrong, because the paths have
