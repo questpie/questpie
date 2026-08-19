@@ -120,3 +120,67 @@ it cannot prove anything adversarial is stopped, for the reason recorded in
 `docs/v4/implementation/beta09/maintenance-decisions.md` — with no wire route the
 only caller is in-process and mints its own `Principal`. Write the assertion, and
 write down which half it proves.
+
+## Two further gaps, found by adversarial review and verified here
+
+Both are bounds that accepted authority names and no code enforces. Neither is a
+disclosure gap in this record's original three; they are additions, found by
+running two opposing reviews over the tenant-share records and then checking the
+tree rather than the reports.
+
+### 4. The retry horizon is pinned, digest-carried, and enforced nowhere
+
+`retryHorizonMilliseconds: 86_400_000` is pinned into the compatibility contract
+the Runtime Build digests (`packages/compiler/src/reaction/durable-kernel.ts:77`),
+under a comment claiming that block holds "only the budgets this slice actually
+enforces" (`:68`–`:71`).
+
+`horizon_at` has exactly two references in the runtime:
+`packages/runtime/src/durable/acceptance.ts:62` writes it, and
+`packages/runtime/src/durable/postgres-kernel.ts:360` reads it — inside
+`available_at = LEAST(transaction_timestamp() + interval, horizon_at)`. Nothing
+compares it to the current time as a termination condition.
+
+**It is not merely absent; it inverts.** Once `horizon_at` is in the past,
+`LEAST` sets `available_at` to a past timestamp, and `admit` orders
+`available_at` ascending (`postgres-kernel.ts:461`–`:463`). A run past its
+horizon therefore retries with zero backoff **at the head of the admission
+queue**, ahead of healthy work.
+
+BETA-08 partially disclosed this — `docs/v4/implementation/beta08/design-context.md:260`–`:263`
+records that no horizon sweep runs — but the same file at `:267`–`:268` counts
+the horizon among the budgets the slice enforces, and `durable-kernel.ts:68`
+carries the wrong half.
+
+### 5. A refused claim writes nothing, and the run is re-admitted forever
+
+Two claim outcomes return without touching the row:
+`refused / EXECUTABLE_RETIRED` (`postgres-kernel.ts:514`–`:518`) and `skipped`
+when `attemptNumber > retry.maximumAttempts` (`:522`–`:523`). The worker mirrors
+this, counting the refusal and continuing
+(`packages/runtime/src/durable/worker.ts:300`–`:304`). `available_at` never
+advances, so `admit` re-selects the row on every poll of every worker and it
+sorts **first**. No sweeper removes it — there is no `DELETE` against any
+`durable_*` table anywhere in `packages/*/src/`.
+
+**A shipped test asserts this state.** After a retired-kernel refusal,
+`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391` asserts the
+run is still returned by `admit()` and still reads
+`{ state: "ready", attemptCount: 0 }`.
+
+`maximumBatch` is capped at 64 (`postgres-kernel.ts:257`–`:263`), so 64 such rows
+occupy the entire admission batch permanently. The trigger is an ordinary
+completed rolling deploy, not an attack.
+
+**This is why it matters to the fair-admission work next door.** Ranking by
+`row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id)` makes
+a poison row `turn = 1` for its tenant on every round. Fair admission narrows the
+blast radius to one tenant and makes that tenant's starvation permanent. Neither
+`docs/v4/prototypes/tenant-share-control/MECHANISM.md` nor its `DECISION.md` asks
+whether an admitted run can fail to progress, and there is no progress bound on
+admission to ask it of.
+
+**Falsification for both.** For 4: set a run's `horizon_at` in the past, fail it,
+and assert its `available_at` is not before a healthy run's. For 5: refuse a
+claim, poll `admit()` twice, and assert the run does not appear in the second
+batch. Both fail against the tree today, which is the point.
