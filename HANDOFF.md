@@ -816,10 +816,19 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
 - Verify every claim with file:line. Cite branch-only paths as
   feat/v4-beta-09:path, since the acceptance packet reads git show
   <reviewedHead>:<path> and a bare path will not resolve.
-- The packages/*.ts:NNN citations currently all resolve -- audited at 3a084099,
-  121 v4-tree citations, none past EOF, none naming a missing file. Do not
-  re-derive that; spot-check when you touch a record instead. Two traps if you
-  do rerun it, both of which produced false positives the first time:
+- Citations have TWO axes and they decay separately. Axis one, existence and
+  range: audited at 3a084099, 121 v4-tree citations, none past EOF, none naming
+  a missing file. That one is done; do not re-derive it. Axis two, does the
+  cited line say what the sentence claims: NOT covered by that audit, and it is
+  where the defects actually are. 81907d85 found two at
+  statement-timeout-gate/DECISION.md, off by one and two lines. A content pass
+  over durable-evidence-gaps/FINDING.md found a third: it cited
+  worker.ts:300-304 for "counting the refusal and continuing" when the counter
+  is refusedIncompatible += 1 at :294 and :300 is a field inside the pushed
+  record. All three resolve, all three sit in the right function, all three
+  point at the wrong statement. "None is stale" was never a claim about content.
+  Two traps if you rerun axis one, both of which produced false positives the
+  first time:
   (a) 66 further citations point at v3 paths -- packages/questpie/src/server|cli
   |client/, packages/workflows/, packages/admin/ -- which are ABSENT from
   feat/v4 on purpose, because v3 is behavioral evidence; they are not broken;

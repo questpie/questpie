@@ -202,8 +202,12 @@ reported an outcome. The lease then expires, `admit` re-selects the row through
 So the two stuck classes settle at **`ready`** (retired executable) and
 **`running` with an expired lease** (crash at the exhaustion boundary).
 Neither is `failed`. The worker mirrors
-this, counting the refusal and continuing
-(`packages/runtime/src/durable/worker.ts:300`–`:304`). `available_at` never
+this, counting the refusal and continuing —
+`refusedIncompatible += 1` at `packages/runtime/src/durable/worker.ts:294`,
+`continue` at `:304`. An earlier revision cited `:300`–`:304`, which resolves
+and sits in the right branch but starts at `outcome: "refusedIncompatible"`
+inside the pushed record and misses the counter at `:294` — the half the
+sentence actually names. `available_at` never
 advances, so `admit` re-selects the row on every poll of every worker and it
 sorts **first**. No sweeper removes it — there is no `DELETE` against any
 `durable_*` table anywhere in `packages/*/src/`.
