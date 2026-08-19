@@ -146,3 +146,43 @@ and costs the one-engine property for the command half.
 This does not reopen the reads decision or the handler-evaluated authorization
 below it. It reopens only how the **commands** arrive, which the earlier
 revision folded into the same answer without checking that it could.
+
+## Both narrowed options are unbuilt, and the Route one more than it looks
+
+The previous section offered the commands "a Route, which ADR-0015 accepts as an
+explicit HTTP escape hatch." Checking whether a Route can carry anything today
+changes that framing.
+
+**`defineRoute` exists as a name and nothing behind it.** The factory is
+generated (`packages/compiler/src/discovery.ts:403`, listed at
+`packages/compiler/src/generate.ts:213` and `:450`), but:
+
+- `packages/runtime/src/application/index.ts` contains **no reference to
+  `route`** — the Fetch path dispatches nothing to one;
+- the runtime application exposes no `routes` member, and ADR-0014 says why:
+  "ADR-0015 **later** adds the compiler-owned `routes` direct-invocation
+  projection" (`docs/adr/0014-...:32`);
+- nothing in the compiler's runtime lowering or model matches a `"route"` kind.
+
+So a Route is declared authoring surface with no mounting, no dispatch and no
+projection. It is the same shape as `authority.isSystem()` recorded in
+`docs/v4/prototypes/authority-contract-gap/FINDING.md`: an authored name the
+runtime cannot yet satisfy.
+
+**Corrected framing.** The choice for the commands is not "an accepted mechanism
+versus an ADR decision." It is **two pieces of unbuilt work**:
+
+| Option               | What it needs                                                                                                          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Route                | route mounting, Fetch dispatch, and the `routes` projection — which ADR-0014 assigns to ADR-0015's slice, not this one |
+| third exposure state | a new value in the exposure mapping and a client generator that excludes it — new authoring surface, an ADR decision   |
+
+Neither is cheap, and neither belongs to BETA-09 as scoped. That is worth
+knowing before someone plans the command half around a Route on the strength of
+the name existing.
+
+**What this does not change.** The reads still work as `network: true` Queries
+today, with handler-evaluated authorization, because Queries are wired and
+Routes are not. So the split is sharper than the previous section implied: the
+read half is buildable now and the command half is blocked on work no accepted
+slice currently owns.
