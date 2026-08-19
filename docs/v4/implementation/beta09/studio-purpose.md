@@ -101,6 +101,30 @@ against 207,000 runs, the worklist query plans as
 0.13 ms. The leftmost prefix carries it and no schema is needed — which is the
 premise this whole decision rests on, so it is checked rather than argued.
 
+**Re-measured independently, and the figure above is the one to keep.** A second
+run against a fresh 207,000-row fixture with the shipped indexes reported an
+`Index Only Scan` with `Heap Fetches: 0` at 0.079 ms, which looks like a stronger
+result and is not one. It is an artifact of a table that has been loaded and
+never updated. Two things remove it, both normal for `durable_runs`:
+
+| Projection / table state                                  | Plan                                 | Time     |
+| --------------------------------------------------------- | ------------------------------------ | -------- |
+| indexed columns only, freshly loaded                      | Index Only Scan, `Heap Fetches: 0`   | 0.079 ms |
+| indexed columns only, after rows were updated             | Index Only Scan, `Heap Fetches: 120` | 0.116 ms |
+| projection includes a non-indexed column (`failure_code`) | Index Scan                           | 0.103 ms |
+
+`durable_runs` is a hot table whose rows change state constantly, so the
+visibility map is rarely current, and any worklist row richer than
+`(run_id, available_at)` reaches outside the index. **`Index Scan` at ~0.1 ms is
+the realistic characterization and index-only is the exception**, which is what
+this section already said.
+
+Recorded because the failure it prevents is specific: a test asserting
+`Index Only Scan` or `Heap Fetches: 0` passes on a freshly seeded fixture and
+fails in production, which is the "test that proves something other than what it
+claims" shape this project keeps blocking rounds for. Assert the index _name_ and
+a row bound, not the scan kind.
+
 **A gap this predicate cannot see, found after the decision and recorded rather
 than folded in.** `state = 'failed'` covers the dead-letter case, which is the
 operator need that justified the worklist, and ordinary retry exhaustion does
