@@ -154,9 +154,12 @@ route exists.
    body, or existence — through any operational read for a run that touched it.
    The failing assertion against unrepaired code is recorded. →
    `hostile-cases.md` cases 1 and the red test.
-6. **`operational-nondisclosure.json` is compiled and digest-verified**, and
-   asserts the absence of result and receipt explicitly, so a later widening is
-   a visible diff in a digested artifact. → `inspection-contract.md` D1.
+6. **The operational nondisclosure commitments are pinned and digest-verified**,
+   asserting the absence of result and receipt explicitly, so a later widening is
+   a visible diff in a digested artifact. **The criterion is the property, not a
+   filename** — an earlier version named `operational-nondisclosure.json`, and
+   the implementation satisfies the intent without producing that file. →
+   `inspection-contract.md` D1.
 7. **`relational-nondisclosure.json` joins the verified set.** It is compiled
    today, byte-verified through the build inventory, and read by nothing. →
    `inspection-contract.md` D2.

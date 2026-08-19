@@ -125,10 +125,9 @@ exists in the tree, so extending it is not a new idea.
 
 ### D1 — the operational lane gets the same kind of artifact
 
-BETA-09 produces `operational-nondisclosure.json`, digested into the Runtime
-Build like every other artifact and pinned by a compile-level test. It states,
-per inspection Operation, the same class of facts the relational projection
-states per query:
+BETA-09 pins these commitments into a digested contract and a compile-level
+test. It states, per inspection Operation, the same class of facts the
+relational projection states per query:
 
 - the exact closed list of fields the projection returns;
 - that `resultBytes` and `receipt` are absent — named explicitly rather than
@@ -150,6 +149,31 @@ showed hand-written proof is the weak link. What would overturn it: if the
 operational reads turn out to have so few disclosure degrees of freedom that
 the artifact is a constant, in which case a test asserting the projection's
 field list directly is the simpler equivalent.
+
+**Where they landed, checked against the branch rather than assumed.** An
+earlier revision of this section said BETA-09 "produces
+`operational-nondisclosure.json`". Nothing produces that file — it is named in
+no compiler source on `feat/v4` or on `feat/v4-beta-09`, while every other
+artifact this record set cites (`relational-nondisclosure.json` at
+`packages/compiler/src/artifacts.ts:453`, `durable-kernel.json`,
+`reaction-projection.json`, `wire-contract.json`) is emitted by one.
+
+The branch put the commitments inside the contract that already exists:
+`durableKernelContract.nondisclosure`, a seven-field block on
+`feat/v4-beta-09`'s `packages/compiler/src/reaction/durable-kernel.ts` (type at
+`:37`–`:45`, values at `:152`), asserted by
+`tests/unit/beta09-operational-nondisclosure.test.ts`. `feat/v4`'s copy of that
+file has no `nondisclosure` at all, so this is new work on the branch rather
+than something the record misread.
+
+**That is the better shape and the record now asks for the property instead.**
+The durable kernel contract is already digested into the Runtime Build, so the
+commitments inherit the digest that a separate file would have had to
+manufacture — the branch's own test comment calls a standalone artifact "a
+constant with a digest around it". Naming a filename in an acceptance criterion
+over-specified the mechanism. What would overturn it: commitments that need to
+be read by something other than the durable kernel, which would justify their
+own artifact rather than a block inside that contract.
 
 ### D2 — `relational-nondisclosure.json` gains runtime verification
 
