@@ -37,7 +37,7 @@ ADR-0015. Nothing here is a defect on its own.
 
 An earlier revision of this paragraph said "ADR-0009 fixes six Current App
 Contract factories and the compiler emits the whole set", which makes the
-seventh sound like the compiler running past its ADR. It is not. ADR-0009:20-22
+seventh sound like the compiler running past its ADR. It is not. ADR-0009:21-23
 does fix an allowlist of exactly six, without `defineWorkflow` — but `:57`–`:59`
 extends it: "ADR-0019 deliberately extends this allowlist to seven by adding
 `defineWorkflow` after the shared durable/checkpoint kernel passed its focused
