@@ -282,3 +282,35 @@ The same reason expires the Q3 qualifier in `maintenance-decisions.md`, unblocks
 D3, and makes the maintenance Authority hostile case fully drivable. One route
 closes four open items, which is worth knowing when deciding what to build
 next.
+
+## The implementation plan and the constraint agree
+
+Checked, because a constraint recorded here is only useful if the branch is not
+already committed against it. It is not — and that closes a risk rather than
+opening one.
+
+At `0181e2a4`:
+
+- **No durable operation is marked `network: true`** anywhere on the branch, so
+  nothing has been exposed in the shape criterion 13 forbids.
+- `studio-interface.md` plans the page to fetch **`/_questpie/studio/artifacts`**,
+  a static path the mount serves
+  (`packages/runtime/src/application/studio-mount.ts:54`), and to run the
+  producer at `apps/studio/src/projection.ts`, whose own comment says it "turns
+  the canonical artifact bytes the Runtime already digest-verifies into the flat
+  catalogs `studio-purpose.md` decided the entrance opens onto".
+
+So the Studio being built renders the **compiled application** from artifacts,
+reaching no Operational Fact and needing no durable route. That is exactly what
+the section above says is reachable, arrived at independently.
+
+**It also means the sequencing is right rather than merely unavoidable.** The
+explanation lane is buildable now and is being built; the action lane is blocked
+on work no accepted slice owns; and the plan does not depend on the blocked half.
+Nothing has to be undone when a route eventually lands — the artifact producer
+and the durable reads are different sources feeding the same entrance, which is
+what `studio-purpose.md` decided.
+
+The one thing to watch is that this makes the slice's demoability claim narrower
+than it reads: what can be demonstrated end to end is _explaining a compiled
+application_, not _operating a durable run_.
