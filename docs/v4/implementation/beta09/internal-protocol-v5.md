@@ -131,6 +131,16 @@ Three consequences worth stating before the implementing slice hits them:
   (`:302`). `ALTER TABLE ... ADD COLUMN` passes both. No guard needs relaxing,
   and any change that _did_ require relaxing one should be treated as a signal
   that the change is wrong.
+
+  **Measured rather than reasoned**, because this is the claim the whole
+  migration rests on and a DDL/trigger interaction is exactly where reasoning
+  goes wrong. Rebuilt both guard functions and both triggers on PostgreSQL 17.10
+  against a `durable_maintenance_commands`-shaped table, with no
+  `questpie.durable_kernel` setting. An unguarded `INSERT` failed as it should,
+  proving the guards were live; then `ADD COLUMN reason text` succeeded, and so
+  did `ADD COLUMN protocol_version integer NOT NULL DEFAULT 5` — the variant
+  that historically rewrote the table and is the one this note did not name.
+
 - **The catalog must be regenerated from a live PostgreSQL catalog.**
   `internal-protocol-v4-catalog.ts` is generated, not hand-written; v5 needs the
   same treatment or verification will fail against a hand-edited approximation.
