@@ -252,107 +252,28 @@ D3, and makes the maintenance Authority hostile case fully drivable. One route
 closes four open items, which is worth knowing when deciding what to build
 next.
 
-## The implementation plan and the constraint agree
+## How this set was verified
 
-Checked, because a constraint recorded here is only useful if the branch is not
-already committed against it. It is not — and that closes a risk rather than
-opening one.
+Three sections of working notes stood here and were compressed once the checks
+they narrated had all come back. What they established, kept because a reviewer
+can re-run any of it:
 
-At `0181e2a4`:
+- **The branch plan and this set's constraints agree.** At `0181e2a4` no durable
+  operation is marked `network: true`, and `studio-interface.md` fetches the
+  static artifacts path rather than a durable read. Nothing has to be undone
+  when a durable route eventually lands.
+- **Citations were audited mechanically.** 131 `file:line` citations checked for
+  existence and range; 125 resolved and six did not, all one defect — a
+  branch-only path cited as though it were on `feat/v4`, since the packet builder
+  reads `git show <reviewedHead>:<path>`. All six now carry the
+  `feat/v4-beta-09:` prefix. Twenty load-bearing code citations and four doc
+  citations were then checked for **content**, not just range. Zero mismatches.
+- **Every retracted claim was searched for across the whole set**, after one
+  correction was found applied in the place it was noticed and not where the
+  claim was first written. Each retracted figure now appears only inside its own
+  retraction.
 
-- **No durable operation is marked `network: true`** anywhere on the branch, so
-  nothing has been exposed in the shape criterion 13 forbids.
-- `studio-interface.md` plans the page to fetch **`/_questpie/studio/artifacts`**,
-  a static path the mount serves
-  (`feat/v4-beta-09:packages/runtime/src/application/studio-mount.ts:54`), and to run the
-  producer at `apps/studio/src/projection.ts`, whose own comment says it "turns
-  the canonical artifact bytes the Runtime already digest-verifies into the flat
-  catalogs `studio-purpose.md` decided the entrance opens onto".
-
-So the Studio being built renders the **compiled application** from artifacts,
-reaching no Operational Fact and needing no durable route. That is exactly what
-the section above says is reachable, arrived at independently.
-
-**It also means the sequencing is right rather than merely unavoidable.** The
-explanation lane is buildable now and is being built; the action lane is blocked
-on work no accepted slice owns; and the plan does not depend on the blocked half.
-Nothing has to be undone when a route eventually lands — the artifact producer
-and the durable reads are different sources feeding the same entrance, which is
-what `studio-purpose.md` decided.
-
-The one thing to watch is that this makes the slice's demoability claim narrower
-than it reads: what can be demonstrated end to end is _explaining a compiled
-application_, not _operating a durable run_.
-
-## Citations were audited mechanically
-
-131 `file:line` citations across this record set and the four prototype records
-were checked for existence and range. **125 resolve on `feat/v4`. Six did not**,
-and all six were the same defect rather than six defects: a path that exists only
-on `feat/v4-beta-09`, cited as though it were on `feat/v4`.
-
-That matters for one specific reason. The acceptance packet is built with
-`git show <reviewedHead>:<path>`, so a branch-only path cited bare does not
-resolve at a `feat/v4` reviewed head — a reviewer opens it, finds nothing, and
-has grounds to treat the citation as fabricated. The claims themselves were
-correct; only their addresses were.
-
-All six now carry the `feat/v4-beta-09:` prefix. The check is worth repeating
-before any manifest is pinned, and it is one pass over the records extracting
-`(packages|fixtures|tests|apps)/…:N` and testing each against the tree.
-
-**Existence is the weak half of that check, so content was checked too.** A line
-number can resolve and still point at the wrong construct once a file has moved
-underneath it. Twenty load-bearing code citations — the exposure mapping, the
-client network filter, `defineQuery`, `actorOf`, the maintenance `FOR UPDATE`,
-the effect fence, `result_bytes` in `inspect`, the ordinary-Authority
-construction site, the `Authority` type, `defineRoute`, the `durable_runs`
-indexes, the audit foreign key, `isSystem` in both its declaration and its
-lowering, `configurePostgresTimeouts`, `maintenanceCommands`, and the artifact
-inventory — were checked for the expected token within two lines of the cited
-position. **Zero mismatches.**
-
-The doc and ADR citations were audited on the same terms: eighteen checked for
-existence and range, none unresolvable, and four load-bearing ones spot-checked
-for content — the maintenance sentence in the accepted projection, Gate 8's
-command list, ADR-0003's "optional", and the glossary's. **Zero mismatches.**
-
-So the record set's addresses are verified as well as its claims, which is worth
-stating because a reviewer who finds one bad citation reasonably discounts the
-rest, and this set had exactly one class of bad citation and it is fixed.
-
-**Text-level breakage was swept for too, after one garbled sentence was found
-surviving several passes** — `studio-purpose.md`'s correlation bullet had ended
-mid-clause since an earlier edit. The sweep looked for unbalanced inline code,
-doubled words, and markdown tables with inconsistent columns. **Nothing real.**
-
-Its three findings were all noise, and they are named so the next person does not
-chase them: inline code spans legally wrap across lines, so a per-line backtick
-count reports forty false positives; `BEGIN ISOLATION LEVEL REPEATABLE READ READ
-ONLY` is correct SQL rather than a doubled word; and pipes inside code spans are
-escaped as `\|`, so a naive pipe count reports a column mismatch in a table that
-is well formed. A checker that produces forty false positives will not be run
-twice, which is worse than not having one.
-
-## The retracted claims were swept for, not just patched
-
-Three times in this record set a correction was applied where it was noticed and
-the earlier statement was left standing — the Live Query reset claim in
-`design-context.md`, the worklist status in this file, and a retracted 170×
-figure in `docs/v4/prototypes/tenant-share-control/MECHANISM.md`. Each time the
-contradiction survived several re-readings, because reading finds what a document
-says and not what it still says elsewhere.
-
-So the defence is mechanical. Every claim this set has retracted was searched for
-across all records: "a total is a scan", "consumed nowhere", "nothing consumes
-it", Tenant "costs nothing here", "2,283 lines", "thirteen decisions", "seven
-BETA-09 design records", Live Query resets "genuinely available", and the 170×
-figure.
-
-**Each now appears only inside its own retraction**, or in this file's
-merge-hazard list where the branch still carries it. No live claim survives that
-the set elsewhere disproves.
-
-Worth repeating whenever a figure or a claim is corrected, because the pattern is
-not carelessness that more care fixes — a retraction reads as complete from the
-paragraph that contains it, and only a search over the whole set shows otherwise.
+The reusable part is the method, not the results. Reading finds candidates and
+settles nothing: a claim about whether something is _enforced_ needs the thing
+broken and the failure asserted, and a claim that something was _corrected_ needs
+a search rather than a re-read.

@@ -273,89 +273,23 @@ Principal"` matches a test, which read as coverage. That test trips the
   PostgreSQL 16/17/18 measured 105/105/108 passing with zero failures across 26
   beta08 scenario tests; `bench:micro` measured 400.075 ms against a 2500 ms
   budget and `test:load` 330.045 ms against 2000 ms.
-- #295 review round 4 left one observation unexplained: PostgreSQL 18 reports
-  three more passing tests than 16 and 17, with no note on which are
-  version-gated. **Closed, and verified against the tree.** They are the three
-  cases in `tests/integration/postgres/beta02-catalog-reader.test.ts` gated by
-  `test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")` — "rejects a
-  PostgreSQL 18 NOT ENFORCED check constraint", "rejects PostgreSQL 18 PERIOD
-  constraints", and "rejects a non-inherited PostgreSQL 18 NOT NULL catalog
-  constraint". Each drives a construct that exists only in 18, so on 16 and 17
-  there is nothing to reject and the assertion would target a feature the server
-  cannot express. The difference is evidence the version gate works rather than a
-  coverage gap, and the same shape should be expected of any future matrix rather
-  than read as drift.
-- #295 review round 4's first observation is **correct, and verified here**.
-  Criterion 4 claims that "every heartbeat, terminal transition, and effect write
-  compares the current attempt and the lease token." The effect write is a
-  genuinely separate compare-and-set —
-  `packages/runtime/src/durable/postgres-effects.ts:86`, a
-  `SELECT 1 AS held ... AND current_attempt_id = $3 AND lease_token_digest = $4`
-  — and nothing drives it. All five `"fenced"` assertions in
-  `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces:
-  `succeed`, `fail`, `cancel`, and `heartbeat` at `:160`–`:179`, and the
-  `succeed`-versus-`cancel` race at `:344`. `DurableLeaseLost`, the error the
-  effect handle raises when fenced, appears in no test at all. So one quarter of
-  that criterion rests on code reading. The review judged it benign under
-  at-least-once, which is defensible — a stale `reserve` only prevents a
-  redundant provider call — but the fence exists to prevent a stale holder
-  settling an effect the fresh holder is also performing, and the cost of proving
-  it is one test. Whoever next touches the effect ledger should add it.
-- #295 review round 4's item 10 is labelled "carried forward unchanged, fourth
-  round" and was re-listed without re-verification. **Checked: it is a mix of
-  live and already-closed claims**, so it must not be treated as a live
-  checklist.
-  - _Stale._ It says `postgres-maintenance.ts::appendEvent` inserts
-    `bumped?.sequence` with no null guard. `bumped` exists only in
-    `packages/runtime/src/durable/rows.ts` and is guarded at `:146` before use at
-    `:155`; the maintenance file has none. Round 3's repair routed the audit
-    append through the one shared writer and removed it, and the observation
-    describes the code before that.
-  - _Closed since._ It says `quality/format-baseline.txt` pre-registers
-    `REVIEW-04.json` while the file is absent. The record was committed with the
-    acceptance; both now exist.
-  - _Live._ `tests/integration/postgres/helpers/beta08-durable.ts:186` still
-    terminates every other backend on the database in a retry loop. Nothing
-    in-tree proves the PostgreSQL lane is sequential, so this remains a real
-    hazard for anyone running that suite beside another consumer.
-    A reviewer re-listing prior observations without re-checking them produces a
-    list whose currency cannot be assumed. Anything carried forward from an earlier
-    round should be re-verified before it is acted on or repeated.
-- #295 round 4's lock-order inversion observation is **refuted**. It carries
-  forward a claim that `durable_effects` → `durable_runs` in the effect ledger
-  inverts `durable_runs FOR UPDATE` → `durable_effects` in maintenance, leaving a
-  deadlock untested. Checked: **the effect ledger takes no row lock on
-  `durable_runs` at all.** `FOR UPDATE` appears nowhere in
-  `packages/runtime/src/durable/postgres-effects.ts`; its only `durable_runs`
-  access is the plain fence `SELECT 1 AS held` at `:86`, and a bare `SELECT`
-  under READ COMMITTED acquires no row lock. Its writes are confined to
-  `durable_effects` (`:113`, `:150`, `:177`). `FOR UPDATE` appears once in the
-  whole durable surface, at `postgres-maintenance.ts:111` inside `lockRun`. Two
-  transactions cannot deadlock by acquiring resources in opposite order when one
-  of them never acquires the first resource, so the named inversion is not
-  reachable. Two caveats stated rather than glossed: a bare `SELECT` still takes
-  an `ACCESS SHARE` table lock, which conflicts only with DDL and not with these
-  paths; and this refutes the _claimed_ inversion, not deadlock in general.
-- #295 round 4's observations 3 and 9 are both **confirmed**, and both are the
-  same shape as the effect-fence gap: declared, implemented, undriven.
-  - _The maintenance brand refusal has no driving case._ `actorOf` throws
-    "durable maintenance requires a trusted Principal", and the only test
-    matching that string is
-    `tests/integration/beta03-execution-services.test.ts:450`, which passes
-    `{...} as never` into a **runtime execution** and trips the Execution root's
-    own brand check. Same wording, different code path. A grep for the message
-    looks like coverage and is not — which is the same trap as reading for a name
-    instead of reading the code. This compounds with the Q3 qualifier in
-    `docs/v4/implementation/beta09/maintenance-decisions.md`: the brand is both
-    untested and, since the only caller is in-process and mints its own
-    `Principal`, weaker than it reads.
-  - _The `cancellationRequested` event is appended and never read back._ Event
-    kinds are asserted from `events()` at
-    `tests/integration/postgres/beta08-durable-kernel.test.ts:204`, `:308`, and
-    `:812`, and `cancellationRequested` appears in none of them. The two hits at
-    `:340` and `:745` assert the **field** on `inspect()`, not the **kind** in
-    the history. So criterion 16's "every declared event kind is appended" holds
-    by execution and not by assertion for this one.
+- #295 round 4's twelve observations were audited one by one against the tree,
+  with four different outcomes. **One closed:** PostgreSQL 18's three extra
+  passes are the `skipIf`-gated catalog cases in `beta02-catalog-reader.test.ts`
+  — NOT ENFORCED checks, PERIOD constraints, and a non-inherited NOT NULL — each
+  driving a construct only 18 has, so the difference is the version gate working.
+  **One refuted:** the claimed effect-ledger/maintenance lock-order inversion is
+  unreachable, because `FOR UPDATE` appears nowhere in `postgres-effects.ts` and
+  its only `durable_runs` access is a bare fence `SELECT`, which takes no row
+  lock. **One part stale.** **Three confirmed, all the same shape** — declared,
+  implemented, driven by nothing: the effect fence (criterion 4's fourth surface,
+  no test asserts it), the maintenance brand refusal (the only test matching its
+  message trips the Execution root's check in a different file), and the
+  `cancellationRequested` event (asserted as a field on `inspect()`, never read
+  back as a kind from `events()`). Each has a written falsification in
+  `docs/v4/prototypes/durable-evidence-gaps/FINDING.md`. Roughly half of what
+  was accepted as minor was not real, which is the argument for auditing a
+  review's observations rather than carrying them.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
@@ -617,37 +551,119 @@ This list is maintained by hand and has already gone stale once. Treat
 
 ## Next invocation
 
-BETA-09 issue #296 is the active frontier. Its design record set is committed on
-`feat/v4` under `docs/v4/implementation/beta09/`, starting at `README.md`, and
-implementation is already under way on branch `feat/v4-beta-09`.
+BETA-09 issue #296 is the nominal frontier, but the scope question below outranks
+it. Read `docs/v4/implementation/beta09/README.md` before touching
+`feat/v4-beta-09`; it carries the merge state and the slice's open items.
 
-**Read `docs/v4/implementation/beta09/README.md` before touching that branch.**
-It records the current merge state: the branch **has merged `feat/v4`** at
-`5066187a`, the merge base has advanced to `4078c057`, and the four defects an
-earlier version of this paragraph named are verified gone. Seven documentation
-commits remain unmerged, so the action is a second merge when they land — **not**
-a rebase.
+### The finding that changes the plan
 
-An earlier version of this paragraph said the branch forked at `219758a4` and
-still carried those defects, and told the next session to rebase. That was true
-when written and became false when the branch merged.
+**What blocks building a real application on this framework is not Studio.** Of
+the seven generated authoring factories, three have a runtime — Query, Mutation,
+Reaction. `defineAction`, `defineJob`, `defineWorkflow`, and `defineRoute` have
+no module under `packages/runtime/src`, and ADR-0021:30-33 lists them absent
+from beta.1. `beta-slice-p15/SLICE.json` names "raw Route and reference Auth
+composition" and "Job and checkpointed Workflow vertical" under `laterBetas` —
+planned, seamed, and with **no slice in `QUEUE.json`**, which covers only
+`4.0.0-beta.1`.
 
-**The commit that corrected it left a fifth copy of the same claim standing in
-this same file.** The workspace entry above restated the fork point in its own
-words, and the correcting commit never checked the rest of the file it was
-editing. The diagnosis is not that the stale text was worded too differently to
-find — it carried the same commit sha, and one `grep -n 219758a4 HANDOFF.md`
-would have returned both. It is that no sweep was run at all. When a fact is
-corrected, grep the tree for its most distinctive token — usually a sha, an
-identifier, or a figure — before calling the correction complete. That search
-costs one command, and skipping it is how this record set reached five
-instances of correcting a staleness only where it was noticed.
+So an application built on beta.1 gets Queries, Mutations, Reactions, Policy,
+live query, migrations, and three call paths — and cannot define a custom HTTP
+route or a scheduled job.
+
+**The user-facing docs do not say this.** `apps/docs/content/docs/v4/` holds 17
+guides, all `kind: guide`; `durable-jobs-and-workflows.mdx` and
+`services-routes-and-auth.mdx` document Jobs, Workflows and raw Routes with no
+`deferred` / `not yet` / `beta.1` marker anywhere, and `index.mdx` states no
+availability. A reader follows the Jobs guide, writes one, and nothing runs it.
+The `docs/v4/` projections do disclose the deferral, in their _Deferred seams_
+sections; the guides do not inherit it.
+
+### Ordered work
+
+1. **Availability callouts on the three affected guides in `apps/docs`.** Cheap,
+   and it removes the worst class of surprise.
+2. **Prove the embedding.** `createApp()` exposes
+   `fetch(request: Request): Promise<Response>`
+   (`packages/runtime/src/application/index.ts:111`), so Hono, Elysia, Next route
+   handlers and TanStack Start server routes all mount it mechanically. **No test
+   drives it under any of them**, so this is inference from the contract, not a
+   measured fact — the exact shape this record set spent a session logging.
+3. **Decide BETA-09.** Finish narrowly or descope. Descope costs an ADR-0021:23
+   amendment plus `implementation-gates.md:438` and `:451`, and needs
+   `blockedBy` on BETA-10 repointed to BETA-08 — the chain 09 ← 10 ← 11 ← 12 is
+   strictly linear, so nothing after it moves until this is settled. **Owner
+   decision.**
+4. **BETA-10**, multi-instance correctness. Not optional for any real
+   deployment.
+5. **BETA-12**, managed PostgreSQL and the release cut.
+6. **Open slices for Route + Auth and for Job + Workflow.** These do not exist
+   and are what the goal actually needs.
+
+**BETA-11** (archive portability) proves the kernel generalises to a second
+domain. Valuable for the framework, not on the path to shipping one application
+— the strongest candidate to defer.
+
+### Still open from this slice
+
+- A **term was projected before its gate**: `Operational Fact` was added to
+  `CONTEXT.md` while BETA-09 has never been reviewed, and the design branch
+  projects terms only after `PASS`. Revert until acceptance, or record an argued
+  exception.
+- `owner-decisions.md` states an owner answered its three questions. **That
+  attribution cannot be verified from this repository** and three decisions rest
+  on it. Two are independently grounded in citations and stand regardless; the
+  attribution still needs confirming before review.
+- **Criteria 18-22 have no derived status.** The branch re-derived 1-17; the file
+  holds 22.
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
-`feat/v4-beta-09`, merging current `feat/v4` first and preserving every
-correction listed in `docs/v4/implementation/beta09/README.md`. Do not reopen
-the decisions in that record set; extend or correct them only on new evidence.
-Preserve the #289–#295 review evidence, the docs-hygiene branch, marketing
-worktree, scalar-research worktree, Studio handoff worktree, and archive branch.
+Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then
+docs/v4/implementation/beta09/README.md.
+
+Repo /home/drepkovsky/code/questpie-v4, branch feat/v4. BETA-09 worktree is
+/home/drepkovsky/code/questpie-v4-beta-09 on feat/v4-beta-09.
+
+CONTEXT. BETA-01..08 are accepted and merged. BETA-09 (minimal Studio) is
+unaccepted, implemented on its branch, and reaches no operational fact. The
+queue chain 09 <- 10 <- 11 <- 12 is strictly linear.
+
+THE THING THAT MATTERS. Studio is not what blocks building an application on
+this framework. defineRoute, defineJob, defineWorkflow and defineAction are
+generated factories with no runtime module; ADR-0021:30-33 lists them absent
+from beta.1; SLICE.json names Route+Auth and Job+Workflow under laterBetas with
+no slice in QUEUE.json. The apps/docs guides document Jobs, Workflows and raw
+Routes as available, with no deferral marker anywhere.
+
+DO, IN ORDER.
+1. Add availability callouts to apps/docs/content/docs/v4/durable-jobs-and-
+   workflows.mdx and services-routes-and-auth.mdx stating what runs in beta.1.
+   Match the existing guide voice; do not restructure the docs.
+2. Write one test that mounts createApp().fetch under Hono or a Next route
+   handler and drives a real request. The seam is standard so it should pass;
+   the point is that nothing currently proves it.
+3. Bring the owner the BETA-09 decision with its cost stated: finish narrowly,
+   or descope via an ADR-0021:23 amendment plus implementation-gates.md:438 and
+   :451, repointing BETA-10's blockedBy to BETA-08.
+4. Once 3 is answered, proceed on BETA-10 then BETA-12. Treat BETA-11 as
+   deferrable.
+5. Draft slices for Route+Auth and Job+Workflow. They do not exist and they are
+   what the goal needs.
+
+DISCIPLINE, learned the hard way this session and non-negotiable.
+- An authored name is not evidence of a runtime. Before depending on a
+  mechanism, name the file that executes it.
+- Reading finds candidates and settles nothing. A claim about whether something
+  is enforced needs the thing broken and the failure asserted.
+- Measure a performance justification before writing it, or lead with the
+  correctness one. Four decisions in this set led with a performance reason that
+  failed measurement while the decision itself was right.
+- When you correct a fact, grep the tree for its most distinctive token before
+  calling the correction done. Five staleness fixes here were applied only where
+  they were noticed.
+- Verify every claim with file:line. Cite branch-only paths as
+  feat/v4-beta-09:path, since the acceptance packet reads git show
+  <reviewedHead>:<path> and a bare path will not resolve.
+
+Run bunx oxfmt on only the files you wrote, never across docs/. Then
+bun run check:changed and git diff --check. Commit each increment and push.
 ```
