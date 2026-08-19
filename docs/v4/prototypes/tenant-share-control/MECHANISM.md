@@ -159,22 +159,54 @@ run_id)`, `(application_name, state, lease_expires_at)`, and
 (`internal-protocol-v4-sql.ts:98`–`:103`). So this axis requires a schema
 addition, `(application_name, tenant_id, state)`, and BETA-10 owns it.
 
-With that index the count is cheap for the reason that matters: it is bounded by
-the cap itself plus however many leases have expired but not yet been reaped. It
-never scans the backlog.
+**An earlier revision of this section measured this wrong, and the wrong table
+was the argument for the index.** It reported the unindexed count as a Seq Scan
+examining 50,016 rows at 4.704 ms, concluded "65× more", and said the cost
+"scales with the backlog rather than with the cap". Re-measured on PostgreSQL
+17.10 against a `durable_runs`-shaped fixture carrying exactly the three shipped
+indexes, `ANALYZE`d — 50,000 ready runs and 16 running for one tenant, 200 quiet
+tenants:
 
-**Measured, and it is also what quantifies the index.** One tenant holding a
-50,000-run ready backlog and 16 runs actually running, on PostgreSQL 17.10:
+```
+Index Scan using durable_runs_lease_idx  (rows=16, Buffers: shared hit=3)
+  Index Cond: (application_name = 'app' AND state = 'running')
+  Filter: (tenant_id = 'noisy')
+Execution Time: 0.083 ms
+```
 
-| Counting that tenant's in-flight runs       | Plan            | Rows touched                 | Time         |
-| ------------------------------------------- | --------------- | ---------------------------- | ------------ |
-| with `(application_name, tenant_id, state)` | Index Only Scan | **16**                       | **0.072 ms** |
-| without it                                  | Seq Scan        | 16 returned, 50,016 examined | 4.704 ms     |
+**The shipped index already answers this count.** `durable_runs_lease_idx` is
+`(application_name, state, lease_expires_at)` (`internal-protocol-v4-sql.ts:100`),
+and its `(application_name, state)` leftmost prefix serves `state = 'running'`
+directly, so the 50,000-row backlog is never touched. There is no Seq Scan, no
+65×, and the backlog is not what the cost scales with.
 
-The indexed count touches exactly the running rows and never sees the backlog,
-which is the claim. Without the index the same count costs 65× more and its cost
-scales with the backlog rather than with the cap — which is the argument for
-the schema addition, stated as a number rather than as a preference.
+**What the cost does scale with is fleet-wide in-flight work**, which is what
+this record's own judgment call said all along — and the table contradicted it.
+Measured on the same fixture by adding 5,000 _other_ tenants' running runs:
+
+| Fleet-wide in-flight | Shipped indexes only           | With `(application_name, tenant_id, state)` |
+| -------------------- | ------------------------------ | ------------------------------------------- |
+| 16                   | 0.083 ms (Index Scan, 16 rows) | 0.086 ms — no measurable gain               |
+| 5,016                | 0.650 ms (Bitmap, 5,016 rows)  | 0.090 ms                                    |
+
+So the honest case for the schema addition is **7× at 5,016 fleet-wide in-flight
+runs, both sub-millisecond**, and nothing at all at the scale the shipped bounds
+actually permit. It decouples one tenant's admission cost from every other
+tenant's load, which is an isolation argument, not a performance one.
+
+**And the old fixture was outside the shipped envelope.** Sixteen runs in flight
+for one tenant requires sixteen concurrent workers on that tenant, because
+`worker.ts` claims and runs sequentially — `for (const admission of admissions)`
+with `await runAttempt(...)` inside (`packages/runtime/src/durable/worker.ts:286`,
+`:338`). One worker runs one attempt at a time, so per-tenant in-flight is
+bounded by worker count, not by `claimBatch`, and ADR-0017's conformance target
+is ten instances.
+
+**That weakens this axis enough to hand BETA-10 a different question.** Not "how
+do we make the count cheap" — it already is — but "does a per-tenant in-flight
+cap bind at all below ten instances, and is decoupling from fleet-wide in-flight
+worth an index." What would settle it: a fleet-wide in-flight figure from the
+ten-instance fixture. If it stays in the hundreds, this axis is theoretical.
 
 **Rejected: a per-tenant counter row.** It would avoid the count, and it would
 serialize every claim for a tenant on one row. That converts a
