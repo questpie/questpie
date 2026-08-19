@@ -253,7 +253,12 @@ have is the failure mode this project keeps blocking on.
   opposite in effect; the decision record keeps them separate and this note does
   not reopen it.
 - **Any cross-instance counter, token bucket, leader, or broker as the authority
-  for share.** ADR-0017 forbids all three. Share must be a property of the claim
+  for share.** ADR-0017 names two of the four directly — "a singleton
+  application, scheduler, queue, or realtime leader" and "mandatory Redis,
+  broker, Pusher, or cache state as durable truth"
+  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:89`–`:90`).
+  A cross-instance counter or token bucket is the second of those under another
+  name once it holds share authority. Share must be a property of the claim
   predicate, decided in PostgreSQL, or it is not correct under ten instances.
 - **A tenant-first listing anywhere.** Until the new index exists, `tenant_id`
   cannot drive a query; afterwards it can, but only on `(application_name,
