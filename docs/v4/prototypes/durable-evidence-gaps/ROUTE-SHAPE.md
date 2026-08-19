@@ -72,11 +72,31 @@ a `definePolicy` bound to a Collection
 Policies of the data it touches.
 
 **A Query that touches no Collection therefore has none.** An inspection read
-over `durable_runs` is exactly that. Making the reads Operations buys a resolved
-Principal, a Tenant and a fresh Execution — and zero authorization.
+over `durable_runs` is exactly that.
 
-**Decision: the inspection Authority decision is evaluated in the handler,
-against the resolved facts the engine supplies, raising a declared error.** No
+**A later check falsified the sentence this decision rested on.** An earlier
+revision said "making the reads Operations buys a resolved Principal, a Tenant
+and a fresh Execution — and zero authorization." That is true of a **Mutation**
+and false of a **Query**, which is what an inspection read is.
+`packages/compiler/src/generate.ts:322`–`:325` emits `QueryContext` as exactly
+two members, `data` and `signal`. `MutationContext` at `:327` extends
+`Omit<RootExecution, "services">`, and `RootExecution` carries `principal` and
+`authority` (`fixtures/collaboration/.questpie/generated/app.ts:148`–`:150`). So
+a Query handler is handed no Principal, no Tenant and no Authority at all.
+
+The precedent the decision cited does not transfer either. `execution.ts:45` and
+`:62` sit inside `defineContext({ resolve: async ({ input, principal, bootstrap })`
+— the **Context resolver**, which is given `principal` as a parameter. A Query
+handler is a different surface and gets none of it, and the resolver's `values`
+do not reach `QueryContext` either.
+
+**So the decision below cannot be built as written, and it is retained with that
+stated rather than quietly rewritten**, because the reasoning around it is still
+the useful part.
+
+**Superseded decision: the inspection Authority decision is evaluated in the
+handler, against the resolved facts the engine supplies, raising a declared
+error.** No
 contract widening, and it has a precedent in the accepted surface rather than
 being invented: the Context resolver already makes authorization decisions in
 code against resolved facts, throwing `context.error.unauthenticated()` at
@@ -95,6 +115,27 @@ non-Collection admission, which would restore the declarative property and make
 the authorization projectable. That is new authoring surface and belongs to an
 ADR, not to this slice — but if it is coming, doing it before the route lands
 avoids authorizing the same reads twice.
+
+**Where that leaves the shape, decided rather than left open.** Three ways to
+give an inspection read an evaluated Authority, given a Query handler cannot see
+a Principal:
+
+1. **Shape the reads as Mutations.** `MutationContext` has the facts today and
+   needs no contract change. Rejected: it opens a transaction for a read and puts
+   operator reads in the mutation projection, which misrepresents them.
+2. **Widen `QueryContext` to carry the resolved Execution facts.** This is the
+   smallest change that makes the superseded decision buildable, and it is the
+   same ADR-level widening already named above as the overturning condition for
+   the declarative option.
+3. **The durable route**, the alternative this record weighed.
+
+**The finding moves weight from 1 to 2 and 3.** BETA-09's criterion 1 requires
+inspection Authority to be _evaluated_, and no path available today lets a Query
+evaluate one. What would overturn this reading: a `QueryContext` that carries
+`principal` on some path I did not find — the check was
+`grep -n "interface QueryContext" -A 4 packages/compiler/src/generate.ts`, and
+the same read shows `MutationContext` inheriting `RootExecution`, so the
+instrument does see a thick context when there is one.
 
 **What would overturn the whole shape:** a demonstration that an Operation
 cannot carry a handler-evaluated authorization acceptably — for instance if the
