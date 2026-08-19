@@ -644,6 +644,27 @@ their _Deferred seams_ sections; the guides did not inherit it.
      arrived with the API ergonomics amendment
      (`docs/v4/prototypes/api-ergonomics-gate/`), which is the likely reason the
      projection ran ahead.
+     **`QP-COMPOSE-003` is the one with substance behind it: the Resource Name
+     grammar is not enforced at all.** `definition-composition.mdx:103`–`:113`
+     documents segments of 1–63 characters, a 255-character total, and names
+     `Appointments`, `booking_availability` and `booking..availability` as
+     invalid. In the compiler, `model.ts:128` reduces a Resource name to
+     `string(value.name, "resource name")`, and `string()` at `:33`–`:41` checks
+     `typeof` only. The three grammar checks that do exist are all pointed
+     somewhere else, which is why a grep for the bound finds nothing:
+     `field-contract.ts:49` `/^[a-z][A-Za-z0-9]{0,62}$/` is `memberKey`, applied
+     at `:187`, `:234` and `:262` to embedded properties and Field path
+     segments; `change-capture.ts:50` is a dotted qualified-name regex used once,
+     at `:133`, against `input.applicationName`; `physical-name.ts:40` is the
+     PostgreSQL identifier rule. **No 255-character bound exists anywhere in
+     `packages/*/src`.**
+     The consequence is quiet rather than loud, which is the opposite of the
+     dead factories: an invalid Resource Name is not rejected, it is mangled.
+     `manifest.ts:54` `defaultCollectionName` splits on `.`, snake-cases each
+     part and joins with `__`, so `booking..availability` becomes
+     `booking____availability` and `Appointments` becomes `appointments`, both of
+     which then pass `validatedPhysicalName`. Whoever implements 003 should
+     expect to be changing what currently compiles, not only adding a code.
    - **Half of one Runtime limits table is invented.**
      `runtime-and-studio.mdx:224`–`:232` presents eight "Defaults". Four are
      exact: active root Executions per Principal 64 and drain deadline 30 s are
