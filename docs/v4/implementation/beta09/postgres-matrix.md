@@ -44,3 +44,34 @@ It does not prove anything about the interface, which has no test that a browser
 executes, or about the four criteria behind the prohibitions in
 `narrower-claims.md`. A green matrix is not a substitute for the parts of the
 slice that are not built.
+
+## Measured at `91eeb3db`, and the lane matters
+
+| PostgreSQL | Passing | Failing |
+| ---------- | ------- | ------- |
+| 16         | 115     | 0       |
+| 17         | 115     | 0       |
+| 18         | 118     | 0       |
+
+The 18 difference is the three version-gated catalog cases in
+`beta02-catalog-reader.test.ts` — NOT ENFORCED check constraints, PERIOD
+constraints, and a non-inherited NOT NULL catalog constraint. Each drives a
+construct only 18 has, so the delta is evidence the gate works rather than
+coverage drift.
+
+**Run it through `bun run test:postgres`, never `bun test
+tests/integration/postgres/`.** The difference is not cosmetic and it cost real
+time here. `scripts/quality.ts:187` runs **one file per process, sequentially**
+(`for (const root of roots) run(["bun", "test", root])`). The directory form
+loads all twenty-one files into a single process, where
+`beta08-internal-protocol.test.ts` drops the shared `questpie_internal` schema in
+`beforeEach` and `helpers/beta08-durable.ts` calls `pg_terminate_backend` on
+every other connection to the database.
+
+Five directory-form runs against PostgreSQL 16 reported 0, 13, 0, 2 and 0
+failures. That reads as a version-specific flake and is not one: the same suite
+is clean every time through the sequenced lane, and BETA-09's own two files pass
+ten of ten on 16 three runs running. BETA-08's fourth review recorded this hazard
+as an observation — "PostgreSQL suite correctness depends on strict per-file
+sequencing enforced outside this packet" — and this is what falling into it looks
+like from the inside.
