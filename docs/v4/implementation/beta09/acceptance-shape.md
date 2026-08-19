@@ -201,6 +201,25 @@ route exists.
 
 Fixed now so the implementing slice does not have to rediscover them:
 
+- **The maintenance commands cannot reach the wire in this slice, and the reason
+  is outside it.** Exposure is binary — `network: true` puts an Operation in the
+  generated browser client (`packages/compiler/src/model.ts:264`,
+  `packages/compiler/src/runtime/client.ts:55`) — and BETA-08's accepted
+  criterion 13 forbids a durable control plane there. The two alternatives are
+  both unbuilt: a Route has a generated factory and no dispatch, mounting, or
+  `routes` projection, which ADR-0014:32 assigns to ADR-0015's slice; and a
+  third exposure state is new authoring surface for an ADR. See
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` and
+  `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`.
+
+  **So this slice should scope the command half as deferred and name the owner,
+  rather than carry criteria it cannot satisfy.** The inspection _reads_ are
+  unaffected — Queries are wired, so they work over the wire today with
+  handler-evaluated Authority. Only the commands are blocked, and no accepted
+  slice currently owns the unblocking work. A criterion asserting a
+  wire-reachable command would be false at acceptance for a reason no repair
+  inside BETA-09 can close.
+
 - **`questpie explain` is not built.** Accepted authority names it in ADR-0014,
   ADR-0019, and `docs/v4/implementation-gates.md`. The byte-parity hostile case
   is reframed onto the two producers that exist.

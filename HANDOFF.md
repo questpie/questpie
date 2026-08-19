@@ -560,6 +560,12 @@ and would otherwise never surface them.
 - **The accepted budget table measures on the wrong axis.** It bounds a
   Principal where the glossary makes Tenant the isolation identity.
   `docs/v4/prototypes/tenant-share-control/DECISION.md`
+- **Four of seven authoring factories have no runtime behind them.** Action,
+  Job, Workflow, and Route are generated names with no module under
+  `packages/runtime/src`. Deferred by accepted authority and not a defect, but it
+  caused three separate corrections in one record set, because an authored name
+  is not evidence of a runtime.
+  `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`
 - **Three accepted durable properties are driven by no test.** The effect fence,
   the maintenance brand refusal, and the `cancellationRequested` event are each
   named in a criterion, present in code, and asserted by nothing. Each has a
