@@ -920,6 +920,21 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   Read a sample instead: nine read by hand produced the two real defects at
   81907d85.
 
+- Absence claims in the record set were swept and all hold. This is the class
+  the repository already burned itself on -- grep-shaped conclusions failed
+  three times in one BETA-08 audit -- so the negative result is worth not
+  re-deriving. Verified: `tenant_id` is in no index, and tree-wide rather than
+  only on `durable_runs` (no CREATE INDEX in schema/postgres names it, across
+  the three tables carrying the column); `grep durable` over
+  packages/runtime/src/application/index.ts returns exactly 0, so the request
+  router really has no durable route; `accepted_at` appears only in
+  acceptance.ts:63's INSERT column list, and inspect() selects `available_at`
+  and `terminal_at` only, so no read returns it; `statement_timeout` and
+  `lock_timeout` appear nowhere in packages/runtime/src; nothing prunes any
+  `durable_*` table. What makes these sound where BETA-08's were not is that
+  each names its search scope in the record, so the claim and its check are the
+  same shape.
+
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
 ```
