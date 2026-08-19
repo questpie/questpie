@@ -23,8 +23,26 @@ The prescribed red test is:
 It bites on the operational lane, not the application one.
 
 **Application data** flows through ordinary generated Operations and Collection
-Policy, as ADR-0014 requires. With no second path to rows, disclosure
-equivalence is definitional, and driving the red test there proves a tautology.
+Policy, as ADR-0014 requires. Disclosure equivalence is definitional there, and
+driving the red test on that lane proves a tautology.
+
+_Precision added after the fact, and it does not change the disposition._ An
+earlier revision said "with no second path to rows". There is a second statement
+that reaches rows: the keyed row lock a Mutation issues before its Policy read —
+`SELECT TRUE AS "qp_locked" FROM <table> WHERE <key predicates> LIMIT 1
+FOR UPDATE` (`packages/compiler/src/mutation/postgres.ts:138`), whose predicates
+come from `operation.keyFields` alone (`:72`–`:75`), with Policy applied only in
+the following read (lifecycle `["keyedRowLock", "freshPolicyRead", …]`, `:131`–`:136`).
+
+It is not a disclosure path. It projects a constant rather than columns, and its
+result is never branched on beyond a `length > 1` sanity check
+(`packages/runtime/src/mutation/collection.ts:253`). What remains is a timing
+channel: the lock is a bare `FOR UPDATE`, so it blocks on a row held by another
+transaction and returns at once on an absent one, which a caller who cannot see
+the row could time. That is a weaker claim than a second read path, it is out of
+scope for this contract, and it is recorded so the sentence is not read as
+stronger than the tree supports. The red test still belongs on the operational
+lane.
 
 **Operational facts** — runs, events, effects, the maintenance audit — are not
 Collection rows. No Collection Policy covers them. All four reads evaluate no
