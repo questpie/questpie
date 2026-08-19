@@ -190,9 +190,25 @@ sorts **first**. No sweeper removes it — there is no `DELETE` against any
 run is still returned by `admit()` and still reads
 `{ state: "ready", attemptCount: 0 }`.
 
-`maximumBatch` is capped at 64 (`postgres-kernel.ts:257`–`:263`), so 64 such rows
-occupy the entire admission batch permanently. The trigger is an ordinary
-completed rolling deploy, not an attack.
+`claimBatch` defaults to 64 and is rejected outside 1–64
+(`postgres-kernel.ts:257`–`:263`), so it takes only as many such rows as the
+configured batch to occupy every admission permanently — 64 at the default, fewer
+for a worker configured lower. They sort first because a refused run keeps its
+original `available_at` while healthy work arrives with later ones.
+
+The trigger is an ordinary completed rolling deploy, not an attack: "readiness
+does not scan `durable_runs.executable_digest` against the current build"
+(`docs/v4/implementation/beta08/design-context.md:279`–`:283`), and no readiness
+path in `packages/runtime/src` reads that column.
+
+**What BETA-08 disclosed, stated fairly.** The slice named this: the refusal
+"consumes no attempt; the run stays `ready` for a compatible worker" (`:264`–`:266`),
+and `:279`–`:283` records it as a narrower claim and "the only disposition this
+slice implements". So the mechanism is disclosed and deliberate. What is not
+disclosed is the consequence for admission — that the row is re-selected by every
+worker on every poll indefinitely, ahead of live work, with no sweeper and no
+progress bound. That consequence is this entry's content; the mechanism is not a
+discovery.
 
 **This is why it matters to the fair-admission work next door.** Ranking by
 `row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id)` makes
