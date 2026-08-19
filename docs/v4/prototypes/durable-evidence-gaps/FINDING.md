@@ -1,4 +1,4 @@
-# Three accepted durable properties that no test drives
+# Seven durable properties that no test drives
 
 BETA-08 was accepted with twelve review observations. Auditing them against the
 tree closed one, refuted one, found one part stale, and **confirmed three** —
@@ -121,12 +121,16 @@ it cannot prove anything adversarial is stopped, for the reason recorded in
 only caller is in-process and mints its own `Principal`. Write the assertion, and
 write down which half it proves.
 
-## Two further gaps, found by adversarial review and verified here
+## Four further gaps, found by adversarial review and verified here
 
-Both are bounds that accepted authority names and no code enforces. Neither is a
+These are bounds that accepted authority names and no code enforces. None is a
 disclosure gap in this record's original three; they are additions, found by
 running two opposing reviews over the tenant-share records and then checking the
 tree rather than the reports.
+
+This heading said "Two further gaps" while four sections sat under it. Sections
+4 and 5 arrived at `e1af84fd`, sections 6 and 7 at `ba7daced`, and the count was
+not updated either time. The document title said "Three" for the same reason.
 
 ### 4. The retry horizon is pinned, digest-carried, and enforced nowhere
 
@@ -295,3 +299,96 @@ unordered queue.
 
 **Falsification.** Abort a Mutation's signal while every pool connection is
 held, and assert the call rejects. It waits instead.
+
+## Who owns 4 through 7
+
+Sections 1 through 3 already say they belong to "whoever next touches the
+durable surface". Sections 4 through 7 were left with no owner at all, which is
+how a written falsification becomes a permanent record instead of a test. Each
+is assigned below against the slice scopes in
+`docs/v4/prototypes/implementation-collapse-p16/QUEUE.json`, or recorded as
+deferred with the reason. No new prototype: the falsifications are already
+written above, and this section only says where each one lands.
+
+### 4 and 5, retry horizon and poison-run progress, to BETA-10
+
+They go together because section 4 says so: its permanence "comes from §5, not
+from the horizon". Assigning them apart would split one failure.
+
+**5 is the stronger fit, and it is close to exact.** BETA-10's `hostile` list
+contains `"old/new compatible build"` and `"incompatible claim refusal"`
+(QUEUE.json), and section 5's trigger is "an ordinary completed rolling deploy"
+producing exactly that refusal. Its falsification — refuse a claim, poll
+`admit()` twice, assert the run is absent from the second batch — is a
+rolling-compatibility assertion, which is what BETA-10's `"rolling compatibility
+matrix"` artifact is for.
+
+**4 needs more than one worker to be visible at all.** The head-of-queue effect
+is an ordering claim between a poisoned run and healthy work competing for
+admission, so it is only observable under BETA-10's `"ten-instance load
+scenario"` and `"concurrent schedulers/workers"`.
+
+**One thing whoever takes this must know before writing the test.** A shipped
+test already asserts the stuck state as correct:
+`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391` asserts
+that after a retired-kernel refusal the run is still returned by `admit()` and
+still reads `{ state: "ready", attemptCount: 0 }`. Fixing section 5 changes an
+assertion inside an accepted slice. That is a BETA-08 acceptance question, not a
+free BETA-10 edit, and it should be raised before the work starts rather than
+discovered in review.
+
+**What would overturn this.** If the owner rules that the eight-attempt program
+is the only intended bound and a poisoned row at the head of admission is
+acceptable, section 4 stops being slice work and becomes a disclosure fix in
+`docs/v4/implementation/beta08/design-context.md` — the consequence for
+admission is the part that record does not state. Section 5 does not dissolve
+the same way; no reading makes indefinite re-admission intended.
+
+### 6, the maintenance audit row bound, to BETA-09 — and it does not die with it
+
+`audit(runId)` is the inspection surface's read, and BETA-09 owns `"safe
+event/explain views"`. Its `hostile` list is where the rows come from:
+`"maintenance Authority denial"` and `"typed concurrent command winner"` both
+produce **rejected** commands, and `record()` inserts a row for rejected
+commands as well as applied ones from eleven call sites. The slice that
+exercises those hostile cases is the slice that generates the unbounded table.
+
+**The dependency is the problem with this assignment, and it is worth stating
+plainly.** BETA-09 is unaccepted and blocked on an owner decision. If it is
+descoped, section 6 loses its owner while the gap stays exactly where it is:
+`audit()` is BETA-08 code, accepted and shipping, and
+`postgres-maintenance.ts:384` has no `LIMIT` today regardless of what happens to
+Studio. **A descope decision must reassign section 6, not close it.** There is
+no Studio row bound in the tree to inherit either — the 100-row page bound the
+public guide describes has no constant anywhere in `packages/`, because Studio
+lives on an unmerged branch.
+
+### 7, pool checkout abort-wiring, deferred — with the trigger that undefers it
+
+No current slice would catch it. Every slice that asserts cancellation asserts
+it without pool contention: nothing in `tests/` drives pool exhaustion, and the
+only `reserve()` appearances are a stub at
+`tests/integration/beta04-policy-query.test.ts:106` and direct session checkouts
+in the beta02 and beta06 protocol tests. A gap no criterion reaches is deferred
+whether or not anyone writes it down; writing it down is the difference between
+deferred and lost.
+
+**The existing non-goal covers half of it and should not be read as covering the
+rest.** The tenant-share record files pool slots under "the host owns the pool |
+non-goal for beta.1". That is right about _sizing_ — the framework takes `SQL`
+as a type-only import and never constructs the pool. It is not about the _wait_:
+`mutation/postgres.ts:173` is `await pool.reserve()` with no signal, armed after
+the 5,000 ms budget at `:159`, and `relational/postgres.ts:31`,`:34` are the
+same shape. That is framework code declining to wire an abort it already holds,
+which the non-goal does not reach.
+
+So this is deferred as slice work but recorded as a known limit of the
+cancellation contract: a Mutation's signal does not interrupt a pool wait.
+
+**What undefers it.** BETA-10 ships a `"ten-instance load scenario"`. If that
+scenario puts enough concurrent Mutations against one pool to queue on checkout,
+section 7 becomes observable inside a slice that is already running, and its
+falsification — abort a Mutation's signal while every connection is held, assert
+the call rejects — costs one test rather than a new scenario. Whoever builds
+that scenario should check whether it already reaches this, because that is the
+cheapest moment this gap will ever be closeable.
