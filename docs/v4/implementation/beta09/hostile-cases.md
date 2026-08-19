@@ -11,6 +11,12 @@ failing assertion is recorded with it. This record does that work up front.
 
 This record decides. It opens no slice branch and writes no production code.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## 1. Foreign Principal
@@ -38,12 +44,31 @@ points.**
 The Execution Envelope's event union is closed and carries no free field: two
 families, `runtime` with four kinds and `operation` with three kinds plus an
 operation name (`packages/runtime/src/application/events.ts:27`–`:34`).
-`traceId`, `causationId`, and `tenantRef` are typed as literal `null`. There is
-no field a payload, credential, secret, or stack trace could occupy, and no
-redaction pass exists anywhere in `packages/runtime` — because none is needed.
+`traceId`, `causationId`, and `tenantRef` are typed as literal `null`, and no
+redaction pass exists anywhere in `packages/runtime` — both verified.
 
-So an assertion that the envelope carries no secret passes today and proves
-nothing about this slice.
+**But "no field a payload could occupy" was overstated, and correcting it gives
+the case content.** The event _union_ is closed. The _envelope wrapping it_ is
+not: it carries four caller-supplied free-form strings —
+`correlationId: string` (`events.ts:12`), `actor.principalRef: string | null`
+(`:15`), `links[].id: string` (`:21`), and the `operation` name in the operation
+family (`:33`).
+
+What fills them today are identities rather than payloads. `correlationId`
+falls back to a per-process `runtime:<sequence>` value, `principalRef` comes
+from the Principal, and `links[].id` from artifact and operation identities.
+So the practical risk is low — but it is low _because of what writes those
+fields_, not because the type forbids anything.
+
+So the disposition changes. An assertion that the envelope carries no secret is
+**narrow rather than vacuous**: it does not test the closed union, which cannot
+carry one, but it does test that the four free-form fields are filled by
+identities. Written that way it has content; written as "the envelope is closed"
+it asserts something the type does not say.
+
+An earlier revision of this section concluded the case was structurally
+satisfied and proved nothing. That followed from the overstatement rather than
+from the tree.
 
 **What the case must actually assert:** that Studio renders no envelope lane as
 if it were retained history. The envelope has no store at all, so a lane

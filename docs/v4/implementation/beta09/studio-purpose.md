@@ -10,6 +10,12 @@ corrections land in the same commit.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## The decision
@@ -42,7 +48,7 @@ exist at this base:
 | A failed Query execution      | **none.** There is no query receipt, log, or execution table                                                                                                                                       | —                                                                                     |
 | A failed Mutation             | **none.** `CHECK (outcome IN ('executing','committed'))` admits no failure, and the receipt is inserted inside the Mutation's own transaction, so a pre-commit failure rolls back its own evidence | `packages/compiler/src/schema/postgres/internal-protocol-v2.ts:38`                    |
 | An Execution error            | **none stored.** `durability: "telemetry"`, an optional in-process sink, with `traceId`, `causationId`, and `tenantRef` typed as hardcoded `null` and a per-process sequence counter               | `packages/runtime/src/application/events.ts:1`–`:34`                                  |
-| A Live Query reset            | **~30 seconds.** `reset_reason` lives on `realtime_binding_generations`, which is hard-deleted rather than tombstoned, under a CHECK-pinned 30-second scope TTL                                    | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129` |
+| A Live Query reset            | **current only.** A superseded generation is deleted at once, not after a delay; an idle scope is swept 30 s after its last renewal. No reset history is retained either way                       | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129` |
 | A change nobody can explain   | **no attribution.** `change_ledger` carries no correlation, causation, call, principal, or tenant column                                                                                           | `internal-protocol-v3.ts:29`                                                          |
 | A failed or dead-lettered run | **yes**                                                                                                                                                                                            | `durable_runs`                                                                        |
 
@@ -65,8 +71,11 @@ answer on its own: **`runId` is not obtainable through any shipped API.**
 
 - All four durable reads take `runId` alone: `inspect`, `events`, effects
   `read`, and `audit`.
-- `admit(batch)` is the only multi-row read of `durable_runs`
-  (`packages/runtime/src/durable/postgres-kernel.ts:455`), and its predicate
+- `admit(batch)` is the only multi-row **read** of `durable_runs`
+  (`packages/runtime/src/durable/postgres-kernel.ts:455`). `reapCancelled`
+  (`:407`) also spans multiple rows, but it is a write and its predicate
+  excludes terminal states too, so neither surfaces a failed run. `admit`'s
+  predicate
   structurally excludes every state an operator cares about — it returns only
   runs eligible for claiming, never `failed`, `succeeded`, `cancelled`, or
   dead-lettered. It is the opposite of a symptom feed.
@@ -86,11 +95,26 @@ BY available_at, run_id` as an index scan. Both opposing teams identified this
 index independently. One read method over an index that already exists is the
 cheapest correction that makes the durable kernel reachable at all.
 
+**The index claim is verified, not assumed.** Measured on PostgreSQL 17.10
+against 207,000 runs, the worklist query plans as
+`Index Scan using durable_runs_claim_idx`, returns 64 rows, and runs in
+0.13 ms. The leftmost prefix carries it and no schema is needed — which is the
+premise this whole decision rests on, so it is checked rather than argued.
+
 Constraints on it, each forced:
 
-- **First N with `hasMore`, never a count.** A total is a scan.
-- **Not tenant-keyed.** `tenant_id` is in no index; see the correction in
-  `design-context.md`. Tenant is displayed and authorized on, not driven from.
+- **First N with `hasMore`, never a count.** The reason is disclosure, not
+  cost. Measured, a count over the same indexed predicate is an Index Only Scan
+  at 0.47 ms for 2,000 failed runs — affordable. But `countOracle: "absent"` is
+  a nondisclosure commitment in the application lane
+  (`packages/compiler/src/relational/nondisclosure.ts`), and the operational
+  lane matches it so a total cannot be used as an existence oracle. An earlier
+  revision justified this as "a total is a scan," which measurement does not
+  support.
+- **Tenant-filtered, not tenant-keyed.** `tenant_id` is in no index, so a
+  tenant-scoped list selects through the indexed state predicate and filters —
+  0.31 ms measured, cost proportional to the matching state set rather than the
+  table. Tenant is displayed and authorized on; it does not drive the query.
 - **Inspection Authority evaluated at the entrance, not the leaf.** A list
   leaks the existence of runs, so the Authority decision `design-context.md`
   assigns to this slice becomes the first thing evaluated rather than the last.
@@ -110,6 +134,23 @@ ambiguous effect with `receipt: null` — and null receipt is _forced_ for
 schema guarantee rather than an inference. `audit(runId)` shows whether someone
 already tried. The action is two fenced steps: `acknowledgeAmbiguity`, then
 `retryRun`, both bound to `version`.
+
+**This job does not execute as written, and that is a finding this slice owes.**
+`acknowledgeAmbiguity`'s applied path appends an `ambiguityAcknowledged` event
+(`packages/runtime/src/durable/postgres-maintenance.ts:371`), and every append
+bumps `event_sequence` (`packages/runtime/src/durable/rows.ts:139`). The run's
+version therefore changes. `DurableMaintenanceOutcome` (`postgres-maintenance.ts:28`)
+carries no version, and `maintenance-decisions.md` only returns one on a
+`VERSION_MISMATCH`. So a caller who reads version V, acknowledges, then retries
+bound to V is _guaranteed_ to be fenced out — the flagship job fails on its
+second step by construction.
+
+The fix is small and belongs with the fence decision: an **applied** outcome
+must return the run's new version too, not only a rejected one. Then the two
+steps chain without a second `inspect()` and without a race. Recorded here
+rather than quietly repaired because this is exactly the class of defect
+BETA-08 was blocked for — a path asserted in a record that no execution
+supports.
 
 This is the job that justifies the whole slice, and it is exactly the job
 `maintenance-decisions.md` warns Studio must not get wrong by offering
@@ -135,27 +176,73 @@ run must join to the contract to do it.
 
 ### Answerable: "the Mutation committed — what happened to its Reaction?"
 
-Pure function, no lookup: `callId` → canonical bytes → `dispatchId` →
-`durableRunIdentity(dispatchId)` → `runId` → `effectIdentity(application,
-runId, effectName)`. Every hop is a deterministic digest
+Pure function, no lookup — but **not a function of `callId` alone**, and an
+earlier revision wrote it that way. The dispatch identity is
+`deterministicUuid(inputScopeBytes({...}))` over **seven** inputs: application,
+`tenantId`, operation identity, principal kind, principal id, `callId`, and the
+`dispatchSlot`
+(`packages/runtime/src/mutation/postgres.ts:271`–`:280`). From there
+`durableRunIdentity(dispatchId)` → `runId` → `effectIdentity(application, runId,
+effectName)` are each a deterministic digest
 (`packages/runtime/src/durable/acceptance.ts:18`,
-`packages/runtime/src/durable/rows.ts:170`), and every landing is a primary
-key. The identities are handed to the user by the system — `callId` rides the
-wire response — rather than memorised.
+`packages/runtime/src/durable/rows.ts:170`), and every landing is a primary key.
 
-Two disclosures are missing to make it usable: there is no public read of
-`mutation_call_receipts` outside the idempotency-conflict branch, and
-`durableRunIdentity` is not exported. Both are disclosures of already-durable,
-already-indexed facts, not new mechanisms.
+The correction matters for whether the job is usable. Six of the seven inputs are
+facts the caller's own Execution already fixes — application, tenant, operation,
+principal, and the slot the Reaction is declared in — so a support flow that
+knows _which operation a known principal called in a known tenant_ can derive the
+rest. A flow holding only a `callId` cannot. "`callId` rides the wire response"
+is still true and still useful; it is one of seven inputs rather than the whole
+key.
+
+Two things stand between this chain and being usable, and they are not the same
+kind of thing.
+
+`durableRunIdentity` is not exported from the package root. That is a disclosure
+of an existing deterministic derivation and costs nothing.
+
+A public read of `mutation_call_receipts` is **not** available to this slice, and
+an earlier revision listed it beside the export as though it were. It is a fifth
+read shape over an internal table, which `inspection-contract.md` D3 forbids in
+terms — "adding read shapes beyond these is how an inspection surface becomes the
+internal-table CRUD the issue names as a non-goal" — and internal-table CRUD is
+one of the issue's own non-goals. D3 wins: the surface stays at four reads plus
+the worklist, and this job stays partly unanswerable rather than being made
+answerable by widening the surface.
+
+One correction to how the receipt was described. It is not "already-indexed" in
+the sense that implies. `mutation_call_receipts` carries a single index, the
+six-column primary key `(application_name, tenant_id, operation_name,
+principal_kind, principal_id, call_id)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v2.ts:34`), with
+`call_id` **last**. A lookup by `callId` alone cannot use it. The chain above
+works because it arrives knowing the five preceding columns, not because a
+receipt is addressable by its call identity.
 
 ### Not answerable — recorded as findings, not deferred
 
 - **"Which subscriptions did this deploy reset?"** No source. Reset history
-  survives ~30 seconds. This kills the handoff's Q5 reset tile.
-- **"Show me recent Executions / trace this correlation id."** No source. The
-  Execution Envelope is unstored telemetry with hardcoded-null correlation
-  fields. Gate 8 already requires that missing telemetry stay explicit, so
-  Studio must say so rather than render an empty lane.
+  is not retained at all: a superseded generation is deleted immediately, and
+  an idle scope is swept thirty seconds after its last renewal. This kills the
+  handoff's Q5 reset tile.
+- **"Show me recent Executions / trace this correlation id."** No source, and
+  for **two** reasons rather than one. The Execution Envelope is unstored
+  telemetry with hardcoded-null trace, causation and tenant references —
+  `correlationId` itself is populated, so what defeats it is the missing store
+  rather than a null field.
+
+  The second reason is stronger and was missing here. `correlation_id` **is**
+  durably stored, on `durable_runs` and on `durable_run_events`
+  (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:31`,
+  `:143`) — and it is unqueryable: **no index mentions it, and no `WHERE` clause
+  anywhere in `packages/runtime` filters on it.** It is write-only propagation
+  data. So even where a correlation is durably recorded, tracing one is a
+  sequential scan rather than a lookup.
+
+  Gate 8 already requires that missing telemetry stay explicit, so Studio must
+  say so rather than render an empty lane. An earlier revision of this bullet was
+  also garbled mid-sentence by a previous edit.
+
 - **"Who changed this row and why?"** No source. The Change Ledger carries no
   caller attribution.
 - **"Who cancelled what today?"** No source at acceptable cost.

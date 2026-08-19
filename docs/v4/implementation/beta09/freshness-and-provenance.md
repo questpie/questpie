@@ -11,6 +11,12 @@ replaces it is better.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## First, there are five sources, not four
@@ -76,8 +82,12 @@ Overview freshness tile and no global staleness clock.
 
 Concretely:
 
-- A run's state carries `source: durable` and the run's own `accepted_at` or
-  `terminal_at`.
+- A run's state carries `source: durable` and the run's own `available_at` or
+  `terminal_at` — the two `inspect()` actually selects
+  (`packages/runtime/src/durable/postgres-kernel.ts:693`). `accepted_at` exists
+  as a column (`internal-protocol-v4-sql.ts:44`, written at
+  `packages/runtime/src/durable/acceptance.ts:58`) but no read returns it, so an
+  earlier revision naming it required a field the surface cannot supply.
 - A maintenance entry carries `source: audit` and its `requested_at`.
 - A contract fact carries `source: artifact` and the Runtime Build identity —
   **not** a timestamp, because the identity is the stronger statement.
@@ -172,15 +182,22 @@ displays the bound its own source supplies rather than promising a retention
 length in copy.
 
 - **Run history and the maintenance audit:** unbounded in time. **No retention
-  sweeper exists** — there is no `DELETE` against any `durable_*` table
-  anywhere in the tree. BETA-08 dropped the retention block precisely because
+  sweeper exists** — there is no `DELETE` against any `durable_*` table anywhere
+  in `packages/`. The only such statements in the repository are negative
+  controls in `tests/integration/postgres/beta08-internal-protocol.test.ts`,
+  which assert the append-only guard refuses them. BETA-08 dropped the retention block precisely because
   nothing enforced it, and nothing enforces it now. The only bound is
   structural: `event_sequence` is CHECK-constrained to 0–1024 per run
   (`internal-protocol-v4-sql.ts:59`), so a run's history is capped in length,
   never in age.
 - **Change Ledger:** back to `min(xid_horizon)`, which moves as consumers
   acknowledge.
-- **Realtime:** approximately thirty seconds.
+- **Realtime:** no history. A superseded generation is deleted at once
+  (`postgres-realtime-generations.ts:129`, whose predicate spares only the rows
+  still holding `latest_slot` or `ack_slot`), and an idle scope is swept thirty
+  seconds after its last renewal (`internal-protocol-v3-realtime.ts:43`). Only
+  the current generation's reason is readable, and only while its binding
+  lives.
 - **Receipts:** never pruned, and currently unreachable.
 
 Studio must not imply a retention window anywhere, because for the two lanes an

@@ -8,6 +8,12 @@ the two edges the schema forces.
 This record decides. It opens no slice branch and changes no ADR, public
 projection, gate, or tracker state. It writes no production code.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## Why a protocol version at all
@@ -34,7 +40,14 @@ CONSTRAINT durable_command_reason_bounded CHECK (
 ```
 
 **Nullable at the schema, required at the surface.** This is the interesting
-part and it is forced rather than chosen.
+part, and it is forced once one premise is stated: the audit stays **one
+table** and v4 rows survive in it. A fourth option exists and is rejected on
+that premise rather than on impossibility — a new v5 table with
+`reason text NOT NULL`, leaving v4 rows behind in the old one. `CREATE TABLE`
+clears the guards exactly as `ADD COLUMN` does. It is rejected because splitting
+an append-only audit across two tables to satisfy a constraint is a worse
+artifact than a nullable column whose null carries a precise meaning. Within
+that premise the nullability is forced; the premise itself is the choice.
 
 `durable_maintenance_commands` is append-only, guarded by
 `durable_maintenance_commands_append_only`
@@ -101,7 +114,14 @@ Mirror the v3 → v4 upgrade exactly
 3. Inside `withPinnedTransaction`: verify the v4 catalog against the recorded
    protocol row, apply the v5 SQL, `update questpie_internal.protocol set
 version = 5, checksum = <v5>`, then verify v5.
-4. Release the advisory lock and assert the backend pid, as v4 does.
+4. In a `finally`, **assert the backend pid first, then release** the advisory
+   lock — `assertBackendPid(sql, expectedPid, "internal protocol v4 unlock")`
+   precedes `pg_advisory_unlock`
+   (`packages/compiler/src/schema/postgres/internal-protocol-v4.ts:311`–`:313`).
+   An earlier revision of this step said release-then-assert, which is the wrong
+   order and would have been copied. The order matters: asserting first proves
+   the unlock is being issued on the same backend that took the lock, and
+   unlocking first would release it before that is established.
 
 Three consequences worth stating before the implementing slice hits them:
 
@@ -153,3 +173,55 @@ a worse artifact than one with an explicit null. What would overturn it:
 evidence that an unbounded-reason rejection is a client bug rather than an
 operator action, in which case it belongs in the typed error path and not in
 the operational record at all.
+
+## The fourth upgrade consequence, which the mechanics section missed
+
+Adding `REASON_INVALID` and `AUTHORITY_DENIED` touches **three** sites, not two.
+The union (`packages/runtime/src/durable/postgres-maintenance.ts:20`) and the
+`durable_command_rejection_known` CHECK
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:232`) are
+the two this record already named. The third is
+`maintenanceRejectionCodes` in the compiled durable-kernel contract
+(`packages/compiler/src/reaction/durable-kernel.ts:111`), which today lists
+exactly six.
+
+That array feeds `durableKernelDigest` into `durable-kernel.json`, which the
+runtime verifies semantically at startup
+(`packages/runtime/src/application/artifact-files.ts:90`) and which is pinned by
+exact equality in the compile-level test and in
+`tests/goldens/beta01/generated-digests.json`.
+
+**So this change moves a deployment-compatibility digest.** Six members becoming
+eight is not only a schema and a type change; it changes the bytes that decide
+whether a running instance considers a build compatible. That belongs in the
+upgrade mechanics beside the protocol version bump, and an implementer working
+only from the two sites named above would discover it as a failing golden rather
+than as a planned step.
+
+## The upgrade mechanism was tested, not read
+
+The nullability argument turns on three mechanical claims. All three were driven
+against PostgreSQL 17.10 with the same guard shape the protocol uses — a
+statement-level `BEFORE UPDATE OR DELETE OR TRUNCATE` trigger raising `42501`.
+
+| Claim                                             | Result                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `ADD COLUMN` and `ADD CONSTRAINT` clear the guard | both returned `ALTER TABLE`                                                    |
+| a backfill `UPDATE` is refused                    | `ERROR: append-only`                                                           |
+| a `NOT NULL DEFAULT` is _mechanically_ available  | `ALTER TABLE` succeeded, and the pre-existing row read `reason = 'fabricated'` |
+
+The first two confirm the upgrade path: the DDL this record specifies runs
+against a guarded table, and the alternative that would let the column be
+`NOT NULL` is genuinely blocked.
+
+**The third is the one worth having.** The `DEFAULT` route is not impossible —
+it works, and it fills historical rows. So this record rejects it on judgment
+rather than on mechanism, and the probe shows exactly what that judgment is
+protecting against: an append-only audit row now carrying a reason no operator
+ever supplied, reading `fabricated`. Stating it as "impossible" would have been
+wrong and would have collapsed the moment anyone tried it.
+
+That distinction matters for how the decision survives review. A reviewer who
+finds a rejected option is actually available treats the rejection as uninformed;
+a reviewer who finds it available _and rejected for a stated reason_ has
+something to agree or disagree with.

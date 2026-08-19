@@ -6,7 +6,7 @@ test.
 
 This record merges two concurrent work ticks that reached the same file from
 different directions. One established that the compiler already emits a
-nondisclosure contract for the application lane and that nothing consumes it;
+nondisclosure contract for the application lane and that no code reads it;
 the other found a live disclosure path in the shipped operational reads. Both
 findings were re-verified against the tree before merging. Neither is
 discarded.
@@ -75,7 +75,14 @@ a closed set of disclosure commitments per query (`nondisclosure.ts:3`–`:28`):
   relation and a Policy-invisible one are the same value.
 - `selectedFieldDenied: "omitProperty"` — a denied Field is absent, not null.
 
-**The finding is that nothing consumes the artifact.**
+**The finding is that no code reads the artifact.** It is not unverified: the
+build inventory covers every generated file except `runtime-build.json` and
+`internal/checksums.json` (`packages/compiler/src/runtime/index.ts:378`), and
+startup sha256-verifies every inventory entry
+(`packages/runtime/src/application/artifact-files.ts:16`–`:28`). For canonical
+bytes that is stricter than a semantic digest. An earlier revision said nothing
+consumed it, which was wrong. What is true is narrower: nothing _consults_ its
+commitments.
 `relational-nondisclosure.json` appears nowhere in `packages/runtime`. The
 runtime verifies eight artifacts by semantic digest at startup —
 `runtime-executables.json`, `operation-contracts.json`, `wire-contract.json`,
@@ -129,8 +136,30 @@ field list directly is the simpler equivalent.
 ### D2 — `relational-nondisclosure.json` gains runtime verification
 
 It joins the eight artifacts verified by semantic digest at startup. A
-nondisclosure proof that nothing checks is not a proof. Small, independent, and
-does not depend on D1.
+**Corrected:** it is already byte-verified through the inventory, so it does
+not need a semantic digest, and an earlier revision of this decision rested on
+the false premise that nothing checked it. What it lacks is a _reader_ — the
+keyed-lookup commitment is independently enforced at
+`packages/runtime/src/relational/postgres.ts:121`–`:130`, and the other four
+have no equivalent. D2 is therefore narrowed to: give the remaining four
+commitments an enforcement site, or drop the artifact's claim to be a proof.
+
+**Independently corroborated, by a better method.** `feat/v4-beta-09` reached
+the same conclusion at `c50b9dbc` without seeing this correction, and proved it
+rather than re-reading it: the branch **tampered** with the artifact and
+asserted the refusal, driving the real generated build so that one flipped
+character inside the nondisclosure proof is rejected with a digest mismatch.
+
+That is stronger evidence than the reading behind this section, and the record
+should say so. It also names the original error's cause exactly — "reading for a
+name instead of reading the code", since the artifact is verified by being in
+`build.inventory` rather than by being mentioned in `artifact-files.ts`.
+
+Worth carrying forward: two earlier attempts at that test failed on their own
+synthetic inventories rather than on the claim, and driving the real artifact set
+removed the fixture from the argument. That is the BETA-07 failure mode —
+injecting a construct the production path never produces — caught before it
+shipped rather than after three rounds.
 
 ### D3 is falsified: "Policy-protected inspection Operations" is not authorable
 
@@ -194,9 +223,22 @@ Nothing Studio can reach returns them.
 | Kernel read      | Inspection projection returns                                                                                                                           | Removed                                                                                                                   |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | `inspect(runId)` | run, dispatch, Resource, state, attempt count, current attempt, cancellation-requested, dead-letter, failure code, availability, terminal time, version | **`resultBytes`** → presence, byte length, digest                                                                         |
-| `events(runId)`  | sequence, timestamp, Resource, dispatch, run, attempt, lease-token digest, causation, correlation, kind, safe error code                                | nothing; already safe by construction, `error_code` CHECK-constrained to a closed set (`internal-protocol-v4-sql.ts:150`) |
+| `events(runId)`  | sequence, kind, attempt, lease-token digest, safe error code — the five fields the kernel read already returns (`postgres-kernel.ts:112`, `:730`)       | nothing; already safe by construction, `error_code` CHECK-constrained to a closed set (`internal-protocol-v4-sql.ts:150`) |
 | `effects(runId)` | effect name, effect identity, status, receipt presence                                                                                                  | **`receipt`** → presence                                                                                                  |
 | `audit(runId)`   | command, outcome, rejection code, actor, state before and after, requested-at, and the bounded reason once internal protocol v5 lands                   | nothing further                                                                                                           |
+
+**A correction to an earlier revision of this table.** It listed eleven fields
+for `events(runId)` — sequence, timestamp, Resource, dispatch, run, attempt,
+lease-token digest, causation, correlation, kind, error code. That is what
+`durable_run_events` **stores** (`internal-protocol-v4-sql.ts:133`–`:145`), not
+what `events()` **returns**. The shipped read selects five
+(`packages/runtime/src/durable/postgres-kernel.ts:730`) into a five-field view
+(`:112`–`:118`). Transplanting the accepted contract's description of the
+stored row into a table about return values made the projection look _wider_
+than the kernel read, which would have falsified this slice's own criterion
+that the projection is strictly narrower. The store-versus-return distinction
+is the thing to hold onto: `causation_id` and `correlation_id` are
+application-supplied strings, and they stay unreturned.
 
 **Presence rather than redaction.** A truncated or masked payload is still a
 payload path, and it invites a later change that widens it. Presence plus

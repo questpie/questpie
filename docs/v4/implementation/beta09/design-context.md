@@ -7,6 +7,12 @@ in `docs/v4/implementation-gates.md`.
 This record fixes the boundary and the identities. It opens no slice branch,
 changes no ADR, no public projection, no gate, and no tracker state.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at BETA-08 acceptance merge
 `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
@@ -48,14 +54,14 @@ properties.
 
 What BETA-08 actually shipped, read out of the tree:
 
-| Accepted                                                  | Shipped at this base                                                                                              | Where                                                                                                                                                          |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| four commands                                             | **three** — `acknowledgeAmbiguity`, `cancelRun`, `retryRun`                                                       | `packages/compiler/src/reaction/durable-kernel.ts:120`                                                                                                         |
-| `drainRuntime`                                            | **absent by that name.** `beginDrain()` is an internal lifecycle method reachable only through `close()`          | `packages/runtime/src/durable/worker.ts:270`, driven at `packages/runtime/src/application/index.ts:592` and `packages/compiler/src/runtime/application.ts:489` |
-| exact identity, bounded reason, idempotency, typed winner | shipped                                                                                                           | `packages/runtime/src/durable/postgres-maintenance.ts`                                                                                                         |
-| expected-version fencing                                  | shipped — `inspect()` reports the run's append-only history length, stale commands refuse with `VERSION_MISMATCH` | `postgres-maintenance.ts` `staleVersion`                                                                                                                       |
-| append-only audit                                         | shipped — `durable_maintenance_commands` carries the same guard as run history                                    | internal protocol v4                                                                                                                                           |
-| **maintenance Authority**                                 | **not evaluated.** `actorOf` accepts a `Principal` and checks only `principalKernel.is(actor)` — a brand check    | `packages/runtime/src/durable/postgres-maintenance.ts:192`                                                                                                     |
+| Accepted                                                  | Shipped at this base                                                                                                              | Where                                                                                                                                                          |
+| --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| four commands                                             | **three** — `acknowledgeAmbiguity`, `cancelRun`, `retryRun`                                                                       | `packages/compiler/src/reaction/durable-kernel.ts:120`                                                                                                         |
+| `drainRuntime`                                            | **absent by that name.** `beginDrain()` is a lifecycle method; in the compiled application it is reachable only through `close()` | `packages/runtime/src/durable/worker.ts:270`, driven at `packages/runtime/src/application/index.ts:592` and `packages/compiler/src/runtime/application.ts:489` |
+| exact identity, bounded reason, idempotency, typed winner | shipped                                                                                                                           | `packages/runtime/src/durable/postgres-maintenance.ts`                                                                                                         |
+| expected-version fencing                                  | shipped — `inspect()` reports the run's append-only history length, stale commands refuse with `VERSION_MISMATCH`                 | `postgres-maintenance.ts` `staleVersion`                                                                                                                       |
+| append-only audit                                         | shipped — `durable_maintenance_commands` carries the same guard as run history                                                    | internal protocol v4                                                                                                                                           |
+| **maintenance Authority**                                 | **not evaluated.** `actorOf` accepts a `Principal` and checks only `principalKernel.is(actor)` — a brand check                    | `packages/runtime/src/durable/postgres-maintenance.ts:130`                                                                                                     |
 
 BETA-08 disclosed this rather than hiding it: its narrower claim 8 names the
 absent Authority evaluation and assigns it to the minimal Studio slice, and the
@@ -64,8 +70,9 @@ case. The two agree, so the boundary is unambiguous.
 
 **BETA-09 therefore owns three gaps against the accepted maintenance
 contract**, and nothing else in the kernel. The third was found while grounding
-the decisions in `maintenance-decisions.md` and was not surfaced by any of
-BETA-08's four review rounds:
+the decisions in `maintenance-decisions.md`. BETA-08's round 3 had examined that
+property and accepted it on evidence that does not hold, so this is a correction
+to an accepted review rather than a new discovery:
 
 1. Maintenance Authority for the three shipped commands. A brand proves the
    value came from the application's own module; it proves nothing about
@@ -92,7 +99,7 @@ BETA-08's four review rounds:
 There is an unmerged design handoff at worktree
 `/home/drepkovsky/code/questpie-v4-minimal-studio-handoff`, branch
 `research/minimal-studio-handoff-20260815`, dated 2026-08-15: sixteen files and
-about 2,283 lines under `docs/v4/research/minimal-studio-handoff/`. It is
+about 2,204 lines of Markdown under `docs/v4/research/minimal-studio-handoff/`. It is
 labelled "research, not accepted UI or implementation authority," it separates
 fixed authority from reversible defaults, and it carries seventeen open owner
 decisions in its own `OPEN-DECISIONS.md`.
@@ -123,10 +130,14 @@ The concrete deltas the implementing slice must reconcile:
   `:191`) living on `realtime_binding_generations`, which is not an event log:
   generations are hard-deleted rather than tombstoned
   (`packages/runtime/src/live-query/postgres-realtime-generations.ts:129`), and
-  scope attachments carry a CHECK-pinned 30-second TTL
+  a superseded generation is deleted at once, and idle scope attachments carry a
+  CHECK-pinned 30-second renewal TTL
   (`internal-protocol-v3-realtime.ts:16`, `:43`). Studio can show the current
   reset reason for a currently live subscription and nothing older. A "Live
-  Query resets" tile would be a count over a 30-second window.
+  Query resets" tile would have no history behind it at all. An earlier
+  revision described this as a thirty-second window, which conflated two
+  mechanisms: the TTL runs from the last renewal, so a live subscription never
+  expires, while a superseded generation is gone immediately.
 - **BETA-08** made run, attempt, lease, effect, cancellation, and the
   maintenance audit real — **and dropped budgets that nothing enforces**.
   `activeAttemptsPerPrincipal`, `pendingRunsPerResource`,
@@ -136,10 +147,12 @@ The concrete deltas the implementing slice must reconcile:
   path enforces. That is the exact failure BETA-08's first review round
   blocked, one layer up.
 
-The handoff's recommended Overview tiles include "Reaction ambiguity" and
-"Live Query resets," both of which are now genuinely available. Its freshness
-and retention treatments (its Q7 and Q8) are the ones that need re-grounding
-against the dropped retention block.
+Of the handoff's recommended Overview tiles, "Reaction ambiguity" is genuinely
+available and "Live Query resets" is not, for the reason recorded in the
+BETA-07 bullet above. An earlier revision of this record listed both as
+available; that was wrong. Its freshness and retention treatments, its Q7 and
+Q8, are settled in `freshness-and-provenance.md`, which replaces the whole
+per-source freshness idea with per-answer provenance.
 
 ## Identities
 
@@ -202,11 +215,21 @@ independently. `tenant_id` appears in **no index**: the three on `durable_runs`
 are `(application_name, state, available_at, run_id)`,
 `(application_name, state, lease_expires_at)`, and
 `(application_name, resource_identity, state)`
-(`internal-protocol-v4-sql.ts:98`–`:103`). A tenant-first listing is a
-sequential scan at this base. Tenant remains the correct axis to _display_ and
-to scope authorization by; it is not yet an axis to _drive a query from_. Any
-tenant-scoped list must filter within a bounded slice selected by an indexed
-predicate, or the slice must take an explicit, measured exception.
+(`internal-protocol-v4-sql.ts:98`–`:103`).
+
+An earlier revision called a tenant-first listing a sequential scan. **Measured,
+it is not.** On PostgreSQL 17.10 with 207,000 runs across 300 tenants,
+`WHERE application_name='app' AND state='failed' AND tenant_id='t-7'` plans as
+an Index Scan with a filter — 0.31 ms, removing 1,993 rows to return 7. The cost
+scales with the _matching state set_, not with the table.
+
+So the correction is smaller than first stated and still points the same way:
+Tenant is the correct axis to display and to scope authorization by, and a
+tenant-scoped list is affordable today by filtering inside an indexed state
+predicate. A dedicated index becomes worthwhile when the failed set grows, not
+because the query is unusable now. Any tenant-scoped list must select through an
+indexed predicate first; the slice does not need a measured exception to ship
+one.
 
 Shipping an operator surface keyed on Principal would harden the wrong axis
 into the place operators look, and correcting it afterwards means changing a
@@ -405,10 +428,11 @@ disclosure) — plus `drainRuntime` and Studio's job-first purpose. Each is
 decided against what BETA-08 shipped rather than deferred, and each records the
 code that forces or fails to force it.
 
-The remaining thirteen decisions in
-`docs/v4/research/minimal-studio-handoff/OPEN-DECISIONS.md` are visual and
-navigational and do not bind the contract this slice implements; they are
-settled by the purpose decision and the screen work that follows it.
+The handoff carries seventeen open decisions, Q1 through Q17. This slice
+settles or reopens Q1, Q3, Q5, Q6, Q7, Q8, Q10, Q12, Q13, and Q14, so at most
+seven remain, and those are visual and navigational rather than contract-
+binding. An earlier revision said thirteen remained, which double-counted the
+ones this record had already settled twelve lines above.
 
 The three tenant-share items in
 `docs/v4/prototypes/tenant-share-control/DECISION.md` remain open and are not

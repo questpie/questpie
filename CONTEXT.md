@@ -25,7 +25,9 @@ library. A low-level Fetch embedding seam remains supported.
 ### Studio
 
 The optional inspector and operational control surface for one compiled
-QUESTPIE application. It reads the App Contract and Execution Envelope.
+QUESTPIE application. It reads the App Contract and Operational Facts.
+Application data it reads only as any client does, through generated Operations
+under Policy.
 
 Do not use: CMS Admin, Operator App framework, SQL console.
 
@@ -560,6 +562,15 @@ signal receipt. Arbitrary callback effects are not checkpoints.
 A persisted orchestration projection over the shared Durable Run kernel. It
 adds checkpoint history, durable timers, typed signals, and explicit semantic-
 version and executable compatibility; it is not a second runtime.
+
+### Operational Fact
+
+A fact about how one compiled application executed rather than about what it
+stores: Durable Run and Physical Attempt state, transitions, Effect Identities,
+Lease facts, and receipts. An operational record may carry application data as
+its payload, and carrying it never makes that payload an Operational Fact.
+
+Do not use: internal state, kernel row, telemetry.
 
 ### Execution Envelope
 

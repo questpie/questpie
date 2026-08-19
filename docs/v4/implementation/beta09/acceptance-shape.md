@@ -12,6 +12,12 @@ entries, 10 authority documents
 
 This record decides. It opens no slice branch and writes no production code.
 
+**Scope note.** Implementation for this slice lives on branch
+`feat/v4-beta-09` (worktree `/home/drepkovsky/code/questpie-v4-beta-09`), which
+is not merged to `feat/v4`. The commit carrying this record touches only
+`docs/`; the branch is where the code and its tests are. Where the two
+disagree, the branch is the evidence.
+
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
 ## The nine keys, and what BETA-09 puts in each
@@ -29,10 +35,75 @@ these — the validator rejects any other set.
   defined against it.
 - **`authorityDocuments`** ADR-0003, ADR-0014, ADR-0021,
   `docs/v4/implementation-gates.md`,
-  `docs/v4/runtime-client-envelope-and-studio.md`, and **the seven BETA-09
-  design records in this directory**. Each with a pinned `sha256`.
+  `docs/v4/runtime-client-envelope-and-studio.md`, and **every BETA-09 design
+  record in this directory**. At the time of writing that is nine files, the
+  eight `README.md` enumerates plus `README.md` itself; an earlier revision said
+  seven, which predated two of them. Pin the list by enumerating the directory
+  at manifest time rather than by carrying a count, and give each a `sha256`.
+- **`authorityDocuments` digests are read at the reviewed head**, not at `HEAD`
+  or from the working tree. The builder runs
+  `git show <reviewedHead>:<path>` and fails on
+  `authority document digest mismatch`
+  (`.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts:224`–`:231`).
+
+  **This is what makes repinning unavoidable, and BETA-08 paid it three times** —
+  `8f538203`, `baea3450`, and `d0aedd54` are all "repin the acceptance manifest".
+  Any commit that touches a pinned document after the digests are computed
+  invalidates them, including a commit that only repairs a record. Compute
+  digests last, and treat the manifest commit as the reviewed head. Every entry
+  must also be exactly `{name, path, sha256}` with a 64-hex digest and a unique
+  path.
+
+- **The packet is scanned for secrets**, both every authority document and the
+  manifest itself, and a match fails the build — `database URL` and
+  `credential assignment` are the guarded classes
+  (`acceptance-packet-secrets.ts:77`, `:93`). A local PostgreSQL URL is
+  permitted; anything else in that shape is not. Worth knowing before pinning a
+  document that quotes a connection string as an example.
 - **`reviewOutput`** the round's record path. Preserve every review record
-  byte-identically and add each to `quality/format-baseline.txt`.
+  byte-identically and add each to `quality/format-baseline.txt`. **The path
+  must not already exist** — `requireAbsentReviewOutput` runs before the
+  transport (`.agents/skills/questpie-v4/scripts/acceptance-review.ts:104`), so a
+  round cannot be re-run into an occupied path. That is why BETA-08 carries four
+  differently named records for four rounds:
+  `claude-initial-review.json`, `claude-review-02.json`, `claude-review-03.json`,
+  and `REVIEW-04.json`. Each repaired head needs a **fresh** `reviewOutput` path
+  as well as recomputed document digests, and the two are easy to remember
+  separately and forget together.
+
+### The dry run is free and validates everything
+
+`--dry-run` runs the whole path — manifest decode, ancestry, document digests,
+secret scan, verification semantics, and the review-output absence check — then
+prints the packet summary and exits **before any model call**
+(`acceptance-review.ts:114`–`:126`). Every rule in this section fails there
+rather than in a review round.
+
+That is worth stating plainly because knowing the rules has not been enough.
+BETA-08 knew the digest rule and repinned three times anyway, because each
+repair arrived after the digests were computed. The sequence that actually pays
+is: repair, then compute digests, then commit, then dry run, and only then spend
+the call.
+
+- **`verification`** every entry must be exactly `{command, result}` and
+  **`result` must be `"PASS"`**. The validator rejects the whole manifest
+  otherwise — `every verification entry must be PASS`
+  (`.agents/skills/questpie-v4/scripts/acceptance-review-packet.ts:137`–`:145`),
+  and it fails the packet build, before any model call.
+
+  **This is a trap for this slice specifically.** A lane that is pending cannot
+  be recorded here at all. BETA-08's round 4 observed exactly this shape — both
+  CI lanes sat at `PENDING_CI` in its baselines while the manifest said nothing
+  about the Gate 10 selected-PR and nightly lanes being unmet — and BETA-09 owns
+  a Studio build-size and query-latency baseline plus a stable-runner budget
+  report, which are the lanes most likely to be incomplete when the manifest is
+  first written.
+
+  So a lane that has not passed is not a verification entry with a different
+  result; it is **not a verification entry**, and it belongs in the narrower
+  claims instead, named as unmet. Omitting it silently is what a reviewer
+  finds.
+
 - **`proof`** one paragraph: what the slice demonstrates end to end.
 - **`verification`** every gate command with its result, including the
   PostgreSQL matrix and the pinned tsc gate over changed test files.
@@ -53,6 +124,22 @@ reasoning rather than against the prose.
    Falsifiable: `actorOf` today checks only a brand
    (`packages/runtime/src/durable/postgres-maintenance.ts:192`). →
    `maintenance-decisions.md` Q3, `hostile-cases.md` case 5.
+   **Criteria 1, 2 and 3 carry a reachability caveat, verified after they were
+   written.** `packages/runtime/src/application/index.ts` contains no reference to
+   `durable`, so the Fetch router exposes no durable route and the operational
+   surface is in-process only. Every demonstration of these three therefore runs as
+   host code that **supplies its own `Principal`**. That proves the decision is
+   evaluated, the denial is typed, and the audit records the attempt. It cannot
+   prove the property the criteria exist for — that a caller who should not pass
+   does not — because the only caller is trusted by construction and could equally
+   have asserted an Authority that passes.
+
+This is stated here rather than left for a reviewer to find, because a criterion
+demonstrated by a weaker case than it claims is what previous rounds blocked on.
+The evidence for these three should say plainly which half it proves. See the
+qualifier in `maintenance-decisions.md`; the caveat expires the moment a durable
+route exists.
+
 3. **Denial specificity follows the missing Authority.** A caller without
    inspection Authority cannot distinguish denial from absence; a caller with
    inspection but not maintenance Authority receives a specific denial. →
@@ -71,7 +158,8 @@ reasoning rather than against the prose.
    asserts the absence of result and receipt explicitly, so a later widening is
    a visible diff in a digested artifact. → `inspection-contract.md` D1.
 7. **`relational-nondisclosure.json` joins the verified set.** It is compiled
-   today and consumed nowhere. → `inspection-contract.md` D2.
+   today, byte-verified through the build inventory, and read by nothing. →
+   `inspection-contract.md` D2.
 8. **The surface is exactly four reads plus one worklist.** No additional read
    shapes, no raw SQL, no internal-table CRUD. → `inspection-contract.md` D3.
 9. **The worklist is bounded and index-backed.** Keyed on
@@ -113,6 +201,25 @@ reasoning rather than against the prose.
 
 Fixed now so the implementing slice does not have to rediscover them:
 
+- **The maintenance commands cannot reach the wire in this slice, and the reason
+  is outside it.** Exposure is binary — `network: true` puts an Operation in the
+  generated browser client (`packages/compiler/src/model.ts:264`,
+  `packages/compiler/src/runtime/client.ts:55`) — and BETA-08's accepted
+  criterion 13 forbids a durable control plane there. The two alternatives are
+  both unbuilt: a Route has a generated factory and no dispatch, mounting, or
+  `routes` projection, which ADR-0014:32 assigns to ADR-0015's slice; and a
+  third exposure state is new authoring surface for an ADR. See
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` and
+  `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`.
+
+  **So this slice should scope the command half as deferred and name the owner,
+  rather than carry criteria it cannot satisfy.** The inspection _reads_ are
+  unaffected — Queries are wired, so they work over the wire today with
+  handler-evaluated Authority. Only the commands are blocked, and no accepted
+  slice currently owns the unblocking work. A criterion asserting a
+  wire-reachable command would be false at acceptance for a reason no repair
+  inside BETA-09 can close.
+
 - **`questpie explain` is not built.** Accepted authority names it in ADR-0014,
   ADR-0019, and `docs/v4/implementation-gates.md`. The byte-parity hostile case
   is reframed onto the two producers that exist.
@@ -122,7 +229,7 @@ Fixed now so the implementing slice does not have to rediscover them:
   and its absence is stated rather than drawn.
 - **The receipt lane is unreachable.** `mutation_call_receipts.committed_at` is
   durable and never pruned, and no public read exists.
-- **Live Query reset history survives roughly thirty seconds.**
+- **Live Query reset history is not retained.**
 - **The maintenance audit is not globally listable** at acceptable cost;
   `run_id` precedes `requested_at` in its index.
 - **The redacted-envelope hostile case is structurally satisfied already** and
@@ -140,3 +247,28 @@ hostile to an authorized reader, and a uniformly specific one leaks existence.
 Merging them hides that tension. What would overturn it: a reviewer judging the
 manifest padded, in which case 3 folds into 1 and the tension moves into
 criterion 1's wording.
+
+## The criteria this record was missing
+
+Issue #296 carries a Budgets block and a Performance ownership block that no
+criterion above mapped. An acceptance manifest that omits the ticket's own
+budget contract is the failure this record exists to prevent, so they are added
+here rather than left to the implementing slice to rediscover.
+
+18. **The changed loop stays under 5 s**, measured rather than asserted.
+    BETA-08's round 4 observed this budget had gone two slices without a
+    recorded measurement; this slice either measures it or stops carrying it.
+19. **Studio build-size and query-latency baselines are recorded**, with each
+    budget derived mechanically as `ceil(observed × multiplier / quantum) ×
+quantum` and the derivation asserted in-test, the way BETA-08's were.
+20. **No secret or raw-payload snapshot enters any baseline or golden.** This is
+    the performance-evidence counterpart of the disclosure decision: a
+    build-size or latency artifact must not embed a result body or a receipt.
+21. **The same-origin Studio bundle exists and matches the accepted contract** —
+    one of the issue's own acceptance criteria, previously unmapped.
+22. **The slice is independently demoable through its stated fixture** — the
+    other previously unmapped issue criterion.
+
+The performance manifests this slice owns are the Studio build-size and query
+baseline measurement manifest, and the BETA-09 stable-runner budget report.
+Both are named by the issue's Performance ownership block.

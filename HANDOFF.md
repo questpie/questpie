@@ -90,7 +90,10 @@ capabilities, never durable authority or a provider matrix.
 ## Workspace and preservation
 
 - Main authority worktree: `/home/drepkovsky/code/questpie-v4`, branch
-  `feat/v4`, accepted merge head `0d1f35dd8685fdeb55c76547a6775df994f41315`.
+  `feat/v4`, latest accepted merge head
+  `8389cf5f80b1e2a4684dfb00faa10bcd83c93605` (BETA-08, PR #320). An earlier
+  revision of this line still named BETA-06's merge `0d1f35dd`, two accepted
+  slices behind.
 - The accepted BETA-02 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-02`, branch `feat/v4-beta-02`.
   Reviewed implementation head `dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
@@ -127,6 +130,13 @@ capabilities, never durable authority or a provider matrix.
   reviewed head `d0aedd54dc6420b48e632590a6c2319f8516bc9f` and evidence
   head `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce`. PR #320 merged it to
   `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`; issue #295 is closed.
+- **In progress, not accepted:** the BETA-09 implementation worktree is
+  `/home/drepkovsky/code/questpie-v4-beta-09`, branch `feat/v4-beta-09`. It
+  carries unmerged production source and its own working-tree changes. It forked
+  from `219758a4`, before several correction commits landed on `feat/v4`, and
+  both sides have since edited the same BETA-09 records — read
+  `docs/v4/implementation/beta09/README.md` before touching it. Do not discard
+  or reset this worktree.
 - The pre-consolidation projection is recoverable at archive commit
   `90288796` on branch `archive/v4-pre-consolidation-20260814`.
 - The unrelated marketing worktree `/home/drepkovsky/code/questpie`, branch
@@ -201,6 +211,26 @@ Do not skip a blocked issue or parallelize dependent implementation.
   correct for the slice and leaves the durable kernel pinning no
   noisy-neighbour budget at all; `durable_runs` stores `tenant_id` while
   admission orders only by `(available_at, run_id)`.
+- #295 second lesson, from auditing round 4's twelve observations against the
+  tree: **grep-shaped conclusions failed three times in one audit, in three
+  different directions, for three different actors.** The pattern is concluding
+  from the presence or absence of a _name_ what can only be concluded from
+  reading the _code_.
+  - _Absent name, wrong "no"._ `relational-nondisclosure.json` is named nowhere
+    in `artifact-files.ts`, which read as "nothing verifies it". It is verified,
+    through `build.inventory`, which covers every generated file without naming
+    any. Settled on `feat/v4-beta-09` by tampering with the artifact and
+    asserting the refusal, rather than by reading a second time.
+  - _Present name, wrong "yes"._ `"durable maintenance requires a trusted
+Principal"` matches a test, which read as coverage. That test trips the
+    Execution root's brand check in a different file on a different code path.
+  - _Present name, wrong subject._ Five `"fenced"` assertions exist, which read
+    as the fence being driven. All five are kernel surfaces; the effect ledger's
+    separate compare-and-set has none.
+    The cheap defence is the one the branch used: when a claim is about whether
+    something is _enforced_, break it and assert the failure. A test that breaks
+    the thing cannot be satisfied by a name appearing somewhere. Reading is for
+    finding candidates, not for settling enforcement.
 - #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
   across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
   forward conformance, and the selected-PR PostgreSQL microbenchmark gate, which
@@ -208,6 +238,89 @@ Do not skip a blocked issue or parallelize dependent implementation.
   PostgreSQL 16/17/18 measured 105/105/108 passing with zero failures across 26
   beta08 scenario tests; `bench:micro` measured 400.075 ms against a 2500 ms
   budget and `test:load` 330.045 ms against 2000 ms.
+- #295 review round 4 left one observation unexplained: PostgreSQL 18 reports
+  three more passing tests than 16 and 17, with no note on which are
+  version-gated. **Closed, and verified against the tree.** They are the three
+  cases in `tests/integration/postgres/beta02-catalog-reader.test.ts` gated by
+  `test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")` — "rejects a
+  PostgreSQL 18 NOT ENFORCED check constraint", "rejects PostgreSQL 18 PERIOD
+  constraints", and "rejects a non-inherited PostgreSQL 18 NOT NULL catalog
+  constraint". Each drives a construct that exists only in 18, so on 16 and 17
+  there is nothing to reject and the assertion would target a feature the server
+  cannot express. The difference is evidence the version gate works rather than a
+  coverage gap, and the same shape should be expected of any future matrix rather
+  than read as drift.
+- #295 review round 4's first observation is **correct, and verified here**.
+  Criterion 4 claims that "every heartbeat, terminal transition, and effect write
+  compares the current attempt and the lease token." The effect write is a
+  genuinely separate compare-and-set —
+  `packages/runtime/src/durable/postgres-effects.ts:86`, a
+  `SELECT 1 AS held ... AND current_attempt_id = $3 AND lease_token_digest = $4`
+  — and nothing drives it. All five `"fenced"` assertions in
+  `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces:
+  `succeed`, `fail`, `cancel`, and `heartbeat` at `:160`–`:179`, and the
+  `succeed`-versus-`cancel` race at `:344`. `DurableLeaseLost`, the error the
+  effect handle raises when fenced, appears in no test at all. So one quarter of
+  that criterion rests on code reading. The review judged it benign under
+  at-least-once, which is defensible — a stale `reserve` only prevents a
+  redundant provider call — but the fence exists to prevent a stale holder
+  settling an effect the fresh holder is also performing, and the cost of proving
+  it is one test. Whoever next touches the effect ledger should add it.
+- #295 review round 4's item 10 is labelled "carried forward unchanged, fourth
+  round" and was re-listed without re-verification. **Checked: it is a mix of
+  live and already-closed claims**, so it must not be treated as a live
+  checklist.
+  - _Stale._ It says `postgres-maintenance.ts::appendEvent` inserts
+    `bumped?.sequence` with no null guard. `bumped` exists only in
+    `packages/runtime/src/durable/rows.ts` and is guarded at `:146` before use at
+    `:155`; the maintenance file has none. Round 3's repair routed the audit
+    append through the one shared writer and removed it, and the observation
+    describes the code before that.
+  - _Closed since._ It says `quality/format-baseline.txt` pre-registers
+    `REVIEW-04.json` while the file is absent. The record was committed with the
+    acceptance; both now exist.
+  - _Live._ `tests/integration/postgres/helpers/beta08-durable.ts:186` still
+    terminates every other backend on the database in a retry loop. Nothing
+    in-tree proves the PostgreSQL lane is sequential, so this remains a real
+    hazard for anyone running that suite beside another consumer.
+    A reviewer re-listing prior observations without re-checking them produces a
+    list whose currency cannot be assumed. Anything carried forward from an earlier
+    round should be re-verified before it is acted on or repeated.
+- #295 round 4's lock-order inversion observation is **refuted**. It carries
+  forward a claim that `durable_effects` → `durable_runs` in the effect ledger
+  inverts `durable_runs FOR UPDATE` → `durable_effects` in maintenance, leaving a
+  deadlock untested. Checked: **the effect ledger takes no row lock on
+  `durable_runs` at all.** `FOR UPDATE` appears nowhere in
+  `packages/runtime/src/durable/postgres-effects.ts`; its only `durable_runs`
+  access is the plain fence `SELECT 1 AS held` at `:86`, and a bare `SELECT`
+  under READ COMMITTED acquires no row lock. Its writes are confined to
+  `durable_effects` (`:113`, `:150`, `:177`). `FOR UPDATE` appears once in the
+  whole durable surface, at `postgres-maintenance.ts:111` inside `lockRun`. Two
+  transactions cannot deadlock by acquiring resources in opposite order when one
+  of them never acquires the first resource, so the named inversion is not
+  reachable. Two caveats stated rather than glossed: a bare `SELECT` still takes
+  an `ACCESS SHARE` table lock, which conflicts only with DDL and not with these
+  paths; and this refutes the _claimed_ inversion, not deadlock in general.
+- #295 round 4's observations 3 and 9 are both **confirmed**, and both are the
+  same shape as the effect-fence gap: declared, implemented, undriven.
+  - _The maintenance brand refusal has no driving case._ `actorOf` throws
+    "durable maintenance requires a trusted Principal", and the only test
+    matching that string is
+    `tests/integration/beta03-execution-services.test.ts:450`, which passes
+    `{...} as never` into a **runtime execution** and trips the Execution root's
+    own brand check. Same wording, different code path. A grep for the message
+    looks like coverage and is not — which is the same trap as reading for a name
+    instead of reading the code. This compounds with the Q3 qualifier in
+    `docs/v4/implementation/beta09/maintenance-decisions.md`: the brand is both
+    untested and, since the only caller is in-process and mints its own
+    `Principal`, weaker than it reads.
+  - _The `cancellationRequested` event is appended and never read back._ Event
+    kinds are asserted from `events()` at
+    `tests/integration/postgres/beta08-durable-kernel.test.ts:204`, `:308`, and
+    `:812`, and `cancellationRequested` appears in none of them. The two hits at
+    `:340` and `:745` assert the **field** on `inspect()`, not the **kind** in
+    the history. So criterion 16's "every declared event kind is appended" holds
+    by execution and not by assertion for this one.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
@@ -417,12 +530,75 @@ Do not skip a blocked issue or parallelize dependent implementation.
   historical file and permits no new drift. Knip report baseline is 17 unused files, two dependency groups,
   and three unused exports; these noisy classes remain report-only.
 
+## Open cross-slice findings
+
+Recorded during BETA-09 design work, verified against the tree, and **owned by
+nobody yet**. Each names its owner and takes no decision. They live under
+`docs/v4/prototypes/` and are listed here because the skill routes here first
+and would otherwise never surface them.
+
+- **`authority.isSystem()` can never be true at runtime.** The public
+  `Authority` type has one member and the only construction site always builds
+  it, while the glossary, the relational layer, and the Policy authoring surface
+  all assume two classes. The collaboration fixture's membership Policy is
+  therefore satisfied by nobody, expressed as though it were satisfied by system
+  callers. `docs/v4/prototypes/authority-contract-gap/FINDING.md`
+- **Context bootstrap is a third read path with no Policy.** It is tightly
+  bounded — one row, exact primary key, explicit selection — and its bounds are
+  documented. What is not documented is that a bootstrap read's safety depends
+  entirely on the provenance of its key values, a property the accepted
+  projection's own example demonstrates without naming. Same record.
+- **Durable admission scans the whole eligible set.** The `OR` between the two
+  eligibility branches defeats `durable_runs_claim_idx`; three index-ordered
+  branches merged run 31× faster on 50,000 ready runs. Measured.
+  `docs/v4/prototypes/tenant-share-control/MECHANISM.md`
+- **The runtime enforces no server-side statement or lock timeout.** Two
+  accepted bounds are client-side hopes, measured: a client cancel leaves the
+  backend running, and only `pg_cancel_backend` stops it. Maintenance can block
+  without bound on `FOR UPDATE`.
+  `docs/v4/prototypes/statement-timeout-gate/DECISION.md`
+- **The accepted budget table measures on the wrong axis.** It bounds a
+  Principal where the glossary makes Tenant the isolation identity.
+  `docs/v4/prototypes/tenant-share-control/DECISION.md`
+- **The Studio packaging fork is narrower than it looks.** Studio is optional in
+  ADR-0003 and the glossary, so always-bundled-with-no-opt-out is unavailable;
+  and assets inside the checksum-verified Runtime bundle inherit its integrity
+  guarantee while assets read from a resolved root at request time do not.
+  `docs/v4/prototypes/studio-packaging/FINDING.md`
+- **Four of seven authoring factories have no runtime behind them.** Action,
+  Job, Workflow, and Route are generated names with no module under
+  `packages/runtime/src`. Deferred by accepted authority and not a defect, but it
+  caused three separate corrections in one record set, because an authored name
+  is not evidence of a runtime.
+  `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`
+- **Three accepted durable properties are driven by no test.** The effect fence,
+  the maintenance brand refusal, and the `cancellationRequested` event are each
+  named in a criterion, present in code, and asserted by nothing. Each has a
+  falsification written out — what to break and what must then fail.
+  `docs/v4/prototypes/durable-evidence-gaps/FINDING.md`
+
+This list is maintained by hand and has already gone stale once. Treat
+`ls docs/v4/prototypes/` as authoritative for what exists.
+
 ## Next invocation
 
+BETA-09 issue #296 is the active frontier. Its design record set is committed on
+`feat/v4` under `docs/v4/implementation/beta09/`, starting at `README.md`, and
+implementation is already under way on branch `feat/v4-beta-09`.
+
+**Read `docs/v4/implementation/beta09/README.md` before touching that branch.**
+It records a merge hazard: the branch forked at `219758a4`, before several
+correction commits landed on `feat/v4`, and both sides have since edited the
+same records. The branch still carries defects that were found and verified
+against the tree, including an inspection projection specified wider than the
+kernel read it claims to narrow. Rebasing the branch is cheaper now than
+resolving it at merge time.
+
 ```text
-Use the repo-owned QUESTPIE v4 skill. Implement and accept BETA-07 issue #294
-from merge base `0d1f35dd8685fdeb55c76547a6775df994f41315` without widening
-its bounded Change Ledger and Message Query watch tracer. Preserve the
-#289/#290/#291/#292/#293 review evidence, docs-hygiene branch, marketing
+Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
+`feat/v4-beta-09`, rebasing it onto current `feat/v4` first and preserving every
+correction listed in `docs/v4/implementation/beta09/README.md`. Do not reopen
+the decisions in that record set; extend or correct them only on new evidence.
+Preserve the #289–#295 review evidence, the docs-hygiene branch, marketing
 worktree, scalar-research worktree, Studio handoff worktree, and archive branch.
 ```

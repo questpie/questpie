@@ -246,17 +246,94 @@ So this does not become a general quota engine:
 - No group partitioning or per-tenant FIFO in this decision.
 - No provider-quota modelling behind the effect ledger.
 
-## Open for confirmation
+## The three remaining choices, decided
 
-Everything above is grounded in the tree or in accepted authority except three
-choices that are genuinely the product owner's:
+An earlier revision left these open for the product owner. They are decided
+here rather than deferred, and each records what would overturn it. One of them
+is settled by evidence that did not exist when the question was first written.
 
-1. **Backlog refusal couples write availability to background pressure.**
-   Recommended and argued above; confirm, or take the degrade-then-refuse
-   variant knowing it is a second mechanism.
-2. **Placing the mechanism in BETA-10 widens that slice** from "correctness
-   under ten instances" to "correctness and fairness under ten instances."
-   Confirm, or accept a new interstitial gate and a second harness.
-3. **Whether the statement-timeout finding is pulled forward** independently of
-   all of this. It is cheap, it is a defect against already-accepted bounds,
-   and it does not need this decision to land.
+### 1. Backlog is refused at acceptance, inside the Mutation transaction
+
+The business write rolls back with the dispatch, and the caller sees
+`RESOURCE_LIMIT`.
+
+The original argument stands: ADR-0013's invariant is that business rows,
+Change Ledger facts, audit, dispatch state, and the Mutation receipt "commit or
+roll back together," so a dispatch that is accepted and shed later returns a
+receipt for work that will not happen. That breaks the receipt, not merely the
+run.
+
+**What settles it is a fact found afterwards, during BETA-09 design work: there
+is no retention sweeper anywhere.** No `DELETE` exists against any `durable_*`
+table in the tree (`docs/v4/implementation/beta09/freshness-and-provenance.md`).
+BETA-08 dropped the retention block because nothing enforced it, and nothing
+enforces it now. So an admitted-then-shed run's row, its history, and its
+dead-letter cost are not merely paid early — they are paid **permanently**. The
+degrade-then-shed variant pays unbounded storage to avoid a bounded refusal.
+
+The cost is real and stays stated: a tenant that floods its own queue starts
+failing its own writes. That is the correct blast radius, since the tenant that
+caused it absorbs it.
+
+**What would overturn it:** a retention sweeper landing, which would make shed
+runs reclaimable and reopen the trade on its original terms.
+
+### 2. BETA-10 owns the mechanism, and its red test gains a clause
+
+Not a new interstitial gate.
+
+BETA-10 already owns the ten-instance fixture, concurrent schedulers and
+workers, arbitrary routing, and — per its own budget list — "strict
+ten-instance budgets owned on tagged stable runner"
+(`docs/v4/prototypes/implementation-collapse-p16/QUEUE.json`). Fairness is
+proven by measuring distribution across tenants under exactly that
+fleet-under-contention setup. The apparatus is already there.
+
+A separate gate would stand up a second ten-instance harness to answer a
+question the first one is already configured to ask. That is the duplication
+the original record warned about, arriving by a different route.
+
+The honest cost: BETA-10's red test is currently "correctness depends on sticky
+routing, a leader, process registry, cache, broker or one instance retaining
+connection state," which is a correctness question. Fairness is an allocation
+question. The red test gains a second clause rather than being replaced, and
+the slice's framing widens from correctness to correctness-and-allocation.
+
+**What would overturn it:** BETA-10's evidence turning out to be at capacity —
+though BETA-08's contention scenario measured 330.045 ms against a 2000 ms
+budget, so there is headroom — or the claim-predicate rewrite conflicting with
+BETA-10's existing "incompatible claim refusal" hostile case.
+
+### 3. The statement-timeout defect is pulled forward as its own interstitial gate
+
+Independently of everything above, and not folded into a tracer slice.
+
+Re-verified at this base: `configurePostgresTimeouts` exists
+(`packages/compiler/src/postgres-session.ts:39`) and is called only from
+`packages/compiler/src/schema/postgres/apply.ts:251` and
+`packages/compiler/src/seed/postgres/apply.ts:231`, both compiler DDL and seed
+sessions. `statement_timeout` appears nowhere in `packages/runtime/src`. Every
+runtime time bound is a client-side `AbortSignal` plus an advisory
+`query.cancel()`.
+
+So ADR-0013's "attempt timeout ... finite" and the Mutation's 5,000 ms budget
+are both accepted bounds that nothing server-side makes true. This is a defect
+against accepted authority, not a new feature, and it is independent of the
+isolation axis.
+
+**Why its own gate rather than folded in.** Setting a server-side
+`statement_timeout` changes behaviour for any legitimately slow query, and that
+change deserves its own measured evidence rather than arriving inside a slice
+about something else. The repository already has the pattern: #301 and #317
+were interstitial gates that did not count toward the native N=5 queue.
+
+**What would overturn it:** evidence that the runtime pool already inherits a
+server-side timeout from deployment configuration in every supported target, in
+which case the framework is right not to set one and the accepted bounds should
+say so instead.
+
+## What remains open
+
+Nothing in this record. The mechanism, its placement, and the independent
+defect are all decided. What is not decided here is anything BETA-09 owns —
+that slice's records are separate and complete.
