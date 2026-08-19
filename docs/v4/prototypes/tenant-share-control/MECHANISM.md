@@ -346,6 +346,39 @@ So the decision stands and now has evidence behind it: a backlog cap is a guard
 against unbounded growth, not an invariant, and claiming exactness it does not
 have is the failure mode this project keeps blocking on.
 
+## The precondition this mechanism assumes, stated because it is not enforced
+
+Fair admission gives each _eligible tenant_ a share of the batch. Nothing bounds
+how many tenants one actor can be eligible under.
+
+`tenant_id` is `text NOT NULL` with no cardinality constraint
+(`internal-protocol-v4-sql.ts:20`), and its value comes from the author's resolve
+step — `tenant: resolved.tenant`
+(`packages/runtime/src/execution/index.ts:284`), typed at `:36` from whatever the
+Execution resolved. The collaboration fixture derives it from a membership row,
+`context.tenant({ id: membership.companyId })`
+(`fixtures/collaboration/src/execution.ts:64`), which bounds it to the companies
+a Principal actually belongs to. **That is an application property, not a
+framework guarantee.**
+
+So the mechanism bounds runs per tenant, not tenants per actor, and its
+completeness as an answer to a noisy neighbour depends on tenants being
+expensive to obtain. Where an application resolves a caller-supplied value into
+`tenant`, one actor gets N shares for N values.
+
+**The decision is to state this as a precondition rather than to close it here**,
+and the decision record already points the same way: it places the request axis
+outside this mechanism and names a quota engine as a non-goal. Enforcing tenant
+cardinality would be admission control on the request axis wearing a fairness
+mechanism's clothes.
+
+What would overturn it: an accepted contract requiring `tenant` to be derived
+from stored authorization data rather than from Execution input, which would make
+the bound a framework property and worth asserting. Until then the honest
+reading of this record is "fair share among the tenants that exist", and the
+sentence "they are one mechanism with three surfaces" describes the durable axis
+only.
+
 ## What must not be built
 
 - **Group partitioning as a fairness mechanism.** One group per tenant

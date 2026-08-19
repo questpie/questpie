@@ -33,6 +33,21 @@ Base: `feat/v4` at `1d1cb53d`.
 | "Stops at the limit" overstated for the `running` branch         | see item 4 |
 | The five bare reads are not all operator-facing or unbounded     | see item 2 |
 | Three runtime readers of the 5,000 ms, not one                   | see item 5 |
+| Pool checkout unbounded and abort-blind                          | see item 6 |
+| Maintenance audit has no row bound                               | see item 7 |
+| Tenant cardinality is unbounded and unstated                     | see item 8 |
+
+**All twenty findings from the adversarial pair are now closed** — the twelve in
+the table above plus the eight raised as open. Counted rather than estimated: of
+the twenty, **fifteen were defects in these records** and are corrected in place,
+**four were runtime gaps** recorded in `durable-evidence-gaps/FINDING.md` §4–§7,
+and **one is closed as a stated precondition** rather than a fix.
+
+Every one was verified against the tree before being acted on. Two reported
+claims did not survive that check and were not recorded as findings: that
+`events` lacks a row bound (it has `CHECK (sequence BETWEEN 1 AND 1024)`), and
+that `freshness-and-provenance.md` contradicts `studio-purpose.md` on Live Query
+reset retention (both are supportable at their own precision).
 
 ## Open — verified, not yet acted on
 
@@ -109,16 +124,39 @@ wall-clock assertions around an uninterruptible await. Original below, unedited.
 assertions around an uninterruptible await, so the gate's conclusion holds, but
 an implementer needs to know there are three to reconcile.
 
+**6. CLOSED — recorded as a gap, not a record defect.**
+Verified `pool.reserve()` at `mutation/postgres.ts:173` takes no signal and runs
+after the budget is armed at `:159`, and `reserveConnection`
+(`relational/postgres.ts:29`–`:36`) is the same shape. Recorded in
+`durable-evidence-gaps/FINDING.md` §7 with a falsification. The tenant-share
+scoping of pool slots is right about sizing and wrong about the wait.
+
 **6. Pool checkout is unbounded and abort-blind.** `pool.reserve()` at
 `packages/runtime/src/mutation/postgres.ts:172`–`:173` takes no signal and runs
 after the 5,000 ms timeout is armed at `:159`. Sizing is the host's, but the
 _wait_ is framework code and the framework has an abort in hand it does not wire.
 A `statement_timeout` bounds the holder, not the queue.
 
+**7. CLOSED — recorded as a gap, with the gate's limit named.**
+Verified: `durable_events` carries `CHECK (sequence BETWEEN 1 AND 1024)` at
+`internal-protocol-v4-sql.ts:149` and `durable_maintenance_commands` has no
+equivalent among its five CHECKs; `record()` inserts for rejected commands from
+eleven sites; `audit()` has no `LIMIT`. Recorded in
+`durable-evidence-gaps/FINDING.md` §6, including that a `statement_timeout`
+makes this surface fail rather than bound.
+
 **7. The maintenance audit has no per-run row bound.**
 `durable_maintenance_commands` caps no count, and `record()` inserts for rejected
 commands from every rejection branch. A `statement_timeout` converts an unbounded
 read into a failing one rather than a bounded one.
+
+**8. CLOSED as a stated precondition, not a fix.** Verified that `tenant` comes
+from the author's resolve step (`execution/index.ts:284`, typed at `:36`) and
+that the fixture's membership derivation
+(`fixtures/collaboration/src/execution.ts:64`) is an application property rather
+than a framework guarantee. `MECHANISM.md` now states the precondition and says
+what would overturn it. Enforcing tenant cardinality is admission control on the
+request axis, which the decision record places outside this mechanism.
 
 **8. Fair admission bounds runs per tenant, not tenants per actor.** Nothing
 constrains the cardinality of `tenant_id`. Where one actor resolves to many

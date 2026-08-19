@@ -184,3 +184,57 @@ admission to ask it of.
 and assert its `available_at` is not before a healthy run's. For 5: refuse a
 claim, poll `admit()` twice, and assert the run does not appear in the second
 batch. Both fail against the tree today, which is the point.
+
+### 6. The maintenance audit has no row bound, and a timeout cannot give it one
+
+`durable_events` is bounded by CHECK —
+`durable_event_sequence_bounded CHECK (sequence BETWEEN 1 AND 1024)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:149`).
+`durable_maintenance_commands` has no equivalent. Its five CHECK constraints
+(`:213`–`:245`) cover the command name, the outcome, the rejection code, the
+outcome shape, and the actor kind. None bounds a count.
+
+`record()` inserts a row for **rejected** commands as well as applied ones, from
+eleven call sites in `packages/runtime/src/durable/postgres-maintenance.ts`
+(`:208`, `:218`, `:228`, `:269`, `:289`, `:299`, `:309`, `:325`, `:345`, `:362`,
+`:372`). Repeated rejected commands against one run therefore grow the table
+without limit, no sweeper deletes them — every
+`delete from questpie_internal.*` in `packages/*/src/` targets `change_ledger`,
+`retained_live_query_results`, or a `realtime_*` table — and `audit(runId)` reads
+all of them: `WHERE application_name = $1 AND run_id = $2 ORDER BY requested_at,
+command_id`, with no `LIMIT` (`postgres-maintenance.ts:384`).
+
+**Why this matters to the statement-timeout gate next door.** A
+`statement_timeout` on `audit` converts an unbounded read into a _failing_ read
+rather than a bounded one. The missing bound is on rows, and the gate only
+bounds time. This is the one surface where the gate makes the operator's
+experience worse rather than better, and
+`docs/v4/prototypes/statement-timeout-gate/DECISION.md` should not be read as
+covering it.
+
+**Falsification.** Issue N rejected maintenance commands against one run, then
+assert `audit(runId)` returns a bounded number of rows. It fails for every N.
+
+### 7. Pool checkout is unbounded and abort-blind, in framework code
+
+`packages/runtime/src/mutation/postgres.ts:173` is `await pool.reserve()` — no
+signal, no deadline — and it runs _after_ the 5,000 ms budget is armed at `:159`.
+The relational path is the same shape: `reserveConnection`
+(`packages/runtime/src/relational/postgres.ts:29`–`:36`) calls `pool.reserve()`
+and retries once on a closed connection, neither call signal-aware, invoked at
+`:80` after a single `throwIfAborted()` at `:79`.
+
+Pool _sizing_ is legitimately the host's — the framework takes `SQL` as a
+type-only import and never constructs the pool. But the _wait_ is framework code,
+and the framework declines to wire an abort it already holds.
+
+**This is the bound the tenant-share record files under "PostgreSQL pool slots |
+nowhere; the host owns the pool | non-goal for beta.1".** That scoping is right
+about sizing and wrong about the wait. It matters for share: a
+`statement_timeout` bounds the holder of a connection, not the queue for one, so
+a tenant parking N mutations behind the unbounded row lock recorded in the gate
+record still holds N slots while every other tenant waits in an uninterruptible,
+unordered queue.
+
+**Falsification.** Abort a Mutation's signal while every pool connection is
+held, and assert the call rejects. It waits instead.
