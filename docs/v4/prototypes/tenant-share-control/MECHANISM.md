@@ -122,9 +122,29 @@ grows without limit; implemented alone, backlog refusal protects storage but
 not share. They are one mechanism with three surfaces, which is the concrete
 form of the decision record's "do not split them across slices."
 
-`$sliceHint` is a hint, not a cap: it exists only to let the planner discard
-ranks that cannot reach the batch. It must be derived from the batch, not
-chosen — a fixed number would be a budget nothing enforces.
+`$sliceHint` bounds how many runs one tenant contributes to a batch. An earlier
+revision justified it on planner grounds — "it exists only to let the planner
+discard ranks that cannot reach the batch" — and measurement shows that is the
+weaker half of the story, stated as the whole of it.
+
+Measured on 50,200 ready runs across 201 tenants, varying only the filter:
+
+| Filter         | Rows the WindowAgg emits | Time    |
+| -------------- | ------------------------ | ------- |
+| `turn <= 8`    | 208                      | 21.1 ms |
+| `turn <= 1000` | 1,200                    | 19.3 ms |
+| none           | 50,200                   | 36.0 ms |
+
+So the filter's **presence** matters — removing it nearly doubles the query, and
+the run condition genuinely prunes the emission. Its **value** does not: 8 and
+1,000 are within noise of each other, and the larger bound was marginally
+faster. The scan and sort beneath are unchanged in all three.
+
+**So the hint must be derived from the batch for fairness, not for cost.** It is
+the bound on one tenant's contribution to a round: too large and a noisy tenant
+reclaims the batch it was meant to share, too small and the batch cannot fill. A
+fixed number chosen for planner reasons would be tuning the wrong property, and
+the planner is nearly indifferent between the values that matter for fairness.
 
 ## 2. Per-tenant in-flight concurrency
 
