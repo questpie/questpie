@@ -190,3 +190,31 @@ whether a running instance considers a build compatible. That belongs in the
 upgrade mechanics beside the protocol version bump, and an implementer working
 only from the two sites named above would discover it as a failing golden rather
 than as a planned step.
+
+## The upgrade mechanism was tested, not read
+
+The nullability argument turns on three mechanical claims. All three were driven
+against PostgreSQL 17.10 with the same guard shape the protocol uses — a
+statement-level `BEFORE UPDATE OR DELETE OR TRUNCATE` trigger raising `42501`.
+
+| Claim                                             | Result                                                                         |
+| ------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `ADD COLUMN` and `ADD CONSTRAINT` clear the guard | both returned `ALTER TABLE`                                                    |
+| a backfill `UPDATE` is refused                    | `ERROR: append-only`                                                           |
+| a `NOT NULL DEFAULT` is _mechanically_ available  | `ALTER TABLE` succeeded, and the pre-existing row read `reason = 'fabricated'` |
+
+The first two confirm the upgrade path: the DDL this record specifies runs
+against a guarded table, and the alternative that would let the column be
+`NOT NULL` is genuinely blocked.
+
+**The third is the one worth having.** The `DEFAULT` route is not impossible —
+it works, and it fills historical rows. So this record rejects it on judgment
+rather than on mechanism, and the probe shows exactly what that judgment is
+protecting against: an append-only audit row now carrying a reason no operator
+ever supplied, reading `fabricated`. Stating it as "impossible" would have been
+wrong and would have collapsed the moment anyone tried it.
+
+That distinction matters for how the decision survives review. A reviewer who
+finds a rejected option is actually available treats the rejection as uninformed;
+a reviewer who finds it available _and rejected for a stated reason_ has
+something to agree or disagree with.
