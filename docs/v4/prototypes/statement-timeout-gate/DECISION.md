@@ -178,7 +178,16 @@ into a slower unbounded wait, and a lock timeout alone still leaves the holder
 running forever.
 
 The durable claim path is unaffected because it uses `FOR UPDATE SKIP LOCKED`
-(`postgres-kernel.ts:504`), which never waits. This is specific to maintenance.
+(`postgres-kernel.ts:504`), which never waits. **That mitigation was measured
+too, rather than assumed, because it is what scopes the finding.** With one row
+held `FOR UPDATE` for four seconds, a concurrent `FOR UPDATE SKIP LOCKED`
+returned in **6 ms** with rows `[2,3]` — the held row skipped, no wait, no
+error.
+
+So the two halves of the lock analysis are both evidenced: maintenance waits for
+the holder's full duration with no timeout, and the claim path steps around a
+held row immediately. The finding is specific to maintenance, and that scoping is
+a measurement rather than a reading of the SQL.
 
 The compiler's helper already pairs the two timeouts and enforces
 `lockTimeoutMs < statementTimeoutMs`
