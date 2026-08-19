@@ -104,8 +104,16 @@ decision executes and the audit records it rather than that an adversary is
 stopped. `maintenance-decisions.md` carries the qualifier and
 `acceptance-shape.md` repeats it on the criteria themselves.
 
-**One unmeasured here:** criterion 18, the changed loop under 5 s. It is a
-budget rather than a behaviour and no manifest should assert it unmeasured.
+**Criterion 18 is now measured: 255 ms against a 5,000 ms budget.** A single
+source file edited, then `bun run check:changed`, which ran oxfmt over the one
+changed file, oxlint with `--deny-warnings`, and `git diff --check`. BETA-08
+carried this budget unmeasured through four rounds; it is closed here.
+
+_The first attempt measured 36 ms and was discarded._ It used `touch`, which
+changes no content, so git reported no diff and the script exited having done
+nothing — a measurement answering a different question than the one asked, which
+is the failure this repository keeps blocking tests for and which is easy to
+accept when the number flatters the budget.
 
 **Two remain genuinely out of reach**, and neither is a repair this slice can
 make: a wire-reachable maintenance command, which the binary exposure flag and
