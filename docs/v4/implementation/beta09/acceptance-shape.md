@@ -255,8 +255,23 @@ Fixed now so the implementing slice does not have to rediscover them:
 
 ## Judgment call
 
-Seventeen criteria against BETA-08's sixteen, with criterion 3 (denial
+**Twenty-two criteria against BETA-08's sixteen**, with criterion 3 (denial
 specificity) the one most likely to be judged as belonging inside criterion 1.
+
+An earlier version of this line said "seventeen", which was right when written:
+the section below, "The criteria this record was missing", later added 18
+through 22 from #296's Budgets and Performance blocks and this sentence did not
+move. Counted rather than estimated — 17 numbered items under "The criteria",
+5 under the later heading — and BETA-08's figure verified too: its accepted
+`acceptance-manifest.json` carries exactly 16.
+
+**The corrected comparison says something the old one hid.** Seventeen against
+sixteen reads as parity with the slice that took four review rounds. Twenty-two
+against sixteen is a materially larger acceptance surface, and the five that
+grew it are budget and performance criteria rather than behaviour. That is worth
+a reviewer's attention rather than being smoothed over: if this slice is judged
+too large, criteria 18 through 22 are the separable part, because they bind the
+ticket's budget contract rather than the inspection behaviour the rest describes.
 
 I am keeping it separate because it is the criterion most likely to be
 implemented wrongly in a way that still passes criterion 1 — a uniformly
