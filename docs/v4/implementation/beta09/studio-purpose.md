@@ -245,7 +245,21 @@ receipt is addressable by its call identity.
 
 - **"Who changed this row and why?"** No source. The Change Ledger carries no
   caller attribution.
-- **"Who cancelled what today?"** No source at acceptable cost.
+- **"Who cancelled what today?"** A scan, and the cost is now measured rather
+  than asserted. With only the shipped
+  `durable_maintenance_commands_run_idx (application_name, run_id, requested_at)`,
+  a global `ORDER BY requested_at DESC LIMIT 50` over 200,000 audit rows plans as
+  a parallel sequential scan with a top-N heapsort at **31.8 ms**. Adding
+  `(application_name, requested_at DESC)` makes the same query an Index Scan at
+  **0.072 ms**.
+
+  So "no source at acceptable cost", which an earlier revision said, is too
+  strong: 31.8 ms is usable. The accurate statement is that the feed is linear in
+  audit size from the shipped indexes, **and nothing prunes the audit** — there is
+  no retention sweeper against any `durable_*` table
+  (`freshness-and-provenance.md`), so that cost grows without bound and one index
+  removes it entirely. The decision to keep the audit per-run stands on the
+  accepted contract framing it that way, not on the scan being unaffordable.
   `durable_maintenance_commands_run_idx` is `(application_name, run_id,
 requested_at)` (`internal-protocol-v4-sql.ts:246`) — `run_id` is second, so a
   time-ordered global feed is a sequential scan. The audit is answerable per
