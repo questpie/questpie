@@ -280,9 +280,16 @@ the Q3 qualifier. Both copies of this file hold twenty-two criteria — seventee
 in the section above and these five — so the derivation is complete for what it
 covers and silent on 18 through 22.
 
-Some of the evidence already exists on that branch: it records **245,540 bundle
-bytes against a 327,680 budget** and a **0.151 ms worklist median against 5 ms**,
-which is most of what criterion 19 asks for. What is missing is the derivation
+Some of the evidence already exists on that branch, though **not at the figures
+its commit message gives, and an earlier revision of this section repeated them
+unverified.** The committed baseline
+(`feat/v4-beta-09:quality/baselines/beta09-studio-projection.json`) records
+`observed.studioBundleBytes` **243,941** against a 327,680 budget, and
+`observed.worklistMedianMs` **0.167** from samples `[0.142, 0.167, 0.255]`
+against a 5 ms budget — not 245,540 and 0.151. Both still pass their budgets
+comfortably, so the conclusion is unchanged and only the numbers were wrong.
+
+That is most of what criterion 19 asks for. What is missing is the derivation
 tying that evidence to these criteria, plus the 5 s changed-loop measurement in
 its flagged form (see `design-context.md`) and an explicit statement for criteria
 20, 21 and 22.
