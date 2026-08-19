@@ -141,6 +141,21 @@ Three consequences worth stating before the implementing slice hits them:
   did `ADD COLUMN protocol_version integer NOT NULL DEFAULT 5` — the variant
   that historically rewrote the table and is the one this note did not name.
 
+  **The rejection-CHECK step was measured too, because it is the migration's
+  other DDL and a different operation.** Widening
+  `durable_command_rejection_known` means `DROP CONSTRAINT` then `ADD
+CONSTRAINT`, and the second validates every existing row rather than only
+  touching the catalog. Against 50,000 rows seeded through the kernel path on
+  the same guarded table, with no `questpie.durable_kernel` setting: an
+  unguarded `INSERT` was refused first, then both statements succeeded.
+
+  The resulting constraint was checked for being live rather than merely
+  present, since a dropped-and-not-replaced constraint would also let the
+  migration "pass": it admits `AUTHORITY_DENIED` and `REASON_INVALID`, still
+  rejects an unknown code with a check-constraint violation, and appears exactly
+  once in `pg_constraint`. So both DDL steps this migration needs are verified,
+  not just the one this bullet originally named.
+
 - **The catalog must be regenerated from a live PostgreSQL catalog.**
   `internal-protocol-v4-catalog.ts` is generated, not hand-written; v5 needs the
   same treatment or verification will fail against a hand-edited approximation.
