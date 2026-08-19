@@ -156,8 +156,26 @@ awkward, and it is worth stating plainly rather than rediscovering.
 `lockRun` takes `FOR UPDATE` without `SKIP LOCKED`
 (`packages/runtime/src/durable/postgres-maintenance.ts:111`). Two concurrent
 maintenance commands against the same run therefore serialize, and the loser
-waits — with **no `lock_timeout` anywhere in the runtime**. The wait is
-unbounded.
+waits — with **no `lock_timeout` anywhere in the runtime**.
+
+**Measured, and the two gaps compound.** One session held a row `FOR UPDATE` for
+six seconds while another attempted the same lock: the waiter blocked for
+**5,706 ms**, the holder's full remaining duration, returned **no error**, and
+`SHOW lock_timeout` read **`0`**.
+
+So the wait is not unbounded in isolation — it is bounded by how long the holder
+holds. But the holder's duration is itself unbounded, because nothing sets a
+`statement_timeout` either. **Either gap alone is survivable; together the wait
+is genuinely without limit**, and a maintenance command can block behind a
+statement that will never be stopped.
+
+That is the argument for setting both rather than a convention borrowed from the
+compiler's helper. `resolvePostgresControl` already pairs them and enforces
+`lockTimeoutMs < statementTimeoutMs`
+(`packages/compiler/src/postgres-session.ts:29`–`:34`), which is the right shape
+for the same reason: a statement timeout alone converts an unbounded lock wait
+into a slower unbounded wait, and a lock timeout alone still leaves the holder
+running forever.
 
 The durable claim path is unaffected because it uses `FOR UPDATE SKIP LOCKED`
 (`postgres-kernel.ts:504`), which never waits. This is specific to maintenance.
