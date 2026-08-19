@@ -132,9 +132,10 @@ capabilities, never durable authority or a provider matrix.
   `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`; issue #295 is closed.
 - **In progress, not accepted:** the BETA-09 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-09`, branch `feat/v4-beta-09`. It
-  carries unmerged production source and its own working-tree changes. It forked
-  from `219758a4`, before several correction commits landed on `feat/v4`, and
-  both sides have since edited the same BETA-09 records — read
+  carries unmerged production source and its own working-tree changes. It **has
+  merged `feat/v4`** at `5066187a`, so the merge base is `4078c057` and the
+  divergence is seven documentation commits rather than the fork-point gap an
+  earlier revision of this entry described — read
   `docs/v4/implementation/beta09/README.md` before touching it. Do not discard
   or reset this worktree.
 - The pre-consolidation projection is recoverable at archive commit
@@ -629,10 +630,18 @@ a rebase.
 
 An earlier version of this paragraph said the branch forked at `219758a4` and
 still carried those defects, and told the next session to rebase. That was true
-when written and became false when the branch merged. It is corrected here rather
-than only in the slice README, because that is where it was first written and
-correcting only where a staleness is noticed is a failure this record set has now
-logged four times.
+when written and became false when the branch merged.
+
+**The commit that corrected it left a fifth copy of the same claim standing in
+this same file.** The workspace entry above restated the fork point in its own
+words, and the correcting commit never checked the rest of the file it was
+editing. The diagnosis is not that the stale text was worded too differently to
+find — it carried the same commit sha, and one `grep -n 219758a4 HANDOFF.md`
+would have returned both. It is that no sweep was run at all. When a fact is
+corrected, grep the tree for its most distinctive token — usually a sha, an
+identifier, or a figure — before calling the correction complete. That search
+costs one command, and skipping it is how this record set reached five
+instances of correcting a staleness only where it was noticed.
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
