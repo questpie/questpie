@@ -92,7 +92,9 @@ do not reach `QueryContext` either.
 
 **So the decision below cannot be built as written, and it is retained with that
 stated rather than quietly rewritten**, because the reasoning around it is still
-the useful part.
+the useful part. **Everything to the end of this section belongs to it** — its
+cost, and both of its overturning conditions. Read them as the case that was
+made for a mechanism that turned out to be unavailable, not as live commitments.
 
 **Superseded decision: the inspection Authority decision is evaluated in the
 handler, against the resolved facts the engine supplies, raising a declared
@@ -185,9 +187,15 @@ on-the-wire-but-not-in-the-client, which is new authoring surface and an ADR
 decision. The second is tidier and larger; the first uses an accepted mechanism
 and costs the one-engine property for the command half.
 
-This does not reopen the reads decision or the handler-evaluated authorization
-below it. It reopens only how the **commands** arrive, which the earlier
-revision folded into the same answer without checking that it could.
+This reopens only how the **commands** arrive, which the earlier revision folded
+into the same answer without checking that it could.
+
+An earlier version of this sentence added that it "does not reopen the reads
+decision or the handler-evaluated authorization below it". The exposure split
+still does not reopen either — but the handler-evaluated authorization was
+separately superseded above, so that reassurance now points at something that no
+longer stands. The reads decision is open for a different reason than this
+section.
 
 ## Both narrowed options are unbuilt, and the Route one more than it looks
 
