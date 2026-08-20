@@ -20,7 +20,9 @@ export type DurableMaintenanceCommand =
 export type DurableMaintenanceRejection =
 	| "ALREADY_REQUESTED"
 	| "ATTEMPTS_EXHAUSTED"
+	| "AUTHORITY_DENIED"
 	| "NOT_AMBIGUOUS"
+	| "REASON_INVALID"
 	| "RUN_IS_TERMINAL"
 	| "RUN_NOT_FAILED"
 	| "VERSION_MISMATCH";
@@ -81,8 +83,29 @@ export interface DurableMaintenance {
 	audit(runId: string): Promise<readonly DurableMaintenanceAuditEntry[]>;
 }
 
+/**
+ * Whether this actor may run this command against this run.
+ *
+ * `authority-mechanism.md` decides that maintenance Authority is an ordinary
+ * Policy decision taken in the Execution that reaches the command, not a new
+ * Authority class. This guard is defence in depth for a server path that
+ * reaches a command it should not; the primary gate is the Policy on the
+ * Operation that exposed it.
+ */
+export type DurableMaintenanceAuthority = (
+	request: Readonly<{
+		actor: DurableActor;
+		command: DurableMaintenanceCommand;
+		runId: string;
+	}>,
+) => boolean | Promise<boolean>;
+
 export function createPostgresDurableMaintenance(
-	input: Readonly<{ sql: SQL; application: string }>,
+	input: Readonly<{
+		sql: SQL;
+		application: string;
+		authorize?: DurableMaintenanceAuthority;
+	}>,
 ): DurableMaintenance {
 	const transaction = <Result>(
 		use: (query: DurableQuery) => Promise<Result>,
@@ -127,6 +150,18 @@ FOR UPDATE`,
 		expectedVersion !== undefined &&
 		expectedVersion !== durableInteger(run.version, "run version");
 
+	/**
+	 * Defence in depth. A denial is audited like any other attempt: an audit that
+	 * omits rejected commands is the artifact this slice is trying not to ship.
+	 */
+	const denied = async (
+		actor: DurableActor,
+		command: DurableMaintenanceCommand,
+		runId: string,
+	): Promise<boolean> =>
+		input.authorize !== undefined &&
+		!(await input.authorize({ actor, command, runId }));
+
 	const actorOf = (actor: Principal): DurableActor => {
 		if (!principalKernel.is(actor))
 			throw new TypeError("durable maintenance requires a trusted Principal");
@@ -164,14 +199,15 @@ FOR UPDATE`,
 			actor: DurableActor;
 			stateBefore: DurableRunState;
 			stateAfter: DurableRunState;
+			reason?: string | null;
 		}>,
 	): Promise<DurableMaintenanceOutcome> => {
 		const commandId = crypto.randomUUID();
 		await query(
 			`INSERT INTO questpie_internal.durable_maintenance_commands
   (application_name, command_id, run_id, command, outcome, rejection_code,
-   actor_kind, actor_id, state_before, state_after, requested_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.transaction_timestamp())`,
+   actor_kind, actor_id, state_before, state_after, reason, requested_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_timestamp())`,
 			[
 				input.application,
 				commandId,
@@ -183,6 +219,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.transaction_timestam
 				entry.actor.id,
 				entry.stateBefore,
 				entry.stateAfter,
+				entry.reason ?? null,
 			],
 		);
 		return Object.freeze({
@@ -204,6 +241,16 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, pg_catalog.transaction_timestam
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (await denied(actor, "cancelRun", request.runId))
+					return record(query, {
+						runId: request.runId,
+						command: "cancelRun",
+						outcome: "rejected",
+						rejectionCode: "AUTHORITY_DENIED",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -285,6 +332,16 @@ WHERE application_name = $1 AND run_id = $2`,
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (await denied(actor, "retryRun", request.runId))
+					return record(query, {
+						runId: request.runId,
+						command: "retryRun",
+						outcome: "rejected",
+						rejectionCode: "AUTHORITY_DENIED",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -341,6 +398,16 @@ WHERE application_name = $1 AND run_id = $2`,
 					run.state,
 					"run state",
 				) as DurableRunState;
+				if (await denied(actor, "acknowledgeAmbiguity", request.runId))
+					return record(query, {
+						runId: request.runId,
+						command: "acknowledgeAmbiguity",
+						outcome: "rejected",
+						rejectionCode: "AUTHORITY_DENIED",
+						actor,
+						stateBefore,
+						stateAfter: stateBefore,
+					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,

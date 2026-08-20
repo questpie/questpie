@@ -3,7 +3,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { SQL } from "bun";
 
 import { digest } from "../../../packages/compiler/src/canonical";
-import { ensureInternalProtocolV4 } from "../../../packages/compiler/src/schema";
+import { ensureInternalProtocolV5 } from "../../../packages/compiler/src/schema";
 import { readCatalogComparable } from "../../../packages/compiler/src/schema/postgres/catalog-reader";
 
 const database = process.env.PGHOST ? new SQL() : undefined;
@@ -15,7 +15,7 @@ beforeAll(async () => {
 		const [connection] = await session<{ database: string; pid: number }[]>`
 			select current_database() as database, pg_backend_pid() as pid
 		`;
-		await ensureInternalProtocolV4(
+		await ensureInternalProtocolV5(
 			session,
 			connection!.database,
 			connection!.pid,
