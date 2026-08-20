@@ -1349,6 +1349,14 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
   would let the migration "pass" just as convincingly.
   The cost is one extra command. The failure it prevents is reporting a green
   result produced by a broken check, which is worse than not checking.
+  The same rule has a mirror worth stating: **a truncated read manufactures
+  false positives as readily as a bad pattern manufactures false negatives.** I
+  nearly reported `ROUTE-SHAPE.md`'s citation of
+  `beta08/acceptance-manifest.json:120` as stale, because I inspected that line
+  through `cut -c1-110` and the quoted clause sits past column 110. The line is
+  criterion 13 and the citation is correct. When a line disagrees with the claim
+  citing it, read the whole line before concluding — manifest and SQL lines in
+  this repository routinely run past 200 characters.
 
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
