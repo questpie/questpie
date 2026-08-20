@@ -1062,6 +1062,29 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   an owner reading the gate rule as unconditional, in which case content does not
   matter and the revert stands. Formally recording the exception is still the
   owner's, not mine.
+- **`SPEC.md` §16 "Current decision state" is two Accepted ADRs behind, and one
+  of them supersedes a decision §16 still states in full.**
+  §16 enumerates ADR-0009 through ADR-0021 and never mentions **ADR-0022**
+  ("Freeze API Ergonomics and Operation Projection", Status: Accepted,
+  2026-08-14) or **ADR-0023** ("Freeze the Post-Commit Operation Outcome",
+  Status: Accepted, 2026-08-16). `HANDOFF.md:76` declares authority as
+  "ADR-0008 through ADR-0023", so §16 stops two short of its own stated range.
+  **The supersession is the urgent half.** ADR-0023's header reads
+  "Supersedes: the incomplete post-commit outcome edge of ADR-0014 and its
+  retained-pair execution rule for Wire v1 Mutations only". `SPEC.md:583`–`:590`
+  describes ADR-0014's acceptance with no mention of it, so a reader takes
+  ADR-0014's post-commit rule as current.
+  Both omitted decisions have already reached the public guides —
+  `queries-and-mutations.mdx` documents `COMMITTED_RESULT_UNAVAILABLE` on Wire
+  v2 (ADR-0023), and `semantic-kernels-and-public-surface.mdx` documents
+  `QP-COMPOSE-023`/`024` (ADR-0022). So the projection reached the guides and
+  skipped the spec.
+  Recorded rather than written: summarising an Accepted ADR into product
+  authority is a projection act, and the wording is the owner's.
+  **The rest of `SPEC.md` is clean.** All 17 document paths it names exist, and
+  all 13 ADR references resolve to files on disk. (`questpie.json` at `:137` is
+  an application's own config, not a repository file — it flags as missing in a
+  naive existence sweep.)
 - **The repo-owned skill is verified end to end: six branches, one content
   defect, one instruction gap.** `SKILL.md` routes to six references and all six
   resolve. Every path and script they name exists — `docs/adr/README.md`,
