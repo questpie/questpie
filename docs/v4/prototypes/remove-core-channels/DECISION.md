@@ -97,9 +97,16 @@ This decision supersedes only their forward product projection:
   wayfinder statement that presents Channels as current or deferred QUESTPIE
   scope.
 
-Historical review records, v3 evidence, and proof artifacts keep their original
-text and heads. Current authority must mark their Channel conclusions as
-superseded rather than rewriting the evidence that produced them.
+Historical review records, v3 evidence, and accepted proof artifacts keep their
+original text and heads. That includes P15's machine-checked `SLICE.json`,
+P16's accepted `QUEUE.json`, and P14's conformance matrix and validator. They
+record what their pinned proof heads established; ADR-0025 and the projected
+beta build spec supersede only their forward Channel seam. Conversely, the API
+ergonomics `CAPABILITY-MAP.md` explicitly declares itself a permanent ownership
+map, so it is current authority and must be projected. Current ADR, product,
+gate, build, public-documentation, visual, permanent-map, and wayfinder
+surfaces must mark Channel removed rather than leaving the historical
+conclusion current.
 
 ## Rejected alternatives
 
@@ -115,9 +122,10 @@ superseded rather than rewriting the evidence that produced them.
 ## Projection gate
 
 [`PROJECTION.json`](./PROJECTION.json) pins the exact removal and preservation
-obligations. [`check.ts`](./check.ts) validates them, and
+obligations. [`check.ts`](./check.ts) validates them against the repository's
+current authority inventory, and
 [`negative-control.ts`](./negative-control.ts) proves that the checker rejects
 the old durable Channel contract, a placeholder seam, provider authority,
-exactly-once overclaim, and accidental deletion of the domain `Channel` noun.
-Only a fresh stateless acceptance `PASS` may project this decision into ADRs and
-current authority.
+exactly-once overclaim, accidental deletion of the domain `Channel` noun, and
+omission of a Channel-bearing current authority surface. Only a fresh stateless
+acceptance `PASS` may project this decision into ADRs and current authority.
