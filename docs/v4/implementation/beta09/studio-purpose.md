@@ -18,6 +18,31 @@ disagree, the branch is the evidence.
 
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
+## Owner reprioritization — 2026-08-20
+
+The product direction is now explicit: Studio should eventually be a
+system-privileged administration surface over one application — Collection
+tables and rows, executable Queries, Mutations and Actions, followed by logs,
+live activity and traces. That product is closer to a Supabase administration
+console than to a source-file browser.
+
+It is not the BETA-09 deliverable. The current accepted contract authorizes a
+minimal safe inspection surface, not ambient admin access, application-data
+browsing, arbitrary Operation execution, or observability storage. Its only
+browser payload would therefore repeat compiled artifacts that are already
+available as files and CLI output. That is not enough value to justify shipping
+or maintaining a Studio application.
+
+The owner stopped the interface increment. No Vite/shadcn foundation is shipped
+for its own sake, and the empty shell is not represented as a product. The
+backend inspection and nondisclosure work remains; completion of BETA-10 through
+BETA-12 takes priority over adding Studio surface.
+
+What would overturn this boundary is new Accepted authority defining the
+privileged browser principal, its Policy/Authority rules, and the disclosure
+contract for application and operational data. Product intent alone does not
+create those security semantics.
+
 ## The decision
 
 **Studio's job is _explain, then act_.**

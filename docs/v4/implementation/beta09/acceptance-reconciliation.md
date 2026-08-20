@@ -1,5 +1,15 @@
 # BETA-09: the seventeen criteria against what shipped
 
+> **Superseded status, 2026-08-20.** `acceptance-shape.md` now contains 22
+> criteria, not 17. The later re-derivation in `narrower-claims.md` accounts for
+> all 22: sixteen met, criteria 1–3 met with the recorded Q3 qualification,
+> criterion 18 measured, and criteria 21–22 unmet. The owner stopped the Studio
+> interface increment because its authorized browser payload only repeats
+> generated artifacts already available as files and CLI output. This file is
+> retained as the history of the earlier 17-criterion reconciliation; its
+> counts below are not the current acceptance status. No BETA-09 `PASS` manifest
+> exists or may be inferred from the backend increments.
+
 `acceptance-shape.md` fixed seventeen criteria before implementation. This
 checks each one against the tree. It is written because the slice is not close
 to acceptance and saying so precisely is worth more than saying so vaguely.

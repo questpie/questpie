@@ -39,7 +39,7 @@ already in the QUESTPIE design system.
    built in `apps/studio/src/projection.ts`. That keeps one producer rather
    than a second in-browser projection.
 
-## Step 2 is a packaging decision, and it is not taken here
+## Step 2 is deliberately not taken
 
 Serving the build output turned out to hide a fork that has nothing to do with
 file reading. The mechanism is the same in all three shapes — the mount reads
@@ -69,16 +69,28 @@ roots are:
    than the framework's — which is where the accepted contract has generally
    refused to put things.
 
-**Not decided here.** `design-context.md` already records that this slice's own
-budget note says an application that never opens Studio should not carry its
-interface, which argues against (1); ADR-0021's publication surface argues
-against (2) without a release decision; and (3) is the kind of host-supplied
-seam ADR-0014 has consistently refused. Picking one at the point of needing it
-is the failure this slice has twice paid for, and each time stopping was right.
+**Owner decision, 2026-08-20: stop the interface increment.** Option (1) can be
+built, but completing it would package a second presentation of generated JSON
+that developers can already inspect directly. Options (2) and (3) only move
+that low-value surface elsewhere. None produces the intended administration
+product.
 
-What is true today: `apps/studio` builds real assets, the mount serves a shell,
-and the two are not connected. Artifact 2 is therefore built as a mechanism and
-incomplete as a product, which the acceptance record must say in those words.
+The discarded implementation attempt made the cost concrete: it added a Vite
+asset pipeline, UI dependencies, fonts and theme output while leaving the
+browser unable to inspect a Collection row, invoke an Operation, or observe a
+running application. Those changes were removed rather than normalized into a
+permanent release burden.
+
+The backend inspection projection, nondisclosure rules, worklist, provenance,
+Authority types, audit reason and protocol work remain useful inputs to future
+observability. The empty shell and static artifact catalog are not treated as a
+product milestone. No protocol-v2 `PASS` may claim criteria 21 or 22.
+
+What would reopen Studio: Accepted authority for one useful end-to-end admin
+workflow — Collection rows, executable Queries/Mutations/Actions, or stored
+logs/traces — including the privileged Principal and its Policy/Authority and
+disclosure rules. At that point the asset packaging choice can be made against
+a real deployed surface.
 
 ## Constraints this increment inherits
 

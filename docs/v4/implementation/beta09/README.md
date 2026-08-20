@@ -14,9 +14,9 @@ Base for every record: `feat/v4` at
 1. **[design-context.md](./design-context.md)** — the boundary against BETA-08,
    the identities, what changed underneath the Studio research, and the
    evidence discipline. Start here.
-2. **[studio-purpose.md](./studio-purpose.md)** — what Studio is for, decided
-   by adversarial review. "Explain, then act": identity-first address space,
-   decision-first destinations, one bounded run worklist as a panel.
+2. **[studio-purpose.md](./studio-purpose.md)** — the historical product
+   exploration and the later owner decision to stop before turning a static
+   artifact catalog into a deployed product.
 3. **[inspection-contract.md](./inspection-contract.md)** — what the inspection
    Operations return, the disclosure finding in the shipped reads, and how the
    red test is driven and falsified.
@@ -75,11 +75,12 @@ standing, the earlier record is corrected and points at the later authority:
 ## Status
 
 Nothing in these records is waiting on a decision. Three that were waiting are
-answered in [owner-decisions.md](./owner-decisions.md), which also records the
-finding those answers exposed: the operational reads and commands are in-process
-methods on the compiled application and no route carries them to a browser, so
-what this slice has built is a contract browser rather than an operational
-control surface. Packaging cannot be settled before that transport is.
+answered in [owner-decisions.md](./owner-decisions.md). The operational reads
+and commands remain in-process methods with no browser transport. The owner has
+now also stopped the browser increment: a deployed catalog of compiled files
+adds too little developer value to justify its asset and release surface.
+[studio-interface.md](./studio-interface.md) records the stop and its reopening
+condition.
 
 Implementation has begun on branch `feat/v4-beta-09`, worktree
 `/home/drepkovsky/code/questpie-v4-beta-09`, which is not merged to `feat/v4`.
@@ -88,24 +89,17 @@ Where the two disagree, the branch is the evidence and the record is corrected
 — that already happened once, when the events projection here was found to
 describe what `durable_run_events` stores rather than what `events()` returns.
 
-What the branch still owes:
-
-- The maintenance Authority evaluation itself.
-- The `operational-nondisclosure.json` producer and the runtime verification
-  that `relational-nondisclosure.json` joins.
-- Internal protocol v5, and the local-database consequence that
-  `ensureInternalProtocol` refuses a same-version different-checksum install.
-- The Studio bundle, on the shadcn and Base UI primitives already in
-  `apps/docs`, whose gaps `maintenance-decisions.md` names.
-- A transport for the operator surface. The reads and commands exist and are
-  tested; nothing carries them to a browser. See
-  [owner-decisions.md](./owner-decisions.md).
+The branch does not owe more UI implementation. Criteria 21 and 22 remain
+unmet, so BETA-09 does not receive a protocol-v2 `PASS`. The useful backend
+increments — maintenance Authority mechanics, nondisclosure, protocol v5,
+inspection projection, provenance, worklist and baselines — remain as evidence
+for the later functional slices. A future Studio starts with an authorized
+admin workflow, not with this shell.
 
 ## Merge hazard: largely resolved, and this note was stale
 
-**`feat/v4-beta-09` has merged `feat/v4`.** The merge is `5066187a`, and the
-merge base has advanced from `219758a4` to **`4078c057`**, leaving only seven
-`feat/v4` commits unmerged at the time of writing.
+**`feat/v4-beta-09` has merged `feat/v4`.** The current merge is `f7a793ad`,
+which incorporated `origin/feat/v4` at `90589c26`.
 
 Every defect this section previously warned about is gone from the branch,
 verified rather than assumed: the four-command list attributed to ADR-0014 and
@@ -121,13 +115,10 @@ when written and none of it is now. A stale warning is worse than no warning: it
 directs a merger's attention at defects that have already been resolved, and its
 confidence is indistinguishable from a live one.
 
-**What actually remains.** Seven `feat/v4` commits are unmerged, all of them
-documentation corrections made after `4078c057` — including two that fix figures
-this record set itself got wrong. The branch also carries five records with no
-counterpart here (`acceptance-reconciliation.md`, `authority-mechanism.md`,
-`narrower-claims.md`, `postgres-matrix.md`, `studio-interface.md`), which nothing
-on `feat/v4` conflicts with. The useful action is no longer a rebase; it is a
-second merge when those seven land.
+The branch also carries five records with no counterpart on `feat/v4`
+(`acceptance-reconciliation.md`, `authority-mechanism.md`, `narrower-claims.md`,
+`postgres-matrix.md`, `studio-interface.md`). Re-fetch before the next commit;
+the shared branch may move again.
 
 ## Implementation reconciliation
 

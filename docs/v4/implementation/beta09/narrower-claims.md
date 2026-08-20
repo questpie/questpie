@@ -82,7 +82,7 @@ An earlier revision said ten of seventeen were met with five remaining behind
 prohibitions. That was true when written and is no longer. Checked one by one
 against the tree rather than carried forward:
 
-**Fourteen met, each with a driver or an artifact:** 4 (projection narrower than
+**Sixteen met, each with a driver or an artifact:** 4 (projection narrower than
 the kernel read), 5 (prescribed red test), 6 (operational nondisclosure compiled
 and digest-verified — riding `durable-kernel.json` rather than a new artifact,
 for the reason `tests/unit/beta09-operational-nondisclosure.test.ts` records),
@@ -115,7 +115,20 @@ nothing — a measurement answering a different question than the one asked, whi
 is the failure this repository keeps blocking tests for and which is easy to
 accept when the number flatters the budget.
 
-**Two remain genuinely out of reach**, and neither is a repair this slice can
-make: a wire-reachable maintenance command, which the binary exposure flag and
-BETA-08's criterion 13 forbid together, and the packaging fork. Both are recorded
-above with their owners.
+**Two remain unmet by owner decision:** criterion 21, serving an executable
+Studio bundle through the same-origin mount; and criterion 22, driving that
+bundle from the independent fixture. The branch must not instantiate a `PASS`
+manifest while either is absent.
+
+The wire-reachable maintenance command is still deliberately absent. It is a
+disclosed narrower claim, not one of the two missing numbered criteria. The
+earlier text incorrectly paired it with packaging and called both out of reach.
+They are technically buildable. They are deliberately not being built because
+the only browser value currently authorized is a second presentation of
+compiled JSON already available in generated files and CLI output. That does
+not justify a deployed UI, its asset pipeline, or its release burden.
+
+What would overturn the stop: Accepted authority for one useful vertical slice
+of the intended administration product — Collection rows, executable
+Operations, or stored operational observations — together with its Principal,
+Policy/Authority, and disclosure boundary.
