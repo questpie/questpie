@@ -109,7 +109,16 @@ are narrow, explicitly authorized, idempotent, expected-version fenced, and
 audited," repeated at Gate 8. Explicit authorization cannot be derived from the
 ability to read, or it would not be explicit. The code today derives it from
 nothing at all — `actorOf` checks only `principalKernel.is(actor)`, a brand
-(`postgres-maintenance.ts:130`) — so BETA-09 has a clear field.
+(`postgres-maintenance.ts` `actorOf`) — so BETA-09 has a clear field.
+
+**Closed by the merged slice (#326).** "The code today derives it from nothing"
+was true of the design base and is false on `feat/v4` now.
+`DurableMaintenanceAuthority` is a required constructor input
+(`packages/runtime/src/durable/postgres-maintenance.ts:107`–`:126`, whose
+comment states that "creating a maintenance surface without an authorizer is
+forbidden"), and each command decides through
+`input.authorize({ actor, command, runId })` at `:287`. `actorOf` survives at
+`:179` and still brand-checks, but it is no longer the authorization.
 
 The handoff's Q3 recommends separate server-supplied capability facts, with a
 read-only user seeing actions disabled and a generic denial rather than
@@ -216,7 +225,7 @@ Those seven properties are run-scoped and do not apply to a process:
 Meanwhile the behaviour already exists and is correct: `beginDrain()` on the
 worker (`packages/runtime/src/durable/worker.ts:270`) and the realtime carrier,
 both driven from `close()` (`packages/runtime/src/application/index.ts:592`,
-`packages/compiler/src/runtime/application.ts:489`). That is a deployment-layer
+`packages/compiler/src/runtime/application.ts:493`). That is a deployment-layer
 concern — a SIGTERM handler calling `close()` — and the accepted lifecycle
 paragraph already describes exactly that.
 

@@ -315,10 +315,31 @@ evidence plan should settle before the wrap is built.
 
 ## A second finding: maintenance can block without bound
 
-`lockRun` takes `FOR UPDATE` without `SKIP LOCKED`
-(`packages/runtime/src/durable/postgres-maintenance.ts:111`). Two concurrent
+`readRun` takes `FOR UPDATE` without `SKIP LOCKED`
+(`packages/runtime/src/durable/postgres-maintenance.ts:160`). Two concurrent
 maintenance commands against the same run therefore serialize, and the loser
 waits — with **no `lock_timeout` anywhere in the runtime**.
+
+**Updated after BETA-09 merged (#326).** This finding was written against
+`lockRun` at `:111`. The slice renamed that function `readRun`, gave it a
+`locking` parameter, and made the lock conditional. The finding survives the
+rename and narrows: all three commands still take `FOR UPDATE` once their
+authorization check passes — `:342`, `:430` and `:493` each call `readRun` with
+the default `locking = true`, immediately after `if (refusal) return refusal`.
+Two authorized commands against one run still serialize. What the slice removed
+is the _unauthorized_ caller's ability to hold that lock, by reading with
+`locking: false` on the denial path at `:316`.
+
+**The slice's own comment assumes the bound this gate would create.** The
+justification at `:141`–`:146` says a second maintenance command "would wait out
+`lock_timeout` behind it." Nothing sets one: that comment is the only occurrence
+of the string in `packages/runtime/src`, and `configurePostgresTimeouts` is
+still called from exactly two places, both compiler-side
+(`packages/compiler/src/schema/postgres/apply.ts:251`,
+`packages/compiler/src/seed/postgres/apply.ts:231`). So the implementers reached
+this record's premise independently, and then assumed the timeout it argues for
+already existed. That is corroboration of the reasoning and evidence for its
+urgency in the same sentence.
 
 **Measured, and the two gaps compound.** One session held a row `FOR UPDATE` for
 six seconds while another attempted the same lock: the waiter blocked for

@@ -240,7 +240,7 @@ reasoning rather than against the prose.
    **Criteria 1 and 2 are not blocked the same way, and the difference decides
    what each costs to fix.** Maintenance _has_ the Principal and lacks a route:
    `actorOf` takes one as a parameter
-   (`packages/runtime/src/durable/postgres-maintenance.ts:130`) and merely
+   (`postgres-maintenance.ts` `actorOf`, `:179` today) and merely
    brand-checks it, so criterion 2 becomes satisfiable by evaluating a value
    already in hand. Inspection is the mirror — the reads are wire-reachable as
    Queries today, and a Query handler receives **no Principal at all**, in-process

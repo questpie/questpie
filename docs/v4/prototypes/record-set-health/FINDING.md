@@ -356,6 +356,42 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   head, and checking it against `HEAD` is the wrong ref.** Any future citation
   sweep should exclude `docs/v4/implementation/*/claude-*.md` or resolve them
   against the matching accepted head in the authority table above.
+  **The merge invalidated this closed sweep, and that is a fourth decay mode.**
+  BETA-09 merged at `21e38b21` and rewrote
+  `packages/runtime/src/durable/postgres-maintenance.ts`. Two verifications
+  recorded above are now false against `HEAD`: `:130`–`:131` is no longer
+  `actorOf` — that function moved to `:179`, and `:130` is now a
+  `Promise<Result>` return type — and `compiler/src/runtime/application.ts:489`
+  is no longer the `beginDrain()` site, `close()` being `:491` and the drain
+  loop `:493`. The paragraphs above are left as written, because they were true
+  when they ran and they are the evidence for this entry.
+  **Re-running the sweep against the 36 files the merge touched found ten stale
+  citations across eight records**, all correct when written, all corrected in
+  this pass: the two clusters above; `statement-timeout-gate/DECISION.md` and
+  its `ISSUE.md` citing `:111` for a `FOR UPDATE` now at `:160`, in a function
+  the slice also renamed `lockRun` → `readRun`; and
+  `beta1-documentation-gap/FINDING.md` citing `declarations.ts:113`, now a
+  blank line.
+  **So the beta05 lesson generalizes past accepted review records.** That case
+  concluded a review record is a snapshot against its own reviewed head. A live
+  design record citing `HEAD` decays the same way the moment an implementation
+  lands: `design-context.md` and `maintenance-decisions.md` have no commit
+  touching them since `21e38b21`, so the record is unedited, the claim is
+  unchanged, and the citation rotted because someone else's merge moved the
+  target. Deletion and rename need an edit to the citing record or the cited
+  document. This needs neither, which is why nothing in the record set signals
+  it.
+  **Two consequences for how citations get written.** First, a citation whose
+  anchor is a symbol should name the symbol. The record set already does this
+  two rows above one of the defects — `beta09/design-context.md:62` cites
+  `` `postgres-maintenance.ts` `staleVersion` `` with no line number, and it did
+  not decay. The `actorOf` sites are now written that way. Second, this sweep's
+  own detector was regex-scoped to citations carrying a `packages/` or `tests/`
+  prefix, and two of the ten — `maintenance-decisions.md:112` and
+  `durable-evidence-gaps/FINDING.md:48` — are bare `postgres-maintenance.ts:130`
+  and were found only by grepping the specific line number afterwards. A sweep
+  that reports a closed count is asserting its detector's coverage as much as
+  its verdicts.
   **D3 has a bigger problem than its heading: the eight divergences it batches
   are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
   divergences between accepted documentation and the tree that this slice

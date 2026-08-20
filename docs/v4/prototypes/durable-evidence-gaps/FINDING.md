@@ -45,7 +45,7 @@ call sites.
 **Claimed.** That maintenance commands take a trusted `Principal` rather than a
 caller-supplied identity pair.
 
-**Built.** `postgres-maintenance.ts:130` — `actorOf` throws
+**Built.** `postgres-maintenance.ts` `actorOf` (`:179` today) — it throws
 `"durable maintenance requires a trusted Principal"` unless
 `principalKernel.is(actor)`.
 

@@ -163,7 +163,7 @@ reaching for a cut.
   docs.
   **Reaction closes the inventory, and one gap turns out to span all three
   factories.** `ReactionFactory`
-  (`packages/compiler/src/reaction/declarations.ts:113`–`:128`) takes `name`,
+  (`packages/compiler/src/reaction/declarations.ts:114`–`:128`) takes `name`,
   `input`, `output`, `runAs`, `retry`, `effects?`, `errors?`, `handler`.
   `output` is required there too — as it is on Query (`generate.ts:379`) and
   Mutation. The accepted contract says the opposite

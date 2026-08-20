@@ -27,8 +27,9 @@ the short form.
    `packages/runtime/src/mutation/postgres.ts:70` and the compiler's
    `executeAbortable` at `packages/compiler/src/postgres-session.ts:65` both
    `return await query`.
-3. **A lock wait compounds it.** `lockRun` takes `FOR UPDATE` without
-   `SKIP LOCKED` (`packages/runtime/src/durable/postgres-maintenance.ts:111`),
+3. **A lock wait compounds it.** `readRun` takes `FOR UPDATE` without
+   `SKIP LOCKED` on every authorized command
+   (`packages/runtime/src/durable/postgres-maintenance.ts:160`),
    and the Mutation lowering emits a second bare `FOR UPDATE` for every keyed
    collection `get` (`packages/compiler/src/mutation/postgres.ts:138`) on a
    key-only predicate, held to `COMMIT`, **before Policy is evaluated**.
