@@ -17,7 +17,7 @@ type Projection = Readonly<{
 		providerGuarantee: string;
 	}>;
 	job: Readonly<{
-		publicResources: string[];
+		checkpointOrchestrationResources: string[];
 		absentPublicSurfaces: string[];
 		versionRequired: boolean;
 		signals: string;
@@ -35,6 +35,9 @@ type Projection = Readonly<{
 	workflowAuthority: Readonly<{
 		projection: string[];
 		benignExemptions: Array<Readonly<{ path: string; reason: string }>>;
+		historicalEvidenceExemptions: Array<
+			Readonly<{ path: string; reason: string }>
+		>;
 	}>;
 	rejectedAlternatives: string[];
 }>;
@@ -156,6 +159,7 @@ const REQUIRED_WORKFLOW_PROJECTION = [
 	"docs/v4/questpie-v4-vision-for-martin.md",
 	"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
 	"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+	"docs/v4/research/production-backend/DECISION-MAP.md",
 	"docs/v4/runtime-client-envelope-and-studio.md",
 	"docs/v4/semantic-kernels-and-public-surface.md",
 	"docs/v4/transactional-dispatch-and-reaction.md",
@@ -166,6 +170,33 @@ const REQUIRED_WORKFLOW_EXEMPTIONS = [
 	"apps/docs/content/docs/v4/index.mdx",
 	"docs/v4/data-model-and-query-grammar.md",
 	"docs/v4/schema-lifecycle.md",
+] as const;
+
+const REQUIRED_WORKFLOW_HISTORICAL_EVIDENCE = [
+	"docs/v4/research/beta1-cut/DECISION-MAP.md",
+	"docs/v4/research/beta1-cut/v3-lifecycle-and-server-jobs.md",
+	"docs/v4/research/convex-comparison.md",
+	"docs/v4/research/data-engine-and-framework-boundary.md",
+	"docs/v4/research/framework-api-atlas/ctx-type-source-explicit-binding.md",
+	"docs/v4/research/framework-api-atlas/durable-execution-primary-sources.md",
+	"docs/v4/research/framework-api-atlas/hooks-lifecycle-kiss.md",
+	"docs/v4/research/framework-api-atlas/policy-and-execution-frontier.md",
+	"docs/v4/research/framework-api-atlas/relational-authorization-primary-sources.md",
+	"docs/v4/research/framework-api-atlas/runtime-studio-design.md",
+	"docs/v4/research/framework-api-atlas/v3-context-resolution-jobs.md",
+	"docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
+	"docs/v4/research/framework-api-atlas/whole-product-journeys.md",
+	"docs/v4/research/supabase-v3-v4-comparison.md",
+] as const;
+
+const HISTORICAL_HEADER_MARKERS = [
+	/Status: reconciled historical evidence/,
+	/Status: research evidence; no (?:v4 )?acceptance authority/,
+	/Status: research note/,
+	/Status: design evidence; no (?:v4 )?(?:acceptance or implementation|acceptance) authority/,
+	/Status: wave-one synthesis; no acceptance authority/,
+	/Evidence-only atlas/,
+	/Status: research fixture; no acceptance authority/,
 ] as const;
 
 function exactMembers(
@@ -204,8 +235,7 @@ function currentAuthorityFiles(): string[] {
 		...listFiles("apps/docs/content/docs/v4", ".mdx"),
 		...listFiles("docs/v4/design-fiction", ".md"),
 		"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
-		"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
-		"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+		...listFiles("docs/v4/research", ".md"),
 		...listFiles("docs/v4/visuals", ".html"),
 	];
 }
@@ -224,6 +254,11 @@ export function scanWorkflowAuthority(projection: Projection): string[] {
 	const benign = new Set(
 		projection.workflowAuthority.benignExemptions.map((item) => item.path),
 	);
+	const historical = new Set(
+		projection.workflowAuthority.historicalEvidenceExemptions.map(
+			(item) => item.path,
+		),
+	);
 	for (const exemption of projection.workflowAuthority.benignExemptions) {
 		const source = readFileSync(join(REPOSITORY_ROOT, exemption.path), "utf8");
 		if (!exemption.reason || !hasWorkflowSurface(source))
@@ -234,13 +269,28 @@ export function scanWorkflowAuthority(projection: Projection): string[] {
 				`benign Workflow exemption contains product marker in ${exemption.path}: ${marker}`,
 			);
 	}
+	for (const exemption of projection.workflowAuthority
+		.historicalEvidenceExemptions) {
+		const header = readFileSync(join(REPOSITORY_ROOT, exemption.path), "utf8")
+			.split("\n")
+			.slice(0, 20)
+			.join("\n");
+		if (
+			!exemption.reason ||
+			!HISTORICAL_HEADER_MARKERS.some((marker) => marker.test(header))
+		)
+			throw new Error(
+				`Workflow historical exemption lacks a self-declared evidence-only header: ${exemption.path}`,
+			);
+	}
 	const paths = [...new Set(currentAuthorityFiles())]
 		.filter((path) =>
 			hasWorkflowSurface(readFileSync(join(REPOSITORY_ROOT, path), "utf8")),
 		)
 		.sort();
 	const uncovered = paths.filter(
-		(path) => !projected.has(path) && !benign.has(path),
+		(path) =>
+			!projected.has(path) && !benign.has(path) && !historical.has(path),
 	);
 	if (uncovered.length)
 		throw new Error(
@@ -301,9 +351,9 @@ export function validateProjection(projection: Projection): void {
 		throw new Error("Action retry or ambiguity ownership is invalid");
 
 	exactMembers(
-		projection.job.publicResources,
+		projection.job.checkpointOrchestrationResources,
 		["Job"],
-		"public durable resources",
+		"public checkpoint-orchestration resources",
 	);
 	exactMembers(
 		projection.job.absentPublicSurfaces,
@@ -351,10 +401,18 @@ export function validateProjection(projection: Projection): void {
 		REQUIRED_WORKFLOW_EXEMPTIONS,
 		"benign Workflow exemptions",
 	);
+	exactMembers(
+		projection.workflowAuthority.historicalEvidenceExemptions.map(
+			(item) => item.path,
+		),
+		REQUIRED_WORKFLOW_HISTORICAL_EVIDENCE,
+		"historical Workflow evidence exemptions",
+	);
 	if (
 		workflowPaths.length !==
 		projection.workflowAuthority.projection.length +
-			projection.workflowAuthority.benignExemptions.length
+			projection.workflowAuthority.benignExemptions.length +
+			projection.workflowAuthority.historicalEvidenceExemptions.length
 	)
 		throw new Error("Workflow authority classification is not exact");
 	exactMembers(

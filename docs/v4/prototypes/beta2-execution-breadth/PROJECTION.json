@@ -41,7 +41,7 @@
 		"providerGuarantee": "explicit idempotency and receipt contract; ambiguity remains when outcome cannot be proved"
 	},
 	"job": {
-		"publicResources": ["Job"],
+		"checkpointOrchestrationResources": ["Job"],
 		"absentPublicSurfaces": [
 			"Workflow Resource",
 			"defineWorkflow",
@@ -108,6 +108,7 @@
 			"docs/v4/questpie-v4-vision-for-martin.md",
 			"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
 			"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"docs/v4/research/production-backend/DECISION-MAP.md",
 			"docs/v4/runtime-client-envelope-and-studio.md",
 			"docs/v4/semantic-kernels-and-public-surface.md",
 			"docs/v4/transactional-dispatch-and-reaction.md",
@@ -125,6 +126,64 @@
 			{
 				"path": "docs/v4/schema-lifecycle.md",
 				"reason": "uses repair workflow as an ordinary operational process, not a durable Resource"
+			}
+		],
+		"historicalEvidenceExemptions": [
+			{
+				"path": "docs/v4/research/beta1-cut/DECISION-MAP.md",
+				"reason": "self-declared reconciled historical beta.1 map superseded by ADR-0021"
+			},
+			{
+				"path": "docs/v4/research/beta1-cut/v3-lifecycle-and-server-jobs.md",
+				"reason": "self-declared v3 research evidence with no v4 acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/convex-comparison.md",
+				"reason": "self-declared research note that does not change an accepted decision"
+			},
+			{
+				"path": "docs/v4/research/data-engine-and-framework-boundary.md",
+				"reason": "self-declared research note that does not change an accepted decision"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/ctx-type-source-explicit-binding.md",
+				"reason": "self-declared design evidence with no acceptance or implementation authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/durable-execution-primary-sources.md",
+				"reason": "self-declared research evidence with no acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/hooks-lifecycle-kiss.md",
+				"reason": "self-declared design evidence with no v4 acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/policy-and-execution-frontier.md",
+				"reason": "self-declared synthesis with no acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/relational-authorization-primary-sources.md",
+				"reason": "self-declared research evidence with no v4 acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/runtime-studio-design.md",
+				"reason": "self-declared design evidence with no v4 acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/v3-context-resolution-jobs.md",
+				"reason": "self-declared v3 research evidence with no v4 acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
+				"reason": "self-declared evidence-only v3 atlas"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/whole-product-journeys.md",
+				"reason": "self-declared research fixture with no acceptance authority"
+			},
+			{
+				"path": "docs/v4/research/supabase-v3-v4-comparison.md",
+				"reason": "self-declared research note that does not change an ADR"
 			}
 		]
 	},

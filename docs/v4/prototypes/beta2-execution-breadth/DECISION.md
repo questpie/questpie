@@ -196,15 +196,20 @@ records whether checkpoints exist.
 
 ## Authority projection boundary
 
-The executable scan discovers 43 current authority files containing the broad
-word `Workflow`/`Workflows` or `defineWorkflow`. `PROJECTION.json` classifies 40
-for post-PASS projection and three as ordinary lowercase process-language
-exemptions: the schema workflow in the docs index, compiler workflow in the
-data grammar, and repair workflow in schema lifecycle. A benign exemption is
-rejected if its bytes contain a durable Workflow product marker. Accepted proof
-artifacts and raw review records outside this current-authority universe remain
-historical evidence; the later authority projection must supersede their
-current conclusions without rewriting the reviewed bytes.
+The executable scan discovers 58 files containing the broad word
+`Workflow`/`Workflows` or `defineWorkflow` across root authority, ADRs, public
+guides, top-level v4 product documents, design fiction, permanent maps, every
+Markdown file under `docs/v4/research`, and architecture visuals.
+`PROJECTION.json` classifies 41 for post-PASS projection, three as ordinary
+lowercase process-language exemptions, and 14 research files as historical
+evidence. A benign exemption is rejected if its bytes contain a durable
+Workflow product marker. A historical exemption is accepted only when its
+first 20 lines self-declare research/design/evidence-only status with no
+acceptance authority; the current production-backend decision map deliberately
+fails that predicate and requires projection. Accepted proof artifacts and raw
+review records outside this scan remain historical evidence; the later
+authority projection must supersede their current conclusions without
+rewriting the reviewed bytes.
 
 ## Ownership
 
@@ -238,8 +243,9 @@ Ratification requires one focused proof that:
    arbitrary callback checkpoint;
 4. compiles and compares this one-Job surface with a separate Workflow Resource
    and an explicit Job mode/builder;
-5. classifies every Workflow-bearing current-authority file and rejects both an
-   omitted marker-invisible file and a false-benign product exemption; and
+5. classifies every Workflow-bearing current-authority or research file and
+   rejects an omitted marker-invisible file, a false-benign product exemption,
+   and a hand-added historical exclusion; and
 6. receives one fresh stateless Opus-medium `PASS` before ADR, glossary,
    public-doc, gate, and implementation-ticket projection.
 
@@ -253,7 +259,9 @@ The resulting slices must still:
 1. prove that a Job using zero checkpoints pays no second runtime or history
    protocol;
 2. crash after real PostgreSQL Mutation and Action checkpoint boundaries and
-   resume without duplicate application writes or blind external retry;
+   resume without duplicate application writes or blind external retry, and
+   prove that a domain input field named `effectKey` cannot replace the
+   checkpoint-bound Effect Identity metadata;
 3. reject renamed, reordered, digest-changed, and semantic-version-incompatible
    checkpoint histories;
 4. race cron tick acceptance across ten instances and prove one accepted run;
@@ -262,10 +270,13 @@ The resulting slices must still:
    bounded history;
 7. prove direct/network Action parity and preserve ADR-0015/P6 as the pinned
    Route/Auth prerequisite rather than restating it;
-8. show generated client inclusion for network Actions and exclusion for Route
+8. remove generated `defineWorkflow`, Workflow structural evaluation, Manifest
+   and client projections, while retaining `defineReaction` and the shared
+   internal durable kernel;
+9. show generated client inclusion for network Actions and exclusion for Route
    and generic Job controls; and
-9. measure declarations, TypeScript instantiations, PostgreSQL scenarios, load,
-   and rolling compatibility.
+10. measure declarations, TypeScript instantiations, PostgreSQL scenarios, load,
+    and rolling compatibility.
 
 ## What would overturn this decision
 

@@ -35,7 +35,7 @@ const invalid: Array<readonly [string, (value: MutableProjection) => void]> = [
 	[
 		"public Workflow",
 		(value) => {
-			value.job.publicResources.push("Workflow");
+			value.job.checkpointOrchestrationResources.push("Workflow");
 		},
 	],
 	[
@@ -130,6 +130,29 @@ if (!productMarkerNamed)
 		"repository scan accepted a product-bearing benign exemption",
 	);
 
+const falseHistorical = clone();
+const currentResearchPath =
+	"docs/v4/research/production-backend/DECISION-MAP.md";
+falseHistorical.workflowAuthority.projection =
+	falseHistorical.workflowAuthority.projection.filter(
+		(path) => path !== currentResearchPath,
+	);
+falseHistorical.workflowAuthority.historicalEvidenceExemptions.push({
+	path: currentResearchPath,
+	reason: "invalid attempt to hide the current owner-directed decision map",
+});
+let historicalHeaderRejected = false;
+try {
+	scanWorkflowAuthority(falseHistorical);
+} catch (error) {
+	historicalHeaderRejected =
+		error instanceof Error &&
+		error.message.includes(currentResearchPath) &&
+		error.message.includes("evidence-only header");
+}
+if (!historicalHeaderRejected)
+	throw new Error("repository scan accepted a hand-added historical exclusion");
+
 console.log(
-	`Negative controls: ${invalid.length + 2} invalid contracts and authority classifications rejected`,
+	`Negative controls: ${invalid.length + 3} invalid contracts and authority classifications rejected`,
 );

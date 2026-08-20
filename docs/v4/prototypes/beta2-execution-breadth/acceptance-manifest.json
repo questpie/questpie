@@ -3,7 +3,7 @@
 	"ticket": "BETA2-EXECUTION-BREADTH",
 	"proof": "Freeze Action as the single external invocation boundary; preserve ADR-0015 Route and credential-resolver composition without a core Auth product; supersede Workflow as a separate Resource by folding its closed checkpoint, signal, timer, and compatibility semantics into one versioned Job Resource; attach cron schedules to Job over the shared PostgreSQL durable kernel without a second scheduler or generic browser control plane.",
 	"diffBase": "01d423f60fa54c0d259278f8ac4057dbf067995e",
-	"reviewOutput": "docs/v4/prototypes/beta2-execution-breadth/REVIEW-02.json",
+	"reviewOutput": "docs/v4/prototypes/beta2-execution-breadth/REVIEW-03.json",
 	"authorityHeads": {
 		"accepted feat/v4 base including core Channel removal": "0587b69b78836eb8fb55867d1a279308f2617ef0",
 		"accepted P14 authority snapshot containing ADR-0015 ADR-0016 and ADR-0019": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d",
@@ -93,11 +93,11 @@
 	],
 	"verification": [
 		{
-			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/check.ts (executes the exact browser reducer and six scenarios, compares three API surfaces, and classifies every Workflow-bearing current-authority file)",
+			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/check.ts (executes the exact browser reducer and six scenarios, compares three API surfaces, and classifies all 58 Workflow-bearing authority/research files)",
 			"result": "PASS"
 		},
 		{
-			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/negative-control.ts (11 invalid ownership/compatibility contracts plus an omitted authority file and a false-benign product exemption rejected with exact paths)",
+			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/negative-control.ts (11 invalid ownership/compatibility contracts plus an omitted authority file, a false-benign product exemption, and a hand-added historical exclusion rejected with exact paths)",
 			"result": "PASS"
 		},
 		{
@@ -105,7 +105,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check docs/v4/prototypes/beta2-execution-breadth/DECISION.md docs/v4/prototypes/beta2-execution-breadth/PROJECTION.json docs/v4/prototypes/beta2-execution-breadth/REVIEW.json docs/v4/prototypes/beta2-execution-breadth/acceptance-manifest.json docs/v4/prototypes/beta2-execution-breadth/alternatives-prototype.ts docs/v4/prototypes/beta2-execution-breadth/check.ts docs/v4/prototypes/beta2-execution-breadth/checkpointed-job-prototype.html docs/v4/prototypes/beta2-execution-breadth/negative-control.ts docs/v4/prototypes/beta2-execution-breadth/type-prototype.ts",
+			"command": "bunx oxfmt --check docs/v4/prototypes/beta2-execution-breadth/DECISION.md docs/v4/prototypes/beta2-execution-breadth/PROJECTION.json docs/v4/prototypes/beta2-execution-breadth/REVIEW.json docs/v4/prototypes/beta2-execution-breadth/REVIEW-02.json docs/v4/prototypes/beta2-execution-breadth/acceptance-manifest.json docs/v4/prototypes/beta2-execution-breadth/alternatives-prototype.ts docs/v4/prototypes/beta2-execution-breadth/check.ts docs/v4/prototypes/beta2-execution-breadth/checkpointed-job-prototype.html docs/v4/prototypes/beta2-execution-breadth/negative-control.ts docs/v4/prototypes/beta2-execution-breadth/type-prototype.ts",
 			"result": "PASS"
 		},
 		{
@@ -113,7 +113,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "git diff --name-only 01d423f60fa54c0d259278f8ac4057dbf067995e...HEAD (exactly nine candidate proof, manifest, and recorded BLOCKED review files under docs/v4/prototypes/beta2-execution-breadth; no authority, public docs, production source, package, fixture, or historical proof changed)",
+			"command": "git diff --name-only 01d423f60fa54c0d259278f8ac4057dbf067995e...HEAD (exactly ten candidate proof, manifest, and recorded BLOCKED review files under docs/v4/prototypes/beta2-execution-breadth; no authority, public docs, production source, package, fixture, or historical proof changed)",
 			"result": "PASS"
 		},
 		{
@@ -131,8 +131,8 @@
 		"Checkpoint history retains Job identity, required semantic version, executable digest, ordered checkpoint name, canonical command digest, stable Mutation Call Identity, and stable Action Effect Identity plus receipt or explicit ambiguity. Incompatible code refuses claim; latest-code replay is forbidden.",
 		"Cron is a compiler-owned schedule attached to Job over PostgreSQL durable state, not a second Resource or scheduler abstraction. Every scheduled instant has one stable tick identity; concurrent acceptance converges once; schedule removal stops future ticks and preserves already accepted runs.",
 		"The generated browser client may include network-exposed Actions but includes neither Routes nor a generic Job control plane. Applications expose selected Job request, status, cancel, and signal behavior through ordinary Policy-protected Operations.",
-		"A repository-aware broad Workflow/defineWorkflow scan classifies every current root authority, ADR, top-level v4 product document, public v4 guide, design-fiction source, permanent capability/proof map, and architecture visual. Every discovered path is either in the exact post-PASS projection or is a byte-falsifiable ordinary-process exemption containing no durable Workflow product marker.",
+		"A repository-aware broad Workflow/defineWorkflow scan classifies every current root authority, ADR, top-level v4 product document, public v4 guide, design-fiction source, permanent capability/proof map, Markdown research file, and architecture visual. Every discovered path is in the exact post-PASS projection, a byte-falsifiable ordinary-process exemption containing no durable Workflow product marker, or a historical research/design exemption whose first 20 lines self-declare evidence-only status with no acceptance authority. The current production-backend decision map is projected and cannot be hidden as historical evidence.",
 		"The executable model demonstrates contract coherence only. PostgreSQL crash windows, ten-instance cron races, signals, cancellation, bounded history, direct/network parity, generated client boundaries, rolling compatibility, and declaration/load budgets remain explicit implementation acceptance gates and are not claimed as implemented by this proof.",
-		"This candidate changes only its decision, structured projection, three compile-only interface/type prototypes, executable model and browser, validator, negative controls, manifest, and preserved raw BLOCKED review. It does not project authority, edit an Accepted ADR, change public docs, or modify production source before a fresh stateless Opus-medium PASS."
+		"This candidate changes only its decision, structured projection, three compile-only interface/type prototypes, executable model and browser, validator, negative controls, manifest, and preserved raw BLOCKED reviews. It does not project authority, edit an Accepted ADR, change public docs, or modify production source before a fresh stateless Opus-medium PASS."
 	]
 }

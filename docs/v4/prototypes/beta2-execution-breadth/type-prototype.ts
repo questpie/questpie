@@ -130,26 +130,24 @@ declare function defineAction<
 	}>,
 ): ActionDefinition<Name, Input, Output, Errors>;
 
-type StepName = string & { readonly __stepName?: never };
-
 type JobSteps<Signals extends Readonly<Record<string, Codec<unknown>>>> =
 	Readonly<{
 		mutation<Input, Output>(
-			name: StepName,
+			name: string,
 			mutation: MutationCaller<Input, Output>,
 			input: Input,
 		): Promise<Output>;
 		action<Input, Output>(
-			name: StepName,
+			name: string,
 			action: ActionCaller<Input, Output>,
 			input: NoInfer<Input>,
 		): Promise<Output>;
 		sleep(
-			name: StepName,
+			name: string,
 			duration: `${number}${"ms" | "s" | "m" | "h" | "d"}`,
 		): Promise<void>;
 		waitForSignal<const SignalName extends keyof Signals & string>(
-			name: StepName,
+			name: string,
 			options: Readonly<{
 				signal: SignalName;
 				timeout?: `${number}${"s" | "m" | "h" | "d"}`;
@@ -168,13 +166,12 @@ type JobAttempt = Readonly<{
 	heartbeat(progress: Readonly<Record<string, unknown>>): Promise<void>;
 }>;
 
-type JobContext<Signals extends Readonly<Record<string, Codec<unknown>>>> =
-	ExecutionFacts &
-		Readonly<{
-			queries: AppQueries;
-			mutations: AppMutations;
-			actions: AppActions;
-		}>;
+type JobContext = ExecutionFacts &
+	Readonly<{
+		queries: AppQueries;
+		mutations: AppMutations;
+		actions: AppActions;
+	}>;
 
 type JobDefinition<
 	Name extends string,
@@ -195,7 +192,7 @@ type JobDefinition<
 	handler(
 		input: Readonly<{
 			input: Input;
-			ctx: JobContext<Signals>;
+			ctx: JobContext;
 			run: JobRun<Signals>;
 			attempt: JobAttempt;
 		}>,
@@ -223,7 +220,7 @@ declare function defineJob<
 		handler(
 			input: Readonly<{
 				input: Input;
-				ctx: JobContext<Signals>;
+				ctx: JobContext;
 				run: JobRun<Signals>;
 				attempt: JobAttempt;
 			}>,
