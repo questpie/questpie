@@ -8,6 +8,11 @@ type FrozenEvidenceExemption = Readonly<{
 	supersededBy: string;
 }>;
 
+type BenignAuthorityExemption = Readonly<{
+	path: string;
+	reason: string;
+}>;
+
 export type Projection = Readonly<{
 	version: number;
 	decision: string;
@@ -25,6 +30,7 @@ export type Projection = Readonly<{
 		retained: string[];
 		frozenEvidenceExemptions: FrozenEvidenceExemption[];
 	}>;
+	currentAuthorityBenignExemptions: BenignAuthorityExemption[];
 	authorityProjection: string[];
 }>;
 
@@ -88,31 +94,20 @@ const REQUIRED_FROZEN_EVIDENCE = [
 	"docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
 ] as const;
 
-const CORE_CHANNEL_MARKERS = [
-	/defineChannel/,
-	/runtime\.channelCarrier/,
-	/Channel Resource/,
-	/Channel payload/,
-	/Channel event/,
-	/Channel replay/,
-	/Channel authority/,
-	/Channel presence/,
-	/Channel carrier/,
-	/typed Channels/i,
-	/generic Channels/i,
-	/Channels\/event streams/,
-	/Channels capabilities/,
-	/ephemeral Channels/i,
-	/explicit Channels/i,
-	/KV, Channels/,
-	/channels, OpenAPI/i,
-	/Channel\/Live Query/,
-	/Channel ownership/,
-	/Channel and optional carrier/,
-	/Channel is an authored/,
-	/"capability": "Channel"/,
-	/\| Channels\s+\|/,
+const REQUIRED_BENIGN_AUTHORITY_EXEMPTIONS = [
+	"docs/adr/0012-freeze-live-query-and-change-ledger.md",
+	"docs/adr/0018-freeze-file-search-and-contract-projections.md",
+	"docs/v4/context-and-policy.md",
+	"docs/v4/data-model-and-query-grammar.md",
+	"docs/v4/query-mutation-and-lifecycle.md",
+	"apps/docs/content/docs/v4/context-and-policy.mdx",
+	"apps/docs/content/docs/v4/durable-reactions.mdx",
+	"apps/docs/content/docs/v4/queries-and-mutations.mdx",
+	"apps/docs/content/docs/v4/realtime.mdx",
+	"apps/docs/content/docs/v4/runtime-and-studio.mdx",
 ] as const;
+
+const CHANNEL_WORD = /\bchannels?\b/i;
 
 function listFiles(directory: string, extension: string): string[] {
 	return readdirSync(join(REPOSITORY_ROOT, directory), {
@@ -144,41 +139,44 @@ function currentAuthorityFiles(): string[] {
 	];
 }
 
-function markerNames(path: string): string[] {
+function containsChannelWord(path: string): boolean {
 	const source = readFileSync(join(REPOSITORY_ROOT, path), "utf8");
-	const markers = CORE_CHANNEL_MARKERS.filter((marker) =>
-		marker.test(source),
-	).map((marker) => marker.source);
-	if (
-		(REQUIRED_FROZEN_EVIDENCE as readonly string[]).includes(path) &&
-		/Channel/.test(source)
-	)
-		markers.push("historical Channel assertion");
-	return markers;
+	return CHANNEL_WORD.test(source);
 }
 
 export function scanRepositoryAuthority(projection: Projection): {
 	currentChannelPaths: string[];
+	projectedChannelPaths: string[];
+	benignChannelPaths: string[];
 	frozenChannelPaths: string[];
 } {
 	const projectionSet = new Set(projection.authorityProjection);
-	const currentChannelPaths = [...new Set(currentAuthorityFiles())]
-		.filter((path) => markerNames(path).length > 0)
-		.sort();
-	const uncovered = currentChannelPaths.filter(
-		(path) => !projectionSet.has(path),
+	const benignExemptionSet = new Set(
+		projection.currentAuthorityBenignExemptions.map((item) => item.path),
 	);
+	const currentChannelPaths = [...new Set(currentAuthorityFiles())]
+		.filter((path) => containsChannelWord(path))
+		.sort();
+	const uncovered = currentChannelPaths.filter((path) => {
+		return !projectionSet.has(path) && !benignExemptionSet.has(path);
+	});
 	if (uncovered.length > 0)
 		throw new Error(
 			`Channel-bearing current authority missing from projection: ${uncovered.join(", ")}`,
 		);
+	const projectedChannelPaths = currentChannelPaths.filter((path) =>
+		projectionSet.has(path),
+	);
+	const benignChannelPaths = currentChannelPaths.filter((path) =>
+		benignExemptionSet.has(path),
+	);
 
 	const exemptionPaths =
 		projection.historicalEvidence.frozenEvidenceExemptions.map(
 			(item) => item.path,
 		);
-	const frozenChannelPaths = REQUIRED_FROZEN_EVIDENCE.filter(
-		(path) => markerNames(path).length > 0,
+	const frozenChannelPaths = REQUIRED_FROZEN_EVIDENCE.filter((path) =>
+		containsChannelWord(path),
 	);
 	const unclassifiedFrozen = frozenChannelPaths.filter(
 		(path) => !exemptionPaths.includes(path),
@@ -188,7 +186,12 @@ export function scanRepositoryAuthority(projection: Projection): {
 			`Channel-bearing frozen evidence is not explicitly exempt: ${unclassifiedFrozen.join(", ")}`,
 		);
 
-	return { currentChannelPaths, frozenChannelPaths };
+	return {
+		currentChannelPaths,
+		projectedChannelPaths,
+		benignChannelPaths,
+		frozenChannelPaths,
+	};
 }
 
 function exactMembers(
@@ -289,6 +292,22 @@ export function validate(projection: Projection): void {
 			);
 	}
 	exactMembers(
+		projection.currentAuthorityBenignExemptions.map((item) => item.path),
+		REQUIRED_BENIGN_AUTHORITY_EXEMPTIONS,
+		"benign current-authority exemption set",
+	);
+	for (const exemption of projection.currentAuthorityBenignExemptions) {
+		if (
+			!exemption.reason ||
+			!existsSync(join(REPOSITORY_ROOT, exemption.path)) ||
+			!containsChannelWord(exemption.path) ||
+			projection.authorityProjection.includes(exemption.path)
+		)
+			throw new Error(
+				`benign current-authority exemption is invalid: ${exemption.path}`,
+			);
+	}
+	exactMembers(
 		projection.authorityProjection,
 		REQUIRED_PROJECTIONS,
 		"authority projection set",
@@ -310,6 +329,6 @@ if (import.meta.main) {
 	validate(projection);
 	const scan = scanRepositoryAuthority(projection);
 	console.log(
-		`Channel removal projection: ${projection.frameworkSurface.absent.length} framework surfaces absent; ${scan.currentChannelPaths.length} current authority files covered; ${scan.frozenChannelPaths.length} frozen evidence files explicitly exempt; domain Channel preserved`,
+		`Channel removal projection: ${projection.frameworkSurface.absent.length} framework surfaces absent; ${scan.currentChannelPaths.length} current authority files scanned (${scan.projectedChannelPaths.length} projected, ${scan.benignChannelPaths.length} benign domain/English exemptions); ${scan.frozenChannelPaths.length} frozen evidence files explicitly exempt; domain Channel preserved`,
 	);
 }

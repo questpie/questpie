@@ -78,7 +78,7 @@ for (const mutate of invalid) {
 const missingCurrentAuthority = clone();
 missingCurrentAuthority.authorityProjection =
 	missingCurrentAuthority.authorityProjection.filter(
-		(path: string) => path !== "HANDOFF.md",
+		(path: string) => path !== "docs/adr/0021-slice-the-beta-one-release.md",
 	);
 let repositoryOmissionRejected = false;
 try {
@@ -87,12 +87,12 @@ try {
 	repositoryOmissionRejected =
 		error instanceof Error &&
 		error.message.includes(
-			"Channel-bearing current authority missing from projection: HANDOFF.md",
+			"Channel-bearing current authority missing from projection: docs/adr/0021-slice-the-beta-one-release.md",
 		);
 }
 if (!repositoryOmissionRejected)
 	throw new Error(
-		"repository scan accepted omission of Channel-bearing current authority",
+		"repository scan accepted omission of marker-invisible Channel-bearing ADR-0021",
 	);
 
 console.log(

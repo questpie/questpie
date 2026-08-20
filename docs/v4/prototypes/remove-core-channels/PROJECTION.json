@@ -92,6 +92,48 @@
 			}
 		]
 	},
+	"currentAuthorityBenignExemptions": [
+		{
+			"path": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"reason": "uses channel name only as a forbidden second realtime handler, not as a QUESTPIE capability"
+		},
+		{
+			"path": "docs/adr/0018-freeze-file-search-and-contract-projections.md",
+			"reason": "uses side-channel as an ordinary security term"
+		},
+		{
+			"path": "docs/v4/context-and-policy.md",
+			"reason": "uses Channel only as the collaboration fixture Collection and domain noun"
+		},
+		{
+			"path": "docs/v4/data-model-and-query-grammar.md",
+			"reason": "uses inference channel as an ordinary information-flow term"
+		},
+		{
+			"path": "docs/v4/query-mutation-and-lifecycle.md",
+			"reason": "uses Channel only as the collaboration fixture Collection and domain noun"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/context-and-policy.mdx",
+			"reason": "documents the ordinary collaboration channels Collection"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/durable-reactions.mdx",
+			"reason": "uses Channel update only as an ordinary persisted domain write"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/queries-and-mutations.mdx",
+			"reason": "documents the ordinary collaboration channels Collection"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/realtime.mdx",
+			"reason": "documents Live Query over the ordinary collaboration channels Collection and rejects a second channel-name protocol"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/runtime-and-studio.mdx",
+			"reason": "documents Query access to the ordinary collaboration channels Collection"
+		}
+	],
 	"authorityProjection": [
 		"HANDOFF.md",
 		"SPEC.md",
