@@ -275,7 +275,7 @@ way: from the file being edited, to everyone who cites it. `c4e6f7cb` fixed my
 instance — `statement-timeout-gate/DECISION.md` cited
 `inspection-contract.md:164`–`:166` for D3 in two places, then `13992051`,
 `70b9b083` and `69c08cc9` inserted blocks into `inspection-contract.md` and
-pushed D3 to `:206`. Three commits apart, two different files, and nobody
+pushed D3 down; it has moved again since and is `:207` today. Three commits apart, two different files, and nobody
 editing the second file had any reason to look at the first. So: **before
 committing an insertion into any record, grep the set for
 `<that filename>:[0-9]` and re-derive what you find.** Better still, avoid
@@ -387,8 +387,9 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   `` `postgres-maintenance.ts` `staleVersion` `` with no line number, and it did
   not decay. The `actorOf` sites are now written that way. Second, this sweep's
   own detector was regex-scoped to citations carrying a `packages/` or `tests/`
-  prefix, and two of the ten — `maintenance-decisions.md:112` and
-  `durable-evidence-gaps/FINDING.md:48` — are bare `postgres-maintenance.ts:130`
+  prefix, and two of the ten — one in `maintenance-decisions.md` and one in
+  `durable-evidence-gaps/FINDING.md`, at the lines they occupied then — were
+  bare `postgres-maintenance.ts:130`
   and were found only by grepping the specific line number afterwards. A sweep
   that reports a closed count is asserting its detector's coverage as much as
   its verdicts.
@@ -404,8 +405,16 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   unrelated beta03/05/07 records. Checked the `feat/v4-beta-09` branch too,
   including its five files that are not on `feat/v4` — same three mentions, no
   list.
-  So the gate has a count and no membership, and whoever builds it cannot know
-  when it is done. It also makes the overlap with this section unresolvable: the
+  **Closed since: the gate now has its membership.** `owner-decisions.md`'s D3
+  section states that "'Eight' previously named only a count. The gate now owns
+  these eight accepted-backed mismatches, one membership item per contract edge
+  rather than one per affected code or example," and follows it with a table of
+  them. The complaint above was acted on, and its own line pins have gone stale
+  in the process — the phrase "eight divergences" it quotes now appears nowhere
+  but in this file. Kept as written, with this closure, because the paragraph is
+  the evidence for the entry below it.
+  So the gate had a count and no membership, and whoever built it could not know
+  when it was done. It also makes the overlap with this section unresolvable: the
   findings catalogued above — eleven diagnostic codes, the Resource Name grammar,
   the JSONB bound, `operation.input`, the Query factory shape, output inference —
   are exactly "accepted documentation against the tree", but whether any is
@@ -425,8 +434,8 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
 - **Claim 9 — CONFIRMED, both halves.** `owner-decisions.md:25` points at
   `CONTEXT.md:405`, while the Policy scope sentence is at `CONTEXT.md:409`–`:412`.
   Its `:81` pointer covers the heading and blanks; the quoted Authority rule is
-  at `CONTEXT.md:404`–`:405`. The four bare source pointers at
-  `owner-decisions.md:46`, `:49`, `:100`, and `:103` resolve to unrelated
+  at `CONTEXT.md:404`–`:405`. The four bare source pointers in
+  `owner-decisions.md`'s operator-surface section resolve to unrelated
   `feat/v4` code, while `git show feat/v4-beta-09:<path>` reaches exactly the
   durable surface (`compiler/src/runtime/application.ts:464`–`:483`), Studio
   request ordering (`runtime/src/application/index.ts:433`–`:447`), conditional
@@ -502,7 +511,7 @@ available_at, run_id`, so the claim needed a correction about what it contains,
 recorded there rather than a new line number.
 
 **The name-anchored citations written after the previous entry did not decay.**
-`design-context.md:62`'s `` `postgres-maintenance.ts` `staleVersion` `` survived
+`beta09/design-context.md:62`'s `` `postgres-maintenance.ts` `staleVersion` `` survived
 both merges, as did the `actorOf` sites converted last tick. The symbol-anchored
 sites fixed in this pass are written the same way, which is the only part of this
 that compounds in the right direction.
@@ -785,3 +794,56 @@ sentence _onto_ `:23`, so that archaeology now reads as though the original
 citation had been right. It is removed rather than renumbered: a record that
 narrates which line a claim used to cite acquires a second thing that can decay,
 for no benefit the current citation does not already give.
+
+## Enumerating the spellings, as promised — and the one this file is worst at
+
+The previous entry committed to printing which citation spellings a sweep
+matches, so an absent form is visible as absent rather than found by accident.
+Doing that produced the census below, over every `:NN` in the set.
+
+| spelling                                     | count | swept             |
+| -------------------------------------------- | ----- | ----------------- |
+| code path or bare basename                   | 415   | yes               |
+| range continuation `` `:NN` `` after a start | 273   | **no, until now** |
+| doc path                                     | 106   | yes               |
+| bare `ADR-NNNN:LL`                           | 19    | yes               |
+| git-ref-qualified `feat/v4-beta-09:path:NN`  | 11    | **no**            |
+| record-to-record short form                  | 15    | **no, until now** |
+
+**Range ends were clean.** 212 resolvable range ends checked; the four flags are
+whole-file or whole-test spans, not errors. That is a real negative result over
+two hundred line numbers no sweep had looked at, and it says the ends drift with
+the starts rather than independently — which follows, since a range's ends move
+together when a block above them shifts.
+
+**Record-to-record citations were not clean, and this file is the offender.**
+Fifteen exist and fourteen are in this record. That is the predictable
+consequence of a record whose subject is other records: it pins their line
+numbers, and this file has been appended to every tick while the files it cites
+were edited in the same ticks. Five were wrong. One of them —
+`design-context.md:62` — was **ambiguous rather than stale**: six files in
+`docs/v4/implementation/*/` are named `design-context.md`, and the bare form
+resolves to `beta04`'s by directory order. It is qualified now.
+
+**The largest was not a citation problem at all.** The D3 entry above complained
+that the gate names eight divergences and never lists them. `owner-decisions.md`
+now has a D3 section that lists them in a table and says so explicitly. The
+complaint was acted on. Its own quotation, "eight divergences", now appears
+nowhere in the set except this file — the record was quoting a sentence that has
+since been rewritten. Closed in place above rather than deleted, because that
+paragraph is the evidence for the entry that follows it.
+
+**So the second instance of a claim going stale because the tree moved toward
+it.** The first was `implementation-gates.md` adopting this set's `drainRuntime`
+recommendation. Both were found by sweeping for staleness, and in both cases the
+"defect" is a record failing to notice it had won. A sweep that only asks
+whether a claim still holds will classify these identically to ordinary rot; the
+difference is only visible on reading what replaced it.
+
+**Applied the de-pinning lesson to this file rather than restating it.** Four
+passages here narrated other records' line numbers inside historical accounts —
+which line a stale citation used to occupy, where D3 sat three commits ago. Each
+was a second thing that decays for no benefit. They now name the section or the
+record instead. What would overturn this: a reader needing to reconstruct a past
+tree state exactly, for whom the pin is the point — in which case the commit sha
+already recorded beside it is the better anchor.
