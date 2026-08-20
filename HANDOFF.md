@@ -1158,10 +1158,19 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
     both are exactly that. Those eleven span `acceptance-shape.md`,
     `design-context.md`, `hostile-cases.md`, `maintenance-decisions.md` and
     `studio-purpose.md`.
-    **So: 32 candidates, 15 read, 4 defects, and all four in
-    `owner-decisions.md`.** Seventeen remain unread. The working conclusion is
-    that this is one file's habit rather than a slice-wide problem, and the
-    unread seventeen are the test of it.
+    **Sweep closed: 32 candidates, all 32 read, 4 defects, all four in
+    `owner-decisions.md`.** The remaining 28 are 27 correct `feat/v4` citations
+    plus one correct-at-its-own-reviewed-head historical citation. The habit is
+    one file's, not the slice's.
+    **One methodological point the last candidate earned.**
+    `beta05/claude-initial-review.md:18` cites
+    `tests/integration/postgres/helpers/beta05-runtime.ts:31`, which is a blank
+    line on `feat/v4` today. At BETA-05's reviewed head `884b5d8a` it is
+    `const beta05FixtureRoot = resolve(` — correct when written, shifted by one
+    since. **An accepted review record is a snapshot against its own reviewed
+    head, and checking it against `HEAD` is the wrong ref.** Any future citation
+    sweep should exclude `docs/v4/implementation/*/claude-*.md` or resolve them
+    against the matching accepted head in the authority table above.
     **D3 has a bigger problem than its heading: the eight divergences it batches
     are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
     divergences between accepted documentation and the tree that this slice
