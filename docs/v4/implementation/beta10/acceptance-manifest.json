@@ -1,0 +1,94 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#297",
+	"proof": "BETA-10 proves correctness across ten all-role Runtime instances and a compatible rolling build: arbitrary direct and network routing, tenant-fair executable-compatible admission, concurrent workers, instance replacement, lease recovery, reconnect and fanout evidence all converge on PostgreSQL without sticky routing, a leader, process registry, cache, broker, or carrier authority.",
+	"diffBase": "21e38b2156b0431613c14755765430b7504d176a",
+	"reviewOutput": "docs/v4/implementation/beta10/REVIEW-HA-01.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "21e38b2156b0431613c14755765430b7504d176a",
+		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
+	},
+	"authorityDocuments": [
+		{
+			"name": "ADR-0014 Runtime, client, envelope, and long-term Studio boundary",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "59e41ff38193ad9cc46d8e8f0e7c5011374a44abe2f8024fc997ca8eab6f1d78"
+		},
+		{
+			"name": "ADR-0017 multi-instance correctness and optional acceleration",
+			"path": "docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
+			"sha256": "d48da37d623b3a575200ae6f2a9fe4b40819767dcbea610eb9992e425d1c1461"
+		},
+		{
+			"name": "ADR-0020 repository foundation",
+			"path": "docs/adr/0020-establish-the-repository-foundation.md",
+			"sha256": "55f2cb05cac8005dc66de9090c487506ffabd16a4ba4ab84e1d3fa289ec4d9d7"
+		},
+		{
+			"name": "ADR-0021 beta.1 release slicing",
+			"path": "docs/adr/0021-slice-the-beta-one-release.md",
+			"sha256": "64df6c1db2922b6943116cf6afd6399042e8380818eaf695152ed282deb364b0"
+		},
+		{
+			"name": "ADR-0024 Studio descope",
+			"path": "docs/adr/0024-descope-minimal-studio-from-beta-one.md",
+			"sha256": "27a40d6e8ee91979337ba818f0e78c2bf29ceedeedb662b01292218e11f37b22"
+		},
+		{
+			"name": "implementation gates",
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "5b8a645b7190555c54cded0bd29fa0f5355536ea701a8c3e8d908c21b5447985"
+		},
+		{
+			"name": "BETA-10 backend closure record",
+			"path": "docs/v4/implementation/beta10/backend-acceptance.md",
+			"sha256": "cd198c6fde806bd7f55f9900afcb49c619d00018eac2d5eaeec1fb3ab8e79587"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run check:changed -- --test tests/type/beta01-generated-contract.test.ts --test tests/unit/beta07-live-query-projection.test.ts --test tests/hostile/beta10-compatibility.test.ts --test tests/unit/beta07-postgres-reconciliation.test.ts --test tests/integration/postgres/beta08-durable-kernel.test.ts --typecheck @questpie/runtime --typecheck @questpie/compiler",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun test tests/integration/postgres/beta08-durable-kernel.test.ts (13 tests, 130 assertions)",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun tests/load/beta10-ten-instance.ts (40 runs, 0 duplicate attempts, 984.768 ms)",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun tests/load/beta10-soak-chaos.ts (80 runs, 1 recovered crash attempt, 3 replacement instances, 0 failures, 3231.481 ms)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/unit/beta07-live-query-projection.test.ts (complete generated application bundle remains within the unchanged 524288-byte budget)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:full",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/implementation/beta10/acceptance-manifest.json --dry-run",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"The owned ten-instance scenario creates ten all-role collaboration Runtime instances, routes 20 direct roots and 20 Operation-Wire POSTs arbitrarily, completes 40 durable runs, records zero duplicate attempts, and proves drained workers admit no later work.",
+		"The fleet contains one signed internal-protocol-v4 Runtime Build and nine current v5 builds. Compatibility remains separate for schema, wire, Policy/Context, realtime, executable, durable state, and internal protocol; the evidence does not claim arbitrary historical binary compatibility.",
+		"Durable admission is tenant-fair and filters incompatible executable digests before LIMIT. A direct claim rechecks compatibility under the row lock, refuses EXECUTABLE_RETIRED without consuming an attempt, and leaves old work durable for a compatible worker.",
+		"Exact PostgreSQL serialization losers in claim and cancellation reaping perform no second transition and leave work for a later poll, while every non-40001 failure still escapes. Startup reconciliation retries the complete repeatable-read transaction from a fresh snapshot.",
+		"A run abandoned after its last allowed claim becomes one failed RETRY_EXHAUSTED dead letter, settles its outstanding attempt, appends one failure event, creates no extra attempt, and no longer poisons admission.",
+		"The separate manual soak/chaos scenario completes 80 runs in waves across ten instances, abandons and recovers one lease exactly once, replaces three instances, ends with zero failed runs, and records zero post-drain admissions.",
+		"The rolling matrix, fanout/worker/reconnect report, and optional-infrastructure absence report connect the BETA-10 fleet to established fanout, fresh-Runtime reconnect, arbitrary-holder reauthorization, and drain evidence. No correctness claim depends on sticky routing, a leader, process registry, cache, broker, Redis, Pusher, WebSocket, or retained connection state.",
+		"For beta.1, drainRuntime is the idempotent local app.close lifecycle transition: it stops new roots and claims, bounds owned work, and disposes the instance. A remote durable maintenance command is not invented without Accepted authority for stable Runtime-instance identity, targeting, fencing across process death, and audit.",
+		"The five required owned artifacts exist: ten-instance load report, separate soak/chaos report, rolling compatibility matrix, fanout/worker/reconnect report, and optional-infrastructure absence report. Their stable-runner budgets remain separately owned and ordinary changed-loop behavior is unchanged.",
+		"The generated application remains under the unchanged 524288-byte bundle ratchet by enabling syntax minification rather than raising the budget. Redis implementation, Pusher/WebSocket, split roles, provider matrix, Studio, and new browser or network administration surfaces remain non-goals."
+	]
+}
