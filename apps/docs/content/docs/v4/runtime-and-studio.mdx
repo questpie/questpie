@@ -1,6 +1,6 @@
 ---
-title: Run and inspect the application
-description: Build one immutable application, start the Runtime, call it directly or through a generated client, and inspect the same truth in Studio.
+title: Run the application
+description: Build one immutable application, start the Runtime, and call it directly or through a generated client.
 kind: guide
 ---
 
@@ -104,15 +104,21 @@ input fails with the operation-specialized `IDEMPOTENCY_CONFLICT` error. See
 The generated App runs the same Query without a network transport:
 
 ```ts title="scripts/read-channel.ts"
-import { createApp } from "#questpie/app";
+import { createApp, type DurableMaintenanceAuthorization } from "#questpie/app";
 
 export async function readChannel(
 	postgresUrl: string,
+	realtimeHmacKey: Uint8Array,
+	authorizeMaintenance: DurableMaintenanceAuthorization,
 	userId: string,
 	companyId: string,
 	channelId: string,
 ) {
-	const app = await createApp({ postgres: { url: postgresUrl } });
+	const app = await createApp({
+		postgres: { url: postgresUrl },
+		realtime: { hmacKey: realtimeHmacKey },
+		maintenance: { authorize: authorizeMaintenance },
+	});
 
 	try {
 		return await app.execution(
@@ -136,9 +142,9 @@ export async function readChannel(
 
 The generated App exposes `fetch`, `execution`, `close`, and the compiler-owned
 `routes` direct-invocation projection. Raw Routes remain outside the generated
-JSON Operation client. Direct, Fetch, generated-client, nested, recompute,
-worker, and Studio calls use the same Context, Policy, Operation, error,
-transaction, and observation engine. `close` is idempotent.
+JSON Operation client. Direct, Fetch, generated-client, nested, recompute, and
+worker calls use the same Context, Policy, Operation, error, transaction, and
+observation engine. `close` is idempotent.
 
 ## Understand readiness and drain
 
@@ -196,27 +202,19 @@ Seed, error, and audit identities. It does not contain a credential, database
 URL, raw payload, relational Policy evidence, serialized Context, Service
 state, secret, or stack trace.
 
-## Use Studio
-
-Studio is the optional inspector and operational control surface for one
-compiled QUESTPIE application. It derives explanations from canonical
-artifacts, Runtime state, receipts, and append-only events. Application data
-uses ordinary generated Operations and Policy. A row hidden from the
-application is also hidden from Studio.
-
-Studio is not a SQL console, private-table editor, Policy bypass, second
-backend, page builder, or Operator App framework.
-
-Studio pages contain at most 100 rows, and retained Studio data is bounded to
-64 MiB. Application code does not define a separate Studio route or backend.
-
 ## Run maintenance commands
 
-The minimal maintenance surface has four commands: `acknowledgeAmbiguity`,
-`cancelRun`, `retryRun`, and `drainRuntime`. Each command requires explicit
-maintenance Authority, exact identity, a bounded reason, an idempotency
-identity, an expected-version fence, a typed winner, and an append-only audit
-event.
+The maintenance contract has four commands: `acknowledgeAmbiguity`, `cancelRun`,
+`retryRun`, and the Runtime lifecycle operation `drainRuntime`. The host must
+supply the `maintenance.authorize` decision when it creates the generated App;
+there is no default allow. Each command requires maintenance Authority, exact
+identity, a bounded reason, idempotency, expected-version fencing, a typed
+winner, and append-only audit. A stale durable-command caller receives the
+current version it can retry against.
+
+Maintenance has no browser or Operation-Wire transport in beta.1. Studio is
+deferred to a later privileged administration vertical; beta.1 does not ship an
+artifact viewer.
 
 ## Stay within Runtime limits
 

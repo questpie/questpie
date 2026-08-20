@@ -423,6 +423,7 @@ export interface GeneratedApp {
 export type CreateAppInput = Readonly<{
 	postgres: Readonly<{ url: string }>;
 	${realtime ? "realtime: Readonly<{ hmacKey: Uint8Array }>;" : ""}
+	maintenance: Readonly<{ authorize: DurableMaintenanceAuthorization }>;
 }>;
 
 export async function createApp(input: CreateAppInput): Promise<GeneratedApp> {

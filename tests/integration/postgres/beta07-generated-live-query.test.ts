@@ -22,6 +22,7 @@ type GeneratedInternal = Readonly<{
 		input: Readonly<{
 			postgres: Readonly<{ url: string }>;
 			realtime: Readonly<{ hmacKey: Uint8Array }>;
+			maintenance: Readonly<{ authorize(): boolean }>;
 		}>,
 	): Promise<GeneratedApplication>;
 	bindIngressPrincipalForRequest(request: Request, principal: unknown): Request;
@@ -238,6 +239,7 @@ postgresTest(
 				const application = await internal.createApplication({
 					postgres: { url: beta05PostgresUrl() },
 					realtime: { hmacKey: new Uint8Array(32).fill(7) },
+					maintenance: { authorize: () => true },
 				});
 				applications.push(application);
 				return application;

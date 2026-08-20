@@ -187,6 +187,7 @@ postgresTest(
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
 			});
 			try {
 				const ledgerFactsBefore = await changeLedgerFactCount();
@@ -386,6 +387,7 @@ postgresTest(
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();
@@ -478,6 +480,7 @@ postgresTest(
 			const application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
 			});
 			try {
 				const internal = await prepared.generated.loadInternal();

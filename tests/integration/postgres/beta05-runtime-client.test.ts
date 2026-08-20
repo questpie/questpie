@@ -53,6 +53,7 @@ postgresTest(
 				generated.app.createApp({
 					postgres: { url: beta05PostgresUrl() },
 					realtime: { hmacKey: new Uint8Array(32) },
+					maintenance: { authorize: () => true },
 				}),
 			).rejects.toThrow("Runtime Build digest does not match");
 			await writeFile(runtimeBuildPath, runtimeBuildBytes);
@@ -86,6 +87,7 @@ postgresTest(
 				generated.app.createApp({
 					postgres: { url: beta05PostgresUrl() },
 					realtime: { hmacKey: new Uint8Array(32) },
+					maintenance: { authorize: () => true },
 				}),
 			).rejects.toThrow(
 				"PostgreSQL Schema Fingerprint does not match Runtime Build",
@@ -171,6 +173,7 @@ postgresTest(
 				.createApp({
 					postgres: { url: beta05PostgresUrl() },
 					realtime: { hmacKey: new Uint8Array(32) },
+					maintenance: { authorize: () => true },
 				})
 				.then(
 					async (forgedApplication: Readonly<{ close(): Promise<void> }>) => {
@@ -192,6 +195,7 @@ postgresTest(
 			const application = await generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
 			});
 			try {
 				const internal = await generated.loadInternal();
@@ -309,6 +313,7 @@ postgresTest(
 				generated.app.createApp({
 					postgres: { url: beta05PostgresUrl() },
 					realtime: { hmacKey: new Uint8Array(32) },
+					maintenance: { authorize: () => true },
 				}),
 			).rejects.toThrow(
 				"PostgreSQL migration history does not match Runtime Build",

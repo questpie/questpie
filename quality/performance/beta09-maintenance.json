@@ -1,0 +1,29 @@
+{
+	"id": "beta09-maintenance",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta09-maintenance.test.ts"],
+	"budgetOwner": "BETA-09",
+	"metrics": {
+		"postgresMaintenance20Ms": {
+			"direction": "max",
+			"budget": 400,
+			"unit": "ms"
+		},
+		"auditRows": {
+			"direction": "min",
+			"budget": 20,
+			"unit": "count"
+		},
+		"publicDeclarationBytes": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}

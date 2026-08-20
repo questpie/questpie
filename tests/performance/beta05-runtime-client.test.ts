@@ -60,6 +60,7 @@ postgresTest(
 			application = await prepared.generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
 			});
 			const coldStartMs = performance.now() - started;
 			const internal = await prepared.generated.loadInternal();

@@ -524,11 +524,13 @@ postgresTest(
 			prepared.maintenance.acknowledgeAmbiguity({
 				runId: failedRun,
 				effectName: "deliver-message",
+				reason: "settle ambiguous delivery",
 				actor,
 			}),
 			prepared.maintenance.acknowledgeAmbiguity({
 				runId: failedRun,
 				effectName: "deliver-message",
+				reason: "concurrent settlement probe",
 				actor,
 			}),
 		]);
@@ -543,8 +545,16 @@ postgresTest(
 		).toHaveLength(1);
 
 		const retries = await Promise.all([
-			prepared.maintenance.retryRun({ runId: failedRun, actor }),
-			prepared.maintenance.retryRun({ runId: failedRun, actor }),
+			prepared.maintenance.retryRun({
+				runId: failedRun,
+				reason: "operator retry",
+				actor,
+			}),
+			prepared.maintenance.retryRun({
+				runId: failedRun,
+				reason: "concurrent retry probe",
+				actor,
+			}),
 		]);
 		expect(retries.filter(({ outcome }) => outcome === "applied")).toHaveLength(
 			1,

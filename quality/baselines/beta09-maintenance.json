@@ -1,0 +1,50 @@
+{
+	"format": "questpie.performance-baseline",
+	"version": 1,
+	"scenario": "beta09-maintenance",
+	"budgetOwner": "BETA-09",
+	"toolchain": {
+		"bun": "1.3.14",
+		"typescript": "6.0.2",
+		"postgres": "17"
+	},
+	"reference": {
+		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"postgres": "local Docker postgres:17",
+		"recordedAt": "2026-08-20",
+		"samples": 3,
+		"aggregation": "median by postgresMaintenance20Ms"
+	},
+	"evidence": {
+		"localBaseline": "PASS",
+		"selectedPrPostgres17": "PENDING_CI",
+		"taggedStableRunner": "PENDING"
+	},
+	"samples": {
+		"postgresMaintenance20Ms": [
+			71.59109000000035, 146.2301620000003, 71.48804799999971
+		]
+	},
+	"observed": {
+		"postgresMaintenance20Ms": 71.59109000000035,
+		"auditRows": 20,
+		"publicDeclarationBytes": 58496,
+		"typescriptInstantiations": 21008
+	},
+	"budgetDerivation": {
+		"postgresMaintenance20Ms": {
+			"referenceObservedMs": 71.59109000000035,
+			"multiplier": 5,
+			"roundUpQuantumMs": 100
+		}
+	},
+	"budgets": {
+		"postgresMaintenance20Ms": 400,
+		"auditRows": 20,
+		"publicDeclarationBytes": 125000,
+		"typescriptInstantiations": 125000
+	},
+	"status": "PASS"
+}
