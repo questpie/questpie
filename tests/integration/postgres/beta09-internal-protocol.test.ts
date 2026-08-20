@@ -1,4 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { SQL } from "bun";
 
@@ -23,6 +26,21 @@ async function connectionIdentity(
 		select current_database() as "databaseName"
 	`;
 	return { databaseName: current!.databaseName, pid: await backendPid(sql) };
+}
+
+async function catalogTool(...cliArguments: string[]): Promise<string> {
+	const child = Bun.spawn(
+		["bun", "run", "scripts/internal-protocol-catalog.ts", ...cliArguments],
+		{ stdout: "pipe", stderr: "pipe" },
+	);
+	const [exitCode, stdout, stderr] = await Promise.all([
+		child.exited,
+		new Response(child.stdout).text(),
+		new Response(child.stderr).text(),
+	]);
+	expect(stderr).toBe("");
+	expect(exitCode).toBe(0);
+	return stdout;
 }
 
 beforeEach(async () => {
@@ -110,6 +128,34 @@ describe.skipIf(!database)("BETA-09 questpie_internal protocol v5", () => {
 			});
 		} finally {
 			session.release();
+		}
+	});
+
+	test("the live v4-to-v5 delta reproduces the committed catalog module", async () => {
+		const directory = await mkdtemp(join(tmpdir(), "questpie-v5-catalog-"));
+		const base = join(directory, "v4.json");
+		const session = await database!.reserve();
+		try {
+			const identity = await connectionIdentity(session);
+			await ensureInternalProtocolV4(
+				session,
+				identity.databaseName,
+				identity.pid,
+				control,
+			);
+			await catalogTool("--snapshot", base);
+			await ensureInternalProtocolV5(
+				session,
+				identity.databaseName,
+				identity.pid,
+				control,
+			);
+			expect(
+				await catalogTool("--emit", "5", "--base", base, "--check"),
+			).toContain("catalog v5 reproduces the committed module exactly");
+		} finally {
+			session.release();
+			await rm(directory, { recursive: true, force: true });
 		}
 	});
 });

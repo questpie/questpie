@@ -165,13 +165,6 @@ export function createPostgresDurableMaintenance(
 	};
 
 	/**
-	 * The accepted contract requires a bounded reason. Enforcing it only in the
-	 * DDL makes an over-long reason a raw PostgreSQL error, while every other
-	 * refusal on this surface is a typed, audited outcome. The bound is the same
-	 * 1–256 the schema uses; stating it twice is deliberate, since the CHECK is
-	 * the backstop and this is the contract.
-	 */
-	/**
 	 * Gate 8 expected-version fencing. `inspect()` reports the run version, and a
 	 * command bound to a stale one is refused rather than applied to a run that
 	 * moved underneath the operator who read it.
@@ -289,8 +282,7 @@ WHERE application_name = $1 AND run_id = $2`,
 		}>,
 		command: DurableMaintenanceCommand,
 	): Promise<DurableMaintenanceOutcome | null> => {
-		const invalidReason =
-			request.reason.length < 1 || request.reason.length > 256;
+		const invalidReason = !request.reason || [...request.reason].length > 256;
 		if (
 			!(await input.authorize({
 				actor: request.actor,

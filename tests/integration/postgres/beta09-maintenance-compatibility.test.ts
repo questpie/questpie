@@ -287,6 +287,15 @@ postgresTest(
 			state: "ready",
 			cancellationRequested: false,
 		});
+
+		// PostgreSQL length(text) and the runtime contract both count Unicode
+		// characters, not JavaScript UTF-16 code units.
+		const unicodeReason = "😀".repeat(200);
+		expect(unicodeReason.length).toBe(400);
+		expect(Array.from(unicodeReason)).toHaveLength(200);
+		expect(
+			await maintenance.cancelRun({ runId, reason: unicodeReason, actor }),
+		).toMatchObject({ outcome: "applied", rejectionCode: null });
 	},
 );
 

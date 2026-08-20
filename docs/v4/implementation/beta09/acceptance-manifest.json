@@ -1,11 +1,11 @@
 {
 	"protocolVersion": 2,
 	"ticket": "#296",
-	"proof": "BETA-09 closes the backend maintenance-compatibility gap without shipping Studio: the generated App requires a host-owned maintenance Authority decision, every durable command carries a bounded audited reason, stale callers receive the settled winner version, and questpie.internal.v5 upgrades the append-only audit catalog from v4 without accepting checksum drift.",
-	"diffBase": "a657f6d580ade7dd8e18f88fa1eef3f4644c486a",
+	"proof": "BETA-09 closes the backend maintenance-compatibility gap without shipping Studio: the generated App requires a host-owned maintenance Authority decision, every durable command carries a Unicode-consistent bounded audited reason, stale callers receive the settled winner version, and a live-derived questpie.internal.v5 catalog upgrades the append-only audit catalog from v4 without accepting checksum drift.",
+	"diffBase": "23fa840dee64622093152eb9fad193b714fb7211",
 	"reviewOutput": "docs/v4/implementation/beta09/REVIEW-BACKEND-02.json",
 	"authorityHeads": {
-		"accepted feat/v4 base": "a657f6d580ade7dd8e18f88fa1eef3f4644c486a",
+		"accepted feat/v4 base": "23fa840dee64622093152eb9fad193b714fb7211",
 		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
 	},
 	"authorityDocuments": [
@@ -37,7 +37,7 @@
 		{
 			"name": "BETA-09 backend closure record",
 			"path": "docs/v4/implementation/beta09/backend-acceptance.md",
-			"sha256": "ac76068c4e7555ec92bc2d1316ab4a2d8b96a06a466d3de720ec8d7f0503cfb0"
+			"sha256": "3025de37cab46f59cadcdbfd1b4133a61bf15d5c5b42f66866caef5ebe3fd84d"
 		}
 	],
 	"verification": [
@@ -46,11 +46,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run test:postgres -- --scenario beta09 (8 tests, 0 failures)",
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run test:postgres -- --scenario beta09 (9 tests, 0 failures)",
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta09 (79.497 ms against 400 ms, 20 run-scoped audit rows, 58,711 public declaration bytes, 21,037 TypeScript instantiations)",
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta09 (84.076 ms against 400 ms, 20 run-scoped audit rows, 58,711 public declaration bytes, 21,037 TypeScript instantiations)",
 			"result": "PASS"
 		},
 		{
@@ -58,7 +58,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun test tests/unit/beta07-live-query-projection.test.ts (524,277 complete generated application-bundle bytes against the unchanged 524,288 budget; 11 bytes headroom with readable audit SQL)",
+			"command": "bun test tests/unit/beta07-live-query-projection.test.ts (524,274 complete generated application-bundle bytes against the unchanged 524,288 budget; 14 bytes headroom with readable audit SQL)",
 			"result": "PASS"
 		},
 		{
@@ -81,12 +81,12 @@
 	"acceptanceCriteria": [
 		"The generated CreateAppInput requires maintenance.authorize, the generated application passes it to the durable surface, and there is no implicit allow, ambient Admin/System Principal, browser client, Fetch route, or Operation-Wire maintenance transport.",
 		"Maintenance Authority is evaluated for the trusted Principal, exact command, and run identity before the target row is locked. A known denied target is audited, but the caller receives typed AUTHORITY_DENIED with null state and version; an unknown target returns the same shape and therefore creates no existence oracle.",
-		"acknowledgeAmbiguity, cancelRun, and retryRun each require a reason of 1 through 256 characters; invalid input is a typed, audited REASON_INVALID result and does not mutate the run.",
+		"acknowledgeAmbiguity, cancelRun, and retryRun each require a reason of 1 through 256 Unicode characters, counted consistently with PostgreSQL length(text); invalid input is a typed, audited REASON_INVALID result and does not mutate the target run or effect.",
 		"Expected-version fencing refuses a stale caller with VERSION_MISMATCH and returns the settled current run version, which can be used for a successful retry; every non-Authority outcome reports the settled version while an Authority denial discloses none.",
-		"questpie.internal.v5 adds the nullable bounded maintenance reason to the existing append-only audit catalog, installs fresh or upgrades v4 in the pinned protocol transaction, and refuses a same-version checksum mismatch without partially accepting drift.",
+		"questpie.internal.v5 adds the nullable bounded maintenance reason to the existing append-only audit catalog, installs fresh or upgrades v4 in the pinned protocol transaction, and refuses a same-version checksum mismatch without partially accepting drift. The repository producer derives the v5 delta from live v4 and v5 catalogs and reproduces the committed module byte for byte.",
 		"The generated Runtime Build declares questpie.internal.v5. A decoder test recomputes and accepts a valid v4 Runtime Build and rejects an unsupported protocol, while newly compiled applications require v5.",
 		"The maintenance tests include positive-controlled instruments proving denial precedes FOR UPDATE for each of the three commands, PostgreSQL evidence for audited denial and authorized success, all three invalid-reason paths, winner-version recovery, and durable write-guard re-arming.",
-		"The reference-local performance test executes 20 fenced maintenance commands, counts exactly their 20 audit rows, and stays under 400 ms. Readable audit SQL leaves the complete generated BETA-07 application bundle at 524,277 bytes, 11 bytes below its unchanged budget.",
+		"The reference-local performance test executes 20 fenced maintenance commands, counts exactly their 20 audit rows, and stays under 400 ms. Readable audit SQL leaves the complete generated BETA-07 application bundle at 524,274 bytes, 14 bytes below its unchanged budget.",
 		"Studio UI, browser mounting, an inspection read model, a failed-run worklist, and ambient privileged authority remain explicit non-goals. drainRuntime remains a Runtime lifecycle operation inside Gate 8's four-command maintenance contract, and the public guide retains the accepted Runtime limit, failure, retention, and backpressure clauses."
 	]
 }

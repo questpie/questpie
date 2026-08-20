@@ -26,7 +26,7 @@ default allow and no browser or Operation-Wire transport.
 
 The runtime evaluates that decision for the trusted Principal, command, and run
 identity (`packages/runtime/src/durable/postgres-maintenance.ts:107`–`:126`,
-`:283`–`:342`). A denied caller is read without `FOR UPDATE`; a known target is
+`:276`–`:342`). A denied caller is read without `FOR UPDATE`; a known target is
 audited, but the caller receives `AUTHORITY_DENIED` with null state and version.
 An unknown target returns the same shape and command identity, so denial is not
 a run-existence oracle. The unknown target cannot produce an audit row because
@@ -43,11 +43,16 @@ change if the accepted disclosure contract explicitly allowed validation
 results before Authority, or if invalid attempts no longer had to be audited.
 
 All three durable commands require a reason of 1–256 characters
-(`postgres-maintenance.ts:78`–`:103`, `:292`–`:293`). Invalid input is a typed,
-audited `REASON_INVALID` result rather than a raw database error. Every audit
-row carries the actor, transition, rejection and reason (`:240`–`:279`), and an
+(`postgres-maintenance.ts:78`–`:103`, `:276`–`:285`). Runtime
+and PostgreSQL both count Unicode characters rather than JavaScript UTF-16 code
+units. Invalid input is a typed, audited `REASON_INVALID` result rather than a
+raw database error. "Before mutation" means before mutating the target run or
+effect: the append-only audit `INSERT` is the required record of the rejected
+attempt, not an applied maintenance transition. Every audit row carries the
+actor, transition, rejection and reason (`:235`–`:273`), and an
 expected-version loser receives the settled run version it can use for a safe
-retry (`:267`–`:279`).
+retry (`:259`–`:273`). This interpretation would change only if accepted
+authority explicitly made invalid attempts unaudited.
 
 The generated Runtime Build declares `questpie.internal.v5`
 (`packages/compiler/src/runtime/index.ts:411`), while the artifact decoder
@@ -65,37 +70,46 @@ catalog verification compares that order to `attnum`; sorting column names
 would make the generated catalog deterministic but wrong. The table-only stable
 sort is therefore intentional
 (`packages/compiler/src/schema/postgres/internal-protocol-v5.ts:47`–`:72`).
+The catalog is not trusted as a transcription: the repository tool snapshots a
+live v4 catalog, derives the live v5 delta, formats it, and compares it byte for
+byte with the committed module
+(`scripts/internal-protocol-catalog.ts:33`–`:228`). The PostgreSQL scenario
+runs that producer through the real v4-to-v5 transition.
 
 ## Evidence
 
-The PostgreSQL scenario has two protocol tests and six maintenance tests. It
+The PostgreSQL scenario has three protocol tests and six maintenance tests. It
 proves fresh-v5 and v4-to-v5 convergence, same-version checksum refusal,
+byte-identical live-catalog derivation,
 Authority denial before a row lock for all three commands with positive
 controls, audited denial, winner-version recovery, guard re-arming, invalid
-reasons on all three commands, and an authorized success
-(`tests/integration/postgres/beta09-internal-protocol.test.ts:37`–`:114`,
+reasons on all three commands, Unicode-bound parity, and an authorized success
+(`tests/integration/postgres/beta09-internal-protocol.test.ts:56`–`:160`,
 `tests/integration/postgres/beta09-maintenance-compatibility.test.ts:23`–`:89`,
-`:145`–`:314`).
+`:145`–`:323`).
 
 The reference-local microbenchmark executes 20 fenced maintenance commands and
 scopes the audit count to those exact runs. The committed baseline is the median
-71.591 ms sample; the dedicated pre-acceptance sample was 79.497 ms and the
-release rerun sampled 90.510 ms against a 400 ms budget, both with 20 audit rows,
-58,711 public declaration bytes, and 21,037 TypeScript instantiations.
+71.591 ms sample; the repaired head's dedicated pre-acceptance sample was
+84.076 ms against a 400 ms budget, with 20 audit rows, 58,711 public declaration
+bytes, and 21,037 TypeScript instantiations.
 
-The first acceptance review also found an unverified 240-line catalog generator,
-a test-only marker export in the published runtime, and audit SQL compressed to
-win bundle bytes. The generator was removed, the unmark statement moved into
-the hostile test that owns it, and the SQL formatting was restored. After a
-code-level maintenance preflight refactor, the complete generated BETA-07
-application bundle is 524,277 bytes against its unchanged 524,288-byte budget:
-11 bytes of measured headroom, without cosmetic SQL compression.
+The first acceptance review found an unverified 240-line catalog generator, a
+test-only marker export in the published runtime, and audit SQL compressed to
+win bundle bytes. The generator was initially removed, but the later two-axis
+review correctly rejected a generated module with no reproducible producer. A
+smaller producer is now exercised byte-for-byte against live PostgreSQL. The
+unmark statement remains in the hostile test that owns it, and the SQL formatting
+is restored. After a code-level maintenance preflight refactor, the complete
+generated BETA-07 application bundle is 524,274 bytes against its unchanged
+524,288-byte budget: 14 bytes of measured headroom, without cosmetic SQL
+compression.
 
-A subsequent acceptance invocation on head `610379e2` returned terminal
+Acceptance invocations on heads `610379e2` and `46b11c39` each returned terminal
 `NO_RESULT` after the reviewer transport timed out and wrote no review artifact;
-it is not a verdict. This record now includes the additional all-command
-lock-order evidence and the catalog-order invariant before requesting a fresh
-review of the materially changed head.
+neither is a verdict. The current materially changed head additionally closes
+the reproducible-catalog and Unicode-bound findings before requesting a fresh
+review.
 
 ## Deliberate limits
 
@@ -105,8 +119,10 @@ review of the materially changed head.
   server-internal and the deployment owns its authorization decision.
 - No ambient Admin/System Principal is introduced.
 - `drainRuntime` remains a Runtime lifecycle operation. This slice does not add
-  it to the three-command durable maintenance object or weaken Gate 8's
-  four-command maintenance contract.
+  it to the three-command durable maintenance object. BETA-10 owns its
+  multi-instance fencing evidence
+  (`docs/v4/prototypes/implementation-collapse-p16/QUEUE.json:491`–`:512`);
+  BETA-09 does not claim that later gate complete.
 - The public guide retains the accepted Runtime limit, failure, retention, and
   backpressure contract. Removing Studio does not descope those clauses.
 
