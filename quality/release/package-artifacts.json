@@ -1,0 +1,14 @@
+{
+	"format": "questpie.release-artifacts",
+	"version": 1,
+	"release": "4.0.0-beta.1",
+	"packages": [
+		{
+			"name": "questpie",
+			"version": "4.0.0-beta.1",
+			"filename": "questpie-4.0.0-beta.1.tgz",
+			"sha256": "7b12a85fffbb156c6d14b9df50b753c586f4cb5272ecaba2e2ddc993cb55064c",
+			"declarationSha256": "11e0160eebe073b138850486868f52ae9ce900bd5310677f17b4d003fab4a45a"
+		}
+	]
+}

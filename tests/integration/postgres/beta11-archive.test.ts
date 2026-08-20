@@ -1,5 +1,5 @@
 import { afterAll, expect, setDefaultTimeout, test } from "bun:test";
-import { cp, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -13,12 +13,25 @@ import {
 	loadCommittedMigration,
 } from "@questpie/compiler";
 
+import {
+	buildPackedTracer,
+	installQuestpieForTracer,
+} from "../../support/beta12-packed-questpie";
+
 const fixtureRoot = resolve(import.meta.dir, "../../../fixtures/archive");
-const repositoryRoot = resolve(import.meta.dir, "../../..");
 const database = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 
-setDefaultTimeout(30_000);
+const configuredTimeout = Number(
+	process.env.QUESTPIE_POSTGRES_TEST_TIMEOUT_MS ?? "30000",
+);
+if (
+	!Number.isSafeInteger(configuredTimeout) ||
+	configuredTimeout < 30_000 ||
+	configuredTimeout > 120_000
+)
+	throw new TypeError("PostgreSQL test timeout must be 30000..120000ms");
+setDefaultTimeout(configuredTimeout);
 
 const ids = Object.freeze({
 	authorized: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
@@ -166,16 +179,7 @@ async function within<Value>(promise: Promise<Value>, milliseconds: number) {
 async function relocatedFixture(): Promise<string> {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta11-pg-"));
 	await cp(fixtureRoot, temporary, { recursive: true });
-	await mkdir(join(temporary, "node_modules/questpie"), { recursive: true });
-	await writeFile(
-		join(temporary, "node_modules/questpie/package.json"),
-		JSON.stringify({ name: "questpie", type: "module", exports: "./index.ts" }),
-	);
-	await symlink(
-		resolve(repositoryRoot, "packages/questpie/src/index.ts"),
-		join(temporary, "node_modules/questpie/index.ts"),
-		"file",
-	);
+	await installQuestpieForTracer(temporary);
 	return temporary;
 }
 
@@ -216,14 +220,18 @@ async function prepareArchive() {
 
 	const temporary = await relocatedFixture();
 	try {
-		await compileApplication({ applicationRoot: temporary });
+		if (!buildPackedTracer(temporary))
+			await compileApplication({ applicationRoot: temporary });
 		const generatedRoot = join(temporary, ".questpie/generated");
 		const nonce = `?beta11=${crypto.randomUUID()}`;
 		const client = await import(
 			`${pathToFileURL(join(generatedRoot, "client.ts")).href}${nonce}`
 		);
+		const questpieEntry = process.env.QUESTPIE_PACKED_TARBALL
+			? join(temporary, "node_modules/questpie/dist/index.js")
+			: join(temporary, "node_modules/questpie/index.ts");
 		const framework = await import(
-			`${pathToFileURL(join(temporary, "node_modules/questpie/index.ts")).href}${nonce}`
+			`${pathToFileURL(questpieEntry).href}${nonce}`
 		);
 		const internal = (await import(
 			`${pathToFileURL(join(generatedRoot, "internal/application.js")).href}${nonce}`

@@ -1,13 +1,4 @@
-import {
-	cp,
-	mkdir,
-	mkdtemp,
-	readFile,
-	readdir,
-	rm,
-	symlink,
-	writeFile,
-} from "node:fs/promises";
+import { cp, mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -19,6 +10,11 @@ import {
 	compileApplication,
 	loadCommittedMigration,
 } from "@questpie/compiler";
+
+import {
+	buildPackedTracer,
+	installQuestpieForTracer,
+} from "../../../support/beta12-packed-questpie";
 
 export const beta05Ids = Object.freeze({
 	company: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
@@ -34,7 +30,6 @@ const beta05FixtureRoot = resolve(
 	import.meta.dir,
 	"../../../../fixtures/collaboration",
 );
-const repositoryRoot = resolve(import.meta.dir, "../../../..");
 const beta06MigrationNames = Object.freeze([
 	"000001_create-collaboration",
 	"000002_authorize-message-pages",
@@ -81,25 +76,7 @@ export function beta05PostgresUrl(): string {
 async function relocatedFixture(): Promise<string> {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta05-pg-"));
 	await cp(beta05FixtureRoot, temporary, { recursive: true });
-	await mkdir(join(temporary, "node_modules"), { recursive: true });
-	await rm(join(temporary, "node_modules/questpie"), {
-		force: true,
-		recursive: true,
-	});
-	await mkdir(join(temporary, "node_modules/questpie"));
-	await writeFile(
-		join(temporary, "node_modules/questpie/package.json"),
-		JSON.stringify({
-			name: "questpie",
-			type: "module",
-			exports: "./index.ts",
-		}),
-	);
-	await symlink(
-		resolve(repositoryRoot, "packages/questpie/src/index.ts"),
-		join(temporary, "node_modules/questpie/index.ts"),
-		"file",
-	);
+	await installQuestpieForTracer(temporary);
 	return temporary;
 }
 
@@ -112,8 +89,11 @@ async function importGenerated(temporary: string) {
 	const client = await import(
 		`${pathToFileURL(join(generatedRoot, "client.ts")).href}${nonce}`
 	);
+	const questpieEntry = process.env.QUESTPIE_PACKED_TARBALL
+		? join(temporary, "node_modules/questpie/dist/index.js")
+		: join(temporary, "node_modules/questpie/index.ts");
 	const framework = await import(
-		`${pathToFileURL(join(temporary, "node_modules/questpie/index.ts")).href}${nonce}`
+		`${pathToFileURL(questpieEntry).href}${nonce}`
 	);
 	const loadInternal = () =>
 		import(
@@ -159,8 +139,12 @@ export async function prepareBeta05PostgresApplication(database: SQL) {
 	`;
 	const temporary = await relocatedFixture();
 	try {
+		const packed = buildPackedTracer(temporary);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
+			...(packed
+				? { outputDirectory: join(temporary, ".questpie/verification") }
+				: {}),
 		});
 		const generated = await importGenerated(temporary);
 		const runtimeBuildBytes = await readFile(

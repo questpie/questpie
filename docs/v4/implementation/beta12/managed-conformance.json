@@ -1,0 +1,9 @@
+{
+	"format": "questpie.beta12-conformance",
+	"version": 1,
+	"target": "managed",
+	"profile": "supabase-postgresql",
+	"status": "WITHHELD",
+	"reason": "MISSING_CREDENTIAL",
+	"missing": ["PGHOST", "PGDATABASE", "PGUSER", "PGPASSWORD"]
+}

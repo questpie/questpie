@@ -13,6 +13,7 @@
 		"multi-instance",
 		"semantic-kernels-and-public-surface",
 		"services",
+		"beta1-release",
 		"runtime-and-studio"
 	]
 }

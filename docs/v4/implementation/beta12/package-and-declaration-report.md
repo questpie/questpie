@@ -1,0 +1,28 @@
+# BETA-12 package and declaration report
+
+## Result
+
+The release contains one public package, `questpie@4.0.0-beta.1`. Compiler and
+Runtime remain private modules and are vendored under `dist/internal`; they are
+not importable package subpaths. The tarball exposes `dist/index.js`,
+`dist/index.d.ts`, and the `questpie` binary at `dist/cli.js`.
+
+`quality/release/package-artifacts.json` pins the tarball SHA-256 and public
+declaration SHA-256. `bun run release -- --dry-run` packs twice, requires equal
+bytes, checks both committed digests, performs a clean tarball install, imports
+the public root, rejects `questpie/runtime` and `@questpie/runtime`, and builds
+the archive fixture through the installed binary. A changed artifact or
+declaration fails before publication.
+
+The connected PostgreSQL release test passes the same tarball to both existing
+fixture harnesses. In packed mode their active `.questpie/generated` output is
+written by `dist/cli.js`; the collaboration and archive Runtime tests then run
+against that output. The installed CLI applies migrations idempotently, starts
+the Runtime over HTTP, and drains cleanly on termination. Reapplying an already
+applied migration is a successful retry rather than an error.
+
+## Boundary
+
+Only `questpie` is public. Vendoring private implementation bytes does not add
+an export, provider SPI, second Runtime, or alternate semantic kernel. A clean
+consumer never imports a repository source path.
