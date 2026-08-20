@@ -30,7 +30,6 @@ const FACTORIES = new Set([
 	"defineQuery",
 	"defineReaction",
 	"defineRoute",
-	"defineWorkflow",
 ]);
 
 function logicalPath(root: string, path: string): string {
@@ -362,7 +361,7 @@ export async function validateStructuralSources(
 					throw new CompilerDiagnosticError(
 						"QP-COMPOSE-012",
 						"structuralImportOfGeneratedOutput",
-						"only application structural source may import the seven current factories",
+						"only application structural source may import the six current factories",
 						{ names, path },
 					);
 			}
@@ -374,7 +373,7 @@ export async function validateStructuralSources(
 					throw new CompilerDiagnosticError(
 						"QP-COMPOSE-012",
 						"structuralImportOfGeneratedOutput",
-						"the Package contract exposes only seven current factories",
+						"the Package contract exposes only six current factories",
 						{ names, path },
 					);
 			}
@@ -403,7 +402,6 @@ export const defineAction = make("action");
 export const defineRoute = make("route");
 export const defineReaction = make("reaction");
 export const defineJob = make("job");
-export const defineWorkflow = make("workflow");
 `;
 
 async function resolveSourceModule(

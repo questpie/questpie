@@ -208,12 +208,7 @@ function renderQueryOperations(
 		.join("\n\t");
 }
 
-const factoryNames = [
-	"defineAction",
-	"defineRoute",
-	"defineJob",
-	"defineWorkflow",
-] as const;
+const factoryNames = ["defineAction", "defineRoute", "defineJob"] as const;
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -451,7 +446,6 @@ export function renderPackageContract(
 		"defineRoute",
 		"defineReaction",
 		"defineJob",
-		"defineWorkflow",
 	]
 		.filter((name) => name !== "defineQuery")
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)

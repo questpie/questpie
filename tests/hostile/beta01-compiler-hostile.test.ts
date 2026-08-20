@@ -145,6 +145,46 @@ export const duplicate = defineCollection({
 		);
 	});
 
+	test("rejects the removed Workflow factory at the structural import boundary", async () => {
+		const root = await fixtureCopy("removed-workflow-factory");
+		await writeFile(
+			join(root, "src/removed-workflow.ts"),
+			`import { defineWorkflow } from "#questpie/app";
+export const removed = defineWorkflow({ name: "removed" });
+`,
+		);
+		const diagnostic = await expectDiagnostic(
+			() => compileApplication({ applicationRoot: root }),
+			"QP-COMPOSE-012",
+		);
+		expect(diagnostic.diagnosticClass).toBe(
+			"structuralImportOfGeneratedOutput",
+		);
+		expect(diagnostic.details).toMatchObject({
+			names: ["defineWorkflow"],
+		});
+
+		const packageRoot = await fixtureCopy("removed-package-workflow-factory");
+		const packageSource = join(packageRoot, "packages/audit/src/questpie.ts");
+		await writeFile(
+			packageSource,
+			`${await readFile(packageSource, "utf8")}
+import { defineWorkflow } from "#questpie/package";
+export const removed = defineWorkflow({ name: "removed" });
+`,
+		);
+		const packageDiagnostic = await expectDiagnostic(
+			() => compileApplication({ applicationRoot: packageRoot }),
+			"QP-COMPOSE-012",
+		);
+		expect(packageDiagnostic.diagnosticClass).toBe(
+			"structuralImportOfGeneratedOutput",
+		);
+		expect(packageDiagnostic.details).toMatchObject({
+			names: ["defineWorkflow"],
+		});
+	});
+
 	test("specializes the generated Package contract without leaking host Resources", async () => {
 		const root = await fixtureCopy("package-host-leak");
 		const packageSource = join(root, "packages/audit/src/questpie.ts");

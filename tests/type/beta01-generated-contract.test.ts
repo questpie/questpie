@@ -218,7 +218,19 @@ describe("BETA-01 generated contract", () => {
 				resource.identity === "collection:messages",
 		);
 		expect(manifestMessage.contributions).toHaveLength(1);
-		expect(first.generatedFiles["app.ts"]).toContain("defineQuery");
+		const appContract = first.generatedFiles["app.ts"]!;
+		expect(
+			[...appContract.matchAll(/^export (?:declare )?const (define\w+)/gm)]
+				.map((match) => match[1])
+				.sort(),
+		).toEqual([
+			"defineAction",
+			"defineJob",
+			"defineMutation",
+			"defineQuery",
+			"defineReaction",
+			"defineRoute",
+		]);
 		expect(first.generatedFiles[collaborationAuditContractPath]).not.toContain(
 			"messages:",
 		);
