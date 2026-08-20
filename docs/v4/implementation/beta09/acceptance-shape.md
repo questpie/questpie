@@ -202,7 +202,15 @@ reasoning rather than against the prose.
    **Criteria 1, 2 and 3 carry a reachability caveat, verified after they were
    written.** `packages/runtime/src/application/index.ts` contains no reference to
    `durable`, so the Fetch router exposes no durable route and the operational
-   surface is in-process only. Every demonstration of these three therefore runs as
+   surface is in-process only. **In-process is not the same as unwired, and the
+   difference is worth stating because I got it wrong once.** The generated
+   application does publish the maintenance surface:
+   `packages/compiler/src/runtime/application.ts:408` constructs
+   `createPostgresDurableMaintenance`, and `:474`–`:476` expose `cancelRun`,
+   `retryRun` and `acknowledgeAmbiguity` on `app.durable`. The BETA-08 harness
+   reaches it exactly that way — `maintenance: app.durable`
+   (`tests/integration/postgres/helpers/beta08-durable.ts:273`). What is absent
+   is a _route_, not the wiring. Every demonstration of these three therefore runs as
    host code that **supplies its own `Principal`**. That proves the decision is
    evaluated, the denial is typed, and the audit records the attempt. It cannot
    prove the property the criteria exist for — that a caller who should not pass
