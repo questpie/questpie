@@ -1,4 +1,5 @@
 import {
+	afterAll,
 	afterEach,
 	beforeAll,
 	beforeEach,
@@ -7,10 +8,13 @@ import {
 	it,
 } from "bun:test";
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
 import { count, eq, sql } from "drizzle-orm";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import { drizzle } from "drizzle-orm/pglite";
+import pg from "pg";
 
 import { CoreNoticeRouter } from "../../../src/server/modules/core/integrated/collaboration/notice-router.js";
 import type { CrdtAuthorizationSnapshot } from "../../../src/server/modules/core/integrated/crdt/authorization.js";
@@ -713,6 +717,62 @@ describe("CRDT idempotent open store", () => {
 		unblock();
 		await release();
 	});
+});
+
+const postgresUrl =
+	process.env.QUESTPIE_CRDT_DATABASE_URL ??
+	process.env.QUESTPIE_TRANSACTION_LOCK_DATABASE_URL;
+
+describe.skipIf(!postgresUrl)("CRDT open store on bounded PostgreSQL", () => {
+	const schemaName = `questpie_crdt_open_${randomUUID().replaceAll("-", "")}`;
+	let admin: pg.Pool;
+	let pool: pg.Pool;
+	let postgresDb: ReturnType<typeof drizzlePg<typeof questpieCrdtTables>>;
+
+	beforeAll(async () => {
+		admin = new pg.Pool({ connectionString: postgresUrl, max: 1 });
+		await admin.query(`CREATE SCHEMA "${schemaName}"`);
+		pool = new pg.Pool({
+			connectionString: postgresUrl,
+			max: 5,
+			options: `-c search_path=${schemaName}`,
+		});
+		postgresDb = drizzlePg({ client: pool, schema: questpieCrdtTables });
+		const { generateDrizzleJson, generateMigration } =
+			await import("drizzle-kit/api-postgres");
+		const empty = {
+			id: "00000000-0000-0000-0000-000000000000",
+			dialect: "postgres" as const,
+			prevIds: [],
+			version: "8" as const,
+			ddl: [],
+			renames: [],
+		};
+		for (const statement of await generateMigration(
+			empty,
+			await generateDrizzleJson(questpieCrdtTables, empty.id),
+		)) {
+			if (statement.trim()) await postgresDb.execute(sql.raw(statement));
+		}
+		await seedResource(postgresDb);
+	});
+
+	afterEach(async () => {
+		await postgresDb?.delete(questpieCrdtSessionGrantTable);
+		await postgresDb?.delete(questpieCrdtSessionTable);
+	});
+
+	afterAll(async () => {
+		await pool?.end();
+		await admin?.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+		await admin?.end();
+	});
+
+	it("does not exhaust the pool while enforcing session caps", async () => {
+		const opened =
+			await createCrdtOpenSessionStore(postgresDb).open(openInput());
+		expect(opened.sessionId).toBeString();
+	}, 3_000);
 });
 
 function openInput(

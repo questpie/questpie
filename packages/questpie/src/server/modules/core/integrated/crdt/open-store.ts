@@ -348,28 +348,29 @@ async function enforceCaps(
 ): Promise<void> {
 	const authorization = input.authorization;
 	const edgeSessionKey = Buffer.from(input.edge.sessionKey);
-	const [global, subject, credential, resource, edge] = await Promise.all([
-		activeSessionCount(db),
-		activeSessionCount(
-			db,
-			eq(questpieCrdtSessionTable.subjectId, authorization.subjectId),
+	// Keep all reads on the transaction connection. Running these together can
+	// escape through a bounded node-postgres pool while the transaction itself
+	// holds one connection, which leaves the final read waiting for itself.
+	const global = await activeSessionCount(db);
+	const subject = await activeSessionCount(
+		db,
+		eq(questpieCrdtSessionTable.subjectId, authorization.subjectId),
+	);
+	const credential = await activeSessionCount(
+		db,
+		eq(
+			questpieCrdtSessionTable.credentialFingerprint,
+			Buffer.from(authorization.credentialFingerprint),
 		),
-		activeSessionCount(
-			db,
-			eq(
-				questpieCrdtSessionTable.credentialFingerprint,
-				Buffer.from(authorization.credentialFingerprint),
-			),
-		),
-		activeSessionCount(
-			db,
-			eq(questpieCrdtSessionTable.resourceId, authorization.resourceId),
-		),
-		activeSessionCount(
-			db,
-			eq(questpieCrdtSessionTable.edgeSessionKey, edgeSessionKey),
-		),
-	]);
+	);
+	const resource = await activeSessionCount(
+		db,
+		eq(questpieCrdtSessionTable.resourceId, authorization.resourceId),
+	);
+	const edge = await activeSessionCount(
+		db,
+		eq(questpieCrdtSessionTable.edgeSessionKey, edgeSessionKey),
+	);
 	if (
 		global >= limits.maximumSessions ||
 		subject >= limits.maximumSessionsPerSubject ||
