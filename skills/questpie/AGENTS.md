@@ -7559,6 +7559,7 @@ Detailed authentication configuration for QUESTPIE using Better Auth.
 - [Social Providers (OAuth)](#social-providers-oauth), `socialProviders`, verified Google/GitHub entry catalog, client `signIn.social`
 - [Session Access](#session-access), routes, hooks, access rules
 - [User Collection](#user-collection), starter user model, merge + extend recipe
+- [Password Recovery](#password-recovery), neutral request, clean challenge exchange, atomic reset
 - [Reaching the App from Better Auth Callbacks](#reaching-the-app-from-better-auth-callbacks), `getContext<App>()`, partial overrides
 - [Client-Side Auth (authClient)](#client-side-auth-authclient), sign-in/up/out, `useSession`
 - [Environment Variables](#environment-variables)
@@ -7679,6 +7680,67 @@ are configured and remains browser-only (`storeInDatabase: false`). Provider
 callback failures are sanitized for the client; their raw diagnostics stay in
 server logs. Explicit account linking remains a separate authenticated
 operation.
+
+## Password Recovery
+
+Use `passwordRecovery()` when an application needs email password recovery. The
+integration replaces Better Auth's direct reset endpoints with a neutral request,
+a server-held challenge, and an atomic password, session, and trusted-device
+rotation. Register the returned plugin in `authConfig()` and publish both emails
+through the provided transactional Queue capability:
+
+```ts
+import { authConfig } from "questpie/app";
+import { passwordRecovery } from "questpie/auth";
+
+export default authConfig({
+	emailAndPassword: { enabled: true, requireEmailVerification: true },
+	plugins: [
+		passwordRecovery({
+			resetPath: "/reset-password",
+			deliverResetLink: async (
+				{ user, exchangeUrl, idempotencyKey },
+				{ publish },
+			) => {
+				await publish(
+					passwordRecoveryEmailJob,
+					{ to: user?.email ?? null, resetUrl: exchangeUrl },
+					{ idempotencyKey },
+				);
+			},
+			notifyResetCommitted: async (
+				{ user, occurredAt, idempotencyKey },
+				{ publish },
+			) => {
+				await publish(
+					passwordChangedEmailJob,
+					{ to: user.email, occurredAt },
+					{ idempotencyKey },
+				);
+			},
+		}),
+	],
+});
+```
+
+The public request is deliberately identical for an existing credential user,
+an unknown email, and a social-only identity. `deliverResetLink` therefore
+receives `user: null` for a neutral dummy dispatch; its job must accept that
+payload and finish without sending mail. Select the message locale from the
+stored user profile, not request headers or cookies.
+
+The emailed `exchangeUrl` contains the one-time reset credential. Do not log it.
+The exchange endpoint validates it, stores only a hashed server challenge, sets
+an HttpOnly challenge cookie, and redirects to the clean `resetPath`. The commit
+endpoint consumes that challenge once in the same transaction that updates the
+existing credential, deletes every session and `trust-device-*` verification,
+and publishes the security notification. Notification publication failure rolls
+the whole reset back. TOTP and OAuth accounts are not changed.
+
+If the product has a stronger password contract than Better Auth's configured
+minimum and maximum lengths, implement it in `preparePassword`. That callback
+owns the full normalization and validation policy and runs before the challenge
+transaction.
 
 ## Session Access
 
