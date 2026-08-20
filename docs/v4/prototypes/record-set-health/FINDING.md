@@ -298,6 +298,13 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   precondition for scoping the gate, and this section is a candidate starting
   set, not a replacement.**
 
+  **Resolved.** `beta09/owner-decisions.md` D3 now enumerates eight membership
+  items from the accepted-backed catalog: composition diagnostics, Resource
+  Name validation, Query input derivation, Query declared errors, Query Policy
+  surface resolution, Query execution facts, output inference, and the JSONB
+  byte bound. It also records the excluded docs-only and invented findings and
+  the evidence that refutes D3's former seven-to-one root-cause explanation.
+
 ## Independent validation at `62880614`
 
 - **Claim 9 — CONFIRMED, both halves.** `owner-decisions.md:25` points at

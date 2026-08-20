@@ -119,16 +119,40 @@ nothing for the guard to evaluate that the caller did not assert about itself.
 
 ## D3 — the divergences are batched into one interstitial gate
 
-**Answered: batch them.** The eight divergences between accepted documentation
-and the tree that this slice surfaced are settled in one interstitial gate
-before BETA-12, rather than one repair per slice as each is encountered.
+**Answered: batch them.** “Eight” previously named only a count. The gate now
+owns these eight accepted-backed mismatches, one membership item per contract
+edge rather than one per affected code or example:
 
-The reason batching is safe here: no downstream slice depends on the outcome.
-BETA-10, BETA-11 and BETA-12 reference Studio nowhere in
-`docs/v4/prototypes/implementation-collapse-p16/QUEUE.json`. The reason batching
-is _better_ is that seven of the eight share the root cause D1 names — Policy is
-Collection-bound and the durable kernel has no Collection — so repairing them
-together states that once instead of seven times in seven different voices.
+|   # | Contract edge                          | Documentation side                                                                                                                                                  | Tree side                                                                                                                                                                                                                    | Gate outcome                                                                                                                                                                                                           |
+| --: | -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | Closed composition diagnostic registry | `docs/v4/definition-composition.md:1159`–`:1189` specifies 24 `QP-COMPOSE` codes                                                                                    | `packages/compiler/src/diagnostic.ts:1`–`:14` declares 13                                                                                                                                                                    | Implement the eleven missing registered outcomes and their falsifications.                                                                                                                                             |
+|   2 | Resource Name grammar and length       | `docs/v4/definition-composition.md:682`–`:692` requires 1–63-character segments and a 255-character total                                                           | `packages/compiler/src/model.ts:33`–`:41`, called at `:125`–`:131`, checks only that the name is a string                                                                                                                    | Reject invalid names before `packages/compiler/src/schema/manifest.ts:47`–`:55` can normalize them.                                                                                                                    |
+|   3 | Query input derivation                 | The accepted Query example uses `operation.input(plan)` at `docs/v4/design-fiction/queries-and-mutations.md:55`–`:58`                                               | `packages/questpie/src/operation.ts:68` exports only `error` and `text`                                                                                                                                                      | Add the accepted derivation or explicitly revise its authority before changing the guide.                                                                                                                              |
+|   4 | Query declared errors                  | `docs/v4/query-mutation-and-lifecycle.md:36`–`:40` assigns declared errors to each local Definition, and the accepted example uses the error factory in its handler | `packages/compiler/src/generate.ts:375`–`:386` has neither an `errors` definition key nor handler member                                                                                                                     | Emit and execute the accepted Query error surface.                                                                                                                                                                     |
+|   5 | Query Policy authoring surface         | The same contract assigns Policy to each Definition, and the accepted example passes `policy`                                                                       | `QueryFactory` rejects the key, while Collection Policy is already attached at `packages/compiler/src/relational/discovery.ts:133`–`:138` and carried by `packages/runtime/src/relational/query.ts:92`–`:102`                | Resolve the owner question: add a distinct operation-level admission contract only if it has semantics Collection Policy does not already own; otherwise correct the accepted authoring projection and guide together. |
+|   6 | Query execution facts                  | The accepted example reads `ctx.tenant` and `ctx.principal` at `docs/v4/design-fiction/queries-and-mutations.md:65`–`:75`                                           | `QueryContext` is only `data` and `signal` at `packages/compiler/src/generate.ts:322`–`:325`                                                                                                                                 | Project the accepted read-only execution facts without adding write, Service, or System capability.                                                                                                                    |
+|   7 | Output inference                       | `docs/v4/query-mutation-and-lifecycle.md:36`–`:40` makes `output` an inference override                                                                             | Query, Mutation, and Reaction require it at `packages/compiler/src/generate.ts:375`–`:386`, `packages/compiler/src/mutation/declarations.ts:52`–`:66`, and `packages/compiler/src/reaction/declarations.ts:114`–`:129`       | Implement closed supported inference and retain explicit output for recursive or independently pinned contracts.                                                                                                       |
+|   8 | JSONB canonical-byte bound             | `docs/v4/data-model-and-query-grammar.md:319`–`:326` fixes 1,048,576 bytes and permits only lowering it                                                             | Seed normalization enforces it at `packages/compiler/src/seed/json-codec.ts:198`–`:225`; ordinary Collection Mutation binds caller values without the same bound at `packages/runtime/src/mutation/collection.ts:277`–`:331` | Enforce one bound across every owning write path with an over-limit negative case for each.                                                                                                                            |
+
+This scope deliberately excludes four other findings because they need different
+owners: `codec.lazy` and the four Runtime defaults have no accepted source;
+page-size wording and the missing `constraints` key are documentation repairs.
+The durable-Reaction Action explanation remains an owner decision, not an
+interstitial implementation item.
+
+The old rationale that seven items share D1's Collection-Policy/durable-kernel
+root is **refuted by the enumeration**. These eight span compiler diagnostics,
+name validation, generated authoring types, execution context, and runtime data
+validation. Batching still gives the release one closed conformance gate before
+BETA-12; it is not evidence that BETA-10 or BETA-11 are independent of every
+repair. Re-check those two slices against the concrete list when the gate is
+scheduled.
+
+This membership is a judgment reconstructed from the current accepted-backed
+mismatch catalog because neither branch nor history contains the original list.
+What would overturn it: a contemporaneous owner note that names a different
+eight, or authority that reclassifies one item as invented rather than accepted.
+In either case replace an entry; do not return to an unscoped count.
 
 ## D4 — the glossary is repaired now
 

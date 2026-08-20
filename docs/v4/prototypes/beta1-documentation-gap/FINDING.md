@@ -168,10 +168,11 @@ reaching for a cut.
   `output` is required there too — as it is on Query (`generate.ts:379`) and
   Mutation. The accepted contract says the opposite
   (`query-mutation-and-lifecycle.md:39`–`:40`: "The compiler can infer a
-  closed supported output"), **every** guide example of all three factories
-  omits `output`, and **every** fixture definition passes it. So output
-  inference being unimplemented is one gap that costs one compile error in
-  every authoring example in the docs.
+  closed supported output"). Six of the seven guide calls omit it, and every
+  fixture definition passes it. The exception is exactly the accepted override
+  case: recursive `threadPreview` supplies `output: threadNode` at
+  `queries-and-mutations.mdx:154`–`:160`. So output inference being unimplemented
+  is one gap that costs a compile error in six authoring examples, not every one.
   Two things Reaction settles that Query left ambiguous. First, the thinness
   is **specific to Query, not general**: `ReactionContext`
   (`reaction/declarations.ts:89`) is `Omit<RootExecution, "services">` plus
@@ -281,13 +282,19 @@ reaching for a cut.
   `data-and-queries.mdx:79` says a JSONB-backed Field has at most 1,048,576
   canonical UTF-8 JSON bytes. The projection agrees —
   `docs/v4/data-model-and-query-grammar.md:325`, "a maximum canonical UTF-8
-  JSON size of 1,048,576 bytes". Nothing enforces it: there is no JSON byte
-  check in `packages/runtime/src/relational` or `.../codec` and none in
-  `packages/compiler/src`; the only `byteLength` on that path is the 63-byte
-  name check at `relational/bootstrap.ts:72`. The 1_048_576 literals that do
-  exist are operation payload limits (`compiler/src/mutation/index.ts:65`,
-  `:66`) and the realtime result cap — different contracts. Guide right,
-  tree behind; do not cut.
+  JSON size of 1,048,576 bytes". **An earlier revision said nothing enforces
+  it; that was false.** Seed normalization sends object, array, and open-JSON
+  Fields through `normalizeJsonBackedValue`
+  (`packages/compiler/src/seed/committed-seed.ts:156`–`:165`), which measures
+  canonical bytes and rejects over 1,048,576 at
+  `packages/compiler/src/seed/json-codec.ts:198`–`:225`.
+  The gap is execution-path parity. An ordinary Collection Mutation checks the
+  exact caller paths and binds the raw values at
+  `packages/runtime/src/mutation/collection.ts:277`–`:331`; its canonical JSON
+  helper validates representation but has no byte limit
+  (`packages/runtime/src/mutation/canonical.ts:7`–`:24`). So Seed writes enforce
+  the bound and ordinary authored writes do not. Guide right, tree partially
+  behind; do not cut.
 - **`data-and-queries.mdx:175` overstates one word.** "The hard v1 page
   maximum is 100 rows. A deployment can set a lower limit." 100 is the
   _default_: `runtime/src/relational/query.ts:599` is
