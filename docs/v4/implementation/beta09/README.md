@@ -9,6 +9,34 @@ returns `PASS`.
 Base for every record: `feat/v4` at
 `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`.
 
+## The slice was re-scoped after these records were written
+
+`65643c1c` added `docs/adr/0024-descope-minimal-studio-from-beta-one.md`
+(`Status: Accepted`), removed `apps/studio/` from the tree, and re-scoped this
+slice. `QUEUE.json` now calls BETA-09 **"Close backend maintenance
+compatibility"**, its red test is a maintenance-Authority and fenced-loser test,
+and its artifacts are the internal protocol v5 bounded reason, an evaluated
+maintenance Authority with a typed denial, an expected-version conflict carrying
+the current winner, and the generated catalog with compatibility evidence.
+
+**Four things these records treat as in scope are now `nonGoals`:** "Studio UI or
+browser mount", "durable inspection read model", "failed-run worklist", and
+"ambient Admin/System authority".
+
+**Everything below was written against the old scope and is left as written.**
+That is deliberate: the analysis is what a later release reintroducing an
+inspection surface will need, and rewriting it to a scope that excludes Studio
+would destroy the reasoning while its conclusions are still wanted. Read the
+Studio and inspection material as history; read the maintenance material as
+current.
+
+**The split falls where `acceptance-shape.md` already put it.** That record
+separates criterion 2, maintenance Authority, from criterion 1, inspection
+Authority, on the ground that maintenance has a Principal at `actorOf` and needs
+only a decision written where a brand check sits, while a Query handler has no
+Principal at all. The re-scope keeps the first and drops the second, so the
+criteria that survive are the ones that record showed were satisfiable.
+
 ## Reading order
 
 1. **[design-context.md](./design-context.md)** — the boundary against BETA-08,
