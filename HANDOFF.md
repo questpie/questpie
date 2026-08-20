@@ -1094,6 +1094,18 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   Both quotes exist and both arguments stand. **Rule the pair earns: when a
   record edits `CONTEXT.md` and cites `CONTEXT.md` in the same commit, re-derive
   every line number after the edit, not before.**
+  **The same decay has a wider form, and the narrow rule does not catch it.**
+  That rule runs from a record to itself. The obligation actually runs the other
+  way: from the file being edited, to everyone who cites it. `c4e6f7cb` fixed my
+  instance — `statement-timeout-gate/DECISION.md` cited
+  `inspection-contract.md:164`–`:166` for D3 in two places, then `13992051`,
+  `70b9b083` and `69c08cc9` inserted blocks into `inspection-contract.md` and
+  pushed D3 to `:206`. Three commits apart, two different files, and nobody
+  editing the second file had any reason to look at the first. So: **before
+  committing an insertion into any record, grep the set for
+  `<that filename>:[0-9]` and re-derive what you find.** Nothing else catches it
+  — both stale citations resolved to real lines in the right file, so axis one
+  passes them, and the citing record was untouched so no diff flags it.
   **D2's three tree claims are all true, and two of them cite bare branch paths
   — the failure this file's own discipline block names.** Verified each against
   `feat/v4-beta-09`:
