@@ -117,13 +117,15 @@ const observeMigrationSession = definePostgresStatement({
 	},
 });
 
-function database() {
+function database(
+	input: Readonly<{ max?: number; checkoutTimeoutMs?: number }> = {},
+) {
 	return createPostgresDatabase({
 		connectionUrl: postgresUrl(),
 		pool: {
-			max: 2,
+			max: input.max ?? 2,
 			connectTimeoutMs: 1_000,
-			checkoutTimeoutMs: 1_000,
+			checkoutTimeoutMs: input.checkoutTimeoutMs ?? 1_000,
 			idleTimeoutMs: 1_000,
 			maxLifetimeSeconds: 60,
 		},
@@ -133,6 +135,17 @@ function database() {
 			idleInTransactionMs: 1_000,
 		},
 	});
+}
+
+async function eventually(
+	assertion: () => boolean,
+	label: string,
+): Promise<void> {
+	const deadline = Date.now() + 500;
+	while (!assertion()) {
+		if (Date.now() >= deadline) throw new Error(label);
+		await new Promise((resolve) => setTimeout(resolve, 5));
+	}
 }
 
 postgresTest(
@@ -179,6 +192,102 @@ postgresTest(
 		} finally {
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
+	},
+);
+
+postgresTest(
+	"bounds a saturated checkout and recovers after release",
+	async () => {
+		const postgres = database({ max: 1, checkoutTimeoutMs: 50 });
+		let entered: (() => void) | undefined;
+		let release: (() => void) | undefined;
+		const active = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const first = postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readOnly" },
+			use: async () => {
+				entered?.();
+				await held;
+			},
+		});
+		await active;
+		try {
+			await expect(
+				postgres.transaction({
+					mode: { isolation: "readCommitted", access: "readOnly" },
+					use: () => Promise.resolve(),
+				}),
+			).rejects.toMatchObject({ code: "checkoutTimeout", phase: "checkout" });
+		} finally {
+			release?.();
+			await first;
+		}
+		await expect(
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("recovered"),
+			}),
+		).resolves.toBe("recovered");
+		expect(postgres.facts().pool).toMatchObject({ inFlight: 0, waiting: 0 });
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+postgresTest(
+	"cancels a queued checkout without leaking its later client",
+	async () => {
+		const postgres = database({ max: 1, checkoutTimeoutMs: 1_000 });
+		let entered: (() => void) | undefined;
+		let release: (() => void) | undefined;
+		const active = new Promise<void>((resolve) => {
+			entered = resolve;
+		});
+		const held = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+		const first = postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readOnly" },
+			use: async () => {
+				entered?.();
+				await held;
+			},
+		});
+		await active;
+		const controller = new AbortController();
+		const queued = postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readOnly" },
+			control: { signal: controller.signal },
+			use: () => Promise.reject(new Error("cancelled checkout entered SQL")),
+		});
+		await eventually(
+			() => postgres.facts().pool.waiting === 1,
+			"checkout never entered the Pool queue",
+		);
+		controller.abort(new Error("caller stopped waiting"));
+		try {
+			await expect(queued).rejects.toMatchObject({
+				code: "cancelled",
+				phase: "checkout",
+			});
+		} finally {
+			release?.();
+			await first;
+		}
+		await eventually(
+			() => postgres.facts().pool.waiting === 0,
+			"cancelled checkout remained queued",
+		);
+		await expect(
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("recovered"),
+			}),
+		).resolves.toBe("recovered");
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
 	},
 );
 

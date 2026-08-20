@@ -3,6 +3,23 @@ import { createHash } from "node:crypto";
 import { Client, Pool, type PoolClient } from "pg";
 
 import { canonicalJsonLine } from "../canonical-json";
+import {
+	QuestpiePostgresError,
+	statementBrand,
+	transactionBrand,
+	type MigrationPostgres,
+	type MigrationPostgresSession,
+	type PostgresControl,
+	type PostgresDatabase,
+	type PostgresDatabaseConfiguration,
+	type PostgresJsonValue,
+	type PostgresParameter,
+	type PostgresStatement,
+	type PostgresTransaction,
+	type PostgresTransactionMode,
+} from "./contract";
+
+export * from "./contract";
 
 export { createPostgresListener, definePostgresChannel } from "./listener";
 export type {
@@ -10,186 +27,6 @@ export type {
 	PostgresListener,
 	PostgresReconcileReason,
 } from "./listener";
-
-const statementBrand: unique symbol = Symbol("questpie.postgres.statement");
-const transactionBrand: unique symbol = Symbol("questpie.postgres.transaction");
-
-export type PostgresJsonValue =
-	| null
-	| boolean
-	| number
-	| string
-	| readonly PostgresJsonValue[]
-	| Readonly<{ [key: string]: PostgresJsonValue }>;
-
-export type PostgresJson = Readonly<{
-	kind: "json";
-	value: PostgresJsonValue;
-}>;
-
-export type PostgresParameter =
-	| null
-	| boolean
-	| number
-	| bigint
-	| string
-	| Date
-	| Uint8Array
-	| readonly PostgresParameter[]
-	| PostgresJson;
-
-export type PostgresStatement<Input, Output> = Readonly<{
-	name: string;
-	text: string;
-	parameterCount: number;
-	parameters(input: Input): readonly PostgresParameter[];
-	decode(
-		result: Readonly<{
-			command: string;
-			rowCount: number | null;
-			rows: readonly (readonly unknown[])[];
-		}>,
-	): Output;
-	readonly [statementBrand]: true;
-}>;
-
-export type PostgresTransactionMode = Readonly<{
-	isolation: "readCommitted" | "repeatableRead" | "serializable";
-	access: "readOnly" | "readWrite";
-	deferrable?: boolean;
-}>;
-
-export type PostgresControl = Readonly<{
-	signal?: AbortSignal;
-	deadlineAt?: number;
-	statementTimeoutMs?: number;
-	lockTimeoutMs?: number;
-}>;
-
-export interface PostgresTransaction {
-	readonly [transactionBrand]: true;
-	execute<Input, Output>(
-		statement: PostgresStatement<Input, Output>,
-		input: Input,
-	): Promise<Output>;
-}
-
-export type PostgresFailureCode =
-	| "configuration"
-	| "closed"
-	| "draining"
-	| "connectTimeout"
-	| "checkoutTimeout"
-	| "statementTimeout"
-	| "lockTimeout"
-	| "cancelled"
-	| "connectionLost"
-	| "queryFailed"
-	| "serializationFailure"
-	| "deadlock"
-	| "constraint"
-	| "invalidResult"
-	| "sessionNotAffine"
-	| "commitOutcomeUnknown";
-
-export class QuestpiePostgresError extends Error {
-	readonly code: PostgresFailureCode;
-	readonly phase:
-		| "connect"
-		| "checkout"
-		| "begin"
-		| "statement"
-		| "commit"
-		| "rollback"
-		| "shutdown";
-	readonly statementName?: string;
-	readonly sqlState?: string;
-	readonly retry: "never" | "safeBeforeCommit" | "callerMustResolveCommit";
-
-	constructor(
-		input: Readonly<{
-			code: PostgresFailureCode;
-			phase: QuestpiePostgresError["phase"];
-			statementName?: string;
-			sqlState?: string;
-			retry?: QuestpiePostgresError["retry"];
-			cause?: unknown;
-		}>,
-	) {
-		super(`PostgreSQL ${input.code}`, { cause: input.cause });
-		this.name = "QuestpiePostgresError";
-		this.code = input.code;
-		this.phase = input.phase;
-		this.statementName = input.statementName;
-		this.sqlState = input.sqlState;
-		this.retry = input.retry ?? "never";
-	}
-}
-
-export type PostgresDatabaseConfiguration = Readonly<{
-	connectionUrl: string;
-	pool: Readonly<{
-		max: number;
-		connectTimeoutMs: number;
-		checkoutTimeoutMs: number;
-		idleTimeoutMs: number;
-		maxLifetimeSeconds: number;
-	}>;
-	timeouts: Readonly<{
-		statementMs: number;
-		lockMs: number;
-		idleInTransactionMs: number;
-	}>;
-}>;
-
-export interface PostgresDatabase {
-	transaction<Output>(
-		input: Readonly<{
-			mode: PostgresTransactionMode;
-			control?: PostgresControl;
-			use(transaction: PostgresTransaction): Promise<Output>;
-		}>,
-	): Promise<Output>;
-	facts(): Readonly<{
-		state: "ready" | "draining" | "closed";
-		pool: Readonly<{
-			max: number;
-			total: number;
-			idle: number;
-			waiting: number;
-			inFlight: number;
-		}>;
-	}>;
-	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
-}
-
-export interface MigrationPostgresSession {
-	transaction<Value>(
-		input: Readonly<{
-			mode: PostgresTransactionMode;
-			use(transaction: PostgresTransaction): Promise<Value>;
-		}>,
-	): Promise<Value>;
-}
-
-export interface MigrationPostgres {
-	run<Output>(
-		input: Readonly<{
-			application: string;
-			control?: PostgresControl;
-			use(
-				session: Readonly<{
-					transaction<Value>(
-						input: Readonly<{
-							mode: PostgresTransactionMode;
-							use(transaction: PostgresTransaction): Promise<Value>;
-						}>,
-					): Promise<Value>;
-				}>,
-			): Promise<Output>;
-		}>,
-	): Promise<Output>;
-}
 
 function positiveInteger(value: number): void {
 	if (!Number.isSafeInteger(value) || value <= 0)
@@ -265,6 +102,50 @@ function sqlState(error: unknown): string | undefined {
 	if (!error || typeof error !== "object" || !("code" in error))
 		return undefined;
 	return typeof error.code === "string" ? error.code : undefined;
+}
+
+function isPoolTimeout(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		error.message === "timeout exceeded when trying to connect"
+	);
+}
+
+function checkout(pool: Pool, signal?: AbortSignal): Promise<PoolClient> {
+	signal?.throwIfAborted();
+	const pending = pool.connect();
+	if (!signal) return pending;
+	return new Promise((resolve, reject) => {
+		let settled = false;
+		const aborted = () => {
+			if (settled) return;
+			settled = true;
+			void pending.then((client) => client.release()).catch(() => {});
+			reject(
+				new QuestpiePostgresError({
+					code: "cancelled",
+					phase: "checkout",
+					cause: signal.reason,
+				}),
+			);
+		};
+		signal.addEventListener("abort", aborted, { once: true });
+		void pending.then(
+			(client) => {
+				if (settled) return;
+				settled = true;
+				signal.removeEventListener("abort", aborted);
+				resolve(client);
+			},
+			(error: unknown) => {
+				if (settled) return;
+				settled = true;
+				signal.removeEventListener("abort", aborted);
+				reject(error);
+			},
+		);
+		if (signal.aborted) aborted();
+	});
 }
 
 function failure(
@@ -431,8 +312,17 @@ export function createPostgresDatabase(
 		signal?.throwIfAborted();
 		let client: PoolClient;
 		try {
-			client = await pool.connect();
+			client = await checkout(pool, signal);
 		} catch (error) {
+			if (isPoolTimeout(error))
+				throw new QuestpiePostgresError({
+					code:
+						pool.totalCount >= configuration.pool.max
+							? "checkoutTimeout"
+							: "connectTimeout",
+					phase: "checkout",
+					cause: error,
+				});
 			throw failure({ error, phase: "checkout", signal });
 		}
 		inFlight += 1;
