@@ -219,6 +219,25 @@ serve only the reads. What would overturn it: the route work proving materially
 larger than an ADR-0011 amendment, or an owner deciding the per-kind context
 boundary should move for reasons beyond this slice.
 
+**The recommendation has a cost the comparison above hides, and it is against
+me.** Option 3 needs no ADR amended, but it needs work **no slice owns**.
+Checked in `QUEUE.json`: the open slices are BETA-09 through BETA-12 and none
+carries a route artifact, while BETA-03 and BETA-05 name "raw Route" in their
+`nonGoals` — deferred, not assigned. ADR-0014:32 places the `routes`
+direct-invocation projection with ADR-0015, and no queued slice implements
+ADR-0015's route half.
+
+So the real choice is sharper than "amend a contract versus build specified
+work". It is: **amend an Accepted ADR inside a slice that exists**, or **build
+unowned work that first needs a slice to own it**. Option 3 is still the better
+shape on authority, and it is the more expensive one on process — a beta.1 queue
+that accepts one bounded tracer at a time has no obvious room for it, and
+BETA-09 cannot absorb it without becoming the route slice.
+
+That tension is the decision an owner has to make, and it is not mine to settle.
+What this record can say is that neither path is cheap and the cheap-looking one
+was cheap only because nobody had priced the ownership.
+
 **The finding moves weight from 1 to 2 and 3.** BETA-09's criterion 1 requires
 inspection Authority to be _evaluated_, and no path available today lets a Query
 evaluate one. What would overturn this reading: a `QueryContext` that carries
