@@ -12,10 +12,10 @@ routes 20 direct roots and 20 Operation-Wire POSTs across them, and completes 40
 durable runs with zero duplicate attempts. One instance carries a signed
 internal-protocol-v4 Runtime Build and nine carry the current v5 build, so the
 scenario exercises a compatible rolling fleet rather than ten identical object
-references (`tests/load/beta10-ten-instance.ts:13`–`:134`). The separately owned
+references (`tests/load/beta10-ten-instance.ts:13`–`:159`). The separately owned
 soak/chaos scenario completes 80 runs across four waves, abandons one claim,
 recovers it exactly once after lease expiry, replaces three instances, and ends
-with no failed runs (`tests/load/beta10-soak-chaos.ts:13`–`:150`).
+with no failed runs (`tests/load/beta10-soak-chaos.ts:13`–`:170`).
 
 Admission is tenant-fair and filters pinned executable digests before its batch
 limit (`packages/runtime/src/durable/postgres-kernel.ts:357`–`:393`). A direct
@@ -23,8 +23,14 @@ claim rechecks the digest under the row lock, so an incompatible worker cannot
 consume an attempt while the durable run remains available to a compatible old
 worker (`:395`–`:435`). Exact PostgreSQL serialization losers in claim and
 cancellation reaping become no work for that poll; every other error still
-escapes (`:309`–`:356`, `:395`–`:580`). The hostile test positively controls all
-three decisions (`tests/hostile/beta10-compatibility.test.ts:56`–`:226`).
+escapes (`:309`–`:356`, `:395`–`:580`). The hostile test inspects the executable
+filter and injects both serialization losers
+(`tests/hostile/beta10-compatibility.test.ts:5`–`:93`). A live PostgreSQL test
+seeds four runs for one tenant and two for another, then proves a four-run batch
+interleaves two from each tenant in turn order
+(`tests/integration/postgres/beta08-durable-kernel.test.ts:104`–`:140`). The same
+suite proves an incompatible kernel neither admits the run nor consumes an
+attempt before a compatible kernel claims it (`:460`–`:488`).
 
 A run abandoned after its final allowed claim is terminalized as
 `failed / RETRY_EXHAUSTED`: the outstanding attempt is settled, the run becomes
@@ -32,18 +38,19 @@ a dead letter, and one append-only failure event is written without creating a
 new attempt (`packages/runtime/src/durable/postgres-kernel.ts:436`–`:480`). The
 live PostgreSQL test proves that state and proves later admission no longer
 returns the poison run
-(`tests/integration/postgres/beta08-durable-kernel.test.ts:315`–`:364`).
+(`tests/integration/postgres/beta08-durable-kernel.test.ts:353`–`:402`).
 
 Runtime readiness now retries the complete repeatable-read reconciliation
 transaction on exact `40001`; it does not retry only the failed statement inside
-the stale transaction (`packages/runtime/src/live-query/postgres.ts:169`–`:256`).
+the stale transaction (`packages/runtime/src/live-query/postgres.ts:157`–`:278`,
+`:281`–`:298`).
 That repair was discovered by starting ten coordinators concurrently, and the
 unit test injects the serialization failure before accepting the retry
-(`tests/unit/beta07-postgres-reconciliation.test.ts:100`–`:137`).
+(`tests/unit/beta07-postgres-reconciliation.test.ts:142`–`:163`).
 
 The rolling matrix keeps schema, wire, Policy/Context, realtime, executable,
 durable state, and internal protocol as separate compatibility decisions
-(`docs/v4/implementation/beta10/rolling-compatibility-matrix.md:5`–`:26`). The
+(`docs/v4/implementation/beta10/rolling-compatibility-matrix.md:5`–`:22`). The
 fanout/reconnect report connects the new fleet evidence to the established
 2,050-watch fanout, fresh-Runtime reconnect, arbitrary-holder reauthorization,
 and drain tests rather than copying those slow scenarios into a second script
@@ -64,6 +71,13 @@ unchanged 524,288-byte test remains enforced
 (`tests/unit/beta07-live-query-projection.test.ts:252`–`:264`). The slice does not
 buy correctness by weakening the quality boundary.
 
+The architecture ratchet also rejected an 836-line durable kernel. Its exported
+structural contract types moved behind the existing internal durable-row seam
+(`packages/runtime/src/durable/rows.ts:17`–`:130`), leaving production transition
+behavior in the smaller kernel. This is a source-organization change only; the
+generated-contract golden and the complete PostgreSQL kernel suite cover the
+resulting import graph.
+
 ## `drainRuntime` judgment
 
 For beta.1, `drainRuntime` is the idempotent local `app.close()` lifecycle
@@ -74,6 +88,9 @@ remote command cannot target a process without introducing a stable
 Runtime-instance identity plus the process registry or leader authority that
 ADR-0017 rejects
 (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:20`–`:37`).
+Gate 8 now records that exact split between the three audited durable-run
+maintenance commands and local `drainRuntime`
+(`docs/v4/implementation-gates.md:277`–`:287`).
 
 This judgment would be overturned by Accepted authority defining that stable
 instance identity, who may target it, the expected-version fence across process
@@ -84,10 +101,15 @@ slice.
 ## Evidence and limits
 
 The pre-acceptance head passed `bun run quality:full`, the explicit PostgreSQL
-durable-kernel suite (13 tests, 130 assertions), the ten-instance scenario, and
-the manual soak/chaos scenario. The latest dedicated measurements were 984.768
-ms for 40 durable runs and 3,231.481 ms for 80 soak runs, both inside their
-committed stable-runner budgets.
+durable-kernel suite (14 tests, 138 assertions), the ten-instance scenario, and
+the manual soak/chaos scenario. The canonical selectors on the replacement head
+measured 1,020.242 ms for 40 durable runs and 3,170.867 ms for 80 soak runs,
+both inside their committed stable-runner budgets and recorded separately from
+the three-sample baselines in the owned reports.
+
+After the blocked review, every file range in this closure record and the five
+owned BETA-10 reports was re-read with `nl -ba` against the replacement head;
+no range was carried forward from a diff hunk or an earlier commit.
 
 The five required owned artifacts are:
 

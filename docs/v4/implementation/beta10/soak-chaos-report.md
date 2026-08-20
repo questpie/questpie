@@ -13,6 +13,12 @@ The observed manual run completed in 3,089.177 ms:
 - all 80 runs succeeded, exactly 81 attempts existed, no run failed, and every
   drained worker admitted zero work.
 
+The canonical scenario selector was rerun after the blocked review and selected
+`beta10-soak-chaos` from its performance manifest. That replacement-head
+validation completed in 3,170.867 ms with 80 claims, one recovered crash
+attempt, three replacement instances, zero failed runs, and zero drained-worker
+admissions. It is validation evidence, not a fourth baseline sample.
+
 The executable scenario and its database assertions are
 `tests/load/beta10-soak-chaos.ts:13`–`:150`. The separate manual manifest is
 `quality/performance/beta10-soak-chaos.json`; it is not selected by the ordinary

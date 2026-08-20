@@ -17,10 +17,16 @@ The observed run completed in 1,006.304 ms and proved:
 - a worker created before its Runtime began draining admitted zero work after
   `app.close()`.
 
+The canonical scenario selector was rerun after the blocked review and selected
+`beta10-ten-instance` from its performance manifest. That replacement-head
+validation completed in 1,020.242 ms with the same 40 claims, zero duplicate
+attempts, and zero drained-worker admissions. It is validation evidence, not a
+fourth baseline sample; the committed three-sample baseline remains unchanged.
+
 The executable scenario is
-`tests/load/beta10-ten-instance.ts:13`–`:134`; its owned budgets are
+`tests/load/beta10-ten-instance.ts:13`–`:159`; its owned budgets are
 `quality/performance/beta10-ten-instance.json`. The scenario checks database
-truth rather than trusting worker counters at `tests/load/beta10-ten-instance.ts:87`–`:112`.
+truth rather than trusting worker counters at `tests/load/beta10-ten-instance.ts:102`–`:128`.
 
 ## Defects found by the load
 

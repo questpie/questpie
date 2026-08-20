@@ -102,6 +102,44 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
 }
 
 postgresTest(
+	"durable admission interleaves an unequal two-tenant backlog before its batch limit",
+	async () => {
+		const prepared = await harness();
+		const runIds: string[] = [];
+		for (let index = 0; index < 6; index += 1) {
+			const callId = `beta10-fairness-${String(index).padStart(12, "0")}`;
+			await publish(prepared, { body: `fairness probe ${index}`, callId });
+			runIds.push(await runIdentity(callId));
+		}
+		const secondTenant = "tenant:beta10-second";
+		await database!.begin(async (session) => {
+			await session.unsafe(
+				"SELECT set_config('questpie.durable_kernel', 'on', true)",
+			);
+			await session.unsafe(
+				`UPDATE questpie_internal.durable_runs
+SET tenant_id = $1
+WHERE application_name = 'application:collaboration' AND run_id = ANY($2::uuid[])`,
+				[secondTenant, `{${runIds.slice(4).join(",")}}`],
+			);
+		});
+
+		const admitted = await prepared.kernel.admit(4);
+		expect(admitted.map(({ runId }) => runId)).toEqual([
+			runIds[0],
+			runIds[4],
+			runIds[1],
+			runIds[5],
+		]);
+
+		const cleanup = (await prepared.app.durable.poll({
+			workerId: "worker:beta10-fairness-cleanup",
+		})) as Readonly<{ claimed: number }>;
+		expect(cleanup.claimed).toBe(6);
+	},
+);
+
+postgresTest(
 	"a worker crash after claim cannot let the stale lease holder publish a terminal transition, and one fact keeps one Reaction",
 	async () => {
 		const prepared = await harness();
