@@ -1,6 +1,6 @@
 ---
-title: Run and inspect the application
-description: Build one immutable application, start the Runtime, call it directly or through a generated client, and inspect the same truth in Studio.
+title: Run the application
+description: Build one immutable application, start the Runtime, and call it directly or through a generated client.
 kind: guide
 ---
 
@@ -108,11 +108,16 @@ import { createApp } from "#questpie/app";
 
 export async function readChannel(
 	postgresUrl: string,
+	realtimeHmacKey: Uint8Array,
 	userId: string,
 	companyId: string,
 	channelId: string,
 ) {
-	const app = await createApp({ postgres: { url: postgresUrl } });
+	const app = await createApp({
+		postgres: { url: postgresUrl },
+		realtime: { hmacKey: realtimeHmacKey },
+		maintenance: { authorize: () => false },
+	});
 
 	try {
 		return await app.execution(
@@ -136,9 +141,9 @@ export async function readChannel(
 
 The generated App exposes `fetch`, `execution`, `close`, and the compiler-owned
 `routes` direct-invocation projection. Raw Routes remain outside the generated
-JSON Operation client. Direct, Fetch, generated-client, nested, recompute,
-worker, and Studio calls use the same Context, Policy, Operation, error,
-transaction, and observation engine. `close` is idempotent.
+JSON Operation client. Direct, Fetch, generated-client, nested, recompute, and
+worker calls use the same Context, Policy, Operation, error, transaction, and
+observation engine. `close` is idempotent.
 
 ## Understand readiness and drain
 
@@ -196,51 +201,21 @@ Seed, error, and audit identities. It does not contain a credential, database
 URL, raw payload, relational Policy evidence, serialized Context, Service
 state, secret, or stack trace.
 
-## Use Studio
-
-Studio is the optional inspector and operational control surface for one
-compiled QUESTPIE application. It derives explanations from canonical
-artifacts, Runtime state, receipts, and append-only events. Application data
-uses ordinary generated Operations and Policy. A row hidden from the
-application is also hidden from Studio.
-
-Studio is not a SQL console, private-table editor, Policy bypass, second
-backend, page builder, or Operator App framework.
-
-Studio pages contain at most 100 rows, and retained Studio data is bounded to
-64 MiB. Application code does not define a separate Studio route or backend.
-
 ## Run maintenance commands
 
-The minimal maintenance surface has four commands: `acknowledgeAmbiguity`,
-`cancelRun`, `retryRun`, and `drainRuntime`. Each command requires explicit
-maintenance Authority, exact identity, a bounded reason, an idempotency
-identity, an expected-version fence, a typed winner, and an append-only audit
-event.
+The server-internal maintenance surface has three commands:
+`acknowledgeAmbiguity`, `cancelRun`, and `retryRun`. The host must supply the
+`maintenance.authorize` decision when it creates the generated App; there is no
+default allow. Each command takes a trusted Principal, exact run identity, a
+reason of 1–256 characters, and an optional expected-version fence. Applied and
+rejected attempts are recorded in the append-only maintenance audit, and a
+stale caller receives the current version it can retry against.
 
-## Stay within Runtime limits
-
-| Limit                                |      Default |
-| ------------------------------------ | -----------: |
-| active root Executions per Principal |           64 |
-| request body                         |        1 MiB |
-| response body                        |        1 MiB |
-| Runtime event                        |       64 KiB |
-| events per Execution                 |        2,048 |
-| telemetry exporter queue             | 4,096 events |
-| startup deadline                     |   30 seconds |
-| drain deadline                       |   30 seconds |
-
-A limit fails with `RESOURCE_LIMIT`. Runtime unavailability fails with
-`RUNTIME_UNAVAILABLE`. Both are explicit and retryable when no ambiguous
-Mutation result exists.
-
-## Understand retention and backpressure
-
-Audit events are retained for 365 days. Telemetry is retained for 30 days.
-Durable events follow the retention of their owning durable state. Telemetry
-loss is explicit. When the 4,096-event exporter queue is full, backpressure can
-drop telemetry; it cannot drop or roll back a business commit.
+Maintenance has no browser or Operation-Wire transport in beta.1. `drain` is a
+Runtime lifecycle operation, not a durable maintenance command. Studio is
+deferred to a later privileged administration vertical; beta.1 does not ship an
+artifact viewer or imply Runtime limits and retention policies that the Runtime
+does not enforce.
 
 ## Keep one PostgreSQL and Policy boundary
 

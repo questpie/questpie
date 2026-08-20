@@ -59,6 +59,11 @@ must fail against on unrepaired code is written in those records; what a single
 compatibility test file should contain, and whether one file is the right shape
 for four artifacts, is the implementing slice's call.
 
+For the implemented backend-only slice and its verification, read
+**[backend-acceptance.md](./backend-acceptance.md)**. It is the current closure
+record; the older Studio-oriented records below are design history, not a list
+of work BETA-09 still owes.
+
 **The split falls where `acceptance-shape.md` already put it.** That record
 separates criterion 2, maintenance Authority, from criterion 1, inspection
 Authority, on the ground that maintenance has a Principal at `actorOf` and needs
