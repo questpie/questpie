@@ -199,6 +199,23 @@ evidence that an unbounded-reason rejection is a client bug rather than an
 operator action, in which case it belongs in the typed error path and not in
 the operational record at all.
 
+**`AUTHORITY_DENIED` also writes a null reason, and that needed deciding
+separately.** This call was written when `REASON_INVALID` was the only code this
+record added; `AUTHORITY_DENIED` arrived later from `hostile-cases.md` case 5 and
+the null-reason question does not carry over by itself. `REASON_INVALID` has no
+valid reason to store — that is what the code means. A denied caller may have
+supplied a perfectly well-formed one.
+
+**Store null anyway.** A caller refused for lack of Authority should not get
+256 bytes of attacker-chosen text into an append-only log an operator reads;
+that is a write primitive handed to exactly the caller the check just refused.
+The identity is recorded, which is what makes the denial auditable, and
+`hostile-cases.md` case 5 already settles that recording a denied caller's
+identity is correct. What would overturn it: a requirement that an operator be
+able to see what a denied caller claimed to be doing, which is a real
+investigative need — but it argues for a separate, clearly-attributed field
+rather than for putting untrusted text in the same column trusted reasons use.
+
 ## The fourth upgrade consequence, which the mechanics section missed
 
 Adding `REASON_INVALID` and `AUTHORITY_DENIED` touches **three** sites, not two.
