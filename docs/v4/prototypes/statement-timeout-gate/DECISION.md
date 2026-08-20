@@ -469,10 +469,14 @@ distribution.
 
 ## Judgment calls
 
-**Wrapping five bare reads in transactions purely to carry a GUC.** It costs a
-round trip on the operator-facing reads. Taken because the alternative is a
-timeout contract with a hole in exactly the surface an operator uses against an
-unhealthy database.
+**Superseded: wrapping five bare reads in transactions purely to carry a GUC.**
+This was taken, and the decision above reverses it — item 3 is "no wrap for the
+five bare reads". Two of its premises failed: the reads are not
+"operator-facing … against an unhealthy database" but four `run_id` point
+lookups plus the scheduler, and a database or role default closes the same hole
+with no round trip. The paragraphs that follow belong to this superseded call
+and are kept because the `cancelBackendOnAbort` finding in them survives on its
+own.
 
 I named as the thing that would overturn this "a per-statement mechanism that
 does not need a transaction." Verifying the record afterwards found one:
@@ -486,18 +490,22 @@ reserves (`packages/runtime/src/relational/postgres.ts:80`). That path can carry
 both defences at no additional round trip, and should, since it is the
 highest-volume statement in the system.
 
-**Pinning Mutation and attempt timeouts now while deferring the query one.** It
-ships an asymmetric contract, which is less tidy than waiting and pinning all
-three together. Taken because two of the three are already-accepted numbers
-that are currently untrue, and making an accepted bound true should not wait on
-a measurement for a different path. What would overturn it: evidence that the
-query path is where the real exposure is, in which case the whole gate should
-wait for the distribution.
+**Superseded: pinning Mutation and attempt timeouts now while deferring the
+query one.** Taken on the ground that two of the three were already-accepted
+numbers merely going unenforced. Neither was. `statement_timeout` bounds a
+statement while `durationMilliseconds` bounds a transaction, and the durable
+attempt runs outside any transaction at all — so the gate could install neither
+number. The evidence plan now measures all three paths before pinning any, which
+is what "derive, do not choose" required in the first place.
 
-**Treating this as a defect rather than a feature.** It changes runtime
-behaviour, which normally argues for a tracer slice. Taken because both pinned
-numbers already exist in accepted authority and neither is enforced, so this
-closes a gap rather than opening a capability. What would overturn it: evidence
+**Treating this as a defect rather than a feature — this one stands, on a
+narrower ground than it was taken.** It changes runtime behaviour, which normally
+argues for a tracer slice. The original reason cited "both pinned numbers", which
+the correction above removes. What survives is the gap itself: ADR-0013 accepts a
+finite attempt timeout and the Mutation program declares a 5,000 ms bound, and
+the runtime enforces no server-side timeout of any kind, so the gate makes an
+accepted bound enforceable rather than adding a capability. What would overturn
+it: evidence
 that every supported deployment target already sets a server-side timeout on
 the pool, in which case the framework is right not to and the accepted bounds
 should say so instead.
