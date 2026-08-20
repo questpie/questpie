@@ -16,20 +16,22 @@ fail visibly.
 The structural tracer compiles both the composite key and text query parameter,
 asserts that generated archive artifacts contain no collaboration name, and
 byte-reproduces the committed migration
-(`tests/integration/beta11-archive.test.ts:13`–`:111`). The connected tracer
+(`tests/integration/beta11-archive.test.ts:13`–`:113`). The connected tracer
 changes Embargo and ResearchPermit evidence externally, proves foreign
 Institution nondisclosure, observes an append through the generated watch,
 restarts the application before polling durable work, and verifies the recovered
 Reaction's second provenance row
-(`tests/integration/postgres/beta11-archive.test.ts:263`–`:415`).
+(`tests/integration/postgres/beta11-archive.test.ts:263`–`:417`).
 
 One portability defect was found rather than hidden: the compiler projected an
 unbounded text Data Query parameter as `{ kind: "text" }`, while the shared
 Runtime scalar decoder requires explicit bounds and collation. BETA-11 now
 projects null bounds plus `questpie.binary` and holds that shape in the archive
-structural tracer (`packages/compiler/src/relational/discovery.ts:185`–`:194`,
-`tests/integration/beta11-archive.test.ts:73`–`:89`). UUID-only collaboration
-parameters could not expose that defect.
+structural tracer (`packages/compiler/src/relational/discovery.ts:185`–`:193`,
+`tests/integration/beta11-archive.test.ts:75`–`:88`). The public text parameter
+factory accepts only `nullable: false`, so null bounds are its complete authored
+state (`packages/questpie/src/relational/query.ts:268`–`:272`). UUID-only
+collaboration parameters could not expose that defect.
 
 The first connected run also found that `query.always()` Field authority SQL
 carried every caller-input parameter even though its constant SQL referenced

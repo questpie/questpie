@@ -1,4 +1,4 @@
-import { codec, operation, policy } from "questpie";
+import { codec, policy } from "questpie";
 
 import { defineMutation } from "#questpie/app";
 
@@ -10,13 +10,8 @@ export const recordReactionProvenance = defineMutation({
 	}),
 	output: codec.object({ sequence: codec.integer() }),
 	policy: policy.authenticated(),
-	errors: {
-		recordUnavailable: operation.error({
-			code: "RECORD_UNAVAILABLE",
-			status: 404,
-		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
+	errors: {},
+	handler: async ({ input, ctx }) => {
 		const entry = await ctx.data.provenance.create({
 			input: {
 				...input,
@@ -25,7 +20,6 @@ export const recordReactionProvenance = defineMutation({
 				note: "Durable Reaction observed the committed deposit",
 			},
 		});
-		if (entry.sequence !== 2) throw errors.recordUnavailable();
 		return { sequence: entry.sequence };
 	},
 });

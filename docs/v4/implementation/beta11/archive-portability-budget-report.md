@@ -7,8 +7,8 @@ benchmark harness or copy a semantic kernel
 (`tests/performance/beta11-archive.test.ts:1`–`:51`).
 
 Three reference-local samples on Bun 1.3.14 and TypeScript 6.0.2 measured
-1,640.806 ms, 1,652.565 ms, and 1,633.138 ms. The median sample generated
-751,524 bytes and 16,828 TypeScript instantiations. The owned budgets are 5,000
+1,815.059 ms, 1,682.973 ms, and 1,719.437 ms. The median sample generated
+751,190 bytes and 16,808 TypeScript instantiations. The owned budgets are 5,000
 ms, 1,048,576 bytes, and 125,000 instantiations
 (`quality/baselines/beta11-archive-portability.json:1`–`:52`). The compile budget
 is three times the observed median rounded to the next second; the generated

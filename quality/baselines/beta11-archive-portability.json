@@ -21,25 +21,25 @@
 		"taggedStableRunner": "PENDING"
 	},
 	"samples": {
-		"compileMs": [1640.805899, 1652.5649039999998, 1633.138486]
+		"compileMs": [1815.059006, 1682.9732060000001, 1719.4365810000002]
 	},
 	"observed": {
-		"compileMs": 1640.805899,
-		"typecheckMs": 1340.443098,
-		"generatedBytes": 751524,
+		"compileMs": 1719.4365810000002,
+		"typecheckMs": 1309.781659,
+		"generatedBytes": 751190,
 		"publicDeclarationBytes": 59299,
-		"typescriptTypes": 6925,
-		"typescriptInstantiations": 16828,
-		"typescriptMemoryKiB": 105728
+		"typescriptTypes": 6923,
+		"typescriptInstantiations": 16808,
+		"typescriptMemoryKiB": 107698
 	},
 	"budgetDerivation": {
 		"compileMs": {
-			"referenceObservedMs": 1640.805899,
+			"referenceObservedMs": 1719.4365810000002,
 			"multiplier": 3,
 			"roundUpQuantumMs": 1000
 		},
 		"generatedBytes": {
-			"referenceObservedBytes": 751524,
+			"referenceObservedBytes": 751190,
 			"roundUpPowerOfTwoBytes": 1048576
 		}
 	},

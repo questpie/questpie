@@ -282,7 +282,10 @@ postgresTest(
 		};
 		try {
 			const reader = principal(ids.reader);
+			const authorized = principal(ids.authorized);
 			expect((await page(reader)).nodes).toEqual([]);
+			expect((await page(authorized)).nodes).toHaveLength(2);
+			expect((await page(authorized, "foreign")).nodes).toEqual([]);
 
 			await database!`
 				update archive.embargoes set status = 'expired'
@@ -314,7 +317,6 @@ postgresTest(
 			expect((await page(reader)).nodes).toEqual([]);
 			expect((await page(reader, "foreign")).nodes).toEqual([]);
 
-			const authorized = principal(ids.authorized);
 			const initial = deferred<void>();
 			const updated = deferred<Page<RecordNode>>();
 			const failures: string[] = [];

@@ -67,6 +67,8 @@ test("archive compiles the existing kernels without tenant, CRUD, or collaborati
 	expect(operationIdentities).toContain("query:records.page");
 	expect(operationIdentities).not.toContain("mutation:records.update");
 	expect(operationIdentities).not.toContain("mutation:records.delete");
+	expect(operationIdentities).not.toContain("mutation:provenance.update");
+	expect(operationIdentities).not.toContain("mutation:provenance.delete");
 	expect(reactions.reactions).toContainEqual(
 		expect.objectContaining({ identity: "reaction:recordDeposited" }),
 	);
