@@ -368,3 +368,52 @@ are genuinely unaffected.
 
 Two counts in this file were also wrong: it said 17 guides in one place and
 fourteen in another. The directory held 15, all `kind: guide`.
+
+## Independent validation at `62880614`
+
+Re-derived against `feat/v4` rather than inherited from this record:
+
+| Claim | Disposition   | Independent basis                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----- | ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | **CONFIRMED** | The directory has 13 `.mdx` files and `meta.json:3`–`:16` names the same 13 stems. An extractor resolved 54 local links to existing pages and found one missing target, `durable-reactions.mdx:233` → `./durable-jobs-and-workflows`. The 54 resolved links are the positive control that the checker can recognize a target.                                                                                                                                                                                                                                                                                                                                     |
+| 2     | **CONFIRMED** | `packages/runtime/src/application/index.ts:431`–`:437` compares the request pathname with the fixed `operationPath`; `packages/runtime/src/operation/wire.ts:5`–`:7` fixes that path at `/_questpie/operation`. Realtime separately compares exact pathname identity at `packages/runtime/src/application/realtime/carrier.ts:158`–`:160`, against the fixed `/_questpie/realtime` contract emitted at `packages/compiler/src/runtime/realtime-wire.ts:127`. A runtime-source search finds no base-path or mount option; its positive `prefix` hits are collection key traversal at `packages/runtime/src/mutation/collection.ts:60`–`:70`, not request mounting. |
+| 3     | **CONFIRMED** | The static `QueryFactory` template at `packages/compiler/src/generate.ts:375`–`:386` accepts only `name`, optional `network`, `input`, `output`, and `handler`. Mutation requires `policy` and `errors` at `packages/compiler/src/mutation/declarations.ts:52`–`:66`.                                                                                                                                                                                                                                                                                                                                                                                             |
+| 4     | **CONFIRMED** | `QueryContext` is exactly `data` and `signal` at `packages/compiler/src/generate.ts:322`–`:325`; `MutationContext` extends `Omit<RootExecution, "services">` at `:327`, and `ReactionContext` does the same at `packages/compiler/src/reaction/declarations.ts:89`–`:95`. `RootExecution` owns `principal` and `tenant` at `generate.ts:352`–`:360`, so those members do not reach a Query handler.                                                                                                                                                                                                                                                               |
+| 5     | **IMPRECISE** | `output` is required by Query (`generate.ts:375`–`:386`), Mutation (`mutation/declarations.ts:52`–`:66`), and Reaction (`reaction/declarations.ts:114`–`:129`), while the accepted contract makes it an inference override at `docs/v4/query-mutation-and-lifecycle.md:36`–`:40`. But it does **not** cost that error in every guide factory call: `queries-and-mutations.mdx:154`–`:160` supplies `output: threadNode`. Six of the seven guide calls omit it; the universal count was false.                                                                                                                                                                     |
+| 6     | **CONFIRMED** | `packages/compiler/src/diagnostic.ts:1`–`:14` contains 13 distinct `QP-COMPOSE` codes. The closed registry has 24 rows at `docs/v4/definition-composition.md:1164`–`:1189` and the same 24-member union at `:1201`–`:1227`. The eleven missing strings occur nowhere in `packages/*/src`; the positive control `QP-COMPOSE-002` reaches throw sites in `model.ts`, `mutation/operation-set.ts`, and `discovery.ts`.                                                                                                                                                                                                                                               |
+| 7     | **CONFIRMED** | `packages/compiler/src/model.ts:33`–`:41`, called for the Resource name at `:125`–`:131`, checks only `typeof value === "string"`. A `255` search is positive in the accepted grammar (`definition-composition.md:692`) and empty under `packages/*/src`. `packages/compiler/src/schema/manifest.ts:47`–`:55` lowercases/snake-cases dot-separated segments, and `:216`–`:223` uses that transformed fallback as the collection table name.                                                                                                                                                                                                                       |
+| 8     | **CONFIRMED** | The four grounded Runtime values resolve at `packages/runtime/src/application/index.ts:202`–`:206` and `packages/compiler/src/runtime/index.ts:226`–`:234`. `packages/runtime/src/application/events.ts:1`–`:93` has no event or per-Execution cap, and no exporter queue or startup-deadline implementation exists. By contrast, all eight realtime values at `realtime.mdx:203`–`:212` match `packages/compiler/src/live-query/index.ts:131`–`:143` key for key. Searches for the four Runtime descriptions find only generic Runtime-event prose or unrelated cursor figures, not a source for those defaults.                                                 |
+| 10    | **IMPRECISE** | `SPEC.md` §16 runs from `:515` to `:592`, names ADR-0009 through ADR-0021, and omits ADR-0022 and ADR-0023. Both are Accepted (`docs/adr/0022-freeze-api-ergonomics-and-operation-projection.md:1`–`:4`; `docs/adr/0023-freeze-post-commit-operation-outcome.md:1`–`:6`), and ADR-0023 explicitly supersedes ADR-0014's post-commit edge. The material omission is real: `SPEC.md:585`–`:592` still presents ADR-0014 without the qualification. But that range does **not** restate the retained-pair rule “in full”; the original claim overstated what the cited SPEC paragraph contains.                                                                      |
+
+### Proposed fenced-code compilation gate — not wired
+
+The corpus currently contains 35 `ts`/`tsx` fences. They are not one uniform
+compilation unit: some are complete titled modules, some are continuation
+fragments, and some are standalone type illustrations. A useful blocking gate
+therefore needs an explicit contract rather than concatenating Markdown:
+
+1. Every TypeScript fence declares a scenario and mode. A module keeps its
+   `title` as its virtual path; a fragment names the checked wrapper that gives
+   it scope; a type-only fence is compiled as its own module. No silent skip is
+   allowed.
+2. The extractor assembles each scenario in a temporary directory, compiles its
+   structural Definitions with the repository compiler, and then runs canonical
+   TypeScript 6 strict no-emit against the resulting generated `#questpie/app`
+   and `#questpie/client` contracts. This avoids treating the collaboration
+   fixture as the contract for the appointments examples, and it leaves the
+   open Barbershop-versus-collaboration content decision open.
+3. The check reports `guide:line`, virtual path, and the TypeScript diagnostic.
+   One known-good minimal scenario is the positive control. A negative control
+   mutates a generated-factory call with a rejected key and requires the check
+   to fail at that fence before a zero-error corpus is trusted.
+4. Only after the current corpus and both controls pass should the command join
+   `quality:full` and release CI. Until then it is a red repair instrument, not a
+   contributor-wide gate.
+
+This compiler gate would have caught claims 3–5 and the bad namespace members
+recorded above. It would **not** have caught claims 6–8: the closed diagnostic
+registry and Runtime limits are prose/table claims, and Resource Name rejection
+is runtime/compiler behavior that a type-only check does not exercise. Those
+need separate contract assertions or executable negative cases. What would
+overturn this split is an extractor that turns those prose rows into explicit
+typed or executable assertions; no such markup or runner exists today.

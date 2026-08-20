@@ -16,6 +16,18 @@ behind it.
 
 Base: `feat/v4` at `c54b30ac`.
 
+## Independent duplicate check at `62880614`
+
+**Claim 12 — CONFIRMED.** A search for the known-positive slice tokens
+`#290`–`#295`, reviewed/evidence heads, and CI run ids fires throughout this
+archive, including the #294 GitHub Actions bullet, the #291 final-CI bullet, and
+the #290 review-round bullet. The same search is empty in
+`docs/v4/research/framework-api-atlas/PROOF-MAP.md`; that file's opening status
+and chapter map at `:1`–`:35` stop at P1–P6 proof authority. The archive is
+therefore not a duplicate and must remain. `HANDOFF.md:297`–`:301` now routes to
+it accurately; the older `:78`–`:81` pointer named in the claim is itself stale
+after the router reduction.
+
 ## Slices
 
 - #294 took four fresh stateless Opus-medium protocol v1 rounds, all
