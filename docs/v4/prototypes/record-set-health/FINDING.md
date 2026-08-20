@@ -131,6 +131,33 @@ It does **not** read the working copy — it resolves the record through
 `git show HEAD:<path>`, which is why two attempts to control it with a tampered
 file on disk failed on the path and on the file being untracked rather than on
 the tampering.
+**A deletion breaks a citation without touching the file that carries it, and a
+rename does it more quietly still.** Every decay recorded above came from an
+insertion shifting line numbers. Two more modes surfaced once records started
+being descoped:
+
+- **Deletion.** `65643c1c` removed `apps/studio/`, and two citations in
+  `maintenance-decisions.md` — the record that re-scope _promoted_ to current —
+  pointed into it. Nothing in that file changed; the target simply stopped
+  existing. Fixed at `cc4192b2`.
+- **Rename.** `1d85b472` renamed
+  `apps/docs/content/docs/v4/services-routes-and-auth.mdx` to `services.mdx`
+  while cutting raw-Route material. `api-ergonomics-gate/AMENDMENT.md` still
+  names the old path, and the example it cites, `mutations.delivery.record`,
+  occurs zero times in `services.mdx`.
+
+**Re-ran the existence axis because a deletion invalidates it silently.** A
+sibling closed that axis at 121 citations with none missing; that result predates
+both cuts. Re-run over 283 code-path citations, 13 do not resolve on `feat/v4`:
+four are branch files legitimately cited when discussing `feat/v4-beta-09`, one
+is a path that exists nowhere and is already recorded as such, and the rest are
+the deletion and rename above. **Axis one is not a one-time audit — any commit
+that deletes or renames a cited path reopens it.**
+
+The prevention that works is visible in the set already: `owner-decisions.md`
+cites `feat/v4-beta-09:apps/studio/src/app.tsx:28`–`:33`, branch-prefixed, and
+the deletion on `feat/v4` cannot touch it.
+
 **The conclusion drawn from that was wrong and is corrected here.** It said
 tamper-detection inside a conforming committed record is untested and that
 testing it would mean committing a bad record. Neither holds. The repository
