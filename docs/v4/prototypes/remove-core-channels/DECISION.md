@@ -123,9 +123,13 @@ conclusion current.
 
 [`PROJECTION.json`](./PROJECTION.json) pins the exact removal and preservation
 obligations. [`check.ts`](./check.ts) validates them against the repository's
-current authority inventory, and
+current authority inventory using a broad case-insensitive `Channel` word scan.
+Ordinary collaboration-domain uses and unrelated English terms such as
+"side-channel" are allowed only through the exact justified exemptions in the
+projection, and
 [`negative-control.ts`](./negative-control.ts) proves that the checker rejects
 the old durable Channel contract, a placeholder seam, provider authority,
 exactly-once overclaim, accidental deletion of the domain `Channel` noun, and
-omission of a Channel-bearing current authority surface. Only a fresh stateless
-acceptance `PASS` may project this decision into ADRs and current authority.
+omission of ADR-0021's otherwise marker-invisible Channel seam. Only a fresh
+stateless acceptance `PASS` may project this decision into ADRs and current
+authority.
