@@ -189,7 +189,35 @@ a Principal:
    answer load-bearing rather than incidental, since per-kind contexts are
    preserved by design.
 
-3. **The durable route**, the alternative this record weighed.
+3. **The durable route**, the alternative this record weighed. **This is the
+   only one of the three that needs no accepted-authority amendment, and that
+   was checked rather than assumed.** ADR-0015:33–:35 specifies that a Route's
+   "handler receives the exact `Request`, typed parameters, **Principal**,
+   cancellation, deadline, and only Route-safe Services. It receives no data
+   facade, Mutation facade, raw database, or ambient System Authority." The
+   Principal is in the Route contract already, so an inspection Authority
+   decision can be evaluated in a Route handler today, by contract, with no ADR
+   changed.
+
+   The data half still works: a Route "enters ordinary application behavior only
+   through an explicit generated Execution transition" (`:36`–`:38`), so the
+   Authority decision happens in the Route handler, where the Principal is, and
+   the reads happen after it. Nothing needs `ctx.data` to carry a Principal.
+
+**So the three shapes differ in kind, not degree.** One and two need an Accepted
+ADR amended — option 1 to stop a Mutation owning a transaction it is required to
+own, option 2 to let a Query's context carry more than `ctx.data`. Option 3
+needs no amendment and instead needs work that accepted authority already
+specifies and nobody has built: route mounting, Fetch dispatch, and the `routes`
+projection, which ADR-0014 assigns to ADR-0015's slice.
+
+**Recommendation, and it is a judgment call.** Prefer option 3. Building
+specified-but-unbuilt work is a smaller commitment than amending a frozen
+contract, and this record already establishes that the command half needs that
+same work regardless — so option 3 serves both halves while options 1 and 2
+serve only the reads. What would overturn it: the route work proving materially
+larger than an ADR-0011 amendment, or an owner deciding the per-kind context
+boundary should move for reasons beyond this slice.
 
 **The finding moves weight from 1 to 2 and 3.** BETA-09's criterion 1 requires
 inspection Authority to be _evaluated_, and no path available today lets a Query
