@@ -11,12 +11,15 @@ and opens no slice.
 
 Base: `feat/v4` at `3ef59f71`.
 
-**Standing note: a descope is in flight that changes what this record is for.**
-An uncommitted working-tree change adds `docs/adr/0024-descope-minimal-studio-from-beta-one.md`
+**Standing note: a descope has landed that changes what this record is for.**
+`65643c1c` adds `docs/adr/0024-descope-minimal-studio-from-beta-one.md`
 (`Status: Accepted`, superseding ADR-0004 and ADR-0021 where they require a
-minimal Studio path in `4.0.0-beta.1`), deletes `apps/studio/`, and re-scopes
-BETA-09 as a backend-only maintenance-compatibility slice. It is not committed as
-this is written, so everything below still stands as recorded.
+minimal Studio path in `4.0.0-beta.1`), deletes `apps/studio/` — `HEAD` now
+carries no file under that path — and re-scopes BETA-09 as a backend-only
+maintenance-compatibility slice. Everything below was written against the
+pre-descope scope and is left as recorded rather than rewritten, because the
+comparison it makes is what a later release reintroducing an inspection surface
+will need.
 
 **Its factual premise checks out**, verified against `feat/v4-beta-09` rather
 than taken from the draft. The ADR says the browser "could not inspect Collection
