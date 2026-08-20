@@ -1100,6 +1100,23 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   building it here** — a new CI job gates every contributor's PR, which is the
   same reason the docs-example check above is recorded rather than added. Owner
   call, but the trigger is no longer hypothetical.
+  **The check itself was run and BETA-08's record passes**, so the wiring would
+  be gating a check that is green today rather than one nobody has tried:
+  `bun run review:accept:verify -- --record docs/v4/implementation/beta08/REVIEW-04.json`
+  exits 0 with "acceptance review verification PASS … ->
+  `d0aedd54dc6420b48e632590a6c2319f8516bc9f`", the repinned manifest head.
+  Verified independently that BETA-08 is the first v2 record, which is what makes
+  the trigger fire: every review JSON under `beta06/` and `beta07/` is
+  `protocolVersion: 1` and all four under `beta08/` are `2`.
+  **What that PASS does and does not establish**, since a green result from an
+  unexercised tool is worth nothing. The tool discriminates on content: pointed at
+  BETA-07's v1 record it exits 1 with "record lacks reviewedHead or manifestPath".
+  It does **not** read the working copy — it resolves the record through
+  `git show HEAD:<path>`, so two attempts to control it with a tampered file
+  failed on the path and on the file being untracked rather than on the
+  tampering. So: conformance is checked and a non-conforming record is rejected;
+  detection of tampering inside a conforming committed record is untested here,
+  and testing it would mean committing a bad record.
 - `owner-decisions.md` states an owner answered its three questions. **That
   attribution cannot be verified from this repository.** Two of the three are
   independently grounded in citations and stand regardless; the attribution still
