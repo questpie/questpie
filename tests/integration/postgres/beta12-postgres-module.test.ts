@@ -3,8 +3,10 @@ import { expect, test } from "bun:test";
 import {
 	createPostgresDatabase,
 	createPostgresListener,
+	createMigrationPostgres,
 	definePostgresChannel,
 	definePostgresStatement,
+	type MigrationPostgresSession,
 	type PostgresTransaction,
 } from "../../../packages/runtime/src/postgres";
 
@@ -73,6 +75,48 @@ WHERE application_name = $1::text
 	},
 });
 
+const createMigrationProbe = definePostgresStatement({
+	name: "pb03.migration-probe-create",
+	text: "CREATE TEMP TABLE qp_pb03_migration_probe (value text) ON COMMIT PRESERVE ROWS",
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const insertMigrationProbe = definePostgresStatement({
+	name: "pb03.migration-probe-insert",
+	text: "INSERT INTO qp_pb03_migration_probe (value) VALUES ($1::text)",
+	parameterCount: 1,
+	parameters: (value: string) => [value],
+	decode: () => undefined,
+});
+
+const observeMigrationSession = definePostgresStatement({
+	name: "pb03.migration-session-observe",
+	text: `SELECT
+	pg_catalog.pg_backend_pid(),
+	EXISTS (
+		SELECT 1 FROM pg_catalog.pg_locks
+		WHERE locktype = 'advisory'
+			AND pid = pg_catalog.pg_backend_pid()
+			AND granted
+	),
+	ARRAY(SELECT value FROM qp_pb03_migration_probe ORDER BY value)`,
+	parameterCount: 0,
+	parameters: () => [],
+	decode(result) {
+		const row = result.rows[0];
+		if (
+			result.rows.length !== 1 ||
+			typeof row?.[0] !== "number" ||
+			typeof row[1] !== "boolean" ||
+			!Array.isArray(row[2])
+		)
+			throw new TypeError("migration session observation is invalid");
+		return { pid: row[0], locked: row[1], values: row[2] };
+	},
+});
+
 function database() {
 	return createPostgresDatabase({
 		connectionUrl: postgresUrl(),
@@ -135,6 +179,68 @@ postgresTest(
 		} finally {
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
+	},
+);
+
+postgresTest(
+	"pins separately committed migration transactions under one application lock",
+	async () => {
+		const migration = createMigrationPostgres({
+			directConnectionUrl: postgresUrl(),
+			timeouts: {
+				statementMs: 1_000,
+				lockMs: 500,
+				idleInTransactionMs: 1_000,
+			},
+		});
+		let expiredSession: MigrationPostgresSession | undefined;
+		const observations = await migration.run({
+			application: "pb03MigrationProbe",
+			use: async (session) => {
+				expiredSession = session;
+				const first = await session.transaction({
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: async (transaction) => {
+						await transaction.execute(createMigrationProbe, undefined);
+						await transaction.execute(insertMigrationProbe, "committed");
+						return transaction.execute(observeMigrationSession, undefined);
+					},
+				});
+				const second = await session.transaction({
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: (transaction) =>
+						transaction.execute(observeMigrationSession, undefined),
+				});
+				return [first, second] as const;
+			},
+		});
+
+		expect(observations[0]).toEqual(observations[1]);
+		expect(observations[0]).toEqual({
+			pid: expect.any(Number),
+			locked: true,
+			values: ["committed"],
+		});
+		await expect(
+			expiredSession!.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: () => Promise.resolve(),
+			}),
+		).rejects.toMatchObject({ code: "closed" });
+
+		const applicationFailure = new Error("migration callback failed");
+		await expect(
+			migration.run({
+				application: "pb03MigrationFailure",
+				use: () => Promise.reject(applicationFailure),
+			}),
+		).rejects.toBe(applicationFailure);
+		await expect(
+			migration.run({
+				application: "pb03MigrationFailure",
+				use: () => Promise.resolve("lock-released"),
+			}),
+		).resolves.toBe("lock-released");
 	},
 );
 

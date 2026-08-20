@@ -1,4 +1,6 @@
-import { Pool, type PoolClient } from "pg";
+import { createHash } from "node:crypto";
+
+import { Client, Pool, type PoolClient } from "pg";
 
 import { canonicalJsonLine } from "../canonical-json";
 
@@ -87,6 +89,7 @@ export type PostgresFailureCode =
 	| "deadlock"
 	| "constraint"
 	| "invalidResult"
+	| "sessionNotAffine"
 	| "commitOutcomeUnknown";
 
 export class QuestpiePostgresError extends Error {
@@ -158,6 +161,34 @@ export interface PostgresDatabase {
 		}>;
 	}>;
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
+}
+
+export interface MigrationPostgresSession {
+	transaction<Value>(
+		input: Readonly<{
+			mode: PostgresTransactionMode;
+			use(transaction: PostgresTransaction): Promise<Value>;
+		}>,
+	): Promise<Value>;
+}
+
+export interface MigrationPostgres {
+	run<Output>(
+		input: Readonly<{
+			application: string;
+			control?: PostgresControl;
+			use(
+				session: Readonly<{
+					transaction<Value>(
+						input: Readonly<{
+							mode: PostgresTransactionMode;
+							use(transaction: PostgresTransaction): Promise<Value>;
+						}>,
+					): Promise<Value>;
+				}>,
+			): Promise<Output>;
+		}>,
+	): Promise<Output>;
 }
 
 function positiveInteger(value: number): void {
@@ -312,6 +343,55 @@ function effectiveTimeout(
 	return Math.min(candidate, maximum);
 }
 
+async function executeStatement<Input, Output>(
+	input: Readonly<{
+		client: PoolClient | Client;
+		statement: PostgresStatement<Input, Output>;
+		value: Input;
+		active: () => boolean;
+		signal?: AbortSignal;
+	}>,
+): Promise<Output> {
+	if (!input.active())
+		throw new QuestpiePostgresError({ code: "closed", phase: "statement" });
+	input.signal?.throwIfAborted();
+	const values = input.statement.parameters(input.value);
+	if (values.length !== input.statement.parameterCount)
+		throw new QuestpiePostgresError({
+			code: "invalidResult",
+			phase: "statement",
+			statementName: input.statement.name,
+		});
+	try {
+		const result = await input.client.query({
+			text: input.statement.text,
+			values: values.map(parameter),
+			rowMode: "array",
+		});
+		try {
+			return input.statement.decode({
+				command: result.command,
+				rowCount: result.rowCount,
+				rows: result.rows as unknown as readonly (readonly unknown[])[],
+			});
+		} catch (error) {
+			throw new QuestpiePostgresError({
+				code: "invalidResult",
+				phase: "statement",
+				statementName: input.statement.name,
+				cause: error,
+			});
+		}
+	} catch (error) {
+		throw failure({
+			error,
+			phase: "statement",
+			statementName: input.statement.name,
+			signal: input.signal,
+		});
+	}
+}
+
 export function createPostgresDatabase(
 	configuration: PostgresDatabaseConfiguration,
 ): PostgresDatabase {
@@ -365,49 +445,14 @@ export function createPostgresDatabase(
 			client.release(true);
 		};
 		signal?.addEventListener("abort", destroy, { once: true });
-		const execute: PostgresTransaction["execute"] = async (
-			statement,
-			value,
-		) => {
-			if (!active)
-				throw new QuestpiePostgresError({ code: "closed", phase: "statement" });
-			signal?.throwIfAborted();
-			const values = statement.parameters(value);
-			if (values.length !== statement.parameterCount)
-				throw new QuestpiePostgresError({
-					code: "invalidResult",
-					phase: "statement",
-					statementName: statement.name,
-				});
-			try {
-				const result = await client.query({
-					text: statement.text,
-					values: values.map(parameter),
-					rowMode: "array",
-				});
-				try {
-					return statement.decode({
-						command: result.command,
-						rowCount: result.rowCount,
-						rows: result.rows as unknown as readonly (readonly unknown[])[],
-					});
-				} catch (error) {
-					throw new QuestpiePostgresError({
-						code: "invalidResult",
-						phase: "statement",
-						statementName: statement.name,
-						cause: error,
-					});
-				}
-			} catch (error) {
-				throw failure({
-					error,
-					phase: "statement",
-					statementName: statement.name,
-					signal,
-				});
-			}
-		};
+		const execute: PostgresTransaction["execute"] = async (statement, value) =>
+			executeStatement({
+				client,
+				statement,
+				value,
+				active: () => active,
+				signal,
+			});
 		const handle = Object.freeze({
 			[transactionBrand]: true as const,
 			execute,
@@ -520,6 +565,185 @@ export function createPostgresDatabase(
 				state = "closed";
 			} finally {
 				if (timer) clearTimeout(timer);
+			}
+		},
+	});
+}
+
+function migrationLockKey(application: string): bigint {
+	return createHash("sha256")
+		.update(`questpie-migration\0${application}`)
+		.digest()
+		.readBigInt64BE(0);
+}
+
+async function clientPid(client: Client): Promise<number> {
+	const result = await client.query<{ pid: number }>(
+		"SELECT pg_catalog.pg_backend_pid() AS pid",
+	);
+	const pid = result.rows[0]?.pid;
+	if (typeof pid !== "number" || !Number.isSafeInteger(pid))
+		throw new QuestpiePostgresError({
+			code: "sessionNotAffine",
+			phase: "statement",
+		});
+	return pid;
+}
+
+export function createMigrationPostgres(
+	input: Readonly<{
+		directConnectionUrl: string;
+		timeouts: PostgresDatabaseConfiguration["timeouts"];
+	}>,
+): MigrationPostgres {
+	if (
+		typeof input.directConnectionUrl !== "string" ||
+		input.directConnectionUrl.length === 0
+	)
+		throw new QuestpiePostgresError({
+			code: "configuration",
+			phase: "connect",
+		});
+	positiveInteger(input.timeouts.statementMs);
+	positiveInteger(input.timeouts.lockMs);
+	positiveInteger(input.timeouts.idleInTransactionMs);
+
+	return Object.freeze({
+		async run<Output>(
+			runInput: Readonly<{
+				application: string;
+				control?: PostgresControl;
+				use(session: MigrationPostgresSession): Promise<Output>;
+			}>,
+		): Promise<Output> {
+			if (
+				!/^[a-z][a-zA-Z0-9]*(?:\.[a-z][a-zA-Z0-9]*)*$/u.test(
+					runInput.application,
+				)
+			)
+				throw new QuestpiePostgresError({
+					code: "configuration",
+					phase: "connect",
+				});
+			runInput.control?.signal?.throwIfAborted();
+			const client = new Client({
+				connectionString: input.directConnectionUrl,
+				application_name: "questpie-migration",
+				connectionTimeoutMillis: 1_000,
+			});
+			await client.connect();
+			let locked = false;
+			let open = true;
+			let transactionActive = false;
+			try {
+				const firstPid = await clientPid(client);
+				await client.query("BEGIN");
+				const committedPid = await clientPid(client);
+				await client.query("COMMIT");
+				if (committedPid !== firstPid || (await clientPid(client)) !== firstPid)
+					throw new QuestpiePostgresError({
+						code: "sessionNotAffine",
+						phase: "statement",
+					});
+				await client.query({
+					text: "SELECT pg_catalog.set_config('lock_timeout', $1, false)",
+					values: [
+						`${effectiveTimeout(runInput.control?.lockTimeoutMs, input.timeouts.lockMs)}ms`,
+					],
+				});
+				await client.query({
+					text: "SELECT pg_catalog.pg_advisory_lock($1::bigint)",
+					values: [migrationLockKey(runInput.application)],
+				});
+				locked = true;
+				const expectedPid = await clientPid(client);
+				const session = Object.freeze({
+					async transaction<Value>(
+						transactionInput: Readonly<{
+							mode: PostgresTransactionMode;
+							use(transaction: PostgresTransaction): Promise<Value>;
+						}>,
+					): Promise<Value> {
+						if (!open || transactionActive)
+							throw new QuestpiePostgresError({
+								code: "closed",
+								phase: "begin",
+							});
+						transactionActive = true;
+						let active = true;
+						let commitSent = false;
+						const execute: PostgresTransaction["execute"] = (
+							statement,
+							value,
+						) =>
+							executeStatement({
+								client,
+								statement,
+								value,
+								active: () => active,
+								signal: runInput.control?.signal,
+							});
+						const handle = Object.freeze({
+							[transactionBrand]: true as const,
+							execute,
+						});
+						try {
+							if ((await clientPid(client)) !== expectedPid)
+								throw new QuestpiePostgresError({
+									code: "sessionNotAffine",
+									phase: "begin",
+								});
+							await client.query(begin(transactionInput.mode));
+							await client.query({
+								text: `SELECT
+	pg_catalog.set_config('statement_timeout', $1, true),
+	pg_catalog.set_config('lock_timeout', $2, true),
+	pg_catalog.set_config('idle_in_transaction_session_timeout', $3, true)`,
+								values: [
+									`${input.timeouts.statementMs}ms`,
+									`${input.timeouts.lockMs}ms`,
+									`${input.timeouts.idleInTransactionMs}ms`,
+								],
+							});
+							const output = await transactionInput.use(handle);
+							active = false;
+							runInput.control?.signal?.throwIfAborted();
+							if ((await clientPid(client)) !== expectedPid)
+								throw new QuestpiePostgresError({
+									code: "sessionNotAffine",
+									phase: "commit",
+								});
+							commitSent = true;
+							await client.query("COMMIT");
+							if ((await clientPid(client)) !== expectedPid)
+								throw new QuestpiePostgresError({
+									code: "sessionNotAffine",
+									phase: "commit",
+								});
+							return output;
+						} catch (error) {
+							active = false;
+							if (!commitSent) await client.query("ROLLBACK").catch(() => {});
+							if (commitSent)
+								throw failure({ error, phase: "commit", commitSent: true });
+							throw error;
+						} finally {
+							active = false;
+							transactionActive = false;
+						}
+					},
+				});
+				return await runInput.use(session);
+			} finally {
+				open = false;
+				if (locked)
+					await client
+						.query({
+							text: "SELECT pg_catalog.pg_advisory_unlock($1::bigint)",
+							values: [migrationLockKey(runInput.application)],
+						})
+						.catch(() => {});
+				await client.end().catch(() => {});
 			}
 		},
 	});
