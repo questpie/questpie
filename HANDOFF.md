@@ -780,6 +780,15 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `ctx.actions` there is not merely explained through a deferred capability,
      it is **not a member of `ReactionContext`**. That guide's example is also
      missing the required `output`.
+     **The client and app surface is clean, checked the same way.**
+     `GeneratedApp` is `fetch`, `execution`, `close`; `GeneratedClientScope` is
+     `context`, `queries`, `mutations`, `withContext`
+     (`fixtures/collaboration/.questpie/generated/client.ts:41`+). Every use in
+     the guides resolves, including the `withContext({…}).queries[…]` call
+     shape. Two apparent misses were my regex reading inside string literals —
+     `app.context` is `name: "app.context"` at `context-and-policy.mdx:129`, and
+     `app.example` is a `baseUrl` URL at `runtime-and-studio.mdx:51`. The
+     authoring surface is where the gap is; the calling surface is not.
      **That is why seven compile errors sit in the flagship guide with every
      gate green**, and it is the cheapest thing on this list to fix: one check
      that extracts `ts` blocks and compiles them would have caught every example
