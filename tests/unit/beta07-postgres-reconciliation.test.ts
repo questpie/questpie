@@ -141,13 +141,16 @@ test("rolls back without processing or advancing when recomputation fails", asyn
 
 test("retries a concurrent repeatable-read reconciliation from a fresh transaction", async () => {
 	const fixture = postgresFixture({ serializationFailures: 1 });
+	let applyCount = 0;
 
 	await expect(
 		reconcilePostgresChangeLedger({
 			sql: fixture.sql as never,
 			application: "application:collaboration",
 			consumer: "runtime:primary",
-			apply: () => undefined,
+			apply: () => {
+				applyCount += 1;
+			},
 		}),
 	).resolves.toEqual(
 		expect.objectContaining({ priorHorizon: "100", nextHorizon: "102" }),
@@ -160,4 +163,5 @@ test("retries a concurrent repeatable-read reconciliation from a fresh transacti
 	).toHaveLength(2);
 	expect(fixture.statements).toContain("ROLLBACK");
 	expect(fixture.released()).toBe(2);
+	expect(applyCount).toBe(1);
 });

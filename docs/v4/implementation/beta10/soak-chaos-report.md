@@ -15,7 +15,7 @@ The observed manual run completed in 3,089.177 ms:
 
 The canonical scenario selector was rerun after the blocked review and selected
 `beta10-soak-chaos` from its performance manifest. That replacement-head
-validation completed in 3,170.867 ms with 80 claims, one recovered crash
+validation completed in 3,168.598 ms with 80 claims, one recovered crash
 attempt, three replacement instances, zero failed runs, and zero drained-worker
 admissions. It is validation evidence, not a fourth baseline sample.
 

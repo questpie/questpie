@@ -43,10 +43,13 @@ returns the poison run
 Runtime readiness now retries the complete repeatable-read reconciliation
 transaction on exact `40001`; it does not retry only the failed statement inside
 the stale transaction (`packages/runtime/src/live-query/postgres.ts:157`–`:278`,
-`:281`–`:298`).
+`:281`–`:319`). Serialization losers use a bounded 1–64 ms full-jitter
+exponential delay before reserving a fresh session, preventing ten coordinators
+from immediately recreating the same race.
 That repair was discovered by starting ten coordinators concurrently, and the
 unit test injects the serialization failure before accepting the retry
-(`tests/unit/beta07-postgres-reconciliation.test.ts:142`–`:163`).
+(`tests/unit/beta07-postgres-reconciliation.test.ts:142`–`:167`), including an
+exact one-call assertion for the application callback.
 
 The rolling matrix keeps schema, wire, Policy/Context, realtime, executable,
 durable state, and internal protocol as separate compatibility decisions
@@ -103,13 +106,19 @@ slice.
 The pre-acceptance head passed `bun run quality:full`, the explicit PostgreSQL
 durable-kernel suite (14 tests, 138 assertions), the ten-instance scenario, and
 the manual soak/chaos scenario. The canonical selectors on the replacement head
-measured 1,020.242 ms for 40 durable runs and 3,170.867 ms for 80 soak runs,
+measured 1,049.284 ms for 40 durable runs and 3,168.598 ms for 80 soak runs,
 both inside their committed stable-runner budgets and recorded separately from
 the three-sample baselines in the owned reports.
 
 After the blocked review, every file range in this closure record and the five
 owned BETA-10 reports was re-read with `nl -ba` against the replacement head;
 no range was carried forward from a diff hunk or an earlier commit.
+
+The replacement review invocation on head `ebe1cfe8` returned terminal
+`NO_RESULT` after the reviewer transport reached its five-minute timeout and
+wrote no review artifact; it is not a verdict. The next materially changed head
+adds the bounded reconciliation backoff and exact callback-count assertion
+before requesting a fresh review.
 
 The five required owned artifacts are:
 

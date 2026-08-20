@@ -3,7 +3,7 @@
 	"ticket": "#297",
 	"proof": "BETA-10 proves correctness across ten all-role Runtime instances and a compatible rolling build: arbitrary direct and network routing, tenant-fair executable-compatible admission, concurrent workers, instance replacement, lease recovery, reconnect and fanout evidence all converge on PostgreSQL without sticky routing, a leader, process registry, cache, broker, or carrier authority.",
 	"diffBase": "21e38b2156b0431613c14755765430b7504d176a",
-	"reviewOutput": "docs/v4/implementation/beta10/REVIEW-HA-02.json",
+	"reviewOutput": "docs/v4/implementation/beta10/REVIEW-HA-03.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "21e38b2156b0431613c14755765430b7504d176a",
 		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
@@ -42,7 +42,7 @@
 		{
 			"name": "BETA-10 backend closure record",
 			"path": "docs/v4/implementation/beta10/backend-acceptance.md",
-			"sha256": "994886bc5d7d9f214d25fec526ffc33d45f77e21c01396d077fcb277d38de4e9"
+			"sha256": "0e49050d137db5a73fb0a9dc94f523b720eb5b0c6a29b123c170e60d5ead41d0"
 		}
 	],
 	"verification": [
@@ -55,11 +55,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun run test:load -- --scenario beta10 (40 runs, 0 duplicate attempts, 1020.242 ms)",
+			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun run test:load -- --scenario beta10 (40 runs, 0 duplicate attempts, 1049.284 ms)",
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun run test:soak -- --scenario beta10 (80 runs, 1 recovered crash attempt, 3 replacement instances, 0 failures, 3170.867 ms)",
+			"command": "PGHOST=127.0.0.1 PGPORT=32799 PGDATABASE=postgres PGUSER=postgres QUESTPIE_POSTGRES_MAJOR=17 bun run test:soak -- --scenario beta10 (80 runs, 1 recovered crash attempt, 3 replacement instances, 0 failures, 3168.598 ms)",
 			"result": "PASS"
 		},
 		{
@@ -83,7 +83,7 @@
 		"The owned ten-instance scenario creates ten all-role collaboration Runtime instances, routes 20 direct roots and 20 Operation-Wire POSTs arbitrarily, completes 40 durable runs, records zero duplicate attempts, and proves drained workers admit no later work.",
 		"The fleet contains one signed internal-protocol-v4 Runtime Build and nine current v5 builds. Compatibility remains separate for schema, wire, Policy/Context, realtime, executable, durable state, and internal protocol; the evidence does not claim arbitrary historical binary compatibility.",
 		"Durable admission is tenant-fair and filters incompatible executable digests before LIMIT. A live PostgreSQL case with an unequal four-run/two-run tenant backlog proves a four-item batch interleaves two runs from each tenant. A direct claim rechecks compatibility under the row lock, refuses EXECUTABLE_RETIRED without consuming an attempt, and leaves old work durable for a compatible worker.",
-		"Exact PostgreSQL serialization losers in claim and cancellation reaping perform no second transition and leave work for a later poll, while every non-40001 failure still escapes. Startup reconciliation retries the complete repeatable-read transaction from a fresh snapshot.",
+		"Exact PostgreSQL serialization losers in claim and cancellation reaping perform no second transition and leave work for a later poll, while every non-40001 failure still escapes. Startup reconciliation retries the complete repeatable-read transaction from a fresh snapshot after a bounded 1–64 ms full-jitter exponential delay, and the injected loser test proves the application callback runs once.",
 		"A run abandoned after its last allowed claim becomes one failed RETRY_EXHAUSTED dead letter, settles its outstanding attempt, appends one failure event, creates no extra attempt, and no longer poisons admission.",
 		"The separate manual soak/chaos scenario completes 80 runs in waves across ten instances, abandons and recovers one lease exactly once, replaces three instances, ends with zero failed runs, and records zero post-drain admissions.",
 		"The rolling matrix, fanout/worker/reconnect report, and optional-infrastructure absence report connect the BETA-10 fleet to established fanout, fresh-Runtime reconnect, arbitrary-holder reauthorization, and drain evidence. No correctness claim depends on sticky routing, a leader, process registry, cache, broker, Redis, Pusher, WebSocket, or retained connection state.",

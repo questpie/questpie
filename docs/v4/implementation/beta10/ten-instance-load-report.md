@@ -19,7 +19,7 @@ The observed run completed in 1,006.304 ms and proved:
 
 The canonical scenario selector was rerun after the blocked review and selected
 `beta10-ten-instance` from its performance manifest. That replacement-head
-validation completed in 1,020.242 ms with the same 40 claims, zero duplicate
+validation completed in 1,049.284 ms with the same 40 claims, zero duplicate
 attempts, and zero drained-worker admissions. It is validation evidence, not a
 fourth baseline sample; the committed three-sample baseline remains unchanged.
 
@@ -33,8 +33,11 @@ truth rather than trusting worker counters at `tests/load/beta10-ten-instance.ts
 The first run failed before work began. Ten coordinators raced while inserting
 the same reconciliation consumer under Repeatable Read. PostgreSQL returned
 `40001`. Reconciliation now retries the whole transaction on that exact error
-(`packages/runtime/src/live-query/postgres.ts:157`–`:278`, `:281`–`:298`), and
-the unit test injects the failure before accepting the retry.
+(`packages/runtime/src/live-query/postgres.ts:157`–`:278`, `:281`–`:319`). Each
+loser waits a bounded 1–64 ms full-jitter exponential delay before reserving a
+fresh session, so ten coordinators do not immediately recreate the same race.
+The unit test injects the failure before accepting the retry and asserts the
+application callback runs once.
 
 The first concurrent worker run then exposed `40001` losers in cancellation
 reaping and claiming. Those paths now treat only that exact PostgreSQL error as

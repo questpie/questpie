@@ -86,7 +86,7 @@ describe("BETA-01 generated contract", () => {
 			"durable-kernel.json",
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
-			"internal/application-122br4k7.js",
+			"internal/application-j0z089r4.js",
 			"internal/application-p4gjaxyj.js",
 			"internal/application-vqw92zgv.js",
 			"internal/application-zbzmy0rb.js",

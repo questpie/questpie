@@ -284,15 +284,36 @@ function postgresErrorNumber(error: unknown): string | null {
 	return typeof errno === "string" ? errno : null;
 }
 
+function waitForReconciliationRetry(
+	attempt: number,
+	signal?: AbortSignal,
+): Promise<void> {
+	signal?.throwIfAborted();
+	const ceilingMilliseconds = Math.min(2 ** (attempt - 1), 64);
+	const delayMilliseconds = Math.floor(Math.random() * ceilingMilliseconds) + 1;
+	return new Promise((resolve, reject) => {
+		const aborted = () => {
+			clearTimeout(timer);
+			reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+		};
+		const timer = setTimeout(() => {
+			signal?.removeEventListener("abort", aborted);
+			resolve();
+		}, delayMilliseconds);
+		signal?.addEventListener("abort", aborted, { once: true });
+		if (signal?.aborted) aborted();
+	});
+}
+
 export async function reconcilePostgresChangeLedger(
 	input: PostgresChangeReconciliationInput,
 ): Promise<ChangeReconciliationResultV1> {
-	for (let attempt = 1; attempt <= 16; attempt += 1) {
+	for (let attempt = 1; ; attempt += 1) {
 		try {
 			return await reconcilePostgresChangeLedgerAttempt(input);
 		} catch (error) {
 			if (postgresErrorNumber(error) !== "40001" || attempt === 16) throw error;
+			await waitForReconciliationRetry(attempt, input.signal);
 		}
 	}
-	throw new TypeError("Change reconciliation retry bound is unreachable");
 }
