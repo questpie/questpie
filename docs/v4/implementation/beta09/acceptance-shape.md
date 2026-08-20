@@ -212,6 +212,23 @@ route exists.
    inspection Authority cannot distinguish denial from absence; a caller with
    inspection but not maintenance Authority receives a specific denial. →
    `maintenance-decisions.md` Q3.
+
+   **This criterion straddles the two blockers, one clause each.** Its first
+   clause is the inspection side and inherits criterion 1's problem exactly:
+   producing a denial indistinguishable from absence requires evaluating an
+   inspection Authority, and a Query handler has no Principal to evaluate. Its
+   second clause is the maintenance side and sits with criterion 2 — the Principal
+   reaches `actorOf`, and the typed denial it needs is the `AUTHORITY_DENIED`
+   code `internal-protocol-v5.md` adds to the rejection union and CHECK, driven by
+   `hostile-cases.md` case 5.
+
+   **That is an argument against the merge the judgment call below considers.**
+   It weighs folding criterion 3 into criterion 1. Half of it does belong there;
+   the other half is satisfiable on the maintenance path once a decision replaces
+   a brand check, and merging would carry that half into a criterion blocked on an
+   ADR amendment it does not need. Splitting the clauses is the better move if
+   this is reopened — one to criterion 1's fate, one to criterion 2's.
+
 4. **The inspection projection is strictly narrower than the kernel read.**
    Nothing Studio can reach returns `result_bytes` or a raw provider receipt.
    Result is presence, length, and digest; receipt is presence. Falsifiable:
