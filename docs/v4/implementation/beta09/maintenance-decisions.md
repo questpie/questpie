@@ -227,9 +227,13 @@ branch.
 ## The design-system gap, named precisely
 
 Owner direction is to build on the shadcn and Base UI primitives already in the
-QUESTPIE design system. Verified state: `apps/studio/src/index.ts` is a one-line
-stub; the system lives in `apps/docs` at shadcn style `base-mira` with phosphor
-icons (`apps/docs/components.json`) on `@base-ui/react ^1.0.0`
+QUESTPIE design system. **That direction is moot on `feat/v4`**: `65643c1c`
+deleted `apps/studio/` under
+`docs/adr/0024-descope-minimal-studio-from-beta-one.md`, so there is no Studio to
+style. It applied when written — `apps/studio/src/index.ts` was then a one-line
+stub, and it survives on `feat/v4-beta-09` — and the design-system facts still
+hold for whatever reintroduces a Studio: `apps/docs` at shadcn style `base-mira`
+with phosphor icons (`apps/docs/components.json`) on `@base-ui/react ^1.0.0`
 (`apps/docs/package.json:14`).
 
 Fourteen primitives exist in `apps/docs/src/components/ui/`: `alert-dialog`,
@@ -363,7 +367,9 @@ have, verified on `feat/v4` at `b387e74f`:
 
 - `packages/runtime/src/application/index.ts` contains **no reference to
   `durable`**. The Fetch router exposes no durable route.
-- `apps/studio/src/` still contains only `index.ts`, the one-line stub.
+- `apps/studio/` no longer exists on `feat/v4` — `65643c1c` deleted it. When
+  this was written it held only the one-line `index.ts` stub, which is still
+  true on `feat/v4-beta-09`.
 
 The durable reads and commands are in-process methods frozen onto the
 application object. **No wire path reaches them.** So at this base a maintenance
