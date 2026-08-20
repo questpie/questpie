@@ -1,6 +1,11 @@
 # ADR 0019: Freeze semantic kernels and the public surface
 
-- Status: Accepted
+> Channel-specific clauses are historical and superseded by
+> [ADR-0025](./0025-remove-channels-from-core.md). `defineChannel`, Channel
+> payload projection, and `runtime.channelCarrier` are not current or deferred
+> public surface.
+
+- Status: Accepted; Channel clauses superseded by ADR-0025
 - Date: 2026-08-13
 
 ## Context

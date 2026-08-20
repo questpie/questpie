@@ -37,11 +37,14 @@ application.
 | Files            | Data lifecycle and blob seam                | File records plus external bytes            | Later               |
 | Search           | Stable query grammar                        | PostgreSQL FTS and vector operations        | Later               |
 | KV               | Proven internal need                        | Named coordination or application data      | Re-evaluate         |
-| Channels         | Live Query transport proof                  | Explicit transient events and presence      | Later               |
 | OpenAPI          | Stable operation exposure and schemas       | Projection of explicit Operations           | Later               |
 | MCP              | Stable exposure, Policy, and error contract | Projection of explicit Operations           | Later               |
 | Full Studio      | Stable Jobs, Workflows, Auth, and Files     | Operational projection of later slices      | Later               |
 | Managed Cloud    | External production proof                   | Semantic deployment control plane           | Business validation |
+
+Transient connected-client events and advisory presence are application/
+provider integrations, not a QUESTPIE product area. Live Query owns current
+authorized Query results; ordinary Collections own durable business history.
 
 ## V3 evidence inventory
 

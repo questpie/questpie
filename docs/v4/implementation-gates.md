@@ -365,19 +365,14 @@ not current release gates.
   and expiry before using bytes. Missing, stale, corrupt, slow, or unavailable
   Memory/Redis entries are misses or resets; no raw `ctx.kv` exists.
 - Duplicate, coalesced, reordered, delayed, and absent notification-broker
-  hints produce the same Change Ledger, durable-run, schedule, and Channel
-  outcomes through PostgreSQL reconciliation.
+  hints produce the same Change Ledger, durable-run, and schedule outcomes
+  through PostgreSQL reconciliation.
 - One bounded multiplexed SSE downstream and Fetch/POST upstream work across
-  different instances. WebSocket or Pusher-compatible delivery must reuse the
-  exact frame, Policy, resume, limit, and reset contract and cannot become
-  event or replay authority.
-- Channel codecs, publish/subscribe Policy, subject identity, stable
-  idempotency, per-Channel order, bounded replay/gap, authority invalidation,
-  and limits are compiler/Policy/PostgreSQL-owned. Direct provider client
-  events are outside the safe contract.
-- Implementation hostile tests include changed-payload Channel conflicts,
-  schedule removal preventing future ticks, real-key stale/corrupt caches,
-  post-write arbitrary routing, and contended old/new build claims.
+  different instances for Live Query. Transient provider delivery is ordinary
+  application integration and cannot become event, replay, or Policy authority.
+- Implementation hostile tests include schedule removal preventing future
+  ticks, real-key stale/corrupt caches, post-write arbitrary routing, and
+  contended old/new build claims.
 
 ## Gate 8D: File, Search, and contract projections
 
@@ -419,7 +414,7 @@ not current release gates.
 
 ## Gate 8E: semantic kernels and exports
 
-- Input, output, Context, durable, and Channel values use one `codec.*` scalar
+- Input, output, Context, and durable values use one `codec.*` scalar
   kernel. `field.*` adds database-only capabilities and `value.*` is a
   compatible embedded-JSONB projection; Operation owns no duplicate scalar
   grammar.
@@ -436,15 +431,15 @@ not current release gates.
   `#questpie/client` exports no server factory. Negative imports, exact
   completions, Package isolation, relocation, emitted declarations, no ambient
   registry, and TypeScript budgets pass.
-- `defineChannel` owns typed event authoring. Live Query has no constructor and
-  gains `.watch` only from compiler-proven Query watchability.
+- Live Query has no constructor and gains `.watch` only from compiler-proven
+  Query watchability. No generic event or presence Resource exists.
 - OpenAPI/MCP/skill selection lives under `questpie.json` `projections`; build
   emits artifacts and `questpie explain projection` reports provenance. No
   authoring factory or alternate handler registry exists.
-- `runtime.cache`, `runtime.wakeBroker`, `runtime.channelCarrier`, and
-  `runtime.byteStore` bind distinct exact Services. They do not form a provider
-  registry, appear as an ambient handler capability bag, carry secrets in
-  committed config, or change PostgreSQL authority/fallback semantics.
+- `runtime.cache`, `runtime.wakeBroker`, and `runtime.byteStore` bind distinct
+  exact Services. They do not form a provider registry, appear as an ambient
+  handler capability bag, carry secrets in committed config, or change
+  PostgreSQL authority/fallback semantics.
 
 ## Gate 9: executable tracer evidence
 

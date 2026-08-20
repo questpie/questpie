@@ -15,14 +15,13 @@ Start from the guarantee the work needs, not from a lifecycle phase name.
 | Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
 | Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
 | Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
-| Deliver ephemeral connected-client messages    | Channel     | Non-durable transport fan-out; durable truth remains in Operations      |
 
 Reaction, Job, and Workflow are distinct authoring meanings over one internal
 run, attempt, lease, retry, cancellation, result, retention, and history kernel.
 No owner grants another owner's capability implicitly.
 
 Query and Live Query are not separate read kernels: watchability is a generated
-projection of a supported Query. Channel is an authored ephemeral event
-transport and never becomes durable application truth. Route owns protocol
-adaptation (and the closed file-byte capability where declared), not reads or
-writes. Policy decides authority but cannot return protected rows.
+projection of a supported Query. Ephemeral connected-client messages are
+ordinary application/provider integration, not framework-owned work. Route
+owns protocol adaptation (and the closed file-byte capability where declared),
+not reads or writes. Policy decides authority but cannot return protected rows.

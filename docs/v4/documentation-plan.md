@@ -48,8 +48,9 @@ The documentation slices are:
 6. Jobs, queues, workflow durability, and execution history;
 7. Execution Envelope, telemetry, CLI, and Studio.
 
-Auth, files, search, KV, channels, OpenAPI, MCP, and Cloud follow only after the
-first tracer proves the shared runtime contracts.
+Auth, files, search, KV, OpenAPI, MCP, and Cloud follow only after the first
+tracer proves the shared runtime contracts. Transient connected-client events
+are application/provider integration, not a later QUESTPIE capability.
 
 ## Review gates
 

@@ -174,9 +174,10 @@ measurements, not production performance promises.
   and the minimum Job vertical if its full matrix passes.
 - P6: production Runtime/Fetch, generated wire frames, deployment lifecycle,
   Execution Envelope, client transport, and minimal Studio.
-- Later: atomic multi-Query publication, persistent offline resume, typed
-  Channels/event streams, raw/native SQL reads, partitioned reactive
-  Collections, non-B-tree indexes, and broad RLS.
+- Later: atomic multi-Query publication, persistent offline resume, raw/native
+  SQL reads, partitioned reactive Collections, non-B-tree indexes, and broad
+  RLS. Generic event streams and transient provider signals are outside the
+  QUESTPIE core.
 
 If Live Query SQL performance requires an expression, partial predicate,
 operator class, native statement, raw SQL, generic `using`, or non-B-tree
