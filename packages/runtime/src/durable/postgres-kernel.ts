@@ -547,8 +547,48 @@ FOR UPDATE SKIP LOCKED`,
 						const attemptNumber =
 							durableInteger(row.attemptCount, "attempt count") + 1;
 						const retry = decodeRetryBytes(row.retryBytes);
-						if (attemptNumber > retry.maximumAttempts)
+						if (attemptNumber > retry.maximumAttempts) {
+							const staleAttempts = await query(
+								`UPDATE questpie_internal.durable_attempts
+SET outcome = 'failed', failure_code = 'RETRY_EXHAUSTED'
+WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL
+RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDigest"`,
+								[input.application, request.runId],
+							);
+							await query(
+								`UPDATE questpie_internal.durable_runs
+SET state = 'failed', current_attempt_id = NULL, lease_token_digest = NULL,
+    lease_expires_at = NULL, result_bytes = NULL,
+    failure_code = 'RETRY_EXHAUSTED', dead_letter = true,
+    terminal_at = pg_catalog.transaction_timestamp()
+WHERE application_name = $1 AND run_id = $2`,
+								[input.application, request.runId],
+							);
+							const stale = staleAttempts[0];
+							await appendEvent(query, {
+								application: input.application,
+								runId: durableText(row.runId, "run identity"),
+								resource,
+								dispatchId: durableText(row.dispatchId, "dispatch identity"),
+								causationId: durableText(row.causationId, "causation identity"),
+								correlationId: durableText(
+									row.correlationId,
+									"correlation identity",
+								),
+								kind: "failed",
+								attemptId: stale
+									? durableText(stale.attemptId, "exhausted attempt identity")
+									: null,
+								leaseTokenDigest: stale
+									? durableText(
+											stale.leaseTokenDigest,
+											"exhausted lease token digest",
+										)
+									: null,
+								errorCode: "RETRY_EXHAUSTED",
+							});
 							return Object.freeze({ status: "skipped" as const });
+						}
 						const attemptId = crypto.randomUUID();
 						const leaseToken = crypto.randomUUID();
 						const [superseded] = await query(

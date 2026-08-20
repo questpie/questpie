@@ -1,0 +1,61 @@
+{
+	"format": "questpie.performance-baseline",
+	"version": 1,
+	"scenario": "beta10-ten-instance",
+	"budgetOwner": "BETA-10",
+	"toolchain": {
+		"bun": "1.3.14",
+		"typescript": "6.0.2",
+		"postgres": "17"
+	},
+	"reference": {
+		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"postgres": "local Docker postgres:17",
+		"recordedAt": "2026-08-20",
+		"samples": 3,
+		"aggregation": "maximum observed tenInstance40Ms"
+	},
+	"evidence": {
+		"localBaseline": "PASS",
+		"nightlyPostgres17": "PENDING_CI",
+		"taggedStableRunner": "PENDING"
+	},
+	"workload": {
+		"runtimeInstances": 10,
+		"compatibleV4Instances": 1,
+		"currentV5Instances": 9,
+		"directRoots": 20,
+		"networkPosts": 20,
+		"durableRuns": 40,
+		"optionalAccelerators": 0
+	},
+	"samples": {
+		"tenInstance40Ms": [1006.30403, 1627.980262, 1427.945418]
+	},
+	"observed": {
+		"tenInstance40Ms": 1627.980262,
+		"duplicateAttempts": 0,
+		"drainedWorkerAdmissions": 0
+	},
+	"budgetDerivation": {
+		"tenInstance40Ms": {
+			"referenceObservedMs": 1627.980262,
+			"multiplier": 8,
+			"roundUpQuantumMs": 5000
+		}
+	},
+	"budgets": {
+		"tenInstance40Ms": 15000,
+		"runtimeInstances": 10,
+		"directRoots": 20,
+		"networkPosts": 20,
+		"durableRuns": 40,
+		"duplicateAttempts": 0,
+		"drainedWorkerAdmissions": 0,
+		"compatibleV4Instances": 1,
+		"currentV5Instances": 9
+	},
+	"status": "PASS"
+}

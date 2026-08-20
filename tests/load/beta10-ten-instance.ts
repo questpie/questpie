@@ -1,5 +1,6 @@
 import { SQL } from "bun";
 
+import baseline from "../../quality/baselines/beta10-ten-instance.json";
 import scenario from "../../quality/performance/beta10-ten-instance.json";
 import {
 	beta05Ids,
@@ -15,11 +16,28 @@ const runs = 40;
 const database = new SQL({ max: instanceCount + 2 });
 const prepared = await beta08Harness(database);
 
+function derivedBudget(
+	input: Readonly<{
+		referenceObservedMs: number;
+		multiplier: number;
+		roundUpQuantumMs: number;
+	}>,
+): number {
+	return (
+		Math.ceil(
+			(input.referenceObservedMs * input.multiplier) / input.roundUpQuantumMs,
+		) * input.roundUpQuantumMs
+	);
+}
+
 try {
-	const applications = [prepared.app];
+	const applications = [
+		prepared.app,
+		await prepared.createCompatibleV4Application(),
+	];
 	applications.push(
 		...(await Promise.all(
-			Array.from({ length: instanceCount - 1 }, () =>
+			Array.from({ length: instanceCount - applications.length }, () =>
 				prepared.createSiblingApplication(),
 			),
 		)),
@@ -105,9 +123,20 @@ try {
 		durableRuns: rows.runs,
 		duplicateAttempts: rows.attempts - rows.runs,
 		drainedWorkerAdmissions: drained.admitted,
+		compatibleV4Instances: 1,
+		currentV5Instances: applications.length - 1,
 	};
+	if (
+		baseline.budgets.tenInstance40Ms !==
+		derivedBudget(baseline.budgetDerivation.tenInstance40Ms)
+	)
+		throw new Error("ten-instance budget derivation drifted");
 	for (const [name, metric] of Object.entries(scenario.metrics)) {
 		const measured = measurements[name as keyof typeof measurements];
+		if (
+			baseline.budgets[name as keyof typeof baseline.budgets] !== metric.budget
+		)
+			throw new Error(`${name} baseline and manifest budgets disagree`);
 		if (metric.direction === "max" && measured > metric.budget)
 			throw new Error(`${name} ${measured} exceeds ${metric.budget}`);
 		if (metric.direction === "min" && measured < metric.budget)

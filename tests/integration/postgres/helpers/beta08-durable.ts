@@ -1,8 +1,9 @@
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 
 import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
+import { runtimeArtifactDigest } from "../../../../packages/runtime/src/application/artifact-protocol";
 import {
 	createPostgresDurableEffectLedger,
 	createPostgresDurableKernel,
@@ -145,6 +146,7 @@ type Beta08Application = Readonly<{
 export type Beta08Harness = Readonly<{
 	app: Beta08Application;
 	createSiblingApplication(): Promise<Beta08Application>;
+	createCompatibleV4Application(): Promise<Beta08Application>;
 	fetch(request: Request): Promise<Response>;
 	bindPrincipal(request: Request): Request;
 	wireFrame(
@@ -225,16 +227,39 @@ WHERE datname = pg_catalog.current_database()
 		): Promise<Beta08Application>;
 	}>;
 	const applications = new Set<Beta08Application>();
-	const createApplication = async () => {
-		const application = await internal.createApplication({
-			postgres: { url: beta05PostgresUrl() },
-			realtime: { hmacKey: new Uint8Array(32).fill(8) },
-			maintenance: {
-				authorize: ({ actor }) => actor.id === beta05Ids.principal,
-			},
-		});
-		applications.add(application);
-		return application;
+	const runtimeBuildPath = join(
+		prepared.generated.generatedRoot,
+		"runtime-build.json",
+	);
+	const currentRuntimeBuildBytes = prepared.runtimeBuildBytes;
+	const currentRuntimeBuild = JSON.parse(currentRuntimeBuildBytes) as Readonly<
+		Record<string, unknown>
+	>;
+	const { digest: _currentDigest, ...v4Unsigned } = {
+		...currentRuntimeBuild,
+		internalProtocol: "questpie.internal.v4",
+	};
+	const compatibleV4RuntimeBuildBytes = JSON.stringify({
+		...v4Unsigned,
+		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v4Unsigned),
+	});
+	const createApplication = async (
+		runtimeBuildBytes = currentRuntimeBuildBytes,
+	) => {
+		await Bun.write(runtimeBuildPath, runtimeBuildBytes);
+		try {
+			const application = await internal.createApplication({
+				postgres: { url: beta05PostgresUrl() },
+				realtime: { hmacKey: new Uint8Array(32).fill(8) },
+				maintenance: {
+					authorize: ({ actor }) => actor.id === beta05Ids.principal,
+				},
+			});
+			applications.add(application);
+			return application;
+		} finally {
+			await Bun.write(runtimeBuildPath, currentRuntimeBuildBytes);
+		}
 	};
 	const app = await createApplication();
 	const reactionProjectionBytes = await Bun.file(
@@ -258,6 +283,8 @@ WHERE datname = pg_catalog.current_database()
 	const harness = Object.freeze({
 		app,
 		createSiblingApplication: createApplication,
+		createCompatibleV4Application: () =>
+			createApplication(compatibleV4RuntimeBuildBytes),
 		fetch: (request: Request) => app.fetch(request),
 		bindPrincipal: (request: Request) =>
 			internal.bindIngressPrincipalForRequest(request, principal),

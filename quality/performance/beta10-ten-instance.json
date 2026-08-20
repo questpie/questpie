@@ -39,6 +39,16 @@
 			"direction": "max",
 			"budget": 0,
 			"unit": "count"
+		},
+		"compatibleV4Instances": {
+			"direction": "min",
+			"budget": 1,
+			"unit": "count"
+		},
+		"currentV5Instances": {
+			"direction": "min",
+			"budget": 9,
+			"unit": "count"
 		}
 	}
 }

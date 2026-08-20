@@ -1,0 +1,39 @@
+{
+	"id": "beta10-soak-chaos",
+	"kind": "soak",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/beta10-soak-chaos.ts"],
+	"budgetOwner": "BETA-10",
+	"metrics": {
+		"soak80Ms": {
+			"direction": "max",
+			"budget": 60000,
+			"unit": "ms"
+		},
+		"durableRuns": {
+			"direction": "min",
+			"budget": 80,
+			"unit": "count"
+		},
+		"recoveredCrashAttempts": {
+			"direction": "min",
+			"budget": 1,
+			"unit": "count"
+		},
+		"failedRuns": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		},
+		"drainedWorkerAdmissions": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		},
+		"replacementInstances": {
+			"direction": "min",
+			"budget": 3,
+			"unit": "count"
+		}
+	}
+}

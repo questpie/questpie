@@ -1,0 +1,43 @@
+# BETA-10 ten-instance load report
+
+Reviewed branch: `feat/v4-beta-10`.
+
+## Result
+
+`bun run test:load -- --scenario beta10` passed on local Docker PostgreSQL 17.
+The observed run completed in 1,006.304 ms and proved:
+
+- ten generated all-role Runtime instances started over one database;
+- one signed `questpie.internal.v4` Runtime Build and nine current v5 builds
+  remained live together;
+- 20 direct Mutation roots and 20 Operation Wire POSTs were routed round-robin
+  across the fleet;
+- nine concurrent workers completed all 40 durable runs with 40 attempts, so
+  the duplicate-attempt count was zero; and
+- a worker created before its Runtime began draining admitted zero work after
+  `app.close()`.
+
+The executable scenario is
+`tests/load/beta10-ten-instance.ts:13`–`:134`; its owned budgets are
+`quality/performance/beta10-ten-instance.json`. The scenario checks database
+truth rather than trusting worker counters at `tests/load/beta10-ten-instance.ts:87`–`:112`.
+
+## Defects found by the load
+
+The first run failed before work began. Ten coordinators raced while inserting
+the same reconciliation consumer under Repeatable Read. PostgreSQL returned
+`40001`. Reconciliation now retries the whole transaction on that exact error
+(`packages/runtime/src/live-query/postgres.ts:157`–`:278`, `:281`–`:298`), and
+the unit test injects the failure before accepting the retry.
+
+The first concurrent worker run then exposed `40001` losers in cancellation
+reaping and claiming. Those paths now treat only that exact PostgreSQL error as
+no work for this poll (`packages/runtime/src/durable/postgres-kernel.ts:420`–`:466`
+and `:522`–`:650`); every other error still escapes. The hostile test injects
+both losers.
+
+## Scope
+
+This is load evidence, not a stable-runner timing claim. The 15-second ceiling
+detects a clear stall on noisy machines. A tagged stable runner remains the
+owner of a strict release budget.
