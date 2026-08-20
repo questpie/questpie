@@ -118,6 +118,23 @@ reasoning rather than against the prose.
    evaluates an inspection Authority decision; a caller without it receives the
    same value a missing run produces. Falsifiable: today no read evaluates
    anything. → `maintenance-decisions.md` Q3, `inspection-contract.md` D3.
+
+   **Prerequisite, and it is a blocker rather than a scope note.** The criterion
+   states a property and is right to. Nothing available today can satisfy it for
+   a read shaped as a Query: the handler is handed no Principal
+   (`QueryContext` is `data` and `signal`,
+   `packages/compiler/src/generate.ts:322`–`:325`); the Query cannot declare
+   authorization either, since `QueryFactory` takes exactly `name`, `network?`,
+   `input`, `output` and `handler` (`:377`–`:384`); and the Operation execution
+   path evaluates nothing of the kind — `packages/runtime/src/operation/` holds
+   six files and none references authority or policy, while the same search finds
+   policy machinery in `packages/runtime/src/relational/`.
+
+   So passing criterion 1 requires first choosing one of the three shapes in
+   `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` — reads as
+   Mutations, a widened `QueryContext`, or the durable route. **Planning the
+   slice without settling that plans a criterion that cannot be met.**
+
 2. **Maintenance Authority is evaluated and distinct.** Holding inspection
    Authority does not confer it. A caller lacking it is refused with a typed
    `AUTHORITY_DENIED`, and the attempt is recorded in the append-only audit.
