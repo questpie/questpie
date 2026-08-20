@@ -141,13 +141,13 @@ enforces" (`:68`–`:71`).
 
 `horizon_at` has exactly two references in the runtime:
 `packages/runtime/src/durable/acceptance.ts:62` writes it, and
-`packages/runtime/src/durable/postgres-kernel.ts:360` reads it — inside
+`packages/runtime/src/durable/postgres-kernel.ts:260`–`:262` reads it — inside
 `available_at = LEAST(transaction_timestamp() + interval, horizon_at)`. Nothing
 compares it to the current time as a termination condition.
 
 **The clamp has an ordering consequence.** Once `horizon_at` is in the past,
 `LEAST` sets `available_at` to a past timestamp, and `admit` orders
-`available_at` ascending (`postgres-kernel.ts:463`). A run past its horizon
+`available_at` ascending (`postgres-kernel.ts:378`). A run past its horizon
 therefore takes its remaining retries with zero backoff **at the head of the
 admission queue**, ahead of healthy work.
 
@@ -166,7 +166,7 @@ bullet and its `durable-kernel.json` budgets bullet:
   there means clamps, not terminates.
 - **The head-of-queue effect is bounded, not permanent.** The eight-attempt
   program stops the retries; `claim` returns `skipped` once
-  `attemptNumber > retry.maximumAttempts` (`postgres-kernel.ts:522`–`:523`).
+  `attemptNumber > retry.maximumAttempts` (`postgres-kernel.ts:439`).
 
 So the accurate finding is narrower than "a pinned budget with no enforcing
 path": the clamp is a path. What is missing is a **termination** condition —
@@ -182,8 +182,8 @@ That permanence comes from §5, not from the horizon.
 ### 5. A refused claim writes nothing, and the run is re-admitted forever
 
 Two claim outcomes return without touching the row:
-`refused / EXECUTABLE_RETIRED` (`postgres-kernel.ts:514`–`:518`) and `skipped`
-when `attemptNumber > retry.maximumAttempts` (`:522`–`:523`).
+`refused / EXECUTABLE_RETIRED` (`postgres-kernel.ts:431`–`:435`) and `skipped`
+when `attemptNumber > retry.maximumAttempts` (`:439`).
 
 **The two leave the run in different states, and the second is rarer than it
 looks — both worth stating precisely, because a first draft of this entry was
@@ -204,8 +204,8 @@ So the two stuck classes settle at **`ready`** (retired executable) and
 **`running` with an expired lease** (crash at the exhaustion boundary).
 Neither is `failed`. The worker mirrors
 this, counting the refusal and continuing —
-`refusedIncompatible += 1` at `packages/runtime/src/durable/worker.ts:294`,
-`continue` at `:304`. An earlier revision cited `:300`–`:304`, which resolves
+`refusedIncompatible += 1` at `packages/runtime/src/durable/worker.ts:290`,
+`continue` at `:300`. An earlier revision cited `:300`–`:304`, which resolves
 and sits in the right branch but starts at `outcome: "refusedIncompatible"`
 inside the pushed record and misses the counter at `:294` — the half the
 sentence actually names. `available_at` never
@@ -412,3 +412,36 @@ falsification — abort a Mutation's signal while every connection is held, asse
 the call rejects — costs one test rather than a new scenario. Whoever builds
 that scenario should check whether it already reaches this, because that is the
 cheapest moment this gap will ever be closeable.
+
+## BETA-10 changed what "head of the queue" means
+
+§4 above argues that a run past its horizon takes its remaining retries with
+zero backoff at the head of the queue, because `LEAST` drives `available_at`
+into the past and `admit` orders by it ascending. BETA-10 merged at `8787e870`
+and rewrote that ordering: `admit` now sorts `ORDER BY tenant_turn,
+available_at, run_id` (`packages/runtime/src/durable/postgres-kernel.ts:378`),
+where `tenant_turn` is `row_number() OVER (PARTITION BY tenant_id ORDER BY
+available_at, run_id)` (`:365`).
+
+**The finding survives and its blast radius shrinks.** `available_at` is still
+the tiebreak inside a tenant, so a horizon-exhausted run still sits at the head
+of **its own tenant's** turn order and still burns its retries with no backoff.
+What changed is who pays: before, that run competed directly against every other
+tenant's work for the head of one global queue, so one tenant's runaway retry
+loop could hold the front of the batch. Now each tenant's first run is taken
+before any tenant's second, so the loop is confined to its own tenant's share of
+each batch.
+
+**This is a containment, not a fix.** The run still spends attempts at full
+speed against its own tenant, which is the tenant that would notice. Nothing in
+the BETA-10 rewrite bounds the retry rate; it bounds the collateral. The
+underlying gap — that `LEAST(transaction_timestamp() + interval, horizon_at)`
+turns a horizon into a zero-backoff floor rather than a stop — is untouched at
+`:260`–`:262`.
+
+**What would overturn this.** A single-tenant deployment, where `PARTITION BY
+tenant_id` yields one partition and `tenant_turn` degenerates to the old global
+`available_at` order. There the containment does not exist and §4's original
+statement stands unmodified. I did not check whether any accepted document
+requires more than one tenant per application, so single-tenant is the case to
+assume, not the exception.

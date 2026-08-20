@@ -40,7 +40,7 @@ property rather than an application one.
 
 ## What admission does today
 
-`admit(batch)` (`packages/runtime/src/durable/postgres-kernel.ts:455`):
+`admit(batch)` (`packages/runtime/src/durable/postgres-kernel.ts` `admit`, `:357`):
 
 ```sql
 SELECT run_id, resource_identity, executable_digest
@@ -246,7 +246,7 @@ produce, since eligibility is re-evaluated per admission call.
 ## 2. Per-tenant in-flight concurrency
 
 The claim is per run with `FOR UPDATE SKIP LOCKED`
-(`postgres-kernel.ts:504`), and it is the only fenced point where in-flight
+(`postgres-kernel.ts:421`), and it is the only fenced point where in-flight
 count can be decided, because it is the transaction that creates the attempt.
 
 A cap needs to count a tenant's `running` runs. **`tenant_id` is in no index** —
@@ -301,8 +301,8 @@ tenant's load, which is an isolation argument, not a performance one.
 **And the old fixture was outside the shipped envelope.** Sixteen runs in flight
 for one tenant requires sixteen concurrent workers on that tenant, because
 `worker.ts` claims and runs sequentially — `for (const admission of admissions)`
-with `await runAttempt(...)` inside (`packages/runtime/src/durable/worker.ts:286`,
-`:338`). One worker runs one attempt at a time, so per-tenant in-flight is
+with `await runAttempt(...)` inside (`packages/runtime/src/durable/worker.ts:284`,
+`:334`). One worker runs one attempt at a time, so per-tenant in-flight is
 bounded by worker count, not by `claimBatch`, and ADR-0017's conformance target
 is ten instances.
 

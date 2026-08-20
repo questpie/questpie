@@ -223,7 +223,8 @@ Those seven properties are run-scoped and do not apply to a process:
   hang off.
 
 Meanwhile the behaviour already exists and is correct: `beginDrain()` on the
-worker (`packages/runtime/src/durable/worker.ts:270`) and the realtime carrier,
+worker (`packages/runtime/src/durable/worker.ts` `beginDrain()`, `:266`) and the
+realtime carrier,
 both driven from `close()` (`packages/runtime/src/application/index.ts:592`,
 `packages/compiler/src/runtime/application.ts:493`). That is a deployment-layer
 concern — a SIGTERM handler calling `close()` — and the accepted lifecycle
@@ -327,7 +328,7 @@ consequence is sharper than that framing.
 `packages/runtime/src/durable/postgres-maintenance.ts` — `:263` inside
 `cancelRun` and `:371` inside `acknowledgeAmbiguity`. `retryRun` appends
 nothing. Since the version _is_ `event_sequence`, and every append bumps it
-(`packages/runtime/src/durable/rows.ts:139`):
+(`packages/runtime/src/durable/rows.ts:256`):
 
 | Applied command        | Appends an event | Held version afterwards                                  |
 | ---------------------- | ---------------- | -------------------------------------------------------- |

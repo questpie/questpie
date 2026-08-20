@@ -72,8 +72,8 @@ answer on its own: **`runId` is not obtainable through any shipped API.**
 - All four durable reads take `runId` alone: `inspect`, `events`, effects
   `read`, and `audit`.
 - `admit(batch)` is the only multi-row **read** of `durable_runs`
-  (`packages/runtime/src/durable/postgres-kernel.ts:455`). `reapCancelled`
-  (`:407`) also spans multiple rows, but it is a write and its predicate
+  (`packages/runtime/src/durable/postgres-kernel.ts` `admit`, `:357`).
+  `reapCancelled` (`:309`) also spans multiple rows, but it is a write and its predicate
   excludes terminal states too, so neither surfaces a failed run. `admit`'s
   predicate
   structurally excludes every state an operator cares about — it returns only
@@ -136,7 +136,7 @@ Two classes of permanently non-progressing run never reach `failed`, so this
 worklist cannot show them:
 
 - **Retired executable.** The claim is refused and nothing is written
-  (`postgres-kernel.ts:514`–`:518`); the run stays `ready`. BETA-08 asserts this
+  (`postgres-kernel.ts:431`–`:435`); the run stays `ready`. BETA-08 asserts this
   state (`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391`).
 - **Crash at the exhaustion boundary.** `claim` returns `skipped` without writing
   when `attempt_count + 1 > maximumAttempts` (`:522`–`:523`), reachable only if a
@@ -198,7 +198,7 @@ already tried. The action is two fenced steps: `acknowledgeAmbiguity`, then
 **This job does not execute as written, and that is a finding this slice owes.**
 `acknowledgeAmbiguity`'s applied path appends an `ambiguityAcknowledged` event
 (`packages/runtime/src/durable/postgres-maintenance.ts:371`), and every append
-bumps `event_sequence` (`packages/runtime/src/durable/rows.ts:139`). The run's
+bumps `event_sequence` (`packages/runtime/src/durable/rows.ts:256`). The run's
 version therefore changes. `DurableMaintenanceOutcome` (`postgres-maintenance.ts:28`)
 carries no version, and `maintenance-decisions.md` only returns one on a
 `VERSION_MISMATCH`. So a caller who reads version V, acknowledges, then retries
@@ -221,7 +221,7 @@ This is the job that justifies the whole slice, and it is exactly the job
 A run whose executable was retired sits at `state = 'ready'` with a history
 that says only `accepted`. The refusal writes **nothing** — the claim returns
 `EXECUTABLE_RETIRED` from inside a transaction that has performed only a
-`SELECT ... FOR UPDATE SKIP LOCKED` (`postgres-kernel.ts:513`), and the worker
+`SELECT ... FOR UPDATE SKIP LOCKED` (`postgres-kernel.ts:421`), and the worker
 counts it in memory.
 
 So the durable log cannot explain it. The only witness is the compiled

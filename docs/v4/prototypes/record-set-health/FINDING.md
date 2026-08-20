@@ -477,3 +477,41 @@ expected to hold a deliberately pinned older tree — verifying an accepted reco
 against its own reviewed head, which the beta05 entry above says is sometimes the
 right ref — then fast-forwarding is wrong and the fix is to record the ref each
 verification ran against instead.
+
+## The fourth mode fired again one tick later, four times larger
+
+BETA-09's merge moved ten citations across eight records. BETA-10 merged at
+`8787e870` one tick after that entry was written and moved **27 citations across
+nine records** — `beta09/design-context.md`,
+`freshness-and-provenance.md`, `inspection-contract.md`,
+`maintenance-decisions.md`, `studio-purpose.md`, and the
+`durable-evidence-gaps`, `statement-timeout-gate` and `tenant-share-control`
+prototypes. The cause is one rewrite: BETA-10 replaced `admit()` in
+`packages/runtime/src/durable/postgres-kernel.ts` and shifted every symbol below
+it, so `admit` `:455` → `:357`, `inspect` `:687` → `:652`, `events` `:729` →
+`:694`, and `FOR UPDATE SKIP LOCKED` `:504` → `:421`. One citation,
+`inspection-contract.md:261`, had already run past the end of a 725-line file.
+
+**Two things this second instance shows that the first could not.** The mode is
+not a one-off of an unusually invasive slice — two consecutive merges produced
+it, and the second was larger. And it is not confined to line numbers: BETA-10
+also falsified a **behavioural** claim. `durable-evidence-gaps/FINDING.md` §4
+argued that a horizon-exhausted run retries at the head of the queue because
+`admit` orders by `available_at`; the ordering is now `tenant_turn,
+available_at, run_id`, so the claim needed a correction about what it contains,
+recorded there rather than a new line number.
+
+**The name-anchored citations written after the previous entry did not decay.**
+`design-context.md:62`'s `` `postgres-maintenance.ts` `staleVersion` `` survived
+both merges, as did the `actorOf` sites converted last tick. The symbol-anchored
+sites fixed in this pass are written the same way, which is the only part of this
+that compounds in the right direction.
+
+**Judgment call: stop treating each merge's sweep as incidental cleanup.** Two
+merges, 37 citations, one behavioural claim, and no record edit in between; the
+rate is a property of a docs-first record set that cites a moving tree, not of
+any one slice. What would overturn it: a merge that touches `packages/runtime`
+and moves nothing, which would show the decay tracks how invasive a slice is
+rather than that merges cause it. BETA-10 changing
+`postgres-maintenance.ts` by a single line without shifting anything is weak
+evidence in that direction already.

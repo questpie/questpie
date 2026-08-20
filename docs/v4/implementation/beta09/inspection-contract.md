@@ -54,7 +54,7 @@ draws blood.
 
 **`inspect(runId)` returns `resultBytes`** — the Reaction's encoded result, up
 to 262,144 bytes. The projection selects it explicitly
-(`packages/runtime/src/durable/postgres-kernel.ts:692`) and returns it
+(`packages/runtime/src/durable/postgres-kernel.ts:658`) and returns it
 unmodified (`:717`). It is written by `succeed()` (`:654`) onto
 `durable_runs.result_bytes` (`internal-protocol-v4-sql.ts:41`) and bounded only
 by size (`:63`).
@@ -258,7 +258,7 @@ for `events(runId)` — sequence, timestamp, Resource, dispatch, run, attempt,
 lease-token digest, causation, correlation, kind, error code. That is what
 `durable_run_events` **stores** (`internal-protocol-v4-sql.ts:133`–`:145`), not
 what `events()` **returns**. The shipped read selects five
-(`packages/runtime/src/durable/postgres-kernel.ts:730`) into a five-field view
+(`packages/runtime/src/durable/postgres-kernel.ts:696`–`:697`) into a five-field view
 (`:112`–`:118`). Transplanting the accepted contract's description of the
 stored row into a table about return values made the projection look _wider_
 than the kernel read, which would have falsified this slice's own criterion

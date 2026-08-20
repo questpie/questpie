@@ -84,7 +84,7 @@ Concretely:
 
 - A run's state carries `source: durable` and the run's own `available_at` or
   `terminal_at` — the two `inspect()` actually selects
-  (`packages/runtime/src/durable/postgres-kernel.ts:693`). `accepted_at` exists
+  (`packages/runtime/src/durable/postgres-kernel.ts:659`). `accepted_at` exists
   as a column (`internal-protocol-v4-sql.ts:44`, written at
   `packages/runtime/src/durable/acceptance.ts:58`) but no read returns it, so an
   earlier revision naming it required a field the surface cannot supply.

@@ -193,9 +193,9 @@ pool:
 
 | Read           | Site                                                       |
 | -------------- | ---------------------------------------------------------- |
-| `admit`        | `packages/runtime/src/durable/postgres-kernel.ts:455`      |
-| `inspect`      | `postgres-kernel.ts:687`                                   |
-| `events`       | `postgres-kernel.ts:729`                                   |
+| `admit`        | `packages/runtime/src/durable/postgres-kernel.ts:357`      |
+| `inspect`      | `postgres-kernel.ts:652`                                   |
+| `events`       | `postgres-kernel.ts:694`                                   |
 | effects `read` | `packages/runtime/src/durable/postgres-effects.ts:193`     |
 | `audit`        | `packages/runtime/src/durable/postgres-maintenance.ts:384` |
 
@@ -269,10 +269,10 @@ managed target before fixing the shape, not only against a container.
 
 **But "these five are the operator-facing reads … run against a database that is
 already unhealthy" overstated what they are.** Their predicates say otherwise:
-`inspect` (`postgres-kernel.ts:687`), `events` (`:729`), effects `read`
+`inspect` (`postgres-kernel.ts:652`), `events` (`:694`), effects `read`
 (`postgres-effects.ts:193`), and `audit` (`postgres-maintenance.ts:384`) are all
 `WHERE application_name = $1 AND run_id = $2` — point lookups against one run's
-primary key or its prefix. Only `admit` (`postgres-kernel.ts:455`) is
+primary key or its prefix. Only `admit` (`postgres-kernel.ts:357`) is
 `WHERE application_name = $1` with no run scope, and `admit` is the scheduler,
 not a surface an operator calls.
 
@@ -361,7 +361,7 @@ into a slower unbounded wait, and a lock timeout alone still leaves the holder
 running forever.
 
 The durable claim path is unaffected because it uses `FOR UPDATE SKIP LOCKED`
-(`postgres-kernel.ts:504`), which never waits. **That mitigation was measured
+(`postgres-kernel.ts:421`), which never waits. **That mitigation was measured
 too, rather than assumed, because it is what scopes the finding.** With one row
 held `FOR UPDATE` for four seconds, a concurrent `FOR UPDATE SKIP LOCKED`
 returned in **6 ms** with rows `[2,3]` — the held row skipped, no wait, no
@@ -416,7 +416,7 @@ record's own "derive, do not choose" rule is what they break.**
 - **Durable attempt: wrong scope.** The attempt does not run inside a statement
   or a transaction. The claim transaction commits first — ADR-0013 states it as
   a decision, "commits before user code" (`docs/adr/0013:32`) — and
-  `worker.ts:338` invokes `runAttempt` after that commit. No `statement_timeout`
+  `worker.ts:334` invokes `runAttempt` after that commit. No `statement_timeout`
   can bound it. The attempt deadline is already enforced, by the heartbeat
   aborting on `deadlineExpired`.
 
