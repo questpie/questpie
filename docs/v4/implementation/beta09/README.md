@@ -30,6 +30,35 @@ would destroy the reasoning while its conclusions are still wanted. Read the
 Studio and inspection material as history; read the maintenance material as
 current.
 
+**The re-scoped slice names an evidence artifact no record decides.** Its
+`verify` in `QUEUE.json` runs
+`bun run check:changed -- --test tests/integration/postgres/beta09-maintenance-compatibility.test.ts
+--typecheck @questpie/runtime`. That file exists on neither `feat/v4` nor
+`feat/v4-beta-09`, and `QUEUE.json` is the only place in the repository that
+names it — no record below says what it must assert. That is expected for
+unbuilt work and is a gap anyway, because these records exist to decide what a
+slice builds and every one of them was written for the old scope.
+
+The decisions it needs are already here, spread across three records, so the
+mapping rather than the content is what is missing:
+
+- **Evaluated maintenance Authority and typed denial** — `hostile-cases.md`
+  case 5, which fixes the falsification (`actorOf` brand-checks today) and
+  requires the denial be audited, plus `internal-protocol-v5.md` for
+  `AUTHORITY_DENIED` joining the rejection union and CHECK, and its decision
+  that a denial writes a null reason.
+- **Expected-version conflict carrying the current winner** —
+  `hostile-cases.md` case 6, whose content is that the loser receives the run's
+  current version rather than having to `inspect()` again.
+- **Bounded maintenance reason and the catalog** — `internal-protocol-v5.md`,
+  including the measured result that both DDL steps pass the durable guards and
+  that the catalog must be regenerated from a live PostgreSQL catalog.
+
+**Naming the mapping is not the same as deciding the test.** What each assertion
+must fail against on unrepaired code is written in those records; what a single
+compatibility test file should contain, and whether one file is the right shape
+for four artifacts, is the implementing slice's call.
+
 **The split falls where `acceptance-shape.md` already put it.** That record
 separates criterion 2, maintenance Authority, from criterion 1, inspection
 Authority, on the ground that maintenance has a Principal at `actorOf` and needs
