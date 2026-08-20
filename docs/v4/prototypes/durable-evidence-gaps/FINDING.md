@@ -304,7 +304,9 @@ rather than a bounded one. The missing bound is on rows, and the gate only
 bounds time. This is the one surface where the gate makes the operator's
 experience worse rather than better, and
 `docs/v4/prototypes/statement-timeout-gate/DECISION.md` should not be read as
-covering it.
+covering it. That record now says the same in its own risk section and in the
+ground for decision item 3, so the pair agrees; what it acknowledges it still
+cannot fix, because the missing bound is on rows.
 
 **Falsification.** Issue N rejected maintenance commands against one run, then
 assert `audit(runId)` returns a bounded number of rows. It fails for every N.

@@ -32,7 +32,14 @@ and a reader should not have to reconstruct the current position from them.
    the five bare-statement reads, which the transaction-scoped mechanism cannot.
 3. **No wrap for those five reads.** Four are `run_id` point lookups that cannot
    grow with the table and the fifth, `admit`, is the scheduler rather than an
-   operator surface.
+   operator surface. **The stated ground is wrong for one of the four and the
+   decision still holds** — see "Corrected: `audit` does not belong in that
+   four" below. `audit` is a `run_id` point lookup whose result grows without
+   limit in the run's own command count, measured at 98 ms for 100,000 rows. The
+   decision survives because item 2 already reaches it: a database or role
+   default bounds a bare statement whether or not a transaction wraps it, so the
+   wrap was never what `audit` needed. What `audit` needs is a bound on **rows**,
+   which neither a wrap nor a timeout supplies.
 
 Item 3 reversed an earlier decision to wrap them, and the section at "The edge
 that decides the gate's real scope" records why and what would restore it — the
@@ -492,6 +499,22 @@ The failure is also mid-transaction for the Mutation path, so a timeout is a
 rollback — correct behaviour, and identical to what the client-side abort
 intends, but it converts a slow success into a visible failure the caller must
 handle.
+
+**One surface is made worse rather than slower, and it is not in the list
+above.** The four populations named there are legitimate queries that happen to
+be slow. `audit(runId)` is different in kind: its cost tracks how many
+maintenance commands one run has accumulated, including rejected ones, and the
+run with a pathological command history is precisely the run an operator opens
+the audit to investigate. A timeout there does not shed a slow query — it makes
+the investigation tool fail on exactly the case it exists for, and returns
+nothing rather than a partial answer.
+
+That is a row bound the gate does not supply and cannot;
+`durable-evidence-gaps/FINDING.md` §6 states it directly and says this record
+"should not be read as covering it". Recorded here as well because a reader of
+the gate alone would otherwise not learn that its mechanism has one surface it
+degrades. The remedy is a `LIMIT` or a cursor on `audit`, owned there, not a
+different timeout here.
 
 This is why the gate cannot be justified by reasoning alone. It needs the
 distribution.
