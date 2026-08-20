@@ -1075,6 +1075,25 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   and only the pointer is broken** — the same citation-axis-two class as the two
   found in `statement-timeout-gate/DECISION.md`, in a load-bearing decision this
   time.
+  **D2 has the same defect, and its cause is worth more than the fix.** D2
+  cites `CONTEXT.md:400`–`:403` for "the immutable class of actions an Execution
+  may request … cannot be derived from request input". That text is at
+  `:404`–`:405`; `:400` is the **Tenant** definition, `:402` the `### Authority`
+  heading, `:401` and `:403` blank. The cited range holds not one word of the
+  quote.
+  It was correct when written. At `f092d618^` the text sat at `:402`, inside the
+  cited range. `f092d618` — the commit that wrote `owner-decisions.md` — also
+  edited `CONTEXT.md`, and its first hunk (`@@ -25,7 +25,9 @@`) added two lines,
+  pushing everything below down by two. **The record cited the file and edited
+  the file in the same commit, and the citations were not re-derived after the
+  edit.** That is a decay mode this record set has not named: not staleness over
+  time, but staleness within a single commit.
+  **D1's is not explained by that**, and I checked before assuming one cause
+  covers both. The Policy sentence sat at `:409` before the commit and `:411`
+  after; D1 cites `:405`, which holds it in neither version.
+  Both quotes exist and both arguments stand. **Rule the pair earns: when a
+  record edits `CONTEXT.md` and cites `CONTEXT.md` in the same commit, re-derive
+  every line number after the edit, not before.**
   **D3 has a bigger problem than its heading: the eight divergences it batches
   are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
   divergences between accepted documentation and the tree that this slice
