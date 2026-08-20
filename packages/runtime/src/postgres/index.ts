@@ -2,6 +2,13 @@ import { Pool, type PoolClient } from "pg";
 
 import { canonicalJsonLine } from "../canonical-json";
 
+export { createPostgresListener, definePostgresChannel } from "./listener";
+export type {
+	PostgresChannel,
+	PostgresListener,
+	PostgresReconcileReason,
+} from "./listener";
+
 const statementBrand: unique symbol = Symbol("questpie.postgres.statement");
 const transactionBrand: unique symbol = Symbol("questpie.postgres.transaction");
 
@@ -75,6 +82,7 @@ export type PostgresFailureCode =
 	| "lockTimeout"
 	| "cancelled"
 	| "connectionLost"
+	| "queryFailed"
 	| "serializationFailure"
 	| "deadlock"
 	| "constraint"
@@ -264,7 +272,9 @@ function failure(
 						? "deadlock"
 						: state?.startsWith("23")
 							? "constraint"
-							: "connectionLost";
+							: state?.startsWith("08")
+								? "connectionLost"
+								: "queryFailed";
 	return new QuestpiePostgresError({
 		code: classification,
 		phase: input.phase,

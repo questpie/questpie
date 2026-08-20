@@ -2,6 +2,8 @@ import { expect, test } from "bun:test";
 
 import {
 	createPostgresDatabase,
+	createPostgresListener,
+	definePostgresChannel,
 	definePostgresStatement,
 	type PostgresTransaction,
 } from "../../../packages/runtime/src/postgres";
@@ -42,25 +44,57 @@ const sleep = definePostgresStatement({
 	decode: () => undefined,
 });
 
+const notify = definePostgresStatement({
+	name: "pb03.notify",
+	text: "SELECT pg_catalog.pg_notify($1::text, $2::text)",
+	parameterCount: 2,
+	parameters: (input: Readonly<{ channel: string; payload: string }>) => [
+		input.channel,
+		input.payload,
+	],
+	decode: () => undefined,
+});
+
+const terminateListener = definePostgresStatement({
+	name: "pb03.terminate-listener",
+	text: `SELECT coalesce(
+	pg_catalog.bool_or(pg_catalog.pg_terminate_backend(pid)),
+	false
+)
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = $1::text
+	AND pid <> pg_catalog.pg_backend_pid()`,
+	parameterCount: 1,
+	parameters: (applicationName: string) => [applicationName],
+	decode(result) {
+		if (result.rows.length !== 1 || typeof result.rows[0]?.[0] !== "boolean")
+			throw new TypeError("listener termination result is invalid");
+		return result.rows[0][0];
+	},
+});
+
+function database() {
+	return createPostgresDatabase({
+		connectionUrl: postgresUrl(),
+		pool: {
+			max: 2,
+			connectTimeoutMs: 1_000,
+			checkoutTimeoutMs: 1_000,
+			idleTimeoutMs: 1_000,
+			maxLifetimeSeconds: 60,
+		},
+		timeouts: {
+			statementMs: 1_000,
+			lockMs: 500,
+			idleInTransactionMs: 1_000,
+		},
+	});
+}
+
 postgresTest(
 	"executes a decoded static statement in one bounded transaction",
 	async () => {
-		const connectionUrl = postgresUrl();
-		const postgres = createPostgresDatabase({
-			connectionUrl,
-			pool: {
-				max: 2,
-				connectTimeoutMs: 1_000,
-				checkoutTimeoutMs: 1_000,
-				idleTimeoutMs: 1_000,
-				maxLifetimeSeconds: 60,
-			},
-			timeouts: {
-				statementMs: 1_000,
-				lockMs: 500,
-				idleInTransactionMs: 1_000,
-			},
-		});
+		const postgres = database();
 		let expired: PostgresTransaction | undefined;
 		try {
 			const observed = await postgres.transaction({
@@ -99,6 +133,88 @@ postgresTest(
 				}),
 			).rejects.toBe(applicationFailure);
 		} finally {
+			await postgres.close({ deadlineAt: Date.now() + 1_000 });
+		}
+	},
+);
+
+postgresTest(
+	"commits LISTEN before reconciling and treats NOTIFY as a hint",
+	async () => {
+		const postgres = database();
+		const channel = definePostgresChannel("qp_pb03_wake");
+		const reasons: string[] = [];
+		let notified: (() => void) | undefined;
+		let reconnected: (() => void) | undefined;
+		const notification = new Promise<void>((resolve) => {
+			notified = resolve;
+		});
+		const reconnection = new Promise<void>((resolve) => {
+			reconnected = resolve;
+		});
+		const listener = await createPostgresListener({
+			directConnectionUrl: postgresUrl(),
+			channel,
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				reasons.push(reason);
+				if (reason === "notification") notified?.();
+				if (reason === "reconnect") setTimeout(() => reconnected?.(), 0);
+			},
+		});
+		try {
+			expect(reasons).toEqual(["startup"]);
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: (transaction) =>
+					transaction.execute(notify, {
+						channel,
+						payload: "ignored-domain-data",
+					}),
+			});
+			await Promise.race([
+				notification,
+				new Promise<never>((_resolve, reject) =>
+					setTimeout(
+						() => reject(new Error("notification was not reconciled")),
+						500,
+					),
+				),
+			]);
+			expect(reasons).toEqual(["startup", "notification"]);
+			expect(listener.facts()).toMatchObject({
+				state: "healthy",
+				reconnects: 0,
+			});
+
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async (transaction) => {
+					expect(
+						await transaction.execute(
+							terminateListener,
+							"questpie-realtime-listener",
+						),
+					).toBe(true);
+				},
+			});
+			await Promise.race([
+				reconnection,
+				new Promise<never>((_resolve, reject) =>
+					setTimeout(
+						() => reject(new Error("listener did not reconnect")),
+						1_000,
+					),
+				),
+			]);
+			expect(reasons).toContain("reconnect");
+			expect(listener.facts()).toMatchObject({
+				state: "healthy",
+				reconnects: 1,
+			});
+		} finally {
+			await listener.close({ deadlineAt: Date.now() + 1_000 });
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
 	},
