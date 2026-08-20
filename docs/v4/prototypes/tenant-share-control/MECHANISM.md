@@ -487,3 +487,90 @@ what would change its mind and is then changed by exactly that is the case the
 practice exists for. What would overturn the reversal: a fleet-wide in-flight
 figure from the ten-instance fixture landing in the thousands, which would need
 either many more instances or a worker that claims concurrently.
+
+## BETA-10 shipped it, by a different mechanism than this note proposed
+
+BETA-10 merged at `8787e870` (#329) and shipped per-tenant fair admission. This
+note was written as design work for a slice that had not started; that framing
+is now closed, and the parts below are reconciled against the merged tree rather
+than predicted.
+
+**What shipped.** `admit()` wraps the eligible set in a CTE and orders by a
+window function: `row_number() OVER (PARTITION BY tenant_id ORDER BY
+available_at, run_id) AS tenant_turn`
+(`packages/runtime/src/durable/postgres-kernel.ts:365`), then `ORDER BY
+tenant_turn, available_at, run_id` before `LIMIT`
+(`:378`). A hostile test pins the statement text
+(`tests/hostile/beta10-compatibility.test.ts:43`). The same rewrite added a
+fleet-compatibility fence on `executable_digest`.
+
+**Which of this note's three parts shipped: one.** The claim predicate rewrite
+over `durable_runs_claim_idx`'s `(application_name, state)` leftmost prefix did
+**not** ship, and the section below explains why it could not have. The
+per-tenant in-flight cap did **not** ship — no such symbol exists in the durable
+path. Backlog refusal at acceptance did **not** ship;
+`packages/runtime/src/durable/acceptance.ts` is 108 lines and contains no
+refusal, cap or backlog term.
+
+### Measured against the merged tree
+
+PostgreSQL 17, 200,000 eligible rows in one application, two tenants split
+199,000 / 1,000, batch 32. `EXPLAIN (ANALYZE, BUFFERS)`, scratch schema.
+
+| Query                                                                       | Execution  | Sort                               |
+| --------------------------------------------------------------------------- | ---------- | ---------------------------------- |
+| pre-BETA-10 `admit()`, verbatim at `2de4cb23`                               | 45.993 ms  | top-N heapsort 33 kB               |
+| digest fence added, no window                                               | 60.794 ms  | top-N heapsort 33 kB               |
+| **shipped BETA-10 `admit()`**                                               | 294.259 ms | external merge, **11,768 kB disk** |
+| shipped, `work_mem = 64MB`                                                  | 288.948 ms | quicksort 17,082 kB, in memory     |
+| shipped, plus a `(application_name, tenant_id, available_at, run_id)` index | 251.794 ms | external merge 9,208 kB            |
+| shipped, 2,000 eligible rows                                                | 1.876 ms   | —                                  |
+
+**Fairness works.** On the 199:1 backlog the 32-row batch came back 16 rows to
+each tenant. The mechanism does what it was built to do.
+
+**The premise this note argued from was already false, and the measurement is
+how I found out.** This note proposed rewriting the claim predicate to exploit
+`durable_runs_claim_idx`, which is `(application_name, state, available_at,
+run_id)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-catalog.ts:526`),
+so that `LIMIT` could stop early. The pre-BETA-10 query already did not do that:
+it planned a **Parallel Seq Scan over all 200,000 rows** with a top-N heapsort.
+Reading the plan against the predicate, the reason is the `OR` — eligibility is
+`(state IN ('delayed','ready') AND available_at <= now)` **or** `(state =
+'running' AND lease_expires_at <= now)`, which spans `available_at` and
+`lease_expires_at`, two different columns, so no one ordered index scan
+satisfies it. **BETA-10 did not introduce the full scan. It added a full sort on
+top of a scan that already read every eligible row**, and the honest statement
+of its cost is the sort, not the scan.
+
+**Two remedies tested, both negative.** Raising `work_mem` to 64 MB removes the
+disk spill entirely — `quicksort  Memory: 17082kB` instead of `external merge
+Disk: 11768kB` — and buys 5 ms of 294. The spill is not the cost; sorting
+200,000 rows is, in memory or not. Adding the tenant-ordered index the window
+function would seem to want does not change the plan either: the planner ignores
+it and still sequentially scans, because it must read every row regardless of
+order. Neither knob is the answer, which is worth recording before someone
+reaches for one.
+
+### What this changes for the record, and what would overturn it
+
+The cost is linear in the eligible backlog and negligible until the backlog is
+large: 1.876 ms at 2,000 rows, 294 ms at 200,000, once per worker poll cycle
+(`packages/runtime/src/durable/worker.ts:280`). That is an uncomfortable shape
+rather than a defect, because the backlog sizes where the sort costs real time
+are exactly the ones where fairness is worth paying for.
+
+**The two parts that did not ship are what would bound the part that did.**
+Backlog refusal at acceptance limits how many rows can be eligible at once, and
+a per-tenant in-flight cap limits how much of a batch one tenant can hold. Either
+bounds the eligible set that the window function must sort. Shipping fairness
+first and admission control later means the mechanism is at its most expensive
+in precisely the case it was added for.
+
+**What would overturn this.** A backlog that never approaches these sizes in the
+ten-instance fixture would make the whole measurement academic — the numbers
+above are from a synthetic 200,000-row table, not from the fixture, and I did not
+run the fixture. A measurement from `tests/load/beta10-ten-instance.ts` showing
+the eligible set staying in the low thousands would reduce this from a cost to a
+footnote.

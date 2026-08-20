@@ -442,3 +442,38 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   membership list; the other hits concern a `hasMore` comment, a hostile-test
   technique, or unrelated accepted slices. The gate therefore has a number but
   no replayable scope.
+
+## A fifth mode, and this one is in the checking, not the records
+
+Every entry above is about a record decaying. This one is about the verification
+decaying, and it is worse, because it makes the checking silently report on a
+tree nobody is looking at.
+
+This tick opened by verifying claims against the working tree while
+`git rev-parse HEAD` was **11 commits behind `origin/feat/v4`**. BETA-10 had
+merged at `8787e870`; the tree on disk was `2de4cb23`. The first symptom was a
+contradiction that took three probes to resolve: `git diff` against the merge
+showed `tenant_turn` added, and `grep` could not find it in any file.
+
+**The standing start-of-tick checks cannot detect this.** `git status --short`
+prints nothing, because a stale checkout is clean. `git log --oneline
+origin/feat/v4..HEAD` prints nothing, because that range is commits _ahead_, and
+this is the other direction. `git fetch` updates the remote ref and deliberately
+does not move the tree. All three reported the healthy answer. The check that
+would have caught it is `git rev-list --count HEAD..origin/feat/v4`, which is not
+in the protocol.
+
+**What this costs is the whole discipline, not one claim.** "Verify every claim
+against the tree with `file:line`" resolves to whatever the tree happens to be,
+and a citation verified against a stale checkout is indistinguishable in the
+record from one verified against `HEAD` — same format, same confidence, no
+marker. The failure is silent on both sides.
+
+**Judgment call: this is a protocol gap, not a per-tick mistake, so the fix is a
+check rather than more care.** Adding `git rev-list --count HEAD..origin/feat/v4`
+beside the existing fetch, and fast-forwarding when it is non-zero and the tree
+is clean, closes it in one line. What would overturn this: if ticks are ever
+expected to hold a deliberately pinned older tree — verifying an accepted record
+against its own reviewed head, which the beta05 entry above says is sometimes the
+right ref — then fast-forwarding is wrong and the fix is to record the ref each
+verification ran against instead.
