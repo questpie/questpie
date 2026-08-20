@@ -14,6 +14,10 @@
 		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {
+		"pg": "8.22.0",
 		"questpie": "workspace:*"
+	},
+	"devDependencies": {
+		"@types/pg": "8.20.0"
 	}
 }

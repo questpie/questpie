@@ -118,7 +118,11 @@
       "name": "@questpie/runtime",
       "version": "4.0.0-beta.1",
       "dependencies": {
+        "pg": "8.22.0",
         "questpie": "workspace:*",
+      },
+      "devDependencies": {
+        "@types/pg": "8.20.0",
       },
     },
     "packages/testkit": {
