@@ -1,5 +1,7 @@
 # @questpie/observability
 
+## 3.28.3
+
 ## 3.28.2
 
 ## 3.28.1

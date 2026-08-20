@@ -1,5 +1,13 @@
 # questpie
 
+## 3.28.3
+
+### Patch Changes
+
+- [#325](https://github.com/questpie/questpie/pull/325) [`9d8f88c`](https://github.com/questpie/questpie/commit/9d8f88c486dce850175c1ba43af441faa251e74f) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Prevent CRDT open and pull admission reads from exhausting bounded PostgreSQL
+  pools, and preserve opaque 16-byte pull identifiers without requiring RFC UUID
+  version or variant bits.
+
 ## 3.28.2
 
 ### Patch Changes
