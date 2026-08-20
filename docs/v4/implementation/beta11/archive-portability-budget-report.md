@@ -1,0 +1,29 @@
+# BETA-11 archive portability budget
+
+The archive fixture owns one selected-PR micro scenario. It compiles the full
+fixture through the ordinary compiler and measures compile time, total generated
+bytes, and TypeScript instantiations. The scenario does not introduce a second
+benchmark harness or copy a semantic kernel
+(`tests/performance/beta11-archive.test.ts:1`–`:51`).
+
+Three reference-local samples on Bun 1.3.14 and TypeScript 6.0.2 measured
+1,640.806 ms, 1,652.565 ms, and 1,633.138 ms. The median sample generated
+751,524 bytes and 16,828 TypeScript instantiations. The owned budgets are 5,000
+ms, 1,048,576 bytes, and 125,000 instantiations
+(`quality/baselines/beta11-archive-portability.json:1`–`:52`). The compile budget
+is three times the observed median rounded to the next second; the generated
+byte budget is the next power-of-two boundary. The instantiation boundary uses
+the established beta.1 compiler ceiling so portability cannot buy a new type
+complexity class.
+
+The manifest registers the scenario as `micro / selected-pr`, owned by BETA-11
+(`quality/performance/beta11-archive-portability.json:1`–`:24`). The local
+baseline is evidence, not a claim about every machine. GitHub-hosted PR runs
+enforce the deliberately wide regression boundary; a tagged stable runner may
+replace the pending evidence field when release evidence exists.
+
+The connected PostgreSQL tracer remains correctness evidence, not a
+microbenchmark. Its watch reconciliation interval and restart recovery make
+wall-clock timing scheduler-sensitive, so folding its ~12-second local run into
+the compile budget would conflate correctness, delivery latency, and compiler
+performance.

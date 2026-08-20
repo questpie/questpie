@@ -184,7 +184,11 @@ function compileDataQuery(value) {
   };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
-    const codec = parameter.parameterKind === "integer" ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null } : { kind: parameter.parameterKind };
+    const codec = parameter.parameterKind === "integer"
+      ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null }
+      : parameter.parameterKind === "text"
+        ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
+        : { kind: parameter.parameterKind };
     return { kind: "scalar", name, codec, nullable: false };
   });
   const selection = template.select({ fields, relations });

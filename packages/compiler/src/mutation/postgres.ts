@@ -304,6 +304,12 @@ function createPlan(
 			aliases: { candidate: "qp_candidate" },
 		});
 		const authorityParameters = policyParameters(authority.parameters);
+		if (rule.when.kind === "constant")
+			return Object.freeze({
+				path: callerPath,
+				sql: `SELECT TRUE WHERE ${authority.sql}`,
+				parameters: authorityParameters.values(),
+			});
 		const rawCandidate = collection.fields.map((field) => {
 			const supplied = operation.callerInputFields.some(
 				(inputPath) => canonicalBytes(inputPath) === canonicalBytes(field.path),
@@ -316,10 +322,7 @@ function createPlan(
 		const authorityCandidateCte = `${quote("qp_candidate")} AS (SELECT ${rawCandidate.join(", ")})`;
 		return Object.freeze({
 			path: callerPath,
-			sql:
-				rule.when.kind === "constant"
-					? `SELECT TRUE WHERE ${authority.sql}`
-					: `WITH ${authorityCandidateCte} SELECT TRUE FROM ${quote("qp_candidate")} WHERE ${authority.sql}`,
+			sql: `WITH ${authorityCandidateCte} SELECT TRUE FROM ${quote("qp_candidate")} WHERE ${authority.sql}`,
 			parameters: authorityParameters.values(),
 		});
 	});

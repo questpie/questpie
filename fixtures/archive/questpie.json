@@ -1,0 +1,20 @@
+{
+	"$schema": "https://questpie.dev/schema/application-v1.json",
+	"version": 1,
+	"application": {
+		"name": "archive"
+	},
+	"postgres": {
+		"schema": "archive",
+		"minimumMajor": 16,
+		"databaseCollation": "C.UTF-8",
+		"databaseCType": "C.UTF-8",
+		"extensions": [],
+		"physicalNames": {}
+	},
+	"source": {
+		"root": "src",
+		"exclude": []
+	},
+	"packages": {}
+}

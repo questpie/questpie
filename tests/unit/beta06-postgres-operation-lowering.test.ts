@@ -425,6 +425,9 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 	if (create.member !== "create") throw new Error("expected create plan");
 	expect(create.fieldAuthority.checks).toHaveLength(2);
 	expect(create.fieldAuthority.checks[0]?.sql).toContain("SELECT TRUE");
+	expect(
+		create.fieldAuthority.checks.map(({ parameters }) => parameters),
+	).toEqual([[], []]);
 	expect(create.write.sql).toContain('WITH "qp_candidate" AS');
 	expect(create.write.sql).toContain("pg_catalog.gen_random_uuid()");
 	expect(create.write.sql).toContain("pg_catalog.now()");
