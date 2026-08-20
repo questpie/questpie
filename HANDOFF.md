@@ -774,8 +774,24 @@ their _Deferred seams_ sections; the guides did not inherit it.
      (`reaction/declarations.ts:89`) is `Omit<RootExecution, "services">` plus
      `data`, `queries`, `mutations`, `run`, `attempt`, so a Reaction handler does
      see the Principal and Tenant. Second, `policy` is a Mutation-only key —
-     Reaction has none either, though `runAs` is its authorization seam, so that
-     one may be by design in a way Query's absence is not.
+     Reaction has none either.
+     **An earlier revision of this line added "so that one may be by design in a
+     way Query's absence is not". That was wrong, and the correction matters
+     more than the point it was attached to.** Policy in v4 is Collection-bound,
+     not Operation-bound: `compiler/src/relational/discovery.ts:136` attaches it
+     as `{ kind: "default", requiredForNormalDataAccess: true }`, and the
+     compiled read plan carries `policy` and `policyProgramDigest`
+     (`runtime/src/relational/query.ts:97`–`:98`, `:621`). The generated
+     `policy-projection.json` holds `operations.read` with
+     `admission: { kind: "authenticated" }`. So a `defineQuery` reading through
+     `ctx.data` **is** Policy-checked, admission included, and the guides'
+     `policy: policy.authenticated()` is closer to redundant than load-bearing.
+     `QueryDefinition` carries no `policy` field either, which is consistent
+     rather than a second gap.
+     The compile error stands — `QueryFactory` rejects the key — but it is a
+     surface mismatch, not evidence that Queries are unauthorized, and it must
+     not be fixed by assuming Query needs an operation-level Policy. The
+     Collection binding may already be the answer; that is an owner call.
      It also puts a type under the open `durable-reactions.mdx` decision:
      `ctx.actions` there is not merely explained through a deferred capability,
      it is **not a member of `ReactionContext`**. That guide's example is also
