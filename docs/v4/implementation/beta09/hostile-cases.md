@@ -217,3 +217,17 @@ to act.
 - Case 2 is disclosed as the weakest of the six. It is not strengthened by
   rewording, and pretending otherwise is the failure mode BETA-07 hit three
   times.
+
+**All four have landed, checked rather than assumed.** A list of amendments a
+record pushes into other records is exactly the kind of instruction that reads as
+done because it is written down. Verified: `internal-protocol-v5.md` carries both
+codes joining the union and the CHECK, and states "six members becomes eight";
+`acceptance-shape.md`'s narrower-claims list carries the `questpie explain` entry
+and criterion 15 carries case 4's scope. The `questpie explain` claim holds at
+both ends — the three authorities each name it exactly once, and no package under
+`packages/` declares a `bin`, so no CLI exists to have built it.
+
+One amendment landed incompletely and was fixed separately: `AUTHORITY_DENIED`
+reached the union and the CHECK but not the judgment call about what a rejection
+writes into `reason`. Adding a code to a contract is not the same as deciding how
+it behaves, and the amendment list only tracks the first.
