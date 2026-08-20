@@ -584,3 +584,30 @@ one that matters: re-resolving a line never asks whether the sentence is still
 true. This merge happens to have moved no lines _and_ falsified no claims, but
 those are independent — BETA-10 falsified `tenant-share-control`'s scheduling row
 by editing code far from any line that record cited.
+
+## An unresolved "probably fine" in a sweep is a defect left in place
+
+The BETA-10 sweep listed `durable-evidence-gaps/FINDING.md`'s claim that
+`claimBatch` "defaults to 64 and is rejected outside 1–64", cited to
+`postgres-kernel.ts:257`–`:263`. The line it landed on was the retry-scheduling
+`UPDATE`, which is nothing to do with batch bounds. I judged it plausible, did
+not resolve it, and moved on. It was stale: at the pre-merge tree `:257`–`:263`
+was exactly `const maximumBatch = input.claimBatch ?? 64` and its 1–64 check, and
+BETA-10 relocated that block to `:152`–`:158` byte-for-byte. Corrected now.
+
+**The near-miss is the more useful half.** Chasing it, I formed the hypothesis
+that BETA-10 had _removed_ the construction-time bound and left only the
+per-call check in `admit()` at `:358`, which would have been a real regression —
+a kernel built with `claimBatch: 10000` accepting 10,000-row batches. That was
+wrong. The check is intact at `:152`–`:158` and the BETA-10 diff touches none of
+those lines. Verifying before writing cost one command; writing it first would
+have put a fabricated regression into a record whose subject is unasserted
+properties.
+
+**So a third way a sweep fails, after renumbering without re-reading and a
+detector's blind spot: the reviewer's own hedge.** A sweep that outputs
+"plausible" for an item has not checked it, and "plausible" is indistinguishable
+from "checked" once the sweep is closed and its count reported. The fix is
+mechanical — a sweep should have two outcomes per item, resolved or open, with
+open items carried forward by name. This one was reported closed with an
+unresolved item inside it.

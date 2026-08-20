@@ -224,7 +224,7 @@ run is still returned by `admit()` and still reads
 `{ state: "ready", attemptCount: 0 }`.
 
 `claimBatch` defaults to 64 and is rejected outside 1–64
-(`postgres-kernel.ts:257`–`:263`), so it takes only as many such rows as the
+(`postgres-kernel.ts:152`–`:158`), so it takes only as many such rows as the
 configured batch to occupy every admission permanently — 64 at the default, fewer
 for a worker configured lower. They sort first because a refused run keeps its
 original `available_at` while healthy work arrives with later ones.
