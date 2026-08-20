@@ -22,7 +22,7 @@ documents already say:
 - `docs/adr/0010-freeze-trusted-context-and-relational-policy.md:41` —
   `definePolicy(collection, body)` "binds one closed typed Policy program to one
   Collection". Policy is Collection-bound by contract.
-- `CONTEXT.md:405` — Policy "applies to normal clients, direct operations,
+- `CONTEXT.md:411` — Policy "applies to normal clients, direct operations,
   workers, recomputation, and Studio". Studio is already inside Policy's scope
   **for Collection data**. Nothing needs adding for that half.
 - The durable kernel has no Collection. So the operational half was never
@@ -43,10 +43,10 @@ and the next section is about the difference.
 set says so.**
 
 The operational reads and commands are in-process methods on the compiled
-application object — `packages/compiler/src/runtime/application.ts:464`–`:483`
+application object — `feat/v4-beta-09:packages/compiler/src/runtime/application.ts:464`–`:483`
 freezes `worklist`, `inspect`, `events`, `effects`, `audit`, `cancelRun`,
 `retryRun` and `acknowledgeAmbiguity` onto `app.durable`. The request router in
-`packages/runtime/src/application/index.ts:433`–`:447` serves realtime, then the
+`feat/v4-beta-09:packages/runtime/src/application/index.ts:433`–`:447` serves realtime, then the
 Studio shell, then the Studio artifacts, then the Operation wire, then 404.
 There is no durable route in it; `grep durable` over that file returns nothing.
 
@@ -78,7 +78,7 @@ a different subject.
 **Answered: evaluated, distinct from read Authority.** This needed no separate
 owner decision once D1 was answered; it follows from the glossary.
 
-`CONTEXT.md:400`–`:403` defines Authority as "the immutable class of actions an
+`CONTEXT.md:404`–`:405` defines Authority as "the immutable class of actions an
 Execution may request", and then: "System Authority is an explicit trusted
 capability and **cannot be derived from request input**."
 
@@ -97,10 +97,10 @@ reachable on any shipped path**, and an earlier revision of this record
 overstated it as working code this decision merely ratifies.
 
 The guard is conditional on an optional hook
-(`packages/runtime/src/durable/postgres-maintenance.ts:209`–`:210`: the denial
+(`feat/v4-beta-09:packages/runtime/src/durable/postgres-maintenance.ts:209`–`:210`: the denial
 fires only when `input.authorize !== undefined`), and the sole production
 construction site passes no authorizer
-(`packages/compiler/src/runtime/application.ts:411`). Every site that supplies
+(`feat/v4-beta-09:packages/compiler/src/runtime/application.ts:411`). Every site that supplies
 one is a test constructing its own instance. So a maintenance command reached
 through `app.durable.cancelRun` today applies without an Authority decision, and
 records an actor the system never verified.
