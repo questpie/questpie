@@ -1145,8 +1145,23 @@ application: durableApplication })` — the construction site, passing no
     **Scope of what I checked:** the sweep produced 32 bare citations where the
     two refs differ at the cited line. Most are records correctly citing
     `feat/v4` where the branch merely shifted, including several of mine. I read
-    the four above and confirmed them; **the other 28 are unread candidates, not
-    findings.**
+    the four above and confirmed them.
+    **Read eleven more, and every one is a correct `feat/v4` citation** — which
+    bounds the defect to one file rather than leaving it open across the slice.
+    Each was verified against the claim, not just the line: three records cite
+    `postgres-maintenance.ts:130` for `actorOf` and its
+    `principalKernel.is(actor)` brand check, and `:130`–`:131` is exactly that;
+    two cite `:61` for `reason` on `cancelRun`, and `:58`–`:61` is exactly that;
+    two cite `rows.ts:139` for the `event_sequence` bump, and `:139`–`:141` is
+    exactly that; two cite `index.ts:592` and two `compiler/src/runtime/
+application.ts:489` for `beginDrain()` reachable only through `close()`, and
+    both are exactly that. Those eleven span `acceptance-shape.md`,
+    `design-context.md`, `hostile-cases.md`, `maintenance-decisions.md` and
+    `studio-purpose.md`.
+    **So: 32 candidates, 15 read, 4 defects, and all four in
+    `owner-decisions.md`.** Seventeen remain unread. The working conclusion is
+    that this is one file's habit rather than a slice-wide problem, and the
+    unread seventeen are the test of it.
     **D3 has a bigger problem than its heading: the eight divergences it batches
     are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
     divergences between accepted documentation and the tree that this slice
