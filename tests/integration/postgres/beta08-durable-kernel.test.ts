@@ -369,7 +369,7 @@ WHERE run_id = $1 AND kind IN ('cancelled', 'failed', 'succeeded')`,
 );
 
 postgresTest(
-	"a worker without compatible executable bytes refuses the claim instead of consuming an attempt",
+	"an incompatible worker cannot admit retired work or consume an attempt",
 	async () => {
 		const prepared = await harness();
 		const callId = "beta08-retire-000-0000-000000000005";
@@ -384,7 +384,7 @@ postgresTest(
 			code: "EXECUTABLE_RETIRED",
 		});
 		const admissions = await retired.admit();
-		expect(admissions.map(({ runId: candidate }) => candidate)).toContain(
+		expect(admissions.map(({ runId: candidate }) => candidate)).not.toContain(
 			runId,
 		);
 		const view = await prepared.kernel.inspect(runId);

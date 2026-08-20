@@ -261,6 +261,13 @@ export function createPostgresDurableKernel(
 		maximumBatch > 64
 	)
 		throw new TypeError("durable claim batch must be between 1 and 64");
+	const executableDigests = [
+		...new Set(
+			[...input.reactions.byIdentity.values()].map(
+				(reaction) => reaction.contractDigest,
+			),
+		),
+	].sort();
 	const random = input.random ?? Math.random;
 	const transaction = <Result>(
 		use: (query: DurableQuery) => Promise<Result>,
@@ -453,16 +460,24 @@ WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL`,
 					`durable admission batch must be between 1 and ${maximumBatch}`,
 				);
 			const rows = (await input.sql.unsafe(
-				`SELECT run_id::text AS "runId", resource_identity AS "resource",
+				`WITH eligible AS (
+  SELECT run_id, resource_identity, executable_digest, available_at,
+         row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id) AS tenant_turn
+  FROM questpie_internal.durable_runs
+  WHERE application_name = $1
+    AND executable_digest IN (
+      SELECT pg_catalog.jsonb_array_elements_text(($2::text)::jsonb)
+    )
+    AND NOT cancellation_requested
+    AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
+      OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
+)
+SELECT run_id::text AS "runId", resource_identity AS "resource",
        executable_digest AS "executableDigest"
-FROM questpie_internal.durable_runs
-WHERE application_name = $1
-  AND NOT cancellation_requested
-  AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
-    OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
-ORDER BY available_at, run_id
-LIMIT $2`,
-				[input.application, batch],
+FROM eligible
+ORDER BY tenant_turn, available_at, run_id
+LIMIT $3`,
+				[input.application, JSON.stringify(executableDigests), batch],
 			)) as unknown as readonly DurableRow[];
 			return Object.freeze(
 				rows.map((row) =>
