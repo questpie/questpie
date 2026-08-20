@@ -206,7 +206,26 @@ the null-reason question does not carry over by itself. `REASON_INVALID` has no
 valid reason to store — that is what the code means. A denied caller may have
 supplied a perfectly well-formed one.
 
-**Store null anyway.** A caller refused for lack of Authority should not get
+**The slice shipped and did not do this.** BETA-09 merged at `21e38b21` (PR
+#326). `packages/runtime/src/durable/postgres-maintenance.ts:310` records an
+`AUTHORITY_DENIED` row with `reason: invalidReason ? null : request.reason` — the
+denied caller's own text, in the same column a trusted reason uses, null only
+when the reason was independently invalid. There is a second path at `:299`
+returning `authorityDenial(...)` with no audit row at all when the run is not
+readable, so the text is stored exactly when the run exists.
+
+That is the overturning condition this decision named, taken. The record said an
+operator's need to see what a denied caller claimed "argues for a separate,
+clearly-attributed field rather than for putting untrusted text in the same
+column trusted reasons use", and the implementation put it in that column. **The
+shipped behaviour is the fact now; the reasoning below is what it was weighed
+against**, and the concern it raises is unchanged: an operator reading the audit
+cannot tell from the column whether a reason was supplied by a caller the check
+accepted or one it refused. What would resolve it without moving the text is
+reading `rejection_code` alongside `reason` — which is available on every row,
+and is worth stating because a reader scanning reasons alone would not.
+
+**The decision as recorded: store null.** A caller refused for lack of Authority should not get
 256 bytes of attacker-chosen text into an append-only log an operator reads;
 that is a write primitive handed to exactly the caller the check just refused.
 The identity is recorded, which is what makes the denial auditable, and
