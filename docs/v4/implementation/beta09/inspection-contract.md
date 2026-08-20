@@ -1,8 +1,9 @@
 # BETA-09: the inspection surface and how nondisclosure is proven
 
-Decides what Policy-protected inspection Operations BETA-09 exposes, what each
-returns, and how nondisclosure equivalence is proven against the prescribed red
-test.
+Decides what inspection Operations BETA-09 exposes, what each returns, and how
+nondisclosure equivalence is proven against the prescribed red test. `QUEUE.json`
+calls them "Policy-protected"; D3 below records why that word names a mechanism
+this surface cannot have.
 
 This record merges two concurrent work ticks that reached the same file from
 different directions. One established that the compiler already emits a

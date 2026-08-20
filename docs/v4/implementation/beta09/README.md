@@ -241,7 +241,7 @@ The gap is that the calling half does not exist yet.
 
 **Why it matters for assessment rather than for blame.** Four of this slice's
 required artifacts can be demonstrated in isolation and three of them are —
-the projection producer, the Policy-protected reads, the safe views. A reviewer
+the projection producer, the inspection reads, the safe views. A reviewer
 counting artifacts will find the bundle present. A reviewer asking whether the
 slice's fixture is _demoable end to end_, which is its own acceptance
 criterion, will not, and the honest answer is that it is not yet, for one
