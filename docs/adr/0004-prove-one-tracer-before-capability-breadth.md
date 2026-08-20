@@ -23,10 +23,13 @@ Dispatch, Change Ledger, Live Query recomputation, concrete client types, crash
 recovery, and local plus managed PostgreSQL. ADR-0024 defers Studio until it
 owns a useful privileged administration workflow and its authority contract.
 
-Complete Auth, Files, Search, KV, Channels, Workflows, OpenAPI, MCP, Effect, and
+Complete Auth, Files, Search, KV, Workflows, OpenAPI, MCP, Effect, and
 managed Cloud remain outside the first tracer. The low-level Fetch boundary is
 part of the Runtime, but official host adapters are not a planned product
 matrix.
+
+ADR-0025 removes Channels from the product rather than retaining them as later
+capability breadth.
 
 Jobs and Workflows remain accepted architectural product areas. The tracer first
 proves their shared transaction, dispatch, lease, idempotency, and observability

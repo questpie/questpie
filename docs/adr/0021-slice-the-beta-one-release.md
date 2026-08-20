@@ -2,6 +2,10 @@
 
 > Partially superseded by [ADR-0024](./0024-descope-minimal-studio-from-beta-one.md)
 > for the minimal Studio path and Studio parity in beta.1.
+>
+> The future Channel seam in the accepted P15 artifact is historical and
+> superseded by [ADR-0025](./0025-remove-channels-from-core.md). Channels are
+> removed from QUESTPIE rather than deferred beyond beta.1.
 
 - Status: Accepted
 - Date: 2026-08-14
@@ -30,11 +34,11 @@ append-only audit, drain, and compatibility-retirement seams.
 The complete machine-checked scope is
 [`beta-slice-p15/SLICE.json`](../v4/prototypes/beta-slice-p15/SLICE.json).
 Action, raw Route and credential Auth integration, generic Job and Workflow
-breadth, Channel, File bytes, Search, OpenAPI/MCP/skill output, optional cache/
-broker/carrier, split Runtime roles, and remote Studio are absent from beta.1.
-Each retains the named compatible seam in that artifact. PostgreSQL remains the
-only durable dependency, Index remains B-tree-only, and this release makes no
-RLS claim.
+breadth, File bytes, Search, OpenAPI/MCP/skill output, optional cache/broker,
+split Runtime roles, and remote Studio are absent from beta.1. Each retains the
+named compatible seam in that artifact. Its Channel and carrier seams do not:
+ADR-0025 removes them from the product. PostgreSQL remains the only durable
+dependency, Index remains B-tree-only, and this release makes no RLS claim.
 
 The collaboration/publishing fixture is the primary connected tracer. The
 archive/permit/embargo fixture proves portability. Release evidence includes

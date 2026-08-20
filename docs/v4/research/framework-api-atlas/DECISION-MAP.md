@@ -973,6 +973,40 @@ for an inert Knip gate. Repair `fe8b5158` closed it; the one replacement fresh
 review returned PASS. Evidence head `17008b05`. No production Runtime was
 implemented.
 
+## #25: Should Channels remain a framework-owned Resource?
+
+Blocked by: none
+Type: Product decision
+
+### Question
+
+Decide whether transient connected-client events justify a compiler Resource,
+generated client/codecs, PostgreSQL event ledger/order/replay/authority state,
+presence model, and runtime carrier binding beside Live Query and the shared
+durable execution kernel.
+
+### Answer
+
+Accepted by ADR-0025: no. QUESTPIE removes the framework Channel concept
+completely and introduces no Signal, Broadcast, Presence, or generic event-bus
+replacement. Live Query owns current authorized Query state; ordinary
+Collections and Queries own durable business history; Reaction or Job owns
+durable post-commit acceptance and attempts. Transient typing, cursor,
+presence, progress, and advisory notification delivery is ordinary
+application/provider integration.
+
+A provider cannot authorize a QUESTPIE Operation or become durable application
+truth. A publish attempt that must survive commit crosses an Action or
+external-effect Service from Reaction and remains physically at least once with
+possible provider ambiguity. The collaboration fixture's `Channel` remains an
+ordinary domain Collection.
+
+The accepted P14/P15 artifacts, earlier ADR clauses, reviews, and v3 research
+remain historical evidence at their pinned heads; their forward Channel seam
+is superseded. Candidate head `ed0dfa7c59e6132a26cc1adaa500ec200ad911c8`
+received a fresh stateless Opus-medium `PASS`; verified review evidence is
+committed at `053690f6`.
+
 ## Research-wave discipline
 
 Run bounded waves rather than one giant undifferentiated investigation:

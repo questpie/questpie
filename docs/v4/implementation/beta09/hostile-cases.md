@@ -85,8 +85,8 @@ deliberately not dressed up as stronger.
 **Finding: there is no CLI at this base, so the case as written cannot be
 driven.**
 
-`questpie explain` is accepted authority — ADR-0014:58, ADR-0019:52, and
-`docs/v4/implementation-gates.md:429` all reference it — and no implementation
+`questpie explain` is accepted authority — ADR-0014:58, ADR-0019:57, and
+`docs/v4/implementation-gates.md:437` all reference it — and no implementation
 exists. `packages/` contains `compiler`, `questpie`, `runtime`, and `testkit`;
 no package declares a `bin`. There is no second producer to compare against.
 

@@ -68,6 +68,8 @@ maintenance compatibility, multi-instance PostgreSQL correctness, and the
 archive portability fixture.
 
 It does not include Studio, Action authoring, credential Auth, raw Routes,
-generic Jobs or Workflows, Channel, File bytes, Search, OpenAPI, MCP, optional
-cache or brokers, split Runtime roles, a provider abstraction, non-B-tree
-indexes, or an RLS claim. These absences do not create placeholder APIs.
+generic Jobs or Workflows, File bytes, Search, OpenAPI, MCP, optional cache or
+brokers, split Runtime roles, a provider abstraction, non-B-tree indexes, or an
+RLS claim. These absences do not create placeholder APIs. ADR-0025 separately
+removes the framework event/presence Resource and carrier seam instead of
+deferring them beyond beta.1.

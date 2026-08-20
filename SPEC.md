@@ -289,13 +289,12 @@ Notification brokers carry possible-progress hints only. Losing cache or wake
 state causes a miss, scan, reconnect, or reset and cannot change results or
 authority.
 
-The first realtime carrier is one multiplexed SSE downstream plus Fetch/POST
-upstream. A reconnect or upstream request may reach another compatible
-instance. Channel is a typed compiler Resource whose codecs, publish/subscribe
-Policy, resolved identity, PostgreSQL event order/replay, authority
-invalidation, and limits are independent of the carrier. WebSocket and
-Pusher-compatible delivery remain later measured carriers of the same frames,
-not provider-specific semantic runtimes.
+The built-in realtime carrier is one multiplexed SSE downstream plus Fetch/POST
+upstream for watched Query results. A reconnect or upstream request may reach
+another compatible instance. QUESTPIE has no generic event or presence
+Resource. Transient connected-client signals are ordinary application/provider
+integration and cannot authorize Operations or become durable application
+truth.
 
 ## 9. Durable execution
 
@@ -465,10 +464,11 @@ contract.
 
 Only the minimum Reaction/dispatch inspection needed to prove the transaction
 spine belongs in this tracer. Service lifetime is included because Context owns
-scoped disposal. Action, raw Route/credential Auth, complete Job/Workflow,
-Channel, File bytes, Search, optional cache/broker/carrier, OpenAPI/MCP/skills,
-split Runtime roles, remote Studio, and managed Cloud retain the named seams and
-exact absence stories in ADR-0021.
+scoped disposal. Action, raw Route/credential Auth, complete Job/Workflow, File
+bytes, Search, optional cache/broker, OpenAPI/MCP/skills, split Runtime roles,
+remote Studio, and managed Cloud retain the named seams and exact absence
+stories in ADR-0021. ADR-0025 removes Channels and their carrier seam rather
+than deferring them.
 
 ## 14. V3 port policy
 
@@ -565,9 +565,9 @@ complete Workflow product breadth remains a later vertical.
 
 ADR-0017 and `docs/v4/multi-instance-and-optional-acceleration.md` accept
 ten-instance HA, arbitrary routing, concurrent schedulers/workers, rolling
-executable compatibility, discardable Query-cache and wake acceleration, one
-multiplexed SSE/Fetch-POST transport, and compiler/Policy/PostgreSQL-owned
-Channels. PostgreSQL remains the only hard durable dependency.
+executable compatibility, discardable Query-cache and wake acceleration, and
+one multiplexed SSE/Fetch-POST Live Query transport. PostgreSQL remains the
+only hard durable dependency.
 
 ADR-0018 and `docs/v4/files-search-and-contract-projections.md` accept ordinary
 File metadata plus a narrow filesystem/S3-compatible byte capability, explicit
@@ -576,10 +576,10 @@ result universe, and compiler-owned OpenAPI/MCP/skill outputs. Final public
 spelling is accepted by ADR-0019; public full-text Index syntax and external
 Search/storage provider breadth remain later decisions. ADR-0019 and
 `docs/v4/semantic-kernels-and-public-surface.md` freeze their public spelling,
-the shared scalar/relational/durable/Fetch kernels, `defineChannel` versus Query
-`.watch`, exact structural/app/package/client exports, and distinct
-`runtime.cache`, `runtime.wakeBroker`, `runtime.channelCarrier`, and
-`runtime.byteStore` bindings without a provider registry.
+the shared scalar/relational/durable/Fetch kernels, Query `.watch`, exact
+structural/app/package/client exports, and distinct `runtime.cache`,
+`runtime.wakeBroker`, and `runtime.byteStore` bindings without a provider
+registry. ADR-0025 removes the Channel Resource and carrier binding completely.
 
 The immutable Runtime bundle, generated App and client, Operation Wire,
 combined-role Runtime lifecycle, deployment compatibility, Execution Envelope,
@@ -659,10 +659,11 @@ their final spelling:
   cannot depend on process-local registries, singleton ownership or a unique
   application leader.
 - PostgreSQL remains the only hard infrastructure dependency and durable source
-  of truth. Memory, Redis/KV, notification brokers, typed Channels and object
-  storage may be optional capabilities for cache, invalidation distribution,
-  collaboration or Files, but loss or absence of an accelerator must fall back
-  safely and cannot change authority.
+  of truth. Memory, Redis/KV, notification brokers, and object storage may be
+  optional capabilities for cache, invalidation distribution, or Files, but
+  loss or absence of an accelerator must fall back safely and cannot change
+  authority. Transient collaboration providers are application integrations,
+  not framework capabilities.
 - Preserve one transport-neutral realtime frame contract, but begin with one
   physical transport: a multiplexed SSE downstream and Fetch/POST upstream.
   An upstream request or reconnect may reach any compatible Runtime instance;

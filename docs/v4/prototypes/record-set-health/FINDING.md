@@ -349,10 +349,10 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   one file's, not the slice's.
   **One methodological point the last candidate earned.**
   `beta05/claude-initial-review.md:18` cites
-  `tests/integration/postgres/helpers/beta05-runtime.ts:31`, which is a blank
-  line on `feat/v4` today. At BETA-05's reviewed head `884b5d8a` it is
-  `const beta05FixtureRoot = resolve(` — correct when written, shifted by one
-  since. **An accepted review record is a snapshot against its own reviewed
+  `tests/integration/postgres/helpers/beta05-runtime.ts:31`, which on `feat/v4`
+  has not held what that record meant for some time. At BETA-05's reviewed head
+  `884b5d8a` it is `const beta05FixtureRoot = resolve(` — correct when written,
+  and moved by later slices since. **An accepted review record is a snapshot against its own reviewed
   head, and checking it against `HEAD` is the wrong ref.** Any future citation
   sweep should exclude `docs/v4/implementation/*/claude-*.md` or resolve them
   against the matching accepted head in the authority table above.
@@ -650,3 +650,138 @@ still resolved.
 **What would overturn the detector's value:** a run where the real defects are
 all caught by symbol re-resolution anyway, which would make this an expensive way
 to find nothing. That is testable on the next merge — run both and compare.
+
+## The authority layer had never been swept at all
+
+Five sweeps had run over `packages/` and `tests/` citations. None had touched
+the citations that point at ADRs and public projections — the documents that
+define v4 behaviour, and therefore the ones a wrong pointer costs most. There
+are 41 of them across 25 targets in this record set.
+
+**Three named a path that does not exist**, which is a failure the code sweeps
+could not have produced, because a bad code path shows up the moment anything
+tries to read it and these had never been read by anything:
+`docs/adr/0015-freeze-service-route-and-auth.md` is missing its `-composition`
+suffix; `docs/adr/0013:32` carries a bare ADR number and no filename; and
+`docs/adr/0014-...:32` contains a literal ellipsis where the filename belongs —
+an author's placeholder that was never filled in and that no check ever looked
+at. In all three the line number and the quoted text were exactly right, so
+every one of them would have passed a content check and failed a reader.
+
+**Of the 37 with a resolvable path, seven flagged and two were real.** Both are
+in authority documents, and one is a kind not seen before.
+
+`maintenance-decisions.md` argued that `drainRuntime` is a lifecycle fence
+wrongly listed among fenced maintenance commands, citing the accepted projection
+_and_ Gate 8, and concluded that "it makes the projection the natural thing to
+correct." The projection half is still exactly right
+(`docs/v4/runtime-client-envelope-and-studio.md:69`). The Gate 8 half was right
+when written and is now false: BETA-10 amended `implementation-gates.md` in
+`ebe1cfe8` to carve `drainRuntime` out explicitly, as "the idempotent local
+`app.close()` lifecycle fence … not a remotely targeted durable-run maintenance
+command" (`:281`–`:284`), leaving the fenced set at three commands
+(`:277`–`:280`).
+
+**So the record's recommendation was adopted, in the gate rather than the
+projection, and the record did not know.** That is a decay mode with the
+opposite sign to every other entry here: not a claim going stale because the
+tree moved away from it, but a claim going stale because the tree moved _toward_
+it. The conflict this record identified is now between two v4 authority
+documents rather than between an ADR and a projection-plus-gate, and the
+projection is its sole remaining source. Correcting the projection is out of
+bounds from here, so it is recorded and left.
+
+The second was ordinary: `owner-decisions.md` cited ADR-0021 `:32` for "remote
+Studio" (it is `:34`) and `:23` for "keeping minimal Studio inside" beta.1 —
+a line that is the release-slice list and never said it. ADR-0021 `:19`–`:21`
+now says ADR-0024 removed the minimal Studio path, so both Studio forms are
+outside beta.1 and only the reasons differ.
+
+**Judgment call: doc-path existence belongs in every future sweep, ahead of the
+content check.** It is one `os.path.exists` per citation and it caught three
+unreadable pointers that six sweeps of content checking would never have looked
+at. What would overturn it: finding that these three were authored in one sitting
+by one hand, which would make it a local lapse rather than a gap in the checking.
+All three sit in different files, so that is not the case here.
+
+## The position prediction held, and I had pinned a moving line inside a lesson
+
+Two entries ago this record claimed the decay mechanism is insertion position
+relative to cited lines, not diff size, and offered BETA-11 as the case where a
+12-line change moved nothing because every hunk began below the citations.
+BETA-12 is the other half of that experiment and it went the predicted way.
+
+`packages/compiler/src/artifacts.ts` took a one-line insertion at line 1
+(`@@ -0,0 +1 @@`) and a ten-line insertion at `:46` (`@@ -46,0 +48,10 @@`). The
+`relational-nondisclosure.json` emission moved from `:453` to `:464` — a shift
+of exactly eleven, the sum of the two insertions above it. Two citations in
+`beta09/inspection-contract.md` broke and are corrected. Nine files changed;
+everything cited below an insertion moved, everything else did not. Size was not
+the variable in either direction.
+
+**And the sweep caught a claim of mine that had no business being time-bound.**
+The methodological point above — that an accepted review record is a snapshot
+against its own reviewed head — was illustrated by saying
+`beta05-runtime.ts:31` "is a blank line on `feat/v4` today". BETA-12 touched
+that helper and `:31` is now a fixture path. The lesson was never about what
+that line currently holds; pinning the present state of a line inside a durable
+point makes the point decay at that line's rate for no gain. Rewritten to say
+the citation no longer holds what the record meant, which is the part that is
+actually stable.
+
+**One detector limitation, recorded because it passed these silently.** The
+identifier-overlap check compares backticked names in the claim against the
+cited window. Four of the seven citations examined here carry no backticked
+identifier in their sentence at all, so there was nothing to compare and the
+check reported them clean. It cannot distinguish "verified" from "nothing to
+verify". Both real defects in this sweep were found by reading, not by the
+detector; its value so far is narrowing where to read, not deciding.
+
+## Two citation forms the sweeps could not see, and a live example of why it matters
+
+A concurrent tick is landing ADR-0025, removing Channels from core. At the time
+of this entry its work is committed locally and **not yet on `origin/feat/v4`**
+— `39f06353`, fourteen commits ahead. It rewrites `docs/adr/0017`, `0019`,
+`0021` and `implementation-gates.md`, which this record set cites.
+
+**Three citations corrected two ticks ago were already broken again**, by work
+that has not been published: ADR-0017's two named non-goals moved `:89`–`:90` →
+`:93`–`:94`, ADR-0019's `questpie explain projection` line `:52` → `:57`, and
+ADR-0021's "remote Studio" `:34` → `:38`. All three were correct at
+`origin/feat/v4` and are correct again here against `39f06353`. **If that tick
+amends or resets its unpushed commits, these three are what to recheck** —
+they are pinned to commits no other machine has seen.
+
+**The bare form was never swept.** The doc sweep matched only citations written
+as a path, `` `docs/adr/0021-...md:34` ``. The record set also writes bare
+`ADR-0019:52`, and there are 19 of those. Sweeping them found two defects that
+predate the channel work and were wrong at `origin` too:
+`hostile-cases.md:89` cited `implementation-gates.md:429` for `questpie explain`
+when it was `:442` at origin and is `:437` now, and
+`beta1-documentation-gap/FINDING.md:210` cited ADR-0021 `:37`–`:38` for the
+connected-tracer designation when it was `:39` at origin and is `:43` now.
+Neither had ever been looked at by anything.
+
+**And the identifier detector missed the first of those for a knowable reason.**
+Its token pattern is `[A-Za-z_][A-Za-z0-9_.()]{2,}`, which cannot match a
+backticked identifier containing a space. The claim's anchor is
+`` `questpie explain` ``, so the detector had no name to compare and passed the
+line as clean. Two-word symbols, CLI subcommands and file-plus-flag spellings
+are all invisible to it.
+
+**Judgment call: a sweep must enumerate its own coverage before reporting a
+count.** Every gap found so far has been a form the matcher did not accept —
+short-form code paths, bare ADR numbers, multi-word identifiers — and each was
+discovered by accident rather than by asking what the pattern excludes. The
+cheap discipline is to print the set of citation spellings a sweep matched
+alongside its result, so an absent form is visible as absent. What would
+overturn this: a sweep that misses a defect in a form it _does_ match, which
+would mean the matcher is not the binding constraint.
+
+One correction here was a delayed hazard rather than a fresh error. The previous
+entry rewrote `owner-decisions.md` to note that a stale citation had pointed at
+`:23`, "the release-slice list". ADR-0021's rewrite moved the minimal-Studio
+sentence _onto_ `:23`, so that archaeology now reads as though the original
+citation had been right. It is removed rather than renumbered: a record that
+narrates which line a claim used to cite acquires a second thing that can decay,
+for no benefit the current citation does not already give.

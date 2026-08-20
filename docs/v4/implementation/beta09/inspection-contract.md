@@ -80,7 +80,7 @@ which is why it is decided here.
 
 The application lane is not merely closed by argument. The compiler emits a
 per-query, machine-readable nondisclosure contract,
-`relational-nondisclosure.json` (`packages/compiler/src/artifacts.ts:453`,
+`relational-nondisclosure.json` (`packages/compiler/src/artifacts.ts:464`,
 projected by `packages/compiler/src/relational/nondisclosure.ts`). Its shape is
 a closed set of disclosure commitments per query (`nondisclosure.ts:3`–`:28`):
 
@@ -156,7 +156,7 @@ earlier revision of this section said BETA-09 "produces
 `operational-nondisclosure.json`". Nothing produces that file — it is named in
 no compiler source on `feat/v4` or on `feat/v4-beta-09`, while every other
 artifact this record set cites (`relational-nondisclosure.json` at
-`packages/compiler/src/artifacts.ts:453`, `durable-kernel.json`,
+`packages/compiler/src/artifacts.ts:464`, `durable-kernel.json`,
 `reaction-projection.json`, `wire-contract.json`) is emitted by one.
 
 The branch put the commitments inside the contract that already exists:

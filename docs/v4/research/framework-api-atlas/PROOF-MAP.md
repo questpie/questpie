@@ -930,6 +930,43 @@ failures. The primary tracer is collaboration/publishing and the portability
 fixture is archive/permit/embargo. PostgreSQL remains the only durable
 dependency, Index remains B-tree-only, and no RLS claim is introduced.
 
+## P25 — remove Channels from the core
+
+Status: accepted by ADR-0025. Initial reviewed head `51d7c5ba` was `BLOCKED`
+because the authority projection was self-referential and did not classify the
+permanent capability map or accepted P14/P15/P16 artifacts. Repair
+`bb63199b` closed those boundaries but its replacement review found an
+under-broad content scan. User-authorized repairs `cb394f67` and `ed0dfa7c`
+broadened discovery to every `Channel` word and made benign exemptions
+falsifiable from file bytes. The final fresh stateless Opus-medium review
+returned `PASS`; the verified review record is committed at `053690f6`.
+
+The proof establishes:
+
+- no Channel Resource, `defineChannel`, generated client/codecs, PostgreSQL
+  event ledger/order/replay/generation, presence model, or
+  `runtime.channelCarrier` remains current or deferred;
+- no replacement Signal, Broadcast, Presence, event-bus Resource, provider
+  registry, compiler ABI, or runtime binding is introduced;
+- Live Query owns current authorized state, ordinary Collections own durable
+  history, and Reaction/Job plus Action or an external-effect Service own
+  durable external publish attempts without exactly-once overclaim;
+- provider events, subscription authentication, connection lifetime, advisory
+  presence, rate limits, and telemetry are application/provider concerns and
+  cannot authorize Operations; and
+- accepted proof artifacts and reviews remain immutable historical evidence,
+  while permanent maps and current ADR/product/gate/build/public/visual/
+  wayfinder surfaces project the removal.
+
+The repository-aware validator scans 39 Channel-bearing current authority
+files: 21 require projection and 18 are exact domain/ordinary-English
+exemptions whose bytes contain no core capability marker. Seven accepted
+historical evidence files are explicitly exempt and superseded. Negative
+controls reject ten contract regressions, omission of marker-invisible
+ADR-0021, and misclassification of a core semantic-kernel document as benign.
+The collaboration fixture's Company → Space → Channel → Membership → Message
+domain graph remains intact.
+
 ## Acceptance and projection protocol
 
 For each chapter:
