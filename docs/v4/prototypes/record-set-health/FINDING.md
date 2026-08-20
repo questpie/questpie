@@ -801,14 +801,28 @@ The previous entry committed to printing which citation spellings a sweep
 matches, so an absent form is visible as absent rather than found by accident.
 Doing that produced the census below, over every `:NN` in the set.
 
-| spelling                                     | count | swept             |
-| -------------------------------------------- | ----- | ----------------- |
-| code path or bare basename                   | 415   | yes               |
-| range continuation `` `:NN` `` after a start | 273   | **no, until now** |
-| doc path                                     | 106   | yes               |
-| bare `ADR-NNNN:LL`                           | 19    | yes               |
-| git-ref-qualified `feat/v4-beta-09:path:NN`  | 11    | **no**            |
-| record-to-record short form                  | 15    | **no, until now** |
+| spelling                                     | count | swept |
+| -------------------------------------------- | ----- | ----- |
+| range continuation `` `:NN` `` after a start | 593   | yes   |
+| code path, rooted                            | 270   | yes   |
+| bare basename                                | 143   | yes   |
+| doc path                                     | 42    | yes   |
+| suffix path, no root                         | 37    | yes   |
+| bare `ADR-NNNN:LL`                           | 20    | yes   |
+| root-file path (`CONTEXT.md:NN`)             | 15    | yes   |
+| git-ref-qualified `feat/v4-beta-09:path:NN`  | 12    | yes   |
+| record-to-record short form                  | 6     | yes   |
+| `docs/adr/NNNN:LL`, no filename              | 1     | yes   |
+
+**This table replaces a wrong one, and how it was wrong is the point.** The
+first version reported six rows as one census. Only four came from the
+classifier that produced the counts; the git-ref and record-to-record rows were
+transcribed by hand from two earlier sweeps, and one transcription was off by
+one — 11 against 12. The classifier bucketed by the text before `:NN`, so a
+git-ref-qualified citation ending `.tsx` landed in the code-path row, and its
+`OTHER` bucket of 332 absorbed the difference without anyone noticing. Rebuilt
+here with mutually exclusive patterns applied in order, each match consumed, and
+an explicit unclassified remainder.
 
 **Range ends were clean.** 212 resolvable range ends checked; the four flags are
 whole-file or whole-test spans, not errors. That is a real negative result over
@@ -847,3 +861,39 @@ was a second thing that decays for no benefit. They now name the section or the
 record instead. What would overturn this: a reader needing to reconstruct a past
 tree state exactly, for whom the pin is the point — in which case the commit sha
 already recorded beside it is the better anchor.
+
+## Closing the census: the last two forms, and the one that cannot be resolved by reading
+
+**Git-ref-qualified citations are clean.** All twelve `feat/v4-beta-09:path:NN`
+references resolve against that branch at `d9c4743c`, ends of ranges included,
+and the two path-only references to `quality/baselines/beta09-studio-projection.json`
+and `beta09/studio-interface.md` exist there too. They must be checked with
+`git show feat/v4-beta-09:<path>`, never against the working tree — checking
+them against `HEAD` is the same category error as checking an accepted review
+record against `HEAD`.
+
+**The rebuild exposed a form neither census had: a path with its root cut off.**
+Thirty-seven citations are written like `mutation/postgres.ts:173` or
+`relational/query.ts:132` — more than a basename, less than a path. Thirty-two
+resolve to exactly one file. **Five do not, and they are the dangerous ones.**
+`mutation/postgres.ts` exists under both `packages/compiler/src/` and
+`packages/runtime/src/`, as does `relational/query.ts` under `packages/questpie/`
+and `packages/runtime/`. A reader who expands the wrong root lands on real code
+at that exact line: compiler `mutation/postgres.ts:173` is
+`postgresType: postgresType(field.codec)`, runtime's is
+`const session = await pool.reserve()`.
+
+All five mean the runtime file — verified by matching each claim against both
+candidates — and all five are now written with their full path. **This is the
+same confusion the statement-timeout gate already records having made once**,
+when an earlier revision attributed the runtime's cancel to the compiler's
+`executeAbortable`. That entry treated it as one author's slip. It is better
+read as the predictable consequence of a citation form that cannot distinguish
+two files, still in use in five places at the time it was written.
+
+**So the census is closed: every spelling enumerated, every form swept.** The
+useful residue is not the clean result but the ordering — three of the four
+defect classes found across these sweeps were invisible to the matcher rather
+than hidden in the data, and the fourth was a hand-count inside a machine table.
+A sweep's blind spots have been more productive than its findings, which argues
+for spending the first effort on enumerating what a check cannot see.
