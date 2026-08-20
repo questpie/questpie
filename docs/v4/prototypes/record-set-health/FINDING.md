@@ -116,6 +116,22 @@ hazard is the next slice. When BETA-09 accepts with its own v2 PASS record,
 nothing adds it to this job, and the gate will keep passing while verifying a
 record nobody is changing. The fix is a step per accepted record, or a loop over
 the accepted-issue map, and it belongs to whoever accepts the next slice.
+
+**That next slice accepted, and the gap is now live rather than predicted.**
+BETA-09 merged at `21e38b21` carrying
+`docs/v4/implementation/beta09/REVIEW-BACKEND-02.json` — `protocolVersion: 2`,
+`verdict: PASS`, a second accepted record. `.github/workflows/ci.yml:27` still
+runs `--record docs/v4/implementation/beta08/REVIEW-04.json` and nothing else,
+so the job verifies one of two and stayed green throughout. A check pinned to a
+path does not fail when a second path appears; it just stops covering the set.
+
+**The addition would pass today**, which is worth knowing because it makes the
+fix a one-line step rather than an investigation:
+`bun run review:accept:verify -- --record docs/v4/implementation/beta09/REVIEW-BACKEND-02.json`
+exits 0 with "acceptance review verification PASS … ->
+`a7545384aa9c8fd5683152414a87c701a76154d3`". Editing `.github/workflows/` is
+outside what a design record does, so this states the step rather than taking
+it.
 **The check itself was run and BETA-08's record passes**, so the wiring gates a
 check that is green today rather than one nobody has tried:
 `bun run review:accept:verify -- --record docs/v4/implementation/beta08/REVIEW-04.json`
