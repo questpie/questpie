@@ -238,6 +238,32 @@ That tension is the decision an owner has to make, and it is not mine to settle.
 What this record can say is that neither path is cheap and the cheap-looking one
 was cheap only because nobody had priced the ownership.
 
+**A second cost, and this record raised it before I recommended the route
+without answering it.** The decisive-question section above argues ADR-0014
+points away from a route: entry paths "use the same Context, Policy, Operation,
+transaction, error, result, and observation engine"
+(`docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md:38`), and
+"a second route with its own auth handling is a second engine by another name".
+Recommending option 3 without addressing that left the record arguing with
+itself.
+
+**It reconciles, but only partly, and the remainder is a real cost.** ADR-0015
+requires a Route to enter ordinary application behaviour "only through an
+explicit generated Execution transition", which then "uses the accepted Context,
+Policy, Query, Mutation, transaction, observation, and error kernels" (`:36`–`:39`).
+So the _data_ half creates no second engine — the route is a doorway into the
+accepted one. What does sit outside it is the Authority decision itself, which
+happens in the Route handler before the transition, and that is precisely the
+"own auth handling" ADR-0014's sentence warns about.
+
+**So option 3's cost is three things, not two:** the unbuilt mounting and
+dispatch, the absence of an owning slice, and an auth decision evaluated outside
+the Operation engine that ADR-0014 wants entry paths to share. The third is the
+one this record was right about first and I overlooked. It does not reverse the
+recommendation — options 1 and 2 amend an Accepted ADR outright, which is worse
+than sitting in tension with one — but a comparison that omitted it was flattering
+the option I preferred.
+
 **The finding moves weight from 1 to 2 and 3.** BETA-09's criterion 1 requires
 inspection Authority to be _evaluated_, and no path available today lets a Query
 evaluate one. What would overturn this reading: a `QueryContext` that carries
