@@ -171,20 +171,31 @@ export async function evaluateQuestpieCrdtOwnerPolicy(
 		return { ownerRead: false, ownerEdit: false, fields: {} };
 	}
 	let edit = false;
+	const collaborativeEdit = state.collaborative?.editAccess;
+	const collaborativeFieldEdit = state.collaborative?.fieldEditAccess;
 	try {
-		edit = await ownerAccess(
-			app,
-			state,
-			"update",
-			context,
-			record,
-			Object.freeze({}),
-			owner.kind === "collection",
-			database,
-			table,
-			i18nTable,
-			crdtFields,
-		);
+		edit =
+			collaborativeEdit !== undefined
+				? await explicitCollaborativeEdit(
+						app,
+						collaborativeEdit,
+						context,
+						record,
+						database,
+					)
+				: await ownerAccess(
+						app,
+						state,
+						"update",
+						context,
+						record,
+						Object.freeze({}),
+						owner.kind === "collection",
+						database,
+						table,
+						i18nTable,
+						crdtFields,
+					);
 	} catch {
 		edit = false;
 	}
@@ -206,21 +217,57 @@ export async function evaluateQuestpieCrdtOwnerPolicy(
 			: (app.crdtRegistry.globals[owner.key]?.fields ?? {}),
 	)) {
 		const readField = !restricted.has(path);
-		const editField =
-			readField &&
-			edit &&
-			(await checkFieldWriteAccess(
-				path,
-				fieldAccess,
-				context,
-				{ app, db: database },
-				"update",
-				record,
-			));
+		let editField = false;
+		if (readField && edit) {
+			const explicitFieldRule = collaborativeFieldEdit?.[path];
+			editField =
+				collaborativeEdit !== undefined
+					? explicitFieldRule === undefined ||
+						(await explicitCollaborativeEdit(
+							app,
+							explicitFieldRule,
+							context,
+							record,
+							database,
+						))
+					: await checkFieldWriteAccess(
+							path,
+							fieldAccess,
+							context,
+							{ app, db: database },
+							"update",
+							record,
+						);
+		}
 		fields[path] = { read: readField, edit: editField };
 	}
 	return { ownerRead: true, ownerEdit: edit, fields };
 }
+
+async function explicitCollaborativeEdit(
+	app: Questpie<any>,
+	rule: NonNullable<CrdtOwnerCapabilityLike["editAccess"]>,
+	context: CRUDContext,
+	record: Record<string, unknown>,
+	database: Questpie<any>["db"],
+): Promise<boolean> {
+	const result = await executeAccessRule(rule, {
+		app,
+		db: database,
+		session: context.session,
+		principal: context.principal,
+		actor: context.actor,
+		locale: context.locale,
+		row: record,
+		request: (context as CRUDContext & { request?: Request }).request,
+		contextExtensions: context["~contextExtensions"],
+	});
+	return result === true;
+}
+
+type CrdtOwnerCapabilityLike = NonNullable<
+	CollectionBuilderState["collaborative"]
+>;
 
 async function ownerAccess(
 	app: Questpie<any>,

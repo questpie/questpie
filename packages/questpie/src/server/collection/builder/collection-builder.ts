@@ -42,6 +42,7 @@ import {
 import type {
 	CrdtOwnerCapability,
 	CrdtOwnerConfig,
+	CrdtOwnerEditRule,
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { SearchableConfig } from "#questpie/server/modules/core/integrated/search/types.js";
 import {
@@ -603,7 +604,7 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 
 	/** Enable one collaborative aggregate per collection record. */
 	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
-		config?: CrdtOwnerConfig<TAwarenessSchema>,
+		config?: CrdtOwnerConfig<TAwarenessSchema, CollectionSelect<TState>>,
 	): CollectionBuilder<
 		Override<
 			TState,
@@ -621,6 +622,19 @@ export class CollectionBuilder<TState extends CollectionBuilderState> {
 			}),
 			collaborative: {
 				awarenessSchema: config?.awareness,
+				...(config?.access
+					? {
+							editAccess: config.access.edit,
+							fieldEditAccess: Object.fromEntries(
+								Object.entries(
+									(config.access.fields ?? {}) as Record<
+										string,
+										{ edit: CrdtOwnerEditRule }
+									>,
+								).map(([path, access]) => [path, access.edit]),
+							),
+						}
+					: {}),
 			},
 		} as any;
 		return this._derive(newState);

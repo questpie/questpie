@@ -22,6 +22,7 @@ import {
 import type {
 	CrdtOwnerCapability,
 	CrdtOwnerConfig,
+	CrdtOwnerEditRule,
 } from "#questpie/server/modules/core/integrated/crdt/capability.js";
 import type { Override, Prettify } from "#questpie/shared/type-utils.js";
 
@@ -326,7 +327,10 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 
 	/** Enable one collaborative aggregate for this global singleton/scope. */
 	collaborative<TAwarenessSchema extends ZodType | undefined = undefined>(
-		config?: CrdtOwnerConfig<TAwarenessSchema>,
+		config?: CrdtOwnerConfig<
+			TAwarenessSchema,
+			Global<TState>["$infer"]["select"]
+		>,
 	): GlobalBuilder<
 		Override<
 			TState,
@@ -344,6 +348,19 @@ export class GlobalBuilder<TState extends GlobalBuilderState> {
 			}),
 			collaborative: {
 				awarenessSchema: config?.awareness,
+				...(config?.access
+					? {
+							editAccess: config.access.edit,
+							fieldEditAccess: Object.fromEntries(
+								Object.entries(
+									(config.access.fields ?? {}) as Record<
+										string,
+										{ edit: CrdtOwnerEditRule }
+									>,
+								).map(([path, access]) => [path, access.edit]),
+							),
+						}
+					: {}),
 			},
 		} as any;
 		return this._derive(newState);
