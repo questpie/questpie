@@ -158,6 +158,26 @@ The prevention that works is visible in the set already: `owner-decisions.md`
 cites `feat/v4-beta-09:apps/studio/src/app.tsx:28`–`:33`, branch-prefixed, and
 the deletion on `feat/v4` cannot touch it.
 
+**The rename case is the exception, and the sibling who left it alone was right
+on the merits, not merely first.** `beta1-documentation-gap/FINDING.md` calls
+`AMENDMENT.md`'s work-list "a historical record of a past amendment's scope, not
+a live claim". Checked whether that work-list is actually finished rather than
+taking the framing: it prescribed replacing generated server capability
+bracket-key calls with nested paths, and
+`docs/v4/service-route-and-auth-composition.md:54` now reads
+`await mutations.delivery.record({ body })` while
+`apps/docs/content/docs/v4/durable-reactions.mdx:56`, `:61` read
+`ctx.actions.delivery.sendMessage` and `ctx.mutations.messages.recordDelivery`.
+**No `ctx.actions[` or `ctx.mutations[` form survives in any guide.** The
+conversion landed; the guide that vanished had its content cut rather than
+converted. So a stale path in a completed work-list is a record of what was
+targeted, and annotating it — which I briefly did and reverted — adds noise to
+finished work.
+
+That does not extend to the amendment's other half. `QP-COMPOSE-023` and `-024`
+are named by `ADR-0022` and exist in no compiler source, which is recorded
+separately and is not historical.
+
 **The conclusion drawn from that was wrong and is corrected here.** It said
 tamper-detection inside a conforming committed record is untested and that
 testing it would mean committing a bad record. Neither holds. The repository
