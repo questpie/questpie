@@ -114,6 +114,38 @@
 			"reason": "uses Channel only as the collaboration fixture Collection and domain noun"
 		},
 		{
+			"path": "docs/v4/design-fiction/API-INVENTORY.md",
+			"reason": "uses manual channel only as a rejected alternative to Live Query"
+		},
+		{
+			"path": "docs/v4/design-fiction/authorize-with-policy.md",
+			"reason": "uses Channel only as the collaboration fixture Collection and domain noun"
+		},
+		{
+			"path": "docs/v4/design-fiction/getting-started.md",
+			"reason": "uses Channels only as the collaboration fixture Collections and domain nouns"
+		},
+		{
+			"path": "docs/v4/design-fiction/index.md",
+			"reason": "uses Channels only as the collaboration fixture Collections and domain nouns"
+		},
+		{
+			"path": "docs/v4/design-fiction/limits-and-guarantees.md",
+			"reason": "uses subscription channel as an ordinary transport phrase while prescribing complete Live Query results"
+		},
+		{
+			"path": "docs/v4/design-fiction/model-data.md",
+			"reason": "uses Channels only as the collaboration fixture Collections and domain nouns"
+		},
+		{
+			"path": "docs/v4/design-fiction/queries-and-mutations.md",
+			"reason": "uses Channels only as the collaboration fixture Collections and domain nouns"
+		},
+		{
+			"path": "docs/v4/design-fiction/routes-actions-and-integrations.md",
+			"reason": "uses side-channel as an ordinary security term"
+		},
+		{
 			"path": "apps/docs/content/docs/v4/context-and-policy.mdx",
 			"reason": "documents the ordinary collaboration channels Collection"
 		},

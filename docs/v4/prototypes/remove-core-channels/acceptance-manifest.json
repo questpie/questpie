@@ -3,7 +3,7 @@
 	"ticket": "ADR-0025",
 	"proof": "Remove the framework-owned Channel Resource, defineChannel, PostgreSQL Channel event ledger/replay/authority generation, generated Channel client, and runtime.channelCarrier without replacing them with another core event primitive; preserve Live Query, Reaction/Job, ordinary provider composition, historical evidence, and the collaboration domain's ordinary Channel Collection.",
 	"diffBase": "4e1e913c44a53cb3180643df7224a2418d430a08",
-	"reviewOutput": "docs/v4/prototypes/remove-core-channels/REVIEW-03.json",
+	"reviewOutput": "docs/v4/prototypes/remove-core-channels/REVIEW-04.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "4e1e913c44a53cb3180643df7224a2418d430a08",
 		"P4 Live Query implementation evidence": "dfa461162fdb211382708b9ad2a30cf10b564015",
@@ -85,6 +85,11 @@
 			"name": "recorded replacement blocked review",
 			"path": "docs/v4/prototypes/remove-core-channels/REVIEW-02.json",
 			"sha256": "92be36ecc893392a29dd8db92b5feb3e6517272790be0981065f0ba844644a02"
+		},
+		{
+			"name": "recorded user-authorized third blocked review",
+			"path": "docs/v4/prototypes/remove-core-channels/REVIEW-03.json",
+			"sha256": "8c9cf0ecdab27364a3f8059488ae1bc939fe631254221970b3e6c9d63f21620b"
 		}
 	],
 	"verification": [
@@ -93,7 +98,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run docs/v4/prototypes/remove-core-channels/negative-control.ts (10 invalid projections plus omission of marker-invisible Channel-bearing ADR-0021 rejected by broad repository scan)",
+			"command": "bun run docs/v4/prototypes/remove-core-channels/negative-control.ts (10 invalid projections, omission of marker-invisible Channel-bearing ADR-0021, and capability-bearing semantic-kernel document misclassified as benign rejected with exact path and marker)",
 			"result": "PASS"
 		},
 		{
@@ -105,7 +110,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "git diff --name-only 4e1e913c44a53cb3180643df7224a2418d430a08...HEAD (exactly the five candidate proof files plus the two recorded blocked review files under docs/v4/prototypes/remove-core-channels; no authority, public docs, production source, fixture, or pre-existing historical proof record changed)",
+			"command": "git diff --name-only 4e1e913c44a53cb3180643df7224a2418d430a08...HEAD (exactly the five candidate proof files plus the three recorded blocked review files under docs/v4/prototypes/remove-core-channels; no authority, public docs, production source, fixture, or pre-existing historical proof record changed)",
 			"result": "PASS"
 		},
 		{
@@ -121,7 +126,7 @@
 		"Transient delivery, provider subscription authentication, connection lifetime, rate limits, advisory presence, and provider observability are application/provider concerns. They cannot authorize QUESTPIE Operations or become durable application truth.",
 		"The collaboration fixture's Company -> Space -> Channel -> Membership -> Message graph and ordinary channels Collection remain intact; the removed capitalized concept is the framework capability only.",
 		"ADR-0017, ADR-0019, ADR-0021, and the P14 conformance requirement are superseded only for Channel. Their accepted proof heads, manifests, review records, and v3 evidence remain immutable historical evidence rather than being rewritten.",
-		"The repository-aware scan enumerates root authority, every ADR, top-level v4 product documents, public v4 guides, the permanent capability map, current wayfinders, the realtime design-fiction source, and the architecture visual. A broad case-insensitive Channel word boundary finds every occurrence; each path is either in the exact authority projection or an exact justified benign domain/English exemption.",
+		"The repository-aware scan enumerates root authority, every ADR, top-level v4 product document, public v4 guide, design-fiction source, visual, the permanent capability map, and current wayfinders. A broad case-insensitive Channel word boundary finds every occurrence; each path is either in the exact authority projection or an exact justified benign domain/English exemption whose bytes contain no core-capability marker.",
 		"Accepted proof artifacts retain claims reviewed at their pinned heads, while permanent maps and current ADR, product, gate, build, public-documentation, visual, and wayfinder surfaces project the new decision. P15 SLICE.json, P16 QUEUE.json, P14 Channel evidence, and research evidence are explicitly classified and superseded without rewriting them.",
 		"This proof changes only the candidate decision, structured projection, validator, negative controls, manifest, and recorded initial review. It does not project authority before PASS and changes no production code, fixture, public docs, or pre-existing historical evidence."
 	]
