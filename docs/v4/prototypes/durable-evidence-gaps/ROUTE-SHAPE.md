@@ -11,6 +11,32 @@ and opens no slice.
 
 Base: `feat/v4` at `3ef59f71`.
 
+**Standing note: a descope is in flight that changes what this record is for.**
+An uncommitted working-tree change adds `docs/adr/0024-descope-minimal-studio-from-beta-one.md`
+(`Status: Accepted`, superseding ADR-0004 and ADR-0021 where they require a
+minimal Studio path in `4.0.0-beta.1`), deletes `apps/studio/`, and re-scopes
+BETA-09 as a backend-only maintenance-compatibility slice. It is not committed as
+this is written, so everything below still stands as recorded.
+
+**Its factual premise checks out**, verified against `feat/v4-beta-09` rather
+than taken from the draft. The ADR says the browser "could not inspect Collection
+rows, invoke an Operation, or observe a running application" and that finishing
+it would ship "a second presentation of generated JSON already available as files
+and CLI output". The branch's `apps/studio/src/app.tsx:35` fetches
+`/_questpie/studio/artifacts` and renders the JSON it returns; its mount test
+asserts only a same-origin `GET` returning 200 and `text/html`
+(`tests/unit/beta09-studio-mount.test.ts`). Artifacts are generated files, so the
+description is accurate.
+
+**What it would do to this record.** The route shape exists to give Studio a
+reachable, authorized path to operational facts. With no Studio in beta.1 the
+reads lose their consumer, and the three-shape comparison becomes a question for
+whichever release reintroduces an inspection surface rather than for BETA-09. The
+half that survives is the maintenance path — which
+`docs/v4/implementation/beta09/acceptance-shape.md` already separates from the
+inspection path, and which is the half that has a Principal and needs only a
+decision written where a brand check sits.
+
 ## The decisive question, and it has a clean answer
 
 Two shapes are available: expose the inspection reads as **generated
