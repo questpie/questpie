@@ -9,8 +9,15 @@ changes no ADR, public projection, gate, or tracker state.
 
 Base: `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`. **That base is 148
 commits behind current `feat/v4` and every code claim below still holds**:
-`git diff --name-only <base>..HEAD -- packages/ tests/` is empty, so the surface
-this record cites has not moved at all. The distance is documentation work.
+`git diff --name-only <base>..HEAD -- packages/` is empty, so every source file
+this record cites is byte-identical to what it was measured against.
+
+**That claim originally covered `tests/` too and no longer can.** `65643c1c`, the
+Studio descope, changed one test file —
+`tests/type/beta01-generated-contract.test.ts` — by removing the `"apps/studio"`
+workspace entries alongside the deleted application. It is a workspace-list
+edit, not a behavioural one, and this record cites nothing in it. The narrower
+claim is the true one and is what the gate's measurements actually rest on.
 
 ## What this record decides, in three parts
 
