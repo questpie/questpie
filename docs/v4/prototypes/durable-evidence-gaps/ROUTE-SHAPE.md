@@ -129,6 +129,30 @@ a Principal:
    smallest change that makes the superseded decision buildable, and it is the
    same ADR-level widening already named above as the overturning condition for
    the declarative option.
+
+   **Its code cost was traced rather than guessed, and it is smaller than
+   "ADR-level" suggests.** Nothing needs threading: the facts are already bound
+   one frame above the narrowing.
+   `packages/runtime/src/execution/index.ts:280`–`:291` freezes `facts` with
+   `principal`, `authority`, `tenant`, `values`, `signal` and `deadline`, then
+   calls `program.project({ facts, service })` at `:290`. That `project` is
+   emitted by `packages/compiler/src/runtime/application.ts:344` as
+   `({ facts }) => Object.freeze({ data: … })` — it **receives the whole facts
+   object and deliberately keeps only `data`**. The contrast is in the same
+   file: `projectMutation` at `:369` passes `facts` through whole, which is why
+   `MutationContext` has what `QueryContext` lacks.
+
+   So widening is two coordinated edits — the emitted projection at
+   `application.ts:344` and the `QueryContext` interface at
+   `generate.ts:322`–`:325` — over a value already in scope. The expense is the
+   accepted-contract change, not the plumbing.
+
+   **What would overturn that reading:** a recorded reason for the narrowing.
+   I looked and did not find one; if Queries are kept fact-free deliberately —
+   for cacheability, or to keep a Query's output a function of its input alone —
+   that reason outranks the cost estimate and belongs in the ADR that decides
+   this.
+
 3. **The durable route**, the alternative this record weighed.
 
 **The finding moves weight from 1 to 2 and 3.** BETA-09's criterion 1 requires
