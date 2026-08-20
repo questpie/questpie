@@ -267,16 +267,18 @@ postgresTest(
 			authorize: () => true,
 		});
 
-		const refusals = await Promise.all([
-			maintenance.cancelRun({ runId, reason: "", actor }),
-			maintenance.retryRun({ runId, reason: "x".repeat(257), actor }),
-			maintenance.acknowledgeAmbiguity({
+		// These are independent contract probes, not a contention test. Keep their
+		// transactions sequential so the version matrix does not couple pool scheduling.
+		const refusals = [
+			await maintenance.cancelRun({ runId, reason: "", actor }),
+			await maintenance.retryRun({ runId, reason: "x".repeat(257), actor }),
+			await maintenance.acknowledgeAmbiguity({
 				runId,
 				effectName: "deliver-message",
 				reason: "",
 				actor,
 			}),
-		]);
+		];
 		expect(
 			refusals.every(
 				({ outcome, rejectionCode }) =>
