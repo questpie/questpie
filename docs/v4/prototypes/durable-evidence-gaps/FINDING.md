@@ -288,7 +288,7 @@ without limit, no sweeper deletes them — every
 `delete from questpie_internal.*` in `packages/*/src/` targets `change_ledger`,
 `retained_live_query_results`, or a `realtime_*` table — and `audit(runId)` reads
 all of them: `WHERE application_name = $1 AND run_id = $2 ORDER BY requested_at,
-command_id`, with no `LIMIT` (`postgres-maintenance.ts:384`).
+command_id`, with no `LIMIT` (`postgres-maintenance.ts:537`–`:546`).
 
 **Why this matters to the statement-timeout gate next door.** A
 `statement_timeout` on `audit` converts an unbounded read into a _failing_ read
@@ -382,7 +382,7 @@ exercises those hostile cases is the slice that generates the unbounded table.
 plainly.** BETA-09 is unaccepted and blocked on an owner decision. If it is
 descoped, section 6 loses its owner while the gap stays exactly where it is:
 `audit()` is BETA-08 code, accepted and shipping, and
-`postgres-maintenance.ts:384` has no `LIMIT` today regardless of what happens to
+`postgres-maintenance.ts:537`–`:546` has no `LIMIT` today regardless of what happens to
 Studio. **A descope decision must reassign section 6, not close it.** There is
 no Studio row bound in the tree to inherit either — the 100-row page bound the
 public guide describes has no constant anywhere in `packages/`, because Studio

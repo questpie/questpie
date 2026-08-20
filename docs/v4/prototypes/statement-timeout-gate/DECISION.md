@@ -133,7 +133,9 @@ directly, with an abort listener calling `query.cancel()` — against PostgreSQL
 The statement ran its full duration and returned **success**. Neither call site
 races the signal against the query: `packages/runtime/src/mutation/postgres.ts:70`
 and the compiler's `executeAbortable`
-(`packages/compiler/src/postgres-session.ts:65`) both `return await query`.
+(`packages/compiler/src/postgres-session.ts:65`) both await the in-flight query
+in a `try` with the listener removed in `finally` — spelled `return await query`
+in the runtime and `return await executing` in the compiler.
 
 _Both line numbers were wrong here until checked against content._ They pointed
 at `:72` and `:66`, which are the `removeEventListener` and `} finally {` lines
@@ -173,9 +175,9 @@ at checkout.
 It does not rule out setting it per transaction, and **the runtime already does
 exactly this once**: `durableKernelMarkerStatement` is
 `SELECT set_config('questpie.durable_kernel', 'on', true)`
-(`packages/runtime/src/durable/rows.ts:24`), whose third argument `true` means
-transaction-local. Every durable kernel transaction runs it
-(`markDurableKernelTransaction`, `:26`).
+(`packages/runtime/src/durable/rows.ts:138`–`:139`), whose third argument `true`
+means transaction-local. Every durable kernel transaction runs it
+(`markDurableKernelTransaction`, `:141`).
 
 So the shape is: **transaction-scoped `set_config`, on the pattern the durable
 kernel already proves.** No new dependency, no pool ownership, no connection
@@ -197,7 +199,7 @@ pool:
 | `inspect`      | `postgres-kernel.ts:652`                                   |
 | `events`       | `postgres-kernel.ts:694`                                   |
 | effects `read` | `packages/runtime/src/durable/postgres-effects.ts:193`     |
-| `audit`        | `packages/runtime/src/durable/postgres-maintenance.ts:384` |
+| `audit`        | `packages/runtime/src/durable/postgres-maintenance.ts:537` |
 
 A transaction-local `set_config` cannot reach them. They are also, not
 coincidentally, four of the five surfaces BETA-09's inspection contract is built
@@ -270,7 +272,7 @@ managed target before fixing the shape, not only against a container.
 **But "these five are the operator-facing reads … run against a database that is
 already unhealthy" overstated what they are.** Their predicates say otherwise:
 `inspect` (`postgres-kernel.ts:652`), `events` (`:694`), effects `read`
-(`postgres-effects.ts:193`), and `audit` (`postgres-maintenance.ts:384`) are all
+(`postgres-effects.ts:193`), and `audit` (`postgres-maintenance.ts:537`) are all
 `WHERE application_name = $1 AND run_id = $2` — point lookups against one run's
 primary key or its prefix. Only `admit` (`postgres-kernel.ts:357`) is
 `WHERE application_name = $1` with no run scope, and `admit` is the scheduler,

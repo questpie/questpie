@@ -231,7 +231,8 @@ drives is the in-process maintenance API,
 holds — BETA-08 drives it at the kernel, fencing on `event_sequence`. The half
 that fails is the loser's payload. `DurableMaintenanceOutcome` returns
 `commandId`, `outcome`, `rejectionCode`, `stateBefore`, and `stateAfter`, and
-**not** the current version (`postgres-maintenance.ts:28`). An assertion that
+**not** the current version (`postgres-maintenance.ts` `DurableMaintenanceOutcome`,
+a union at `:53` today). An assertion that
 the loser can re-issue from what it received fails, because it must call
 `inspect()` again — a second round trip and a second chance to race.
 
@@ -251,10 +252,13 @@ re-proving the kernel. BETA-08 already owns single-winner election, fencing on
 `event_sequence`; the new content is only that the loser is handed enough to act.
 An earlier revision said the new content was "that the property survives the
 projection" — that was the Studio projection, and with it gone the whole of this
-case is the payload. Re-verified the falsification against the current tree:
-`DurableMaintenanceOutcome` (`packages/runtime/src/durable/postgres-maintenance.ts:28`–`:35`)
-carries `commandId`, `command`, `outcome`, `rejectionCode`, `stateBefore` and
-`stateAfter`, and no field naming a version.
+case is the payload. The re-verification recorded here — that
+`DurableMaintenanceOutcome` carries `commandId`, `command`, `outcome`,
+`rejectionCode`, `stateBefore` and `stateAfter` and no field naming a version —
+was against the **pre-slice** tree and said "current tree" because it was
+current when written. It is superseded by the closure above: the union's settled
+arm carries `version: number`
+(`packages/runtime/src/durable/postgres-maintenance.ts:40`, union at `:53`).
 
 ## Only two of these six survive the re-scope
 

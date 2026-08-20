@@ -611,3 +611,42 @@ from "checked" once the sweep is closed and its count reported. The fix is
 mechanical — a sweep should have two outcomes per item, resolved or open, with
 open items carried forward by name. This one was reported closed with an
 unresolved item inside it.
+
+## A detector for the class the eyeball sweeps kept missing
+
+The previous entry admitted that a sweep item marked "plausible" is unchecked.
+Rather than re-eyeball 238 citations, this pass built the check the earlier ones
+lacked: for every citation, take the backticked identifiers named in the
+surrounding sentence and require at least one to appear within a few lines of
+the cited target. Zero overlap means the citation points somewhere that cannot
+support the sentence, whatever the line number happens to be. It flagged 40 of
+238, and every flag was resolved rather than triaged.
+
+**Most were false positives, and the shape of them is worth knowing.** Range
+citations put the anchor several lines past the start — `:107`–`:126` for
+`DurableMaintenanceAuthority` lands on the doc comment's `/**` — and table rows
+pull identifiers from adjacent cells. A detector tuned tighter would miss real
+defects; this one is meant to over-flag and be resolved by hand.
+
+**Eight were real, and none of them were findable by re-resolving a symbol,**
+because the citation had drifted onto a line that still parses as plausible
+code: `audit` cited to `:384`, which is a `crypto.randomUUID()` inside an
+`INSERT` parameter list, when the audit read is `:537`–`:546`;
+`durableKernelMarkerStatement` cited to `rows.ts:24`, a member of a state union,
+when it is `:138`–`:139`; `acknowledgeAmbiguity`'s event append cited to `:371`,
+which is `rejectionCode: "ALREADY_REQUESTED"` inside `cancelRun`, when it is
+`:524`. A symbol-anchored sweep asks where `audit` went and finds it; it never
+asks whether `:384` was ever `audit`.
+
+**One flag was not a citation problem at all.** Three records asserted that
+`DurableMaintenanceOutcome` carries no version. The slice shipped `version:
+number` on the union's settled arm, and `hostile-cases.md` already recorded that
+closure — while a later paragraph in the same file still said "re-verified the
+falsification against the current tree" and listed the fields without it. The
+closure and the contradiction were nine lines apart in one file, added by me,
+and three sweeps of that file did not surface it because every line it cited
+still resolved.
+
+**What would overturn the detector's value:** a run where the real defects are
+all caught by symbol re-resolution anyway, which would make this an expensive way
+to find nothing. That is testable on the next merge — run both and compare.

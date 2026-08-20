@@ -165,8 +165,9 @@ is the single most consequential thing this screen can get wrong.
 state, its own command receipt, and the current version. It does not learn the
 winning actor.**
 
-`DurableMaintenanceOutcome` (`postgres-maintenance.ts:28`) already returns
-`commandId`, `outcome`, `rejectionCode`, `stateBefore`, and `stateAfter`, and
+`DurableMaintenanceOutcome` (`postgres-maintenance.ts:53`) already returns
+`commandId`, `outcome`, `rejectionCode`, `stateBefore`, and `stateAfter` — and
+`version: number` on the settled arm (`:40`), added by the slice — and
 `VERSION_MISMATCH` is the code a fenced loser receives. So most of this is
 already shipped.
 
@@ -288,8 +289,9 @@ above rather than overturning them.
 `durable_maintenance_commands` carries
 `FOREIGN KEY (application_name, run_id) REFERENCES durable_runs`
 (`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:226`), and
-`lockRun` throws before any write when the run is absent
-(`packages/runtime/src/durable/postgres-maintenance.ts:114`). So **an
+`readRun` — `lockRun` before the slice renamed it — throws before any write
+when the run is absent
+(`packages/runtime/src/durable/postgres-maintenance.ts:163`). So **an
 `AUTHORITY_DENIED` attempt against a run that does not exist cannot be
 recorded at all** — there is no run row for the audit entry to reference.
 

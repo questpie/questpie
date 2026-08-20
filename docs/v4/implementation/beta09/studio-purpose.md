@@ -197,11 +197,13 @@ already tried. The action is two fenced steps: `acknowledgeAmbiguity`, then
 
 **This job does not execute as written, and that is a finding this slice owes.**
 `acknowledgeAmbiguity`'s applied path appends an `ambiguityAcknowledged` event
-(`packages/runtime/src/durable/postgres-maintenance.ts:371`), and every append
+(`packages/runtime/src/durable/postgres-maintenance.ts:524`), and every append
 bumps `event_sequence` (`packages/runtime/src/durable/rows.ts:256`). The run's
-version therefore changes. `DurableMaintenanceOutcome` (`postgres-maintenance.ts:28`)
-carries no version, and `maintenance-decisions.md` only returns one on a
-`VERSION_MISMATCH`. So a caller who reads version V, acknowledges, then retries
+version therefore changes. At this record's base `DurableMaintenanceOutcome`
+carried no version, and `maintenance-decisions.md` returned one only on a
+`VERSION_MISMATCH`. **BETA-09 shipped otherwise**: the union's settled arm
+carries `version: number` (`postgres-maintenance.ts:40`, union at `:53`), so the
+round trip this paragraph predicts is not required. So a caller who reads version V, acknowledges, then retries
 bound to V is _guaranteed_ to be fenced out — the flagship job fails on its
 second step by construction.
 
