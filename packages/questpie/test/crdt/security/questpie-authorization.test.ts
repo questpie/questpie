@@ -143,6 +143,31 @@ const setDocuments = collection("crdt_set_policy_documents")
 		read: () => ({ tags: { containsAll: ["allowed"] } }),
 		update: true,
 	});
+const shapedUpdateDocuments = collection("crdt_shaped_update_documents")
+	.fields(({ f }) => ({
+		content: f
+			.textarea()
+			.required()
+			.default("")
+			.crdt({ format: "text" })
+			.access({ update: false }),
+	}))
+	.collaborative({
+		access: {
+			edit: ({ data }) => data.content !== "owner-locked",
+			fields: { content: { edit: ({ data }) => data.content === "" } },
+		},
+	})
+	.access({
+		read: true,
+		update: ({ input }) =>
+			Boolean(
+				input &&
+				typeof input === "object" &&
+				Object.keys(input).length === 1 &&
+				(input as Record<string, unknown>).content === "",
+			),
+	});
 const textEngine = createDeterministicTextEngine();
 const crdtConfig = {
 	namespace: "crdt-policy-test",
@@ -159,6 +184,7 @@ const registry = createCrdtRegistry({
 		crdt_raw_policy_documents: rawDocuments.build(),
 		crdt_empty_relation_nodes: emptyRelationNodes.build(),
 		crdt_set_policy_documents: setDocuments.build(),
+		crdt_shaped_update_documents: shapedUpdateDocuments.build(),
 	},
 	globals: {},
 });
@@ -187,6 +213,7 @@ describe("QUESTPIE CRDT owner policy", () => {
 					crdt_raw_policy_documents: rawDocuments,
 					crdt_empty_relation_nodes: emptyRelationNodes,
 					crdt_set_policy_documents: setDocuments,
+					crdt_shaped_update_documents: shapedUpdateDocuments,
 				},
 				crdtManifest: manifest,
 			},
@@ -259,6 +286,70 @@ describe("QUESTPIE CRDT owner policy", () => {
 			ownerEdit: false,
 			fields: {},
 		});
+	});
+
+	it("keeps explicit CRDT edit policy independent from ordinary update policy", async () => {
+		const created =
+			await setup.app.collections.crdt_shaped_update_documents.create(
+				{},
+				createTestContext(),
+			);
+		const owner = {
+			kind: "collection" as const,
+			key: "crdt_shaped_update_documents",
+			ownerKey: "crdt_shaped_update_documents",
+			id: created.id,
+			locator: canonicalCrdtCollectionLocator(created.id),
+		};
+		const record = await loadQuestpieCrdtOwnerRecord(setup.app, owner);
+
+		await expect(
+			evaluateQuestpieCrdtOwnerPolicy(
+				setup.app,
+				owner,
+				record!,
+				createTestContext({ accessMode: "user" }),
+			),
+		).resolves.toMatchObject({
+			ownerRead: true,
+			ownerEdit: true,
+			fields: { content: { read: true, edit: true } },
+		});
+		await expect(
+			evaluateQuestpieCrdtOwnerPolicy(
+				setup.app,
+				owner,
+				{ ...record!, content: "locked" },
+				createTestContext({ accessMode: "user" }),
+			),
+		).resolves.toMatchObject({
+			ownerRead: true,
+			ownerEdit: true,
+			fields: { content: { read: true, edit: false } },
+		});
+		await expect(
+			evaluateQuestpieCrdtOwnerPolicy(
+				setup.app,
+				owner,
+				{ ...record!, content: "owner-locked" },
+				createTestContext({ accessMode: "user" }),
+			),
+		).resolves.toMatchObject({
+			ownerRead: true,
+			ownerEdit: false,
+			fields: { content: { read: true, edit: false } },
+		});
+
+		await expect(
+			setup.app.collections.crdt_shaped_update_documents.updateById(
+				{
+					id: created.id,
+					expectedRevision: created.revision,
+					data: { content: "" } as never,
+				},
+				createTestContext({ accessMode: "user" }),
+			),
+		).rejects.toThrow("cannot be changed through ordinary CRUD");
 	});
 
 	it("keeps a nested logically empty OR access predicate denied", async () => {
