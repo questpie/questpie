@@ -264,7 +264,7 @@ So this does not become a general quota engine:
 - No cross-instance token bucket, no leader, and no Redis or broker as the
   authority for share. ADR-0017 names two of these directly — the leader and
   broker-or-cache-as-durable-truth
-  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:89`–`:90`);
+  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:93`–`:94`);
   a cross-instance token bucket is the second of those under another name once
   it holds share authority. A share mechanism that needed one would be reopening
   the ADR. Note the ADR _permits_ a broker to carry notifications (`:47`) — what

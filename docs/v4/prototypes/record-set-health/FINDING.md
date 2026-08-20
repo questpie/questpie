@@ -736,3 +736,52 @@ identifier in their sentence at all, so there was nothing to compare and the
 check reported them clean. It cannot distinguish "verified" from "nothing to
 verify". Both real defects in this sweep were found by reading, not by the
 detector; its value so far is narrowing where to read, not deciding.
+
+## Two citation forms the sweeps could not see, and a live example of why it matters
+
+A concurrent tick is landing ADR-0025, removing Channels from core. At the time
+of this entry its work is committed locally and **not yet on `origin/feat/v4`**
+— `39f06353`, fourteen commits ahead. It rewrites `docs/adr/0017`, `0019`,
+`0021` and `implementation-gates.md`, which this record set cites.
+
+**Three citations corrected two ticks ago were already broken again**, by work
+that has not been published: ADR-0017's two named non-goals moved `:89`–`:90` →
+`:93`–`:94`, ADR-0019's `questpie explain projection` line `:52` → `:57`, and
+ADR-0021's "remote Studio" `:34` → `:38`. All three were correct at
+`origin/feat/v4` and are correct again here against `39f06353`. **If that tick
+amends or resets its unpushed commits, these three are what to recheck** —
+they are pinned to commits no other machine has seen.
+
+**The bare form was never swept.** The doc sweep matched only citations written
+as a path, `` `docs/adr/0021-...md:34` ``. The record set also writes bare
+`ADR-0019:52`, and there are 19 of those. Sweeping them found two defects that
+predate the channel work and were wrong at `origin` too:
+`hostile-cases.md:89` cited `implementation-gates.md:429` for `questpie explain`
+when it was `:442` at origin and is `:437` now, and
+`beta1-documentation-gap/FINDING.md:210` cited ADR-0021 `:37`–`:38` for the
+connected-tracer designation when it was `:39` at origin and is `:43` now.
+Neither had ever been looked at by anything.
+
+**And the identifier detector missed the first of those for a knowable reason.**
+Its token pattern is `[A-Za-z_][A-Za-z0-9_.()]{2,}`, which cannot match a
+backticked identifier containing a space. The claim's anchor is
+`` `questpie explain` ``, so the detector had no name to compare and passed the
+line as clean. Two-word symbols, CLI subcommands and file-plus-flag spellings
+are all invisible to it.
+
+**Judgment call: a sweep must enumerate its own coverage before reporting a
+count.** Every gap found so far has been a form the matcher did not accept —
+short-form code paths, bare ADR numbers, multi-word identifiers — and each was
+discovered by accident rather than by asking what the pattern excludes. The
+cheap discipline is to print the set of citation spellings a sweep matched
+alongside its result, so an absent form is visible as absent. What would
+overturn this: a sweep that misses a defect in a form it _does_ match, which
+would mean the matcher is not the binding constraint.
+
+One correction here was a delayed hazard rather than a fresh error. The previous
+entry rewrote `owner-decisions.md` to note that a stale citation had pointed at
+`:23`, "the release-slice list". ADR-0021's rewrite moved the minimal-Studio
+sentence _onto_ `:23`, so that archaeology now reads as though the original
+citation had been right. It is removed rather than renumbered: a record that
+narrates which line a claim used to cite acquires a second thing that can decay,
+for no benefit the current citation does not already give.

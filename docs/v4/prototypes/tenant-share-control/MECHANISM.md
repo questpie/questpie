@@ -425,7 +425,7 @@ only.
   for share.** ADR-0017 names two of the four directly — "a singleton
   application, scheduler, queue, or realtime leader" and "mandatory Redis,
   broker, Pusher, or cache state as durable truth"
-  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:89`–`:90`).
+  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:93`–`:94`).
   A cross-instance counter or token bucket is the second of those under another
   name once it holds share authority. Share must be a property of the claim
   predicate, decided in PostgreSQL, or it is not correct under ten instances.

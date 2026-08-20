@@ -207,7 +207,7 @@ reaching for a cut.
   the canonical application", `:53` has example review check "one connected
   Barbershop domain", and
   `.agents/skills/questpie-v4/references/public-documentation.md:9` repeats it
-  as "complete Barbershop examples". But ADR-0021:37–38 designates the
+  as "complete Barbershop examples". But ADR-0021:43 designates the
   **collaboration/publishing fixture** the primary connected tracer, and
   `fixtures/` holds `archive` and `collaboration` — **there is no barbershop
   fixture**.

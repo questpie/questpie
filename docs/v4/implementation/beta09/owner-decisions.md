@@ -33,13 +33,13 @@ The owner also asked that a managed offering — hosting plus Studio, serving
 several projects, paired with the code — stay possible, while being explicitly
 out of scope now: "lets just make it possible to make the app as this brings too
 much complexity". That is consistent with ADR-0021, which places "remote Studio"
-outside beta.1 (`docs/adr/0021-slice-the-beta-one-release.md:34`). The second
-half of this sentence used to read "while keeping minimal Studio inside it" and
-cited `:23`, which is the release-slice list and never said that. ADR-0021 now
-records the opposite at `:19`–`:21`: beta.1 "was accepted here with a minimal
-Studio path. ADR-0024 removes that path from the release while preserving the
-compiler, migration, Runtime, direct, Fetch/client, watch, recovery and worker
-vertical." Both Studio forms are outside beta.1; only the reasons differ. Out of scope is not the same as foreclosed,
+outside beta.1 (`docs/adr/0021-slice-the-beta-one-release.md:38`). The second
+half of this sentence used to read "while keeping minimal Studio inside it",
+which ADR-0021 does not say anywhere: at `:23`–`:25` it records that beta.1
+"was accepted here with a minimal Studio path. ADR-0024 removes that path from
+the release while preserving the compiler, migration, Runtime, direct,
+Fetch/client, watch, recovery and worker vertical." Both Studio forms are
+outside beta.1; only the reasons differ. Out of scope is not the same as foreclosed,
 and the next section is about the difference.
 
 ## The consequence all three answers share
