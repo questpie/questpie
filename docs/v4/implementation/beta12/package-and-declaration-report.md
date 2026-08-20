@@ -19,6 +19,16 @@ directory before compiling and vendoring private bytes. Turbo hashes that build
 producer plus the compiler and Runtime sources, so a cache restore cannot put a
 removed private module back into the tarball. A stale-file probe was deleted by
 the build, and a clean Linux checkout reproduced the committed tarball digest.
+The acceptance manifest records both exact commands at evidence head
+`502ea522`.
+
+The build does not race Turbo's private workspace tasks. The derived full task
+graph has no prerequisites for `questpie#build`; `@questpie/runtime#build`
+depends on it, and `@questpie/compiler#build` depends on both. A filtered public
+build schedules only `questpie#build`, whose sibling compilation calls are
+synchronous. A graph change that removes those reverse edges would overturn
+this judgment and must fail the recorded graph check before release evidence is
+accepted.
 
 The connected PostgreSQL release test passes the same tarball to both existing
 fixture harnesses. In packed mode their active `.questpie/generated` output is

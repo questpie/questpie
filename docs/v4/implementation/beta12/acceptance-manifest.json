@@ -3,7 +3,7 @@
 	"ticket": "#299",
 	"proof": "BETA-12 cuts one checked questpie@4.0.0-beta.1 package whose installed CLI builds the archive fixture, applies its committed migrations idempotently, starts and drains the generated Runtime, and drives both collaboration and archive connected tracers from the same tarball against local PostgreSQL 17 without exposing private compiler or Runtime package surfaces.",
 	"diffBase": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
-	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-04.json",
+	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-05.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
 		"P14 projection in reviewed ancestry": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d",
@@ -54,9 +54,26 @@
 			"name": "third BETA-12 acceptance review",
 			"path": "docs/v4/implementation/beta12/REVIEW-RC-03.json",
 			"sha256": "163d1808de3c9b8aef5d41e3d846218a0b2548c45655794f275c99b2785c9e3d"
+		},
+		{
+			"name": "fourth BETA-12 acceptance findings",
+			"path": "docs/v4/implementation/beta12/REVIEW-RC-04.json",
+			"sha256": "056f7c48dff451197c39777db86d782af560564e19cc1be502bf121a4b020c3e"
 		}
 	],
 	"verification": [
+		{
+			"command": "at 502ea52284b63ce868b1e8bbac48203394b57887: touch packages/runtime/dist/beta12-stale-probe.js && bun run scripts/build-public-package.ts && test ! -e packages/runtime/dist/beta12-stale-probe.js && test ! -e packages/questpie/dist/internal/runtime/beta12-stale-probe.js; then bun pm pack --destination <fresh temporary directory> --ignore-scripts --quiet in packages/questpie produced sha256 6a4a002966630ad7652cb56fd4b59ce509981d096fbf027580fc123168abdfb1",
+			"result": "PASS"
+		},
+		{
+			"command": "at 502ea52284b63ce868b1e8bbac48203394b57887: probe=$(mktemp -d) && git archive 502ea52284b63ce868b1e8bbac48203394b57887 | tar -x -C \"$probe\" && docker run --rm -v \"$probe:/workspace\" -w /workspace oven/bun:1.3.14-debian sh -lc 'bun ci && bun run scripts/build-public-package.ts && mkdir /tmp/pack && cd packages/questpie && bun pm pack --destination /tmp/pack --ignore-scripts --quiet && test \"$(sha256sum /tmp/pack/questpie-4.0.0-beta.1.tgz | cut -d\" \" -f1)\" = \"6a4a002966630ad7652cb56fd4b59ce509981d096fbf027580fc123168abdfb1\"'",
+			"result": "PASS"
+		},
+		{
+			"command": "at 502ea52284b63ce868b1e8bbac48203394b57887: bunx turbo run build --dry=json, selecting questpie/compiler/runtime task ids, showed questpie#build dependencies [], @questpie/runtime#build dependencies [questpie#build], and @questpie/compiler#build dependencies [@questpie/runtime#build, questpie#build]",
+			"result": "PASS"
+		},
 		{
 			"command": "bun run scripts/build-public-package.ts && bun run release -- --dry-run twice (clean-output build, retry-stable checked tarball, clean install, public-root import, private negative imports, and installed packed build)",
 			"result": "PASS"
