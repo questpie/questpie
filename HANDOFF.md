@@ -796,6 +796,21 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `ctx.actions` there is not merely explained through a deferred capability,
      it is **not a member of `ReactionContext`**. That guide's example is also
      missing the required `output`.
+     **The structural factories are clean except one example, and that one
+     contradicts the guides' own prose.** `defineCollection` requires
+     `constraints` — `packages/questpie/src/index.ts`, `constraints: Constraints
+& ValidateFieldReferences<Fields, Constraints>`, no `?`. Eleven of the
+     twelve `defineCollection` examples across the guides pass it. The twelfth,
+     `semantic-kernels-and-public-surface.mdx:20`–`:27`, does not, so it does not
+     compile. `data-and-queries.mdx:9` states the rule the example breaks: "A
+     regular Collection must have exactly one named primary-key Constraint."
+     Docs against docs, with the tree siding with the prose — a different shape
+     from every other finding here, and the only one that is an isolated slip
+     rather than a contract mismatch.
+     `defineContext` (`name`, `input`, `resolve`), `defineSeed` (`name`,
+     `steps`, `dependsOn?`) and `defineService` (`name`, `lifetime`, `effect`,
+     `create`, `dependencies?`, `dispose?`) all match their guide examples
+     exactly.
      **The client and app surface is clean, checked the same way.**
      `GeneratedApp` is `fetch`, `execution`, `close`; `GeneratedClientScope` is
      `context`, `queries`, `mutations`, `withContext`
