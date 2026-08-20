@@ -19,18 +19,31 @@ import { useEffect, useState } from "react";
 import questpiePackage from "../../../../../packages/questpie/package.json";
 
 const GITHUB_URL = "https://github.com/questpie/questpie";
-const EARLY_ACCESS = "/autopilot#cta";
+const CREATE_APP = "/docs/learn/first-app";
 
-export type MarketingPage = "home" | "autopilot" | "framework" | "docs";
+export type MarketingPage =
+	| "home"
+	| "autopilot"
+	| "framework"
+	| "docs"
+	| "works";
 
 const LINKS: { id: MarketingPage; label: string; href: string }[] = [
-	{ id: "autopilot", label: "Autopilot", href: "/autopilot" },
 	{ id: "framework", label: "Framework", href: "/framework" },
+	{ id: "autopilot", label: "Autopilot", href: "/autopilot" },
 	{ id: "docs", label: "Docs", href: "/docs" },
 ];
 
+/* Works is footer-only by decision: the root is a thesis plus two doors at
+ * ~60/40 (specs/questpie-com-v2/00-DECISIONS.md §1, §3), and a services page in
+ * the nav would make it a third. */
+const FOOTER_LINKS: typeof LINKS = [
+	...LINKS,
+	{ id: "works", label: "Works", href: "/works" },
+];
+
 /** The routes that carry the mesh, the grain and the forced dark theme. */
-const MARKETING_PATHS = new Set(["/", "/framework", "/autopilot"]);
+const MARKETING_PATHS = new Set(["/", "/framework", "/autopilot", "/works"]);
 
 export function isMarketingPath(pathname: string): boolean {
 	return MARKETING_PATHS.has(pathname.replace(/(.)\/$/, "$1"));
@@ -38,7 +51,7 @@ export function isMarketingPath(pathname: string): boolean {
 
 function Lockup({ fontSize, size }: { fontSize: number; size: number }) {
 	return (
-		<Link className="lockup" to="/">
+		<Link aria-label="QUESTPIE home" className="lockup" to="/">
 			{/* The bare mark carries no <text>, so an <img> is safe: nothing in it
 			    depends on a font the page stylesheet cannot reach. alt is empty
 			    because the wordmark beside it already names the link. */}
@@ -138,8 +151,8 @@ function MarketingNav({ page }: { page: MarketingPage }) {
 					>
 						GitHub
 					</a>
-					<a className="btn p" href={EARLY_ACCESS}>
-						Get early access
+					<a className="btn p" href={CREATE_APP}>
+						Create an app
 					</a>
 					<button
 						aria-controls="marketing-nav-menu"
@@ -189,7 +202,7 @@ function MarketingFooter() {
 				<Lockup fontSize={17} size={22} />
 				<span>Open source. Self-hosted. MIT.</span>
 				<nav>
-					{LINKS.map((link) => (
+					{FOOTER_LINKS.map((link) => (
 						<a href={link.href} key={link.id}>
 							{link.label}
 						</a>

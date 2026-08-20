@@ -1,25 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 
 import { MarketingChrome } from "@/components/marketing/chrome";
-import { FrameworkPage } from "@/components/marketing/framework";
+import { WorksPage } from "@/components/marketing/works";
 import { generateLinks, generateMeta, siteConfig } from "@/lib/seo";
 
-const TITLE = "Framework: model the application, keep its parts aligned";
+const TITLE = "White-label engineering, from the team that builds QUESTPIE";
 const DESCRIPTION =
-	"QUESTPIE turns collections into a PostgreSQL schema, typed REST API and typed client, then gives routes, hooks and jobs the same application context.";
+	"Contract engineering in your repo, your stack and under your name. Headless CMS builds, operator tools, full stack and infrastructure. EU hours, English, invoiced from an EU company.";
 
-export const Route = createFileRoute("/framework")({
-	component: Framework,
+export const Route = createFileRoute("/works")({
+	component: Works,
 	head: () => ({
 		links: generateLinks({
-			url: `${siteConfig.url}/framework`,
+			url: `${siteConfig.url}/works`,
 			includeIcons: false,
 			includePreconnect: false,
 		}),
 		meta: generateMeta({
 			title: TITLE,
 			description: DESCRIPTION,
-			url: `${siteConfig.url}/framework`,
+			url: `${siteConfig.url}/works`,
 		}),
 	}),
 	headers: () => ({
@@ -30,10 +30,10 @@ export const Route = createFileRoute("/framework")({
 	gcTime: 2 * 60 * 60_000,
 });
 
-function Framework() {
+function Works() {
 	return (
-		<MarketingChrome page="framework">
-			<FrameworkPage />
+		<MarketingChrome page="works">
+			<WorksPage />
 		</MarketingChrome>
 	);
 }
