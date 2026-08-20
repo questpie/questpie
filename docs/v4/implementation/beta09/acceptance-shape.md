@@ -416,6 +416,21 @@ here rather than left to the implementing slice to rediscover.
 19. **Studio build-size and query-latency baselines are recorded**, with each
     budget derived mechanically as `ceil(observed × multiplier / quantum) ×
 quantum` and the derivation asserted in-test, the way BETA-08's were.
+    **Criterion 19's subject is out of scope and its method is what replaced it.**
+    The re-scope substituted this budget rather than deleting it. `QUEUE.json` now
+    requires a "maintenance command latency baseline recorded" and lists a
+    "maintenance command latency measurement manifest" as performance evidence. No
+    record in this set mentions maintenance command latency anywhere, so the
+    replacement budget has no criterion.
+
+The derivation rule carries over unchanged, and it is real rather than
+aspirational: `tests/load/beta08-worker-contention.ts:22` onward computes
+`Math.ceil((referenceObservedMs * multiplier) / roundUpQuantumMs)`, the shape
+BETA-08 asserted in-test. A latency baseline derived any other way — a number
+chosen and then justified — is the failure BETA-08's first round was blocked
+for. Read criterion 19 as: the subject is now maintenance command latency, and
+the mechanical derivation is the part that survives.
+
 20. **No secret or raw-payload snapshot enters any baseline or golden.** This is
     the performance-evidence counterpart of the disclosure decision: a
     build-size or latency artifact must not embed a result body or a receipt.
