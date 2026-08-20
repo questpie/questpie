@@ -236,6 +236,34 @@ case is the payload. Re-verified the falsification against the current tree:
 carries `commandId`, `command`, `outcome`, `rejectionCode`, `stateBefore` and
 `stateAfter`, and no field naming a version.
 
+## Only two of these six survive the re-scope
+
+`QUEUE.json` now lists BETA-09's hostile cases as: denial before row lock,
+invalid and oversized reason, maintenance Authority denial, typed concurrent
+command winner, same-version different-checksum refusal, and v4 to v5 protocol
+upgrade.
+
+**Cases 5 and 6 map onto that list.** Cases 1 through 4 — foreign Principal,
+redacted envelope, CLI/Studio byte parity, stale build — are inspection and
+Studio properties, which the re-scope made non-goals. They stay as written and
+are history, for the same reason the rest of the Studio material does.
+
+**Four entries on the new list have no case here**, and their material is
+already in the set without a falsification attached:
+
+| New hostile case                        | Where its substance is                                               | What is missing                                             |
+| --------------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------- |
+| denial before row lock                  | case 5's added clause above                                          | nothing — it is the clause the re-scoped red test forced    |
+| invalid and oversized reason            | `internal-protocol-v5.md` bounded reason, `maintenance-decisions.md` | a falsification: what fails today for an over-length reason |
+| same-version different-checksum refusal | `internal-protocol-v5.md`, the `ensure` note                         | a falsification, and it is already known to cost real time  |
+| v4 to v5 protocol upgrade               | `internal-protocol-v5.md` migration steps and measured DDL           | a falsification against a v4 database                       |
+
+**Writing those three as cases is not done here.** This record's shape is an
+assertion, a falsification against unrepaired code, and what the case forces
+elsewhere; three of those need a v4 database to falsify against, which is
+implementation work rather than a reading of the tree. What this section does is
+stop the next reader assuming the six cases below are the slice's six.
+
 ## What this inventory changes elsewhere
 
 - `internal-protocol-v5.md` gains `AUTHORITY_DENIED` alongside `REASON_INVALID`
