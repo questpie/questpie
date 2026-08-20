@@ -1,0 +1,19 @@
+{
+	"id": "beta12-release-gate",
+	"kind": "micro",
+	"schedule": "manual",
+	"command": ["bun", "test", "tests/performance/beta12-release.test.ts"],
+	"budgetOwner": "BETA-12",
+	"metrics": {
+		"packedReleaseDryRunMs": {
+			"direction": "max",
+			"budget": 15000,
+			"unit": "ms"
+		},
+		"implementationSliceOwners": {
+			"direction": "min",
+			"budget": 12,
+			"unit": "count"
+		}
+	}
+}

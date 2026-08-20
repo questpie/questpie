@@ -1,6 +1,13 @@
 {
 	"$schema": "https://turborepo.com/schema.json",
 	"ui": "tui",
+	"globalDependencies": [
+		"scripts/build-public-package.ts",
+		"packages/compiler/src/**",
+		"packages/compiler/tsconfig.json",
+		"packages/runtime/src/**",
+		"packages/runtime/tsconfig.json"
+	],
 	"tasks": {
 		"build": {
 			"dependsOn": ["^build"],

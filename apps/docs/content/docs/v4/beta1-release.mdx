@@ -1,0 +1,73 @@
+---
+title: Install the beta.1 application server
+description: Build, migrate, and run the first QUESTPIE v4 backend from the published package.
+kind: guide
+---
+
+Install the beta.1 package in a Bun application:
+
+```bash
+bun add questpie@4.0.0-beta.1
+```
+
+The `questpie` package contains the structural authoring API, generated
+declarations, compiler, Runtime kernels, and the `questpie` command. You do not
+install `@questpie/compiler` or `@questpie/runtime`; those are private
+implementation modules bundled inside the public package.
+
+## Build and migrate
+
+Compile the application and its immutable Runtime bundle:
+
+```bash
+bunx questpie build
+```
+
+The command reads `questpie.json`, the application source, its lockfile, and
+committed migrations. It writes `.questpie/generated` only after the complete
+contract compiles and type-checks. `questpie check` performs the same validation
+without replacing generated output.
+
+Apply reviewed committed migrations explicitly:
+
+```bash
+: "${DATABASE_URL:?Set DATABASE_URL in the deployment environment}"
+bunx questpie migration apply
+```
+
+Migration apply verifies the provider profile, checksums, migration order,
+schema fingerprint, and internal protocol. Runtime startup never applies a
+migration.
+
+## Start the standalone Runtime
+
+Supply a stable resume-token signing key containing at least 32 bytes as hex,
+then start the generated application:
+
+```bash
+: "${DATABASE_URL:?Set DATABASE_URL in the deployment environment}"
+export QUESTPIE_REALTIME_HMAC_KEY="$(openssl rand -hex 32)"
+export PORT=3000
+bunx questpie start
+```
+
+The beta.1 standalone server binds network requests to the anonymous Principal.
+Use generated direct Execution for trusted scripts that need a user or service
+Principal. Credential Auth and raw Route integration are later capabilities;
+beta.1 does not infer a user from headers or cookies.
+
+The process becomes ready only after its generated bundle, schema, migrations,
+internal protocol, realtime state, and durable work are compatible. `SIGINT`
+and `SIGTERM` drain the application and close it idempotently.
+
+## Know the beta.1 boundary
+
+Beta.1 includes Collections, Services, Context and Policy, Queries, Mutations,
+generated direct and Fetch/client execution, Live Query, durable Reaction,
+maintenance compatibility, multi-instance PostgreSQL correctness, and the
+archive portability fixture.
+
+It does not include Studio, Action authoring, credential Auth, raw Routes,
+generic Jobs or Workflows, Channel, File bytes, Search, OpenAPI, MCP, optional
+cache or brokers, split Runtime roles, a provider abstraction, non-B-tree
+indexes, or an RLS claim. These absences do not create placeholder APIs.

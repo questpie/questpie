@@ -1,5 +1,6 @@
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { extname, join, relative, sep } from "node:path";
+import { extname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -44,6 +45,16 @@ import {
 	projectManifest,
 	projectMemberContributions,
 } from "./schema";
+
+function runtimeBundleEntry(specifier: string, filename: string): string {
+	try {
+		return fileURLToPath(import.meta.resolve(specifier));
+	} catch {
+		const vendored = resolve(import.meta.dir, "../runtime", filename);
+		if (existsSync(vendored)) return vendored;
+		throw new TypeError(`QUESTPIE Runtime bundle is unavailable: ${specifier}`);
+	}
+}
 import type { SchemaProjectionV1 } from "./schema";
 import type {
 	ApplicationConfiguration,
@@ -465,11 +476,13 @@ export async function createArtifacts(
 			compilation.resources,
 		);
 	generated["internal/application.d.ts"] = renderApplicationDeclaration();
-	const runtimeCoreBundleEntry = fileURLToPath(
-		import.meta.resolve("@questpie/runtime/bundle-core"),
+	const runtimeCoreBundleEntry = runtimeBundleEntry(
+		"@questpie/runtime/bundle-core",
+		"bundle-core.js",
 	);
-	const runtimeRealtimeBundleEntry = fileURLToPath(
-		import.meta.resolve("@questpie/runtime/bundle-realtime"),
+	const runtimeRealtimeBundleEntry = runtimeBundleEntry(
+		"@questpie/runtime/bundle-realtime",
+		"bundle-realtime.js",
 	);
 	const readinessEntry = join(
 		import.meta.dir,
