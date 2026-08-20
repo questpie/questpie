@@ -230,6 +230,22 @@ fairness by serializing that tenant to one concurrent run** — it protects the
 small tenant by crippling the large one, which is the opposite of what a share
 control is for.
 
+**The cap's half of that sentence has since weakened, and the conclusion
+survives without it.** `MECHANISM.md` measured the in-flight axis and handed
+BETA-10 an open question rather than a requirement: whether a per-tenant cap
+binds at all below ten instances, given `packages/runtime/src/durable/worker.ts`
+claims and runs one attempt at a time (`:286`, `:338`), so per-tenant in-flight
+is bounded by worker count rather than by `claimBatch`. The index the cap was
+argued to need also turned out optional — the shipped
+`durable_runs_lease_idx` answers the count at 0.083 ms.
+
+That does not rescue group partitioning. The contrast above needs only that
+**fair admission alone** buys share without serializing anyone, which it does:
+`ORDER BY turn` puts every tenant's first eligible run ahead of any tenant's
+second. So read this paragraph as fair admission carrying the argument and the
+cap as a possible addition BETA-10 decides, not as two mechanisms that are
+jointly necessary.
+
 Decide fairness now: it is a defect in an accepted table. Hold group
 partitioning as a separate later decision. The compatible seam is that the
 claim predicate should partition on a _key column_ rather than hardcoding
