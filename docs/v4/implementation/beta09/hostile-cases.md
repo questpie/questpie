@@ -190,14 +190,23 @@ the value came from the application's own module, not a decision about this
 actor and this run. Any branded Principal succeeds, so an assertion that the
 outcome is a denial fails because the outcome is `applied`.
 
-**This case forces an addition the v5 record did not list.** The rejection
-union has six members and none of them is an Authority denial
-(`postgres-maintenance.ts:20`), and `durable_command_rejection_known` admits
-exactly those six (`internal-protocol-v4-sql.ts:232`). If a denial is to be
-audited — and it must be, since the audit's purpose is that every attempt is
-recorded, applied or rejected — then `AUTHORITY_DENIED` joins both the union
-and the CHECK alongside `REASON_INVALID`. `internal-protocol-v5.md` is amended
-accordingly.
+**This case forces an addition the v5 record did not list.** At this record's
+base the rejection union had six members and none was an Authority denial, and
+`durable_command_rejection_known` admitted exactly those six — still the v4
+shape at `internal-protocol-v4-sql.ts:232`–`:236`. If a denial is to be audited
+— and it must be, since the audit's purpose is that every attempt is recorded,
+applied or rejected — then `AUTHORITY_DENIED` joins both the union and the CHECK
+alongside `REASON_INVALID`. `internal-protocol-v5.md` is amended accordingly.
+
+**The forced addition shipped.** The union now carries eight members including
+both (`packages/runtime/src/durable/postgres-maintenance.ts:20`–`:28`), and the
+v5 CHECK admits exactly those eight
+(`packages/compiler/src/schema/postgres/internal-protocol-v5-sql.ts:16`–`:18`,
+catalogued at `internal-protocol-v5-catalog.ts:29`).
+`internal-protocol-v5.md:77` and `:202`–`:211` already record it. This sentence
+was the last one in the set still asserting the six-member state in the present
+tense, and a count is what carried it past three citation sweeps: every line it
+cites still resolves.
 
 Auditing a denial records the denied caller's identity against a run they
 cannot see. That is correct: the audit is not visible to them, and an audit

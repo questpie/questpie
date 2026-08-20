@@ -24,10 +24,15 @@ write compares the current attempt and the lease token."
 `SELECT 1 AS held FROM questpie_internal.durable_runs WHERE application_name = $1
 AND run_id = $2 AND current_attempt_id = $3 AND lease_token_digest = $4`.
 
-**Driven by nothing.** All five `"fenced"` assertions in
+**Driven by nothing.** All six `"fenced"` assertions in
 `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces —
-`succeed`, `fail`, `cancel`, `heartbeat` at `:200`–`:217`, and the
-`succeed`-versus-`cancel` race at `:440`. `DurableLeaseLost` appears in no test.
+`succeed`, `fail`, `cancel`, `heartbeat` at `:200`–`:217`, the
+`succeed`-versus-`cancel` race at `:440`, and a second `succeed` fence at `:542`
+inside the cancel-reap test at `:490`. `DurableLeaseLost` appears in no test.
+An earlier revision of this entry said "all five" and enumerated only the first
+five; the file held six then too, so that was a miscount at authoring rather
+than drift. The substance is unchanged and slightly strengthened: the sixth is
+another kernel surface, not the effect fence.
 
 **The falsification.** Take a claim, let the lease expire, let another worker
 claim it, then invoke an effect on the _stale_ claim. Assert the ledger refuses

@@ -490,7 +490,12 @@ distribution.
    client-side must be shown to actually stop server-side — assert the backend
    is gone from `pg_stat_activity`, not merely that the client promise
    rejected. This is the assertion that distinguishes a real cancel from a
-   client giving up, and nothing in the runtime asserts it today.
+   client giving up, and no _test_ in the tree makes it. The behaviour itself is
+   already measured in "Measured, not asserted" above — including the
+   `pg_cancel_backend` control — so this item is asking for a regression test,
+   not for a first measurement. An independent re-run on Bun 1.3.14 against
+   PostgreSQL 17 reproduced it: four seconds after `query.cancel()` the backend
+   was still `active`, and the client promise had still not settled.
 7. **Report what the change would have killed.** Run the measured tail against
    the proposed bound and state how many observed statements would now fail.
    If that number is not zero, the bound is wrong or the query is.
