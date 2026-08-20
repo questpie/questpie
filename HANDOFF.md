@@ -27,6 +27,11 @@ Accepted BETA-08 executes the Reaction that BETA-06 accepts through the shared
 durable kernel: run, physical attempt, opaque lease fence, append-only history,
 stable effect ledger, durable cancellation, and an audited maintenance surface,
 at reviewed head `d0aedd54`, evidence head `78e81b67`, and merge `8389cf5f`.
+Accepted ADR-0025 removes the framework-owned Channel Resource, generated
+surface, PostgreSQL event ledger/replay, presence model, and carrier binding.
+Live Query remains the built-in current-state mechanism; transient fanout is
+ordinary application/provider integration. The collaboration fixture's
+`Channel` Collection remains a domain noun.
 
 Fixed accepted proof authority:
 
@@ -72,8 +77,10 @@ Fixed accepted proof authority:
 | #295 BETA-08 evidence                | `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce` |
 | #317 P22R1 reviewed implementation   | `4463708e56a72e26f65b8d1d3a2c5d0bf5cd6d4b` |
 | #317 P22R1 evidence                  | `27d6f4f9`                                 |
+| ADR-0025 Channel removal reviewed    | `ed0dfa7c59e6132a26cc1adaa500ec200ad911c8` |
+| ADR-0025 acceptance evidence         | `053690f6`                                 |
 
-ADR-0008 through ADR-0024 and their accepted workbench/public projections are
+ADR-0008 through ADR-0025 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
 commands, measurements, and remaining implementation edges live in
 `docs/v4/research/framework-api-atlas/PROOF-MAP.md` and each proof acceptance
@@ -84,8 +91,10 @@ The accepted surface has one scalar, relational, durable, and Fetch kernel with
 restricted projections; seven generated executable factory kinds; Package and
 client isolation; PostgreSQL as the only hard durable dependency; Policy as the
 only authored authorization model; B-tree-only public Index; and no RLS claim.
-Optional cache, wake broker, Channel carrier, and byte storage are named
-capabilities, never durable authority or a provider matrix.
+Optional cache, wake broker, and byte storage are named capabilities, never
+durable authority or a provider matrix. Channels are not a framework
+capability; transient connected-client signals belong to application/provider
+code.
 
 ## Workspace and preservation
 

@@ -368,9 +368,10 @@ reconstruct in a browser:
 - Context or membership revocation;
 - server-code and serializer changes.
 
-Typed ephemeral Channels, durable application event streams, and collaborative
-documents are different jobs. They do not replace a Live Query and do not share
-its latest-result delivery rules.
+Transient provider signals, durable application event streams, and
+collaborative documents are different jobs. They do not replace a Live Query
+or become another QUESTPIE realtime Resource. Provider signals are composed by
+application code and do not share Live Query's latest-result delivery rules.
 
 ## Slow consumers and hot data
 

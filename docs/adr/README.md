@@ -30,6 +30,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 22. [API Ergonomics and Operation Projection](./0022-freeze-api-ergonomics-and-operation-projection.md)
 23. [Post-Commit Operation Outcome](./0023-freeze-post-commit-operation-outcome.md)
 24. [Descope Minimal Studio from Beta.1](./0024-descope-minimal-studio-from-beta-one.md)
+25. [Remove Channels from the Core](./0025-remove-channels-from-core.md)
 
 ## Open decisions
 
@@ -41,15 +42,18 @@ Envelope, minimal Studio, Service lifetime, raw Route/Fetch mounting, and Auth
 composition contracts are accepted. Lifecycle job mapping, explicit Job
 acceptance, and the shared Job/Reaction/Workflow durable kernel are also
 accepted. Ten-instance correctness, PostgreSQL-only durable authority,
-discardable cache/wake accelerators, multiplexed SSE plus Fetch/POST, and typed
-Channel ownership are accepted by ADR-0017. File metadata/byte separation, the
+discardable cache/wake accelerators, and multiplexed SSE plus Fetch/POST are
+accepted by ADR-0017. File metadata/byte separation, the
 filesystem and S3-compatible byte seam, authorized Search projection, and
 compiler-owned OpenAPI/MCP/skill outputs are accepted by ADR-0018. ADR-0019
 freezes the shared semantic kernels, named factories, structural/app/package/
-client exports, Channel/Live Query spelling, and optional capability bindings.
+client exports, Live Query spelling, and optional capability bindings.
 ADR-0020 accepts the portable agent router and review protocol, Bun/TypeScript
 baseline, measured quality lanes, PostgreSQL CI, Knip ratchet, performance
 harness, and guarded release path.
+ADR-0025 removes the framework-owned Channel Resource, generated surface,
+PostgreSQL event ledger/replay, presence model, and carrier binding while
+preserving the collaboration fixture's ordinary `Channel` Collection.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

@@ -41,7 +41,6 @@ Route capability, never a Mutation or Policy capability.
 | Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
 | Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
 | Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
-| Deliver ephemeral connected-client messages    | Channel     | Non-durable transport fan-out; durable truth remains in Operations      |
 
 This map is the permanent v4 guide for work ownership. The v3 hook crosswalk is
 historical evidence, not a public lifecycle API. Reaction, Job, and Workflow
@@ -53,7 +52,7 @@ Use `"questpie"` for stable structural builders and grammars, including
 `codec`, `field`, `value`, `shape`, `constraint`, `relation`, `dataQuery`,
 `query`, `policy`, `operation`, `mutation`, `durable`, `defineCollection`,
 `defineContext`, `definePolicy`, `defineService`,
-`defineCredentialResolver`, `defineSearch`, `defineChannel`, and `file`.
+`defineCredentialResolver`, `defineSearch`, and `file`.
 
 Use `"#questpie/app"` for application-specialized `defineQuery`,
 `defineMutation`, `defineAction`, `defineRoute`, `defineReaction`, `defineJob`,
@@ -80,10 +79,10 @@ helpers.
 
 ## Realtime and generated projections
 
-`defineChannel` authors an ordered Policy-protected event Resource. Live Query
-is different: compilation adds `.watch` to the same generated Query method when
-the Query's dependencies are supported. Neither creates another authorization
-path.
+Live Query is a compiler-earned projection: compilation adds `.watch` to the
+same generated Query method when the Query's dependencies are supported. It
+does not create another authorization path or a generic event transport.
+Transient provider signals remain ordinary application integration.
 
 OpenAPI, MCP, and skill bundles export no authoring factory. Configure their
 selection under `questpie.json` `projections`, emit them with `questpie build`,
@@ -92,13 +91,12 @@ and inspect provenance and omissions with
 
 ## Optional runtime capabilities
 
-`questpie.json` uses distinct `runtime.cache`, `runtime.wakeBroker`,
-`runtime.channelCarrier`, and `runtime.byteStore` bindings. Values name exact
-Service identities; they are not provider names or a registry.
+`questpie.json` uses distinct `runtime.cache`, `runtime.wakeBroker`, and
+`runtime.byteStore` bindings. Values name exact Service identities; they are
+not provider names or a registry.
 
 - no cache means no shared cache and safe local reset;
 - no wake broker means PostgreSQL polling plus `NOTIFY` recovery;
-- no Channel carrier means local SSE plus PostgreSQL replay/reset; and
 - File production requires byte storage, while `questpie dev` may bind the
   filesystem implementation and production may bind S3-compatible storage.
 
@@ -113,6 +111,10 @@ received `BLOCKED`. Repair head
 `step.query` widening and named all four optional Runtime bindings. One fresh
 stateless Opus-medium replacement review returned `PASS`; acceptance evidence
 is `d50d4334b116a5bdc46e95cdabf566d8db938d37`.
+
+That proof record remains historical. ADR-0025 supersedes its Channel factory
+and fourth carrier binding; the current surface above has three optional
+Runtime bindings and no generic realtime-event Resource.
 
 The proof compiles a complete application and isolated Package, exact negative
 imports and invalid combinations, autocomplete and hover, a relocated

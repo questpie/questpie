@@ -59,11 +59,13 @@ budgets.
 ## Fixed beta.1 absences
 
 Beta.1 has no Action authoring, raw Route or credential Auth integration,
-generic Job/Workflow client, Channel, File byte API, Search, OpenAPI/MCP/skill
-bundle, Studio, optional cache/broker/carrier, split Runtime roles,
-provider matrix, non-B-tree public Index, or RLS claim. Their compatible seams
-remain those in ADR-0021; an issue may not expose a placeholder public API for
-an absent capability.
+generic Job/Workflow client, File byte API, Search, OpenAPI/MCP/skill bundle,
+Studio, optional cache/broker, split Runtime roles, provider matrix, non-B-tree
+public Index, or RLS claim. Their compatible seams remain those in ADR-0021; an
+issue may not expose a placeholder public API for an absent capability.
+
+ADR-0025 removes the framework Channel Resource and carrier seam completely.
+The fixture path above retains its ordinary domain `Channel` Collection.
 
 ## Completion gate
 

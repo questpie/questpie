@@ -379,8 +379,10 @@ spine. Az potom dokoncit workflow semantics.
 
 ### Faza 3: produktove integracie
 
-Postupne riesit Auth, files, search, KV, channels, OpenAPI a MCP. Kazdy slice
-musi pouzit rovnake identity, transaction, policy, types a observability.
+Postupne riesit Auth, files, search, KV, OpenAPI a MCP. Kazdy slice musi pouzit
+rovnake identity, transaction, policy, types a observability. Docasne
+connected-client eventy si aplikacia sklada priamo s providerom; nie su dalsi
+QUESTPIE Resource.
 
 ### Faza 4: Cloud experiment
 

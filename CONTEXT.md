@@ -8,8 +8,8 @@ and implementation order. `docs/adr/README.md` indexes current decisions.
 ### Codec
 
 The transport-neutral runtime value grammar used by Operation input/output,
-Context input, durable payloads, and Channel payloads. Fields and embedded
-values are restricted projections over the same scalar kernel.
+Context input, and durable payloads. Fields and embedded values are restricted
+projections over the same scalar kernel.
 
 Do not use: Operation schema, input-only schema, output-only schema.
 
@@ -471,13 +471,6 @@ code does not interpret or authorize from it.
 A discardable capability implementation that can avoid work or latency but
 owns no application, authorization, realtime, or durable fact. Its loss causes
 a miss, reconciliation, reconnect, or reset rather than a semantic change.
-
-### Channel
-
-A compiler-owned typed event Resource with publish and subscribe Policy,
-resolved-subject identity, PostgreSQL-owned per-Channel order and bounded
-replay, authority invalidation, and explicit gap/reset behavior. It is delivery
-infrastructure, not business history.
 
 ### File Projection
 

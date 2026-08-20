@@ -2,7 +2,7 @@
 
 ADR-0017 makes ten-instance high availability the normal correctness model,
 not a later enterprise mode. PostgreSQL remains the only hard durable
-dependency. Memory, Redis/KV, notification brokers, and realtime carriers may
+dependency. Memory, Redis/KV, and notification brokers may
 save work or latency; losing all of them cannot change authority or results.
 
 ## One authority model across the fleet
@@ -17,7 +17,6 @@ owns all facts that survive an instance:
 | Live Query            | Change Ledger and exclusive visibility frontier      | SSE connection and bounded send buffer |
 | Job/Reaction/Workflow | run, attempt, lease, timer, signal, and history rows | current handler and Services           |
 | durable schedule      | unique schedule/tick acceptance                      | scan opportunity                       |
-| Channel               | ordered event/replay/generation rows                 | connection fanout                      |
 | Query cache           | dependency generations and fresh Policy              | Memory/Redis value bytes               |
 
 No process is an application, scheduler, queue, or realtime singleton. An
@@ -44,42 +43,37 @@ third cache does not create another public provider contract.
 
 `LISTEN`/`NOTIFY`, Redis pub/sub, or another broker can announce a ledger shard
 or durable class that may have advanced. The message is never a committed
-change, authorized output, run receipt, or Channel event. Duplicate, coalesced,
+change, authorized output, or run receipt. Duplicate, coalesced,
 reordered, delayed, and absent hints all converge through PostgreSQL scans.
 
 Startup and listener reconnect establish the listener, reconcile durable state,
 then process overlapping hints. A broker outage increases scan latency; it
-cannot lose a Live Query refresh, Job, schedule tick, or Channel event.
+cannot lose a Live Query refresh, Job, or schedule tick.
 
 ## Realtime without affinity
 
 The v1 physical transport is one bounded multiplexed SSE downstream per client
 scope plus Fetch/POST upstream. One SSE connection can carry several Live Query
-and Channel bindings. The connection and its backpressure buffer are local,
-but neither is durable authority.
+bindings. The connection and its backpressure buffer are local, but neither is
+durable authority.
 
-An upstream publish or Mutation may route to a different compatible instance.
+An upstream request or Mutation may route to a different compatible instance.
 When SSE disconnects, the generated client reconnects anywhere with its opaque
 token. PostgreSQL-bound retained state either resumes safely or causes a fresh
 authorized reset. Sticky routing may reduce churn; correctness never needs it.
 
-## Typed Channels preserve application meaning
+## Transient application events stay outside the Runtime
 
-Channel remains a compiler Resource because it owns exact event codecs,
-subscribe and publish Policy, resolved subject identity, order, replay horizon,
-authority invalidation, and limits. Accepted events append to a PostgreSQL
-ledger under stable idempotency. A duplicate may be replayed and the generated
-client deduplicates by event identity. Past retention, the client gets an
-explicit gap/reset instead of guessed history.
+Typing state, cursors, advisory presence, progress, and similar transient
+signals are ordinary application/provider integrations. They have no QUESTPIE
+Resource, generated client, PostgreSQL event ledger, replay contract, presence
+model, or runtime carrier binding. Provider authentication and connection state
+cannot decide Policy or authorize an Operation.
 
-Subscribe and reconnect create fresh Executions and reauthorize. An old socket
-or cache entry is never authority for the next frame. Direct provider client
-events bypass this contract and are not a safe core capability.
-
-WebSocket or a Pusher-compatible service may later carry the same frames. Such
-a carrier must preserve event identity, Policy, ordering, replay, limits,
-resume/reset, and optional-loss behavior. It cannot become a second Channel
-runtime or provider matrix.
+When an external publish attempt must survive commit, Reaction or Job owns the
+durable acceptance and attempts and crosses an Action or external-effect
+Service boundary. Physical attempts remain at least once and provider delivery
+may remain ambiguous. Durable business history is ordinary persisted data.
 
 ## Rolling deployment
 
@@ -102,6 +96,7 @@ review at medium effort returned `PASS`.
 The repaired proof covers ten instances, three-instance SSE/POST/resume,
 complete cache/wake loss, fresh Policy revocation, concurrent scheduler and
 `SKIP LOCKED` worker sessions, crash recovery and stale fencing, old/new build
-refusal/claim/retirement, Channel replay/reauthorization, and distinct direct,
-worker, recompute, and Studio adapters. Isolated PostgreSQL 17.10 passes with
-only B-tree indexes and zero RLS objects; no RLS claim is made.
+refusal/claim/retirement, and distinct direct, worker, recompute, and Studio
+adapters. Isolated PostgreSQL 17.10 passes with only B-tree indexes and zero RLS
+objects; no RLS claim is made. The historical Channel proof is superseded by
+ADR-0025 and is not an implementation requirement.
