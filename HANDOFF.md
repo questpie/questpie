@@ -758,6 +758,28 @@ their _Deferred seams_ sections; the guides did not inherit it.
      nothing for that gate either; the instrument was wrong, not the tree. Once
      pointed at `tests/`, it fires for the siblings and still finds nothing for
      docs.
+     **Reaction closes the inventory, and one gap turns out to span all three
+     factories.** `ReactionFactory`
+     (`packages/compiler/src/reaction/declarations.ts:113`–`:128`) takes `name`,
+     `input`, `output`, `runAs`, `retry`, `effects?`, `errors?`, `handler`.
+     `output` is required there too — as it is on Query (`generate.ts:379`) and
+     Mutation. The accepted contract says the opposite
+     (`query-mutation-and-lifecycle.md:39`–`:40`: "The compiler can infer a
+     closed supported output"), **every** guide example of all three factories
+     omits `output`, and **every** fixture definition passes it. So output
+     inference being unimplemented is one gap that costs one compile error in
+     every authoring example in the docs.
+     Two things Reaction settles that Query left ambiguous. First, the thinness
+     is **specific to Query, not general**: `ReactionContext`
+     (`reaction/declarations.ts:89`) is `Omit<RootExecution, "services">` plus
+     `data`, `queries`, `mutations`, `run`, `attempt`, so a Reaction handler does
+     see the Principal and Tenant. Second, `policy` is a Mutation-only key —
+     Reaction has none either, though `runAs` is its authorization seam, so that
+     one may be by design in a way Query's absence is not.
+     It also puts a type under the open `durable-reactions.mdx` decision:
+     `ctx.actions` there is not merely explained through a deferred capability,
+     it is **not a member of `ReactionContext`**. That guide's example is also
+     missing the required `output`.
      **That is why seven compile errors sit in the flagship guide with every
      gate green**, and it is the cheapest thing on this list to fix: one check
      that extracts `ts` blocks and compiles them would have caught every example
