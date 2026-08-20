@@ -315,6 +315,29 @@ ten-instance budgets owned on tagged stable runner"
 proven by measuring distribution across tenants under exactly that
 fleet-under-contention setup. The apparatus is already there.
 
+**The apparatus is there and the assignment is not, which this heading promises
+and the queue has not delivered.** Checked BETA-10's entry directly: its title
+is "Preserve correctness across ten instances and a rolling build", its five
+artifacts are the ten-instance load scenario, soak/chaos report, rolling
+compatibility matrix, fanout/worker/reconnect report and optional-infrastructure
+absence report, and its red test reads in full "Correctness depends on sticky
+routing, a leader, process registry, cache, broker or one instance retaining
+connection state." **The words tenant, fair, admission, backlog and share do not
+occur anywhere in that entry.** The budget quoted above does — "strict
+ten-instance budgets owned on tagged stable runner" — so the fixture rationale
+holds exactly as written.
+
+So the clause this heading says BETA-10's red test "gains" has not been added.
+Until it is, a planner reading BETA-10 finds a multi-instance correctness slice
+with no fairness obligation, and these records name an owner that has not
+accepted the work. That is the same shape as the route work having no owning
+slice, and it is sharper here because a record asserts the ownership.
+
+Editing `QUEUE.json` is outside what a design record does, so this states the
+outstanding change rather than making it: BETA-10's red test needs the fairness
+clause, and its artifacts need whatever evidence line the distribution
+measurement produces.
+
 A separate gate would stand up a second ten-instance harness to answer a
 question the first one is already configured to ask. That is the duplication
 the original record warned about, arriving by a different route.
