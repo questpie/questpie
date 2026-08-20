@@ -1062,6 +1062,27 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   an owner reading the gate rule as unconditional, in which case content does not
   matter and the revert stands. Formally recording the exception is still the
   owner's, not mine.
+- **The repo-owned skill is verified end to end: six branches, one content
+  defect, one instruction gap.** `SKILL.md` routes to six references and all six
+  resolve. Every path and script they name exists — `docs/adr/README.md`,
+  `docs/v4/implementation-gates.md`, `SPEC.md`, `CONTEXT.md`,
+  `docs/agents/product-documentation.md`, `PROOF-MAP.md`, `CONTRIBUTING.md`,
+  `SECURITY.md`, and the `architecture:check`, `quality:full`,
+  `quality:release`, `check:changed`, `review:accept*` scripts.
+  `codebase.md` checks out in full: `composition/`, `schema/` and `seed/` exist
+  under `packages/compiler/src`; the size ratchet is real and exact —
+  `quality/code-architecture.json` has `warningLines: 500` and
+  `maximumLines: 800`, with the shrink-only `legacy` map present and currently
+  empty; all five named test directories exist; and `questpie` is the only
+  package without `private: true`, with compiler, runtime and testkit all
+  private, exactly as claimed.
+  The two defects are recorded above: the Barbershop canonical-application
+  instruction that three guides out of thirteen follow, and the handoff prompt
+  that dropped `--test`/`--typecheck` (fixed).
+  **Do not re-derive this**; spot-check a branch when you edit it. One trap if
+  you do: the ratchet thresholds are config, not code — a grep of `scripts/`
+  and the root `*.json` files finds nothing and invites a false "the ratchet is
+  unimplemented" finding. They live in `quality/`.
 - **The acceptance-verify seam's own trigger has fired and nothing moved.**
   `.agents/skills/questpie-v4/references/proof.md` describes
   `bun run review:accept:verify` as the seam letting CI check acceptance
