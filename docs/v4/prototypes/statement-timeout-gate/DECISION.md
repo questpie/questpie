@@ -417,7 +417,8 @@ record's own "derive, do not choose" rule is what they break.**
   it installs a looser, differently shaped bound and calls it the same number.
 - **Durable attempt: wrong scope.** The attempt does not run inside a statement
   or a transaction. The claim transaction commits first — ADR-0013 states it as
-  a decision, "commits before user code" (`docs/adr/0013:32`) — and
+  a decision, "commits before user code"
+  (`docs/adr/0013-freeze-transactional-dispatch-and-reaction.md:32`) — and
   `worker.ts:334` invokes `runAttempt` after that commit. No `statement_timeout`
   can bound it. The attempt deadline is already enforced, by the heartbeat
   aborting on `deadlineExpired`.

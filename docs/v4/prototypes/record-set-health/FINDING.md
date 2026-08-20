@@ -650,3 +650,56 @@ still resolved.
 **What would overturn the detector's value:** a run where the real defects are
 all caught by symbol re-resolution anyway, which would make this an expensive way
 to find nothing. That is testable on the next merge — run both and compare.
+
+## The authority layer had never been swept at all
+
+Five sweeps had run over `packages/` and `tests/` citations. None had touched
+the citations that point at ADRs and public projections — the documents that
+define v4 behaviour, and therefore the ones a wrong pointer costs most. There
+are 41 of them across 25 targets in this record set.
+
+**Three named a path that does not exist**, which is a failure the code sweeps
+could not have produced, because a bad code path shows up the moment anything
+tries to read it and these had never been read by anything:
+`docs/adr/0015-freeze-service-route-and-auth.md` is missing its `-composition`
+suffix; `docs/adr/0013:32` carries a bare ADR number and no filename; and
+`docs/adr/0014-...:32` contains a literal ellipsis where the filename belongs —
+an author's placeholder that was never filled in and that no check ever looked
+at. In all three the line number and the quoted text were exactly right, so
+every one of them would have passed a content check and failed a reader.
+
+**Of the 37 with a resolvable path, seven flagged and two were real.** Both are
+in authority documents, and one is a kind not seen before.
+
+`maintenance-decisions.md` argued that `drainRuntime` is a lifecycle fence
+wrongly listed among fenced maintenance commands, citing the accepted projection
+_and_ Gate 8, and concluded that "it makes the projection the natural thing to
+correct." The projection half is still exactly right
+(`docs/v4/runtime-client-envelope-and-studio.md:69`). The Gate 8 half was right
+when written and is now false: BETA-10 amended `implementation-gates.md` in
+`ebe1cfe8` to carve `drainRuntime` out explicitly, as "the idempotent local
+`app.close()` lifecycle fence … not a remotely targeted durable-run maintenance
+command" (`:281`–`:284`), leaving the fenced set at three commands
+(`:277`–`:280`).
+
+**So the record's recommendation was adopted, in the gate rather than the
+projection, and the record did not know.** That is a decay mode with the
+opposite sign to every other entry here: not a claim going stale because the
+tree moved away from it, but a claim going stale because the tree moved _toward_
+it. The conflict this record identified is now between two v4 authority
+documents rather than between an ADR and a projection-plus-gate, and the
+projection is its sole remaining source. Correcting the projection is out of
+bounds from here, so it is recorded and left.
+
+The second was ordinary: `owner-decisions.md` cited ADR-0021 `:32` for "remote
+Studio" (it is `:34`) and `:23` for "keeping minimal Studio inside" beta.1 —
+a line that is the release-slice list and never said it. ADR-0021 `:19`–`:21`
+now says ADR-0024 removed the minimal Studio path, so both Studio forms are
+outside beta.1 and only the reasons differ.
+
+**Judgment call: doc-path existence belongs in every future sweep, ahead of the
+content check.** It is one `os.path.exists` per citation and it caught three
+unreadable pointers that six sweeps of content checking would never have looked
+at. What would overturn it: finding that these three were authored in one sitting
+by one hand, which would make it a local lapse rather than a gap in the checking.
+All three sit in different files, so that is not the case here.

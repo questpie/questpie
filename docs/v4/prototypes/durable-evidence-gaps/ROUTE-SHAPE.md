@@ -343,7 +343,7 @@ cannot go that way while the exposure flag is binary.
 
 **The narrowed options.** Either the commands arrive through a Route, which
 ADR-0015 calls "the bounded raw Fetch escape hatch"
-(`docs/adr/0015-freeze-service-route-and-auth.md:30`) and which SPEC mounts into
+(`docs/adr/0015-freeze-service-route-and-auth-composition.md:30`) and which SPEC mounts into
 `app.fetch`; or the Operation contract gains a third exposure state meaning
 on-the-wire-but-not-in-the-client, which is new authoring surface and an ADR
 decision. The second is tidier and larger; the first uses an accepted mechanism
@@ -380,7 +380,7 @@ well:
   `route`** — the Fetch path dispatches nothing to one;
 - the runtime application exposes no `routes` member, and ADR-0014 says why:
   "ADR-0015 **later** adds the compiler-owned `routes` direct-invocation
-  projection" (`docs/adr/0014-...:32`);
+  projection" (`docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md:32`);
 - nothing in the compiler's runtime lowering or model matches a `"route"` kind.
 
 So a Route is declared authoring surface with no mounting, no dispatch and no

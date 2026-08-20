@@ -200,14 +200,31 @@ The contract contradicts itself. ADR-0014 describes drain as lifecycle bound to
 reset, waits bounded owned work, aborts remaining Executions, fences durable
 attempts, disposes resources in reverse order, and stops. `close` is
 idempotent." The accepted **projection**
-(`docs/v4/runtime-client-envelope-and-studio.md:69`) and Gate 8
-(`docs/v4/implementation-gates.md:272`) then list `drainRuntime` among the
-maintenance commands that require exact identity, expected-version fencing, and
-a typed winner. Note precisely where that list lives: **no ADR names
+(`docs/v4/runtime-client-envelope-and-studio.md:69`) lists `drainRuntime` among
+the maintenance commands that require exact identity, expected-version fencing,
+and a typed winner. Note precisely where that list lives: **no ADR names
 `drainRuntime` at all** — a grep across `docs/adr/` returns nothing. The tension
-is between an ADR's lifecycle paragraph and a projection plus a gate, which is a
-weaker conflict than an ADR contradicting itself, and it makes the projection
-the natural thing to correct.
+is between an ADR's lifecycle paragraph and a projection, which is a weaker
+conflict than an ADR contradicting itself, and it makes the projection the
+natural thing to correct.
+
+**Gate 8 was on this side of the argument and has since moved further onto it.**
+This paragraph originally cited Gate 8 alongside the projection, at
+`docs/v4/implementation-gates.md:272`. That was accurate when written. BETA-10
+amended the gate in `ebe1cfe8`, and it now carves `drainRuntime` out explicitly:
+the fenced maintenance commands are `acknowledgeAmbiguity`, `cancelRun` and
+`retryRun` (`docs/v4/implementation-gates.md:277`–`:280`), while `drainRuntime`
+"names the idempotent local `app.close()` lifecycle fence … It is not a remotely
+targeted durable-run maintenance command and therefore has no invented reason,
+expected-version, or audit protocol" (`:281`–`:285`).
+
+So the recommendation above was adopted, in the gate rather than in the
+projection, and the conflict this record identified is now **between two v4
+authority documents** rather than between an ADR and a projection-plus-gate.
+The projection at `:69` is unchanged and is the sole remaining source. Correcting
+it is outside this record's scope — public projections and
+`implementation-gates.md` are both out of bounds here — so this is recorded, not
+acted on.
 
 Those seven properties are run-scoped and do not apply to a process:
 
