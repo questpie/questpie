@@ -796,6 +796,32 @@ their _Deferred seams_ sections; the guides did not inherit it.
      `ctx.actions` there is not merely explained through a deferred capability,
      it is **not a member of `ReactionContext`**. That guide's example is also
      missing the required `output`.
+     **The guides teach two different applications, and the routing document
+     names the one the minority uses.** Not a beta.1 scoping issue and not caused
+     by the cut — the break sits between two guides that both survived it.
+     `docs/agents/product-documentation.md:36` says "Use TanStack Barbershop as
+     the canonical application", `:53` has example review check "one connected
+     Barbershop domain", and
+     `.agents/skills/questpie-v4/references/public-documentation.md:9` repeats it
+     as "complete Barbershop examples". But ADR-0021:37–38 designates the
+     **collaboration/publishing fixture** the primary connected tracer, and
+     `fixtures/` holds `archive` and `collaboration` — **there is no barbershop
+     fixture**.
+     The guides split three to five: `definition-composition.mdx`,
+     `schema-lifecycle.mdx` and `data-and-queries.mdx` use appointments;
+     `context-and-policy.mdx`, `queries-and-mutations.mdx`, `realtime.mdx`,
+     `durable-reactions.mdx` and `runtime-and-studio.mdx` use
+     Company/Space/Channel/Membership/Message; five use neither.
+     **The break shows in the reading order, not just a count.** `meta.json` runs
+     `definition-composition → schema-lifecycle → data-and-queries →
+     context-and-policy`, and each chain asserts continuity —
+     `data-and-queries.mdx:12` "Continue with the complete `appointments`
+     Collection from", `queries-and-mutations.mdx:12` "The examples continue with
+     the complete collaboration fixture from". A reader follows appointments for
+     three guides, then meets a different application with no transition.
+     Either instruction could be the one to change; **what cannot stand is a
+     canonical application named by the routing document and used by three guides
+     out of thirteen.** Owner content decision, not a cut.
      **The structural factories are clean except one example, and that one
      contradicts the guides' own prose.** `defineCollection` requires
      `constraints` — `packages/questpie/src/index.ts`, `constraints: Constraints
