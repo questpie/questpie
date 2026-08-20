@@ -27,6 +27,14 @@ test("projects the authored message.publish Mutation into the executable applica
 				}>[];
 		  }>
 		| undefined;
+	const directContracts = JSON.parse(
+		compilation.generatedFiles["operation-contracts.json"]!,
+	) as Readonly<{
+		operations: readonly Readonly<{
+			admission?: string;
+			identity: string;
+		}>[];
+	}>;
 	const projection = JSON.parse(
 		compilation.generatedFiles["mutation-projection.json"]!,
 	) as Readonly<{
@@ -79,6 +87,12 @@ test("projects the authored message.publish Mutation into the executable applica
 					status: 409,
 				}),
 			},
+		}),
+	);
+	expect(directContracts.operations).toContainEqual(
+		expect.objectContaining({
+			admission: "authenticated",
+			identity: "mutation:message.publish",
 		}),
 	);
 	const publishWire = wire?.operations.find(

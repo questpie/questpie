@@ -157,6 +157,7 @@ type MutationView = Readonly<{
 }>;
 
 const operation = {
+	admission: "authenticated",
 	binding: {
 		identity: "mutation:message.publish",
 		kind: "mutation",

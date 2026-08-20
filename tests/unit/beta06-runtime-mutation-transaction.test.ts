@@ -16,6 +16,7 @@ const widgetId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b63a0";
 type Row = Readonly<Record<string, unknown>>;
 
 function postgres(denial: "candidatePolicy" | "fieldAuthority" | null = null) {
+	let reservations = 0;
 	const statements: Array<
 		Readonly<{ sql: string; parameters: readonly unknown[] }>
 	> = [];
@@ -59,8 +60,14 @@ function postgres(denial: "candidatePolicy" | "fieldAuthority" | null = null) {
 		release: async () => {},
 	};
 	return {
+		reservations: () => reservations,
 		statements,
-		sql: { reserve: async () => session } as unknown as SQL,
+		sql: {
+			reserve: async () => {
+				reservations += 1;
+				return session;
+			},
+		} as unknown as SQL,
 	};
 }
 
@@ -162,6 +169,7 @@ type View = Readonly<{
 }>;
 
 const operation = {
+	admission: "authenticated",
 	binding: {
 		identity: "mutation:widgets.publish",
 		kind: "mutation",
@@ -219,6 +227,48 @@ test("executes only linked Collection plans and projection-derived Reaction inte
 			sql.includes("committed_change_facts"),
 		),
 	).toBe(false);
+});
+
+test("authenticated Mutation admission refuses an anonymous execution before reserving PostgreSQL or running the handler", async () => {
+	const database = postgres();
+	let handlerCalls = 0;
+	const guardedOperation = {
+		...operation,
+		binding: {
+			...operation.binding,
+			execute: async () => {
+				handlerCalls += 1;
+				return { id: widgetId };
+			},
+		},
+	} as unknown as PreparedOperation<View>;
+	const invoke = createPostgresMutationInvoker<View>({
+		sql: database.sql,
+		application: "application:generic",
+		collectionPlans,
+		reactions: linkReactionProjection(reactionProjection),
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts: {
+			principal: principal.anonymous(),
+			authority: { kind: "ordinary" },
+			tenant: { id: tenantId },
+			values: {},
+			contextInput: {},
+			liveQueryObservation: null,
+			signal: new AbortController().signal,
+			deadline: null,
+		},
+	});
+
+	await expect(
+		invoke(guardedOperation, "anonymous-call"),
+	).rejects.toMatchObject({
+		code: "unauthenticated",
+	});
+	expect(database.reservations()).toBe(0);
+	expect(database.statements).toEqual([]);
+	expect(handlerCalls).toBe(0);
 });
 
 test("rejects the same non-canonical call identity as the wire adapter", async () => {

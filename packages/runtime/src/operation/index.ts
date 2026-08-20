@@ -106,6 +106,7 @@ function decode(codec: RuntimeCodec, value: unknown): unknown {
 }
 
 export type PreparedOperation<View> = Readonly<{
+	admission?: OperationAdmission;
 	binding: RuntimeExecutableBinding<View>;
 	inputCodec: RuntimeCodec;
 	output: RuntimeCodec;
@@ -121,6 +122,7 @@ export type RuntimeDeclaredErrorContract = Readonly<{
 }>;
 
 export type RuntimeOperationContract = Readonly<{
+	admission?: OperationAdmission;
 	identity: string;
 	input: RuntimeCodec;
 	output: RuntimeCodec;
@@ -196,6 +198,7 @@ export function createOperationEngine<View>(
 			const contract = codecs.get(identity);
 			if (!operation || !contract) throw new OperationFailure("NOT_FOUND");
 			return Object.freeze({
+				admission: contract.admission,
 				binding: operation,
 				inputCodec: contract.input,
 				output: contract.output,

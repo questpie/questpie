@@ -9,6 +9,7 @@ import {
 import type { LinkedReactionProjection } from "../durable";
 import type { ExecutionFacts } from "../execution";
 import {
+	assertOperationAdmission,
 	DeclaredOperationError,
 	isOperationCallId,
 	type PreparedOperation,
@@ -145,6 +146,9 @@ export function createPostgresMutationInvoker<View>(
 	return async (operation, callId, options) => {
 		if (operation.binding.kind !== "mutation" || !isOperationCallId(callId))
 			throw new TypeError("Mutation call identity is invalid");
+		if (!operation.admission)
+			throw new TypeError("Mutation admission is unavailable");
+		assertOperationAdmission(operation.admission, input.facts);
 		const encodedInput = encodeRuntimeCodec(
 			operation.inputCodec,
 			operation.input,

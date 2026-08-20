@@ -128,7 +128,7 @@ function decodeOperationContracts(value: unknown): OperationContractsV1 {
 	)
 		fail("operation contracts artifact is invalid");
 	const operations = artifact.operations.map((operation, index) =>
-		decodeOperationWireContract(operation, index),
+		decodeOperationWireContract(operation, index, true),
 	);
 	const identities = operations.map(({ identity }) => identity);
 	if (
@@ -148,13 +148,33 @@ function decodeOperationContracts(value: unknown): OperationContractsV1 {
 function decodeOperationWireContract(
 	value: unknown,
 	index: number,
+	direct = false,
 ): RuntimeOperationContract {
 	const operation = record(value, `wire operation ${index}`);
+	const identity = string(
+		operation.identity,
+		`wire operation ${index} identity`,
+	);
+	const carriesAdmission = direct && identity.startsWith("mutation:");
 	exact(
 		operation,
-		["identity", "input", "output", "declaredErrors"],
+		[
+			"identity",
+			"input",
+			"output",
+			"declaredErrors",
+			...(carriesAdmission ? ["admission"] : []),
+		],
 		`wire operation ${index}`,
 	);
+	const admission = operation.admission;
+	if (
+		carriesAdmission &&
+		!(["authenticated", "public", "system"] as const).includes(
+			admission as "authenticated" | "public" | "system",
+		)
+	)
+		fail(`wire operation ${index} admission is invalid`);
 	const rawDeclaredErrors = record(
 		operation.declaredErrors,
 		`wire operation ${index} declared errors`,
@@ -194,7 +214,10 @@ function decodeOperationWireContract(
 	)
 		fail(`wire operation ${index} declared error codes must be unique`);
 	return Object.freeze({
-		identity: string(operation.identity, `wire operation ${index} identity`),
+		...(carriesAdmission
+			? { admission: admission as "authenticated" | "public" | "system" }
+			: {}),
+		identity,
 		input: decodeRuntimeCodecDescriptor(
 			operation.input,
 			`$wire.operations[${index}].input`,
@@ -295,7 +318,9 @@ function decodeWire(value: unknown): OperationWireContract {
 	for (const [key, expected] of Object.entries(responseShape))
 		if (JSON.stringify(responseKeys[key]) !== JSON.stringify(expected))
 			fail("wire response keys are invalid");
-	const operations = wire.operations.map(decodeOperationWireContract);
+	const operations = wire.operations.map((operation, index) =>
+		decodeOperationWireContract(operation, index),
+	);
 	const operationIds = operations.map((operation) => operation.identity);
 	if (
 		new Set(operationIds).size !== operationIds.length ||

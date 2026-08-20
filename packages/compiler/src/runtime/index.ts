@@ -62,9 +62,26 @@ export interface RuntimeContractProjection {
 	readonly wireDigest: string;
 }
 
+function mutationAdmission(
+	resource: NormalizedResource,
+): "authenticated" | "public" | "system" {
+	const policy = resource.contract.policy;
+	if (!policy || typeof policy !== "object" || Array.isArray(policy))
+		throw new TypeError("normalized Mutation admission is invalid");
+	const admission = (policy as Readonly<{ kind?: unknown }>).kind;
+	if (
+		!(["authenticated", "public", "system"] as const).includes(
+			admission as never,
+		)
+	)
+		throw new TypeError("normalized Mutation admission is invalid");
+	return admission as "authenticated" | "public" | "system";
+}
+
 function operationContracts(
 	resources: readonly NormalizedResource[],
 	exposure: "direct" | "network",
+	includeAdmission = false,
 ) {
 	return resources
 		.filter(
@@ -77,6 +94,9 @@ function operationContracts(
 			input: resource.contract.input,
 			output: resource.contract.output,
 			declaredErrors: resource.contract.declaredErrors ?? {},
+			...(includeAdmission && resource.kind === "mutation"
+				? { admission: mutationAdmission(resource) }
+				: {}),
 		}))
 		.sort((left, right) => compareAscii(left.identity, right.identity));
 }
@@ -100,7 +120,7 @@ export function projectRuntimeContract(
 	const operationContractsArtifact = {
 		format: "questpie.operation-contracts" as const,
 		version: 1 as const,
-		operations: operationContracts(input.resources, "direct"),
+		operations: operationContracts(input.resources, "direct", true),
 	};
 	const reactions = projectReactionContracts(input.resources);
 	const reactionDigest = digest("questpie-reaction-projection-v2", reactions);
