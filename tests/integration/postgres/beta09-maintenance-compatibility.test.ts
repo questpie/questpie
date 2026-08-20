@@ -3,7 +3,10 @@ import { afterAll, expect, test } from "bun:test";
 import { SQL } from "bun";
 import { principal } from "questpie";
 
-import { createPostgresDurableMaintenance } from "../../../packages/runtime/src/durable/postgres-maintenance";
+import {
+	createPostgresDurableMaintenance,
+	type DurableMaintenanceCommand,
+} from "../../../packages/runtime/src/durable/postgres-maintenance";
 import { durableKernelMarkerStatement } from "../../../packages/runtime/src/durable/rows";
 import {
 	beta05Ids,
@@ -17,7 +20,10 @@ const postgresTest = process.env.PGHOST ? test : test.skip;
 const durableKernelUnmarkStatement =
 	"SELECT set_config('questpie.durable_kernel', 'off', true)";
 
-async function maintenanceStatements(authorize: boolean): Promise<string[]> {
+async function maintenanceStatements(
+	command: DurableMaintenanceCommand,
+	authorize: boolean,
+): Promise<string[]> {
 	const statements: string[] = [];
 	const row = {
 		state: "ready",
@@ -48,25 +54,38 @@ async function maintenanceStatements(authorize: boolean): Promise<string[]> {
 		application: "application:collaboration",
 		authorize: () => authorize,
 	});
-	await maintenance.cancelRun({
+	const request = {
 		runId: crypto.randomUUID(),
 		reason: "row-lock ordering probe",
 		actor: principal.user({ id: crypto.randomUUID() }),
-	});
+	};
+	if (command === "cancelRun") await maintenance.cancelRun(request);
+	else if (command === "retryRun") await maintenance.retryRun(request);
+	else
+		await maintenance.acknowledgeAmbiguity({
+			...request,
+			effectName: "row-lock-probe",
+		});
 	return statements;
 }
 
-test("maintenance Authority denial happens before a row lock", async () => {
-	const denied = await maintenanceStatements(false);
-	expect(denied.some((statement) => statement.includes("FOR UPDATE"))).toBe(
-		false,
-	);
+test("maintenance Authority denial happens before a row lock for every command", async () => {
+	for (const command of [
+		"acknowledgeAmbiguity",
+		"cancelRun",
+		"retryRun",
+	] as const) {
+		const denied = await maintenanceStatements(command, false);
+		expect(denied.some((statement) => statement.includes("FOR UPDATE"))).toBe(
+			false,
+		);
 
-	// Positive control: the same instrument observes the authorized lock path.
-	const authorized = await maintenanceStatements(true);
-	expect(authorized.some((statement) => statement.includes("FOR UPDATE"))).toBe(
-		true,
-	);
+		// Positive control: the same instrument observes each authorized lock path.
+		const authorized = await maintenanceStatements(command, true);
+		expect(
+			authorized.some((statement) => statement.includes("FOR UPDATE")),
+		).toBe(true);
+	}
 });
 
 async function harness(): Promise<Beta08Harness> {

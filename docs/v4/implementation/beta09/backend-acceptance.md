@@ -34,6 +34,14 @@ the audit has a run foreign key. This ordering matters: a caller that is not
 allowed to touch a run must neither learn its state nor hold its row lock and
 delay an authorized operator.
 
+Reason bounds are computed before the host decision, but the decision remains
+the first externally visible outcome. The authorizer receives only actor,
+command, and run identity—not the reason—and still runs for malformed input.
+That is deliberate: returning `REASON_INVALID` first would let an unauthorized
+caller distinguish validation paths from Authority denial. This judgment would
+change if the accepted disclosure contract explicitly allowed validation
+results before Authority, or if invalid attempts no longer had to be audited.
+
 All three durable commands require a reason of 1–256 characters
 (`postgres-maintenance.ts:78`–`:103`, `:292`–`:293`). Invalid input is a typed,
 audited `REASON_INVALID` result rather than a raw database error. Every audit
@@ -51,22 +59,29 @@ reason at the generated or runtime API. The decoder's retained v4 path and its
 unsupported-protocol refusal are exercised directly
 (`tests/unit/beta05-runtime-artifacts.test.ts:55`–`:81`).
 
+The generated protocol catalog groups columns by table while deliberately
+preserving their existing and appended order within each table. PostgreSQL
+catalog verification compares that order to `attnum`; sorting column names
+would make the generated catalog deterministic but wrong. The table-only stable
+sort is therefore intentional
+(`packages/compiler/src/schema/postgres/internal-protocol-v5.ts:47`–`:72`).
+
 ## Evidence
 
 The PostgreSQL scenario has two protocol tests and six maintenance tests. It
 proves fresh-v5 and v4-to-v5 convergence, same-version checksum refusal,
-Authority denial before a row lock with a positive control, audited denial,
-winner-version recovery, guard re-arming, invalid reasons on all three commands,
-and an authorized success
+Authority denial before a row lock for all three commands with positive
+controls, audited denial, winner-version recovery, guard re-arming, invalid
+reasons on all three commands, and an authorized success
 (`tests/integration/postgres/beta09-internal-protocol.test.ts:37`–`:114`,
-`tests/integration/postgres/beta09-maintenance-compatibility.test.ts:21`–`:71`,
-`:115`–`:279`).
+`tests/integration/postgres/beta09-maintenance-compatibility.test.ts:23`–`:89`,
+`:145`–`:314`).
 
 The reference-local microbenchmark executes 20 fenced maintenance commands and
 scopes the audit count to those exact runs. The committed baseline is the median
-71.591 ms sample; the final post-review sample was 75.257 ms against a 400 ms budget,
-with 20 audit rows, 58,711 public declaration bytes, and 21,037 TypeScript
-instantiations.
+71.591 ms sample; the dedicated pre-acceptance sample was 79.497 ms and the
+release rerun sampled 90.510 ms against a 400 ms budget, both with 20 audit rows,
+58,711 public declaration bytes, and 21,037 TypeScript instantiations.
 
 The first acceptance review also found an unverified 240-line catalog generator,
 a test-only marker export in the published runtime, and audit SQL compressed to
@@ -75,6 +90,12 @@ the hostile test that owns it, and the SQL formatting was restored. After a
 code-level maintenance preflight refactor, the complete generated BETA-07
 application bundle is 524,277 bytes against its unchanged 524,288-byte budget:
 11 bytes of measured headroom, without cosmetic SQL compression.
+
+A subsequent acceptance invocation on head `610379e2` returned terminal
+`NO_RESULT` after the reviewer transport timed out and wrote no review artifact;
+it is not a verdict. This record now includes the additional all-command
+lock-order evidence and the catalog-order invariant before requesting a fresh
+review of the materially changed head.
 
 ## Deliberate limits
 
