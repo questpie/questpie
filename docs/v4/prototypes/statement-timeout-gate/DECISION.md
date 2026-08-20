@@ -233,7 +233,7 @@ What changed beneath it:
 **What would overturn item 3**, and it is worth stating because it is the part
 that reversed: the run worklist landing as a bare statement. That is the one read
 in this design whose cost grows with the table, it does not exist yet
-(`docs/v4/implementation/beta09/inspection-contract.md:207`–`:213`), and if it
+(`docs/v4/implementation/beta09/inspection-contract.md` D3), and if it
 ships without a transaction the wrap becomes the cheapest way to bound it. A
 deployment target that cannot set a database default would also restore item 3,
 since the baseline is then unavailable.
@@ -272,7 +272,7 @@ not a surface an operator calls.
 So four of the five are structurally bounded and do not grow with the database,
 which weakens the latency worry for exactly the reads the wrap is aimed at. The
 surface that would genuinely be unbounded is the run worklist BETA-09 decided
-(`docs/v4/implementation/beta09/inspection-contract.md:207`–`:213`), and it does
+(`docs/v4/implementation/beta09/inspection-contract.md` D3), and it does
 not exist in the tree yet. The gate should say plainly that its expensive case is
 a read nobody has written.
 

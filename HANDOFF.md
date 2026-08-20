@@ -1213,7 +1213,7 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
     splits them seven-and-one by root cause. No record enumerates them. "Divergence"
     appears eleven times in the whole record set, across seven files: three in this
     file (two of them about D3 itself, one about branch commits), three in
-    `owner-decisions.md`, one in `beta09/README.md:167` about a `hasMore` comment,
+    `owner-decisions.md`, one in `beta09/README.md`'s "One divergence" paragraph about a `hasMore` comment,
     one in `beta09/hostile-cases.md:106` about a test technique, and three in
     unrelated beta03/05/07 records. Checked the `feat/v4-beta-09` branch too,
     including its five files that are not on `feat/v4` — same three mentions, no
@@ -1231,11 +1231,12 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   covered**, in a different file:
   `feat/v4-beta-09:docs/v4/implementation/beta09/narrower-claims.md:107` records
   "Criterion 18 is now measured: 255 ms against a 5,000 ms budget". Verified on
-  the branch. `acceptance-shape.md:377`–`:384` had already corrected itself; the
-  correction had not reached this file. (That range has moved twice as my own
-  insertions into `acceptance-shape.md` pushed the paragraph down — `:355` to
-  `:361` to `:377`. Both moves were caught by running the rule above in the same
-  commit as the edit, which is the only time it is cheap.)
+  the branch. `acceptance-shape.md`'s "Criterion 18 is covered, in a different file"
+  paragraph had already corrected itself; the correction had not reached this
+  file. (That pointer was a line range until it had moved three times under my
+  own insertions — `:355` to `:361` to `:377` — each move caught by the sweep
+  rule but only because the sweep ran in the same commit as the edit. Naming the
+  paragraph ends the maintenance.)
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then
