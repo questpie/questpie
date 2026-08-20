@@ -196,9 +196,29 @@ reasoning rather than against the prose.
 2. **Maintenance Authority is evaluated and distinct.** Holding inspection
    Authority does not confer it. A caller lacking it is refused with a typed
    `AUTHORITY_DENIED`, and the attempt is recorded in the append-only audit.
-   Falsifiable: `actorOf` today checks only a brand
-   (`packages/runtime/src/durable/postgres-maintenance.ts:130`). →
-   `maintenance-decisions.md` Q3, `hostile-cases.md` case 5.
+   Falsifiable: `actorOf` checked only a brand. → `maintenance-decisions.md` Q3,
+   `hostile-cases.md` case 5.
+
+   **Shipped and closed.** BETA-09 merged at `21e38b21`. The Authority decision
+   is now `input.authorize({ actor, command, runId })`
+   (`packages/runtime/src/durable/postgres-maintenance.ts:287`) — a decision
+   about this actor, this command and this run, which is precisely what case 5
+   said a brand could not be. `actorOf` survives at `:179` and still brand-checks,
+   but it is no longer the authorization: it proves the `Principal` came from the
+   application's own module, which is a separate property.
+
+   The citation in this falsification pointed at `:130`, where `actorOf` sat
+   before the slice; `:130` is now a `Promise<Result>` return type. The slice
+   moved it to `:179`, which is the citation axis reopening on a code file rather
+   than a document — the same decay, from an implementation landing rather than
+   an edit to a record.
+
+   **The clause `hostile-cases.md` case 5 gained is implemented with its
+   reasoning attached**, which is worth recording because it was added here as a
+   requirement and arrived there as an argument. `readRun` takes `locking: false`
+   on the denial path, and the comment at `:141`–`:146` gives the reason: "An
+   unauthorized caller must not take `FOR UPDATE` on a run it may not touch … a
+   denial-of-service surface handed to exactly the caller who was refused."
    **Criteria 1, 2 and 3 carry a reachability caveat, verified after they were
    written.** `packages/runtime/src/application/index.ts` contains no reference to
    `durable`, so the Fetch router exposes no durable route and the operational
