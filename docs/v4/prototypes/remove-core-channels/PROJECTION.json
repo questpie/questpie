@@ -1,0 +1,72 @@
+{
+	"version": 1,
+	"decision": "removeCoreChannels",
+	"frameworkSurface": {
+		"absent": [
+			"Channel Resource",
+			"defineChannel",
+			"generated Channel client",
+			"Channel event codec projection",
+			"Channel PostgreSQL ledger",
+			"Channel replay or resume",
+			"Channel authority generation",
+			"Channel presence model",
+			"runtime.channelCarrier"
+		],
+		"replacements": []
+	},
+	"ownership": {
+		"durableAuthorizedClientState": "Query.watch, Change Ledger, and PostgreSQL",
+		"durableBusinessHistory": "ordinary Collection and Query",
+		"postCommitWork": "Reaction or Job",
+		"externalPublishAttempt": "Action or external-effect Service",
+		"transientDelivery": "application and provider integration",
+		"providerPresence": "advisory provider connection state",
+		"businessAuthorization": "QUESTPIE Policy over ordinary application facts",
+		"generatedChannelTypes": "absent"
+	},
+	"providerBoundary": {
+		"composition": "ordinary application or Package code",
+		"providerRegistry": "absent",
+		"compilerAbi": "absent",
+		"runtimeBinding": "absent",
+		"durableAuthority": "absent",
+		"operationAuthority": "absent",
+		"deliveryGuarantee": "fire-and-forget",
+		"reactionGuarantee": "durable acceptance and at-least-once publish attempts; provider delivery may remain ambiguous"
+	},
+	"domainPreservation": {
+		"fixtureGraph": "Company -> Space -> Channel -> Membership -> Message",
+		"channelMeaning": "ordinary application Collection and domain noun"
+	},
+	"supersedes": [
+		"ADR-0017 Channel Resource and Pusher-compatible carrier clauses",
+		"ADR-0019 defineChannel, Channel payload, and runtime.channelCarrier clauses",
+		"ADR-0021 future Channel-compatible seam",
+		"P14 Channel conformance requirement",
+		"current authority that presents Channels as current or deferred QUESTPIE scope"
+	],
+	"historicalEvidence": {
+		"rewrite": false,
+		"retained": [
+			"accepted proof heads and manifests",
+			"historical review records",
+			"v3 behavioral evidence"
+		]
+	},
+	"authorityProjection": [
+		"HANDOFF.md",
+		"SPEC.md",
+		"CONTEXT.md",
+		"docs/adr/README.md",
+		"docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
+		"docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+		"docs/adr/0021-slice-the-beta-one-release.md",
+		"docs/adr/0025-remove-channels-from-core.md",
+		"docs/v4/beta1-build-spec.md",
+		"docs/v4/implementation-gates.md",
+		"docs/v4/multi-instance-and-optional-acceleration.md",
+		"docs/v4/product-area-matrix.md",
+		"docs/v4/semantic-kernels-and-public-surface.md"
+	]
+}

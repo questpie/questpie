@@ -1,0 +1,121 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0025",
+	"proof": "Remove the framework-owned Channel Resource, defineChannel, PostgreSQL Channel event ledger/replay/authority generation, generated Channel client, and runtime.channelCarrier without replacing them with another core event primitive; preserve Live Query, Reaction/Job, ordinary provider composition, historical evidence, and the collaboration domain's ordinary Channel Collection.",
+	"diffBase": "4e1e913c44a53cb3180643df7224a2418d430a08",
+	"reviewOutput": "docs/v4/prototypes/remove-core-channels/REVIEW.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "4e1e913c44a53cb3180643df7224a2418d430a08",
+		"P4 Live Query implementation evidence": "dfa461162fdb211382708b9ad2a30cf10b564015",
+		"P5 Reaction implementation evidence": "f9879efdfb2921ed747d353b6cb903398e9d67c3",
+		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "0488886fcc9d235a7754017bd07a952b17ca7688e919e27f31e6a5f4127b9c8d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "53be1162c67a018ea8422952f7bcfbf150e08646766a7d89e9f7a778fb51792e"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "5ab1a144148521457d9eaa7132f7990f7a0c54d4b29547ee356dae6787ed4343"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "c9d3b90e03e55310470f4ef19795c7ecef7e73904cda71997d20e1b57185311c"
+		},
+		{
+			"name": "accepted Live Query and Change Ledger decision",
+			"path": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"sha256": "14cfc6eceae76c8411d8c9193486e3d89f16fa66dd605fad30aeeb2cdb8bd9b8"
+		},
+		{
+			"name": "accepted Transactional Dispatch and Reaction decision",
+			"path": "docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"sha256": "f8b36c9df0af8c8ca6785fb901cf075744dbcfc8d2586a182855805a920850ed"
+		},
+		{
+			"name": "accepted multi-instance and Channel decision",
+			"path": "docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
+			"sha256": "d48da37d623b3a575200ae6f2a9fe4b40819767dcbea610eb9992e425d1c1461"
+		},
+		{
+			"name": "accepted public Channel spelling",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "729a27af1fe46f5094ca26a85c3657870a3471e8b62bf5358ee0c667ce9a215f"
+		},
+		{
+			"name": "accepted beta one slice and Channel absence seam",
+			"path": "docs/adr/0021-slice-the-beta-one-release.md",
+			"sha256": "64df6c1db2922b6943116cf6afd6399042e8380818eaf695152ed282deb364b0"
+		},
+		{
+			"name": "accepted permanent application-work ownership map",
+			"path": "docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+			"sha256": "00c810bee679da248ad8bbcb7aea9736d6b404beadac4885e197816d1516b66e"
+		},
+		{
+			"name": "accepted proof and projection protocol history",
+			"path": "docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"sha256": "27c5c3a67f3df71c570ed96fb6f537fac1dd887603da935b79de4f95eb59c6b6"
+		},
+		{
+			"name": "v3 Channel behavioral evidence",
+			"path": "docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
+			"sha256": "f0a7aec8b9443257939742b817b1178c35d6e31342917a6b5d2461d9c37fb70a"
+		},
+		{
+			"name": "beta one implementation authority",
+			"path": "docs/v4/beta1-build-spec.md",
+			"sha256": "57dff2540f62ba89485105ece680037c405f9ed72a7a62ef00339a1f1a2c5709"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/remove-core-channels/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/remove-core-channels/negative-control.ts (10 invalid projections rejected)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run format:check -- docs/v4/prototypes/remove-core-channels/DECISION.md docs/v4/prototypes/remove-core-channels/PROJECTION.json docs/v4/prototypes/remove-core-channels/acceptance-manifest.json docs/v4/prototypes/remove-core-channels/check.ts docs/v4/prototypes/remove-core-channels/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run lint -- docs/v4/prototypes/remove-core-channels/check.ts docs/v4/prototypes/remove-core-channels/negative-control.ts --deny-warnings",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --name-only 4e1e913c44a53cb3180643df7224a2418d430a08...HEAD (exactly five files under docs/v4/prototypes/remove-core-channels; no authority, public docs, production source, fixture, or historical proof record changed)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/prototypes/remove-core-channels/acceptance-manifest.json --dry-run",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"QUESTPIE v4 removes the framework-owned Channel concept completely: no Channel Resource, defineChannel, generated Channel client or codecs, PostgreSQL Channel ledger/order/replay/generation, Channel presence model, or runtime.channelCarrier remains current or deferred product scope.",
+		"The removal introduces no replacement Signal, Broadcast, Presence, event-bus Resource, provider registry, runtime provider binding, or generic semantic adapter contract.",
+		"Live Query remains the sole built-in continuing client-state mechanism: Query.watch recomputes current authorized state from PostgreSQL Change Ledger facts, while durable application history remains an ordinary Collection queried through Policy.",
+		"Reaction and Job retain durable acceptance and attempt ownership. A post-commit provider publish crosses an Action or external-effect Service boundary, remains physically at least once, and retains ambiguity when the provider offers no idempotency or reliable receipt lookup; no exactly-once provider delivery claim is introduced.",
+		"Transient delivery, provider subscription authentication, connection lifetime, rate limits, advisory presence, and provider observability are application/provider concerns. They cannot authorize QUESTPIE Operations or become durable application truth.",
+		"The collaboration fixture's Company -> Space -> Channel -> Membership -> Message graph and ordinary channels Collection remain intact; the removed capitalized concept is the framework capability only.",
+		"ADR-0017, ADR-0019, ADR-0021, and the P14 conformance requirement are superseded only for Channel. Their accepted proof heads, manifests, review records, and v3 evidence remain immutable historical evidence rather than being rewritten.",
+		"The exact authority projection set includes a new superseding ADR and every current SPEC, glossary, gate, beta build, multi-instance, semantic-kernel, product-matrix, ADR index, and handoff surface that otherwise keeps Channels current or deferred.",
+		"This proof changes only the candidate decision, structured projection, validator, negative controls, and manifest. It does not project authority before PASS and changes no production code, fixture, public docs, or historical evidence."
+	]
+}
