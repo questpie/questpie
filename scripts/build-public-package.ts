@@ -15,7 +15,7 @@ function run(command: string[]): void {
 }
 
 const typescript = resolve(repositoryRoot, "node_modules/typescript/bin/tsc");
-for (const workspace of ["runtime", "compiler", "questpie"])
+for (const workspace of ["questpie", "runtime", "compiler"])
 	run(["bun", typescript, "-p", `packages/${workspace}/tsconfig.json`]);
 
 const internal = resolve(repositoryRoot, "packages/questpie/dist/internal");
