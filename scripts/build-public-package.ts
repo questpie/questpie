@@ -15,8 +15,14 @@ function run(command: string[]): void {
 }
 
 const typescript = resolve(repositoryRoot, "node_modules/typescript/bin/tsc");
-for (const workspace of ["questpie", "runtime", "compiler"])
+
+for (const workspace of ["questpie", "runtime", "compiler"]) {
+	rmSync(resolve(repositoryRoot, `packages/${workspace}/dist`), {
+		force: true,
+		recursive: true,
+	});
 	run(["bun", typescript, "-p", `packages/${workspace}/tsconfig.json`]);
+}
 
 const internal = resolve(repositoryRoot, "packages/questpie/dist/internal");
 rmSync(internal, { force: true, recursive: true });

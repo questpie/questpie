@@ -3,7 +3,7 @@
 	"ticket": "#299",
 	"proof": "BETA-12 cuts one checked questpie@4.0.0-beta.1 package whose installed CLI builds the archive fixture, applies its committed migrations idempotently, starts and drains the generated Runtime, and drives both collaboration and archive connected tracers from the same tarball against local PostgreSQL 17 without exposing private compiler or Runtime package surfaces.",
 	"diffBase": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
-	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-03.json",
+	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-04.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
 		"P14 projection in reviewed ancestry": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d",
@@ -49,11 +49,16 @@
 			"name": "second BETA-12 acceptance review",
 			"path": "docs/v4/implementation/beta12/REVIEW-RC-02.json",
 			"sha256": "bfe03f993c542aec2ae3fe8ce70f3b40aa20bde5fdf61cb4dc8da53b86ae1111"
+		},
+		{
+			"name": "third BETA-12 acceptance review",
+			"path": "docs/v4/implementation/beta12/REVIEW-RC-03.json",
+			"sha256": "163d1808de3c9b8aef5d41e3d846218a0b2548c45655794f275c99b2785c9e3d"
 		}
 	],
 	"verification": [
 		{
-			"command": "bun run release -- --dry-run (retry-stable checked tarball, clean install, public-root import, private negative imports, and installed packed build)",
+			"command": "bun run scripts/build-public-package.ts && bun run release -- --dry-run twice (clean-output build, retry-stable checked tarball, clean install, public-root import, private negative imports, and installed packed build)",
 			"result": "PASS"
 		},
 		{
@@ -69,7 +74,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run quality:release (353 tests passed, 126 environment-gated PostgreSQL tests skipped, all architecture, format, lint, typecheck, build, docs, skill, strict knip, package, performance, and diff gates passed)",
+			"command": "bun run quality:release (354 tests passed, 126 environment-gated PostgreSQL tests skipped, all architecture, format, lint, typecheck, build, docs, skill, strict knip, package, performance, and diff gates passed)",
 			"result": "PASS"
 		},
 		{

@@ -14,6 +14,12 @@ the public root, rejects `questpie/runtime` and `@questpie/runtime`, and builds
 the archive fixture through the installed binary. A changed artifact or
 declaration fails before publication.
 
+The package build removes every compiler, Runtime, and public-package `dist`
+directory before compiling and vendoring private bytes. Turbo hashes that build
+producer plus the compiler and Runtime sources, so a cache restore cannot put a
+removed private module back into the tarball. A stale-file probe was deleted by
+the build, and a clean Linux checkout reproduced the committed tarball digest.
+
 The connected PostgreSQL release test passes the same tarball to both existing
 fixture harnesses. In packed mode their active `.questpie/generated` output is
 written by `dist/cli.js`; the collaboration and archive Runtime tests then run
