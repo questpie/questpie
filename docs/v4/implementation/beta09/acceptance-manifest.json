@@ -1,0 +1,89 @@
+{
+	"protocolVersion": 2,
+	"ticket": "#296",
+	"proof": "BETA-09 closes the backend maintenance-compatibility gap without shipping Studio: the generated App requires a host-owned maintenance Authority decision, every durable command carries a bounded audited reason, stale callers receive the settled winner version, and questpie.internal.v5 upgrades the append-only audit catalog from v4 without accepting checksum drift.",
+	"diffBase": "87d3c48fde3eb45789258d5289df1853537a9391",
+	"reviewOutput": "docs/v4/implementation/beta09/REVIEW-BACKEND-01.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "87d3c48fde3eb45789258d5289df1853537a9391",
+		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
+	},
+	"authorityDocuments": [
+		{
+			"name": "ADR-0014 Runtime, client, envelope, and long-term Studio boundary",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "59e41ff38193ad9cc46d8e8f0e7c5011374a44abe2f8024fc997ca8eab6f1d78"
+		},
+		{
+			"name": "ADR-0016 lifecycle jobs and shared durable kernel",
+			"path": "docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "7b9e5dca74828f576a21f738fbdbc5335560ca7575a26360ca3b6115fe14ee8f"
+		},
+		{
+			"name": "ADR-0021 beta.1 release slicing",
+			"path": "docs/adr/0021-slice-the-beta-one-release.md",
+			"sha256": "64df6c1db2922b6943116cf6afd6399042e8380818eaf695152ed282deb364b0"
+		},
+		{
+			"name": "ADR-0024 Studio descope",
+			"path": "docs/adr/0024-descope-minimal-studio-from-beta-one.md",
+			"sha256": "27a40d6e8ee91979337ba818f0e78c2bf29ceedeedb662b01292218e11f37b22"
+		},
+		{
+			"name": "implementation gates",
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "5b8a645b7190555c54cded0bd29fa0f5355536ea701a8c3e8d908c21b5447985"
+		},
+		{
+			"name": "BETA-09 backend closure record",
+			"path": "docs/v4/implementation/beta09/backend-acceptance.md",
+			"sha256": "9666eb55b85db2eec50d82c832c8e81888d8a34de86cacc66f01794a00eb227e"
+		},
+		{
+			"name": "public Runtime guide",
+			"path": "apps/docs/content/docs/v4/runtime-and-studio.mdx",
+			"sha256": "4032f97e3599b4463076da02a8880238ace64176afe519a0e445307e5f7dba2f"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run check:changed -- --test tests/integration/postgres/beta09-internal-protocol.test.ts --test tests/integration/postgres/beta09-maintenance-compatibility.test.ts --test tests/performance/beta09-maintenance.test.ts --typecheck @questpie/runtime --typecheck @questpie/compiler --typecheck @questpie/docs",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run test:postgres -- --scenario beta09 (8 tests, 0 failures)",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta09 (84.986 ms against 400 ms, 20 audit rows, 58,496 public declaration bytes, 21,008 TypeScript instantiations)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:full",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie QUESTPIE_POSTGRES_MAJOR=17 bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run review:accept:v2 -- --manifest docs/v4/implementation/beta09/acceptance-manifest.json --dry-run",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"The generated CreateAppInput requires maintenance.authorize, the generated application passes it to the durable surface, and there is no implicit allow, ambient Admin/System Principal, browser client, Fetch route, or Operation-Wire maintenance transport.",
+		"Maintenance Authority is evaluated for the trusted Principal, exact command, and run identity before the target row is locked; a denied caller receives typed AUTHORITY_DENIED and the attempt is recorded with actor and reason in the append-only audit.",
+		"acknowledgeAmbiguity, cancelRun, and retryRun each require a reason of 1 through 256 characters; invalid input is a typed, audited REASON_INVALID result and does not mutate the run.",
+		"Expected-version fencing refuses a stale caller with VERSION_MISMATCH and returns the settled current run version, which can be used for a successful retry; every applied or rejected outcome reports the settled version.",
+		"questpie.internal.v5 adds the nullable bounded maintenance reason to the existing append-only audit catalog, installs fresh or upgrades v4 in the pinned protocol transaction, and refuses a same-version checksum mismatch without partially accepting drift.",
+		"The generated Runtime Build declares questpie.internal.v5 and the runtime artifact decoder retains v4 compatibility while accepting and requiring the v5 build for newly compiled applications.",
+		"The maintenance tests include a positive-controlled instrument proving denial precedes FOR UPDATE, PostgreSQL evidence for audited denial and authorized success, all three invalid-reason paths, winner-version recovery, and durable write-guard re-arming.",
+		"The reference-local performance test executes 20 fenced maintenance commands and records 20 audit rows under the 400 ms budget without increasing the accepted BETA-07 server-bundle budget.",
+		"Studio UI, browser mounting, an inspection read model, a failed-run worklist, and ambient privileged authority remain explicit non-goals; drain remains Runtime lifecycle rather than a fourth durable maintenance command, and the public guide makes no unsupported Studio, retention, or Runtime-limit claim."
+	]
+}
