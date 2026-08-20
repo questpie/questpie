@@ -315,20 +315,21 @@ async function ownerAccess(
 			sourceColumns,
 			record,
 		);
-		let query: any = database.select({ matched: sql<number>`1` }).from(table);
-		if (i18nCurrentTable) {
-			query = query.leftJoin(
-				i18nCurrentTable,
-				and(
-					eq(getTableColumns(i18nCurrentTable).parentId, sourceId),
-					eq(
-						getTableColumns(i18nCurrentTable).locale,
-						context.locale ?? context.defaultLocale ?? "en",
+		const baseQuery = database.select({ matched: sql<number>`1` }).from(table);
+		const currentLocaleQuery = i18nCurrentTable
+			? baseQuery.leftJoin(
+					i18nCurrentTable,
+					and(
+						eq(getTableColumns(i18nCurrentTable).parentId, sourceId),
+						eq(
+							getTableColumns(i18nCurrentTable).locale,
+							context.locale ?? context.defaultLocale ?? "en",
+						),
 					),
-				),
-			);
-			if (i18nFallbackTable) {
-				query = query.leftJoin(
+				)
+			: baseQuery;
+		const query = i18nFallbackTable
+			? currentLocaleQuery.leftJoin(
 					i18nFallbackTable,
 					and(
 						eq(getTableColumns(i18nFallbackTable).parentId, sourceId),
@@ -337,9 +338,8 @@ async function ownerAccess(
 							context.defaultLocale ?? "en",
 						),
 					),
-				);
-			}
-		}
+				)
+			: currentLocaleQuery;
 		const [match] = await query
 			.where(and(eq(sourceId, recordId), ...projectionGuards, access))
 			.limit(1);
