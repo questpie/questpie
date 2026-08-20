@@ -1057,6 +1057,24 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   D4 is what added `Operational Fact` to `CONTEXT.md`. The recommendation above
   to take the argued exception rests on the term's content, not on D4's
   provenance, so it holds either way.
+  **D1's premise holds; one of its three citations does not.** D1 is the
+  decision seven of the eight divergences are batched under, so its grounding
+  is worth checking rather than inheriting. Two of three verify exactly:
+  `docs/adr/0010-freeze-trusted-context-and-relational-policy.md:41` does say
+  `definePolicy(collection, body)` "binds one closed typed Policy program to one
+  Collection", and **the durable kernel really has no Collection** — no
+  `defineCollection` anywhere under `packages/runtime/src/durable/` or
+  `packages/compiler/src/reaction/`, and the tables are raw DDL in
+  `questpie_internal` (`internal-protocol-v4-sql.ts:15`). That premise carries
+  the batching argument and it is sound.
+  The third citation is wrong. `owner-decisions.md` cites `CONTEXT.md:405` for
+  "Policy applies to normal clients, direct operations, workers, recomputation,
+  and Studio". That sentence is at **`:411`**. Line 405 sits inside the
+  **Authority** definition; `### Policy` does not start until `:407`. The
+  sentence exists and says what the argument needs, so **the conclusion stands
+  and only the pointer is broken** — the same citation-axis-two class as the two
+  found in `statement-timeout-gate/DECISION.md`, in a load-bearing decision this
+  time.
   **D3 has a bigger problem than its heading: the eight divergences it batches
   are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
   divergences between accepted documentation and the tree that this slice
