@@ -211,6 +211,32 @@ existing `durable_runs_claim_idx`. Every one is Policy-protected by an
 **evaluated inspection Authority**, distinct from maintenance Authority per
 `maintenance-decisions.md` Q3.
 
+**"Policy-protected" is the wrong word here, and the queue uses it too.**
+`Policy` in v4 names a specific mechanism: it is Collection-bound, attached as
+`{ kind: "default", requiredForNormalDataAccess: true }`
+(`packages/compiler/src/relational/discovery.ts:136`) and carried in the compiled
+read plan (`packages/runtime/src/relational/query.ts:97`–`:98`). These four reads
+are over `questpie_internal.durable_*`, which are not discovered Collections, so
+**no Policy can attach to them** — the mechanism the word names cannot reach this
+surface. `QUEUE.json` names BETA-09's artifact "Policy-protected inspection
+Operations", so the conflation is upstream of this record rather than introduced
+by it.
+
+Read the sentence above as "protected by an evaluated inspection Authority" and
+drop "Policy-protected". The distinction matters to whoever builds this: an
+implementer who reads "Policy-protected" literally will look for a Policy
+binding, find none possible, and conclude the surface is unprotectable — when
+what is actually required is a new Authority evaluation, on one of the shapes
+`docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` compares.
+
+**And this closes the question of deferring criterion 1.** The command half was
+scoped out of this slice rather than carried unsatisfiable. The read half cannot
+be: "Policy-protected inspection Operations" is one of BETA-09's four artifacts
+in `QUEUE.json`, and the slice's red test is about disclosure through the
+inspection surface. Deferring criterion 1 would leave the slice shipping an
+inspection surface with no authorization, which is the thing the red test exists
+to catch.
+
 Adding read shapes beyond these is how an inspection surface becomes the
 internal-table CRUD the issue names as a non-goal.
 
