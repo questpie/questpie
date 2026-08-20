@@ -1,5 +1,11 @@
 # questpie
 
+## 3.28.5
+
+### Patch Changes
+
+- [#334](https://github.com/questpie/questpie/pull/334) [`b362f56`](https://github.com/questpie/questpie/commit/b362f5604438b6b9a0b012aefda1189774decd26) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add transaction-safe password recovery with hashed reset credentials, a token-free browser challenge, session and trusted-device revocation, durable notification dispatch, and neutral request state.
+
 ## 3.28.4
 
 ### Patch Changes
