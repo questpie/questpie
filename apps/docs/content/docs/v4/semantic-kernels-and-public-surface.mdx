@@ -1,6 +1,6 @@
 ---
 title: Use the QUESTPIE v4 API surface
-description: Import structural builders, generated factories, clients, and optional runtime capabilities from their exact owners.
+description: Import structural builders, generated factories, and clients from their exact owners.
 kind: guide
 ---
 
@@ -10,8 +10,8 @@ owns the value.
 
 ## Build values once
 
-Use `codec.*` for Operation input and output, Context input, durable payloads,
-and Channel payloads:
+Use `codec.*` for Operation input and output, Context input, and durable
+payloads:
 
 ```ts
 import { codec, defineCollection, field } from "questpie";
@@ -34,23 +34,18 @@ define a second `operation.uuid()` grammar.
 
 ## Choose the owner of application work
 
-| Work                                           | Owner       | Boundary                                                                |
-| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle               |
-| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts               |
-| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                          |
-| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts  |
-| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance      |
-| Call an external or nondeterministic provider  | Action      | Explicit effect outside transaction retry                               |
-| Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
-| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
-| Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
-| Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
-| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
-| Deliver ephemeral connected-client messages    | Channel     | Non-durable transport fan-out; durable truth remains in Operations      |
+| Work                                           | Owner       | Boundary                                                               |
+| ---------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
+| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle              |
+| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts              |
+| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                         |
+| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts |
+| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance     |
+| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer          |
+| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation             |
 
-Reaction, Job, and Workflow keep distinct authoring meanings over one internal
-durable kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
+Reaction is the committed-fact authoring meaning over the internal durable
+kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
 
 ## Import executable factories from the current contract
 
@@ -75,13 +70,13 @@ export const renameMessage = defineMutation({
 });
 ```
 
-`#questpie/app` also exports `defineAction`, `defineRoute`, `defineReaction`,
-`defineJob`, and `defineWorkflow`. Each factory has its own exact context; there
-is no universal Definition builder. Packages import the same names from their
-generated `#questpie/package` contract and cannot see host-only Resources.
+`#questpie/app` also exports `defineReaction`. Each factory has its own exact
+context; there is no universal Definition builder. Packages import the same
+names from their generated `#questpie/package` contract and cannot see
+host-only Resources.
 
 Generated server Operation maps use nested calls such as
-`ctx.actions.delivery.sendMessage`. Canonical Resource Identity and direct
+`ctx.mutations.delivery.sendMessage`. Canonical Resource Identity and direct
 client/App maps retain exact `<kind>:<qualified-name>` keys. QUESTPIE reports
 `QP-COMPOSE-023` when one same-kind Operation would be both a callable leaf and
 a namespace. It reports `QP-COMPOSE-024` when a final `then` segment would make
@@ -91,40 +86,8 @@ Server capability maps are frozen objects with no inherited Object helpers.
 Names such as `constructor` and `prototype` are ordinary generated members.
 Treat the map as a typed capability surface, not as a general JavaScript object.
 
-## Keep Route and Fetch distinct
-
-A Route owns raw HTTP behavior. It receives Request, parameters, ingress facts,
-Route-safe Services, and `ctx.execution`. It receives no data facade or
-transaction. The generated Runtime mounts Routes into `app.fetch`; there is no
-`defineFetch`.
-
-## Watch Queries; define Channels
+## Watch Queries
 
 A supported generated Query method gains `.watch` and returns complete freshly
-authorized results. A Channel is a distinct Resource created with
-`defineChannel`; it owns event codecs, subject identity, publish/subscribe
-Policy, order, replay, and limits. Neither bypasses Policy.
-
-## Configure capabilities, not providers
-
-Optional runtime acceleration uses four distinct `questpie.json` keys:
-
-```json
-{
-	"runtime": {
-		"cache": { "service": "service:cache.redis" },
-		"wakeBroker": { "service": "service:wake.redis" },
-		"channelCarrier": { "service": "service:channels.pusher" },
-		"byteStore": { "service": "service:bytes.s3" }
-	}
-}
-```
-
-Each value is an exact Service identity implementing that capability, not a
-provider registry. Losing cache, broker, or carrier cannot lose authority or
-durable progress; PostgreSQL remains the source of truth. Byte storage receives
-no Principal, Policy, Collection, transaction, or raw database capability.
-
-OpenAPI, MCP, and skills have no authoring import. Select them under
-`questpie.json` `projections`, emit them with `questpie build`, and inspect them
-with `questpie explain projection <openapi|mcp|skills>`.
+authorized results. Watching does not bypass Policy: every recomputation is
+authorized again.

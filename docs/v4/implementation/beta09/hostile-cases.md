@@ -132,6 +132,31 @@ assertion should therefore be on _the explanation Studio produces_, not on the
 presence of an event, or it will force a schema change that the case does not
 require.
 
+**Reachability gap, found after this case was written and worth stating before
+someone drives it.** The case says Studio explains the run. Studio cannot
+currently reach it. The run sits at `state = 'ready'`; the inspection surface is
+four `runId`-keyed reads plus one worklist (`inspection-contract.md` D3); and the
+worklist as decided is keyed on `state = 'failed'` (`studio-purpose.md`), which
+this run is not. `studio-purpose.md`'s own counter-finding is that **`runId` is
+not obtainable through any shipped API** — that is why the worklist exists at
+all. So nothing lists a stuck `ready` run and nothing yields its identity.
+
+**This matters because the test will pass anyway.** A fixture knows the `runId`
+it created, so an assertion driven as `inspect(thatRunId)` proves the projection
+explains a run whose identity was handed to it — not that an operator can find
+one. That is the shape this project keeps blocking rounds for: a test proving
+something other than what it claims.
+
+**Decision: scope the assertion, do not widen the surface here.** Drive case 4
+as "given a run's identity, the projection explains why it is not progressing",
+and say in the test what it does not prove. Widening the worklist to cover
+non-progressing `ready` and expired-lease `running` rows is the real fix, it is
+cheap on the same indexes, and it belongs to whichever slice owns the progress
+bound — the same disposition `studio-purpose.md` records and the same one
+`docs/v4/prototypes/durable-evidence-gaps/FINDING.md` §5 argues for. What would
+overturn it: that slice landing first, in which case case 4 should assert the
+operator path end to end rather than from a known identity.
+
 ## 5. Maintenance Authority denial
 
 **Asserts:** a caller without maintenance Authority is refused, the refusal is
@@ -193,6 +218,12 @@ to act.
   in both the rejection union and the CHECK. Amended in the same commit.
 - Case 3 adds an entry to the slice's narrower-claims list: BETA-09 does not
   build `questpie explain`, which accepted authority names in three places.
+- Case 4 is scoped to "given a run's identity", because Studio cannot reach a
+  stuck `ready` run: the worklist keys on `state = 'failed'` and `runId` is
+  obtainable from no shipped API. The test must say what it does not prove.
+  Widening the worklist to cover non-progressing runs belongs to the slice that
+  owns the progress bound, not to this one. `acceptance-shape.md` criterion 15
+  carries the same scope.
 - Case 2 is disclosed as the weakest of the six. It is not strengthened by
   rewording, and pretending otherwise is the failure mode BETA-07 hit three
   times.
@@ -228,3 +259,17 @@ reading:
 Nothing is redacted, which makes the case's name misleading. What protects the
 envelope is that there is nowhere to put a payload, plus a validator that keeps
 the one open field from carrying unbounded or malformed text.
+
+**All four have landed, checked rather than assumed.** A list of amendments a
+record pushes into other records is exactly the kind of instruction that reads as
+done because it is written down. Verified: `internal-protocol-v5.md` carries both
+codes joining the union and the CHECK, and states "six members becomes eight";
+`acceptance-shape.md`'s narrower-claims list carries the `questpie explain` entry
+and criterion 15 carries case 4's scope. The `questpie explain` claim holds at
+both ends — the three authorities each name it exactly once, and no package under
+`packages/` declares a `bin`, so no CLI exists to have built it.
+
+One amendment landed incompletely and was fixed separately: `AUTHORITY_DENIED`
+reached the union and the CHECK but not the judgment call about what a rejection
+writes into `reason`. Adding a code to a contract is not the same as deciding how
+it behaves, and the amendment list only tracks the first.

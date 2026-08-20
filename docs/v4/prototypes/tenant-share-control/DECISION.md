@@ -144,8 +144,13 @@ ADR-0013's "attempt timeout ... finite," the Mutation's 5,000 ms — that nothin
 server-side makes true. It is the highest-value, lowest-cost item in this
 entire record, it is independent of every axis decision here, and it should not
 wait on them. `configurePostgresTimeouts` already exists at
-`packages/compiler/src/postgres-session.ts:39`; the runtime simply never calls
-it.
+`packages/compiler/src/postgres-session.ts:39`, but "the runtime simply never
+calls it", which an earlier revision said, understates what adopting it takes.
+It sets both GUCs with `set_config(..., false)` (`:44`–`:45`) — **session**
+scope, not transaction-local — so on a pooled connection it leaks the timeout to
+the next borrower. The runtime needs the transaction-local form the durable
+kernel already uses (`packages/runtime/src/durable/rows.ts:23`). The helper is a
+precedent for the shape, not something the runtime can call as it stands.
 
 Recorded here as a **newly discovered blocking edge**, not as part of the share
 decision.
@@ -225,6 +230,22 @@ fairness by serializing that tenant to one concurrent run** — it protects the
 small tenant by crippling the large one, which is the opposite of what a share
 control is for.
 
+**The cap's half of that sentence has since weakened, and the conclusion
+survives without it.** `MECHANISM.md` measured the in-flight axis and handed
+BETA-10 an open question rather than a requirement: whether a per-tenant cap
+binds at all below ten instances, given `packages/runtime/src/durable/worker.ts`
+claims and runs one attempt at a time (`:286`, `:338`), so per-tenant in-flight
+is bounded by worker count rather than by `claimBatch`. The index the cap was
+argued to need also turned out optional — the shipped
+`durable_runs_lease_idx` answers the count at 0.083 ms.
+
+That does not rescue group partitioning. The contrast above needs only that
+**fair admission alone** buys share without serializing anyone, which it does:
+`ORDER BY turn` puts every tenant's first eligible run ahead of any tenant's
+second. So read this paragraph as fair admission carrying the argument and the
+cap as a possible addition BETA-10 decides, not as two mechanisms that are
+jointly necessary.
+
 Decide fairness now: it is a defect in an accepted table. Hold group
 partitioning as a separate later decision. The compatible seam is that the
 claim predicate should partition on a _key column_ rather than hardcoding
@@ -241,8 +262,13 @@ So this does not become a general quota engine:
 - No billing, metering, or usage accounting.
 - No per-tenant connection pools and no per-tenant databases.
 - No cross-instance token bucket, no leader, and no Redis or broker as the
-  authority for share — ADR-0017 forbids all three, and a share mechanism that
-  needed one would be reopening it.
+  authority for share. ADR-0017 names two of these directly — the leader and
+  broker-or-cache-as-durable-truth
+  (`docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md:89`–`:90`);
+  a cross-instance token bucket is the second of those under another name once
+  it holds share authority. A share mechanism that needed one would be reopening
+  the ADR. Note the ADR _permits_ a broker to carry notifications (`:47`) — what
+  it forbids is a broker as authority.
 - No group partitioning or per-tenant FIFO in this decision.
 - No provider-quota modelling behind the effect ledger.
 

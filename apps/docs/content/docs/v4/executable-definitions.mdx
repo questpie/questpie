@@ -34,24 +34,16 @@ A member absent from that handler's generated context is a TypeScript error.
 The source does not declare a global application registry or repeat an
 application generic.
 
-These seven factories use the same generated type source:
+These factories use the same generated type source:
 
 ```ts
-import {
-	defineAction,
-	defineJob,
-	defineMutation,
-	defineQuery,
-	defineReaction,
-	defineRoute,
-	defineWorkflow,
-} from "#questpie/app";
+import { defineMutation, defineQuery, defineReaction } from "#questpie/app";
 ```
 
 Executable Definition factories come from `#questpie/app`. Structural
 Definitions, codecs, and expressions come from `questpie`.
 
-All seven factories bind the same generated types. Importing a factory does not
+Every factory binds the same generated types. Importing a factory does not
 make its Runtime execution surface available; each executable guide states
 which calls the Runtime supports.
 
@@ -79,8 +71,8 @@ the Current App Contract and reject stale generated output.
 
 An inline handler is the normal form. The `messageSummary` Definition above
 owns one Executable Slot: the one handler position the compiler records for
-that Definition. Query, Mutation, Action, Route, Reaction, Job, and Workflow
-Definitions each carry exactly one handler.
+that Definition. Query, Mutation, and Reaction Definitions each carry exactly
+one handler.
 
 The compiler keeps the handler and its runtime-only imports outside controlled
 structural evaluation. It records a stable slot in the structural contract and

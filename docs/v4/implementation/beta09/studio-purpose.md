@@ -43,14 +43,14 @@ This is the finding that decides it, and it is not a matter of taste.
 Everything else an incident-first entrance would enter from does not durably
 exist at this base:
 
-| Candidate symptom             | Durable trace                                                                                                                                                                                      | Verified at                                                                           |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| A failed Query execution      | **none.** There is no query receipt, log, or execution table                                                                                                                                       | —                                                                                     |
-| A failed Mutation             | **none.** `CHECK (outcome IN ('executing','committed'))` admits no failure, and the receipt is inserted inside the Mutation's own transaction, so a pre-commit failure rolls back its own evidence | `packages/compiler/src/schema/postgres/internal-protocol-v2.ts:38`                    |
-| An Execution error            | **none stored.** `durability: "telemetry"`, an optional in-process sink, with `traceId`, `causationId`, and `tenantRef` typed as hardcoded `null` and a per-process sequence counter               | `packages/runtime/src/application/events.ts:1`–`:34`                                  |
-| A Live Query reset            | **current only.** A superseded generation is deleted at once, not after a delay; an idle scope is swept 30 s after its last renewal. No reset history is retained either way                       | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129` |
-| A change nobody can explain   | **no attribution.** `change_ledger` carries no correlation, causation, call, principal, or tenant column                                                                                           | `internal-protocol-v3.ts:29`                                                          |
-| A failed or dead-lettered run | **yes**                                                                                                                                                                                            | `durable_runs`                                                                        |
+| Candidate symptom             | Durable trace                                                                                                                                                                                      | Verified at                                                                                                                                 |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| A failed Query execution      | **none.** There is no query receipt, log, or execution table                                                                                                                                       | —                                                                                                                                           |
+| A failed Mutation             | **none.** `CHECK (outcome IN ('executing','committed'))` admits no failure, and the receipt is inserted inside the Mutation's own transaction, so a pre-commit failure rolls back its own evidence | `packages/compiler/src/schema/postgres/internal-protocol-v2.ts:38`                                                                          |
+| An Execution error            | **none stored.** `durability: "telemetry"`, an optional in-process sink, with `traceId`, `causationId`, and `tenantRef` typed as hardcoded `null` and a per-process sequence counter               | `packages/runtime/src/application/events.ts:24`, with `traceId`, `causationId` and `tenantRef` typed `null` at `:11`, `:13` and `:16`–`:34` |
+| A Live Query reset            | **current only.** A superseded generation is deleted at once, not after a delay; an idle scope is swept 30 s after its last renewal. No reset history is retained either way                       | `internal-protocol-v3-realtime.ts:169`, `:43`; `postgres-realtime-generations.ts:129`                                                       |
+| A change nobody can explain   | **no attribution.** `change_ledger` carries no correlation, causation, call, principal, or tenant column                                                                                           | `internal-protocol-v3.ts:29`                                                                                                                |
+| A failed or dead-lettered run | **yes**                                                                                                                                                                                            | `durable_runs`                                                                                                                              |
 
 A symptom-first front door would therefore be a filtered view of one table.
 That is a panel, and it is built below. It is not an entrance.
@@ -100,6 +100,66 @@ against 207,000 runs, the worklist query plans as
 `Index Scan using durable_runs_claim_idx`, returns 64 rows, and runs in
 0.13 ms. The leftmost prefix carries it and no schema is needed — which is the
 premise this whole decision rests on, so it is checked rather than argued.
+
+**Re-measured independently, and the figure above is the one to keep.** A second
+run against a fresh 207,000-row fixture with the shipped indexes reported an
+`Index Only Scan` with `Heap Fetches: 0` at 0.079 ms, which looks like a stronger
+result and is not one. It is an artifact of a table that has been loaded and
+never updated. Two things remove it, both normal for `durable_runs`:
+
+| Projection / table state                                  | Plan                                 | Time     |
+| --------------------------------------------------------- | ------------------------------------ | -------- |
+| indexed columns only, freshly loaded                      | Index Only Scan, `Heap Fetches: 0`   | 0.079 ms |
+| indexed columns only, after rows were updated             | Index Only Scan, `Heap Fetches: 120` | 0.116 ms |
+| projection includes a non-indexed column (`failure_code`) | Index Scan                           | 0.103 ms |
+
+`durable_runs` is a hot table whose rows change state constantly, so the
+visibility map is rarely current, and any worklist row richer than
+`(run_id, available_at)` reaches outside the index. **`Index Scan` at ~0.1 ms is
+the realistic characterization and index-only is the exception**, which is what
+this section already said.
+
+Recorded because the failure it prevents is specific: a test asserting
+`Index Only Scan` or `Heap Fetches: 0` passes on a freshly seeded fixture and
+fails in production, which is the "test that proves something other than what it
+claims" shape this project keeps blocking rounds for. Assert the index _name_ and
+a row bound, not the scan kind.
+
+**A gap this predicate cannot see, found after the decision and recorded rather
+than folded in.** `state = 'failed'` covers the dead-letter case, which is the
+operator need that justified the worklist, and ordinary retry exhaustion does
+reach it — `fail()` writes `state = 'failed'` with `RETRY_EXHAUSTED` and
+`deadLetter: true` once `attemptNumber >= maximumAttempts`
+(`packages/runtime/src/durable/postgres-kernel.ts:663`–`:675`).
+
+Two classes of permanently non-progressing run never reach `failed`, so this
+worklist cannot show them:
+
+- **Retired executable.** The claim is refused and nothing is written
+  (`postgres-kernel.ts:514`–`:518`); the run stays `ready`. BETA-08 asserts this
+  state (`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391`).
+- **Crash at the exhaustion boundary.** `claim` returns `skipped` without writing
+  when `attempt_count + 1 > maximumAttempts` (`:522`–`:523`), reachable only if a
+  worker died after incrementing the count and before reporting an outcome. The
+  run stays `running` with an expired lease and is re-admitted forever through
+  `:462`.
+
+Both are described in `docs/v4/prototypes/durable-evidence-gaps/FINDING.md` §5.
+They matter here because the worklist's stated purpose is runs that need a human,
+and a run that can never progress is exactly that while being invisible to a
+`failed`-keyed read.
+
+**The decision stands as scoped, and the scope is now stated:** this worklist
+answers "what failed", not "what is stuck". Widening it is cheap on the same
+indexes — `state = 'ready'` uses the same `durable_runs_claim_idx` prefix, and
+the expired-lease class is served by
+`durable_runs_lease_idx (application_name, state, lease_expires_at)`
+(`internal-protocol-v4-sql.ts:100`) — but it is a second read shape, and D3 fixes
+the inspection surface at four reads plus one worklist. Adding it belongs to
+whichever slice owns the progress bound, not to this one. What would overturn
+the scoping: evidence that either class occurs in practice rather than only
+after a crash or a rolling deploy, in which case "what failed" is the wrong
+question for the only multi-row read an operator has.
 
 Constraints on it, each forced:
 
@@ -245,7 +305,21 @@ receipt is addressable by its call identity.
 
 - **"Who changed this row and why?"** No source. The Change Ledger carries no
   caller attribution.
-- **"Who cancelled what today?"** No source at acceptable cost.
+- **"Who cancelled what today?"** A scan, and the cost is now measured rather
+  than asserted. With only the shipped
+  `durable_maintenance_commands_run_idx (application_name, run_id, requested_at)`,
+  a global `ORDER BY requested_at DESC LIMIT 50` over 200,000 audit rows plans as
+  a parallel sequential scan with a top-N heapsort at **31.8 ms**. Adding
+  `(application_name, requested_at DESC)` makes the same query an Index Scan at
+  **0.072 ms**.
+
+  So "no source at acceptable cost", which an earlier revision said, is too
+  strong: 31.8 ms is usable. The accurate statement is that the feed is linear in
+  audit size from the shipped indexes, **and nothing prunes the audit** — there is
+  no retention sweeper against any `durable_*` table
+  (`freshness-and-provenance.md`), so that cost grows without bound and one index
+  removes it entirely. The decision to keep the audit per-run stands on the
+  accepted contract framing it that way, not on the scan being unaffordable.
   `durable_maintenance_commands_run_idx` is `(application_name, run_id,
 requested_at)` (`internal-protocol-v4-sql.ts:246`) — `run_id` is second, so a
   time-ordered global feed is a sequential scan. The audit is answerable per

@@ -132,9 +132,10 @@ capabilities, never durable authority or a provider matrix.
   `feat/v4` at `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`; issue #295 is closed.
 - **In progress, not accepted:** the BETA-09 implementation worktree is
   `/home/drepkovsky/code/questpie-v4-beta-09`, branch `feat/v4-beta-09`. It
-  carries unmerged production source and its own working-tree changes. It forked
-  from `219758a4`, before several correction commits landed on `feat/v4`, and
-  both sides have since edited the same BETA-09 records — read
+  carries unmerged production source and its own working-tree changes. It **has
+  merged `feat/v4`** at `5066187a`, so the merge base is `4078c057` and the
+  divergence is seven documentation commits rather than the fork-point gap an
+  earlier revision of this entry described — read
   `docs/v4/implementation/beta09/README.md` before touching it. Do not discard
   or reset this worktree.
 - The pre-consolidation projection is recoverable at archive commit
@@ -231,6 +232,40 @@ Principal"` matches a test, which read as coverage. That test trips the
     something is _enforced_, break it and assert the failure. A test that breaks
     the thing cannot be satisfied by a name appearing somewhere. Reading is for
     finding candidates, not for settling enforcement.
+- #295 third lesson, from measuring the BETA-09 design records: **a decision
+  carrying both a correctness reason and a performance reason kept leading with
+  the performance one, and the performance one kept failing measurement.** Three
+  instances, each measured on PostgreSQL 17.10:
+  - _"A total is a scan"_ justified omitting counts. A count over the same
+    indexed predicate is an Index Only Scan at 0.47 ms for 2,000 rows. The
+    surviving reason is that `countOracle: "absent"` is a nondisclosure
+    commitment the operational lane matches.
+  - _Cost_ justified rejecting `SERIALIZABLE` for the backlog cap. It admits
+    **fewer** than the cap — three against a cap of five — because conflicting
+    transactions abort. The surviving objection is the caller experience:
+    transient retryable errors on the write path.
+  - _Planner pruning_ justified deriving the fair-admission slice hint from the
+    batch. The planner is nearly indifferent between `turn <= 8` and
+    `turn <= 1000` (21.1 ms against 19.3 ms). The surviving reason is fairness —
+    the hint bounds one tenant's contribution to a round.
+
+  A fourth was found afterwards **by applying the rule rather than by stumbling
+  into it**, which is the evidence that it works. Sweeping the records for
+  performance-shaped words with no number nearby turned up "who cancelled what
+  today has no source at acceptable cost". Measured, a global time-ordered audit
+  feed over 200,000 rows costs 31.8 ms from the shipped indexes and 0.072 ms with
+  a time-leading one — usable, not unacceptable. The true statement is that the
+  cost is linear in audit size and nothing prunes the audit, so it grows without
+  bound while one index removes it.
+
+  In all four the decision was right and the stated reason was wrong, which is
+  the dangerous shape: a reviewer who disproves the reason has grounds to doubt
+  the decision. The rule is to measure a performance justification before writing
+  it, or lead with the correctness one and let the performance claim follow only
+  if it has a number. The sweep that finds these is one pass for words like
+  cheap, expensive, faster, scan, or proportional with no figure within a few
+  lines; expect most hits to be noise, since "scan" is also a verb.
+
 - #295 GitHub Actions run `32076598594` is green on evidence head `78e81b67`
   across cached full quality, PostgreSQL 16/17/18 correctness, TypeScript 7
   forward conformance, and the selected-PR PostgreSQL microbenchmark gate, which
@@ -238,297 +273,32 @@ Principal"` matches a test, which read as coverage. That test trips the
   PostgreSQL 16/17/18 measured 105/105/108 passing with zero failures across 26
   beta08 scenario tests; `bench:micro` measured 400.075 ms against a 2500 ms
   budget and `test:load` 330.045 ms against 2000 ms.
-- #295 review round 4 left one observation unexplained: PostgreSQL 18 reports
-  three more passing tests than 16 and 17, with no note on which are
-  version-gated. **Closed, and verified against the tree.** They are the three
-  cases in `tests/integration/postgres/beta02-catalog-reader.test.ts` gated by
-  `test.skipIf(process.env.QUESTPIE_POSTGRES_MAJOR !== "18")` — "rejects a
-  PostgreSQL 18 NOT ENFORCED check constraint", "rejects PostgreSQL 18 PERIOD
-  constraints", and "rejects a non-inherited PostgreSQL 18 NOT NULL catalog
-  constraint". Each drives a construct that exists only in 18, so on 16 and 17
-  there is nothing to reject and the assertion would target a feature the server
-  cannot express. The difference is evidence the version gate works rather than a
-  coverage gap, and the same shape should be expected of any future matrix rather
-  than read as drift.
-- #295 review round 4's first observation is **correct, and verified here**.
-  Criterion 4 claims that "every heartbeat, terminal transition, and effect write
-  compares the current attempt and the lease token." The effect write is a
-  genuinely separate compare-and-set —
-  `packages/runtime/src/durable/postgres-effects.ts:86`, a
-  `SELECT 1 AS held ... AND current_attempt_id = $3 AND lease_token_digest = $4`
-  — and nothing drives it. All five `"fenced"` assertions in
-  `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces:
-  `succeed`, `fail`, `cancel`, and `heartbeat` at `:160`–`:179`, and the
-  `succeed`-versus-`cancel` race at `:344`. `DurableLeaseLost`, the error the
-  effect handle raises when fenced, appears in no test at all. So one quarter of
-  that criterion rests on code reading. The review judged it benign under
-  at-least-once, which is defensible — a stale `reserve` only prevents a
-  redundant provider call — but the fence exists to prevent a stale holder
-  settling an effect the fresh holder is also performing, and the cost of proving
-  it is one test. Whoever next touches the effect ledger should add it.
-- #295 review round 4's item 10 is labelled "carried forward unchanged, fourth
-  round" and was re-listed without re-verification. **Checked: it is a mix of
-  live and already-closed claims**, so it must not be treated as a live
-  checklist.
-  - _Stale._ It says `postgres-maintenance.ts::appendEvent` inserts
-    `bumped?.sequence` with no null guard. `bumped` exists only in
-    `packages/runtime/src/durable/rows.ts` and is guarded at `:146` before use at
-    `:155`; the maintenance file has none. Round 3's repair routed the audit
-    append through the one shared writer and removed it, and the observation
-    describes the code before that.
-  - _Closed since._ It says `quality/format-baseline.txt` pre-registers
-    `REVIEW-04.json` while the file is absent. The record was committed with the
-    acceptance; both now exist.
-  - _Live._ `tests/integration/postgres/helpers/beta08-durable.ts:186` still
-    terminates every other backend on the database in a retry loop. Nothing
-    in-tree proves the PostgreSQL lane is sequential, so this remains a real
-    hazard for anyone running that suite beside another consumer.
-    A reviewer re-listing prior observations without re-checking them produces a
-    list whose currency cannot be assumed. Anything carried forward from an earlier
-    round should be re-verified before it is acted on or repeated.
-- #295 round 4's lock-order inversion observation is **refuted**. It carries
-  forward a claim that `durable_effects` → `durable_runs` in the effect ledger
-  inverts `durable_runs FOR UPDATE` → `durable_effects` in maintenance, leaving a
-  deadlock untested. Checked: **the effect ledger takes no row lock on
-  `durable_runs` at all.** `FOR UPDATE` appears nowhere in
-  `packages/runtime/src/durable/postgres-effects.ts`; its only `durable_runs`
-  access is the plain fence `SELECT 1 AS held` at `:86`, and a bare `SELECT`
-  under READ COMMITTED acquires no row lock. Its writes are confined to
-  `durable_effects` (`:113`, `:150`, `:177`). `FOR UPDATE` appears once in the
-  whole durable surface, at `postgres-maintenance.ts:111` inside `lockRun`. Two
-  transactions cannot deadlock by acquiring resources in opposite order when one
-  of them never acquires the first resource, so the named inversion is not
-  reachable. Two caveats stated rather than glossed: a bare `SELECT` still takes
-  an `ACCESS SHARE` table lock, which conflicts only with DDL and not with these
-  paths; and this refutes the _claimed_ inversion, not deadlock in general.
-- #295 round 4's observations 3 and 9 are both **confirmed**, and both are the
-  same shape as the effect-fence gap: declared, implemented, undriven.
-  - _The maintenance brand refusal has no driving case._ `actorOf` throws
-    "durable maintenance requires a trusted Principal", and the only test
-    matching that string is
-    `tests/integration/beta03-execution-services.test.ts:450`, which passes
-    `{...} as never` into a **runtime execution** and trips the Execution root's
-    own brand check. Same wording, different code path. A grep for the message
-    looks like coverage and is not — which is the same trap as reading for a name
-    instead of reading the code. This compounds with the Q3 qualifier in
-    `docs/v4/implementation/beta09/maintenance-decisions.md`: the brand is both
-    untested and, since the only caller is in-process and mints its own
-    `Principal`, weaker than it reads.
-  - _The `cancellationRequested` event is appended and never read back._ Event
-    kinds are asserted from `events()` at
-    `tests/integration/postgres/beta08-durable-kernel.test.ts:204`, `:308`, and
-    `:812`, and `cancellationRequested` appears in none of them. The two hits at
-    `:340` and `:745` assert the **field** on `inspect()`, not the **kind** in
-    the history. So criterion 16's "every declared event kind is appended" holds
-    by execution and not by assertion for this one.
+- #295 round 4's twelve observations were audited one by one against the tree,
+  with four different outcomes. **One closed:** PostgreSQL 18's three extra
+  passes are the `skipIf`-gated catalog cases in `beta02-catalog-reader.test.ts`
+  — NOT ENFORCED checks, PERIOD constraints, and a non-inherited NOT NULL — each
+  driving a construct only 18 has, so the difference is the version gate working.
+  **One refuted:** the claimed effect-ledger/maintenance lock-order inversion is
+  unreachable, because `FOR UPDATE` appears nowhere in `postgres-effects.ts` and
+  its only `durable_runs` access is a bare fence `SELECT`, which takes no row
+  lock. **One part stale.** **Three confirmed, all the same shape** — declared,
+  implemented, driven by nothing: the effect fence (criterion 4's fourth surface,
+  no test asserts it), the maintenance brand refusal (the only test matching its
+  message trips the Execution root's check in a different file), and the
+  `cancellationRequested` event (asserted as a field on `inspect()`, never read
+  back as a kind from `events()`). Each has a written falsification in
+  `docs/v4/prototypes/durable-evidence-gaps/FINDING.md`. Roughly half of what
+  was accepted as minor was not real, which is the argument for auditing a
+  review's observations rather than carrying them.
 - #295 PR #320 merged normally to `feat/v4` at
   `8389cf5f80b1e2a4684dfb00faa10bcd83c93605`, and issue #295 is closed. P16 now
   derives BETA-09 as the sole agent-ready frontier.
 
-- #294 took four fresh stateless Opus-medium protocol v1 rounds, all
-  byte-preserved in `docs/v4/implementation/beta07/`. Initial head `0a420838`
-  received `BLOCKED` for re-framing a retained generation onto a fresh holder
-  with no fresh root, a reconnect that was refused and surfaced a transport
-  failure to application code, a baseline that disagreed with the manifest on
-  the hosted gate, an untested 256 dependency-token cap, and wake prose the
-  Runtime never enacts. Head `4f01bef3` closed all five and received `BLOCKED`
-  for two defects introduced by that repair: a widened denial union that no
-  production error could reach, and a re-frame branch that could never stage.
-  Head `9318b819` received `BLOCKED` because its refusal mapping tested
-  `instanceof DeclaredOperationError` while `context.error` builds a frozen
-  plain `Error` with no class, so no refusal ever reached a client; the review
-  found it by noticing that the design record and the tracer's passing
-  assertion claimed opposite outcomes. Reviewed head `d25d9388` maps a refusal
-  by the shape `context.error` actually builds, fences a refused binding at its
-  invalidation generation, and received `PASS`.
-- #294 lesson recorded for later slices: three consecutive rounds shipped a
-  test that proved something other than what it claimed, because each injected
-  a construct the production path cannot produce. Every repair in the accepted
-  head is falsified against the unrepaired code, and the manifest pins an
-  explicit typecheck of the changed test files because `tests/**` has no root
-  tsconfig and is not covered by `check-types`.
-- #294 GitHub Actions run `32029361604` is green on evidence head `dfa46116`
-  across full quality, PostgreSQL 16/17/18, TypeScript 7 forward conformance,
-  and the selected-PR performance gate. Local PostgreSQL 16/17/18 measured
-  79/79/82 passing with zero failures; `bench:micro` measured 178.344 ms and
-  `test:load` 7645.066 ms, both inside the committed budgets.
-- #294 PR #313 merged normally to `feat/v4` at
-  `8edfa11a8d62afbd867c4a1e1b6551241d89667e`, and issue #294 is closed. P16 now
-  derives BETA-08 as the sole agent-ready frontier.
-
-- #293 initial reviewed head `a550c3ac3d25965f4391b5a32fba29d0cfe4ce4a`
-  received a fresh stateless Opus-medium `BLOCKED` for an untrue Mutation
-  Service projection and unexecuted sparse-Field/candidate-Policy denial
-  branches. Repaired head `7b37e8ec37f3f8fdb59b080e1a2edbcb15fda9e9`
-  closed the denial evidence but retained the Service wording and received a
-  second `BLOCKED`. Exact authority repair
-  `76016e581f72ea9058a1fed3c784317934ff695d` pinned the no-Service boundary;
-  reviewed head `ef37bd6b5fedef555f39e2e02a6e08fa1f2bce3c` then received
-  fresh stateless Opus-medium `PASS`. All raw reviews are byte-preserved in
-  `docs/v4/implementation/beta06/`.
-- #293 release, architecture, package, Knip, TypeScript 7, hostile,
-  PostgreSQL 16/17/18, and selected-PR performance gates are PASS. Final
-  GitHub Actions run `31926134431` measured 20 PostgreSQL 17 Mutation
-  transactions at 166.026 ms, a 168-byte maximum result, 41,030 public
-  declaration bytes, and 19,276 TypeScript instantiations, all inside the
-  committed budgets.
-- #293 PR #312 merged normally to `feat/v4` at
-  `0d1f35dd8685fdeb55c76547a6775df994f41315`, and issue #293 is closed. P16
-  now derives BETA-07 as the sole agent-ready frontier.
-
-- #292 initial reviewed head `a2a3c90f30d3c0845c1b2b7e6595574d89d1826f`
-  received a valid fresh stateless Opus-medium `BLOCKED` with four findings:
-  review-packet source shaping, a timestamp handler type mismatch, unproven
-  private-package relocation, and an unmeasured compiler budget. Repaired
-  reviewed head `884b5d8a5f051b23d34705be9916140629187509`
-  received replacement `PASS`; raw findings are byte-preserved in
-  `docs/v4/implementation/beta05/`.
-- #292 focused changed, full, release, architecture, package, PostgreSQL
-  16/17/18, TypeScript 7, generated Runtime/client, hostile, and selected-PR
-  performance gates are PASS. GitHub Actions run `31913365744` measured BETA-05
-  PostgreSQL 17 cold start at 91.162 ms and 20 wire executions at 62.622 ms;
-  the final evidence head passed run `31913658818`.
-- #292 PR #311 merged normally to `feat/v4` at
-  `740f2e0049a64f5a541f33ab8da44cf8e114041b`, and issue #292 is closed. P16
-  now derives BETA-06 as the sole agent-ready frontier.
-- P6R1 initial reviewed head `d5c562d8e70e140f9736a5ab56815cb76cc313c5`
-  received a valid fresh stateless Opus-medium `BLOCKED` for an unbound v2
-  digest, missing v1 declared-error/result-kind continuity, and inconsistent
-  v1 retirement. Repaired clean head
-  `deea51ba2799867825b120ec46ec5d8944991d1b` received the single replacement
-  `PASS`; raw reviews are byte-preserved in
-  `docs/v4/prototypes/p6-postcommit-outcome/REVIEW*.json`.
-- P6R1 preserves Operation Wire v1 digest
-  `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c`
-  and accepts Wire v2 digest
-  `2f4cd0631be02ff8a979a0aaa22d0fd393d3638db55e4cc9bbb2db6d9a5ade28`.
-  Wire v2 adds the exact post-commit transaction outcome while carrying v1
-  result kinds and declared errors forward. Retained v1 Queries may execute;
-  v1 Mutations fail before Context Resolution or Operation execution.
-
-- #291 initial reviewed head `f2c1f7be06deaf6ebca9e934c64be0a290034172`
-  received a valid fresh stateless Opus-medium `BLOCKED` with three findings:
-  an unbounded materialized page plan, a mocked PostgreSQL performance claim,
-  and an unreviewed authority revision. Repaired reviewed head
-  `7918bac0c7d579142fc4882c23f6a61e82dc1a51` received the single replacement
-  fresh stateless Opus-medium `PASS`. Raw findings are byte-preserved in
-  `docs/v4/implementation/beta04/`.
-- #291 focused changed, full, release, architecture, package, PostgreSQL
-  16/17/18, generated-contract, hostile, and selected-PR performance gates are
-  PASS. GitHub Actions run `31892854190` measured PostgreSQL 17 execute20 at
-  37.725 ms, planning at 0.422 ms, execution at 0.575 ms, 101 returned rows,
-  and 509 total scan rows. The first-plus-one hostile proves
-  `qp_ix_messages_page`, exactly two Message rows at `first=1`, and no Message
-  sequential scan on all three supported majors.
-- #291 evidence head passed final CI run `31893362124`; PR #308 merged normally
-  to `feat/v4` at `275cad0c1d25251dc5d1ca1835a1316769218d7c`, and issue #291
-  is closed.
-
-- P2R1/BETA04 authority candidate `10d5712a` received a valid fresh stateless
-  Opus-medium `BLOCKED` because its checker required two unretained authoring
-  objects. Raw findings remain in
-  `docs/v4/prototypes/beta04-authority-revision/REVIEW.json`. Portable repaired
-  head `f8e12ead9f667ecc2c6e5478a3071b7f23e67099` received replacement `PASS`;
-  raw evidence is `REVIEW-02.json` and commit `2ae19817`. The sibling revision
-  preserves original P2 and v1 bytes while accepting only Policy cursor v2,
-  two fatal compiler diagnostics, and mechanically derived BETA-04 readiness.
-
-- #290 initial reviewed head `6d0c81392297964180c6032164e3d4b87814b5cc`
-  received a valid fresh stateless Claude Opus-medium `BLOCKED` with four
-  findings. Repaired reviewed head
-  `f830e48c554b027afcb13efea6d3f900fd8c7ece` received the single replacement
-  fresh stateless Opus-medium `PASS`. The byte-preserved raw reviews are in
-  `docs/v4/implementation/beta03/`.
-- #290 focused changed, full, release, architecture, package-isolation,
-  generated-contract, hostile, and performance gates are recorded PASS. The
-  timing evidence is an honestly labelled local reference with a mechanically
-  derived binding budget; it makes no tagged stable-runner claim.
-- #290 PR #305 merged normally to `feat/v4` at
-  `a7d24541c433ab502316b34906d97c9dd51f7ee1`; issue #290 is closed. The target
-  branch reported no status checks, so none were bypassed. #291 is the next
-  dependency-ordered frontier.
-
-- #289 exact diff `11cb63e3a31ae9ec716aac38a6c5ea481fd9bad9..dca711f06ca4b3cc58adbc7b2e56799cabd4839a`
-  received five valid fresh stateless Claude Opus-medium `BLOCKED` reviews at
-  `edaabc83`, `62de1be4`, `391138c0`, `a65ddbf1`, and `e151b748`, followed by a
-  fresh stateless Opus-medium `PASS` at `dca711f0`. Verbatim findings are in
-  `docs/v4/implementation/beta02/`; the disclaimer-prefixed `aaedd3ea` output
-  is not review evidence.
-- #289 `quality:full` and `quality:release` PASS with 80 tests, 0 failures, and
-  15 snapshots. PostgreSQL 16/17/18 lifecycle evidence is 22/22 PASS; catalog
-  evidence is 16 PASS plus 3 version skips on PostgreSQL 16 and 17, and 19/19
-  PASS on PostgreSQL 18. `architecture:check`, `package:check`, and
-  `git diff --check` PASS.
-- #289 recorded performance is 2,690 ms for the changed lane, 6.847 ms for
-  migration planning, and 25,528 golden bytes. The accepted slice exposes
-  compiler and library-level schema/migration/Seed behavior plus CLI explanation
-  producers and goldens; it does not claim a wired `questpie` command binary.
-- #289 PR #304 merged normally to `feat/v4` at
-  `b630fb01c6966b97fb3ac265bd416c4cfe0f1908`; issue #289 is closed. The target
-  branch has no required status checks because CI currently targets `main`;
-  no failing or required check was bypassed.
-
-- #301 reviewed proof head `ff2dfa762c953f2511c5f65e6f930bac3da77868`
-  received a fresh stateless Claude Opus-medium `PASS` after two preserved
-  `BLOCKED` rounds and repairs. Raw reviews are in
-  `docs/v4/prototypes/api-ergonomics-gate/REVIEW*.json`; authority evidence is
-  `fbbf05d457f97927dc2b847b0ad049f26d887151`.
-- #301 fixes named `defineKind`, nested-only Query/Mutation/Action server
-  capability maps, exact canonical Resource Identity, diagnostics
-  `QP-COMPOSE-023`/`024`, one durable kernel with distinct Job/Reaction/Workflow
-  meanings, and the permanent v4 capability map. ADR-0022 and public mirrors
-  project the result.
-- #301 proof runner, canonical TypeScript diagnostics, scoped Oxlint, Oxfmt,
-  docs typecheck/build, `quality:full`, and `git diff --check` PASS. Latest live
-  sample: 1,594 TypeScript instantiations; 84,473 maximum measured declaration
-  bytes; root completion/hover p95 0.253/0.346 ms; 50-operation p95
-  0.367/0.179 ms; 500-operation p95 1.572/0.233 ms. All budgets PASS.
-
-- #288 initial reviewed head
-  `78a08b1eec8bd0c9459a76157171ac0425e4e23a` received a valid fresh stateless
-  Claude Opus-medium `BLOCKED` with five compiler blockers. Repaired reviewed
-  head `f510579567bc587e3679b817d1c68892e6c5de59` received the single replacement
-  fresh stateless Opus-medium `PASS`; raw findings are in
-  `docs/v4/implementation/beta01/`.
-- #288 focused changed lane PASS in 4.151 s; hostile suite 8/8 PASS;
-  `quality:full`, `quality:release`, `package:check`, and `git diff --check`
-  PASS. Latest stable micro sample: compile 1013.34 ms, typecheck 879.98 ms,
-  34,665 generated bytes, 4,103 public declaration bytes, 1,824 TypeScript
-  types, 3,684 instantiations, and 106,592 KiB memory, all within BETA-01
-  budgets.
-- #288 PR #300 merged to `feat/v4` at
-  `20ad8529ee18aba6830a7646acb3a9c9292f2fc6`; issue #288 is closed and #289 is
-  the exact remaining frontier.
-
-- #21 repaired reviewed head
-  `0f44e985cf897a499cae6801966a2467c1e09b68` received replacement fresh
-  stateless Claude Opus-medium `PASS`; accepted evidence head is `d50d4334...`.
-- #21 authority projection: Oxfmt on 21 relevant files, docs MDX/TypeScript, and
-  `git diff --check` PASS; issue #261 comment `#issuecomment-5286723736`.
-- #22 candidate: skill validation, zero-warning scoped Oxlint, performance
-  manifest validation, canonical TS 6 docs/MDX, native TS 7 forward check,
-  strict Knip zero-noise classes, full docs build, and `git diff --check` PASS.
-- Initial #22 reviewed head `bf45e2036fb1796f7f97899b9ef5672bdce4d27d`
-  received a valid fresh stateless Opus-medium `BLOCKED`: the strict Knip
-  filter left unlisted dependencies and binaries at warning severity. The
-  repair promotes those classes to errors and adds a negative control.
-- Repaired #22 reviewed head `fe8b5158d4d4eefb5920f07b3c7198fa3a4d8553`
-  received one replacement fresh stateless Opus-medium `PASS`; accepted
-  evidence head is `17008b0547f24b53d456530b798e8d96ae2e2b1e`.
-- #14 initial reviewed head `e222be7484f6b5ae10eaf7eb209b2259f5a17865`
-  was validly BLOCKED; repaired head
-  `56a39c27704afef00c6b25fdbd13ade88278b668` received replacement fresh
-  stateless Opus-medium PASS. Evidence head is
-  `3a89c565cb1eba59815d106df1c06406ac20ac98`.
-- #15 initial reviewed head `49e142607e9c0275ee07a2fa4b90ff516eaf6995`
-  was validly BLOCKED because Service lifetime had no beta owner. Repaired head
-  `5c4bdfa67ea97fa48793d01fbee188b7dbf19e3b` received replacement fresh
-  stateless Opus-medium PASS. Evidence head is
-  `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f`.
-- Measured #22 candidate loops: focused changed lane 2.09 s; cold docs-only full
-  lane 9.40 s; the warm focused lane is 0.50 s. The format ratchet records one
-  historical file and permits no new drift. Knip report baseline is 17 unused files, two dependency groups,
-  and three unused exports; these noisy classes remain report-only.
+- Verification for accepted slices before BETA-08 is archived in
+  `docs/v4/prototypes/accepted-slice-verification/ARCHIVE.md` — review rounds,
+  reviewed and evidence heads, CI runs, merges and per-slice lessons for #294
+  and older. **That archive is the only copy**: this file used to say the
+  material lives in `PROOF-MAP.md`, and it does not.
 
 ## Open cross-slice findings
 
@@ -565,11 +335,20 @@ and would otherwise never surface them.
   and assets inside the checksum-verified Runtime bundle inherit its integrity
   guarantee while assets read from a resolved root at request time do not.
   `docs/v4/prototypes/studio-packaging/FINDING.md`
-- **Four of seven authoring factories have no runtime behind them.** Action,
-  Job, Workflow, and Route are generated names with no module under
-  `packages/runtime/src`. Deferred by accepted authority and not a defect, but it
-  caused three separate corrections in one record set, because an authored name
-  is not evidence of a runtime.
+- **Four of seven authoring factories have no runtime behind them, and the
+  absence is typed rather than merely missing.** Action, Job, Workflow, and
+  Route are generated into `#questpie/app` as
+  `type EmptyDefinitionFactory = (definition: never) => never`
+  (`fixtures/collaboration/.questpie/generated/app.ts:184`, applied at
+  `:198`–`:201`). Nothing is assignable to `never`, so authoring one is a
+  **compile error at the call site, not a silent no-op**. The runtime end is
+  closed too: `RuntimeExecutableInventoryBinding`
+  (`packages/runtime/src/application/bindings.ts:19`–`:35`) is a union of
+  query/mutation, reaction, context and service only, its switch at `:146`–`:158`
+  has no other case, and `:163`–`:176` returns just `operations` and
+  `reactions`. Deferred by accepted authority and not a defect, but it caused
+  three separate corrections in one record set, because an authored name is not
+  evidence of a runtime.
   `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`
 - **Three accepted durable properties are driven by no test.** The effect fence,
   the maintenance brand refusal, and the `cancellationRequested` event are each
@@ -582,23 +361,375 @@ This list is maintained by hand and has already gone stale once. Treat
 
 ## Next invocation
 
-BETA-09 issue #296 is the active frontier. Its design record set is committed on
-`feat/v4` under `docs/v4/implementation/beta09/`, starting at `README.md`, and
-implementation is already under way on branch `feat/v4-beta-09`.
+BETA-09 issue #296 is the nominal frontier, but the scope question below outranks
+it. Read `docs/v4/implementation/beta09/README.md` before touching
+`feat/v4-beta-09`; it carries the merge state and the slice's open items.
 
-**Read `docs/v4/implementation/beta09/README.md` before touching that branch.**
-It records a merge hazard: the branch forked at `219758a4`, before several
-correction commits landed on `feat/v4`, and both sides have since edited the
-same records. The branch still carries defects that were found and verified
-against the tree, including an inspection projection specified wider than the
-kernel read it claims to narrow. Rebasing the branch is cheaper now than
-resolving it at merge time.
+### The finding that changes the plan
+
+**What blocks building a real application on this framework is not Studio.** Of
+the seven generated authoring factories, three have a runtime — Query, Mutation,
+Reaction. `defineAction`, `defineJob`, `defineWorkflow`, and `defineRoute` are
+generated as uncallable stubs — `(definition: never) => never` at
+`fixtures/collaboration/.questpie/generated/app.ts:184`,`:198`–`:201` — and the
+runtime binding union has no member that could represent them
+(`packages/runtime/src/application/bindings.ts:19`–`:35`). ADR-0021:30-33 lists
+them absent from beta.1. `beta-slice-p15/SLICE.json` names "raw Route and reference Auth
+composition" and "Job and checkpointed Workflow vertical" under `laterBetas` —
+planned, seamed, and with **no slice in `QUEUE.json`**, which covers only
+`4.0.0-beta.1`.
+
+So an application built on beta.1 gets Queries, Mutations, Reactions, Policy,
+live query, migrations, and three call paths — and cannot define a custom HTTP
+route or a scheduled job.
+
+**The user-facing docs did not say this**, and that is now fixed — see the
+first item below. The `docs/v4/` projections always disclosed the deferral in
+their _Deferred seams_ sections; the guides did not inherit it.
+
+### Ordered work
+
+1. ~~**Scope `apps/docs` to beta.1 by removal.**~~ **Done at `1d85b472`.**
+   15 guides → 13, boundary from `beta-slice-p15/SLICE.json`. Two removed, two
+   renamed after surgery, four pruned. The cut's reasoning and the two guides
+   the mapped list missed are in the record named in item 2.
+2. **The beta.1 documentation gap.**
+   `docs/v4/prototypes/beta1-documentation-gap/FINDING.md`
+   Fourteen findings from scoping `apps/docs`, each verified at `c54b30ac`,
+   sorted into four classes — grounded, invented, accepted-but-unbuilt, and
+   precise-but-overstated. **Only "invented" admits a cut**; cutting an
+   accepted-but-unbuilt claim moves the docs away from the accepted position.
+   The two that dominate the rest: `defineQuery` accepts five keys where every
+   guide example passes seven, and output inference is unimplemented, which
+   together account for nearly every compile failure in the guides. One factory
+   and one missing feature, not general rot.
+   Blocked on the owner: `durable-reactions.mdx` (Action explanation, the
+   `ctx.actions` member that is not in `ReactionContext`, and the `:233` link
+   the cut left dangling — one decision settles all three), the four invented
+   Runtime limits, whether Query should gain an operation-level Policy at all,
+   and which application the guides teach.
+
+3. **Prove the embedding — and the claim it was going to prove is false.**
+   `createApp()` exposes `fetch(request: Request): Promise<Response>`
+   (`packages/runtime/src/application/index.ts:111`). An earlier revision of
+   this line said Hono, Elysia, Next route handlers and TanStack Start server
+   routes "all mount it mechanically". **They do not, at a sub-path.**
+
+   `packages/runtime/src/application/index.ts:436` gates on exact pathname
+   equality — `if (new URL(request.url).pathname !== operationPath)` → 404 —
+   with `operationPath = "/_questpie/operation"`
+   (`packages/runtime/src/operation/wire.ts:7`). The realtime carrier does the
+   same at `packages/runtime/src/application/realtime/carrier.ts:159-160`.
+   There is no base-path, prefix, or mount option anywhere in
+   `packages/runtime/src` — the only `prefix` hits are key paths in
+   `mutation/collection.ts:60` and filesystem Origin prefixes in
+   `compiler/src/runtime/application.ts:45-50`.
+
+   So `app.fetch` mounts mechanically **at the host root only**, where the
+   pathname arrives unmodified. A Next route handler is at a sub-path by
+   construction, and `app.route('/api', …)` in Hono or `.group()` in Elysia
+   produce the same thing: inbound `/api/_questpie/operation`, which 404s
+   unless the host rewrites the URL back to app-absolute.
+
+   This was never a discovery — `docs/v4/design-fiction/run-and-deploy.md:285-290`
+   already says it, in accepted text: "it is not a Hono, Elysia, Next.js,
+   Express, or Cloudflare adapter… QUESTPIE does not promise lifecycle parity
+   across a host adapter matrix." The handoff asserted the opposite of its own
+   projection, and the tree sides with the projection.
+
+   **Still unmeasured, and now the measurement is worth more:** no test drives
+   `app.fetch` behind any outer router. The existing coverage in
+   `tests/integration/beta05-runtime-client.test.ts` drives it with real
+   `Request`s (`:406`, `:444`, `:455`, `:462`, `:540`, `:563`, `:612`), so the
+   `Request → Response` contract itself IS measured; the `fetch:` callbacks at
+   `:419` and `:474` are the generated client's outbound transport, not a host
+   mount. What needs a test is the mount boundary: root-mount passes,
+   sub-path-mount 404s. **Blocked in-tick** — that suite needs a workspace
+   build first (`packages/questpie/dist` is stale: "Export named 'durable' not
+   found"), and building writes under `packages/`.
+
+   This lands on open ADR question 2 below. "How much router must the compiler
+   own" is not abstract: literal path identity is enforced at runtime today.
+
+4. **Decide BETA-09.** Finish narrowly or descope. Descope costs an ADR-0021:23
+   amendment plus `implementation-gates.md:438` and `:451`, and needs
+   `blockedBy` on BETA-10 repointed to BETA-08 — the chain 09 ← 10 ← 11 ← 12 is
+   strictly linear, so nothing after it moves until this is settled. **Owner
+   decision.**
+5. **BETA-10**, multi-instance correctness. Not optional for any real
+   deployment.
+6. **BETA-12**, managed PostgreSQL and the release cut.
+7. **Open slices for Route + Auth and for Job + Workflow.** These do not exist
+   and are what the goal actually needs.
+
+**BETA-11** (archive portability) proves the kernel generalises to a second
+domain. Valuable for the framework, not on the path to shipping one application
+— the strongest candidate to defer.
+
+### Route: decided, with two questions left open
+
+Decided with the owner, grounded in ADR-0015 and the tree.
+
+**Route stays, and the reason is narrower than "raw HTTP is sometimes needed".**
+Query, Mutation, and Action all assume the caller is the generated client. Route
+is for callers you do not control — a payment provider, an OAuth server, a
+browser upload. ADR-0015:30 frames it the same way, and its non-goals forbid
+"Modeling a raw Route as an Action or generated JSON Operation". The concrete
+case is the signature check in
+`docs/v4/service-route-and-auth-composition.md:44`: it reads the exact body bytes
+before any parsing, which a typed input contract cannot supply. Convex, the model
+the Query/Mutation/Action trio draws on, needed the same escape hatch alongside
+its `action`.
+
+**Provider primitives do not replace Route; they compose with it.** `createApp()`
+exposes `fetch(request: Request): Promise<Response>`
+(`packages/runtime/src/application/index.ts:111`), so the host framework owns the
+outer server and forwards Requests to that seam. Routes then live inside the
+compiled app and keep the credential resolver, cancellation, deadline,
+Route-safe Service scoping, and compiler overlap diagnostics. Moving them out to
+a host route inverts the framework's value: the riskiest code — webhooks,
+callbacks, uploads — would get the fewest guarantees.
+
+**This composition is narrower than "mounts as a subtree", which is what an
+earlier revision of this line said.** Item 3 above has the grounding: pathname
+equality is exact (`application/index.ts:436`,
+`realtime/carrier.ts:159-160`) and no mount-prefix option exists, so a subtree
+mount 404s until the host rewrites the URL. The argument for keeping Route
+survives unchanged — it never depended on sub-path mounting — but the seam a
+host actually gets is root-mount or an explicit rewrite, not a subtree.
+
+**Two questions this leaves, both ADR-level rather than implementation choices:**
+
+1. **Must `app.fetch` remain the only server entrypoint?** ADR-0015 says yes and
+   lists "authored server entrypoints" under non-goals. Mounting one Route
+   natively in a host router is an amendment.
+2. **How much router must the compiler own?** Overlap diagnostics need literal
+   path identity; mounting could be a thin per-provider adapter. The emitted
+   `routes` map already exposes `direct()`, but `direct` deliberately does not
+   resolve credentials, so it is not that adapter.
+
+Nothing here is built — `route`, `action`, `job` and `workflow` have no runtime
+binding the union can represent (`application/bindings.ts:19`–`:35`) and their
+generated factories are uncallable by construction
+(`generated/app.ts:184`,`:198`–`:201`) — so this is a live decision, not a sunk
+cost. It also sets the floor on the Route + Auth slice: the work starts at the
+binding union and the compiler's emitted inventory, not at a missing module.
+
+### Still open from this slice
+
+- A **term was projected before its gate**: `Operational Fact` was added to
+  `CONTEXT.md` while BETA-09 has never been reviewed, and the design branch
+  projects terms only after `PASS`.
+  **Take the argued exception, not the revert.** The rule was broken in the
+  letter — `f092d618` added it during an unaccepted slice — but the term
+  projects no unbuilt capability. It names a category over four terms that are
+  already accepted vocabulary and already implemented: `Durable Run`,
+  `Physical Attempt`, `Effect Identity` and `Lease` each have a `### ` entry in
+  this glossary and code under `packages/runtime/src/durable/`. Nothing in
+  `packages/*/src` is named for the term itself, which is expected of a
+  superordinate.
+  Checked mechanically that it is the only instance: `git diff 8389cf5f..HEAD --
+CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
+  the file. So this is a single deliberate addition, not drift.
+  Reverting also costs four records that reference it — `HANDOFF.md`,
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, and the two under
+  `docs/v4/implementation/beta09/` — two of which are actively edited.
+  **What would overturn this:** the definition growing to cover a fact only
+  BETA-09 introduces, at which point it would be projecting ahead after all; or
+  an owner reading the gate rule as unconditional, in which case content does not
+  matter and the revert stands. Formally recording the exception is still the
+  owner's, not mine.
+- **Record-set health is tracked separately.**
+  `docs/v4/prototypes/record-set-health/FINDING.md` holds the citation audit,
+  the skill verification, the `SPEC.md` §16 gap, and the
+  `beta09/owner-decisions.md` pointer defects, with the method notes that
+  produced them. Four items there need a person:
+  **`SPEC.md` §16 omits ADR-0022 and ADR-0023**, both Accepted, and ADR-0023
+  supersedes a post-commit edge `SPEC:583`–`:590` still states in full;
+  **`review:accept:verify` is still unwired into CI** though `proof.md`'s own
+  trigger fired when BETA-08 merged; **`owner-decisions.md` carries six pointer
+  defects** whose underlying claims are all true; and **the eight divergences D3
+  batches are enumerated nowhere**, so that gate has a count and no membership.
+- **Criteria 19-22 have no derived status.** The branch re-derived 1-17; the file
+  holds 22. An earlier revision of this line said 18-22. **Criterion 18 is
+  covered**, in a different file:
+  `feat/v4-beta-09:docs/v4/implementation/beta09/narrower-claims.md:107` records
+  "Criterion 18 is now measured: 255 ms against a 5,000 ms budget". Verified on
+  the branch. `acceptance-shape.md`'s "Criterion 18 is covered, in a different file"
+  paragraph had already corrected itself; the correction had not reached this
+  file. (That pointer was a line range until it had moved three times under my
+  own insertions — `:355` to `:361` to `:377` — each move caught by the sweep
+  rule but only because the sweep ran in the same commit as the edit. Naming the
+  paragraph ends the maintenance.)
 
 ```text
-Use the repo-owned QUESTPIE v4 skill. Continue BETA-09 issue #296 on branch
-`feat/v4-beta-09`, rebasing it onto current `feat/v4` first and preserving every
-correction listed in `docs/v4/implementation/beta09/README.md`. Do not reopen
-the decisions in that record set; extend or correct them only on new evidence.
-Preserve the #289–#295 review evidence, the docs-hygiene branch, marketing
-worktree, scalar-research worktree, Studio handoff worktree, and archive branch.
+Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then
+docs/v4/implementation/beta09/README.md.
+
+Repo /home/drepkovsky/code/questpie-v4, branch feat/v4. BETA-09 worktree is
+/home/drepkovsky/code/questpie-v4-beta-09 on feat/v4-beta-09.
+
+CONTEXT. BETA-01..08 are accepted and merged. BETA-09 (minimal Studio) is
+unaccepted, implemented on its branch, and reaches no operational fact. The
+queue chain 09 <- 10 <- 11 <- 12 is strictly linear.
+
+THE THING THAT MATTERS. Studio is not what blocks building an application on
+this framework. defineRoute, defineJob, defineWorkflow and defineAction are
+generated as UNCALLABLE stubs -- (definition: never) => never at
+fixtures/collaboration/.questpie/generated/app.ts:184, applied at :198-201 --
+so authoring one is a compile error, not a silent no-op. The runtime end is
+closed too: RuntimeExecutableInventoryBinding
+(packages/runtime/src/application/bindings.ts:19-35) has no member that could
+represent them. ADR-0021:30-33 lists them absent from beta.1; SLICE.json names
+Route+Auth and Job+Workflow under laterBetas with no slice in QUEUE.json.
+Scope those slices from the binding union and the generated declaration, not
+from "a missing module" -- the floor is higher than that phrasing suggests.
+
+The apps/docs guides no longer document them. That cut landed at 1d85b472:
+13 guides remain, scoped by removal, not by callout -- the owner rejected
+callouts because the guides must read as a finished product.
+
+DO, IN ORDER.
+1. Settle durable-reactions.mdx with the owner. It is the one guide the cut
+   could not touch, and it now has two problems with one root: it explains
+   external effects through the deferred Action capability (:86, :97, :170),
+   and its :233 link to ./durable-jobs-and-workflows now points at a removed
+   page. Deciding how a shipped Reaction performs an effect settles both.
+2. Write one test for the app.fetch mount boundary, and do not expect it to
+   pass everywhere. app.fetch gates on exact pathname equality
+   (application/index.ts:436 against operationPath "/_questpie/operation" at
+   operation/wire.ts:7; realtime/carrier.ts:159-160 does the same) and has no
+   mount-prefix option, so it works at the host ROOT and 404s under a sub-path
+   -- which is where a Next route handler lives by construction. Assert both
+   halves. Needs a workspace build first: packages/questpie/dist is stale
+   ("Export named 'durable' not found").
+3. Bring the owner the BETA-09 decision with its cost stated: finish narrowly,
+   or descope via an ADR-0021:23 amendment plus implementation-gates.md:438 and
+   :451, repointing BETA-10's blockedBy to BETA-08.
+4. Once 3 is answered, proceed on BETA-10 then BETA-12. Treat BETA-11 as
+   deferrable.
+5. Draft slices for Route+Auth and Job+Workflow. They do not exist and they are
+   what the goal needs.
+
+DISCIPLINE, learned the hard way this session and non-negotiable.
+- An authored name is not evidence of a runtime. Before depending on a
+  mechanism, name the file that executes it.
+- Reading finds candidates and settles nothing. A claim about whether something
+  is enforced needs the thing broken and the failure asserted.
+- Measure a performance justification before writing it, or lead with the
+  correctness one. Four decisions in this set led with a performance reason that
+  failed measurement while the decision itself was right.
+- When you correct a fact, grep the tree for its most distinctive token before
+  calling the correction done. Five staleness fixes here were applied only where
+  they were noticed.
+- Verify every claim with file:line. Cite branch-only paths as
+  feat/v4-beta-09:path, since the acceptance packet reads git show
+  <reviewedHead>:<path> and a bare path will not resolve.
+- Citations have TWO axes and they decay separately. Axis one, existence and
+  range: audited at 3a084099, 121 v4-tree citations, none past EOF, none naming
+  a missing file. That one is done; do not re-derive it. Axis two, does the
+  cited line say what the sentence claims: NOT covered by that audit, and it is
+  where the defects actually are. 81907d85 found two at
+  statement-timeout-gate/DECISION.md, off by one and two lines. A content pass
+  over durable-evidence-gaps/FINDING.md found a third: it cited
+  worker.ts:300-304 for "counting the refusal and continuing" when the counter
+  is refusedIncompatible += 1 at :294 and :300 is a field inside the pushed
+  record. All three resolve, all three sit in the right function, all three
+  point at the wrong statement. "None is stale" was never a claim about content.
+  Numbers are a third axis and that one IS worth automating, because it
+  converges. Roughly thirty figures across the guides are now checked against
+  the tree; the results are in item 2 above. Grounded exactly: the whole
+  realtime table, maximumItems 1-1,000 and container depth 8
+  (field-contract.ts:197-202), callId 1-256 scalars / 1,024 bytes / NFC
+  (call-identity.ts:14,:17-19), physical name 63 bytes, heartbeat 10 s and
+  attempt deadline 5 min (durable-kernel.ts:61-62), payload and result 256 KiB,
+  active roots 64 and drain 30 s. Not grounded: the four Runtime limits, the
+  JSONB byte bound, the 255-character Resource Name bound, and one overstated
+  word about page size. Do not re-derive the grounded ones.
+  Two traps if you rerun axis one, both of which produced false positives the
+  first time:
+  (a) 66 further citations point at v3 paths -- packages/questpie/src/server|cli
+  |client/, packages/workflows/, packages/admin/ -- which are ABSENT from
+  feat/v4 on purpose, because v3 is behavioral evidence; they are not broken;
+  (b) a regex for packages/... matches inside feat/v4-beta-09:packages/... and
+  reports correctly-prefixed branch citations as missing files. Both
+  studio-mount.ts citations are already correct.
+
+  Axis two does NOT automate, and this was tried rather than assumed. A checker
+  that pulls backticked identifiers from the sentence and looks for them within
+  three lines of the cited position flagged 33 of 149 citations. Excluding
+  markdown table rows -- whose neighbouring cells contribute unrelated
+  identifiers -- still left 25 of 125. Six were spot-checked against the source
+  and all six were false, from three causes the heuristic cannot separate from a
+  real defect: a range citation `:464`-`:483` whose identifier sits later in the
+  range; a sentence citing two files where the identifier belongs to the other
+  one; and a dotted name like `ctx.values` whose head is not what appears in the
+  code. A 20% false-positive rate is the "forty false positives" trap this
+  repository already learned once -- such a checker gets run once and ignored.
+  Read a sample instead: nine read by hand produced the two real defects at
+  81907d85.
+
+- Absence claims in the record set were swept and all hold. This is the class
+  the repository already burned itself on -- grep-shaped conclusions failed
+  three times in one BETA-08 audit -- so the negative result is worth not
+  re-deriving. Verified: `tenant_id` is in no index, and tree-wide rather than
+  only on `durable_runs` (no CREATE INDEX in schema/postgres names it, across
+  the three tables carrying the column); `grep durable` over
+  packages/runtime/src/application/index.ts returns exactly 0, so the request
+  router really has no durable route; `accepted_at` appears only in
+  acceptance.ts:63's INSERT column list, and inspect() selects `available_at`
+  and `terminal_at` only, so no read returns it; `statement_timeout` and
+  `lock_timeout` appear nowhere in packages/runtime/src; nothing prunes any
+  `durable_*` table. What makes these sound where BETA-08's were not is that
+  each names its search scope in the record, so the claim and its check are the
+  same shape.
+  **Re-checked under the positive-control rule below, since four of these rested
+  on a grep returning empty and an empty result proves nothing on its own.** Each
+  pattern was re-run against a case known to be positive: the index pattern finds
+  0 for `tenant` and 8 for `state`; the `statement_timeout` grep finds 0 under
+  packages/runtime/src and 1 under packages/compiler/src; `grep durable` finds 0
+  in runtime/src/application/index.ts and 23 in
+  compiler/src/runtime/application.ts; the delete-target pattern finds 0 against
+  `durable_*` and 12 against `questpie_internal.*` overall. All four instruments
+  demonstrably fire, so all four absences are real.
+
+- A sweep that finds nothing is only worth reporting if you have shown the
+  instrument can find something. Run it against a case you already know is
+  positive first. Three times this run that step decided whether a clean result
+  was real:
+  (a) the Accepted-ADR sweep at eeec5093 first returned zero defects. The
+  identifier regex excluded hyphens, so it could not have matched
+  QP-COMPOSE-023 -- the one gap already known. Fixed, re-run, and only then
+  reported;
+  (b) the guard probe at 6327ca25 issued an unguarded INSERT and required it to
+  fail with 42501 before testing that ALTER TABLE ADD COLUMN passes. Without
+  that step a passing DDL against absent guards looks identical to one against
+  live guards;
+  (c) the CHECK migration at b5a4285e asserted the widened constraint still
+  rejects an unknown code, because a constraint dropped and never replaced
+  would let the migration "pass" just as convincingly.
+  The cost is one extra command. The failure it prevents is reporting a green
+  result produced by a broken check, which is worse than not checking.
+  The same rule has a mirror worth stating: **a truncated read manufactures
+  false positives as readily as a bad pattern manufactures false negatives.** I
+  nearly reported `ROUTE-SHAPE.md`'s citation of
+  `beta08/acceptance-manifest.json:120` as stale, because I inspected that line
+  through `cut -c1-110` and the quoted clause sits past column 110. The line is
+  criterion 13 and the citation is correct. When a line disagrees with the claim
+  citing it, read the whole line before concluding — manifest and SQL lines in
+  this repository routinely run past 200 characters.
+
+Run bunx oxfmt on only the files you wrote, never across docs/. Then
+bun run check:changed and git diff --check. Commit each increment and push.
+For a change touching packages/ or tests/, that bare form is NOT enough: the
+changed lane runs a test only for each --test you name and a typecheck only for
+each --typecheck workspace you name (scripts/quality.ts:128-130). Use
+  bun run check:changed -- --test path/to/test.ts --typecheck <workspace>
+as references/implementation.md:11 specifies. Bare check:changed on a docs-only
+change is correct, and it runs format and git diff --check -- NOT lint. oxlint
+runs only when a changed file is lintable, and lintable is .js/.jsx/.mjs/.ts/.tsx
+(scripts/quality.ts:94-97). Markdown is formatable (:73-93, .md and .mdx are in
+that set) but never lintable, so a docs-only run does format plus git diff
+--check and nothing else. Do not read a green docs-only gate as having linted
+anything.
 ```

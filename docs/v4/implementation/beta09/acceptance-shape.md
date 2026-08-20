@@ -118,6 +118,56 @@ reasoning rather than against the prose.
    evaluates an inspection Authority decision; a caller without it receives the
    same value a missing run produces. Falsifiable: today no read evaluates
    anything. → `maintenance-decisions.md` Q3, `inspection-contract.md` D3.
+
+   **Prerequisite, and it is a blocker rather than a scope note.** The criterion
+   states a property and is right to. Nothing available today can satisfy it for
+   a read shaped as a Query: the handler is handed no Principal
+   (`QueryContext` is `data` and `signal`,
+   `packages/compiler/src/generate.ts:322`–`:325`); the Query cannot declare
+   authorization either, since `QueryFactory` takes exactly `name`, `network?`,
+   `input`, `output` and `handler` (`:377`–`:384`); and the Operation execution
+   path evaluates nothing of the kind — `packages/runtime/src/operation/` holds
+   six files and none references authority or policy, while the same search finds
+   policy machinery in `packages/runtime/src/relational/`.
+
+   **This is not the claim that Queries are unauthorized, and that distinction
+   was sharpened after the fact.** Policy in v4 is Collection-bound, attached as
+   `{ kind: "default", requiredForNormalDataAccess: true }`
+   (`packages/compiler/src/relational/discovery.ts:136`) and carried in the
+   compiled read plan as `policy` and `policyProgramDigest`
+   (`packages/runtime/src/relational/query.ts:97`–`:98`, `:621`), so an ordinary
+   Query reading Collection data through `ctx.data` **is** Policy-checked.
+
+   The inspection reads are outside that binding, which is the whole of the
+   problem. `durable_runs` is not a discovered Collection — it appears nowhere in
+   `relational/discovery.ts` — and the durable read path carries no Policy
+   machinery at all: the only match for `policy` under
+   `packages/runtime/src/durable/` is a comment at `principal.ts:8`, against two
+   files carrying it under `packages/runtime/src/relational/`.
+
+   So passing criterion 1 requires first choosing one of the three shapes in
+   `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` — reads as
+   Mutations, a widened `QueryContext`, or the durable route. **Planning the
+   slice without settling that plans a criterion that cannot be met** — and the
+   fix must not be an Operation-level Policy on Query, which would duplicate a
+   binding that already works for Collection data.
+
+   **That choice has since been narrowed against accepted authority, and the
+   three are not comparable in cost.** Two need an Accepted ADR amended: reads as
+   Mutations would have to stop a Mutation owning the single PostgreSQL
+   transaction ADR-0011:27 _requires_ it to own, and a widened `QueryContext`
+   would have to let a Query's context carry more than the "generated read-only
+   `ctx.data`" ADR-0011:23 specifies. The durable route needs **no amendment** —
+   ADR-0015:33–:35 already gives a Route handler the Principal, so an inspection
+   Authority decision is evaluable there today — and instead needs the mounting,
+   Fetch dispatch and `routes` projection that ADR-0014 assigns to ADR-0015's
+   slice and nobody has built.
+
+   `ROUTE-SHAPE.md` records the recommendation and its judgment call: prefer the
+   route, because unbuilt-but-specified work is a smaller commitment than
+   amending a frozen contract, and the command half needs that same work
+   regardless.
+
 2. **Maintenance Authority is evaluated and distinct.** Holding inspection
    Authority does not confer it. A caller lacking it is refused with a typed
    `AUTHORITY_DENIED`, and the attempt is recorded in the append-only audit.
@@ -134,6 +184,24 @@ reasoning rather than against the prose.
    does not — because the only caller is trusted by construction and could equally
    have asserted an Authority that passes.
 
+   **Criteria 1 and 2 are not blocked the same way, and the difference decides
+   what each costs to fix.** Maintenance _has_ the Principal and lacks a route:
+   `actorOf` takes one as a parameter
+   (`packages/runtime/src/durable/postgres-maintenance.ts:130`) and merely
+   brand-checks it, so criterion 2 becomes satisfiable by evaluating a value
+   already in hand. Inspection is the mirror — the reads are wire-reachable as
+   Queries today, and a Query handler receives **no Principal at all**, in-process
+   or otherwise, because `QueryContext` is `data` and `signal`
+   (`packages/compiler/src/generate.ts:322`–`:325`). Host code calling a Query
+   cannot hand its handler a Principal the way it hands one to `actorOf`.
+
+   So the caveat above is right that both are in-process only, and that is where
+   the similarity ends. Criterion 2 needs a decision written where a brand check
+   sits. Criterion 1 needs one of the three shapes in
+   `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, two of which amend
+   an Accepted ADR. Reading the caveat as one shared blocker understates the
+   second and overstates the first.
+
 This is stated here rather than left for a reviewer to find, because a criterion
 demonstrated by a weaker case than it claims is what previous rounds blocked on.
 The evidence for these three should say plainly which half it proves. See the
@@ -144,6 +212,23 @@ route exists.
    inspection Authority cannot distinguish denial from absence; a caller with
    inspection but not maintenance Authority receives a specific denial. →
    `maintenance-decisions.md` Q3.
+
+   **This criterion straddles the two blockers, one clause each.** Its first
+   clause is the inspection side and inherits criterion 1's problem exactly:
+   producing a denial indistinguishable from absence requires evaluating an
+   inspection Authority, and a Query handler has no Principal to evaluate. Its
+   second clause is the maintenance side and sits with criterion 2 — the Principal
+   reaches `actorOf`, and the typed denial it needs is the `AUTHORITY_DENIED`
+   code `internal-protocol-v5.md` adds to the rejection union and CHECK, driven by
+   `hostile-cases.md` case 5.
+
+   **That is an argument against the merge the judgment call below considers.**
+   It weighs folding criterion 3 into criterion 1. Half of it does belong there;
+   the other half is satisfiable on the maintenance path once a decision replaces
+   a brand check, and merging would carry that half into a criterion blocked on an
+   ADR amendment it does not need. Splitting the clauses is the better move if
+   this is reopened — one to criterion 1's fate, one to criterion 2's.
+
 4. **The inspection projection is strictly narrower than the kernel read.**
    Nothing Studio can reach returns `result_bytes` or a raw provider receipt.
    Result is presence, length, and digest; receipt is presence. Falsifiable:
@@ -154,9 +239,12 @@ route exists.
    body, or existence — through any operational read for a run that touched it.
    The failing assertion against unrepaired code is recorded. →
    `hostile-cases.md` cases 1 and the red test.
-6. **`operational-nondisclosure.json` is compiled and digest-verified**, and
-   asserts the absence of result and receipt explicitly, so a later widening is
-   a visible diff in a digested artifact. → `inspection-contract.md` D1.
+6. **The operational nondisclosure commitments are pinned and digest-verified**,
+   asserting the absence of result and receipt explicitly, so a later widening is
+   a visible diff in a digested artifact. **The criterion is the property, not a
+   filename** — an earlier version named `operational-nondisclosure.json`, and
+   the implementation satisfies the intent without producing that file. →
+   `inspection-contract.md` D1.
 7. **`relational-nondisclosure.json` joins the verified set.** It is compiled
    today, byte-verified through the build inventory, and read by nothing. →
    `inspection-contract.md` D2.
@@ -186,9 +274,15 @@ route exists.
 14. **Retry is never offered as the remedy for ambiguity**, and retry copy
     states that no exactly-once guarantee is created. →
     `maintenance-decisions.md` Q12.
-15. **A stale build is explained.** A run pinned to a retired executable digest
-    is not presented as healthy. Falsifiable: `EXECUTABLE_RETIRED` writes
-    nothing, so the history says only `accepted`. → `hostile-cases.md` case 4.
+15. **A stale build is explained, given the run's identity.** A run pinned to a
+    retired executable digest is not presented as healthy. Falsifiable:
+    `EXECUTABLE_RETIRED` writes nothing, so the history says only `accepted`.
+    **Scoped deliberately:** the criterion is about what the projection says
+    about a run it was handed, not about an operator finding one. Nothing lists
+    a stuck `ready` run — the worklist keys on `state = 'failed'` and `runId`
+    comes from no shipped API — so a criterion asserting the operator path would
+    pass on a fixture that already knows the identity. →
+    `hostile-cases.md` case 4.
 16. **The Studio projection producer is independent.** Given the same compiled
     input it emits bytes identical to the compiler's artifact, and mutating the
     artifact bytes alone makes the parity test fail. → `hostile-cases.md`
@@ -213,10 +307,19 @@ Fixed now so the implementing slice does not have to rediscover them:
   `docs/v4/prototypes/authority-contract-gap/AUTHORED-VS-BUILT.md`.
 
   **So this slice should scope the command half as deferred and name the owner,
-  rather than carry criteria it cannot satisfy.** The inspection _reads_ are
-  unaffected — Queries are wired, so they work over the wire today with
-  handler-evaluated Authority. Only the commands are blocked, and no accepted
-  slice currently owns the unblocking work. A criterion asserting a
+  rather than carry criteria it cannot satisfy.** Queries are wired, so the
+  inspection _reads_ reach the wire today.
+
+  **But "with handler-evaluated Authority", which an earlier revision said here,
+  is not available.** `QueryContext` is `data` and `signal` only
+  (`packages/compiler/src/generate.ts:322`–`:325`), so a Query handler is handed
+  no Principal and cannot evaluate an Authority at all; the mechanism and the
+  alternatives are worked through in
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`. The reads reaching
+  the wire is still true and is what that sentence needed; the reads being
+  _authorized_ is not settled, and criterion 1 depends on it.
+  Only the commands are blocked, and no accepted slice currently owns the
+  unblocking work. A criterion asserting a
   wire-reachable command would be false at acceptance for a reason no repair
   inside BETA-09 can close.
 
@@ -230,15 +333,42 @@ Fixed now so the implementing slice does not have to rediscover them:
 - **The receipt lane is unreachable.** `mutation_call_receipts.committed_at` is
   durable and never pruned, and no public read exists.
 - **Live Query reset history is not retained.**
-- **The maintenance audit is not globally listable** at acceptable cost;
-  `run_id` precedes `requested_at` in its index.
+- **The maintenance audit is answerable per run, not as a global time-ordered
+  feed.** `run_id` precedes `requested_at` in
+  `durable_maintenance_commands_run_idx` (`internal-protocol-v4-sql.ts:246`), so
+  a global `ORDER BY requested_at DESC` cannot use the index and plans as a
+  sequential scan. An earlier revision of this entry said "not globally listable
+  at acceptable cost"; measurement disproved the cost half — 31.8 ms over 200,000
+  rows is usable. The accurate disclosure is that the cost is **linear in audit
+  size and nothing prunes the audit** — every `delete from questpie_internal.*`
+  across `packages/*/src/` targets one of `change_ledger`,
+  `retained_live_query_results`, `realtime_binding_generations`,
+  `realtime_scope_attachments`, or `realtime_watch_bindings`, and no `durable_*`
+  table appears among them — so it grows without bound, while one
+  `(application_name, requested_at DESC)` index removes it at 0.072 ms.
+  Measured in `studio-purpose.md`.
 - **The redacted-envelope hostile case is structurally satisfied already** and
   is the weakest of the six.
 
 ## Judgment call
 
-Seventeen criteria against BETA-08's sixteen, with criterion 3 (denial
+**Twenty-two criteria against BETA-08's sixteen**, with criterion 3 (denial
 specificity) the one most likely to be judged as belonging inside criterion 1.
+
+An earlier version of this line said "seventeen", which was right when written:
+the section below, "The criteria this record was missing", later added 18
+through 22 from #296's Budgets and Performance blocks and this sentence did not
+move. Counted rather than estimated — 17 numbered items under "The criteria",
+5 under the later heading — and BETA-08's figure verified too: its accepted
+`acceptance-manifest.json` carries exactly 16.
+
+**The corrected comparison says something the old one hid.** Seventeen against
+sixteen reads as parity with the slice that took four review rounds. Twenty-two
+against sixteen is a materially larger acceptance surface, and the five that
+grew it are budget and performance criteria rather than behaviour. That is worth
+a reviewer's attention rather than being smoothed over: if this slice is judged
+too large, criteria 18 through 22 are the separable part, because they bind the
+ticket's budget contract rather than the inspection behaviour the rest describes.
 
 I am keeping it separate because it is the criterion most likely to be
 implemented wrongly in a way that still passes criterion 1 — a uniformly
@@ -272,3 +402,35 @@ quantum` and the derivation asserted in-test, the way BETA-08's were.
 The performance manifests this slice owns are the Studio build-size and query
 baseline measurement manifest, and the BETA-09 stable-runner budget report.
 Both are named by the issue's Performance ownership block.
+
+**Four of these five sit outside the branch's status derivation, and that is
+worth knowing before a manifest is written.** `feat/v4-beta-09` re-derived
+criteria status at `cdd5193c`, finding fourteen of **seventeen** met with three
+carrying the Q3 qualifier. Both copies of this file hold twenty-two criteria —
+seventeen in the section above and these five.
+
+**Criterion 18 is covered, in a different file.** The branch's
+`narrower-claims.md:107` records "Criterion 18 is now measured: 255 ms against a
+5,000 ms budget", so the changed loop is tied to its criterion. An earlier
+revision of this section said the branch was silent on 18 through 22; it was
+silent on **19 through 22**, and I had read only the reconciliation record before
+concluding about the whole branch. Criteria status is spread across at least
+`acceptance-reconciliation.md` and `narrower-claims.md`, so neither file alone
+answers what is covered.
+
+Some of the evidence already exists on that branch, though **not at the figures
+its commit message gives, and an earlier revision of this section repeated them
+unverified.** The committed baseline
+(`feat/v4-beta-09:quality/baselines/beta09-studio-projection.json`) records
+`observed.studioBundleBytes` **243,941** against a 327,680 budget, and
+`observed.worklistMedianMs` **0.167** from samples `[0.142, 0.167, 0.255]`
+against a 5 ms budget — not 245,540 and 0.151. Both still pass their budgets
+comfortably, so the conclusion is unchanged and only the numbers were wrong.
+
+That is most of what criterion 19 asks for. What is missing is the derivation
+tying that evidence to these criteria, plus the 5 s changed-loop measurement in
+its flagged form (see `design-context.md`) and an explicit statement for criteria
+20, 21 and 22.
+
+A count a reviewer checks first should not have two answers depending on which
+section they read.

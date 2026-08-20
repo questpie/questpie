@@ -1,8 +1,9 @@
 # BETA-09: the inspection surface and how nondisclosure is proven
 
-Decides what Policy-protected inspection Operations BETA-09 exposes, what each
-returns, and how nondisclosure equivalence is proven against the prescribed red
-test.
+Decides what inspection Operations BETA-09 exposes, what each returns, and how
+nondisclosure equivalence is proven against the prescribed red test. `QUEUE.json`
+calls them "Policy-protected"; D3 below records why that word names a mechanism
+this surface cannot have.
 
 This record merges two concurrent work ticks that reached the same file from
 different directions. One established that the compiler already emits a
@@ -23,8 +24,26 @@ The prescribed red test is:
 It bites on the operational lane, not the application one.
 
 **Application data** flows through ordinary generated Operations and Collection
-Policy, as ADR-0014 requires. With no second path to rows, disclosure
-equivalence is definitional, and driving the red test there proves a tautology.
+Policy, as ADR-0014 requires. Disclosure equivalence is definitional there, and
+driving the red test on that lane proves a tautology.
+
+_Precision added after the fact, and it does not change the disposition._ An
+earlier revision said "with no second path to rows". There is a second statement
+that reaches rows: the keyed row lock a Mutation issues before its Policy read —
+`SELECT TRUE AS "qp_locked" FROM <table> WHERE <key predicates> LIMIT 1
+FOR UPDATE` (`packages/compiler/src/mutation/postgres.ts:138`), whose predicates
+come from `operation.keyFields` alone (`:72`–`:75`), with Policy applied only in
+the following read (lifecycle `["keyedRowLock", "freshPolicyRead", …]`, `:131`–`:136`).
+
+It is not a disclosure path. It projects a constant rather than columns, and its
+result is never branched on beyond a `length > 1` sanity check
+(`packages/runtime/src/mutation/collection.ts:253`). What remains is a timing
+channel: the lock is a bare `FOR UPDATE`, so it blocks on a row held by another
+transaction and returns at once on an absent one, which a caller who cannot see
+the row could time. That is a weaker claim than a second read path, it is out of
+scope for this contract, and it is recorded so the sentence is not read as
+stronger than the tree supports. The red test still belongs on the operational
+lane.
 
 **Operational facts** — runs, events, effects, the maintenance audit — are not
 Collection rows. No Collection Policy covers them. All four reads evaluate no
@@ -107,10 +126,9 @@ exists in the tree, so extending it is not a new idea.
 
 ### D1 — the operational lane gets the same kind of artifact
 
-BETA-09 produces `operational-nondisclosure.json`, digested into the Runtime
-Build like every other artifact and pinned by a compile-level test. It states,
-per inspection Operation, the same class of facts the relational projection
-states per query:
+BETA-09 pins these commitments into a digested contract and a compile-level
+test. It states, per inspection Operation, the same class of facts the
+relational projection states per query:
 
 - the exact closed list of fields the projection returns;
 - that `resultBytes` and `receipt` are absent — named explicitly rather than
@@ -132,6 +150,31 @@ showed hand-written proof is the weak link. What would overturn it: if the
 operational reads turn out to have so few disclosure degrees of freedom that
 the artifact is a constant, in which case a test asserting the projection's
 field list directly is the simpler equivalent.
+
+**Where they landed, checked against the branch rather than assumed.** An
+earlier revision of this section said BETA-09 "produces
+`operational-nondisclosure.json`". Nothing produces that file — it is named in
+no compiler source on `feat/v4` or on `feat/v4-beta-09`, while every other
+artifact this record set cites (`relational-nondisclosure.json` at
+`packages/compiler/src/artifacts.ts:453`, `durable-kernel.json`,
+`reaction-projection.json`, `wire-contract.json`) is emitted by one.
+
+The branch put the commitments inside the contract that already exists:
+`durableKernelContract.nondisclosure`, a seven-field block on
+`feat/v4-beta-09`'s `packages/compiler/src/reaction/durable-kernel.ts` (type at
+`:37`–`:45`, values at `:152`), asserted by
+`tests/unit/beta09-operational-nondisclosure.test.ts`. `feat/v4`'s copy of that
+file has no `nondisclosure` at all, so this is new work on the branch rather
+than something the record misread.
+
+**That is the better shape and the record now asks for the property instead.**
+The durable kernel contract is already digested into the Runtime Build, so the
+commitments inherit the digest that a separate file would have had to
+manufacture — the branch's own test comment calls a standalone artifact "a
+constant with a digest around it". Naming a filename in an acceptance criterion
+over-specified the mechanism. What would overturn it: commitments that need to
+be read by something other than the durable kernel, which would justify their
+own artifact rather than a block inside that contract.
 
 ### D2 — `relational-nondisclosure.json` gains runtime verification
 
@@ -212,6 +255,32 @@ existing `durable_runs_claim_idx`. Every one is Policy-protected by an
 **evaluated inspection Authority**, distinct from maintenance Authority per
 `maintenance-decisions.md` Q3.
 
+**"Policy-protected" is the wrong word here, and the queue uses it too.**
+`Policy` in v4 names a specific mechanism: it is Collection-bound, attached as
+`{ kind: "default", requiredForNormalDataAccess: true }`
+(`packages/compiler/src/relational/discovery.ts:136`) and carried in the compiled
+read plan (`packages/runtime/src/relational/query.ts:97`–`:98`). These four reads
+are over `questpie_internal.durable_*`, which are not discovered Collections, so
+**no Policy can attach to them** — the mechanism the word names cannot reach this
+surface. `QUEUE.json` names BETA-09's artifact "Policy-protected inspection
+Operations", so the conflation is upstream of this record rather than introduced
+by it.
+
+Read the sentence above as "protected by an evaluated inspection Authority" and
+drop "Policy-protected". The distinction matters to whoever builds this: an
+implementer who reads "Policy-protected" literally will look for a Policy
+binding, find none possible, and conclude the surface is unprotectable — when
+what is actually required is a new Authority evaluation, on one of the shapes
+`docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` compares.
+
+**And this closes the question of deferring criterion 1.** The command half was
+scoped out of this slice rather than carried unsatisfiable. The read half cannot
+be: "Policy-protected inspection Operations" is one of BETA-09's four artifacts
+in `QUEUE.json`, and the slice's red test is about disclosure through the
+inspection surface. Deferring criterion 1 would leave the slice shipping an
+inspection surface with no authorization, which is the thing the red test exists
+to catch.
+
 Adding read shapes beyond these is how an inspection surface becomes the
 internal-table CRUD the issue names as a non-goal.
 
@@ -280,6 +349,13 @@ and falsifying every repair against the unrepaired code is the guard.
 receives the same outcome for a run that exists and one that does not.
 Inspection Authority is evaluated at the entrance — the bounded worklist — not
 only at the leaf, because a list leaks existence.
+
+That placement is unaffected by a later finding, but the mechanism under it is
+open: the worklist is a Query, and a Query handler receives no Principal
+(`packages/compiler/src/generate.ts:322`–`:325`). Entrance-versus-leaf is still
+the right call for the reason given; _what_ performs the evaluation there is
+decided in `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, which
+rules out the handler and leaves widening `QueryContext` or the durable route.
 
 ## Corrections carried from this work
 

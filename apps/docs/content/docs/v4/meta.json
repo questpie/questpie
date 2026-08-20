@@ -10,11 +10,9 @@
 		"queries-and-mutations",
 		"realtime",
 		"durable-reactions",
-		"durable-jobs-and-workflows",
-		"multi-instance-and-acceleration",
-		"files-search-and-contract-projections",
+		"multi-instance",
 		"semantic-kernels-and-public-surface",
-		"services-routes-and-auth",
+		"services",
 		"runtime-and-studio"
 	]
 }

@@ -1,4 +1,4 @@
-# Three accepted durable properties that no test drives
+# Seven durable properties that no test drives
 
 BETA-08 was accepted with twelve review observations. Auditing them against the
 tree closed one, refuted one, found one part stale, and **confirmed three** —
@@ -120,3 +120,280 @@ it cannot prove anything adversarial is stopped, for the reason recorded in
 `docs/v4/implementation/beta09/maintenance-decisions.md` — with no wire route the
 only caller is in-process and mints its own `Principal`. Write the assertion, and
 write down which half it proves.
+
+## Four further gaps, found by adversarial review and verified here
+
+These are bounds that accepted authority names and no code enforces. None is a
+disclosure gap in this record's original three; they are additions, found by
+running two opposing reviews over the tenant-share records and then checking the
+tree rather than the reports.
+
+This heading said "Two further gaps" while four sections sat under it. Sections
+4 and 5 arrived at `e1af84fd`, sections 6 and 7 at `ba7daced`, and the count was
+not updated either time. The document title said "Three" for the same reason.
+
+### 4. The retry horizon is pinned, digest-carried, and enforced nowhere
+
+`retryHorizonMilliseconds: 86_400_000` is pinned into the compatibility contract
+the Runtime Build digests (`packages/compiler/src/reaction/durable-kernel.ts:77`),
+under a comment claiming that block holds "only the budgets this slice actually
+enforces" (`:68`–`:71`).
+
+`horizon_at` has exactly two references in the runtime:
+`packages/runtime/src/durable/acceptance.ts:62` writes it, and
+`packages/runtime/src/durable/postgres-kernel.ts:360` reads it — inside
+`available_at = LEAST(transaction_timestamp() + interval, horizon_at)`. Nothing
+compares it to the current time as a termination condition.
+
+**The clamp has an ordering consequence.** Once `horizon_at` is in the past,
+`LEAST` sets `available_at` to a past timestamp, and `admit` orders
+`available_at` ascending (`postgres-kernel.ts:463`). A run past its horizon
+therefore takes its remaining retries with zero backoff **at the head of the
+admission queue**, ahead of healthy work.
+
+**This entry was first written more strongly than the tree supports, on an
+agent's framing that was not checked against the surrounding text.** Two
+corrections, both from reading BETA-08's narrower-claims list in
+`docs/v4/implementation/beta08/design-context.md` in full — its retry-horizon
+bullet and its `durable-kernel.json` budgets bullet:
+
+- **It is not a self-contradiction, and calling it one was unfair.** The record
+  discloses the gap in the same bullet that describes the clamp: "This slice
+  runs no horizon sweep, so a run whose horizon passes while it waits is still
+  bounded only by its eight-attempt program" (`:260`–`:263`). Counting the
+  horizon among the pinned budgets at `:266`–`:268` is consistent with that,
+  because the horizon _is_ read and applied on every retry schedule. "Enforces"
+  there means clamps, not terminates.
+- **The head-of-queue effect is bounded, not permanent.** The eight-attempt
+  program stops the retries; `claim` returns `skipped` once
+  `attemptNumber > retry.maximumAttempts` (`postgres-kernel.ts:522`–`:523`).
+
+So the accurate finding is narrower than "a pinned budget with no enforcing
+path": the clamp is a path. What is missing is a **termination** condition —
+nothing compares `horizon_at` to the current time to end a run — and the clamp's
+interaction with ascending admission order means an over-horizon run's remaining
+attempts jump the queue.
+
+It compounds with §5 rather than standing alone: once those attempts are
+exhausted the run is `skipped` on every claim, still carries a past
+`available_at`, and is therefore re-admitted at the head of the queue **forever**.
+That permanence comes from §5, not from the horizon.
+
+### 5. A refused claim writes nothing, and the run is re-admitted forever
+
+Two claim outcomes return without touching the row:
+`refused / EXECUTABLE_RETIRED` (`postgres-kernel.ts:514`–`:518`) and `skipped`
+when `attemptNumber > retry.maximumAttempts` (`:522`–`:523`).
+
+**The two leave the run in different states, and the second is rarer than it
+looks — both worth stating precisely, because a first draft of this entry was
+vaguer than the tree.** Ordinary retry exhaustion does _not_ reach the `skipped`
+path: `fail()` terminalizes at `claim.attemptNumber >= claim.retry.maximumAttempts`,
+writing `state = 'failed'` with `RETRY_EXHAUSTED` and `deadLetter: true`
+(`postgres-kernel.ts:663`–`:675`). So an exhausted run normally ends `failed`,
+which is correct and reachable.
+
+The `skipped` branch uses `>` against `attempt_count + 1`, so it fires only when
+`attempt_count` already reached `maximumAttempts` **without** `fail()` ever being
+called — a worker that died after the attempt incremented the count and before it
+reported an outcome. The lease then expires, `admit` re-selects the row through
+`state = 'running' AND lease_expires_at <= transaction_timestamp()` (`:462`),
+`claim` skips it, nothing is written, and the cycle repeats indefinitely.
+
+So the two stuck classes settle at **`ready`** (retired executable) and
+**`running` with an expired lease** (crash at the exhaustion boundary).
+Neither is `failed`. The worker mirrors
+this, counting the refusal and continuing —
+`refusedIncompatible += 1` at `packages/runtime/src/durable/worker.ts:294`,
+`continue` at `:304`. An earlier revision cited `:300`–`:304`, which resolves
+and sits in the right branch but starts at `outcome: "refusedIncompatible"`
+inside the pushed record and misses the counter at `:294` — the half the
+sentence actually names. `available_at` never
+advances, so `admit` re-selects the row on every poll of every worker and it
+sorts **first**. No sweeper removes it — there is no `DELETE` against any
+`durable_*` table anywhere in `packages/*/src/`.
+
+**A shipped test asserts this state.** After a retired-kernel refusal,
+`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391` asserts the
+run is still returned by `admit()` and still reads
+`{ state: "ready", attemptCount: 0 }`.
+
+`claimBatch` defaults to 64 and is rejected outside 1–64
+(`postgres-kernel.ts:257`–`:263`), so it takes only as many such rows as the
+configured batch to occupy every admission permanently — 64 at the default, fewer
+for a worker configured lower. They sort first because a refused run keeps its
+original `available_at` while healthy work arrives with later ones.
+
+The trigger is an ordinary completed rolling deploy, not an attack: "readiness
+does not scan `durable_runs.executable_digest` against the current build"
+(`docs/v4/implementation/beta08/design-context.md:279`–`:283`), and no readiness
+path in `packages/runtime/src` reads that column.
+
+**What BETA-08 disclosed, stated fairly.** The slice named this: the refusal
+"consumes no attempt; the run stays `ready` for a compatible worker" (`:264`–`:266`),
+and `:279`–`:283` records it as a narrower claim and "the only disposition this
+slice implements". So the mechanism is disclosed and deliberate. What is not
+disclosed is the consequence for admission — that the row is re-selected by every
+worker on every poll indefinitely, ahead of live work, with no sweeper and no
+progress bound. That consequence is this entry's content; the mechanism is not a
+discovery.
+
+**This is why it matters to the fair-admission work next door.** Ranking by
+`row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id)` makes
+a poison row `turn = 1` for its tenant on every round. Fair admission narrows the
+blast radius to one tenant and makes that tenant's starvation permanent. Neither
+`docs/v4/prototypes/tenant-share-control/MECHANISM.md` nor its `DECISION.md` asks
+whether an admitted run can fail to progress, and there is no progress bound on
+admission to ask it of.
+
+**Falsification for both.** For 4: set a run's `horizon_at` in the past, fail it,
+and assert its `available_at` is not before a healthy run's. For 5: refuse a
+claim, poll `admit()` twice, and assert the run does not appear in the second
+batch. Both fail against the tree today, which is the point.
+
+### 6. The maintenance audit has no row bound, and a timeout cannot give it one
+
+`durable_events` is bounded by CHECK —
+`durable_event_sequence_bounded CHECK (sequence BETWEEN 1 AND 1024)`
+(`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts:149`).
+`durable_maintenance_commands` has no equivalent. Its five CHECK constraints
+(`:213`–`:245`) cover the command name, the outcome, the rejection code, the
+outcome shape, and the actor kind. None bounds a count.
+
+`record()` inserts a row for **rejected** commands as well as applied ones, from
+eleven call sites in `packages/runtime/src/durable/postgres-maintenance.ts`
+(`:208`, `:218`, `:228`, `:269`, `:289`, `:299`, `:309`, `:325`, `:345`, `:362`,
+`:372`). Repeated rejected commands against one run therefore grow the table
+without limit, no sweeper deletes them — every
+`delete from questpie_internal.*` in `packages/*/src/` targets `change_ledger`,
+`retained_live_query_results`, or a `realtime_*` table — and `audit(runId)` reads
+all of them: `WHERE application_name = $1 AND run_id = $2 ORDER BY requested_at,
+command_id`, with no `LIMIT` (`postgres-maintenance.ts:384`).
+
+**Why this matters to the statement-timeout gate next door.** A
+`statement_timeout` on `audit` converts an unbounded read into a _failing_ read
+rather than a bounded one. The missing bound is on rows, and the gate only
+bounds time. This is the one surface where the gate makes the operator's
+experience worse rather than better, and
+`docs/v4/prototypes/statement-timeout-gate/DECISION.md` should not be read as
+covering it.
+
+**Falsification.** Issue N rejected maintenance commands against one run, then
+assert `audit(runId)` returns a bounded number of rows. It fails for every N.
+
+### 7. Pool checkout is unbounded and abort-blind, in framework code
+
+`packages/runtime/src/mutation/postgres.ts:173` is `await pool.reserve()` — no
+signal, no deadline — and it runs _after_ the 5,000 ms budget is armed at `:159`.
+The relational path is the same shape: `reserveConnection`
+(`packages/runtime/src/relational/postgres.ts:29`–`:36`) calls `pool.reserve()`
+and retries once on a closed connection, neither call signal-aware, invoked at
+`:80` after a single `throwIfAborted()` at `:79`.
+
+Pool _sizing_ is legitimately the host's — the framework takes `SQL` as a
+type-only import and never constructs the pool. But the _wait_ is framework code,
+and the framework declines to wire an abort it already holds.
+
+**This is the bound the tenant-share record files under "PostgreSQL pool slots |
+nowhere; the host owns the pool | non-goal for beta.1".** That scoping is right
+about sizing and wrong about the wait. It matters for share: a
+`statement_timeout` bounds the holder of a connection, not the queue for one, so
+a tenant parking N mutations behind the unbounded row lock recorded in the gate
+record still holds N slots while every other tenant waits in an uninterruptible,
+unordered queue.
+
+**Falsification.** Abort a Mutation's signal while every pool connection is
+held, and assert the call rejects. It waits instead.
+
+## Who owns 4 through 7
+
+Sections 1 through 3 already say they belong to "whoever next touches the
+durable surface". Sections 4 through 7 were left with no owner at all, which is
+how a written falsification becomes a permanent record instead of a test. Each
+is assigned below against the slice scopes in
+`docs/v4/prototypes/implementation-collapse-p16/QUEUE.json`, or recorded as
+deferred with the reason. No new prototype: the falsifications are already
+written above, and this section only says where each one lands.
+
+### 4 and 5, retry horizon and poison-run progress, to BETA-10
+
+They go together because section 4 says so: its permanence "comes from §5, not
+from the horizon". Assigning them apart would split one failure.
+
+**5 is the stronger fit, and it is close to exact.** BETA-10's `hostile` list
+contains `"old/new compatible build"` and `"incompatible claim refusal"`
+(QUEUE.json), and section 5's trigger is "an ordinary completed rolling deploy"
+producing exactly that refusal. Its falsification — refuse a claim, poll
+`admit()` twice, assert the run is absent from the second batch — is a
+rolling-compatibility assertion, which is what BETA-10's `"rolling compatibility
+matrix"` artifact is for.
+
+**4 needs more than one worker to be visible at all.** The head-of-queue effect
+is an ordering claim between a poisoned run and healthy work competing for
+admission, so it is only observable under BETA-10's `"ten-instance load
+scenario"` and `"concurrent schedulers/workers"`.
+
+**One thing whoever takes this must know before writing the test.** A shipped
+test already asserts the stuck state as correct:
+`tests/integration/postgres/beta08-durable-kernel.test.ts:386`–`:391` asserts
+that after a retired-kernel refusal the run is still returned by `admit()` and
+still reads `{ state: "ready", attemptCount: 0 }`. Fixing section 5 changes an
+assertion inside an accepted slice. That is a BETA-08 acceptance question, not a
+free BETA-10 edit, and it should be raised before the work starts rather than
+discovered in review.
+
+**What would overturn this.** If the owner rules that the eight-attempt program
+is the only intended bound and a poisoned row at the head of admission is
+acceptable, section 4 stops being slice work and becomes a disclosure fix in
+`docs/v4/implementation/beta08/design-context.md` — the consequence for
+admission is the part that record does not state. Section 5 does not dissolve
+the same way; no reading makes indefinite re-admission intended.
+
+### 6, the maintenance audit row bound, to BETA-09 — and it does not die with it
+
+`audit(runId)` is the inspection surface's read, and BETA-09 owns `"safe
+event/explain views"`. Its `hostile` list is where the rows come from:
+`"maintenance Authority denial"` and `"typed concurrent command winner"` both
+produce **rejected** commands, and `record()` inserts a row for rejected
+commands as well as applied ones from eleven call sites. The slice that
+exercises those hostile cases is the slice that generates the unbounded table.
+
+**The dependency is the problem with this assignment, and it is worth stating
+plainly.** BETA-09 is unaccepted and blocked on an owner decision. If it is
+descoped, section 6 loses its owner while the gap stays exactly where it is:
+`audit()` is BETA-08 code, accepted and shipping, and
+`postgres-maintenance.ts:384` has no `LIMIT` today regardless of what happens to
+Studio. **A descope decision must reassign section 6, not close it.** There is
+no Studio row bound in the tree to inherit either — the 100-row page bound the
+public guide describes has no constant anywhere in `packages/`, because Studio
+lives on an unmerged branch.
+
+### 7, pool checkout abort-wiring, deferred — with the trigger that undefers it
+
+No current slice would catch it. Every slice that asserts cancellation asserts
+it without pool contention: nothing in `tests/` drives pool exhaustion, and the
+only `reserve()` appearances are a stub at
+`tests/integration/beta04-policy-query.test.ts:106` and direct session checkouts
+in the beta02 and beta06 protocol tests. A gap no criterion reaches is deferred
+whether or not anyone writes it down; writing it down is the difference between
+deferred and lost.
+
+**The existing non-goal covers half of it and should not be read as covering the
+rest.** The tenant-share record files pool slots under "the host owns the pool |
+non-goal for beta.1". That is right about _sizing_ — the framework takes `SQL`
+as a type-only import and never constructs the pool. It is not about the _wait_:
+`mutation/postgres.ts:173` is `await pool.reserve()` with no signal, armed after
+the 5,000 ms budget at `:159`, and `relational/postgres.ts:31`,`:34` are the
+same shape. That is framework code declining to wire an abort it already holds,
+which the non-goal does not reach.
+
+So this is deferred as slice work but recorded as a known limit of the
+cancellation contract: a Mutation's signal does not interrupt a pool wait.
+
+**What undefers it.** BETA-10 ships a `"ten-instance load scenario"`. If that
+scenario puts enough concurrent Mutations against one pool to queue on checkout,
+section 7 becomes observable inside a slice that is already running, and its
+falsification — abort a Mutation's signal while every connection is held, assert
+the call rejects — costs one test rather than a new scenario. Whoever builds
+that scenario should check whether it already reaches this, because that is the
+cheapest moment this gap will ever be closeable.

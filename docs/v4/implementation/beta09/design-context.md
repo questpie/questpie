@@ -302,8 +302,40 @@ From the issue, unchanged: the changed loop stays under 5 s; Studio build-size
 and query-latency baselines are recorded; no secret or raw-payload snapshots.
 
 BETA-08's review observed that "the changed loop stays under 5 s" has had no
-recorded measurement for two slices running. This slice should either measure
-it or stop carrying it.
+recorded measurement for two slices running. **`feat/v4-beta-09` has now measured
+it at `b4fd93c9`: 255 ms against the 5,000 ms budget**, with a discarded first
+attempt honestly recorded — it used `touch`, which changes no content, so the
+script exited on an early return and reported 36 ms of nothing.
+
+**One qualification, verified here.** That measures a _bare_ `check:changed`,
+which runs oxfmt, oxlint with `--deny-warnings`, and `git diff --check`. Tests
+and typechecks run **only when passed explicitly** — `for (const test of
+values("--test", args))` and `for (const workspace of values("--typecheck",
+args))` (`scripts/quality.ts:128`–`:129`).
+
+This slice's own verification command is the flagged form:
+`bun run check:changed -- --test tests/integration/beta09-studio.test.ts
+--typecheck @questpie/studio`.
+
+**That path does not exist, on either branch.** `feat/v4-beta-09` built its
+Studio tests under different names — `tests/unit/beta09-studio-mount.test.ts`,
+`tests/unit/beta09-studio-projection.test.ts`, and
+`tests/performance/beta09-studio-projection.test.ts` — and there is no
+`tests/integration/beta09-studio.test.ts` anywhere.
+
+Checked what that costs, since a verification command that quietly verifies
+nothing is worse than one that breaks: `bun test <missing path>` reports "The
+following filters did not match any test files" and **exits 1**, so
+`quality.ts:128` (`run(["bun", "test", test])`) fails loudly rather than passing
+an empty run. The command is unrunnable, not silently vacuous.
+
+So the budget question below is unchanged — the flagged loop is still the right
+one to measure — but the command must name the three files that exist before
+anyone quotes a figure from it. So 255 ms is correct for what it measured and
+narrower than the loop the slice actually prescribes. The budget should be
+measured against the flagged command too, or the record should say which loop
+the 5 s bounds — otherwise the number is honest and answers a question adjacent
+to the one the budget asks.
 
 Budgets must be derived from measurement the way BETA-08's were —
 `ceil(observed × multiplier / quantum) × quantum` — and the derivation asserted
