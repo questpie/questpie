@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { Buffer } from "node:buffer";
+import { randomUUID } from "node:crypto";
 
 import { PGlite } from "@electric-sql/pglite";
 import { eq, inArray, sql } from "drizzle-orm";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import { drizzle } from "drizzle-orm/pglite";
+import pg from "pg";
 
 import { collectCrdtGarbage } from "../../../src/server/modules/core/integrated/crdt/compaction-store.js";
 import {
@@ -170,6 +173,48 @@ describe("CRDT repeatable aggregate sync store", () => {
 				fieldCursor: fixture.title.headFieldCursor,
 			},
 		]);
+	});
+
+	it("round-trips opaque pull ids without RFC version or variant bits", async () => {
+		const authorization = await currentAuthorization(db, fixture);
+		const pullId = "00000000-0000-0000-0000-000000000560";
+		const store = createCrdtPullStore(db, {
+			namespace: "sync-test",
+			deploymentFingerprint: "deployment-a",
+			secret: "test-secret-that-is-long-enough",
+			resolveEngine: () => textEngine,
+		});
+
+		const page = await store.pull({
+			claim: {
+				sessionId: SESSION_ID,
+				bindingId: authorization.bindingId,
+				resourceId: RESOURCE_ID,
+				requestedMode: "edit",
+				effectiveMode: "edit",
+				sessionGeneration: 0n,
+				deliveryGeneration: 0n,
+			},
+			authorization: authorization.snapshot,
+			pullId,
+			schemaVersion: manifest.version,
+			continuation: null,
+			proofs: [
+				{
+					fieldSlot: fixture.title.fieldSlot,
+					fieldEpoch: fixture.title.fieldEpoch,
+					proof: Uint8Array.of(1),
+				},
+			],
+		});
+
+		const frame = decodeStoredPull(page.payload);
+		expect(frame.opcode).toBe(0x81);
+		if (frame.opcode !== 0x81) throw new Error("expected pull page");
+		expect(Buffer.from(frame.payload.pullId)).toEqual(
+			Buffer.from(pullId.replaceAll("-", ""), "hex"),
+		);
+		await expireAndCollectPulls(db, store, [pullId]);
 	});
 
 	it("stops awaiting pull materialization when the request is aborted", async () => {
@@ -1209,6 +1254,97 @@ describe("CRDT repeatable aggregate sync store", () => {
 			chunks: after.payload.chunks,
 		});
 	});
+});
+
+const postgresUrl =
+	process.env.QUESTPIE_CRDT_DATABASE_URL ??
+	process.env.QUESTPIE_TRANSACTION_LOCK_DATABASE_URL;
+
+describe.skipIf(!postgresUrl)("CRDT pull store on bounded PostgreSQL", () => {
+	const schemaName = `questpie_crdt_pull_${randomUUID().replaceAll("-", "")}`;
+	let admin: pg.Pool;
+	let pool: pg.Pool;
+	let postgresDb: ReturnType<typeof drizzlePg<typeof questpieCrdtTables>>;
+	let compatibleDb: ReturnType<typeof drizzle<typeof questpieCrdtTables>>;
+	let postgresFixture: Awaited<ReturnType<typeof seed>>;
+
+	beforeAll(async () => {
+		admin = new pg.Pool({ connectionString: postgresUrl, max: 1 });
+		await admin.query(`CREATE SCHEMA "${schemaName}"`);
+		pool = new pg.Pool({
+			connectionString: postgresUrl,
+			max: 5,
+			options: `-c search_path=${schemaName}`,
+		});
+		postgresDb = drizzlePg({ client: pool, schema: questpieCrdtTables });
+		compatibleDb = postgresDb as unknown as typeof compatibleDb;
+		const { generateDrizzleJson, generateMigration } =
+			await import("drizzle-kit/api-postgres");
+		const empty = {
+			id: "00000000-0000-0000-0000-000000000000",
+			dialect: "postgres" as const,
+			prevIds: [],
+			version: "8" as const,
+			ddl: [],
+			renames: [],
+		};
+		for (const statement of await generateMigration(
+			empty,
+			await generateDrizzleJson(questpieCrdtTables, empty.id),
+		)) {
+			if (statement.trim()) await postgresDb.execute(sql.raw(statement));
+		}
+		await postgresDb.execute(sql`
+			CREATE TABLE articles (
+				id text PRIMARY KEY,
+				title text NOT NULL,
+				content text NOT NULL
+			)
+		`);
+		postgresFixture = await seed(compatibleDb);
+	});
+
+	afterAll(async () => {
+		await pool?.end();
+		await admin?.query(`DROP SCHEMA IF EXISTS "${schemaName}" CASCADE`);
+		await admin?.end();
+	});
+
+	it("does not exhaust the pool while reserving a pull", async () => {
+		const authorization = await currentAuthorization(
+			compatibleDb,
+			postgresFixture,
+		);
+		const store = createCrdtPullStore(postgresDb, {
+			namespace: "sync-test",
+			deploymentFingerprint: "deployment-a",
+			secret: "test-secret-that-is-long-enough",
+			resolveEngine: () => textEngine,
+		});
+		const page = await store.pull({
+			claim: {
+				sessionId: SESSION_ID,
+				bindingId: authorization.bindingId,
+				resourceId: RESOURCE_ID,
+				requestedMode: "edit",
+				effectiveMode: "edit",
+				sessionGeneration: 0n,
+				deliveryGeneration: 0n,
+			},
+			authorization: authorization.snapshot,
+			pullId: "00000000-0000-0000-0000-000000000561",
+			schemaVersion: manifest.version,
+			continuation: null,
+			proofs: [
+				{
+					fieldSlot: postgresFixture.title.fieldSlot,
+					fieldEpoch: postgresFixture.title.fieldEpoch,
+					proof: Uint8Array.of(1),
+				},
+			],
+		});
+		expect(page.opcode).toBe(0x81);
+	}, 3_000);
 });
 
 async function currentFieldProof(

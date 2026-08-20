@@ -370,40 +370,31 @@ async function reservePull(
 				PULL_MINIMUM_AUTHORITY_WINDOW_MS,
 			);
 			await expireStalePullLeases(tx, session.bindingId);
-			const [
-				active,
-				subjectActive,
-				retained,
-				subjectRetained,
-				bindingRetained,
-				retainedBytes,
-				subjectRetainedBytes,
-				bindingRetainedBytes,
-			] = await Promise.all([
-				activePullCount(tx),
-				activePullCount(
-					tx,
-					eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
-				),
-				retainedPullCount(tx),
-				retainedPullCount(
-					tx,
-					eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
-				),
-				retainedPullCount(
-					tx,
-					eq(questpieCrdtPullTable.bindingId, session.bindingId),
-				),
-				retainedPullBytes(tx),
-				retainedPullBytes(
-					tx,
-					eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
-				),
-				retainedPullBytes(
-					tx,
-					eq(questpieCrdtPullTable.bindingId, session.bindingId),
-				),
-			]);
+			// Keep all reads on the transaction connection. A bounded
+			// node-postgres pool can deadlock when these are started together.
+			const active = await activePullCount(tx);
+			const subjectActive = await activePullCount(
+				tx,
+				eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
+			);
+			const retained = await retainedPullCount(tx);
+			const subjectRetained = await retainedPullCount(
+				tx,
+				eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
+			);
+			const bindingRetained = await retainedPullCount(
+				tx,
+				eq(questpieCrdtPullTable.bindingId, session.bindingId),
+			);
+			const retainedBytes = await retainedPullBytes(tx);
+			const subjectRetainedBytes = await retainedPullBytes(
+				tx,
+				eq(questpieCrdtPullTable.subjectId, input.authorization.subjectId),
+			);
+			const bindingRetainedBytes = await retainedPullBytes(
+				tx,
+				eq(questpieCrdtPullTable.bindingId, session.bindingId),
+			);
 			if (
 				active >= MAX_ACTIVE_PULLS ||
 				subjectActive >= MAX_ACTIVE_PULLS_PER_SUBJECT ||
@@ -1658,11 +1649,9 @@ async function expireBuildingPullRow(
 }
 
 function uuidToBytes(value: string): Buffer {
-	if (
-		!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-			value,
-		)
-	) {
+	// Pull ids are opaque protocol bytes stored in a PostgreSQL uuid column.
+	// They do not carry RFC version or variant semantics.
+	if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value)) {
 		throw recovery();
 	}
 	return Buffer.from(value.replaceAll("-", ""), "hex");
