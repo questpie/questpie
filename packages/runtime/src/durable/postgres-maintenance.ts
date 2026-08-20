@@ -34,6 +34,7 @@ export type DurableMaintenanceOutcome = Readonly<{
 	rejectionCode: DurableMaintenanceRejection | null;
 	stateBefore: DurableRunState;
 	stateAfter: DurableRunState;
+	version: number;
 }>;
 
 export type DurableMaintenanceAuditEntry = Readonly<{
@@ -44,6 +45,7 @@ export type DurableMaintenanceAuditEntry = Readonly<{
 	actor: DurableActor;
 	stateBefore: string;
 	stateAfter: string;
+	reason: string | null;
 }>;
 
 const terminalStates: ReadonlySet<string> = new Set([
@@ -68,6 +70,7 @@ export interface DurableMaintenance {
 	retryRun(
 		input: Readonly<{
 			runId: string;
+			reason: string;
 			actor: Principal;
 			expectedVersion?: number;
 		}>,
@@ -76,6 +79,7 @@ export interface DurableMaintenance {
 		input: Readonly<{
 			runId: string;
 			effectName: string;
+			reason: string;
 			actor: Principal;
 			expectedVersion?: number;
 		}>,
@@ -86,11 +90,8 @@ export interface DurableMaintenance {
 /**
  * Whether this actor may run this command against this run.
  *
- * `authority-mechanism.md` decides that maintenance Authority is an ordinary
- * Policy decision taken in the Execution that reaches the command, not a new
- * Authority class. This guard is defence in depth for a server path that
- * reaches a command it should not; the primary gate is the Policy on the
- * Operation that exposed it.
+ * Maintenance is server-internal in beta.1. The host must make this explicit
+ * decision; creating a maintenance surface without an authorizer is forbidden.
  */
 export type DurableMaintenanceAuthority = (
 	request: Readonly<{
@@ -104,7 +105,7 @@ export function createPostgresDurableMaintenance(
 	input: Readonly<{
 		sql: SQL;
 		application: string;
-		authorize?: DurableMaintenanceAuthority;
+		authorize: DurableMaintenanceAuthority;
 	}>,
 ): DurableMaintenance {
 	const transaction = <Result>(
@@ -155,12 +156,19 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 	 */
 	const reasonOutOfBound = (reason: string): boolean =>
 		reason.length < 1 || reason.length > 256;
+	const boundedReason = (reason: string): string | null =>
+		reasonOutOfBound(reason) ? null : reason;
 
-	/** The denial path: audited, and taking no lock on the way. */
-	const refuseUnauthorized = async (
+	/** A typed, audited refusal that does not lock the target run. */
+	const refuseWithoutLock = async (
 		query: DurableQuery,
-		request: Readonly<{ runId: string; actor: DurableActor }>,
+		request: Readonly<{
+			runId: string;
+			actor: DurableActor;
+			reason: string | null;
+		}>,
 		command: DurableMaintenanceCommand,
+		rejectionCode: "AUTHORITY_DENIED" | "REASON_INVALID",
 	): Promise<DurableMaintenanceOutcome> => {
 		const run = await readRun(query, request.runId, false);
 		const state = durableText(run.state, "run state") as DurableRunState;
@@ -168,10 +176,11 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 			runId: request.runId,
 			command,
 			outcome: "rejected",
-			rejectionCode: "AUTHORITY_DENIED",
+			rejectionCode,
 			actor: request.actor,
 			stateBefore: state,
 			stateAfter: state,
+			reason: request.reason,
 		});
 	};
 
@@ -195,9 +204,7 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 		actor: DurableActor,
 		command: DurableMaintenanceCommand,
 		runId: string,
-	): Promise<boolean> =>
-		input.authorize !== undefined &&
-		!(await input.authorize({ actor, command, runId }));
+	): Promise<boolean> => !(await input.authorize({ actor, command, runId }));
 
 	const actorOf = (actor: Principal): DurableActor => {
 		if (!principalKernel.is(actor))
@@ -259,6 +266,10 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 				entry.reason ?? null,
 			],
 		);
+		const [settled] = await query(
+			`SELECT event_sequence AS "version" FROM questpie_internal.durable_runs WHERE application_name=$1 AND run_id=$2`,
+			[input.application, entry.runId],
+		);
 		return Object.freeze({
 			commandId,
 			command: entry.command,
@@ -266,6 +277,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 			rejectionCode: entry.rejectionCode,
 			stateBefore: entry.stateBefore,
 			stateAfter: entry.stateAfter,
+			version: durableInteger(settled?.version, "run version"),
 		});
 	};
 
@@ -274,29 +286,23 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				if (await denied(actor, "cancelRun", request.runId))
-					return refuseUnauthorized(
+					return refuseWithoutLock(
 						query,
-						{ runId: request.runId, actor },
+						{
+							runId: request.runId,
+							actor,
+							reason: boundedReason(request.reason),
+						},
 						"cancelRun",
+						"AUTHORITY_DENIED",
 					);
 				if (reasonOutOfBound(request.reason)) {
-					const unbounded = await readRun(query, request.runId, false);
-					const state = durableText(
-						unbounded.state,
-						"run state",
-					) as DurableRunState;
-					// A command refused for an invalid reason has no valid reason to
-					// record, so the audit keeps a null one rather than the offending
-					// text.
-					return record(query, {
-						runId: request.runId,
-						command: "cancelRun",
-						outcome: "rejected",
-						rejectionCode: "REASON_INVALID",
-						actor,
-						stateBefore: state,
-						stateAfter: state,
-					});
+					return refuseWithoutLock(
+						query,
+						{ runId: request.runId, actor, reason: null },
+						"cancelRun",
+						"REASON_INVALID",
+					);
 				}
 				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
@@ -312,6 +318,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				if (terminalStates.has(stateBefore))
 					return record(query, {
@@ -322,6 +329,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				if (run.cancellationRequested === true)
 					return record(query, {
@@ -332,6 +340,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				await query(
 					`INSERT INTO questpie_internal.durable_cancellations
@@ -373,6 +382,7 @@ WHERE application_name = $1 AND run_id = $2`,
 					actor,
 					stateBefore,
 					stateAfter: claimed ? stateBefore : "cancelled",
+					reason: request.reason,
 				});
 			});
 		},
@@ -380,10 +390,22 @@ WHERE application_name = $1 AND run_id = $2`,
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				if (await denied(actor, "retryRun", request.runId))
-					return refuseUnauthorized(
+					return refuseWithoutLock(
 						query,
-						{ runId: request.runId, actor },
+						{
+							runId: request.runId,
+							actor,
+							reason: boundedReason(request.reason),
+						},
 						"retryRun",
+						"AUTHORITY_DENIED",
+					);
+				if (reasonOutOfBound(request.reason))
+					return refuseWithoutLock(
+						query,
+						{ runId: request.runId, actor, reason: null },
+						"retryRun",
+						"REASON_INVALID",
 					);
 				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
@@ -399,6 +421,7 @@ WHERE application_name = $1 AND run_id = $2`,
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				if (stateBefore !== "failed")
 					return record(query, {
@@ -409,6 +432,7 @@ WHERE application_name = $1 AND run_id = $2`,
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				if (Number(run.attemptCount) >= 8)
 					return record(query, {
@@ -419,6 +443,7 @@ WHERE application_name = $1 AND run_id = $2`,
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				await query(
 					`UPDATE questpie_internal.durable_runs
@@ -435,6 +460,7 @@ WHERE application_name = $1 AND run_id = $2`,
 					actor,
 					stateBefore,
 					stateAfter: "ready",
+					reason: request.reason,
 				});
 			});
 		},
@@ -442,10 +468,22 @@ WHERE application_name = $1 AND run_id = $2`,
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
 				if (await denied(actor, "acknowledgeAmbiguity", request.runId))
-					return refuseUnauthorized(
+					return refuseWithoutLock(
 						query,
-						{ runId: request.runId, actor },
+						{
+							runId: request.runId,
+							actor,
+							reason: boundedReason(request.reason),
+						},
 						"acknowledgeAmbiguity",
+						"AUTHORITY_DENIED",
+					);
+				if (reasonOutOfBound(request.reason))
+					return refuseWithoutLock(
+						query,
+						{ runId: request.runId, actor, reason: null },
+						"acknowledgeAmbiguity",
+						"REASON_INVALID",
 					);
 				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
@@ -461,6 +499,7 @@ WHERE application_name = $1 AND run_id = $2`,
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				const acknowledged = await query(
 					`UPDATE questpie_internal.durable_effects
@@ -478,6 +517,7 @@ RETURNING effect_id::text AS "effectId"`,
 						actor,
 						stateBefore,
 						stateAfter: stateBefore,
+						reason: request.reason,
 					});
 				await appendEvent(query, run, request.runId, "ambiguityAcknowledged");
 				return record(query, {
@@ -488,17 +528,18 @@ RETURNING effect_id::text AS "effectId"`,
 					actor,
 					stateBefore,
 					stateAfter: stateBefore,
+					reason: request.reason,
 				});
 			});
 		},
 		async audit(runId) {
 			const rows = (await input.sql.unsafe(
-				`SELECT command_id::text AS "commandId", command, outcome,
-       rejection_code AS "rejectionCode", actor_kind AS "actorKind",
-       actor_id AS "actorId", state_before AS "stateBefore", state_after AS "stateAfter"
+				`SELECT command_id::text AS "commandId",command,outcome,
+rejection_code AS "rejectionCode",actor_kind AS "actorKind",
+actor_id AS "actorId",state_before AS "stateBefore",state_after AS "stateAfter",reason
 FROM questpie_internal.durable_maintenance_commands
-WHERE application_name = $1 AND run_id = $2
-ORDER BY requested_at, command_id`,
+WHERE application_name=$1 AND run_id=$2
+ORDER BY requested_at,command_id`,
 				[input.application, runId],
 			)) as unknown as readonly DurableRow[];
 			return Object.freeze(
@@ -525,6 +566,8 @@ ORDER BY requested_at, command_id`,
 						}),
 						stateBefore: durableText(row.stateBefore, "state before"),
 						stateAfter: durableText(row.stateAfter, "state after"),
+						reason:
+							row.reason === null ? null : durableText(row.reason, "reason"),
 					}),
 				),
 			);

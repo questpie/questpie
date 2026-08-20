@@ -24,6 +24,7 @@ type Beta08MaintenanceOutcome = Readonly<{
 	rejectionCode: string | null;
 	stateBefore: string;
 	stateAfter: string;
+	version: number;
 }>;
 
 type Beta08Durable = Readonly<{
@@ -62,6 +63,7 @@ type Beta08Durable = Readonly<{
 		version: number;
 		state: string;
 		attemptCount: number;
+		cancellationRequested: boolean;
 		deadLetter: boolean;
 		failureCode: string | null;
 		resultBytes: Uint8Array | null;
@@ -88,6 +90,7 @@ type Beta08Durable = Readonly<{
 			actor: Readonly<{ kind: string; id: string }>;
 			stateBefore: string;
 			stateAfter: string;
+			reason: string | null;
 		}>[]
 	>;
 	cancelRun(
@@ -101,6 +104,7 @@ type Beta08Durable = Readonly<{
 	retryRun(
 		input: Readonly<{
 			runId: string;
+			reason: string;
 			actor: unknown;
 			expectedVersion?: number;
 		}>,
@@ -109,6 +113,7 @@ type Beta08Durable = Readonly<{
 		input: Readonly<{
 			runId: string;
 			effectName: string;
+			reason: string;
 			actor: unknown;
 			expectedVersion?: number;
 		}>,
@@ -159,6 +164,7 @@ export type Beta08Harness = Readonly<{
 	): DurableKernel;
 	reactionProjectionBytes: string;
 	principal: Principal;
+	readerPrincipal: Principal;
 }>;
 
 /**
@@ -205,12 +211,24 @@ WHERE datname = pg_catalog.current_database()
 			input: Readonly<{
 				postgres: Readonly<{ url: string }>;
 				realtime: Readonly<{ hmacKey: Uint8Array }>;
+				maintenance: Readonly<{
+					authorize(
+						input: Readonly<{
+							actor: Readonly<{ kind: string; id: string }>;
+							command: string;
+							runId: string;
+						}>,
+					): boolean | Promise<boolean>;
+				}>;
 			}>,
 		): Promise<Beta08Application>;
 	}>;
 	const app = await internal.createApplication({
 		postgres: { url: beta05PostgresUrl() },
 		realtime: { hmacKey: new Uint8Array(32).fill(8) },
+		maintenance: {
+			authorize: ({ actor }) => actor.id === beta05Ids.principal,
+		},
 	});
 	const reactionProjectionBytes = await Bun.file(
 		resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
@@ -226,6 +244,9 @@ WHERE datname = pg_catalog.current_database()
 		).text(),
 	) as Readonly<{ mediaType: string; protocol: unknown }>;
 	const principal = framework.principal.user({ id: beta05Ids.principal });
+	const readerPrincipal = framework.principal.user({
+		id: beta05Ids.readerPrincipal,
+	});
 	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
 	const harness = Object.freeze({
 		app,
@@ -273,6 +294,7 @@ WHERE datname = pg_catalog.current_database()
 		maintenance: app.durable,
 		reactionProjectionBytes,
 		principal,
+		readerPrincipal,
 	});
 	return Object.freeze({
 		harness,

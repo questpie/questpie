@@ -111,6 +111,7 @@ test("relocated generated application links Mutation and private Live Query prog
 			internalApplication.createApplication({
 				postgres: { url: "postgres://localhost:1/questpie" },
 				realtime: { hmacKey: new Uint8Array(31) },
+				maintenance: { authorize: () => true },
 			}),
 		).rejects.toThrow("HMAC key must contain at least 32 bytes");
 	} finally {

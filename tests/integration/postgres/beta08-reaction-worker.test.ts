@@ -238,6 +238,7 @@ postgresTest(
 			await prepared.maintenance.acknowledgeAmbiguity({
 				runId,
 				effectName: "deliver-message",
+				reason: "operator acknowledged ambiguous delivery",
 				actor,
 			}),
 		).toMatchObject({ outcome: "applied", rejectionCode: null });
@@ -248,6 +249,7 @@ postgresTest(
 			await prepared.maintenance.acknowledgeAmbiguity({
 				runId,
 				effectName: "deliver-message",
+				reason: "duplicate acknowledgement probe",
 				actor,
 			}),
 		).toMatchObject({ outcome: "rejected", rejectionCode: "NOT_AMBIGUOUS" });
@@ -302,13 +304,17 @@ postgresTest(
 		// The run-as denial is permanent: an operator retry re-evaluates
 		// current Policy rather than replaying the earlier decision.
 		const actor = prepared.principal;
-		expect(await prepared.maintenance.retryRun({ runId, actor })).toMatchObject(
-			{
-				outcome: "applied",
-				stateBefore: "failed",
-				stateAfter: "ready",
-			},
-		);
+		expect(
+			await prepared.maintenance.retryRun({
+				runId,
+				reason: "policy restored retry",
+				actor,
+			}),
+		).toMatchObject({
+			outcome: "applied",
+			stateBefore: "failed",
+			stateAfter: "ready",
+		});
 		expect(outcomeFor(await prepared.app.durable.poll(), runId)).toMatchObject({
 			outcome: "failed",
 			failureCode: "RUN_AS_DENIED",
@@ -319,9 +325,13 @@ postgresTest(
 			`UPDATE collaboration.memberships SET status = 'active' WHERE id = $1`,
 			[beta05Ids.membership],
 		);
-		expect(await prepared.maintenance.retryRun({ runId, actor })).toMatchObject(
-			{ outcome: "applied" },
-		);
+		expect(
+			await prepared.maintenance.retryRun({
+				runId,
+				reason: "active membership retry",
+				actor,
+			}),
+		).toMatchObject({ outcome: "applied" });
 		expect(outcomeFor(await prepared.app.durable.poll(), runId)).toMatchObject({
 			outcome: "succeeded",
 			attemptNumber: 3,

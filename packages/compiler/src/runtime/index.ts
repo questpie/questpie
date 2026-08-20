@@ -408,7 +408,7 @@ export function projectRuntimeBuild(
 		version: 1,
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
-		internalProtocol: "questpie.internal.v4",
+		internalProtocol: "questpie.internal.v5",
 		compiler,
 		compilerRuntimeBuildDigest: digest(
 			"questpie-compiler-runtime-build-v1",

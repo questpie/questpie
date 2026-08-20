@@ -140,6 +140,24 @@ export function renderDurableDeclarations(): string {
 
 export type DurableActor = Readonly<{ kind: "anonymous" | "service" | "user"; id: string }>;
 
+export type DurableMaintenanceCommand = "acknowledgeAmbiguity" | "cancelRun" | "retryRun";
+
+export type DurableMaintenanceRejection =
+	| "ALREADY_REQUESTED"
+	| "ATTEMPTS_EXHAUSTED"
+	| "AUTHORITY_DENIED"
+	| "NOT_AMBIGUOUS"
+	| "REASON_INVALID"
+	| "RUN_IS_TERMINAL"
+	| "RUN_NOT_FAILED"
+	| "VERSION_MISMATCH";
+
+export type DurableMaintenanceAuthorization = (request: Readonly<{
+	actor: DurableActor;
+	command: DurableMaintenanceCommand;
+	runId: string;
+}>) => boolean | Promise<boolean>;
+
 export type DurableWorkerOutcome = Readonly<{
 	runId: string;
 	resource: string;
@@ -190,21 +208,23 @@ export type DurableEffectView = Readonly<{
 
 export type DurableMaintenanceOutcome = Readonly<{
 	commandId: string;
-	command: "acknowledgeAmbiguity" | "cancelRun" | "retryRun";
+	command: DurableMaintenanceCommand;
 	outcome: "applied" | "rejected";
-	rejectionCode: string | null;
+	rejectionCode: DurableMaintenanceRejection | null;
 	stateBefore: DurableRunState;
 	stateAfter: DurableRunState;
+	version: number;
 }>;
 
 export type DurableMaintenanceAuditEntry = Readonly<{
 	commandId: string;
-	command: "acknowledgeAmbiguity" | "cancelRun" | "retryRun";
+	command: DurableMaintenanceCommand;
 	outcome: "applied" | "rejected";
 	rejectionCode: string | null;
 	actor: DurableActor;
 	stateBefore: string;
 	stateAfter: string;
+	reason: string | null;
 }>;
 
 export type DurableWorkerOptions = Readonly<{
@@ -232,7 +252,7 @@ export interface GeneratedDurable {
 	effects(runId: string): Promise<readonly DurableEffectView[]>;
 	audit(runId: string): Promise<readonly DurableMaintenanceAuditEntry[]>;
 	cancelRun(input: Readonly<{ runId: string; reason: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
-	retryRun(input: Readonly<{ runId: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
-	acknowledgeAmbiguity(input: Readonly<{ runId: string; effectName: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
+	retryRun(input: Readonly<{ runId: string; reason: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
+	acknowledgeAmbiguity(input: Readonly<{ runId: string; effectName: string; reason: string; actor: Principal; expectedVersion?: number }>): Promise<DurableMaintenanceOutcome>;
 }`;
 }

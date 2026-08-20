@@ -405,7 +405,11 @@ export async function createApplication(input) {
 		reactions: mutationArtifacts.reactions,
 	});
 	const durableLedger = createPostgresDurableEffectLedger({ sql, application: durableApplication });
-	const durableMaintenance = createPostgresDurableMaintenance({ sql, application: durableApplication });
+	const durableMaintenance = createPostgresDurableMaintenance({
+		sql,
+		application: durableApplication,
+		authorize: input.maintenance.authorize,
+	});
 	const durableExecute = ({ reaction, input: reactionInput, contextInput, principal, signal, run, attempt, errors }) => {
 		const binding = reactionBindings.get(reaction.identity);
 		if (!binding) throw new TypeError("Reaction executable is unavailable");

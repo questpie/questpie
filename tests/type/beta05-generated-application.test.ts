@@ -110,10 +110,21 @@ handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
 	// @ts-expect-error watchable builds require deployment-owned resume signing material
-	createApp({ postgres: { url: "postgres://localhost/questpie" } });
+	createApp({
+		postgres: { url: "postgres://localhost/questpie" },
+		maintenance: { authorize: () => true },
+	});
 	const app = await createApp({
 		postgres: { url: "postgres://localhost/questpie" },
 		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: {
+			authorize: ({ actor, command, runId }) => {
+				actor.id satisfies string;
+				command satisfies "acknowledgeAmbiguity" | "cancelRun" | "retryRun";
+				runId satisfies string;
+				return actor.kind === "service";
+			},
+		},
 	});
 	const response: Response = await app.fetch(new Request("http://runtime.test/_questpie/operation"));
 	const page = await app.execution(

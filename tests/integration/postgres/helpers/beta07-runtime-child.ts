@@ -39,6 +39,7 @@ const internal = (await import(
 		input: Readonly<{
 			postgres: Readonly<{ url: string }>;
 			realtime: Readonly<{ hmacKey: Uint8Array }>;
+			maintenance: Readonly<{ authorize(): boolean }>;
 		}>,
 	): Promise<Readonly<{ fetch(request: Request): Promise<Response> }>>;
 	bindIngressPrincipalForRequest(request: Request, principal: unknown): Request;
@@ -52,6 +53,7 @@ const principal = framework.principal.user({ id: principalId });
 const application = await internal.createApplication({
 	postgres: { url: postgresUrl },
 	realtime: { hmacKey: new Uint8Array(32).fill(7) },
+	maintenance: { authorize: () => true },
 });
 
 const server = Bun.serve({

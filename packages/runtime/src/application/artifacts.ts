@@ -25,7 +25,8 @@ type RuntimeBuildV1 = Readonly<{
 	internalProtocol:
 		| "questpie.internal.v2"
 		| "questpie.internal.v3"
-		| "questpie.internal.v4";
+		| "questpie.internal.v4"
+		| "questpie.internal.v5";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -335,7 +336,9 @@ function decodeWire(value: unknown): OperationWireContract {
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const build = record(value, "runtime build");
-	const durable = build.internalProtocol === "questpie.internal.v4";
+	const durable =
+		build.internalProtocol === "questpie.internal.v4" ||
+		build.internalProtocol === "questpie.internal.v5";
 	const v3 = build.internalProtocol === "questpie.internal.v3" || durable;
 	exact(
 		build,
@@ -552,7 +555,8 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	if (
 		build.internalProtocol !== "questpie.internal.v2" &&
 		build.internalProtocol !== "questpie.internal.v3" &&
-		build.internalProtocol !== "questpie.internal.v4"
+		build.internalProtocol !== "questpie.internal.v4" &&
+		build.internalProtocol !== "questpie.internal.v5"
 	)
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)

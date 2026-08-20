@@ -34,6 +34,7 @@ export type {
 export { createPostgresDurableMaintenance } from "./postgres-maintenance";
 export type {
 	DurableMaintenance,
+	DurableMaintenanceAuthority,
 	DurableMaintenanceAuditEntry,
 	DurableMaintenanceCommand,
 	DurableMaintenanceOutcome,
