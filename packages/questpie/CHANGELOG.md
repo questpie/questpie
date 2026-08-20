@@ -1,5 +1,11 @@
 # questpie
 
+## 3.28.4
+
+### Patch Changes
+
+- [#330](https://github.com/questpie/questpie/pull/330) [`ef0b5c4`](https://github.com/questpie/questpie/commit/ef0b5c4dd6cf80e07acab5c56c4b293ca8d21bbf) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Add explicit owner and field authorization policies for CRDT edits.
+
 ## 3.28.3
 
 ### Patch Changes
