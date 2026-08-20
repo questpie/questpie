@@ -13,12 +13,26 @@ test("BETA-11 archive portability stays inside its stable-runner budgets", async
 		),
 	).json()) as Readonly<{
 		reference: Readonly<{ runnerClass: string }>;
+		budgetDerivation: Readonly<{
+			compileMs: Readonly<{
+				referenceObservedMs: number;
+				multiplier: number;
+				roundUpQuantumMs: number;
+			}>;
+		}>;
 		budgets: Readonly<{
 			compileMs: number;
 			generatedBytes: number;
 			typescriptInstantiations: number;
 		}>;
 	}>;
+	const compileDerivation = baseline.budgetDerivation.compileMs;
+	expect(
+		Math.ceil(
+			(compileDerivation.referenceObservedMs * compileDerivation.multiplier) /
+				compileDerivation.roundUpQuantumMs,
+		) * compileDerivation.roundUpQuantumMs,
+	).toBe(baseline.budgets.compileMs);
 	const outputDirectory = await mkdtemp(
 		join(tmpdir(), "questpie-beta11-bench-"),
 	);

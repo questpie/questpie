@@ -38,8 +38,10 @@ The semantic `record.deposit` Mutation creates one Record, appends provenance
 sequence 1, and dispatches `recordDeposited` in the same accepted mutation
 boundary (`fixtures/archive/src/record-deposit.ts:5`–`:48`). The Reaction
 rereads through the same Policy-bound Data Query, then invokes an internal
-Mutation that appends sequence 2 with a run-stable call identity
-(`fixtures/archive/src/record-deposited.ts:7`–`:51`). Record and Provenance
+Mutation with a run-stable call identity
+(`fixtures/archive/src/record-deposited.ts:7`–`:51`). That internal Mutation
+appends the literal provenance sequence 2
+(`fixtures/archive/src/provenance-record-reaction.ts:5`–`:25`). Record and Provenance
 Collection Operation Sets expose create only
 (`fixtures/archive/src/archive-operations.ts:7`–`:36`). “Immutable provenance”
 therefore means immutable through the generated application mutation surface;
@@ -70,9 +72,9 @@ archive shape falsifies
 The tracer found two shared-kernel defects rather than encoding fixture
 workarounds. First, an unbounded text Data Query parameter was projected without
 the null bounds and binary collation required by the Runtime scalar contract.
-The public `query.parameter.text` factory accepts only `nullable: false`; unlike
-the integer factory, it has no authored bound options
-(`packages/questpie/src/relational/query.ts:268`–`:279`). The compiler therefore
+The public `query.parameter.text` factory accepts only `nullable: false` and has
+no authored bound options
+(`packages/questpie/src/relational/query.ts:268`–`:272`). The compiler therefore
 emits the complete unbounded text codec with null bounds and binary collation
 (`packages/compiler/src/relational/discovery.ts:185`–`:193`), and the archive
 test pins all four codec members

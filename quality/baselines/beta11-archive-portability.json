@@ -35,7 +35,7 @@
 	"budgetDerivation": {
 		"compileMs": {
 			"referenceObservedMs": 1719.4365810000002,
-			"multiplier": 3,
+			"multiplier": 2.5,
 			"roundUpQuantumMs": 1000
 		},
 		"generatedBytes": {
