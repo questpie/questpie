@@ -1129,7 +1129,16 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   pushed D3 to `:206`. Three commits apart, two different files, and nobody
   editing the second file had any reason to look at the first. So: **before
   committing an insertion into any record, grep the set for
-  `<that filename>:[0-9]` and re-derive what you find.** Nothing else catches it
+  `<that filename>:[0-9]` and re-derive what you find.** Better still, avoid
+  creating the pointer: **cite a document by the name of the thing, not by line.**
+  Checked the doc-to-doc citations that exist and three of four target something
+  already named — `### D3`, the "Criterion 18 is covered" paragraph, the "One
+  divergence" paragraph — so the line number adds nothing and is the only part
+  that decays. Code needs line numbers because a statement has no name; a
+  document section usually has one. The fourth, a range into BETA-08's
+  narrower-claims list, both began on a blank line and ended mid-sentence, and is
+  now cited by naming its two bullets instead. Nothing else catches a stale
+  pointer
   — both stale citations resolved to real lines in the right file, so axis one
   passes them, and the citing record was untouched so no diff flags it.
   **D2's three tree claims are all true, and two of them cite bare branch paths

@@ -153,8 +153,9 @@ admission queue**, ahead of healthy work.
 
 **This entry was first written more strongly than the tree supports, on an
 agent's framing that was not checked against the surrounding text.** Two
-corrections, both from reading
-`docs/v4/implementation/beta08/design-context.md:259`–`:268` in full:
+corrections, both from reading BETA-08's narrower-claims list in
+`docs/v4/implementation/beta08/design-context.md` in full — its retry-horizon
+bullet and its `durable-kernel.json` budgets bullet:
 
 - **It is not a self-contradiction, and calling it one was unfair.** The record
   discloses the gap in the same bullet that describes the clamp: "This slice
