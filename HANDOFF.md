@@ -1386,4 +1386,10 @@ DISCIPLINE, learned the hard way this session and non-negotiable.
 
 Run bunx oxfmt on only the files you wrote, never across docs/. Then
 bun run check:changed and git diff --check. Commit each increment and push.
+For a change touching packages/ or tests/, that bare form is NOT enough: the
+changed lane runs a test only for each --test you name and a typecheck only for
+each --typecheck workspace you name (scripts/quality.ts:128-130). Use
+  bun run check:changed -- --test path/to/test.ts --typecheck <workspace>
+as references/implementation.md:11 specifies. Bare check:changed on a docs-only
+change is correct and runs format, lint and git diff --check.
 ```
