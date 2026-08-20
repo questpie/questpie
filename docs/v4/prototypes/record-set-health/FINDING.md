@@ -897,3 +897,45 @@ defect classes found across these sweeps were invisible to the matcher rather
 than hidden in the data, and the fourth was a hand-count inside a machine table.
 A sweep's blind spots have been more productive than its findings, which argues
 for spending the first effort on enumerating what a check cannot see.
+
+## Quoted text: one fabricated attribution, and why the check barely works
+
+With the citation census closed, the next class is quoted text — a misquote is
+worse than a wrong line number, because a wrong line points at nothing while a
+misquote manufactures evidence. Two passes: every quotation near a citation (36
+checked), then only quotations introduced by an attribution verb — says, states,
+reads, calls it — which is where a claim of verbatim source is actually being
+made (229 checked).
+
+**One real defect, and it is the shape the class exists to catch.**
+`durable-evidence-gaps/ROUTE-SHAPE.md` argued that ADR-0014 points away from a
+route, quoting "use the same Context, Policy, Operation, transaction, error,
+result, and observation engine" — verbatim across
+`docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md:38`–`:39` — and
+then, joined by "and" and still inside quotation marks, "a second route with its
+own auth handling is a second engine by another name". That phrase occurs twice
+in the repository: at `ROUTE-SHAPE.md:52`, as this record's own unquoted
+sentence, and at `:275` inside the quotation marks. **The record quoted itself
+in the position where the ADR's second sentence would go.** Nothing in
+`docs/adr/` contains it. Corrected to name it as this record's inference.
+
+**Every other flag was mechanical, and the failure modes are worth naming
+because two of them are mine.** The 42 attributed-quote flags were dominated by
+three classes: the checker pairing a quote with the nearest citation rather than
+its actual source; punctuation at quote boundaries, where a record ends a
+sentence with a period the source continues with an em dash; and **case**. A
+quote lowercased to sit mid-sentence — "six members becomes eight" against
+`internal-protocol-v5.md:81`'s "Six members becomes eight." — fails a
+case-sensitive match while being a correct quotation. That is the third time in
+these sweeps a case-sensitive matcher produced a false alarm on my own reading,
+and the second time I nearly recorded a correct quote as a defect.
+
+**Judgment call: this class does not support a mechanical gate, only a
+narrowing.** Legitimate quotation routinely changes case, trims punctuation,
+elides with `…`, and re-marks nested quotes — `owner-decisions.md` writes
+`“Eight”` and a record quoting it must write `'Eight'`. A checker strict enough
+to catch the fabricated attribution would reject dozens of correct quotes, and
+one loose enough to accept them all accepted this one. What would overturn that:
+a normalization that folds case, punctuation and quote glyphs and still leaves
+the fabrication visible — plausible, and worth trying before this class is
+called closed rather than swept.
