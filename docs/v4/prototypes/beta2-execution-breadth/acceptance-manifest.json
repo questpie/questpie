@@ -1,0 +1,135 @@
+{
+	"protocolVersion": 2,
+	"ticket": "BETA2-EXECUTION-BREADTH",
+	"proof": "Freeze Action as the single external invocation boundary; preserve ADR-0015 Route and credential-resolver composition without a core Auth product; supersede Workflow as a separate Resource by folding its closed checkpoint, signal, timer, and compatibility semantics into one versioned Job Resource; attach cron schedules to Job over the shared PostgreSQL durable kernel without a second scheduler or generic browser control plane.",
+	"diffBase": "01d423f60fa54c0d259278f8ac4057dbf067995e",
+	"reviewOutput": "docs/v4/prototypes/beta2-execution-breadth/REVIEW.json",
+	"authorityHeads": {
+		"accepted feat/v4 base including core Channel removal": "0587b69b78836eb8fb55867d1a279308f2617ef0",
+		"P17 Route and Auth reviewed input": "7211bd3c8a9cdbe131b026874d4441f3ccb39c9d",
+		"P17 Route and Auth acceptance evidence": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
+		"P18 durable kernel reviewed input": "fa2960083c94f824d7c0f4d005a9aec01babb978",
+		"P18 durable kernel acceptance evidence": "71463e99a70481b0950ae18d1ff409c034c1b158",
+		"core Channel removal acceptance candidate": "ed0dfa7c59e6132a26cc1adaa500ec200ad911c8"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "0488886fcc9d235a7754017bd07a952b17ca7688e919e27f31e6a5f4127b9c8d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "53be1162c67a018ea8422952f7bcfbf150e08646766a7d89e9f7a778fb51792e"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "56d86830322f38d3876f9bc4c6972eb790ac2aba7f6934f61e2c56a27b7f02d8"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "ff2ee6623cb77d3b8086e67ff04829e1cc7d75f559ba35993989e5f65c4ca23d"
+		},
+		{
+			"name": "accepted Transactional Dispatch and Reaction decision",
+			"path": "docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"sha256": "f8b36c9df0af8c8ca6785fb901cf075744dbcfc8d2586a182855805a920850ed"
+		},
+		{
+			"name": "accepted Service Route and Auth composition decision",
+			"path": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"sha256": "5db374d76fc838dc5ae2eaabc214e82b03e26c1526611ad9384f48c6f78e1ea9"
+		},
+		{
+			"name": "accepted lifecycle Jobs and shared durable kernel decision",
+			"path": "docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "7b9e5dca74828f576a21f738fbdbc5335560ca7575a26360ca3b6115fe14ee8f"
+		},
+		{
+			"name": "accepted semantic kernels and public factory surface",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "1625f38b07df84945aacbfd7d2fd8ebb35ba1e43c26b00b33ca5700b38eb176e"
+		},
+		{
+			"name": "accepted removal of framework-owned Channels",
+			"path": "docs/adr/0025-remove-channels-from-core.md",
+			"sha256": "66b2b591725f2d954a82745080108d24e785e8aa6d532d680cf0bbf397d60b9b"
+		},
+		{
+			"name": "public Service Route and Auth contract",
+			"path": "docs/v4/service-route-and-auth-composition.md",
+			"sha256": "1900029f27b0b3bdab8b24cf14eb7cfbed0a4ee285cc9ef1a8a28626be8d7885"
+		},
+		{
+			"name": "public lifecycle Jobs and shared durable kernel contract",
+			"path": "docs/v4/lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "fc19ad32fd021aea7af8cb5335071aaa4529e31c04b6af2cb6bea5e02a5255c8"
+		},
+		{
+			"name": "Action and integration behavioral evidence",
+			"path": "docs/v4/design-fiction/routes-actions-and-integrations.md",
+			"sha256": "6c20c9b5432a6114429d5db342f31764b83b753ab74e5e8b33009a5a80dc0c9f"
+		},
+		{
+			"name": "Job Workflow and cron behavioral evidence",
+			"path": "docs/v4/design-fiction/durable-work.md",
+			"sha256": "2626fbcbd3c2239f52ad6a4c3d7446a2f75ec9da7809d0a216a4afc676da1290"
+		},
+		{
+			"name": "accepted permanent capability ownership map",
+			"path": "docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+			"sha256": "10215a421c96a9e8b997f2a45f6c69ff234f5e0f5f1670a79010a5dc28958565"
+		},
+		{
+			"name": "owner-directed production backend sequence",
+			"path": "docs/v4/research/production-backend/DECISION-MAP.md",
+			"sha256": "b19fa8ccdfb5bff2cf6f830fc02f8ec53e20d129e1456d4c562d9f106a47d0b4"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/check.ts (executes the exact browser reducer and five scenarios)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/beta2-execution-breadth/negative-control.ts (10 invalid ownership and compatibility contracts rejected)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun node_modules/typescript/bin/tsc --noEmit --strict --target ES2024 --lib ES2024,DOM --module ESNext --moduleResolution Bundler --allowImportingTsExtensions --resolveJsonModule --types bun --skipLibCheck docs/v4/prototypes/beta2-execution-breadth/type-prototype.ts docs/v4/prototypes/beta2-execution-breadth/check.ts docs/v4/prototypes/beta2-execution-breadth/negative-control.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/beta2-execution-breadth/DECISION.md docs/v4/prototypes/beta2-execution-breadth/PROJECTION.json docs/v4/prototypes/beta2-execution-breadth/acceptance-manifest.json docs/v4/prototypes/beta2-execution-breadth/check.ts docs/v4/prototypes/beta2-execution-breadth/checkpointed-job-prototype.html docs/v4/prototypes/beta2-execution-breadth/negative-control.ts docs/v4/prototypes/beta2-execution-breadth/type-prototype.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run lint -- docs/v4/prototypes/beta2-execution-breadth/check.ts docs/v4/prototypes/beta2-execution-breadth/negative-control.ts docs/v4/prototypes/beta2-execution-breadth/type-prototype.ts --deny-warnings",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --name-only 01d423f60fa54c0d259278f8ac4057dbf067995e...HEAD (exactly the seven candidate proof and manifest files under docs/v4/prototypes/beta2-execution-breadth; no authority, public docs, production source, package, fixture, or historical proof changed)",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"Route and Auth composition remains exactly owned by accepted ADR-0015/P17: an application installs zero or one credential resolver backed by an explicit Service; the resolver produces Principal only; Context Resolution produces application scope; Policy authorizes; Better Auth remains an ordinary reference integration and QUESTPIE gains no core Auth schema, migrations, server, session, client, or UI.",
+		"Action becomes the single public owner of one external or nondeterministic invocation. It owns exact input, inferred output with optional pin, declared errors, Policy, exposure, cancellation, and explicit ambiguity; its Context has immutable Execution facts, effect Services, and generated Query/Mutation callers but no data/transaction facade, raw database, durable controls, or System elevation.",
+		"Ordinary Action invocation never retries automatically. Reaction or Job owns durable acceptance and stable Effect Identity; provider idempotency and receipt lookup remain explicit provider/application contracts, and an unknowable outcome remains ambiguous.",
+		"QUESTPIE exposes one versioned Job Resource over the accepted durable run/attempt/lease kernel and removes Workflow, defineWorkflow, a Workflow client, and any second workflow runtime from current and deferred public scope.",
+		"An ordinary Job and a checkpointed Job use the same Definition, handler, run, attempt, lease, worker, and event vocabulary. A Job that uses no checkpoint command creates no checkpoint history or second runtime protocol.",
+		"The closed Job checkpoint helper admits only named generated Mutation, named generated Action, durable sleep, and typed signal wait. It admits no arbitrary callback. Checkpoint name is a stable ordered identity distinct from the closed typed signal name.",
+		"Checkpoint history retains Job identity, required semantic version, executable digest, ordered checkpoint name, canonical command digest, stable Mutation Call Identity, and stable Action Effect Identity plus receipt or explicit ambiguity. Incompatible code refuses claim; latest-code replay is forbidden.",
+		"Cron is a compiler-owned schedule attached to Job over PostgreSQL durable state, not a second Resource or scheduler abstraction. Every scheduled instant has one stable tick identity; concurrent acceptance converges once; schedule removal stops future ticks and preserves already accepted runs.",
+		"The generated browser client may include network-exposed Actions but includes neither Routes nor a generic Job control plane. Applications expose selected Job request, status, cancel, and signal behavior through ordinary Policy-protected Operations.",
+		"The executable model demonstrates contract coherence only. PostgreSQL crash windows, ten-instance cron races, signals, cancellation, bounded history, direct/network parity, generated client boundaries, rolling compatibility, and declaration/load budgets remain explicit implementation acceptance gates and are not claimed as implemented by this proof.",
+		"This candidate changes only its decision, structured projection, executable model and browser, type prototype, validator, negative controls, and manifest. It does not project authority, edit an Accepted ADR, change public docs, or modify production source before a fresh stateless Opus-medium PASS."
+	]
+}
