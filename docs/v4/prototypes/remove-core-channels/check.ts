@@ -100,6 +100,14 @@ const REQUIRED_BENIGN_AUTHORITY_EXEMPTIONS = [
 	"docs/v4/context-and-policy.md",
 	"docs/v4/data-model-and-query-grammar.md",
 	"docs/v4/query-mutation-and-lifecycle.md",
+	"docs/v4/design-fiction/API-INVENTORY.md",
+	"docs/v4/design-fiction/authorize-with-policy.md",
+	"docs/v4/design-fiction/getting-started.md",
+	"docs/v4/design-fiction/index.md",
+	"docs/v4/design-fiction/limits-and-guarantees.md",
+	"docs/v4/design-fiction/model-data.md",
+	"docs/v4/design-fiction/queries-and-mutations.md",
+	"docs/v4/design-fiction/routes-actions-and-integrations.md",
 	"apps/docs/content/docs/v4/context-and-policy.mdx",
 	"apps/docs/content/docs/v4/durable-reactions.mdx",
 	"apps/docs/content/docs/v4/queries-and-mutations.mdx",
@@ -108,6 +116,24 @@ const REQUIRED_BENIGN_AUTHORITY_EXEMPTIONS = [
 ] as const;
 
 const CHANNEL_WORD = /\bchannels?\b/i;
+
+const CORE_CAPABILITY_MARKERS = [
+	/defineChannel/,
+	/runtime\.channelCarrier/,
+	/\bchannelCarrier\b/,
+	/\bChannel Resource\b/i,
+	/\bChannel payloads?\b/i,
+	/\bChannel event (?:codec|identity|order|ledger|replay|stream)/i,
+	/\bChannel PostgreSQL\b/i,
+	/\bChannel ledger\b/i,
+	/\bChannel replay\b/i,
+	/\bChannel authority\b/i,
+	/\bChannel presence(?: model)?\b/i,
+	/\btyped Channels\b/i,
+	/\bephemeral Channels\b/i,
+	/\bgeneric Channels\b/i,
+	/Deliver ephemeral connected-client messages\s+\|\s+Channel/i,
+] as const;
 
 function listFiles(directory: string, extension: string): string[] {
 	return readdirSync(join(REPOSITORY_ROOT, directory), {
@@ -131,11 +157,11 @@ function currentAuthorityFiles(): string[] {
 			.filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
 			.map((entry) => `docs/v4/${entry.name}`),
 		...listFiles("apps/docs/content/docs/v4", ".mdx"),
-		"docs/v4/design-fiction/realtime.md",
+		...listFiles("docs/v4/design-fiction", ".md"),
 		"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
 		"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
 		"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
-		"docs/v4/visuals/architecture.html",
+		...listFiles("docs/v4/visuals", ".html"),
 	];
 }
 
@@ -144,12 +170,28 @@ function containsChannelWord(path: string): boolean {
 	return CHANNEL_WORD.test(source);
 }
 
+function coreCapabilityMarker(path: string): string | undefined {
+	const source = readFileSync(join(REPOSITORY_ROOT, path), "utf8");
+	return CORE_CAPABILITY_MARKERS.find((marker) => marker.test(source))?.source;
+}
+
+export function assertBenignAuthorityExemptions(projection: Projection): void {
+	for (const exemption of projection.currentAuthorityBenignExemptions) {
+		const marker = coreCapabilityMarker(exemption.path);
+		if (marker)
+			throw new Error(
+				`benign current-authority exemption contains core Channel marker in ${exemption.path}: ${marker}`,
+			);
+	}
+}
+
 export function scanRepositoryAuthority(projection: Projection): {
 	currentChannelPaths: string[];
 	projectedChannelPaths: string[];
 	benignChannelPaths: string[];
 	frozenChannelPaths: string[];
 } {
+	assertBenignAuthorityExemptions(projection);
 	const projectionSet = new Set(projection.authorityProjection);
 	const benignExemptionSet = new Set(
 		projection.currentAuthorityBenignExemptions.map((item) => item.path),

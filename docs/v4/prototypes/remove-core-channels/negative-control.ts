@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 
-import { scanRepositoryAuthority, validate } from "./check";
+import {
+	assertBenignAuthorityExemptions,
+	scanRepositoryAuthority,
+	validate,
+} from "./check";
 
 const source = JSON.parse(
 	readFileSync(new URL("./PROJECTION.json", import.meta.url), "utf8"),
@@ -95,6 +99,30 @@ if (!repositoryOmissionRejected)
 		"repository scan accepted omission of marker-invisible Channel-bearing ADR-0021",
 	);
 
+const capabilityMisclassifiedAsBenign = clone();
+const capabilityPath = "docs/v4/semantic-kernels-and-public-surface.md";
+capabilityMisclassifiedAsBenign.authorityProjection =
+	capabilityMisclassifiedAsBenign.authorityProjection.filter(
+		(path: string) => path !== capabilityPath,
+	);
+capabilityMisclassifiedAsBenign.currentAuthorityBenignExemptions.push({
+	path: capabilityPath,
+	reason: "incorrectly claimed as a domain-only use",
+});
+let capabilityMisclassificationRejected = false;
+try {
+	assertBenignAuthorityExemptions(capabilityMisclassifiedAsBenign);
+} catch (error) {
+	capabilityMisclassificationRejected =
+		error instanceof Error &&
+		error.message.includes(capabilityPath) &&
+		error.message.includes("defineChannel");
+}
+if (!capabilityMisclassificationRejected)
+	throw new Error(
+		"benign exemption accepted a projected core Channel capability surface",
+	);
+
 console.log(
-	`Channel removal negative controls: ${invalid.length} invalid projections and one repository authority omission rejected`,
+	`Channel removal negative controls: ${invalid.length} invalid projections, one repository authority omission, and one capability-as-benign misclassification rejected`,
 );
