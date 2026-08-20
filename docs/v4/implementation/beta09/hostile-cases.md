@@ -226,6 +226,17 @@ that fails is the loser's payload. `DurableMaintenanceOutcome` returns
 the loser can re-issue from what it received fails, because it must call
 `inspect()` again — a second round trip and a second chance to race.
 
+**The slice shipped and closed this one.** BETA-09 merged at `21e38b21`.
+`DurableMaintenanceOutcome` is now a union, and its settled arm
+`DurableMaintenanceSettledOutcome` carries `version: number`
+(`packages/runtime/src/durable/postgres-maintenance.ts`). The value is the run's
+current version rather than an echo of the request: `record` selects
+`event_sequence AS "version"` and sets
+`version: durableInteger(settled?.version, "run version")`, so all three
+`VERSION_MISMATCH` sites — `:349`, `:437`, `:500` — return it without the loser
+calling `inspect()` again. The falsification below described the pre-slice state
+and is kept as the evidence it was.
+
 Take care that this test proves the **maintenance outcome** rather than
 re-proving the kernel. BETA-08 already owns single-winner election, fencing on
 `event_sequence`; the new content is only that the loser is handed enough to act.
