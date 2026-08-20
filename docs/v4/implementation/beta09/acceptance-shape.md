@@ -108,6 +108,31 @@ the call.
 - **`verification`** every gate command with its result, including the
   PostgreSQL matrix and the pinned tsc gate over changed test files.
 
+## Scope marker: several of these criteria are now non-goals
+
+`65643c1c` re-scoped BETA-09 through
+`docs/adr/0024-descope-minimal-studio-from-beta-one.md` (`Status: Accepted`).
+`QUEUE.json` now lists as `nonGoals`: "Studio UI or browser mount", "durable
+inspection read model", "failed-run worklist", and "ambient Admin/System
+authority". This list was written before that and is left intact; the marker
+says which entries survive it.
+
+| Criterion                                                                 | Under the re-scope                                                     |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| 1 inspection Authority, 4 inspection projection                           | out — "durable inspection read model"                                  |
+| 3 denial specificity                                                      | **split** — its inspection clause is out, its maintenance clause is in |
+| 8 four reads plus one worklist, 9 bounded worklist                        | out — "failed-run worklist"                                            |
+| 16 Studio projection producer, 19 Studio baselines, 21 same-origin bundle | out — "Studio UI or browser mount"                                     |
+| 2 maintenance Authority, 11–14 protocol v5 and typed denial               | in — these are the re-scoped slice                                     |
+
+Criterion 3's split is not a tidy-up: its two clauses were already shown to sit
+on opposite blockers, and the re-scope keeps exactly the maintenance one.
+
+**Read the out entries as design history.** They record how an inspection
+surface would have been authorized and bounded, which is what a later release
+reintroducing one will need. They are not acceptance criteria for BETA-09 as it
+now stands, and building against them would build the slice's own non-goals.
+
 ## The criteria
 
 Each is falsifiable and each maps to a decision already recorded. The record
