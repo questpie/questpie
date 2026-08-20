@@ -515,3 +515,37 @@ and moves nothing, which would show the decay tracks how invasive a slice is
 rather than that merges cause it. BETA-10 changing
 `postgres-maintenance.ts` by a single line without shifting anything is weak
 evidence in that direction already.
+
+## A citation sweep can make a false claim look better sourced
+
+The BETA-10 sweep in the entry above re-pointed
+`tenant-share-control/DECISION.md`'s "Nothing schedules on it" row from
+`postgres-kernel.ts:123`, `:463` to `:357`, `:378`, because the old lines no
+longer held the admission query. The new citation is accurate. The claim it
+supports — "`tenant_id` is selected for projection only; admission is
+`ORDER BY available_at, run_id` with no tenant term" — was false by then, and
+`:378` **is the line that falsifies it**: `ORDER BY tenant_turn, available_at,
+run_id`.
+
+So the sweep left a false sentence pointing at correct, current evidence for its
+own contradiction. Before the sweep the row was at least visibly stale, citing
+lines that no longer resolved. After it, the row read as freshly verified. **A
+line-number sweep can raise a claim's apparent credibility while leaving it
+wrong**, and that is a worse end state than the decay it repaired.
+
+**The cause is mechanical and worth naming.** Re-resolving a citation asks
+"where did this symbol go?" It never asks "does the sentence still hold?" Those
+are different questions, and only the first can be automated by matching an
+anchor. The three name-anchored conversions in the same sweep have the same
+exposure: `` `postgres-maintenance.ts` `actorOf` `` will keep resolving for as
+long as `actorOf` exists, including long after any claim about what it does
+stops being true.
+
+**Judgment call: a citation sweep must end by reading the sentences it
+touched, not only the lines.** This one did not, and the row survived a pass
+that was looking directly at it. The cheap version is to re-read every claim
+whose citation moved by more than a few lines, on the theory that a large shift
+means the surrounding code was rewritten rather than nudged — `:463` → `:378`
+here. What would overturn that heuristic: a falsified claim whose citation moved
+by one or two lines, which would show shift distance is not a usable proxy and
+the only safe rule is to re-read every touched claim.

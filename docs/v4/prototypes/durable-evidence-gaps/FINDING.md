@@ -26,8 +26,8 @@ AND run_id = $2 AND current_attempt_id = $3 AND lease_token_digest = $4`.
 
 **Driven by nothing.** All five `"fenced"` assertions in
 `tests/integration/postgres/beta08-durable-kernel.test.ts` are kernel surfaces —
-`succeed`, `fail`, `cancel`, `heartbeat` at `:160`–`:179`, and the
-`succeed`-versus-`cancel` race at `:344`. `DurableLeaseLost` appears in no test.
+`succeed`, `fail`, `cancel`, `heartbeat` at `:200`–`:217`, and the
+`succeed`-versus-`cancel` race at `:440`. `DurableLeaseLost` appears in no test.
 
 **The falsification.** Take a claim, let the lease expire, let another worker
 claim it, then invoke an effect on the _stale_ claim. Assert the ledger refuses
@@ -445,3 +445,43 @@ tenant_id` yields one partition and `tenant_turn` degenerates to the old global
 statement stands unmodified. I did not check whether any accepted document
 requires more than one tenant per application, so single-tenant is the case to
 assume, not the exception.
+
+## Gap 5's first half closed at the source, and its evidence is text-shaped
+
+"4 and 5 to BETA-10" above assigned this gap. BETA-10 merged at `8787e870`, and
+half of gap 5 is closed — not by making the refusal write something, but by
+removing the reason the refusal was reached.
+
+`admit()` now fences on fleet compatibility inside its own `WHERE`:
+`executable_digest IN (SELECT pg_catalog.jsonb_array_elements_text(($2::text)::jsonb))`
+(`packages/runtime/src/durable/postgres-kernel.ts:368`–`:370`). A run whose
+pinned executable no boot in the fleet carries is **no longer eligible for
+admission**, so it cannot be handed to a worker, refused, and re-admitted on the
+next poll. That was the loop this entry described, and it is gone at its source.
+
+**The refusal path survives, correctly, as a race backstop.** `claim` still
+returns `refused / EXECUTABLE_RETIRED` (`:431`–`:435`), which is right: a run can
+be admitted and the executable retire before the claim transaction runs. What
+changed is that this is now the narrow window rather than the steady state.
+
+**The second half is untouched.** The `skipped` branch when `attemptNumber >
+retry.maximumAttempts` (`:439`) still writes nothing, and nothing in the BETA-10
+diff addresses gap 4's retry horizon. Both remain open, and "4 and 5 to BETA-10"
+should now be read as one delivered and one not.
+
+**The evidence is thinner than the mechanism, which is this record's whole
+subject.** The fence's statement text is asserted by
+`tests/hostile/beta10-compatibility.test.ts:5`, which builds the kernel over a
+fake `sql` whose `unsafe` captures the statement and resolves `[]`
+(`:11`–`:17`), then asserts `toContain` on the captured string. That proves the
+statement contains the fence, not that the fence excludes a run. The one live
+`postgresTest` that calls `admit()` —
+`tests/integration/postgres/beta08-durable-kernel.test.ts:104` — asserts tenant
+interleaving, `[runIds[0], runIds[4], runIds[1], runIds[5]]` from a
+two-tenant backlog, and never introduces a run with an incompatible digest.
+
+**So gap 5's mitigation is in the same category the other six entries name.**
+Implemented in code, asserted as a string. The falsification this record would
+have asked for is unchanged in shape: admit a run, retire its executable from
+every reaction in the fleet, call `admit()`, and assert the run is absent from
+the batch. That test does not exist today.
