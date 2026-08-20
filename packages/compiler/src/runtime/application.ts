@@ -355,7 +355,7 @@ export async function createApplication(input) {
 							},
 							executionFacts: {
 								authority: facts.authority,
-								principal: { id: facts.principal.id },
+								principal: { id: facts.principal.id, kind: facts.principal.kind },
 								tenant: { id: facts.tenant.id },
 							},
 							sql,
@@ -432,7 +432,7 @@ export async function createApplication(input) {
 								},
 								executionFacts: {
 									authority: execution.authority,
-									principal: { id: execution.principal.id },
+									principal: { id: execution.principal.id, kind: execution.principal.kind },
 									tenant: { id: execution.tenant.id },
 								},
 								sql,

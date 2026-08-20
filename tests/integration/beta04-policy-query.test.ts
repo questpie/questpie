@@ -2,7 +2,7 @@ import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
 import type { SQL } from "bun";
-import { principal } from "questpie";
+import { codec, context, defineContext, principal } from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
@@ -149,7 +149,10 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 					binding,
 					executionFacts: {
 						authority: facts.authority,
-						principal: { id: facts.principal.id },
+						principal: {
+							id: facts.principal.id,
+							kind: facts.principal.kind,
+						},
 						tenant: { id: facts.tenant.id },
 					},
 					sql,
@@ -210,6 +213,108 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 	expect(calls).toHaveLength(2);
 	expect(calls.every(({ sql }) => sql === plan.sql)).toBe(true);
 	expect(calls[1]?.parameters.slice(5, 8)).toEqual([true, firstId, 1]);
+
+	await runtime.close();
+});
+
+test("Query admission refuses anonymous authenticated access before PostgreSQL and permits public access", async () => {
+	const compilation = await compileApplication({
+		applicationRoot: fixtureRoot,
+	});
+	const envelope = JSON.parse(
+		compilation.generatedFiles["postgres-query-plans.json"] ?? "null",
+	) as Readonly<{ plans: readonly PostgresQueryPlanV1[] }>;
+	const plan = envelope.plans[0];
+	if (!plan) throw new Error("expected the compiled Message page plan");
+	expect(plan.admission).toBe("authenticated");
+	let activePlan = plan;
+
+	let reservations = 0;
+	let postgresMayOpen = false;
+	const sql = {
+		reserve() {
+			if (!postgresMayOpen) throw new Error("PostgreSQL must remain unopened");
+			reservations += 1;
+			return {
+				close: async () => {},
+				release: () => {},
+				unsafe() {
+					const pending = Promise.resolve([]);
+					const query = {
+						cancel: () => query,
+						execute: () => query,
+						// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
+						then: pending.then.bind(pending),
+					};
+					return query;
+				},
+			};
+		},
+	} as unknown as SQL;
+	const anonymousContext = defineContext({
+		name: "test.anonymous-query-admission",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: context.tenant({ id: input.companyId }),
+			values: {},
+		}),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context: anonymousContext,
+		bootstrap: { get: async () => null as never },
+		project: ({ facts }) => ({
+			run: (binding: DataQueryBindingV1) =>
+				executePostgresQuery({
+					plan: activePlan,
+					binding,
+					executionFacts: {
+						authority: facts.authority,
+						principal: {
+							id: facts.principal.id,
+							kind: facts.principal.kind,
+						},
+						tenant: { id: facts.tenant.id },
+					},
+					sql,
+					signal: facts.signal,
+				}),
+		}),
+	});
+	const binding: DataQueryBindingV1 = {
+		templateDigest: plan.templateDigest,
+		values: [
+			{ parameter: "after", value: null },
+			{ parameter: "channelId", value: channelId },
+			{ parameter: "first", value: 1 },
+		],
+	};
+
+	await expect(
+		runtime.execution(
+			{
+				principal: principal.anonymous(),
+				context: { companyId },
+			},
+			({ run }) => run(binding),
+		),
+	).rejects.toMatchObject({ code: "unauthenticated" });
+	expect(reservations).toBe(0);
+
+	activePlan = { ...plan, admission: "public" };
+	postgresMayOpen = true;
+	const page = await runtime.execution(
+		{
+			principal: principal.anonymous(),
+			context: { companyId },
+		},
+		({ run }) => run(binding),
+	);
+	expect(page).toEqual({
+		nodes: [],
+		pageInfo: { endCursor: null, hasNextPage: false },
+	});
+	expect(reservations).toBe(1);
 
 	await runtime.close();
 });

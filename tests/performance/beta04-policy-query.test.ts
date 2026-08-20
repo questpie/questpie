@@ -145,7 +145,7 @@ async function measureAuthorizedQuery(): Promise<void> {
 		} as const;
 		const executionFacts = {
 			authority: { kind: "ordinary" as const },
-			principal: { id: principalId },
+			principal: { id: principalId, kind: "user" as const },
 			tenant: { id: companyId },
 		};
 		const execute = () =>

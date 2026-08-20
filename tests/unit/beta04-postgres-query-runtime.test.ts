@@ -200,7 +200,10 @@ const binding = {
 
 const executionFacts = {
 	authority: { kind: "ordinary" as const },
-	principal: { id: "00000000-0000-0000-0000-000000000010" },
+	principal: {
+		id: "00000000-0000-0000-0000-000000000010",
+		kind: "user" as const,
+	},
 	tenant: { id: "00000000-0000-0000-0000-000000000020" },
 };
 

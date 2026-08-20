@@ -58,6 +58,31 @@ export class OperationFailure extends Error {
 	}
 }
 
+export type OperationAdmission = "authenticated" | "public" | "system";
+
+export class OperationAdmissionError extends Error {
+	constructor(readonly code: "forbidden" | "unauthenticated") {
+		super(code);
+		this.name = "OperationAdmissionError";
+	}
+}
+
+export function assertOperationAdmission(
+	admission: OperationAdmission,
+	facts: Readonly<{
+		authority: Readonly<{ kind: "ordinary" | "system" }>;
+		principal: Readonly<{ kind: "anonymous" | "service" | "user" }>;
+	}>,
+): void {
+	if (admission === "public") return;
+	if (admission === "authenticated") {
+		if (facts.principal.kind !== "anonymous") return;
+		throw new OperationAdmissionError("unauthenticated");
+	}
+	if (facts.authority.kind === "system") return;
+	throw new OperationAdmissionError("forbidden");
+}
+
 export function normalizeOperationError(
 	error: unknown,
 ): OperationFailure | DeclaredOperationError | CommittedResultUnavailable {

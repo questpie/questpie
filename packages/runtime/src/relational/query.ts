@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import type { SQL } from "bun";
 
+import { assertOperationAdmission } from "../operation";
 import {
 	createCursorBindingV2,
 	type CursorOrderTerm,
@@ -130,7 +131,10 @@ export type DataQueryBindingV1 = Readonly<{
 
 export type QueryExecutionFacts = Readonly<{
 	authority: Readonly<{ kind: "ordinary" | "system" }>;
-	principal: Readonly<{ id: string }>;
+	principal: Readonly<{
+		id: string;
+		kind: "anonymous" | "service" | "user";
+	}>;
 	tenant: Readonly<{ id: string }>;
 }>;
 
@@ -604,11 +608,15 @@ export async function executePostgresQuery(
 		input.plan.version !== 1 ||
 		!digestPattern.test(input.plan.templateDigest) ||
 		!digestPattern.test(input.plan.policyProgramDigest) ||
+		!(["authenticated", "public", "system"] as const).includes(
+			input.plan.admission,
+		) ||
 		input.plan.page.kind !== "forwardCursor" ||
 		input.plan.page.order.length === 0 ||
 		typeof input.plan.sql !== "string"
 	)
 		throw new TypeError("invalid compiled PostgreSQL Query plan");
+	assertOperationAdmission(input.plan.admission, input.executionFacts);
 	const values = normalizeBinding(input.plan, input.binding, maximumPageSize);
 	const scopeBytes = dataQueryScopeBytes(
 		input.plan.templateDigest,

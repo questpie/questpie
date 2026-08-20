@@ -72,7 +72,7 @@ function binding(
 function executionFacts(principal = principalId, tenant = companyId) {
 	return {
 		authority: { kind: "ordinary" as const },
-		principal: { id: principal },
+		principal: { id: principal, kind: "user" as const },
 		tenant: { id: tenant },
 	};
 }

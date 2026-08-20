@@ -85,7 +85,7 @@ test("BETA-04 deterministic query binding stays inside its slice-owned budgets",
 	} as const;
 	const executionFacts = {
 		authority: { kind: "ordinary" as const },
-		principal: { id: principalId },
+		principal: { id: principalId, kind: "user" as const },
 		tenant: { id: companyId },
 	};
 
