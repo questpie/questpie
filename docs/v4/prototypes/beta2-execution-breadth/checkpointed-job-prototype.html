@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>PROTOTYPE — One Job with optional checkpoints</title>
+		<style>
+			:root {
+				color-scheme: light;
+				font-family:
+					Inter,
+					ui-sans-serif,
+					system-ui,
+					-apple-system,
+					BlinkMacSystemFont,
+					"Segoe UI",
+					sans-serif;
+				color: #17201b;
+				background: #f3f5f1;
+			}
+			* {
+				box-sizing: border-box;
+			}
+			body {
+				margin: 0;
+			}
+			main {
+				width: min(1100px, calc(100% - 32px));
+				margin: 36px auto 72px;
+			}
+			h1,
+			h2,
+			p {
+				margin-top: 0;
+			}
+			h1 {
+				font-size: clamp(28px, 4vw, 46px);
+				letter-spacing: -0.04em;
+				margin-bottom: 12px;
+			}
+			.intro {
+				max-width: 820px;
+				font-size: 18px;
+				line-height: 1.55;
+				color: #536158;
+				margin-bottom: 28px;
+			}
+			.badge {
+				display: inline-flex;
+				padding: 6px 10px;
+				margin-bottom: 16px;
+				border-radius: 999px;
+				background: #ffe8c6;
+				color: #70470a;
+				font-size: 12px;
+				font-weight: 750;
+				letter-spacing: 0.08em;
+			}
+			.grid {
+				display: grid;
+				grid-template-columns: minmax(0, 1.1fr) minmax(320px, 0.9fr);
+				gap: 18px;
+			}
+			.panel {
+				background: #ffffff;
+				border: 1px solid #dce2da;
+				border-radius: 16px;
+				padding: 22px;
+				box-shadow: 0 10px 28px rgb(28 45 34 / 6%);
+			}
+			.state-grid {
+				display: grid;
+				grid-template-columns: repeat(2, minmax(0, 1fr));
+				gap: 10px;
+				margin-bottom: 18px;
+			}
+			.fact {
+				border: 1px solid #e6eae4;
+				border-radius: 11px;
+				padding: 11px 12px;
+			}
+			.fact span {
+				display: block;
+				font-size: 11px;
+				font-weight: 700;
+				letter-spacing: 0.07em;
+				text-transform: uppercase;
+				color: #738078;
+			}
+			.fact strong {
+				display: block;
+				margin-top: 5px;
+				font-size: 15px;
+				word-break: break-word;
+			}
+			.notice {
+				min-height: 48px;
+				padding: 12px;
+				border-radius: 10px;
+				background: #eef7ed;
+				color: #24512e;
+				line-height: 1.4;
+			}
+			.notice.error {
+				background: #fff0ed;
+				color: #842f23;
+			}
+			.controls {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+			}
+			button {
+				border: 1px solid #bfc9c0;
+				border-radius: 9px;
+				background: #fff;
+				color: #17201b;
+				padding: 9px 12px;
+				font: inherit;
+				font-size: 13px;
+				font-weight: 650;
+				cursor: pointer;
+			}
+			button:hover {
+				border-color: #277447;
+				color: #185c36;
+			}
+			button.primary {
+				border-color: #1f6f42;
+				background: #1f6f42;
+				color: #fff;
+			}
+			.history {
+				margin: 0;
+				padding-left: 20px;
+				max-height: 310px;
+				overflow: auto;
+				font-size: 13px;
+				line-height: 1.6;
+				color: #536158;
+			}
+			.tabs {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 7px;
+				margin-bottom: 16px;
+			}
+			.tabs button[aria-selected="true"] {
+				border-color: #17201b;
+				background: #17201b;
+				color: #fff;
+			}
+			.walkthrough {
+				margin-top: 18px;
+			}
+			.walkthrough p {
+				color: #536158;
+				line-height: 1.5;
+			}
+			.steps {
+				display: grid;
+				gap: 8px;
+			}
+			.steps button {
+				text-align: left;
+			}
+			.steps button.done {
+				border-color: #b9d8c1;
+				background: #eef7ed;
+				color: #376246;
+			}
+			@media (max-width: 800px) {
+				.grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<main>
+			<div class="badge">Prototype — not production</div>
+			<h1>Can one Job preserve Workflow guarantees?</h1>
+			<p class="intro">
+				This demo tests one narrow decision: an ordinary background Job and a
+				crash-resumable multi-step Job share one run, attempt, lease, history,
+				and worker. Named Mutation, Action, sleep, and signal checkpoints add
+				guarantees without creating a separate Workflow Resource.
+			</p>
+
+			<div class="grid">
+				<section class="panel">
+					<h2>Current durable state</h2>
+					<div class="state-grid" id="state"></div>
+					<div class="notice" id="notice"></div>
+					<h2 style="margin-top: 24px">Free play</h2>
+					<div class="controls" id="controls"></div>
+				</section>
+
+				<section class="panel">
+					<h2>Append-only history</h2>
+					<ol class="history" id="history"></ol>
+				</section>
+			</div>
+
+			<section class="panel walkthrough">
+				<h2>Guided cases</h2>
+				<div class="tabs" id="tabs"></div>
+				<p id="scenario-description"></p>
+				<div class="steps" id="scenario-steps"></div>
+			</section>
+		</main>
+
+		<script>
+			// Pure prototype module. It deliberately owns no DOM or timers.
+			// PROOF-MODEL-START
+			const JobMachine = (() => {
+				const initial = () => ({
+					scheduleActive: true,
+					tickIdentity: null,
+					run: "absent",
+					attempt: 0,
+					lease: null,
+					version: 1,
+					executable: "build-A",
+					commandDigest: "publish:v1",
+					steps: {},
+					signal: null,
+					history: ["Prototype reset"],
+					last: { ok: true, message: "Choose any action or guided case." },
+				});
+
+				const record = (state, message, patch = {}) => ({
+					...state,
+					...patch,
+					history: [...state.history, message],
+					last: { ok: true, message },
+				});
+
+				const reject = (state, message) => ({
+					...state,
+					history: [...state.history, `Rejected: ${message}`],
+					last: { ok: false, message },
+				});
+
+				const reduce = (state, action) => {
+					switch (action.type) {
+						case "reset":
+							return initial();
+						case "accept-manual":
+							if (state.run !== "absent")
+								return reject(
+									state,
+									"The scoped idempotency identity already has a run.",
+								);
+							return record(
+								state,
+								"Manual acceptance created one durable Job run.",
+								{
+									run: "ready",
+								},
+							);
+						case "accept-tick":
+							if (!state.scheduleActive)
+								return reject(
+									state,
+									"The cron schedule is removed; no future tick may be accepted.",
+								);
+							if (state.tickIdentity === "2030-01-01T09:00Z")
+								return reject(
+									state,
+									"A competing scheduler already accepted this tick identity.",
+								);
+							return record(
+								state,
+								"One scheduler accepted the stable cron tick; duplicates lose.",
+								{
+									tickIdentity: "2030-01-01T09:00Z",
+									run: state.run === "absent" ? "ready" : state.run,
+								},
+							);
+						case "remove-schedule":
+							return record(
+								state,
+								"Schedule removed. Existing run remains; future ticks stop.",
+								{
+									scheduleActive: false,
+								},
+							);
+						case "claim":
+							if (state.run !== "ready")
+								return reject(state, "Only a ready run can be claimed.");
+							return record(state, "Worker claimed a short fenced attempt.", {
+								run: "running",
+								attempt: state.attempt + 1,
+								lease: `lease-${state.attempt + 1}`,
+							});
+						case "complete-ordinary":
+							if (state.run !== "running")
+								return reject(state, "No running attempt exists.");
+							return record(
+								state,
+								"Ordinary Job completed without creating checkpoint history.",
+								{
+									run: "succeeded",
+									lease: null,
+								},
+							);
+						case "mutation-step":
+							if (state.run !== "running")
+								return reject(
+									state,
+									"Checkpoint commands need a running attempt.",
+								);
+							if (state.steps.review === "complete")
+								return record(
+									state,
+									"Mutation checkpoint replayed its stored result; no second write.",
+								);
+							return record(
+								state,
+								"Named Mutation checkpoint committed once with a stable call identity.",
+								{
+									steps: { ...state.steps, review: "complete" },
+								},
+							);
+						case "wait-signal":
+							if (state.run !== "running" || state.steps.review !== "complete")
+								return reject(
+									state,
+									"The signal wait follows the committed review checkpoint.",
+								);
+							return record(
+								state,
+								"Job persisted a typed signal wait and released its lease.",
+								{
+									run: "waiting",
+									lease: null,
+									steps: { ...state.steps, approval: "waiting" },
+								},
+							);
+						case "signal":
+							if (state.run !== "waiting")
+								return reject(state, "This Job is not waiting for a signal.");
+							return record(
+								state,
+								"Typed approval signal advanced the same durable Job.",
+								{
+									run: "ready",
+									signal: "approved",
+									steps: { ...state.steps, approval: "complete" },
+								},
+							);
+						case "action-ambiguous":
+							if (
+								state.run !== "running" ||
+								state.steps.approval !== "complete"
+							)
+								return reject(state, "The publish Action follows approval.");
+							return record(
+								state,
+								"Provider may have accepted the stable effect; outcome is ambiguous.",
+								{
+									run: "ready",
+									lease: null,
+									steps: { ...state.steps, publish: "ambiguous" },
+								},
+							);
+						case "recover-action":
+							if (
+								state.run !== "running" ||
+								state.steps.publish !== "ambiguous"
+							)
+								return reject(
+									state,
+									"No ambiguous Action checkpoint is ready for receipt lookup.",
+								);
+							return record(
+								state,
+								"Reliable receipt lookup resolved the same Effect Identity.",
+								{
+									steps: { ...state.steps, publish: "complete" },
+								},
+							);
+						case "succeed":
+							if (state.run !== "running")
+								return reject(state, "No running attempt exists.");
+							if (state.steps.publish && state.steps.publish !== "complete")
+								return reject(
+									state,
+									"An ambiguous external effect cannot be reported as success.",
+								);
+							return record(state, "Job reached one terminal success.", {
+								run: "succeeded",
+								lease: null,
+							});
+						case "crash":
+							if (state.run !== "running")
+								return reject(state, "Only an active attempt can crash.");
+							return record(
+								state,
+								"Process crashed. PostgreSQL kept run and checkpoint history.",
+								{
+									run: "ready",
+									lease: null,
+								},
+							);
+						case "change-command":
+							return record(
+								state,
+								"Deployment changed a recorded command digest.",
+								{
+									commandDigest: "publish:v2-incompatible",
+									executable: "build-B",
+								},
+							);
+						case "claim-incompatible":
+							if (state.run !== "ready")
+								return reject(
+									state,
+									"Only a ready run can be checked for claim.",
+								);
+							if (
+								Object.keys(state.steps).length &&
+								state.commandDigest !== "publish:v1"
+							)
+								return reject(
+									state,
+									"Checkpoint digest changed; latest-code replay is refused.",
+								);
+							return reduce(state, { type: "claim" });
+						case "cancel":
+							if (["absent", "succeeded", "cancelled"].includes(state.run))
+								return reject(state, "This run cannot be cancelled now.");
+							return record(
+								state,
+								"Cancellation fenced the current owner and terminalized the Job.",
+								{
+									run: "cancelled",
+									lease: null,
+								},
+							);
+						default:
+							return reject(state, `Unknown action: ${action.type}`);
+					}
+				};
+
+				return Object.freeze({ initial, reduce });
+			})();
+			// PROOF-MODEL-END
+
+			const actions = [
+				["Reset", "reset"],
+				["Accept Job", "accept-manual"],
+				["Accept cron tick", "accept-tick"],
+				["Remove schedule", "remove-schedule"],
+				["Claim attempt", "claim"],
+				["Complete ordinary Job", "complete-ordinary"],
+				["Run Mutation checkpoint", "mutation-step"],
+				["Wait for approval", "wait-signal"],
+				["Deliver approval", "signal"],
+				["Action becomes ambiguous", "action-ambiguous"],
+				["Recover Action receipt", "recover-action"],
+				["Crash process", "crash"],
+				["Change command digest", "change-command"],
+				["Claim with compatibility check", "claim-incompatible"],
+				["Succeed", "succeed"],
+				["Cancel", "cancel"],
+			];
+
+			const scenarios = [
+				{
+					name: "Ordinary Job",
+					description:
+						"A simple Job uses the same run and worker but writes no checkpoint rows.",
+					steps: [
+						["Accept the Job", "accept-manual"],
+						["Claim one attempt", "claim"],
+						["Finish the handler", "complete-ordinary"],
+					],
+				},
+				{
+					name: "Crash and resume",
+					description:
+						"A Mutation checkpoint survives a crash and replays its stored result instead of writing twice.",
+					steps: [
+						["Accept the Job", "accept-manual"],
+						["Claim attempt one", "claim"],
+						["Commit the Mutation checkpoint", "mutation-step"],
+						["Crash the process", "crash"],
+						["Claim attempt two", "claim"],
+						["Replay the same Mutation checkpoint", "mutation-step"],
+						["Finish", "succeed"],
+					],
+				},
+				{
+					name: "Signal and Action",
+					description:
+						"The same Job waits durably, resumes, and preserves an ambiguous external Action until receipt lookup resolves it.",
+					steps: [
+						["Accept and claim", "accept-manual"],
+						["Claim", "claim"],
+						["Request review", "mutation-step"],
+						["Wait for approval", "wait-signal"],
+						["Deliver typed approval", "signal"],
+						["Claim resumed Job", "claim"],
+						["Provider response is lost", "action-ambiguous"],
+						["Claim reconciliation attempt", "claim"],
+						["Lookup stable receipt", "recover-action"],
+						["Finish", "succeed"],
+					],
+				},
+				{
+					name: "Cron ownership",
+					description:
+						"Competing schedulers share one tick identity. Removing cron affects only future ticks.",
+					steps: [
+						["First scheduler accepts tick", "accept-tick"],
+						["Second scheduler loses", "accept-tick"],
+						["Remove schedule", "remove-schedule"],
+						["Future tick is refused", "accept-tick"],
+						["Existing run still claims", "claim"],
+						["Existing run succeeds", "complete-ordinary"],
+					],
+				},
+				{
+					name: "Incompatible deployment",
+					description:
+						"A recorded checkpoint cannot silently replay against changed command bytes.",
+					steps: [
+						["Accept and claim", "accept-manual"],
+						["Claim", "claim"],
+						["Record checkpoint", "mutation-step"],
+						["Crash", "crash"],
+						["Deploy changed command", "change-command"],
+						["Attempt incompatible claim", "claim-incompatible"],
+					],
+				},
+			];
+
+			let state = JobMachine.initial();
+			let activeScenario = 0;
+			let completedSteps = new Set();
+
+			const dispatch = (type, stepIndex = null) => {
+				state = JobMachine.reduce(state, { type });
+				if (stepIndex !== null) completedSteps.add(stepIndex);
+				render();
+			};
+
+			const render = () => {
+				const facts = [
+					["Run", state.run],
+					["Attempt", state.attempt || "none"],
+					["Lease", state.lease || "none"],
+					["Cron", state.scheduleActive ? "active" : "removed"],
+					["Tick", state.tickIdentity || "none"],
+					["Executable", state.executable],
+					["Command digest", state.commandDigest],
+					[
+						"Checkpoints",
+						Object.keys(state.steps).length
+							? JSON.stringify(state.steps)
+							: "none",
+					],
+				];
+				document.querySelector("#state").innerHTML = facts
+					.map(
+						([label, value]) =>
+							`<div class="fact"><span>${label}</span><strong>${value}</strong></div>`,
+					)
+					.join("");
+				const notice = document.querySelector("#notice");
+				notice.textContent = state.last.message;
+				notice.classList.toggle("error", !state.last.ok);
+				document.querySelector("#history").innerHTML = state.history
+					.map((item) => `<li>${item}</li>`)
+					.join("");
+				document.querySelector("#controls").innerHTML = actions
+					.map(
+						([label, type], index) =>
+							`<button class="${index === 1 ? "primary" : ""}" data-action="${type}">${label}</button>`,
+					)
+					.join("");
+				document.querySelectorAll("[data-action]").forEach((button) => {
+					button.addEventListener("click", () =>
+						dispatch(button.dataset.action),
+					);
+				});
+				renderScenario();
+			};
+
+			const renderScenario = () => {
+				document.querySelector("#tabs").innerHTML = scenarios
+					.map(
+						(scenario, index) =>
+							`<button data-tab="${index}" aria-selected="${index === activeScenario}">${scenario.name}</button>`,
+					)
+					.join("");
+				document.querySelectorAll("[data-tab]").forEach((button) => {
+					button.addEventListener("click", () => {
+						activeScenario = Number(button.dataset.tab);
+						completedSteps = new Set();
+						state = JobMachine.initial();
+						render();
+					});
+				});
+				const scenario = scenarios[activeScenario];
+				document.querySelector("#scenario-description").textContent =
+					scenario.description;
+				document.querySelector("#scenario-steps").innerHTML = scenario.steps
+					.map(
+						([label, type], index) =>
+							`<button class="${completedSteps.has(index) ? "done" : ""}" data-step="${index}" data-step-action="${type}">${index + 1}. ${label}</button>`,
+					)
+					.join("");
+				document.querySelectorAll("[data-step]").forEach((button) => {
+					button.addEventListener("click", () =>
+						dispatch(button.dataset.stepAction, Number(button.dataset.step)),
+					);
+				});
+			};
+
+			render();
+		</script>
+	</body>
+</html>

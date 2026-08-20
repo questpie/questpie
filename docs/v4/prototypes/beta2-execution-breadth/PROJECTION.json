@@ -1,0 +1,74 @@
+{
+	"version": 1,
+	"decision": "unifyCheckpointedWorkIntoJob",
+	"routeAuth": {
+		"authority": "ADR-0015 and P6 remain the accepted prerequisite",
+		"coreAuthProduct": false,
+		"credentialOwner": "application provider through one credential resolver",
+		"principalOwner": "credential resolver",
+		"contextOwner": "Context Resolution",
+		"authorizationOwner": "Policy",
+		"referenceIntegration": "Better Auth through ordinary Service, Route, Collection, and credential-resolver composition"
+	},
+	"action": {
+		"owns": [
+			"one external or nondeterministic invocation",
+			"input and inferred output with optional output pin",
+			"declared errors",
+			"Policy and network exposure",
+			"cancellation and explicit ambiguity"
+		],
+		"context": [
+			"immutable Execution facts",
+			"external-effect Services",
+			"generated Query callers",
+			"generated Mutation callers"
+		],
+		"forbiddenContext": [
+			"data or transaction facade",
+			"raw database",
+			"durable run or checkpoint control",
+			"System elevation"
+		],
+		"automaticRetry": false,
+		"durableEffectIdentityOwner": "Reaction or Job checkpoint",
+		"providerGuarantee": "explicit idempotency and receipt contract; ambiguity remains when outcome cannot be proved"
+	},
+	"job": {
+		"publicResources": ["Job"],
+		"absentPublicSurfaces": [
+			"Workflow Resource",
+			"defineWorkflow",
+			"Workflow client",
+			"second workflow runtime"
+		],
+		"versionRequired": true,
+		"signals": "optional closed structural map",
+		"checkpointCommands": [
+			"named generated Mutation",
+			"named generated Action",
+			"durable sleep",
+			"typed signal wait"
+		],
+		"arbitraryCallbackCheckpoint": false,
+		"signalAndCheckpointNamesAreDistinct": true,
+		"ordinaryJobCheckpointStorage": false,
+		"compatibility": "job identity, semantic version, executable digest, ordered checkpoint name, and canonical command digest",
+		"incompatibleReplay": "refuse claim",
+		"cronOwner": "compiler-owned schedule attached to Job over PostgreSQL durable state",
+		"cronTickIdentity": "one stable identity per scheduled instant",
+		"scheduleRemoval": "stop future ticks and preserve accepted runs"
+	},
+	"clientBoundary": {
+		"networkAction": "generated client member",
+		"route": "no generated semantic client",
+		"job": "no generic browser control plane"
+	},
+	"rejectedAlternatives": [
+		"separate Workflow Resource over the same durable kernel",
+		"Job mode switch or builder that creates a second Definition shape",
+		"generic step.run callback",
+		"core Auth product",
+		"separate cron or scheduler Resource"
+	]
+}
