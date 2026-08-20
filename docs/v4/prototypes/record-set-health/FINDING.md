@@ -85,7 +85,7 @@ you do: the ratchet thresholds are config, not code — a grep of `scripts/`
 and the root `_.json`files finds nothing and invites a false "the ratchet is
 unimplemented" finding. They live in`quality/`.
 
-## **The acceptance-verify seam's own trigger has fired and nothing moved.**
+## **The acceptance-verify seam's own trigger fired; CI now enforces it.**
 
 `.agents/skills/questpie-v4/references/proof.md` describes
 `bun run review:accept:verify` as the seam letting CI check acceptance
@@ -96,15 +96,12 @@ when the first v2 record lands on a merged branch."
 `protocolVersion: 2` with `verdict: PASS`, and BETA-08 is merged at
 `8389cf5f` (PR #320). All four BETA-08 records are v2; BETA-06 and BETA-07 are
 all v1, so BETA-08 is exactly the first.
-`review:accept` appears in **no** file under `.github/workflows/` —
-`ci.yml` runs `quality:full`, `test:postgres`, `quality:typescript-forward`
-and `bench:micro`; `release.yml` runs `quality:release` then `release`.
-So the condition the skill set for itself is met and the wiring is due. **Not
-building it here** — a new CI job gates every contributor's PR, which is the
-same reason the docs-example check above is recorded rather than added. Owner
-call, but the trigger is no longer hypothetical.
-**The check itself was run and BETA-08's record passes**, so the wiring would
-be gating a check that is green today rather than one nobody has tried:
+The condition the skill set for itself is therefore met. It is now wired as the
+credential-free `Acceptance record integrity` job at `.github/workflows/ci.yml:17`–`:27`.
+That job uses `fetch-depth: 0`, not the full-quality job's shallow checkout,
+because the verifier proves the reviewed head is an ancestor of `HEAD`.
+**The check itself was run and BETA-08's record passes**, so the wiring gates a
+check that is green today rather than one nobody has tried:
 `bun run review:accept:verify -- --record docs/v4/implementation/beta08/REVIEW-04.json`
 exits 0 with "acceptance review verification PASS … ->
 `d0aedd54dc6420b48e632590a6c2319f8516bc9f`", the repinned manifest head.
