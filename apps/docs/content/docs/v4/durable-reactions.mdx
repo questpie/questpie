@@ -230,8 +230,9 @@ Durable events are append-only. They contain safe correlation identities and
 error codes, not credentials, raw payloads, secrets, or stack traces.
 
 Reaction is the committed-fact projection of the shared durable kernel. Use a
-[Job or Workflow seam](./durable-jobs-and-workflows) for explicitly requested
-or checkpointed durable work; generic browser worker controls remain absent.
+Job for explicitly requested or checkpointed durable work; generic browser
+worker controls remain absent. ADR-0026 removes the separate Workflow Resource
+and assigns its closed checkpoints, timers, and signals to Job.
 
 QUESTPIE authors only ordinary B-tree Indexes for durable state. It emits no
 row-level security. Policy remains the authorization model.

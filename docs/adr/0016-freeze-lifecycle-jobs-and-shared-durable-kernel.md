@@ -1,6 +1,11 @@
 # ADR 0016: Freeze Lifecycle Jobs and the Shared Durable Kernel
 
-- Status: Accepted
+> The separate Workflow Resource/factory clauses are historical and superseded
+> by [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> Their checkpoint, timer, signal, history, and compatibility semantics remain
+> current as the closed Job checkpoint projection. Reaction remains distinct.
+
+- Status: Accepted; separate Workflow projection superseded by ADR-0026
 - Date: 2026-08-13
 
 ## Context

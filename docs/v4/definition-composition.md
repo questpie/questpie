@@ -375,7 +375,7 @@ A structural module cannot value-import `.questpie/generated/**` or an
 arbitrary `#questpie/app` value. A type-only import is permitted and is erased
 before controlled evaluation. ADR-0009 plus ADR-0019 permit exactly seven pure
 current-virtual factory values: `defineQuery`, `defineMutation`, `defineAction`,
-`defineRoute`, `defineReaction`, `defineJob`, and `defineWorkflow`. The evaluator
+`defineRoute`, `defineReaction`, and `defineJob`. The evaluator
 substitutes those values from the compiler's current draft and never loads
 emitted Runtime output. Another generated value remains `QP-COMPOSE-012`.
 

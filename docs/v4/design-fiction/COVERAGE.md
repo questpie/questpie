@@ -1,5 +1,8 @@
 # `SPEC.md` to developer-guide coverage
 
+> ADR-0026 supersedes Workflow coverage as a separate product area. Durable
+> checkpoint coverage belongs to Job.
+
 - Status: documentation workbench; not reader-facing product documentation
 - Purpose: make every architectural promise teachable and testable through the
   design-fiction developer guide

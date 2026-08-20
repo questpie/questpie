@@ -19,8 +19,9 @@ different owners.
 
 ## One kernel, three meanings
 
-The compiler emits separate Job, Reaction, and Workflow Resource projections.
-The Runtime lowers all three to one PostgreSQL state machine:
+The compiler emits distinct Job and Reaction Resource projections. A Job gains
+the closed checkpoint projection when its handler uses it. The Runtime lowers
+both Resources and Job checkpoints to one PostgreSQL state machine:
 
 ```text
 accept -> ready/delayed -> claim(attempt, lease) -> running
@@ -35,8 +36,8 @@ owner. Capability projections preserve application meaning:
 - Job is explicitly dispatched work with a scoped idempotency key;
 - Reaction is derived from one exact committed fact with stable causation and
   no independent producer;
-- Workflow adds checkpoint history, durable timers, typed signals, and pinned
-  semantic versioning to the same run.
+- Job checkpoints add history, durable timers, typed signals, and pinned
+  semantic versioning to the same run without another Resource.
 
 Queue names the operational scheduling and lease surface. It is not an authored
 Definition or a fourth application runtime.
@@ -71,9 +72,10 @@ does not execute the handler inline. Browser callers request this work through
 an application-authored Mutation. Removing a recurring schedule prevents
 future tick acceptance but does not cancel a run already accepted from a tick.
 
-## Workflow checkpoint boundary
+## Job checkpoint boundary
 
-A Workflow uses a closed projection rather than a generic callback recorder:
+A checkpointed Job uses a closed projection rather than a generic callback
+recorder:
 
 ```ts
 await step.mutation("request-review", mutations.articles.requestReview, {
@@ -96,7 +98,7 @@ one Effect Identity and receipt or explicit ambiguity. Sleep and signal wait
 write durable timer/signal state. There is no `step.run(async () => ...)`, and
 an attempt or lease is never application-mutable.
 
-Live histories pin the Workflow semantic version and executable digest. A
+Live histories pin the Job semantic version and executable digest. A
 worker without compatible bytes refuses the claim. Latest-code replay is not a
 compatibility strategy.
 
@@ -123,13 +125,13 @@ review at medium effort returned `PASS`.
 
 The proof exercises explicit, delayed, and scheduled Job acceptance;
 committed-fact Reaction causation; lease recovery and stale-worker fencing;
-shared retry/cancellation; Workflow checkpoint resume, ordering, signals,
+shared retry/cancellation; Job checkpoint resume, ordering, signals,
 effect crash recovery, and executable pinning; exact negative client and
 capability types; and bounded declaration/editor cost. It inherits P5 as the
 PostgreSQL and fresh run-as authority.
 
 Ticket #19 must still prove concurrent schedulers, ten compatible instances,
 arbitrary routing, crashes, and rolling deployment. ADR-0019 owns final
-factory and export spelling. Full Workflow publication remains deferred until
+factory and export spelling. Full Job checkpoint breadth remains deferred until
 its authorization, child-work, compensation, continuation/history-limit, and
 multi-version matrices pass.

@@ -1,5 +1,11 @@
 # ADR 0014: Freeze Runtime, Client, Execution Envelope, and Minimal Studio
 
+> Workflow-specific forward clauses in this record are historical and
+> superseded by
+> [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> Their closed checkpoint semantics remain current as Job; `defineWorkflow`
+> and a separate Workflow Resource are not current or deferred public surface.
+
 > Partially superseded by [ADR-0023](./0023-freeze-post-commit-operation-outcome.md)
 > for the post-commit Operation outcome and Wire v1 Mutation retained-pair
 > execution. Wire v1 Query retention remains unchanged.

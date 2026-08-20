@@ -24,6 +24,10 @@ proof-blocked-contracts:
   - complete Workflow authorization, child work, compensation, limits, and evolution matrix
 ---
 
+> ADR-0026 supersedes the separate Workflow factory and examples below. Their
+> closed steps, timers, signals, history, and compatibility behavior belong to
+> the same `defineJob` handler.
+
 # Run durable work after commit
 
 Use a Reaction for durable follow-up caused by a committed application change.

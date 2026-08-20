@@ -7,6 +7,10 @@
   application administration; an artifact viewer is not a product
 - Authority: Accepted ADRs, `SPEC.md`, and executable evidence remain fixed;
   this map records investigation order, not replacement authority
+- Execution breadth: ADR-0026 now accepts Action and one Job Resource with
+  cron/checkpoints; Route/Auth remains the ADR-0015 application-composition
+  boundary. The accepted proof is
+  `docs/v4/prototypes/beta2-execution-breadth/`.
 
 ## Release sequence
 
@@ -170,7 +174,7 @@ absence boundary.
 ## #7: Which accepted backend seams are still absent?
 
 Blocked by: #6
-Type: Research
+Type: Resolved by ADR-0026; implementation slices remain
 
 ### Question
 
@@ -200,9 +204,12 @@ Partial owner direction for beta.2:
   handlers or authority
   (`docs/adr/0018-freeze-file-search-and-contract-projections.md:60`-`:70`).
 
-Accepted ADR-0016 and ADR-0019 currently retain Workflow as a distinct Resource
-and factory. Folding it into Job therefore requires a focused superseding
-decision and proof; this map does not silently rewrite that authority.
+ADR-0026 now supersedes the distinct Workflow Resource/factory after the
+focused `beta2-execution-breadth` proof received a verified fresh
+Opus-medium `PASS`. The closed checkpoint, timer, signal, history, and
+compatibility semantics belong to Job. Action is accepted; Route/Auth remains
+the ADR-0015 application-composition boundary. Production implementation and
+its PostgreSQL/ten-instance gates remain open.
 
 ## #8: Which authoring and documentation DX earns a focused pass?
 

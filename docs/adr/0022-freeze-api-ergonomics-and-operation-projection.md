@@ -1,6 +1,10 @@
 # ADR 0022: Freeze API Ergonomics and Operation Projection
 
-- Status: Accepted
+> The distinct Workflow authoring clause is historical and superseded by
+> [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> Checkpointed orchestration is a closed projection of Job.
+
+- Status: Accepted; Workflow clause superseded by ADR-0026
 - Date: 2026-08-14
 
 ## Context

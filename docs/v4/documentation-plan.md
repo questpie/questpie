@@ -1,5 +1,8 @@
 # QUESTPIE v4 documentation plan
 
+> ADR-0026 supersedes Workflow as a separate documentation/product area.
+> Durable checkpoint, timer, signal, and compatibility guidance belongs to Job.
+
 - Status: Active
 - Date: 2026-08-10
 - Public root: `apps/docs/content/docs/v4/`

@@ -4,8 +4,14 @@
 > [ADR-0025](./0025-remove-channels-from-core.md). `defineChannel`, Channel
 > payload projection, and `runtime.channelCarrier` are not current or deferred
 > public surface.
+>
+> Workflow-specific clauses are historical and superseded by
+> [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> `defineWorkflow` and a separate Workflow projection are not current or
+> deferred public surface; their closed durable semantics belong to Job.
 
-- Status: Accepted; Channel clauses superseded by ADR-0025
+- Status: Accepted; Channel clauses superseded by ADR-0025 and Workflow clauses
+  superseded by ADR-0026
 - Date: 2026-08-13
 
 ## Context

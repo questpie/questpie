@@ -1,5 +1,8 @@
 # QUESTPIE v4: produktova vizia pre Martina
 
+> ADR-0026 nahrádza samostatný Workflow koncept: checkpointy, timery a signály
+> patria Jobu. `defineWorkflow` ani druhý workflow runtime nie sú produkt.
+
 Datum: 10. august 2026
 
 Stav: navrh produktu pred implementaciou

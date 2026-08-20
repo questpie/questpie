@@ -1,5 +1,11 @@
 # ADR 0021: Slice the beta.1 release
 
+> Workflow-specific forward clauses in this record are historical and
+> superseded by
+> [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> Their closed checkpoint semantics remain current as Job; `defineWorkflow`
+> and a separate Workflow Resource are not current or deferred public surface.
+
 > Partially superseded by [ADR-0024](./0024-descope-minimal-studio-from-beta-one.md)
 > for the minimal Studio path and Studio parity in beta.1.
 >

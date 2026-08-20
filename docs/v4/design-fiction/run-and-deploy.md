@@ -25,6 +25,9 @@ proof-blocked-contracts:
   - focused Runtime and deployment Opus-medium acceptance review
 ---
 
+> ADR-0026 supersedes Workflow evolution references with Job checkpoint
+> history and executable compatibility.
+
 # Run and deploy QUESTPIE
 
 The normal QUESTPIE deployment has three steps: build one matched application

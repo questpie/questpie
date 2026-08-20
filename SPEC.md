@@ -170,12 +170,12 @@ The compiler emits concrete application files with:
 - exact declared errors;
 - exact Origin and ownership metadata needed by tools.
 
-Executable Definition handlers import the seven application-specialized
+Executable Definition handlers import the six application-specialized
 `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`,
-`defineReaction`, `defineJob`, and `defineWorkflow` factories from the Current
-App Contract at `#questpie/app`. The Controlled Structural Evaluator substitutes
-only these pure factory values. It never loads emitted Runtime output or another
-generated value during structural compilation.
+`defineReaction`, and `defineJob` factories from the Current App Contract at
+`#questpie/app`. The Controlled Structural Evaluator substitutes only these
+pure factory values. It never loads emitted Runtime output or another generated
+value during structural compilation.
 
 One scalar/codec kernel backs `codec.*`, stored `field.*`, and compatible
 embedded `value.*` projections. Operation composes input/output codecs and owns
@@ -319,15 +319,15 @@ Reaction is the committed-fact projection of that kernel. Its causation and
 deduplication derive from the exact transaction fact and static dispatch slot;
 it has no independent producer or author-supplied second key.
 
-Durable Workflow is a checkpoint/history projection over the same kernel. Its
-closed commands call a generated Mutation or Action, sleep on a durable timer,
-or wait for a typed durable signal. It does not expose a generic callback step
-or create a second runtime. Live histories pin semantic version and executable
-bytes instead of replaying arbitrary latest TypeScript.
+A checkpointed Job is a checkpoint/history projection over the same kernel.
+Its closed commands call a generated Mutation or Action, sleep on a durable
+timer, or wait for a typed durable signal. It does not expose a generic callback
+step or create a second Resource/runtime. Live histories pin semantic version
+and executable bytes instead of replaying arbitrary latest TypeScript.
 
 Queue names the operational scheduling, admission, lease, and backpressure
-surface, not a Definition or composition container. Full Workflow breadth
-still requires signal authorization, child work, compensation, bounded
+surface, not a Definition or composition container. Complete Job checkpoint
+breadth still requires signal authorization, child work, compensation, bounded
 continuation/history, and multi-version evidence before public release.
 
 ## 10. Execution Envelope and Studio
@@ -340,7 +340,7 @@ versioned Execution Envelope correlation schema. It correlates:
 - transaction identity;
 - idempotency and causation identity;
 - change-ledger and dispatch identity;
-- Job or Workflow attempt identity;
+- Job attempt and checkpoint identity;
 - timing, declared errors, logs, spans, and audit events.
 
 CLI, Studio, OpenTelemetry exporters, tests, and a future Cloud consume this
@@ -353,7 +353,7 @@ Studio shows:
 - migration plan, migration checksum history, database drift, and Seeds;
 - operation calls, Policy decisions, transactions, and declared errors;
 - Change Ledger and Transactional Dispatch state;
-- Queue, Job, and Workflow attempts, leases, retries, cancellation, and dead
+- Queue and Job attempts, checkpoints, leases, retries, cancellation, and dead
   letters;
 - Live Query dependencies, cursor, lag, wake reason, recomputation, and
   reconnect state;
@@ -464,7 +464,7 @@ contract.
 
 Only the minimum Reaction/dispatch inspection needed to prove the transaction
 spine belongs in this tracer. Service lifetime is included because Context owns
-scoped disposal. Action, raw Route/credential Auth, complete Job/Workflow, File
+scoped disposal. Action, raw Route/credential Auth, complete Job checkpoints, File
 bytes, Search, optional cache/broker, OpenAPI/MCP/skills, split Runtime roles,
 remote Studio, and managed Cloud retain the named seams and exact absence
 stories in ADR-0021. ADR-0025 removes Channels and their carrier seam rather
@@ -508,7 +508,7 @@ Do not port these mechanisms:
 - A full CMS Admin.
 - An Operator App builder.
 - A public compiler plugin API.
-- A full Workflow product before the dispatch spine passes.
+- Full Job checkpoint orchestration before the dispatch spine passes.
 - A managed control plane.
 
 ## 16. Current decision state
@@ -553,15 +553,15 @@ resume, or a production Runtime.
 Transactional Dispatch, caller-run-as Reaction, attempt/lease fencing, bounded
 retry and timeout, cancellation, external-effect ambiguity, retention, and
 executable compatibility are accepted in ADR-0013 and
-`docs/v4/transactional-dispatch-and-reaction.md`. They do not accept Job,
-Workflow, a Queue composition surface, provider-specific Action semantics, or a
-production Runtime/Fetch/Studio protocol.
+`docs/v4/transactional-dispatch-and-reaction.md`. They do not accept Job
+checkpoint orchestration, a Queue composition surface, provider-specific Action
+semantics, or a production Runtime/Fetch/Studio protocol.
 
 ADR-0016 and `docs/v4/lifecycle-jobs-and-shared-durable-kernel.md` accept the
 complete v3 lifecycle-job mapping, explicit Job acceptance, committed-fact
-Reaction distinction, and one Job/Reaction/Workflow durable kernel with a
-closed checkpoint seam. Final factory spelling is accepted by ADR-0019;
-complete Workflow product breadth remains a later vertical.
+Reaction distinction, and one Job/Reaction durable kernel with a closed
+checkpoint seam. ADR-0026 supersedes the separate Workflow spelling: the seam
+belongs to Job, and complete checkpoint breadth remains a later vertical.
 
 ADR-0017 and `docs/v4/multi-instance-and-optional-acceleration.md` accept
 ten-instance HA, arbitrary routing, concurrent schedulers/workers, rolling
@@ -620,8 +620,9 @@ Grill and record these contracts in order:
    is deferred from beta.1 by ADR-0024, while split roles, host/provider SPIs,
    and remote Studio remain later;
 9. Service, Route/Fetch, and Auth composition — accepted by ADR-0015;
-10. lifecycle jobs and one Job/Reaction/Workflow durable kernel — accepted by
-    ADR-0016; complete Workflow breadth remains later;
+10. lifecycle jobs and one Job/Reaction durable kernel — accepted by ADR-0016;
+    ADR-0026 assigns the closed checkpoint projection to Job and complete
+    checkpoint breadth remains later;
 11. Files, Search, OpenAPI, MCP, and skills ownership — accepted by ADR-0018;
     public breadth remains a later slice;
 12. semantic kernels, naming, imports, exports, and optional Runtime binding
@@ -649,11 +650,11 @@ their final spelling:
   mapped deliberately. Pure validation/normalization, transaction-owned work,
   result projection and post-commit durable work are distinct phases; Reaction
   is not a replacement name for every lifecycle extension.
-- Job, Reaction and Workflow should share the smallest viable durable
-  execution kernel. Their differences are trigger/dispatch authority and
-  available capability: a Reaction is derived from a committed fact; a
-  Workflow adds checkpointed `step` semantics. Do not build three queues merely
-  because three authoring jobs exist.
+- Job and Reaction share the smallest viable durable execution kernel. Their
+  difference is trigger/dispatch authority: a Reaction derives from a committed
+  fact, while Job is explicitly/delayed/scheduled accepted and may add closed
+  checkpointed `step` semantics. Do not build another Resource or queue merely
+  because one Job begins checkpointing.
 - HA is a default correctness target. Ten compatible application instances
   must not change Context, Policy, Live Query or durable semantics. Correctness
   cannot depend on process-local registries, singleton ownership or a unique

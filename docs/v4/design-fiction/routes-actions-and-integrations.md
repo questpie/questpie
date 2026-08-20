@@ -21,6 +21,9 @@ proof-blocked-contracts:
   - focused Action and Better Auth reference-integration acceptance reviews
 ---
 
+> ADR-0026 accepts the focused Action boundary and supersedes later Workflow
+> references with the closed Job checkpoint projection.
+
 # Connect HTTP, external effects, Auth, Files, and Search
 
 Use a Route when the application must own raw HTTP. Use an Action when it must

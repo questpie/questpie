@@ -23,6 +23,9 @@ proof-blocked-contracts:
   - fresh focused Opus-medium acceptance review for each promoted contract
 ---
 
+> ADR-0026 supersedes Workflow as a separate product/factory. Equivalent
+> checkpoint, timer, signal, and evolution guarantees belong to Job.
+
 # Know the limits and guarantees
 
 QUESTPIE makes ownership visible so you can predict what happens when input is

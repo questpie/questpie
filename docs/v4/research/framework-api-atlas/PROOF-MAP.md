@@ -1,5 +1,9 @@
 # QUESTPIE v4 contract proof map
 
+> Current projection: ADR-0026 supersedes the separate Workflow Resource and
+> factory accepted by historical P18/P21 evidence. The durable semantics remain
+> current as Job checkpoints; reviewed proof records below are historical bytes.
+
 - Status: execution plan; no acceptance or implementation authority
 - Purpose: turn the ideal-framework design fiction into six bounded contracts
   that can be proven, reviewed, accepted, and only then implemented

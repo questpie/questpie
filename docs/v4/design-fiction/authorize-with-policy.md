@@ -16,6 +16,9 @@ candidate-contracts:
   - nondisclosure, explicit System Authority, and derived RLS boundaries
 ---
 
+> ADR-0026 supersedes Workflow as a separate Resource. Durable attempts and
+> checkpoint steps described below are Job attempts/checkpoints.
+
 # Authorize data with Policy
 
 Policy is QUESTPIE's application authorization model. You bind one Policy to a

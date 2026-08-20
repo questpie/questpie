@@ -31,6 +31,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 23. [Post-Commit Operation Outcome](./0023-freeze-post-commit-operation-outcome.md)
 24. [Descope Minimal Studio from Beta.1](./0024-descope-minimal-studio-from-beta-one.md)
 25. [Remove Channels from the Core](./0025-remove-channels-from-core.md)
+26. [Freeze Action and Unify Checkpointed Work in Job](./0026-freeze-action-and-unify-checkpointed-work-in-job.md)
 
 ## Open decisions
 
@@ -54,6 +55,11 @@ harness, and guarded release path.
 ADR-0025 removes the framework-owned Channel Resource, generated surface,
 PostgreSQL event ledger/replay, presence model, and carrier binding while
 preserving the collaboration fixture's ordinary `Channel` Collection.
+ADR-0026 freezes Action as the external-invocation boundary, preserves
+application-composed Route/Auth, and moves the accepted closed checkpoint,
+timer, signal, and compatibility semantics into one Job Resource. Workflow and
+`defineWorkflow` are no longer current or deferred public surface; Reaction
+remains distinct over the shared durable kernel.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path
@@ -67,9 +73,8 @@ post-commit outcome, exact recovery identities, and general bounded Call
 Identity text.
 ADR-0024 defers Studio until one useful privileged administration workflow and
 its Principal, Policy/Authority and disclosure contract are accepted.
-Complete Workflow, Action, split
-Runtime roles, host/provider SPIs, and remote/fleet Studio remain later
-verticals.
+Complete Job checkpoint implementation, split Runtime roles, host/provider
+SPIs, and remote/fleet Studio remain later verticals.
 Migration execution and Package Augmentation through the connected Runtime
 remain implementation gates, not newly accepted syntax.
 

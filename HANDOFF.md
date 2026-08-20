@@ -1,5 +1,10 @@
 # QUESTPIE v4 handoff
 
+> Current execution-breadth authority: ADR-0026 freezes Action and assigns
+> checkpoint/timer/signal orchestration to Job. `defineWorkflow` and a separate
+> Workflow Resource are historical only. Route/Auth remains application
+> composition under ADR-0015.
+
 ## Current accepted outcome
 
 QUESTPIE v4 is a docs-first rewrite. Public documentation projects Accepted

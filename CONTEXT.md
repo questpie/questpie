@@ -358,7 +358,7 @@ anonymous, or a typed failure. It does not decide Policy or Authority.
 
 ### Execution Scope
 
-The lifetime of one request, Job attempt, Workflow step, script call, or test
+The lifetime of one request, Job attempt or checkpoint, script call, or test
 execution. It carries immutable Principal, Tenant, Authority, cancellation, and
 trace context.
 
@@ -544,17 +544,18 @@ delay, or from a durable schedule.
 A persisted producer of independently deduplicated Job ticks. Removing a
 schedule prevents future acceptance and never cancels an already accepted run.
 
-### Workflow Checkpoint
+### Job Checkpoint
 
-One named ordered durable Workflow command and its canonical digest, stable
+One named ordered durable Job command and its canonical digest, stable
 Mutation Call Identity or Effect Identity, and validated result, timer, or
 signal receipt. Arbitrary callback effects are not checkpoints.
 
-### Durable Workflow
+### Checkpointed Job
 
-A persisted orchestration projection over the shared Durable Run kernel. It
-adds checkpoint history, durable timers, typed signals, and explicit semantic-
-version and executable compatibility; it is not a second runtime.
+A Job using the closed checkpoint projection over the shared Durable Run
+kernel. It adds checkpoint history, durable timers, typed signals, and explicit
+semantic-version and executable compatibility without becoming another
+Resource, factory, or runtime.
 
 ### Operational Fact
 
@@ -568,8 +569,8 @@ Do not use: internal state, kernel row, telemetry.
 ### Execution Envelope
 
 The versioned correlation schema carried by each append-only Runtime event. It
-correlates operation, transaction, causation, idempotency, dispatch, Job or
-Workflow attempt, error, log, span, and audit identities. It is not one mutable
+correlates operation, transaction, causation, idempotency, dispatch, Job
+attempt/checkpoint, error, log, span, and audit identities. It is not one mutable
 execution record.
 
 ### Deployment Compatibility

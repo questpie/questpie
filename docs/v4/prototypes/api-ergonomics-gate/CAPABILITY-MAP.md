@@ -13,12 +13,13 @@ Start from the guarantee the work needs, not from a lifecycle phase name.
 | Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
 | React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
 | Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
-| Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
+| Coordinate checkpointed multi-step work        | Job         | Durable named Mutation/Action steps, timers, and typed signals          |
 | Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
 
-Reaction, Job, and Workflow are distinct authoring meanings over one internal
-run, attempt, lease, retry, cancellation, result, retention, and history kernel.
-No owner grants another owner's capability implicitly.
+Reaction and Job are distinct authoring meanings over one internal run,
+attempt, lease, retry, cancellation, result, retention, and history kernel.
+Checkpointed work remains Job. No owner grants another owner's capability
+implicitly.
 
 Query and Live Query are not separate read kernels: watchability is a generated
 projection of a supported Query. Ephemeral connected-client messages are

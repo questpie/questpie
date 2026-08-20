@@ -1,5 +1,11 @@
 # ADR 0009: Bind executable Definitions from the current App Contract
 
+> Workflow-specific forward clauses in this record are historical and
+> superseded by
+> [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
+> Their closed checkpoint semantics remain current as Job; `defineWorkflow`
+> and a separate Workflow Resource are not current or deferred public surface.
+
 - Status: Accepted
 - Date: 2026-08-12
 

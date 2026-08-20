@@ -1,5 +1,8 @@
 # Query, Mutation, Collection Operations, and lifecycle contract
 
+> ADR-0026 supersedes forward Workflow references. Checkpointed orchestration
+> is a closed Job projection, not another Resource or factory.
+
 - Status: Accepted
 - Projection: verified by independent factual, prose, and example audits
 - Date: 2026-08-13

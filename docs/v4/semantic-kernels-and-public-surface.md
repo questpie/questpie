@@ -15,7 +15,7 @@ and generated modules specialize executable code to one exact contract.
 | Policy evidence             | `policy.exists(...)` | same plan, boolean-only projection               |
 | explicit work               | `defineJob`          | durable run/attempt/lease kernel                 |
 | committed-fact work         | `defineReaction`     | same durable kernel plus causation/deduplication |
-| checkpointed work           | `defineWorkflow`     | same durable kernel plus versioned `ctx.step`    |
+| checkpointed work           | `defineJob`          | same durable kernel plus versioned closed `step` |
 | raw protocol                | `defineRoute`        | Fetch execution kernel                           |
 | server entry                | `app.fetch`          | same Fetch kernel; no `defineFetch`              |
 
@@ -23,7 +23,7 @@ Restricted projections prevent invalid combinations. Query has read capability
 and no retry. Route receives Request, parameters, Principal, cancellation,
 deadline, Route-safe Services, and `ctx.execution`; it has no data facade or
 transaction. Job and Reaction receive run/attempt/retry state but no Request.
-Workflow adds only the accepted checkpoint commands. File byte storage is a
+Job adds only the accepted checkpoint commands. File byte storage is a
 Route capability, never a Mutation or Policy capability.
 
 ## Choose the owner of application work
@@ -39,12 +39,13 @@ Route capability, never a Mutation or Policy capability.
 | Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
 | React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
 | Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
-| Coordinate checkpointed multi-step work        | Workflow    | Durable named Mutation/Action steps, timers, and typed signals          |
+| Coordinate checkpointed multi-step work        | Job         | Durable named Mutation/Action steps, timers, and typed signals          |
 | Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
 
 This map is the permanent v4 guide for work ownership. The v3 hook crosswalk is
-historical evidence, not a public lifecycle API. Reaction, Job, and Workflow
-remain distinct authoring meanings over one internal durable kernel.
+historical evidence, not a public lifecycle API. Reaction and Job remain
+distinct authoring meanings over one internal durable kernel; checkpointing
+does not create another Resource.
 
 ## Imports
 
@@ -56,8 +57,8 @@ Use `"questpie"` for stable structural builders and grammars, including
 
 Use `"#questpie/app"` for application-specialized `defineQuery`,
 `defineMutation`, `defineAction`, `defineRoute`, `defineReaction`, `defineJob`,
-`defineWorkflow`, `createApp`, and exact generated types. A Package uses the
-same seven factory names from `"#questpie/package"`, specialized only to its
+`createApp`, and exact generated types. A Package uses the same six factory
+names from `"#questpie/package"`, specialized only to its
 sealed Package Contract. Its `"./questpie"` export may contain branded
 structural and executable Definitions, Augmentations, and types.
 
@@ -107,7 +108,7 @@ Context, and committed configuration contains no credentials.
 
 The initial clean reviewed head `1785809aeed4f517f5182c5fc3fffd5802433181`
 received `BLOCKED`. Repair head
-`0f44e985cf897a499cae6801966a2467c1e09b68` removed the Package Workflow
+`0f44e985cf897a499cae6801966a2467c1e09b68` removed the historical Package Workflow
 `step.query` widening and named all four optional Runtime bindings. One fresh
 stateless Opus-medium replacement review returned `PASS`; acceptance evidence
 is `d50d4334b116a5bdc46e95cdabf566d8db938d37`.

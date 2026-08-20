@@ -1,5 +1,8 @@
 # Runtime, client, Execution Envelope, and minimal Studio
 
+> ADR-0026 supersedes forward Workflow references. Job owns checkpoint history
+> and the generated browser client exposes no generic durable control plane.
+
 Status: accepted by ADR-0014 and proof head
 `94c237c9aa910a60a332b1ef97473f34fe89d65b`, with the focused post-commit
 outcome revision accepted by ADR-0023 and `P6R1/PostCommitOutcome`.

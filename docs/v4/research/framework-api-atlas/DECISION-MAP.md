@@ -1,5 +1,9 @@
 # QUESTPIE v4 ideal framework API atlas decision map
 
+> ADR-0026 supersedes forward conclusions that expose Workflow as a separate
+> Resource/factory. Their closed checkpoint semantics remain current as Job;
+> historical evidence and pinned proof heads remain unchanged.
+
 - Status: research frontier; no acceptance authority
 - Objective: design the coherent ideal QUESTPIE v4 developer interface before
   implementation, then derive `4.0.0-beta.1`, later betas, and 4.0 from it

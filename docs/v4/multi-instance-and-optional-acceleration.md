@@ -11,13 +11,13 @@ Every compatible Runtime instance can accept roots, reconcile Change Ledger
 facts, accept schedule ticks, claim durable work, and resume clients. PostgreSQL
 owns all facts that survive an instance:
 
-| Concern               | Durable owner                                        | Instance-local state                   |
-| --------------------- | ---------------------------------------------------- | -------------------------------------- |
-| Operation replay      | PostgreSQL result receipt                            | response buffer                        |
-| Live Query            | Change Ledger and exclusive visibility frontier      | SSE connection and bounded send buffer |
-| Job/Reaction/Workflow | run, attempt, lease, timer, signal, and history rows | current handler and Services           |
-| durable schedule      | unique schedule/tick acceptance                      | scan opportunity                       |
-| Query cache           | dependency generations and fresh Policy              | Memory/Redis value bytes               |
+| Concern          | Durable owner                                        | Instance-local state                   |
+| ---------------- | ---------------------------------------------------- | -------------------------------------- |
+| Operation replay | PostgreSQL result receipt                            | response buffer                        |
+| Live Query       | Change Ledger and exclusive visibility frontier      | SSE connection and bounded send buffer |
+| Job/Reaction     | run, attempt, lease, timer, signal, and history rows | current handler and Services           |
+| durable schedule | unique schedule/tick acceptance                      | scan opportunity                       |
+| Query cache      | dependency generations and fresh Policy              | Memory/Redis value bytes               |
 
 No process is an application, scheduler, queue, or realtime singleton. An
 instance crash loses local connections, buffers, Services, cache values, and

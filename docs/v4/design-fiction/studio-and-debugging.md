@@ -22,6 +22,9 @@ proof-blocked-contracts:
   - focused Execution Envelope and Studio Opus-medium acceptance review
 ---
 
+> ADR-0026 supersedes Workflow as a separate timeline. Studio will inspect Job
+> checkpoints over the same durable event spine.
+
 # Inspect and debug with Studio
 
 Studio explains one compiled QUESTPIE application. It joins the Compiled

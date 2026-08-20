@@ -236,21 +236,21 @@ the connected tracer; their assertions remain mandatory regressions below.
   horizon, dead letters, and retention are finite and fail explicitly.
 - Pending runs pin exact executable bytes; incompatible readiness and bounded
   drain cannot strand work.
-- Job, Reaction, and Workflow must lower to one durable transition kernel with
+- Job and Reaction must lower to one durable transition kernel with
   capability-scoped generated projections. Job accepts explicit direct,
-  Mutation, delayed, or scheduled work; Reaction exists only from one exact
-  committed fact; Workflow adds closed named Mutation, Action, timer, and
-  signal checkpoints.
+  Mutation, delayed, or scheduled work and adds closed named Mutation, Action,
+  timer, and signal checkpoints; Reaction exists only from one exact committed
+  fact.
 - Schedule removal never cancels an accepted run. A Reaction has no independent
-  producer or author-supplied second dedup key. A Workflow has no generic
-  callback checkpoint or latest-code replay.
+  producer or author-supplied second dedup key. A Job has no generic callback
+  checkpoint or latest-code replay.
 - Implementation evidence must directly reject a needless recovered attempt
-  after cancellation, nondeterministic Workflow replay mismatch, and mutable or
+  after cancellation, nondeterministic Job checkpoint mismatch, and mutable or
   truncated append-only event history.
-- Generic browser Queue, worker, lease, Reaction, Job, and Workflow controls
+- Generic browser Queue, worker, lease, Reaction, and Job controls
   stay absent. Applications expose selected controls through ordinary Policy-
   protected Query and Mutation Operations.
-- Complete Workflow publication remains blocked until signal authorization,
+- Complete Job checkpoint publication remains blocked until signal authorization,
   child work, compensation, continuation/history limits, and multi-version
   compatibility pass.
 
@@ -421,8 +421,8 @@ not current release gates.
 - Query disclosure reads and boolean-only Policy evidence are restricted
   projections of one relational planner. Neither may acquire the other's
   return or authority behavior.
-- Job, Reaction, and Workflow lower to one durable kernel while retaining exact
-  distinct causes and contexts. Workflow checkpoint commands remain closed.
+- Job and Reaction lower to one durable kernel while retaining exact distinct
+  causes and contexts. Job checkpoint commands remain closed.
 - `defineRoute` authors the Resource and generated `app.fetch` mounts it. There
   is no `defineFetch`; raw Route ingress has no data facade and uses an explicit
   `ctx.execution` transition.

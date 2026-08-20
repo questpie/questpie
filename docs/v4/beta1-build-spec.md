@@ -1,5 +1,9 @@
 # QUESTPIE v4 beta.1 build specification
 
+> ADR-0026 supersedes forward Workflow references in this beta.1 snapshot.
+> Checkpointed orchestration remains Job; there is no `defineWorkflow` or
+> separate Workflow Resource.
+
 - Status: candidate implementation authority for atlas #16
 - Release: `4.0.0-beta.1`
 - Scope source: ADR-0008 through ADR-0024

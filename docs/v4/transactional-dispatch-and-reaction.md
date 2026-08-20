@@ -1,5 +1,8 @@
 # Transactional Dispatch and Reaction contract
 
+> ADR-0026 supersedes forward Workflow references. Reaction remains distinct;
+> explicitly accepted checkpointed orchestration belongs to Job.
+
 - Status: Accepted
 - Projection: verified after independent factual, prose, and example audits
 - Date: 2026-08-13

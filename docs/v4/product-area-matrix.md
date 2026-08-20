@@ -29,18 +29,18 @@ application.
 
 ## Later slices
 
-| Product area     | Dependency before grill                     | Intended role                               | Status              |
-| ---------------- | ------------------------------------------- | ------------------------------------------- | ------------------- |
-| Jobs             | Transactional Dispatch and lease proof      | Durable background execution                | Next slice          |
-| Durable Workflow | Jobs, timers, signals, idempotency, history | Persisted orchestration on the same Runtime | Later               |
-| Auth             | Principal and Policy proof                  | Resolve credentials into Principal          | Later               |
-| Files            | Data lifecycle and blob seam                | File records plus external bytes            | Later               |
-| Search           | Stable query grammar                        | PostgreSQL FTS and vector operations        | Later               |
-| KV               | Proven internal need                        | Named coordination or application data      | Re-evaluate         |
-| OpenAPI          | Stable operation exposure and schemas       | Projection of explicit Operations           | Later               |
-| MCP              | Stable exposure, Policy, and error contract | Projection of explicit Operations           | Later               |
-| Full Studio      | Stable Jobs, Workflows, Auth, and Files     | Operational projection of later slices      | Later               |
-| Managed Cloud    | External production proof                   | Semantic deployment control plane           | Business validation |
+| Product area    | Dependency before grill                     | Intended role                                | Status              |
+| --------------- | ------------------------------------------- | -------------------------------------------- | ------------------- |
+| Jobs            | Transactional Dispatch and lease proof      | Durable background execution and checkpoints | Next slice          |
+| Job checkpoints | Jobs, timers, signals, idempotency, history | Persisted orchestration on the same Runtime  | Later               |
+| Auth            | Principal and Policy proof                  | Resolve credentials into Principal           | Later               |
+| Files           | Data lifecycle and blob seam                | File records plus external bytes             | Later               |
+| Search          | Stable query grammar                        | PostgreSQL FTS and vector operations         | Later               |
+| KV              | Proven internal need                        | Named coordination or application data       | Re-evaluate         |
+| OpenAPI         | Stable operation exposure and schemas       | Projection of explicit Operations            | Later               |
+| MCP             | Stable exposure, Policy, and error contract | Projection of explicit Operations            | Later               |
+| Full Studio     | Stable Jobs, Auth, and Files                | Operational projection of later slices       | Later               |
+| Managed Cloud   | External production proof                   | Semantic deployment control plane            | Business validation |
 
 Transient connected-client events and advisory presence are application/
 provider integrations, not a QUESTPIE product area. Live Query owns current

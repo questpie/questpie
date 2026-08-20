@@ -4,6 +4,9 @@ description: A developer-first tour of the compiled PostgreSQL application runti
 status: design-fiction
 ---
 
+> ADR-0026 supersedes Workflow as a separate Resource/factory. Checkpointed
+> orchestration in this design fiction is Job.
+
 # Build applications with QUESTPIE
 
 QUESTPIE turns TypeScript application definitions into a typed PostgreSQL
