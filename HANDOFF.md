@@ -1222,10 +1222,11 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   covered**, in a different file:
   `feat/v4-beta-09:docs/v4/implementation/beta09/narrower-claims.md:107` records
   "Criterion 18 is now measured: 255 ms against a 5,000 ms budget". Verified on
-  the branch. `acceptance-shape.md:361`–`:368` had already corrected itself; the
-  correction had not reached this file. (That range read `:355`–`:365` until my
-  own insertions into `acceptance-shape.md` pushed the paragraph down six lines
-  — the decay the rule above names, found by applying it.)
+  the branch. `acceptance-shape.md:377`–`:384` had already corrected itself; the
+  correction had not reached this file. (That range has moved twice as my own
+  insertions into `acceptance-shape.md` pushed the paragraph down — `:355` to
+  `:361` to `:377`. Both moves were caught by running the rule above in the same
+  commit as the edit, which is the only time it is cheap.)
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then

@@ -152,6 +152,22 @@ reasoning rather than against the prose.
    fix must not be an Operation-level Policy on Query, which would duplicate a
    binding that already works for Collection data.
 
+   **That choice has since been narrowed against accepted authority, and the
+   three are not comparable in cost.** Two need an Accepted ADR amended: reads as
+   Mutations would have to stop a Mutation owning the single PostgreSQL
+   transaction ADR-0011:27 _requires_ it to own, and a widened `QueryContext`
+   would have to let a Query's context carry more than the "generated read-only
+   `ctx.data`" ADR-0011:23 specifies. The durable route needs **no amendment** —
+   ADR-0015:33–:35 already gives a Route handler the Principal, so an inspection
+   Authority decision is evaluable there today — and instead needs the mounting,
+   Fetch dispatch and `routes` projection that ADR-0014 assigns to ADR-0015's
+   slice and nobody has built.
+
+   `ROUTE-SHAPE.md` records the recommendation and its judgment call: prefer the
+   route, because unbuilt-but-specified work is a smaller commitment than
+   amending a frozen contract, and the command half needs that same work
+   regardless.
+
 2. **Maintenance Authority is evaluated and distinct.** Holding inspection
    Authority does not confer it. A caller lacking it is refused with a typed
    `AUTHORITY_DENIED`, and the attempt is recorded in the append-only audit.
