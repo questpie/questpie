@@ -132,8 +132,21 @@ callers.
 
 ### Answer
 
-Fog. There will be one concrete PostgreSQL implementation, not an adapter
-registry and not a public raw-client escape hatch.
+The interface-design pass selects one private `@questpie/runtime/postgres`
+module with a concrete `pg@8.22.0` implementation. Its seam follows three
+PostgreSQL lifetimes: callback-scoped ordinary transactions, a Runtime-owned
+listener/generation lifecycle, and a separately constructed transient pinned
+migration runner. It does not follow product names such as Query or Mutation,
+and it exposes no adapter registry, raw Client/Pool, raw rows, or public raw-SQL
+escape hatch.
+
+The compared alternatives, exact internal TypeScript interface, invariants,
+failure and performance contracts, dependency boundary, deletion test, and
+overturn conditions are recorded in
+[`postgres-module-interface-design.md`](./postgres-module-interface-design.md).
+This selects the shape for an executable PB-03 prototype. It does not authorize
+the production driver migration or public connection spelling; those require
+the disposable-PostgreSQL/PgBouncer hostile proof first.
 
 ## #4: How does realtime wake immediately without owning correctness?
 

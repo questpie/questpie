@@ -59,6 +59,14 @@ realtime Runtime, and separate pinned migration ownership. The required
 fallback. This unblocks an internal PB-03 prototype; it does not authorize the
 public projection before the focused topology proof passes.
 
+PB-03 now has a selected internal prototype interface in
+`docs/v4/research/production-backend/postgres-module-interface-design.md`.
+The chosen seam is one private `pg` module with callback-scoped ordinary
+transactions, Runtime-owned listener/generation lifecycle, and a separate
+transient pinned migration runner. The design comparison and deletion test are
+complete; executable PostgreSQL 16/17/18 and transaction-PgBouncer hostile proof
+still blocks production migration and PB-04.
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from
