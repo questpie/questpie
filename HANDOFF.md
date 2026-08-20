@@ -1391,5 +1391,10 @@ changed lane runs a test only for each --test you name and a typecheck only for
 each --typecheck workspace you name (scripts/quality.ts:128-130). Use
   bun run check:changed -- --test path/to/test.ts --typecheck <workspace>
 as references/implementation.md:11 specifies. Bare check:changed on a docs-only
-change is correct and runs format, lint and git diff --check.
+change is correct, and it runs format and git diff --check -- NOT lint. oxlint
+runs only when a changed file is lintable, and lintable is .js/.jsx/.mjs/.ts/.tsx
+(scripts/quality.ts:94-97). Markdown is formatable (:73-93, .md and .mdx are in
+that set) but never lintable, so a docs-only run does format plus git diff
+--check and nothing else. Do not read a green docs-only gate as having linted
+anything.
 ```
