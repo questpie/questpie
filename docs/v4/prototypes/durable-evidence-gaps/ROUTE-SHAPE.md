@@ -230,8 +230,27 @@ Neither is cheap, and neither belongs to BETA-09 as scoped. That is worth
 knowing before someone plans the command half around a Route on the strength of
 the name existing.
 
-**What this does not change.** The reads still work as `network: true` Queries
-today, with handler-evaluated authorization, because Queries are wired and
-Routes are not. So the split is sharper than the previous section implied: the
-read half is buildable now and the command half is blocked on work no accepted
-slice currently owns.
+**What this does not change, corrected.** An earlier version of this paragraph
+concluded that "the reads still work as `network: true` Queries today, with
+handler-evaluated authorization … the read half is buildable now". The first
+half of that is right and the conclusion is not. Queries are wired and Routes
+are not, so the reads do **reach the wire** today. But handler-evaluated
+authorization is unavailable — the mechanism is dismantled in "Where the
+authorization decision lives" above — so the reads reach the wire
+**unauthorized**.
+
+That was corrected in the decision section of this record and left standing
+here, which is the failure this record set keeps producing: a correction applied
+where it was noticed rather than everywhere the claim was relied on. This is the
+paragraph a planner reads.
+
+**The honest split.** Not "reads buildable, commands blocked". It is:
+
+| Half     | Reaches the wire | Can evaluate an Authority              | Also needs                       |
+| -------- | ---------------- | -------------------------------------- | -------------------------------- |
+| reads    | yes, as Queries  | **no** — needs one of the three shapes | —                                |
+| commands | no               | **no** — same problem                  | mounting, dispatch, a projection |
+
+So the authorization gap is common to both halves, and for commands it is the
+smaller of their two problems rather than a reason to treat the reads as ready. BETA-09's criterion 1
+depends on closing it for the reads alone.
