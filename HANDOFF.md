@@ -1127,6 +1127,26 @@ application: durableApplication })` — the construction site, passing no
     record cited something that does not exist. **The claims are true and the
     pointers make them look fabricated** — worse than an ordinary stale line,
     because it discredits a correct finding.
+    **It is four, not two, and the pattern is systematic in that one file.**
+    Swept every bare `packages/…` and `tests/…` citation in the record set for
+    the shape "feat/v4 does not match the claim, the branch does".
+    `owner-decisions.md` carries four, each with line numbers exactly right for
+    `feat/v4-beta-09`: `:100` → `postgres-maintenance.ts:209`–`:210`, the
+    `authorize` guard; `:103` → `compiler/src/runtime/application.ts:411`, the
+    `createPostgresDurableMaintenance` call; `:46` →
+    `compiler/src/runtime/application.ts:464`–`:483`, where the branch has
+    `const durable = Object.freeze({` and `feat/v4` has a comment about worker
+    polling; and `:46`–`:47` → `runtime/src/application/index.ts:433`–`:447`,
+    which on the branch is exactly realtime, then the Studio shell, then Studio
+    artifacts, then the wire. **`studio` appears zero times in that file on
+    `feat/v4`**, so that sentence cannot be checked against it at all.
+    One citation in the same file — the test at `:60`–`:63` — does carry the
+    prefix, so the rule was known and applied unevenly rather than missed.
+    **Scope of what I checked:** the sweep produced 32 bare citations where the
+    two refs differ at the cited line. Most are records correctly citing
+    `feat/v4` where the branch merely shifted, including several of mine. I read
+    the four above and confirmed them; **the other 28 are unread candidates, not
+    findings.**
     **D3 has a bigger problem than its heading: the eight divergences it batches
     are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
     divergences between accepted documentation and the tree that this slice
