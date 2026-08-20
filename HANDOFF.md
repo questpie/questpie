@@ -1016,8 +1016,26 @@ binding union and the compiler's emitted inventory, not at a missing module.
 
 - A **term was projected before its gate**: `Operational Fact` was added to
   `CONTEXT.md` while BETA-09 has never been reviewed, and the design branch
-  projects terms only after `PASS`. Revert until acceptance, or record an argued
-  exception.
+  projects terms only after `PASS`.
+  **Take the argued exception, not the revert.** The rule was broken in the
+  letter — `f092d618` added it during an unaccepted slice — but the term
+  projects no unbuilt capability. It names a category over four terms that are
+  already accepted vocabulary and already implemented: `Durable Run`,
+  `Physical Attempt`, `Effect Identity` and `Lease` each have a `### ` entry in
+  this glossary and code under `packages/runtime/src/durable/`. Nothing in
+  `packages/*/src` is named for the term itself, which is expected of a
+  superordinate.
+  Checked mechanically that it is the only instance: `git diff 8389cf5f..HEAD --
+CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
+  the file. So this is a single deliberate addition, not drift.
+  Reverting also costs four records that reference it — `HANDOFF.md`,
+  `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, and the two under
+  `docs/v4/implementation/beta09/` — two of which are actively edited.
+  **What would overturn this:** the definition growing to cover a fact only
+  BETA-09 introduces, at which point it would be projecting ahead after all; or
+  an owner reading the gate rule as unconditional, in which case content does not
+  matter and the revert stands. Formally recording the exception is still the
+  owner's, not mine.
 - `owner-decisions.md` states an owner answered its three questions. **That
   attribution cannot be verified from this repository** and three decisions rest
   on it. Two are independently grounded in citations and stand regardless; the
