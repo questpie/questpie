@@ -130,10 +130,27 @@ reasoning rather than against the prose.
    six files and none references authority or policy, while the same search finds
    policy machinery in `packages/runtime/src/relational/`.
 
+   **This is not the claim that Queries are unauthorized, and that distinction
+   was sharpened after the fact.** Policy in v4 is Collection-bound, attached as
+   `{ kind: "default", requiredForNormalDataAccess: true }`
+   (`packages/compiler/src/relational/discovery.ts:136`) and carried in the
+   compiled read plan as `policy` and `policyProgramDigest`
+   (`packages/runtime/src/relational/query.ts:97`–`:98`, `:621`), so an ordinary
+   Query reading Collection data through `ctx.data` **is** Policy-checked.
+
+   The inspection reads are outside that binding, which is the whole of the
+   problem. `durable_runs` is not a discovered Collection — it appears nowhere in
+   `relational/discovery.ts` — and the durable read path carries no Policy
+   machinery at all: the only match for `policy` under
+   `packages/runtime/src/durable/` is a comment at `principal.ts:8`, against two
+   files carrying it under `packages/runtime/src/relational/`.
+
    So passing criterion 1 requires first choosing one of the three shapes in
    `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md` — reads as
    Mutations, a widened `QueryContext`, or the durable route. **Planning the
-   slice without settling that plans a criterion that cannot be met.**
+   slice without settling that plans a criterion that cannot be met** — and the
+   fix must not be an Operation-level Policy on Query, which would duplicate a
+   binding that already works for Collection data.
 
 2. **Maintenance Authority is evaluated and distinct.** Holding inspection
    Authority does not confer it. A caller lacking it is refused with a typed
