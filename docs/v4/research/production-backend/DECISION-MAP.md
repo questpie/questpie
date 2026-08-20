@@ -8,6 +8,20 @@
 - Authority: Accepted ADRs, `SPEC.md`, and executable evidence remain fixed;
   this map records investigation order, not replacement authority
 
+## Release sequence
+
+| Release | Outcome                                                                                                                                                                       |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| beta.1  | Consolidate the accepted BETA-01–12 core, remove core Channels, publish the checked package, and teach one real end-to-end developer journey.                                 |
+| beta.2  | Ship the production PostgreSQL module, immediate Live Query wake, Action, Route, scheduled/checkpointed Job, cron, OpenAPI/MCP projections, and the authoring/visual DX pass. |
+| beta.3  | Resolve custom scalar and Field extensibility from its retained research.                                                                                                     |
+
+Studio remains outside all three rows. Core Auth also remains absent: application
+code or a reference Package integrates Better Auth or another provider, a Route
+resolves credentials into a trusted Principal, Context Resolution derives
+application context, and Policy remains the only QUESTPIE authorization model.
+Provider server/client objects and session UI stay in userland.
+
 ## #1: Which PostgreSQL driver does the Runtime own?
 
 Blocked by: none
@@ -147,8 +161,11 @@ Include scripts and failure diagnostics, not only test helpers.
 
 ### Answer
 
-Fog. This is the usability checkpoint before adding breadth: a developer must
+This is beta.1's usability checkpoint before adding breadth: a developer must
 be able to learn QUESTPIE by running a backend, not by reading generated files.
+The guide must cover install, build, migration, Seed, start, direct and network
+calls, Mutation, watch, Reaction, restart, diagnostics, and the exact beta.1
+absence boundary.
 
 ## #7: Which accepted backend seams are still absent?
 
@@ -157,16 +174,35 @@ Type: Research
 
 ### Question
 
-Re-derive the implementation status of Action, Route, Job, Workflow,
+Re-derive the implementation status of Action, Route, Job, Workflow, cron,
 Collection Operation Sets, OpenAPI, MCP, and skills against their Accepted
 contracts. Separate missing runtime behavior from generated-but-unusable
 surface, then order the smallest vertical slices needed for a useful backend.
+Test whether Workflow's useful semantics can become an opt-in checkpoint
+capability of Job instead of a separate public Resource.
 
 ### Answer
 
-Fog. OpenAPI, MCP, and skills must remain compiler projections over canonical
-App Contract members and the same Operation/Execution/Policy path, never
-parallel handlers or authority (`docs/adr/0018-freeze-file-search-and-contract-projections.md:60`-`:70`).
+Partial owner direction for beta.2:
+
+- Action, Route, Job, cron, and real realtime are priority backend capabilities.
+- Cron is schedule-based Job acceptance, not a second scheduler/runtime.
+- Prefer one Job concept with an opt-in checkpoint interface over a separate
+  Workflow Resource. The interface must preserve stable named checkpoints,
+  command digests, durable sleep/signal wait, executable/version pinning,
+  cancellation, and restart behavior; an idempotency-key helper alone is not
+  Workflow-equivalent.
+- QUESTPIE owns the Route and credential-to-Principal transition, not an Auth
+  product. Better Auth is a reference userland composition through Service and
+  Route; its browser client remains application code.
+- OpenAPI, MCP, and skills remain compiler projections over canonical App
+  Contract members and the same Operation/Execution/Policy path, never parallel
+  handlers or authority
+  (`docs/adr/0018-freeze-file-search-and-contract-projections.md:60`-`:70`).
+
+Accepted ADR-0016 and ADR-0019 currently retain Workflow as a distinct Resource
+and factory. Folding it into Job therefore requires a focused superseding
+decision and proof; this map does not silently rewrite that authority.
 
 ## #8: Which authoring and documentation DX earns a focused pass?
 
@@ -204,3 +240,21 @@ resource budgets and make every zero-result checker prove a positive control.
 Fog. Studio remains outside this closure under ADR-0024; it returns only as a
 separate system-privileged administration vertical
 (`docs/adr/0024-descope-minimal-studio-from-beta-one.md:34`-`:40`).
+
+## #10: Which custom scalar and Field extension seam is earned?
+
+Blocked by: #9
+Type: Research
+
+### Question
+
+For beta.3, reconcile the retained custom-scalar research with the accepted
+single scalar kernel, generated codecs, PostgreSQL lowering, Policy, migrations,
+OpenAPI/MCP projections, declarations, and package isolation. Determine whether
+the useful job needs a new scalar grammar, a closed Field projection, or no new
+public concept.
+
+### Answer
+
+Fog. Beta.3 owns this question; beta.2 must not grow an ad hoc scalar extension
+while implementing backend breadth.
