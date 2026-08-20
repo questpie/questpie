@@ -106,3 +106,97 @@ postgresTest(
 		expect(applied.outcome).toBe("applied");
 	},
 );
+
+/**
+ * The marker discipline rests on this and nothing in the tree exercised it.
+ * `withDurableKernelMarker` lowers the flag in a `finally`, which is only worth
+ * anything if lowering it actually re-arms the guard for the rest of the
+ * transaction. The guard compares against `'on'`, so any other value should
+ * refuse — this proves it rather than trusting the predicate by reading.
+ */
+postgresTest(
+	"lowering the kernel marker re-arms the guard mid-transaction",
+	async () => {
+		await harness();
+		const [row] = await database!.unsafe<
+			readonly Readonly<{ app: string; id: string }>[]
+		>(
+			`SELECT application_name AS app, run_id::text AS id
+FROM questpie_internal.durable_runs LIMIT 1`,
+		);
+		expect(row?.id).toBeString();
+		const update = `UPDATE questpie_internal.durable_runs SET event_sequence = event_sequence
+WHERE application_name = $1 AND run_id = $2`;
+		let markedAccepted = false;
+		let unmarkedRefused = false;
+		await database!
+			.begin(async (session) => {
+				await session.unsafe(durableKernelMarkerStatement);
+				await session.unsafe(update, [row!.app, row!.id]);
+				markedAccepted = true;
+				await session.unsafe(durableKernelUnmarkStatement);
+				try {
+					await session.unsafe(update, [row!.app, row!.id]);
+				} catch {
+					unmarkedRefused = true;
+				}
+				// Never commit a probe write.
+				throw new Error("rollback");
+			})
+			.catch(() => undefined);
+		expect(markedAccepted).toBe(true);
+		expect(unmarkedRefused).toBe(true);
+	},
+);
+
+/**
+ * `REASON_INVALID` was added to the rejection union and to the v5 CHECK and
+ * nothing produced it — a typed member no path could reach, which is the exact
+ * failure BETA-08's first round was blocked for, committed here.
+ *
+ * The bound belongs before the statement, not only in the DDL: enforced only by
+ * the database CHECK, an over-long reason surfaces as a raw PostgreSQL error
+ * rather than as the typed, audited outcome the command surface promises
+ * everywhere else.
+ */
+postgresTest(
+	"an out-of-bound reason is a typed rejection, not a database error",
+	async () => {
+		const prepared = await harness();
+		const runId = await publishedRun(prepared, "beta09-reason-1");
+		const actor = principal.user({ id: beta05Ids.principal });
+		const maintenance = createPostgresDurableMaintenance({
+			sql: database!,
+			application: "application:collaboration",
+		});
+
+		const tooLong = await maintenance.cancelRun({
+			runId,
+			reason: "x".repeat(257),
+			actor,
+		});
+		expect(tooLong.outcome).toBe("rejected");
+		expect(tooLong.rejectionCode).toBe("REASON_INVALID");
+		expect(tooLong.stateAfter).toBe(tooLong.stateBefore);
+
+		const empty = await maintenance.cancelRun({ runId, reason: "", actor });
+		expect(empty.rejectionCode).toBe("REASON_INVALID");
+
+		// Every attempt is recorded, and a rejection with no valid reason records a
+		// null one rather than the offending value.
+		const audited = await maintenance.audit(runId);
+		const refusals = audited.filter(
+			(entry) => entry.rejectionCode === "REASON_INVALID",
+		);
+		expect(refusals).toHaveLength(2);
+
+		// A reason at the bound is accepted, so the refusal is the bound and not the
+		// command being broken.
+		const applied = await maintenance.cancelRun({
+			runId,
+			reason: "y".repeat(256),
+			actor,
+		});
+		expect(applied.outcome).toBe("applied");
+	},
+);
