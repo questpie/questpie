@@ -1,5 +1,8 @@
 # ADR 0021: Slice the beta.1 release
 
+> Partially superseded by [ADR-0024](./0024-descope-minimal-studio-from-beta-one.md)
+> for the minimal Studio path and Studio parity in beta.1.
+
 - Status: Accepted
 - Date: 2026-08-14
 
@@ -13,15 +16,14 @@ large.
 
 ## Decision
 
-`4.0.0-beta.1` is the smallest connected P1–P6 application-server vertical. An
-application can compile, migrate, run, call, watch, recover, inspect, and restart
-one Policy-protected PostgreSQL application through direct, Fetch/client,
-worker, and minimal Studio paths.
+`4.0.0-beta.1` was accepted here with a minimal Studio path. ADR-0024 removes
+that path from the release while preserving the compiler, migration, Runtime,
+direct, Fetch/client, watch, recovery and worker vertical.
 
 The dependency-ordered release slices are foundation, schema, Services,
 Context/Policy, Operations, Runtime/client, realtime, one committed-fact
-Reaction, minimal Studio, and connected conformance. Service lifetime precedes
-Context disposal. The Runtime and durable slices also own the accepted
+Reaction, backend maintenance compatibility, and connected conformance.
+Service lifetime precedes Context disposal. The Runtime and durable slices also own the accepted
 maintenance Authority, expected-version fencing, typed concurrent winner,
 append-only audit, drain, and compatibility-retirement seams.
 
@@ -37,7 +39,7 @@ RLS claim.
 The collaboration/publishing fixture is the primary connected tracer. The
 archive/permit/embargo fixture proves portability. Release evidence includes
 local and one selected managed PostgreSQL target, exact generated declarations,
-direct/network/worker/Studio parity, crash and response-loss recovery, ten-
+direct/network/worker parity, crash and response-loss recovery, ten-
 instance compatibility evidence, optional-infrastructure absence, and slice-
 owned quality/performance budgets.
 

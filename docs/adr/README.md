@@ -29,6 +29,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 21. [Beta.1 Release Slice](./0021-slice-the-beta-one-release.md)
 22. [API Ergonomics and Operation Projection](./0022-freeze-api-ergonomics-and-operation-projection.md)
 23. [Post-Commit Operation Outcome](./0023-freeze-post-commit-operation-outcome.md)
+24. [Descope Minimal Studio from Beta.1](./0024-descope-minimal-studio-from-beta-one.md)
 
 ## Open decisions
 
@@ -49,15 +50,19 @@ client exports, Channel/Live Query spelling, and optional capability bindings.
 ADR-0020 accepts the portable agent router and review protocol, Bun/TypeScript
 baseline, measured quality lanes, PostgreSQL CI, Knip ratchet, performance
 harness, and guarded release path.
-ADR-0021 accepts the connected beta.1 slice: compiler through minimal Studio,
+ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
-explicit absence stories for later breadth.
+explicit absence stories for later breadth. ADR-0024 removes the Studio path
+and parity gate from beta.1 and re-scopes BETA-09 as backend-only maintenance
+compatibility.
 ADR-0022 keeps named factories, preserves exact Resource Identity, accepts
 nested-only generated server Operation calls, closes their leaf/prefix and
 final-`then` diagnostics, and publishes the permanent capability ownership map.
 ADR-0023 preserves Operation Wire v1 and accepts the versioned framework
 post-commit outcome, exact recovery identities, and general bounded Call
 Identity text.
+ADR-0024 defers Studio until one useful privileged administration workflow and
+its Principal, Policy/Authority and disclosure contract are accepted.
 Complete Workflow, Action, split
 Runtime roles, host/provider SPIs, and remote/fleet Studio remain later
 verticals.

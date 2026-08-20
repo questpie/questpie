@@ -444,8 +444,7 @@ It is complete only when:
 10. The client receives one correct recomputed result after commit.
 11. A process crash after commit and before wake loses neither refresh nor
     Reaction.
-12. Direct execution, network client, and minimal Studio return the same
-    authorized result.
+12. Direct execution and the network client return the same authorized result.
 13. Migration create, apply, checksum, and drift checks are deterministic.
 14. Public declarations contain no ORM types.
 15. Type-performance and runtime-performance budgets pass.
@@ -591,6 +590,16 @@ or later product breadth. ADR-0015 additionally accepts Service lifetime,
 Route/Fetch mounting, generated direct Route invocation, and Auth composition.
 Its factory spelling is finalized by ADR-0019.
 
+ADR-0020 establishes the repository quality, performance, CI and acceptance
+review authority. ADR-0021 slices beta.1; ADR-0024 supersedes only its minimal
+Studio path and parity requirement, re-scoping BETA-09 to backend maintenance
+compatibility. The long-term Studio boundary in ADR-0014 remains accepted but
+is not a beta.1 release gate.
+
+ADR-0022 freezes the generated authoring ergonomics and Operation projection.
+ADR-0023 supersedes ADR-0014's incomplete post-commit Mutation outcome with
+Operation Wire v2 while retaining v1 Query compatibility.
+
 ## 17. Next grilling sequence
 
 Grill and record these contracts in order:
@@ -607,8 +616,9 @@ Grill and record these contracts in order:
    accepted by item 9;
 6. observed Live Query dependencies and Change Ledger capture — accepted;
 7. Transactional Dispatch, Reaction leases, retry, and idempotency — accepted;
-8. Runtime/Fetch, Execution Envelope, generated client, and minimal Studio —
-   accepted; split roles, host/provider SPIs, and remote Studio remain later;
+8. Runtime/Fetch, Execution Envelope, and generated client — accepted; Studio
+   is deferred from beta.1 by ADR-0024, while split roles, host/provider SPIs,
+   and remote Studio remain later;
 9. Service, Route/Fetch, and Auth composition — accepted by ADR-0015;
 10. lifecycle jobs and one Job/Reaction/Workflow durable kernel — accepted by
     ADR-0016; complete Workflow breadth remains later;

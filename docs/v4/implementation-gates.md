@@ -256,6 +256,11 @@ the connected tracer; their assertions remain mandatory regressions below.
 
 ## Gate 8: Execution Envelope and Studio
 
+ADR-0024 defers the Studio application from beta.1. The Execution Envelope and
+maintenance clauses below remain beta.1 requirements; the Studio clauses are
+the contract a later privileged administration vertical must re-enter through,
+not current release gates.
+
 - Operation, transaction, change, dispatch, run, attempt, effect, error,
   subscription, migration, log, trace, metric, and audit events use one closed
   versioned correlation schema with monotonic per-owner sequencing.
@@ -435,7 +440,7 @@ the connected tracer; their assertions remain mandatory regressions below.
 
 ## Gate 9: executable tracer evidence
 
-- The Barbershop slice passes direct, network-client, and minimal-Studio tests.
+- The Barbershop slice passes direct and network-client tests.
 - A crash after commit and before wake loses no Reaction or Live Query refresh.
 - The same Definitions pass on local PostgreSQL and one managed Supabase
   PostgreSQL project.
@@ -448,9 +453,9 @@ the connected tracer; their assertions remain mandatory regressions below.
   after it closes and all consumers reconcile the fact prunes; the matching
   no-snapshot control also prunes. Sequence wrap remains independent of fact
   order.
-- CLI and Studio derive canonical explanation bytes through separate source
-  producers and independent joins. Neither may call the other or manufacture
-  parity with a JSON round trip.
+- CLI derives canonical explanation bytes through its own source producer and
+  independent joins. A future Studio must use a separate producer and may not
+  manufacture parity with a JSON round trip.
 - The connected tracer executes Migration Plan creation, immutable checksum,
   transactional apply plus receipt, lost-response retry, tamper refusal, and
   Drift detection and repair.

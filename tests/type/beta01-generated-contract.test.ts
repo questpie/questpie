@@ -51,7 +51,6 @@ describe("BETA-01 generated contract", () => {
 				"packages/compiler",
 				"packages/runtime",
 				"packages/testkit",
-				"apps/studio",
 				"fixtures/collaboration",
 				"fixtures/archive",
 			].map(async (workspace) => {
@@ -65,7 +64,6 @@ describe("BETA-01 generated contract", () => {
 			}),
 		);
 		expect(Object.fromEntries(workspaceGraph)).toEqual({
-			"apps/studio": "@questpie/studio",
 			"fixtures/archive": "@questpie/fixture-archive",
 			"fixtures/collaboration": "@questpie/fixture-collaboration",
 			"packages/compiler": "@questpie/compiler",

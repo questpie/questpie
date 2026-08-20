@@ -71,10 +71,6 @@
         "typescript": "6.0.2",
       },
     },
-    "apps/studio": {
-      "name": "@questpie/studio",
-      "version": "4.0.0-beta.1",
-    },
     "fixtures/archive": {
       "name": "@questpie/fixture-archive",
       "version": "4.0.0-beta.1",
@@ -580,8 +576,6 @@
     "@questpie/fixture-collaboration": ["@questpie/fixture-collaboration@workspace:fixtures/collaboration"],
 
     "@questpie/runtime": ["@questpie/runtime@workspace:packages/runtime"],
-
-    "@questpie/studio": ["@questpie/studio@workspace:apps/studio"],
 
     "@questpie/testkit": ["@questpie/testkit@workspace:packages/testkit"],
 

@@ -1,5 +1,8 @@
 # ADR 0004: Prove one tracer before product breadth
 
+> Partially superseded by [ADR-0024](./0024-descope-minimal-studio-from-beta-one.md)
+> for minimal Studio inspection in the first tracer.
+
 - Status: Accepted
 - Date: 2026-08-10
 
@@ -16,8 +19,9 @@ Implementation starts with one deletion-driven TanStack Barbershop tracer.
 
 The tracer proves static identity and ownership, one authorized Augmentation,
 PostgreSQL schema and migrations, Policy, Query, Mutation, Transactional
-Dispatch, Change Ledger, Live Query recomputation, concrete client types,
-minimal Studio inspection, crash recovery, and local plus managed PostgreSQL.
+Dispatch, Change Ledger, Live Query recomputation, concrete client types, crash
+recovery, and local plus managed PostgreSQL. ADR-0024 defers Studio until it
+owns a useful privileged administration workflow and its authority contract.
 
 Complete Auth, Files, Search, KV, Channels, Workflows, OpenAPI, MCP, Effect, and
 managed Cloud remain outside the first tracer. The low-level Fetch boundary is

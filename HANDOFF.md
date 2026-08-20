@@ -73,7 +73,7 @@ Fixed accepted proof authority:
 | #317 P22R1 reviewed implementation   | `4463708e56a72e26f65b8d1d3a2c5d0bf5cd6d4b` |
 | #317 P22R1 evidence                  | `27d6f4f9`                                 |
 
-ADR-0008 through ADR-0023 and their accepted workbench/public projections are
+ADR-0008 through ADR-0024 and their accepted workbench/public projections are
 product authority. The exact review heads, BLOCKED/repair history, digests,
 commands, measurements, and remaining implementation edges live in
 `docs/v4/research/framework-api-atlas/PROOF-MAP.md` and each proof acceptance
@@ -330,11 +330,10 @@ and would otherwise never surface them.
 - **The accepted budget table measures on the wrong axis.** It bounds a
   Principal where the glossary makes Tenant the isolation identity.
   `docs/v4/prototypes/tenant-share-control/DECISION.md`
-- **The Studio packaging fork is narrower than it looks.** Studio is optional in
-  ADR-0003 and the glossary, so always-bundled-with-no-opt-out is unavailable;
-  and assets inside the checksum-verified Runtime bundle inherit its integrity
-  guarantee while assets read from a resolved root at request time do not.
-  `docs/v4/prototypes/studio-packaging/FINDING.md`
+- ~~**The Studio packaging fork is narrower than it looks.**~~ **Resolved by
+  ADR-0024:** beta.1 ships no Studio assets. The earlier alternatives remain
+  evidence in `docs/v4/prototypes/studio-packaging/FINDING.md`; none is current
+  release work.
 - **Four of seven authoring factories have no runtime behind them, and the
   absence is typed rather than merely missing.** Action, Job, Workflow, and
   Route are generated into `#questpie/app` as
@@ -361,9 +360,16 @@ This list is maintained by hand and has already gone stale once. Treat
 
 ## Next invocation
 
-BETA-09 issue #296 is the nominal frontier, but the scope question below outranks
-it. Read `docs/v4/implementation/beta09/README.md` before touching
-`feat/v4-beta-09`; it carries the merge state and the slice's open items.
+BETA-09 issue #296 is re-scoped by ADR-0024 to backend maintenance
+compatibility. The unaccepted `feat/v4-beta-09` branch is evidence only and is
+not a merge candidate: retain bounded reason, evaluated maintenance Authority,
+typed denial/current winner and protocol compatibility by fresh TDD against
+`feat/v4`; drop Studio UI, mount, projection, worklist and inspection read
+model. After BETA-09 passes, proceed directly to BETA-10's ten-instance fair
+admission and rolling-compatibility fixture.
+
+The analysis below predates ADR-0024. It is retained as decision provenance;
+where it asks whether to finish or descope Studio, ADR-0024 answers **descope**.
 
 ### The finding that changes the plan
 

@@ -1,6 +1,6 @@
 {
 	"release": "4.0.0-beta.1",
-	"promise": "Compile, migrate, run, call, watch, recover, inspect, and restart one Policy-protected PostgreSQL application through direct, Fetch/client, worker, and minimal Studio paths.",
+	"promise": "Compile, migrate, run, call, watch, recover and restart one Policy-protected PostgreSQL application through direct, Fetch/client and worker paths.",
 	"compatibility": {
 		"data": "Migration Plan/receipt and PostgreSQL state are explicit; no silent destructive change.",
 		"behavior": "Accepted beta.1 guarantees may only change through a documented release decision and conformance update.",
@@ -58,14 +58,14 @@
 			"evidence": "durable cell with one Reaction; no generic Job/Workflow client"
 		},
 		{
-			"id": "studio",
+			"id": "maintenance-compatibility",
 			"requires": ["reaction"],
-			"owns": "minimal same-origin Policy-protected readiness, Resource/Origin, Operation, transaction, ledger, Reaction and event inspection",
-			"evidence": "direct/network/worker/Studio parity and independent projection joins"
+			"owns": "bounded maintenance reason, evaluated maintenance Authority, typed denial, expected-version winner and internal-protocol compatibility",
+			"evidence": "real PostgreSQL maintenance denial, fencing and protocol upgrade cases; no browser surface"
 		},
 		{
 			"id": "connected-conformance",
-			"requires": ["studio"],
+			"requires": ["maintenance-compatibility"],
 			"owns": "collaboration tracer, archive portability fixture, ten-instance correctness subset, local plus one selected managed PostgreSQL target, release and performance evidence",
 			"evidence": "accepted P14 matrix and slice-owned budgets"
 		}
@@ -112,9 +112,14 @@
 			"absence": "beta.1 correctness uses PostgreSQL only; no Redis, Pusher, provider matrix or sticky-session requirement"
 		},
 		{
+			"capability": "Studio",
+			"seam": "a future privileged application-admin client over accepted Operations and operational projections",
+			"absence": "beta.1 ships no Studio UI, browser mount, artifact viewer, admin Principal or application/operational-data disclosure contract"
+		},
+		{
 			"capability": "split Runtime roles and remote Studio",
 			"seam": "one immutable Runtime Build, role-compatible lifecycle protocol and versioned Studio event/projection contract",
-			"absence": "beta.1 runs combined role and same-origin minimal Studio; no fleet/control-plane API"
+			"absence": "beta.1 runs combined role and has no Studio or fleet/control-plane API"
 		}
 	],
 	"laterBetas": [
@@ -123,12 +128,12 @@
 		"Channel and optional carrier",
 		"File metadata/bytes and Search verticals",
 		"OpenAPI/MCP/skill projections and optional acceleration",
-		"split roles and broader Studio only after their focused conformance passes"
+		"privileged application Studio and split roles only after their focused authority and conformance pass"
 	],
 	"releaseGates": [
 		"all beta1 dependency slices green in order",
 		"P14 collaboration and archive required cells",
-		"direct/network/worker/Studio parity for the connected tracer",
+		"direct/network/worker parity for the connected tracer",
 		"local PostgreSQL 17 and one selected managed PostgreSQL target",
 		"crash-after-commit, response loss, retry/fencing, rolling compatibility and optional-infrastructure absence",
 		"exact declarations, negative imports, no ORM types and TypeScript budgets",

@@ -440,48 +440,49 @@
 		},
 		{
 			"id": "BETA-09",
-			"title": "BETA-09 Inspect the connected tracer through minimal Studio",
+			"title": "BETA-09 Close backend maintenance compatibility",
 			"blockedBy": ["BETA-08"],
 			"agentReady": true,
-			"authority": ["ADR-0003", "ADR-0014", "ADR-0021"],
+			"authority": ["ADR-0014", "ADR-0016", "ADR-0021", "ADR-0024"],
 			"artifacts": [
-				"independent Studio projection producer",
-				"same-origin Studio bundle",
-				"Policy-protected inspection Operations",
-				"safe event/explain views"
+				"internal protocol v5 bounded maintenance reason",
+				"evaluated maintenance Authority and typed denial",
+				"expected-version conflict carrying the current winner",
+				"generated internal-protocol catalog and compatibility evidence"
 			],
-			"fixture": "Minimal Studio joins Resource/Origin, migration, Policy, Operation, transaction, ledger and Reaction facts for the collaboration tracer.",
-			"redTest": "Studio can disclose a hidden Message or internal payload not available through the equivalent generated Operation.",
+			"fixture": "The collaboration Runtime drives maintenance commands against real durable runs while PostgreSQL upgrades from internal protocol v4 to v5.",
+			"redTest": "A caller without maintenance Authority can lock or mutate a run before denial, and a fenced loser cannot learn the current version needed to recover.",
 			"hostile": [
-				"foreign Principal",
-				"redacted envelope",
-				"CLI/Studio canonical byte parity from independent producers",
-				"stale build",
+				"denial before row lock",
+				"invalid and oversized reason",
 				"maintenance Authority denial",
-				"typed concurrent command winner"
+				"typed concurrent command winner",
+				"same-version different-checksum refusal",
+				"v4 to v5 protocol upgrade"
 			],
 			"nonGoals": [
-				"second backend",
-				"raw SQL",
-				"internal-table CRUD",
-				"remote/fleet Studio",
-				"Operator App framework"
+				"Studio UI or browser mount",
+				"durable inspection read model",
+				"failed-run worklist",
+				"ambient Admin/System authority",
+				"network maintenance route"
 			],
 			"budgets": [
 				"changed loop <= 5 s",
-				"Studio build-size and query-latency baselines recorded",
+				"maintenance command latency baseline recorded",
 				"no secret/raw payload snapshots"
 			],
 			"performance": {
 				"owner": "BETA-09",
 				"evidence": [
-					"Studio build-size and query baseline measurement manifest",
+					"maintenance command latency measurement manifest",
 					"BETA-09 stable-runner budget report"
 				]
 			},
 			"verify": [
-				"bun run check:changed -- --test tests/integration/beta09-studio.test.ts --typecheck @questpie/studio",
+				"bun run check:changed -- --test tests/integration/postgres/beta09-maintenance-compatibility.test.ts --typecheck @questpie/runtime",
 				"bun run test:postgres -- --scenario beta09",
+				"bun run bench:micro -- --scenario beta09",
 				"bun run quality:full",
 				"git diff --check"
 			]
@@ -491,7 +492,7 @@
 			"title": "BETA-10 Preserve correctness across ten instances and a rolling build",
 			"blockedBy": ["BETA-09"],
 			"agentReady": false,
-			"authority": ["ADR-0014", "ADR-0017", "ADR-0020", "ADR-0021"],
+			"authority": ["ADR-0014", "ADR-0017", "ADR-0020", "ADR-0021", "ADR-0024"],
 			"artifacts": [
 				"ten-instance load scenario",
 				"separate manual soak/chaos scenario and report",
