@@ -1172,8 +1172,10 @@ application: durableApplication })` — the construction site, passing no
   covered**, in a different file:
   `feat/v4-beta-09:docs/v4/implementation/beta09/narrower-claims.md:107` records
   "Criterion 18 is now measured: 255 ms against a 5,000 ms budget". Verified on
-  the branch. `acceptance-shape.md:355`–`:365` had already corrected itself; the
-  correction had not reached this file.
+  the branch. `acceptance-shape.md:361`–`:368` had already corrected itself; the
+  correction had not reached this file. (That range read `:355`–`:365` until my
+  own insertions into `acceptance-shape.md` pushed the paragraph down six lines
+  — the decay the rule above names, found by applying it.)
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then
