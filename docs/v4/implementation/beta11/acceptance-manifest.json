@@ -8,9 +8,6 @@
 		"accepted feat/v4 base": "a2de8ca0d58201a6f83de2a09c335515f9140e55",
 		"foundation data and query": "d03358b749c4c8efb769d1c0fed50e8fbf983fb0",
 		"context and policy": "5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa",
-		"query mutation and lifecycle": "a09bf55f0e22f65e059cda9f3eda914520dd4f9d",
-		"live query and ledger": "05fc96f3d07c70beaf7f654d79d6cfb46f427f92",
-		"dispatch and reaction": "3f8618613bde1bdd7e13863970eb1c140e201c6f",
 		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
 	},
 	"authorityDocuments": [
