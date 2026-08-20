@@ -9,6 +9,7 @@ import {
 	and,
 	type Column,
 	eq,
+	getTableName,
 	gt,
 	gte,
 	inArray,
@@ -20,7 +21,8 @@ import {
 	type SQL,
 	sql,
 } from "drizzle-orm";
-import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
+import { mapColumnsInSQLToAlias } from "drizzle-orm/alias";
+import { alias, type AnyPgColumn, type PgTable } from "drizzle-orm/pg-core";
 
 import type {
 	CollectionBuilderState,
@@ -67,6 +69,10 @@ export interface BuildWhereClauseOptions {
 	db?: any;
 	/** Internal: this subtree came from an access rule and must never weaken. */
 	failClosedAccess?: boolean;
+	/** Internal: exact parent values for correlation without an outer table alias. */
+	parentRecord?: Readonly<Record<string, unknown>>;
+	/** Internal: unique relation aliases for a single-record access evaluation. */
+	relationAliasDepth?: number;
 }
 
 /**
@@ -228,6 +234,8 @@ export function buildWhereClause(
 						useI18n,
 						db: options.db,
 						failClosedAccess,
+						parentRecord: options.parentRecord,
+						relationAliasDepth: options.relationAliasDepth,
 					}),
 				)
 				.filter(Boolean) as SQL[];
@@ -247,11 +255,15 @@ export function buildWhereClause(
 						useI18n,
 						db: options.db,
 						failClosedAccess,
+						parentRecord: options.parentRecord,
+						relationAliasDepth: options.relationAliasDepth,
 					}),
 				)
 				.filter(Boolean) as SQL[];
 			if (subClauses.length > 0) {
 				conditions.push(or(...subClauses)!);
+			} else if (failClosedAccess) {
+				conditions.push(sql`false`);
 			}
 		} else if (key === "NOT" && typeof value === "object") {
 			const subClause = buildWhereClause(value as Where, {
@@ -264,9 +276,13 @@ export function buildWhereClause(
 				useI18n,
 				db: options.db,
 				failClosedAccess,
+				parentRecord: options.parentRecord,
+				relationAliasDepth: options.relationAliasDepth,
 			});
 			if (subClause) {
 				conditions.push(not(subClause));
+			} else if (failClosedAccess) {
+				conditions.push(sql`false`);
 			}
 		} else if (key === "RAW" && typeof value === "function") {
 			conditions.push(
@@ -330,6 +346,14 @@ export function buildWhereClause(
 			];
 			const relationQuantifiers = ["some", "none", "every", "is", "isNot"];
 			const valueKeys = Object.keys(value as Record<string, any>);
+			if (
+				valueKeys.length === 0 &&
+				failClosedAccess &&
+				!state.relations?.[key]
+			) {
+				conditions.push(sql`false`);
+				continue;
+			}
 
 			// A key is a field operator if it's in the standard list OR in the field's operator map
 			const hasFieldOperators = valueKeys.some(
@@ -384,6 +408,8 @@ export function buildWhereClause(
 					app,
 					db: options.db,
 					failClosedAccess,
+					parentRecord: options.parentRecord,
+					relationAliasDepth: options.relationAliasDepth,
 				});
 				if (relationClause) {
 					conditions.push(relationClause);
@@ -609,6 +635,75 @@ interface BuildRelationWhereOptions {
 	db?: any;
 	/** Whether this relation predicate originated from access control. */
 	failClosedAccess?: boolean;
+	/** Exact parent values used instead of a shadowable outer correlation. */
+	parentRecord?: Readonly<Record<string, unknown>>;
+	/** Unique relation aliases for a single-record access evaluation. */
+	relationAliasDepth?: number;
+}
+
+function relationQueryTarget(
+	baseTable: PgTable,
+	state: CollectionBuilderState,
+	options: BuildRelationWhereOptions,
+): { table: PgTable; state: CollectionBuilderState } {
+	const depth = options.relationAliasDepth;
+	if (
+		depth === undefined ||
+		getTableName(options.parentTable) !== getTableName(baseTable)
+	) {
+		return { table: baseTable, state };
+	}
+
+	const aliasName = `qp_access_relation_${depth}`;
+	const table = alias(baseTable, aliasName);
+	const virtuals = Object.fromEntries(
+		Object.entries(state.virtuals ?? {}).flatMap(([field, expression]) => {
+			if (hasUnsafeRelationVirtualReference(expression, baseTable)) return [];
+			return [[field, mapColumnsInSQLToAlias(expression, aliasName)]];
+		}),
+	);
+	return { table, state: { ...state, virtuals } };
+}
+
+function hasUnsafeRelationVirtualReference(
+	expression: SQL,
+	baseTable: PgTable,
+): boolean {
+	const tableName = getTableName(baseTable);
+	const qualifiedName = new RegExp(
+		`(?:^|[^A-Za-z0-9_])(?:"[^"]+"\\s*\\.\\s*)?"?${escapeRegExp(tableName)}"?\\s*\\.`,
+	);
+	const visit = (chunk: unknown): boolean => {
+		if (!chunk || typeof chunk !== "object") return false;
+		if ("table" in chunk && "name" in chunk) {
+			const table = (chunk as { table?: unknown }).table;
+			if (table && typeof table === "object") {
+				try {
+					return getTableName(table as PgTable) !== tableName;
+				} catch {
+					return true;
+				}
+			}
+		}
+		if ("value" in chunk) {
+			const value = (chunk as { value?: unknown }).value;
+			if (
+				Array.isArray(value) &&
+				value.some(
+					(part) => typeof part === "string" && qualifiedName.test(part),
+				)
+			) {
+				return true;
+			}
+		}
+		if ("queryChunks" in chunk) {
+			const children = (chunk as { queryChunks?: unknown }).queryChunks;
+			if (Array.isArray(children) && children.some(visit)) return true;
+		}
+		if ("sql" in chunk) return visit((chunk as { sql?: unknown }).sql);
+		return false;
+	};
+	return visit(expression);
 }
 
 /**
@@ -750,8 +845,13 @@ export function buildBelongsToExistsClause(
 	}
 
 	const relatedCrud = app.collections[relation.collection];
-	const relatedTable = relatedCrud["~internalRelatedTable"];
-	const relatedState = relatedCrud["~internalState"];
+	const relatedTarget = relationQueryTarget(
+		relatedCrud["~internalRelatedTable"],
+		relatedCrud["~internalState"],
+		options,
+	);
+	const relatedTable = relatedTarget.table;
+	const relatedState = relatedTarget.state;
 
 	// Build join conditions supporting both formats
 	let joinConditions: SQL[] = [];
@@ -767,7 +867,15 @@ export function buildBelongsToExistsClause(
 			: undefined;
 
 		if (sourceColumn && targetColumn) {
-			joinConditions.push(eq(targetColumn, sourceColumn));
+			joinConditions.push(
+				eq(
+					targetColumn,
+					options.parentRecord &&
+						Object.hasOwn(options.parentRecord, relation.field)
+						? options.parentRecord[relation.field]
+						: sourceColumn,
+				),
+			);
 		}
 	} else if (relation.fields && relation.fields.length > 0) {
 		// Array field format: fields: [table.userId], references: ["id"]
@@ -787,7 +895,13 @@ export function buildBelongsToExistsClause(
 					? getColumn(parentTable, sourceFieldName)
 					: undefined;
 				return targetColumn && sourceColumn
-					? eq(targetColumn, sourceColumn)
+					? eq(
+							targetColumn,
+							options.parentRecord &&
+								Object.hasOwn(options.parentRecord, sourceFieldName!)
+								? options.parentRecord[sourceFieldName!]
+								: sourceColumn,
+						)
 					: undefined;
 			})
 			.filter(Boolean) as SQL[];
@@ -810,6 +924,10 @@ export function buildBelongsToExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
+			relationAliasDepth:
+				options.relationAliasDepth === undefined
+					? undefined
+					: options.relationAliasDepth + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -843,8 +961,13 @@ export function buildHasManyExistsClause(
 	if (!app || relation.fields) return undefined;
 
 	const relatedCrud = app.collections[relation.collection];
-	const relatedTable = relatedCrud["~internalRelatedTable"];
-	const relatedState = relatedCrud["~internalState"];
+	const relatedTarget = relationQueryTarget(
+		relatedCrud["~internalRelatedTable"],
+		relatedCrud["~internalState"],
+		options,
+	);
+	const relatedTable = relatedTarget.table;
+	const relatedState = relatedTarget.state;
 	const reverseRelationName = relation.relationName;
 	const reverseRelation = reverseRelationName
 		? relatedState.relations?.[reverseRelationName]
@@ -870,7 +993,13 @@ export function buildHasManyExistsClause(
 				? getColumn(relatedTable, foreignFieldName)
 				: undefined;
 			return parentColumn && foreignColumn
-				? eq(foreignColumn, parentColumn)
+				? eq(
+						foreignColumn,
+						options.parentRecord &&
+							Object.hasOwn(options.parentRecord, parentFieldName!)
+							? options.parentRecord[parentFieldName!]
+							: parentColumn,
+					)
 				: undefined;
 		})
 		.filter(Boolean) as SQL[];
@@ -891,6 +1020,10 @@ export function buildHasManyExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
+			relationAliasDepth:
+				options.relationAliasDepth === undefined
+					? undefined
+					: options.relationAliasDepth + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -925,9 +1058,14 @@ export function buildManyToManyExistsClause(
 
 	const relatedCrud = app.collections[relation.collection];
 	const junctionCrud = app.collections[relation.through];
-	const relatedTable = relatedCrud["~internalRelatedTable"];
+	const relatedTarget = relationQueryTarget(
+		relatedCrud["~internalRelatedTable"],
+		relatedCrud["~internalState"],
+		options,
+	);
+	const relatedTable = relatedTarget.table;
 	const junctionTable = junctionCrud["~internalRelatedTable"];
-	const relatedState = relatedCrud["~internalState"];
+	const relatedState = relatedTarget.state;
 	const junctionState = junctionCrud["~internalState"];
 
 	const sourceKey = relation.sourceKey || "id";
@@ -953,7 +1091,14 @@ export function buildManyToManyExistsClause(
 		return undefined;
 	}
 
-	const whereConditions: SQL[] = [eq(junctionSourceColumn, parentColumn)];
+	const whereConditions: SQL[] = [
+		eq(
+			junctionSourceColumn,
+			options.parentRecord && Object.hasOwn(options.parentRecord, sourceKey)
+				? options.parentRecord[sourceKey]
+				: parentColumn,
+		),
+	];
 
 	if (relationWhere) {
 		// Note: For relation subqueries, we don't use i18n fallback (useI18n: false)
@@ -967,6 +1112,10 @@ export function buildManyToManyExistsClause(
 			useI18n: false,
 			db: options.db,
 			failClosedAccess: options.failClosedAccess,
+			relationAliasDepth:
+				options.relationAliasDepth === undefined
+					? undefined
+					: options.relationAliasDepth + 1,
 		});
 		if (nestedClause) whereConditions.push(nestedClause);
 	}
@@ -1004,4 +1153,8 @@ function accessCompilationError(
 	return new Error(
 		`Cannot compile access predicate '${collection}.${field}'${suffix}`,
 	);
+}
+
+function escapeRegExp(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
