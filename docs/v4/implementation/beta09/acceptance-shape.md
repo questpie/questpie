@@ -184,6 +184,24 @@ reasoning rather than against the prose.
    does not — because the only caller is trusted by construction and could equally
    have asserted an Authority that passes.
 
+   **Criteria 1 and 2 are not blocked the same way, and the difference decides
+   what each costs to fix.** Maintenance _has_ the Principal and lacks a route:
+   `actorOf` takes one as a parameter
+   (`packages/runtime/src/durable/postgres-maintenance.ts:130`) and merely
+   brand-checks it, so criterion 2 becomes satisfiable by evaluating a value
+   already in hand. Inspection is the mirror — the reads are wire-reachable as
+   Queries today, and a Query handler receives **no Principal at all**, in-process
+   or otherwise, because `QueryContext` is `data` and `signal`
+   (`packages/compiler/src/generate.ts:322`–`:325`). Host code calling a Query
+   cannot hand its handler a Principal the way it hands one to `actorOf`.
+
+   So the caveat above is right that both are in-process only, and that is where
+   the similarity ends. Criterion 2 needs a decision written where a brand check
+   sits. Criterion 1 needs one of the three shapes in
+   `docs/v4/prototypes/durable-evidence-gaps/ROUTE-SHAPE.md`, two of which amend
+   an Accepted ADR. Reading the caveat as one shared blocker understates the
+   second and overstates the first.
+
 This is stated here rather than left for a reviewer to find, because a criterion
 demonstrated by a weaker case than it claims is what previous rounds blocked on.
 The evidence for these three should say plainly which half it proves. See the
