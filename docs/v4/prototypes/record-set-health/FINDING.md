@@ -349,10 +349,10 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   one file's, not the slice's.
   **One methodological point the last candidate earned.**
   `beta05/claude-initial-review.md:18` cites
-  `tests/integration/postgres/helpers/beta05-runtime.ts:31`, which is a blank
-  line on `feat/v4` today. At BETA-05's reviewed head `884b5d8a` it is
-  `const beta05FixtureRoot = resolve(` — correct when written, shifted by one
-  since. **An accepted review record is a snapshot against its own reviewed
+  `tests/integration/postgres/helpers/beta05-runtime.ts:31`, which on `feat/v4`
+  has not held what that record meant for some time. At BETA-05's reviewed head
+  `884b5d8a` it is `const beta05FixtureRoot = resolve(` — correct when written,
+  and moved by later slices since. **An accepted review record is a snapshot against its own reviewed
   head, and checking it against `HEAD` is the wrong ref.** Any future citation
   sweep should exclude `docs/v4/implementation/*/claude-*.md` or resolve them
   against the matching accepted head in the authority table above.
@@ -703,3 +703,36 @@ unreadable pointers that six sweeps of content checking would never have looked
 at. What would overturn it: finding that these three were authored in one sitting
 by one hand, which would make it a local lapse rather than a gap in the checking.
 All three sit in different files, so that is not the case here.
+
+## The position prediction held, and I had pinned a moving line inside a lesson
+
+Two entries ago this record claimed the decay mechanism is insertion position
+relative to cited lines, not diff size, and offered BETA-11 as the case where a
+12-line change moved nothing because every hunk began below the citations.
+BETA-12 is the other half of that experiment and it went the predicted way.
+
+`packages/compiler/src/artifacts.ts` took a one-line insertion at line 1
+(`@@ -0,0 +1 @@`) and a ten-line insertion at `:46` (`@@ -46,0 +48,10 @@`). The
+`relational-nondisclosure.json` emission moved from `:453` to `:464` — a shift
+of exactly eleven, the sum of the two insertions above it. Two citations in
+`beta09/inspection-contract.md` broke and are corrected. Nine files changed;
+everything cited below an insertion moved, everything else did not. Size was not
+the variable in either direction.
+
+**And the sweep caught a claim of mine that had no business being time-bound.**
+The methodological point above — that an accepted review record is a snapshot
+against its own reviewed head — was illustrated by saying
+`beta05-runtime.ts:31` "is a blank line on `feat/v4` today". BETA-12 touched
+that helper and `:31` is now a fixture path. The lesson was never about what
+that line currently holds; pinning the present state of a line inside a durable
+point makes the point decay at that line's rate for no gain. Rewritten to say
+the citation no longer holds what the record meant, which is the part that is
+actually stable.
+
+**One detector limitation, recorded because it passed these silently.** The
+identifier-overlap check compares backticked names in the claim against the
+cited window. Four of the seven citations examined here carry no backticked
+identifier in their sentence at all, so there was nothing to compare and the
+check reported them clean. It cannot distinguish "verified" from "nothing to
+verify". Both real defects in this sweep were found by reading, not by the
+detector; its value so far is narrowing where to read, not deciding.
