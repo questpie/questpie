@@ -99,7 +99,23 @@ all v1, so BETA-08 is exactly the first.
 The condition the skill set for itself is therefore met. It is now wired as the
 credential-free `Acceptance record integrity` job at `.github/workflows/ci.yml:17`–`:27`.
 That job uses `fetch-depth: 0`, not the full-quality job's shallow checkout,
-because the verifier proves the reviewed head is an ancestor of `HEAD`.
+because the verifier proves the reviewed head is an ancestor of `HEAD`. **Both
+halves of that were checked rather than taken on the commit message.**
+`verify-acceptance-review.ts:77` runs `git merge-base --is-ancestor <reviewedHead>
+HEAD`, and `acceptance-review-packet.ts:204`–`:219` adds two more ancestry
+checks, so the full history is genuinely required. `ci.yml`'s triggers are
+`pull_request` on `[main, feat/v4]`, so the job runs on the branch where records
+actually land rather than only on `main`.
+
+**One limitation, recorded because it will rot silently.** The job pins a single
+path — `--record docs/v4/implementation/beta08/REVIEW-04.json` — and the script
+accepts exactly one record (`verify-acceptance-review.ts:48`–`:50` fails anything
+but `--record <path>`). Checking only the PASS record is correct: the other three
+v2 files under `beta08/` are BLOCKED rounds and are not acceptance evidence. The
+hazard is the next slice. When BETA-09 accepts with its own v2 PASS record,
+nothing adds it to this job, and the gate will keep passing while verifying a
+record nobody is changing. The fix is a step per accepted record, or a loop over
+the accepted-issue map, and it belongs to whoever accepts the next slice.
 **The check itself was run and BETA-08's record passes**, so the wiring gates a
 check that is green today rather than one nobody has tried:
 `bun run review:accept:verify -- --record docs/v4/implementation/beta08/REVIEW-04.json`
