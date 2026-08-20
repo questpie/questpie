@@ -939,3 +939,54 @@ one loose enough to accept them all accepted this one. What would overturn that:
 a normalization that folds case, punctuation and quote glyphs and still leaves
 the fabrication visible — plausible, and worth trying before this class is
 called closed rather than swept.
+
+## The open item, tested: the normalization failed and something narrower worked
+
+The previous entry judged that quoted text supports narrowing rather than a
+gate, and named what would overturn it — "a normalization folding case,
+punctuation and quote glyphs that still leaves the fabrication visible." That is
+a testable claim, so it was tested rather than left standing.
+
+**The normalization failed, as predicted, and the numbers say why.** Folding
+case, whitespace, dashes, emphasis markers and quote glyphs, then classifying
+each attributed quote by where in the repository it actually occurs: of 440
+attributed quotes, 92 are found in a cited source, 108 elsewhere in the
+repository, **240 only in the citing record**, and **none nowhere at all**. The
+fabricated attribution would have been one of those 240. Records quote their own
+earlier headings and findings constantly and legitimately — "Measured, not
+asserted", "reads buildable, commands blocked" — so self-quotation carries no
+signal. And the strongest category, a quote occurring nowhere in the repository,
+is empty: nothing here is invented text.
+
+**A different signal separates it cleanly.** What made the ROUTE-SHAPE case a
+fabrication was not where the phrase lived but the grammar around it: a quotation
+verbatim from a named source, its citation, the conjunction "and", then a second
+quotation with no citation of its own. The second inherits the first's
+attribution from position alone. Matching that shape —
+`"A" (cite) and "B"` — over the record set at `20df45ce`, the commit before the
+fix, returns **exactly one hit in the entire set**, and it is the defect: `A` is
+present in the cited ADR, `B` is not. The same match over the current tree
+returns zero, because the fix removed the only instance.
+
+**So the judgment is overturned, though not by the route I named.** The class is
+gateable, on syntax rather than on corpus membership. Corrected rather than
+defended, because the previous entry committed to a specific falsification and
+this is a different one succeeding.
+
+**The honest caveat is that this is n = 1.** One true positive, zero false
+positives, and no other instance in the corpus to test precision against. A
+detector validated on a single example may be precise or may simply be matching
+something rare; those look identical at this sample size. It also catches only
+this fabrication shape — a quotation inheriting attribution by adjacency — and
+says nothing about a paraphrase presented as a quotation, or a quotation attached
+to the wrong one of two nearby citations.
+
+**Widened it in the same pass rather than leaving that as a promise.** Run over
+all 142 markdown records under `docs/v4` — every implementation set from beta01
+onward, every prototype, the public pages — the pattern returns **zero** at
+`HEAD`, against one at `20df45ce`. So across the entire v4 corpus this shape has
+occurred exactly once, and that once was the defect. That is consistent with a
+precise detector and equally consistent with a rare one; a single positive cannot
+separate them. It does bound the cost: a check that fires once in 142 records is
+cheap to run and cheap to triage, which is the argument for adding it regardless
+of which explanation holds.
