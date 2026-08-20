@@ -17,6 +17,11 @@ export {
 	type AuthTransactionalQueueTransaction,
 	withAuthTransactionalQueue,
 } from "#questpie/server/modules/core/integrated/auth/transactional-queue.js";
+export {
+	passwordRecovery,
+	type PasswordRecoveryDispatchContext,
+	type PasswordRecoveryOptions,
+} from "#questpie/server/modules/core/integrated/auth/password-recovery.js";
 export type { AuthConfig } from "#questpie/server/config/module-types.js";
 export {
 	type AccessRuleEvaluationContext,
