@@ -26,6 +26,7 @@ import {
 } from "#questpie/server/collection/crud/shared/access-control.js";
 import type { CRUDContext } from "#questpie/server/collection/crud/types.js";
 import type { Questpie } from "#questpie/server/config/questpie.js";
+import { rowsOf } from "#questpie/server/db/driver-result.js";
 
 import type { CrdtAuthentication } from "./authority.js";
 import {
@@ -315,34 +316,34 @@ async function ownerAccess(
 			sourceColumns,
 			record,
 		);
-		const baseQuery = database.select({ matched: sql<number>`1` }).from(table);
-		const currentLocaleQuery = i18nCurrentTable
-			? baseQuery.leftJoin(
-					i18nCurrentTable,
-					and(
-						eq(getTableColumns(i18nCurrentTable).parentId, sourceId),
-						eq(
-							getTableColumns(i18nCurrentTable).locale,
-							context.locale ?? context.defaultLocale ?? "en",
-						),
+		const currentLocaleJoin = i18nCurrentTable
+			? sql`LEFT JOIN ${i18nTable} AS ${sql.identifier("crdt_i18n_current")} ON ${and(
+					eq(getTableColumns(i18nCurrentTable).parentId, sourceId),
+					eq(
+						getTableColumns(i18nCurrentTable).locale,
+						context.locale ?? context.defaultLocale ?? "en",
 					),
-				)
-			: baseQuery;
-		const query = i18nFallbackTable
-			? currentLocaleQuery.leftJoin(
-					i18nFallbackTable,
-					and(
-						eq(getTableColumns(i18nFallbackTable).parentId, sourceId),
-						eq(
-							getTableColumns(i18nFallbackTable).locale,
-							context.defaultLocale ?? "en",
-						),
+				)}`
+			: sql.empty();
+		const fallbackLocaleJoin = i18nFallbackTable
+			? sql`LEFT JOIN ${i18nTable} AS ${sql.identifier("crdt_i18n_fallback")} ON ${and(
+					eq(getTableColumns(i18nFallbackTable).parentId, sourceId),
+					eq(
+						getTableColumns(i18nFallbackTable).locale,
+						context.defaultLocale ?? "en",
 					),
-				)
-			: currentLocaleQuery;
-		const [match] = await query
-			.where(and(eq(sourceId, recordId), ...projectionGuards, access))
-			.limit(1);
+				)}`
+			: sql.empty();
+		const [match] = rowsOf<{ matched: number }>(
+			await database.execute(sql`
+				SELECT 1 AS matched
+				FROM ${table}
+				${currentLocaleJoin}
+				${fallbackLocaleJoin}
+				WHERE ${and(eq(sourceId, recordId), ...projectionGuards, access)}
+				LIMIT 1
+			`),
+		);
 		return match !== undefined;
 	}
 	return false;
