@@ -38,11 +38,6 @@
 			"name": "BETA-09 backend closure record",
 			"path": "docs/v4/implementation/beta09/backend-acceptance.md",
 			"sha256": "9666eb55b85db2eec50d82c832c8e81888d8a34de86cacc66f01794a00eb227e"
-		},
-		{
-			"name": "public Runtime guide",
-			"path": "apps/docs/content/docs/v4/runtime-and-studio.mdx",
-			"sha256": "4032f97e3599b4463076da02a8880238ace64176afe519a0e445307e5f7dba2f"
 		}
 	],
 	"verification": [
