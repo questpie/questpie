@@ -147,11 +147,31 @@ a Principal:
    `generate.ts:322`–`:325` — over a value already in scope. The expense is the
    accepted-contract change, not the plumbing.
 
-   **What would overturn that reading:** a recorded reason for the narrowing.
-   I looked and did not find one; if Queries are kept fact-free deliberately —
-   for cacheability, or to keep a Query's output a function of its input alone —
-   that reason outranks the cost estimate and belongs in the ADR that decides
-   this.
+   **That condition has since been met, by searching properly rather than by
+   guessing at rationale wording.** An earlier revision of this paragraph said no
+   recorded reason for the narrowing was found. There is one, and it is Accepted
+   authority. ADR-0011 (`Status: Accepted`) states at
+   `docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md:23`–`:26`:
+   "Query receives a generated read-only `ctx.data` and owns one bounded
+   consistent read snapshot. It cannot write, dispatch, access a database or raw
+   SQL handle, open a transaction, bypass Policy, obtain System Authority, or
+   call an external Action through its Context." ADR-0019:68 reinforces it as a
+   principle rather than an accident — the factories "share implementation
+   kernels while preserving exact per-kind contexts."
+
+   So the narrowing is deliberate and specified, and the emitted projection at
+   `application.ts:344` implements the ADR rather than under-serving it. **That
+   raises option 2's cost and lowers its likelihood**: it is not a contract
+   widening in the abstract, it contradicts a named sentence in an Accepted ADR
+   that positively specifies what a Query receives. The code cost traced above
+   stands and is now the least interesting part of the decision.
+
+   Note what the ADR does _not_ say: it forbids obtaining **System** Authority
+   through the Context, not carrying an ordinary resolved Principal. An amendment
+   that added `principal` without touching the System Authority prohibition would
+   be a narrower change than replacing the sentence — but it is still an
+   amendment, and ADR-0019:68 means per-kind context differences are load-bearing
+   rather than incidental.
 
 3. **The durable route**, the alternative this record weighed.
 
