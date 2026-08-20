@@ -239,6 +239,7 @@ type PostgresFailureCode =
 	| "lockTimeout"
 	| "cancelled"
 	| "connectionLost"
+	| "queryFailed"
 	| "serializationFailure"
 	| "deadlock"
 	| "constraint"
@@ -411,6 +412,27 @@ The executable PB-03 prototype must cover PB-02's seven hostile cases
 prove expired callback handles, decoder mismatch, notification during initial
 reconciliation, commit-response loss, failed rotation retaining the old
 generation, and complete diagnostic redaction.
+
+## Executable progress
+
+`59fa031c` adds the concrete `pg@8.22.0` transaction kernel and a real-database
+witness. PostgreSQL 16, 17, and 18 each prove parameterized static execution,
+array-row decoding, repeatable-read/read-only control, server
+`statement_timeout`, callback-handle expiry, and preservation of an application
+callback failure. This is the ordinary transaction foundation, not yet Runtime
+adoption.
+
+`63924ba7` adds the dedicated direct listener state machine. The same three
+PostgreSQL versions prove committed `LISTEN` before startup reconciliation,
+payload-free notification wake, forced backend termination, reconnect,
+re-`LISTEN`, and reconciliation before healthy state. The witness does not yet
+prove ledger convergence for a wake lost during the disconnect or the
+transaction-PgBouncer negative boundary.
+
+Still open in PB-03: bounded checkout saturation, AbortSignal cancel-or-destroy,
+unknown COMMIT outcome, pinned migration affinity/lock ownership, rotation,
+forced shutdown, safe diagnostics, PgBouncer, and migration of existing Bun SQL
+callers. PB-04 remains blocked.
 
 ## Deletion test
 
