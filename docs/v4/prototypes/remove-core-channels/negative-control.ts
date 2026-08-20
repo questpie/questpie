@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { validate } from "./check";
+import { scanRepositoryAuthority, validate } from "./check";
 
 const source = JSON.parse(
 	readFileSync(new URL("./PROJECTION.json", import.meta.url), "utf8"),
@@ -75,6 +75,26 @@ for (const mutate of invalid) {
 		throw new Error("invalid Channel removal projection was accepted");
 }
 
+const missingCurrentAuthority = clone();
+missingCurrentAuthority.authorityProjection =
+	missingCurrentAuthority.authorityProjection.filter(
+		(path: string) => path !== "HANDOFF.md",
+	);
+let repositoryOmissionRejected = false;
+try {
+	scanRepositoryAuthority(missingCurrentAuthority);
+} catch (error) {
+	repositoryOmissionRejected =
+		error instanceof Error &&
+		error.message.includes(
+			"Channel-bearing current authority missing from projection: HANDOFF.md",
+		);
+}
+if (!repositoryOmissionRejected)
+	throw new Error(
+		"repository scan accepted omission of Channel-bearing current authority",
+	);
+
 console.log(
-	`Channel removal negative controls: ${invalid.length} invalid projections rejected`,
+	`Channel removal negative controls: ${invalid.length} invalid projections and one repository authority omission rejected`,
 );

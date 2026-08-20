@@ -1,6 +1,14 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-type Projection = Readonly<{
+type FrozenEvidenceExemption = Readonly<{
+	path: string;
+	reason: string;
+	supersededBy: string;
+}>;
+
+export type Projection = Readonly<{
 	version: number;
 	decision: string;
 	frameworkSurface: Readonly<{
@@ -13,10 +21,17 @@ type Projection = Readonly<{
 	supersedes: string[];
 	historicalEvidence: Readonly<{
 		rewrite: boolean;
+		criterion: string;
 		retained: string[];
+		frozenEvidenceExemptions: FrozenEvidenceExemption[];
 	}>;
 	authorityProjection: string[];
 }>;
+
+const REPOSITORY_ROOT = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"../../../..",
+);
 
 const REQUIRED_ABSENCES = [
 	"Channel Resource",
@@ -43,16 +58,138 @@ const REQUIRED_PROJECTIONS = [
 	"SPEC.md",
 	"CONTEXT.md",
 	"docs/adr/README.md",
+	"docs/adr/0004-prove-one-tracer-before-capability-breadth.md",
 	"docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
 	"docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
 	"docs/adr/0021-slice-the-beta-one-release.md",
 	"docs/adr/0025-remove-channels-from-core.md",
 	"docs/v4/beta1-build-spec.md",
+	"docs/v4/design-fiction/realtime.md",
+	"docs/v4/documentation-plan.md",
 	"docs/v4/implementation-gates.md",
+	"docs/v4/live-query-and-change-ledger.md",
 	"docs/v4/multi-instance-and-optional-acceleration.md",
 	"docs/v4/product-area-matrix.md",
+	"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+	"docs/v4/questpie-v4-vision-for-martin.md",
+	"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+	"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
 	"docs/v4/semantic-kernels-and-public-surface.md",
+	"docs/v4/visuals/architecture.html",
 ] as const;
+
+const REQUIRED_FROZEN_EVIDENCE = [
+	"docs/v4/prototypes/beta-slice-p15/SLICE.json",
+	"docs/v4/prototypes/implementation-collapse-p16/QUEUE.json",
+	"docs/v4/prototypes/conformance-p14/MATRIX.md",
+	"docs/v4/prototypes/conformance-p14/check.ts",
+	"docs/v4/research/convex-comparison.md",
+	"docs/v4/research/supabase-v3-v4-comparison.md",
+	"docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
+] as const;
+
+const CORE_CHANNEL_MARKERS = [
+	/defineChannel/,
+	/runtime\.channelCarrier/,
+	/Channel Resource/,
+	/Channel payload/,
+	/Channel event/,
+	/Channel replay/,
+	/Channel authority/,
+	/Channel presence/,
+	/Channel carrier/,
+	/typed Channels/i,
+	/generic Channels/i,
+	/Channels\/event streams/,
+	/Channels capabilities/,
+	/ephemeral Channels/i,
+	/explicit Channels/i,
+	/KV, Channels/,
+	/channels, OpenAPI/i,
+	/Channel\/Live Query/,
+	/Channel ownership/,
+	/Channel and optional carrier/,
+	/Channel is an authored/,
+	/"capability": "Channel"/,
+	/\| Channels\s+\|/,
+] as const;
+
+function listFiles(directory: string, extension: string): string[] {
+	return readdirSync(join(REPOSITORY_ROOT, directory), {
+		withFileTypes: true,
+	}).flatMap((entry) => {
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) return listFiles(path, extension);
+		return entry.isFile() && path.endsWith(extension) ? [path] : [];
+	});
+}
+
+function currentAuthorityFiles(): string[] {
+	return [
+		"HANDOFF.md",
+		"SPEC.md",
+		"CONTEXT.md",
+		...listFiles("docs/adr", ".md"),
+		...readdirSync(join(REPOSITORY_ROOT, "docs/v4"), {
+			withFileTypes: true,
+		})
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+			.map((entry) => `docs/v4/${entry.name}`),
+		...listFiles("apps/docs/content/docs/v4", ".mdx"),
+		"docs/v4/design-fiction/realtime.md",
+		"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+		"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+		"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+		"docs/v4/visuals/architecture.html",
+	];
+}
+
+function markerNames(path: string): string[] {
+	const source = readFileSync(join(REPOSITORY_ROOT, path), "utf8");
+	const markers = CORE_CHANNEL_MARKERS.filter((marker) =>
+		marker.test(source),
+	).map((marker) => marker.source);
+	if (
+		(REQUIRED_FROZEN_EVIDENCE as readonly string[]).includes(path) &&
+		/Channel/.test(source)
+	)
+		markers.push("historical Channel assertion");
+	return markers;
+}
+
+export function scanRepositoryAuthority(projection: Projection): {
+	currentChannelPaths: string[];
+	frozenChannelPaths: string[];
+} {
+	const projectionSet = new Set(projection.authorityProjection);
+	const currentChannelPaths = [...new Set(currentAuthorityFiles())]
+		.filter((path) => markerNames(path).length > 0)
+		.sort();
+	const uncovered = currentChannelPaths.filter(
+		(path) => !projectionSet.has(path),
+	);
+	if (uncovered.length > 0)
+		throw new Error(
+			`Channel-bearing current authority missing from projection: ${uncovered.join(", ")}`,
+		);
+
+	const exemptionPaths =
+		projection.historicalEvidence.frozenEvidenceExemptions.map(
+			(item) => item.path,
+		);
+	const frozenChannelPaths = REQUIRED_FROZEN_EVIDENCE.filter(
+		(path) => markerNames(path).length > 0,
+	);
+	const unclassifiedFrozen = frozenChannelPaths.filter(
+		(path) => !exemptionPaths.includes(path),
+	);
+	if (unclassifiedFrozen.length > 0)
+		throw new Error(
+			`Channel-bearing frozen evidence is not explicitly exempt: ${unclassifiedFrozen.join(", ")}`,
+		);
+
+	return { currentChannelPaths, frozenChannelPaths };
+}
 
 function exactMembers(
 	actual: string[],
@@ -123,20 +260,47 @@ export function validate(projection: Projection): void {
 		REQUIRED_SUPERSESSIONS,
 		"supersession set",
 	);
+	const historical = projection.historicalEvidence;
 	if (
-		projection.historicalEvidence.rewrite !== false ||
+		historical.rewrite !== false ||
+		historical.criterion !==
+			"Accepted proof artifacts, manifests, and review records retain the exact claim reviewed at their pinned head; permanent maps and current ADR, product, gate, build, public-documentation, visual, and wayfinder surfaces project the new decision." ||
 		![
 			"accepted proof heads and manifests",
 			"historical review records",
 			"v3 behavioral evidence",
-		].every((item) => projection.historicalEvidence.retained.includes(item))
+		].every((item) => historical.retained.includes(item))
 	)
-		throw new Error("historical evidence would be rewritten or lost");
+		throw new Error("historical evidence boundary is incomplete");
+	exactMembers(
+		historical.frozenEvidenceExemptions.map((item) => item.path),
+		REQUIRED_FROZEN_EVIDENCE,
+		"frozen evidence exemption set",
+	);
+	for (const exemption of historical.frozenEvidenceExemptions) {
+		if (
+			!exemption.reason ||
+			!(REQUIRED_PROJECTIONS as readonly string[]).includes(
+				exemption.supersededBy,
+			)
+		)
+			throw new Error(
+				`frozen evidence exemption is unjustified: ${exemption.path}`,
+			);
+	}
 	exactMembers(
 		projection.authorityProjection,
 		REQUIRED_PROJECTIONS,
 		"authority projection set",
 	);
+	for (const path of projection.authorityProjection) {
+		if (
+			path !== "docs/adr/0025-remove-channels-from-core.md" &&
+			!existsSync(join(REPOSITORY_ROOT, path))
+		)
+			throw new Error(`projected authority does not exist: ${path}`);
+	}
+	scanRepositoryAuthority(projection);
 }
 
 if (import.meta.main) {
@@ -144,7 +308,8 @@ if (import.meta.main) {
 		readFileSync(new URL("./PROJECTION.json", import.meta.url), "utf8"),
 	) as Projection;
 	validate(projection);
+	const scan = scanRepositoryAuthority(projection);
 	console.log(
-		`Channel removal projection: ${projection.frameworkSurface.absent.length} framework surfaces absent, domain Channel preserved`,
+		`Channel removal projection: ${projection.frameworkSurface.absent.length} framework surfaces absent; ${scan.currentChannelPaths.length} current authority files covered; ${scan.frozenChannelPaths.length} frozen evidence files explicitly exempt; domain Channel preserved`,
 	);
 }

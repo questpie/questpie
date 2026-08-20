@@ -48,10 +48,48 @@
 	],
 	"historicalEvidence": {
 		"rewrite": false,
+		"criterion": "Accepted proof artifacts, manifests, and review records retain the exact claim reviewed at their pinned head; permanent maps and current ADR, product, gate, build, public-documentation, visual, and wayfinder surfaces project the new decision.",
 		"retained": [
 			"accepted proof heads and manifests",
 			"historical review records",
 			"v3 behavioral evidence"
+		],
+		"frozenEvidenceExemptions": [
+			{
+				"path": "docs/v4/prototypes/beta-slice-p15/SLICE.json",
+				"reason": "accepted machine-checked beta.1 scope at its pinned proof head",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			},
+			{
+				"path": "docs/v4/prototypes/implementation-collapse-p16/QUEUE.json",
+				"reason": "accepted implementation queue at its pinned proof head; its Channel entry is a historical non-goal",
+				"supersededBy": "docs/v4/beta1-build-spec.md"
+			},
+			{
+				"path": "docs/v4/prototypes/conformance-p14/MATRIX.md",
+				"reason": "accepted conformance proof at its pinned proof head",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			},
+			{
+				"path": "docs/v4/prototypes/conformance-p14/check.ts",
+				"reason": "executable validator for the accepted historical P14 matrix",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			},
+			{
+				"path": "docs/v4/research/convex-comparison.md",
+				"reason": "research evidence, not current product authority",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			},
+			{
+				"path": "docs/v4/research/supabase-v3-v4-comparison.md",
+				"reason": "research evidence, not current product authority",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			},
+			{
+				"path": "docs/v4/research/framework-api-atlas/v3-realtime-durable-jobs.md",
+				"reason": "v3 behavioral evidence, not v4 architecture",
+				"supersededBy": "docs/adr/0025-remove-channels-from-core.md"
+			}
 		]
 	},
 	"authorityProjection": [
@@ -59,14 +97,23 @@
 		"SPEC.md",
 		"CONTEXT.md",
 		"docs/adr/README.md",
+		"docs/adr/0004-prove-one-tracer-before-capability-breadth.md",
 		"docs/adr/0017-freeze-multi-instance-and-optional-acceleration.md",
 		"docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
 		"docs/adr/0021-slice-the-beta-one-release.md",
 		"docs/adr/0025-remove-channels-from-core.md",
 		"docs/v4/beta1-build-spec.md",
+		"docs/v4/design-fiction/realtime.md",
+		"docs/v4/documentation-plan.md",
 		"docs/v4/implementation-gates.md",
+		"docs/v4/live-query-and-change-ledger.md",
 		"docs/v4/multi-instance-and-optional-acceleration.md",
 		"docs/v4/product-area-matrix.md",
-		"docs/v4/semantic-kernels-and-public-surface.md"
+		"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+		"docs/v4/questpie-v4-vision-for-martin.md",
+		"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+		"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+		"docs/v4/semantic-kernels-and-public-surface.md",
+		"docs/v4/visuals/architecture.html"
 	]
 }

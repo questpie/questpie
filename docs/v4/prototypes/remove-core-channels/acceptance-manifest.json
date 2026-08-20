@@ -3,7 +3,7 @@
 	"ticket": "ADR-0025",
 	"proof": "Remove the framework-owned Channel Resource, defineChannel, PostgreSQL Channel event ledger/replay/authority generation, generated Channel client, and runtime.channelCarrier without replacing them with another core event primitive; preserve Live Query, Reaction/Job, ordinary provider composition, historical evidence, and the collaboration domain's ordinary Channel Collection.",
 	"diffBase": "4e1e913c44a53cb3180643df7224a2418d430a08",
-	"reviewOutput": "docs/v4/prototypes/remove-core-channels/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/remove-core-channels/REVIEW-02.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "4e1e913c44a53cb3180643df7224a2418d430a08",
 		"P4 Live Query implementation evidence": "dfa461162fdb211382708b9ad2a30cf10b564015",
@@ -75,6 +75,11 @@
 			"name": "beta one implementation authority",
 			"path": "docs/v4/beta1-build-spec.md",
 			"sha256": "57dff2540f62ba89485105ece680037c405f9ed72a7a62ef00339a1f1a2c5709"
+		},
+		{
+			"name": "recorded initial blocked review",
+			"path": "docs/v4/prototypes/remove-core-channels/REVIEW.json",
+			"sha256": "4745dd30ba5efc399e7287673b3ec0bdc1ab37b480e718e8335d9fe49fcde846"
 		}
 	],
 	"verification": [
@@ -83,7 +88,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run docs/v4/prototypes/remove-core-channels/negative-control.ts (10 invalid projections rejected)",
+			"command": "bun run docs/v4/prototypes/remove-core-channels/negative-control.ts (10 invalid projections plus omission of Channel-bearing HANDOFF.md rejected by repository scan)",
 			"result": "PASS"
 		},
 		{
@@ -95,7 +100,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "git diff --name-only 4e1e913c44a53cb3180643df7224a2418d430a08...HEAD (exactly five files under docs/v4/prototypes/remove-core-channels; no authority, public docs, production source, fixture, or historical proof record changed)",
+			"command": "git diff --name-only 4e1e913c44a53cb3180643df7224a2418d430a08...HEAD (exactly the five candidate proof files plus the recorded initial REVIEW.json under docs/v4/prototypes/remove-core-channels; no authority, public docs, production source, fixture, or pre-existing historical proof record changed)",
 			"result": "PASS"
 		},
 		{
@@ -115,7 +120,8 @@
 		"Transient delivery, provider subscription authentication, connection lifetime, rate limits, advisory presence, and provider observability are application/provider concerns. They cannot authorize QUESTPIE Operations or become durable application truth.",
 		"The collaboration fixture's Company -> Space -> Channel -> Membership -> Message graph and ordinary channels Collection remain intact; the removed capitalized concept is the framework capability only.",
 		"ADR-0017, ADR-0019, ADR-0021, and the P14 conformance requirement are superseded only for Channel. Their accepted proof heads, manifests, review records, and v3 evidence remain immutable historical evidence rather than being rewritten.",
-		"The exact authority projection set includes a new superseding ADR and every current SPEC, glossary, gate, beta build, multi-instance, semantic-kernel, product-matrix, ADR index, and handoff surface that otherwise keeps Channels current or deferred.",
-		"This proof changes only the candidate decision, structured projection, validator, negative controls, and manifest. It does not project authority before PASS and changes no production code, fixture, public docs, or historical evidence."
+		"The repository-aware scan enumerates root authority, every ADR, top-level v4 product documents, public v4 guides, the permanent capability map, current wayfinders, the realtime design-fiction source, and the architecture visual. Every Channel-bearing current surface is in the exact authority projection set.",
+		"Accepted proof artifacts retain claims reviewed at their pinned heads, while permanent maps and current ADR, product, gate, build, public-documentation, visual, and wayfinder surfaces project the new decision. P15 SLICE.json, P16 QUEUE.json, P14 Channel evidence, and research evidence are explicitly classified and superseded without rewriting them.",
+		"This proof changes only the candidate decision, structured projection, validator, negative controls, manifest, and recorded initial review. It does not project authority before PASS and changes no production code, fixture, public docs, or pre-existing historical evidence."
 	]
 }
