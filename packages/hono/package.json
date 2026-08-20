@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/hono",
-	"version": "3.28.2",
+	"version": "3.28.3",
 	"description": "Hono adapter for QUESTPIE, with a unified typed client",
 	"repository": {
 		"type": "git",
