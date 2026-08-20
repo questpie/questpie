@@ -549,3 +549,38 @@ means the surrounding code was rewritten rather than nudged — `:463` → `:378
 here. What would overturn that heuristic: a falsified claim whose citation moved
 by one or two lines, which would show shift distance is not a usable proxy and
 the only safe rule is to re-read every touched claim.
+
+## A third merge, and this one moved nothing — the reason is position, not size
+
+BETA-11 merged at `aa7d2a54`. It changed two production files,
+`packages/compiler/src/mutation/postgres.ts` and
+`packages/compiler/src/relational/discovery.ts`, for 12 insertions and 5
+deletions, plus four test files. Twenty-two record citations point into those six
+files. **None of them broke**, and the nine that live in the records this set
+maintains were re-read as claims, not only re-resolved as lines: `:138` is still
+`SELECT TRUE AS "qp_locked" … LIMIT 1 FOR UPDATE` with no `SKIP LOCKED`,
+`:72`–`:75` still builds lock predicates from `operation.keyFields` alone, and
+`lock:` at `:137` still precedes `read:` at `:142`, which is what the
+statement-timeout gate's argument rests on.
+
+**The tempting conclusion is that small diffs are safe, and it is wrong.** The
+hunks are `@@ -306,0 +307,6 @@` and `@@ -319,4 +325 @@` in `mutation/postgres.ts`
+and `@@ -187 +187,5 @@` in `discovery.ts`. Every cited anchor — `:54`, `:72`,
+`:136`, `:138` — sits **above** the first edited line in its file. Nothing moved
+because nothing was inserted before the citations, not because little was
+inserted. The same 12 lines added near the top of either file would have shifted
+all nine.
+
+**So the gradient across three merges is about where a slice edits, not how
+much.** BETA-09 changed 36 files and moved 10 citations; BETA-10 changed 19 and
+moved 27, because it rewrote `admit()` near the middle of `postgres-kernel.ts`
+and pushed every symbol below it down; BETA-11 changed 6 and moved none. That
+refines the previous entry's guess, which read the difference as invasiveness.
+Invasiveness correlates, but the mechanism is insertion position relative to
+cited lines.
+
+**What this does not change.** The previous entry's rule still holds and is the
+one that matters: re-resolving a line never asks whether the sentence is still
+true. This merge happens to have moved no lines _and_ falsified no claims, but
+those are independent — BETA-10 falsified `tenant-share-control`'s scheduling row
+by editing code far from any line that record cited.

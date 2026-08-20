@@ -485,3 +485,21 @@ Implemented in code, asserted as a string. The falsification this record would
 have asked for is unchanged in shape: admit a run, retire its executable from
 every reaction in the fleet, call `admit()`, and assert the run is absent from
 the batch. That test does not exist today.
+
+## The archive kernel is not the single-tenant case
+
+The entry above names a single-tenant deployment as what would overturn the
+containment reading, since `PARTITION BY tenant_id` degenerates to one partition
+there. BETA-11 merged at `aa7d2a54` and added a second fixture,
+`fixtures/archive`, whose acceptance test is titled "archive compiles the
+existing kernels **without tenant**, CRUD, or collaboration assumptions"
+(`tests/integration/beta11-archive.test.ts:13`). That title is about what the
+compiler assumes, not about what the kernel declares: the fixture declares
+`tenantId: field.uuid({ nullable: false })`
+(`fixtures/archive/src/institutions.ts:7`) and resolves
+`context.tenant({ id: institution.tenantId })`
+(`fixtures/archive/src/execution.ts:16`).
+
+So the overturn condition is still unmet, and both shipped fixtures carry a
+tenant. Recorded because the test title reads like the opposite, and a future
+reader looking for the single-tenant case would reasonably stop there.
