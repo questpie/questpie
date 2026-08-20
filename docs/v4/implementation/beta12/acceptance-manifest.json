@@ -1,9 +1,9 @@
 {
 	"protocolVersion": 2,
 	"ticket": "#299",
-	"proof": "BETA-12 cuts one checked questpie@4.0.0-beta.1 package whose installed CLI builds the archive fixture, applies its committed migrations idempotently, starts and drains the generated Runtime, and drives both collaboration and archive connected tracers from the same tarball against local PostgreSQL 17 and a remote CNPG PostgreSQL 18 direct endpoint without exposing private compiler or Runtime package surfaces.",
+	"proof": "BETA-12 cuts one checked questpie@4.0.0-beta.1 package whose installed CLI builds the archive fixture, applies its committed migrations idempotently, starts and drains the generated Runtime, and drives both collaboration and archive connected tracers from the same tarball against local PostgreSQL 17 without exposing private compiler or Runtime package surfaces.",
 	"diffBase": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
-	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-01.json",
+	"reviewOutput": "docs/v4/implementation/beta12/REVIEW-RC-02.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "aa7d2a5477daf4d18b505c48a00d045e7412e86d",
 		"P14 projection in reviewed ancestry": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d",
@@ -38,7 +38,12 @@
 		{
 			"name": "BETA-12 backend closure record",
 			"path": "docs/v4/implementation/beta12/backend-acceptance.md",
-			"sha256": "38764a0ee15d2e5aa99c1d001763e9869532b8df46ccfe45cfcbfb4055b812c8"
+			"sha256": "a48dbef0acb5d9d14f84826eff4fc27ffba70d9eb06b0feea21c399f51bfd216"
+		},
+		{
+			"name": "initial BETA-12 acceptance findings",
+			"path": "docs/v4/implementation/beta12/REVIEW-RC-01.json",
+			"sha256": "871913cc59d0e2081ea8b586a30ef115c263281336d746056b373f194559986f"
 		}
 	],
 	"verification": [
@@ -51,15 +56,11 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run scripts/beta12-conformance.ts --target local against local PostgreSQL 17 (both packed fixture tracers, 1 test, 8 assertions, 23155.98 ms)",
+			"command": "with PGHOST, PGDATABASE, PGUSER, PGPASSWORD and QUESTPIE_POSTGRES_MAJOR=17 set for the local test database: bun run scripts/beta12-conformance.ts --target local --report docs/v4/implementation/beta12/local-conformance.json (both packed fixture tracers, 1 test, 8 assertions)",
 			"result": "PASS"
 		},
 		{
-			"command": "the identical packed BETA-12 PostgreSQL scenario against a remote CNPG PostgreSQL 18 direct endpoint (both fixture tracers, 1 test, 8 assertions, 126130.48 ms)",
-			"result": "PASS"
-		},
-		{
-			"command": "bun run scripts/beta12-conformance.ts --target managed without the selected Supabase credential writes managed-conformance.json as WITHHELD/MISSING_CREDENTIAL and exits 2",
+			"command": "env -u PGHOST -u PGPORT -u PGDATABASE -u PGUSER -u PGPASSWORD bun run scripts/beta12-conformance.ts --target managed --report docs/v4/implementation/beta12/managed-conformance.json writes WITHHELD/MISSING_CREDENTIAL and exits 2",
 			"result": "PASS"
 		},
 		{
@@ -76,7 +77,7 @@
 		"The release manifest pins exact tarball and public declaration SHA-256 digests. Dry-run packs twice with byte-identical output, rejects a changed committed digest, installs into a clean consumer, imports the public root, checks negative imports, and builds the archive fixture through the installed CLI.",
 		"The installed CLI provides build, check, migration apply, and start. Migration apply consumes committed migration bytes and treats an already-applied head as an idempotent successful retry; start requires the database URL and a bounded realtime HMAC key, serves the generated Runtime, and drains on SIGINT or SIGTERM.",
 		"The same checked tarball drives the existing collaboration Reaction tracer and the materially different archive permit, embargo, watch, and recovered-Reaction tracer. Their active generated application bytes come from the packed CLI rather than a workspace compiler import.",
-		"Local PostgreSQL 17 and remote CNPG PostgreSQL 18 direct evidence both pass the complete packed scenario. The selected Supabase profile remains honestly WITHHELD/MISSING_CREDENTIAL rather than being fabricated as PASS; the owner explicitly ruled that provider-specific run non-blocking, while a future credential changes the report only after the identical scenario actually passes.",
+		"Local PostgreSQL 17 passes the complete packed scenario. The producer measures server_version_num, requires PostgreSQL 17 for the local target, and checks that local versus Supabase target labels match the configured host before PASS. The selected Supabase profile remains honestly WITHHELD/MISSING_CREDENTIAL rather than being fabricated as PASS; the owner explicitly ruled that provider-specific run non-blocking, while a future credential changes the report only after the identical scenario actually passes.",
 		"The package test covers clean install, negative private imports, checksum mismatch, migration application and retry, Runtime start and graceful termination, and both connected tracers without weakening their nondisclosure, fresh Policy, transaction, retry, cancellation, or durable ownership assertions.",
 		"Public beta.1 documentation states the package, commands, required environment, generated-artifact boundary, and release boundary. It does not claim credential Auth, automatic publication, Studio, raw Routes, OpenAPI, MCP, or deferred capabilities.",
 		"Publication remains fail-closed outside a tag-triggered GitHub Actions npm environment and runs bun ci plus quality:release before npm publish --provenance. Dry-run never publishes; actual tag creation and environment approval remain human release decisions.",

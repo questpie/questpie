@@ -5,30 +5,29 @@
 The beta.1 release candidate is complete: one checked tarball cleanly installs,
 builds the archive application without workspace compiler/runtime imports, and
 drives both collaboration and archive connected tracers against local
-PostgreSQL 17. The identical packed scenario also passes against a remote CNPG
-PostgreSQL 18 direct endpoint. Package retry, checksum mismatch, negative
-imports, migration drift inherited by both tracers, clean install, graceful
-Runtime shutdown, and the aggregate performance ownership gate are executable.
+PostgreSQL 17. Package retry, checksum mismatch, negative imports, migration
+drift inherited by both tracers, clean install, graceful Runtime shutdown, and
+the aggregate performance ownership gate are executable.
 
 The selected managed profile is Supabase PostgreSQL. This checkout has no
 managed connection credential, so `managed-conformance.json` is `WITHHELD` with
 `MISSING_CREDENTIAL`; it is deliberately not `PASS`. The owner ruled that the
 named Supabase run is useful provider evidence but is not a BETA-12 blocker.
-`cnpg18-direct-conformance.json` records the available remote production-shaped
-database evidence instead; it does not relabel CNPG as Supabase. The same
-`scripts/beta12-conformance.ts` command runs the identical packed BETA-12
-scenario when standard PostgreSQL connection variables are supplied.
 
-The available CNPG PgBouncer endpoint uses transaction pooling. BETA-12 proves
-the release candidate against the direct endpoint; it does not claim a pooler
-compatibility result that was not executed. The current generated Runtime uses
-one Bun SQL pool for query, mutation, durable, and periodic realtime
-reconciliation work. It does not yet implement the `listenNotify` wake declared
-by its live-query artifact, so external changes can wait for the ten-second
-reconciliation tick. Production connection routing and immediate cross-instance
-realtime therefore remain a separate inherited Runtime closure: normal traffic
-may use a transaction pool, while migrations and the future notification
-listener require a direct or session-affine connection.
+`scripts/beta12-conformance.ts` measures PostgreSQL's server version and checks
+the configured host against the requested local or Supabase target before it
+can write PASS. A local endpoint cannot be relabelled as managed evidence. The
+same command runs the identical packed BETA-12 scenario when the selected
+Supabase PostgreSQL connection variables are supplied.
+
+BETA-12 does not claim a pooler compatibility result that was not executed. The
+current generated Runtime uses one Bun SQL pool for query, mutation, durable,
+and periodic realtime reconciliation work. It does not yet implement the
+`listenNotify` wake declared by its live-query artifact, so external changes can
+wait for the ten-second reconciliation tick. Production connection routing and
+immediate cross-instance realtime therefore remain a separate inherited Runtime
+closure: normal traffic may use a transaction pool, while migrations and the
+future notification listener require a direct or session-affine connection.
 
 The tagged stable-runner `quality:release` result and actual tag publication
 remain release-environment gates, not locally fabricated successes.

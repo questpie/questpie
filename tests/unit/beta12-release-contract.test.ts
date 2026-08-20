@@ -85,3 +85,37 @@ test("a missing managed PostgreSQL credential is WITHHELD, never PASS", async ()
 		await rm(temporary, { force: true, recursive: true });
 	}
 });
+
+test("a local endpoint cannot be relabelled as selected managed evidence", async () => {
+	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta12-target-"));
+	try {
+		const report = join(temporary, "managed.json");
+		const result = run(
+			[
+				"bun",
+				"run",
+				"scripts/beta12-conformance.ts",
+				"--target",
+				"managed",
+				"--report",
+				report,
+			],
+			{
+				PGDATABASE: "postgres",
+				PGHOST: "127.0.0.1",
+				["PGPASSWORD"]: "x",
+				PGUSER: "postgres",
+			},
+		);
+		expect(result.exitCode).not.toBe(0);
+		expect(JSON.parse(await readFile(report, "utf8"))).toMatchObject({
+			format: "questpie.beta12-conformance",
+			target: "managed",
+			profile: "supabase-postgresql",
+			status: "FAIL",
+			reason: "TARGET_MISMATCH",
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+});

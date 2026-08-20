@@ -21,6 +21,15 @@ against that output. The installed CLI applies migrations idempotently, starts
 the Runtime over HTTP, and drains cleanly on termination. Reapplying an already
 applied migration is a successful retry rather than an error.
 
+The connected tracer harness links the repository's TypeScript and Bun type
+directories into its temporary fixture to avoid a network install during the
+PostgreSQL lane. That proves packed CLI execution, not clean dependency
+installation. The separate release dry-run performs the clean `bun install`
+from the tarball before invoking the installed CLI. `typescript` and
+`@types/bun` are production dependencies because application compilation is a
+runtime CLI capability and consumer projects may name Bun types in their
+TypeScript configuration.
+
 ## Boundary
 
 Only `questpie` is public. Vendoring private implementation bytes does not add
