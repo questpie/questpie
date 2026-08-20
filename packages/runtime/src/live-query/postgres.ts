@@ -38,6 +38,18 @@ export type ChangeReconciliationResultV1 = Readonly<{
 	facts: readonly ChangeLedgerFactV1[];
 }>;
 
+type PostgresChangeReconciliationInput = Readonly<{
+	sql: SQL;
+	application: string;
+	consumer: string;
+	apply(
+		facts: readonly ChangeLedgerFactV1[],
+		horizon: Readonly<{ prior: string; next: string }>,
+	): void | Promise<void>;
+	effect?: PostgresLiveQueryInvalidationEffect;
+	signal?: AbortSignal;
+}>;
+
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const positiveIntegerPattern = /^[1-9][0-9]*$/;
@@ -142,18 +154,8 @@ function decodeHorizon(row: Row | undefined): Readonly<{
 	return Object.freeze({ priorHorizon, nextHorizon });
 }
 
-export async function reconcilePostgresChangeLedger(
-	input: Readonly<{
-		sql: SQL;
-		application: string;
-		consumer: string;
-		apply(
-			facts: readonly ChangeLedgerFactV1[],
-			horizon: Readonly<{ prior: string; next: string }>,
-		): void | Promise<void>;
-		effect?: PostgresLiveQueryInvalidationEffect;
-		signal?: AbortSignal;
-	}>,
+async function reconcilePostgresChangeLedgerAttempt(
+	input: PostgresChangeReconciliationInput,
 ): Promise<ChangeReconciliationResultV1> {
 	const application = text(input.application, "Change Ledger application");
 	const consumer = text(input.consumer, "Change Ledger consumer");
@@ -272,6 +274,46 @@ WHERE application_name = $1 AND consumer_id = $2`,
 			await session.release();
 		} catch {
 			await session.close({ timeout: 0 }).catch(() => {});
+		}
+	}
+}
+
+function postgresErrorNumber(error: unknown): string | null {
+	if (!error || typeof error !== "object") return null;
+	const errno = (error as Readonly<{ errno?: unknown }>).errno;
+	return typeof errno === "string" ? errno : null;
+}
+
+function waitForReconciliationRetry(
+	attempt: number,
+	signal?: AbortSignal,
+): Promise<void> {
+	signal?.throwIfAborted();
+	const ceilingMilliseconds = Math.min(2 ** (attempt - 1), 64);
+	const delayMilliseconds = Math.floor(Math.random() * ceilingMilliseconds) + 1;
+	return new Promise((resolve, reject) => {
+		const aborted = () => {
+			clearTimeout(timer);
+			reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+		};
+		const timer = setTimeout(() => {
+			signal?.removeEventListener("abort", aborted);
+			resolve();
+		}, delayMilliseconds);
+		signal?.addEventListener("abort", aborted, { once: true });
+		if (signal?.aborted) aborted();
+	});
+}
+
+export async function reconcilePostgresChangeLedger(
+	input: PostgresChangeReconciliationInput,
+): Promise<ChangeReconciliationResultV1> {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			return await reconcilePostgresChangeLedgerAttempt(input);
+		} catch (error) {
+			if (postgresErrorNumber(error) !== "40001" || attempt === 16) throw error;
+			await waitForReconciliationRetry(attempt, input.signal);
 		}
 	}
 }

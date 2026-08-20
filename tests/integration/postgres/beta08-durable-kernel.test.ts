@@ -102,6 +102,44 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
 }
 
 postgresTest(
+	"durable admission interleaves an unequal two-tenant backlog before its batch limit",
+	async () => {
+		const prepared = await harness();
+		const runIds: string[] = [];
+		for (let index = 0; index < 6; index += 1) {
+			const callId = `beta10-fairness-${String(index).padStart(12, "0")}`;
+			await publish(prepared, { body: `fairness probe ${index}`, callId });
+			runIds.push(await runIdentity(callId));
+		}
+		const secondTenant = "tenant:beta10-second";
+		await database!.begin(async (session) => {
+			await session.unsafe(
+				"SELECT set_config('questpie.durable_kernel', 'on', true)",
+			);
+			await session.unsafe(
+				`UPDATE questpie_internal.durable_runs
+SET tenant_id = $1
+WHERE application_name = 'application:collaboration' AND run_id = ANY($2::uuid[])`,
+				[secondTenant, `{${runIds.slice(4).join(",")}}`],
+			);
+		});
+
+		const admitted = await prepared.kernel.admit(4);
+		expect(admitted.map(({ runId }) => runId)).toEqual([
+			runIds[0],
+			runIds[4],
+			runIds[1],
+			runIds[5],
+		]);
+
+		const cleanup = (await prepared.app.durable.poll({
+			workerId: "worker:beta10-fairness-cleanup",
+		})) as Readonly<{ claimed: number }>;
+		expect(cleanup.claimed).toBe(6);
+	},
+);
+
+postgresTest(
 	"a worker crash after claim cannot let the stale lease holder publish a terminal transition, and one fact keeps one Reaction",
 	async () => {
 		const prepared = await harness();
@@ -313,6 +351,57 @@ FROM questpie_internal.durable_runs WHERE run_id = $1`,
 );
 
 postgresTest(
+	"a crash after the final allowed claim terminalizes instead of poisoning admission forever",
+	async () => {
+		const prepared = await harness();
+		const callId = "beta10-exhausted-crash-000000000001";
+		await publish(prepared, { body: "exhausted crash", callId });
+		const runId = await runIdentity(callId);
+		const first = await prepared.kernel.claim({
+			runId,
+			workerId: "worker:exhausted-crash",
+			leaseMilliseconds: 1_000,
+			attemptDeadlineMilliseconds: 1_000,
+		});
+		expect(first.status).toBe("claimed");
+
+		await database!.begin(async (session) => {
+			await session.unsafe(
+				"SELECT set_config('questpie.durable_kernel', 'on', true)",
+			);
+			await session.unsafe(
+				`UPDATE questpie_internal.durable_runs
+SET attempt_count = 8,
+    lease_expires_at = pg_catalog.transaction_timestamp() - interval '1 second'
+WHERE application_name = 'application:collaboration' AND run_id = $1`,
+				[runId],
+			);
+		});
+
+		expect(
+			await prepared.kernel.claim({
+				runId,
+				workerId: "worker:after-exhausted-crash",
+			}),
+		).toEqual({ status: "skipped" });
+		expect(await prepared.kernel.inspect(runId)).toMatchObject({
+			state: "failed",
+			attemptCount: 8,
+			deadLetter: true,
+			failureCode: "RETRY_EXHAUSTED",
+		});
+		expect(
+			(await prepared.kernel.admit()).map(({ runId }) => runId),
+		).not.toContain(runId);
+		expect(
+			(await prepared.kernel.events(runId)).filter(
+				({ kind }) => kind === "failed",
+			),
+		).toHaveLength(1);
+	},
+);
+
+postgresTest(
 	"a cancellation request during a handler competes with success through one fenced transition",
 	async () => {
 		const prepared = await harness();
@@ -369,7 +458,7 @@ WHERE run_id = $1 AND kind IN ('cancelled', 'failed', 'succeeded')`,
 );
 
 postgresTest(
-	"a worker without compatible executable bytes refuses the claim instead of consuming an attempt",
+	"an incompatible worker cannot admit retired work or consume an attempt",
 	async () => {
 		const prepared = await harness();
 		const callId = "beta08-retire-000-0000-000000000005";
@@ -384,7 +473,7 @@ postgresTest(
 			code: "EXECUTABLE_RETIRED",
 		});
 		const admissions = await retired.admit();
-		expect(admissions.map(({ runId: candidate }) => candidate)).toContain(
+		expect(admissions.map(({ runId: candidate }) => candidate)).not.toContain(
 			runId,
 		);
 		const view = await prepared.kernel.inspect(runId);

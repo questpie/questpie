@@ -1,5 +1,5 @@
 import type { DurableEffectLedger } from "./postgres-effects";
-import type { DurableClaim } from "./postgres-kernel";
+import type { DurableClaim } from "./rows";
 
 export class DurableEffectAmbiguous extends Error {
 	readonly effectName: string;

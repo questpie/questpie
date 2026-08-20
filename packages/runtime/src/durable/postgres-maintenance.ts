@@ -1,7 +1,7 @@
 import type { SQL } from "bun";
 import { principal as principalKernel, type Principal } from "questpie";
 
-import type { DurableRunState } from "./postgres-kernel";
+import type { DurableRunState } from "./rows";
 import {
 	appendDurableRunEvent,
 	durableInteger,

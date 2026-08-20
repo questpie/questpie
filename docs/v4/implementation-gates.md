@@ -274,9 +274,17 @@ not current release gates.
 - Studio application data uses normal App authority, generated Operations, and
   Policy. It has no raw SQL, internal-table CRUD, Policy bypass, second backend,
   `defineStudio`, or Operator App framework.
-- `acknowledgeAmbiguity`, `cancelRun`, `drainRuntime`, and `retryRun` require
-  explicit maintenance Authority, exact identity, bounded reason, idempotency,
-  expected-version fencing, a typed winner, and append-only audit.
+- The durable-run maintenance commands `acknowledgeAmbiguity`, `cancelRun`, and
+  `retryRun` require explicit maintenance Authority, exact run identity, bounded
+  reason, idempotency, expected-version fencing, a typed winner, and append-only
+  audit.
+- For beta.1, `drainRuntime` names the idempotent local `app.close()` lifecycle
+  fence: stop new roots and claims on this Runtime instance, bound owned work,
+  then dispose it. It is not a remotely targeted durable-run maintenance
+  command and therefore has no invented reason, expected-version, or audit
+  protocol. A remote form requires new Accepted authority defining stable
+  Runtime-instance identity, targeting, fencing across process death, and audit;
+  ADR-0017 forbids deriving that identity from a leader or process registry.
 
 ## Gate 8A: Runtime, wire, and deployment
 

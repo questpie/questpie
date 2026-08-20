@@ -1,0 +1,58 @@
+{
+	"format": "questpie.performance-baseline",
+	"version": 1,
+	"scenario": "beta10-soak-chaos",
+	"budgetOwner": "BETA-10",
+	"toolchain": {
+		"bun": "1.3.14",
+		"typescript": "6.0.2",
+		"postgres": "17"
+	},
+	"reference": {
+		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"postgres": "local Docker postgres:17",
+		"recordedAt": "2026-08-20",
+		"samples": 3,
+		"aggregation": "maximum observed soak80Ms"
+	},
+	"evidence": {
+		"localBaseline": "PASS",
+		"manualPostgres17": "PASS",
+		"taggedStableRunner": "PENDING"
+	},
+	"workload": {
+		"runtimeInstances": 10,
+		"durableRuns": 80,
+		"waves": 4,
+		"abandonedClaims": 1,
+		"replacementInstances": 3,
+		"optionalAccelerators": 0
+	},
+	"samples": {
+		"soak80Ms": [3089.177369, 5244.611153, 4464.79603]
+	},
+	"observed": {
+		"soak80Ms": 5244.611153,
+		"recoveredCrashAttempts": 1,
+		"failedRuns": 0,
+		"drainedWorkerAdmissions": 0
+	},
+	"budgetDerivation": {
+		"soak80Ms": {
+			"referenceObservedMs": 5244.611153,
+			"multiplier": 10,
+			"roundUpQuantumMs": 10000
+		}
+	},
+	"budgets": {
+		"soak80Ms": 60000,
+		"durableRuns": 80,
+		"recoveredCrashAttempts": 1,
+		"failedRuns": 0,
+		"drainedWorkerAdmissions": 0,
+		"replacementInstances": 3
+	},
+	"status": "PASS"
+}

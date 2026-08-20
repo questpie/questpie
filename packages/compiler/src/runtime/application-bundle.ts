@@ -28,7 +28,7 @@ export async function bundleApplicationEntry(
 			entry: "application.js",
 			chunk: "application-[hash].[ext]",
 		},
-		minify: { whitespace: true },
+		minify: { syntax: true, whitespace: true },
 		sourcemap: "none",
 		packages: "bundle",
 		external: ["questpie"],

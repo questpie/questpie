@@ -249,7 +249,22 @@ admission to ask it of.
 **Falsification for both.** For 4: set a run's `horizon_at` in the past, fail it,
 and assert its `available_at` is not before a healthy run's. For 5: refuse a
 claim, poll `admit()` twice, and assert the run does not appear in the second
-batch. Both fail against the tree today, which is the point.
+batch. The §4 falsification still fails against the tree; BETA-10 closes §5
+below.
+
+**BETA-10 resolution of §5.** The two poison classes are now closed at their
+different correct seams. Admission filters executable digests before its
+tenant-fair order and `LIMIT` (`packages/runtime/src/durable/postgres-kernel.ts:357`–`:393`),
+so an incompatible run remains durable for an old compatible worker without
+occupying a new worker's batch. A run whose worker died after the last allowed
+claim is terminalized as `failed / RETRY_EXHAUSTED`, its outstanding attempt is
+settled, and one append-only `failed` event is written without creating a ninth
+attempt (`packages/runtime/src/durable/postgres-kernel.ts:436`–`:480`). The PostgreSQL falsification at
+`tests/integration/postgres/beta08-durable-kernel.test.ts:353`–`:402` asserts
+the terminal state and that a later admission no longer returns the run.
+
+This does not resolve §4's separate horizon-ordering claim; no BETA-10 evidence
+silently promotes that remaining candidate to closed.
 
 ### 6. The maintenance audit has no row bound, and a timeout cannot give it one
 
