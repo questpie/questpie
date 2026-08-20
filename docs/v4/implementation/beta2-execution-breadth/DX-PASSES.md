@@ -51,6 +51,14 @@ changes stay sequential. Do not build Route, Action, or Job against a temporary
 second database driver or a public connection shape that the topology proof may
 replace.
 
+PB-02 is resolved at the research layer by
+`docs/v4/research/production-backend/postgres-connection-topology-primary-sources.md`:
+one bounded ordinary `pg.Pool`, one dedicated session-affine listener per
+realtime Runtime, and separate pinned migration ownership. The required
+`connectionUrl`/`directConnectionUrl` spelling has no implicit production
+fallback. This unblocks an internal PB-03 prototype; it does not authorize the
+public projection before the focused topology proof passes.
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from

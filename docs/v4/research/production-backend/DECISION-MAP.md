@@ -63,7 +63,7 @@ accept Bun's `SQL` type directly
 ## #2: What connection topology is correct for one Runtime instance?
 
 Blocked by: #1
-Type: Research
+Type: Resolved research; focused interface proof remains
 
 ### Question
 
@@ -76,7 +76,7 @@ cancellation, credential rotation, and failure behavior.
 
 ### Answer
 
-Frontier. The leading public shape is:
+Require the public shape:
 
 ```ts
 postgres: {
@@ -87,8 +87,33 @@ postgres: {
 
 `connectionUrl` serves bounded ordinary Runtime traffic through a pooler.
 `directConnectionUrl` serves session-affine work such as migrations and a
-dedicated `LISTEN` connection. The research must determine safe local fallback
-and exact pool allocation before this becomes an interface.
+dedicated `LISTEN` connection. There is no implicit production fallback: a
+local caller may deliberately supply the same direct URL twice, but the
+framework cannot infer whether an arbitrary PostgreSQL URL preserves session
+state.
+
+One realtime-enabled Runtime owns one ordinary `pg.Pool` with a starting
+default maximum of 10 clients plus one dedicated listener Client. All Query,
+Mutation, Context, maintenance, reconciliation, and Job/Reaction database
+phases share the bounded ordinary pool; a Job never holds a connection while
+an external Action runs. A migration process transiently owns one pinned
+direct session and may need one additional cancellation session. Fleet sizing
+must satisfy the aggregate provider budget; 10 is a default to tune, not a
+throughput claim.
+
+Startup establishes and commits `LISTEN`, then reconciles durable state before
+readiness. Every reconnect repeats that order. Listener failure after readiness
+degrades immediate wake and retries with bounded jitter while periodic durable
+reconciliation remains active. Shutdown stops admission, drains work, closes
+the listener, then drains the Pool. Credential or endpoint rotation constructs
+new Pool/listener objects and drains the old ones; it does not mutate live
+connection objects.
+
+The primary-source derivation, current-tree inventory, capacity formula,
+failure behavior, and seven required proofs are recorded in
+[`postgres-connection-topology-primary-sources.md`](./postgres-connection-topology-primary-sources.md).
+This resolves PB-02 sufficiently for an internal PB-03 prototype. The public
+spelling still requires its focused executable proof before projection.
 
 ## #3: What is the smallest deep PostgreSQL module?
 
