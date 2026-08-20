@@ -290,6 +290,14 @@ without limit, no sweeper deletes them — every
 all of them: `WHERE application_name = $1 AND run_id = $2 ORDER BY requested_at,
 command_id`, with no `LIMIT` (`postgres-maintenance.ts:537`–`:546`).
 
+**Measured since, and the timeout gate has been corrected to agree.**
+`statement-timeout-gate/DECISION.md` listed `audit` among four reads it called
+"structurally bounded". Its predicate is a point lookup, but its result is not
+bounded: holding a scratch table at 50,000 unrelated rows and varying only one
+run's accumulated commands, `audit(runId)` runs 0.052 ms at one row and
+98.058 ms at 100,000, roughly linear in the run's own count. This entry's claim
+stands and that paragraph now says so.
+
 **Why this matters to the statement-timeout gate next door.** A
 `statement_timeout` on `audit` converts an unbounded read into a _failing_ read
 rather than a bounded one. The missing bound is on rows, and the gate only

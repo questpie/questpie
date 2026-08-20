@@ -285,6 +285,43 @@ surface that would genuinely be unbounded is the run worklist BETA-09 decided
 not exist in the tree yet. The gate should say plainly that its expensive case is
 a read nobody has written.
 
+**Corrected: `audit` does not belong in that four, and the record set already
+said so.** "Structurally bounded" conflates two things. All four predicates are
+point lookups — none scans the table, and that part stands. But the _result_ size
+differs per read: `inspect` returns exactly one row (`const [row]`,
+`postgres-kernel.ts:653`); `events` is capped at 1,024 by
+`durable_event_sequence_bounded CHECK (sequence BETWEEN 1 AND 1024)`
+(`internal-protocol-v4-sql.ts:149`); effects `read` returns one row per declared
+effect name, keyed by `PRIMARY KEY (application_name, run_id, effect_name)`
+(`:178`), so it is bounded by the compiled program. `audit` has no such bound.
+`record()` writes a row for rejected commands as well as applied ones, no CHECK
+limits the count, and no sweeper deletes them — which
+`durable-evidence-gaps/FINDING.md` §6 established independently while this
+paragraph was claiming the opposite.
+
+**Measured, with the database held still.** A scratch
+`durable_maintenance_commands` carrying 50,000 rows of unrelated runs throughout,
+varying only how many commands one run has accumulated, PostgreSQL 17, third run
+of each to discard the cold read:
+
+| commands on one run | `audit(runId)` |
+| ------------------- | -------------- |
+| 1                   | 0.052 ms       |
+| 100                 | 0.150 ms       |
+| 1,000               | 1.420 ms       |
+| 10,000              | 19.679 ms      |
+| 100,000             | 98.058 ms      |
+
+Roughly linear in the run's own row count while the table around it does not
+change. **So "does not grow with the database" is true of `audit` and beside the
+point**: its latency grows with caller behaviour, and the caller who grows it is
+the one issuing repeated rejected commands against a single run — which is a
+retry loop or an attacker, not an operator. Three of the five are bounded. The
+fourth is the one this gate would most want a timeout on, and the first
+measurement I took of it was a cold-cache artifact reading 8.9 ms at a single
+row, which is recorded here because it is the number a single unrepeated run
+would have published.
+
 **What this rules out.** Any mechanism that adds statements pays the same
 round-trip tax, including the `cancelBackendOnAbort` alternative below, which
 needs a reserved connection.
