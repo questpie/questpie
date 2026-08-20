@@ -119,9 +119,18 @@ export function createPostgresDurableMaintenance(
 			return use(query);
 		}) as Promise<Result>;
 
-	const lockRun = async (
+	/**
+	 * `locking: false` serves the denial path. An unauthorized caller must not
+	 * take `FOR UPDATE` on a run it may not touch: the lock is held for the rest
+	 * of the transaction, this read has no `SKIP LOCKED`, and a second
+	 * maintenance command would wait out `lock_timeout` behind it — a
+	 * denial-of-service surface handed to exactly the caller who was refused.
+	 * Reading unlocked still gives the audit the `stateBefore` it records.
+	 */
+	const readRun = async (
 		query: DurableQuery,
 		runId: string,
+		locking = true,
 	): Promise<DurableRow> => {
 		const [row] = await query(
 			`SELECT state, attempt_count AS "attemptCount", dead_letter AS "deadLetter",
@@ -130,12 +139,30 @@ export function createPostgresDurableMaintenance(
        cancellation_requested AS "cancellationRequested",
        event_sequence AS "version"
 FROM questpie_internal.durable_runs
-WHERE application_name = $1 AND run_id = $2
-FOR UPDATE`,
+WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 			[input.application, runId],
 		);
 		if (!row) throw new TypeError("durable maintenance target run is missing");
 		return row;
+	};
+
+	/** The denial path: audited, and taking no lock on the way. */
+	const refuseUnauthorized = async (
+		query: DurableQuery,
+		request: Readonly<{ runId: string; actor: DurableActor }>,
+		command: DurableMaintenanceCommand,
+	): Promise<DurableMaintenanceOutcome> => {
+		const run = await readRun(query, request.runId, false);
+		const state = durableText(run.state, "run state") as DurableRunState;
+		return record(query, {
+			runId: request.runId,
+			command,
+			outcome: "rejected",
+			rejectionCode: "AUTHORITY_DENIED",
+			actor: request.actor,
+			stateBefore: state,
+			stateAfter: state,
+		});
 	};
 
 	/**
@@ -236,21 +263,17 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 		async cancelRun(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				const run = await lockRun(query, request.runId);
+				if (await denied(actor, "cancelRun", request.runId))
+					return refuseUnauthorized(
+						query,
+						{ runId: request.runId, actor },
+						"cancelRun",
+					);
+				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
-				if (await denied(actor, "cancelRun", request.runId))
-					return record(query, {
-						runId: request.runId,
-						command: "cancelRun",
-						outcome: "rejected",
-						rejectionCode: "AUTHORITY_DENIED",
-						actor,
-						stateBefore,
-						stateAfter: stateBefore,
-					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -327,21 +350,17 @@ WHERE application_name = $1 AND run_id = $2`,
 		async retryRun(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				const run = await lockRun(query, request.runId);
+				if (await denied(actor, "retryRun", request.runId))
+					return refuseUnauthorized(
+						query,
+						{ runId: request.runId, actor },
+						"retryRun",
+					);
+				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
-				if (await denied(actor, "retryRun", request.runId))
-					return record(query, {
-						runId: request.runId,
-						command: "retryRun",
-						outcome: "rejected",
-						rejectionCode: "AUTHORITY_DENIED",
-						actor,
-						stateBefore,
-						stateAfter: stateBefore,
-					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -393,21 +412,17 @@ WHERE application_name = $1 AND run_id = $2`,
 		async acknowledgeAmbiguity(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				const run = await lockRun(query, request.runId);
+				if (await denied(actor, "acknowledgeAmbiguity", request.runId))
+					return refuseUnauthorized(
+						query,
+						{ runId: request.runId, actor },
+						"acknowledgeAmbiguity",
+					);
+				const run = await readRun(query, request.runId);
 				const stateBefore = durableText(
 					run.state,
 					"run state",
 				) as DurableRunState;
-				if (await denied(actor, "acknowledgeAmbiguity", request.runId))
-					return record(query, {
-						runId: request.runId,
-						command: "acknowledgeAmbiguity",
-						outcome: "rejected",
-						rejectionCode: "AUTHORITY_DENIED",
-						actor,
-						stateBefore,
-						stateAfter: stateBefore,
-					});
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
