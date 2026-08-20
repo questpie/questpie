@@ -225,6 +225,7 @@
 					commandDigest: "publish:v1",
 					steps: {},
 					signal: null,
+					effectIdentity: null,
 					history: ["Prototype reset"],
 					last: { ok: true, message: "Choose any action or guided case." },
 				});
@@ -362,6 +363,7 @@
 								{
 									run: "ready",
 									lease: null,
+									effectIdentity: "job-run-1/step:publish",
 									steps: { ...state.steps, publish: "ambiguous" },
 								},
 							);
@@ -373,6 +375,11 @@
 								return reject(
 									state,
 									"No ambiguous Action checkpoint is ready for receipt lookup.",
+								);
+							if (state.effectIdentity !== "job-run-1/step:publish")
+								return reject(
+									state,
+									"Action receipt lookup must reuse the checkpoint-derived Effect Identity.",
 								);
 							return record(
 								state,
@@ -410,7 +417,22 @@
 								"Deployment changed a recorded command digest.",
 								{
 									commandDigest: "publish:v2-incompatible",
+								},
+							);
+						case "change-executable":
+							return record(
+								state,
+								"Deployment removed compatible executable bytes.",
+								{
 									executable: "build-B",
+								},
+							);
+						case "change-version":
+							return record(
+								state,
+								"Deployment changed the Job semantic version.",
+								{
+									version: 2,
 								},
 							);
 						case "claim-incompatible":
@@ -418,6 +440,19 @@
 								return reject(
 									state,
 									"Only a ready run can be checked for claim.",
+								);
+							if (Object.keys(state.steps).length && state.version !== 1)
+								return reject(
+									state,
+									"Job semantic version changed; latest-code replay is refused.",
+								);
+							if (
+								Object.keys(state.steps).length &&
+								state.executable !== "build-A"
+							)
+								return reject(
+									state,
+									"Compatible executable bytes are unavailable; claim is refused.",
 								);
 							if (
 								Object.keys(state.steps).length &&
@@ -462,6 +497,8 @@
 				["Recover Action receipt", "recover-action"],
 				["Crash process", "crash"],
 				["Change command digest", "change-command"],
+				["Change executable", "change-executable"],
+				["Change semantic version", "change-version"],
 				["Claim with compatibility check", "claim-incompatible"],
 				["Succeed", "succeed"],
 				["Cancel", "cancel"],
@@ -535,6 +572,21 @@
 						["Attempt incompatible claim", "claim-incompatible"],
 					],
 				},
+				{
+					name: "Incompatible version/build",
+					description:
+						"A live checkpoint history refuses missing executable bytes and a changed semantic version independently.",
+					steps: [
+						["Accept and claim", "accept-manual"],
+						["Claim", "claim"],
+						["Record checkpoint", "mutation-step"],
+						["Crash", "crash"],
+						["Remove compatible executable", "change-executable"],
+						["Attempt incompatible claim", "claim-incompatible"],
+						["Change semantic version", "change-version"],
+						["Attempt changed-version claim", "claim-incompatible"],
+					],
+				},
 			];
 
 			let state = JobMachine.initial();
@@ -556,6 +608,7 @@
 					["Tick", state.tickIdentity || "none"],
 					["Executable", state.executable],
 					["Command digest", state.commandDigest],
+					["Effect identity", state.effectIdentity || "none"],
 					[
 						"Checkpoints",
 						Object.keys(state.steps).length

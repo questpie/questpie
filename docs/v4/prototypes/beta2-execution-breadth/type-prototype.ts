@@ -26,7 +26,12 @@ type ExecutionFacts = Readonly<{
 
 type QueryCaller<Input, Output> = (input: Input) => Promise<Output>;
 type MutationCaller<Input, Output> = (input: Input) => Promise<Output>;
-type ActionCaller<Input, Output> = (input: Input) => Promise<Output>;
+type EffectIdentity = string & { readonly __effectIdentity: true };
+
+type ActionCaller<Input, Output> = (
+	input: Input,
+	options: Readonly<{ effectId: EffectIdentity }>,
+) => Promise<Output>;
 
 type Policy = Readonly<{ kind: "authenticated" }>;
 type DeclaredError = Readonly<{ code: string; status: number }>;
@@ -56,7 +61,7 @@ type AppMutations = Readonly<{
 type AppActions = Readonly<{
 	article: Readonly<{
 		publish: ActionCaller<
-			Readonly<{ articleId: string; approvedBy: string; effectKey: string }>,
+			Readonly<{ articleId: string; approvedBy: string }>,
 			Readonly<{ providerId: string }>
 		>;
 	}>;
@@ -95,6 +100,7 @@ type ActionDefinition<
 		input: Readonly<{
 			input: Input;
 			ctx: ActionContext;
+			effect: Readonly<{ id: EffectIdentity }>;
 			errors: ErrorThrowers<Errors>;
 		}>,
 	): Awaitable<Output>;
@@ -117,6 +123,7 @@ declare function defineAction<
 			input: Readonly<{
 				input: Input;
 				ctx: ActionContext;
+				effect: Readonly<{ id: EffectIdentity }>;
 				errors: ErrorThrowers<Errors>;
 			}>,
 		): Awaitable<Output>;
@@ -135,7 +142,7 @@ type JobSteps<Signals extends Readonly<Record<string, Codec<unknown>>>> =
 		action<Input, Output>(
 			name: StepName,
 			action: ActionCaller<Input, Output>,
-			input: Input,
+			input: NoInfer<Input>,
 		): Promise<Output>;
 		sleep(
 			name: StepName,
@@ -152,7 +159,7 @@ type JobSteps<Signals extends Readonly<Record<string, Codec<unknown>>>> =
 
 type JobRun<Signals extends Readonly<Record<string, Codec<unknown>>>> =
 	Readonly<{
-		effect(name: string): string;
+		effect(name: string): EffectIdentity;
 		scheduledFor: Date | null;
 		step: JobSteps<Signals>;
 	}>;
@@ -226,7 +233,20 @@ declare function defineJob<
 
 declare const articleInput: Codec<Readonly<{ articleId: string }>>;
 declare const publishedOutput: Codec<Readonly<{ providerId: string }>>;
+declare const refreshOutput: Codec<Readonly<{ indexedTitle: string }>>;
 declare const approvalSignal: Codec<Readonly<{ approvedBy: string }>>;
+declare const directActions: AppActions;
+declare const callerEffect: EffectIdentity;
+
+void directActions.article.publish(
+	{ articleId: "article-1", approvedBy: "user-1" },
+	{ effectId: callerEffect },
+);
+// @ts-expect-error Direct Action invocation must supply explicit Effect Identity metadata.
+void directActions.article.publish({
+	articleId: "article-1",
+	approvedBy: "user-1",
+});
 
 export const publishArticle = defineAction({
 	name: "article.publish",
@@ -237,9 +257,9 @@ export const publishArticle = defineAction({
 		outcomeUnknown: { code: "PUBLISH_OUTCOME_UNKNOWN", status: 502 },
 	},
 	network: true,
-	async handler({ input, ctx }) {
+	async handler({ input, ctx, effect }) {
 		const providerId = await ctx.services.publisher.publish(
-			{ articleId: input.articleId, effectKey: `manual:${input.articleId}` },
+			{ articleId: input.articleId, effectKey: effect.id },
 			ctx.signal,
 		);
 		await ctx.mutations.article.requestReview({ articleId: input.articleId });
@@ -257,6 +277,7 @@ export const refreshSearch = defineJob({
 	name: "search.refresh",
 	version: 1,
 	input: articleInput,
+	output: refreshOutput,
 	async handler({ input, ctx, run, attempt }) {
 		const article = await ctx.queries.article.byId({
 			articleId: input.articleId,
@@ -267,7 +288,7 @@ export const refreshSearch = defineJob({
 		// @ts-expect-error No signal name exists when the Job declares no signals.
 		await run.step.waitForSignal("approval-gate", { signal: "approval" });
 
-		return { providerId: article?.title ?? "missing" };
+		return { indexedTitle: article?.title ?? "missing" };
 	},
 });
 
@@ -291,7 +312,6 @@ export const scheduledPublication = defineJob({
 		return run.step.action("publish", ctx.actions.article.publish, {
 			articleId: input.articleId,
 			approvedBy: approval.approvedBy,
-			effectKey: run.effect("publish"),
 		});
 	},
 });
@@ -306,6 +326,20 @@ defineJob({
 		// @ts-expect-error Signal names are closed by the Job Definition.
 		await run.step.waitForSignal("rejection-gate", { signal: "rejection" });
 		return { providerId: "never" };
+	},
+});
+
+defineJob({
+	name: "article.invalidEffectOverride",
+	version: 1,
+	input: articleInput,
+	async handler({ input, ctx, run }) {
+		return run.step.action("publish", ctx.actions.article.publish, {
+			articleId: input.articleId,
+			approvedBy: "user-1",
+			// @ts-expect-error The checkpoint derives Effect Identity; authors cannot override it in Action input.
+			effectKey: run.effect("different-step"),
+		});
 	},
 });
 

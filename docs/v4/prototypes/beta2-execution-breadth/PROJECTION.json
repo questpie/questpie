@@ -32,6 +32,12 @@
 		],
 		"automaticRetry": false,
 		"durableEffectIdentityOwner": "Reaction or Job checkpoint",
+		"effectIdentity": {
+			"directInvocation": "explicit caller metadata",
+			"checkpointInvocation": "derived from Job run and ordered checkpoint name",
+			"handlerAccess": "effect.id",
+			"authorOverride": false
+		},
 		"providerGuarantee": "explicit idempotency and receipt contract; ambiguity remains when outcome cannot be proved"
 	},
 	"job": {
@@ -63,6 +69,64 @@
 		"networkAction": "generated client member",
 		"route": "no generated semantic client",
 		"job": "no generic browser control plane"
+	},
+	"workflowAuthority": {
+		"projection": [
+			"CONTEXT.md",
+			"HANDOFF.md",
+			"SPEC.md",
+			"apps/docs/content/docs/v4/beta1-release.mdx",
+			"apps/docs/content/docs/v4/durable-reactions.mdx",
+			"docs/adr/0003-studio-is-the-operational-application-surface.md",
+			"docs/adr/0004-prove-one-tracer-before-capability-breadth.md",
+			"docs/adr/0009-bind-executable-definitions-from-the-current-app-contract.md",
+			"docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"docs/adr/0021-slice-the-beta-one-release.md",
+			"docs/adr/0022-freeze-api-ergonomics-and-operation-projection.md",
+			"docs/adr/README.md",
+			"docs/v4/beta1-build-spec.md",
+			"docs/v4/definition-composition.md",
+			"docs/v4/design-fiction/COVERAGE.md",
+			"docs/v4/design-fiction/authorize-with-policy.md",
+			"docs/v4/design-fiction/durable-work.md",
+			"docs/v4/design-fiction/index.md",
+			"docs/v4/design-fiction/limits-and-guarantees.md",
+			"docs/v4/design-fiction/routes-actions-and-integrations.md",
+			"docs/v4/design-fiction/run-and-deploy.md",
+			"docs/v4/design-fiction/studio-and-debugging.md",
+			"docs/v4/documentation-plan.md",
+			"docs/v4/executable-definition-compiler.md",
+			"docs/v4/implementation-gates.md",
+			"docs/v4/lifecycle-jobs-and-shared-durable-kernel.md",
+			"docs/v4/multi-instance-and-optional-acceleration.md",
+			"docs/v4/product-area-matrix.md",
+			"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+			"docs/v4/query-mutation-and-lifecycle.md",
+			"docs/v4/questpie-v4-vision-for-martin.md",
+			"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+			"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"docs/v4/runtime-client-envelope-and-studio.md",
+			"docs/v4/semantic-kernels-and-public-surface.md",
+			"docs/v4/transactional-dispatch-and-reaction.md",
+			"docs/v4/visuals/architecture.html"
+		],
+		"benignExemptions": [
+			{
+				"path": "apps/docs/content/docs/v4/index.mdx",
+				"reason": "uses schema workflow for the ordinary compile-plan-review-apply process, not a durable Resource"
+			},
+			{
+				"path": "docs/v4/data-model-and-query-grammar.md",
+				"reason": "uses workflow for the ordinary compiler process, not a durable Resource"
+			},
+			{
+				"path": "docs/v4/schema-lifecycle.md",
+				"reason": "uses repair workflow as an ordinary operational process, not a durable Resource"
+			}
+		]
 	},
 	"rejectedAlternatives": [
 		"separate Workflow Resource over the same durable kernel",

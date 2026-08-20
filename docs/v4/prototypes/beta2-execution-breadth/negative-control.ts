@@ -1,4 +1,4 @@
-import { validateProjection } from "./check";
+import { scanWorkflowAuthority, validateProjection } from "./check";
 import projectionSource from "./PROJECTION.json";
 
 type MutableProjection = typeof projectionSource;
@@ -16,6 +16,12 @@ const invalid: Array<readonly [string, (value: MutableProjection) => void]> = [
 		"automatic Action retry",
 		(value) => {
 			value.action.automaticRetry = true;
+		},
+	],
+	[
+		"author-controlled checkpoint Effect Identity",
+		(value) => {
+			value.action.effectIdentity.authorOverride = true;
 		},
 	],
 	[
@@ -84,4 +90,46 @@ for (const [name, mutate] of invalid) {
 	if (!rejected) throw new Error(`negative control was accepted: ${name}`);
 }
 
-console.log(`Negative controls: ${invalid.length} invalid contracts rejected`);
+const omittedAuthority = clone();
+const omittedPath = "apps/docs/content/docs/v4/beta1-release.mdx";
+omittedAuthority.workflowAuthority.projection =
+	omittedAuthority.workflowAuthority.projection.filter(
+		(path) => path !== omittedPath,
+	);
+let omissionNamed = false;
+try {
+	scanWorkflowAuthority(omittedAuthority);
+} catch (error) {
+	omissionNamed = error instanceof Error && error.message.includes(omittedPath);
+}
+if (!omissionNamed)
+	throw new Error("repository scan accepted or hid omitted Workflow authority");
+
+const falseBenign = clone();
+const productPath =
+	"docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md";
+falseBenign.workflowAuthority.projection =
+	falseBenign.workflowAuthority.projection.filter(
+		(path) => path !== productPath,
+	);
+falseBenign.workflowAuthority.benignExemptions.push({
+	path: productPath,
+	reason: "invalid attempt to hide product authority",
+});
+let productMarkerNamed = false;
+try {
+	scanWorkflowAuthority(falseBenign);
+} catch (error) {
+	productMarkerNamed =
+		error instanceof Error &&
+		error.message.includes(productPath) &&
+		error.message.includes("product marker");
+}
+if (!productMarkerNamed)
+	throw new Error(
+		"repository scan accepted a product-bearing benign exemption",
+	);
+
+console.log(
+	`Negative controls: ${invalid.length + 2} invalid contracts and authority classifications rejected`,
+);

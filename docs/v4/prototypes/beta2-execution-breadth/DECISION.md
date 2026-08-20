@@ -81,10 +81,13 @@ Action owns one external or nondeterministic invocation.
   an external system did not accept a request. Provider rejection and unknown
   outcome must map to distinct declared errors where the provider permits that
   distinction.
-- Provider idempotency remains an explicit part of the Action input/contract.
-  A direct or browser caller chooses its key. Reaction or Job derives and
-  reuses one stable Effect Identity. QUESTPIE never claims the provider honored
-  it and preserves explicit ambiguity when reliable receipt lookup is absent.
+- Effect Identity is invocation metadata, not author-controlled domain input.
+  A direct or browser caller supplies it explicitly; a Reaction or ordinary Job
+  can derive it from stable durable identity; `step.action` derives and binds it
+  from Job run plus ordered checkpoint name. The Action handler receives the
+  exact identity as `effect.id`, and checkpoint authors cannot override it.
+  QUESTPIE never claims the provider honored that identity and preserves
+  explicit ambiguity when reliable receipt lookup is absent.
 - Reaction's beta.1 callback-shaped effect adapter is a compatibility bridge,
   not a second public effect system. The Action slice must route authored
   external effects through generated Actions and narrow or internalize that
@@ -161,14 +164,47 @@ export const publishArticle = defineJob({
 });
 ```
 
-The prototypes settle both open spelling questions. `version` is required for
-every Job so ordinary and checkpointed work remain one Definition shape; an
-ordinary Job pays no checkpoint storage or replay protocol merely because it
-has a semantic version. `signals` is an optional closed structural map. Its
-keys contextually type `waitForSignal`, while the checkpoint name remains a
-separate stable ordered identity. This uniform spelling can be overturned only
-if measured authoring friction justifies compiler materialization of version 1
-without weakening stored identity, digest, or version behavior.
+The candidate chooses `version` on every Job so ordinary and checkpointed work
+remain one Definition shape; an ordinary Job pays no checkpoint storage or
+replay protocol merely because it has a semantic version. `signals` is an
+optional closed structural map. Its keys contextually type `waitForSignal`,
+while the checkpoint name remains a separate stable ordered identity. The
+prototype proves this spelling is coherent, not that its authoring friction is
+already measured. Compiler materialization of version 1 remains a permissible
+implementation simplification if measurement shows a real cost without
+weakening stored identity, digest, or version behavior.
+
+## Compared interfaces
+
+`alternatives-prototype.ts` compiles all three materially different KISS
+surfaces. None is dismissed as impossible; the choice follows the product
+boundary:
+
+| Surface           | Resources/factories | Definition/handler shapes | Promotion from ordinary work                         |
+| ----------------- | ------------------- | ------------------------- | ---------------------------------------------------- |
+| one unified Job   | 1 / 1               | 1 / 1                     | start using the closed `step` helper                 |
+| separate Workflow | 2 / 2               | 2 / 2                     | replace Resource, factory, projection, and handler   |
+| explicit Job mode | 1 / 1               | 2 / 2                     | change the discriminant and contextual handler shape |
+
+The separate Workflow shape is the incumbent and gives the strongest nominal
+separation, but duplicates public identity and generated projection over the
+same worker and durable state. The mode union correctly rejects mixed
+combinations, but makes a capability increase into a Definition-shape change.
+The unified Job keeps one meaning: accepted background work may use zero or
+more closed durable commands. Runtime history, not an author-selected mode,
+records whether checkpoints exist.
+
+## Authority projection boundary
+
+The executable scan discovers 43 current authority files containing the broad
+word `Workflow`/`Workflows` or `defineWorkflow`. `PROJECTION.json` classifies 40
+for post-PASS projection and three as ordinary lowercase process-language
+exemptions: the schema workflow in the docs index, compiler workflow in the
+data grammar, and repair workflow in schema lifecycle. A benign exemption is
+rejected if its bytes contain a durable Workflow product marker. Accepted proof
+artifacts and raw review records outside this current-authority universe remain
+historical evidence; the later authority projection must supersede their
+current conclusions without rewriting the reviewed bytes.
 
 ## Ownership
 
@@ -200,9 +236,11 @@ Ratification requires one focused proof that:
    and incompatible command-digest refusal;
 3. keeps checkpoint name separate from typed signal name and admits no
    arbitrary callback checkpoint;
-4. compares this one-Job surface with a separate Workflow Resource and an
-   explicit Job mode/builder; and
-5. receives one fresh stateless Opus-medium `PASS` before ADR, glossary,
+4. compiles and compares this one-Job surface with a separate Workflow Resource
+   and an explicit Job mode/builder;
+5. classifies every Workflow-bearing current-authority file and rejects both an
+   omitted marker-invisible file and a false-benign product exemption; and
+6. receives one fresh stateless Opus-medium `PASS` before ADR, glossary,
    public-doc, gate, and implementation-ticket projection.
 
 The model proves that the contract is coherent; it does not claim that the

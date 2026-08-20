@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { runInNewContext } from "node:vm";
 
 type Projection = Readonly<{
@@ -11,6 +13,7 @@ type Projection = Readonly<{
 		forbiddenContext: string[];
 		automaticRetry: boolean;
 		durableEffectIdentityOwner: string;
+		effectIdentity: Readonly<Record<string, string | boolean>>;
 		providerGuarantee: string;
 	}>;
 	job: Readonly<{
@@ -29,6 +32,10 @@ type Projection = Readonly<{
 		scheduleRemoval: string;
 	}>;
 	clientBoundary: Readonly<Record<string, string>>;
+	workflowAuthority: Readonly<{
+		projection: string[];
+		benignExemptions: Array<Readonly<{ path: string; reason: string }>>;
+	}>;
 	rejectedAlternatives: string[];
 }>;
 
@@ -42,6 +49,8 @@ type ModelState = Readonly<{
 	executable: string;
 	commandDigest: string;
 	steps: Readonly<Record<string, string>>;
+	signal: string | null;
+	effectIdentity: string | null;
 	history: string[];
 	last: Readonly<{ ok: boolean; message: string }>;
 }>;
@@ -95,6 +104,70 @@ const REQUIRED_REJECTIONS = [
 	"separate cron or scheduler Resource",
 ] as const;
 
+const REPOSITORY_ROOT = resolve(
+	dirname(fileURLToPath(import.meta.url)),
+	"../../../..",
+);
+
+const WORKFLOW_WORD = /\bworkflows?\b/i;
+const WORKFLOW_PRODUCT_MARKERS = [
+	/defineWorkflow/,
+	/\bDurable Workflow\b/,
+	/\bWorkflow (?:Resource|Checkpoint|client|history|attempt|step|product|authoring|semantics|commands|integration|breadth|publication|evolution)\b/,
+	/\bJob\/Workflow\b/,
+	/\bJob, Reaction, and Workflow\b/,
+	/\bWorkflows\b/,
+] as const;
+
+const REQUIRED_WORKFLOW_PROJECTION = [
+	"CONTEXT.md",
+	"HANDOFF.md",
+	"SPEC.md",
+	"apps/docs/content/docs/v4/beta1-release.mdx",
+	"apps/docs/content/docs/v4/durable-reactions.mdx",
+	"docs/adr/0003-studio-is-the-operational-application-surface.md",
+	"docs/adr/0004-prove-one-tracer-before-capability-breadth.md",
+	"docs/adr/0009-bind-executable-definitions-from-the-current-app-contract.md",
+	"docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+	"docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+	"docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+	"docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+	"docs/adr/0021-slice-the-beta-one-release.md",
+	"docs/adr/0022-freeze-api-ergonomics-and-operation-projection.md",
+	"docs/adr/README.md",
+	"docs/v4/beta1-build-spec.md",
+	"docs/v4/definition-composition.md",
+	"docs/v4/design-fiction/COVERAGE.md",
+	"docs/v4/design-fiction/authorize-with-policy.md",
+	"docs/v4/design-fiction/durable-work.md",
+	"docs/v4/design-fiction/index.md",
+	"docs/v4/design-fiction/limits-and-guarantees.md",
+	"docs/v4/design-fiction/routes-actions-and-integrations.md",
+	"docs/v4/design-fiction/run-and-deploy.md",
+	"docs/v4/design-fiction/studio-and-debugging.md",
+	"docs/v4/documentation-plan.md",
+	"docs/v4/executable-definition-compiler.md",
+	"docs/v4/implementation-gates.md",
+	"docs/v4/lifecycle-jobs-and-shared-durable-kernel.md",
+	"docs/v4/multi-instance-and-optional-acceleration.md",
+	"docs/v4/product-area-matrix.md",
+	"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+	"docs/v4/query-mutation-and-lifecycle.md",
+	"docs/v4/questpie-v4-vision-for-martin.md",
+	"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+	"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+	"docs/v4/runtime-client-envelope-and-studio.md",
+	"docs/v4/semantic-kernels-and-public-surface.md",
+	"docs/v4/transactional-dispatch-and-reaction.md",
+	"docs/v4/visuals/architecture.html",
+] as const;
+
+const REQUIRED_WORKFLOW_EXEMPTIONS = [
+	"apps/docs/content/docs/v4/index.mdx",
+	"docs/v4/data-model-and-query-grammar.md",
+	"docs/v4/schema-lifecycle.md",
+] as const;
+
 function exactMembers(
 	actual: string[],
 	expected: readonly string[],
@@ -105,6 +178,75 @@ function exactMembers(
 		expected.some((member) => !actual.includes(member))
 	)
 		throw new Error(`${label} is incomplete`);
+}
+
+function listFiles(directory: string, extension: string): string[] {
+	return readdirSync(join(REPOSITORY_ROOT, directory), {
+		withFileTypes: true,
+	}).flatMap((entry) => {
+		const path = join(directory, entry.name);
+		if (entry.isDirectory()) return listFiles(path, extension);
+		return entry.isFile() && path.endsWith(extension) ? [path] : [];
+	});
+}
+
+function currentAuthorityFiles(): string[] {
+	return [
+		"HANDOFF.md",
+		"SPEC.md",
+		"CONTEXT.md",
+		...listFiles("docs/adr", ".md"),
+		...readdirSync(join(REPOSITORY_ROOT, "docs/v4"), {
+			withFileTypes: true,
+		})
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".md"))
+			.map((entry) => `docs/v4/${entry.name}`),
+		...listFiles("apps/docs/content/docs/v4", ".mdx"),
+		...listFiles("docs/v4/design-fiction", ".md"),
+		"docs/v4/prototypes/api-ergonomics-gate/CAPABILITY-MAP.md",
+		"docs/v4/research/framework-api-atlas/DECISION-MAP.md",
+		"docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+		...listFiles("docs/v4/visuals", ".html"),
+	];
+}
+
+function workflowProductMarker(path: string): string | undefined {
+	const source = readFileSync(join(REPOSITORY_ROOT, path), "utf8");
+	return WORKFLOW_PRODUCT_MARKERS.find((marker) => marker.test(source))?.source;
+}
+
+function hasWorkflowSurface(source: string): boolean {
+	return WORKFLOW_WORD.test(source) || source.includes("defineWorkflow");
+}
+
+export function scanWorkflowAuthority(projection: Projection): string[] {
+	const projected = new Set(projection.workflowAuthority.projection);
+	const benign = new Set(
+		projection.workflowAuthority.benignExemptions.map((item) => item.path),
+	);
+	for (const exemption of projection.workflowAuthority.benignExemptions) {
+		const source = readFileSync(join(REPOSITORY_ROOT, exemption.path), "utf8");
+		if (!exemption.reason || !hasWorkflowSurface(source))
+			throw new Error(`invalid Workflow exemption: ${exemption.path}`);
+		const marker = workflowProductMarker(exemption.path);
+		if (marker)
+			throw new Error(
+				`benign Workflow exemption contains product marker in ${exemption.path}: ${marker}`,
+			);
+	}
+	const paths = [...new Set(currentAuthorityFiles())]
+		.filter((path) =>
+			hasWorkflowSurface(readFileSync(join(REPOSITORY_ROOT, path), "utf8")),
+		)
+		.sort();
+	const uncovered = paths.filter(
+		(path) => !projected.has(path) && !benign.has(path),
+	);
+	if (uncovered.length)
+		throw new Error(
+			`Workflow-bearing current authority missing from projection: ${uncovered.join(", ")}`,
+		);
+	return paths;
 }
 
 export function validateProjection(projection: Projection): void {
@@ -147,6 +289,12 @@ export function validateProjection(projection: Projection): void {
 		projection.action.automaticRetry !== false ||
 		projection.action.durableEffectIdentityOwner !==
 			"Reaction or Job checkpoint" ||
+		projection.action.effectIdentity.directInvocation !==
+			"explicit caller metadata" ||
+		projection.action.effectIdentity.checkpointInvocation !==
+			"derived from Job run and ordered checkpoint name" ||
+		projection.action.effectIdentity.handlerAccess !== "effect.id" ||
+		projection.action.effectIdentity.authorOverride !== false ||
 		projection.action.providerGuarantee !==
 			"explicit idempotency and receipt contract; ambiguity remains when outcome cannot be proved"
 	)
@@ -191,6 +339,24 @@ export function validateProjection(projection: Projection): void {
 		projection.clientBoundary.job !== "no generic browser control plane"
 	)
 		throw new Error("client boundary is invalid");
+
+	const workflowPaths = scanWorkflowAuthority(projection);
+	exactMembers(
+		projection.workflowAuthority.projection,
+		REQUIRED_WORKFLOW_PROJECTION,
+		"Workflow authority projection",
+	);
+	exactMembers(
+		projection.workflowAuthority.benignExemptions.map((item) => item.path),
+		REQUIRED_WORKFLOW_EXEMPTIONS,
+		"benign Workflow exemptions",
+	);
+	if (
+		workflowPaths.length !==
+		projection.workflowAuthority.projection.length +
+			projection.workflowAuthority.benignExemptions.length
+	)
+		throw new Error("Workflow authority classification is not exact");
 	exactMembers(
 		projection.rejectedAlternatives,
 		REQUIRED_REJECTIONS,
@@ -282,6 +448,10 @@ export function validateModel(): void {
 		"Action receipt was not recovered",
 	);
 	assert(
+		recovered.effectIdentity === "job-run-1/step:publish",
+		"Action checkpoint did not derive stable Effect Identity",
+	);
+	assert(
 		recovered.history.some((item) => item.includes("outcome is ambiguous")),
 		"unknown provider outcome was collapsed",
 	);
@@ -320,6 +490,29 @@ export function validateModel(): void {
 		incompatible.last.message.includes("digest changed"),
 		"incompatible replay did not name the changed digest",
 	);
+
+	const incompatibleVersion = execute(machine, [
+		"accept-manual",
+		"claim",
+		"mutation-step",
+		"crash",
+		"change-executable",
+		"claim-incompatible",
+		"change-version",
+		"claim-incompatible",
+	]);
+	assert(incompatibleVersion.run === "ready", "incompatible Job was claimed");
+	assert(incompatibleVersion.version === 2, "semantic version did not change");
+	assert(
+		incompatibleVersion.history.some((item) =>
+			item.includes("executable bytes are unavailable"),
+		),
+		"missing compatible executable was not refused independently",
+	);
+	assert(
+		incompatibleVersion.last.message.includes("semantic version changed"),
+		"changed semantic version was not refused independently",
+	);
 }
 
 export function validateTypeSurface(): void {
@@ -336,11 +529,31 @@ export function validateTypeSurface(): void {
 		"run.step.action(",
 		'run.step.waitForSignal("approval-gate", {',
 		'signal: "approval"',
+		"effectKey: effect.id",
+		"@ts-expect-error The checkpoint derives Effect Identity",
 		"@ts-expect-error Action owns no transaction/data facade.",
 		"@ts-expect-error No signal name exists",
 	])
 		if (!source.includes(marker))
 			throw new Error(`type proof marker is missing: ${marker}`);
+}
+
+export function validateAlternativeSurfaces(): void {
+	const source = readFileSync(
+		new URL("./alternatives-prototype.ts", import.meta.url),
+		"utf8",
+	);
+	for (const marker of [
+		"defineUnifiedJob",
+		"defineSeparateJob",
+		"defineSeparateWorkflow",
+		"defineModeJob",
+		"resourceKinds: 2",
+		"definitionShapes: 2",
+		"promotion changes the Definition shape",
+	])
+		if (!source.includes(marker))
+			throw new Error(`alternative-surface marker is missing: ${marker}`);
 }
 
 if (import.meta.main) {
@@ -350,7 +563,9 @@ if (import.meta.main) {
 	validateProjection(projection);
 	validateModel();
 	validateTypeSurface();
+	validateAlternativeSurfaces();
+	const workflowPaths = scanWorkflowAuthority(projection);
 	console.log(
-		"BETA.2 execution breadth: Action + one Job/cron/checkpoint contract is coherent across projection, type surface, and five executable model scenarios",
+		`BETA.2 execution breadth: Action + one Job/cron/checkpoint contract is coherent across three compiled interfaces, six executable model scenarios, and ${workflowPaths.length} classified Workflow-bearing authority files`,
 	);
 }
