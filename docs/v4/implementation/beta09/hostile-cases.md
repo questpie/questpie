@@ -207,8 +207,16 @@ to ship.
 ## 6. Typed concurrent command winner
 
 **Asserts:** two concurrent maintenance commands against one run elect exactly
-one winner through Studio's surface, and the loser receives a typed
-`VERSION_MISMATCH` carrying the run's current version.
+one winner, and the loser receives a typed `VERSION_MISMATCH` carrying the run's
+current version.
+
+**"Through Studio's surface" was removed after the descope.** `65643c1c` deleted
+`apps/studio/`, so the surface this case named no longer exists. The substance is
+untouched and is now the second clause of the slice's own red test — "a fenced
+loser cannot learn the current version needed to recover" (`QUEUE.json`) — so
+this case carries a red-test clause rather than a Studio property. The surface it
+drives is the in-process maintenance API,
+`createPostgresDurableMaintenance` (`packages/runtime/src/durable/index.ts:34`).
 
 **Falsification against unrepaired code:** the single-winner half already
 holds — BETA-08 drives it at the kernel, fencing on `event_sequence`. The half
@@ -218,10 +226,15 @@ that fails is the loser's payload. `DurableMaintenanceOutcome` returns
 the loser can re-issue from what it received fails, because it must call
 `inspect()` again — a second round trip and a second chance to race.
 
-Take care that this test proves the Studio surface rather than re-proving the
-kernel. BETA-08 already owns single-winner election; the new content here is
-that the property survives the projection, and that the loser is handed enough
-to act.
+Take care that this test proves the **maintenance outcome** rather than
+re-proving the kernel. BETA-08 already owns single-winner election, fencing on
+`event_sequence`; the new content is only that the loser is handed enough to act.
+An earlier revision said the new content was "that the property survives the
+projection" — that was the Studio projection, and with it gone the whole of this
+case is the payload. Re-verified the falsification against the current tree:
+`DurableMaintenanceOutcome` (`packages/runtime/src/durable/postgres-maintenance.ts:28`–`:35`)
+carries `commandId`, `command`, `outcome`, `rejectionCode`, `stateBefore` and
+`stateAfter`, and no field naming a version.
 
 ## What this inventory changes elsewhere
 
