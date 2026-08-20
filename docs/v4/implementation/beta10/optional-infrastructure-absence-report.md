@@ -22,7 +22,7 @@ PostgreSQL remains semantic authority:
 - reconciliation reads and advances one PostgreSQL horizon in a Repeatable
   Read transaction (`packages/runtime/src/live-query/postgres.ts:169`–`:256`);
 - durable admission reads eligible rows and executable digests from PostgreSQL
-  (`packages/runtime/src/durable/postgres-kernel.ts:473`–`:504`); and
+  (`packages/runtime/src/durable/postgres-kernel.ts:357`–`:393`); and
 - absence or loss of a wake hint is repaired by the startup scan, whose `start()`
   immediately calls `requestScan()` (`packages/runtime/src/live-query/postgres-wake.ts:109`–`:123`).
 

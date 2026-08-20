@@ -30,7 +30,7 @@ export type {
 	DurableRunState,
 	DurableRunView,
 	DurableTransition,
-} from "./postgres-kernel";
+} from "./rows";
 export { createPostgresDurableMaintenance } from "./postgres-maintenance";
 export type {
 	DurableMaintenance,

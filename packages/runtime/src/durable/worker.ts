@@ -14,14 +14,10 @@ import {
 } from "./effects";
 import type { DurableEffectLedger } from "./postgres-effects";
 import type {
-	DurableClaim,
-	DurableFailureCode,
-	DurableKernel,
-} from "./postgres-kernel";
-import type {
 	LinkedReactionMember,
 	LinkedReactionProjection,
 } from "./projection";
+import type { DurableClaim, DurableFailureCode, DurableKernel } from "./rows";
 
 export type DurableAttemptHandle = Readonly<{
 	number: number;

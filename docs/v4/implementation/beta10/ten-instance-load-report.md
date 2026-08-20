@@ -32,9 +32,16 @@ the unit test injects the failure before accepting the retry.
 
 The first concurrent worker run then exposed `40001` losers in cancellation
 reaping and claiming. Those paths now treat only that exact PostgreSQL error as
-no work for this poll (`packages/runtime/src/durable/postgres-kernel.ts:420`–`:466`
-and `:522`–`:650`); every other error still escapes. The hostile test injects
+no work for this poll (`packages/runtime/src/durable/postgres-kernel.ts:309`–`:356`
+and `:395`–`:580`); every other error still escapes. The hostile test injects
 both losers.
+
+The added backend paths initially exceeded the accepted 512 KiB application
+bundle ratchet. The compiler now enables Bun syntax minification in addition to
+whitespace minification (`packages/compiler/src/runtime/application-bundle.ts:22`–`:32`),
+while the unchanged 524,288-byte assertion remains enforced
+(`tests/unit/beta07-live-query-projection.test.ts:252`–`:264`). This preserves
+the quality boundary instead of raising it.
 
 ## Scope
 

@@ -481,7 +481,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			digest: runtimeBuild.realtimeWireDigest,
 		});
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
-			"observer:facts.liveQueryObservation??undefined",
+			"observer:facts.liveQueryObservation??void 0",
 		);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });

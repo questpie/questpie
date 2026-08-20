@@ -1,7 +1,7 @@
 import type { SQL } from "bun";
 
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
-import type { DurableClaim } from "./postgres-kernel";
+import type { DurableClaim } from "./rows";
 import {
 	appendDurableRunEvent,
 	durableText,

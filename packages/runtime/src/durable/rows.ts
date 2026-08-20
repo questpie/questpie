@@ -15,6 +15,121 @@ export type DurableActor = Readonly<{
 	id: string;
 }>;
 
+export type DurableRunState =
+	| "cancelled"
+	| "delayed"
+	| "failed"
+	| "ready"
+	| "running"
+	| "succeeded";
+
+export type DurableFailureCode =
+	| "EFFECT_AMBIGUOUS"
+	| "EFFECT_CONFLICT"
+	| "HANDLER_FAILED"
+	| "REACTION_ERROR"
+	| "RESOURCE_LIMIT"
+	| "RETRY_EXHAUSTED"
+	| "RUN_AS_DENIED"
+	| "VALIDATION_FAILED";
+
+export type DurableClaim = Readonly<{
+	runId: string;
+	dispatchId: string;
+	resource: string;
+	attemptId: string;
+	attemptNumber: number;
+	leaseToken: string;
+	leaseMilliseconds: number;
+	leaseExpiresAt: Date;
+	deadlineAt: Date;
+	workerId: string;
+	tenantId: string;
+	principal: Readonly<{ kind: DurablePrincipalKind; id: string }>;
+	contextInputBytes: Uint8Array;
+	payloadBytes: Uint8Array;
+	retry: LinkedReactionRetry;
+	runtimeBuildDigest: string;
+	executableDigest: string;
+	causationId: string;
+	correlationId: string;
+	cancellationRequested: boolean;
+}>;
+
+export type DurableAdmission = Readonly<{
+	runId: string;
+	resource: string;
+	executableDigest: string;
+}>;
+
+export type DurableClaimOutcome =
+	| Readonly<{ status: "claimed"; claim: DurableClaim }>
+	| Readonly<{ status: "skipped" }>
+	| Readonly<{ status: "refused"; code: "EXECUTABLE_RETIRED" }>;
+
+export type DurableHeartbeat = Readonly<{
+	status: "fenced" | "held";
+	cancellationRequested: boolean;
+	deadlineExpired: boolean;
+}>;
+
+export type DurableTransition = Readonly<{
+	status: "applied" | "fenced";
+	state: DurableRunState | null;
+	deadLetter: boolean;
+}>;
+
+export type DurableRunView = Readonly<{
+	runId: string;
+	/** The append-only history length: the run version a command may fence on. */
+	version: number;
+	dispatchId: string;
+	resource: string;
+	state: DurableRunState;
+	attemptCount: number;
+	currentAttemptId: string | null;
+	cancellationRequested: boolean;
+	deadLetter: boolean;
+	failureCode: string | null;
+	resultBytes: Uint8Array | null;
+	availableAt: Date;
+	terminalAt: Date | null;
+}>;
+
+export type DurableRunEventView = Readonly<{
+	sequence: number;
+	kind: string;
+	attemptId: string | null;
+	leaseTokenDigest: string | null;
+	errorCode: string | null;
+}>;
+
+export interface DurableKernel {
+	readonly application: string;
+	admit(batch?: number): Promise<readonly DurableAdmission[]>;
+	reapCancelled(limit?: number): Promise<number>;
+	claim(
+		input: Readonly<{
+			runId: string;
+			workerId: string;
+			leaseMilliseconds?: number;
+			attemptDeadlineMilliseconds?: number;
+		}>,
+	): Promise<DurableClaimOutcome>;
+	heartbeat(claim: DurableClaim): Promise<DurableHeartbeat>;
+	succeed(
+		claim: DurableClaim,
+		resultBytes: Uint8Array,
+	): Promise<DurableTransition>;
+	fail(
+		claim: DurableClaim,
+		failure: Readonly<{ code: DurableFailureCode }>,
+	): Promise<DurableTransition>;
+	cancel(claim: DurableClaim): Promise<DurableTransition>;
+	inspect(runId: string): Promise<DurableRunView | null>;
+	events(runId: string): Promise<readonly DurableRunEventView[]>;
+}
+
 /**
  * The durable kernel opts every one of its own transactions into the
  * `questpie_internal` guard. Application and worker statements that never call

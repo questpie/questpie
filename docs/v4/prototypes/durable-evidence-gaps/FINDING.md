@@ -253,12 +253,12 @@ batch. Both fail against the tree today, which is the point.
 
 **BETA-10 resolution of §5.** The two poison classes are now closed at their
 different correct seams. Admission filters executable digests before its
-tenant-fair order and `LIMIT` (`packages/runtime/src/durable/postgres-kernel.ts:473`–`:504`),
+tenant-fair order and `LIMIT` (`packages/runtime/src/durable/postgres-kernel.ts:357`–`:393`),
 so an incompatible run remains durable for an old compatible worker without
 occupying a new worker's batch. A run whose worker died after the last allowed
 claim is terminalized as `failed / RETRY_EXHAUSTED`, its outstanding attempt is
 settled, and one append-only `failed` event is written without creating a ninth
-attempt (`:547`–`:590`). The PostgreSQL falsification at
+attempt (`packages/runtime/src/durable/postgres-kernel.ts:436`–`:480`). The PostgreSQL falsification at
 `tests/integration/postgres/beta08-durable-kernel.test.ts:315`–`:364` asserts
 the terminal state and that a later admission no longer returns the run.
 
