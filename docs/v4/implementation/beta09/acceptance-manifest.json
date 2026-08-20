@@ -2,10 +2,10 @@
 	"protocolVersion": 2,
 	"ticket": "#296",
 	"proof": "BETA-09 closes the backend maintenance-compatibility gap without shipping Studio: the generated App requires a host-owned maintenance Authority decision, every durable command carries a bounded audited reason, stale callers receive the settled winner version, and questpie.internal.v5 upgrades the append-only audit catalog from v4 without accepting checksum drift.",
-	"diffBase": "87d3c48fde3eb45789258d5289df1853537a9391",
+	"diffBase": "cc4192b20f291a60f887b35d2ac45fb8394b6cf9",
 	"reviewOutput": "docs/v4/implementation/beta09/REVIEW-BACKEND-02.json",
 	"authorityHeads": {
-		"accepted feat/v4 base": "87d3c48fde3eb45789258d5289df1853537a9391",
+		"accepted feat/v4 base": "cc4192b20f291a60f887b35d2ac45fb8394b6cf9",
 		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
 	},
 	"authorityDocuments": [
