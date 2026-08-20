@@ -6,11 +6,8 @@
 	"reviewOutput": "docs/v4/prototypes/beta2-execution-breadth/REVIEW.json",
 	"authorityHeads": {
 		"accepted feat/v4 base including core Channel removal": "0587b69b78836eb8fb55867d1a279308f2617ef0",
-		"P17 Route and Auth reviewed input": "7211bd3c8a9cdbe131b026874d4441f3ccb39c9d",
-		"P17 Route and Auth acceptance evidence": "79d3667019e0a4cda6f7652d24f2d9c6b68d4fca",
-		"P18 durable kernel reviewed input": "fa2960083c94f824d7c0f4d005a9aec01babb978",
-		"P18 durable kernel acceptance evidence": "71463e99a70481b0950ae18d1ff409c034c1b158",
-		"core Channel removal acceptance candidate": "ed0dfa7c59e6132a26cc1adaa500ec200ad911c8"
+		"accepted P14 authority snapshot containing ADR-0015 ADR-0016 and ADR-0019": "c740c1d20fc1b2a3a7c8b780fa4e9a7f8aba6c5d",
+		"core Channel removal authority projection": "62e929c5f52ce67160cdf57b47f5a9f3fe1c7f96"
 	},
 	"authorityDocuments": [
 		{
@@ -32,6 +29,11 @@
 			"name": "canonical language",
 			"path": "CONTEXT.md",
 			"sha256": "ff2ee6623cb77d3b8086e67ff04829e1cc7d75f559ba35993989e5f65c4ca23d"
+		},
+		{
+			"name": "accepted proof history including branch-only P17 and P18 heads",
+			"path": "docs/v4/research/framework-api-atlas/PROOF-MAP.md",
+			"sha256": "2dd5e17150e5c0a7bcf16146babd77da0000dae32f705fcff54d654967140b21"
 		},
 		{
 			"name": "accepted Transactional Dispatch and Reaction decision",
