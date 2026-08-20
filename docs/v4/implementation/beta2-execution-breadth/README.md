@@ -19,6 +19,11 @@ not progress.
 
 ## Dependency order
 
+The correctness, PostgreSQL, and later authoring/editor DX ordering is recorded
+in [`DX-PASSES.md`](./DX-PASSES.md). In particular, Operation admission and the
+production PostgreSQL connection seam precede new Route, Action, and Job
+Runtime bindings; client/editor sugar follows the runnable backend.
+
 ```text
 EB-00 accepted authority (done)
   -> EB-01 remove superseded Workflow bytes
@@ -50,6 +55,8 @@ Status: complete at `521c05d0`.
   ADR-0013 committed-fact Resource.
 
 ## EB-01 — Remove superseded Workflow bytes
+
+Status: complete at `1f0a7903`.
 
 Red test:
 
