@@ -402,7 +402,8 @@ deferred and lost.
 rest.** The tenant-share record files pool slots under "the host owns the pool |
 non-goal for beta.1". That is right about _sizing_ — the framework takes `SQL`
 as a type-only import and never constructs the pool. It is not about the _wait_:
-`mutation/postgres.ts:173` is `await pool.reserve()` with no signal, armed after
+`packages/runtime/src/mutation/postgres.ts:173` is `await pool.reserve()` with
+no signal, armed after
 the 5,000 ms budget at `:159`, and `relational/postgres.ts:31`,`:34` are the
 same shape. That is framework code declining to wire an abort it already holds,
 which the non-goal does not reach.

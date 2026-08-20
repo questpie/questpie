@@ -116,7 +116,7 @@ index supplies its order and it top-N sorts every expired lease. The 0.42 ms
 conclusion survives; the mechanism claim does not hold for the third branch.
 
 **5. CLOSED — three readers named in the gate record.**
-Verified `mutation/postgres.ts:336` before `COMMIT` and
+Verified `packages/runtime/src/mutation/postgres.ts:336` before `COMMIT` and
 `mutation/collection.ts:199`, `:202` sandwiching the await. All three are
 wall-clock assertions around an uninterruptible await. Original below, unedited.
 
@@ -128,7 +128,8 @@ assertions around an uninterruptible await, so the gate's conclusion holds, but
 an implementer needs to know there are three to reconcile.
 
 **6. CLOSED — recorded as a gap, not a record defect.**
-Verified `pool.reserve()` at `mutation/postgres.ts:173` takes no signal and runs
+Verified `pool.reserve()` at `packages/runtime/src/mutation/postgres.ts:173`
+takes no signal and runs
 after the budget is armed at `:159`, and `reserveConnection`
 (`relational/postgres.ts:29`–`:36`) is the same shape. Recorded in
 `durable-evidence-gaps/FINDING.md` §7 with a falsification. The tenant-share

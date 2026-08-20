@@ -83,10 +83,11 @@ Three resolutions are visible and each belongs to a different owner:
   `packages/runtime/src/mutation/collection.ts:141` — all pass the value through
   rather than branching on it, and every other site forwards the whole object.
   The lower layer already types it `"ordinary" | "system"`
-  (`relational/query.ts:132`).
+  (`packages/runtime/src/relational/query.ts:132`).
 
   One detail worth noticing: `authorityKind` is already carried as a scope value
-  into the query cursor (`relational/query.ts:372`, `relational/cursor.ts:27`,
+  into the query cursor (`packages/runtime/src/relational/query.ts:372`,
+  `packages/runtime/src/relational/cursor.ts:27`,
   `:113`), so a result computed under one Authority class cannot be served to
   the other. The plumbing anticipated a second class; only the type and the
   constructor did not.
