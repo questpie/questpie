@@ -160,7 +160,28 @@ operator path end to end rather than from a known identity.
 ## 5. Maintenance Authority denial
 
 **Asserts:** a caller without maintenance Authority is refused, the refusal is
-typed, and the attempt is recorded in the append-only audit.
+typed, the attempt is recorded in the append-only audit, **and no row was locked
+or mutated before the refusal**.
+
+**That last clause was added to match the re-scoped red test, and it is not
+redundant.** `QUEUE.json` now states the red test as "a caller without
+maintenance Authority can lock or mutate a run before denial, and a fenced loser
+cannot learn the current version needed to recover". An assertion that only
+checks the outcome is a denial would pass against a repair that evaluates
+Authority _after_ taking the row lock — the outcome would be correct and the run
+would still have been locked by a caller with no right to it. That is the shape
+this project keeps blocking rounds for: a test satisfied by something other than
+what it claims.
+
+**The current ordering makes the stronger assertion cheap rather than
+structural.** `actorOf(request.actor)` runs at
+`packages/runtime/src/durable/postgres-maintenance.ts:200`, _before_ the
+`transaction(...)` callback opens at `:201` and `lockRun` runs at `:202`; the
+same shape repeats at `:281`–`:283`. So replacing the brand check with an
+Authority decision at `actorOf` denies before any transaction begins, and the
+added clause is satisfied by the repair case 5 already requires. Written down
+because the ordering is what makes it free, and a repair placed inside the
+transaction instead would satisfy the old assertion and fail the red test.
 
 **Falsification against unrepaired code:** the command applies. `actorOf`
 checks only `principalKernel.is(actor)`
