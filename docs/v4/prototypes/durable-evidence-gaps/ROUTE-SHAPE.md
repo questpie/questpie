@@ -125,6 +125,10 @@ a Principal:
 1. **Shape the reads as Mutations.** `MutationContext` has the facts today and
    needs no contract change. Rejected: it opens a transaction for a read and puts
    operator reads in the mutation projection, which misrepresents them.
+   **That rejection is now grounded rather than asserted.** ADR-0011:27 does not
+   merely permit a transaction, it requires one — "Mutation … owns exactly one
+   PostgreSQL transaction" — so shaping a read as a Mutation opens a transaction
+   by contract, not by accident.
 2. **Widen `QueryContext` to carry the resolved Execution facts.** This is the
    smallest change that makes the superseded decision buildable, and it is the
    same ADR-level widening already named above as the overturning condition for
@@ -166,12 +170,24 @@ a Principal:
    that positively specifies what a Query receives. The code cost traced above
    stands and is now the least interesting part of the decision.
 
-   Note what the ADR does _not_ say: it forbids obtaining **System** Authority
-   through the Context, not carrying an ordinary resolved Principal. An amendment
-   that added `principal` without touching the System Authority prohibition would
-   be a narrower change than replacing the sentence — but it is still an
-   amendment, and ADR-0019:68 means per-kind context differences are load-bearing
-   rather than incidental.
+   Note what the ADR does _not_ say, checked by reading the whole passage rather
+   than the clause that suited the argument. It forbids obtaining **System**
+   Authority through the Context, not carrying an ordinary resolved Principal.
+   And its "cannot … access a database or raw SQL handle" is not a bar on
+   framework-performed SQL: the Mutation sentence carries the same prohibition
+   five lines later — "no raw transaction handle" (`:32`) — while a Mutation
+   plainly does perform SQL. Both clauses forbid the **handler** holding a
+   handle, not the engine reading on its behalf. An inspection read exposed as a
+   generated, bounded accessor is not excluded on that ground, and I nearly
+   recorded that it was.
+
+   **What the passage does constrain is singular, and that simplifies the
+   amendment.** `:23` specifies what a Query receives — "a generated read-only
+   `ctx.data`" — so the resolved Principal **and** a durable read accessor both
+   sit outside it. That is not two amendment questions but one: whether a
+   Query's context may carry anything beyond `ctx.data`. ADR-0019:68 makes the
+   answer load-bearing rather than incidental, since per-kind contexts are
+   preserved by design.
 
 3. **The durable route**, the alternative this record weighed.
 
