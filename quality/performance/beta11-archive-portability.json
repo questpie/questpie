@@ -1,0 +1,24 @@
+{
+	"id": "beta11-archive-portability",
+	"kind": "micro",
+	"schedule": "selected-pr",
+	"command": ["bun", "test", "tests/performance/beta11-archive.test.ts"],
+	"budgetOwner": "BETA-11",
+	"metrics": {
+		"compileMs": {
+			"direction": "max",
+			"budget": 5000,
+			"unit": "ms"
+		},
+		"generatedBytes": {
+			"direction": "max",
+			"budget": 1048576,
+			"unit": "bytes"
+		},
+		"typescriptInstantiations": {
+			"direction": "max",
+			"budget": 125000,
+			"unit": "count"
+		}
+	}
+}

@@ -1,0 +1,52 @@
+{
+	"format": "questpie.performance-baseline",
+	"version": 1,
+	"scenario": "beta11-archive-portability",
+	"budgetOwner": "BETA-11",
+	"toolchain": {
+		"bun": "1.3.14",
+		"typescript": "6.0.2"
+	},
+	"reference": {
+		"platform": "linux-x64",
+		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
+		"runnerClass": "reference-local",
+		"recordedAt": "2026-08-20",
+		"samples": 3,
+		"aggregation": "median by compileMs"
+	},
+	"evidence": {
+		"localBaseline": "PASS",
+		"selectedPr": "PENDING_CI",
+		"taggedStableRunner": "PENDING"
+	},
+	"samples": {
+		"compileMs": [1815.059006, 1682.9732060000001, 1719.4365810000002]
+	},
+	"observed": {
+		"compileMs": 1719.4365810000002,
+		"typecheckMs": 1309.781659,
+		"generatedBytes": 751190,
+		"publicDeclarationBytes": 59299,
+		"typescriptTypes": 6923,
+		"typescriptInstantiations": 16808,
+		"typescriptMemoryKiB": 107698
+	},
+	"budgetDerivation": {
+		"compileMs": {
+			"referenceObservedMs": 1719.4365810000002,
+			"multiplier": 2.5,
+			"roundUpQuantumMs": 1000
+		},
+		"generatedBytes": {
+			"referenceObservedBytes": 751190,
+			"roundUpPowerOfTwoBytes": 1048576
+		}
+	},
+	"budgets": {
+		"compileMs": 5000,
+		"generatedBytes": 1048576,
+		"typescriptInstantiations": 125000
+	},
+	"status": "PASS"
+}
