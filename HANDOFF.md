@@ -1062,6 +1062,23 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   an owner reading the gate rule as unconditional, in which case content does not
   matter and the revert stands. Formally recording the exception is still the
   owner's, not mine.
+- **The acceptance-verify seam's own trigger has fired and nothing moved.**
+  `.agents/skills/questpie-v4/references/proof.md` describes
+  `bun run review:accept:verify` as the seam letting CI check acceptance
+  evidence without a model account, and says plainly: "it is not yet wired into
+  a workflow, so run it locally after committing a record and wire it into CI
+  when the first v2 record lands on a merged branch."
+  **That record landed.** `docs/v4/implementation/beta08/REVIEW-04.json` is
+  `protocolVersion: 2` with `verdict: PASS`, and BETA-08 is merged at
+  `8389cf5f` (PR #320). All four BETA-08 records are v2; BETA-06 and BETA-07 are
+  all v1, so BETA-08 is exactly the first.
+  `review:accept` appears in **no** file under `.github/workflows/` —
+  `ci.yml` runs `quality:full`, `test:postgres`, `quality:typescript-forward`
+  and `bench:micro`; `release.yml` runs `quality:release` then `release`.
+  So the condition the skill set for itself is met and the wiring is due. **Not
+  building it here** — a new CI job gates every contributor's PR, which is the
+  same reason the docs-example check above is recorded rather than added. Owner
+  call, but the trigger is no longer hypothetical.
 - `owner-decisions.md` states an owner answered its three questions. **That
   attribution cannot be verified from this repository.** Two of the three are
   independently grounded in citations and stand regardless; the attribution still
