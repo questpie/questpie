@@ -7,12 +7,34 @@ interface Query {
 	execute(): Query;
 }
 
-function postgresFixture(options: Readonly<{ failApply?: boolean }> = {}) {
+function postgresFixture(
+	options: Readonly<{
+		failApply?: boolean;
+		serializationFailures?: number;
+	}> = {},
+) {
 	const statements: string[] = [];
 	let released = 0;
+	let serializationFailures = options.serializationFailures ?? 0;
 	const session = {
 		unsafe(statement: string): Query {
 			statements.push(statement);
+			if (
+				statement.startsWith(
+					"INSERT INTO questpie_internal.reconciliation_consumers",
+				) &&
+				serializationFailures > 0
+			) {
+				serializationFailures -= 1;
+				const query = Promise.reject(
+					Object.assign(new Error("concurrent reconciliation"), {
+						errno: "40001",
+					}),
+				) as Promise<readonly Record<string, unknown>[]> & Query;
+				query.cancel = () => query;
+				query.execute = () => query;
+				return query;
+			}
 			const rows = statement.startsWith("SELECT xid_horizon")
 				? [{ priorHorizon: "100", nextHorizon: "102" }]
 				: statement.startsWith("SELECT fact_identity")
@@ -115,4 +137,27 @@ test("rolls back without processing or advancing when recomputation fails", asyn
 	);
 	expect(fixture.statements.at(-1)).toBe("ROLLBACK");
 	expect(fixture.released()).toBe(1);
+});
+
+test("retries a concurrent repeatable-read reconciliation from a fresh transaction", async () => {
+	const fixture = postgresFixture({ serializationFailures: 1 });
+
+	await expect(
+		reconcilePostgresChangeLedger({
+			sql: fixture.sql as never,
+			application: "application:collaboration",
+			consumer: "runtime:primary",
+			apply: () => undefined,
+		}),
+	).resolves.toEqual(
+		expect.objectContaining({ priorHorizon: "100", nextHorizon: "102" }),
+	);
+
+	expect(
+		fixture.statements.filter(
+			(statement) => statement === "BEGIN ISOLATION LEVEL REPEATABLE READ",
+		),
+	).toHaveLength(2);
+	expect(fixture.statements).toContain("ROLLBACK");
+	expect(fixture.released()).toBe(2);
 });

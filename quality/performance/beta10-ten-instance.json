@@ -1,0 +1,44 @@
+{
+	"id": "beta10-ten-instance",
+	"kind": "load",
+	"schedule": "nightly",
+	"command": ["bun", "tests/load/beta10-ten-instance.ts"],
+	"budgetOwner": "BETA-10",
+	"metrics": {
+		"tenInstance40Ms": {
+			"direction": "max",
+			"budget": 15000,
+			"unit": "ms"
+		},
+		"runtimeInstances": {
+			"direction": "min",
+			"budget": 10,
+			"unit": "count"
+		},
+		"directRoots": {
+			"direction": "min",
+			"budget": 20,
+			"unit": "count"
+		},
+		"networkPosts": {
+			"direction": "min",
+			"budget": 20,
+			"unit": "count"
+		},
+		"durableRuns": {
+			"direction": "min",
+			"budget": 40,
+			"unit": "count"
+		},
+		"duplicateAttempts": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		},
+		"drainedWorkerAdmissions": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		}
+	}
+}

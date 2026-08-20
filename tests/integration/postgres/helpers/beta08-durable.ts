@@ -144,6 +144,7 @@ type Beta08Application = Readonly<{
 
 export type Beta08Harness = Readonly<{
 	app: Beta08Application;
+	createSiblingApplication(): Promise<Beta08Application>;
 	fetch(request: Request): Promise<Response>;
 	bindPrincipal(request: Request): Request;
 	wireFrame(
@@ -223,13 +224,19 @@ WHERE datname = pg_catalog.current_database()
 			}>,
 		): Promise<Beta08Application>;
 	}>;
-	const app = await internal.createApplication({
-		postgres: { url: beta05PostgresUrl() },
-		realtime: { hmacKey: new Uint8Array(32).fill(8) },
-		maintenance: {
-			authorize: ({ actor }) => actor.id === beta05Ids.principal,
-		},
-	});
+	const applications = new Set<Beta08Application>();
+	const createApplication = async () => {
+		const application = await internal.createApplication({
+			postgres: { url: beta05PostgresUrl() },
+			realtime: { hmacKey: new Uint8Array(32).fill(8) },
+			maintenance: {
+				authorize: ({ actor }) => actor.id === beta05Ids.principal,
+			},
+		});
+		applications.add(application);
+		return application;
+	};
+	const app = await createApplication();
 	const reactionProjectionBytes = await Bun.file(
 		resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
 	).text();
@@ -250,6 +257,7 @@ WHERE datname = pg_catalog.current_database()
 	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
 	const harness = Object.freeze({
 		app,
+		createSiblingApplication: createApplication,
 		fetch: (request: Request) => app.fetch(request),
 		bindPrincipal: (request: Request) =>
 			internal.bindIngressPrincipalForRequest(request, principal),
@@ -299,7 +307,9 @@ WHERE datname = pg_catalog.current_database()
 	return Object.freeze({
 		harness,
 		dispose: async () => {
-			await app.close();
+			await Promise.allSettled(
+				[...applications].map((application) => application.close()),
+			);
 			await prepared.dispose();
 		},
 	});

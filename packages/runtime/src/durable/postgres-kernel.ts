@@ -46,6 +46,12 @@ const permanentFailureCodes: ReadonlySet<DurableFailureCode> = new Set([
 	"VALIDATION_FAILED",
 ]);
 
+function postgresErrorNumber(error: unknown): string | null {
+	if (!error || typeof error !== "object") return null;
+	const errno = (error as Readonly<{ errno?: unknown }>).errno;
+	return typeof errno === "string" ? errno : null;
+}
+
 export type DurableClaim = Readonly<{
 	runId: string;
 	dispatchId: string;
@@ -412,9 +418,10 @@ WHERE application_name = $1 AND attempt_id = $2`,
 	return Object.freeze<DurableKernel>({
 		application: input.application,
 		async reapCancelled(limit = maximumBatch) {
-			return transaction(async (query) => {
-				const cancelled = await query(
-					`UPDATE questpie_internal.durable_runs
+			try {
+				return await transaction(async (query) => {
+					const cancelled = await query(
+						`UPDATE questpie_internal.durable_runs
 SET state = 'cancelled', current_attempt_id = NULL, lease_token_digest = NULL,
     lease_expires_at = NULL, failure_code = NULL,
     terminal_at = pg_catalog.transaction_timestamp()
@@ -429,30 +436,34 @@ WHERE (application_name, run_id) IN (
 RETURNING run_id::text AS "runId", resource_identity AS "resource",
           dispatch_id::text AS "dispatchId", causation_id AS "causationId",
           correlation_id AS "correlationId"`,
-					[input.application, limit],
-				);
-				for (const row of cancelled) {
-					await query(
-						`UPDATE questpie_internal.durable_attempts
+						[input.application, limit],
+					);
+					for (const row of cancelled) {
+						await query(
+							`UPDATE questpie_internal.durable_attempts
 SET outcome = 'cancelled'
 WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL`,
-						[input.application, durableText(row.runId, "run identity")],
-					);
-					await appendEvent(query, {
-						application: input.application,
-						runId: durableText(row.runId, "run identity"),
-						resource: durableText(row.resource, "Resource Identity"),
-						dispatchId: durableText(row.dispatchId, "dispatch identity"),
-						causationId: durableText(row.causationId, "causation identity"),
-						correlationId: durableText(
-							row.correlationId,
-							"correlation identity",
-						),
-						kind: "cancelled",
-					});
-				}
-				return cancelled.length;
-			});
+							[input.application, durableText(row.runId, "run identity")],
+						);
+						await appendEvent(query, {
+							application: input.application,
+							runId: durableText(row.runId, "run identity"),
+							resource: durableText(row.resource, "Resource Identity"),
+							dispatchId: durableText(row.dispatchId, "dispatch identity"),
+							causationId: durableText(row.causationId, "causation identity"),
+							correlationId: durableText(
+								row.correlationId,
+								"correlation identity",
+							),
+							kind: "cancelled",
+						});
+					}
+					return cancelled.length;
+				});
+			} catch (error) {
+				if (postgresErrorNumber(error) === "40001") return 0;
+				throw error;
+			}
 		},
 		async admit(batch = maximumBatch) {
 			if (!Number.isSafeInteger(batch) || batch < 1 || batch > maximumBatch)
@@ -508,124 +519,135 @@ LIMIT $3`,
 				deadlineMilliseconds > 300_000
 			)
 				throw new TypeError("durable attempt deadline is outside its bound");
-			return transaction(async (query): Promise<DurableClaimOutcome> => {
-				const [row] = await query(
-					`SELECT ${runSelection}
+			try {
+				return await transaction(
+					async (query): Promise<DurableClaimOutcome> => {
+						const [row] = await query(
+							`SELECT ${runSelection}
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
   AND NOT cancellation_requested
   AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
     OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
 FOR UPDATE SKIP LOCKED`,
-					[input.application, request.runId],
-				);
-				if (!row) return Object.freeze({ status: "skipped" as const });
-				const resource = durableText(row.resource, "Resource Identity");
-				const executableDigest = durableText(
-					row.executableDigest,
-					"executable digest",
-				);
-				const reaction = input.reactions.byIdentity.get(resource);
-				if (!reaction || reaction.contractDigest !== executableDigest)
-					return Object.freeze({
-						status: "refused" as const,
-						code: "EXECUTABLE_RETIRED" as const,
-					});
-				const attemptNumber =
-					durableInteger(row.attemptCount, "attempt count") + 1;
-				const retry = decodeRetryBytes(row.retryBytes);
-				if (attemptNumber > retry.maximumAttempts)
-					return Object.freeze({ status: "skipped" as const });
-				const attemptId = crypto.randomUUID();
-				const leaseToken = crypto.randomUUID();
-				const [superseded] = await query(
-					`UPDATE questpie_internal.durable_runs
+							[input.application, request.runId],
+						);
+						if (!row) return Object.freeze({ status: "skipped" as const });
+						const resource = durableText(row.resource, "Resource Identity");
+						const executableDigest = durableText(
+							row.executableDigest,
+							"executable digest",
+						);
+						const reaction = input.reactions.byIdentity.get(resource);
+						if (!reaction || reaction.contractDigest !== executableDigest)
+							return Object.freeze({
+								status: "refused" as const,
+								code: "EXECUTABLE_RETIRED" as const,
+							});
+						const attemptNumber =
+							durableInteger(row.attemptCount, "attempt count") + 1;
+						const retry = decodeRetryBytes(row.retryBytes);
+						if (attemptNumber > retry.maximumAttempts)
+							return Object.freeze({ status: "skipped" as const });
+						const attemptId = crypto.randomUUID();
+						const leaseToken = crypto.randomUUID();
+						const [superseded] = await query(
+							`UPDATE questpie_internal.durable_runs
 SET state = 'running', attempt_count = $3, current_attempt_id = $4,
     lease_token_digest = $5,
     lease_expires_at = pg_catalog.transaction_timestamp() + make_interval(secs => $6::double precision)
 WHERE application_name = $1 AND run_id = $2
 RETURNING lease_expires_at AS "leaseExpiresAt",
           pg_catalog.transaction_timestamp() + make_interval(secs => $7::double precision) AS "deadlineAt"`,
-					[
-						input.application,
-						request.runId,
-						attemptNumber,
-						attemptId,
-						leaseTokenDigest(leaseToken),
-						leaseMilliseconds / 1_000,
-						deadlineMilliseconds / 1_000,
-					],
-				);
-				if (!superseded) throw new TypeError("durable claim lost its run");
-				const previous = await query(
-					`UPDATE questpie_internal.durable_attempts
+							[
+								input.application,
+								request.runId,
+								attemptNumber,
+								attemptId,
+								leaseTokenDigest(leaseToken),
+								leaseMilliseconds / 1_000,
+								deadlineMilliseconds / 1_000,
+							],
+						);
+						if (!superseded) throw new TypeError("durable claim lost its run");
+						const previous = await query(
+							`UPDATE questpie_internal.durable_attempts
 SET outcome = 'leaseSuperseded'
 WHERE application_name = $1 AND run_id = $2 AND attempt_id <> $3 AND outcome IS NULL
 RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDigest"`,
-					[input.application, request.runId, attemptId],
-				);
-				const leaseExpiresAt = durableDate(
-					superseded.leaseExpiresAt,
-					"lease expiry",
-				);
-				const deadlineAt = durableDate(
-					superseded.deadlineAt,
-					"attempt deadline",
-				);
-				await query(
-					`INSERT INTO questpie_internal.durable_attempts
+							[input.application, request.runId, attemptId],
+						);
+						const leaseExpiresAt = durableDate(
+							superseded.leaseExpiresAt,
+							"lease expiry",
+						);
+						const deadlineAt = durableDate(
+							superseded.deadlineAt,
+							"attempt deadline",
+						);
+						await query(
+							`INSERT INTO questpie_internal.durable_attempts
   (application_name, attempt_id, run_id, attempt_number, worker_id, lease_token_digest,
    lease_expires_at, deadline_at, started_at, heartbeat_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
    pg_catalog.transaction_timestamp(), pg_catalog.transaction_timestamp())`,
-					[
-						input.application,
-						attemptId,
-						request.runId,
-						attemptNumber,
-						request.workerId,
-						leaseTokenDigest(leaseToken),
-						leaseExpiresAt,
-						deadlineAt,
-					],
+							[
+								input.application,
+								attemptId,
+								request.runId,
+								attemptNumber,
+								request.workerId,
+								leaseTokenDigest(leaseToken),
+								leaseExpiresAt,
+								deadlineAt,
+							],
+						);
+						const claim = claimRow(row, {
+							workerId: request.workerId,
+							attemptId,
+							attemptNumber,
+							leaseToken,
+							leaseMilliseconds,
+							leaseExpiresAt,
+							deadlineAt,
+						});
+						for (const stale of previous)
+							await appendEvent(query, {
+								application: input.application,
+								runId: claim.runId,
+								resource: claim.resource,
+								dispatchId: claim.dispatchId,
+								causationId: claim.causationId,
+								correlationId: claim.correlationId,
+								kind: "leaseSuperseded",
+								attemptId: durableText(
+									stale.attemptId,
+									"stale attempt identity",
+								),
+								leaseTokenDigest: durableText(
+									stale.leaseTokenDigest,
+									"stale lease token digest",
+								),
+							});
+						await appendEvent(query, {
+							application: input.application,
+							runId: claim.runId,
+							resource: claim.resource,
+							dispatchId: claim.dispatchId,
+							causationId: claim.causationId,
+							correlationId: claim.correlationId,
+							kind: "attemptStarted",
+							attemptId,
+							leaseTokenDigest: leaseTokenDigest(leaseToken),
+						});
+						return Object.freeze({ status: "claimed" as const, claim });
+					},
 				);
-				const claim = claimRow(row, {
-					workerId: request.workerId,
-					attemptId,
-					attemptNumber,
-					leaseToken,
-					leaseMilliseconds,
-					leaseExpiresAt,
-					deadlineAt,
-				});
-				for (const stale of previous)
-					await appendEvent(query, {
-						application: input.application,
-						runId: claim.runId,
-						resource: claim.resource,
-						dispatchId: claim.dispatchId,
-						causationId: claim.causationId,
-						correlationId: claim.correlationId,
-						kind: "leaseSuperseded",
-						attemptId: durableText(stale.attemptId, "stale attempt identity"),
-						leaseTokenDigest: durableText(
-							stale.leaseTokenDigest,
-							"stale lease token digest",
-						),
-					});
-				await appendEvent(query, {
-					application: input.application,
-					runId: claim.runId,
-					resource: claim.resource,
-					dispatchId: claim.dispatchId,
-					causationId: claim.causationId,
-					correlationId: claim.correlationId,
-					kind: "attemptStarted",
-					attemptId,
-					leaseTokenDigest: leaseTokenDigest(leaseToken),
-				});
-				return Object.freeze({ status: "claimed" as const, claim });
-			});
+			} catch (error) {
+				if (postgresErrorNumber(error) === "40001")
+					return Object.freeze({ status: "skipped" as const });
+				throw error;
+			}
 		},
 		async heartbeat(claim) {
 			return transaction(async (query) => {
