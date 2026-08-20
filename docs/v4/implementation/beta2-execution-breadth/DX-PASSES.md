@@ -104,6 +104,38 @@ What would overturn the ordering: executable evidence that a different
 already-enforced gate consumes the exact compiled admission before every listed
 surface. A grep hit or an artifact field is not that evidence.
 
+Progress at `373d326c`:
+
+- `2c606003` adds one shared admission kernel and consumes the compiled
+  structural Query admission before binding, cursor work, or PostgreSQL
+  (`packages/runtime/src/operation/index.ts:61`-`:84`,
+  `packages/runtime/src/relational/query.ts:606`-`:620`). The integration
+  witness resolves an anonymous Context, observes zero reservations for
+  `authenticated`, and positively opens PostgreSQL once for `public`
+  (`tests/integration/beta04-policy-query.test.ts:220`-`:319`).
+- `35338b23` carries the authored Mutation admission in the direct Operation
+  contract without changing Operation Wire bytes, then consumes it before
+  input encoding, pool reservation, transaction start, or handler execution
+  (`packages/compiler/src/runtime/index.ts:65`-`:100`,
+  `packages/runtime/src/mutation/postgres.ts:146`-`:152`). Its hostile witness
+  observes zero reservations, statements, and handler calls
+  (`tests/unit/beta06-runtime-mutation-transaction.test.ts:232`-`:272`).
+- `373d326c` refreshes only the generated-build and package-release ratchets.
+  `bun run quality:full` passes at that head.
+
+DX-01 is not marked complete. The remaining proof is the application wrapper:
+direct named Operations and Fetch/client calls pass through
+`normalizeOperationError`, while accepted Operation Wire v2 has no ordinary
+`UNAUTHENTICATED` or `FORBIDDEN` failure code. The current kernel fails closed
+before application work, but Fetch can expose only a generic existing failure.
+Do not change the wire digest or silently map this to `INTERNAL` as the final
+contract. A retained-wire proof must choose the observable result first.
+
+Named Query admission is also not inferred here. The current generated Query
+factory has no operation-level Policy input; adding one remains the explicit
+owner decision recorded above this execution plan, not an implementation
+detail of this pass.
+
 ## DX-02 — Make the common Query path one-source
 
 Run after the runnable backend establishes the real authoring loop. Compare and
