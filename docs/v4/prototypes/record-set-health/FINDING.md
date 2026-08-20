@@ -42,8 +42,9 @@ of them supersedes a decision §16 still states in full.**
 §16 enumerates ADR-0009 through ADR-0021 and never mentions **ADR-0022**
 ("Freeze API Ergonomics and Operation Projection", Status: Accepted,
 2026-08-14) or **ADR-0023** ("Freeze the Post-Commit Operation Outcome",
-Status: Accepted, 2026-08-16). `HANDOFF.md:76` declares authority as
-"ADR-0008 through ADR-0023", so §16 stops two short of its own stated range.
+Status: Accepted, 2026-08-16). `HANDOFF.md`'s "Current accepted outcome" section declares
+authority as "ADR-0008 through ADR-0023 and their accepted workbench/public
+projections", so §16 stops two short of its own stated range.
 **The supersession is the urgent half.** ADR-0023's header reads
 "Supersedes: the incomplete post-commit outcome edge of ADR-0014 and its
 retained-pair execution rule for Wire v1 Mutations only". `SPEC.md:583`–`:590`
@@ -299,3 +300,26 @@ application.ts:489` for `beginDrain()` reachable only through `close()`, and
   already one of the eight cannot be determined. **Enumerating them is the
   precondition for scoping the gate, and this section is a candidate starting
   set, not a replacement.**
+
+## Independent validation at `62880614`
+
+- **Claim 9 — CONFIRMED, both halves.** `owner-decisions.md:25` points at
+  `CONTEXT.md:405`, while the Policy scope sentence is at `CONTEXT.md:409`–`:412`.
+  Its `:81` pointer covers the heading and blanks; the quoted Authority rule is
+  at `CONTEXT.md:404`–`:405`. The four bare source pointers at
+  `owner-decisions.md:46`, `:49`, `:100`, and `:103` resolve to unrelated
+  `feat/v4` code, while `git show feat/v4-beta-09:<path>` reaches exactly the
+  durable surface (`compiler/src/runtime/application.ts:464`–`:483`), Studio
+  request ordering (`runtime/src/application/index.ts:433`–`:447`), conditional
+  authorizer (`runtime/src/durable/postgres-maintenance.ts:209`–`:210`), and
+  unauthorised construction site (`compiler/src/runtime/application.ts:411`)
+  the prose claims. The nearby authority-guard test already uses the correct
+  branch prefix and corroborates the reachability limitation at
+  `feat/v4-beta-09:tests/integration/postgres/beta09-authority-guard.test.ts:59`–`:63`.
+  Six pointers are defective; every underlying statement is true.
+- **Claim 11 — CONFIRMED.** A positive search finds D3's count and seven/one
+  assertion at `owner-decisions.md:120`–`:131`. Reading every `divergence` hit
+  under the BETA-09 records on both `feat/v4` and `feat/v4-beta-09` finds no
+  membership list; the other hits concern a `hasMore` comment, a hostile-test
+  technique, or unrelated accepted slices. The gate therefore has a number but
+  no replayable scope.
