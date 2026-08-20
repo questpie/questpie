@@ -109,6 +109,11 @@ handlerOutput.nodes[0]!.createdAt satisfies Date;
 handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
+	// @ts-expect-error maintenance authorization is deployment-owned and required
+	createApp({
+		postgres: { url: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+	});
 	// @ts-expect-error watchable builds require deployment-owned resume signing material
 	createApp({
 		postgres: { url: "postgres://localhost/questpie" },

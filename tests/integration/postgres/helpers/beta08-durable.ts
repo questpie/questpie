@@ -22,9 +22,9 @@ type Beta08MaintenanceOutcome = Readonly<{
 	commandId: string;
 	outcome: "applied" | "rejected";
 	rejectionCode: string | null;
-	stateBefore: string;
-	stateAfter: string;
-	version: number;
+	stateBefore: string | null;
+	stateAfter: string | null;
+	version: number | null;
 }>;
 
 type Beta08Durable = Readonly<{

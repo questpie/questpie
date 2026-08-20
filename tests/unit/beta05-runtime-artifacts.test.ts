@@ -7,6 +7,9 @@ import { pathToFileURL } from "node:url";
 
 import { compileApplication } from "@questpie/compiler";
 
+import { runtimeArtifactDigest } from "../../packages/runtime/src/application/artifact-protocol";
+import { decodeRuntimeArtifacts } from "../../packages/runtime/src/application/artifacts";
+
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 test("binds every generated network Query slot to immutable Runtime Build bytes", async () => {
@@ -19,6 +22,9 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		const executables = JSON.parse(
 			first.generatedFiles["runtime-executables.json"]!,
+		);
+		const operationContracts = JSON.parse(
+			first.generatedFiles["operation-contracts.json"]!,
 		);
 		const wire = JSON.parse(first.generatedFiles["wire-contract.json"]!);
 
@@ -43,6 +49,36 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({ path: "reaction-projection.json" }),
 		);
+		const compatibleBuild = JSON.parse(
+			first.generatedFiles["runtime-build.json"]!,
+		);
+		const { digest: _v5Digest, ...v4Unsigned } = {
+			...compatibleBuild,
+			internalProtocol: "questpie.internal.v4",
+		};
+		const v4RuntimeBuild = {
+			...v4Unsigned,
+			digest: runtimeArtifactDigest("questpie-runtime-build-v1", v4Unsigned),
+		};
+		expect(
+			decodeRuntimeArtifacts({
+				runtimeBuild: v4RuntimeBuild,
+				runtimeExecutables: executables,
+				operationContracts,
+				wireContract: wire,
+			}).runtimeBuild.internalProtocol,
+		).toBe("questpie.internal.v4");
+		expect(() =>
+			decodeRuntimeArtifacts({
+				runtimeBuild: {
+					...v4RuntimeBuild,
+					internalProtocol: "questpie.internal.v6",
+				},
+				runtimeExecutables: executables,
+				operationContracts,
+				wireContract: wire,
+			}),
+		).toThrow();
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({ path: "durable-kernel.json" }),
 		);

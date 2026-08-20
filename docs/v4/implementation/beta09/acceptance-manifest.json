@@ -3,7 +3,7 @@
 	"ticket": "#296",
 	"proof": "BETA-09 closes the backend maintenance-compatibility gap without shipping Studio: the generated App requires a host-owned maintenance Authority decision, every durable command carries a bounded audited reason, stale callers receive the settled winner version, and questpie.internal.v5 upgrades the append-only audit catalog from v4 without accepting checksum drift.",
 	"diffBase": "87d3c48fde3eb45789258d5289df1853537a9391",
-	"reviewOutput": "docs/v4/implementation/beta09/REVIEW-BACKEND-01.json",
+	"reviewOutput": "docs/v4/implementation/beta09/REVIEW-BACKEND-02.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "87d3c48fde3eb45789258d5289df1853537a9391",
 		"beta one slice": "0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f"
@@ -37,12 +37,17 @@
 		{
 			"name": "BETA-09 backend closure record",
 			"path": "docs/v4/implementation/beta09/backend-acceptance.md",
-			"sha256": "9666eb55b85db2eec50d82c832c8e81888d8a34de86cacc66f01794a00eb227e"
+			"sha256": "3b5075ced5c8242f1302e5d7adee726eda7d884badcdb33a6b4e2fb50a484faf"
+		},
+		{
+			"name": "first backend acceptance round findings",
+			"path": "docs/v4/implementation/beta09/REVIEW-BACKEND-01.json",
+			"sha256": "435cc86236f6971e2fc23f8d146886c7fa2b5f2b16465e612c1e70b50c8fb01d"
 		}
 	],
 	"verification": [
 		{
-			"command": "bun run check:changed -- --test tests/integration/postgres/beta09-internal-protocol.test.ts --test tests/integration/postgres/beta09-maintenance-compatibility.test.ts --test tests/performance/beta09-maintenance.test.ts --typecheck @questpie/runtime --typecheck @questpie/compiler --typecheck @questpie/docs",
+			"command": "bun run check:changed -- --test tests/type/beta01-generated-contract.test.ts --test tests/type/beta05-generated-application.test.ts --test tests/unit/beta05-runtime-artifacts.test.ts --test tests/unit/beta07-live-query-projection.test.ts --test tests/integration/postgres/beta09-internal-protocol.test.ts --test tests/integration/postgres/beta09-maintenance-compatibility.test.ts --test tests/performance/beta09-maintenance.test.ts --typecheck @questpie/runtime --typecheck @questpie/compiler --typecheck @questpie/docs",
 			"result": "PASS"
 		},
 		{
@@ -50,7 +55,15 @@
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta09 (84.986 ms against 400 ms, 20 audit rows, 58,496 public declaration bytes, 21,008 TypeScript instantiations)",
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta09 (75.257 ms against 400 ms, 20 run-scoped audit rows, 58,711 public declaration bytes, 21,037 TypeScript instantiations)",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=172.17.0.3 PGDATABASE=questpie PGUSER=questpie bun run bench:micro -- --scenario beta05 (206,647 server-bundle bytes against 311,296)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test tests/unit/beta07-live-query-projection.test.ts (524,277 complete generated application-bundle bytes against the unchanged 524,288 budget; 11 bytes headroom with readable audit SQL)",
 			"result": "PASS"
 		},
 		{
@@ -72,13 +85,13 @@
 	],
 	"acceptanceCriteria": [
 		"The generated CreateAppInput requires maintenance.authorize, the generated application passes it to the durable surface, and there is no implicit allow, ambient Admin/System Principal, browser client, Fetch route, or Operation-Wire maintenance transport.",
-		"Maintenance Authority is evaluated for the trusted Principal, exact command, and run identity before the target row is locked; a denied caller receives typed AUTHORITY_DENIED and the attempt is recorded with actor and reason in the append-only audit.",
+		"Maintenance Authority is evaluated for the trusted Principal, exact command, and run identity before the target row is locked. A known denied target is audited, but the caller receives typed AUTHORITY_DENIED with null state and version; an unknown target returns the same shape and therefore creates no existence oracle.",
 		"acknowledgeAmbiguity, cancelRun, and retryRun each require a reason of 1 through 256 characters; invalid input is a typed, audited REASON_INVALID result and does not mutate the run.",
-		"Expected-version fencing refuses a stale caller with VERSION_MISMATCH and returns the settled current run version, which can be used for a successful retry; every applied or rejected outcome reports the settled version.",
+		"Expected-version fencing refuses a stale caller with VERSION_MISMATCH and returns the settled current run version, which can be used for a successful retry; every non-Authority outcome reports the settled version while an Authority denial discloses none.",
 		"questpie.internal.v5 adds the nullable bounded maintenance reason to the existing append-only audit catalog, installs fresh or upgrades v4 in the pinned protocol transaction, and refuses a same-version checksum mismatch without partially accepting drift.",
-		"The generated Runtime Build declares questpie.internal.v5 and the runtime artifact decoder retains v4 compatibility while accepting and requiring the v5 build for newly compiled applications.",
+		"The generated Runtime Build declares questpie.internal.v5. A decoder test recomputes and accepts a valid v4 Runtime Build and rejects an unsupported protocol, while newly compiled applications require v5.",
 		"The maintenance tests include a positive-controlled instrument proving denial precedes FOR UPDATE, PostgreSQL evidence for audited denial and authorized success, all three invalid-reason paths, winner-version recovery, and durable write-guard re-arming.",
-		"The reference-local performance test executes 20 fenced maintenance commands and records 20 audit rows under the 400 ms budget without increasing the accepted BETA-07 server-bundle budget.",
-		"Studio UI, browser mounting, an inspection read model, a failed-run worklist, and ambient privileged authority remain explicit non-goals; drain remains Runtime lifecycle rather than a fourth durable maintenance command, and the public guide makes no unsupported Studio, retention, or Runtime-limit claim."
+		"The reference-local performance test executes 20 fenced maintenance commands, counts exactly their 20 audit rows, and stays under 400 ms. Readable audit SQL leaves the complete generated BETA-07 application bundle at 524,277 bytes, 11 bytes below its unchanged budget.",
+		"Studio UI, browser mounting, an inspection read model, a failed-run worklist, and ambient privileged authority remain explicit non-goals. drainRuntime remains a Runtime lifecycle operation inside Gate 8's four-command maintenance contract, and the public guide retains the accepted Runtime limit, failure, retention, and backpressure clauses."
 	]
 }

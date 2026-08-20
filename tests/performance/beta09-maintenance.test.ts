@@ -96,9 +96,20 @@ ORDER BY intents.call_id`,
 
 		const [audit] = await database!.unsafe<
 			Readonly<Array<{ auditRows: number }>>
-		>(`SELECT count(*)::int AS "auditRows"
-FROM questpie_internal.durable_maintenance_commands
-WHERE reason = 'performance baseline'`);
+		>(
+			`SELECT count(*)::int AS "auditRows"
+FROM questpie_internal.durable_maintenance_commands AS commands
+JOIN questpie_internal.durable_runs AS measured_runs
+  ON measured_runs.application_name = commands.application_name
+ AND measured_runs.run_id = commands.run_id
+JOIN questpie_internal.pending_reaction_intents AS measured_intents
+  ON measured_intents.application_name = measured_runs.application_name
+ AND measured_intents.record_id = measured_runs.dispatch_id
+WHERE commands.application_name = 'application:collaboration'
+  AND measured_intents.call_id LIKE $1
+  AND commands.reason = 'performance baseline'`,
+			[`${prefix}-%`],
+		);
 		const measurements = {
 			postgresMaintenance20Ms,
 			auditRows: audit!.auditRows,

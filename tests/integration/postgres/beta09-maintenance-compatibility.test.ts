@@ -4,10 +4,7 @@ import { SQL } from "bun";
 import { principal } from "questpie";
 
 import { createPostgresDurableMaintenance } from "../../../packages/runtime/src/durable/postgres-maintenance";
-import {
-	durableKernelMarkerStatement,
-	durableKernelUnmarkStatement,
-} from "../../../packages/runtime/src/durable/rows";
+import { durableKernelMarkerStatement } from "../../../packages/runtime/src/durable/rows";
 import {
 	beta05Ids,
 	beta08Harness,
@@ -17,6 +14,8 @@ import {
 
 const database = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
+const durableKernelUnmarkStatement =
+	"SELECT set_config('questpie.durable_kernel', 'off', true)";
 
 async function maintenanceStatements(authorize: boolean): Promise<string[]> {
 	const statements: string[] = [];
@@ -113,11 +112,11 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
 }
 
 /**
- * BETA-08 shipped six of the seven properties ADR-0014 requires of a
- * maintenance command and disclosed the seventh: nothing evaluates maintenance
- * Authority. `actorOf` checks `principalKernel.is`, which proves the value came
- * from the application's own module and proves nothing about whether this actor
- * may cancel this run.
+ * BETA-08 shipped the maintenance state transitions and audit, but did not
+ * evaluate maintenance Authority. It also accepted no reason on two commands
+ * and persisted no maintenance reason. `actorOf` checks `principalKernel.is`,
+ * which proves the value came from the application's own module and proves
+ * nothing about whether this actor may cancel this run.
  *
  * ADR-0024 retains maintenance as a server-internal capability and forbids it
  * from becoming ambient Admin/System authority. `readerPrincipal` is an active
@@ -140,9 +139,26 @@ postgresTest(
 
 		expect(outcome.outcome).toBe("rejected");
 		expect(outcome.rejectionCode).toBe("AUTHORITY_DENIED");
+		expect(outcome).toMatchObject({
+			stateBefore: null,
+			stateAfter: null,
+			version: null,
+		});
+
+		const missing = await prepared.app.durable.cancelRun({
+			runId: crypto.randomUUID(),
+			reason: "unknown maintenance target",
+			actor: prepared.readerPrincipal,
+		});
+		expect({ ...missing, commandId: null }).toEqual({
+			...outcome,
+			commandId: null,
+		});
 
 		// Every attempt is recorded, applied or rejected. A denial that leaves no
-		// trace is the artifact this slice is trying not to ship.
+		// trace for a known target is the artifact this slice is trying not to ship.
+		// An unknown target cannot be audited because the audit row is run-owned;
+		// its returned denial remains byte-shape indistinguishable.
 		const audit = await prepared.app.durable.audit(runId);
 		const denials = audit.filter(
 			(entry) => entry.rejectionCode === "AUTHORITY_DENIED",

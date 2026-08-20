@@ -209,8 +209,16 @@ export type DurableEffectView = Readonly<{
 export type DurableMaintenanceOutcome = Readonly<{
 	commandId: string;
 	command: DurableMaintenanceCommand;
+	outcome: "rejected";
+	rejectionCode: "AUTHORITY_DENIED";
+	stateBefore: null;
+	stateAfter: null;
+	version: null;
+}> | Readonly<{
+	commandId: string;
+	command: DurableMaintenanceCommand;
 	outcome: "applied" | "rejected";
-	rejectionCode: DurableMaintenanceRejection | null;
+	rejectionCode: Exclude<DurableMaintenanceRejection, "AUTHORITY_DENIED"> | null;
 	stateBefore: DurableRunState;
 	stateAfter: DurableRunState;
 	version: number;

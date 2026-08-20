@@ -27,15 +27,32 @@ export type DurableMaintenanceRejection =
 	| "RUN_NOT_FAILED"
 	| "VERSION_MISMATCH";
 
-export type DurableMaintenanceOutcome = Readonly<{
+type DurableMaintenanceSettledOutcome = Readonly<{
 	commandId: string;
 	command: DurableMaintenanceCommand;
 	outcome: "applied" | "rejected";
-	rejectionCode: DurableMaintenanceRejection | null;
+	rejectionCode: Exclude<
+		DurableMaintenanceRejection,
+		"AUTHORITY_DENIED"
+	> | null;
 	stateBefore: DurableRunState;
 	stateAfter: DurableRunState;
 	version: number;
 }>;
+
+type DurableMaintenanceAuthorityDenial = Readonly<{
+	commandId: string;
+	command: DurableMaintenanceCommand;
+	outcome: "rejected";
+	rejectionCode: "AUTHORITY_DENIED";
+	stateBefore: null;
+	stateAfter: null;
+	version: null;
+}>;
+
+export type DurableMaintenanceOutcome =
+	| DurableMaintenanceAuthorityDenial
+	| DurableMaintenanceSettledOutcome;
 
 export type DurableMaintenanceAuditEntry = Readonly<{
 	commandId: string;
@@ -135,12 +152,12 @@ export function createPostgresDurableMaintenance(
 	): Promise<DurableRow> => {
 		const [row] = await query(
 			`SELECT state, attempt_count AS "attemptCount", dead_letter AS "deadLetter",
-       resource_identity AS "resource", dispatch_id::text AS "dispatchId",
-       causation_id AS "causationId", correlation_id AS "correlationId",
-       cancellation_requested AS "cancellationRequested",
-       event_sequence AS "version"
-FROM questpie_internal.durable_runs
-WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
+	       resource_identity AS "resource", dispatch_id::text AS "dispatchId",
+	       causation_id AS "causationId", correlation_id AS "correlationId",
+	       cancellation_requested AS "cancellationRequested",
+	       event_sequence AS "version"
+	FROM questpie_internal.durable_runs
+	WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 			[input.application, runId],
 		);
 		if (!row) throw new TypeError("durable maintenance target run is missing");
@@ -154,36 +171,6 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 	 * 1–256 the schema uses; stating it twice is deliberate, since the CHECK is
 	 * the backstop and this is the contract.
 	 */
-	const reasonOutOfBound = (reason: string): boolean =>
-		reason.length < 1 || reason.length > 256;
-	const boundedReason = (reason: string): string | null =>
-		reasonOutOfBound(reason) ? null : reason;
-
-	/** A typed, audited refusal that does not lock the target run. */
-	const refuseWithoutLock = async (
-		query: DurableQuery,
-		request: Readonly<{
-			runId: string;
-			actor: DurableActor;
-			reason: string | null;
-		}>,
-		command: DurableMaintenanceCommand,
-		rejectionCode: "AUTHORITY_DENIED" | "REASON_INVALID",
-	): Promise<DurableMaintenanceOutcome> => {
-		const run = await readRun(query, request.runId, false);
-		const state = durableText(run.state, "run state") as DurableRunState;
-		return record(query, {
-			runId: request.runId,
-			command,
-			outcome: "rejected",
-			rejectionCode,
-			actor: request.actor,
-			stateBefore: state,
-			stateAfter: state,
-			reason: request.reason,
-		});
-	};
-
 	/**
 	 * Gate 8 expected-version fencing. `inspect()` reports the run version, and a
 	 * command bound to a stale one is refused rather than applied to a run that
@@ -196,21 +183,13 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 		expectedVersion !== undefined &&
 		expectedVersion !== durableInteger(run.version, "run version");
 
-	/**
-	 * Defence in depth. A denial is audited like any other attempt: an audit that
-	 * omits rejected commands is the artifact this slice is trying not to ship.
-	 */
-	const denied = async (
-		actor: DurableActor,
-		command: DurableMaintenanceCommand,
-		runId: string,
-	): Promise<boolean> => !(await input.authorize({ actor, command, runId }));
-
 	const actorOf = (actor: Principal): DurableActor => {
 		if (!principalKernel.is(actor))
 			throw new TypeError("durable maintenance requires a trusted Principal");
 		return Object.freeze({ kind: actor.kind, id: actor.id });
 	};
+	const stateOf = (run: DurableRow): DurableRunState =>
+		durableText(run.state, "run state") as DurableRunState;
 
 	const appendEvent = async (
 		query: DurableQuery,
@@ -233,20 +212,36 @@ WHERE application_name = $1 AND run_id = $2${locking ? "\nFOR UPDATE" : ""}`,
 		});
 	};
 
+	type AuditRecord = Readonly<{
+		runId: string;
+		command: DurableMaintenanceCommand;
+		outcome: "applied" | "rejected";
+		rejectionCode: DurableMaintenanceRejection | null;
+		actor: DurableActor;
+		stateBefore: DurableRunState;
+		stateAfter: DurableRunState;
+		reason?: string | null;
+	}>;
+
+	const authorityDenial = (
+		commandId: string,
+		command: DurableMaintenanceCommand,
+	): DurableMaintenanceAuthorityDenial =>
+		Object.freeze({
+			commandId,
+			command,
+			outcome: "rejected",
+			rejectionCode: "AUTHORITY_DENIED",
+			stateBefore: null,
+			stateAfter: null,
+			version: null,
+		});
+
 	const record = async (
 		query: DurableQuery,
-		entry: Readonly<{
-			runId: string;
-			command: DurableMaintenanceCommand;
-			outcome: "applied" | "rejected";
-			rejectionCode: DurableMaintenanceRejection | null;
-			actor: DurableActor;
-			stateBefore: DurableRunState;
-			stateAfter: DurableRunState;
-			reason?: string | null;
-		}>,
+		entry: AuditRecord,
+		commandId = crypto.randomUUID(),
 	): Promise<DurableMaintenanceOutcome> => {
-		const commandId = crypto.randomUUID();
 		await query(
 			`INSERT INTO questpie_internal.durable_maintenance_commands
   (application_name, command_id, run_id, command, outcome, rejection_code,
@@ -266,8 +261,12 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 				entry.reason ?? null,
 			],
 		);
+		if (entry.rejectionCode === "AUTHORITY_DENIED")
+			return authorityDenial(commandId, entry.command);
 		const [settled] = await query(
-			`SELECT event_sequence AS "version" FROM questpie_internal.durable_runs WHERE application_name=$1 AND run_id=$2`,
+			`SELECT event_sequence AS "version"
+FROM questpie_internal.durable_runs
+WHERE application_name = $1 AND run_id = $2`,
 			[input.application, entry.runId],
 		);
 		return Object.freeze({
@@ -281,34 +280,75 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.transaction_tim
 		});
 	};
 
+	const refusalBeforeLock = async (
+		query: DurableQuery,
+		request: Readonly<{
+			runId: string;
+			actor: DurableActor;
+			reason: string;
+		}>,
+		command: DurableMaintenanceCommand,
+	): Promise<DurableMaintenanceOutcome | null> => {
+		const invalidReason =
+			request.reason.length < 1 || request.reason.length > 256;
+		if (
+			!(await input.authorize({
+				actor: request.actor,
+				command,
+				runId: request.runId,
+			}))
+		) {
+			const commandId = crypto.randomUUID();
+			const [run] = await query(
+				`SELECT state FROM questpie_internal.durable_runs
+WHERE application_name = $1 AND run_id = $2`,
+				[input.application, request.runId],
+			);
+			if (!run) return authorityDenial(commandId, command);
+			const state = stateOf(run);
+			return record(
+				query,
+				{
+					...request,
+					command,
+					outcome: "rejected",
+					rejectionCode: "AUTHORITY_DENIED",
+					stateBefore: state,
+					stateAfter: state,
+					reason: invalidReason ? null : request.reason,
+				},
+				commandId,
+			);
+		}
+		if (invalidReason) {
+			const run = await readRun(query, request.runId, false);
+			const state = stateOf(run);
+			return record(query, {
+				runId: request.runId,
+				command,
+				outcome: "rejected",
+				rejectionCode: "REASON_INVALID",
+				actor: request.actor,
+				stateBefore: state,
+				stateAfter: state,
+				reason: null,
+			});
+		}
+		return null;
+	};
+
 	return Object.freeze<DurableMaintenance>({
 		async cancelRun(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				if (await denied(actor, "cancelRun", request.runId))
-					return refuseWithoutLock(
-						query,
-						{
-							runId: request.runId,
-							actor,
-							reason: boundedReason(request.reason),
-						},
-						"cancelRun",
-						"AUTHORITY_DENIED",
-					);
-				if (reasonOutOfBound(request.reason)) {
-					return refuseWithoutLock(
-						query,
-						{ runId: request.runId, actor, reason: null },
-						"cancelRun",
-						"REASON_INVALID",
-					);
-				}
+				const refusal = await refusalBeforeLock(
+					query,
+					{ runId: request.runId, actor, reason: request.reason },
+					"cancelRun",
+				);
+				if (refusal) return refusal;
 				const run = await readRun(query, request.runId);
-				const stateBefore = durableText(
-					run.state,
-					"run state",
-				) as DurableRunState;
+				const stateBefore = stateOf(run);
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -389,29 +429,14 @@ WHERE application_name = $1 AND run_id = $2`,
 		async retryRun(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				if (await denied(actor, "retryRun", request.runId))
-					return refuseWithoutLock(
-						query,
-						{
-							runId: request.runId,
-							actor,
-							reason: boundedReason(request.reason),
-						},
-						"retryRun",
-						"AUTHORITY_DENIED",
-					);
-				if (reasonOutOfBound(request.reason))
-					return refuseWithoutLock(
-						query,
-						{ runId: request.runId, actor, reason: null },
-						"retryRun",
-						"REASON_INVALID",
-					);
+				const refusal = await refusalBeforeLock(
+					query,
+					{ runId: request.runId, actor, reason: request.reason },
+					"retryRun",
+				);
+				if (refusal) return refusal;
 				const run = await readRun(query, request.runId);
-				const stateBefore = durableText(
-					run.state,
-					"run state",
-				) as DurableRunState;
+				const stateBefore = stateOf(run);
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -467,29 +492,14 @@ WHERE application_name = $1 AND run_id = $2`,
 		async acknowledgeAmbiguity(request) {
 			const actor = actorOf(request.actor);
 			return transaction(async (query) => {
-				if (await denied(actor, "acknowledgeAmbiguity", request.runId))
-					return refuseWithoutLock(
-						query,
-						{
-							runId: request.runId,
-							actor,
-							reason: boundedReason(request.reason),
-						},
-						"acknowledgeAmbiguity",
-						"AUTHORITY_DENIED",
-					);
-				if (reasonOutOfBound(request.reason))
-					return refuseWithoutLock(
-						query,
-						{ runId: request.runId, actor, reason: null },
-						"acknowledgeAmbiguity",
-						"REASON_INVALID",
-					);
+				const refusal = await refusalBeforeLock(
+					query,
+					{ runId: request.runId, actor, reason: request.reason },
+					"acknowledgeAmbiguity",
+				);
+				if (refusal) return refusal;
 				const run = await readRun(query, request.runId);
-				const stateBefore = durableText(
-					run.state,
-					"run state",
-				) as DurableRunState;
+				const stateBefore = stateOf(run);
 				if (staleVersion(run, request.expectedVersion))
 					return record(query, {
 						runId: request.runId,
@@ -534,12 +544,13 @@ RETURNING effect_id::text AS "effectId"`,
 		},
 		async audit(runId) {
 			const rows = (await input.sql.unsafe(
-				`SELECT command_id::text AS "commandId",command,outcome,
-rejection_code AS "rejectionCode",actor_kind AS "actorKind",
-actor_id AS "actorId",state_before AS "stateBefore",state_after AS "stateAfter",reason
+				`SELECT command_id::text AS "commandId", command, outcome,
+       rejection_code AS "rejectionCode", actor_kind AS "actorKind",
+       actor_id AS "actorId", state_before AS "stateBefore",
+       state_after AS "stateAfter", reason
 FROM questpie_internal.durable_maintenance_commands
-WHERE application_name=$1 AND run_id=$2
-ORDER BY requested_at,command_id`,
+WHERE application_name = $1 AND run_id = $2
+ORDER BY requested_at, command_id`,
 				[input.application, runId],
 			)) as unknown as readonly DurableRow[];
 			return Object.freeze(

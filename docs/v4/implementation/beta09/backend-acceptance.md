@@ -1,6 +1,9 @@
 # BETA-09 backend closure
 
-BETA-09 closes the maintenance compatibility gap and nothing more. ADR-0024
+BETA-09 closes the maintenance compatibility gaps and nothing more. BETA-08
+shipped the maintenance transitions and audit, but evaluated no maintenance
+Authority, accepted no reason on two commands, and persisted no maintenance
+reason. ADR-0024
 removed Studio from beta.1 because the implemented browser surface could only
 repeat generated files; it could not inspect application data, execute an
 Operation, or observe a running application. Shipping it would create UI and
@@ -22,18 +25,21 @@ passes that decision into the durable maintenance surface
 default allow and no browser or Operation-Wire transport.
 
 The runtime evaluates that decision for the trusted Principal, command, and run
-identity (`packages/runtime/src/durable/postgres-maintenance.ts:90`–`:109`,
-`:199`–`:213`). A denied caller is read without `FOR UPDATE` and receives an
-audited `AUTHORITY_DENIED` result (`:123`–`:185`). This ordering matters: a
-caller that is not allowed to touch a run must not be able to hold its row lock
-and delay an authorized operator.
+identity (`packages/runtime/src/durable/postgres-maintenance.ts:107`–`:126`,
+`:283`–`:342`). A denied caller is read without `FOR UPDATE`; a known target is
+audited, but the caller receives `AUTHORITY_DENIED` with null state and version.
+An unknown target returns the same shape and command identity, so denial is not
+a run-existence oracle. The unknown target cannot produce an audit row because
+the audit has a run foreign key. This ordering matters: a caller that is not
+allowed to touch a run must neither learn its state nor hold its row lock and
+delay an authorized operator.
 
 All three durable commands require a reason of 1–256 characters
-(`postgres-maintenance.ts:61`–`:86`, `:150`–`:160`). Invalid input is a typed,
+(`postgres-maintenance.ts:78`–`:103`, `:292`–`:293`). Invalid input is a typed,
 audited `REASON_INVALID` result rather than a raw database error. Every audit
-row carries the actor, transition, rejection and reason (`:236`–`:280`), and an
+row carries the actor, transition, rejection and reason (`:240`–`:279`), and an
 expected-version loser receives the settled run version it can use for a safe
-retry (`:269`–`:281`).
+retry (`:267`–`:279`).
 
 The generated Runtime Build declares `questpie.internal.v5`
 (`packages/compiler/src/runtime/index.ts:411`), while the artifact decoder
@@ -41,7 +47,9 @@ accepts both v4 and v5 builds
 (`packages/runtime/src/application/artifacts.ts:28`–`:29`, `:340`–`:341`). The
 v5 migration adds the bounded nullable reason to the existing append-only audit
 catalog. Nullable is required for the v4 upgrade path; new calls cannot omit a
-reason at the generated or runtime API.
+reason at the generated or runtime API. The decoder's retained v4 path and its
+unsupported-protocol refusal are exercised directly
+(`tests/unit/beta05-runtime-artifacts.test.ts:55`–`:81`).
 
 ## Evidence
 
@@ -54,11 +62,19 @@ and an authorized success
 `tests/integration/postgres/beta09-maintenance-compatibility.test.ts:21`–`:71`,
 `:115`–`:279`).
 
-The reference-local microbenchmark executes 20 fenced maintenance commands.
-The final pre-acceptance sample was 84.986 ms against a 400 ms budget, with 20
-audit rows, 58,496 public declaration bytes, and 21,008 TypeScript
-instantiations. `bun run quality:full` also passes without raising BETA-07's
-bundle budget.
+The reference-local microbenchmark executes 20 fenced maintenance commands and
+scopes the audit count to those exact runs. The committed baseline is the median
+71.591 ms sample; the final post-review sample was 75.257 ms against a 400 ms budget,
+with 20 audit rows, 58,711 public declaration bytes, and 21,037 TypeScript
+instantiations.
+
+The first acceptance review also found an unverified 240-line catalog generator,
+a test-only marker export in the published runtime, and audit SQL compressed to
+win bundle bytes. The generator was removed, the unmark statement moved into
+the hostile test that owns it, and the SQL formatting was restored. After a
+code-level maintenance preflight refactor, the complete generated BETA-07
+application bundle is 524,277 bytes against its unchanged 524,288-byte budget:
+11 bytes of measured headroom, without cosmetic SQL compression.
 
 ## Deliberate limits
 
@@ -67,9 +83,11 @@ bundle budget.
 - No network maintenance route is created. The capability remains
   server-internal and the deployment owns its authorization decision.
 - No ambient Admin/System Principal is introduced.
-- `drain` remains Runtime lifecycle, not a fourth durable maintenance command.
-- This slice does not claim Runtime size, retention, telemetry queue, or Studio
-  pagination limits that no implementation enforces.
+- `drainRuntime` remains a Runtime lifecycle operation. This slice does not add
+  it to the three-command durable maintenance object or weaken Gate 8's
+  four-command maintenance contract.
+- The public guide retains the accepted Runtime limit, failure, retention, and
+  backpressure contract. Removing Studio does not descope those clauses.
 
 The judgment changes only if accepted authority changes: ADR-0024 could restore
 Studio to beta.1, or a new accepted contract could define the privileged

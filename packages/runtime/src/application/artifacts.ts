@@ -336,10 +336,11 @@ function decodeWire(value: unknown): OperationWireContract {
 
 function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const build = record(value, "runtime build");
+	const internalProtocol = build.internalProtocol;
 	const durable =
-		build.internalProtocol === "questpie.internal.v4" ||
-		build.internalProtocol === "questpie.internal.v5";
-	const v3 = build.internalProtocol === "questpie.internal.v3" || durable;
+		internalProtocol === "questpie.internal.v4" ||
+		internalProtocol === "questpie.internal.v5";
+	const v3 = internalProtocol === "questpie.internal.v3" || durable;
 	exact(
 		build,
 		[
@@ -552,12 +553,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		string(build[key], key);
 	if (build.runtimeAbi !== "questpie.runtime.v1")
 		fail("unsupported Runtime ABI");
-	if (
-		build.internalProtocol !== "questpie.internal.v2" &&
-		build.internalProtocol !== "questpie.internal.v3" &&
-		build.internalProtocol !== "questpie.internal.v4" &&
-		build.internalProtocol !== "questpie.internal.v5"
-	)
+	if (!/^questpie\.internal\.v[2-5]$/.test(internalProtocol as string))
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
 		string(build.migrationHead, "migrationHead");

@@ -104,11 +104,12 @@ input fails with the operation-specialized `IDEMPOTENCY_CONFLICT` error. See
 The generated App runs the same Query without a network transport:
 
 ```ts title="scripts/read-channel.ts"
-import { createApp } from "#questpie/app";
+import { createApp, type DurableMaintenanceAuthorization } from "#questpie/app";
 
 export async function readChannel(
 	postgresUrl: string,
 	realtimeHmacKey: Uint8Array,
+	authorizeMaintenance: DurableMaintenanceAuthorization,
 	userId: string,
 	companyId: string,
 	channelId: string,
@@ -116,7 +117,7 @@ export async function readChannel(
 	const app = await createApp({
 		postgres: { url: postgresUrl },
 		realtime: { hmacKey: realtimeHmacKey },
-		maintenance: { authorize: () => false },
+		maintenance: { authorize: authorizeMaintenance },
 	});
 
 	try {
@@ -203,19 +204,41 @@ state, secret, or stack trace.
 
 ## Run maintenance commands
 
-The server-internal maintenance surface has three commands:
-`acknowledgeAmbiguity`, `cancelRun`, and `retryRun`. The host must supply the
-`maintenance.authorize` decision when it creates the generated App; there is no
-default allow. Each command takes a trusted Principal, exact run identity, a
-reason of 1–256 characters, and an optional expected-version fence. Applied and
-rejected attempts are recorded in the append-only maintenance audit, and a
-stale caller receives the current version it can retry against.
+The maintenance contract has four commands: `acknowledgeAmbiguity`, `cancelRun`,
+`retryRun`, and the Runtime lifecycle operation `drainRuntime`. The host must
+supply the `maintenance.authorize` decision when it creates the generated App;
+there is no default allow. Each command requires maintenance Authority, exact
+identity, a bounded reason, idempotency, expected-version fencing, a typed
+winner, and append-only audit. A stale durable-command caller receives the
+current version it can retry against.
 
-Maintenance has no browser or Operation-Wire transport in beta.1. `drain` is a
-Runtime lifecycle operation, not a durable maintenance command. Studio is
+Maintenance has no browser or Operation-Wire transport in beta.1. Studio is
 deferred to a later privileged administration vertical; beta.1 does not ship an
-artifact viewer or imply Runtime limits and retention policies that the Runtime
-does not enforce.
+artifact viewer.
+
+## Stay within Runtime limits
+
+| Limit                                |      Default |
+| ------------------------------------ | -----------: |
+| active root Executions per Principal |           64 |
+| request body                         |        1 MiB |
+| response body                        |        1 MiB |
+| Runtime event                        |       64 KiB |
+| events per Execution                 |        2,048 |
+| telemetry exporter queue             | 4,096 events |
+| startup deadline                     |   30 seconds |
+| drain deadline                       |   30 seconds |
+
+A limit fails with `RESOURCE_LIMIT`. Runtime unavailability fails with
+`RUNTIME_UNAVAILABLE`. Both are explicit and retryable when no ambiguous
+Mutation result exists.
+
+## Understand retention and backpressure
+
+Audit events are retained for 365 days. Telemetry is retained for 30 days.
+Durable events follow the retention of their owning durable state. Telemetry
+loss is explicit. When the 4,096-event exporter queue is full, backpressure can
+drop telemetry; it cannot drop or roll back a business commit.
 
 ## Keep one PostgreSQL and Policy boundary
 
