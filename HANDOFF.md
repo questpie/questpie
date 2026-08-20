@@ -1037,11 +1037,33 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   matter and the revert stands. Formally recording the exception is still the
   owner's, not mine.
 - `owner-decisions.md` states an owner answered its three questions. **That
-  attribution cannot be verified from this repository** and three decisions rest
-  on it. Two are independently grounded in citations and stand regardless; the
-  attribution still needs confirming before review.
-- **Criteria 18-22 have no derived status.** The branch re-derived 1-17; the file
-  holds 22.
+  attribution cannot be verified from this repository.** Two of the three are
+  independently grounded in citations and stand regardless; the attribution still
+  needs confirming before review.
+  **The count is also wrong, and the discrepancy is not cosmetic.** The intro at
+  `:3`–`:7` says three decisions were put to the owner and names them — whether
+  ADR-0010 grows, whether maintenance Authority is evaluated, and how Studio
+  assets are packaged. The file then records **four**, D1 through D4, each headed
+  "**Answered:**". D3 (batching the divergences) and D4 (repairing the glossary)
+  are not among the three named, so it is unclear whether they carry the same
+  owner attribution or were settled in-branch.
+  **D3 is settled by the file itself, in the other direction.** Its subject
+  reappears at `:181`–`:183` in the author's own "Judgment calls, and what would
+  overturn them" list — "That batching the divergences is safe" — with an
+  overturning condition attached. A decision cannot be both an owner answer and
+  the author's judgment call; the judgment-call framing is the one with
+  reasoning attached, so treat D3 as needing no owner confirmation and resolve
+  the heading instead.
+  D4 is what added `Operational Fact` to `CONTEXT.md`. The recommendation above
+  to take the argued exception rests on the term's content, not on D4's
+  provenance, so it holds either way.
+- **Criteria 19-22 have no derived status.** The branch re-derived 1-17; the file
+  holds 22. An earlier revision of this line said 18-22. **Criterion 18 is
+  covered**, in a different file:
+  `feat/v4-beta-09:docs/v4/implementation/beta09/narrower-claims.md:107` records
+  "Criterion 18 is now measured: 255 ms against a 5,000 ms budget". Verified on
+  the branch. `acceptance-shape.md:355`–`:365` had already corrected itself; the
+  correction had not reached this file.
 
 ```text
 Use the repo-owned QUESTPIE v4 skill. Read HANDOFF.md first, then
