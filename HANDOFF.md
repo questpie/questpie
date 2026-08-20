@@ -1057,6 +1057,26 @@ CONTEXT.md` returns exactly one added `### ` heading, and one commit touched
   D4 is what added `Operational Fact` to `CONTEXT.md`. The recommendation above
   to take the argued exception rests on the term's content, not on D4's
   provenance, so it holds either way.
+  **D3 has a bigger problem than its heading: the eight divergences it batches
+  are never listed.** `owner-decisions.md:122`–`:123` commits "the eight
+  divergences between accepted documentation and the tree that this slice
+  surfaced" to one interstitial gate before BETA-12, and `:126`–`:131` even
+  splits them seven-and-one by root cause. No record enumerates them. "Divergence"
+  appears eleven times in the whole record set, across seven files: three in this
+  file (two of them about D3 itself, one about branch commits), three in
+  `owner-decisions.md`, one in `beta09/README.md:167` about a `hasMore` comment,
+  one in `beta09/hostile-cases.md:106` about a test technique, and three in
+  unrelated beta03/05/07 records. Checked the `feat/v4-beta-09` branch too,
+  including its five files that are not on `feat/v4` — same three mentions, no
+  list.
+  So the gate has a count and no membership, and whoever builds it cannot know
+  when it is done. It also makes the overlap with this section unresolvable: the
+  findings catalogued above — eleven diagnostic codes, the Resource Name grammar,
+  the JSONB bound, `operation.input`, the Query factory shape, output inference —
+  are exactly "accepted documentation against the tree", but whether any is
+  already one of the eight cannot be determined. **Enumerating them is the
+  precondition for scoping the gate, and this section is a candidate starting
+  set, not a replacement.**
 - **Criteria 19-22 have no derived status.** The branch re-derived 1-17; the file
   holds 22. An earlier revision of this line said 18-22. **Criterion 18 is
   covered**, in a different file:
