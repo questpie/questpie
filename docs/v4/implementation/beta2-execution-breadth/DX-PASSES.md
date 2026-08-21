@@ -141,6 +141,22 @@ its Bun transactions in `postgres-retention.ts:339`-`:390`, `:404`-`:420`, and
 `:453` onward. Deleting that path belongs to the remaining PB-04 coordinator
 wiring and PB-05 production-wide Bun removal, not to this tracer.
 
+`83c6ada0` adds the parallel `PostgresDatabase` scope and generation authority
+path. The factory selects disjoint `{ database }` or legacy `{ sql }` modes
+(`packages/runtime/src/live-query/postgres-realtime-scope.ts:31`-`:46`); the
+database mode transacts attach/open/scan/close/expiry through static statements
+(`packages/runtime/src/live-query/postgres-realtime-scope-database.ts:46`-`:165`)
+and owns generation fencing, successor publication, acknowledgement transfer,
+and pruning in the same seam
+(`packages/runtime/src/live-query/postgres-realtime-generations-database.ts:31`-`:113`).
+The retained hostile path uses three independent database owners and proves
+stale refusal, a generation-one acknowledgement, a generation-two successor,
+acknowledgement transfer, and physical pruning
+(`tests/integration/postgres/beta07-postgres-realtime-scope.test.ts:315`-`:527`).
+This is still a store tracer, not coordinator closure: the production
+coordinator continues to accept Bun `SQL` and construct its Bun-backed stores
+(`packages/runtime/src/application/realtime/postgres-coordinator.ts:103`-`:120`).
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from
