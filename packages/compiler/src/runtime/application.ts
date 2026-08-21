@@ -60,6 +60,7 @@ function applicationEntry(
 		inventories: readonly PackageInventory[];
 		queryProjection: unknown;
 		schemaProjection: unknown;
+		contextBootstrapPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;
@@ -199,6 +200,7 @@ ${imports.join("\n")}
 ${structuralImports.join("\n")}
 
 const schemaProjection = ${JSON.stringify(input.schemaProjection)};
+const expectedContextBootstrapPlansDigest = ${JSON.stringify(input.contextBootstrapPlansDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
 const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
@@ -287,11 +289,14 @@ export async function createApplication(input) {
 		createRuntimeApplication,
 		durablePrincipal,
 		executePostgresQuery,
+		linkPostgresContextBootstrapPlans,
 		linkPostgresQueryPlans,
 	} = runtimeModule;
+	const loaded = await loadRuntimeArtifacts();
+	if (loaded.artifacts.runtimeBuild.postgresContextBootstrapPlansDigest !== expectedContextBootstrapPlansDigest)
+		throw new TypeError("generated ContextBootstrap plans do not match Runtime Build");
 	const sql = new SQL(input.postgres.connectionUrl);
 	const postgresController = new AbortController();
-	const loaded = await loadRuntimeArtifacts();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
 	let queryPlans;
 	const bootstrap = createPostgresContextBootstrap({
@@ -333,6 +338,11 @@ export async function createApplication(input) {
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {
+				linkPostgresContextBootstrapPlans({
+					artifact: loaded.artifactFiles["postgres-context-bootstrap-plans.json"],
+					schemaProjection,
+					expectedDigest: expectedContextBootstrapPlansDigest,
+				});
 				mutationArtifacts = linkMutationArtifacts(runtimeModule, loaded.artifactFiles);
 				const queryPlanBytes = loaded.artifactFiles["postgres-query-plans.json"];
 				if (queryPlanBytes !== undefined)
@@ -520,6 +530,7 @@ export async function renderApplicationBundle(
 		inventories: readonly PackageInventory[];
 		queryProjection: unknown;
 		schemaProjection: unknown;
+		contextBootstrapPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;

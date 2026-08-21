@@ -504,6 +504,7 @@ export async function createArtifacts(
 			inventories: input.inventories,
 			queryProjection: relational.query,
 			schemaProjection: schema,
+			contextBootstrapPlansDigest: contextBootstrapPlans.digest,
 			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
 			realtime: realtimeEnabled,
