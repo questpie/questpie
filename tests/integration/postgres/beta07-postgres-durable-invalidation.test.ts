@@ -15,8 +15,36 @@ import {
 	createPostgresLiveQueryInvalidationEffect,
 	reconcilePostgresChangeLedger,
 } from "../../../packages/runtime/src/live-query";
+import { createPostgresDatabase } from "../../../packages/runtime/src/postgres";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
+const connectionUrl = (() => {
+	const url = new URL("postgres://localhost/postgres");
+	url.hostname = process.env.PGHOST ?? "127.0.0.1";
+	url.port = process.env.PGPORT ?? "5432";
+	url.username = process.env.PGUSER ?? "postgres";
+	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.href;
+})();
+const ledgerDatabase = process.env.PGHOST
+	? createPostgresDatabase({
+			connectionUrl,
+			directConnectionUrl: connectionUrl,
+			pool: {
+				max: 2,
+				connectTimeoutMs: 2_000,
+				checkoutTimeoutMs: 2_000,
+				idleTimeoutMs: 5_000,
+				maxLifetimeSeconds: 60,
+			},
+			timeouts: {
+				statementMs: 10_000,
+				lockMs: 1_000,
+				idleInTransactionMs: 10_000,
+			},
+		})
+	: undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
 const application = "durableInvalidationProbe";
@@ -137,6 +165,7 @@ afterAll(async () => {
 	await database?.unsafe(`DROP SCHEMA IF EXISTS durable_invalidation_probe CASCADE;
 DROP SCHEMA IF EXISTS questpie_internal CASCADE;`);
 	await database?.close({ timeout: 0 });
+	await ledgerDatabase?.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 describe.skipIf(!database)(
@@ -183,7 +212,7 @@ describe.skipIf(!database)(
 				values ('one', 'wake deliberately suppressed')
 			`;
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,
@@ -196,7 +225,7 @@ describe.skipIf(!database)(
 				});
 
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,
@@ -210,7 +239,7 @@ describe.skipIf(!database)(
 				from generate_series(1, 17) value
 			`);
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,
@@ -243,7 +272,7 @@ describe.skipIf(!database)(
 			`;
 				await expect(
 					reconcilePostgresChangeLedger({
-						sql: database!,
+						database: ledgerDatabase!,
 						application,
 						consumer: effect.consumer,
 						apply: () => undefined,
@@ -280,7 +309,7 @@ describe.skipIf(!database)(
 				`;
 				await expect(
 					reconcilePostgresChangeLedger({
-						sql: database!,
+						database: ledgerDatabase!,
 						application,
 						consumer: effect.consumer,
 						apply: () => undefined,
@@ -369,7 +398,7 @@ describe.skipIf(!database)(
 					fanoutPerBatch: 1_024,
 				});
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,
@@ -380,7 +409,7 @@ describe.skipIf(!database)(
 					values ('fanout', 'production fanout witness')
 				`;
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,

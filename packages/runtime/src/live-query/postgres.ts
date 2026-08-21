@@ -1,6 +1,11 @@
 import type { SQL } from "bun";
 
 import { isPostgresTransactionId } from "../operation";
+import {
+	definePostgresStatement,
+	QuestpiePostgresError,
+	type PostgresDatabase,
+} from "../postgres";
 import type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 
 type Row = Readonly<Record<string, unknown>>;
@@ -38,8 +43,7 @@ export type ChangeReconciliationResultV1 = Readonly<{
 	facts: readonly ChangeLedgerFactV1[];
 }>;
 
-type PostgresChangeReconciliationInput = Readonly<{
-	sql: SQL;
+type PostgresChangeReconciliationCommon = Readonly<{
 	application: string;
 	consumer: string;
 	apply(
@@ -50,10 +54,16 @@ type PostgresChangeReconciliationInput = Readonly<{
 	signal?: AbortSignal;
 }>;
 
+type PostgresChangeReconciliationInput =
+	| (PostgresChangeReconciliationCommon &
+			Readonly<{ database: PostgresDatabase; sql?: never }>)
+	| (PostgresChangeReconciliationCommon &
+			Readonly<{ database?: never; sql: SQL }>);
+type ConsumerIdentity = Readonly<{ application: string; consumer: string }>;
+type ConsumerHorizon = ConsumerIdentity & Readonly<{ nextHorizon: string }>;
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const positiveIntegerPattern = /^[1-9][0-9]*$/;
-
 async function execute(
 	session: TransactionSession,
 	statement: string,
@@ -152,6 +162,170 @@ function decodeHorizon(row: Row | undefined): Readonly<{
 	)
 		throw new TypeError("Change reconciliation horizon is invalid");
 	return Object.freeze({ priorHorizon, nextHorizon });
+}
+const initializeConsumer = definePostgresStatement({
+	name: "live-query.reconciliation-consumer-initialize",
+	text: `INSERT INTO questpie_internal.reconciliation_consumers
+  (application_name, consumer_id, xid_horizon, acknowledged_at)
+VALUES ($1, $2, pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot()), pg_catalog.clock_timestamp())
+ON CONFLICT DO NOTHING`,
+	parameterCount: 2,
+	parameters: (input: ConsumerIdentity) => [input.application, input.consumer],
+	decode: () => undefined,
+});
+const readHorizon = definePostgresStatement({
+	name: "live-query.reconciliation-horizon-read",
+	text: `SELECT xid_horizon::text,
+       pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot())::text
+FROM questpie_internal.reconciliation_consumers
+WHERE application_name = $1 AND consumer_id = $2
+FOR UPDATE`,
+	parameterCount: 2,
+	parameters: (input: ConsumerIdentity) => [input.application, input.consumer],
+	decode(result) {
+		const row = result.rows[0];
+		if (result.rows.length !== 1 || row?.length !== 2)
+			throw new TypeError("Change reconciliation horizon is unavailable");
+		return decodeHorizon({ priorHorizon: row[0], nextHorizon: row[1] });
+	},
+});
+const readFacts = definePostgresStatement({
+	name: "live-query.change-ledger-facts-read",
+	text: `SELECT fact_identity::text,
+       fact_id::text,
+       transaction_id::text,
+       collection_identity,
+       change_kind,
+       old_key,
+       new_key,
+       conservative,
+       captured_at
+FROM questpie_internal.change_ledger AS ledger
+WHERE application_name = $1
+  AND transaction_id >= $3::xid8
+  AND transaction_id < $4::xid8
+  AND NOT EXISTS (
+    SELECT 1
+    FROM questpie_internal.processed_change_facts AS processed
+    WHERE processed.application_name = ledger.application_name
+      AND processed.consumer_id = $2
+      AND processed.fact_identity = ledger.fact_identity
+  )
+ORDER BY transaction_id, fact_id`,
+	parameterCount: 4,
+	parameters: (
+		input: Readonly<{
+			application: string;
+			consumer: string;
+			priorHorizon: string;
+			nextHorizon: string;
+		}>,
+	) => [
+		input.application,
+		input.consumer,
+		input.priorHorizon,
+		input.nextHorizon,
+	],
+	decode(result) {
+		return Object.freeze(
+			result.rows.map((row, index) => {
+				if (row.length !== 9)
+					throw new TypeError(`Change Ledger fact ${index} row is invalid`);
+				return decodeFact(
+					{
+						factIdentity: row[0],
+						factId: row[1],
+						transactionId: row[2],
+						collection: row[3],
+						kind: row[4],
+						oldKey: row[5],
+						newKey: row[6],
+						conservative: row[7],
+						capturedAt: row[8],
+					},
+					index,
+				);
+			}),
+		);
+	},
+});
+const recordProcessedFacts = definePostgresStatement({
+	name: "live-query.change-ledger-facts-record-processed",
+	text: `INSERT INTO questpie_internal.processed_change_facts
+  (application_name, consumer_id, fact_identity, processed_at)
+SELECT $1, $2, fact_identity, pg_catalog.clock_timestamp()
+FROM pg_catalog.unnest($3::uuid[]) AS fact_identity
+ON CONFLICT DO NOTHING`,
+	parameterCount: 3,
+	parameters: (
+		input: Readonly<{
+			application: string;
+			consumer: string;
+			factIdentities: readonly string[];
+		}>,
+	) => [input.application, input.consumer, input.factIdentities],
+	decode: () => undefined,
+});
+
+const advanceHorizon = definePostgresStatement({
+	name: "live-query.reconciliation-horizon-advance",
+	text: `UPDATE questpie_internal.reconciliation_consumers
+SET xid_horizon = $3::xid8, acknowledged_at = pg_catalog.clock_timestamp()
+WHERE application_name = $1 AND consumer_id = $2`,
+	parameterCount: 3,
+	parameters: (input: ConsumerHorizon) => [
+		input.application,
+		input.consumer,
+		input.nextHorizon,
+	],
+	decode(result) {
+		if (result.rowCount !== 1)
+			throw new TypeError("Change reconciliation horizon did not advance");
+	},
+});
+
+async function reconcilePostgresDatabaseChangeLedgerAttempt(
+	input: PostgresChangeReconciliationCommon &
+		Readonly<{ database: PostgresDatabase }>,
+): Promise<ChangeReconciliationResultV1> {
+	const application = text(input.application, "Change Ledger application");
+	const consumer = text(input.consumer, "Change Ledger consumer");
+	if (input.effect && input.effect.consumer !== consumer)
+		throw new TypeError(
+			"Change Ledger consumer must match the deployment invalidation effect",
+		);
+	return input.database.transaction({
+		mode: { isolation: "repeatableRead", access: "readWrite" },
+		control: { signal: input.signal },
+		async use(transaction) {
+			const identity = { application, consumer };
+			await transaction.execute(initializeConsumer, identity);
+			const horizon = await transaction.execute(readHorizon, identity);
+			const facts = await transaction.execute(readFacts, {
+				...identity,
+				...horizon,
+			});
+			await input.apply(facts, {
+				prior: horizon.priorHorizon,
+				next: horizon.nextHorizon,
+			});
+			await input.effect?.apply({ application, facts, transaction });
+			if (facts.length > 0)
+				await transaction.execute(recordProcessedFacts, {
+					...identity,
+					factIdentities: facts.map(({ factIdentity }) => factIdentity),
+				});
+			await transaction.execute(advanceHorizon, {
+				...identity,
+				nextHorizon: horizon.nextHorizon,
+			});
+			return Object.freeze({
+				priorHorizon: horizon.priorHorizon,
+				nextHorizon: horizon.nextHorizon,
+				facts,
+			});
+		},
+	});
 }
 
 async function reconcilePostgresChangeLedgerAttempt(
@@ -278,10 +452,11 @@ WHERE application_name = $1 AND consumer_id = $2`,
 	}
 }
 
-function postgresErrorNumber(error: unknown): string | null {
-	if (!error || typeof error !== "object") return null;
-	const errno = (error as Readonly<{ errno?: unknown }>).errno;
-	return typeof errno === "string" ? errno : null;
+function isSerializationFailure(error: unknown): boolean {
+	if (error instanceof QuestpiePostgresError)
+		return error.code === "serializationFailure";
+	if (!error || typeof error !== "object") return false;
+	return (error as Readonly<{ errno?: unknown }>).errno === "40001";
 }
 
 function waitForReconciliationRetry(
@@ -310,9 +485,14 @@ export async function reconcilePostgresChangeLedger(
 ): Promise<ChangeReconciliationResultV1> {
 	for (let attempt = 1; ; attempt += 1) {
 		try {
-			return await reconcilePostgresChangeLedgerAttempt(input);
+			return input.database !== undefined
+				? await reconcilePostgresDatabaseChangeLedgerAttempt({
+						...input,
+						database: input.database,
+					})
+				: await reconcilePostgresChangeLedgerAttempt(input);
 		} catch (error) {
-			if (postgresErrorNumber(error) !== "40001" || attempt === 16) throw error;
+			if (!isSerializationFailure(error) || attempt === 16) throw error;
 			await waitForReconciliationRetry(attempt, input.signal);
 		}
 	}
