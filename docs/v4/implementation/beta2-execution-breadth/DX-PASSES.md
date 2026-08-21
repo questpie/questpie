@@ -157,6 +157,60 @@ This is still a store tracer, not coordinator closure: the production
 coordinator continues to accept Bun `SQL` and construct its Bun-backed stores
 (`packages/runtime/src/application/realtime/postgres-coordinator.ts:103`-`:120`).
 
+`1ddfb42b` crosses the PB-04 coordinator narrowly. Its private selection is
+disjoint: a direct caller supplies only the Runtime-owned `transaction` and
+`listen` capabilities, while the compatibility branch supplies Bun `SQL` and
+the synthetic tick source
+(`packages/runtime/src/application/realtime/postgres-coordinator-runtime.ts:18`-`:36`).
+Database mode creates the `questpie_change` listener with the ten-second
+fallback, reconciles a rotation candidate's durable Change Ledger without
+process-local fanout, and runs the full coordinator only for the active
+generation (`packages/runtime/src/application/realtime/postgres-coordinator-runtime.ts:114`-`:129`).
+The coordinator gates attach, open, acknowledge, and explicit scans on ready
+admission, owns a listener that is still starting when drain wins, closes that
+listener before withdrawing scopes, and treats the owner signal as drain
+(`packages/runtime/src/application/realtime/postgres-coordinator.ts:487`-`:600`,
+`:603`-`:640`). The two hostile lifecycle controls close the starting listener
+exactly once and prove that both concurrent drain and owner abort leave scans
+unavailable (`1ddfb42b:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:285`-`:367`).
+
+The retained PostgreSQL 17 run at this head is **6/6 with 98 assertions**. Its
+new positive control first quiesces attach/open-triggered reconciliation, then
+commits a Change Ledger fact and `pg_notify` from an independent writer and
+receives the update before the ten-second fallback
+(`1ddfb42b:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:395`-`:441`).
+After drain, attach is false, open is unavailable, explicit scan is refused,
+and the attempted scope leaves zero durable rows (`:442`-`:484`). This proves
+the normal-path arbitrary-writer LISTEN wake and the coordinator lifecycle; it
+does not close the whole hostile PB-04 question.
+
+The generated application remains on the compatibility path: its emitted
+module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
+passes `sql` to the Live Query coordinator
+(`packages/compiler/src/runtime/application.ts:196`, `:272`-`:315`). PB-05
+still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
+callers, and the production-wide deletion test.
+
+### Remaining PB-04 hostile closure matrix after `1ddfb42b`
+
+| Missing hostile case                          | Exact falsifying witness required                                                                                                                                                                                                             |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Notification loss across disconnect/reconnect | Hold a Change Ledger writer transaction, sever the real coordinator listener before commit, emit no `NOTIFY`, and prove reconnect reconciliation delivers the committed change before the ten-second fallback.                                |
+| Duplicate and coalesced notifications         | Drive repeated and coalesced `NOTIFY` wakes around committed facts and prove monotonic frontier consumption with no duplicate generation or frame.                                                                                            |
+| Healthy-listener periodic fallback            | Commit a fact without `NOTIFY` while the listener stays healthy and prove the configured periodic reconciliation eventually delivers it exactly once.                                                                                         |
+| Process replacement/startup recovery          | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
+| Transaction rollback                          | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
+| Runtime generation rotation                   | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
+| Drain during in-flight reconciliation         | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
+| Coordinator-owned reconciliation failure      | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
+| Single fallback owner                         | Instrument database mode and prove it constructs no synthetic reconciliation timer in addition to the listener's fallback interval.                                                                                                           |
+
+PB-03's generic listener tests remain prerequisites for several rows, but they
+cannot substitute for these Change Ledger and coordinator-level witnesses. A
+row closes only when the actual database-mode coordinator drives the stated
+failure; a Bun compatibility test or a generic monotonic table does not close
+it.
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from
