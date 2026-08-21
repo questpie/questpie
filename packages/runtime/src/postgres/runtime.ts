@@ -16,6 +16,7 @@ type ListenerInput = Readonly<{
 	fallbackIntervalMs: number;
 	reconcile(
 		input: Readonly<{
+			admission: "active" | "candidate";
 			reason: PostgresReconcileReason;
 			database: PostgresDatabase;
 			signal: AbortSignal;
@@ -53,6 +54,7 @@ type Generation = {
 	configuration: PostgresDatabaseConfiguration;
 	database: PostgresDatabase;
 	listener?: PostgresListener;
+	listenerAdmission?: { active: boolean };
 };
 
 async function beforeDeadline<Value>(
@@ -129,11 +131,18 @@ export function createRuntimePostgres(
 		database: PostgresDatabase,
 		directConnectionUrl: string,
 		input: ListenerInput,
+		admission: { active: boolean },
 	): Promise<PostgresListener> =>
 		createPostgresListener({
 			directConnectionUrl,
 			database,
-			...input,
+			channel: input.channel,
+			fallbackIntervalMs: input.fallbackIntervalMs,
+			reconcile: (reconciliation) =>
+				input.reconcile({
+					...reconciliation,
+					admission: admission.active ? "active" : "candidate",
+				}),
 		});
 
 	const lifecycleFailure = (phase: "connect" | "checkout") =>
@@ -152,15 +161,18 @@ export function createRuntimePostgres(
 			let startup!: Promise<PostgresListener>;
 			startup = (async () => {
 				let listener: PostgresListener | undefined;
+				const admission = { active: true };
 				try {
 					listener = await createListener(
 						current.database,
 						current.configuration.directConnectionUrl,
 						input,
+						admission,
 					);
 					if (state !== "ready") throw lifecycleFailure("connect");
 					const ownedListener = listener;
 					current.listener = ownedListener;
+					current.listenerAdmission = admission;
 					const facade: PostgresListener = Object.freeze({
 						facts() {
 							return current.listener?.facts() ?? ownedListener.facts();
@@ -172,6 +184,9 @@ export function createRuntimePostgres(
 							listenerInput = undefined;
 							const active = current.listener;
 							current.listener = undefined;
+							if (current.listenerAdmission)
+								current.listenerAdmission.active = false;
+							current.listenerAdmission = undefined;
 							await active?.close(closeInput);
 						},
 					});
@@ -206,10 +221,13 @@ export function createRuntimePostgres(
 					);
 					if (state !== "rotating") throw lifecycleFailure("connect");
 					if (listenerInput) {
+						const admission = { active: false };
+						candidate.listenerAdmission = admission;
 						const startingListener = createListener(
 							candidate.database,
 							input.configuration.directConnectionUrl,
 							listenerInput,
+							admission,
 						);
 						try {
 							candidate.listener = await beforeDeadline(
@@ -234,10 +252,15 @@ export function createRuntimePostgres(
 				}
 
 				const previous = current;
+				if (previous.listenerAdmission)
+					previous.listenerAdmission.active = false;
+				if (candidate.listenerAdmission)
+					candidate.listenerAdmission.active = true;
 				current = candidate;
 				rotationCandidate = undefined;
 				generation += 1;
 				rotations += 1;
+				void current.listener?.requestReconcile().catch(() => {});
 				await previous.listener?.close({ deadlineAt: input.deadlineAt });
 				await previous.database.close({ deadlineAt: input.deadlineAt });
 				const previousCounters = previous.database.facts().counters;

@@ -1420,11 +1420,16 @@ postgresTest(
 		const runtime = createRuntimePostgres(databaseConfiguration());
 		const channel = definePostgresChannel("qp_pb03_rotation_wake");
 		const reasons: string[] = [];
+		let failNextCandidate = false;
 		const listener = await runtime.listen({
 			channel,
 			fallbackIntervalMs: 10_000,
-			reconcile: async ({ reason }) => {
-				reasons.push(reason);
+			reconcile: async ({ admission, reason }) => {
+				reasons.push(`${admission}:${reason}`);
+				if (admission === "candidate" && failNextCandidate) {
+					failNextCandidate = false;
+					throw new Error("candidate startup refused");
+				}
 			},
 		});
 		let verificationEntered: (() => void) | undefined;
@@ -1465,7 +1470,32 @@ postgresTest(
 			counters: { rotations: 1 },
 		});
 		expect(listener.facts()).toMatchObject({ state: "healthy" });
-		expect(reasons).toEqual(["startup", "startup"]);
+		expect(reasons).toEqual([
+			"active:startup",
+			"candidate:startup",
+			"active:notification",
+		]);
+
+		failNextCandidate = true;
+		await expect(
+			runtime.rotate({
+				configuration: databaseConfiguration(),
+				deadlineAt: Date.now() + 1_000,
+				verify: () => Promise.resolve(),
+			}),
+		).rejects.toMatchObject({ phase: "reconcile" });
+		expect(runtime.facts()).toMatchObject({
+			state: "ready",
+			generation: 2,
+			listener: { state: "healthy" },
+			counters: { rotations: 1 },
+		});
+		expect(reasons).toEqual([
+			"active:startup",
+			"candidate:startup",
+			"active:notification",
+			"candidate:startup",
+		]);
 
 		const unreachable = new URL(postgresUrl());
 		unreachable.port = "1";
@@ -1511,6 +1541,164 @@ postgresTest(
 			}),
 		).resolves.toBe("winner-retained");
 		await runtime.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+postgresTest(
+	"admits a replacement listener only after its startup frontier is complete",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		const channel = definePostgresChannel("qp_pb04_rotation_admission");
+		const reconciliations: string[] = [];
+		let candidateDatabase: unknown;
+		let candidateEntered: (() => void) | undefined;
+		let releaseCandidate: (() => void) | undefined;
+		const candidateStarting = new Promise<void>((resolve) => {
+			candidateEntered = resolve;
+		});
+		const candidateHeld = new Promise<void>((resolve) => {
+			releaseCandidate = resolve;
+		});
+		const listener = await runtime.listen({
+			channel,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ admission, database, reason }) => {
+				const source = database === candidateDatabase ? "candidate" : "old";
+				reconciliations.push(`${source}:${admission}:${reason}`);
+				if (admission === "candidate" && reason === "startup") {
+					candidateEntered?.();
+					await candidateHeld;
+				}
+			},
+		});
+		try {
+			expect(reconciliations).toEqual(["old:active:startup"]);
+			const rotating = runtime.rotate({
+				configuration: databaseConfiguration(),
+				deadlineAt: Date.now() + 2_000,
+				verify: (candidate) => {
+					candidateDatabase = candidate;
+					return Promise.resolve();
+				},
+			});
+			await candidateStarting;
+			expect(runtime.facts()).toMatchObject({
+				state: "rotating",
+				generation: 1,
+			});
+			expect(reconciliations).toEqual([
+				"old:active:startup",
+				"candidate:candidate:startup",
+			]);
+			await runtime.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: (transaction) =>
+					transaction.execute(notify, {
+						channel,
+						payload: "queued-during-candidate-startup",
+					}),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 25));
+			expect(reconciliations).toEqual([
+				"old:active:startup",
+				"candidate:candidate:startup",
+				"old:active:notification",
+			]);
+			expect(
+				reconciliations.filter((entry) =>
+					entry.startsWith("candidate:active:"),
+				),
+			).toEqual([]);
+			releaseCandidate?.();
+			await rotating;
+			expect(runtime.facts()).toMatchObject({
+				state: "ready",
+				generation: 2,
+				counters: { rotations: 1 },
+			});
+			expect(reconciliations).toEqual([
+				"old:active:startup",
+				"candidate:candidate:startup",
+				"old:active:notification",
+				"candidate:candidate:notification",
+				"candidate:active:notification",
+			]);
+		} finally {
+			releaseCandidate?.();
+			await listener.close({ deadlineAt: Date.now() + 1_000 });
+			await runtime.close({ deadlineAt: Date.now() + 1_000 });
+		}
+	},
+);
+
+postgresTest(
+	"keeps the admitted listener when its post-swap reconciliation fails",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		const reconciliations: string[] = [];
+		let failNextActiveScan = false;
+		let activeScanEntered: (() => void) | undefined;
+		let releaseActiveScan: (() => void) | undefined;
+		let activeScanFailed: (() => void) | undefined;
+		const activeScanStarting = new Promise<void>((resolve) => {
+			activeScanEntered = resolve;
+		});
+		const activeScanHeld = new Promise<void>((resolve) => {
+			releaseActiveScan = resolve;
+		});
+		const activeScanFailureObserved = new Promise<void>((resolve) => {
+			activeScanFailed = resolve;
+		});
+		const listener = await runtime.listen({
+			channel: definePostgresChannel("qp_pb04_rotation_scan_failure"),
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ admission, reason }) => {
+				reconciliations.push(`${admission}:${reason}`);
+				if (admission === "active" && failNextActiveScan) {
+					activeScanEntered?.();
+					await activeScanHeld;
+					failNextActiveScan = false;
+					activeScanFailed?.();
+					throw new Error("qp-sensitive-post-swap-reconcile");
+				}
+			},
+		});
+		try {
+			failNextActiveScan = true;
+			const rotating = runtime.rotate({
+				configuration: databaseConfiguration(),
+				deadlineAt: Date.now() + 1_000,
+				verify: () => Promise.resolve(),
+			});
+			await activeScanStarting;
+			await expect(rotating).resolves.toBeUndefined();
+			expect(runtime.facts()).toMatchObject({
+				state: "ready",
+				generation: 2,
+				listener: { state: "healthy" },
+				counters: { rotations: 1 },
+			});
+			expect(reconciliations).toEqual([
+				"active:startup",
+				"candidate:startup",
+				"active:notification",
+			]);
+
+			releaseActiveScan?.();
+			await activeScanFailureObserved;
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			await expect(listener.requestReconcile()).resolves.toBeUndefined();
+			expect(reconciliations).toEqual([
+				"active:startup",
+				"candidate:startup",
+				"active:notification",
+				"active:notification",
+			]);
+		} finally {
+			releaseActiveScan?.();
+			await listener.close({ deadlineAt: Date.now() + 1_000 });
+			await runtime.close({ deadlineAt: Date.now() + 1_000 });
+		}
 	},
 );
 
