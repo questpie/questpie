@@ -197,6 +197,26 @@ and the listener reports generation two with exactly one reconnect
 assertions**. This is the actual RuntimePostgres coordinator, Change Ledger,
 and carrier path, not PB-03's generic frontier substitute.
 
+`ba008395` closes duplicate and coalesced wakes with two distinct controls.
+First, a raw `pg.Client` listens on an isolated control channel
+(`tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:702`-`:730`).
+Five identical notifications committed in one transaction arrive as exactly one
+`"same"`, while the positive control's five distinct payloads all arrive
+(`:797`-`:839`). This proves the PostgreSQL behavior rather than assuming it.
+Second, the real RuntimePostgres listener records reconciliation reasons while
+the coordinator's second evaluation is held
+(`:664`-`:725`). Five direct reconcile requests made during that in-flight run
+produce one queued follow-up: the notification-reason delta is exactly two for
+the original wake plus the coalesced follow-up (`:840`-`:853`).
+
+The end-to-end assertions keep that scheduling fact subordinate to durable
+correctness. One transaction appends three Change Ledger facts and sends the
+duplicate wakes (`:761`-`:803`); after release, invalidation advances by exactly
+three, the evaluated frontier catches it, the consumer horizon increases, the
+latest retained generation is two, evaluation count is two, and the carrier
+emits one update frame with no second frame (`:844`-`:908`). The PostgreSQL 17
+lane at this head passes **8/8 with 120 assertions**.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -204,11 +224,10 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `040e4bf6`
+### Remaining PB-04 hostile closure matrix after `ba008395`
 
 | Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Duplicate and coalesced notifications    | Drive repeated and coalesced `NOTIFY` wakes around committed facts and prove monotonic frontier consumption with no duplicate generation or frame.                                                                                            |
 | Healthy-listener periodic fallback       | Commit a fact without `NOTIFY` while the listener stays healthy and prove the configured periodic reconciliation eventually delivers it exactly once.                                                                                         |
 | Process replacement/startup recovery     | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
 | Transaction rollback                     | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
