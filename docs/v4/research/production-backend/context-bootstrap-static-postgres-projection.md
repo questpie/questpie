@@ -1,20 +1,21 @@
 # ContextBootstrap static PostgreSQL projection
 
-- Status: selected design; prototype implementation only, with no production
-  implementation or public-surface authority
-- Re-derived against: `feat/v4-beta-12` at
-  `fd9a07ee025353377b8b47d2f6e24879f4cc35bf`
+- Status: selected design; compiler/linker/readiness and private root-signal
+  seams implemented, generated static execution still deferred; no
+  public-surface authority
+- Re-derived against: `feat/v4-beta-12` at `f0ed025e`
 - Scope: replace Runtime-authored ContextBootstrap SQL with compiler-owned
   static statements executed through `PostgresDatabase`
 - Public surface: unchanged `ContextBootstrap.get(Collection, { key, select })`
 
 ## Prototype result and deferred production edges
 
-The prototype working tree based on `c9305edf` proves the compiler-owned
+The prototype sequence through `84324fa8` proves the compiler-owned
 artifact, per-plan and envelope semantic digests, the Runtime Build digest
-field, complete eligible Collection-set and logical Field/key/codec/nullability linking,
-primary-key cast validation, immutable static `PostgresStatement` construction,
-and decode-before-COMMIT behavior. A focused
+field, complete eligible Collection-set and logical
+Field/key/codec/nullability linking, primary-key cast validation, immutable
+static `PostgresStatement` construction, and decode-before-COMMIT behavior. A
+focused
 PostgreSQL 17 execution proves a known-positive selected value and proves that
 an unselected sensitive `companies.name` is `false, null` at the raw driver
 boundary and absent from the decoded result. The compiler ratchet accepts 832
@@ -26,19 +27,38 @@ The prototype also corrected the selected SQL spelling from the nonexistent
 schema-qualified `pg_catalog.boolean` to PostgreSQL's canonical
 `pg_catalog.bool`.
 
+Generated readiness now has an independent compiler-embedded digest anchor and
+links the static artifact before database readiness (`a67ca4bd`). The private
+execution seam now creates exactly one `ContextBootstrap` view from each
+root-owned signal, isolates concurrent roots, and records Live Query Context
+only after a successful lookup (`84324fa8`). The generated compatibility path
+uses that root signal, but it still executes the legacy dynamic Bun SQL
+adapter. The linked static adapter is ready behind the same private factory; it
+does not yet own generated execution.
+
+PostgreSQL 17 evidence at `f0ed025e` establishes why that last distinction is
+material. A generated Context lookup was held behind an
+`ACCESS EXCLUSIVE` table lock. Root abort rejected JavaScript execution and the
+handler remained uncalled, but the exact backend PID stayed active, inside its
+transaction, and waiting on the same PostgreSQL lock until the holder released
+it. Only then did the transaction clear, after which the same application
+served another root. The current Bun compatibility path therefore prevents
+late disclosure but does not cancel retained server work. This is a blocker
+witness for the one-Pool `RuntimePostgres` ownership flip, not successful
+cancellation evidence.
+
 The following remain downstream and are not claimed by this prototype:
 
-- embedding an independent expected digest in the generated server bundle and
-  linking the artifact during generated Runtime readiness;
 - physical SQL descriptor, placeholder, CASE-association, and result-alias
   linkage beyond semantic-digest binding, without reconstructing SQL in the
   Runtime, plus its hostile matrix;
 - replacing the generated Bun `ContextBootstrap` adapter with this linked
   statement;
-- forwarding each root's cancellation signal through generated Context
-  Resolution rather than only exposing the private execution seam;
 - performing the one-time generated Runtime flip to one shared
   `RuntimePostgres` and one Pool; and
+- proving that root abort, deadline, and shutdown cancel or destroy the exact
+  PostgreSQL backend and roll back its transaction before a blocker is
+  released; and
 - executing the 832-Field maximum-bound statement on PostgreSQL.
 
 ## Boundary
@@ -58,7 +78,7 @@ runtime `lookup.select` keys, and sends that text through Bun SQL
 decodes the returned row only after that helper has completed its transaction
 (`:390`-`:408`). Generated application code constructs this adapter from the
 embedded Schema Projection and the generated Bun SQL owner
-(`packages/compiler/src/runtime/application.ts:292`-`:301`). The useful public
+(`packages/compiler/src/runtime/application.ts:298`-`:305`). The useful public
 job is correct, but SQL ownership and decoding sit on the wrong side of the
 PB-05 PostgreSQL seam.
 
@@ -69,7 +89,7 @@ to the Bun SQL Pool. It may add compiler artifacts, linkers, and compatibility
 callers while generated production construction remains on Bun; the ownership
 flip happens once after Context, Query, Mutation, realtime, Durable, and
 readiness callers can all use the one module
-(`generated-runtime-operational-profile.md:9`-`:17`, `:124`-`:135`).
+(`generated-runtime-operational-profile.md:9`-`:17`, `:131`-`:144`).
 
 ## Selected statement shape
 
@@ -247,34 +267,35 @@ Policy or a handler, preserving ADR-0010.
 
 ## Execution-scoped cancellation
 
-The migration must correct one existing private seam rather than copying it.
-The generated adapter currently captures only the application-level
-`postgresController.signal`
-(`packages/compiler/src/runtime/application.ts:293`-`:301`). During a root,
-the execution engine passes the single application bootstrap directly to the
-Context resolver and checks its root signal only after resolution
-(`packages/runtime/src/execution/index.ts:243`-`:279`). Therefore aborting one
-root does not currently cancel its blocked bootstrap statement.
-
-Keep the public `ContextBootstrap` interface unchanged. Change the private
-Runtime program seam to an execution-scoped factory:
+The migration corrected the private causal seam without changing the public
+`ContextBootstrap` interface. The Runtime program owns an execution-scoped
+factory:
 
 ```ts
 type RuntimeContextBootstrapFactory = (signal: AbortSignal) => ContextBootstrap;
 ```
 
-The root creates one bootstrap view from its own controller signal before it
-calls `context.resolve`; the Live Query observation wrapper decorates that
-same view. The view passes the signal as `PostgresControl.signal`. The
-PostgresDatabase already combines caller, deadline, and shutdown cancellation
-at transaction admission (`packages/runtime/src/postgres/index.ts:306`-`:325`)
-and owns backend cancellation, rollback, or connection destruction. Do not use
-mutable closure state, AsyncLocalStorage, a public signal argument on
-`bootstrap.get`, or a Pool per Execution.
+Each root now creates one bootstrap view from its own controller signal before
+`context.resolve`, and the Live Query observation wrapper decorates that same
+view (`packages/runtime/src/execution/index.ts:247`-`:276`). The generated Bun
+compatibility factory receives the exact root signal
+(`packages/compiler/src/runtime/application.ts:302`-`:335`). This repairs
+causal signal ownership and concurrent-root isolation, but it does not by
+itself guarantee server cancellation: `f0ed025e` proves that Bun may reject the
+caller while its backend remains blocked and transaction-bound.
+
+The final generated adapter must use the already-linked static plan through
+`PostgresDatabase`. That module combines caller, deadline, and shutdown
+cancellation at transaction admission and owns backend cancellation, rollback,
+or connection destruction. The hostile proof must observe the exact backend
+becoming absent or cleanly idle with no transaction or target lock while the
+blocking lock is still held. Releasing the blocker first is a false positive.
+Do not use mutable closure state, AsyncLocalStorage, a public signal argument
+on `bootstrap.get`, or a Pool per Execution.
 
 Application shutdown remains the database owner's signal and shared close
-deadline. Request cancellation remains the root's signal. Both reach the same
-ordinary Pool; neither creates a second owner.
+deadline. Request cancellation remains the root's signal. After the ownership
+flip both must reach the same ordinary Pool; neither may create a second owner.
 
 ## Hostile proof matrix
 

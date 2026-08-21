@@ -2,7 +2,7 @@
 
 - Status: provisional implementation profile; not a stable production latency
   guarantee
-- Re-derived against: `feat/v4-beta-12` at `f2bfbabf`
+- Re-derived against: `feat/v4-beta-12` at `f0ed025e`
 - Scope: generated Runtime construction while PB-05 removes Bun SQL
 - Public surface: exactly `connectionUrl` and `directConnectionUrl`; every value
   below remains framework-owned
@@ -70,13 +70,28 @@ they do not sum to a transaction or shutdown budget. A Mutation may issue many
 individually bounded statements. Only the shared absolute lifecycle deadline and
 its cancellation/destruction path can bound application close.
 
-The shared close deadline is not implemented today. Runtime creates its own
-relative drain window (`packages/runtime/src/application/index.ts:205`-`:207`,
-`:589`-`:618`), while the realtime coordinator separately computes another
-30-second deadline
-(`packages/runtime/src/application/realtime/postgres-coordinator-runtime.ts:130`-`:139`).
-`RuntimePostgres.close()` already accepts an absolute deadline. PB-05 must join
-these owners before it can claim a bounded application shutdown.
+The compatibility shutdown path now captures one absolute deadline in the
+generated `app.close()` and forwards that same scalar through Runtime and
+realtime drain (`packages/compiler/src/runtime/application.ts:507`-`:514`;
+`packages/runtime/src/application/index.ts:594`-`:652`). Lifecycle owners copy
+the scalar before awaiting, database-mode coordinator startup is fenced by its
+drain signal
+(`packages/runtime/src/application/realtime/postgres-coordinator-runtime.ts:122`-`:160`),
+and post-stop telemetry is terminal
+(`packages/runtime/src/application/index.ts:219`-`:221`;
+`tests/unit/beta05-runtime-application.test.ts:1759`-`:1795`). This prerequisite
+is complete without constructing a second Pool. The final ownership flip must
+extend the same deadline to the single generated `RuntimePostgres` owner and
+prove listener-before-Pool closure and zero post-close checkout.
+
+Root-scoped Context causality is also complete, but server cancellation on the
+remaining Bun compatibility path is not. The PG17 witness at `f0ed025e` shows
+that a lock-blocked Context root can reject after abort while its exact backend
+remains active and transaction-bound until the blocker is released. This
+prevents disclosure, not database work. PB-05 must not paper over the gap with
+a second cancellation Pool or an ad hoc `pg_cancel_backend` owner; the one-Pool
+`RuntimePostgres` flip must make the existing cancellation/destruction path the
+sole owner and retain the hostile backend-state proof.
 
 ## Measurement before promotion
 
@@ -125,11 +140,12 @@ values (`docs/v4/prototypes/statement-timeout-gate/DECISION.md:402`-`:475`).
 3. separately measure contended lock waits and transaction-idle lifecycle
    phases;
 4. derive and hostile-test each server timeout ceiling from its own evidence;
-5. make one absolute application close deadline executable;
+5. retain the executable single absolute application close deadline;
 6. migrate internal callers behind `PostgresDatabase` while the generated app
    still owns only the Bun compatibility Pool;
 7. flip generated construction once to the completed `RuntimePostgres`
-   profile and delete its Bun SQL owner;
+   profile, prove blocked Context cancellation reaches the backend while the
+   blocker remains held, and delete its Bun SQL owner;
 8. run representative Query, Mutation, realtime, Durable, startup, saturation,
    rotation, and shutdown evidence before promoting defaults.
 
