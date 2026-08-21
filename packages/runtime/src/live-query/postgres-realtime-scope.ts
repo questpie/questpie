@@ -1,15 +1,11 @@
 import type { SQL } from "bun";
 
+import type { PostgresDatabase } from "../postgres";
 import { createPostgresRealtimeGenerationStore } from "./postgres-realtime-generations";
+import { createPostgresRealtimeGenerationDatabaseStore } from "./postgres-realtime-generations-database";
 import {
 	scopeLockIdentity,
-	type PostgresRealtimeAcknowledgement,
 	type PostgresRealtimeGeneration,
-	type PostgresRealtimeGenerationStage,
-	type PostgresRealtimeOpenWatch,
-	type PostgresRealtimeScopeAuthority,
-	type PostgresRealtimeScopeLease,
-	type PostgresRealtimeWatch,
 	validBoundedIdentity,
 	validDigest,
 	validateApplicationIdentity,
@@ -17,58 +13,35 @@ import {
 	validateScope,
 	validateScopeLease,
 } from "./postgres-realtime-scope-contract";
+import { createPostgresRealtimeScopeDatabaseStore } from "./postgres-realtime-scope-database";
+import type { PostgresRealtimeScopeStore } from "./postgres-realtime-scope-store";
 
 export type {
 	PostgresRealtimeScopeLease,
 	PostgresRealtimeWatch,
 } from "./postgres-realtime-scope-contract";
+export type { PostgresRealtimeScopeStore } from "./postgres-realtime-scope-store";
 const unavailable = Object.freeze({ status: "unavailable" as const });
 const limit = Object.freeze({ status: "limit" as const });
-
-export type PostgresRealtimeScopeStore = Readonly<{
-	attachScope(
-		input: PostgresRealtimeScopeAuthority,
-	): Promise<
-		| Readonly<{ status: "attached"; holderGeneration: bigint }>
-		| typeof unavailable
-	>;
-	renewScope(input: PostgresRealtimeScopeLease): Promise<boolean>;
-	openWatch(
-		input: PostgresRealtimeOpenWatch,
-	): Promise<
-		| Readonly<{ status: "opened"; activeSlot: number }>
-		| typeof unavailable
-		| typeof limit
-	>;
-	scanOpenWatches(
-		input: PostgresRealtimeScopeLease,
-	): Promise<readonly PostgresRealtimeWatch[]>;
-	readOpenWatch(
-		input: PostgresRealtimeScopeAuthority &
-			Readonly<{ bindingIdentity: string }>,
-	): Promise<PostgresRealtimeWatch | undefined>;
-	stageGeneration(input: PostgresRealtimeGenerationStage): Promise<boolean>;
-	acknowledgeWatch(input: PostgresRealtimeAcknowledgement): Promise<boolean>;
-	closeWatch(
-		input: PostgresRealtimeScopeAuthority &
-			Readonly<{ bindingIdentity: string }>,
-	): Promise<boolean>;
-	withdrawScope(input: PostgresRealtimeScopeLease): Promise<boolean>;
-	expireScopes(
-		input: Readonly<{
-			applicationName: string;
-			deploymentDigest: string;
-		}>,
-	): Promise<Readonly<{ scopes: number; watches: number }>>;
-}>;
 
 function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 	return Buffer.from(left).equals(Buffer.from(right));
 }
 
 export function createPostgresRealtimeScopeStore(
-	input: Readonly<{ sql: SQL }>,
+	input:
+		| Readonly<{ database: PostgresDatabase; sql?: never }>
+		| Readonly<{ database?: never; sql: SQL }>,
 ): PostgresRealtimeScopeStore {
+	if (input.database) {
+		const generations = createPostgresRealtimeGenerationDatabaseStore(
+			input.database,
+		);
+		return createPostgresRealtimeScopeDatabaseStore({
+			database: input.database,
+			generations,
+		});
+	}
 	const generations = createPostgresRealtimeGenerationStore(input.sql);
 	return Object.freeze({
 		async attachScope(scope) {

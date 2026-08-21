@@ -7,9 +7,45 @@ import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import { ensureInternalProtocolV3 } from "../../../packages/compiler/src/schema";
 import { sha256Digest } from "../../../packages/runtime/src/canonical-json";
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
+import { attachScope as attachScopeStatement } from "../../../packages/runtime/src/live-query/postgres-realtime-scope-statements";
+import {
+	createPostgresDatabase,
+	type PostgresDatabase,
+	type PostgresStatement,
+} from "../../../packages/runtime/src/postgres";
 
 const databases = process.env.PGHOST
 	? [new SQL({ max: 1 }), new SQL({ max: 1 }), new SQL({ max: 1 })]
+	: [];
+const connectionUrl = (() => {
+	const url = new URL("postgres://localhost/postgres");
+	url.hostname = process.env.PGHOST ?? "127.0.0.1";
+	url.port = process.env.PGPORT ?? "5432";
+	url.username = process.env.PGUSER ?? "postgres";
+	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.href;
+})();
+function createScopeDatabase(): PostgresDatabase {
+	return createPostgresDatabase({
+		connectionUrl,
+		directConnectionUrl: connectionUrl,
+		pool: {
+			max: 3,
+			connectTimeoutMs: 2_000,
+			checkoutTimeoutMs: 2_000,
+			idleTimeoutMs: 5_000,
+			maxLifetimeSeconds: 60,
+		},
+		timeouts: {
+			statementMs: 10_000,
+			lockMs: 1_000,
+			idleInTransactionMs: 10_000,
+		},
+	});
+}
+const scopeDatabases = process.env.PGHOST
+	? [createScopeDatabase(), createScopeDatabase(), createScopeDatabase()]
 	: [];
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
@@ -64,6 +100,10 @@ function openInput(scopeIdentity: string, bindingIdentity: string) {
 	} as const;
 }
 
+function store(index: number) {
+	return createPostgresRealtimeScopeStore({ database: scopeDatabases[index]! });
+}
+
 beforeEach(async () => {
 	await databases[0]?.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	if (databases[0]) await ensure(databases[0]);
@@ -74,16 +114,85 @@ afterAll(async () => {
 	await Promise.all(
 		databases.map((database) => database.close({ timeout: 0 })),
 	);
+	await Promise.all(
+		scopeDatabases.map((database) =>
+			database.close({ deadlineAt: Date.now() + 2_000 }),
+		),
+	);
+});
+
+test("refuses an impossible realtime attachment cardinality", () => {
+	expect(() =>
+		attachScopeStatement.decode({
+			command: "INSERT",
+			rowCount: 2,
+			rows: [["1"], ["2"]],
+		}),
+	).toThrow("realtime scope attachment result cardinality is invalid");
 });
 
 describe.skipIf(databases.length === 0)(
 	"BETA-07 PostgreSQL realtime scope authority",
 	() => {
 		postgresTest(
+			"rolls back scope authority when watch persistence fails after opening",
+			async () => {
+				const baseDatabase = scopeDatabases[1]!;
+				const sabotagedDatabase: PostgresDatabase = {
+					facts: () => baseDatabase.facts(),
+					close: (input) => baseDatabase.close(input),
+					async transaction(request) {
+						return baseDatabase.transaction({
+							mode: request.mode,
+							control: request.control,
+							async use(transaction) {
+								async function execute<Input, Output>(
+									statement: PostgresStatement<Input, Output>,
+									value: Input,
+								): Promise<Output> {
+									const output = await transaction.execute(statement, value);
+									if (statement.name === "live-query.realtime-watch-insert")
+										throw new Error("sabotaged watch persistence");
+									return output;
+								}
+								const sabotaged = Object.freeze({ ...transaction, execute });
+								return request.use(sabotaged);
+							},
+						});
+					},
+				};
+				const scope = attachInput("scope:rollback");
+				const normal = store(0);
+				expect(await normal.attachScope(scope)).toEqual({
+					status: "attached",
+					holderGeneration: 1n,
+				});
+				await expect(
+					createPostgresRealtimeScopeStore({
+						database: sabotagedDatabase,
+					}).openWatch(openInput("scope:rollback", "binding:rollback")),
+				).rejects.toThrow("sabotaged watch persistence");
+				const [persisted] = await databases[0]!<
+					{ state: string; watches: number }[]
+				>`
+					select scope.state,
+					       count(watch.binding_identity)::integer as watches
+					from questpie_internal.realtime_scope_attachments scope
+					left join questpie_internal.realtime_watch_bindings watch
+					  using (application_name, scope_identity)
+					where scope.application_name = ${applicationName}
+					  and scope.scope_identity = 'scope:rollback'
+					group by scope.state
+				`;
+				expect(persisted).toEqual({ state: "attached", watches: 0 });
+			},
+		);
+
+		postgresTest(
 			"fences a stale holder after same-Principal deployment takeover",
 			async () => {
-				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
-				const fresh = createPostgresRealtimeScopeStore({ sql: databases[1]! });
+				const first = store(0);
+				const fresh = store(1);
 				const scope = attachInput("scope:takeover");
 				const firstLease = await first.attachScope(scope);
 				expect(firstLease).toEqual({
@@ -149,8 +258,8 @@ describe.skipIf(databases.length === 0)(
 		postgresTest(
 			"reattaches a normally withdrawn scope only for the same Principal and deployment",
 			async () => {
-				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
-				const fresh = createPostgresRealtimeScopeStore({ sql: databases[1]! });
+				const first = store(0);
+				const fresh = store(1);
 				const scope = attachInput("scope:normal-reconnect");
 				expect(await first.attachScope(scope)).toEqual({
 					status: "attached",
@@ -204,13 +313,9 @@ describe.skipIf(databases.length === 0)(
 		postgresTest(
 			"routes attach, open, scan, acknowledgement, and close across instances without reconstructing a Principal",
 			async () => {
-				const holder = createPostgresRealtimeScopeStore({ sql: databases[0]! });
-				const command = createPostgresRealtimeScopeStore({
-					sql: databases[1]!,
-				});
-				const acknowledger = createPostgresRealtimeScopeStore({
-					sql: databases[2]!,
-				});
+				const holder = store(0);
+				const command = store(1);
+				const acknowledger = store(2);
 				const attached = await holder.attachScope(attachInput("scope:a"));
 				expect(attached).toEqual({
 					status: "attached",
@@ -246,6 +351,12 @@ describe.skipIf(databases.length === 0)(
 					latest: null,
 				});
 				expect(Object.hasOwn(opened!, "principal")).toBe(false);
+				expect(
+					await holder.readOpenWatch({
+						...attachInput("scope:a"),
+						bindingIdentity: "binding:a",
+					}),
+				).toEqual(opened);
 
 				expect(
 					await command.openWatch({
@@ -328,6 +439,85 @@ describe.skipIf(databases.length === 0)(
 						acknowledged: true,
 					},
 				});
+				const successorToken = "opaque.successor.token";
+				expect(
+					await command.stageGeneration({
+						...lease,
+						bindingIdentity: "binding:a",
+						observedInvalidationGeneration: 2n,
+						generation: 2n,
+						resumeToken: successorToken,
+						resultBytes,
+						dependencyPlanBytes,
+						delivery: "update",
+						resetReason: null,
+					}),
+				).toBe(true);
+				const beforeSuccessorAcknowledgement = await databases[0]!<
+					{
+						generation: bigint;
+						latest: boolean;
+						acknowledged: boolean;
+					}[]
+				>`
+					select generation,
+					       latest_slot is not null as latest,
+					       ack_slot is not null as acknowledged
+					from questpie_internal.realtime_binding_generations
+					where application_name = ${applicationName}
+					  and scope_identity = 'scope:a'
+					  and binding_identity = 'binding:a'
+					order by generation
+				`;
+				expect(
+					beforeSuccessorAcknowledgement.map((row) => ({
+						...row,
+						generation: BigInt(row.generation),
+					})),
+				).toEqual([
+					{ generation: 1n, latest: false, acknowledged: true },
+					{ generation: 2n, latest: true, acknowledged: false },
+				]);
+				expect(
+					await acknowledger.acknowledgeWatch({
+						...attachInput("scope:a"),
+						bindingIdentity: "binding:a",
+						generation: 2n,
+						resumeToken: successorToken,
+					}),
+				).toBe(true);
+				const afterSuccessorAcknowledgement = await databases[0]!<
+					{
+						generation: bigint;
+						latest: boolean;
+						acknowledged: boolean;
+					}[]
+				>`
+					select generation,
+					       latest_slot is not null as latest,
+					       ack_slot is not null as acknowledged
+					from questpie_internal.realtime_binding_generations
+					where application_name = ${applicationName}
+					  and scope_identity = 'scope:a'
+					  and binding_identity = 'binding:a'
+					order by generation
+				`;
+				expect(
+					afterSuccessorAcknowledgement.map((row) => ({
+						...row,
+						generation: BigInt(row.generation),
+					})),
+				).toEqual([{ generation: 2n, latest: true, acknowledged: true }]);
+				expect((await holder.scanOpenWatches(lease))[0]).toMatchObject({
+					invalidationGeneration: 2n,
+					evaluatedInvalidationGeneration: 2n,
+					latest: {
+						generation: 2n,
+						tokenDigest: sha256Digest(successorToken),
+						delivery: "update",
+						acknowledged: true,
+					},
+				});
 				expect(
 					await command.closeWatch({
 						...attachInput("scope:a"),
@@ -341,8 +531,8 @@ describe.skipIf(databases.length === 0)(
 		postgresTest(
 			"enforces 64 active slots across scopes and instances while expiry and deployments remain independent",
 			async () => {
-				const first = createPostgresRealtimeScopeStore({ sql: databases[0]! });
-				const second = createPostgresRealtimeScopeStore({ sql: databases[1]! });
+				const first = store(0);
+				const second = store(1);
 				await first.attachScope(attachInput("scope:first"));
 				await second.attachScope(attachInput("scope:second"));
 				const secondLease = {
