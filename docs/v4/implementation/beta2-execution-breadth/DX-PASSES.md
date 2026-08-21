@@ -256,6 +256,23 @@ duplicate replacement frame nor an old-process frame arrives (`:1176`-`:1194`).
 The retained PostgreSQL 17 lane at this head passes **10/10 with 165
 assertions**.
 
+`f09c97ec` closes transaction rollback isolation. After the initial frame, an
+explicit scan establishes a clean baseline. An independent writer then inserts
+a Change Ledger fact and issues the real `questpie_change` notification inside
+one transaction that deliberately rolls back
+(`f09c97ec:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:595`-`:637`).
+The exact durable state and evaluation count remain unchanged, and the same
+already-pending carrier read stays silent (`:639`-`:649`).
+
+The positive control commits the identical fact and transactional notification
+through the same writer/listener path. That pending read resolves exactly once,
+invalidation and retained generation advance by one, evaluation catches up,
+and the consumer horizon advances (`:651`-`:679`). An idempotent rescan performs
+no additional evaluation, prunes the consumed ledger fact, preserves the
+frontiers and generation, and emits no duplicate frame (`:681`-`:702`). The
+PostgreSQL 17 lane at this head passes **11/11 with 185 assertions**, including
+six stable targeted repetitions.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -263,11 +280,10 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `96701486`
+### Remaining PB-04 hostile closure matrix after `f09c97ec`
 
 | Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Transaction rollback                     | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
 | Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
 | Drain during in-flight reconciliation    | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
 | Coordinator-owned reconciliation failure | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
