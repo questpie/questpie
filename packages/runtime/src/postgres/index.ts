@@ -340,10 +340,16 @@ export function createPostgresDatabase(
 	pool.on("error", () => {});
 	let state: "ready" | "draining" | "closed" = "ready";
 	let inFlight = 0;
+	const counters = {
+		checkoutTimeouts: 0,
+		statementTimeouts: 0,
+		cancellations: 0,
+		destroyedConnections: 0,
+	};
 	const shutdown = new AbortController();
 	let closing: Promise<void> | undefined;
 
-	const transaction: PostgresDatabase["transaction"] = async (input) => {
+	const executeTransaction: PostgresDatabase["transaction"] = async (input) => {
 		if (state !== "ready")
 			throw new QuestpiePostgresError({ code: state, phase: "checkout" });
 		const deadlineSignal =
@@ -387,12 +393,14 @@ export function createPostgresDatabase(
 		const destroy = () => {
 			if (destruction) return destruction;
 			destroyed = true;
+			counters.destroyedConnections += 1;
 			destruction = new Promise((resolve) => client.once("end", resolve));
 			client.release(true);
 			return destruction;
 		};
 		const cancel = () => {
 			if (cancellation) return;
+			counters.cancellations += 1;
 			cancellation =
 				backendPid === undefined
 					? destroy()
@@ -497,6 +505,17 @@ export function createPostgresDatabase(
 			inFlight -= 1;
 		}
 	};
+	const transaction: PostgresDatabase["transaction"] = async (input) => {
+		try {
+			return await executeTransaction(input);
+		} catch (error) {
+			if (error instanceof QuestpiePostgresError) {
+				if (error.code === "checkoutTimeout") counters.checkoutTimeouts += 1;
+				if (error.code === "statementTimeout") counters.statementTimeouts += 1;
+			}
+			throw error;
+		}
+	};
 
 	return Object.freeze({
 		transaction,
@@ -510,6 +529,7 @@ export function createPostgresDatabase(
 					waiting: pool.waitingCount,
 					inFlight,
 				}),
+				counters: Object.freeze({ ...counters }),
 			});
 		},
 		close(input: Readonly<{ deadlineAt: number }>) {

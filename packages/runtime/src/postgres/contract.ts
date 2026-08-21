@@ -151,6 +151,12 @@ export interface PostgresDatabase {
 			waiting: number;
 			inFlight: number;
 		}>;
+		counters: Readonly<{
+			checkoutTimeouts: number;
+			statementTimeouts: number;
+			cancellations: number;
+			destroyedConnections: number;
+		}>;
 	}>;
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }

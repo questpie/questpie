@@ -122,6 +122,24 @@ const insertCommitProbe = definePostgresStatement({
 	decode: () => undefined,
 });
 
+const createSensitiveConstraint = definePostgresStatement({
+	name: "pb03.sensitive-constraint-create",
+	text: `CREATE TEMP TABLE qp_pb03_sensitive (
+	value text CHECK (false)
+)`,
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const violateSensitiveConstraint = definePostgresStatement({
+	name: "pb03.sensitive-constraint-violate",
+	text: "INSERT INTO qp_pb03_sensitive (value) VALUES ($1::text)",
+	parameterCount: 1,
+	parameters: (value: string) => [value],
+	decode: () => undefined,
+});
+
 const backendIsCommitting = definePostgresStatement({
 	name: "pb03.backend-is-committing",
 	text: `SELECT EXISTS (
@@ -302,6 +320,56 @@ postgresTest(
 		} finally {
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
+	},
+);
+
+postgresTest(
+	"serializes only safe failures and operational facts",
+	async () => {
+		const postgres = database();
+		const sensitiveValue = "qp-sensitive-value";
+		const failure = await postgres
+			.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async (transaction) => {
+					await transaction.execute(createSensitiveConstraint, undefined);
+					await transaction.execute(violateSensitiveConstraint, sensitiveValue);
+				},
+			})
+			.catch((error: unknown) => error);
+		const serializedFailure = JSON.stringify(failure);
+		expect(JSON.parse(serializedFailure)).toEqual({
+			name: "QuestpiePostgresError",
+			code: "constraint",
+			phase: "statement",
+			statementName: "pb03.sensitive-constraint-violate",
+			sqlState: "23514",
+			retry: "never",
+		});
+		expect(serializedFailure).not.toContain(sensitiveValue);
+		expect(serializedFailure).not.toContain("INSERT INTO");
+		expect(serializedFailure).not.toContain(postgresUrl());
+
+		await expect(
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				control: { statementTimeoutMs: 25 },
+				use: (transaction) => transaction.execute(sleep, 0.25),
+			}),
+		).rejects.toMatchObject({ code: "statementTimeout" });
+		const serializedFacts = JSON.stringify(postgres.facts());
+		expect(JSON.parse(serializedFacts)).toMatchObject({
+			state: "ready",
+			pool: { max: 2, inFlight: 0 },
+			counters: {
+				checkoutTimeouts: 0,
+				statementTimeouts: 1,
+				cancellations: 0,
+				destroyedConnections: 0,
+			},
+		});
+		expect(serializedFacts).not.toContain(postgresUrl());
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
 	},
 );
 
