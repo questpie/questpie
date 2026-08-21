@@ -1,6 +1,7 @@
 import { afterAll, beforeEach, describe, expect, test } from "bun:test";
 
 import { SQL } from "bun";
+import { Client } from "pg";
 import { context as contextHelpers, principal } from "questpie";
 
 import { projectLiveQueryCompilation } from "../../../packages/compiler/src/live-query";
@@ -655,6 +656,263 @@ describe.skipIf(databases.length === 0)(
 							.catch(() => {});
 						await dropReconnectRole(databases[2]!);
 					}
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
+			"coalesces duplicate PostgreSQL wakes into one monotonic Live Query result",
+			async () => {
+				const runtime = runtimePostgres();
+				const reconciliationReasons: string[] = [];
+				let listener: PostgresListener | undefined;
+				const postgres: Pick<RuntimePostgres, "transaction" | "listen"> =
+					Object.freeze({
+						transaction: runtime.transaction,
+						async listen(input) {
+							listener = await runtime.listen({
+								...input,
+								async reconcile(reconciliation) {
+									reconciliationReasons.push(reconciliation.reason);
+									await input.reconcile(reconciliation);
+								},
+							});
+							return listener;
+						},
+					});
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before coalesced wakes";
+				let evaluations = 0;
+				let updateEntered!: () => void;
+				const updateEntry = new Promise<void>((resolve) => {
+					updateEntered = resolve;
+				});
+				let releaseUpdate!: () => void;
+				const updateHeld = new Promise<void>((resolve) => {
+					releaseUpdate = resolve;
+				});
+				const notificationControlChannel = "questpie_pb04_notify_control";
+				const notificationControl = new Client({
+					connectionString: postgresUrl(),
+					application_name: "questpie-pb04-notification-control",
+				});
+				const controlNotifications: string[] = [];
+				notificationControl.on("notification", (message) => {
+					if (message.channel === notificationControlChannel)
+						controlNotifications.push(message.payload ?? "");
+				});
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						if (evaluations === 2) {
+							updateEntered();
+							await updateHeld;
+						}
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+				});
+				try {
+					await notificationControl.connect();
+					await notificationControl.query(
+						'LISTEN "questpie_pb04_notify_control"',
+					);
+					await coordinator.start();
+					if (!listener) throw new Error("missing PostgreSQL listener");
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:coalesced-wakes"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:coalesced-wakes", {
+										scopeId: "scope:coalesced-wakes",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before coalesced wakes" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					const notificationReasonsBefore = reconciliationReasons.filter(
+						(reason) => reason === "notification",
+					).length;
+					const [before] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							horizon: string;
+							invalidation: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations generation
+						         where generation.application_name = watch.application_name
+						           and generation.scope_identity = watch.scope_identity
+						           and generation.binding_identity = watch.binding_identity) as generations,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:coalesced-wakes'
+						  and watch.binding_identity = 'binding:coalesced-wakes'
+					`;
+					if (!before) throw new Error("missing coalesced-wake binding");
+
+					body = "after coalesced wakes";
+					await databases[2]!.begin(async (writer) => {
+						await writer`
+							insert into questpie_internal.change_ledger
+							(application_name, transaction_id, collection_identity,
+							 change_kind, conservative)
+							select ${applicationName}, pg_catalog.pg_current_xact_id(),
+							       'collection:messages', 'collection', true
+							from pg_catalog.generate_series(1, 3)
+						`;
+						for (let duplicate = 0; duplicate < 5; duplicate += 1)
+							await writer`select pg_catalog.pg_notify('questpie_change', 'same')`;
+						for (let duplicate = 0; duplicate < 5; duplicate += 1)
+							await writer`
+								select pg_catalog.pg_notify(${notificationControlChannel}, 'same')
+							`;
+					});
+					await Promise.race([
+						updateEntry,
+						new Promise<never>((_resolve, reject) =>
+							setTimeout(
+								() => reject(new Error("coalesced update did not start")),
+								2_000,
+							),
+						),
+					]);
+					await waitUntil(
+						() => controlNotifications.length === 1,
+						"PostgreSQL did not coalesce identical notifications",
+					);
+					expect(controlNotifications).toEqual(["same"]);
+
+					await databases[2]!.begin(async (writer) => {
+						for (let distinct = 0; distinct < 5; distinct += 1)
+							await writer`
+								select pg_catalog.pg_notify(
+									${notificationControlChannel},
+									${`distinct-${distinct}`}
+								)
+							`;
+					});
+					await waitUntil(
+						() => controlNotifications.length === 6,
+						"PostgreSQL distinct-notification control did not fire",
+					);
+					expect(controlNotifications).toEqual([
+						"same",
+						"distinct-0",
+						"distinct-1",
+						"distinct-2",
+						"distinct-3",
+						"distinct-4",
+					]);
+					const queued = Array.from({ length: 5 }, () =>
+						listener!.requestReconcile(),
+					);
+					releaseUpdate();
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after coalesced wakes" }] },
+					});
+					await Promise.all(queued);
+					expect(
+						reconciliationReasons.filter((reason) => reason === "notification")
+							.length - notificationReasonsBefore,
+					).toBe(2);
+					await coordinator.durable!.requestScan();
+
+					const [after] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:coalesced-wakes'
+						  and watch.binding_identity = 'binding:coalesced-wakes'
+					`;
+					if (!after) throw new Error("missing coalesced-wake result");
+					expect(BigInt(after.invalidation)).toBe(
+						BigInt(before.invalidation) + 3n,
+					);
+					expect(after.evaluated).toBe(after.invalidation);
+					// The unacknowledged initial row is pruned when generation 2 stages.
+					// A duplicate recompute would therefore still keep one row but advance
+					// `latest` to 3, so both assertions are required.
+					expect(after.generations).toBe(before.generations);
+					expect(after.latest).toBe("2");
+					expect(BigInt(after.horizon)).toBeGreaterThan(BigInt(before.horizon));
+					expect(evaluations).toBe(2);
+
+					const unexpected = nextFrame(reader).then((frame) => ({ frame }));
+					expect(
+						await Promise.race([
+							unexpected,
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					await reader.cancel();
+				} finally {
+					releaseUpdate();
+					await carrier.drain();
+					await coordinator.drain();
+					await runtime.close({ deadlineAt: Date.now() + 2_000 });
+					await notificationControl.end().catch(() => {});
 				}
 			},
 			20_000,
