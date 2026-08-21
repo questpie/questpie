@@ -929,6 +929,24 @@ authority partition's expired retained results while acknowledging one. Each is
 narrower than the prune — one principal, one partition — so neither scales with
 the whole database, but neither has a bound either.
 
+**The write side is now closed, and the exposure is exactly these four.** The
+same classification over every `UPDATE` the runtime issues against
+`questpie_internal` — thirty-two — finds **none** unbounded. Thirty-one carry a
+row key in their own predicate. The thirty-second,
+`packages/runtime/src/live-query/postgres-durable-invalidation.ts:127`, looked
+like a fan-out and is not: it joins `FROM (VALUES …) AS dirty(…)` and matches
+`watch.scope_identity = dirty.scope_identity AND watch.binding_identity =
+dirty.binding_identity`, so it updates exactly the rows in a batch the caller
+supplies. So on the write side this gate's exposure is four `DELETE`s and
+nothing else — a list rather than an open question.
+
+**Two heuristic failures in that pass, recorded because the numbers came from
+it.** `packages/runtime/src/live-query/postgres.ts:250` was flagged unbounded and
+is keyed on `consumer_id`, which the key list did not contain; and the fan-out
+above was flagged bounded while I doubted it. One false positive, one correct
+call I distrusted, both settled by reading the predicate. The classifier's value
+is narrowing thirty-two statements to one worth reading, not deciding which.
+
 **The serving pair fails differently and worse in one respect.** A timeout there
 kills a user-facing operation rather than a maintenance cycle, and because both
 deletes are opportunistic cleanups riding inside that operation, the expired rows
