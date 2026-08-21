@@ -86,10 +86,10 @@ describe("BETA-01 generated contract", () => {
 			"durable-kernel.json",
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
-			"internal/application-ba4wd1j5.js",
-			"internal/application-ebvs8dee.js",
-			"internal/application-g3mpsx5s.js",
-			"internal/application-sg1bznvj.js",
+			"internal/application-8xk5sbpy.js",
+			"internal/application-9d2cx4yy.js",
+			"internal/application-9j6ksw6a.js",
+			"internal/application-p6ehc53e.js",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",
@@ -239,6 +239,33 @@ describe("BETA-01 generated contract", () => {
 		expect(first.generatedFiles[collaborationAuditContractPath]).not.toContain(
 			"Name extends string",
 		);
+		const generatedQueryPlans = JSON.parse(
+			first.generatedFiles["postgres-query-plans.json"] ?? "null",
+		);
+		const embeddedPlanMarker = "qp_guard_1";
+		expect(generatedQueryPlans.plans[0].sql).toContain(embeddedPlanMarker);
+		const oldAuthorityRoot = await temporaryRoot(
+			"beta01-embedded-query-plan-positive-control",
+		);
+		const oldAuthorityEntrypoint = join(oldAuthorityRoot, "application.ts");
+		await Bun.write(
+			oldAuthorityEntrypoint,
+			`export const postgresQueryPlans = ${JSON.stringify(generatedQueryPlans)};`,
+		);
+		const oldAuthorityBuild = await Bun.build({
+			entrypoints: [oldAuthorityEntrypoint],
+			minify: true,
+			target: "bun",
+		});
+		expect(oldAuthorityBuild.success).toBe(true);
+		expect(await oldAuthorityBuild.outputs[0]!.text()).toContain(
+			embeddedPlanMarker,
+		);
+		expect(
+			Object.entries(first.generatedFiles)
+				.filter(([path]) => path.endsWith(".js"))
+				.every(([, contents]) => !contents.includes(embeddedPlanMarker)),
+		).toBe(true);
 		expect(JSON.stringify(first.generatedFiles)).not.toMatch(
 			/Drizzle|Kysely|drizzle-orm|(?<!\.)\bany\b/,
 		);

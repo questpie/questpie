@@ -18,6 +18,11 @@ export type LinkedPostgresQueryPlan = Readonly<{
 	>;
 }>;
 
+export type LinkedPostgresQueryPlans = Readonly<{
+	plans: readonly LinkedPostgresQueryPlan[];
+	get(queryDigest: string): LinkedPostgresQueryPlan | undefined;
+}>;
+
 function freeze<T>(value: T): T {
 	if (!value || typeof value !== "object" || Object.isFrozen(value))
 		return value;
@@ -122,6 +127,58 @@ export function linkPostgresQueryPlan(
 		},
 	});
 	return Object.freeze({ plan, statement });
+}
+
+export function linkPostgresQueryPlans(
+	artifact: string,
+	expectedQueryDigests: readonly string[],
+): LinkedPostgresQueryPlans {
+	let decoded: unknown;
+	try {
+		decoded = JSON.parse(artifact);
+	} catch {
+		throw new TypeError("invalid PostgreSQL Query plans artifact");
+	}
+	if (!decoded || typeof decoded !== "object" || Array.isArray(decoded))
+		throw new TypeError("invalid PostgreSQL Query plans artifact");
+	const envelope = decoded as Readonly<Record<string, unknown>>;
+	if (
+		Object.keys(envelope).sort().join(",") !== "format,plans,version" ||
+		envelope.format !== "questpie.postgres-query-plans" ||
+		envelope.version !== 1 ||
+		!Array.isArray(envelope.plans)
+	)
+		throw new TypeError("invalid PostgreSQL Query plans artifact");
+	const plans = Object.freeze(
+		envelope.plans.map((plan) =>
+			linkPostgresQueryPlan(plan as PostgresQueryPlanV1),
+		),
+	);
+	for (let index = 1; index < plans.length; index += 1) {
+		if (plans[index - 1]!.plan.queryDigest >= plans[index]!.plan.queryDigest)
+			throw new TypeError(
+				"PostgreSQL Query plans must have unique sorted identities",
+			);
+	}
+	if (
+		expectedQueryDigests.length !== plans.length ||
+		expectedQueryDigests.some(
+			(queryDigest, index) =>
+				!/^[0-9a-f]{64}$/u.test(queryDigest) ||
+				(index > 0 && expectedQueryDigests[index - 1]! >= queryDigest) ||
+				plans[index]!.plan.queryDigest !== queryDigest,
+		)
+	)
+		throw new TypeError(
+			"PostgreSQL Query plans do not match the Runtime Query identities",
+		);
+	const byDigest = new Map(
+		plans.map((linked) => [linked.plan.queryDigest, linked] as const),
+	);
+	return Object.freeze({
+		plans,
+		get: (queryDigest: string) => byDigest.get(queryDigest),
+	});
 }
 
 export async function executeLinkedPostgresQueryPlan(

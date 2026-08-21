@@ -13,7 +13,10 @@ import {
 	type LinkedStructuralQueryObservationSlotV1,
 } from "../../packages/runtime/src/live-query";
 import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";
-import { linkPostgresQueryPlan } from "../../packages/runtime/src/relational";
+import {
+	linkPostgresQueryPlan,
+	linkPostgresQueryPlans,
+} from "../../packages/runtime/src/relational";
 
 const templateDigest = "a".repeat(64);
 const policyProgramDigest = "b".repeat(64);
@@ -529,6 +532,71 @@ test("rejects malformed PostgreSQL array-row results at the static statement", (
 	expect(() =>
 		statement.decode({ ...valid, rows: [[id1, "visible"]] }),
 	).toThrow("Query statement result width is invalid");
+});
+
+test("links the exact sorted PostgreSQL Query-plan artifact envelope", () => {
+	const second = {
+		...databasePlan,
+		queryDigest: "c".repeat(64),
+		templateDigest: "c".repeat(64),
+	};
+	const linked = linkPostgresQueryPlans(
+		JSON.stringify({
+			format: "questpie.postgres-query-plans",
+			version: 1,
+			plans: [databasePlan, second],
+		}),
+		[templateDigest, "c".repeat(64)],
+	);
+
+	expect(linked.plans.map(({ plan }) => plan.queryDigest)).toEqual([
+		templateDigest,
+		"c".repeat(64),
+	]);
+	expect(linked.get(templateDigest)).toBe(linked.plans[0]);
+	expect(linked.get("f".repeat(64))).toBeUndefined();
+
+	expect(() =>
+		linkPostgresQueryPlans(
+			JSON.stringify({
+				format: "questpie.postgres-query-plans",
+				version: 1,
+				plans: [second, databasePlan],
+			}),
+			[templateDigest, "c".repeat(64)],
+		),
+	).toThrow("PostgreSQL Query plans must have unique sorted identities");
+	expect(() =>
+		linkPostgresQueryPlans(
+			JSON.stringify({
+				format: "questpie.postgres-query-plans",
+				version: 1,
+				plans: [databasePlan],
+				extra: true,
+			}),
+			[templateDigest],
+		),
+	).toThrow("invalid PostgreSQL Query plans artifact");
+	expect(() =>
+		linkPostgresQueryPlans(
+			JSON.stringify({
+				format: "questpie.postgres-query-plans",
+				version: 1,
+				plans: [],
+			}),
+			[templateDigest],
+		),
+	).toThrow("PostgreSQL Query plans do not match the Runtime Query identities");
+	expect(() =>
+		linkPostgresQueryPlans(
+			JSON.stringify({
+				format: "questpie.postgres-query-plans",
+				version: 1,
+				plans: [databasePlan, second],
+			}),
+			[templateDigest],
+		),
+	).toThrow("PostgreSQL Query plans do not match the Runtime Query identities");
 });
 
 test("binds one exact authorized page and decodes structural disclosure", async () => {

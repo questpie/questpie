@@ -12,8 +12,12 @@ export { createPostgresContextBootstrap } from "./bootstrap";
 export {
 	executeLinkedPostgresQueryPlan,
 	linkPostgresQueryPlan,
+	linkPostgresQueryPlans,
 } from "./postgres-database";
-export type { LinkedPostgresQueryPlan } from "./postgres-database";
+export type {
+	LinkedPostgresQueryPlan,
+	LinkedPostgresQueryPlans,
+} from "./postgres-database";
 export type {
 	DataQueryBindingV1,
 	DataQueryDiagnosticCode,

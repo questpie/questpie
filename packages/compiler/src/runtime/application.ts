@@ -59,7 +59,6 @@ function applicationEntry(
 		slots: readonly RuntimeExecutableSlot[];
 		inventories: readonly PackageInventory[];
 		queryProjection: unknown;
-		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
@@ -200,8 +199,8 @@ ${imports.join("\n")}
 ${structuralImports.join("\n")}
 
 const schemaProjection = ${JSON.stringify(input.schemaProjection)};
-const postgresQueryPlans = ${JSON.stringify(input.postgresQueryPlans)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
+const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
 const slotBindings = Object.freeze([${bindingEntries.join(",\n")}]);
 
@@ -288,12 +287,13 @@ export async function createApplication(input) {
 		createRuntimeApplication,
 		durablePrincipal,
 		executePostgresQuery,
+		linkPostgresQueryPlans,
 	} = runtimeModule;
 	const sql = new SQL(input.postgres.url);
 	const postgresController = new AbortController();
 	const loaded = await loadRuntimeArtifacts();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
-	const plansByDigest = new Map(postgresQueryPlans.plans.map((plan) => [plan.queryDigest, plan]));
+	let queryPlans;
 	const bootstrap = createPostgresContextBootstrap({
 		sql,
 		schema: schemaProjection,
@@ -334,6 +334,11 @@ export async function createApplication(input) {
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {
 				mutationArtifacts = linkMutationArtifacts(runtimeModule, loaded.artifactFiles);
+				const queryPlanBytes = loaded.artifactFiles["postgres-query-plans.json"];
+				if (queryPlanBytes !== undefined)
+					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryDigests);
+				else if (structuralQueryDigests.size !== 0)
+					throw new TypeError("PostgreSQL Query plans are unavailable");
 				return verifyPostgresRuntimeReadiness({
 					sql,
 					schema: schemaProjection,
@@ -345,7 +350,7 @@ export async function createApplication(input) {
 				data: Object.freeze({
 					run: (definition, operationInput) => {
 						const queryDigest = structuralQueryDigests.get(definition);
-						const plan = queryDigest && plansByDigest.get(queryDigest);
+						const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
 						if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
 						return executePostgresQuery({
 							plan,
@@ -422,7 +427,7 @@ export async function createApplication(input) {
 					data: Object.freeze({
 						run: (definition, operationInput) => {
 							const queryDigest = structuralQueryDigests.get(definition);
-							const plan = queryDigest && plansByDigest.get(queryDigest);
+							const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
 							if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
 							return executePostgresQuery({
 								plan,
@@ -511,7 +516,6 @@ export async function renderApplicationBundle(
 		slots: readonly RuntimeExecutableSlot[];
 		inventories: readonly PackageInventory[];
 		queryProjection: unknown;
-		postgresQueryPlans: unknown;
 		schemaProjection: unknown;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;

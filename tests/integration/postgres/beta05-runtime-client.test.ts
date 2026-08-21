@@ -192,6 +192,97 @@ postgresTest(
 				writeFile(checksumsPath, checksumsBytes),
 			]);
 
+			const queryPlansPath = join(
+				generated.generatedRoot,
+				"postgres-query-plans.json",
+			);
+			const queryPlansBytes = await readFile(queryPlansPath, "utf8");
+			const {
+				digest: _queryPlanRuntimeBuildDigest,
+				...unsignedQueryPlanRuntimeBuild
+			} = JSON.parse(runtimeBuildBytes);
+			const refuseSelfConsistentQueryPlans = async (
+				queryPlans: unknown,
+				message: string,
+			): Promise<void> => {
+				const forgedQueryPlansBytes = JSON.stringify(queryPlans) + "\n";
+				const forgedUnsignedBuild = {
+					...unsignedQueryPlanRuntimeBuild,
+					postgresQueryPlansDigest: contentDigest(forgedQueryPlansBytes),
+					inventory: unsignedQueryPlanRuntimeBuild.inventory.map(
+						(item: Readonly<{ path: string; digest: string }>) =>
+							item.path === "postgres-query-plans.json"
+								? { ...item, digest: contentDigest(forgedQueryPlansBytes) }
+								: item,
+					),
+				};
+				const forgedBuild = {
+					...forgedUnsignedBuild,
+					digest: artifactDigest(
+						"questpie-runtime-build-v1",
+						forgedUnsignedBuild,
+					),
+				};
+				const forgedBuildBytes = JSON.stringify(forgedBuild) + "\n";
+				const forgedChecksums = JSON.parse(checksumsBytes);
+				forgedChecksums.files = forgedChecksums.files.map(
+					(item: Readonly<{ path: string; digest: string }>) =>
+						item.path === "postgres-query-plans.json"
+							? { ...item, digest: contentDigest(forgedQueryPlansBytes) }
+							: item.path === "runtime-build.json"
+								? { ...item, digest: contentDigest(forgedBuildBytes) }
+								: item,
+				);
+				await Promise.all([
+					writeFile(queryPlansPath, forgedQueryPlansBytes),
+					writeFile(runtimeBuildPath, forgedBuildBytes),
+					writeFile(checksumsPath, JSON.stringify(forgedChecksums) + "\n"),
+				]);
+				try {
+					await expect(
+						generated.app.createApp({
+							postgres: {
+								url: "postgres://unreachable:unreachable@127.0.0.1:1/postgres",
+							},
+							realtime: { hmacKey: new Uint8Array(32) },
+							maintenance: { authorize: () => true },
+						}),
+					).rejects.toThrow(message);
+				} finally {
+					await Promise.all([
+						writeFile(queryPlansPath, queryPlansBytes),
+						writeFile(runtimeBuildPath, runtimeBuildBytes),
+						writeFile(checksumsPath, checksumsBytes),
+					]);
+				}
+			};
+			const originalQueryPlans = JSON.parse(queryPlansBytes);
+			const castTamper = structuredClone(originalQueryPlans);
+			castTamper.plans[0].sql = castTamper.plans[0].sql.replaceAll(
+				"$1::uuid",
+				"$1::text",
+			);
+			await refuseSelfConsistentQueryPlans(
+				castTamper,
+				"Query SQL placeholders do not match its parameters",
+			);
+			await refuseSelfConsistentQueryPlans(
+				{ ...originalQueryPlans, plans: [] },
+				"PostgreSQL Query plans do not match the Runtime Query identities",
+			);
+			const surplusPlan = {
+				...structuredClone(originalQueryPlans.plans[0]),
+				queryDigest: "f".repeat(64),
+				templateDigest: "f".repeat(64),
+			};
+			await refuseSelfConsistentQueryPlans(
+				{
+					...originalQueryPlans,
+					plans: [...originalQueryPlans.plans, surplusPlan],
+				},
+				"PostgreSQL Query plans do not match the Runtime Query identities",
+			);
+
 			const application = await generated.app.createApp({
 				postgres: { url: beta05PostgresUrl() },
 				realtime: { hmacKey: new Uint8Array(32) },

@@ -3,6 +3,7 @@ export { bindIngressPrincipal, readIngressPrincipal } from "./operation";
 export {
 	createPostgresContextBootstrap,
 	executePostgresQuery,
+	linkPostgresQueryPlans,
 } from "./relational";
 export {
 	createPostgresMutationInvoker,

@@ -498,7 +498,6 @@ export async function createArtifacts(
 			slots: runtime.executables.slots,
 			inventories: input.inventories,
 			queryProjection: relational.query,
-			postgresQueryPlans,
 			schemaProjection: schema,
 			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
