@@ -677,6 +677,63 @@ postgresTest(
 				use: () => Promise.resolve("lock-released"),
 			}),
 		).resolves.toBe("lock-released");
+
+		let holderEntered: (() => void) | undefined;
+		let releaseHolder: (() => void) | undefined;
+		const holding = new Promise<void>((resolve) => {
+			holderEntered = resolve;
+		});
+		const holderReleased = new Promise<void>((resolve) => {
+			releaseHolder = resolve;
+		});
+		const holder = migration.run({
+			application: "pb03MigrationContention",
+			use: async () => {
+				holderEntered?.();
+				await holderReleased;
+			},
+		});
+		await holding;
+		try {
+			await expect(
+				migration.run({
+					application: "pb03MigrationContention",
+					control: { lockTimeoutMs: 25 },
+					use: () => Promise.reject(new Error("contender acquired held lock")),
+				}),
+			).rejects.toMatchObject({ code: "lockTimeout", phase: "statement" });
+
+			const controller = new AbortController();
+			const startedAt = Date.now();
+			const cancelled = migration.run({
+				application: "pb03MigrationContention",
+				control: { lockTimeoutMs: 500, signal: controller.signal },
+				use: () =>
+					Promise.reject(new Error("cancelled contender acquired lock")),
+			});
+			const timer = setTimeout(
+				() => controller.abort(new Error("stop waiting for migration lock")),
+				20,
+			);
+			try {
+				await expect(cancelled).rejects.toMatchObject({
+					code: "cancelled",
+					phase: "statement",
+				});
+				expect(Date.now() - startedAt).toBeLessThan(250);
+			} finally {
+				clearTimeout(timer);
+			}
+		} finally {
+			releaseHolder?.();
+			await holder;
+		}
+		await expect(
+			migration.run({
+				application: "pb03MigrationContention",
+				use: () => Promise.resolve("contention-recovered"),
+			}),
+		).resolves.toBe("contention-recovered");
 	},
 );
 

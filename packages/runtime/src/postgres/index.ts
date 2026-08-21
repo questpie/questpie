@@ -644,10 +644,35 @@ export function createMigrationPostgres(
 						`${effectiveTimeout(runInput.control?.lockTimeoutMs, input.timeouts.lockMs)}ms`,
 					],
 				});
-				await client.query({
-					text: "SELECT pg_catalog.pg_advisory_lock($1::bigint)",
-					values: [migrationLockKey(runInput.application)],
+				let lockCancellation: Promise<void> | undefined;
+				const cancelLock = () => {
+					if (lockCancellation) return;
+					lockCancellation = cancelBackend(
+						input.directConnectionUrl,
+						firstPid,
+					).then(async (cancelled) => {
+						if (!cancelled) await client.end().catch(() => {});
+					});
+				};
+				runInput.control?.signal?.addEventListener("abort", cancelLock, {
+					once: true,
 				});
+				if (runInput.control?.signal?.aborted) cancelLock();
+				try {
+					await client.query({
+						text: "SELECT pg_catalog.pg_advisory_lock($1::bigint)",
+						values: [migrationLockKey(runInput.application)],
+					});
+				} catch (error) {
+					throw failure({
+						error,
+						phase: "statement",
+						signal: runInput.control?.signal,
+					});
+				} finally {
+					runInput.control?.signal?.removeEventListener("abort", cancelLock);
+					if (lockCancellation) await lockCancellation;
+				}
 				locked = true;
 				const expectedPid = await clientPid(client);
 				const session = Object.freeze({
