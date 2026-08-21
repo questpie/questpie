@@ -18,6 +18,7 @@ import {
 	type PostgresTransaction,
 	type PostgresTransactionMode,
 } from "./contract";
+import { createPostgresControlSignal } from "./control";
 
 export * from "./contract";
 
@@ -618,18 +619,41 @@ export function createMigrationPostgres(
 					code: "configuration",
 					phase: "connect",
 				});
-			runInput.control?.signal?.throwIfAborted();
+			const controlled = createPostgresControlSignal(runInput.control);
+			const signal = controlled.signal;
+			signal?.throwIfAborted();
 			const client = new Client({
 				connectionString: input.directConnectionUrl,
 				application_name: "questpie-migration",
 				connectionTimeoutMillis: 1_000,
 			});
-			await client.connect();
+			try {
+				await (signal
+					? withSignal(client.connect(), signal)
+					: client.connect());
+			} catch (error) {
+				controlled.close();
+				await client.end().catch(() => {});
+				throw failure({ error, phase: "connect", signal });
+			}
 			let locked = false;
 			let open = true;
 			let transactionActive = false;
+			let cancellation: Promise<void> | undefined;
+			let cancel: (() => void) | undefined;
 			try {
 				const firstPid = await clientPid(client);
+				cancel = () => {
+					if (cancellation) return;
+					cancellation = cancelBackend(
+						input.directConnectionUrl,
+						firstPid,
+					).then(async (cancelled) => {
+						if (!cancelled) await client.end().catch(() => {});
+					});
+				};
+				signal?.addEventListener("abort", cancel, { once: true });
+				if (signal?.aborted) cancel();
 				await client.query("BEGIN");
 				const committedPid = await clientPid(client);
 				await client.query("COMMIT");
@@ -644,20 +668,6 @@ export function createMigrationPostgres(
 						`${effectiveTimeout(runInput.control?.lockTimeoutMs, input.timeouts.lockMs)}ms`,
 					],
 				});
-				let lockCancellation: Promise<void> | undefined;
-				const cancelLock = () => {
-					if (lockCancellation) return;
-					lockCancellation = cancelBackend(
-						input.directConnectionUrl,
-						firstPid,
-					).then(async (cancelled) => {
-						if (!cancelled) await client.end().catch(() => {});
-					});
-				};
-				runInput.control?.signal?.addEventListener("abort", cancelLock, {
-					once: true,
-				});
-				if (runInput.control?.signal?.aborted) cancelLock();
 				try {
 					await client.query({
 						text: "SELECT pg_catalog.pg_advisory_lock($1::bigint)",
@@ -667,11 +677,8 @@ export function createMigrationPostgres(
 					throw failure({
 						error,
 						phase: "statement",
-						signal: runInput.control?.signal,
+						signal,
 					});
-				} finally {
-					runInput.control?.signal?.removeEventListener("abort", cancelLock);
-					if (lockCancellation) await lockCancellation;
 				}
 				locked = true;
 				const expectedPid = await clientPid(client);
@@ -699,7 +706,7 @@ export function createMigrationPostgres(
 								statement,
 								value,
 								active: () => active,
-								signal: runInput.control?.signal,
+								signal,
 							});
 						const handle = Object.freeze({
 							[transactionBrand]: true as const,
@@ -718,14 +725,14 @@ export function createMigrationPostgres(
 	pg_catalog.set_config('lock_timeout', $2, true),
 	pg_catalog.set_config('idle_in_transaction_session_timeout', $3, true)`,
 								values: [
-									`${input.timeouts.statementMs}ms`,
-									`${input.timeouts.lockMs}ms`,
+									`${effectiveTimeout(runInput.control?.statementTimeoutMs, input.timeouts.statementMs)}ms`,
+									`${effectiveTimeout(runInput.control?.lockTimeoutMs, input.timeouts.lockMs)}ms`,
 									`${input.timeouts.idleInTransactionMs}ms`,
 								],
 							});
 							const output = await transactionInput.use(handle);
 							active = false;
-							runInput.control?.signal?.throwIfAborted();
+							signal?.throwIfAborted();
 							if ((await clientPid(client)) !== expectedPid)
 								throw new QuestpiePostgresError({
 									code: "sessionNotAffine",
@@ -751,9 +758,20 @@ export function createMigrationPostgres(
 						}
 					},
 				});
-				return await runInput.use(session);
+				try {
+					return await (signal
+						? withSignal(runInput.use(session), signal)
+						: runInput.use(session));
+				} catch (error) {
+					if (signal?.aborted)
+						throw failure({ error, phase: "statement", signal });
+					throw error;
+				}
 			} finally {
 				open = false;
+				controlled.close();
+				if (cancel) signal?.removeEventListener("abort", cancel);
+				if (cancellation) await cancellation;
 				if (locked)
 					await client
 						.query({

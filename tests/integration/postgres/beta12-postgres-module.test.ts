@@ -738,6 +738,81 @@ postgresTest(
 );
 
 postgresTest(
+	"bounds active migration SQL with timeout, cancellation, and deadline",
+	async () => {
+		const migration = createMigrationPostgres({
+			directConnectionUrl: postgresUrl(),
+			timeouts: {
+				statementMs: 1_000,
+				lockMs: 500,
+				idleInTransactionMs: 1_000,
+			},
+		});
+		const executeSleep = (
+			application: string,
+			control: {
+				statementTimeoutMs?: number;
+				signal?: AbortSignal;
+				deadlineAt?: number;
+			},
+		) =>
+			migration.run({
+				application,
+				control,
+				use: (session) =>
+					session.transaction({
+						mode: { isolation: "readCommitted", access: "readWrite" },
+						use: (transaction) => transaction.execute(sleep, 0.3),
+					}),
+			});
+
+		await expect(
+			executeSleep("pb03MigrationStatementTimeout", {
+				statementTimeoutMs: 25,
+			}),
+		).rejects.toMatchObject({
+			code: "statementTimeout",
+			phase: "statement",
+			sqlState: "57014",
+		});
+
+		const controller = new AbortController();
+		const cancellationStartedAt = Date.now();
+		const cancelled = executeSleep("pb03MigrationCancellation", {
+			signal: controller.signal,
+		});
+		const cancellationTimer = setTimeout(
+			() => controller.abort(new Error("cancel active migration SQL")),
+			25,
+		);
+		try {
+			await expect(cancelled).rejects.toMatchObject({
+				code: "cancelled",
+				phase: "statement",
+			});
+			expect(Date.now() - cancellationStartedAt).toBeLessThan(200);
+		} finally {
+			clearTimeout(cancellationTimer);
+		}
+
+		const deadlineStartedAt = Date.now();
+		await expect(
+			executeSleep("pb03MigrationDeadline", {
+				deadlineAt: Date.now() + 100,
+			}),
+		).rejects.toMatchObject({ code: "cancelled", phase: "statement" });
+		expect(Date.now() - deadlineStartedAt).toBeLessThan(250);
+
+		await expect(
+			migration.run({
+				application: "pb03MigrationCancellation",
+				use: () => Promise.resolve("session-recovered"),
+			}),
+		).resolves.toBe("session-recovered");
+	},
+);
+
+postgresTest(
 	"commits LISTEN before reconciling and treats NOTIFY as a hint",
 	async () => {
 		const postgres = database();
