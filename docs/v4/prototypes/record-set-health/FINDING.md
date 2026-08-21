@@ -1050,3 +1050,16 @@ the record set decaying under someone else's merge. This one is a fragility the
 sweeps introduced while documenting fragility, in a form the set had avoided for
 twelve slices. What would have caught it sooner: treating "I just wrote a
 construct nothing else here uses" as a signal rather than as a convenience.
+
+**And the conversion broke the same citation a third time, which is the entry's
+real lesson.** Rewriting the marker changed its length, so the range it points
+at moved again — `:109`–`:113` became `:110`–`:114` — inside the commit that
+documented the trap. Worse, the first attempt to re-locate the paragraph matched
+the phrase **inside the marker**, because a pointer that quotes its anchor makes
+that anchor appear twice in the file. Phrase anchors are more durable than line
+numbers and they are not free: quoting one creates a second occurrence, so a
+locator has to exclude the pointer itself.
+
+The line numbers survived only because they were verified after writing, for the
+third consecutive tick. That is the check earning its place — a pre-write check
+cannot see a shift the write itself causes.
