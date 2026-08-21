@@ -1233,6 +1233,7 @@ async function evaluateCollectionAccess(
 		actor: context.actor,
 	});
 	const accessContext: AccessContext = {
+		...(context["~contextExtensions"] ?? {}),
 		...services,
 		locale: context.locale,
 	} as AccessContext;

@@ -67,6 +67,8 @@ export type McpEntityPolicy =
 			workload?: McpWorkloadRequirement;
 			operationWorkloads?: Record<string, McpWorkloadRequirement>;
 			fields?: { include?: string[]; exclude?: string[] };
+			/** Allow callers to expand relation fields with `with`. Defaults to true. */
+			relationLoading?: boolean;
 			description?: string;
 	  };
 

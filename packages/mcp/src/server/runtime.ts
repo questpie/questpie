@@ -79,6 +79,7 @@ export function toRequestContext(
 	return {
 		session: ctx.session,
 		principal: ctx.principal,
+		actor: ctx.actor,
 		locale: ctx.locale,
 		defaultLocale: ctx.defaultLocale,
 		localeFallback: ctx.localeFallback,
@@ -86,7 +87,10 @@ export function toRequestContext(
 		stage: ctx.stage,
 		requestId: ctx.requestId,
 		traceId: ctx.traceId,
+		workload: ctx.workload,
+		logger: ctx.logger,
 		db: ctx.db,
+		request: ctx.request,
 		"~contextExtensions": ctx["~contextExtensions"],
 	};
 }

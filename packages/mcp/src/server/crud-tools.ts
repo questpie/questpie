@@ -28,7 +28,7 @@ import {
 	workloadRequirementForOperation,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
-import { toToolError, toToolResult } from "./runtime.js";
+import { toRequestContext, toToolError, toToolResult } from "./runtime.js";
 import type { McpConfig } from "./types.js";
 import {
 	authorizeWorkload,
@@ -39,11 +39,21 @@ import { toToolInputJsonSchema } from "./zod-json-schema.js";
 
 const idSchema = z.union([z.string(), z.number()]);
 
-const deleteSchema = z
-	.object({
-		id: idSchema,
-	})
-	.strict();
+function optimisticConcurrencyEnabled(collection: unknown): boolean {
+	return (
+		(
+			collection as {
+				state?: { options?: { optimisticConcurrency?: boolean } };
+			}
+		).state?.options?.optimisticConcurrency === true
+	);
+}
+
+function expectedRevisionShape(collection: unknown) {
+	return optimisticConcurrencyEnabled(collection)
+		? { expectedRevision: z.number().int().min(1) }
+		: {};
+}
 
 const MAX_QUERY_FIELDS = 64;
 const MAX_WHERE_DEPTH = 3;
@@ -149,7 +159,10 @@ function relationLoadSchema(relations: string[]) {
 
 function collectionReadSchemas(collection: unknown, policy: ResolvedMcpPolicy) {
 	const fields = allowedEntityFieldNames(collection, policy);
-	const relations = allowedEntityRelationNames(collection, policy);
+	const relations =
+		policy.relationLoading === false
+			? []
+			: allowedEntityRelationNames(collection, policy);
 	const common = {
 		with: relationLoadSchema(relations).optional(),
 		columns: columnsSchema(fields).optional(),
@@ -185,7 +198,10 @@ function collectionReadSchemas(collection: unknown, policy: ResolvedMcpPolicy) {
 
 function globalOperationBaseSchema(global: unknown, policy: ResolvedMcpPolicy) {
 	const fields = allowedEntityFieldNames(global, policy);
-	const relations = allowedEntityRelationNames(global, policy);
+	const relations =
+		policy.relationLoading === false
+			? []
+			: allowedEntityRelationNames(global, policy);
 	return {
 		with: relationLoadSchema(relations).optional(),
 		columns: columnsSchema(fields).optional(),
@@ -211,11 +227,17 @@ const COLLECTION_OPERATIONS: Array<{
 		name: "list",
 		kind: "read",
 		description: (name) => `List ${name} records.`,
-		execute: (crud, input, ctx, maxLimit) =>
-			crud.find(
-				{ ...input, limit: Math.min(input.limit ?? maxLimit, maxLimit) },
+		execute: (crud, input, ctx, maxLimit) => {
+			const { sort, ...options } = input;
+			return crud.find(
+				{
+					...options,
+					...(sort === undefined ? {} : { orderBy: sort }),
+					limit: Math.min(input.limit ?? maxLimit, maxLimit),
+				},
 				ctx,
-			),
+			);
+		},
 	},
 	{
 		name: "count",
@@ -243,13 +265,31 @@ const COLLECTION_OPERATIONS: Array<{
 		kind: "write",
 		description: (name) => `Update a ${name} record by id.`,
 		execute: (crud, input, ctx) =>
-			crud.updateById({ id: input.id, data: input.data }, ctx),
+			crud.updateById(
+				{
+					id: input.id,
+					data: input.data,
+					...(input.expectedRevision === undefined
+						? {}
+						: { expectedRevision: input.expectedRevision }),
+				},
+				ctx,
+			),
 	},
 	{
 		name: "delete",
 		kind: "delete",
 		description: (name) => `Delete a ${name} record by id.`,
-		execute: (crud, input, ctx) => crud.deleteById({ id: input.id }, ctx),
+		execute: (crud, input, ctx) =>
+			crud.deleteById(
+				{
+					id: input.id,
+					...(input.expectedRevision === undefined
+						? {}
+						: { expectedRevision: input.expectedRevision }),
+				},
+				ctx,
+			),
 	},
 ];
 
@@ -293,11 +333,17 @@ function collectionOperationSchema(
 			.object({
 				id: idSchema,
 				data: createCollectionDataSchema(collection, "update", policy),
+				...expectedRevisionShape(collection),
 			})
 			.strict();
 	}
+	if (operationName === "delete") {
+		return z
+			.object({ id: idSchema, ...expectedRevisionShape(collection) })
+			.strict();
+	}
 	const readSchemas = collectionReadSchemas(collection, policy);
-	return readSchemas[operationName as keyof typeof readSchemas] ?? deleteSchema;
+	return readSchemas[operationName as keyof typeof readSchemas];
 }
 
 function globalOperationSchema(
@@ -325,13 +371,10 @@ async function questpieAllows(
 ): Promise<boolean> {
 	if (scope.accessMode === "system") return true;
 
-	const crudContext = {
-		db: ctx.db ?? scope.app.db,
-		session: ctx.session,
-		locale: ctx.locale,
-		accessMode: scope.accessMode,
-		stage: ctx.stage,
-	};
+	const crudContext = toRequestContext(
+		{ ...ctx, db: ctx.db ?? scope.app.db },
+		scope.accessMode,
+	);
 
 	if (kind === "collection") {
 		const collection = (scope.app.getCollections() as Record<string, any>)[
