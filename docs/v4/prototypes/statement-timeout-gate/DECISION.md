@@ -74,10 +74,20 @@ and a reader should not have to reconstruct the current position from them.
    - `statement_timeout` = `ceil(23.091 × 5 / 100) × 100` = **200 ms**
    - `lock_timeout` = `ceil(17.064 × 5 / 100) × 100` = **100 ms**
 
-   The pair satisfies `lockTimeoutMs < statementTimeoutMs`
-   (`packages/compiler/src/postgres-session.ts:30`), and by evidence-plan item 7
-   it kills nothing observed — not even the 132.532 ms fixture insert. At a 10 ms
-   quantum the same rule gives 120 and 90, also valid and tighter.
+   The pair keeps `lock_timeout` below `statement_timeout`, and by evidence-plan
+   item 7 it kills nothing observed — not even the 132.532 ms fixture insert. At
+   a 10 ms quantum the same rule gives 120 and 90, also valid and tighter.
+
+   **That ordering is a semantic requirement here, not an enforced one.**
+   `resolvePostgresControl` does reject `statementTimeoutMs <= lockTimeoutMs`
+   (`packages/compiler/src/postgres-session.ts:30`, throwing at `:33`), but it is
+   compiler code and the runtime never imports it — `grep -rn "postgres-session"
+packages/runtime/src` returns nothing, as this record establishes elsewhere.
+   **Nothing would stop a runtime pair from violating the ordering.** What makes
+   it necessary is the mechanism rather than the check: a lock wait happens
+   inside statement execution, so an inverted pair returns `57014` naming
+   slowness where `55P03` would have named contention, which the attribution
+   table above measures directly.
 
    **What the observation can and cannot settle.** It settles
    `statement_timeout`, which bounds work, and the corpus contains that work. It
@@ -278,11 +288,29 @@ list.** The three durable call sites are the first statement inside their
 transaction wrapper, immediately after the `query` helper is defined, so they run
 on every durable transaction. The Mutation call at `:281` sits inside
 `for (const dispatch of reactions.pending)` (`:270`). A Mutation that dispatches
-no Reaction never runs it, and one that dispatches N runs it N times. **So the
-fold is free on the three durable paths and unavailable on the Mutation path**,
-which is the highest-volume write path and the one carrying the `qp_locked` lock
-this gate is most concerned with. There the timeout costs one added statement
-after `BEGIN`, the same as the relational path.
+no Reaction never runs it, and one that dispatches N runs it N times.
+
+**And conditionality is the weaker of two reasons, which the first version of
+this correction missed.** Even when a Reaction is dispatched, `:281` runs _after_
+`operation.binding.execute(...)` at `packages/runtime/src/mutation/postgres.ts:256`
+— the whole business body, including the `qp_locked` `… LIMIT 1 FOR UPDATE`
+issued from `packages/runtime/src/mutation/collection.ts:242`. A GUC folded onto
+`:281` would bound the reaction inserts, the receipt update and `COMMIT`, and
+never the one statement this gate exists for. **The fold is positionally useless
+on the Mutation path, not merely sometimes absent.**
+
+**So the fold is free on the three durable paths and unavailable on the Mutation
+path**, which is the highest-volume write path and the one carrying the lock. The
+timeout there is one added statement after `BEGIN`
+(`packages/runtime/src/mutation/postgres.ts:181`) — mandatory rather than a
+fallback, and it must precede `:256` to bound anything that matters.
+
+**The fourth call site is not a transaction wrapper.**
+`packages/runtime/src/durable/acceptance.ts:45` is the first statement of
+`acceptDurableDispatch`, which inherits whichever transaction calls it; on the
+Mutation path that call is at `postgres.ts:301`, inside the same dispatch loop,
+so it re-runs the marker moments after `:281`. It carries no transaction of its
+own to fold into.
 
 Measured on PostgreSQL 17, 400 `BEGIN`/marker/`COMMIT` cycles after 50 warm-up
 rounds, comparing the shipped one-value marker against a three-value form
@@ -824,6 +852,14 @@ run with a pathological command history is precisely the run an operator opens
 the audit to investigate. A timeout there does not shed a slow query — it makes
 the investigation tool fail on exactly the case it exists for, and returns
 nothing rather than a partial answer.
+
+**The margin belongs in that sentence, and was missing.** The measurement above
+puts `audit(runId)` at 98.058 ms with 100,000 accumulated commands on one run, so
+the candidate `statement_timeout` of 200 ms is not reached until roughly double
+that. The mechanism is real and the exposure is an order of magnitude beyond
+anything observed: the surface degrades if `audit` is bounded near 100 ms, or if
+one run's command count passes about 200,000. Stated unconditionally it reads as
+a present defect rather than a bound worth choosing carefully.
 
 That is a row bound the gate does not supply and cannot;
 `durable-evidence-gaps/FINDING.md` §6 states it directly and says this record
