@@ -555,3 +555,42 @@ gets closed only where it happens to overlap work someone already wanted.
 reason other than that this record named it. That is falsifiable on the next
 durable slice and worth watching, because if it happens the handoff form works
 and only needs patience.
+
+## Section 6 had an owner, the owner shipped, and the fix it measured is orphaned
+
+The paragraph above about section 6 guards one exit: "if it is descoped, section
+6 loses its owner … a descope decision must reassign section 6, not close it."
+BETA-09 took the other exit. It merged at `21e38b21` and published the
+inspection surface — `application.ts:474`–`:477` exposes `inspect`, `events` and
+`audit` on `app.durable` — so the grounds for the assignment held, the owner
+completed, and `audit()` still has no `LIMIT`. **The conditional guarded
+cancellation and the slice exited by finishing**, which is the likelier exit and
+the one that closes the window silently.
+
+**And BETA-09 did the work this record wanted, in a file that was then
+descoped.** `beta09/studio-purpose.md:317`–`:323` measures the audit feed
+directly: with only the shipped
+`durable_maintenance_commands_run_idx (application_name, run_id, requested_at)`,
+a global `ORDER BY requested_at DESC LIMIT 50` over 200,000 audit rows plans as a
+parallel sequential scan with a top-N heapsort at **31.8 ms**, and adding
+`(application_name, requested_at DESC)` makes it an Index Scan at **0.072 ms**.
+That index does not exist in the tree — `internal-protocol-v4-catalog.ts:502`
+carries only the run-scoped one — and this record's section 6 never referenced
+the measurement.
+
+So a measured, named, cheap remedy for the gap section 6 describes has been
+sitting in the record set since BETA-09, filed under a surface removed from the
+release. `studio-purpose.md` carries **no descope marker at all**, so a reader
+who knows Studio was descoped has no way to tell which of its findings outlived
+that decision. This one did: `audit()` is on `app.durable` today and the feed
+cost is a property of the table, not of Studio.
+
+**The recommendation is recovered here rather than left where it was found.**
+Section 6 needs a row bound; the measurement says the cheaper half is an index,
+and the two are independent — `LIMIT` bounds what one call returns, the index
+bounds what scanning costs. Neither is shipped.
+
+**What this adds to the handoff finding above.** A record that names an owner
+should guard the completion path, not only the cancellation path. And a record
+that is descoped should say so on its face, because the descope decision travels
+with the surface while the measurements inside it may not.

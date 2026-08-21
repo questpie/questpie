@@ -1,5 +1,12 @@
 # BETA-09: what Studio is for
 
+> **Descope marker, added later.** ADR-0024 removed the minimal Studio path from
+> beta.1, so this record describes a surface that is not in the release. Not all
+> of it died with that decision: the audit-feed measurement below is a property
+> of `durable_maintenance_commands`, and `audit()` ships on `app.durable`
+> (`packages/compiler/src/runtime/application.ts:477`). It is carried forward in
+> `docs/v4/prototypes/durable-evidence-gaps/FINDING.md` section 6.
+
 Decides the purpose question `maintenance-decisions.md` defers to this file.
 Settled by adversarial review: two agents argued opposing framings, each
 required to ground claims in `file:line` and to name where its own position was
