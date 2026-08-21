@@ -205,6 +205,53 @@ const notify = definePostgresStatement({
 	decode: () => undefined,
 });
 
+const dropListenerFrontier = definePostgresStatement({
+	name: "pb03.listener-frontier-drop",
+	text: "DROP TABLE IF EXISTS qp_pb03_listener_frontier",
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const createListenerFrontier = definePostgresStatement({
+	name: "pb03.listener-frontier-create",
+	text: `CREATE TABLE qp_pb03_listener_frontier (
+	value integer NOT NULL
+)`,
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const lockListenerFrontier = definePostgresStatement({
+	name: "pb03.listener-frontier-lock",
+	text: "SELECT pg_catalog.pg_advisory_xact_lock($1::bigint)",
+	parameterCount: 1,
+	parameters: (key: bigint) => [key],
+	decode: () => undefined,
+});
+
+const writeListenerFrontier = definePostgresStatement({
+	name: "pb03.listener-frontier-write",
+	text: "INSERT INTO qp_pb03_listener_frontier (value) VALUES ($1::integer)",
+	parameterCount: 1,
+	parameters: (value: number) => [value],
+	decode: () => undefined,
+});
+
+const readListenerFrontier = definePostgresStatement({
+	name: "pb03.listener-frontier-read",
+	text: "SELECT coalesce(max(value), 0)::integer FROM qp_pb03_listener_frontier",
+	parameterCount: 0,
+	parameters: () => [],
+	decode(result) {
+		const frontier = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof frontier !== "number")
+			throw new TypeError("listener frontier is invalid");
+		return frontier;
+	},
+});
+
 const terminateListener = definePostgresStatement({
 	name: "pb03.terminate-listener",
 	text: `SELECT coalesce(
@@ -1024,6 +1071,88 @@ postgresTest(
 			});
 		} finally {
 			await listener.close({ deadlineAt: Date.now() + 1_000 });
+			await postgres.close({ deadlineAt: Date.now() + 1_000 });
+		}
+	},
+);
+
+postgresTest(
+	"reconciles a durable frontier after a lost wake before periodic fallback",
+	async () => {
+		const postgres = database();
+		const frontierLock = 8_214_337n;
+		let frontier = -1;
+		let reconnected: (() => void) | undefined;
+		const reconnection = new Promise<void>((resolve) => {
+			reconnected = resolve;
+		});
+		let listener:
+			| Awaited<ReturnType<typeof createPostgresListener>>
+			| undefined;
+		try {
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async (transaction) => {
+					await transaction.execute(dropListenerFrontier, undefined);
+					await transaction.execute(createListenerFrontier, undefined);
+				},
+			});
+			listener = await createPostgresListener({
+				directConnectionUrl: postgresUrl(),
+				channel: definePostgresChannel("qp_pb03_frontier_wake"),
+				database: postgres,
+				fallbackIntervalMs: 10_000,
+				reconcile: async ({ database, reason }) => {
+					frontier = await database.transaction({
+						mode: { isolation: "readCommitted", access: "readWrite" },
+						use: async (transaction) => {
+							await transaction.execute(lockListenerFrontier, frontierLock);
+							return transaction.execute(readListenerFrontier, undefined);
+						},
+					});
+					if (reason === "reconnect") reconnected?.();
+				},
+			});
+			expect(frontier).toBe(0);
+
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async (transaction) => {
+					await transaction.execute(lockListenerFrontier, frontierLock);
+					expect(
+						await transaction.execute(
+							terminateListener,
+							"questpie-realtime-listener",
+						),
+					).toBe(true);
+					await transaction.execute(writeListenerFrontier, 7);
+				},
+			});
+
+			await Promise.race([
+				reconnection,
+				new Promise<never>((_resolve, reject) =>
+					setTimeout(
+						() => reject(new Error("durable frontier was not reconciled")),
+						1_000,
+					),
+				),
+			]);
+			expect(frontier).toBe(7);
+			await eventually(
+				() => listener?.facts().state === "healthy",
+				"listener did not become healthy after frontier reconciliation",
+			);
+			expect(listener.facts()).toMatchObject({ reconnects: 1 });
+		} finally {
+			await listener?.close({ deadlineAt: Date.now() + 1_000 });
+			await postgres
+				.transaction({
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					use: (transaction) =>
+						transaction.execute(dropListenerFrontier, undefined),
+				})
+				.catch(() => {});
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
 	},
