@@ -46,6 +46,38 @@ const sleep = definePostgresStatement({
 	decode: () => undefined,
 });
 
+const currentBackendPid = definePostgresStatement({
+	name: "pb03.current-backend-pid",
+	text: "SELECT pg_catalog.pg_backend_pid()",
+	parameterCount: 0,
+	parameters: () => [],
+	decode(result) {
+		const pid = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof pid !== "number")
+			throw new TypeError("backend PID result is invalid");
+		return pid;
+	},
+});
+
+const backendIsSleeping = definePostgresStatement({
+	name: "pb03.backend-is-sleeping",
+	text: `SELECT EXISTS (
+	SELECT 1
+	FROM pg_catalog.pg_stat_activity
+	WHERE pid = $1::integer
+		AND state = 'active'
+		AND wait_event = 'PgSleep'
+)`,
+	parameterCount: 1,
+	parameters: (pid: number) => [pid],
+	decode(result) {
+		const active = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof active !== "boolean")
+			throw new TypeError("backend activity result is invalid");
+		return active;
+	},
+});
+
 const notify = definePostgresStatement({
 	name: "pb03.notify",
 	text: "SELECT pg_catalog.pg_notify($1::text, $2::text)",
@@ -122,6 +154,7 @@ function database(
 ) {
 	return createPostgresDatabase({
 		connectionUrl: postgresUrl(),
+		directConnectionUrl: postgresUrl(),
 		pool: {
 			max: input.max ?? 2,
 			connectTimeoutMs: 1_000,
@@ -138,11 +171,11 @@ function database(
 }
 
 async function eventually(
-	assertion: () => boolean,
+	assertion: () => boolean | Promise<boolean>,
 	label: string,
 ): Promise<void> {
 	const deadline = Date.now() + 500;
-	while (!assertion()) {
+	while (!(await assertion())) {
 		if (Date.now() >= deadline) throw new Error(label);
 		await new Promise((resolve) => setTimeout(resolve, 5));
 	}
@@ -288,6 +321,55 @@ postgresTest(
 			}),
 		).resolves.toBe("recovered");
 		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+postgresTest(
+	"cancels active SQL before safely reusing its connection",
+	async () => {
+		const postgres = database({ max: 1 });
+		const observer = database({ max: 1 });
+		const controller = new AbortController();
+		let publishPid: ((pid: number) => void) | undefined;
+		const observedPid = new Promise<number>((resolve) => {
+			publishPid = resolve;
+		});
+		const running = postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readOnly" },
+			control: { signal: controller.signal },
+			use: async (transaction) => {
+				const pid = await transaction.execute(currentBackendPid, undefined);
+				publishPid?.(pid);
+				await transaction.execute(sleep, 5);
+			},
+		});
+		const pid = await observedPid;
+		await eventually(async () => {
+			return observer.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: (transaction) => transaction.execute(backendIsSleeping, pid),
+			});
+		}, "backend never entered pg_sleep");
+		controller.abort(new Error("caller stopped active SQL"));
+		await expect(running).rejects.toMatchObject({
+			code: "cancelled",
+			phase: "statement",
+		});
+		await eventually(async () => {
+			return observer.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: async (transaction) =>
+					!(await transaction.execute(backendIsSleeping, pid)),
+			});
+		}, "cancelled backend continued running");
+		await expect(
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("recovered"),
+			}),
+		).resolves.toBe("recovered");
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+		await observer.close({ deadlineAt: Date.now() + 1_000 });
 	},
 );
 

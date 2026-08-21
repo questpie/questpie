@@ -39,7 +39,9 @@ function positiveInteger(value: number): void {
 function validateConfiguration(input: PostgresDatabaseConfiguration): void {
 	if (
 		typeof input.connectionUrl !== "string" ||
-		input.connectionUrl.length === 0
+		input.connectionUrl.length === 0 ||
+		typeof input.directConnectionUrl !== "string" ||
+		input.directConnectionUrl.length === 0
 	)
 		throw new QuestpiePostgresError({
 			code: "configuration",
@@ -146,6 +148,36 @@ function checkout(pool: Pool, signal?: AbortSignal): Promise<PoolClient> {
 		);
 		if (signal.aborted) aborted();
 	});
+}
+
+const CANCEL_GRACE_MS = 250;
+
+async function cancelBackend(
+	connectionUrl: string,
+	pid: number,
+): Promise<boolean> {
+	const client = new Client({
+		connectionString: connectionUrl,
+		connectionTimeoutMillis: CANCEL_GRACE_MS,
+	});
+	const timer = setTimeout(
+		() => void client.end().catch(() => {}),
+		CANCEL_GRACE_MS,
+	);
+	try {
+		await client.connect();
+		const result = await client.query({
+			text: "SELECT pg_catalog.pg_cancel_backend($1::integer)",
+			values: [pid],
+			rowMode: "array",
+		});
+		return result.rows[0]?.[0] === true;
+	} catch {
+		return false;
+	} finally {
+		clearTimeout(timer);
+		await client.end().catch(() => {});
+	}
 }
 
 function failure(
@@ -327,14 +359,28 @@ export function createPostgresDatabase(
 		}
 		inFlight += 1;
 		let destroyed = false;
+		let destruction: Promise<void> | undefined;
+		let cancellation: Promise<void> | undefined;
+		let backendPid: number | undefined;
 		let active = true;
 		let commitSent = false;
 		const destroy = () => {
-			if (destroyed) return;
+			if (destruction) return destruction;
 			destroyed = true;
+			destruction = new Promise((resolve) => client.once("end", resolve));
 			client.release(true);
+			return destruction;
 		};
-		signal?.addEventListener("abort", destroy, { once: true });
+		const cancel = () => {
+			if (cancellation) return;
+			cancellation =
+				backendPid === undefined
+					? destroy()
+					: cancelBackend(configuration.directConnectionUrl, backendPid).then(
+							(cancelled) => (cancelled ? undefined : destroy()),
+						);
+		};
+		signal?.addEventListener("abort", cancel, { once: true });
 		const execute: PostgresTransaction["execute"] = async (statement, value) =>
 			executeStatement({
 				client,
@@ -373,17 +419,26 @@ export function createPostgresDatabase(
 				statementMs,
 			);
 			try {
-				await client.query({
+				const setup = await client.query({
 					text: `SELECT
 	pg_catalog.set_config('statement_timeout', $1, true),
 	pg_catalog.set_config('lock_timeout', $2, true),
-	pg_catalog.set_config('idle_in_transaction_session_timeout', $3, true)`,
+	pg_catalog.set_config('idle_in_transaction_session_timeout', $3, true),
+	pg_catalog.pg_backend_pid()`,
 					values: [
 						`${statementMs}ms`,
 						`${lockMs}ms`,
 						`${configuration.timeouts.idleInTransactionMs}ms`,
 					],
+					rowMode: "array",
 				});
+				const pid = setup.rows[0]?.[3];
+				if (typeof pid !== "number")
+					throw new QuestpiePostgresError({
+						code: "invalidResult",
+						phase: "begin",
+					});
+				backendPid = pid;
 			} catch (error) {
 				await rollback();
 				throw failure({ error, phase: "begin", signal });
@@ -411,8 +466,10 @@ export function createPostgresDatabase(
 			}
 		} finally {
 			active = false;
-			signal?.removeEventListener("abort", destroy);
-			if (!destroyed) client.release();
+			signal?.removeEventListener("abort", cancel);
+			if (cancellation) await cancellation;
+			if (destroyed) await destruction;
+			else client.release();
 			inFlight -= 1;
 		}
 	};

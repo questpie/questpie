@@ -119,6 +119,7 @@ export class QuestpiePostgresError extends Error {
 
 export type PostgresDatabaseConfiguration = Readonly<{
 	connectionUrl: string;
+	directConnectionUrl: string;
 	pool: Readonly<{
 		max: number;
 		connectTimeoutMs: number;
