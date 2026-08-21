@@ -701,6 +701,47 @@ distribution.
    absent from `shared_preload_libraries`, so it needs a restart rather than a
    session setting.
 
+   **A third route existed and it worked, so item 1 is now partly executed.**
+   `log_min_duration_statement` is `superuser` context, which means it can be
+   set per database and reloaded without a restart. A dedicated `gateprobe`
+   database with `ALTER DATABASE gateprobe SET log_min_duration_statement = 0`
+   captures every statement duration while leaving every other database silent,
+   and the repository's suites already accept `PGHOST`/`PGPORT`/`PGUSER`/
+   `PGDATABASE` (`tests/integration/postgres/helpers/beta05-runtime.ts:68`–`:71`),
+   so a real suite can be pointed at it. Running
+   `tests/integration/postgres/beta09-maintenance-compatibility.test.ts` there —
+   six tests, all passing — logged 2,002 timed operations.
+
+   | population                             | n     | p50   | p95   | p99    | max    |
+   | -------------------------------------- | ----- | ----- | ----- | ------ | ------ |
+   | `execute` — extended protocol, serving | 853   | 0.087 | 0.510 | 1.493  | 3.486  |
+   | `statement` — simple protocol, setup   | 126   | 0.031 | 2.532 | 12.699 | 26.326 |
+   | `bind` + `parse`                       | 1,023 | 0.055 | 0.575 | 1.261  | 2.186  |
+
+   All in milliseconds. **Twenty serving executions exceed 1 ms and none exceeds
+   5 ms.** The whole visible tail lives in the simple-query population, whose
+   maximum is a `CREATE TABLE questpie_internal.change_ledger` at 26.326 ms —
+   migration DDL, not a served read. A bound derived from a naive "observed
+   maximum" would therefore be derived from a `CREATE TABLE`, which is the scope
+   error this record already refuses elsewhere.
+
+   **Applying item 2's rule to the serving maximum gives a candidate.**
+   `ceil(3.486 × 5 / 100) × 100` is **100 ms**, on the same ×5 multiplier and
+   100 ms quantum the shipped `postgresMaintenance20Ms` baseline uses. At a 10 ms
+   quantum the same rule gives 20 ms, so the quantum is a real choice and not a
+   formality.
+
+   **What this is not.** One suite, one path, a warm local container and a small
+   fixture — not the tail item 1 asks for across the Mutation path, the
+   relational query path and the five durable reads. And the extended protocol
+   logs the portal name rather than the SQL, so these 853 durations cannot be
+   attributed per path from this capture; the per-shape breakdown is only
+   available for the 126 simple statements. **Per-path attribution still needs
+   `pg_stat_statements` or runtime instrumentation.** What is settled is the
+   order of magnitude and the shape: the serving population is sub-millisecond at
+   p95 and the tail belongs to migration, which was previously assumed either
+   way.
+
 2. **Derive, do not choose.** Any timeout this gate pins is derived from the
    measured maximum by the same rule BETA-08 used —
    `ceil(observed × multiplier / quantum) × quantum` — with the derivation
