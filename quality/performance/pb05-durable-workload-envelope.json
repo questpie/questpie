@@ -1,0 +1,54 @@
+{
+	"id": "pb05-durable-workload-envelope",
+	"kind": "load",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/pb05-durable-workload-envelope.ts"],
+	"budgetOwner": "PB-05",
+	"metrics": {
+		"seededRuns": {
+			"direction": "min",
+			"budget": 1100,
+			"unit": "count"
+		},
+		"warmupRuns": {
+			"direction": "min",
+			"budget": 100,
+			"unit": "count"
+		},
+		"measuredRuns": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"claimSamples": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"heartbeatSamples": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"effectReserveSamples": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"effectSettleSamples": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"terminalSucceedSamples": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"completedRuns": {
+			"direction": "min",
+			"budget": 1100,
+			"unit": "count"
+		}
+	}
+}
