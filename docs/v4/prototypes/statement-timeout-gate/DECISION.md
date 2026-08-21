@@ -588,6 +588,43 @@ unaffected.
 A single global runtime timeout would be wrong, because the paths have
 different legitimate durations and only some of them have an accepted bound.
 
+**Measured across three paths, and the first half of that sentence is wrong.**
+Same capture method as evidence-plan item 1 — a `gateprobe` database with
+`log_min_duration_statement = 0`, three real suites pointed at it:
+
+| path                                             | n     | p50   | p95   | p99   | max     |
+| ------------------------------------------------ | ----- | ----- | ----- | ----- | ------- |
+| Mutation (`beta06-publish-mutation.test.ts`)     | 2,822 | 0.082 | 0.441 | 1.316 | 17.064  |
+| Relational query (`beta04-policy-query.test.ts`) | 413   | 0.079 | 0.429 | 1.298 | 132.532 |
+| Durable kernel (`beta08-durable-kernel.test.ts`) | 1,635 | 0.087 | 0.420 | 1.511 | 3.329   |
+
+Milliseconds, `execute` durations only. **The bodies are the same path to path** —
+p50 within 0.008 ms, p95 within 0.021 ms, p99 within 0.213 ms across three
+different subsystems. What differs is the tail, and it differs by forty times.
+So a single global timeout is wrong, but not for the stated reason: typical
+durations do not vary by path, worst cases do.
+
+**The Mutation tail is this record's own lock statement.** The 17.064 ms maximum
+is `SELECT TRUE AS "qp_locked" FROM "collaboration"."channels" AS "qp_lock_row"
+WHERE … LIMIT 1 FOR UPDATE` — the bare `FOR UPDATE` at
+`packages/compiler/src/mutation/postgres.ts:138` that this gate identifies as its
+lock risk, appearing unprompted as the slowest served statement on that path. It
+is slow because it waits, which is the behaviour measured separately under "A
+second finding: maintenance can block without bound". Two independent methods,
+the same statement.
+
+**The relational maximum is not a served read.** The 132.532 ms statement is an
+`insert into collaboration.messages` — fixture seeding inside the suite, not a
+Policy-filtered query. Its serving tail is therefore lower than its maximum
+suggests, and a bound derived from that number would be derived from test setup:
+the same DDL-in-the-tail trap recorded under item 1, in a second guise.
+
+**Scope.** One run per suite, warm local container, small fixtures. One test in
+the Mutation suite fails — "runs against the exact declared supported PostgreSQL
+major" — identically against the ordinary database, so it is a pre-existing
+environment mismatch rather than an artefact of the probe, and the other four
+tests pass.
+
 **Both numbers an earlier revision proposed to ship were scope errors, and the
 record's own "derive, do not choose" rule is what they break.**
 
