@@ -1,0 +1,34 @@
+{
+	"id": "pb05-query-statement-tail",
+	"kind": "load",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/pb05-query-statement-tail.ts"],
+	"budgetOwner": "PB-05",
+	"metrics": {
+		"seededMessages": {
+			"direction": "min",
+			"budget": 10001,
+			"unit": "count"
+		},
+		"warmupExecutions": {
+			"direction": "min",
+			"budget": 100,
+			"unit": "count"
+		},
+		"measuredExecutions": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"firstPageSamples": {
+			"direction": "min",
+			"budget": 500,
+			"unit": "count"
+		},
+		"cursorPageSamples": {
+			"direction": "min",
+			"budget": 500,
+			"unit": "count"
+		}
+	}
+}

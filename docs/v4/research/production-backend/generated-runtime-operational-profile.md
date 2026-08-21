@@ -85,12 +85,22 @@ performance scenario. Against the collaboration fixture's authored 100-row page
 maximum it will:
 
 1. seed 10,001 Messages outside the timed region;
-2. warm 100 linked static-statement executions;
-3. alternate 500 first-page and 500 cursor-page statements;
-4. repeat the process three times;
-5. retain all 3,000 statement durations and derive nearest-rank p50, p95, p99,
-   and maximum;
-6. assert zero statement timeouts and zero server statements left running.
+2. warm 100 linked Query executions;
+3. alternate 500 first-page and 500 cursor-page executions;
+4. retain all 1,000 durations from that invocation and derive exact
+   nearest-rank p50, p95, p99, and maximum for the combined, first-page, and
+   cursor-page populations.
+
+One invocation is one run. Three independent invocations are required before a
+cross-run production judgment; the scenario does not synthesize three runs in
+one process. This slice does not claim server cleanup: proving that separately
+requires a known-positive active `pg_stat_activity` control and a differential
+slow-statement timeout case.
+
+The measured interval surrounds `executePostgresQuery`: it includes Pool
+checkout, transaction control, the linked static statement, cursor handling,
+row decoding, and commit. It is a conservative Runtime Query-tail instrument,
+not a claim of isolated PostgreSQL server execution time.
 
 The measurement reports the distribution before selecting a multiplier or
 rounding quantum. The current `10x / 50 ms` budget belongs to an aggregate of 20

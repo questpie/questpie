@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 
-test("owns the aggregate beta.1 release gate budget", async () => {
+test("owns the aggregate release and production-backend budgets", async () => {
 	const started = performance.now();
 	const release = Bun.spawnSync(["bun", "run", "release", "--", "--dry-run"], {
 		cwd: repositoryRoot,
@@ -29,10 +29,13 @@ test("owns the aggregate beta.1 release gate budget", async () => {
 		),
 	);
 	expect([...owners].sort()).toEqual(
-		Array.from(
-			{ length: 12 },
-			(_, index) => `BETA-${String(index + 1).padStart(2, "0")}`,
-		),
+		[
+			...Array.from(
+				{ length: 12 },
+				(_, index) => `BETA-${String(index + 1).padStart(2, "0")}`,
+			),
+			"PB-05",
+		].sort(),
 	);
 	expect(release.stdout.toString()).toContain("packed-build");
 });
