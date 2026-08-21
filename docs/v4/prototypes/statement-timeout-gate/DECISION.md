@@ -834,6 +834,45 @@ distribution.
    the proposed bound and state how many observed statements would now fail.
    If that number is not zero, the bound is wrong or the query is.
 
+   **Executed, over 4,870 serving executions across the three paths measured
+   above.** Counts are executions exceeding the bound:
+
+   | bound  | Mutation   | Relational | Durable kernel | all         |
+   | ------ | ---------- | ---------- | -------------- | ----------- |
+   | 5 ms   | 3 of 2,822 | 1 of 413   | 0 of 1,635     | 4 (0.082 %) |
+   | 10 ms  | 2 of 2,822 | 1 of 413   | 0 of 1,635     | 3 (0.062 %) |
+   | 20 ms  | 0          | 1 of 413   | 0              | 1 (0.021 %) |
+   | 100 ms | 0          | 1 of 413   | 0              | 1 (0.021 %) |
+   | 133 ms | 0          | 0          | 0              | **0**       |
+
+   **The 100 ms candidate derived under item 2 kills exactly one statement, and
+   item 7's own test resolves it.** That statement is the 132.532 ms
+   `insert into collaboration.messages` — suite fixture seeding, not a served
+   read. "The bound is wrong or the query is": here the query is wrong for the
+   purpose, because it is setup. Excluding it, the slowest served statement is
+   17.064 ms and any bound above that kills nothing.
+
+   **Below 20 ms the casualties become specific, and they are this gate's own
+   subject.** Of the three Mutation statements over 5 ms, **two are the same
+   `SELECT TRUE AS "qp_locked" … LIMIT 1 FOR UPDATE`** — 17.064 ms and
+   11.048 ms — and the 11.048 ms one is followed immediately by `ROLLBACK`, so
+   that transaction was failing anyway. The third is a 6.197 ms
+   `INSERT INTO questpie_internal.mutation_call_receipts`.
+
+   **So the bound is not choosing how slow a query may be. It is choosing how
+   long a Mutation may wait for a row lock.** On this path `statement_timeout`
+   and `lock_timeout` bound the same statement, which is why the ordering rule
+   recorded above matters more than it first appears: it decides whether the
+   dominant tail case returns `55P03` naming contention or `57014` naming
+   slowness. One observation is not a pattern, and the `ROLLBACK` case is one
+   observation — but it is the one that suggests a tight bound may convert a
+   slow failure into a fast failure rather than a success into a failure.
+
+   **What would overturn the zero.** These are warm local runs against small
+   fixtures. A cold cache, a large tenant's page, or a managed target with
+   1–5 ms round trips moves the whole distribution, and the 0.021 % at 100 ms is
+   a floor rather than an estimate.
+
 ## Judgment calls
 
 **Superseded: wrapping five bare reads in transactions purely to carry a GUC.**
