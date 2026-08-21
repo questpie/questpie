@@ -871,6 +871,348 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"recovers an unprocessed fact during independent Runtime startup",
+			async () => {
+				const crashedRuntime = runtimePostgres();
+				const crashedCoordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres: crashedRuntime,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let crashedEvaluations = 0;
+				const crashedCarrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: crashedCoordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						crashedEvaluations += 1;
+						return {
+							result: { nodes: [{ body: "before process replacement" }] },
+							observedPlan,
+						};
+					},
+				});
+				let crashedReader: ReadableStreamDefaultReader<Uint8Array> | undefined;
+				let replacementRuntime: ReturnType<typeof runtimePostgres> | undefined;
+				let replacementCoordinator:
+					| ReturnType<typeof createPostgresLiveQueryCoordinator>
+					| undefined;
+				let replacementCarrier:
+					| ReturnType<typeof createRealtimeCarrier>
+					| undefined;
+				let replacementReader:
+					| ReadableStreamDefaultReader<Uint8Array>
+					| undefined;
+				try {
+					await crashedCoordinator.start();
+					const stream = await crashedCarrier.fetch(
+						request("GET", undefined, "scope:process-replacement"),
+					);
+					crashedReader = stream?.body?.getReader();
+					if (!crashedReader) throw new Error("missing crashed Runtime stream");
+					expect((await nextFrameBefore(crashedReader, 2_000))?.kind).toBe(
+						"ready",
+					);
+					expect(
+						(
+							await crashedCarrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:process-replacement", {
+										scopeId: "scope:process-replacement",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(crashedReader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before process replacement" }] },
+					});
+					await crashedCoordinator.durable!.requestScan();
+					expect(crashedEvaluations).toBe(1);
+					const [beforeCrash] = await databases[0]!<
+						{
+							evaluated: string;
+							holderGeneration: string;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+							state: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       scope.holder_generation::text as "holderGeneration",
+						       scope.state,
+						       generation.generation::text as latest,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_scope_attachments scope
+						  on scope.application_name = watch.application_name
+						 and scope.scope_identity = watch.scope_identity
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:process-replacement'
+						  and watch.binding_identity = 'binding:process-replacement'
+					`;
+					if (!beforeCrash) throw new Error("missing pre-crash binding");
+					expect(beforeCrash.state).toBe("open");
+					expect(beforeCrash.holderGeneration).toBe("1");
+					expect(beforeCrash.evaluated).toBe(beforeCrash.invalidation);
+					expect(beforeCrash.latest).toBe("1");
+
+					// This is the crash boundary. It closes all PostgreSQL resources but
+					// deliberately does not call either owner drain, so no durable scope or
+					// watch withdrawal can run before the replacement takes over.
+					await crashedRuntime.close({ deadlineAt: Date.now() + 2_000 });
+					expect(crashedRuntime.facts()).toMatchObject({
+						state: "closed",
+						listener: { state: "closed" },
+					});
+					const [afterProcessLoss] = await databases[0]!<
+						{ holderGeneration: string; state: string }[]
+					>`
+						select holder_generation::text as "holderGeneration", state
+						from questpie_internal.realtime_scope_attachments
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:process-replacement'
+					`;
+					expect(afterProcessLoss).toEqual({
+						holderGeneration: "1",
+						state: "open",
+					});
+
+					const [committed] = await databases[2]!<{ factIdentity: string }[]>`
+						insert into questpie_internal.change_ledger
+						(application_name, transaction_id, collection_identity,
+						 change_kind, conservative)
+						values (${applicationName}, pg_catalog.pg_current_xact_id(),
+						        'collection:messages', 'collection', true)
+						returning fact_identity::text as "factIdentity"
+					`;
+					if (!committed) throw new Error("missing committed crash fact");
+					const [unprocessed] = await databases[0]!<
+						{ facts: number; processed: number }[]
+					>`
+						select
+						  (select count(*)::integer
+						     from questpie_internal.change_ledger fact
+						    where fact.application_name = ${applicationName}
+						      and fact.fact_identity = ${committed.factIdentity}) as facts,
+						  (select count(*)::integer
+						     from questpie_internal.processed_change_facts processed
+						    where processed.application_name = ${applicationName}
+						      and processed.consumer_id = ${`realtime:deployment:${deploymentDigest}`}
+						      and processed.fact_identity = ${committed.factIdentity}) as processed
+					`;
+					expect(unprocessed).toEqual({ facts: 1, processed: 0 });
+					const staleFrame = nextFrame(crashedReader).then((frame) => ({
+						frame,
+					}));
+
+					replacementRuntime = runtimePostgres();
+					const replacementReasons: string[] = [];
+					const replacementPostgres: Pick<
+						RuntimePostgres,
+						"transaction" | "listen"
+					> = Object.freeze({
+						transaction: replacementRuntime.transaction,
+						listen(input) {
+							return replacementRuntime!.listen({
+								...input,
+								async reconcile(reconciliation) {
+									replacementReasons.push(reconciliation.reason);
+									await input.reconcile(reconciliation);
+								},
+							});
+						},
+					});
+					replacementCoordinator = createPostgresLiveQueryCoordinator({
+						program: liveQueryProgram,
+						postgres: replacementPostgres,
+						hmacKey: new Uint8Array(32).fill(7),
+						applicationName,
+						deploymentDigest,
+						wireVersion: 1,
+					});
+					let replacementEvaluations = 0;
+					replacementCarrier = createRealtimeCarrier({
+						contract: decodeRealtimeWireContract(projected),
+						durableCoordinator: replacementCoordinator.durable!,
+						resolvePrincipal: () => user,
+						decodeContext: (value) => value as typeof context,
+						evaluate: async () => {
+							replacementEvaluations += 1;
+							return {
+								result: { nodes: [{ body: "after startup recovery" }] },
+								observedPlan,
+							};
+						},
+					});
+					await replacementCoordinator.start();
+					expect(replacementEvaluations).toBe(0);
+					expect(replacementReasons).toEqual(["startup"]);
+					expect(replacementRuntime.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 1,
+						reconnects: 0,
+					});
+					const [startupRecovered] = await databases[0]!<
+						{
+							evaluated: string;
+							facts: number;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.change_ledger fact
+						         where fact.application_name = watch.application_name
+						           and fact.fact_identity = ${committed.factIdentity}) as facts,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:process-replacement'
+						  and watch.binding_identity = 'binding:process-replacement'
+					`;
+					if (!startupRecovered)
+						throw new Error("replacement startup did not recover binding");
+					expect(startupRecovered.facts).toBe(0);
+					expect(BigInt(startupRecovered.invalidation)).toBe(
+						BigInt(beforeCrash.invalidation) + 1n,
+					);
+					expect(startupRecovered.evaluated).toBe(beforeCrash.evaluated);
+					expect(startupRecovered.latest).toBe("1");
+					expect(BigInt(startupRecovered.horizon)).toBeGreaterThan(
+						BigInt(beforeCrash.horizon),
+					);
+
+					const replacementStream = await replacementCarrier.fetch(
+						request("GET", undefined, "scope:process-replacement"),
+					);
+					replacementReader = replacementStream?.body?.getReader();
+					if (!replacementReader)
+						throw new Error("missing replacement Runtime stream");
+					expect((await nextFrameBefore(replacementReader, 2_000))?.kind).toBe(
+						"ready",
+					);
+					expect(await nextFrameBefore(replacementReader, 2_000)).toMatchObject(
+						{
+							kind: "delivery",
+							delivery: "update",
+							payload: { nodes: [{ body: "after startup recovery" }] },
+						},
+					);
+					expect(replacementEvaluations).toBe(1);
+					await replacementCoordinator.durable!.requestScan();
+					expect(replacementEvaluations).toBe(1);
+					const [recovered] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							holderGeneration: string;
+							invalidation: string;
+							latest: string;
+							state: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       scope.holder_generation::text as "holderGeneration",
+						       scope.state,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_scope_attachments scope
+						  on scope.application_name = watch.application_name
+						 and scope.scope_identity = watch.scope_identity
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:process-replacement'
+						  and watch.binding_identity = 'binding:process-replacement'
+					`;
+					expect(recovered).toEqual({
+						evaluated: startupRecovered.invalidation,
+						generations: 1,
+						holderGeneration: "2",
+						invalidation: startupRecovered.invalidation,
+						latest: "2",
+						state: "open",
+					});
+
+					const duplicate = nextFrame(replacementReader).then((frame) => ({
+						frame,
+					}));
+					expect(
+						await Promise.race([
+							duplicate,
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					expect(
+						await Promise.race([
+							staleFrame,
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+				} finally {
+					await replacementReader?.cancel().catch(() => {});
+					await crashedReader?.cancel().catch(() => {});
+					await replacementCarrier?.drain().catch(() => {});
+					await replacementCoordinator?.drain().catch(() => {});
+					await replacementRuntime
+						?.close({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
+					// Cleanup is intentionally after every recovery assertion. Running it
+					// earlier would turn the crash boundary into a graceful withdrawal.
+					await crashedCarrier.drain().catch(() => {});
+					await crashedCoordinator.drain().catch(() => {});
+					await crashedRuntime
+						.close({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
 			"coalesces duplicate PostgreSQL wakes into one monotonic Live Query result",
 			async () => {
 				const runtime = runtimePostgres();
