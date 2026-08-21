@@ -389,6 +389,7 @@ export function projectRuntimeBuild(
 			resume: string;
 		}>;
 		realtimeWireDigest: string;
+		postgresContextBootstrapPlansDigest: string;
 	}>,
 ): Readonly<Record<string, unknown>> {
 	const fileDigest = (path: string): string | null => {
@@ -443,6 +444,8 @@ export function projectRuntimeBuild(
 		policyProjectionDigest: fileDigest("policy-projection.json"),
 		queryProjectionDigest: fileDigest("query-projection.json"),
 		postgresQueryPlansDigest: fileDigest("postgres-query-plans.json"),
+		postgresContextBootstrapPlansDigest:
+			input.postgresContextBootstrapPlansDigest,
 		committedMigrationsDigest: fileDigest("committed-migrations.json"),
 		migrationHead: input.migrationHead,
 		serverBundleDigest: fileDigest("internal/application.js"),

@@ -27,6 +27,7 @@ import {
 } from "./mutation";
 import {
 	lowerPostgresQueryPlans,
+	projectPostgresContextBootstrapPlans,
 	projectRelationalCompilation,
 	projectRelationalNondisclosure,
 } from "./relational";
@@ -371,6 +372,7 @@ export async function createArtifacts(
 		input.applicationRoot,
 	);
 	const mutations = projectMutations(input.resources);
+	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
@@ -398,6 +400,9 @@ export async function createArtifacts(
 		"manifest.json": canonicalBytes(finalManifest),
 		"origin-map.json": originMapBytes,
 		"schema-projection.json": canonicalBytes(schema),
+		"postgres-context-bootstrap-plans.json": canonicalBytes(
+			contextBootstrapPlans,
+		),
 		"service-projection.json": canonicalBytes(executionComposition.services),
 		"operation-contracts.json": runtimeArtifactBytes(
 			runtime.operationContracts,
@@ -522,6 +527,7 @@ export async function createArtifacts(
 				resume: liveQuery.semanticDigests.resume,
 			},
 			realtimeWireDigest: realtime.digest,
+			postgresContextBootstrapPlansDigest: contextBootstrapPlans.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

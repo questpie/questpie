@@ -8,6 +8,39 @@
   static statements executed through `PostgresDatabase`
 - Public surface: unchanged `ContextBootstrap.get(Collection, { key, select })`
 
+## Prototype result and deferred production edges
+
+The prototype working tree based on `c9305edf` proves the compiler-owned
+artifact, per-plan and envelope semantic digests, the Runtime Build digest
+field, complete eligible Collection-set and logical Field/key/codec/nullability linking,
+primary-key cast validation, immutable static `PostgresStatement` construction,
+and decode-before-COMMIT behavior. A focused
+PostgreSQL 17 execution proves a known-positive selected value and proves that
+an unselected sensitive `companies.name` is `false, null` at the raw driver
+boundary and absent from the decoded result. The compiler ratchet accepts 832
+Fields and rejects 833 before emission, derived from PostgreSQL's 1,664 result
+column bound; this slice does not execute that maximum-width statement against
+PostgreSQL.
+
+The prototype also corrected the selected SQL spelling from the nonexistent
+schema-qualified `pg_catalog.boolean` to PostgreSQL's canonical
+`pg_catalog.bool`.
+
+The following remain downstream and are not claimed by this prototype:
+
+- embedding an independent expected digest in the generated server bundle and
+  linking the artifact during generated Runtime readiness;
+- physical SQL descriptor, placeholder, CASE-association, and result-alias
+  linkage beyond semantic-digest binding, without reconstructing SQL in the
+  Runtime, plus its hostile matrix;
+- replacing the generated Bun `ContextBootstrap` adapter with this linked
+  statement;
+- forwarding each root's cancellation signal through generated Context
+  Resolution rather than only exposing the private execution seam;
+- performing the one-time generated Runtime flip to one shared
+  `RuntimePostgres` and one Pool; and
+- executing the 832-Field maximum-bound statement on PostgreSQL.
+
 ## Boundary
 
 Accepted Context Resolution receives only Principal, decoded input, and a
@@ -46,14 +79,14 @@ owns one boolean selection parameter and a paired selected/value result:
 
 ```sql
 SELECT
-  $4::pg_catalog.boolean AS "qp_selected_0",
+  $4::pg_catalog.bool AS "qp_selected_0",
   CASE
-    WHEN $4::pg_catalog.boolean THEN "role"
+    WHEN $4::pg_catalog.bool THEN "role"
     ELSE NULL::pg_catalog.text
   END AS "qp_value_0",
-  $5::pg_catalog.boolean AS "qp_selected_1",
+  $5::pg_catalog.bool AS "qp_selected_1",
   CASE
-    WHEN $5::pg_catalog.boolean THEN "status"
+    WHEN $5::pg_catalog.bool THEN "status"
     ELSE NULL::pg_catalog.text
   END AS "qp_value_1"
 FROM "collaboration"."memberships"
@@ -132,9 +165,11 @@ Plans are unique and sorted by Collection identity. Key descriptors preserve
 the exact primary-key order. Field descriptors are unique and sorted by
 logical key. Field identity, logical key, codec, nullability, PostgreSQL type,
 and physical SQL must agree with the compiler's Schema Projection. The
-compiler emits the artifact for all Collections at build time because the
-Context resolver is executable application code and may choose a Collection or
-selection through ordinary control flow.
+compiler emits the artifact for every eligible Collection at build time because
+the Context resolver is executable application code and may choose a Collection
+or selection through ordinary control flow. A Collection whose primary key is
+not entirely representable by the current top-level scalar seam is ineligible
+and omitted; compiler and linker must derive that same subset.
 
 Artifact creation belongs beside the other generated compiler artifacts. The
 current compiler already owns `schema-projection.json` and the generated
@@ -176,7 +211,7 @@ result aliases before creating a branded static statement
 (`packages/runtime/src/relational/postgres-database.ts:45`-`:129`,
 `:132`-`:181`).
 
-The Context linker additionally cross-checks every Collection, primary-key
+The Context linker additionally cross-checks every eligible Collection, primary-key
 Field, selected Field, codec, nullability, physical name, cast, placeholder,
 and result alias against the embedded compiler Schema Projection. It validates
 the expected semantic digest; it does not derive SQL from that Schema. A

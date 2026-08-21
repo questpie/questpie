@@ -47,6 +47,20 @@ export function verifyRuntimeArtifactFiles(
 			fail(`artifact file ${path} is not canonical JSON`);
 		}
 	};
+	const rawContextBootstrap = record(
+		parseJsonFile("postgres-context-bootstrap-plans.json"),
+		"postgres-context-bootstrap-plans.json",
+	);
+	const { digest: rawContextBootstrapDigest, ...unsignedContextBootstrap } =
+		rawContextBootstrap;
+	if (
+		rawContextBootstrapDigest !== build.postgresContextBootstrapPlansDigest ||
+		artifactDigest(
+			"questpie-postgres-context-bootstrap-plans-v1",
+			unsignedContextBootstrap,
+		) !== build.postgresContextBootstrapPlansDigest
+	)
+		fail("ContextBootstrap plans semantic digest does not match");
 	if (
 		artifactDigest(
 			"questpie-runtime-executables-v1",

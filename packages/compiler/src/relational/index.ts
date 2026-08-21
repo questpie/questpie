@@ -16,6 +16,7 @@ export type {
 	RelationalNondisclosureV1,
 } from "./nondisclosure";
 export { lowerPostgresQueryPlans } from "./postgres";
+export { projectPostgresContextBootstrapPlans } from "./postgres/context-bootstrap";
 export type { PostgresQueryPlanV1, PostgresQueryPlansV1 } from "./postgres";
 export {
 	lowerPostgresMutationPolicyCheck,

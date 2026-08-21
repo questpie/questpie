@@ -2,7 +2,9 @@ export { createRuntimeApplication } from "./application";
 export { bindIngressPrincipal, readIngressPrincipal } from "./operation";
 export {
 	createPostgresContextBootstrap,
+	executeLinkedPostgresContextBootstrap,
 	executePostgresQuery,
+	linkPostgresContextBootstrapPlans,
 	linkPostgresQueryPlans,
 } from "./relational";
 export {

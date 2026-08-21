@@ -10,6 +10,14 @@ export { DataQueryExecutionError, executePostgresQuery } from "./query";
 export { decodeRelationalScalar, decodeRelationalScalarCodec } from "./scalar";
 export { createPostgresContextBootstrap } from "./bootstrap";
 export {
+	executeLinkedPostgresContextBootstrap,
+	linkPostgresContextBootstrapPlans,
+} from "./context-bootstrap-database";
+export type {
+	LinkedPostgresContextBootstrapPlan,
+	LinkedPostgresContextBootstrapPlans,
+} from "./context-bootstrap-database";
+export {
 	executeLinkedPostgresQueryPlan,
 	linkPostgresQueryPlan,
 	linkPostgresQueryPlans,
