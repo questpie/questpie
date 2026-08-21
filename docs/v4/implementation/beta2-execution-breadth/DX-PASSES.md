@@ -296,6 +296,43 @@ the legacy source; explicit scan routes only to that listener
 (`:462`-`:473`). Concurrent drain closes the listener exactly once, still never
 touches the legacy source, and leaves later scans unavailable (`:475`-`:483`).
 
+`0d607a7a` adds the real Runtime generation-rotation witness. A committed change
+while verification holds leaves generation one active, performs no evaluation,
+and emits no frame; after the successful swap, evaluation runs on generation
+two and emits exactly one update
+(`0d607a7a:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:1088`-`:1144`).
+An unreachable replacement then fails in `connect`, retains generation two as
+the winner, and a later committed notification is evaluated and delivered by
+that same generation (`:1146`-`:1188`).
+
+`49178beb` corrects the first witness's unresolved candidate interval rather
+than treating candidate reconciliation as a total no-op. It holds the candidate
+after the actual candidate reconcile callback
+(`49178beb:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:981`-`:1006`).
+While the Runtime still reports rotating generation one, the candidate is
+allowed to consume the durable Change Ledger and advance invalidation, but it
+cannot evaluate, advance the evaluated frontier, replace retained generations,
+or emit a frame (`:1110`-`:1166`). This directly falsifies the broader
+"candidate does nothing" assumption and proves the required narrower boundary:
+durable recovery may progress, process-local evaluation and disclosure may not.
+Only after candidate release and the generation-two swap does one evaluation
+and one update occur; the failed-candidate control still retains the active
+generation-two winner (`:1168`-`:1236`).
+
+`4da0f4d4` closes coordinator-owned reconciliation failure and recovery. A real
+storage refusal is induced by revoking the coordinator role's Change Ledger
+read. Explicit reconciliation returns the exact normalized
+`QuestpiePostgresError` shape, omits role and password material, preserves the
+durable baseline, and leaves the listener healthy
+(`4da0f4d4:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:1354`-`:1381`).
+After access is restored, a later notification delivers the pending change and
+advances invalidation, evaluation, and retained generation exactly once
+(`:1383`-`:1406`). A separate observed-plan callback failure is normalized and
+redacted without a frame; after disabling the fault, the later wake delivers
+the pending result, an idempotent scan changes no durable state, and no duplicate
+frame appears (`:1408`-`:1468`). A final read-only adversarial review of exact
+head `4da0f4d4` returned **APPROVE** with no blocking finding.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -303,18 +340,19 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `0d3c66ac`
+### PB-04 narrow closure at `4da0f4d4`
 
-| Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
-| Coordinator-owned reconciliation failure | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
+The PB-04 hostile closure matrix is now empty. The actual database-mode
+coordinator drives arbitrary-instance wake, lost-notification reconnect,
+duplicate/coalesced wake, healthy periodic fallback, process replacement,
+rollback, in-flight drain, single-fallback ownership, Runtime rotation, and
+normalized failure/recovery witnesses. PB-03's generic listener controls remain
+prerequisites, not substitutes for these coordinator-level results.
 
-PB-03's generic listener tests remain prerequisites for several rows, but they
-cannot substitute for these Change Ledger and coordinator-level witnesses. A
-row closes only when the actual database-mode coordinator drives the stated
-failure; a Bun compatibility test or a generic monotonic table does not close
-it.
+This is narrow PB-04 closure only. It does not claim that generated applications
+construct `RuntimePostgres`, nor that the remaining Bun `SQL` compatibility
+callers are gone. Those production projection and deletion tests remain PB-05
+exactly as stated above.
 
 ## DX-00 — Propose executable fenced-code verification
 
