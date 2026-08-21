@@ -338,6 +338,33 @@ outstanding change rather than making it: BETA-10's red test needs the fairness
 clause, and its artifacts need whatever evidence line the distribution
 measurement produces.
 
+**BETA-10 has since shipped, and the observation above held while the inference
+from it did not.** Re-checked the queue entry today: it still contains none of
+tenant, fair, admission, backlog or share, and its red test still reads
+"Correctness depends on sticky routing, a leader, process registry, cache,
+broker or one instance retaining connection state." The clause was never added.
+BETA-10 shipped per-tenant fair admission anyway —
+`row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id)` and
+`ORDER BY tenant_turn, available_at, run_id`
+(`packages/runtime/src/durable/postgres-kernel.ts:365`, `:378`).
+
+**And it did not ship ungated, which was the sharper half of the worry.** Both
+assertions run in CI without any queue clause obliging them: `quality:full`
+invokes bare `bun test` (`scripts/quality.ts` `full`), which discovers
+`tests/hostile/beta10-compatibility.test.ts` — verified by running it, three
+tests passing — and the `postgres` lane globs
+`tests/integration/postgres/*.test.ts`, which includes the live interleaving
+assertion in `beta08-durable-kernel.test.ts:104`. A regression in either would
+fail the same CI that runs today.
+
+So this section identified something real and drew the wrong consequence from
+it. The queue entry does not describe what BETA-10 contains, which is a
+records-accuracy defect worth fixing. It was argued here as a delivery and
+evidence risk — that a planner would find no obligation and the work would go
+unowned and unproven — and neither followed. Kept as written above with this
+closure rather than edited, because a record that predicts and is wrong is more
+useful intact than quietly corrected.
+
 A separate gate would stand up a second ten-instance harness to answer a
 question the first one is already configured to ask. That is the duplication
 the original record warned about, arriving by a different route.
