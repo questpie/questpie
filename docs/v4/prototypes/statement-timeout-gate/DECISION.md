@@ -666,6 +666,41 @@ distribution.
    p50, p95, p99, and max for the Mutation path, the relational query path, and
    the five durable reads. The BETA-08 contention scenario is the natural host:
    it already drives 64 runs against 8 workers.
+
+   **Checked what "instrument the existing suites" would actually cost, because
+   this item blocks 2 and 7 and has never been attempted.** It is a new kind of
+   measurement, not an addition. **No percentile is computed anywhere in
+   `tests/` or `scripts/`** — no p50, p95, p99, median or quantile. Both suites
+   time a whole batch against a derived budget:
+   `tests/performance/beta09-maintenance.test.ts:83`–`:94` wraps twenty
+   `cancelRun` calls in one `performance.now()` span, and
+   `tests/load/beta08-worker-contention.ts:60`–`:72` does the same for 64 runs.
+
+   **The derivation rule item 2 wants to reuse does exist, verbatim.**
+   `derivedBudget` in `tests/load/beta10-ten-instance.ts`,
+   `beta10-soak-chaos.ts:19` and `beta07-recompute-fanout.ts:84` computes
+   `ceil(referenceObservedMs × multiplier / roundUpQuantumMs) × roundUpQuantumMs`,
+   which is this record's `ceil(observed × multiplier / quantum) × quantum`. The
+   shipped baselines derive `postgresMaintenance20Ms = 400` from an observed
+   71.591 ms at ×5 into 100 ms quanta, and `postgresContention64Ms = 2000` from
+   330.045 ms at ×6 into 1000 ms quanta; both re-derive exactly.
+
+   **So the numbers exist and cannot be used, for a reason this record already
+   documented once.** 71.591 ms over twenty commands is 3.580 ms per `cancelRun`;
+   330.045 ms over 64 runs is 5.157 ms per run. Those are means of a whole
+   _command_ — a transaction, the kernel marker, a read, an update and an audit
+   insert — while `statement_timeout` bounds one _statement_. Deriving a
+   statement bound from a command mean is the identical unit error caught under
+   "Both numbers an earlier revision proposed to ship were scope errors", where
+   5,000 ms bounded a transaction and was proposed for a statement.
+
+   Item 1 therefore cannot be shortcut from what is already measured. The two
+   honest routes are instrumenting the runtime's own query path, which is
+   production code this gate does not touch, or capturing server-side with
+   `pg_stat_statements` — available as an extension in the test container and
+   absent from `shared_preload_libraries`, so it needs a restart rather than a
+   session setting.
+
 2. **Derive, do not choose.** Any timeout this gate pins is derived from the
    measured maximum by the same rule BETA-08 used —
    `ceil(observed × multiplier / quantum) × quantum` — with the derivation
