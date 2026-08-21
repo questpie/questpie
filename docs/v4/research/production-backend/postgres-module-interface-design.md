@@ -432,13 +432,13 @@ transaction-PgBouncer negative boundary.
 `732b78d8` adds the direct migration runner. PostgreSQL 16, 17, and 18 prove one
 session advisory lock across two separately committed transactions, stable
 backend identity and temporary session state, callback-scope expiry, and lock
-cleanup after failure (`packages/runtime/src/postgres/index.ts:544`-`:700`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:503`-`:563`).
+cleanup after failure (`packages/runtime/src/postgres/index.ts:584`-`:740`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:607`-`:667`).
 
 `360ff8e0` bounds a saturated one-connection Pool, distinguishes checkout from
 connect timeout, releases a cancelled queued checkout when it is eventually
-assigned, and proves subsequent admission (`packages/runtime/src/postgres/index.ts:120`-`:150`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:308`-`:401`). The
+assigned, and proves subsequent admission (`packages/runtime/src/postgres/index.ts:116`-`:150`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:376`-`:470`). The
 contract vocabulary moved to `postgres/contract.ts`; the cross-domain import
 seam remains `postgres/index.ts` and the architecture gate passes.
 
@@ -446,21 +446,40 @@ seam remains `postgres/index.ts` and the architecture gate passes.
 and uses one transient direct session to run `pg_cancel_backend`. The active
 `pg_sleep` witness proves the server statement stops before the ordinary client
 is reused; failed cancellation destroys the client instead
-(`packages/runtime/src/postgres/index.ts:153`-`:180`, `:363`-`:385`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:404`-`:451`). This
+(`packages/runtime/src/postgres/index.ts:171`-`:199`, `:393`-`:411`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:472`-`:519`). This
 does not use the driver's undocumented `Client.cancel` implementation.
 
 `160af3a8` kills a backend while a deferred trigger holds `COMMIT`. The Runtime
 returns `commitOutcomeUnknown` with `callerMustResolveCommit`, destroys the
 fatal client, contains its late driver error inside the checkout scope, and
 admits the next transaction on a healthy connection
-(`packages/runtime/src/postgres/index.ts:183`-`:200`, `:457`-`:477`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:453`-`:500`).
+(`packages/runtime/src/postgres/index.ts:201`-`:218`, `:483`-`:505`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:521`-`:569`).
 
-Still open in PB-03: lost-wake ledger convergence, failed rotation retaining the
-old generation, forced shutdown, complete safe diagnostics, the
-transaction-PgBouncer boundary, additional hostile migration cleanup, and
-migration of existing Bun SQL callers. PB-04 remains blocked.
+`0993433d` composes an internal shutdown signal into every admitted Transaction
+Scope. A callback held past its deadline is rejected, its client is ended, Pool
+drain completes, the Runtime becomes `closed`, and later admission refuses
+(`packages/runtime/src/postgres/index.ts:346`-`:369`, `:475`-`:560`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:571`-`:605`).
+
+`172720bf` adds bounded Pool/cancellation/destruction counters and proves the
+serialized failure/facts boundary. A real constraint error contains a sensitive
+row value in its internal driver cause, but JSON contains only the stable code,
+phase, statement identity, SQLSTATE, and retry disposition; neither facts nor
+failure JSON contains the URL, SQL, or parameter
+(`packages/runtime/src/postgres/contract.ts:137`-`:161`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:326`-`:373`).
+
+`527be565` publishes a notification after committed `LISTEN` while startup
+reconciliation is deliberately held open. The queued reconciliation runs before
+the listener is accepted healthy, proving the startup wake is not dropped
+(`tests/integration/postgres/beta12-postgres-module.test.ts:685`-`:731`).
+
+Still open in PB-03: durable ledger convergence across a disconnect, failed
+rotation retaining the old generation, the transaction-PgBouncer boundary,
+additional hostile migration cleanup, and migration of existing Bun SQL callers.
+PB-04 remains blocked.
 
 ## Deletion test
 
