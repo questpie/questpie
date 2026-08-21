@@ -9,6 +9,7 @@ import {
 	definePostgresStatement,
 	type MigrationPostgresSession,
 	type PostgresTransaction,
+	QuestpiePostgresError,
 } from "../../../packages/runtime/src/postgres";
 
 const postgresTest = process.env.PGHOST ? test : test.skip;
@@ -1015,6 +1016,91 @@ postgresTest(
 		}
 	},
 );
+
+postgresTest("normalizes and redacts listener startup failures", async () => {
+	const postgres = database();
+	try {
+		const malformedUrl =
+			"postgres://qp-secret-user:qp-secret-password@[invalid/postgres";
+		const configurationFailure = await createPostgresListener({
+			directConnectionUrl: malformedUrl,
+			channel: definePostgresChannel("qp_pb03_configuration_failure"),
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: () => Promise.resolve(),
+		}).catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(configurationFailure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "configuration",
+			phase: "connect",
+			retry: "never",
+		});
+		expect(String(configurationFailure)).not.toContain("qp-secret-user");
+		expect(String(configurationFailure)).not.toContain("qp-secret-password");
+
+		const unreachable = new URL(postgresUrl());
+		unreachable.port = "1";
+		unreachable.username = "qp-secret-user";
+		unreachable.password = "qp-secret-password";
+		const connectFailure = await createPostgresListener({
+			directConnectionUrl: unreachable.href,
+			channel: definePostgresChannel("qp_pb03_connect_failure"),
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: () => Promise.resolve(),
+		}).catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(connectFailure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "connectionLost",
+			phase: "connect",
+			retry: "safeBeforeCommit",
+		});
+		expect(JSON.stringify(connectFailure)).not.toContain(unreachable.href);
+		expect(String(connectFailure)).not.toContain("qp-secret-user");
+		expect(String(connectFailure)).not.toContain("qp-secret-password");
+
+		const sensitiveDetail = "qp-sensitive-reconcile-detail";
+		const reconcileFailure = await createPostgresListener({
+			directConnectionUrl: postgresUrl(),
+			channel: definePostgresChannel("qp_pb03_reconcile_failure"),
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: () => Promise.reject(new Error(sensitiveDetail)),
+		}).catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(reconcileFailure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "queryFailed",
+			phase: "reconcile",
+			retry: "never",
+		});
+		expect(JSON.stringify(reconcileFailure)).not.toContain(sensitiveDetail);
+		expect(String(reconcileFailure)).not.toContain(sensitiveDetail);
+
+		const nestedFailure = await createPostgresListener({
+			directConnectionUrl: postgresUrl(),
+			channel: definePostgresChannel("qp_pb03_nested_reconcile_failure"),
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: () =>
+				Promise.reject(
+					new QuestpiePostgresError({
+						code: "constraint",
+						phase: "statement",
+						sqlState: "23505",
+					}),
+				),
+		}).catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(nestedFailure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "constraint",
+			phase: "reconcile",
+			sqlState: "23505",
+			retry: "never",
+		});
+	} finally {
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+	}
+});
 
 postgresTest(
 	"rotates only after candidate verification and retains the winner on failure",

@@ -1,6 +1,7 @@
 import { Client } from "pg";
 
-import type { PostgresDatabase } from "./contract";
+import { QuestpiePostgresError, type PostgresDatabase } from "./contract";
+import { postgresFailure } from "./errors";
 
 const channelBrand: unique symbol = Symbol("questpie.postgres.channel");
 
@@ -50,7 +51,21 @@ export async function createPostgresListener(
 		!Number.isSafeInteger(input.fallbackIntervalMs) ||
 		input.fallbackIntervalMs <= 0
 	)
-		throw new TypeError("invalid PostgreSQL listener configuration");
+		throw new QuestpiePostgresError({
+			code: "configuration",
+			phase: "connect",
+		});
+	try {
+		const url = new URL(input.directConnectionUrl);
+		if (url.protocol !== "postgres:" && url.protocol !== "postgresql:")
+			throw new TypeError("invalid PostgreSQL listener protocol");
+	} catch (error) {
+		throw new QuestpiePostgresError({
+			code: "configuration",
+			phase: "connect",
+			cause: error,
+		});
+	}
 
 	let state: "starting" | "healthy" | "degraded" | "closing" | "closed" =
 		"starting";
@@ -108,13 +123,19 @@ export async function createPostgresListener(
 
 	const establish = async (reason: "startup" | "reconnect"): Promise<void> => {
 		if (state === "closing" || state === "closed") return;
-		const candidate = new Client({
-			connectionString: input.directConnectionUrl,
-			application_name: "questpie-realtime-listener",
-			connectionTimeoutMillis: 1_000,
-		});
+		let candidate: Client;
+		try {
+			candidate = new Client({
+				connectionString: input.directConnectionUrl,
+				application_name: "questpie-realtime-listener",
+				connectionTimeoutMillis: 1_000,
+			});
+		} catch (error) {
+			throw postgresFailure({ error, phase: "connect" });
+		}
 		establishingClient = candidate;
 		let lost = false;
+		let failurePhase: "connect" | "listen" | "reconcile" = "connect";
 		const connectionLost = (): void => {
 			if (lost) return;
 			lost = true;
@@ -129,6 +150,7 @@ export async function createPostgresListener(
 		try {
 			await candidate.connect();
 			if (stopped()) throw controller.signal.reason;
+			failurePhase = "listen";
 			await candidate.query("BEGIN");
 			await candidate.query(`LISTEN "${input.channel}"`);
 			await candidate.query("COMMIT");
@@ -137,6 +159,7 @@ export async function createPostgresListener(
 			establishingClient = undefined;
 			generation += 1;
 			if (reason === "reconnect") reconnects += 1;
+			failurePhase = "reconcile";
 			await reconcile(reason);
 			if (stopped()) throw controller.signal.reason;
 			reconnectAttempt = 0;
@@ -145,7 +168,12 @@ export async function createPostgresListener(
 			if (client === candidate) client = undefined;
 			if (establishingClient === candidate) establishingClient = undefined;
 			if (!lost) await candidate.end().catch(() => {});
-			throw error;
+			throw postgresFailure({
+				error,
+				phase: failurePhase,
+				signal: controller.signal,
+				overridePhase: failurePhase === "reconcile",
+			});
 		}
 	};
 

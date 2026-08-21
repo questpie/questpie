@@ -19,6 +19,7 @@ import {
 	type PostgresTransactionMode,
 } from "./contract";
 import { createPostgresControlSignal } from "./control";
+import { postgresFailure as failure } from "./errors";
 
 export * from "./contract";
 
@@ -101,12 +102,6 @@ function parameter(value: PostgresParameter): unknown {
 	if (Array.isArray(value)) return value.map(parameter);
 	if ("kind" in value && value.kind === "json") return jsonText(value.value);
 	throw new TypeError("invalid PostgreSQL parameter");
-}
-
-function sqlState(error: unknown): string | undefined {
-	if (!error || typeof error !== "object" || !("code" in error))
-		return undefined;
-	return typeof error.code === "string" ? error.code : undefined;
 }
 
 function isPoolTimeout(error: unknown): boolean {
@@ -199,58 +194,6 @@ async function cancelBackend(
 		clearTimeout(timer);
 		await client.end().catch(() => {});
 	}
-}
-
-function failure(
-	input: Readonly<{
-		error: unknown;
-		phase: QuestpiePostgresError["phase"];
-		statementName?: string;
-		commitSent?: boolean;
-		signal?: AbortSignal;
-	}>,
-): QuestpiePostgresError {
-	if (input.error instanceof QuestpiePostgresError) return input.error;
-	const state = sqlState(input.error);
-	if (input.commitSent)
-		return new QuestpiePostgresError({
-			code: "commitOutcomeUnknown",
-			phase: "commit",
-			retry: "callerMustResolveCommit",
-			cause: input.error,
-		});
-	if (input.signal?.aborted)
-		return new QuestpiePostgresError({
-			code: "cancelled",
-			phase: input.phase,
-			statementName: input.statementName,
-			cause: input.signal.reason,
-		});
-	const classification =
-		state === "57014"
-			? "statementTimeout"
-			: state === "55P03"
-				? "lockTimeout"
-				: state === "40001"
-					? "serializationFailure"
-					: state === "40P01"
-						? "deadlock"
-						: state?.startsWith("23")
-							? "constraint"
-							: state?.startsWith("08")
-								? "connectionLost"
-								: "queryFailed";
-	return new QuestpiePostgresError({
-		code: classification,
-		phase: input.phase,
-		statementName: input.statementName,
-		sqlState: state,
-		retry:
-			classification === "serializationFailure" || classification === "deadlock"
-				? "safeBeforeCommit"
-				: "never",
-		cause: input.error,
-	});
 }
 
 function begin(mode: PostgresTransactionMode): string {

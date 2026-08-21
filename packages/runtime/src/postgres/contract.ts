@@ -92,6 +92,8 @@ export class QuestpiePostgresError extends Error {
 		| "statement"
 		| "commit"
 		| "rollback"
+		| "listen"
+		| "reconcile"
 		| "shutdown";
 	readonly statementName?: string;
 	readonly sqlState?: string;
