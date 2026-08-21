@@ -500,6 +500,42 @@ postgresTest(
 	},
 );
 
+postgresTest("forces shutdown at its deadline", async () => {
+	const postgres = database({ max: 1 });
+	let entered: (() => void) | undefined;
+	const active = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	const never = new Promise<never>(() => {});
+	const running = postgres.transaction({
+		mode: { isolation: "readCommitted", access: "readOnly" },
+		use: async (transaction) => {
+			await transaction.execute(currentBackendPid, undefined);
+			entered?.();
+			await never;
+		},
+	});
+	const outcome = running.catch((error: unknown) => error);
+	await active;
+	await expect(
+		postgres.close({ deadlineAt: Date.now() + 25 }),
+	).resolves.toBeUndefined();
+	await expect(outcome).resolves.toMatchObject({
+		code: "closed",
+		phase: "shutdown",
+	});
+	expect(postgres.facts()).toMatchObject({
+		state: "closed",
+		pool: { inFlight: 0, total: 0 },
+	});
+	await expect(
+		postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readOnly" },
+			use: () => Promise.resolve(),
+		}),
+	).rejects.toMatchObject({ code: "closed", phase: "checkout" });
+});
+
 postgresTest(
 	"pins separately committed migration transactions under one application lock",
 	async () => {

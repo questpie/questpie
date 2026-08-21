@@ -150,6 +150,24 @@ function checkout(pool: Pool, signal?: AbortSignal): Promise<PoolClient> {
 	});
 }
 
+async function withSignal<Value>(
+	work: Promise<Value>,
+	signal: AbortSignal,
+): Promise<Value> {
+	signal.throwIfAborted();
+	let abort: (() => void) | undefined;
+	const stopped = new Promise<never>((_resolve, reject) => {
+		abort = () => reject(signal.reason);
+		signal.addEventListener("abort", abort, { once: true });
+		if (signal.aborted) abort();
+	});
+	try {
+		return await Promise.race([work, stopped]);
+	} finally {
+		if (abort) signal.removeEventListener("abort", abort);
+	}
+}
+
 const CANCEL_GRACE_MS = 250;
 
 async function cancelBackend(
@@ -322,6 +340,8 @@ export function createPostgresDatabase(
 	pool.on("error", () => {});
 	let state: "ready" | "draining" | "closed" = "ready";
 	let inFlight = 0;
+	const shutdown = new AbortController();
+	let closing: Promise<void> | undefined;
 
 	const transaction: PostgresDatabase["transaction"] = async (input) => {
 		if (state !== "ready")
@@ -337,11 +357,9 @@ export function createPostgresDatabase(
 		);
 		const signal =
 			signals.length === 0
-				? undefined
-				: signals.length === 1
-					? signals[0]
-					: AbortSignal.any(signals);
-		signal?.throwIfAborted();
+				? shutdown.signal
+				: AbortSignal.any([...signals, shutdown.signal]);
+		signal.throwIfAborted();
 		let client: PoolClient;
 		try {
 			client = await checkout(pool, signal);
@@ -446,7 +464,7 @@ export function createPostgresDatabase(
 				throw failure({ error, phase: "begin", signal });
 			}
 			try {
-				const output = await input.use(handle);
+				const output = await withSignal(input.use(handle), signal);
 				active = false;
 				try {
 					signal?.throwIfAborted();
@@ -465,6 +483,8 @@ export function createPostgresDatabase(
 			} catch (error) {
 				active = false;
 				await rollback();
+				if (signal.aborted)
+					throw failure({ error, phase: "statement", signal });
 				throw error;
 			}
 		} finally {
@@ -492,31 +512,31 @@ export function createPostgresDatabase(
 				}),
 			});
 		},
-		async close(input: Readonly<{ deadlineAt: number }>) {
-			if (state === "closed") return;
+		close(input: Readonly<{ deadlineAt: number }>) {
+			if (closing) return closing;
 			state = "draining";
-			const remaining = Math.max(0, input.deadlineAt - Date.now());
-			let timer: ReturnType<typeof setTimeout> | undefined;
-			try {
-				await Promise.race([
-					pool.end(),
-					new Promise<never>((_resolve, reject) => {
-						timer = setTimeout(
-							() =>
-								reject(
-									new QuestpiePostgresError({
-										code: "closed",
-										phase: "shutdown",
-									}),
-								),
-							remaining,
-						);
+			closing = (async () => {
+				const ended = pool.end();
+				const remaining = Math.max(0, input.deadlineAt - Date.now());
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				const graceful = await Promise.race([
+					ended.then(() => true),
+					new Promise<false>((resolve) => {
+						timer = setTimeout(() => resolve(false), remaining);
 					}),
 				]);
-				state = "closed";
-			} finally {
 				if (timer) clearTimeout(timer);
-			}
+				if (!graceful)
+					shutdown.abort(
+						new QuestpiePostgresError({
+							code: "closed",
+							phase: "shutdown",
+						}),
+					);
+				await ended;
+				state = "closed";
+			})();
+			return closing;
 		},
 	});
 }
