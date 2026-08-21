@@ -63,9 +63,15 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 			effect: input.effect,
 			signal,
 		});
+	const drainController = new AbortController();
 	const boundedSignal = (signal: AbortSignal): AbortSignal =>
 		AbortSignal.any(
-			[input.signal, signal, AbortSignal.timeout(10_000)].filter(
+			[
+				input.signal,
+				signal,
+				drainController.signal,
+				AbortSignal.timeout(10_000),
+			].filter(
 				(candidate): candidate is AbortSignal => candidate !== undefined,
 			),
 		);
@@ -93,6 +99,8 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 				signal: input.signal,
 			});
 	let listener: PostgresListener | undefined;
+	let draining = false;
+	let drainDeadlineAt: number | undefined;
 
 	return Object.freeze({
 		databaseMode: input.postgres !== undefined,
@@ -113,16 +121,23 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 		},
 		async start(): Promise<void> {
 			if (input.postgres) {
-				listener = await input.postgres.listen({
+				const started = await input.postgres.listen({
 					channel: definePostgresChannel("questpie_change"),
 					fallbackIntervalMs: 10_000,
 					reconcile: ({ admission, database, signal }) => {
+						drainController.signal.throwIfAborted();
 						const bounded = boundedSignal(signal);
+						bounded.throwIfAborted();
 						return admission === "candidate"
 							? reconcileLedger(database, bounded).then(() => undefined)
 							: runFullReconciliation(database, bounded);
 					},
 				});
+				if (draining) {
+					await started.close({ deadlineAt: drainDeadlineAt ?? Date.now() });
+					throw new Error("Live Query coordinator stopped during startup");
+				}
+				listener = started;
 				return;
 			}
 			await wake!.start();
@@ -132,10 +147,17 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 			if (wake) return wake.requestScan();
 			return Promise.reject(new Error("Live Query coordinator is not started"));
 		},
-		async drain(): Promise<void> {
-			await listener?.close({ deadlineAt: Date.now() + 30_000 });
+		async drain(input: Readonly<{ deadlineAt: number }>): Promise<void> {
+			const deadlineAt = input.deadlineAt;
+			draining = true;
+			drainDeadlineAt ??= deadlineAt;
+			drainController.abort(
+				new DOMException("Live Query coordinator draining", "AbortError"),
+			);
+			const shutdown = Object.freeze({ deadlineAt: drainDeadlineAt });
+			await listener?.close(shutdown);
 			listener = undefined;
-			await wake?.drain();
+			await wake?.drain(shutdown);
 			wake = undefined;
 		},
 	});

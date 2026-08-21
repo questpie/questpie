@@ -509,7 +509,7 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
 		expect(harness.dataRuns()).toBe(beforeDeclaredError);
 	} finally {
-		await harness.runtime.close();
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 
 	expect(harness.events.map(({ event }) => event.kind)).toEqual([
@@ -580,7 +580,7 @@ test("executes retained v1 Queries but rejects v1 Mutations and unknown operatio
 			data: harness.dataRuns(),
 		}).toEqual({ bootstrap: 1, data: 1 });
 	} finally {
-		await harness.runtime.close();
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 });
 
@@ -623,6 +623,6 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 			},
 		});
 	} finally {
-		await harness.runtime.close();
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 });

@@ -617,27 +617,58 @@ export function createPostgresDurableLiveQueryCoordinator(
 			startPromise = undefined;
 		}
 	};
-	const drain = (): Promise<void> => {
+	const drain = (input: Readonly<{ deadlineAt: number }>): Promise<void> => {
 		if (drainPromise) return drainPromise;
+		const deadlineAt = input.deadlineAt;
+		const shutdown = Object.freeze({ deadlineAt });
 		drainPromise = (async () => {
 			if (state === "drained") return;
 			state = "draining";
-			await startPromise?.catch(() => {});
-			await runtime.drain();
+			await runtime.drain(shutdown);
+			const starting = startPromise?.catch(() => {});
+			if (starting) {
+				const remaining = Math.max(0, deadlineAt - Date.now());
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				try {
+					await Promise.race([
+						starting,
+						new Promise<void>((resolve) => {
+							timer = setTimeout(resolve, remaining);
+						}),
+					]);
+				} finally {
+					if (timer) clearTimeout(timer);
+				}
+			}
 			const withdrawals = [...attachments.values()].map((holder) =>
 				store.withdrawScope(holder.lease),
 			);
 			attachments.clear();
-			await Promise.allSettled(withdrawals);
+			const settled = Promise.allSettled(withdrawals);
+			const remaining = Math.max(0, deadlineAt - Date.now());
+			let timer: ReturnType<typeof setTimeout> | undefined;
+			try {
+				await Promise.race([
+					settled,
+					new Promise<void>((resolve) => {
+						timer = setTimeout(resolve, remaining);
+					}),
+				]);
+			} finally {
+				if (timer) clearTimeout(timer);
+			}
 			state = "drained";
 		})();
 		return drainPromise;
 	};
-	if (input.signal?.aborted) void drain().catch(() => {});
+	if (input.signal?.aborted)
+		void drain({ deadlineAt: Date.now() + 30_000 }).catch(() => {});
 	else if (input.signal)
-		input.signal.addEventListener("abort", () => void drain().catch(() => {}), {
-			once: true,
-		});
+		input.signal.addEventListener(
+			"abort",
+			() => void drain({ deadlineAt: Date.now() + 30_000 }).catch(() => {}),
+			{ once: true },
+		);
 
 	return Object.freeze({
 		durable,

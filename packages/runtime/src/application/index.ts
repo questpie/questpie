@@ -109,7 +109,7 @@ export interface RuntimeApplication<Input, ExecutionView> {
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
 	fetch(request: Request): Promise<Response>;
-	close(): Promise<void>;
+	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
 type RuntimeState = "closed" | "draining" | "ready" | "verifying";
@@ -155,6 +155,7 @@ export async function createRuntimeApplication<
 	)
 		throw new TypeError("drainMilliseconds must be a nonnegative safe integer");
 	let state: RuntimeState = "verifying";
+	const drainMilliseconds = input.drainMilliseconds ?? 30_000;
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
 	const retainedClients = retainClientPairs(input.retainedClients);
@@ -180,7 +181,9 @@ export async function createRuntimeApplication<
 	try {
 		await input.program.liveQueryCoordinator?.start();
 	} catch (error) {
-		await input.program.liveQueryCoordinator?.drain().catch(() => {});
+		await input.program.liveQueryCoordinator
+			?.drain({ deadlineAt: Date.now() + drainMilliseconds })
+			.catch(() => {});
 		throw error;
 	}
 	const core = createApplicationRuntime({
@@ -203,7 +206,6 @@ export async function createRuntimeApplication<
 	const activeRoots = new Set<Promise<unknown>>();
 	const rootControllers = new Set<AbortController>();
 	const maximumRoots = input.maximumActiveRootsPerPrincipal ?? 64;
-	const drainMilliseconds = input.drainMilliseconds ?? 30_000;
 	const nowMilliseconds = () => (input.now?.() ?? new Date()).getTime();
 	let rootSequence = 0;
 	let callSequence = 0;
@@ -214,6 +216,9 @@ export async function createRuntimeApplication<
 		sink: input.events,
 		now: input.now,
 	});
+	const emitBeforeStopped = (...event: Parameters<typeof emit>): void => {
+		if (state !== "closed") emit(...event);
+	};
 	state = "ready";
 	emit(
 		{ family: "runtime", kind: "ready" },
@@ -287,7 +292,7 @@ export async function createRuntimeApplication<
 								{ kind: "operationCall" as const, id: callId },
 							],
 						};
-						emit(
+						emitBeforeStopped(
 							{
 								family: "operation",
 								kind: "accepted",
@@ -319,7 +324,7 @@ export async function createRuntimeApplication<
 							if (controlled.controller.signal.aborted)
 								if (!committedMutation)
 									throw controlled.controller.signal.reason;
-							emit(
+							emitBeforeStopped(
 								{
 									family: "operation",
 									kind: "result",
@@ -329,7 +334,7 @@ export async function createRuntimeApplication<
 							);
 							return result;
 						} catch (error) {
-							emit(
+							emitBeforeStopped(
 								{
 									family: "operation",
 									kind: "failed",
@@ -586,37 +591,66 @@ export async function createRuntimeApplication<
 		}
 	};
 
-	const close = (): Promise<void> => {
+	const close = (shutdown: Readonly<{ deadlineAt: number }>): Promise<void> => {
 		if (closePromise) return closePromise;
+		const deadlineAt = shutdown.deadlineAt;
+		if (!Number.isFinite(deadlineAt))
+			return Promise.reject(new TypeError("close deadline must be finite"));
+		const closeInput = Object.freeze({ deadlineAt });
 		state = "draining";
 		realtime?.beginDrain();
 		emit({ family: "runtime", kind: "drainStarted" });
 		closePromise = (async () => {
 			let timedOut = false;
-			let timer: ReturnType<typeof setTimeout> | undefined;
+			let timeoutEmitted = false;
+			let shutdownFailure: unknown;
+			const settle = async (work: Promise<unknown>): Promise<void> => {
+				const remaining = Math.max(0, deadlineAt - Date.now());
+				if (remaining === 0) {
+					timedOut = true;
+					void work.catch(() => {});
+					return;
+				}
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				let settled: boolean;
+				try {
+					settled = await Promise.race([
+						work.then(() => true),
+						new Promise<false>((resolve) => {
+							timer = setTimeout(() => resolve(false), remaining);
+						}),
+					]);
+				} finally {
+					if (timer) clearTimeout(timer);
+				}
+				if (!settled) {
+					timedOut = true;
+					void work.catch(() => {});
+				}
+			};
+			const settlePhase = async (work: Promise<unknown>): Promise<void> => {
+				try {
+					await settle(work);
+				} catch (error) {
+					shutdownFailure ??= error;
+				}
+			};
+			if (activeRoots.size > 0) await settle(Promise.allSettled(activeRoots));
 			if (activeRoots.size > 0) {
-				await Promise.race([
-					Promise.allSettled(activeRoots),
-					new Promise<void>((resolve) => {
-						timer = setTimeout(() => {
-							timedOut = true;
-							resolve();
-						}, drainMilliseconds);
-					}),
-				]);
-			}
-			if (timer !== undefined) clearTimeout(timer);
-			if (timedOut) {
 				emit({ family: "runtime", kind: "drainTimedOut" });
+				timeoutEmitted = true;
 				for (const controller of rootControllers)
 					controller.abort(new DOMException("Runtime draining", "AbortError"));
-				await Promise.allSettled(activeRoots);
 			}
-			await realtime?.drain();
-			await input.program.liveQueryCoordinator?.drain();
-			await core.close();
+			if (realtime) await settlePhase(realtime.drain(closeInput));
+			if (input.program.liveQueryCoordinator)
+				await settlePhase(input.program.liveQueryCoordinator.drain(closeInput));
+			await settlePhase(core.close());
 			state = "closed";
+			if (timedOut && !timeoutEmitted)
+				emit({ family: "runtime", kind: "drainTimedOut" });
 			emit({ family: "runtime", kind: "stopped" });
+			if (shutdownFailure !== undefined) throw shutdownFailure;
 		})();
 		return closePromise;
 	};

@@ -24,6 +24,7 @@ import {
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
 import {
 	createRuntimePostgres,
+	type PostgresDatabase,
 	type PostgresListener,
 	type RuntimePostgres,
 } from "../../../packages/runtime/src/postgres";
@@ -361,11 +362,121 @@ test("a concurrent drain owns a coordinator listener still starting", async () =
 	});
 
 	const starting = coordinator.start();
-	const draining = coordinator.drain();
+	const draining = coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 	releaseListen();
 	await expect(starting).rejects.toThrow("stopped during startup");
 	await draining;
 	expect(closes).toBe(1);
+	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
+});
+
+test("a startup reconciliation consumes the first drain cancellation and cannot resume", async () => {
+	let releaseListen!: () => void;
+	const listenHeld = new Promise<void>((resolve) => {
+		releaseListen = resolve;
+	});
+	let reconciliationEntered!: () => void;
+	const entered = new Promise<void>((resolve) => {
+		reconciliationEntered = resolve;
+	});
+	let closes = 0;
+	const closeDeadlines: number[] = [];
+	let transactionCalls = 0;
+	let transactionUses = 0;
+	let reconciliationSignal: AbortSignal | undefined;
+	const listener = {
+		facts: () => ({
+			state: "healthy" as const,
+			generation: 1,
+			reconnects: 0,
+			lastReconciledAt: Date.now(),
+		}),
+		requestReconcile: () => Promise.resolve(),
+		close: async (input) => {
+			closes += 1;
+			closeDeadlines.push(input.deadlineAt);
+		},
+	} satisfies PostgresListener;
+	const database = {
+		async transaction(
+			transactionInput: Readonly<{
+				control?: Readonly<{ signal?: AbortSignal }>;
+				use(transaction: never): Promise<unknown>;
+			}>,
+		): Promise<unknown> {
+			transactionCalls += 1;
+			reconciliationSignal = transactionInput.control?.signal;
+			reconciliationEntered();
+			const signal = reconciliationSignal;
+			if (!signal) throw new Error("missing reconciliation signal");
+			await new Promise<never>((_resolve, reject) => {
+				const aborted = () => reject(signal.reason);
+				signal.addEventListener("abort", aborted, { once: true });
+				if (signal.aborted) aborted();
+			});
+			transactionUses += 1;
+			return transactionInput.use(undefined as never);
+		},
+	} as unknown as PostgresDatabase;
+	let reconcileAfterDrain!: () => Promise<void>;
+	const postgres = {
+		transaction: database.transaction.bind(database),
+		listen: async (input: Parameters<RuntimePostgres["listen"]>[0]) => {
+			reconcileAfterDrain = () =>
+				input.reconcile({
+					admission: "candidate",
+					reason: "notification",
+					database,
+					signal: new AbortController().signal,
+				});
+			await input
+				.reconcile({
+					admission: "candidate",
+					reason: "startup",
+					database,
+					signal: new AbortController().signal,
+				})
+				.catch(() => {});
+			await listenHeld;
+			return listener;
+		},
+	} as unknown as Pick<RuntimePostgres, "transaction" | "listen">;
+	const coordinator = createPostgresLiveQueryCoordinator({
+		program: liveQueryProgram,
+		postgres,
+		hmacKey: new Uint8Array(32).fill(7),
+		applicationName,
+		deploymentDigest,
+		wireVersion: 1,
+	});
+
+	const starting = coordinator.start();
+	await entered;
+	const firstDeadlineAt = Date.now() + 25;
+	const mutableShutdown = { deadlineAt: firstDeadlineAt };
+	const draining = coordinator.drain(mutableShutdown);
+	mutableShutdown.deadlineAt += 30_000;
+	expect(reconciliationSignal?.aborted).toBe(true);
+	await draining;
+	expect({ transactionCalls, transactionUses }).toEqual({
+		transactionCalls: 1,
+		transactionUses: 0,
+	});
+	await expect(
+		Promise.resolve().then(reconcileAfterDrain),
+	).rejects.toMatchObject({
+		name: "AbortError",
+	});
+	expect(transactionCalls).toBe(1);
+
+	releaseListen();
+	await expect(starting).rejects.toThrow("stopped during startup");
+	expect(closes).toBe(1);
+	expect(closeDeadlines).toEqual([firstDeadlineAt]);
+	expect({ transactionCalls, transactionUses }).toEqual({
+		transactionCalls: 1,
+		transactionUses: 0,
+	});
 	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
 });
 
@@ -478,7 +589,10 @@ test("database mode owns one listener fallback and never arms the legacy wake", 
 	expect(listenerCalls.request).toBe(1);
 	expect(tickCalls).toEqual({ start: 0, request: 0, drain: 0 });
 
-	await Promise.all([coordinator.drain(), coordinator.drain()]);
+	await Promise.all([
+		coordinator.drain({ deadlineAt: Date.now() + 2_000 }),
+		coordinator.drain({ deadlineAt: Date.now() + 2_000 }),
+	]);
 	expect(listenerCalls).toEqual({
 		close: 1,
 		fallbackIntervals: [10_000],
@@ -563,8 +677,8 @@ describe.skipIf(databases.length === 0)(
 					});
 					expect(performance.now() - startedAt).toBeLessThan(10_000);
 					await reader.cancel();
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 
 					const postDrainAttachment = {
 						scopeId: "scope:after-drain",
@@ -606,8 +720,8 @@ describe.skipIf(databases.length === 0)(
 					`;
 					expect(postDrainRows?.count).toBe(0);
 				} finally {
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await postgres.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
@@ -787,8 +901,8 @@ describe.skipIf(databases.length === 0)(
 					).toEqual({ frame: "none" });
 					await reader.cancel();
 				} finally {
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await postgres.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
@@ -909,7 +1023,9 @@ describe.skipIf(databases.length === 0)(
 						),
 					]);
 					const pendingFrame = nextFrame(reader);
-					const draining = coordinator.drain();
+					const draining = coordinator.drain({
+						deadlineAt: Date.now() + 2_000,
+					});
 					expect(
 						await Promise.race([
 							draining.then(() => "resolved" as const),
@@ -970,8 +1086,8 @@ describe.skipIf(databases.length === 0)(
 					await reader.cancel();
 				} finally {
 					releaseEvaluation();
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await runtime.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
@@ -1239,8 +1355,8 @@ describe.skipIf(databases.length === 0)(
 					releaseVerification();
 					releaseCandidate();
 					releaseEvaluation();
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await postgres.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
@@ -1474,8 +1590,8 @@ describe.skipIf(databases.length === 0)(
 						)
 						.catch(() => {});
 					try {
-						await carrier.drain();
-						await coordinator.drain();
+						await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+						await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 						await postgres.close({ deadlineAt: Date.now() + 2_000 });
 					} finally {
 						await postgres
@@ -1606,8 +1722,8 @@ describe.skipIf(databases.length === 0)(
 						.unsafe(`ALTER ROLE ${reconnectRole} LOGIN`)
 						.catch(() => {});
 					try {
-						await carrier.drain();
-						await coordinator.drain();
+						await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+						await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 						await postgres.close({ deadlineAt: Date.now() + 2_000 });
 					} finally {
 						await postgres
@@ -1821,8 +1937,8 @@ describe.skipIf(databases.length === 0)(
 					).toEqual({ frame: "none" });
 					await reader.cancel();
 				} finally {
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await runtime.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
@@ -2154,15 +2270,23 @@ describe.skipIf(databases.length === 0)(
 				} finally {
 					await replacementReader?.cancel().catch(() => {});
 					await crashedReader?.cancel().catch(() => {});
-					await replacementCarrier?.drain().catch(() => {});
-					await replacementCoordinator?.drain().catch(() => {});
+					await replacementCarrier
+						?.drain({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
+					await replacementCoordinator
+						?.drain({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
 					await replacementRuntime
 						?.close({ deadlineAt: Date.now() + 2_000 })
 						.catch(() => {});
 					// Cleanup is intentionally after every recovery assertion. Running it
 					// earlier would turn the crash boundary into a graceful withdrawal.
-					await crashedCarrier.drain().catch(() => {});
-					await crashedCoordinator.drain().catch(() => {});
+					await crashedCarrier
+						.drain({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
+					await crashedCoordinator
+						.drain({ deadlineAt: Date.now() + 2_000 })
+						.catch(() => {});
 					await crashedRuntime
 						.close({ deadlineAt: Date.now() + 2_000 })
 						.catch(() => {});
@@ -2419,8 +2543,8 @@ describe.skipIf(databases.length === 0)(
 					await reader.cancel();
 				} finally {
 					releaseUpdate();
-					await carrier.drain();
-					await coordinator.drain();
+					await carrier.drain({ deadlineAt: Date.now() + 2_000 });
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 					await runtime.close({ deadlineAt: Date.now() + 2_000 });
 					await notificationControl.end().catch(() => {});
 				}
@@ -2841,12 +2965,18 @@ describe.skipIf(databases.length === 0)(
 				`;
 				expect(closed).toEqual({ activeSlot: null, state: "withdrawn" });
 
-				await Promise.all(carriers.map((carrier) => carrier.drain()));
-				await wrongDeploymentCarrier.drain();
 				await Promise.all(
-					coordinators.map((coordinator) => coordinator.drain()),
+					carriers.map((carrier) =>
+						carrier.drain({ deadlineAt: Date.now() + 2_000 }),
+					),
 				);
-				await wrongDeployment.drain();
+				await wrongDeploymentCarrier.drain({ deadlineAt: Date.now() + 2_000 });
+				await Promise.all(
+					coordinators.map((coordinator) =>
+						coordinator.drain({ deadlineAt: Date.now() + 2_000 }),
+					),
+				);
+				await wrongDeployment.drain({ deadlineAt: Date.now() + 2_000 });
 			},
 			20_000,
 		);
@@ -2984,9 +3114,15 @@ describe.skipIf(databases.length === 0)(
 					});
 					await takeoverReader.cancel();
 				} finally {
-					await Promise.all(carriers.map((carrier) => carrier.drain()));
 					await Promise.all(
-						coordinators.map((coordinator) => coordinator.drain()),
+						carriers.map((carrier) =>
+							carrier.drain({ deadlineAt: Date.now() + 2_000 }),
+						),
+					);
+					await Promise.all(
+						coordinators.map((coordinator) =>
+							coordinator.drain({ deadlineAt: Date.now() + 2_000 }),
+						),
 					);
 				}
 			},
@@ -3125,9 +3261,15 @@ describe.skipIf(databases.length === 0)(
 					await takeoverReader.cancel();
 					await firstReader.cancel();
 				} finally {
-					await Promise.all(carriers.map((carrier) => carrier.drain()));
 					await Promise.all(
-						coordinators.map((coordinator) => coordinator.drain()),
+						carriers.map((carrier) =>
+							carrier.drain({ deadlineAt: Date.now() + 2_000 }),
+						),
+					);
+					await Promise.all(
+						coordinators.map((coordinator) =>
+							coordinator.drain({ deadlineAt: Date.now() + 2_000 }),
+						),
 					);
 				}
 			},

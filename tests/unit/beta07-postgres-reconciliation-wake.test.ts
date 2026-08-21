@@ -75,7 +75,7 @@ test("arms the exact bounded scan before startup reconciliation", async () => {
 	expect(order).toEqual(["arm:10000", "reconcile"]);
 	expect(ticks.deadlines).toEqual([10_000]);
 	expect(ticks.deadlineDisposed).toBe(1);
-	await wake.drain();
+	await wake.drain({ deadlineAt: Date.now() + 1_000 });
 });
 
 test("queues one rerun for ticks arriving during a scan and coalesces duplicates", async () => {
@@ -99,7 +99,7 @@ test("queues one rerun for ticks arriving during a scan and coalesces duplicates
 
 	expect(attempts).toBe(2);
 	expect(ticks.deadlines).toEqual([10_000, 10_000]);
-	await wake.drain();
+	await wake.drain({ deadlineAt: Date.now() + 1_000 });
 });
 
 test("aborts an over-bound attempt and retries only on the next tick", async () => {
@@ -140,7 +140,7 @@ test("aborts an over-bound attempt and retries only on the next tick", async () 
 	await retried.promise;
 	expect(attempts).toBe(2);
 	expect(durableHorizon).toBe(1);
-	await wake.drain();
+	await wake.drain({ deadlineAt: Date.now() + 1_000 });
 });
 
 test("drain and owner abort dispose ticks, abort active work, and prevent later work", async () => {
@@ -167,8 +167,8 @@ test("drain and owner abort dispose ticks, abort active work, and prevent later 
 		await entered.promise;
 		const stopping = ownerAborts
 			? (owner.abort(new DOMException("owner stopped", "AbortError")),
-				wake.drain())
-			: wake.drain();
+				wake.drain({ deadlineAt: Date.now() + 1_000 }))
+			: wake.drain({ deadlineAt: Date.now() + 1_000 });
 		await stopping;
 		await expect(startup).rejects.toMatchObject({ name: "AbortError" });
 		expect(ticks.intervalDisposed).toBe(1);
@@ -178,4 +178,28 @@ test("drain and owner abort dispose ticks, abort active work, and prevent later 
 		await Promise.resolve();
 		expect(attempts).toBe(1);
 	}
+});
+
+test("drain does not restart its deadline for reconciliation that ignores abort", async () => {
+	const ticks = tickHarness();
+	const entered = deferred();
+	const release = deferred();
+	const wake = createPostgresReconciliationWake({
+		tickSource: ticks.source,
+		reconcile: async () => {
+			entered.resolve();
+			await release.promise;
+		},
+	});
+	const startup = wake.start();
+	await entered.promise;
+	const startedAt = Date.now();
+	await wake.drain({ deadlineAt: startedAt + 25 });
+	expect(Date.now() - startedAt).toBeLessThan(100);
+	expect(ticks.intervalDisposed).toBe(1);
+	release.resolve();
+	await startup;
+	ticks.tick();
+	await Promise.resolve();
+	expect(ticks.deadlines).toHaveLength(1);
 });

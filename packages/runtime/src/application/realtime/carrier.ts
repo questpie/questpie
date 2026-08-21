@@ -50,7 +50,7 @@ export type RealtimeCarrierObservedPlan = Readonly<{
 export interface RealtimeCarrier {
 	fetch(request: Request): Promise<Response | null>;
 	beginDrain(): void;
-	drain(): Promise<void>;
+	drain(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
 function empty(status: number): Response {
@@ -400,13 +400,26 @@ export function createRealtimeCarrier<Context>(
 	const beginDrain = () => {
 		state = "draining";
 	};
-	const drain = async () => {
+	const drain = async (input: Readonly<{ deadlineAt: number }>) => {
+		const deadlineAt = input.deadlineAt;
 		beginDrain();
 		for (const session of sessions.values()) {
 			session.close("runtime-draining", true);
 			disposeSession(session);
 		}
-		await Promise.allSettled(pendingDisposals);
+		const disposals = Promise.allSettled(pendingDisposals);
+		const remaining = Math.max(0, deadlineAt - Date.now());
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		try {
+			await Promise.race([
+				disposals,
+				new Promise<void>((resolve) => {
+					timer = setTimeout(resolve, remaining);
+				}),
+			]);
+		} finally {
+			if (timer) clearTimeout(timer);
+		}
 	};
 	return Object.freeze({ fetch, beginDrain, drain });
 }

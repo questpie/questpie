@@ -29,7 +29,7 @@ export class LiveQueryEvaluationFailure extends Error {
 
 interface LiveQueryCoordinatorLifecycle {
 	start(): Promise<void>;
-	drain(): Promise<void>;
+	drain(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
 export type LiveQueryCoordinator = LiveQueryCoordinatorLifecycle &

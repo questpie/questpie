@@ -879,7 +879,7 @@ test("runs one valid build through the direct operation engine", async () => {
 	expect(result).toEqual({ count: 2 });
 	expect(handlerCalls).toBe(1);
 	expect(projectionCalls).toBe(1);
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {
@@ -944,7 +944,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 		family: "runtime",
 		kind: "ready",
 	});
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 	expect(coordinatorDrains).toBe(1);
 
 	const startupFailure = new Error("startup reconciliation failed");
@@ -1052,7 +1052,7 @@ test("sanitizes unknown operation errors identically for direct and wire calls",
 		error: { code: "INTERNAL" },
 	});
 	expect(responseText).not.toContain("duplicate key");
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", async () => {
@@ -1223,7 +1223,7 @@ test("pairs the exact Context and Service exports before readiness", async () =>
 			resolvePrincipal: async () => principal.anonymous(),
 		},
 	});
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("uses one engine for direct and Fetch and rejects hostile wire before disclosure", async () => {
@@ -1395,7 +1395,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		error: { code: "INTERNAL" },
 	});
 	expect(handlerCalls).toBe(2);
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 	const eventBytes = JSON.stringify(events);
 	expect(events).toEqual(expectedRuntimeEvents);
 	expect(eventBytes).not.toContain(baseFrame.context.companyId);
@@ -1522,14 +1522,16 @@ test("executes a retained v1 Query only for its exact deployment-owned digest pa
 			handlerCalls: 1,
 		});
 	} finally {
-		await app.close();
+		await app.close({ deadlineAt: Date.now() + 2_000 });
 	}
 });
 
 async function createHoldingRuntime(
 	input: Readonly<{
+		coordinatorDeadlines?: number[];
 		drainMilliseconds?: number;
 		events?: (event: unknown) => void;
+		holdCoordinatorDrain?: boolean;
 		ignoreAbort?: boolean;
 	}> = {},
 ) {
@@ -1575,6 +1577,19 @@ async function createHoldingRuntime(
 			bootstrap: { get: async () => null },
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
+			...(input.coordinatorDeadlines
+				? {
+						liveQueryCoordinator: {
+							start: () => Promise.resolve(),
+							drain(close: Readonly<{ deadlineAt: number }>) {
+								input.coordinatorDeadlines!.push(close.deadlineAt);
+								return input.holdCoordinatorDrain
+									? new Promise<void>(() => {})
+									: Promise.resolve();
+							},
+						},
+					}
+				: {}),
 		},
 		drainMilliseconds: input.drainMilliseconds,
 		events: input.events,
@@ -1621,7 +1636,7 @@ test("separates runtime deadlines from Fetch disconnect cancellation", async () 
 	while (releases.length < 2) await Bun.sleep(0);
 	disconnect.abort();
 	await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("refuses a late result from a handler that ignores deadline cancellation", async () => {
@@ -1650,7 +1665,7 @@ test("refuses a late result from a handler that ignores deadline cancellation", 
 				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
 		),
 	).toEqual(["ready", "accepted", "failed"]);
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("enforces 64 active roots per Principal across the shared admission gate", async () => {
@@ -1683,7 +1698,7 @@ test("enforces 64 active roots per Principal across the shared admission gate", 
 	expect(releases).toHaveLength(65);
 	for (const release of releases) release();
 	await Promise.all([...roots, independent]);
-	await app.close();
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("bounds drain, aborts the remaining root and refuses new work", async () => {
@@ -1702,7 +1717,7 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 		operations.invoke("query:messages.page", { first: 1 }),
 	);
 	while (releases.length < 1) await Bun.sleep(0);
-	const closing = app.close();
+	const closing = app.close({ deadlineAt: Date.now() + 1 });
 	await expect(
 		app.execution({ principal: user, context }, (operations) =>
 			operations.invoke("query:messages.page", { first: 1 }),
@@ -1710,18 +1725,58 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 	).rejects.toThrow("RUNTIME_UNAVAILABLE");
 	await expect(held).rejects.toThrow("Runtime draining");
 	await closing;
-	await app.close();
-	expect(
-		events.map(
-			(event) =>
-				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-		),
-	).toEqual([
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+	const eventKinds = events.map(
+		(event) =>
+			(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
+	);
+	expect(eventKinds.slice(0, 4)).toEqual([
 		"ready",
 		"accepted",
 		"drainStarted",
 		"drainTimedOut",
-		"failed",
-		"stopped",
 	]);
+	expect(eventKinds.at(-1)).toBe("stopped");
+	const failedIndex = eventKinds.indexOf("failed");
+	if (failedIndex !== -1)
+		expect(failedIndex).toBeLessThan(eventKinds.indexOf("stopped"));
+});
+
+test("shares the first absolute close deadline and does not restart it for stuck phases", async () => {
+	const coordinatorDeadlines: number[] = [];
+	const events: unknown[] = [];
+	const { app, releases } = await createHoldingRuntime({
+		coordinatorDeadlines,
+		events: (event) => events.push(event),
+		holdCoordinatorDrain: true,
+		ignoreAbort: true,
+	});
+	const context = {
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	};
+	const held = app.execution(
+		{ principal: principal.anonymous(), context },
+		(operations) => operations.invoke("query:messages.page", { first: 1 }),
+	);
+	const heldOutcome = held.catch((error: unknown) => error);
+	while (releases.length < 1) await Bun.sleep(0);
+	const startedAt = Date.now();
+	const deadlineAt = startedAt + 25;
+	const mutableShutdown = { deadlineAt };
+	const closing = app.close(mutableShutdown);
+	mutableShutdown.deadlineAt += 30_000;
+	const repeated = app.close({ deadlineAt: deadlineAt + 30_000 });
+	expect(repeated).toBe(closing);
+	await closing;
+	expect(Date.now() - startedAt).toBeLessThan(100);
+	expect(coordinatorDeadlines).toEqual([deadlineAt]);
+	const stoppedEventCount = events.length;
+	expect(
+		(events.at(-1) as Readonly<{ event: Readonly<{ kind: string }> }>).event
+			.kind,
+	).toBe("stopped");
+
+	releases[0]?.();
+	await expect(heldOutcome).resolves.toMatchObject({ name: "AbortError" });
+	expect(events).toHaveLength(stoppedEventCount);
 });

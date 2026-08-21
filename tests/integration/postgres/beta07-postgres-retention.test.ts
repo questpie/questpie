@@ -410,7 +410,7 @@ describe.skipIf(!database)(
 				`;
 					expect(remaining).toEqual({ count: 0 });
 				} finally {
-					await coordinator.drain();
+					await coordinator.drain({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
 		);

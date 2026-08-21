@@ -201,7 +201,7 @@ test("threads a per-root observation through Context and the reached Message str
 		"collectionRange",
 	]);
 
-	await runtime.close();
+	await runtime.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("refuses the 257th distinct dependency token and publishes no plan", () => {

@@ -226,7 +226,7 @@ try {
 		}),
 	);
 } finally {
-	await coordinator?.drain().catch(() => {});
+	await coordinator?.drain({ deadlineAt: Date.now() + 2_000 }).catch(() => {});
 	await sql
 		.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE")
 		.catch(() => {});

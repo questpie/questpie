@@ -20,7 +20,7 @@ type MaybePromise<Value> = Value | Promise<Value>;
 type RuntimeRealtimeExtension = Readonly<{
 	fetch(request: Request): Promise<Response | null>;
 	beginDrain(): void;
-	drain(): Promise<void>;
+	drain(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }>;
 
 export type RuntimeRealtimeFactory<Input> = (

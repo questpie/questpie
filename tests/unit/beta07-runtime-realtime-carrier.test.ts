@@ -272,7 +272,7 @@ test("rejects malformed commands before Context or command Principal work", asyn
 	expect(malformed?.status).toBe(400);
 	expect(value.contextDecodes()).toBe(0);
 	expect(value.principalResolutions()).toBe(before);
-	await value.carrier.drain();
+	await value.carrier.drain({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("serves ready, complete delivery, acknowledgement, and close frames", async () => {
@@ -325,7 +325,7 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 			)
 		)?.status,
 	).toBe(202);
-	await value.carrier.drain();
+	await value.carrier.drain({ deadlineAt: Date.now() + 2_000 });
 	expect(
 		(
 			await value.carrier.fetch(
@@ -365,7 +365,7 @@ test("frames an invalid complete result as an exact failure", async () => {
 	});
 	expect(value.observedPlans).toEqual([]);
 	expect(value.evaluationFailures()).toBe(1);
-	await value.carrier.drain();
+	await value.carrier.drain({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("resets unavailable private resume state and enforces 64 watches", async () => {
@@ -423,7 +423,7 @@ test("resets unavailable private resume state and enforces 64 watches", async ()
 			)
 		)?.status,
 	).toBe(202);
-	await value.carrier.drain();
+	await value.carrier.drain({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("disconnects a slow client before its exact byte buffer can grow", async () => {

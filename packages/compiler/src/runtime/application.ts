@@ -495,10 +495,13 @@ export async function createApplication(input) {
 		durable,
 		close: () => {
 			if (!closePromise) {
+				const deadlineAt = Date.now() + 30_000;
 				for (const worker of durableWorkers) worker.beginDrain();
-				closePromise = runtime.close().finally(() => {
+				closePromise = runtime.close({ deadlineAt }).finally(() => {
 					postgresController.abort(new DOMException("Runtime closed", "AbortError"));
-					return sql.close();
+					return sql.close({
+						timeout: Math.max(0, Math.floor((deadlineAt - Date.now()) / 1_000)),
+					});
 				});
 			}
 			return closePromise;

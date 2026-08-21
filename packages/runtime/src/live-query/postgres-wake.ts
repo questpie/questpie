@@ -8,7 +8,7 @@ export type PostgresWakeTickSource = Readonly<{
 export interface PostgresReconciliationWake {
 	start(): Promise<void>;
 	requestScan(): Promise<void>;
-	drain(): Promise<void>;
+	drain(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
 const scanMilliseconds = 10_000;
@@ -84,8 +84,9 @@ export function createPostgresReconciliationWake(
 		return inFlight;
 	};
 
-	const drain = (): Promise<void> => {
+	const drain = (shutdown: Readonly<{ deadlineAt: number }>): Promise<void> => {
 		if (drainPromise) return drainPromise;
+		const deadlineAt = shutdown.deadlineAt;
 		state = "draining";
 		queued = false;
 		intervalDispose?.();
@@ -95,14 +96,27 @@ export function createPostgresReconciliationWake(
 		);
 		const active = inFlight;
 		drainPromise = (async () => {
-			await active?.catch(() => {});
+			if (active) {
+				const remaining = Math.max(0, deadlineAt - Date.now());
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				try {
+					await Promise.race([
+						active.catch(() => {}),
+						new Promise<void>((resolve) => {
+							timer = setTimeout(resolve, remaining);
+						}),
+					]);
+				} finally {
+					if (timer) clearTimeout(timer);
+				}
+			}
 			state = "drained";
 			input.signal?.removeEventListener("abort", ownerAborted);
 		})();
 		return drainPromise;
 	};
 	const ownerAborted = (): void => {
-		void drain();
+		void drain({ deadlineAt: Date.now() + scanMilliseconds });
 	};
 	input.signal?.addEventListener("abort", ownerAborted, { once: true });
 
@@ -111,7 +125,7 @@ export function createPostgresReconciliationWake(
 			if (state !== "idle")
 				throw new Error("PostgreSQL reconciliation wake is already started");
 			if (input.signal?.aborted) {
-				void drain();
+				void drain({ deadlineAt: Date.now() + scanMilliseconds });
 				return Promise.reject(input.signal.reason);
 			}
 			state = "armed";
