@@ -19,7 +19,7 @@ workspace entries alongside the deleted application. It is a workspace-list
 edit, not a behavioural one, and this record cites nothing in it. The narrower
 claim is the true one and is what the gate's measurements actually rest on.
 
-## What this record decides, in three parts
+## What this record decides, in four parts
 
 Stated here because the reasoning below reached it through several corrections,
 and a reader should not have to reconstruct the current position from them.
@@ -47,6 +47,18 @@ and a reader should not have to reconstruct the current position from them.
    holds**: `audit` grows without limit in one run's own command count, and what
    it needs is a bound on rows, which neither a wrap nor a timeout supplies. See
    "Corrected: `audit` does not belong in that four" below.
+
+4. **The number is not decided here, and the measurements say why it cannot be
+   one number.** Every served statement across three subsystems sits at or under
+   3.4 ms except the Mutation lock, which sits at p95 15.560 ms over six
+   executions. `statement_timeout` bounds a statement including any lock wait
+   inside it, and `resolvePostgresControl` requires
+   `lockTimeoutMs < statementTimeoutMs`
+   (`packages/compiler/src/postgres-session.ts:30`). **So the statement bound
+   cannot be tighter than the longest lock wait anyone is willing to tolerate**,
+   even though the work it is meant to bound is five times smaller. Tolerating a
+   20 ms wait forces a statement bound above 20 ms on a path whose real work
+   finishes in 3.4. See "Measured across three paths" and evidence-plan item 7.
 
 Item 3 reversed an earlier decision to wrap them, and the section at "The edge
 that decides the gate's real scope" records why and what would restore it — the
@@ -316,7 +328,10 @@ What changed beneath it:
 - The two numbers the wrap would have installed were a wrong unit and a wrong
   scope.
 
-**So the decision is now:**
+**So the decision at that point was these three parts.** The record has since
+added a fourth, on why the number itself cannot be one number; "What this record
+decides, in four parts" at the top is the current position and this list is kept
+as the state when the wrap was reversed.
 
 1. **Transaction-scoped `set_config` on every path that already has a
    transaction** — Mutation, relational, and the durable kernel transactions.
@@ -643,6 +658,23 @@ numbers stand and only their interpretation was wrong.
 15.560 ms means the slow lock wait is the normal case for that statement under
 this suite's contention, not a tail event. Every other served statement across
 three subsystems sits at or under 3.4 ms.
+
+**Which couples the two bounds in a way this record had not stated.** A lock
+wait happens inside statement execution, so `statement_timeout` covers it, and
+`resolvePostgresControl` requires `lockTimeoutMs < statementTimeoutMs`
+(`packages/compiler/src/postgres-session.ts:30`). Sizing `lock_timeout` to
+tolerate a legitimate wait therefore forces `statement_timeout` above it, on a
+path whose actual work completes in 3.4 ms. The work bound is dragged up by the
+wait bound; a single pair cannot be tight for both.
+
+**The measured difference between paths is contention, not path.** The durable
+kernel's `readRun` takes `FOR UPDATE` by default too
+(`packages/runtime/src/durable/postgres-maintenance.ts:160`), so its 3.329 ms
+maximum reflects an uncontended run rather than a lock-free path. Under
+contention it would show the same shape as the Mutation path, and any per-path
+number derived from these runs inherits that assumption. **That is the strongest
+argument in this record for deriving per path from a contended workload rather
+than from whichever suite happened to be measured.**
 
 **Scope.** One run per suite, warm local container, small fixtures. One test in
 the Mutation suite fails — "runs against the exact declared supported PostgreSQL
