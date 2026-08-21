@@ -205,6 +205,47 @@ So the shape is: **transaction-scoped `set_config`, on the pattern the durable
 kernel already proves.** No new dependency, no pool ownership, no connection
 hook.
 
+**And it costs no round trip at all, because the statement to carry it already
+runs.** `set_config` composes in one `SELECT`, which the compiler's own helper
+already relies on — `configurePostgresTimeouts` sets `lock_timeout` and
+`statement_timeout` in a single statement
+(`packages/compiler/src/postgres-session.ts:39`–`:46`). The marker can do the
+same. Five call sites run it today, covering every path this gate is about:
+`packages/runtime/src/durable/acceptance.ts:45`,
+`packages/runtime/src/durable/postgres-kernel.ts:175`,
+`packages/runtime/src/durable/postgres-maintenance.ts:136`,
+`packages/runtime/src/durable/postgres-effects.ts:77`, and the Mutation
+transaction at `packages/runtime/src/mutation/postgres.ts:281`.
+
+Measured on PostgreSQL 17, 400 `BEGIN`/marker/`COMMIT` cycles after 50 warm-up
+rounds, comparing the shipped one-value marker against a three-value form
+carrying both timeouts:
+
+| marker statement                                          | per transaction |
+| --------------------------------------------------------- | --------------- |
+| `set_config('questpie.durable_kernel',…)` alone (shipped) | 0.313 ms        |
+| the same plus `statement_timeout` and `lock_timeout`      | 0.340 ms        |
+
+**The statement count does not change**, so the 0.027 ms is server-side work and
+a wider result row, not a round trip. That matters more than the number: this
+record's cost analysis for the wrap is explicitly round-trip-bound — "against a
+managed PostgreSQL at 1–5 ms round trip, the same wrap costs 3–15 ms" — and a
+fold that adds no statement does not grow with network latency. On a managed
+target the wrap's cost scales and this one does not.
+
+Enforcement and scope were checked in the same transaction: after the
+three-value marker, `current_setting` read `questpie.durable_kernel = on`,
+`statement_timeout = 150ms`, `lock_timeout = 50ms`; `SELECT pg_sleep(2)` inside
+that transaction failed `57014`; and after it committed, the same pooled
+connection read `statement_timeout = 0`. The guard value survives the fold, which
+is the one thing that could have made this unsafe.
+
+**What this does not show.** The probe confirmed the guard _setting_ is present,
+not that a guarded write still passes its trigger — `guard_durable_kernel_write`
+fires on INSERT/UPDATE/DELETE and the probe only read. That is the check to run
+before shipping the fold, and it is cheap: any existing durable integration test
+would fail loudly if the marker stopped working.
+
 It fits the main read path cleanly too. Relational queries reserve a connection
 and open an explicit `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY`
 (`packages/runtime/src/relational/postgres.ts:83`), so the timeout is one
