@@ -982,9 +982,31 @@ describe.skipIf(databases.length === 0)(
 			"admits coordinator evaluation only after a Runtime generation swap",
 			async () => {
 				const postgres = runtimePostgres();
+				let candidateReconciled!: () => void;
+				const candidateReconciliation = new Promise<void>((resolve) => {
+					candidateReconciled = resolve;
+				});
+				let releaseCandidate!: () => void;
+				const candidateHeld = new Promise<void>((resolve) => {
+					releaseCandidate = resolve;
+				});
+				const coordinatorPostgres = Object.freeze({
+					transaction: postgres.transaction,
+					listen: (input: Parameters<typeof postgres.listen>[0]) =>
+						postgres.listen({
+							...input,
+							reconcile: async (reconciliation) => {
+								await input.reconcile(reconciliation);
+								if (reconciliation.admission === "candidate") {
+									candidateReconciled();
+									await candidateHeld;
+								}
+							},
+						}),
+				});
 				const coordinator = createPostgresLiveQueryCoordinator({
 					program: liveQueryProgram,
-					postgres,
+					postgres: coordinatorPostgres,
 					hmacKey: new Uint8Array(32).fill(7),
 					applicationName,
 					deploymentDigest,
@@ -1112,6 +1134,39 @@ describe.skipIf(databases.length === 0)(
 
 					releaseVerification();
 					await Promise.race([
+						candidateReconciliation,
+						new Promise<never>((_resolve, reject) =>
+							setTimeout(
+								() =>
+									reject(new Error("candidate reconciliation did not finish")),
+								2_000,
+							),
+						),
+					]);
+					expect(postgres.facts()).toMatchObject({
+						state: "rotating",
+						generation: 1,
+					});
+					expect(evaluations).toBe(1);
+					expect(evaluationGenerations).toEqual([1]);
+					const candidateResult = await readBinding();
+					expect(BigInt(candidateResult.invalidation)).toBe(
+						BigInt(before.invalidation) + 1n,
+					);
+					expect(candidateResult.evaluated).toBe(before.evaluated);
+					expect(candidateResult.latest).toBe(before.latest);
+					expect(candidateResult.generations).toBe(before.generations);
+					expect(
+						await Promise.race([
+							pendingFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+
+					releaseCandidate();
+					await Promise.race([
 						evaluationEntry,
 						new Promise<never>((_resolve, reject) =>
 							setTimeout(
@@ -1122,13 +1177,6 @@ describe.skipIf(databases.length === 0)(
 					]);
 					expect(postgres.facts()).toMatchObject({ generation: 2 });
 					expect(evaluationGenerations).toEqual([1, 2]);
-					const candidateResult = await readBinding();
-					expect(BigInt(candidateResult.invalidation)).toBe(
-						BigInt(before.invalidation) + 1n,
-					);
-					expect(candidateResult.evaluated).toBe(before.evaluated);
-					expect(candidateResult.latest).toBe(before.latest);
-					expect(candidateResult.generations).toBe(before.generations);
 
 					releaseEvaluation();
 					await rotating;
@@ -1189,6 +1237,7 @@ describe.skipIf(databases.length === 0)(
 					await reader.cancel();
 				} finally {
 					releaseVerification();
+					releaseCandidate();
 					releaseEvaluation();
 					await carrier.drain();
 					await coordinator.drain();
