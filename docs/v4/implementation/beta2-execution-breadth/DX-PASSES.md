@@ -92,9 +92,12 @@ narrowing; `2428e8f7` bounds rotation and close; `e1bc6dde` prevents a reconnect
 from crossing close and proves zero remaining listener sessions; and
 `14205c25` retains failures produced during old-generation drain. PB-03 still
 does not authorize PB-04. `7b355e98` also retains redacted decoder-mismatch
-refusal. Normalized listener failures, uncertain migration
-unlock, the pre-healthy transaction-pool capability negative, generic durable-
-frontier convergence, and production caller migration remain open.
+refusal. `b8da3909` closes normalized configuration, connection, and startup
+reconciliation failures with credential- and callback-redaction hostile cases
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1020`-`:1103`).
+Uncertain migration unlock, the pre-healthy transaction-pool capability
+negative, generic durable-frontier convergence, and production caller migration
+remain open.
 
 ## DX-00 — Propose executable fenced-code verification
 

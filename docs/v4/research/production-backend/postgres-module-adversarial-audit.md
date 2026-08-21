@@ -1,7 +1,7 @@
 # PB-03 PostgreSQL module adversarial audit
 
 - Status: adversarial implementation record; not product or public API authority
-- Re-derived against: `feat/v4-beta-12` at `7b355e98`
+- Re-derived against: `feat/v4-beta-12` at `b8da3909`
 - Scope: the private PostgreSQL module and its retained hostile proof
 - Input authority: `DECISION-MAP.md` PB-03/PB-04 split, the selected module
   interface, and PB-02's required topology proof
@@ -15,16 +15,16 @@ control gap. `2428e8f7` bounds rotation and close, `e1bc6dde` closes the
 separately reproduced reconnect-after-close race with an external zero-session
 observation, and `14205c25` retains failures produced while the old generation
 drains. `7b355e98` closes the decoder-mismatch half of the static-statement
-negative. The remaining highest-risk gap is the normalized listener failure
-boundary. The pooler negative and durable-frontier proof are also weaker than
-the accepted proof request.
+negative, and `b8da3909` closes the normalized listener failure boundary. The
+uncertain migration unlock, pooler capability negative, tampered-plan refusal,
+and durable-frontier proof remain weaker than the accepted proof request.
 
 The findings below distinguish a module proof from downstream product
 integration. PB-03 must prove the lifetimes and guarantees it owns. It must not
 absorb all Change Ledger semantics or the production-wide Bun SQL migration,
 which already have separate downstream questions.
 
-## Confirmed and closed through `7b355e98`
+## Confirmed and closed through `b8da3909`
 
 ### Runtime resurrection during close
 
@@ -42,7 +42,7 @@ The repair now tracks the rotation, rejects a continuation after state leaves
 (`packages/runtime/src/postgres/runtime.ts:190`-`:255`, `:276`-`:290`). The
 retained hostile case holds verification, starts close, releases verification,
 and proves the Runtime remains closed at generation 1
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1089`-`:1126`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1205`-`:1242`).
 
 ### Concurrent listener ownership leak
 
@@ -63,7 +63,7 @@ candidate that loses the state race, and makes Runtime close await startup
 (`packages/runtime/src/postgres/runtime.ts:148`-`:188`, `:276`-`:290`). The
 retained case holds startup reconciliation, proves the second admission fails,
 then proves close drains the first startup and leaves the listener disabled
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1239`-`:1281`). This
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1355`-`:1397`). This
 now enforces the selected one-listener invariant
 (`postgres-module-interface-design.md:320`-`:324`).
 
@@ -80,7 +80,7 @@ abort listener before unlock and session teardown
 (`packages/runtime/src/postgres/index.ts:622`-`:782`). The retained PostgreSQL
 case drives a 25 ms server statement timeout, active cancellation, absolute
 deadline, and subsequent same-application recovery
-(`tests/integration/postgres/beta12-postgres-module.test.ts:756`-`:829`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:787`-`:860`).
 
 This closes the migration control finding. It does not prove transaction-pool
 refusal or every uncertain-unlock path, which remain separate findings below.
@@ -98,7 +98,7 @@ and current generation (`packages/runtime/src/postgres/runtime.ts:276`-`:290`).
 The retained PostgreSQL case holds verification across both paths. Rotation
 expires as `connectTimeout` without switching generation; close completes at its
 own deadline, remains closed, and the late rotation rejects as closed
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1128`-`:1194`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1244`-`:1310`).
 
 This closes the bounded rotation/close finding.
 
@@ -107,15 +107,15 @@ This closes the bounded rotation/close finding.
 `e1bc6dde` makes the candidate owned as `establishingClient` before its first
 await, rechecks closing state after connect, committed `LISTEN`, and
 reconciliation, and clears or ends the candidate on every failure
-(`packages/runtime/src/postgres/listener.ts:55`-`:67`, `:109`-`:150`). Close now
+(`packages/runtime/src/postgres/listener.ts:70`-`:82`, `:124`-`:178`). Close now
 captures and ends both active and establishing clients before publishing
-`closed` (`packages/runtime/src/postgres/listener.ts:172`-`:200`).
+`closed` (`packages/runtime/src/postgres/listener.ts:200`-`:228`).
 
 The retained PostgreSQL case forces disconnect, holds reconnect reconciliation,
 closes on a 25 ms deadline, releases the late continuation, and proves the state
 remains closed. Its final assertion queries `pg_stat_activity` through a separate
 ordinary transaction and waits for zero `questpie-realtime-listener` sessions
-(`tests/integration/postgres/beta12-postgres-module.test.ts:927`-`:987`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:958`-`:1018`).
 
 This closes the reconnect-after-close finding with the external observation the
 original audit required.
@@ -132,7 +132,7 @@ The retained PostgreSQL case holds an old-generation transaction across the
 generation switch, forces cancellation at the old drain deadline, and proves
 the terminal failure is `closed` at shutdown while cumulative facts retain one
 cancellation and one rotation
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1196`-`:1237`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1312`-`:1353`).
 
 This closes the drain-time facts finding without downgrading the selected safe
 count contract (`postgres-module-interface-design.md:333`-`:335`).
@@ -149,31 +149,29 @@ This closes the decoder-mismatch half of the static-statement negative. Runtime
 Build tamper refusal remains open below because it belongs before database
 checkout rather than to row decoding.
 
-## Open findings, in priority order
+### Listener and reconciliation failures are normalized and redacted
 
-### 1. Listener and reconciliation failures bypass normalization
+`b8da3909` adds the selected `listen` and `reconcile` phases to the concrete
+error contract (`packages/runtime/src/postgres/contract.ts:86`-`:119`) and moves
+the shared SQLSTATE classification into one internal normalizer
+(`packages/runtime/src/postgres/errors.ts:3`-`:77`). Listener configuration,
+client construction, connection, committed `LISTEN`, and startup reconciliation
+now cross that normalized boundary with their exact phase; an already-normalized
+database failure is re-enveloped as reconciliation without copying unsafe driver
+fields (`packages/runtime/src/postgres/listener.ts:47`-`:68`, `:124`-`:177`).
 
-The concrete error type has no `listen` or `reconcile` phase
-(`packages/runtime/src/postgres/contract.ts:86`-`:116`). Listener startup
-propagates raw driver or reconciliation errors
-(`packages/runtime/src/postgres/listener.ts:129`-`:163`). Migration connect is
-now normalized inside its owned control and cleanup scope
-(`packages/runtime/src/postgres/index.ts:622`-`:638`), but that repair does not
-close the listener boundary. The listener behavior remains weaker than the
-selected normalized and redacted failure boundary
+The retained hostile case drives a malformed credential-bearing URL, an
+unreachable credential-bearing endpoint, a reconciliation callback containing a
+sensitive value, and a nested normalized database failure. It asserts exact
+configuration/connect/reconcile shapes and proves that serialized and string
+forms omit credentials and callback detail
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1020`-`:1103`). This
+closes the selected normalized and redacted listener boundary
 (`postgres-module-interface-design.md:333`-`:342`, `:410`-`:414`).
 
-Minimal hostile proof: use an unreachable and a malformed secret-bearing direct
-endpoint, then a reconciliation callback with a sensitive value. Assert the
-serialized boundary contains only a normalized class, phase, safe identity,
-SQLSTATE, and retry disposition, never URL, credential, SQL, parameters,
-PostgreSQL detail, or the sensitive callback value.
+## Open findings, in priority order
 
-This is overturned if these errors are proven never to cross any diagnostic,
-wire, log, or operation boundary and the selected normalization claim is
-narrowed accordingly.
-
-### 2. Uncertain migration unlock cleanup is not yet proved
+### 1. Uncertain migration unlock cleanup is not yet proved
 
 The selected migration invariant requires backend identity checks around every
 transaction and unlock, with session destruction on uncertain cleanup
@@ -193,14 +191,14 @@ This is overturned by a retained hostile case that drives unlock failure and
 proves session destruction plus lock release externally. A happy-path recovery
 after callback failure does not drive the uncertain cleanup branch.
 
-### 3. The transaction-pool negative proves failure after healthy, not refusal
+### 2. The transaction-pool negative proves failure after healthy, not refusal
 
 PB-02 requires listener and migration paths pointed at transaction pooling to
 fail before either is reported healthy
 (`postgres-connection-topology-primary-sources.md:243`-`:244`). The current
 negative deliberately accepts a pooled listener, records successful startup
 reconciliation, and proves only that a later wake is absent
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1321`-`:1350`). No
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1437`-`:1458`). No
 migration transaction-pool negative exists in that witness.
 
 Minimal hostile proof: a capability-negative listener and migration lane must
@@ -213,7 +211,7 @@ This requirement is overturned only if PB-02 changes the boundary from runtime
 capability refusal to an operator-validated deployment precondition. Merely
 documenting two URLs does not satisfy the current executable requirement.
 
-### 4. Tampered-plan refusal is still unproved
+### 3. Tampered-plan refusal is still unproved
 
 The static-statement invariant requires Runtime Build digest/inventory
 verification before execution,
@@ -261,13 +259,12 @@ is resolved, the narrow executable rule is:
 
 ## Recommended tracer order
 
-1. Close the normalized/redacted listener failure boundary.
-2. Drive uncertain migration unlock cleanup and prove external lock release.
-3. Replace the current pooled-listener observation with the required listener
+1. Drive uncertain migration unlock cleanup and prove external lock release.
+2. Replace the current pooled-listener observation with the required listener
    and migration pre-healthy negative, or explicitly amend PB-02's ownership.
-4. Prove generic durable-frontier convergence after a lost wake before the
+3. Prove generic durable-frontier convergence after a lost wake before the
    periodic poll.
-5. Hand the proven module to PB-04 and the Bun SQL removal pass; do not claim
+4. Hand the proven module to PB-04 and the Bun SQL removal pass; do not claim
    actual Change Ledger or production caller completion inside PB-03.
 
 PB-03 can be called complete when these module-owned hostile cases pass against
