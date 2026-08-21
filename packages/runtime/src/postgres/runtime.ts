@@ -55,6 +55,46 @@ type Generation = {
 	listener?: PostgresListener;
 };
 
+async function beforeDeadline<Value>(
+	work: Promise<Value>,
+	deadlineAt: number,
+): Promise<Value> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			work,
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(
+					() =>
+						reject(
+							new QuestpiePostgresError({
+								code: "connectTimeout",
+								phase: "connect",
+							}),
+						),
+					Math.max(0, deadlineAt - Date.now()),
+				);
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
+async function settleBeforeDeadline(
+	work: Promise<unknown>,
+	deadlineAt: number,
+): Promise<void> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	await Promise.race([
+		work.catch(() => {}),
+		new Promise<void>((resolve) => {
+			timer = setTimeout(resolve, Math.max(0, deadlineAt - Date.now()));
+		}),
+	]);
+	if (timer) clearTimeout(timer);
+}
+
 export function createRuntimePostgres(
 	configuration: PostgresDatabaseConfiguration,
 ): RuntimePostgres {
@@ -68,6 +108,7 @@ export function createRuntimePostgres(
 	let listenerInput: ListenerInput | undefined;
 	let listenerStartup: Promise<PostgresListener> | undefined;
 	let rotation: Promise<void> | undefined;
+	let rotationCandidate: Generation | undefined;
 	let closing: Promise<void> | undefined;
 	const retired = {
 		checkoutTimeouts: 0,
@@ -158,14 +199,32 @@ export function createRuntimePostgres(
 						configuration: input.configuration,
 						database: createPostgresDatabase(input.configuration),
 					};
-					await input.verify(candidate.database);
+					rotationCandidate = candidate;
+					await beforeDeadline(
+						input.verify(candidate.database),
+						input.deadlineAt,
+					);
 					if (state !== "rotating") throw lifecycleFailure("connect");
-					if (listenerInput)
-						candidate.listener = await createListener(
+					if (listenerInput) {
+						const startingListener = createListener(
 							candidate.database,
 							input.configuration.directConnectionUrl,
 							listenerInput,
 						);
+						try {
+							candidate.listener = await beforeDeadline(
+								startingListener,
+								input.deadlineAt,
+							);
+						} catch (error) {
+							void startingListener
+								.then((listener) =>
+									listener.close({ deadlineAt: input.deadlineAt }),
+								)
+								.catch(() => {});
+							throw error;
+						}
+					}
 					if (state !== "rotating") throw lifecycleFailure("connect");
 				} catch (error) {
 					await candidate?.listener?.close({ deadlineAt: input.deadlineAt });
@@ -181,6 +240,7 @@ export function createRuntimePostgres(
 				retired.cancellations += previousCounters.cancellations;
 				retired.destroyedConnections += previousCounters.destroyedConnections;
 				current = candidate;
+				rotationCandidate = undefined;
 				generation += 1;
 				rotations += 1;
 				await previous.listener?.close({ deadlineAt: input.deadlineAt });
@@ -188,6 +248,7 @@ export function createRuntimePostgres(
 				if (state !== "rotating") throw lifecycleFailure("connect");
 				state = "ready";
 			})().finally(() => {
+				rotationCandidate = undefined;
 				if (rotation === operation) rotation = undefined;
 			});
 			rotation = operation;
@@ -216,7 +277,12 @@ export function createRuntimePostgres(
 			if (closing) return closing;
 			state = "draining";
 			closing = (async () => {
-				await Promise.allSettled([rotation, listenerStartup]);
+				await settleBeforeDeadline(
+					Promise.allSettled([rotation, listenerStartup]),
+					input.deadlineAt,
+				);
+				await rotationCandidate?.listener?.close(input);
+				await rotationCandidate?.database.close(input);
 				await current.listener?.close(input);
 				await current.database.close(input);
 				state = "closed";

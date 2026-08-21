@@ -1048,6 +1048,74 @@ postgresTest(
 );
 
 postgresTest(
+	"bounds rotation verification and close at their deadlines",
+	async () => {
+		const expiringRuntime = createRuntimePostgres(databaseConfiguration());
+		let verificationEntered: (() => void) | undefined;
+		let releaseVerification: (() => void) | undefined;
+		const verifying = new Promise<void>((resolve) => {
+			verificationEntered = resolve;
+		});
+		const verificationHeld = new Promise<void>((resolve) => {
+			releaseVerification = resolve;
+		});
+		const rotationStartedAt = Date.now();
+		const expiringRotation = expiringRuntime.rotate({
+			configuration: databaseConfiguration(),
+			deadlineAt: Date.now() + 25,
+			verify: async () => {
+				verificationEntered?.();
+				await verificationHeld;
+			},
+		});
+		await verifying;
+		await expect(expiringRotation).rejects.toMatchObject({
+			code: "connectTimeout",
+			phase: "connect",
+		});
+		expect(Date.now() - rotationStartedAt).toBeLessThan(200);
+		expect(expiringRuntime.facts()).toMatchObject({
+			state: "ready",
+			generation: 1,
+			counters: { rotations: 0 },
+		});
+		releaseVerification?.();
+		await expiringRuntime.close({ deadlineAt: Date.now() + 1_000 });
+
+		const closingRuntime = createRuntimePostgres(databaseConfiguration());
+		let closeVerificationEntered: (() => void) | undefined;
+		let releaseCloseVerification: (() => void) | undefined;
+		const closeVerifying = new Promise<void>((resolve) => {
+			closeVerificationEntered = resolve;
+		});
+		const closeVerificationHeld = new Promise<void>((resolve) => {
+			releaseCloseVerification = resolve;
+		});
+		const rotating = closingRuntime.rotate({
+			configuration: databaseConfiguration(),
+			deadlineAt: Date.now() + 1_000,
+			verify: async () => {
+				closeVerificationEntered?.();
+				await closeVerificationHeld;
+			},
+		});
+		await closeVerifying;
+		const closeStartedAt = Date.now();
+		await closingRuntime.close({ deadlineAt: Date.now() + 25 });
+		expect(Date.now() - closeStartedAt).toBeLessThan(200);
+		expect(closingRuntime.facts()).toMatchObject({
+			state: "closed",
+			generation: 1,
+		});
+		releaseCloseVerification?.();
+		await expect(rotating).rejects.toMatchObject({
+			code: "closed",
+			phase: "connect",
+		});
+	},
+);
+
+postgresTest(
 	"owns listener startup before await and drains it during close",
 	async () => {
 		const runtime = createRuntimePostgres(databaseConfiguration());
