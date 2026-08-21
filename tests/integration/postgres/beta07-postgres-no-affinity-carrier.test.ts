@@ -243,8 +243,14 @@ function postgresUrl(
 function runtimePostgres(
 	credentials?: Readonly<{ username: string; password: string }>,
 ) {
+	return createRuntimePostgres(runtimePostgresConfiguration(credentials));
+}
+
+function runtimePostgresConfiguration(
+	credentials?: Readonly<{ username: string; password: string }>,
+) {
 	const connectionUrl = postgresUrl(credentials);
-	return createRuntimePostgres({
+	return {
 		connectionUrl,
 		directConnectionUrl: connectionUrl,
 		pool: {
@@ -259,7 +265,7 @@ function runtimePostgres(
 			lockMs: 1_000,
 			idleInTransactionMs: 10_000,
 		},
-	});
+	} as const;
 }
 
 async function dropReconnectRole(sql: SQL): Promise<void> {
@@ -967,6 +973,226 @@ describe.skipIf(databases.length === 0)(
 					await carrier.drain();
 					await coordinator.drain();
 					await runtime.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
+			"admits coordinator evaluation only after a Runtime generation swap",
+			async () => {
+				const postgres = runtimePostgres();
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before rotation";
+				let evaluations = 0;
+				const evaluationGenerations: number[] = [];
+				let evaluationEntered!: () => void;
+				const evaluationEntry = new Promise<void>((resolve) => {
+					evaluationEntered = resolve;
+				});
+				let releaseEvaluation!: () => void;
+				const evaluationHeld = new Promise<void>((resolve) => {
+					releaseEvaluation = resolve;
+				});
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						evaluationGenerations.push(postgres.facts().generation);
+						if (evaluations === 2) {
+							evaluationEntered();
+							await evaluationHeld;
+						}
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+				});
+				const readBinding = async () => {
+					const [state] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:rotation'
+						  and watch.binding_identity = 'binding:rotation'
+					`;
+					if (!state) throw new Error("missing rotation binding state");
+					return state;
+				};
+				let releaseVerification!: () => void;
+				const verificationHeld = new Promise<void>((resolve) => {
+					releaseVerification = resolve;
+				});
+				let verificationEntered!: () => void;
+				const verificationEntry = new Promise<void>((resolve) => {
+					verificationEntered = resolve;
+				});
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:rotation"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:rotation", {
+										scopeId: "scope:rotation",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before rotation" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					expect(evaluationGenerations).toEqual([1]);
+					const before = await readBinding();
+					const pendingFrame = nextFrame(reader);
+
+					const rotating = postgres.rotate({
+						configuration: runtimePostgresConfiguration(),
+						deadlineAt: Date.now() + 3_000,
+						verify: async () => {
+							verificationEntered();
+							await verificationHeld;
+						},
+					});
+					await verificationEntry;
+					body = "after successful rotation";
+					await captureMessageChange(databases[2]!);
+					expect(postgres.facts()).toMatchObject({
+						state: "rotating",
+						generation: 1,
+					});
+					expect(evaluations).toBe(1);
+					expect(
+						await Promise.race([
+							pendingFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+
+					releaseVerification();
+					await Promise.race([
+						evaluationEntry,
+						new Promise<never>((_resolve, reject) =>
+							setTimeout(
+								() => reject(new Error("post-swap evaluation did not start")),
+								2_000,
+							),
+						),
+					]);
+					expect(postgres.facts()).toMatchObject({ generation: 2 });
+					expect(evaluationGenerations).toEqual([1, 2]);
+					const candidateResult = await readBinding();
+					expect(BigInt(candidateResult.invalidation)).toBe(
+						BigInt(before.invalidation) + 1n,
+					);
+					expect(candidateResult.evaluated).toBe(before.evaluated);
+					expect(candidateResult.latest).toBe(before.latest);
+					expect(candidateResult.generations).toBe(before.generations);
+
+					releaseEvaluation();
+					await rotating;
+					expect(await pendingFrame).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after successful rotation" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(2);
+					const afterSuccess = await readBinding();
+					expect(afterSuccess.evaluated).toBe(afterSuccess.invalidation);
+					expect(BigInt(afterSuccess.latest)).toBe(BigInt(before.latest) + 1n);
+
+					const unreachable = new URL(postgresUrl());
+					unreachable.port = "1";
+					const retainedWinnerFrame = nextFrame(reader);
+					await expect(
+						postgres.rotate({
+							configuration: {
+								...runtimePostgresConfiguration(),
+								directConnectionUrl: unreachable.href,
+							},
+							deadlineAt: Date.now() + 2_000,
+							verify: () => Promise.resolve(),
+						}),
+					).rejects.toMatchObject({ phase: "connect" });
+					expect(postgres.facts()).toMatchObject({
+						state: "ready",
+						generation: 2,
+						counters: { rotations: 1 },
+					});
+					expect(
+						await Promise.race([
+							retainedWinnerFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+
+					body = "after failed rotation";
+					await databases[2]!.begin(async (writer) => {
+						await captureMessageChange(writer);
+						await writer`select pg_catalog.pg_notify('questpie_change', '')`;
+					});
+					expect(await retainedWinnerFrame).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after failed rotation" }] },
+					});
+					expect(evaluations).toBe(3);
+					expect(evaluationGenerations).toEqual([1, 2, 2]);
+					expect(postgres.facts()).toMatchObject({
+						generation: 2,
+						counters: { rotations: 1 },
+					});
+					await reader.cancel();
+				} finally {
+					releaseVerification();
+					releaseEvaluation();
+					await carrier.drain();
+					await coordinator.drain();
+					await postgres.close({ deadlineAt: Date.now() + 2_000 });
 				}
 			},
 			20_000,
