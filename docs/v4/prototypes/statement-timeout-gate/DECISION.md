@@ -26,20 +26,27 @@ and a reader should not have to reconstruct the current position from them.
 
 1. **Transaction-scoped `set_config` wherever a transaction already exists** —
    Mutation, relational, and the durable kernel transactions. This is the only
-   part that gives the framework a bound it _guarantees_ rather than inherits.
+   part that gives the framework a bound it _guarantees_ rather than inherits,
+   and on the durable and Mutation paths it costs **no additional round trip**:
+   each of those already sends a `set_config` marker statement, and `set_config`
+   composes in one `SELECT`. Measured at 0.027 ms per transaction, server-side
+   work rather than a round trip — see "And it costs no round trip at all"
+   below. The relational path runs no marker, so there it is one added statement
+   after the `BEGIN` it already opens.
 2. **A database- or role-level baseline for everything else**, as a deployment
    requirement asserted in conformance rather than serving-path code. It reaches
    the five bare-statement reads, which the transaction-scoped mechanism cannot.
+   **It reaches them only on connections opened after it is set** — a role
+   default applies at login and leaves a running pool unbounded — so the
+   requirement is ordering as well as configuration, and the conformance
+   assertion has to read the value through a connection the application is
+   already using. See the measured note under evidence-plan item 4.
 3. **No wrap for those five reads.** Four are `run_id` point lookups that cannot
    grow with the table and the fifth, `admit`, is the scheduler rather than an
-   operator surface. **The stated ground is wrong for one of the four and the
-   decision still holds** — see "Corrected: `audit` does not belong in that
-   four" below. `audit` is a `run_id` point lookup whose result grows without
-   limit in the run's own command count, measured at 98 ms for 100,000 rows. The
-   decision survives because item 2 already reaches it: a database or role
-   default bounds a bare statement whether or not a transaction wraps it, so the
-   wrap was never what `audit` needed. What `audit` needs is a bound on **rows**,
-   which neither a wrap nor a timeout supplies.
+   operator surface. **That ground is wrong for `audit`, and the decision still
+   holds**: `audit` grows without limit in one run's own command count, and what
+   it needs is a bound on rows, which neither a wrap nor a timeout supplies. See
+   "Corrected: `audit` does not belong in that four" below.
 
 Item 3 reversed an earlier decision to wrap them, and the section at "The edge
 that decides the gate's real scope" records why and what would restore it — the
