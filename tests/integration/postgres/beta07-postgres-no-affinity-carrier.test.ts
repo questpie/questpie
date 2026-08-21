@@ -530,6 +530,187 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"does not reconcile a rolled-back Change Ledger fact or notification",
+			async () => {
+				const postgres = runtimePostgres();
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before rollback";
+				let evaluations = 0;
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+				});
+				const readState = async () => {
+					const [state] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+							ledger: number;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon,
+						       (select count(*)::integer
+						          from questpie_internal.change_ledger ledger
+						         where ledger.application_name = watch.application_name) as ledger
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:rollback'
+						  and watch.binding_identity = 'binding:rollback'
+					`;
+					if (!state) throw new Error("missing rollback binding state");
+					return state;
+				};
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:rollback"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:rollback", {
+										scopeId: "scope:rollback",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before rollback" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					const before = await readState();
+
+					body = "after rollback";
+					await expect(
+						databases[2]!.begin(async (writer) => {
+							await writer`
+								insert into questpie_internal.change_ledger
+								(application_name, transaction_id, collection_identity,
+								 change_kind, conservative)
+								values (${applicationName}, pg_catalog.pg_current_xact_id(),
+								        'collection:messages', 'collection', true)
+							`;
+							await writer`select pg_catalog.pg_notify('questpie_change', '')`;
+							throw new Error("deliberate rollback");
+						}),
+					).rejects.toThrow("deliberate rollback");
+
+					const rolledBackFrame = nextFrame(reader);
+					expect(
+						await Promise.race([
+							rolledBackFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 200),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					expect(await readState()).toEqual(before);
+					expect(evaluations).toBe(1);
+
+					// Positive control: commit the same ledger insert and NOTIFY through the
+					// same writer and listener path. The already-pending read must receive
+					// exactly this update, proving the rollback zero is not a dead instrument.
+					body = "after commit";
+					await databases[2]!.begin(async (writer) => {
+						await writer`
+							insert into questpie_internal.change_ledger
+							(application_name, transaction_id, collection_identity,
+							 change_kind, conservative)
+							values (${applicationName}, pg_catalog.pg_current_xact_id(),
+							        'collection:messages', 'collection', true)
+						`;
+						await writer`select pg_catalog.pg_notify('questpie_change', '')`;
+					});
+					expect(await rolledBackFrame).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after commit" }] },
+					});
+					expect(evaluations).toBe(2);
+					const after = await readState();
+					expect(after.ledger).toBe(before.ledger + 1);
+					expect(BigInt(after.invalidation)).toBe(
+						BigInt(before.invalidation) + 1n,
+					);
+					expect(after.evaluated).toBe(after.invalidation);
+					expect(after.generations).toBe(before.generations);
+					expect(BigInt(after.latest)).toBe(BigInt(before.latest) + 1n);
+					expect(BigInt(after.horizon)).toBeGreaterThan(BigInt(before.horizon));
+
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(2);
+					const afterIdempotentScan = await readState();
+					expect(afterIdempotentScan).toMatchObject({
+						evaluated: after.evaluated,
+						generations: after.generations,
+						invalidation: after.invalidation,
+						latest: after.latest,
+						ledger: 0,
+					});
+					expect(BigInt(afterIdempotentScan.horizon)).toBeGreaterThanOrEqual(
+						BigInt(after.horizon),
+					);
+					const duplicateFrame = nextFrame(reader);
+					expect(
+						await Promise.race([
+							duplicateFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					await reader.cancel();
+				} finally {
+					await carrier.drain();
+					await coordinator.drain();
+					await postgres.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
 			"reconciles a committed Change Ledger fact after the listener loses its wake",
 			async () => {
 				await dropReconnectRole(databases[2]!);
