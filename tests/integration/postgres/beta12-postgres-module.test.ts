@@ -672,35 +672,49 @@ postgresTest(
 		const postgres = database();
 		const channel = definePostgresChannel("qp_pb03_wake");
 		const reasons: string[] = [];
+		let startupEntered: (() => void) | undefined;
+		let releaseStartup: (() => void) | undefined;
 		let notified: (() => void) | undefined;
 		let reconnected: (() => void) | undefined;
+		const startup = new Promise<void>((resolve) => {
+			startupEntered = resolve;
+		});
+		const startupHeld = new Promise<void>((resolve) => {
+			releaseStartup = resolve;
+		});
 		const notification = new Promise<void>((resolve) => {
 			notified = resolve;
 		});
 		const reconnection = new Promise<void>((resolve) => {
 			reconnected = resolve;
 		});
-		const listener = await createPostgresListener({
+		const startingListener = createPostgresListener({
 			directConnectionUrl: postgresUrl(),
 			channel,
 			database: postgres,
 			fallbackIntervalMs: 10_000,
 			reconcile: async ({ reason }) => {
 				reasons.push(reason);
+				if (reason === "startup") {
+					startupEntered?.();
+					await startupHeld;
+				}
 				if (reason === "notification") notified?.();
 				if (reason === "reconnect") setTimeout(() => reconnected?.(), 0);
 			},
 		});
+		await startup;
+		await postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readWrite" },
+			use: (transaction) =>
+				transaction.execute(notify, {
+					channel,
+					payload: "ignored-domain-data",
+				}),
+		});
+		releaseStartup?.();
+		const listener = await startingListener;
 		try {
-			expect(reasons).toEqual(["startup"]);
-			await postgres.transaction({
-				mode: { isolation: "readCommitted", access: "readWrite" },
-				use: (transaction) =>
-					transaction.execute(notify, {
-						channel,
-						payload: "ignored-domain-data",
-					}),
-			});
 			await Promise.race([
 				notification,
 				new Promise<never>((_resolve, reject) =>
