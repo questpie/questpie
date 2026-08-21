@@ -14,6 +14,11 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import {
+	embeddedProductionDependencies,
+	validateEmbeddedProductionDependencies,
+} from "./package-contract-dependencies";
+
 type PackageJson = {
 	name?: string;
 	version?: string;
@@ -22,6 +27,7 @@ type PackageJson = {
 	files?: string[];
 	exports?: Record<string, unknown>;
 	scripts?: Record<string, string>;
+	dependencies?: Record<string, string>;
 };
 
 function fail(message: string): never {
@@ -97,6 +103,27 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 	const temporary = mkdtempSync(join(tmpdir(), "questpie-private-packages-"));
 	try {
 		const nodeModules = join(temporary, "node_modules");
+		const privateSources = ["packages/runtime", "packages/compiler"] as const;
+		const privateManifests = privateSources.map(
+			(source) =>
+				JSON.parse(
+					readFileSync(resolve(source, "package.json"), "utf8"),
+				) as PackageJson,
+		);
+		const embeddedDependencies =
+			embeddedProductionDependencies(privateManifests);
+		const publicManifest = JSON.parse(
+			readFileSync(resolve("packages/questpie/package.json"), "utf8"),
+		) as PackageJson;
+		try {
+			validateEmbeddedProductionDependencies(
+				publicManifest.dependencies,
+				embeddedDependencies,
+				publicManifest.name,
+			);
+		} catch (error) {
+			fail(error instanceof Error ? error.message : String(error));
+		}
 		const install = (
 			name: string,
 			source: string,
@@ -104,13 +131,23 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			isPrivate = true,
 		): void => {
 			const root = join(nodeModules, ...name.split("/"));
+			const sourceManifest = JSON.parse(
+				readFileSync(resolve(source, "package.json"), "utf8"),
+			) as PackageJson;
 			mkdirSync(root, { recursive: true });
 			cpSync(resolve(source, "dist"), join(root, "dist"), {
 				recursive: true,
 			});
 			writeFileSync(
 				join(root, "package.json"),
-				JSON.stringify({ name, private: isPrivate, type: "module", exports }),
+				JSON.stringify({
+					name,
+					version: sourceManifest.version,
+					private: isPrivate,
+					type: "module",
+					exports,
+					dependencies: sourceManifest.dependencies,
+				}),
 			);
 			if (existsSync(join(root, "src")))
 				fail(`${name}: relocated build unexpectedly contains source files`);
@@ -133,11 +170,14 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 		install("@questpie/compiler", "packages/compiler", {
 			".": "./dist/index.js",
 		});
-		symlinkSync(
-			resolve("node_modules/typescript"),
-			join(nodeModules, "typescript"),
-		);
-		symlinkSync(resolve("node_modules/@types"), join(nodeModules, "@types"));
+		for (const name of embeddedDependencies.keys()) {
+			const installed = resolve("node_modules", ...name.split("/"));
+			if (!existsSync(installed))
+				fail(`embedded production dependency ${name} is not installed`);
+			const staged = join(nodeModules, ...name.split("/"));
+			mkdirSync(dirname(staged), { recursive: true });
+			symlinkSync(installed, staged);
+		}
 
 		const applicationRoot = join(temporary, "application");
 		cpSync(resolve("fixtures/collaboration"), applicationRoot, {
