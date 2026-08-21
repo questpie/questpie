@@ -12,6 +12,8 @@ import {
 	type LinkedQueryWatchabilityV1,
 	type LinkedStructuralQueryObservationSlotV1,
 } from "../../packages/runtime/src/live-query";
+import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";
+import { linkPostgresQueryPlan } from "../../packages/runtime/src/relational";
 
 const templateDigest = "a".repeat(64);
 const policyProgramDigest = "b".repeat(64);
@@ -207,6 +209,24 @@ const executionFacts = {
 	tenant: { id: "00000000-0000-0000-0000-000000000020" },
 };
 
+const databasePlan = {
+	...plan,
+	sql: `SELECT
+	NULL::uuid AS "qp_f0",
+	NULL::text AS "qp_f1",
+	TRUE AS "qp_g1",
+	NULL::timestamptz AS "qp_f2",
+	TRUE AS "qp_r3_present",
+	NULL::text AS "qp_r3_f0"
+WHERE $1::uuid IS NOT NULL
+	AND $2::text IS NOT NULL
+	AND cardinality($3::text[]) >= 0
+	AND NOT $4::boolean
+	AND $5::timestamptz IS NULL
+	AND $6::uuid IS NULL
+	AND $7::integer > 0;\n`,
+} as const satisfies PostgresQueryPlanV1;
+
 function watchability(
 	options?: Readonly<{
 		policyEvidence?: boolean;
@@ -332,6 +352,184 @@ function fakeSql(
 		},
 	} as unknown as SQL;
 }
+
+function fakeDatabase(
+	input: Readonly<{
+		rows: readonly (readonly unknown[])[];
+		onTransaction?(): void;
+		onMode?(mode: unknown): void;
+		onStatement?(
+			statement: Readonly<{
+				name: string;
+				text: string;
+				parameterCount: number;
+				parameters: readonly unknown[];
+			}>,
+		): void;
+	}>,
+): PostgresTransactionRunner {
+	return {
+		async transaction<Output>(transactionInput: {
+			mode: unknown;
+			use(transaction: unknown): Promise<Output>;
+		}): Promise<Output> {
+			input.onTransaction?.();
+			input.onMode?.(transactionInput.mode);
+			return transactionInput.use({
+				execute: async (
+					statement: {
+						name: string;
+						text: string;
+						parameterCount: number;
+						parameters(value: unknown): readonly unknown[];
+						decode(result: unknown): unknown;
+					},
+					parameters: unknown,
+				) => {
+					const encoded = statement.parameters(parameters);
+					input.onStatement?.({
+						name: statement.name,
+						text: statement.text,
+						parameterCount: statement.parameterCount,
+						parameters: encoded,
+					});
+					return statement.decode({
+						command: "SELECT",
+						rowCount: input.rows.length,
+						rows: input.rows,
+					});
+				},
+			});
+		},
+	} as PostgresTransactionRunner;
+}
+
+test("links one static Query statement and executes it through the PostgreSQL transaction seam", async () => {
+	const linkedPlan = linkPostgresQueryPlan(databasePlan);
+	const modes: unknown[] = [];
+	const statements: unknown[] = [];
+	let transactions = 0;
+	const database = fakeDatabase({
+		rows: rows().map((row) => [
+			row.qp_f0,
+			row.qp_f1,
+			row.qp_g1,
+			row.qp_f2,
+			row.qp_r3_present,
+			row.qp_r3_f0,
+		]),
+		onTransaction: () => {
+			transactions += 1;
+		},
+		onMode: (mode) => modes.push(mode),
+		onStatement: (statement) => statements.push(statement),
+	});
+
+	const page = await executePostgresQuery({
+		linkedPlan,
+		binding,
+		executionFacts,
+		database,
+	});
+
+	expect(transactions).toBe(1);
+	expect(modes).toEqual([{ isolation: "repeatableRead", access: "readOnly" }]);
+	expect(statements).toEqual([
+		{
+			name: "query." + templateDigest,
+			text: databasePlan.sql,
+			parameterCount: 7,
+			parameters: [
+				executionFacts.tenant.id,
+				"north",
+				["draft", "published"],
+				false,
+				null,
+				null,
+				2,
+			],
+		},
+	]);
+	expect(page.nodes).toEqual([
+		{
+			id: id1,
+			body: "visible",
+			createdAt: createdAt1,
+			author: { name: "Ada" },
+		},
+		{ id: id2, createdAt: createdAt2, author: null },
+	]);
+});
+
+test("rejects a Query statement cast mismatch before opening PostgreSQL", async () => {
+	let transactions = 0;
+	const database = fakeDatabase({
+		rows: [],
+		onTransaction: () => {
+			transactions += 1;
+		},
+	});
+	const tampered = {
+		...databasePlan,
+		sql: databasePlan.sql.replace("$3::text[]", "$3::text"),
+	};
+
+	await expect(
+		(async () => {
+			const linkedPlan = linkPostgresQueryPlan(tampered);
+			return executePostgresQuery({
+				linkedPlan,
+				binding,
+				executionFacts,
+				database,
+			});
+		})(),
+	).rejects.toThrow("Query SQL placeholders do not match its parameters");
+	expect(transactions).toBe(0);
+});
+
+test("rejects Query result aliases projected in a different physical order", () => {
+	const tampered = {
+		...databasePlan,
+		sql: databasePlan.sql
+			.replace('AS "qp_f0"', 'AS "qp_swap"')
+			.replace('AS "qp_f1"', 'AS "qp_f0"')
+			.replace('AS "qp_swap"', 'AS "qp_f1"'),
+	};
+
+	expect(() => linkPostgresQueryPlan(tampered)).toThrow(
+		"Query SQL result projection does not match its result columns",
+	);
+});
+
+test("rejects malformed PostgreSQL array-row results at the static statement", () => {
+	const { statement } = linkPostgresQueryPlan(databasePlan);
+	const valid = {
+		command: "SELECT",
+		rowCount: 1,
+		rows: [[id1, "visible", true, createdAt1, true, "Ada"]],
+	} as const;
+
+	expect(statement.decode(valid)).toEqual([
+		{
+			qp_f0: id1,
+			qp_f1: "visible",
+			qp_g1: true,
+			qp_f2: createdAt1,
+			qp_r3_present: true,
+			qp_r3_f0: "Ada",
+		},
+	]);
+	expect(() => statement.decode({ ...valid, command: "UPDATE" })).toThrow(
+		"Query statement result cardinality is invalid",
+	);
+	expect(() => statement.decode({ ...valid, rowCount: 2 })).toThrow(
+		"Query statement result cardinality is invalid",
+	);
+	expect(() =>
+		statement.decode({ ...valid, rows: [[id1, "visible"]] }),
+	).toThrow("Query statement result width is invalid");
+});
 
 test("binds one exact authorized page and decodes structural disclosure", async () => {
 	const calls: Array<

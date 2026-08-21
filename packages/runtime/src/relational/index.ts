@@ -9,6 +9,11 @@ export type {
 export { DataQueryExecutionError, executePostgresQuery } from "./query";
 export { decodeRelationalScalar, decodeRelationalScalarCodec } from "./scalar";
 export { createPostgresContextBootstrap } from "./bootstrap";
+export {
+	executeLinkedPostgresQueryPlan,
+	linkPostgresQueryPlan,
+} from "./postgres-database";
+export type { LinkedPostgresQueryPlan } from "./postgres-database";
 export type {
 	DataQueryBindingV1,
 	DataQueryDiagnosticCode,

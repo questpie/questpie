@@ -3,12 +3,17 @@ import { createHash } from "node:crypto";
 import type { SQL } from "bun";
 
 import { assertOperationAdmission } from "../operation";
+import type { PostgresParameter, PostgresTransactionRunner } from "../postgres";
 import {
 	createCursorBindingV2,
 	type CursorOrderTerm,
 	type CursorScalar,
 } from "./cursor";
 import { executePostgresStatement } from "./postgres";
+import {
+	executeLinkedPostgresQueryPlan,
+	type LinkedPostgresQueryPlan,
+} from "./postgres-database";
 import {
 	decodeRelationalScalar,
 	isValidRelationalScalar,
@@ -392,7 +397,7 @@ function positionalParameters(
 	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
 	facts: QueryExecutionFacts,
 	boundary: readonly CursorScalar[] | null,
-): readonly unknown[] {
+): readonly PostgresParameter[] {
 	const orderIndex = new Map(
 		plan.page.order.map((term, index) => [term.field, index] as const),
 	);
@@ -590,64 +595,86 @@ function queryObservation(
 
 export async function executePostgresQuery(
 	input: Readonly<{
-		plan: PostgresQueryPlanV1;
 		binding: DataQueryBindingV1;
 		executionFacts: QueryExecutionFacts;
-		sql: SQL;
 		maximumPageSize?: number;
 		signal?: AbortSignal;
 		observer?: PostgresQueryObserver;
-	}>,
+	}> &
+		(
+			| Readonly<{
+					plan: PostgresQueryPlanV1;
+					sql: SQL;
+					linkedPlan?: never;
+					database?: never;
+			  }>
+			| Readonly<{
+					linkedPlan: LinkedPostgresQueryPlan;
+					database: PostgresTransactionRunner;
+					plan?: never;
+					sql?: never;
+			  }>
+		),
 ): Promise<DataQueryPage> {
 	input.signal?.throwIfAborted();
+	const plan = input.linkedPlan?.plan ?? input.plan;
+	if (plan === undefined)
+		throw new TypeError("missing compiled PostgreSQL Query plan");
 	const maximumPageSize = input.maximumPageSize ?? 100;
 	if (!Number.isSafeInteger(maximumPageSize) || maximumPageSize < 1)
 		throw new TypeError("maximumPageSize must be a positive integer");
 	if (
-		input.plan.format !== "questpie.postgres-query-plan" ||
-		input.plan.version !== 1 ||
-		!digestPattern.test(input.plan.templateDigest) ||
-		!digestPattern.test(input.plan.policyProgramDigest) ||
+		plan.format !== "questpie.postgres-query-plan" ||
+		plan.version !== 1 ||
+		!digestPattern.test(plan.templateDigest) ||
+		!digestPattern.test(plan.policyProgramDigest) ||
 		!(["authenticated", "public", "system"] as const).includes(
-			input.plan.admission,
+			plan.admission,
 		) ||
-		input.plan.page.kind !== "forwardCursor" ||
-		input.plan.page.order.length === 0 ||
-		typeof input.plan.sql !== "string"
+		plan.page.kind !== "forwardCursor" ||
+		plan.page.order.length === 0 ||
+		typeof plan.sql !== "string"
 	)
 		throw new TypeError("invalid compiled PostgreSQL Query plan");
-	assertOperationAdmission(input.plan.admission, input.executionFacts);
-	const values = normalizeBinding(input.plan, input.binding, maximumPageSize);
+	assertOperationAdmission(plan.admission, input.executionFacts);
+	const values = normalizeBinding(plan, input.binding, maximumPageSize);
 	const scopeBytes = dataQueryScopeBytes(
-		input.plan.templateDigest,
-		input.plan.page.scopeParameters,
+		plan.templateDigest,
+		plan.page.scopeParameters,
 		values,
 	);
 	const cursor = createCursorBindingV2({
-		templateDigest: input.plan.templateDigest,
+		templateDigest: plan.templateDigest,
 		scopeDigest: sha256("questpie-data-query-scope-v1", scopeBytes),
-		policyProgramDigest: input.plan.policyProgramDigest,
-		usedExecutionFacts: sparseExecutionFacts(input.plan, input.executionFacts),
-		order: orderTerms(input.plan),
+		policyProgramDigest: plan.policyProgramDigest,
+		usedExecutionFacts: sparseExecutionFacts(plan, input.executionFacts),
+		order: orderTerms(plan),
 	});
-	const after = values.get(input.plan.page.after.parameter);
+	const after = values.get(plan.page.after.parameter);
 	if (after !== null && typeof after !== "string")
 		throw new TypeError("invalid compiled cursor binding");
 	return cursor.execute(after, async (boundary) => {
 		input.signal?.throwIfAborted();
 		const parameters = positionalParameters(
-			input.plan,
+			plan,
 			values,
 			input.executionFacts,
 			boundary,
 		);
-		const rows = await executePostgresStatement(input.sql, {
-			statement: input.plan.sql,
-			parameters,
-			signal: input.signal,
-		});
+		const rows = input.linkedPlan
+			? await executeLinkedPostgresQueryPlan(
+					input.database,
+					input.linkedPlan,
+					parameters,
+					input.signal,
+				)
+			: await executePostgresStatement(input.sql, {
+					statement: plan.sql,
+					parameters,
+					signal: input.signal,
+				});
 		input.signal?.throwIfAborted();
-		const first = values.get(input.plan.page.first.parameter);
+		const first = values.get(plan.page.first.parameter);
 		if (typeof first !== "number")
 			throw new TypeError("invalid compiled page binding");
 		if (rows.length > first + 1)
@@ -655,18 +682,18 @@ export async function executePostgresQuery(
 				"PostgreSQL Query adapter exceeded compiled row bound",
 			);
 		const visibleRows = rows.slice(0, first);
-		const nodes = visibleRows.map((row) => decodeRow(row, input.plan.result));
+		const nodes = visibleRows.map((row) => decodeRow(row, plan.result));
 		const last = visibleRows.at(-1);
 		const page = Object.freeze({
 			nodes: Object.freeze(nodes),
 			pageInfo: Object.freeze({
-				endCursor: last ? cursor.encode(cursorValues(input.plan, last)) : null,
+				endCursor: last ? cursor.encode(cursorValues(plan, last)) : null,
 				hasNextPage: rows.length > first,
 			}),
 		});
 		input.observer?.recordPostgresQuery(
 			queryObservation(
-				input.plan,
+				plan,
 				values,
 				input.executionFacts,
 				rows,
