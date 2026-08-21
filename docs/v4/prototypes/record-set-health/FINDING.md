@@ -1015,3 +1015,38 @@ precise detector and equally consistent with a rare one; a single positive canno
 separate them. It does bound the cost: a check that fires once in 142 records is
 cheap to run and cheap to triage, which is the argument for adding it regardless
 of which explanation holds.
+
+## The one fragile citation form in this set was introduced by these sweeps
+
+Two ticks running, an edit to the top of a file broke a citation into that same
+file inside the same commit. Naming it a trap was not a fix, so this pass swept
+for the form itself: a record citing its own line numbers.
+
+**The set did not do this before. All three instances were mine.** A sweep of
+every `path.md:NN` citation found no record citing its own full path, and the
+201 bare `` `:NN` `` references are almost entirely continuations of an external
+path citation earlier in the paragraph — their same-file targets are blank lines
+or unrelated prose, which is what distinguishes them. Narrowing to references
+that genuinely mean "this file" left three, all written in the last four ticks:
+`ROUTE-SHAPE.md`'s pointer at its own earlier sentence, and the descope marker's
+two pointers into `studio-purpose.md`.
+
+Two of the three had already broken once. The marker's pointers shifted the
+moment the marker itself grew, because a block inserted at the top of a file
+moves everything it cites — the same insertion-position mechanism this record
+documents for merges, arriving from the author rather than from a slice.
+
+**All three are converted to phrase anchors.** The marker now names "The index
+claim is verified, not assumed" and the sentence ending "assert the index name
+and a row bound, not the scan kind"; the cross-file citation in the timeout gate
+keeps its line numbers _and_ carries the phrase, on the pattern the set already
+used for code — `` `postgres-maintenance.ts` `actorOf`, `:179` today ``. The
+`ROUTE-SHAPE.md` pointer was deleted rather than converted: the clause it
+pointed at is restated in the very next words, so the pointer was decay with no
+reader benefit.
+
+**The uncomfortable part is the direction.** Every earlier entry here describes
+the record set decaying under someone else's merge. This one is a fragility the
+sweeps introduced while documenting fragility, in a form the set had avoided for
+twelve slices. What would have caught it sooner: treating "I just wrote a
+construct nothing else here uses" as a signal rather than as a convenience.
