@@ -81,8 +81,8 @@ startup reconciliation is queued before healthy admission. This is not closure:
 `abfaa889` adds verify/listen/reconcile-before-swap generation rotation with
 failed-candidate retention, and `c2f0ef2d` adds a focused PostgreSQL 17 plus
 PgBouncer 1.24.1 transaction-mode lane with a direct-listener positive and a
-pooled-listener negative. Disconnect ledger convergence, additional hostile
-migration cleanup, and caller migration remain open.
+pooled-listener negative. This was not closure; later adversarial repairs are
+summarized below.
 
 The first adversarial pass is retained in
 `docs/v4/research/production-backend/postgres-module-adversarial-audit.md`.
@@ -94,12 +94,18 @@ from crossing close and proves zero remaining listener sessions; and
 does not authorize PB-04. `7b355e98` also retains redacted decoder-mismatch
 refusal. `b8da3909` closes normalized configuration, connection, and startup
 reconciliation failures with credential- and callback-redaction hostile cases
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1094`-`:1177`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1223`-`:1306`).
 `c024d953` closes malformed migration configuration and uncertain advisory-lock
 cleanup with typed refusal, zero-session observation, and fresh-runner lock
-recovery (`tests/integration/postgres/beta12-postgres-module.test.ts:322`-`:346`,
-`:811`-`:857`). The pre-healthy transaction-pool capability negative, generic
-durable-frontier convergence, and production caller migration remain open.
+recovery (`tests/integration/postgres/beta12-postgres-module.test.ts:369`-`:393`,
+`:858`-`:904`). `f51be2b2` closes the generic lost-wake frontier: advisory-lock
+ordering forces reconnect reconciliation to wait for the writer's commit, no
+`NOTIFY` is emitted, and frontier seven is observed inside one second rather than
+the configured ten-second periodic fallback
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1079`-`:1159`). This
+does not claim actual Change Ledger/PB-04 integration. The pre-healthy
+transaction-pool capability negative, Runtime Build tamper refusal, and
+production caller migration remain open.
 
 ## DX-00 — Propose executable fenced-code verification
 
