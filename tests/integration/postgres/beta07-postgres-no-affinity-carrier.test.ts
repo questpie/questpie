@@ -1248,6 +1248,247 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"normalizes coordinator storage and callback failures and recovers",
+			async () => {
+				await dropReconnectRole(databases[2]!);
+				await databases[2]!.unsafe(
+					`CREATE ROLE ${reconnectRole} LOGIN PASSWORD '${reconnectPassword}'`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT USAGE ON SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				const postgres = runtimePostgres({
+					username: reconnectRole,
+					password: reconnectPassword,
+				});
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before reconciliation failures";
+				let evaluations = 0;
+				let failObservedPlan = false;
+				const callbackDetail = "qp-sensitive-coordinator-callback-detail";
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+					onObservedPlan: () => {
+						if (failObservedPlan) throw new Error(callbackDetail);
+					},
+				});
+				const readBinding = async () => {
+					const [state] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:reconcile-failure'
+						  and watch.binding_identity = 'binding:reconcile-failure'
+					`;
+					if (!state) throw new Error("missing reconciliation failure state");
+					return state;
+				};
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:reconcile-failure"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:reconcile-failure", {
+										scopeId: "scope:reconcile-failure",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before reconciliation failures" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					const baseline = await readBinding();
+
+					body = "after storage recovery";
+					await captureMessageChange(databases[2]!);
+					await databases[2]!.unsafe(
+						`REVOKE SELECT ON questpie_internal.change_ledger FROM ${reconnectRole}`,
+					);
+					const storageFailure = await coordinator
+						.durable!.requestScan()
+						.catch((error: unknown) => error);
+					expect(JSON.parse(JSON.stringify(storageFailure))).toEqual({
+						name: "QuestpiePostgresError",
+						code: "queryFailed",
+						phase: "reconcile",
+						statementName: "live-query.change-ledger-facts-read",
+						sqlState: "42501",
+						retry: "never",
+					});
+					expect(JSON.stringify(storageFailure)).not.toContain(
+						reconnectPassword,
+					);
+					expect(String(storageFailure)).not.toContain(reconnectRole);
+					expect(String(storageFailure)).not.toContain(reconnectPassword);
+					expect(await readBinding()).toEqual(baseline);
+					expect(evaluations).toBe(1);
+					expect(postgres.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 1,
+						reconnects: 0,
+					});
+
+					await databases[2]!.unsafe(
+						`GRANT SELECT ON questpie_internal.change_ledger TO ${reconnectRole}`,
+					);
+					const storageRecoveryFrame = nextFrame(reader);
+					await databases[2]!`
+						select pg_catalog.pg_notify('questpie_change', 'storage-recovery')
+					`;
+					expect(await storageRecoveryFrame).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after storage recovery" }] },
+					});
+					await coordinator.durable!.requestScan();
+					const afterStorageRecovery = await readBinding();
+					expect(BigInt(afterStorageRecovery.invalidation)).toBe(
+						BigInt(baseline.invalidation) + 1n,
+					);
+					expect(afterStorageRecovery.evaluated).toBe(
+						afterStorageRecovery.invalidation,
+					);
+					expect(BigInt(afterStorageRecovery.latest)).toBe(
+						BigInt(baseline.latest) + 1n,
+					);
+					expect(evaluations).toBe(2);
+
+					body = "after callback recovery";
+					await captureMessageChange(databases[2]!);
+					failObservedPlan = true;
+					const callbackFrame = nextFrame(reader);
+					const callbackFailure = await coordinator
+						.durable!.requestScan()
+						.catch((error: unknown) => error);
+					expect(JSON.parse(JSON.stringify(callbackFailure))).toEqual({
+						name: "QuestpiePostgresError",
+						code: "queryFailed",
+						phase: "reconcile",
+						retry: "never",
+					});
+					expect(JSON.stringify(callbackFailure)).not.toContain(callbackDetail);
+					expect(String(callbackFailure)).not.toContain(callbackDetail);
+					expect(
+						await Promise.race([
+							callbackFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					const afterCallbackFailure = await readBinding();
+					expect(BigInt(afterCallbackFailure.invalidation)).toBe(
+						BigInt(afterStorageRecovery.invalidation) + 1n,
+					);
+					expect(afterCallbackFailure.evaluated).toBe(
+						afterCallbackFailure.invalidation,
+					);
+					expect(BigInt(afterCallbackFailure.latest)).toBe(
+						BigInt(afterStorageRecovery.latest) + 1n,
+					);
+					expect(evaluations).toBe(3);
+
+					failObservedPlan = false;
+					await databases[2]!`
+						select pg_catalog.pg_notify('questpie_change', 'callback-recovery')
+					`;
+					expect(await callbackFrame).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after callback recovery" }] },
+					});
+					const noDuplicateFrame = nextFrame(reader);
+					await coordinator.durable!.requestScan();
+					expect(await readBinding()).toEqual(afterCallbackFailure);
+					expect(evaluations).toBe(4);
+					expect(
+						await Promise.race([
+							noDuplicateFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					expect(postgres.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 1,
+						reconnects: 0,
+					});
+					await reader.cancel();
+				} finally {
+					await databases[2]!
+						.unsafe(
+							`GRANT SELECT ON questpie_internal.change_ledger TO ${reconnectRole}`,
+						)
+						.catch(() => {});
+					try {
+						await carrier.drain();
+						await coordinator.drain();
+						await postgres.close({ deadlineAt: Date.now() + 2_000 });
+					} finally {
+						await postgres
+							.close({ deadlineAt: Date.now() + 2_000 })
+							.catch(() => {});
+						await dropReconnectRole(databases[2]!);
+					}
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
 			"reconciles a committed Change Ledger fact after the listener loses its wake",
 			async () => {
 				await dropReconnectRole(databases[2]!);
