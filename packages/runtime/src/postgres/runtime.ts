@@ -234,17 +234,17 @@ export function createRuntimePostgres(
 				}
 
 				const previous = current;
-				const previousCounters = previous.database.facts().counters;
-				retired.checkoutTimeouts += previousCounters.checkoutTimeouts;
-				retired.statementTimeouts += previousCounters.statementTimeouts;
-				retired.cancellations += previousCounters.cancellations;
-				retired.destroyedConnections += previousCounters.destroyedConnections;
 				current = candidate;
 				rotationCandidate = undefined;
 				generation += 1;
 				rotations += 1;
 				await previous.listener?.close({ deadlineAt: input.deadlineAt });
 				await previous.database.close({ deadlineAt: input.deadlineAt });
+				const previousCounters = previous.database.facts().counters;
+				retired.checkoutTimeouts += previousCounters.checkoutTimeouts;
+				retired.statementTimeouts += previousCounters.statementTimeouts;
+				retired.cancellations += previousCounters.cancellations;
+				retired.destroyedConnections += previousCounters.destroyedConnections;
 				if (state !== "rotating") throw lifecycleFailure("connect");
 				state = "ready";
 			})().finally(() => {

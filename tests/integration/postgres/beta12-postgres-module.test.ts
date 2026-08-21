@@ -1194,6 +1194,49 @@ postgresTest(
 );
 
 postgresTest(
+	"retains old-generation failures produced during rotation drain",
+	async () => {
+		const runtime = createRuntimePostgres(
+			databaseConfiguration({ max: 1, checkoutTimeoutMs: 1_000 }),
+		);
+		let transactionEntered: (() => void) | undefined;
+		let releaseTransaction: (() => void) | undefined;
+		const entered = new Promise<void>((resolve) => {
+			transactionEntered = resolve;
+		});
+		const held = new Promise<void>((resolve) => {
+			releaseTransaction = resolve;
+		});
+		const oldTransaction = runtime
+			.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: async () => {
+					transactionEntered?.();
+					await held;
+				},
+			})
+			.catch((error: unknown) => error);
+		await entered;
+		await runtime.rotate({
+			configuration: databaseConfiguration(),
+			deadlineAt: Date.now() + 25,
+			verify: () => Promise.resolve(),
+		});
+		releaseTransaction?.();
+		expect(await oldTransaction).toMatchObject({
+			code: "closed",
+			phase: "shutdown",
+		});
+		expect(runtime.facts()).toMatchObject({
+			state: "ready",
+			generation: 2,
+			counters: { cancellations: 1, rotations: 1 },
+		});
+		await runtime.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+postgresTest(
 	"owns listener startup before await and drains it during close",
 	async () => {
 		const runtime = createRuntimePostgres(databaseConfiguration());
