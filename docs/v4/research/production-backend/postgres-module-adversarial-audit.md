@@ -1,7 +1,7 @@
 # PB-03 PostgreSQL module adversarial audit
 
 - Status: adversarial implementation record; not product or public API authority
-- Re-derived against: `feat/v4-beta-12` at `14205c25`
+- Re-derived against: `feat/v4-beta-12` at `7b355e98`
 - Scope: the private PostgreSQL module and its retained hostile proof
 - Input authority: `DECISION-MAP.md` PB-03/PB-04 split, the selected module
   interface, and PB-02's required topology proof
@@ -14,7 +14,8 @@ both. `3e2cfa24` then closes the migration cancellation, deadline, and timeout
 control gap. `2428e8f7` bounds rotation and close, `e1bc6dde` closes the
 separately reproduced reconnect-after-close race with an external zero-session
 observation, and `14205c25` retains failures produced while the old generation
-drains. The remaining highest-risk gap is the normalized listener failure
+drains. `7b355e98` closes the decoder-mismatch half of the static-statement
+negative. The remaining highest-risk gap is the normalized listener failure
 boundary. The pooler negative and durable-frontier proof are also weaker than
 the accepted proof request.
 
@@ -23,7 +24,7 @@ integration. PB-03 must prove the lifetimes and guarantees it owns. It must not
 absorb all Change Ledger semantics or the production-wide Bun SQL migration,
 which already have separate downstream questions.
 
-## Confirmed and closed through `14205c25`
+## Confirmed and closed through `7b355e98`
 
 ### Runtime resurrection during close
 
@@ -136,6 +137,18 @@ cancellation and one rotation
 This closes the drain-time facts finding without downgrading the selected safe
 count contract (`postgres-module-interface-design.md:333`-`:335`).
 
+### Decoder failures expose only the static statement identity
+
+`7b355e98` executes a static statement whose decoder deliberately rejects the
+returned row shape. The retained result is `invalidResult` with phase
+`statement`, stable statement name, and `never` retry; serialized output omits
+both the sensitive decoder detail and SQL text
+(`tests/integration/postgres/beta12-postgres-module.test.ts:393`-`:409`).
+
+This closes the decoder-mismatch half of the static-statement negative. Runtime
+Build tamper refusal remains open below because it belongs before database
+checkout rather than to row decoding.
+
 ## Open findings, in priority order
 
 ### 1. Listener and reconciliation failures bypass normalization
@@ -200,23 +213,19 @@ This requirement is overturned only if PB-02 changes the boundary from runtime
 capability refusal to an operator-validated deployment precondition. Merely
 documenting two URLs does not satisfy the current executable requirement.
 
-### 4. Decoder mismatch and tampered-plan refusal are still unproved
+### 4. Tampered-plan refusal is still unproved
 
-PB-03 explicitly requires decoder mismatch coverage
-(`postgres-module-interface-design.md:410`-`:414`), and the static-statement
-invariant requires Runtime Build digest/inventory verification before execution,
+The static-statement invariant requires Runtime Build digest/inventory
+verification before execution,
 including a tampered-plan refusal (`postgres-module-interface-design.md:299`-`:305`).
-The current PostgreSQL witness proves successful decoding and safe serialization,
-not these two negative boundaries.
+The decoder mismatch is now retained above, but it does not prove this earlier
+binding boundary.
 
-Minimal hostile proof: return a deliberately incompatible row shape and require
-`invalidResult` with only the stable statement name; separately tamper with one
-verified Runtime Build statement and prove refusal occurs before checkout or
-SQL.
+Minimal hostile proof: tamper with one verified Runtime Build statement and
+prove refusal occurs before checkout or SQL.
 
-The decoder case is overturned by an existing retained case that actually
-drives the decoder failure path. A similarly named assertion or a type-only
-test is not enough.
+This is overturned only by a retained case that drives the verified Runtime
+Build boundary. A similarly named assertion or a type-only test is not enough.
 
 ## PB-03 and PB-04 ownership
 
@@ -252,8 +261,7 @@ is resolved, the narrow executable rule is:
 
 ## Recommended tracer order
 
-1. Close the normalized/redacted listener failure boundary, including decoder
-   mismatch.
+1. Close the normalized/redacted listener failure boundary.
 2. Drive uncertain migration unlock cleanup and prove external lock release.
 3. Replace the current pooled-listener observation with the required listener
    and migration pre-healthy negative, or explicitly amend PB-02's ownership.

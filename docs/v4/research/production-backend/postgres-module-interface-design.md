@@ -507,7 +507,7 @@ cases and external session observations are cited individually in the audit.
 
 Still open in PB-03: normalized listener/reconciliation failures, uncertain
 migration unlock cleanup, the required pre-healthy transaction-pool capability
-negative, decoder mismatch, and generic durable-frontier convergence across a
+negative, Runtime Build tamper refusal, and generic durable-frontier convergence across a
 disconnect. Actual Change Ledger integration and migration of existing Bun SQL
 callers remain downstream PB-04/Bun-removal work; PB-04 remains blocked until
 the callers move through this seam.

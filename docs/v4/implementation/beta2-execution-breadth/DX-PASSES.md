@@ -91,7 +91,8 @@ The first adversarial pass is retained in
 narrowing; `2428e8f7` bounds rotation and close; `e1bc6dde` prevents a reconnect
 from crossing close and proves zero remaining listener sessions; and
 `14205c25` retains failures produced during old-generation drain. PB-03 still
-does not authorize PB-04: normalized listener failures, uncertain migration
+does not authorize PB-04. `7b355e98` also retains redacted decoder-mismatch
+refusal. Normalized listener failures, uncertain migration
 unlock, the pre-healthy transaction-pool capability negative, generic durable-
 frontier convergence, and production caller migration remain open.
 
