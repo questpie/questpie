@@ -1,14 +1,14 @@
 # PB-03 PostgreSQL module adversarial audit
 
 - Status: adversarial implementation record; not product or public API authority
-- Re-derived against: `feat/v4-beta-12` at `f51be2b2`
+- Re-derived against: `feat/v4-beta-12` at `9cc76e2a`
 - Scope: the private PostgreSQL module and its retained hostile proof
 - Input authority: `DECISION-MAP.md` PB-03/PB-04 split, the selected module
   interface, and PB-02's required topology proof
 
 ## Outcome
 
-PB-03 has a credible deep-module foundation, but it is not complete. The audit
+PB-03's private deep-module proof is complete at `9a6f7b22`. The audit
 found two executable Runtime ownership races at `2779cf12`; `48429c3c` closes
 both. `3e2cfa24` then closes the migration cancellation, deadline, and timeout
 control gap. `2428e8f7` bounds rotation and close, `e1bc6dde` closes the
@@ -17,15 +17,17 @@ observation, and `14205c25` retains failures produced while the old generation
 drains. `7b355e98` closes the decoder-mismatch half of the static-statement
 negative, `b8da3909` closes the normalized listener failure boundary,
 `c024d953` closes uncertain migration cleanup, and `f51be2b2` closes generic
-durable-frontier convergence. The pooler capability negative and tampered-plan
-refusal remain weaker than the accepted proof request.
+durable-frontier convergence. `9a6f7b22` resolves the last two record blockers:
+direct/session affinity is an operator-validated precondition because ordinary
+credentials cannot infer it, and Runtime Build statement-tamper refusal belongs
+to the first production seam crossing in PB-05 rather than this isolated module.
 
 The findings below distinguish a module proof from downstream product
 integration. PB-03 must prove the lifetimes and guarantees it owns. It must not
 absorb all Change Ledger semantics or the production-wide Bun SQL migration,
 which already have separate downstream questions.
 
-## Confirmed and closed through `f51be2b2`
+## Confirmed and closed through `9a6f7b22`
 
 ### Runtime resurrection during close
 
@@ -146,9 +148,12 @@ returned row shape. The retained result is `invalidResult` with phase
 both the sensitive decoder detail and SQL text
 (`tests/integration/postgres/beta12-postgres-module.test.ts:467`-`:483`).
 
-This closes the decoder-mismatch half of the static-statement negative. Runtime
-Build tamper refusal remains open below because it belongs before database
-checkout rather than to row decoding.
+This closes the module-owned static-statement decode negative. Runtime Build
+integrity remains a prerequisite before a generated statement crosses this
+seam. No production caller crossed it at the `9a6f7b22` decision point; the
+subsequent PB-04 Change Ledger crossing is recorded below. Runtime Build
+statement projection and its seam-level tamper refusal therefore belong to
+PB-05 rather than row decoding or PB-03.
 
 ### Listener and reconciliation failures are normalized and redacted
 
@@ -207,45 +212,66 @@ ten seconds away
 (`tests/integration/postgres/beta12-postgres-module.test.ts:1132`-`:1159`). This
 closes PB-03's generic committed-`LISTEN`/reconnect/reconcile frontier invariant
 and the module portion of the required lost-wake proof
-(`postgres-connection-topology-primary-sources.md:245`-`:246`). It does **not**
+(`postgres-connection-topology-primary-sources.md:268`-`:269`). It does **not**
 prove the actual Change Ledger's loss, duplication, coalescing, crash, or
 arbitrary-instance behavior; those remain PB-04.
 
-## Open findings, in priority order
+## Resolved ownership decisions
 
-### 1. The transaction-pool negative proves failure after healthy, not refusal
+### Direct/session affinity is an operator-validated precondition
 
-PB-02 requires listener and migration paths pointed at transaction pooling to
-fail before either is reported healthy
-(`postgres-connection-topology-primary-sources.md:243`-`:244`). The current
-negative deliberately accepts a pooled listener, records successful startup
-reconciliation, and proves only that a later wake is absent
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1640`-`:1661`). No
-migration transaction-pool negative exists in that witness.
+The former PB-02 wording required the Runtime to reject a transaction-pool
+listener and migration path before healthy admission. That is not implementable
+generically from ordinary credentials and two PostgreSQL URLs: neither the
+protocol nor those inputs expose an authoritative pooling-mode capability.
+PgBouncer's official feature matrix, already grounded in the topology record,
+declares `LISTEN` and session advisory locks unsupported in transaction mode
+(`postgres-connection-topology-primary-sources.md:173`-`:180`).
 
-Minimal hostile proof: a capability-negative listener and migration lane must
-reject before returning their handles or invoking user work, and it must remain
-negative when PgBouncer happens to reuse a sticky backend. A single repeated PID
-is not sufficient because transaction pooling may assign the same server
-connection by coincidence.
+The executed negative control demonstrates the false-positive risk. Against the
+pinned transaction-mode lane at `9a6f7b22`, six separately committed migration
+transactions all reported backend PID `453`, and the current migration runner
+returned `"accepted"`; its PID, lock, and unlock probes are real
+(`packages/runtime/src/postgres/index.ts:538`-`:749`) but happened to retain one
+backend. The opposite retained control points the listener at the same pooler:
+startup reconciliation completes, yet the later wake is absent
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1640`-`:1667`). A
+sticky PID or accepted migration is therefore not capability proof.
 
-This requirement is overturned only if PB-02 changes the boundary from runtime
-capability refusal to an operator-validated deployment precondition. Merely
-documenting two URLs does not satisfy the current executable requirement.
+PB-02 now requires the operator to validate that `directConnectionUrl` is direct
+or session-affine before deployment health is accepted. The Runtime retains no
+implicit fallback to `connectionUrl`, and the controlled pooled-listener
+negative remains as evidence that the URLs are not interchangeable. This
+decision would be overturned by an authenticated generic capability handshake
+available with ordinary application credentials, or by a primary provider
+guarantee that transaction pooling preserves both required session features;
+provider admin access or probabilistic PID reuse is insufficient.
 
-### 2. Tampered-plan refusal is still unproved
+### Runtime Build statement tamper refusal belongs to PB-05
 
-The static-statement invariant requires Runtime Build digest/inventory
-verification before execution,
-including a tampered-plan refusal (`postgres-module-interface-design.md:299`-`:305`).
-The decoder mismatch is now retained above, but it does not prove this earlier
-binding boundary.
+BETA-05 already owns generic Runtime artifact integrity and readiness. Runtime
+startup decodes artifacts, verifies every inventory file, validates executable
+bindings, and only then invokes readiness
+(`packages/runtime/src/application/index.ts:157`-`:181`); file inventory and
+digests refuse mismatches (`packages/runtime/src/application/artifact-files.ts:10`-`:36`),
+and the retained forged-build control rejects at application creation
+(`tests/integration/postgres/beta05-runtime-client.test.ts:32`-`:59`). That
+boundary is prerequisite, not proof that a `PostgresStatement` currently crosses
+the new module seam.
 
-Minimal hostile proof: tamper with one verified Runtime Build statement and
-prove refusal occurs before checkout or SQL.
-
-This is overturned only by a retained case that drives the verified Runtime
-Build boundary. A similarly named assertion or a type-only test is not enough.
+No production caller crossed that seam at the `9a6f7b22` decision point. The
+next commit, `9cc76e2a`, adds only PB-04's narrow Change Ledger static statements
+and `PostgresDatabase` transaction path
+(`packages/runtime/src/live-query/postgres.ts:166`-`:328`,
+`packages/runtime/src/live-query/postgres-durable-invalidation.ts:47`-`:126`),
+with retained atomic rollback and fanout controls
+(`tests/integration/postgres/beta07-postgres-durable-invalidation.test.ts:202`-`:334`,
+`:339`-`:432`). The generated application still imports and constructs Bun
+`SQL` (`packages/compiler/src/runtime/application.ts:196`, `:272`-`:299`).
+PB-05/Bun-removal owns the production Runtime Build statement projection, its
+seam-level tamper refusal before checkout or SQL, and the remaining caller
+migration. Neither PB-03 nor the narrow PB-04 crossing claims that hostile proof
+exists.
 
 ## PB-03 and PB-04 ownership
 
@@ -260,18 +286,18 @@ closes the module-level portion of PB-02's lost-wake case
 PB-04 owns actual Change Ledger semantics and integration: loss, duplication,
 coalescing, process crash, arbitrary-instance routing, and periodic fallback.
 That is the explicit next question in the decision map
-(`DECISION-MAP.md:151`-`:171`). A generic PB-03 frontier proof must not claim
-that the real Change Ledger caller has been migrated or accepted.
+(`DECISION-MAP.md:151`-`:171`). `9cc76e2a` migrates the narrow reconciliation
+and invalidation statement set behind an explicit `PostgresDatabase` input, but
+a generic PB-03 frontier proof must not claim the wider PB-04 behavior or
+production projection accepted.
 
 Production-wide Bun SQL removal is another downstream question. The decision
 map says PB-03 selects an internal prototype without authorizing production
 driver migration (`DECISION-MAP.md:143`-`:149`) and assigns compiler, generated
 application, Query, Mutation, Live Query, Durable, scripts, and tests to the Bun
-SQL removal pass (`DECISION-MAP.md:173`-`:190`). The module record currently
-says both that caller migration remains open in PB-03 and that its deletion test
-fails while duplicate caller responsibilities remain
-(`postgres-module-interface-design.md:498`-`:515`). Until that record conflict
-is resolved, the narrow executable rule is:
+SQL removal pass (`DECISION-MAP.md:173`-`:190`). The interface record now
+distinguishes PB-03's prototype deletion test from PB-05's production-wide
+realization. The narrow executable rule is:
 
 - PB-03 closes the PostgreSQL lifetimes and hostile guarantees behind its
   selected internal seam;
@@ -279,15 +305,18 @@ is resolved, the narrow executable rule is:
 - the Bun SQL removal pass realizes the production-wide deletion test without
   semantic drift.
 
-## Recommended tracer order
+## Tracer order after PB-03
 
-1. Replace the current pooled-listener observation with the required listener
-   and migration pre-healthy negative, or explicitly amend PB-02's ownership.
-2. Prove Runtime Build tamper refusal before checkout or SQL.
-3. Hand the proven module to PB-04 and the Bun SQL removal pass; do not claim
-   actual Change Ledger or production caller completion inside PB-03.
+1. PB-04 migrates the real Change Ledger static statements and proves immediate
+   wake without claiming production-wide Bun removal.
+2. PB-05 migrates the remaining production callers, proves Runtime Build
+   statement tamper refusal at the first real seam crossing, and realizes the
+   production-wide deletion test.
+3. Deployment validation enforces the operator-declared direct/session-affine
+   precondition; the Runtime retains no connection-URL fallback.
 
-PB-03 can be called complete when these module-owned hostile cases pass against
-PostgreSQL 16, 17, and 18, with the focused PgBouncer lane where capability
-topology matters. A green happy-path matrix or a grep count does not replace a
-test that breaks each guarantee and asserts the failure.
+PB-03 is complete narrowly because its module-owned hostile cases pass against
+PostgreSQL 16, 17, and 18, with the focused PgBouncer lane where topology
+matters. This does not accept PB-04 Change Ledger integration, PB-05 caller
+migration, or a production deployment that has not validated its direct
+endpoint.

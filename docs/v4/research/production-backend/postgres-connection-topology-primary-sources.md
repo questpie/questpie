@@ -5,7 +5,7 @@
   and the current QUESTPIE topology
 - Decision-map question:
   `docs/v4/research/production-backend/DECISION-MAP.md:63`-`:91`
-- Re-derived against: `feat/v4-beta-12` at `cd2043e5`
+- Re-derived against: `feat/v4-beta-12` at `9cc76e2a`
 
 ## Finding
 
@@ -28,7 +28,11 @@ postgres: {
 There should be **no implicit production fallback** from
 `directConnectionUrl` to `connectionUrl`. A transaction-pool URL accepts SQL
 but cannot preserve `LISTEN`, session advisory locks, or other session state;
-the Runtime cannot infer pooling mode reliably from a generic PostgreSQL URL.
+the Runtime cannot infer pooling mode reliably from ordinary PostgreSQL
+credentials and two generic URLs. Supplying `directConnectionUrl` is therefore
+an operator assertion that the endpoint is direct or session-affine, and that
+assertion must be validated before the deployment is reported healthy rather
+than guessed by the Runtime.
 For local PostgreSQL, the caller may deliberately pass the same direct URL in
 both fields. A session-mode pooler may also be supplied as the direct value if
 the operator accepts that provider's session guarantees. This explicit
@@ -48,9 +52,11 @@ one pool (`packages/compiler/src/runtime/application.ts:482`-`:500`).
 The query path reserves a connection for a repeatable-read transaction
 (`packages/runtime/src/relational/postgres.ts:70`-`:112`), mutation reserves a
 connection before its read-committed transaction
-(`packages/runtime/src/mutation/postgres.ts:133`-`:185`), and Change Ledger
-reconciliation reserves another repeatable-read transaction
-(`packages/runtime/src/live-query/postgres.ts:157`-`:278`). Durable kernel,
+(`packages/runtime/src/mutation/postgres.ts:133`-`:185`). `9cc76e2a` gives
+Change Ledger reconciliation a narrow static-statement `PostgresDatabase` path
+(`packages/runtime/src/live-query/postgres.ts:166`-`:328`) while retaining the
+Bun `SQL` compatibility path that the generated application still supplies
+(`packages/runtime/src/live-query/postgres.ts:331`-`:453`). Durable kernel,
 effect-ledger, and maintenance operations also open transactions on the shared
 pool (`packages/runtime/src/durable/postgres-kernel.ts:143`-`:177`,
 `packages/runtime/src/durable/postgres-effects.ts:66`-`:79`,
@@ -173,6 +179,20 @@ unsupported; `NOTIFY` itself is supported
 transaction pool is therefore valid for bounded ordinary QUESTPIE
 transactions, but never for the listener or migrations.
 
+A controlled probe against the pinned PgBouncer 1.24.1 transaction-mode lane at
+`9a6f7b22` demonstrates why runtime inference is not a sound substitute for
+operator validation. Six separately committed transactions on one client all
+reported backend PID `453`, and the current migration runner completed as
+`"accepted"` through that same endpoint. This is coincidence, not a capability
+guarantee: the runner can observe one sticky assignment across its PID probes,
+advisory lock, work, and unlock (`packages/runtime/src/postgres/index.ts:538`-`:749`),
+while the official feature matrix still declares session advisory locks and
+`LISTEN` unsupported in transaction mode. The retained negative supplies the
+opposite control: a pooled listener completes startup reconciliation but misses
+the later wake (`tests/integration/postgres/beta12-postgres-module.test.ts:1640`-`:1667`).
+Neither a sticky PID nor a successful migration may promote an unvalidated
+endpoint to healthy, and the Runtime must not fall back to `connectionUrl`.
+
 PgBouncer's `max_client_conn` counts accepted client sockets, while
 `default_pool_size` and related per-user/per-database caps govern backend
 connections
@@ -240,8 +260,11 @@ supported lifecycle.
 1. Two Runtime instances behind transaction PgBouncer complete Query,
    Mutation, Job claim/settle, and Change Ledger reconciliation while a direct
    Client supplies immediate wakes.
-2. A negative test points the listener and migration path at transaction
-   pooling and fails before either is reported healthy.
+2. Before deployment health is accepted, the operator has validated that
+   `directConnectionUrl` is direct or session-affine. Retain a controlled
+   transaction-PgBouncer negative showing that a pooled listener can appear to
+   start yet miss a later wake; do not convert sticky backend-PID probes or a
+   migration that happens to complete into runtime capability inference.
 3. Listener disconnect loses at least one wake; reconnect, committed `LISTEN`,
    and ledger catch-up still converge before the periodic poll.
 4. Saturate all ten Pool clients: checkout fails on the bounded timeout,
@@ -261,6 +284,10 @@ supported lifecycle.
 - A primary provider guarantee that transaction pooling preserves `LISTEN` or
   session advisory locks would reopen the required direct endpoint. Current
   PgBouncer documentation says the opposite.
+- An authenticated, generic PostgreSQL capability handshake available through
+  ordinary application credentials could replace the operator-validated
+  precondition. Provider-specific administration access, a repeated backend
+  PID, or a successful migration run does not overturn it.
 - A representative deployment proving that the default 10 ordinary clients
   either starves latency-critical work or consumes unsafe database capacity
   would change the number or require role-specific Runtime pools. The formula,

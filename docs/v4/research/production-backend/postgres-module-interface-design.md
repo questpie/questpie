@@ -2,10 +2,10 @@
 
 - Status: selected internal prototype shape; no production or public API
   authority
-- Re-derived against: `feat/v4-beta-12` at `f51be2b2`
+- Re-derived against: `feat/v4-beta-12` at `9cc76e2a`
 - Input: PB-02 topology and lifecycle finding
-- Remaining proof: pre-healthy transaction-pool refusal and Runtime Build tamper
-  refusal
+- Remaining proof: downstream PB-04 Change Ledger integration and PB-05
+  production caller migration; the private PB-03 module proof is complete
 
 ## Decision
 
@@ -301,8 +301,11 @@ runs inside migration application, in which case it uses that pinned session.
    global `pg.types` mutation crosses the seam. JSON uses the explicit
    `PostgresJson` wrapper and canonical serialization; arbitrary objects and
    `pg`'s implicit `toPostgres` hook are refused. Execution uses array row mode.
-   Runtime Build statements cross only after their existing digest/inventory
-   verification; the hostile proof includes a tampered-plan refusal.
+   Before any Runtime Build statement crosses this seam, the existing generic
+   digest, file-inventory, executable-inventory, and readiness refusal remains a
+   prerequisite. Seam-level tampered-statement refusal belongs to Runtime Build
+   projection in PB-05, not to a PB-03 prototype or PB-04's hand-authored Change
+   Ledger statements.
 2. A transaction owns exactly one checkout and physical connection from `BEGIN`
    through confirmed `COMMIT` or `ROLLBACK`. The callback handle is invalid once
    the callback settles. Nested transactions and savepoints are absent.
@@ -403,15 +406,17 @@ Do not add a fake PostgreSQL adapter. Pure statement encoder/decoder and
 lifecycle state-machine tests may inject private clocks, backoff, or sockets,
 but behavioral substitution uses disposable real PostgreSQL. PGLite cannot
 prove `LISTEN`, session advisory locks, backend PID affinity, or driver-level
-cancellation. Required integration coverage is PostgreSQL 16, 17, and 18 plus a
-transaction-PgBouncer lane for ordinary work and negative listener/migration
-tests.
+cancellation. Required module integration coverage is PostgreSQL 16, 17, and 18
+plus a transaction-PgBouncer lane with a direct-listener positive and a
+controlled pooled-listener negative. Whether a purported direct endpoint is
+direct or session-affine is an operator-validated deployment precondition;
+ordinary credentials and two generic URLs cannot negotiate that capability.
 
-The executable PB-03 prototype must cover PB-02's seven hostile cases
-(`postgres-connection-topology-primary-sources.md:238`-`:257`) and additionally
-prove expired callback handles, decoder mismatch, notification during initial
-reconciliation, commit-response loss, failed rotation retaining the old
-generation, and complete diagnostic redaction.
+The executable PB-03 prototype covers the module-owned portions of PB-02's seven
+hostile cases (`postgres-connection-topology-primary-sources.md:260`-`:280`) and
+additionally proves expired callback handles, decoder mismatch, notification
+during initial reconciliation, commit-response loss, failed rotation retaining
+the old generation, and complete diagnostic redaction.
 
 ## Executable progress
 
@@ -495,6 +500,17 @@ the two URLs are not interchangeable
 runs the focused witness on PostgreSQL 17 with the pinned pooler image
 (`.github/workflows/ci.yml:85`-`:133`).
 
+At `9a6f7b22`, an executed control against that same transaction-mode endpoint
+returned one backend PID (`453`) across six separately committed migration
+transactions and the current migration runner reported `"accepted"`. The
+runner's probes and cleanup are real (`packages/runtime/src/postgres/index.ts:538`-`:749`),
+but this result does not establish session affinity: PgBouncer may happen to
+reuse one backend while its official feature matrix still declares `LISTEN` and
+session advisory locks unsupported in transaction mode. PB-02 therefore owns an
+operator-validated direct/session-affine precondition, retains the pooled-listener
+negative (`tests/integration/postgres/beta12-postgres-module.test.ts:1640`-`:1667`),
+and forbids implicit fallback rather than adding unsound runtime inference.
+
 The adversarial lifecycle pass is recorded in
 `postgres-module-adversarial-audit.md`. `48429c3c` closes Runtime resurrection
 and concurrent listener ownership (`packages/runtime/src/postgres/runtime.ts:148`-`:290`);
@@ -541,25 +557,38 @@ configured ten-second periodic fallback
 proves only the module-owned listen/reconnect/reconcile ordering; actual Change
 Ledger behavior and PB-04 integration remain downstream.
 
-Still open in PB-03: the required pre-healthy transaction-pool capability
-negative and Runtime Build tamper refusal. Actual Change Ledger integration and
-migration of existing Bun SQL callers remain downstream PB-04/Bun-removal work;
-PB-04 remains blocked until the callers move through this seam.
+This closes the private PB-03 module proof narrowly. `9cc76e2a` begins PB-04 by
+moving the Change Ledger reconciliation and invalidation statement set through
+`PostgresDatabase` (`packages/runtime/src/live-query/postgres.ts:166`-`:328`,
+`packages/runtime/src/live-query/postgres-durable-invalidation.ts:47`-`:126`) and
+retaining atomic rollback and exact 1,024/1,024/2 fanout controls
+(`tests/integration/postgres/beta07-postgres-durable-invalidation.test.ts:202`-`:334`,
+`:339`-`:432`). This narrow crossing does not claim PB-04's entire immediate-wake
+contract or Runtime Build statement projection. The generated application still
+constructs Bun `SQL`
+(`packages/compiler/src/runtime/application.ts:196`, `:272`-`:299`), while the
+existing generic Runtime boundary verifies artifact files, digests, executable
+inventory, and readiness before startup
+(`packages/runtime/src/application/index.ts:157`-`:181`,
+`packages/runtime/src/application/artifact-files.ts:10`-`:36`). PB-05/Bun-removal
+owns Runtime Build statement projection, its seam-level tamper negative, and
+production-wide caller migration.
 
 ## Deletion test
 
-Deleting this module must force all of the following to reappear independently
-in generated application, relational Query, Mutation, Live Query, Durable,
-compiler migration, and Seed code: Pool checkout/release, transaction control,
-server timeouts, AbortSignal cancel-or-destroy, exact row decoding, SQLSTATE and
-commit-ambiguity classification, connection cleanup, and shutdown.
+The selected seam passes its PB-03 deletion test: deleting the prototype would
+force Pool checkout/release, transaction control, server timeouts, AbortSignal
+cancel-or-destroy, exact row decoding, SQLSTATE and commit-ambiguity
+classification, connection cleanup, listener lifecycle, and shutdown to be
+reimplemented for the retained module witnesses.
 
-Migration would additionally regain backend-PID checks and advisory-lock
-cleanup; realtime would regain session ownership, LISTEN reconnect ordering,
-and listen-then-reconcile; generated application would regain Pool construction,
-rotation, and drain. The current tree already shows that spread. If the
-prototype merely moves `pool.query()` without deleting those duplicated
-responsibilities from the named callers, PB-03 fails.
+Production-wide realization of that deletion value is PB-05: generated
+application, relational Query, Mutation, Live Query, Durable, compiler
+migration, and Seed still own their Bun-era database mechanics. PB-05 fails if
+it merely moves `pool.query()` while leaving those responsibilities duplicated;
+their current duplication does not retroactively make the private PB-03 module
+proof incomplete. PB-04 is narrower and proves only the migrated Change Ledger
+static statements and immediate-wake integration.
 
 ## What would overturn this selection
 

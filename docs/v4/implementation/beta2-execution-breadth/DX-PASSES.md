@@ -34,16 +34,17 @@ DX-00 executable guide-block gate proposal (proposal only)
   -> DX-01 enforce Operation admission
        -> PB-02 connection topology proof
             -> PB-03 one deep pg module proof
-                 -> PB-04 Bun SQL removal + immediate LISTEN wake
-                      -> EB-02 Route/Auth
-                      -> EB-03 Action
-                      -> EB-04..08 unified Job, cron, checkpoints
-                           -> EB-09 OpenAPI/MCP/skills
-                           -> EB-10 runnable backend and docs
-                                -> DX-02 one-source Query authoring
-                                -> DX-03 structural Query parity
-                                -> DX-04 client/editor ergonomics
-                                -> DX-05 visual docs and framework skills
+                 -> PB-04 Change Ledger static statements + immediate LISTEN wake
+                      -> PB-05 production Bun SQL removal
+                           -> EB-02 Route/Auth
+                           -> EB-03 Action
+                           -> EB-04..08 unified Job, cron, checkpoints
+                                -> EB-09 OpenAPI/MCP/skills
+                                -> EB-10 runnable backend and docs
+                                     -> DX-02 one-source Query authoring
+                                     -> DX-03 structural Query parity
+                                     -> DX-04 client/editor ergonomics
+                                     -> DX-05 visual docs and framework skills
 ```
 
 The `pg` chain may prepare proof while DX-01 is implemented, but production
@@ -57,15 +58,19 @@ one bounded ordinary `pg.Pool`, one dedicated session-affine listener per
 realtime Runtime, and separate pinned migration ownership. The required
 `connectionUrl`/`directConnectionUrl` spelling has no implicit production
 fallback. This unblocks an internal PB-03 prototype; it does not authorize the
-public projection before the focused topology proof passes.
+public projection. `directConnectionUrl` is an operator assertion of a direct or
+session-affine endpoint that must be validated before deployment health; the
+Runtime cannot infer it from ordinary credentials and two generic URLs, and it
+must not fall back to `connectionUrl`.
 
 PB-03 now has a selected internal prototype interface in
 `docs/v4/research/production-backend/postgres-module-interface-design.md`.
 The chosen seam is one private `pg` module with callback-scoped ordinary
 transactions, Runtime-owned listener/generation lifecycle, and a separate
 transient pinned migration runner. The design comparison and deletion test are
-complete; executable PostgreSQL 16/17/18 and transaction-PgBouncer hostile proof
-still blocks production migration and PB-04.
+complete, and its private executable proof is closed across PostgreSQL 16/17/18
+plus the focused transaction-PgBouncer lane. PB-04 remains the first downstream
+integration, not unfinished PB-03 proof.
 
 Executable PB-03 now retains ten core real-database scenarios against PostgreSQL
 16, 17, and 18. `59fa031c` proves the static-statement transaction kernel;
@@ -103,9 +108,26 @@ ordering forces reconnect reconciliation to wait for the writer's commit, no
 `NOTIFY` is emitted, and frontier seven is observed inside one second rather than
 the configured ten-second periodic fallback
 (`tests/integration/postgres/beta12-postgres-module.test.ts:1079`-`:1159`). This
-does not claim actual Change Ledger/PB-04 integration. The pre-healthy
-transaction-pool capability negative, Runtime Build tamper refusal, and
-production caller migration remain open.
+does not claim actual Change Ledger/PB-04 integration.
+
+`9a6f7b22` closes the last PB-03 record blockers without inventing proof. An
+executed transaction-PgBouncer control returned one backend PID across six
+committed migration transactions and let the migration runner return
+`"accepted"`, while the retained pooled-listener negative still misses the later
+wake (`tests/integration/postgres/beta12-postgres-module.test.ts:1640`-`:1667`).
+That contrast makes direct/session affinity an operator-validated precondition,
+not a generic runtime inference. The existing BETA-05 artifact inventory,
+digest, executable-binding, and readiness refusal remains prerequisite
+(`packages/runtime/src/application/index.ts:157`-`:181`). `9cc76e2a` then adds
+PB-04's narrow Change Ledger static-statement and `PostgresDatabase` path
+(`packages/runtime/src/live-query/postgres.ts:166`-`:328`) with retained atomic
+rollback and fanout controls
+(`tests/integration/postgres/beta07-postgres-durable-invalidation.test.ts:202`-`:334`,
+`:339`-`:432`). It does not project Runtime Build statements, and the generated
+application still constructs Bun `SQL`
+(`packages/compiler/src/runtime/application.ts:196`, `:272`-`:299`). PB-05 owns
+that production projection, its seam-level tamper negative, the rest of Bun
+removal, and the production-wide deletion test.
 
 ## DX-00 — Propose executable fenced-code verification
 
