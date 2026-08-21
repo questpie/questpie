@@ -1,6 +1,6 @@
 import { Client } from "pg";
 
-import type { PostgresDatabase } from "./index";
+import type { PostgresDatabase } from "./contract";
 
 const channelBrand: unique symbol = Symbol("questpie.postgres.channel");
 

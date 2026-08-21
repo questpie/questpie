@@ -27,6 +27,8 @@ export type {
 	PostgresListener,
 	PostgresReconcileReason,
 } from "./listener";
+export { createRuntimePostgres } from "./runtime";
+export type { RuntimePostgres } from "./runtime";
 
 function positiveInteger(value: number): void {
 	if (!Number.isSafeInteger(value) || value <= 0)

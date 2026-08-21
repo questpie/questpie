@@ -4,6 +4,7 @@ import {
 	createPostgresDatabase,
 	createPostgresListener,
 	createMigrationPostgres,
+	createRuntimePostgres,
 	definePostgresChannel,
 	definePostgresStatement,
 	type MigrationPostgresSession,
@@ -247,7 +248,13 @@ const observeMigrationSession = definePostgresStatement({
 function database(
 	input: Readonly<{ max?: number; checkoutTimeoutMs?: number }> = {},
 ) {
-	return createPostgresDatabase({
+	return createPostgresDatabase(databaseConfiguration(input));
+}
+
+function databaseConfiguration(
+	input: Readonly<{ max?: number; checkoutTimeoutMs?: number }> = {},
+) {
+	return {
 		connectionUrl: postgresUrl(),
 		directConnectionUrl: postgresUrl(),
 		pool: {
@@ -262,7 +269,7 @@ function database(
 			lockMs: 500,
 			idleInTransactionMs: 1_000,
 		},
-	});
+	} as const;
 }
 
 async function eventually(
@@ -759,5 +766,105 @@ postgresTest(
 			await listener.close({ deadlineAt: Date.now() + 1_000 });
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}
+	},
+);
+
+postgresTest(
+	"rotates only after candidate verification and retains the winner on failure",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		const channel = definePostgresChannel("qp_pb03_rotation_wake");
+		const reasons: string[] = [];
+		const listener = await runtime.listen({
+			channel,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				reasons.push(reason);
+			},
+		});
+		let verificationEntered: (() => void) | undefined;
+		let releaseVerification: (() => void) | undefined;
+		const verifying = new Promise<void>((resolve) => {
+			verificationEntered = resolve;
+		});
+		const verificationHeld = new Promise<void>((resolve) => {
+			releaseVerification = resolve;
+		});
+		const rotating = runtime.rotate({
+			configuration: databaseConfiguration(),
+			deadlineAt: Date.now() + 1_000,
+			verify: async (candidate) => {
+				await candidate.transaction({
+					mode: { isolation: "readCommitted", access: "readOnly" },
+					use: (transaction) =>
+						transaction.execute(currentBackendPid, undefined),
+				});
+				verificationEntered?.();
+				await verificationHeld;
+			},
+		});
+		await verifying;
+		expect(runtime.facts()).toMatchObject({ state: "rotating", generation: 1 });
+		await expect(
+			runtime.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("old-generation-serving"),
+			}),
+		).resolves.toBe("old-generation-serving");
+		releaseVerification?.();
+		await rotating;
+		expect(runtime.facts()).toMatchObject({
+			state: "ready",
+			generation: 2,
+			listener: { state: "healthy" },
+			counters: { rotations: 1 },
+		});
+		expect(listener.facts()).toMatchObject({ state: "healthy" });
+		expect(reasons).toEqual(["startup", "startup"]);
+
+		const unreachable = new URL(postgresUrl());
+		unreachable.port = "1";
+		await expect(
+			runtime.rotate({
+				configuration: {
+					...databaseConfiguration(),
+					connectionUrl: unreachable.href,
+				},
+				deadlineAt: Date.now() + 1_000,
+				verify: (candidate) =>
+					candidate.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: () => Promise.resolve(),
+					}),
+			}),
+		).rejects.toMatchObject({ phase: "checkout" });
+		expect(runtime.facts()).toMatchObject({
+			state: "ready",
+			generation: 2,
+			listener: { state: "healthy" },
+			counters: { rotations: 1 },
+		});
+		await expect(
+			runtime.rotate({
+				configuration: {
+					...databaseConfiguration(),
+					directConnectionUrl: "",
+				},
+				deadlineAt: Date.now() + 1_000,
+				verify: () => Promise.reject(new Error("invalid candidate verified")),
+			}),
+		).rejects.toMatchObject({ code: "configuration", phase: "connect" });
+		expect(runtime.facts()).toMatchObject({
+			state: "ready",
+			generation: 2,
+			counters: { rotations: 1 },
+		});
+		await expect(
+			runtime.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("winner-retained"),
+			}),
+		).resolves.toBe("winner-retained");
+		await runtime.close({ deadlineAt: Date.now() + 1_000 });
 	},
 );
