@@ -711,6 +711,189 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"does not publish or resurrect a scope when drain wins during evaluation",
+			async () => {
+				const runtime = runtimePostgres();
+				let listener: PostgresListener | undefined;
+				const postgres: Pick<RuntimePostgres, "transaction" | "listen"> =
+					Object.freeze({
+						transaction: runtime.transaction,
+						async listen(input) {
+							listener = await runtime.listen(input);
+							return listener;
+						},
+					});
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before drain";
+				let evaluations = 0;
+				let evaluationEntered!: () => void;
+				const evaluationEntry = new Promise<void>((resolve) => {
+					evaluationEntered = resolve;
+				});
+				let releaseEvaluation!: () => void;
+				const evaluationHeld = new Promise<void>((resolve) => {
+					releaseEvaluation = resolve;
+				});
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						if (evaluations === 2) {
+							evaluationEntered();
+							await evaluationHeld;
+						}
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+				});
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:drain-in-flight"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:drain-in-flight", {
+										scopeId: "scope:drain-in-flight",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before drain" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					const [beforeDrain] = await databases[0]!<
+						{ generations: number; latest: string }[]
+					>`
+						select generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:drain-in-flight'
+						  and watch.binding_identity = 'binding:drain-in-flight'
+					`;
+					expect(beforeDrain).toEqual({ generations: 1, latest: "1" });
+
+					body = "must not publish";
+					await databases[2]!.begin(async (writer) => {
+						await writer`
+							insert into questpie_internal.change_ledger
+							(application_name, transaction_id, collection_identity,
+							 change_kind, conservative)
+							values (${applicationName}, pg_catalog.pg_current_xact_id(),
+							        'collection:messages', 'collection', true)
+						`;
+						await writer`select pg_catalog.pg_notify('questpie_change', '')`;
+					});
+					await Promise.race([
+						evaluationEntry,
+						new Promise<never>((_resolve, reject) =>
+							setTimeout(
+								() => reject(new Error("draining evaluation did not start")),
+								2_000,
+							),
+						),
+					]);
+					const pendingFrame = nextFrame(reader);
+					const draining = coordinator.drain();
+					expect(
+						await Promise.race([
+							draining.then(() => "resolved" as const),
+							new Promise<"pending">((resolve) =>
+								setTimeout(() => resolve("pending"), 100),
+							),
+						]),
+					).toBe("pending");
+					releaseEvaluation();
+					await draining;
+					expect(evaluations).toBe(2);
+					expect(listener?.facts()).toMatchObject({ state: "closed" });
+					expect(runtime.facts().listener).toBe("disabled");
+					await expect(coordinator.durable!.requestScan()).rejects.toThrow(
+						"not ready",
+					);
+
+					const [durable] = await databases[0]!<
+						{
+							generations: number;
+							scopes: number;
+							state: string | null;
+							watches: number;
+						}[]
+					>`
+						select
+						  (select count(*)::integer
+						     from questpie_internal.realtime_scope_attachments scope
+						    where scope.application_name = ${applicationName}
+						      and scope.scope_identity = 'scope:drain-in-flight') as scopes,
+						  (select scope.state
+						     from questpie_internal.realtime_scope_attachments scope
+						    where scope.application_name = ${applicationName}
+						      and scope.scope_identity = 'scope:drain-in-flight') as state,
+						  (select count(*)::integer
+						     from questpie_internal.realtime_watch_bindings watch
+						    where watch.application_name = ${applicationName}
+						      and watch.scope_identity = 'scope:drain-in-flight') as watches,
+						  (select count(*)::integer
+						     from questpie_internal.realtime_binding_generations generation
+						    where generation.application_name = ${applicationName}
+						      and generation.scope_identity = 'scope:drain-in-flight') as generations
+					`;
+					expect(durable).toEqual({
+						generations: 0,
+						scopes: 1,
+						state: "withdrawn",
+						watches: 0,
+					});
+					expect(
+						await Promise.race([
+							pendingFrame.then((frame) => ({ frame })),
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					await reader.cancel();
+				} finally {
+					releaseEvaluation();
+					await carrier.drain();
+					await coordinator.drain();
+					await runtime.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
 			"reconciles a committed Change Ledger fact after the listener loses its wake",
 			async () => {
 				await dropReconnectRole(databases[2]!);
