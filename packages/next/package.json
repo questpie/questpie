@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/next",
-	"version": "3.28.5",
+	"version": "3.28.6",
 	"description": "Next.js App Router adapter for QUESTPIE",
 	"repository": {
 		"type": "git",
