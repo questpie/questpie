@@ -20,7 +20,7 @@ export interface PostgresListener {
 		reconnects: number;
 		lastReconciledAt: number | null;
 	}>;
-	requestReconcile(): void;
+	requestReconcile(): Promise<void>;
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
@@ -195,7 +195,14 @@ export async function createPostgresListener(
 			return Object.freeze({ state, generation, reconnects, lastReconciledAt });
 		},
 		requestReconcile() {
-			void reconcile("notification").catch(() => {});
+			return reconcile("notification").catch((error: unknown) => {
+				throw postgresFailure({
+					error,
+					phase: "reconcile",
+					signal: controller.signal,
+					overridePhase: true,
+				});
+			});
 		},
 		async close(closeInput: Readonly<{ deadlineAt: number }>) {
 			if (state === "closed") return;

@@ -1220,6 +1220,115 @@ postgresTest(
 	},
 );
 
+postgresTest(
+	"awaits and coalesces explicit reconciliation through the Runtime listener facade",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		let notificationCalls = 0;
+		let activeCalls = 0;
+		let maximumActiveCalls = 0;
+		let reconcileEntered: (() => void) | undefined;
+		let releaseReconcile: (() => void) | undefined;
+		let entered = new Promise<void>((resolve) => {
+			reconcileEntered = resolve;
+		});
+		let held = new Promise<void>((resolve) => {
+			releaseReconcile = resolve;
+		});
+		const listener = await runtime.listen({
+			channel: definePostgresChannel("qp_pb03_explicit_reconcile"),
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				if (reason !== "notification") return;
+				notificationCalls += 1;
+				activeCalls += 1;
+				maximumActiveCalls = Math.max(maximumActiveCalls, activeCalls);
+				reconcileEntered?.();
+				try {
+					await held;
+				} finally {
+					activeCalls -= 1;
+				}
+			},
+		});
+		try {
+			const first = listener.requestReconcile();
+			await entered;
+			const second = listener.requestReconcile();
+			const third = listener.requestReconcile();
+			await expect(
+				Promise.race([
+					first.then(() => "settled"),
+					new Promise<string>((resolve) =>
+						setTimeout(() => resolve("pending"), 25),
+					),
+				]),
+			).resolves.toBe("pending");
+			releaseReconcile?.();
+			await Promise.all([first, second, third]);
+			expect(notificationCalls).toBe(2);
+			expect(maximumActiveCalls).toBe(1);
+
+			entered = new Promise<void>((resolve) => {
+				reconcileEntered = resolve;
+			});
+			held = new Promise<void>((resolve) => {
+				releaseReconcile = resolve;
+			});
+			const drainingReconcile = listener.requestReconcile();
+			await entered;
+			const closing = runtime.close({ deadlineAt: Date.now() + 1_000 });
+			await expect(
+				Promise.race([
+					closing.then(() => "settled"),
+					new Promise<string>((resolve) =>
+						setTimeout(() => resolve("pending"), 25),
+					),
+				]),
+			).resolves.toBe("pending");
+			releaseReconcile?.();
+			await Promise.all([drainingReconcile, closing]);
+			expect(runtime.facts()).toMatchObject({
+				state: "closed",
+				listener: { state: "closed" },
+			});
+		} finally {
+			releaseReconcile?.();
+			await runtime.close({ deadlineAt: Date.now() + 1_000 });
+		}
+	},
+);
+
+postgresTest("normalizes explicit reconciliation rejection", async () => {
+	const postgres = database();
+	const sensitiveDetail = "qp-sensitive-explicit-reconcile-detail";
+	let fail = false;
+	const listener = await createPostgresListener({
+		directConnectionUrl: postgresUrl(),
+		channel: definePostgresChannel("qp_pb03_explicit_reconcile_failure"),
+		database: postgres,
+		fallbackIntervalMs: 10_000,
+		reconcile: () =>
+			fail ? Promise.reject(new Error(sensitiveDetail)) : Promise.resolve(),
+	});
+	try {
+		fail = true;
+		const failure = await listener
+			.requestReconcile()
+			.catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(failure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "queryFailed",
+			phase: "reconcile",
+			retry: "never",
+		});
+		expect(JSON.stringify(failure)).not.toContain(sensitiveDetail);
+	} finally {
+		await listener.close({ deadlineAt: Date.now() + 1_000 });
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+	}
+});
+
 postgresTest("normalizes and redacts listener startup failures", async () => {
 	const postgres = database();
 	try {

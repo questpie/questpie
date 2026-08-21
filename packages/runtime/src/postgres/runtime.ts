@@ -166,7 +166,7 @@ export function createRuntimePostgres(
 							return current.listener?.facts() ?? ownedListener.facts();
 						},
 						requestReconcile() {
-							current.listener?.requestReconcile();
+							return current.listener?.requestReconcile() ?? Promise.resolve();
 						},
 						async close(closeInput: Readonly<{ deadlineAt: number }>) {
 							listenerInput = undefined;
