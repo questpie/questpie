@@ -14,10 +14,29 @@ import {
 	createPostgresLiveQueryRetention,
 	type RetainedLiveQueryBinding,
 } from "../../../packages/runtime/src/live-query/postgres-retention";
+import { createPostgresDatabase } from "../../../packages/runtime/src/postgres";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const concurrentDatabase = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
 const snapshotDatabase = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
+const pgDatabase = process.env.PGHOST
+	? createPostgresDatabase({
+			connectionUrl: postgresUrl(),
+			directConnectionUrl: postgresUrl(),
+			pool: {
+				max: 2,
+				connectTimeoutMs: 2_000,
+				checkoutTimeoutMs: 2_000,
+				idleTimeoutMs: 5_000,
+				maxLifetimeSeconds: 60,
+			},
+			timeouts: {
+				statementMs: 10_000,
+				lockMs: 1_000,
+				idleInTransactionMs: 10_000,
+			},
+		})
+	: undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
 const hmacKey = new Uint8Array(32).fill(29);
@@ -36,6 +55,16 @@ const dependencyPlanBytes = new TextEncoder().encode('{"tokens":[]}\n');
 const runtimeProgram = {
 	limits: { fanoutPerBatch: 1_024 },
 } as LinkedLiveQueryProgramV1;
+
+function postgresUrl(): string {
+	const url = new URL("postgres://localhost/postgres");
+	url.hostname = process.env.PGHOST ?? "127.0.0.1";
+	url.port = process.env.PGPORT ?? "5432";
+	url.username = process.env.PGUSER ?? "postgres";
+	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.href;
+}
 
 function dormantTicks(): PostgresWakeTickSource {
 	return {
@@ -74,6 +103,7 @@ afterAll(async () => {
 	await database?.close({ timeout: 0 });
 	await concurrentDatabase?.close({ timeout: 0 });
 	await snapshotDatabase?.close({ timeout: 0 });
+	await pgDatabase?.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 describe.skipIf(!database)(
@@ -83,7 +113,7 @@ describe.skipIf(!database)(
 			"makes only the last acknowledged complete result resumable without an availability oracle",
 			async () => {
 				const retention = createPostgresLiveQueryRetention({
-					sql: database!,
+					database: pgDatabase!,
 					hmacKey,
 				});
 				const result = completeResult();

@@ -3,6 +3,13 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SQL } from "bun";
 
 import { canonicalJsonLine, sha256Digest } from "../canonical-json";
+import type { PostgresDatabase } from "../postgres";
+import {
+	acknowledgePostgresRetainedResult,
+	prunePostgresLiveQueryRetention,
+	readPostgresRetainedResult,
+	type PostgresRetainedResultRow,
+} from "./postgres-retention-database";
 
 const digestPattern = /^[0-9a-f]{64}$/;
 const identityPattern = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
@@ -55,6 +62,18 @@ type PostgresLiveQueryPruneResult = Readonly<{
 	retainedResults: number;
 	ledgerFacts: number;
 }>;
+
+type PostgresLiveQueryRetentionInput =
+	| Readonly<{
+			database: PostgresDatabase;
+			sql?: never;
+			hmacKey: Uint8Array;
+	  }>
+	| Readonly<{
+			database?: never;
+			sql: SQL;
+			hmacKey: Uint8Array;
+	  }>;
 
 export type PostgresLiveQueryRetention = Readonly<{
 	mint(result: RetainedLiveQueryCompleteResult): string;
@@ -249,10 +268,7 @@ function bytes(value: unknown): Uint8Array | undefined {
 }
 
 export function createPostgresLiveQueryRetention(
-	input: Readonly<{
-		sql: SQL;
-		hmacKey: Uint8Array;
-	}>,
+	input: PostgresLiveQueryRetentionInput,
 ): PostgresLiveQueryRetention {
 	if (!(input.hmacKey instanceof Uint8Array) || input.hmacKey.byteLength < 32)
 		throw new TypeError("resume-token HMAC key must contain at least 32 bytes");
@@ -314,6 +330,12 @@ export function createPostgresLiveQueryRetention(
 					"resume token does not bind the acknowledged result",
 				);
 			const tokenDigest = sha256Digest(result.resumeToken);
+			if (input.database !== undefined)
+				return acknowledgePostgresRetainedResult(
+					input.database,
+					result,
+					tokenDigest,
+				);
 			await input.sql.begin(async (transaction) => {
 				await transaction`
 					select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
@@ -371,18 +393,15 @@ export function createPostgresLiveQueryRetention(
 			validateLookupBinding(binding);
 			const candidateToken = typeof resumeToken === "string" ? resumeToken : "";
 			const payload = decode(candidateToken);
-			const [row] = await input.sql<
-				{
-					deploymentDigest: string;
-					authorityPartitionDigest: string;
-					queryIdentity: string;
-					inputDigest: string;
-					wireVersion: number;
-					retainedGeneration: bigint;
-					resultBytes: Uint8Array;
-					dependencyPlanBytes: Uint8Array;
-				}[]
-			>`
+			const row =
+				input.database !== undefined
+					? await readPostgresRetainedResult(
+							input.database,
+							binding,
+							sha256Digest(candidateToken),
+						)
+					: (
+							await input.sql<PostgresRetainedResultRow[]>`
 				select deployment_digest as "deploymentDigest",
 				       authority_partition_digest as "authorityPartitionDigest",
 				       query_identity as "queryIdentity", input_digest as "inputDigest",
@@ -397,7 +416,8 @@ export function createPostgresLiveQueryRetention(
 				  and input_digest = ${binding.inputDigest}
 				  and wire_version = ${binding.wireVersion}
 				  and expires_at > transaction_timestamp()
-			`;
+			`
+						)[0];
 			const resultBytes = bytes(row?.resultBytes);
 			const dependencyPlanBytes = bytes(row?.dependencyPlanBytes);
 			if (
@@ -428,6 +448,8 @@ export function createPostgresLiveQueryRetention(
 		},
 		async prune({ applicationName }) {
 			validIdentity(applicationName, "application identity");
+			if (input.database !== undefined)
+				return prunePostgresLiveQueryRetention(input.database, applicationName);
 			return input.sql.begin(async (transaction) => {
 				const [retained] = await transaction<{ count: number }[]>`
 					with deleted as (
