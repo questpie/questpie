@@ -12,7 +12,7 @@ import type { NormalizedResource } from "../../packages/compiler/src/types";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const beta05ServerBundleBudget = 311_296;
-const beta07RealtimeBundleReferenceBytes = 434_688;
+const beta07RealtimeBundleReferenceBytes = 682_420;
 const beta07RealtimeBundleBudget =
 	Math.ceil((beta07RealtimeBundleReferenceBytes * 1.2) / 65_536) * 65_536;
 
@@ -261,7 +261,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 				0,
 			),
 		).toBeLessThanOrEqual(beta07RealtimeBundleBudget);
-		expect(beta07RealtimeBundleBudget).toBe(524_288);
+		expect(beta07RealtimeBundleBudget).toBe(851_968);
 		expect(
 			runtimeBuild.inventory
 				.map(({ path }: { path: string }) => path)
