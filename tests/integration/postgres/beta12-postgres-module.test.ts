@@ -54,6 +54,18 @@ const sleep = definePostgresStatement({
 	decode: () => undefined,
 });
 
+const invalidDecoder = definePostgresStatement({
+	name: "pb03.invalid-decoder",
+	text: "SELECT 42::integer",
+	parameterCount: 0,
+	parameters: () => [],
+	decode(result) {
+		if (typeof result.rows[0]?.[0] !== "string")
+			throw new TypeError("sensitive decoder detail");
+		return result.rows[0][0];
+	},
+});
+
 const currentBackendPid = definePostgresStatement({
 	name: "pb03.current-backend-pid",
 	text: "SELECT pg_catalog.pg_backend_pid()",
@@ -377,6 +389,24 @@ postgresTest(
 			retry: "never",
 		});
 		expect(serializedFailure).not.toContain(sensitiveValue);
+
+		const decoderFailure = await postgres
+			.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: (transaction) => transaction.execute(invalidDecoder, undefined),
+			})
+			.catch((error: unknown) => error);
+		expect(JSON.parse(JSON.stringify(decoderFailure))).toEqual({
+			name: "QuestpiePostgresError",
+			code: "invalidResult",
+			phase: "statement",
+			statementName: "pb03.invalid-decoder",
+			retry: "never",
+		});
+		expect(JSON.stringify(decoderFailure)).not.toContain(
+			"sensitive decoder detail",
+		);
+		expect(JSON.stringify(decoderFailure)).not.toContain("SELECT 42");
 		expect(serializedFailure).not.toContain("INSERT INTO");
 		expect(serializedFailure).not.toContain(postgresUrl());
 
