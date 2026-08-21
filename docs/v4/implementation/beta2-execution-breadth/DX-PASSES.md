@@ -187,7 +187,7 @@ does not close the whole hostile PB-04 question.
 `040e4bf6` closes notification loss across a real coordinator listener
 disconnect and reconnect. The test gives that Runtime a dedicated PostgreSQL
 role, opens the real carrier and binding, and drains the initial work
-(`tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:531`-`:595`).
+(`040e4bf6:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:531`-`:595`).
 It then changes the role to `NOLOGIN` before terminating the listener, commits
 the Change Ledger fact while reconnect is impossible, and restores `LOGIN` only
 after the writer transaction has returned (`:597`-`:621`). No `NOTIFY` is
@@ -199,7 +199,7 @@ and carrier path, not PB-03's generic frontier substitute.
 
 `ba008395` closes duplicate and coalesced wakes with two distinct controls.
 First, a raw `pg.Client` listens on an isolated control channel
-(`tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:702`-`:730`).
+(`ba008395:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:702`-`:730`).
 Five identical notifications committed in one transaction arrive as exactly one
 `"same"`, while the positive control's five distinct payloads all arrive
 (`:797`-`:839`). This proves the PostgreSQL behavior rather than assuming it.
@@ -217,6 +217,25 @@ latest retained generation is two, evaluation count is two, and the carrier
 emits one update frame with no second frame (`:844`-`:908`). The PostgreSQL 17
 lane at this head passes **8/8 with 120 assertions**.
 
+`4a07f772` closes the healthy-listener periodic fallback. The real listener
+records reconciliation reasons; after the carrier's initial frame, an explicit
+scan quiesces prior work and the test pins one evaluation plus listener state
+`healthy`, generation one, and zero reconnects
+(`4a07f772:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:664`-`:760`).
+The independent writer then appends one Change Ledger fact with deliberately no
+`NOTIFY` and no manual scan. The next carrier frame follows only the exact
+`periodic` reason while the listener remains healthy on the same generation
+with zero reconnects (`:762`-`:789`). The retained PostgreSQL 17 run measured
+about **10.2 seconds from writer start to frame**; this is not an exact commit
+latency measurement because the clock starts before the insert returns.
+
+The durable result advances invalidation by one, catches the evaluated frontier
+up to it, increases the consumer horizon, and retains exactly one physical row
+whose latest generation is two (`:791`-`:829`). A subsequent manual scan leaves
+generation and evaluation unchanged, and no second frame arrives
+(`:831`-`:862`). The PostgreSQL 17 lane at this head passes **9/9 with 139
+assertions**.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -224,11 +243,10 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `ba008395`
+### Remaining PB-04 hostile closure matrix after `4a07f772`
 
 | Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Healthy-listener periodic fallback       | Commit a fact without `NOTIFY` while the listener stays healthy and prove the configured periodic reconciliation eventually delivers it exactly once.                                                                                         |
 | Process replacement/startup recovery     | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
 | Transaction rollback                     | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
 | Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
