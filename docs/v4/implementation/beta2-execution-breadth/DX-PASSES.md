@@ -236,6 +236,26 @@ generation and evaluation unchanged, and no second frame arrives
 (`:831`-`:862`). The PostgreSQL 17 lane at this head passes **9/9 with 139
 assertions**.
 
+`96701486` closes process replacement and startup recovery. The first Runtime
+opens holder generation one, then only `RuntimePostgres.close()` crosses the
+simulated crash boundary: neither the carrier nor coordinator drains, and the
+durable holder remains open at generation one
+(`96701486:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:911`-`:996`).
+An independent writer commits one Change Ledger fact; before replacement there
+is exactly one durable fact and zero processed rows (`:998`-`:1021`).
+
+The replacement uses an independent Runtime and coordinator. Its exact
+`startup` reconciliation runs before any carrier fetch or evaluation, makes the
+listener healthy, physically consumes the fact, advances invalidation by one
+and the consumer horizon, and leaves the evaluated frontier and retained
+generation unchanged until a consumer attaches (`:1026`-`:1113`). The first
+replacement fetch then emits one fresh update, advances the evaluated frontier,
+replaces the durable holder with generation two, and prunes generation one;
+an idempotent scan performs no second evaluation (`:1115`-`:1174`). Neither a
+duplicate replacement frame nor an old-process frame arrives (`:1176`-`:1194`).
+The retained PostgreSQL 17 lane at this head passes **10/10 with 165
+assertions**.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -243,11 +263,10 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `4a07f772`
+### Remaining PB-04 hostile closure matrix after `96701486`
 
 | Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Process replacement/startup recovery     | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
 | Transaction rollback                     | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
 | Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
 | Drain during in-flight reconciliation    | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
