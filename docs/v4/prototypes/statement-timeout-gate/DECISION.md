@@ -888,6 +888,26 @@ anything observed: the surface degrades if `audit` is bounded near 100 ms, or if
 one run's command count passes about 200,000. Stated unconditionally it reads as
 a present defect rather than a bound worth choosing carefully.
 
+**A second surface, and this one compounds.** Live-query retention prunes inside
+a transaction — `prune()` at
+`packages/runtime/src/live-query/postgres-retention.ts:429`, wrapping
+`input.sql.begin` at `:431` — with two deletes that carry no `LIMIT` and no
+batching: every expired `retained_live_query_results` row (`:434`) and every
+`change_ledger` fact below the consumers' `xid_horizon` (`:447`). Nothing in that
+file batches; its only `limit` mentions are byte-size checks at `:136` and `:140`.
+Because it is a transaction, **decision item 1's transaction-scoped GUC reaches
+it**, so the candidate 200 ms bounds a delete whose size is however much has
+accumulated since the last successful prune.
+
+That is the difference from the four populations above. A bounded query that
+fails is a request lost; a bounded _prune_ that fails leaves its own backlog in
+place, so the next attempt is larger and fails sooner. The failure is not
+swallowed either: `postgres-coordinator.ts:463` calls it inside a `finally`,
+captures the error as `maintenanceFailure`, and rethrows at `:468`, so a prune
+killed by the timeout also fails the maintenance cycle around it. **The mechanism
+makes the work it kills grow**, which no timeout can resolve — the remedy is the
+same shape as `audit`'s, a bound on rows, and it is equally absent.
+
 That is a row bound the gate does not supply and cannot;
 `durable-evidence-gaps/FINDING.md` §6 states it directly and says this record
 "should not be read as covering it". Recorded here as well because a reader of
