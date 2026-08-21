@@ -12,6 +12,7 @@ import {
 } from "../../../packages/runtime/src/postgres";
 
 const postgresTest = process.env.PGHOST ? test : test.skip;
+const pgbouncerTest = process.env.PGBOUNCER_PORT ? test : test.skip;
 
 function postgresUrl(): string {
 	const url = new URL("postgres://localhost/postgres");
@@ -20,6 +21,12 @@ function postgresUrl(): string {
 	url.username = process.env.PGUSER ?? "postgres";
 	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
 	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.href;
+}
+
+function pgbouncerUrl(): string {
+	const url = new URL(postgresUrl());
+	url.port = process.env.PGBOUNCER_PORT ?? "6432";
 	return url.href;
 }
 
@@ -866,5 +873,74 @@ postgresTest(
 			}),
 		).resolves.toBe("winner-retained");
 		await runtime.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+pgbouncerTest(
+	"uses transaction pooling only for ordinary work and direct LISTEN for wake",
+	async () => {
+		const runtime = createRuntimePostgres({
+			...databaseConfiguration(),
+			connectionUrl: pgbouncerUrl(),
+		});
+		const channel = definePostgresChannel("qp_pb03_pgbouncer_wake");
+		let notified: (() => void) | undefined;
+		const notification = new Promise<void>((resolve) => {
+			notified = resolve;
+		});
+		await runtime.listen({
+			channel,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				if (reason === "notification") notified?.();
+			},
+		});
+		await runtime.transaction({
+			mode: { isolation: "readCommitted", access: "readWrite" },
+			use: (transaction) =>
+				transaction.execute(notify, {
+					channel,
+					payload: "pooler-notify",
+				}),
+		});
+		await Promise.race([
+			notification,
+			new Promise<never>((_resolve, reject) =>
+				setTimeout(
+					() => reject(new Error("direct listener missed pooler NOTIFY")),
+					500,
+				),
+			),
+		]);
+		await runtime.close({ deadlineAt: Date.now() + 1_000 });
+
+		const directDatabase = database();
+		const wrongReasons: string[] = [];
+		const transactionPooledListener = await createPostgresListener({
+			directConnectionUrl: pgbouncerUrl(),
+			channel,
+			database: directDatabase,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				wrongReasons.push(reason);
+			},
+		});
+		try {
+			await directDatabase.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: (transaction) =>
+					transaction.execute(notify, {
+						channel,
+						payload: "unsupported-listener",
+					}),
+			});
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(wrongReasons).toEqual(["startup"]);
+		} finally {
+			await transactionPooledListener.close({
+				deadlineAt: Date.now() + 1_000,
+			});
+			await directDatabase.close({ deadlineAt: Date.now() + 1_000 });
+		}
 	},
 );
