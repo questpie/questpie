@@ -21,6 +21,11 @@ import {
 	type PostgresWakeTickSource,
 } from "../../../packages/runtime/src/live-query";
 import { createPostgresRealtimeScopeStore } from "../../../packages/runtime/src/live-query/postgres-realtime-scope";
+import {
+	createRuntimePostgres,
+	type PostgresListener,
+	type RuntimePostgres,
+} from "../../../packages/runtime/src/postgres";
 
 const databases = process.env.PGHOST
 	? [new SQL({ max: 1 }), new SQL({ max: 1 }), new SQL({ max: 1 })]
@@ -215,6 +220,56 @@ async function captureMessageChange(sql: SQL): Promise<void> {
 	`;
 }
 
+function postgresUrl(): string {
+	const url = new URL("postgres://localhost/postgres");
+	if (process.env.PGHOST) url.hostname = process.env.PGHOST;
+	if (process.env.PGPORT) url.port = process.env.PGPORT;
+	if (process.env.PGUSER) url.username = process.env.PGUSER;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	if (process.env.PGDATABASE) url.pathname = `/${process.env.PGDATABASE}`;
+	return url.href;
+}
+
+function runtimePostgres() {
+	const connectionUrl = postgresUrl();
+	return createRuntimePostgres({
+		connectionUrl,
+		directConnectionUrl: connectionUrl,
+		pool: {
+			max: 3,
+			connectTimeoutMs: 1_000,
+			checkoutTimeoutMs: 1_000,
+			idleTimeoutMs: 1_000,
+			maxLifetimeSeconds: 60,
+		},
+		timeouts: {
+			statementMs: 10_000,
+			lockMs: 1_000,
+			idleInTransactionMs: 10_000,
+		},
+	});
+}
+
+async function nextFrameBefore(
+	reader: ReadableStreamDefaultReader<Uint8Array>,
+	deadlineMs: number,
+) {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	try {
+		return await Promise.race([
+			nextFrame(reader),
+			new Promise<never>((_resolve, reject) => {
+				timer = setTimeout(
+					() => reject(new Error("realtime frame deadline exceeded")),
+					deadlineMs,
+				);
+			}),
+		]);
+	} finally {
+		if (timer) clearTimeout(timer);
+	}
+}
+
 beforeEach(async () => {
 	await databases[0]?.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	if (databases[0]) await ensure(databases[0]);
@@ -227,9 +282,215 @@ afterAll(async () => {
 	);
 });
 
+test("a concurrent drain owns a coordinator listener still starting", async () => {
+	let releaseListen!: () => void;
+	const listenHeld = new Promise<void>((resolve) => {
+		releaseListen = resolve;
+	});
+	let closes = 0;
+	const listener = {
+		facts: () => ({
+			state: "healthy" as const,
+			generation: 1,
+			reconnects: 0,
+			lastReconciledAt: Date.now(),
+		}),
+		requestReconcile: () => Promise.resolve(),
+		close: async () => {
+			closes += 1;
+		},
+	} satisfies PostgresListener;
+	const postgres = {
+		transaction: () => Promise.reject(new Error("unexpected transaction")),
+		listen: async () => {
+			await listenHeld;
+			return listener;
+		},
+	} as unknown as Pick<RuntimePostgres, "transaction" | "listen">;
+	const coordinator = createPostgresLiveQueryCoordinator({
+		program: liveQueryProgram,
+		postgres,
+		hmacKey: new Uint8Array(32).fill(7),
+		applicationName,
+		deploymentDigest,
+		wireVersion: 1,
+	});
+
+	const starting = coordinator.start();
+	const draining = coordinator.drain();
+	releaseListen();
+	await expect(starting).rejects.toThrow("stopped during startup");
+	await draining;
+	expect(closes).toBe(1);
+	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
+});
+
+test("the owner signal drains the database-mode coordinator listener", async () => {
+	const controller = new AbortController();
+	let closeListener!: () => void;
+	const listenerClosed = new Promise<void>((resolve) => {
+		closeListener = resolve;
+	});
+	let closes = 0;
+	const listener = {
+		facts: () => ({
+			state: "healthy" as const,
+			generation: 1,
+			reconnects: 0,
+			lastReconciledAt: Date.now(),
+		}),
+		requestReconcile: () => Promise.resolve(),
+		close: async () => {
+			closes += 1;
+			closeListener();
+		},
+	} satisfies PostgresListener;
+	const postgres = {
+		transaction: () => Promise.reject(new Error("unexpected transaction")),
+		listen: () => Promise.resolve(listener),
+	} as unknown as Pick<RuntimePostgres, "transaction" | "listen">;
+	const coordinator = createPostgresLiveQueryCoordinator({
+		program: liveQueryProgram,
+		postgres,
+		hmacKey: new Uint8Array(32).fill(7),
+		applicationName,
+		deploymentDigest,
+		wireVersion: 1,
+		signal: controller.signal,
+	});
+
+	await coordinator.start();
+	controller.abort();
+	await listenerClosed;
+	expect(closes).toBe(1);
+	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
+});
+
 describe.skipIf(databases.length === 0)(
 	"BETA-07 no-affinity PostgreSQL carrier",
 	() => {
+		postgresTest(
+			"delivers a committed arbitrary-writer change through LISTEN before fallback",
+			async () => {
+				const postgres = runtimePostgres();
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before notification";
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => ({
+						result: { nodes: [{ body }] },
+						observedPlan,
+					}),
+				});
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:listener"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:listener", {
+										scopeId: "scope:listener",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before notification" }] },
+					});
+					// Drain attach/open-triggered work before the writer commits. A later
+					// delivery therefore cannot be credited to a queued synthetic scan.
+					await coordinator.durable!.requestScan();
+
+					body = "after notification";
+					const startedAt = performance.now();
+					await databases[2]!.begin(async (writer) => {
+						await writer`
+							insert into questpie_internal.change_ledger
+							(application_name, transaction_id, collection_identity,
+							 change_kind, conservative)
+							values (${applicationName}, pg_catalog.pg_current_xact_id(),
+							        'collection:messages', 'collection', true)
+						`;
+						await writer`select pg_catalog.pg_notify('questpie_change', '')`;
+					});
+					expect(await nextFrameBefore(reader, 3_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after notification" }] },
+					});
+					expect(performance.now() - startedAt).toBeLessThan(10_000);
+					await reader.cancel();
+					await carrier.drain();
+					await coordinator.drain();
+
+					const postDrainAttachment = {
+						scopeId: "scope:after-drain",
+						principal: user,
+						prepare: () => null,
+						publish: () => false,
+						publishFailure: () => false,
+						synchronize() {},
+					} as const;
+					expect(
+						await coordinator.durable!.attach(postDrainAttachment),
+					).toBeFalse();
+					const postDrainInputBytes = canonicalJsonLine(queryInput);
+					expect(
+						await coordinator.durable!.open({
+							scopeId: "scope:after-drain",
+							bindingId: "binding:after-drain",
+							principal: user,
+							authorityPartitionDigest: "b".repeat(64),
+							queryIdentity: "messages.page",
+							queryBytes: canonicalJsonLine({
+								identity: "query:messages.page",
+							}),
+							inputBytes: postDrainInputBytes,
+							inputDigest: sha256Digest(postDrainInputBytes),
+							contextInputBytes: canonicalJsonLine(context),
+							resumeRequested: false,
+							requestedResumeToken: null,
+						}),
+					).toBe("unavailable");
+					await expect(coordinator.durable!.requestScan()).rejects.toThrow(
+						"not ready",
+					);
+					const [postDrainRows] = await databases[0]!<{ count: number }[]>`
+						select count(*)::integer as count
+						from questpie_internal.realtime_scope_attachments
+						where application_name = ${applicationName}
+						  and scope_identity = 'scope:after-drain'
+					`;
+					expect(postDrainRows?.count).toBe(0);
+				} finally {
+					await carrier.drain();
+					await coordinator.drain();
+					await postgres.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
 		postgresTest(
 			"attaches on A, opens on B, frames from A, acknowledges on C, and closes on B",
 			async () => {

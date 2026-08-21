@@ -4,7 +4,7 @@ import { isPostgresTransactionId } from "../operation";
 import {
 	definePostgresStatement,
 	QuestpiePostgresError,
-	type PostgresDatabase,
+	type PostgresTransactionRunner,
 } from "../postgres";
 import type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 
@@ -56,7 +56,7 @@ type PostgresChangeReconciliationCommon = Readonly<{
 
 type PostgresChangeReconciliationInput =
 	| (PostgresChangeReconciliationCommon &
-			Readonly<{ database: PostgresDatabase; sql?: never }>)
+			Readonly<{ database: PostgresTransactionRunner; sql?: never }>)
 	| (PostgresChangeReconciliationCommon &
 			Readonly<{ database?: never; sql: SQL }>);
 type ConsumerIdentity = Readonly<{ application: string; consumer: string }>;
@@ -286,7 +286,7 @@ WHERE application_name = $1 AND consumer_id = $2`,
 
 async function reconcilePostgresDatabaseChangeLedgerAttempt(
 	input: PostgresChangeReconciliationCommon &
-		Readonly<{ database: PostgresDatabase }>,
+		Readonly<{ database: PostgresTransactionRunner }>,
 ): Promise<ChangeReconciliationResultV1> {
 	const application = text(input.application, "Change Ledger application");
 	const consumer = text(input.consumer, "Change Ledger consumer");

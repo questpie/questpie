@@ -1,4 +1,4 @@
-import type { PostgresDatabase } from "../postgres";
+import type { PostgresTransactionRunner } from "../postgres";
 import type { PostgresRealtimeGenerationStore } from "./postgres-realtime-generations";
 import {
 	scopeLockIdentity,
@@ -45,7 +45,7 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 export function createPostgresRealtimeScopeDatabaseStore(
 	input: Readonly<{
-		database: PostgresDatabase;
+		database: PostgresTransactionRunner;
 		generations: PostgresRealtimeGenerationStore;
 	}>,
 ): PostgresRealtimeScopeStore {

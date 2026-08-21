@@ -1,4 +1,7 @@
-import { definePostgresStatement, type PostgresDatabase } from "../postgres";
+import {
+	definePostgresStatement,
+	type PostgresTransactionRunner,
+} from "../postgres";
 import type {
 	RetainedLiveQueryBinding,
 	RetainedLiveQueryCompleteResult,
@@ -274,7 +277,7 @@ SELECT count(*)::integer FROM deleted`,
 });
 
 export async function acknowledgePostgresRetainedResult(
-	database: PostgresDatabase,
+	database: PostgresTransactionRunner,
 	result: RetainedLiveQueryCompleteResult,
 	tokenDigest: string,
 ): Promise<void> {
@@ -298,7 +301,7 @@ export async function acknowledgePostgresRetainedResult(
 }
 
 export function readPostgresRetainedResult(
-	database: PostgresDatabase,
+	database: PostgresTransactionRunner,
 	binding: RetainedLiveQueryLookupBinding,
 	tokenDigest: string,
 ): Promise<PostgresRetainedResultRow | undefined> {
@@ -310,7 +313,7 @@ export function readPostgresRetainedResult(
 }
 
 export function prunePostgresLiveQueryRetention(
-	database: PostgresDatabase,
+	database: PostgresTransactionRunner,
 	applicationName: string,
 ): Promise<Readonly<{ retainedResults: number; ledgerFacts: number }>> {
 	return database.transaction({

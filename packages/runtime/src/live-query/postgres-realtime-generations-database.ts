@@ -1,5 +1,5 @@
 import { sha256Digest } from "../canonical-json";
-import type { PostgresDatabase } from "../postgres";
+import type { PostgresTransactionRunner } from "../postgres";
 import {
 	clearLatestGeneration,
 	clearPriorAcknowledgement,
@@ -29,7 +29,7 @@ const readWrite = Object.freeze({
 });
 
 export function createPostgresRealtimeGenerationDatabaseStore(
-	database: PostgresDatabase,
+	database: PostgresTransactionRunner,
 ): PostgresRealtimeGenerationStore {
 	return Object.freeze({
 		async stageGeneration(staged) {

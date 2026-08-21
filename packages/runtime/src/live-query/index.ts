@@ -10,6 +10,7 @@ export type {
 export { reconcilePostgresChangeLedger } from "./postgres";
 export type { ChangeLedgerFactV1 } from "./postgres";
 export { createPostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
+export type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 export {
 	createPostgresRealtimeScopeStore,
 	type PostgresRealtimeScopeLease,

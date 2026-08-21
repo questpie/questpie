@@ -1,6 +1,6 @@
 import type { SQL } from "bun";
 
-import type { PostgresDatabase } from "../postgres";
+import type { PostgresTransactionRunner } from "../postgres";
 import { createPostgresRealtimeGenerationStore } from "./postgres-realtime-generations";
 import { createPostgresRealtimeGenerationDatabaseStore } from "./postgres-realtime-generations-database";
 import {
@@ -30,7 +30,7 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 
 export function createPostgresRealtimeScopeStore(
 	input:
-		| Readonly<{ database: PostgresDatabase; sql?: never }>
+		| Readonly<{ database: PostgresTransactionRunner; sql?: never }>
 		| Readonly<{ database?: never; sql: SQL }>,
 ): PostgresRealtimeScopeStore {
 	if (input.database) {

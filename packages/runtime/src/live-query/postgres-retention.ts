@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SQL } from "bun";
 
 import { canonicalJsonLine, sha256Digest } from "../canonical-json";
-import type { PostgresDatabase } from "../postgres";
+import type { PostgresTransactionRunner } from "../postgres";
 import {
 	acknowledgePostgresRetainedResult,
 	prunePostgresLiveQueryRetention,
@@ -65,7 +65,7 @@ type PostgresLiveQueryPruneResult = Readonly<{
 
 type PostgresLiveQueryRetentionInput =
 	| Readonly<{
-			database: PostgresDatabase;
+			database: PostgresTransactionRunner;
 			sql?: never;
 			hmacKey: Uint8Array;
 	  }>

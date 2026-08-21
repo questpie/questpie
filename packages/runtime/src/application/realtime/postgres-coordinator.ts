@@ -1,20 +1,15 @@
-import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
 import { canonicalJsonLine, sha256Digest } from "../../canonical-json";
 import {
 	createPostgresLiveQueryInvalidationEffect,
-	createPostgresLiveQueryRetention,
-	createPostgresRealtimeScopeStore,
-	createPostgresReconciliationWake,
 	decodeObservedLiveQueryPlan,
-	reconcilePostgresChangeLedger,
 	type LinkedLiveQueryProgramV1,
 	type PostgresRealtimeWatch,
 	type PostgresRealtimeScopeLease,
-	type PostgresWakeTickSource,
 	type RetainedLiveQueryCompleteResult,
 } from "../../live-query";
+import { type PostgresTransactionRunner } from "../../postgres";
 import {
 	LiveQueryEvaluationFailure,
 	type LiveQueryCoordinator,
@@ -24,6 +19,10 @@ import type {
 	DurableRealtimeCoordinator,
 	DurableRealtimeOpen,
 } from "./durable";
+import {
+	createPostgresCoordinatorRuntime,
+	type PostgresCoordinatorRuntimeSelection,
+} from "./postgres-coordinator-runtime";
 
 type ScopeAuthority = Readonly<{
 	applicationName: string;
@@ -51,6 +50,18 @@ type Holder = Readonly<{
 	denied: Map<string, bigint>;
 	lease: PostgresRealtimeScopeLease;
 }>;
+
+type CoordinatorCommonInput = Readonly<{
+	program: LinkedLiveQueryProgramV1;
+	hmacKey: Uint8Array;
+	applicationName: string;
+	deploymentDigest: string;
+	wireVersion: number;
+	signal?: AbortSignal;
+}>;
+
+type PostgresDurableLiveQueryCoordinatorInput = CoordinatorCommonInput &
+	PostgresCoordinatorRuntimeSelection;
 
 function scopeAuthority(
 	applicationName: string,
@@ -101,40 +112,36 @@ function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
 }
 
 export function createPostgresDurableLiveQueryCoordinator(
-	input: Readonly<{
-		program: LinkedLiveQueryProgramV1;
-		sql: SQL;
-		hmacKey: Uint8Array;
-		applicationName: string;
-		deploymentDigest: string;
-		wireVersion: number;
-		tickSource?: PostgresWakeTickSource;
-		signal?: AbortSignal;
-	}>,
+	input: PostgresDurableLiveQueryCoordinatorInput,
 ): LiveQueryCoordinator {
-	const store = createPostgresRealtimeScopeStore({ sql: input.sql });
-	const retention = createPostgresLiveQueryRetention({
-		sql: input.sql,
-		hmacKey: input.hmacKey,
-	});
 	const effect = createPostgresLiveQueryInvalidationEffect({
 		deploymentDigest: input.deploymentDigest,
 		fanoutPerBatch: input.program.limits.fanoutPerBatch,
 	});
+	const runtime = createPostgresCoordinatorRuntime({
+		...input,
+		effect,
+	});
+	const steady = runtime.steady;
 	const attachments = new Map<string, Holder>();
 	const leases = new WeakMap<
 		DurableRealtimeAttachment,
 		PostgresRealtimeScopeLease
 	>();
-	let state: "idle" | "ready" | "draining" | "drained" = "idle";
+	let state: "idle" | "starting" | "ready" | "draining" | "drained" = "idle";
+	let startPromise: Promise<void> | undefined;
+	let drainPromise: Promise<void> | undefined;
 
 	const processWatch = async (
+		store: typeof steady.store,
+		retention: typeof steady.retention,
 		holder: Holder,
 		authority: PostgresRealtimeScopeLease,
 		watch: PostgresRealtimeWatch,
 		signal: AbortSignal,
 	): Promise<void> => {
 		const prepared = await holder.attachment.prepare(watch, signal);
+		signal.throwIfAborted();
 		if (
 			!prepared ||
 			prepared.authorityPartitionDigest !== watch.authorityPartitionDigest
@@ -180,6 +187,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 						evaluated = await prepared.evaluate();
 					} catch (error) {
 						if (error instanceof LiveQueryEvaluationFailure) {
+							signal.throwIfAborted();
 							await holder.attachment.publishFailure(watch, error.code);
 							holder.denied.set(
 								watch.bindingIdentity,
@@ -207,6 +215,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 							resetReason: null,
 						});
 						if (!staged) return;
+						signal.throwIfAborted();
 						const published = await holder.attachment.publish(
 							watch,
 							Object.freeze({
@@ -247,6 +256,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 						resetReason: null,
 					});
 					if (!staged) return;
+					signal.throwIfAborted();
 					const published = await holder.attachment.publish(
 						watch,
 						Object.freeze({
@@ -268,6 +278,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 				evaluated = await prepared.evaluate();
 			} catch (error) {
 				if (error instanceof LiveQueryEvaluationFailure) {
+					signal.throwIfAborted();
 					await holder.attachment.publishFailure(watch, error.code);
 					holder.denied.set(
 						watch.bindingIdentity,
@@ -310,6 +321,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 				resetReason,
 			});
 			if (!staged) return;
+			signal.throwIfAborted();
 			const published = await holder.attachment.publish(
 				watch,
 				Object.freeze({
@@ -340,6 +352,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 			evaluated = await prepared.evaluate();
 		} catch (error) {
 			if (error instanceof LiveQueryEvaluationFailure) {
+				signal.throwIfAborted();
 				await holder.attachment.publishFailure(watch, error.code);
 				holder.denied.set(watch.bindingIdentity, watch.invalidationGeneration);
 			}
@@ -367,6 +380,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 				bytesDigest: sha256Digest(latest.dependencyPlanBytes),
 				queryIdentity: watch.queryIdentity,
 			});
+			signal.throwIfAborted();
 			const published = await holder.attachment.publish(
 				watch,
 				Object.freeze({
@@ -392,15 +406,13 @@ export function createPostgresDurableLiveQueryCoordinator(
 		holder.withheld.set(watch.bindingIdentity, latest.tokenDigest);
 	};
 
-	const reconcile = async (signal: AbortSignal): Promise<void> => {
-		await reconcilePostgresChangeLedger({
-			sql: input.sql,
-			application: input.applicationName,
-			consumer: effect.consumer,
-			apply() {},
-			effect,
-			signal,
-		});
+	const reconcile = async (
+		database: PostgresTransactionRunner | undefined,
+		signal: AbortSignal,
+	): Promise<void> => {
+		const { store, retention } = runtime.persistence(database);
+		await runtime.reconcileLedger(database, signal);
+		signal.throwIfAborted();
 		let batch: Array<
 			readonly [
 				holder: Holder,
@@ -414,7 +426,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 			batch = [];
 			const settled = await Promise.allSettled(
 				current.map(([holder, authority, watch]) =>
-					processWatch(holder, authority, watch, signal),
+					processWatch(store, retention, holder, authority, watch, signal),
 				),
 			);
 			const failed = settled.find(
@@ -438,6 +450,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 					continue;
 				}
 				const watches = await store.scanOpenWatches(authority);
+				signal.throwIfAborted();
 				const open = new Set(watches.map((watch) => watch.bindingIdentity));
 				holder.attachment.synchronize(open);
 				for (const bindingIdentity of holder.framed.keys())
@@ -466,15 +479,20 @@ export function createPostgresDurableLiveQueryCoordinator(
 			}
 		}
 		if (maintenanceFailure !== undefined) throw maintenanceFailure;
+		signal.throwIfAborted();
 	};
-	const wake = createPostgresReconciliationWake({
-		reconcile,
-		tickSource: input.tickSource,
-		signal: input.signal,
-	});
+	runtime.bindReconciliation(reconcile);
+	const store = steady.store;
+	const retention = steady.retention;
+	const requestReconcile = (): Promise<void> => {
+		if (runtime.databaseMode && state !== "ready")
+			return Promise.reject(new Error("Live Query coordinator is not ready"));
+		return runtime.requestScan();
+	};
 
 	const durable: DurableRealtimeCoordinator = Object.freeze({
 		async attach(attachment: DurableRealtimeAttachment) {
+			if (runtime.databaseMode && state !== "ready") return false;
 			const authority = scopeAuthority(
 				input.applicationName,
 				input.deploymentDigest,
@@ -497,7 +515,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 					lease,
 				}),
 			);
-			void wake.requestScan().catch(() => {});
+			void requestReconcile().catch(() => {});
 			return true;
 		},
 		async detach(attachment: DurableRealtimeAttachment) {
@@ -505,9 +523,11 @@ export function createPostgresDurableLiveQueryCoordinator(
 			if (holder?.attachment === attachment)
 				attachments.delete(attachment.scopeId);
 			const lease = leases.get(attachment);
-			if (lease) await store.withdrawScope(lease);
+			if (lease && (!runtime.databaseMode || state !== "drained"))
+				await store.withdrawScope(lease);
 		},
 		async open(opened: DurableRealtimeOpen) {
+			if (runtime.databaseMode && state !== "ready") return "unavailable";
 			const result = await store.openWatch({
 				...scopeAuthority(
 					input.applicationName,
@@ -525,7 +545,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 				resumeRequested: opened.resumeRequested,
 				requestedResumeToken: opened.requestedResumeToken,
 			});
-			void wake.requestScan().catch(() => {});
+			void requestReconcile().catch(() => {});
 			return result.status;
 		},
 		async acknowledge(
@@ -534,6 +554,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 			principal: Principal,
 			resumeToken: string,
 		) {
+			if (runtime.databaseMode && state !== "ready") return false;
 			const authority = scopeAuthority(
 				input.applicationName,
 				input.deploymentDigest,
@@ -566,6 +587,8 @@ export function createPostgresDurableLiveQueryCoordinator(
 			});
 		},
 		close(scopeId: string, bindingId: string, principal: Principal) {
+			if (runtime.databaseMode && state !== "ready" && state !== "draining")
+				return Promise.resolve(false);
 			return store.closeWatch({
 				...scopeAuthority(input.applicationName, input.deploymentDigest, {
 					scopeId,
@@ -574,27 +597,51 @@ export function createPostgresDurableLiveQueryCoordinator(
 				bindingIdentity: bindingId,
 			});
 		},
-		requestScan: () => wake.requestScan(),
+		requestScan: requestReconcile,
 	});
 
-	return Object.freeze({
-		durable,
-		async start() {
-			if (state !== "idle")
-				throw new Error("Live Query coordinator already started");
-			await wake.start();
+	const start = async (): Promise<void> => {
+		if (state !== "idle")
+			throw new Error("Live Query coordinator already started");
+		state = "starting";
+		startPromise = runtime.start();
+		try {
+			await startPromise;
+			if (state !== "starting")
+				throw new Error("Live Query coordinator stopped during startup");
 			state = "ready";
-		},
-		async drain() {
+		} catch (error) {
+			if (state === "starting") state = "idle";
+			throw error;
+		} finally {
+			startPromise = undefined;
+		}
+	};
+	const drain = (): Promise<void> => {
+		if (drainPromise) return drainPromise;
+		drainPromise = (async () => {
 			if (state === "drained") return;
 			state = "draining";
+			await startPromise?.catch(() => {});
+			await runtime.drain();
 			const withdrawals = [...attachments.values()].map((holder) =>
 				store.withdrawScope(holder.lease),
 			);
 			attachments.clear();
 			await Promise.allSettled(withdrawals);
-			await wake.drain();
 			state = "drained";
-		},
+		})();
+		return drainPromise;
+	};
+	if (input.signal?.aborted) void drain().catch(() => {});
+	else if (input.signal)
+		input.signal.addEventListener("abort", () => void drain().catch(() => {}), {
+			once: true,
+		});
+
+	return Object.freeze({
+		durable,
+		start,
+		drain,
 	});
 }

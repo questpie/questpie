@@ -163,6 +163,8 @@ export interface PostgresDatabase {
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
 
+export type PostgresTransactionRunner = Pick<PostgresDatabase, "transaction">;
+
 export interface MigrationPostgresSession {
 	transaction<Value>(
 		input: Readonly<{
