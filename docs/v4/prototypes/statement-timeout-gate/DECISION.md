@@ -421,6 +421,40 @@ for the same reason: a statement timeout alone converts an unbounded lock wait
 into a slower unbounded wait, and a lock timeout alone still leaves the holder
 running forever.
 
+**Half of that sentence is wrong, measured.** One session held a row
+`FOR UPDATE` for three seconds while another attempted the same lock, on
+PostgreSQL 17:
+
+| waiter's settings                                          | waited   | outcome                                              |
+| ---------------------------------------------------------- | -------- | ---------------------------------------------------- |
+| none                                                       | 2,706 ms | acquired the lock after the holder finished          |
+| `lock_timeout=150ms`                                       | 152 ms   | `55P03` canceling statement due to lock timeout      |
+| `statement_timeout=150ms` only                             | 152 ms   | `57014` canceling statement due to statement timeout |
+| `lock_timeout=150ms`, `statement_timeout=2000ms`           | 152 ms   | `55P03` lock timeout                                 |
+| inverted: `lock_timeout=2000ms`, `statement_timeout=150ms` | 152 ms   | `57014` statement timeout                            |
+
+A lock wait happens _inside_ statement execution, so `statement_timeout` bounds
+it too. A statement timeout alone does not leave "a slower unbounded wait" — it
+ends the wait at the statement bound. **Either GUC alone bounds the waiter.**
+The second half of the sentence stands untouched: neither bounds the _holder_,
+which ran its full three seconds in every trial.
+
+**So the ordering rule is right for a reason this record did not give.**
+`lockTimeoutMs < statementTimeoutMs` does not buy boundedness, which either
+setting supplies. It buys **attribution**: with the lock bound lower the failure
+arrives as `55P03`, naming contention; inverted, the identical wait arrives as
+`57014`, naming only slowness. For the surface this section is about — a
+maintenance command blocked behind another maintenance command — that is the
+difference between an operator diagnosing contention and an operator retrying a
+"slow" query against a run that is still locked. Keeping the rule, replacing its
+justification.
+
+**Evidence-plan item 5 is satisfied by the second row.** It asked for two
+concurrent commands on one run with the loser failing on `lock_timeout` rather
+than waiting; the loser fails at 152 ms with `55P03`. What remains unproven
+there is the shipped shape rather than the mechanism: this used a scratch table
+and `SET`, not `readRun` under `configurePostgresTimeouts`.
+
 The durable claim path is unaffected because it uses `FOR UPDATE SKIP LOCKED`
 (`postgres-kernel.ts:421`), which never waits. **That mitigation was measured
 too, rather than assumed, because it is what scopes the finding.** With one row
