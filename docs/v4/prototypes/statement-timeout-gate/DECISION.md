@@ -986,6 +986,31 @@ the gate alone would otherwise not learn that its mechanism has one surface it
 degrades. The remedy is a `LIMIT` or a cursor on `audit`, owned there, not a
 different timeout here.
 
+**Every surface the bound degrades, in one place.** The paragraphs above were
+added one finding at a time; the sweeps behind them are now complete across all
+three statement kinds, so the list is closed rather than open-ended.
+
+| surface                                                  | kind   | what a bound does                         |
+| -------------------------------------------------------- | ------ | ----------------------------------------- |
+| `audit(runId)` — `postgres-maintenance.ts:537`           | read   | fails on the run with the longest history |
+| change-ledger fact read — `live-query/postgres.ts:198`   | read   | **compounds** — horizon never advances    |
+| retention prune ×2 — `postgres-retention.ts:434`, `:447` | delete | **compounds** — backlog stays and grows   |
+| `openWatch` cleanup — `postgres-realtime-scope.ts:148`   | delete | **compounds**, inside a user request      |
+| `acknowledge` cleanup — `postgres-retention.ts:325`      | delete | **compounds**, inside a user request      |
+
+Six statements. Four compound, meaning the bound makes the work it killed larger
+next time; two of those four sit on a request path rather than a background
+sweep. Everything else the runtime issues against `questpie_internal` — the other
+five `DELETE`s, all thirty-two `UPDATE`s, the other nineteen `SELECT`s — is
+bounded by a row key or a `LIMIT`. Two of the twenty-one `SELECT`s are unbounded,
+not one: `audit` sits inside that count and the classifier passed it, which is
+the blind spot recorded above.
+
+**None of these are fixed by choosing a different number**, which is the point of
+listing them together. Each wants a row bound, and each row bound is owned
+somewhere other than this gate. What this record can do is name them so the
+choice is made with them in view rather than discovered afterwards.
+
 This is why the gate cannot be justified by reasoning alone. It needs the
 distribution.
 
