@@ -184,6 +184,19 @@ and the attempted scope leaves zero durable rows (`:442`-`:484`). This proves
 the normal-path arbitrary-writer LISTEN wake and the coordinator lifecycle; it
 does not close the whole hostile PB-04 question.
 
+`040e4bf6` closes notification loss across a real coordinator listener
+disconnect and reconnect. The test gives that Runtime a dedicated PostgreSQL
+role, opens the real carrier and binding, and drains the initial work
+(`tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:531`-`:595`).
+It then changes the role to `NOLOGIN` before terminating the listener, commits
+the Change Ledger fact while reconnect is impossible, and restores `LOGIN` only
+after the writer transaction has returned (`:597`-`:621`). No `NOTIFY` is
+issued. The carrier receives the changed payload before the ten-second fallback
+and the listener reports generation two with exactly one reconnect
+(`:623`-`:642`). The PostgreSQL 17 lane at this head passes **7/7 with 105
+assertions**. This is the actual RuntimePostgres coordinator, Change Ledger,
+and carrier path, not PB-03's generic frontier substitute.
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -191,19 +204,18 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `1ddfb42b`
+### Remaining PB-04 hostile closure matrix after `040e4bf6`
 
-| Missing hostile case                          | Exact falsifying witness required                                                                                                                                                                                                             |
-| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Notification loss across disconnect/reconnect | Hold a Change Ledger writer transaction, sever the real coordinator listener before commit, emit no `NOTIFY`, and prove reconnect reconciliation delivers the committed change before the ten-second fallback.                                |
-| Duplicate and coalesced notifications         | Drive repeated and coalesced `NOTIFY` wakes around committed facts and prove monotonic frontier consumption with no duplicate generation or frame.                                                                                            |
-| Healthy-listener periodic fallback            | Commit a fact without `NOTIFY` while the listener stays healthy and prove the configured periodic reconciliation eventually delivers it exactly once.                                                                                         |
-| Process replacement/startup recovery          | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
-| Transaction rollback                          | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
-| Runtime generation rotation                   | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
-| Drain during in-flight reconciliation         | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
-| Coordinator-owned reconciliation failure      | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
-| Single fallback owner                         | Instrument database mode and prove it constructs no synthetic reconciliation timer in addition to the listener's fallback interval.                                                                                                           |
+| Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Duplicate and coalesced notifications    | Drive repeated and coalesced `NOTIFY` wakes around committed facts and prove monotonic frontier consumption with no duplicate generation or frame.                                                                                            |
+| Healthy-listener periodic fallback       | Commit a fact without `NOTIFY` while the listener stays healthy and prove the configured periodic reconciliation eventually delivers it exactly once.                                                                                         |
+| Process replacement/startup recovery     | Leave an unprocessed committed fact, discard the first coordinator without a graceful withdrawal, start an independent coordinator, and prove startup reconciliation catches up before healthy disclosure.                                    |
+| Transaction rollback                     | Insert a fact and issue `pg_notify` inside a transaction that rolls back; prove neither durable fact nor delivery survives.                                                                                                                   |
+| Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
+| Drain during in-flight reconciliation    | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
+| Coordinator-owned reconciliation failure | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
+| Single fallback owner                    | Instrument database mode and prove it constructs no synthetic reconciliation timer in addition to the listener's fallback interval.                                                                                                           |
 
 PB-03's generic listener tests remain prerequisites for several rows, but they
 cannot substitute for these Change Ledger and coordinator-level witnesses. A
