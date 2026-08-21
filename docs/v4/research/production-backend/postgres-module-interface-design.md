@@ -476,10 +476,28 @@ reconciliation is deliberately held open. The queued reconciliation runs before
 the listener is accepted healthy, proving the startup wake is not dropped
 (`tests/integration/postgres/beta12-postgres-module.test.ts:685`-`:731`).
 
-Still open in PB-03: durable ledger convergence across a disconnect, failed
-rotation retaining the old generation, the transaction-PgBouncer boundary,
-additional hostile migration cleanup, and migration of existing Bun SQL callers.
-PB-04 remains blocked.
+`abfaa889` adds the Runtime generation router. Candidate transaction
+verification and candidate `LISTEN` plus startup reconciliation complete before
+the atomic swap; the old generation continues admitting work while verification
+is held. Both an unreachable endpoint and invalid configuration leave generation
+2, its listener, and its cumulative facts authoritative
+(`packages/runtime/src/postgres/runtime.ts:26`-`:201`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:779`-`:877`). The
+stable listener handle follows the winning generation rather than retaining a
+closed Client.
+
+`c2f0ef2d` adds the transaction-PgBouncer lane. Ordinary work through PgBouncer
+1.24.1 transaction mode can publish a wake received immediately by the direct
+listener. The retained negative points the listener itself at transaction mode:
+startup reconciliation succeeds but the subsequent wake is absent, proving why
+the two URLs are not interchangeable
+(`tests/integration/postgres/beta12-postgres-module.test.ts:879`-`:946`). CI
+runs the focused witness on PostgreSQL 17 with the pinned pooler image
+(`.github/workflows/ci.yml:85`-`:133`).
+
+Still open in PB-03: durable ledger convergence across a disconnect, additional
+hostile migration cleanup, and migration of existing Bun SQL callers. PB-04
+remains blocked until the callers move through this seam.
 
 ## Deletion test
 

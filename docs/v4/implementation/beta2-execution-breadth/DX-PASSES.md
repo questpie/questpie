@@ -67,7 +67,7 @@ transient pinned migration runner. The design comparison and deletion test are
 complete; executable PostgreSQL 16/17/18 and transaction-PgBouncer hostile proof
 still blocks production migration and PB-04.
 
-Executable PB-03 now retains nine real-database scenarios against PostgreSQL
+Executable PB-03 now retains ten core real-database scenarios against PostgreSQL
 16, 17, and 18. `59fa031c` proves the static-statement transaction kernel;
 `63924ba7` proves committed LISTEN, notification wake, forced disconnect,
 reconnect, and reconcile-before-healthy; `732b78d8` proves pinned migration
@@ -78,7 +78,10 @@ classification plus fatal-client eviction. These are retained positive and
 hostile controls. `0993433d` adds forced bounded shutdown, `172720bf` proves safe
 failure/facts serialization, and `527be565` proves a wake arriving during
 startup reconciliation is queued before healthy admission. This is not closure:
-disconnect ledger convergence, rotation, PgBouncer, additional hostile
+`abfaa889` adds verify/listen/reconcile-before-swap generation rotation with
+failed-candidate retention, and `c2f0ef2d` adds a focused PostgreSQL 17 plus
+PgBouncer 1.24.1 transaction-mode lane with a direct-listener positive and a
+pooled-listener negative. Disconnect ledger convergence, additional hostile
 migration cleanup, and caller migration remain open.
 
 ## DX-00 — Propose executable fenced-code verification
