@@ -5,7 +5,11 @@
 > of it died with that decision: the audit-feed measurement below is a property
 > of `durable_maintenance_commands`, and `audit()` ships on `app.durable`
 > (`packages/compiler/src/runtime/application.ts:477`). It is carried forward in
-> `docs/v4/prototypes/durable-evidence-gaps/FINDING.md` section 6.
+> `docs/v4/prototypes/durable-evidence-gaps/FINDING.md` section 6, and the
+> worklist index measurement at `:109`–`:113` is cited by
+> `docs/v4/prototypes/statement-timeout-gate/DECISION.md` against its own
+> "cost grows with the table" premise. The index-assertion rule at `:133`–`:136`
+> is not Studio-specific either, and the tree already complies with it.
 
 Decides the purpose question `maintenance-decisions.md` defers to this file.
 Settled by adversarial review: two agents argued opposing framings, each

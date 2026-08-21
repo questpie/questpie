@@ -337,6 +337,28 @@ ships without a transaction the wrap becomes the cheapest way to bound it. A
 deployment target that cannot set a database default would also restore item 3,
 since the baseline is then unavailable.
 
+**"Cost grows with the table" is measured, and it overstates.** BETA-09 measured
+this exact query before the Studio descope and the measurement outlived it:
+`WHERE application_name = $1 AND state = 'failed' ORDER BY available_at, run_id`
+plans as `Index Scan using durable_runs_claim_idx`, returns 64 rows, and runs in
+**0.13 ms against 207,000 runs**
+(`docs/v4/implementation/beta09/studio-purpose.md:109`–`:113`). The index is
+`(application_name, state, available_at, run_id)`, so its leftmost prefix serves
+the predicate and the trailing columns serve the `ORDER BY` — a bounded page
+stops early rather than scanning.
+
+This is the same predicate-versus-result distinction the `audit` correction
+draws elsewhere in this record, applied in the opposite direction. The worklist's
+predicate is not a point lookup, but its result is bounded by the page, so its
+cost tracks the page and the matching state set, not the table. **What would
+still restore item 3 is narrower than "the worklist ships": it is the worklist
+shipping _unbounded_**, with no page limit, so the read returns every failed run.
+The deployment-target half of the condition is unaffected and stands as written.
+
+That measurement sits in a record ADR-0024 removed from the release, which is
+why this gate had not cited it; `studio-purpose.md` now carries a marker saying
+which of its findings outlived the descope.
+
 **The wrap's cost is measured rather than asserted.** 300 iterations after 50
 warm-up rounds, against PostgreSQL 17.10 over TCP to a container on the same
 machine, reading one `durable_runs` row by primary key:
