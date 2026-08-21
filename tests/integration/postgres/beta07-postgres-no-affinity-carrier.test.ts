@@ -40,6 +40,8 @@ const otherUser = principal.user({ id: "user:two" });
 const context = { companyId: "company:one" };
 const changedContext = { companyId: "company:two" };
 const queryInput = { after: null, channelId: "channel:one", first: 20 };
+const reconnectRole = "questpie_pb04_reconnect";
+const reconnectPassword = "questpie-pb04-reconnect";
 
 const projected = projectRealtimeWireContract({
 	application,
@@ -220,18 +222,27 @@ async function captureMessageChange(sql: SQL): Promise<void> {
 	`;
 }
 
-function postgresUrl(): string {
+function postgresUrl(
+	credentials?: Readonly<{ username: string; password: string }>,
+): string {
 	const url = new URL("postgres://localhost/postgres");
 	if (process.env.PGHOST) url.hostname = process.env.PGHOST;
 	if (process.env.PGPORT) url.port = process.env.PGPORT;
-	if (process.env.PGUSER) url.username = process.env.PGUSER;
-	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	if (credentials) {
+		url.username = credentials.username;
+		url.password = credentials.password;
+	} else {
+		if (process.env.PGUSER) url.username = process.env.PGUSER;
+		if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	}
 	if (process.env.PGDATABASE) url.pathname = `/${process.env.PGDATABASE}`;
 	return url.href;
 }
 
-function runtimePostgres() {
-	const connectionUrl = postgresUrl();
+function runtimePostgres(
+	credentials?: Readonly<{ username: string; password: string }>,
+) {
+	const connectionUrl = postgresUrl(credentials);
 	return createRuntimePostgres({
 		connectionUrl,
 		directConnectionUrl: connectionUrl,
@@ -248,6 +259,20 @@ function runtimePostgres() {
 			idleInTransactionMs: 10_000,
 		},
 	});
+}
+
+async function dropReconnectRole(sql: SQL): Promise<void> {
+	await sql`
+		select coalesce(
+			pg_catalog.bool_or(pg_catalog.pg_terminate_backend(pid)),
+			false
+		)
+		from pg_catalog.pg_stat_activity
+		where usename = ${reconnectRole}
+		  and pid <> pg_catalog.pg_backend_pid()
+	`;
+	await sql.unsafe("DROP OWNED BY questpie_pb04_reconnect").catch(() => {});
+	await sql.unsafe("DROP ROLE IF EXISTS questpie_pb04_reconnect");
 }
 
 async function nextFrameBefore(
@@ -267,6 +292,18 @@ async function nextFrameBefore(
 		]);
 	} finally {
 		if (timer) clearTimeout(timer);
+	}
+}
+
+async function waitUntil(
+	condition: () => boolean,
+	description: string,
+	deadlineMs = 1_000,
+): Promise<void> {
+	const deadlineAt = Date.now() + deadlineMs;
+	while (!condition()) {
+		if (Date.now() >= deadlineAt) throw new Error(description);
+		await new Promise((resolve) => setTimeout(resolve, 5));
 	}
 }
 
@@ -486,6 +523,138 @@ describe.skipIf(databases.length === 0)(
 					await carrier.drain();
 					await coordinator.drain();
 					await postgres.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
+			"reconciles a committed Change Ledger fact after the listener loses its wake",
+			async () => {
+				await dropReconnectRole(databases[2]!);
+				await databases[2]!.unsafe(
+					`CREATE ROLE ${reconnectRole} LOGIN PASSWORD '${reconnectPassword}'`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT USAGE ON SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				await databases[2]!.unsafe(
+					`GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA questpie_internal TO ${reconnectRole}`,
+				);
+				const postgres = runtimePostgres({
+					username: reconnectRole,
+					password: reconnectPassword,
+				});
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before disconnect";
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => ({
+						result: { nodes: [{ body }] },
+						observedPlan,
+					}),
+				});
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:lost-wake"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:lost-wake", {
+										scopeId: "scope:lost-wake",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before disconnect" }] },
+					});
+					await coordinator.durable!.requestScan();
+
+					body = "after lost wake";
+					const startedAt = performance.now();
+					await databases[2]!.unsafe(`ALTER ROLE ${reconnectRole} NOLOGIN`);
+					await databases[2]!.begin(async (writer) => {
+						const [terminated] = await writer<{ terminated: boolean }[]>`
+							select coalesce(
+								pg_catalog.bool_or(pg_catalog.pg_terminate_backend(pid)),
+								false
+							) as terminated
+							from pg_catalog.pg_stat_activity
+							where application_name = 'questpie-realtime-listener'
+							  and usename = ${reconnectRole}
+							  and datname = pg_catalog.current_database()
+							  and pid <> pg_catalog.pg_backend_pid()
+						`;
+						expect(terminated?.terminated).toBeTrue();
+						await writer`
+							insert into questpie_internal.change_ledger
+							(application_name, transaction_id, collection_identity,
+							 change_kind, conservative)
+							values (${applicationName}, pg_catalog.pg_current_xact_id(),
+							        'collection:messages', 'collection', true)
+						`;
+					});
+					await databases[2]!.unsafe(`ALTER ROLE ${reconnectRole} LOGIN`);
+
+					// There is deliberately no NOTIFY and the fallback interval is 10 s.
+					// Delivery inside this deadline therefore comes from the real listener's
+					// reconnect reconciliation through the coordinator Change Ledger path.
+					expect(await nextFrameBefore(reader, 3_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after lost wake" }] },
+					});
+					expect(performance.now() - startedAt).toBeLessThan(10_000);
+					await waitUntil(
+						() =>
+							postgres.facts().listener !== "disabled" &&
+							postgres.facts().listener.state === "healthy",
+						"listener did not become healthy after reconnect reconciliation",
+					);
+					expect(postgres.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 2,
+						reconnects: 1,
+					});
+					await reader.cancel();
+				} finally {
+					await databases[2]!
+						.unsafe(`ALTER ROLE ${reconnectRole} LOGIN`)
+						.catch(() => {});
+					try {
+						await carrier.drain();
+						await coordinator.drain();
+						await postgres.close({ deadlineAt: Date.now() + 2_000 });
+					} finally {
+						await postgres
+							.close({ deadlineAt: Date.now() + 2_000 })
+							.catch(() => {});
+						await dropReconnectRole(databases[2]!);
+					}
 				}
 			},
 			20_000,
