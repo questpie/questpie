@@ -10,6 +10,11 @@ export type { LinkedReactionProjection } from "../durable";
 export { createPostgresMutationInvoker } from "./postgres";
 export { linkCollectionMutationPrograms } from "./program";
 export { linkPostgresCollectionOperationPlans } from "./postgres-program";
+export { linkPostgresMutationTransactionStatements } from "./postgres-transaction-statements";
+export type {
+	LinkedPostgresMutationTransactionStatement,
+	LinkedPostgresMutationTransactionStatements,
+} from "./postgres-transaction-statements";
 export type {
 	CollectionOperationProgramV1,
 	FieldNormalizerProgramV1,

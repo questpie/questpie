@@ -61,6 +61,7 @@ function applicationEntry(
 		queryProjection: unknown;
 		schemaProjection: unknown;
 		contextBootstrapPlansDigest: string;
+		mutationTransactionStatementsDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;
@@ -201,6 +202,7 @@ ${structuralImports.join("\n")}
 
 const schemaProjection = ${JSON.stringify(input.schemaProjection)};
 const expectedContextBootstrapPlansDigest = ${JSON.stringify(input.contextBootstrapPlansDigest)};
+const expectedMutationTransactionStatementsDigest = ${JSON.stringify(input.mutationTransactionStatementsDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
 const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
@@ -290,11 +292,14 @@ export async function createApplication(input) {
 		durablePrincipal,
 		executePostgresQuery,
 		linkPostgresContextBootstrapPlans,
+		linkPostgresMutationTransactionStatements,
 		linkPostgresQueryPlans,
 	} = runtimeModule;
 	const loaded = await loadRuntimeArtifacts();
 	if (loaded.artifacts.runtimeBuild.postgresContextBootstrapPlansDigest !== expectedContextBootstrapPlansDigest)
 		throw new TypeError("generated ContextBootstrap plans do not match Runtime Build");
+	if (loaded.artifacts.runtimeBuild.postgresMutationTransactionStatementsDigest !== expectedMutationTransactionStatementsDigest)
+		throw new TypeError("generated Mutation transaction statements do not match Runtime Build");
 	const sql = new SQL(input.postgres.connectionUrl);
 	const postgresController = new AbortController();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
@@ -337,12 +342,19 @@ export async function createApplication(input) {
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {
+				const mutationTransactionStatements = linkPostgresMutationTransactionStatements({
+					artifact: loaded.artifactFiles["postgres-mutation-transaction-statements.json"],
+					expectedDigest: expectedMutationTransactionStatementsDigest,
+				});
 				linkPostgresContextBootstrapPlans({
 					artifact: loaded.artifactFiles["postgres-context-bootstrap-plans.json"],
 					schemaProjection,
 					expectedDigest: expectedContextBootstrapPlansDigest,
 				});
-				mutationArtifacts = linkMutationArtifacts(runtimeModule, loaded.artifactFiles);
+				mutationArtifacts = Object.freeze({
+					...linkMutationArtifacts(runtimeModule, loaded.artifactFiles),
+					transactionStatements: mutationTransactionStatements,
+				});
 				const queryPlanBytes = loaded.artifactFiles["postgres-query-plans.json"];
 				if (queryPlanBytes !== undefined)
 					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryDigests);
@@ -530,6 +542,7 @@ export async function renderApplicationBundle(
 		queryProjection: unknown;
 		schemaProjection: unknown;
 		contextBootstrapPlansDigest: string;
+		mutationTransactionStatementsDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;

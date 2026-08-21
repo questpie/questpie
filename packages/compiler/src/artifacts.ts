@@ -24,6 +24,7 @@ import {
 	projectMutationGeneratedContract,
 	projectCollectionOperationResourceMetadata,
 	projectMutations,
+	projectPostgresMutationTransactionStatements,
 } from "./mutation";
 import {
 	lowerPostgresQueryPlans,
@@ -373,6 +374,8 @@ export async function createArtifacts(
 	);
 	const mutations = projectMutations(input.resources);
 	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
+	const mutationTransactionStatements =
+		projectPostgresMutationTransactionStatements();
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
@@ -402,6 +405,9 @@ export async function createArtifacts(
 		"schema-projection.json": canonicalBytes(schema),
 		"postgres-context-bootstrap-plans.json": canonicalBytes(
 			contextBootstrapPlans,
+		),
+		"postgres-mutation-transaction-statements.json": canonicalBytes(
+			mutationTransactionStatements,
 		),
 		"service-projection.json": canonicalBytes(executionComposition.services),
 		"operation-contracts.json": runtimeArtifactBytes(
@@ -505,6 +511,7 @@ export async function createArtifacts(
 			queryProjection: relational.query,
 			schemaProjection: schema,
 			contextBootstrapPlansDigest: contextBootstrapPlans.digest,
+			mutationTransactionStatementsDigest: mutationTransactionStatements.digest,
 			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
 			realtime: realtimeEnabled,
@@ -529,6 +536,8 @@ export async function createArtifacts(
 			},
 			realtimeWireDigest: realtime.digest,
 			postgresContextBootstrapPlansDigest: contextBootstrapPlans.digest,
+			postgresMutationTransactionStatementsDigest:
+				mutationTransactionStatements.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

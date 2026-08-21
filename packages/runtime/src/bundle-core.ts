@@ -13,6 +13,7 @@ export {
 	linkPostgresCollectionOperationPlans,
 	linkReactionProjection,
 } from "./mutation";
+export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-transaction-statements";
 export {
 	createDurableReactionWorker,
 	createPostgresDurableEffectLedger,

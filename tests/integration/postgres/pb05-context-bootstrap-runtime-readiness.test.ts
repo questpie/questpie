@@ -140,9 +140,17 @@ postgresTest(
 				generatedRoot,
 				"postgres-context-bootstrap-plans.json",
 			);
+			const mutationStatementsPath = join(
+				generatedRoot,
+				"postgres-mutation-transaction-statements.json",
+			);
 			const runtimeBuildPath = join(generatedRoot, "runtime-build.json");
 			const checksumsPath = join(generatedRoot, "internal/checksums.json");
 			const plansBytes = await readFile(plansPath, "utf8");
+			const mutationStatementsBytes = await readFile(
+				mutationStatementsPath,
+				"utf8",
+			);
 			const runtimeBuildBytes = await readFile(runtimeBuildPath, "utf8");
 			const checksumsBytes = await readFile(checksumsPath, "utf8");
 			const plans = JSON.parse(plansBytes);
@@ -255,6 +263,111 @@ postgresTest(
 					writeFile(runtimeBuildPath, runtimeBuildBytes),
 					writeFile(checksumsPath, checksumsBytes),
 				]);
+
+				const mutationStatements = JSON.parse(mutationStatementsBytes);
+				const commitIndex = mutationStatements.statements.findIndex(
+					(statement: Readonly<{ identity: string }>) =>
+						statement.identity === "mutation.receipt.commit",
+				);
+				expect(commitIndex).toBeGreaterThanOrEqual(0);
+				const commit = mutationStatements.statements[commitIndex];
+				expect(commit.text).toContain(" AND call_id = $6");
+				const {
+					digest: _mutationStatementsDigest,
+					...unsignedMutationStatements
+				} = mutationStatements;
+				const forgedUnsignedMutationStatements = {
+					...unsignedMutationStatements,
+					statements: mutationStatements.statements.map(
+						(statement: Readonly<Record<string, unknown>>, index: number) =>
+							index === commitIndex
+								? {
+										...statement,
+										text: String(statement.text).replace(
+											" AND call_id = $6",
+											" OR call_id = $6",
+										),
+									}
+								: statement,
+					),
+				};
+				const forgedMutationStatements = {
+					...forgedUnsignedMutationStatements,
+					digest: artifactDigest(
+						"questpie-postgres-mutation-transaction-statements-v1",
+						forgedUnsignedMutationStatements,
+					),
+				};
+				const forgedMutationStatementsBytes = canonicalArtifactBytes(
+					forgedMutationStatements,
+				);
+				const forgedMutationUnsignedRuntimeBuild = {
+					...unsignedRuntimeBuild,
+					postgresMutationTransactionStatementsDigest:
+						forgedMutationStatements.digest,
+					inventory: unsignedRuntimeBuild.inventory.map(
+						(item: Readonly<{ path: string; digest: string }>) =>
+							item.path === "postgres-mutation-transaction-statements.json"
+								? {
+										...item,
+										digest: contentDigest(forgedMutationStatementsBytes),
+									}
+								: item,
+					),
+				};
+				const forgedMutationRuntimeBuild = {
+					...forgedMutationUnsignedRuntimeBuild,
+					digest: artifactDigest(
+						"questpie-runtime-build-v1",
+						forgedMutationUnsignedRuntimeBuild,
+					),
+				};
+				const forgedMutationRuntimeBuildBytes = canonicalArtifactBytes(
+					forgedMutationRuntimeBuild,
+				);
+				const forgedMutationChecksums = JSON.parse(checksumsBytes);
+				forgedMutationChecksums.files = forgedMutationChecksums.files.map(
+					(item: Readonly<{ path: string; digest: string }>) =>
+						item.path === "postgres-mutation-transaction-statements.json"
+							? {
+									...item,
+									digest: contentDigest(forgedMutationStatementsBytes),
+								}
+							: item.path === "runtime-build.json"
+								? {
+										...item,
+										digest: contentDigest(forgedMutationRuntimeBuildBytes),
+									}
+								: item,
+				);
+				await Promise.all([
+					writeFile(mutationStatementsPath, forgedMutationStatementsBytes),
+					writeFile(runtimeBuildPath, forgedMutationRuntimeBuildBytes),
+					writeFile(
+						checksumsPath,
+						canonicalArtifactBytes(forgedMutationChecksums),
+					),
+				]);
+				await expect(
+					createApplication({
+						postgres: {
+							connectionUrl: `postgres://127.0.0.1:${address.port}/questpie`,
+							directConnectionUrl: `postgres://127.0.0.1:${address.port}/questpie`,
+						},
+						realtime: { hmacKey: new Uint8Array(32) },
+						maintenance: { authorize: () => true },
+					}),
+				).rejects.toThrow(
+					"generated Mutation transaction statements do not match Runtime Build",
+				);
+				expect(probe).toEqual({ context: 0, handler: 0 });
+				expect(databaseConnections).toBe(0);
+				await Promise.all([
+					writeFile(mutationStatementsPath, mutationStatementsBytes),
+					writeFile(runtimeBuildPath, runtimeBuildBytes),
+					writeFile(checksumsPath, checksumsBytes),
+				]);
+
 				const forgedRoot = join(
 					temporary,
 					".questpie/forged-context-readiness",

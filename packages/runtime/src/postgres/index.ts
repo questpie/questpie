@@ -5,7 +5,6 @@ import { Client, Pool, type PoolClient } from "pg";
 import { canonicalJsonLine } from "../canonical-json";
 import {
 	QuestpiePostgresError,
-	statementBrand,
 	transactionBrand,
 	type MigrationPostgres,
 	type MigrationPostgresSession,
@@ -67,28 +66,6 @@ function validateConfiguration(input: PostgresDatabaseConfiguration): void {
 	positiveInteger(input.timeouts.statementMs);
 	positiveInteger(input.timeouts.lockMs);
 	positiveInteger(input.timeouts.idleInTransactionMs);
-}
-
-function statementName(value: string): boolean {
-	return /^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(value);
-}
-
-export function definePostgresStatement<Input, Output>(
-	input: Readonly<{
-		name: string;
-		text: string;
-		parameterCount: number;
-		parameters(input: Input): readonly PostgresParameter[];
-		decode: PostgresStatement<Input, Output>["decode"];
-	}>,
-): PostgresStatement<Input, Output> {
-	if (!statementName(input.name))
-		throw new TypeError("invalid PostgreSQL statement name");
-	if (typeof input.text !== "string" || input.text.trim().length === 0)
-		throw new TypeError("invalid PostgreSQL statement text");
-	if (!Number.isSafeInteger(input.parameterCount) || input.parameterCount < 0)
-		throw new TypeError("invalid PostgreSQL statement parameter count");
-	return Object.freeze({ ...input, [statementBrand]: true as const });
 }
 
 function jsonText(value: PostgresJsonValue): string {

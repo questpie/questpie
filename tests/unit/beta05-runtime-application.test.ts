@@ -151,6 +151,18 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 			unsignedContextBootstrapPlans,
 		),
 	};
+	const unsignedMutationTransactionStatements = {
+		format: "questpie.postgres-mutation-transaction-statements",
+		version: 1,
+		statements: [],
+	};
+	const mutationTransactionStatements = {
+		...unsignedMutationTransactionStatements,
+		digest: digest(
+			"questpie-postgres-mutation-transaction-statements-v1",
+			unsignedMutationTransactionStatements,
+		),
+	};
 	const artifactFiles = {
 		"app.ts": "export type App = unknown;\n",
 		"build-input.json": '{"format":"questpie.build-input"}\n',
@@ -162,6 +174,7 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 		"operation-contracts.json": `${JSON.stringify(operationContracts)}\n`,
 		"policy-projection.json": "{}\n",
 		"postgres-context-bootstrap-plans.json": `${JSON.stringify(contextBootstrapPlans)}\n`,
+		"postgres-mutation-transaction-statements.json": `${JSON.stringify(mutationTransactionStatements)}\n`,
 		"postgres-query-plans.json": "{}\n",
 		"query-projection.json": "{}\n",
 		"runtime-executables.json": `${JSON.stringify(runtimeExecutables)}\n`,
@@ -215,6 +228,8 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 			artifactFiles["postgres-query-plans.json"],
 		),
 		postgresContextBootstrapPlansDigest: contextBootstrapPlans.digest,
+		postgresMutationTransactionStatementsDigest:
+			mutationTransactionStatements.digest,
 		committedMigrationsDigest: fileDigest(
 			artifactFiles["committed-migrations.json"],
 		),

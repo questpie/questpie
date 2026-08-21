@@ -61,6 +61,21 @@ export function verifyRuntimeArtifactFiles(
 		) !== build.postgresContextBootstrapPlansDigest
 	)
 		fail("ContextBootstrap plans semantic digest does not match");
+	const rawMutationStatements = record(
+		parseJsonFile("postgres-mutation-transaction-statements.json"),
+		"postgres-mutation-transaction-statements.json",
+	);
+	const { digest: rawMutationStatementsDigest, ...unsignedMutationStatements } =
+		rawMutationStatements;
+	if (
+		rawMutationStatementsDigest !==
+			build.postgresMutationTransactionStatementsDigest ||
+		artifactDigest(
+			"questpie-postgres-mutation-transaction-statements-v1",
+			unsignedMutationStatements,
+		) !== build.postgresMutationTransactionStatementsDigest
+	)
+		fail("Mutation transaction statements semantic digest does not match");
 	if (
 		artifactDigest(
 			"questpie-runtime-executables-v1",

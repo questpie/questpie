@@ -390,6 +390,7 @@ export function projectRuntimeBuild(
 		}>;
 		realtimeWireDigest: string;
 		postgresContextBootstrapPlansDigest: string;
+		postgresMutationTransactionStatementsDigest: string;
 	}>,
 ): Readonly<Record<string, unknown>> {
 	const fileDigest = (path: string): string | null => {
@@ -446,6 +447,8 @@ export function projectRuntimeBuild(
 		postgresQueryPlansDigest: fileDigest("postgres-query-plans.json"),
 		postgresContextBootstrapPlansDigest:
 			input.postgresContextBootstrapPlansDigest,
+		postgresMutationTransactionStatementsDigest:
+			input.postgresMutationTransactionStatementsDigest,
 		committedMigrationsDigest: fileDigest("committed-migrations.json"),
 		migrationHead: input.migrationHead,
 		serverBundleDigest: fileDigest("internal/application.js"),
