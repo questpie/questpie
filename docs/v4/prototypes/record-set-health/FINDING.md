@@ -854,6 +854,16 @@ recommendation. Both were found by sweeping for staleness, and in both cases the
 whether a claim still holds will classify these identically to ordinary rot; the
 difference is only visible on reading what replaced it.
 
+**A third instance since, and it is the sharpest of the three.**
+`tenant-share-control/DECISION.md` §2 argued that BETA-10's queue entry carried
+no fairness obligation, so a planner would find none and the work would go
+unowned and unproven. The queue entry still carries none — re-checked, the red
+test is unchanged — and BETA-10 shipped per-tenant fair admission regardless,
+with both assertions running in CI. Here the record's _observation_ survived
+intact and only its _inference_ failed, which the two earlier instances did not
+separate. A sweep asking "does this claim still hold" would pass the observation
+and never reach the prediction built on it.
+
 **Applied the de-pinning lesson to this file rather than restating it.** Four
 passages here narrated other records' line numbers inside historical accounts —
 which line a stale citation used to occupy, where D3 sat three commits ago. Each
