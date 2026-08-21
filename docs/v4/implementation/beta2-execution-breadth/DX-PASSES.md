@@ -129,6 +129,18 @@ application still constructs Bun `SQL`
 that production projection, its seam-level tamper negative, the rest of Bun
 removal, and the production-wide deletion test.
 
+`7358b1f3` extends that narrow PB-04 crossing through retained Live Query
+results. A private statement module owns the authority lock, bounded retention,
+exact retained-result read, and pruning transactions
+(`packages/runtime/src/live-query/postgres-retention-database.ts:67`-`:330`).
+The retained scenario drives the new `PostgresDatabase` path through unavailable,
+acknowledge, resume, expiry, prune, and forged-result refusal
+(`tests/integration/postgres/beta07-postgres-retention.test.ts:113`-`:214`). This
+is still incremental migration: the coordinator-facing compatibility path keeps
+its Bun transactions in `postgres-retention.ts:339`-`:390`, `:404`-`:420`, and
+`:453` onward. Deleting that path belongs to the remaining PB-04 coordinator
+wiring and PB-05 production-wide Bun removal, not to this tracer.
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from
