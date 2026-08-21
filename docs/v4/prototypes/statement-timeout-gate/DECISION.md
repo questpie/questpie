@@ -169,6 +169,21 @@ The GUC mechanism was checked the same way: inside a transaction,
 `statement_timeout` reads `0` — enforced, and transaction-scoped without
 leaking to the pooled connection.
 
+**The reciprocal was not checked, and it does leak.** With the third argument
+`false` the setting is session-scoped, and Bun does not reset session state when
+a reservation ends: on a `max: 1` pool, `set_config('statement_timeout','30000ms',false)`
+followed by `release()` and a fresh `reserve()` returned the **same backend pid**
+still reading `30s`. Whoever reserves next inherits it. That is why item 1 of the
+decision specifies `true`, and it is a constraint on any future proposal to set
+the GUC once per connection: the framework does not own the pool, so it cannot
+know who reserves next. `configurePostgresTimeouts` uses `false` legitimately —
+it wants the value for a whole apply session — and is safe today only because
+both call sites construct their own pool with `new SQL(...)`
+(`packages/compiler/src/schema/postgres/apply.ts:238`–`:241`,
+`packages/compiler/src/seed/postgres/apply.ts:216`–`:219`) rather than accepting
+a caller's. **Nothing enforces that**, and pointing it at a host-supplied pool
+would leave the host's connections carrying compiler timeouts.
+
 An earlier revision of this record described the gap as a missing timeout. It is
 a missing layer _and_ a missing timeout, and the second half was already built.
 
@@ -547,6 +562,24 @@ distribution.
    The assertion must fail when the database or role default is absent, which is
    the whole point of moving the guarantee out of the serving path — a
    deployment that skips it must not pass silently.
+
+   **Measured: that assertion as written would pass over an unbounded fleet.**
+   A role default is applied at login, so it does not reach a connection that is
+   already open. On PostgreSQL 17 an open connection read `statement_timeout`
+   as `0` before `ALTER ROLE gucprobe SET statement_timeout='150ms'` and **still
+   `0` after it**, while a connection opened afterwards read `150ms`. Pooled
+   connections are long-lived by design, so a deployment that sets the baseline
+   while the runtime is running keeps serving on unbounded connections until the
+   pool cycles — and "connect as the application role and `SHOW`" opens a fresh
+   connection, which is exactly the one case that passes.
+
+   So the assertion proves the default is _configured_, not that the serving
+   connections _carry_ it. It needs a second half that reads the value on a
+   connection the application is already using — `SHOW statement_timeout` issued
+   through the same pool as a real read, or `pg_settings` sampled per backend in
+   `pg_stat_activity` — and a stated ordering requirement that the baseline is
+   set before the fleet starts, not applied to a running one.
+
 5. **Prove the lock bound.** Two concurrent maintenance commands on one run,
    with the loser asserted to fail on `lock_timeout` rather than wait.
 6. **Prove the cancel layer independently of the timeout.** A statement aborted
