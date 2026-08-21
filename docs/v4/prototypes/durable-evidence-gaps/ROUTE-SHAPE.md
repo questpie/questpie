@@ -272,7 +272,8 @@ without answering it.** The decisive-question section above argues ADR-0014
 points away from a route: entry paths "use the same Context, Policy, Operation,
 transaction, error, result, and observation engine"
 (`docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md:38`), and
-then this record's own reading of it at `:52` — that a second route with its own
+then this record's own reading of it, stated under "The decisive question" — that
+a second route with its own
 auth handling is a second engine by another name. That second clause is
 inference, not ADR text. It previously stood in quotation marks immediately
 after the ADR citation and joined to it by "and", where a reader would take it

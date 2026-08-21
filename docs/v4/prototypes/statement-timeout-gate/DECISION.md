@@ -342,7 +342,8 @@ this exact query before the Studio descope and the measurement outlived it:
 `WHERE application_name = $1 AND state = 'failed' ORDER BY available_at, run_id`
 plans as `Index Scan using durable_runs_claim_idx`, returns 64 rows, and runs in
 **0.13 ms against 207,000 runs**
-(`docs/v4/implementation/beta09/studio-purpose.md:109`–`:113`). The index is
+(`docs/v4/implementation/beta09/studio-purpose.md` "The index claim is
+verified, not assumed", `:109`–`:113` today). The index is
 `(application_name, state, available_at, run_id)`, so its leftmost prefix serves
 the predicate and the trailing columns serve the `ORDER BY` — a bounded page
 stops early rather than scanning.
