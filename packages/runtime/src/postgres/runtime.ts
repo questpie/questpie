@@ -66,7 +66,8 @@ export function createRuntimePostgres(
 		database: createPostgresDatabase(configuration),
 	};
 	let listenerInput: ListenerInput | undefined;
-	let listenerFacade: PostgresListener | undefined;
+	let listenerStartup: Promise<PostgresListener> | undefined;
+	let rotation: Promise<void> | undefined;
 	let closing: Promise<void> | undefined;
 	const retired = {
 		checkoutTimeouts: 0,
@@ -94,79 +95,103 @@ export function createRuntimePostgres(
 			...input,
 		});
 
+	const lifecycleFailure = (phase: "connect" | "checkout") =>
+		new QuestpiePostgresError({
+			code:
+				state === "draining" || state === "closed" ? state : "configuration",
+			phase,
+		});
+
 	const runtime: RuntimePostgres = {
 		transaction,
-		async listen(input: ListenerInput) {
-			if (state !== "ready" || listenerInput)
-				throw new QuestpiePostgresError({
-					code:
-						state === "draining" || state === "closed"
-							? state
-							: "configuration",
-					phase: "connect",
-				});
-			const listener = await createListener(
-				current.database,
-				current.configuration.directConnectionUrl,
-				input,
-			);
+		listen(input: ListenerInput) {
+			if (state !== "ready" || listenerInput || listenerStartup || rotation)
+				return Promise.reject(lifecycleFailure("connect"));
 			listenerInput = input;
-			current.listener = listener;
-			listenerFacade = Object.freeze({
-				facts() {
-					return current.listener?.facts() ?? listener.facts();
-				},
-				requestReconcile() {
-					current.listener?.requestReconcile();
-				},
-				async close(closeInput: Readonly<{ deadlineAt: number }>) {
-					listenerInput = undefined;
-					const active = current.listener;
-					current.listener = undefined;
-					await active?.close(closeInput);
-				},
-			});
-			return listenerFacade;
-		},
-		async rotate(input) {
-			if (state !== "ready")
-				throw new QuestpiePostgresError({
-					code: state === "rotating" ? "configuration" : state,
-					phase: "connect",
-				});
-			state = "rotating";
-			let candidate: Generation | undefined;
-			try {
-				candidate = {
-					configuration: input.configuration,
-					database: createPostgresDatabase(input.configuration),
-				};
-				await input.verify(candidate.database);
-				if (listenerInput)
-					candidate.listener = await createListener(
-						candidate.database,
-						input.configuration.directConnectionUrl,
-						listenerInput,
+			let startup!: Promise<PostgresListener>;
+			startup = (async () => {
+				let listener: PostgresListener | undefined;
+				try {
+					listener = await createListener(
+						current.database,
+						current.configuration.directConnectionUrl,
+						input,
 					);
-			} catch (error) {
-				await candidate?.listener?.close({ deadlineAt: input.deadlineAt });
-				await candidate?.database.close({ deadlineAt: input.deadlineAt });
-				state = "ready";
-				throw error;
-			}
+					if (state !== "ready") throw lifecycleFailure("connect");
+					const ownedListener = listener;
+					current.listener = ownedListener;
+					const facade: PostgresListener = Object.freeze({
+						facts() {
+							return current.listener?.facts() ?? ownedListener.facts();
+						},
+						requestReconcile() {
+							current.listener?.requestReconcile();
+						},
+						async close(closeInput: Readonly<{ deadlineAt: number }>) {
+							listenerInput = undefined;
+							const active = current.listener;
+							current.listener = undefined;
+							await active?.close(closeInput);
+						},
+					});
+					return facade;
+				} catch (error) {
+					listenerInput = undefined;
+					await listener?.close({ deadlineAt: Date.now() + 1_000 });
+					throw error;
+				} finally {
+					if (listenerStartup === startup) listenerStartup = undefined;
+				}
+			})();
+			listenerStartup = startup;
+			return startup;
+		},
+		rotate(input) {
+			if (state !== "ready" || listenerStartup || rotation)
+				return Promise.reject(lifecycleFailure("connect"));
+			state = "rotating";
+			let operation!: Promise<void>;
+			operation = (async () => {
+				let candidate: Generation | undefined;
+				try {
+					candidate = {
+						configuration: input.configuration,
+						database: createPostgresDatabase(input.configuration),
+					};
+					await input.verify(candidate.database);
+					if (state !== "rotating") throw lifecycleFailure("connect");
+					if (listenerInput)
+						candidate.listener = await createListener(
+							candidate.database,
+							input.configuration.directConnectionUrl,
+							listenerInput,
+						);
+					if (state !== "rotating") throw lifecycleFailure("connect");
+				} catch (error) {
+					await candidate?.listener?.close({ deadlineAt: input.deadlineAt });
+					await candidate?.database.close({ deadlineAt: input.deadlineAt });
+					if (state === "rotating") state = "ready";
+					throw error;
+				}
 
-			const previous = current;
-			const previousCounters = previous.database.facts().counters;
-			retired.checkoutTimeouts += previousCounters.checkoutTimeouts;
-			retired.statementTimeouts += previousCounters.statementTimeouts;
-			retired.cancellations += previousCounters.cancellations;
-			retired.destroyedConnections += previousCounters.destroyedConnections;
-			current = candidate;
-			generation += 1;
-			rotations += 1;
-			await previous.listener?.close({ deadlineAt: input.deadlineAt });
-			await previous.database.close({ deadlineAt: input.deadlineAt });
-			state = "ready";
+				const previous = current;
+				const previousCounters = previous.database.facts().counters;
+				retired.checkoutTimeouts += previousCounters.checkoutTimeouts;
+				retired.statementTimeouts += previousCounters.statementTimeouts;
+				retired.cancellations += previousCounters.cancellations;
+				retired.destroyedConnections += previousCounters.destroyedConnections;
+				current = candidate;
+				generation += 1;
+				rotations += 1;
+				await previous.listener?.close({ deadlineAt: input.deadlineAt });
+				await previous.database.close({ deadlineAt: input.deadlineAt });
+				if (state !== "rotating") throw lifecycleFailure("connect");
+				state = "ready";
+			})().finally(() => {
+				if (rotation === operation) rotation = undefined;
+			});
+			rotation = operation;
+			return operation;
 		},
 		facts() {
 			const facts = current.database.facts();
@@ -191,6 +216,7 @@ export function createRuntimePostgres(
 			if (closing) return closing;
 			state = "draining";
 			closing = (async () => {
+				await Promise.allSettled([rotation, listenerStartup]);
 				await current.listener?.close(input);
 				await current.database.close(input);
 				state = "closed";

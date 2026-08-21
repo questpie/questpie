@@ -933,6 +933,89 @@ postgresTest(
 	},
 );
 
+postgresTest(
+	"cannot resurrect a closed Runtime from an in-flight rotation",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		let verificationEntered: (() => void) | undefined;
+		let releaseVerification: (() => void) | undefined;
+		const verifying = new Promise<void>((resolve) => {
+			verificationEntered = resolve;
+		});
+		const verificationHeld = new Promise<void>((resolve) => {
+			releaseVerification = resolve;
+		});
+		const rotating = runtime.rotate({
+			configuration: databaseConfiguration(),
+			deadlineAt: Date.now() + 1_000,
+			verify: async () => {
+				verificationEntered?.();
+				await verificationHeld;
+			},
+		});
+		await verifying;
+		const closing = runtime.close({ deadlineAt: Date.now() + 1_000 });
+		expect(runtime.facts()).toMatchObject({ state: "draining", generation: 1 });
+		releaseVerification?.();
+		await expect(rotating).rejects.toMatchObject({
+			code: "draining",
+			phase: "connect",
+		});
+		await closing;
+		expect(runtime.facts()).toMatchObject({ state: "closed", generation: 1 });
+		await expect(
+			runtime.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve(),
+			}),
+		).rejects.toMatchObject({ code: "closed", phase: "checkout" });
+	},
+);
+
+postgresTest(
+	"owns listener startup before await and drains it during close",
+	async () => {
+		const runtime = createRuntimePostgres(databaseConfiguration());
+		let startupEntered: (() => void) | undefined;
+		let releaseStartup: (() => void) | undefined;
+		const starting = new Promise<void>((resolve) => {
+			startupEntered = resolve;
+		});
+		const startupHeld = new Promise<void>((resolve) => {
+			releaseStartup = resolve;
+		});
+		const listenerInput = {
+			channel: definePostgresChannel("qp_pb03_listener_ownership"),
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }: { reason: string }) => {
+				if (reason === "startup") {
+					startupEntered?.();
+					await startupHeld;
+				}
+			},
+		};
+		const first = runtime.listen(listenerInput);
+		await starting;
+		await expect(runtime.listen(listenerInput)).rejects.toMatchObject({
+			code: "configuration",
+			phase: "connect",
+		});
+		const closing = runtime.close({ deadlineAt: Date.now() + 1_000 });
+		expect(runtime.facts()).toMatchObject({ state: "draining" });
+		releaseStartup?.();
+		await expect(first).rejects.toMatchObject({
+			code: "draining",
+			phase: "connect",
+		});
+		await closing;
+		expect(runtime.facts()).toMatchObject({
+			state: "closed",
+			generation: 1,
+			listener: "disabled",
+		});
+	},
+);
+
 pgbouncerTest(
 	"uses transaction pooling only for ordinary work and direct LISTEN for wake",
 	async () => {
