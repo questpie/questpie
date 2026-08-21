@@ -519,3 +519,39 @@ compiler assumes, not about what the kernel declares: the fixture declares
 So the overturn condition is still unmet, and both shipped fixtures carry a
 tenant. Recorded because the test title reads like the opposite, and a future
 reader looking for the single-tenant case would reasonably stop there.
+
+## Three slices later: what "whoever next touches the durable surface" actually closed
+
+This record hands its gaps to no one in particular — "the gaps belong to whoever
+next touches the durable surface." BETA-09, BETA-10 and BETA-11 have all touched
+it since. Checked each gap against `feat/v4` rather than assuming the handoff
+worked or that it didn't.
+
+| gap                                    | status                                                                                                                                                           |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. the effect fence                    | **open** — `DurableLeaseLost` still appears in no test                                                                                                           |
+| 2. the maintenance brand refusal       | **closed** — `beta09-maintenance-compatibility.test.ts:160` asserts `rejectionCode === "AUTHORITY_DENIED"`, `:183` the audit entry                               |
+| 3. the `cancellationRequested` event   | **open** — `beta08-reaction-worker.test.ts:258`–`:263` does assert appended kinds from a real run, and `cancellationRequested` is not among them                 |
+| 4. the retry horizon                   | **open**                                                                                                                                                         |
+| 5. a refused claim re-admitted forever | **half closed** — BETA-10's digest fence removes the source; the `skipped` branch is untouched                                                                   |
+| 6. the maintenance audit row bound     | **open** — measured at 98 ms for 100,000 rows on one run                                                                                                         |
+| 7. pool checkout abort-blind           | **open** — `pool.reserve()` still takes no signal at `packages/runtime/src/mutation/postgres.ts:173` and `packages/runtime/src/relational/postgres.ts:31`, `:34` |
+
+**One and a half of seven, and neither was closed because this record asked.**
+Gap 2 closed because BETA-09 was already building the maintenance Authority, and
+gap 5's source closed because BETA-10 was already fencing on fleet compatibility.
+Both lay directly on a slice's path. The five that did not lie on anyone's path
+are exactly the five still open, including the two this record argued were most
+urgent.
+
+**So the handoff form is the finding.** "Whoever next touches the durable
+surface" reads like an assignment and behaves like a hope: it closed what would
+have closed anyway. That is worth knowing before writing another record that
+ends the same way — `ROUTE-SHAPE.md` and the sections above both do. An
+unassigned gap is not owned by the next slice; it is owned by nobody, and it
+gets closed only where it happens to overlap work someone already wanted.
+
+**What would overturn this reading:** a slice closing one of the five for no
+reason other than that this record named it. That is falsifiable on the next
+durable slice and worth watching, because if it happens the handoff form works
+and only needs patience.

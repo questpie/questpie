@@ -864,6 +864,21 @@ intact and only its _inference_ failed, which the two earlier instances did not
 separate. A sweep asking "does this claim still hold" would pass the observation
 and never reach the prediction built on it.
 
+**Swept that surface once, and it has a measurable base rate.**
+`durable-evidence-gaps/FINDING.md` hands seven gaps to "whoever next touches the
+durable surface". Three slices have touched it since. One gap is closed, one half
+closed, five open — and both that moved lay directly on a slice's path, BETA-09
+already building the maintenance Authority and BETA-10 already fencing on fleet
+compatibility. Neither closed because a record asked. The five overlapping
+nobody's work are the five still open, including the two that record argued were
+most urgent.
+
+So an unassigned handoff closes what would have closed anyway. That is a
+prediction embedded in a **form** rather than a sentence — "belongs to whoever
+next touches X" reads as an assignment — and it is the kind a claim-level sweep
+cannot see at all, because every individual sentence in that record is still
+true.
+
 **Applied the de-pinning lesson to this file rather than restating it.** Four
 passages here narrated other records' line numbers inside historical accounts —
 which line a stale citation used to occupy, where D3 sat three commits ago. Each
