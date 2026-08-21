@@ -662,6 +662,215 @@ describe.skipIf(databases.length === 0)(
 		);
 
 		postgresTest(
+			"reconciles an absent wake through the healthy listener periodic fallback",
+			async () => {
+				const runtime = runtimePostgres();
+				const reconciliationReasons: string[] = [];
+				const postgres: Pick<RuntimePostgres, "transaction" | "listen"> =
+					Object.freeze({
+						transaction: runtime.transaction,
+						listen(input) {
+							return runtime.listen({
+								...input,
+								async reconcile(reconciliation) {
+									reconciliationReasons.push(reconciliation.reason);
+									await input.reconcile(reconciliation);
+								},
+							});
+						},
+					});
+				const coordinator = createPostgresLiveQueryCoordinator({
+					program: liveQueryProgram,
+					postgres,
+					hmacKey: new Uint8Array(32).fill(7),
+					applicationName,
+					deploymentDigest,
+					wireVersion: 1,
+				});
+				let body = "before periodic fallback";
+				let evaluations = 0;
+				const carrier = createRealtimeCarrier({
+					contract: decodeRealtimeWireContract(projected),
+					durableCoordinator: coordinator.durable!,
+					resolvePrincipal: () => user,
+					decodeContext: (value) => value as typeof context,
+					evaluate: async () => {
+						evaluations += 1;
+						return { result: { nodes: [{ body }] }, observedPlan };
+					},
+				});
+				try {
+					await coordinator.start();
+					const stream = await carrier.fetch(
+						request("GET", undefined, "scope:periodic-fallback"),
+					);
+					const reader = stream?.body?.getReader();
+					if (!reader) throw new Error("missing realtime stream");
+					expect((await nextFrameBefore(reader, 2_000))?.kind).toBe("ready");
+					expect(
+						(
+							await carrier.fetch(
+								request(
+									"POST",
+									command("open", "binding:periodic-fallback", {
+										scopeId: "scope:periodic-fallback",
+									}),
+								),
+							)
+						)?.status,
+					).toBe(202);
+					expect(await nextFrameBefore(reader, 2_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "initial",
+						payload: { nodes: [{ body: "before periodic fallback" }] },
+					});
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(1);
+					expect(runtime.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 1,
+						reconnects: 0,
+					});
+					const reasonBoundary = reconciliationReasons.length;
+					const [before] = await databases[0]!<
+						{
+							evaluated: string;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:periodic-fallback'
+						  and watch.binding_identity = 'binding:periodic-fallback'
+					`;
+					if (!before) throw new Error("missing periodic-fallback binding");
+
+					body = "after periodic fallback";
+					const committedAt = performance.now();
+					await databases[2]!`
+						insert into questpie_internal.change_ledger
+						(application_name, transaction_id, collection_identity,
+						 change_kind, conservative)
+						values (${applicationName}, pg_catalog.pg_current_xact_id(),
+						        'collection:messages', 'collection', true)
+					`;
+					// Deliberately no NOTIFY and no manual requestScan: the production
+					// coordinator configures the healthy listener fallback at 10 seconds.
+					expect(await nextFrameBefore(reader, 14_000)).toMatchObject({
+						kind: "delivery",
+						delivery: "update",
+						payload: { nodes: [{ body: "after periodic fallback" }] },
+					});
+					const fallbackDelay = performance.now() - committedAt;
+					expect(fallbackDelay).toBeGreaterThanOrEqual(8_000);
+					expect(fallbackDelay).toBeLessThan(14_000);
+					expect(reconciliationReasons.slice(reasonBoundary)).toEqual([
+						"periodic",
+					]);
+					expect(runtime.facts().listener).toMatchObject({
+						state: "healthy",
+						generation: 1,
+						reconnects: 0,
+					});
+					expect(evaluations).toBe(2);
+
+					const [after] = await databases[0]!<
+						{
+							evaluated: string;
+							generations: number;
+							horizon: string;
+							invalidation: string;
+							latest: string;
+						}[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest,
+						       (select count(*)::integer
+						          from questpie_internal.realtime_binding_generations all_generations
+						         where all_generations.application_name = watch.application_name
+						           and all_generations.scope_identity = watch.scope_identity
+						           and all_generations.binding_identity = watch.binding_identity) as generations,
+						       (select consumer.xid_horizon::text
+						          from questpie_internal.reconciliation_consumers consumer
+						         where consumer.application_name = watch.application_name
+						           and consumer.consumer_id = ${`realtime:deployment:${deploymentDigest}`}) as horizon
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:periodic-fallback'
+						  and watch.binding_identity = 'binding:periodic-fallback'
+					`;
+					if (!after) throw new Error("missing periodic-fallback result");
+					expect(BigInt(after.invalidation)).toBe(
+						BigInt(before.invalidation) + 1n,
+					);
+					expect(after.evaluated).toBe(after.invalidation);
+					expect(after.generations).toBe(1);
+					expect(after.latest).toBe("2");
+					expect(BigInt(after.horizon)).toBeGreaterThan(BigInt(before.horizon));
+
+					await coordinator.durable!.requestScan();
+					expect(evaluations).toBe(2);
+					const [afterIdempotentScan] = await databases[0]!<
+						{ evaluated: string; invalidation: string; latest: string }[]
+					>`
+						select watch.invalidation_generation::text as invalidation,
+						       watch.evaluated_invalidation_generation::text as evaluated,
+						       generation.generation::text as latest
+						from questpie_internal.realtime_watch_bindings watch
+						join questpie_internal.realtime_binding_generations generation
+						  on generation.application_name = watch.application_name
+						 and generation.scope_identity = watch.scope_identity
+						 and generation.binding_identity = watch.binding_identity
+						 and generation.latest_slot = 1
+						where watch.application_name = ${applicationName}
+						  and watch.scope_identity = 'scope:periodic-fallback'
+						  and watch.binding_identity = 'binding:periodic-fallback'
+					`;
+					expect(afterIdempotentScan).toEqual({
+						evaluated: after.evaluated,
+						invalidation: after.invalidation,
+						latest: "2",
+					});
+					const unexpected = nextFrame(reader).then((frame) => ({ frame }));
+					expect(
+						await Promise.race([
+							unexpected,
+							new Promise<{ frame: "none" }>((resolve) =>
+								setTimeout(() => resolve({ frame: "none" }), 100),
+							),
+						]),
+					).toEqual({ frame: "none" });
+					await reader.cancel();
+				} finally {
+					await carrier.drain();
+					await coordinator.drain();
+					await runtime.close({ deadlineAt: Date.now() + 2_000 });
+				}
+			},
+			20_000,
+		);
+
+		postgresTest(
 			"coalesces duplicate PostgreSQL wakes into one monotonic Live Query result",
 			async () => {
 				const runtime = runtimePostgres();
