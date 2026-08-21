@@ -357,6 +357,8 @@ export function createPostgresDatabase(
 				});
 			throw failure({ error, phase: "checkout", signal });
 		}
+		const clientError = () => {};
+		client.on("error", clientError);
 		inFlight += 1;
 		let destroyed = false;
 		let destruction: Promise<void> | undefined;
@@ -456,6 +458,7 @@ export function createPostgresDatabase(
 				try {
 					await client.query("COMMIT");
 				} catch (error) {
+					await destroy();
 					throw failure({ error, phase: "commit", commitSent: true, signal });
 				}
 				return output;
@@ -469,7 +472,8 @@ export function createPostgresDatabase(
 			signal?.removeEventListener("abort", cancel);
 			if (cancellation) await cancellation;
 			if (destroyed) await destruction;
-			else client.release();
+			client.removeListener("error", clientError);
+			if (!destroyed) client.release();
 			inFlight -= 1;
 		}
 	};

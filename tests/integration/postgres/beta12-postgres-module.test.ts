@@ -78,6 +78,83 @@ const backendIsSleeping = definePostgresStatement({
 	},
 });
 
+const createCommitProbeTable = definePostgresStatement({
+	name: "pb03.commit-probe-table-create",
+	text: "CREATE TEMP TABLE qp_pb03_commit_probe (value integer)",
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const createCommitDelayFunction = definePostgresStatement({
+	name: "pb03.commit-delay-function-create",
+	text: `CREATE FUNCTION pg_temp.qp_pb03_commit_delay()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+	PERFORM pg_catalog.pg_sleep(5);
+	RETURN NEW;
+END
+$$`,
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const createCommitDelayTrigger = definePostgresStatement({
+	name: "pb03.commit-delay-trigger-create",
+	text: `CREATE CONSTRAINT TRIGGER qp_pb03_commit_delay
+AFTER INSERT ON qp_pb03_commit_probe
+DEFERRABLE INITIALLY DEFERRED
+FOR EACH ROW
+EXECUTE FUNCTION pg_temp.qp_pb03_commit_delay()`,
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const insertCommitProbe = definePostgresStatement({
+	name: "pb03.commit-probe-insert",
+	text: "INSERT INTO qp_pb03_commit_probe (value) VALUES (1)",
+	parameterCount: 0,
+	parameters: () => [],
+	decode: () => undefined,
+});
+
+const backendIsCommitting = definePostgresStatement({
+	name: "pb03.backend-is-committing",
+	text: `SELECT EXISTS (
+	SELECT 1
+	FROM pg_catalog.pg_stat_activity
+	WHERE pid = $1::integer
+		AND state = 'active'
+		AND query = 'COMMIT'
+		AND wait_event = 'PgSleep'
+)`,
+	parameterCount: 1,
+	parameters: (pid: number) => [pid],
+	decode(result) {
+		const active = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof active !== "boolean")
+			throw new TypeError("commit activity result is invalid");
+		return active;
+	},
+});
+
+const terminateBackend = definePostgresStatement({
+	name: "pb03.backend-terminate",
+	text: "SELECT pg_catalog.pg_terminate_backend($1::integer)",
+	parameterCount: 1,
+	parameters: (pid: number) => [pid],
+	decode(result) {
+		const terminated = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof terminated !== "boolean")
+			throw new TypeError("backend termination result is invalid");
+		return terminated;
+	},
+});
+
 const notify = definePostgresStatement({
 	name: "pb03.notify",
 	text: "SELECT pg_catalog.pg_notify($1::text, $2::text)",
@@ -362,6 +439,56 @@ postgresTest(
 					!(await transaction.execute(backendIsSleeping, pid)),
 			});
 		}, "cancelled backend continued running");
+		await expect(
+			postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: () => Promise.resolve("recovered"),
+			}),
+		).resolves.toBe("recovered");
+		await postgres.close({ deadlineAt: Date.now() + 1_000 });
+		await observer.close({ deadlineAt: Date.now() + 1_000 });
+	},
+);
+
+postgresTest(
+	"classifies a lost COMMIT response as an unknown outcome",
+	async () => {
+		const postgres = database({ max: 1 });
+		const observer = database({ max: 1 });
+		let publishPid: ((pid: number) => void) | undefined;
+		const observedPid = new Promise<number>((resolve) => {
+			publishPid = resolve;
+		});
+		const committing = postgres.transaction({
+			mode: { isolation: "readCommitted", access: "readWrite" },
+			use: async (transaction) => {
+				const pid = await transaction.execute(currentBackendPid, undefined);
+				await transaction.execute(createCommitProbeTable, undefined);
+				await transaction.execute(createCommitDelayFunction, undefined);
+				await transaction.execute(createCommitDelayTrigger, undefined);
+				await transaction.execute(insertCommitProbe, undefined);
+				publishPid?.(pid);
+			},
+		});
+		const outcome = committing.catch((error: unknown) => error);
+		const pid = await observedPid;
+		await eventually(async () => {
+			return observer.transaction({
+				mode: { isolation: "readCommitted", access: "readOnly" },
+				use: (transaction) => transaction.execute(backendIsCommitting, pid),
+			});
+		}, "backend never entered COMMIT");
+		await expect(
+			observer.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: (transaction) => transaction.execute(terminateBackend, pid),
+			}),
+		).resolves.toBe(true);
+		await expect(outcome).resolves.toMatchObject({
+			code: "commitOutcomeUnknown",
+			phase: "commit",
+			retry: "callerMustResolveCommit",
+		});
 		await expect(
 			postgres.transaction({
 				mode: { isolation: "readCommitted", access: "readOnly" },
