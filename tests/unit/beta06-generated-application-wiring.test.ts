@@ -109,7 +109,10 @@ test("relocated generated application links Mutation and private Live Query prog
 		]);
 		await expect(
 			internalApplication.createApplication({
-				postgres: { url: "postgres://localhost:1/questpie" },
+				postgres: {
+					connectionUrl: "postgres://localhost:1/questpie",
+					directConnectionUrl: "postgres://localhost:1/questpie",
+				},
 				realtime: { hmacKey: new Uint8Array(31) },
 				maintenance: { authorize: () => true },
 			}),

@@ -237,7 +237,10 @@ postgresTest(
 				(await prepared.generated.loadInternal()) as GeneratedInternal;
 			const createApplication = async () => {
 				const application = await internal.createApplication({
-					postgres: { url: beta05PostgresUrl() },
+					postgres: {
+						connectionUrl: beta05PostgresUrl(),
+						directConnectionUrl: beta05PostgresUrl(),
+					},
 					realtime: { hmacKey: new Uint8Array(32).fill(7) },
 					maintenance: { authorize: () => true },
 				});

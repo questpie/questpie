@@ -249,7 +249,10 @@ WHERE datname = pg_catalog.current_database()
 		await Bun.write(runtimeBuildPath, runtimeBuildBytes);
 		try {
 			const application = await internal.createApplication({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32).fill(8) },
 				maintenance: {
 					authorize: ({ actor }) => actor.id === beta05Ids.principal,

@@ -109,18 +109,24 @@ handlerOutput.nodes[0]!.createdAt satisfies Date;
 handlerOutput.nodes[0]!.createdAt satisfies string;
 
 async function useGeneratedApp() {
+	createApp({
+		// @ts-expect-error the removed single URL shape cannot hide session-affine topology
+		postgres: { url: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: { authorize: () => true },
+	});
 	// @ts-expect-error maintenance authorization is deployment-owned and required
 	createApp({
-		postgres: { url: "postgres://localhost/questpie" },
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
 		realtime: { hmacKey: new Uint8Array(32) },
 	});
 	// @ts-expect-error watchable builds require deployment-owned resume signing material
 	createApp({
-		postgres: { url: "postgres://localhost/questpie" },
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
 		maintenance: { authorize: () => true },
 	});
 	const app = await createApp({
-		postgres: { url: "postgres://localhost/questpie" },
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
 		realtime: { hmacKey: new Uint8Array(32) },
 		maintenance: {
 			authorize: ({ actor, command, runId }) => {

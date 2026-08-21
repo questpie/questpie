@@ -68,7 +68,10 @@ postgresTest(
 		}> | null = null;
 		try {
 			application = await prepared.generated.app.createApp({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});

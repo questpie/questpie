@@ -239,7 +239,10 @@ async function prepareArchive() {
 		const applications = new Set<GeneratedApplication>();
 		const createApplication = async () => {
 			const application = await internal.createApplication({
-				postgres: { url: postgresUrl() },
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32).fill(11) },
 				maintenance: { authorize: () => true },
 			});

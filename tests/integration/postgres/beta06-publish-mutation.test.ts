@@ -185,7 +185,10 @@ postgresTest(
 		const prepared = await prepareBeta05PostgresApplication(database!);
 		try {
 			const application = await prepared.generated.app.createApp({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});
@@ -385,7 +388,10 @@ postgresTest(
 		const blocker = await database!.reserve();
 		try {
 			const application = await prepared.generated.app.createApp({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});
@@ -478,7 +484,10 @@ postgresTest(
 				[beta05Ids.membership],
 			);
 			const application = await prepared.generated.app.createApp({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});

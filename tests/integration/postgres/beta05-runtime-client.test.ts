@@ -51,7 +51,10 @@ postgresTest(
 			await writeFile(runtimeBuildPath, `${JSON.stringify(mismatched)}\n`);
 			await expect(
 				generated.app.createApp({
-					postgres: { url: beta05PostgresUrl() },
+					postgres: {
+						connectionUrl: beta05PostgresUrl(),
+						directConnectionUrl: beta05PostgresUrl(),
+					},
 					realtime: { hmacKey: new Uint8Array(32) },
 					maintenance: { authorize: () => true },
 				}),
@@ -85,7 +88,10 @@ postgresTest(
 			]);
 			await expect(
 				generated.app.createApp({
-					postgres: { url: beta05PostgresUrl() },
+					postgres: {
+						connectionUrl: beta05PostgresUrl(),
+						directConnectionUrl: beta05PostgresUrl(),
+					},
 					realtime: { hmacKey: new Uint8Array(32) },
 					maintenance: { authorize: () => true },
 				}),
@@ -171,7 +177,10 @@ postgresTest(
 			]);
 			const forgedOutcome = await generated.app
 				.createApp({
-					postgres: { url: beta05PostgresUrl() },
+					postgres: {
+						connectionUrl: beta05PostgresUrl(),
+						directConnectionUrl: beta05PostgresUrl(),
+					},
 					realtime: { hmacKey: new Uint8Array(32) },
 					maintenance: { authorize: () => true },
 				})
@@ -242,7 +251,10 @@ postgresTest(
 					await expect(
 						generated.app.createApp({
 							postgres: {
-								url: "postgres://unreachable:unreachable@127.0.0.1:1/postgres",
+								connectionUrl:
+									"postgres://unreachable:unreachable@127.0.0.1:1/postgres",
+								directConnectionUrl:
+									"postgres://unreachable:unreachable@127.0.0.1:1/postgres",
 							},
 							realtime: { hmacKey: new Uint8Array(32) },
 							maintenance: { authorize: () => true },
@@ -284,7 +296,10 @@ postgresTest(
 			);
 
 			const application = await generated.app.createApp({
-				postgres: { url: beta05PostgresUrl() },
+				postgres: {
+					connectionUrl: beta05PostgresUrl(),
+					directConnectionUrl: beta05PostgresUrl(),
+				},
 				realtime: { hmacKey: new Uint8Array(32) },
 				maintenance: { authorize: () => true },
 			});
@@ -402,7 +417,10 @@ postgresTest(
 			`;
 			await expect(
 				generated.app.createApp({
-					postgres: { url: beta05PostgresUrl() },
+					postgres: {
+						connectionUrl: beta05PostgresUrl(),
+						directConnectionUrl: beta05PostgresUrl(),
+					},
 					realtime: { hmacKey: new Uint8Array(32) },
 					maintenance: { authorize: () => true },
 				}),

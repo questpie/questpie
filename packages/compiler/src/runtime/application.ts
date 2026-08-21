@@ -289,7 +289,7 @@ export async function createApplication(input) {
 		executePostgresQuery,
 		linkPostgresQueryPlans,
 	} = runtimeModule;
-	const sql = new SQL(input.postgres.url);
+	const sql = new SQL(input.postgres.connectionUrl);
 	const postgresController = new AbortController();
 	const loaded = await loadRuntimeArtifacts();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);

@@ -107,7 +107,8 @@ The generated App runs the same Query without a network transport:
 import { createApp, type DurableMaintenanceAuthorization } from "#questpie/app";
 
 export async function readChannel(
-	postgresUrl: string,
+	connectionUrl: string,
+	directConnectionUrl: string,
 	realtimeHmacKey: Uint8Array,
 	authorizeMaintenance: DurableMaintenanceAuthorization,
 	userId: string,
@@ -115,7 +116,7 @@ export async function readChannel(
 	channelId: string,
 ) {
 	const app = await createApp({
-		postgres: { url: postgresUrl },
+		postgres: { connectionUrl, directConnectionUrl },
 		realtime: { hmacKey: realtimeHmacKey },
 		maintenance: { authorize: authorizeMaintenance },
 	});

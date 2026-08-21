@@ -416,7 +416,10 @@ export interface GeneratedApp {
 }
 
 export type CreateAppInput = Readonly<{
-	postgres: Readonly<{ url: string }>;
+	postgres: Readonly<{
+		connectionUrl: string;
+		directConnectionUrl: string;
+	}>;
 	${realtime ? "realtime: Readonly<{ hmacKey: Uint8Array }>;" : ""}
 	maintenance: Readonly<{ authorize: DurableMaintenanceAuthorization }>;
 }>;

@@ -119,8 +119,12 @@ async function main(): Promise<void> {
 		const framework = (await import(
 			new URL("./index.js", import.meta.url).href
 		)) as Framework;
+		const postgresUrl = databaseUrl();
 		const application = await internal.createApplication({
-			postgres: { url: databaseUrl() },
+			postgres: {
+				connectionUrl: postgresUrl,
+				directConnectionUrl: postgresUrl,
+			},
 			realtime: { hmacKey: realtimeKey() },
 			maintenance: { authorize: () => false },
 		});

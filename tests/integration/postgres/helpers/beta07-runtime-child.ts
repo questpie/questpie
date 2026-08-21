@@ -51,7 +51,7 @@ const framework = (await import(
 }>;
 const principal = framework.principal.user({ id: principalId });
 const application = await internal.createApplication({
-	postgres: { url: postgresUrl },
+	postgres: { connectionUrl: postgresUrl, directConnectionUrl: postgresUrl },
 	realtime: { hmacKey: new Uint8Array(32).fill(7) },
 	maintenance: { authorize: () => true },
 });
