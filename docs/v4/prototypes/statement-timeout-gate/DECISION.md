@@ -929,6 +929,30 @@ authority partition's expired retained results while acknowledging one. Each is
 narrower than the prune — one principal, one partition — so neither scales with
 the whole database, but neither has a bound either.
 
+**The read side has a third compounding case, on the hottest path of the
+three.** Classifying every row-returning `SELECT` the runtime issues against
+`questpie_internal` — twenty-one — leaves one genuinely unbounded after reading:
+`packages/runtime/src/live-query/postgres.ts:198` selects every unprocessed
+`change_ledger` fact in the window `transaction_id >= $3 AND transaction_id < $4`
+with no `LIMIT`. `admit`'s CTE also flagged and is a false positive; its `LIMIT
+$3` is at `packages/runtime/src/durable/postgres-kernel.ts:379`.
+
+The reconciliation attempt is one transaction — `BEGIN ISOLATION LEVEL
+REPEATABLE READ` at `:171`, the fact read at `:198`, the horizon advance
+`SET xid_horizon = $3::xid8` at `:251`, `COMMIT` at `:256`, `ROLLBACK` at `:266`.
+So item 1's GUC reaches it, and a read killed by the bound rolls back without
+advancing the horizon. **The next cycle reads the same window plus whatever
+arrived meanwhile**, which is the retention prune's shape again on the live-query
+reconciliation loop rather than on a background sweep.
+
+**And the classifier would have missed `audit`, which is the case that started
+this.** `audit`'s predicate is `WHERE application_name = $1 AND run_id = $2`, so
+a key-based test marks it bounded; one run holds an unbounded number of
+maintenance commands. **A key is not a row bound when the key is one-to-many.**
+That blind spot is systematic, not incidental: every "keyed" verdict in these
+sweeps means "scoped to an entity", and only reading tells you whether that
+entity holds one row or a million.
+
 **The write side is now closed, and the exposure is exactly these four.** The
 same classification over every `UPDATE` the runtime issues against
 `questpie_internal` — thirty-two — finds **none** unbounded. Thirty-one carry a
