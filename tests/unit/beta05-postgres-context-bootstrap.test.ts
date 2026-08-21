@@ -253,6 +253,28 @@ const lookup = {
 	},
 } as const;
 
+test("projects Schema once and binds a ContextBootstrap per execution", () => {
+	let schemaReads = 0;
+	const schema = new Proxy(membershipSchema, {
+		get(target, property, receiver) {
+			schemaReads += 1;
+			return Reflect.get(target, property, receiver);
+		},
+	});
+	const factory = createPostgresContextBootstrap({
+		sql: fakeSql([]).sql,
+		schema,
+	});
+	const projectedReads = schemaReads;
+	expect(projectedReads).toBeGreaterThan(0);
+	const first = factory(new AbortController().signal);
+	const second = factory(new AbortController().signal);
+	expect(first).not.toBe(second);
+	expect(typeof first.get).toBe("function");
+	expect(typeof second.get).toBe("function");
+	expect(schemaReads).toBe(projectedReads);
+});
+
 test("loads the active membership through one static RR/RO PostgreSQL lookup", async () => {
 	const database = fakeSql([
 		{
@@ -266,7 +288,7 @@ test("loads the active membership through one static RR/RO PostgreSQL lookup", a
 	const bootstrap = createPostgresContextBootstrap({
 		sql: database.sql,
 		schema: membershipSchema,
-	});
+	})(new AbortController().signal);
 
 	await expect(bootstrap.get(memberships, lookup)).resolves.toEqual({
 		companyId,
@@ -293,7 +315,7 @@ test("refuses unknown and inexact key/select shapes before reserving SQL", async
 	const bootstrap = createPostgresContextBootstrap({
 		sql: database.sql,
 		schema: membershipSchema,
-	});
+	})(new AbortController().signal);
 	const unknownCollection = { ...memberships, name: "missing" };
 
 	await expect(bootstrap.get(unknownCollection, lookup)).rejects.toThrow(
@@ -328,7 +350,7 @@ test("fails closed on malformed PostgreSQL values", async () => {
 	const bootstrap = createPostgresContextBootstrap({
 		sql: database.sql,
 		schema: membershipSchema,
-	});
+	})(new AbortController().signal);
 
 	await expect(bootstrap.get(memberships, lookup)).rejects.toThrow(
 		"invalid PostgreSQL ContextBootstrap value",
@@ -347,7 +369,7 @@ test("decodes boolean, integer, timestamp, and nullable text from the projection
 	const bootstrap = createPostgresContextBootstrap({
 		sql: database.sql,
 		schema: membershipSchema,
-	});
+	})(new AbortController().signal);
 
 	await expect(
 		bootstrap.get(scalarRows, {
@@ -369,8 +391,7 @@ test("cancels an active membership lookup through the execution signal", async (
 	const bootstrap = createPostgresContextBootstrap({
 		sql: database.sql,
 		schema: membershipSchema,
-		signal: controller.signal,
-	});
+	})(controller.signal);
 	const blocked = bootstrap.get(memberships, lookup);
 	await database.startedPromise;
 	controller.abort(new Error("execution disconnected"));

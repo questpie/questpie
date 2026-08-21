@@ -130,7 +130,7 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: collaborationContext,
-		bootstrap: {
+		bootstrap: () => ({
 			get: async () =>
 				({
 					companyId,
@@ -139,7 +139,7 @@ test("foreign member cannot infer a hidden Message through key lookup, page boun
 					scopeKey: "company",
 					status: "active",
 				}) as never,
-		},
+		}),
 		project: ({ facts }) => ({
 			run: (binding: DataQueryBindingV1) => {
 				if (facts.principal.kind === "anonymous")
@@ -262,7 +262,7 @@ test("Query admission refuses anonymous authenticated access before PostgreSQL a
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: anonymousContext,
-		bootstrap: { get: async () => null as never },
+		bootstrap: () => ({ get: async () => null as never }),
 		project: ({ facts }) => ({
 			run: (binding: DataQueryBindingV1) =>
 				executePostgresQuery({

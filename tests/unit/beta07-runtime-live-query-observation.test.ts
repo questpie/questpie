@@ -151,19 +151,23 @@ test("threads a per-root observation through Context and the reached Message str
 		]),
 	};
 	const observation = createLiveQueryObservation(messageQuery);
+	let factoryCalls = 0;
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: collaborationContext,
-		bootstrap: {
-			get: async () =>
-				({
-					id: "018f5f78-64ac-73cc-985e-b48c00e945fa",
-					companyId,
-					principalId,
-					role: "member",
-					scopeKey: "company",
-					status: "active",
-				}) as never,
+		bootstrap: () => {
+			factoryCalls += 1;
+			return {
+				get: async () =>
+					({
+						id: "018f5f78-64ac-73cc-985e-b48c00e945fa",
+						companyId,
+						principalId,
+						role: "member",
+						scopeKey: "company",
+						status: "active",
+					}) as never,
+			};
 		},
 		project: ({ facts }) => ({
 			run(definition: unknown) {
@@ -184,6 +188,7 @@ test("threads a per-root observation through Context and the reached Message str
 	const successfulPlan = observation.finish();
 
 	expect(result).toEqual({ nodes: [] });
+	expect(factoryCalls).toBe(1);
 	expect(successfulPlan.tokens.map(({ collection }) => collection)).toEqual([
 		"collection:channels",
 		"collection:companies",
@@ -202,6 +207,37 @@ test("threads a per-root observation through Context and the reached Message str
 	]);
 
 	await runtime.close({ deadlineAt: Date.now() + 2_000 });
+
+	let failedContextRecords = 0;
+	const failedObservation = Object.freeze({
+		...createLiveQueryObservation(messageQuery),
+		recordContext: () => {
+			failedContextRecords += 1;
+		},
+	});
+	let failedFactoryCalls = 0;
+	const failedRuntime = createApplicationRuntime({
+		services: [],
+		context: collaborationContext,
+		bootstrap: () => {
+			failedFactoryCalls += 1;
+			return {
+				get: async () => {
+					throw new Error("bootstrap cancelled");
+				},
+			};
+		},
+		project: () => ({ run: () => ({ nodes: [] }) }),
+	});
+	await expect(
+		failedRuntime.execution(
+			{ ...root, liveQueryObservation: failedObservation },
+			() => ({ nodes: [] }),
+		),
+	).rejects.toThrow("bootstrap cancelled");
+	expect(failedFactoryCalls).toBe(1);
+	expect(failedContextRecords).toBe(0);
+	await failedRuntime.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("refuses the 257th distinct dependency token and publishes no plan", () => {

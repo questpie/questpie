@@ -1,3 +1,5 @@
+import type { CollectionDefinition, ContextBootstrap } from "questpie";
+
 import { runtimeArtifactDigest } from "../application/artifact-protocol";
 import {
 	definePostgresStatement,
@@ -64,6 +66,10 @@ export type LinkedPostgresContextBootstrapPlans = Readonly<{
 		collectionIdentity: string,
 	): LinkedPostgresContextBootstrapPlan | undefined;
 }>;
+
+export type LinkedPostgresContextBootstrapFactory = (
+	signal: AbortSignal,
+) => ContextBootstrap;
 
 function record(value: unknown, label: string): RecordValue {
 	if (!value || typeof value !== "object" || Array.isArray(value))
@@ -436,4 +442,85 @@ export function executeLinkedPostgresContextBootstrap(
 		control: { signal },
 		use: (transaction) => transaction.execute(linked.statement, lookup),
 	});
+}
+
+function collectionIdentity(definition: CollectionDefinition): string {
+	if (
+		!definition ||
+		typeof definition !== "object" ||
+		Array.isArray(definition)
+	)
+		throw new TypeError("unknown ContextBootstrap Collection");
+	const candidate = definition as unknown as RecordValue;
+	const brand = candidate["__questpie"];
+	if (!brand || typeof brand !== "object" || Array.isArray(brand))
+		throw new TypeError("unknown ContextBootstrap Collection");
+	const resource = brand as RecordValue;
+	if (
+		resource.category !== "definition" ||
+		resource.resourceKind !== "collection" ||
+		typeof candidate.name !== "string"
+	)
+		throw new TypeError("unknown ContextBootstrap Collection");
+	return `collection:${candidate.name}`;
+}
+
+export function createLinkedPostgresContextBootstrapFactory(
+	input: Readonly<{
+		database: PostgresTransactionRunner;
+		plans: LinkedPostgresContextBootstrapPlans;
+		collections: readonly CollectionDefinition[];
+	}>,
+): LinkedPostgresContextBootstrapFactory {
+	const expectedPlans = new Set(input.plans.plans);
+	if (expectedPlans.size !== input.plans.plans.length)
+		throw new TypeError(
+			"ContextBootstrap Collections do not match linked plans",
+		);
+	const byDefinition = new Map<
+		CollectionDefinition,
+		LinkedPostgresContextBootstrapPlan
+	>();
+	const identities = new Set<string>();
+	const boundPlans = new Set<LinkedPostgresContextBootstrapPlan>();
+	for (const definition of input.collections) {
+		const identity = collectionIdentity(definition);
+		const linked = input.plans.get(identity);
+		if (
+			!linked ||
+			!expectedPlans.has(linked) ||
+			linked.plan.collection !== identity ||
+			identities.has(identity) ||
+			byDefinition.has(definition) ||
+			boundPlans.has(linked)
+		)
+			throw new TypeError(
+				"ContextBootstrap Collections do not match linked plans",
+			);
+		identities.add(identity);
+		boundPlans.add(linked);
+		byDefinition.set(definition, linked);
+	}
+	if (boundPlans.size !== expectedPlans.size)
+		throw new TypeError(
+			"ContextBootstrap Collections do not match linked plans",
+		);
+	return (signal) => {
+		if (!(signal instanceof AbortSignal))
+			throw new TypeError("ContextBootstrap requires an AbortSignal");
+		const get = async (
+			definition: CollectionDefinition,
+			lookup: ContextBootstrapLookupV1,
+		): Promise<Readonly<Record<string, unknown>> | null> => {
+			const linked = byDefinition.get(definition);
+			if (!linked) throw new TypeError("unknown ContextBootstrap Collection");
+			return executeLinkedPostgresContextBootstrap(
+				input.database,
+				linked,
+				lookup,
+				signal,
+			);
+		};
+		return Object.freeze({ get }) as ContextBootstrap;
+	};
 }

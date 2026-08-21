@@ -323,7 +323,7 @@ async function runtimeHarness(
 		program: {
 			services: [auditConnection, executionAudit, auditReader] as never,
 			context: collaborationContext as never,
-			bootstrap: {
+			bootstrap: () => ({
 				get: (async () => {
 					bootstrapGets += 1;
 					return Object.freeze({
@@ -334,7 +334,7 @@ async function runtimeHarness(
 						status: "active",
 					});
 				}) as never,
-			},
+			}),
 			resolvePrincipal: readIngressPrincipal,
 			project: ({ facts }) =>
 				Object.freeze({

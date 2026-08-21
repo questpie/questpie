@@ -47,7 +47,7 @@ test("BETA-03 execution lifecycle stays inside its derived reference budget", as
 	const runtime = createApplicationRuntime({
 		services: [application, execution],
 		context,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => {
 			const [first, second] = await Promise.all([
 				service(execution),

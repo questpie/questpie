@@ -35,7 +35,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 	const runtime = createApplicationRuntime({
 		services: [auditConnection, executionAudit],
 		context: collaborationContext,
-		bootstrap: {
+		bootstrap: () => ({
 			get: async () =>
 				({
 					id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5",
@@ -45,7 +45,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 					scopeKey: "company",
 					status: "active",
 				}) as never,
-		},
+		}),
 		project: async ({ facts, service }) => {
 			const [first, second] = await Promise.all([
 				service(executionAudit),
@@ -149,7 +149,7 @@ test("retains execution Services until a response body reaches EOF", async () =>
 	const runtime = createApplicationRuntime({
 		services: [streamService],
 		context: streamContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => ({ stream: await service(streamService) }),
 	});
 	let body!: ReadableStreamDefaultController<Uint8Array>;
@@ -208,7 +208,7 @@ test("aborts retained responses before closing application Services", async () =
 	const runtime = createApplicationRuntime({
 		services: [applicationService, executionService],
 		context: closeContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ facts, service }) => {
 			rootSignal = facts.signal;
 			return { execution: await service(executionService) };
@@ -267,7 +267,7 @@ test("isolates application Services between Runtime instances", async () => {
 	const program = {
 		services: [isolatedService],
 		context: isolatedContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({
 			service,
 		}: Parameters<
@@ -334,7 +334,7 @@ test("unwinds created dependencies after Service resolution failure", async () =
 	const runtime = createApplicationRuntime({
 		services: [dependency, failing],
 		context: failureContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => ({ failing: await service(failing) }),
 	});
 	let callbackCalls = 0;
@@ -372,7 +372,7 @@ test("decodes direct and Operation-Wire Context input through one root", async (
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: wireContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: ({ facts }) => facts,
 	});
 	const useFacts = ({
@@ -432,7 +432,7 @@ test("rejects a structurally forged Principal before Context Resolution", async 
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: trustedContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: ({ facts }) => facts,
 	});
 	await expect(
@@ -474,7 +474,7 @@ test("disposes execution Services after handler failure", async () => {
 	const runtime = createApplicationRuntime({
 		services: [handlerService],
 		context: handlerContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => ({
 			handler: await service(handlerService),
 		}),
@@ -514,7 +514,7 @@ test("retains execution Services through SSE EOF", async () => {
 	const runtime = createApplicationRuntime({
 		services: [sseService],
 		context: sseContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => ({ sse: await service(sseService) }),
 	});
 	const response = await runtime.execution(
@@ -557,7 +557,7 @@ test("does not enter the handler after cancellation during Context Resolution", 
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: cancellationContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: ({ facts }) => facts,
 	});
 	const controller = new AbortController();
@@ -599,7 +599,7 @@ test("disposes execution Services after a response stream error", async () => {
 	const runtime = createApplicationRuntime({
 		services: [streamErrorService],
 		context: streamErrorContext,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: async ({ service }) => ({
 			stream: await service(streamErrorService),
 		}),

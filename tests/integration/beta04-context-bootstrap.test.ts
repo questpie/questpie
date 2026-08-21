@@ -69,7 +69,7 @@ test("Context authorizes only a current active company Membership", async () => 
 	const runtime = createApplicationRuntime({
 		services: [],
 		context: collaborationContext,
-		bootstrap: active.bootstrap,
+		bootstrap: () => active.bootstrap,
 		project: ({ facts }) => {
 			projectCalls += 1;
 			return facts;
@@ -131,7 +131,7 @@ test("Context authorizes only a current active company Membership", async () => 
 		const hostileRuntime = createApplicationRuntime({
 			services: [],
 			context: collaborationContext,
-			bootstrap: hostile.bootstrap.bootstrap,
+			bootstrap: () => hostile.bootstrap.bootstrap,
 			project: ({ facts: hostileFacts }) => {
 				hostileProjectCalls += 1;
 				return hostileFacts;

@@ -28,6 +28,10 @@ type AnyService = ServiceDefinition<
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
+export type RuntimeContextBootstrapFactory = (
+	signal: AbortSignal,
+) => ContextBootstrap;
+
 export type ExecutionFacts<Resolved> = Readonly<{
 	principal: Principal;
 	authority: Authority;
@@ -43,7 +47,7 @@ export type ExecutionFacts<Resolved> = Readonly<{
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
 	readonly context: Context;
-	readonly bootstrap: ContextBootstrap;
+	readonly bootstrap: RuntimeContextBootstrapFactory;
 	readonly project: (
 		scope: Readonly<{
 			facts: ExecutionFacts<ContextResolvedOf<Context>>;
@@ -248,19 +252,17 @@ export function createApplicationRuntime<
 				const decoded = deepFreeze(
 					decodeContextInput(program.context.input, input.context),
 				);
+				const bootstrap = program.bootstrap(controller.signal);
 				const resolved = copiedFrozen(
 					await program.context.resolve({
 						input: decoded,
 						principal: input.principal,
 						bootstrap:
 							input.liveQueryObservation === undefined
-								? program.bootstrap
+								? bootstrap
 								: {
 										get: async (collection, request) => {
-											const value = await program.bootstrap.get(
-												collection,
-												request,
-											);
+											const value = await bootstrap.get(collection, request);
 											input.liveQueryObservation!.recordContext(
 												`context:${program.context.name}`,
 												[

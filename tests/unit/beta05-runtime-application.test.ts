@@ -452,7 +452,7 @@ test("requires the Runtime Build to bind the Schema Fingerprint", async () => {
 			program: {
 				services: [],
 				context,
-				bootstrap: { get: async () => null },
+				bootstrap: () => ({ get: async () => null }),
 				project: ({ facts }) => ({ signal: facts.signal }),
 				resolvePrincipal: async () => principal.anonymous(),
 			},
@@ -507,7 +507,7 @@ test("rejects an unsupported Runtime ABI or internal protocol before readiness",
 				program: {
 					services: [],
 					context,
-					bootstrap: { get: async () => null },
+					bootstrap: () => ({ get: async () => null }),
 					project: ({ facts }) => ({ signal: facts.signal }),
 					resolvePrincipal: async () => principal.anonymous(),
 					verifyReadiness: () => {
@@ -581,7 +581,7 @@ test("binds Runtime Build Application Identity to the executable bundle", async 
 			program: {
 				services: [],
 				context,
-				bootstrap: { get: async () => null },
+				bootstrap: () => ({ get: async () => null }),
 				project: ({ facts }) => ({ signal: facts.signal }),
 				resolvePrincipal: async () => principal.anonymous(),
 				verifyReadiness: () => {
@@ -627,7 +627,7 @@ test("rejects a mismatched Runtime Build before Context or handler disclosure", 
 			program: {
 				services: [],
 				context,
-				bootstrap: { get: async () => null },
+				bootstrap: () => ({ get: async () => null }),
 				project: ({ facts }) => ({ signal: facts.signal }),
 				resolvePrincipal: async () => principal.anonymous(),
 			},
@@ -692,7 +692,7 @@ test("rejects a forged Mutation Service capability before readiness", async () =
 			program: {
 				services: [],
 				context,
-				bootstrap: { get: async () => null },
+				bootstrap: () => ({ get: async () => null }),
 				project: ({ facts }) => ({ signal: facts.signal }),
 				resolvePrincipal: async () => principal.anonymous(),
 			},
@@ -730,7 +730,7 @@ test("rejects a changed inventory file before readiness or executable disclosure
 	const program = {
 		services: [],
 		context,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
 			signal: facts.signal,
 		}),
@@ -841,7 +841,7 @@ test("runs one valid build through the direct operation engine", async () => {
 	const program = {
 		services: [],
 		context,
-		bootstrap: { get: async () => null },
+		bootstrap: () => ({ get: async () => null }),
 		project: ({ facts }: { facts: { signal: AbortSignal } }) => {
 			projectionCalls += 1;
 			return { signal: facts.signal };
@@ -934,7 +934,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 		program: {
 			services: [],
 			context,
-			bootstrap: { get: async () => null },
+			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
 			liveQueryCoordinator: {
@@ -971,7 +971,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 			program: {
 				services: [],
 				context,
-				bootstrap: { get: async () => null },
+				bootstrap: () => ({ get: async () => null }),
 				project: ({ facts }) => ({ signal: facts.signal }),
 				resolvePrincipal: async () => principal.anonymous(),
 				liveQueryCoordinator: {
@@ -1020,7 +1020,7 @@ test("sanitizes unknown operation errors identically for direct and wire calls",
 		program: {
 			services: [],
 			context,
-			bootstrap: { get: async () => null },
+			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
 		},
@@ -1149,7 +1149,7 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", a
 				program: {
 					services: [],
 					context,
-					bootstrap: { get: async () => null },
+					bootstrap: () => ({ get: async () => null }),
 					project: ({ facts }) => ({ signal: facts.signal }),
 					resolvePrincipal: async () => principal.anonymous(),
 				},
@@ -1232,7 +1232,7 @@ test("pairs the exact Context and Service exports before readiness", async () =>
 		program: {
 			services: [connection],
 			context,
-			bootstrap: { get: async () => null },
+			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
 		},
@@ -1280,12 +1280,12 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		program: {
 			services: [],
 			context,
-			bootstrap: {
+			bootstrap: () => ({
 				get: async () => {
 					bootstrapReads += 1;
 					return null;
 				},
-			},
+			}),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async (request) => {
 				principalResolutions += 1;
@@ -1469,12 +1469,12 @@ test("executes a retained v1 Query only for its exact deployment-owned digest pa
 		program: {
 			services: [],
 			context,
-			bootstrap: {
+			bootstrap: () => ({
 				get: async () => {
 					bootstrapReads += 1;
 					return null;
 				},
-			},
+			}),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
 		},
@@ -1588,7 +1588,7 @@ async function createHoldingRuntime(
 		program: {
 			services: [],
 			context,
-			bootstrap: { get: async () => null },
+			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
 			...(input.coordinatorDeadlines

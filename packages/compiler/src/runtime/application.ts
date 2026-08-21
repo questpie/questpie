@@ -299,10 +299,9 @@ export async function createApplication(input) {
 	const postgresController = new AbortController();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
 	let queryPlans;
-	const bootstrap = createPostgresContextBootstrap({
+	const bootstrapFactory = createPostgresContextBootstrap({
 		sql,
 		schema: schemaProjection,
-		signal: postgresController.signal,
 	});
 	let liveQueryCoordinator;
 	let mutationArtifacts;
@@ -333,7 +332,7 @@ export async function createApplication(input) {
 		program: {
 			services: [${serviceDefinitions.join(", ")}],
 			context: ${contextDefinition},
-			bootstrap,
+			bootstrap: bootstrapFactory,
 			resolvePrincipal: readIngressPrincipal,
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}

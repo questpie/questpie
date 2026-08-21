@@ -335,77 +335,78 @@ export function createPostgresContextBootstrap(
 	input: Readonly<{
 		sql: SQL;
 		schema: unknown;
-		signal?: AbortSignal;
 	}>,
-): ContextBootstrap {
+): (signal: AbortSignal) => ContextBootstrap {
 	const projection = projectSchema(input.schema);
-	const get = async (
-		definition: CollectionDefinition,
-		lookup: BootstrapLookup,
-	): Promise<Readonly<Record<string, unknown>> | null> => {
-		input.signal?.throwIfAborted();
-		const collection = resolveCollection(projection.collections, definition);
-		const suppliedKeyNames = exactKeys(lookup?.key, "lookup.key");
-		const requiredKeyNames = collection.primaryKey
-			.map((field) => field.key)
-			.sort();
-		if (
-			suppliedKeyNames.length !== requiredKeyNames.length ||
-			suppliedKeyNames.some((key, index) => key !== requiredKeyNames[index])
-		)
-			throw new TypeError("ContextBootstrap requires the exact primary key");
-		const selectedKeys = exactKeys(lookup?.select, "lookup.select");
-		if (selectedKeys.length === 0)
-			throw new TypeError("ContextBootstrap requires selected Fields");
-		const selectedFields = selectedKeys.map((key) => {
-			if (lookup.select[key] !== true)
-				throw new TypeError("ContextBootstrap selected Fields must be true");
-			return fieldForUse(collection, key, "selected");
-		});
-		const parameters = collection.primaryKey.map((field) =>
-			decodeScalar(lookup.key[field.key], field),
-		);
-		const statement = [
-			`SELECT ${selectedFields
-				.map(
-					(field) =>
-						`${quoteIdentifier(field.postgresName)} AS ${quoteIdentifier(field.key)}`,
-				)
-				.join(", ")}`,
-			`FROM ${quoteIdentifier(projection.postgresSchema)}.${quoteIdentifier(collection.postgresName)}`,
-			`WHERE ${collection.primaryKey
-				.map(
-					(field, index) =>
-						`${quoteIdentifier(field.postgresName)} = $${index + 1}`,
-				)
-				.join(" AND ")}`,
-			"LIMIT 1",
-			"",
-		].join("\n");
-		const rows = await executePostgresStatement(input.sql, {
-			statement,
-			parameters,
-			signal: input.signal,
-		});
-		input.signal?.throwIfAborted();
-		if (rows.length === 0) return null;
-		if (rows.length !== 1)
-			throw new TypeError("invalid PostgreSQL ContextBootstrap row count");
-		const row = record(rows[0], "PostgreSQL ContextBootstrap row");
-		const rowKeys = Object.keys(row).sort();
-		if (
-			rowKeys.length !== selectedKeys.length ||
-			rowKeys.some((key, index) => key !== selectedKeys[index])
-		)
-			throw new TypeError("invalid PostgreSQL ContextBootstrap row shape");
-		return Object.freeze(
-			Object.fromEntries(
-				selectedFields.map((field) => [
-					field.key,
-					decodeScalar(row[field.key], field),
-				]),
-			),
-		);
+	return (signal) => {
+		const get = async (
+			definition: CollectionDefinition,
+			lookup: BootstrapLookup,
+		): Promise<Readonly<Record<string, unknown>> | null> => {
+			signal.throwIfAborted();
+			const collection = resolveCollection(projection.collections, definition);
+			const suppliedKeyNames = exactKeys(lookup?.key, "lookup.key");
+			const requiredKeyNames = collection.primaryKey
+				.map((field) => field.key)
+				.sort();
+			if (
+				suppliedKeyNames.length !== requiredKeyNames.length ||
+				suppliedKeyNames.some((key, index) => key !== requiredKeyNames[index])
+			)
+				throw new TypeError("ContextBootstrap requires the exact primary key");
+			const selectedKeys = exactKeys(lookup?.select, "lookup.select");
+			if (selectedKeys.length === 0)
+				throw new TypeError("ContextBootstrap requires selected Fields");
+			const selectedFields = selectedKeys.map((key) => {
+				if (lookup.select[key] !== true)
+					throw new TypeError("ContextBootstrap selected Fields must be true");
+				return fieldForUse(collection, key, "selected");
+			});
+			const parameters = collection.primaryKey.map((field) =>
+				decodeScalar(lookup.key[field.key], field),
+			);
+			const statement = [
+				`SELECT ${selectedFields
+					.map(
+						(field) =>
+							`${quoteIdentifier(field.postgresName)} AS ${quoteIdentifier(field.key)}`,
+					)
+					.join(", ")}`,
+				`FROM ${quoteIdentifier(projection.postgresSchema)}.${quoteIdentifier(collection.postgresName)}`,
+				`WHERE ${collection.primaryKey
+					.map(
+						(field, index) =>
+							`${quoteIdentifier(field.postgresName)} = $${index + 1}`,
+					)
+					.join(" AND ")}`,
+				"LIMIT 1",
+				"",
+			].join("\n");
+			const rows = await executePostgresStatement(input.sql, {
+				statement,
+				parameters,
+				signal,
+			});
+			signal.throwIfAborted();
+			if (rows.length === 0) return null;
+			if (rows.length !== 1)
+				throw new TypeError("invalid PostgreSQL ContextBootstrap row count");
+			const row = record(rows[0], "PostgreSQL ContextBootstrap row");
+			const rowKeys = Object.keys(row).sort();
+			if (
+				rowKeys.length !== selectedKeys.length ||
+				rowKeys.some((key, index) => key !== selectedKeys[index])
+			)
+				throw new TypeError("invalid PostgreSQL ContextBootstrap row shape");
+			return Object.freeze(
+				Object.fromEntries(
+					selectedFields.map((field) => [
+						field.key,
+						decodeScalar(row[field.key], field),
+					]),
+				),
+			);
+		};
+		return Object.freeze({ get }) as ContextBootstrap;
 	};
-	return Object.freeze({ get }) as ContextBootstrap;
 }
