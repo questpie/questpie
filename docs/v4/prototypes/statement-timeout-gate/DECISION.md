@@ -240,11 +240,31 @@ that transaction failed `57014`; and after it committed, the same pooled
 connection read `statement_timeout = 0`. The guard value survives the fold, which
 is the one thing that could have made this unsafe.
 
-**What this does not show.** The probe confirmed the guard _setting_ is present,
-not that a guarded write still passes its trigger — `guard_durable_kernel_write`
-fires on INSERT/UPDATE/DELETE and the probe only read. That is the check to run
-before shipping the fold, and it is cheap: any existing durable integration test
-would fail loudly if the marker stopped working.
+**The write check named here has since been run, and the fold passes it.** The
+earlier probe confirmed only that the guard _setting_ was present, not that a
+guarded write still passes its trigger. Built with the shipped
+`guard_durable_kernel_write` function copied verbatim out of
+`packages/compiler/src/schema/postgres/internal-protocol-v4-sql.ts` and the same
+`FOR EACH STATEMENT` trigger the catalog installs, then ran INSERT, UPDATE and
+DELETE inside one transaction:
+
+| marker                                    | result                                                               |
+| ----------------------------------------- | -------------------------------------------------------------------- |
+| none — negative control                   | `42501` questpie durable state is written only by the durable kernel |
+| shipped one-value marker                  | all three writes succeed                                             |
+| three-value marker carrying both timeouts | all three writes succeed                                             |
+
+The negative control matters more than the two passes: it proves the trigger was
+live for all three trials rather than absent. So the fold is safe for writes as
+well as reads, on the statement-level guard the durable tables actually use.
+
+**A note on where this ran.** The guard function is schema-qualified in the
+shipped DDL, so unlike the other probes in this record it could not use a
+throwaway schema name and recreated `questpie_internal` in the shared test
+container, dropping what was there. That is recoverable rather than harmless —
+`tests/integration/postgres/helpers/beta05-runtime.ts:41` drops the same schema
+at setup, so any integration run rebuilds it — but a throwaway _database_ would
+have been the right isolation and is what a repeat of this should use.
 
 It fits the main read path cleanly too. Relational queries reserve a connection
 and open an explicit `BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY`
