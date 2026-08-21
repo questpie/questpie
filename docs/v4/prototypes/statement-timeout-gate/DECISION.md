@@ -48,8 +48,8 @@ and a reader should not have to reconstruct the current position from them.
    it needs is a bound on rows, which neither a wrap nor a timeout supplies. See
    "Corrected: `audit` does not belong in that four" below.
 
-4. **The number is not decided here, and the measurements say why it cannot be
-   one number.** Every served statement across three subsystems sits at or under
+4. **The number is not decided here; the measurements say why it cannot be one
+   number, and a derived pair is offered as a candidate.** Every served statement across three subsystems sits at or under
    3.4 ms except the Mutation lock, which sits at p95 15.560 ms over six
    executions. `statement_timeout` bounds a statement including any lock wait
    inside it, and `resolvePostgresControl` requires
@@ -59,6 +59,38 @@ and a reader should not have to reconstruct the current position from them.
    even though the work it is meant to bound is five times smaller. Tolerating a
    20 ms wait forces a statement bound above 20 ms on a path whose real work
    finishes in 3.4. See "Measured across three paths" and evidence-plan item 7.
+
+   **A pair is now derivable, and it is offered as a candidate rather than a
+   decision.** Across roughly 12,000 measured executions the largest served
+   statement is a contended `COMMIT` at 23.091 ms and the largest non-`COMMIT`
+   served statement is the Mutation `qp_locked` wait at 17.064 ms. Applying this
+   record's own rule at the ×5 multiplier and 100 ms quantum that the shipped
+   `postgresMaintenance20Ms` baseline uses:
+   - `statement_timeout` = `ceil(23.091 × 5 / 100) × 100` = **200 ms**
+   - `lock_timeout` = `ceil(17.064 × 5 / 100) × 100` = **100 ms**
+
+   The pair satisfies `lockTimeoutMs < statementTimeoutMs`
+   (`packages/compiler/src/postgres-session.ts:30`), and by evidence-plan item 7
+   it kills nothing observed — not even the 132.532 ms fixture insert. At a 10 ms
+   quantum the same rule gives 120 and 90, also valid and tighter.
+
+   **What the observation can and cannot settle.** It settles
+   `statement_timeout`, which bounds work, and the corpus contains that work. It
+   does not settle `lock_timeout`, because a lock wait is bounded by whoever
+   holds the row rather than by the waiter — the probe under "A second finding"
+   measured a **5,706 ms** wait against a holder that held for six seconds.
+   Observation can only put a floor under the lock bound, at least the 17.064 ms
+   of legitimate waiting seen here; the ceiling is a policy choice about how long
+   a Mutation may block. 100 ms says roughly six times the worst legitimate wait
+   observed, and nothing longer.
+
+   **What would overturn the pair.** A cold cache, a larger fixture, or a managed
+   target moving the served tail above 200 ms; or same-row Mutation contention in
+   production routinely exceeding 100 ms, which would mean the lock bound is
+   cutting legitimate work rather than a stuck holder. Both are measurable by
+   re-running this capture under those conditions, and neither is measurable from
+   the corpus in hand — warm, local, and inflated about fifty percent by the
+   logging that produced it.
 
 Item 3 reversed an earlier decision to wrap them, and the section at "The edge
 that decides the gate's real scope" records why and what would restore it — the
