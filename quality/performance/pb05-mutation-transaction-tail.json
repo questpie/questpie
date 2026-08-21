@@ -1,0 +1,39 @@
+{
+	"id": "pb05-mutation-transaction-tail",
+	"kind": "load",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/pb05-mutation-transaction-tail.ts"],
+	"budgetOwner": "PB-05",
+	"metrics": {
+		"warmupExecutions": {
+			"direction": "min",
+			"budget": 100,
+			"unit": "count"
+		},
+		"measuredExecutions": {
+			"direction": "min",
+			"budget": 1000,
+			"unit": "count"
+		},
+		"freshSamples": {
+			"direction": "min",
+			"budget": 500,
+			"unit": "count"
+		},
+		"replaySamples": {
+			"direction": "min",
+			"budget": 500,
+			"unit": "count"
+		},
+		"measuredFreshWrites": {
+			"direction": "min",
+			"budget": 500,
+			"unit": "count"
+		},
+		"measuredReplayWrites": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		}
+	}
+}
