@@ -210,6 +210,22 @@ WHERE application_name = $1::text
 	},
 });
 
+const listenerSessionCount = definePostgresStatement({
+	name: "pb03.listener-session-count",
+	text: `SELECT count(*)::integer
+FROM pg_catalog.pg_stat_activity
+WHERE application_name = $1::text
+	AND pid <> pg_catalog.pg_backend_pid()`,
+	parameterCount: 1,
+	parameters: (applicationName: string) => [applicationName],
+	decode(result) {
+		const count = result.rows[0]?.[0];
+		if (result.rows.length !== 1 || typeof count !== "number")
+			throw new TypeError("listener session count is invalid");
+		return count;
+	},
+});
+
 const createMigrationProbe = definePostgresStatement({
 	name: "pb03.migration-probe-create",
 	text: "CREATE TEMP TABLE qp_pb03_migration_probe (value text) ON COMMIT PRESERVE ROWS",
@@ -902,6 +918,68 @@ postgresTest(
 				reconnects: 1,
 			});
 		} finally {
+			await listener.close({ deadlineAt: Date.now() + 1_000 });
+			await postgres.close({ deadlineAt: Date.now() + 1_000 });
+		}
+	},
+);
+
+postgresTest(
+	"cannot reconnect or become healthy after listener close",
+	async () => {
+		const postgres = database();
+		let reconnectEntered: (() => void) | undefined;
+		let releaseReconnect: (() => void) | undefined;
+		const reconnecting = new Promise<void>((resolve) => {
+			reconnectEntered = resolve;
+		});
+		const reconnectHeld = new Promise<void>((resolve) => {
+			releaseReconnect = resolve;
+		});
+		const listener = await createPostgresListener({
+			directConnectionUrl: postgresUrl(),
+			channel: definePostgresChannel("qp_pb03_close_reconnect"),
+			database: postgres,
+			fallbackIntervalMs: 10_000,
+			reconcile: async ({ reason }) => {
+				if (reason === "reconnect") {
+					reconnectEntered?.();
+					await reconnectHeld;
+				}
+			},
+		});
+		try {
+			await postgres.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async (transaction) => {
+					expect(
+						await transaction.execute(
+							terminateListener,
+							"questpie-realtime-listener",
+						),
+					).toBe(true);
+				},
+			});
+			await reconnecting;
+			await listener.close({ deadlineAt: Date.now() + 25 });
+			expect(listener.facts()).toMatchObject({ state: "closed" });
+			releaseReconnect?.();
+			await new Promise((resolve) => setTimeout(resolve, 25));
+			expect(listener.facts()).toMatchObject({ state: "closed" });
+			await eventually(
+				async () =>
+					(await postgres.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: (transaction) =>
+							transaction.execute(
+								listenerSessionCount,
+								"questpie-realtime-listener",
+							),
+					})) === 0,
+				"listener session remained after close",
+			);
+		} finally {
+			releaseReconnect?.();
 			await listener.close({ deadlineAt: Date.now() + 1_000 });
 			await postgres.close({ deadlineAt: Date.now() + 1_000 });
 		}

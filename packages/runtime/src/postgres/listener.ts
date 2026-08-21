@@ -60,6 +60,7 @@ export async function createPostgresListener(
 	let client: Client | undefined;
 	let reconnectTimer: ReturnType<typeof setTimeout> | undefined;
 	let reconnectAttempt = 0;
+	let establishingClient: Client | undefined;
 	let inFlight: Promise<void> | undefined;
 	let queuedReason: PostgresReconcileReason | undefined;
 	const controller = new AbortController();
@@ -112,6 +113,7 @@ export async function createPostgresListener(
 			application_name: "questpie-realtime-listener",
 			connectionTimeoutMillis: 1_000,
 		});
+		establishingClient = candidate;
 		let lost = false;
 		const connectionLost = (): void => {
 			if (lost) return;
@@ -126,16 +128,22 @@ export async function createPostgresListener(
 		});
 		try {
 			await candidate.connect();
+			if (stopped()) throw controller.signal.reason;
 			await candidate.query("BEGIN");
 			await candidate.query(`LISTEN "${input.channel}"`);
 			await candidate.query("COMMIT");
+			if (stopped()) throw controller.signal.reason;
 			client = candidate;
+			establishingClient = undefined;
 			generation += 1;
 			if (reason === "reconnect") reconnects += 1;
 			await reconcile(reason);
+			if (stopped()) throw controller.signal.reason;
 			reconnectAttempt = 0;
 			state = "healthy";
 		} catch (error) {
+			if (client === candidate) client = undefined;
+			if (establishingClient === candidate) establishingClient = undefined;
 			if (!lost) await candidate.end().catch(() => {});
 			throw error;
 		}
@@ -170,12 +178,18 @@ export async function createPostgresListener(
 			clearInterval(periodic);
 			if (reconnectTimer) clearTimeout(reconnectTimer);
 			const activeClient = client;
+			const startingClient = establishingClient;
 			client = undefined;
+			establishingClient = undefined;
 			const remaining = Math.max(0, closeInput.deadlineAt - Date.now());
 			let timer: ReturnType<typeof setTimeout> | undefined;
 			try {
 				await Promise.race([
-					Promise.allSettled([inFlight, activeClient?.end()]),
+					Promise.allSettled([
+						inFlight,
+						activeClient?.end(),
+						startingClient?.end(),
+					]),
 					new Promise<void>((resolve) => {
 						timer = setTimeout(resolve, remaining);
 					}),
