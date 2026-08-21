@@ -908,6 +908,35 @@ killed by the timeout also fails the maintenance cycle around it. **The mechanis
 makes the work it kills grow**, which no timeout can resolve — the remedy is the
 same shape as `audit`'s, a bound on rows, and it is equally absent.
 
+**Swept the rest rather than stopping at the example.** Every `DELETE` the
+runtime issues against `questpie_internal` — nine of them — classified by whether
+a row key or a `LIMIT` bounds it:
+
+| statement                                      | bound                      |
+| ---------------------------------------------- | -------------------------- |
+| `postgres-realtime-generations.ts:130`, `:195` | keyed                      |
+| `postgres-realtime-scope.ts:78`, `:557`        | keyed                      |
+| `postgres-retention.ts:363`                    | keyed (`using evicted`)    |
+| `postgres-realtime-scope.ts:148`               | **none**                   |
+| `postgres-retention.ts:325`                    | **none**                   |
+| `postgres-retention.ts:434`, `:447`            | **none** — the prune above |
+
+Five are bounded and four are not, and the four split into two kinds. The prune
+is background. **The other two sit on the serving path**: `:148` is inside
+`openWatch` (`:139`) and deletes that principal's expired scope attachments while
+opening a watch; `:325` is inside `acknowledge` (`:304`) and deletes the
+authority partition's expired retained results while acknowledging one. Each is
+narrower than the prune — one principal, one partition — so neither scales with
+the whole database, but neither has a bound either.
+
+**The serving pair fails differently and worse in one respect.** A timeout there
+kills a user-facing operation rather than a maintenance cycle, and because both
+deletes are opportunistic cleanups riding inside that operation, the expired rows
+they failed to remove are still there for the next caller — the same compounding
+shape as the prune, now inside a request path. Whether it bites depends on how
+much one principal or one partition accumulates between calls, which nothing in
+this record measures.
+
 That is a row bound the gate does not supply and cannot;
 `durable-evidence-gaps/FINDING.md` §6 states it directly and says this record
 "should not be read as covering it". Recorded here as well because a reader of
