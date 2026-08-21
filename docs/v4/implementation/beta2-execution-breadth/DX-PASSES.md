@@ -94,10 +94,12 @@ from crossing close and proves zero remaining listener sessions; and
 does not authorize PB-04. `7b355e98` also retains redacted decoder-mismatch
 refusal. `b8da3909` closes normalized configuration, connection, and startup
 reconciliation failures with credential- and callback-redaction hostile cases
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1020`-`:1103`).
-Uncertain migration unlock, the pre-healthy transaction-pool capability
-negative, generic durable-frontier convergence, and production caller migration
-remain open.
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1094`-`:1177`).
+`c024d953` closes malformed migration configuration and uncertain advisory-lock
+cleanup with typed refusal, zero-session observation, and fresh-runner lock
+recovery (`tests/integration/postgres/beta12-postgres-module.test.ts:322`-`:346`,
+`:811`-`:857`). The pre-healthy transaction-pool capability negative, generic
+durable-frontier convergence, and production caller migration remain open.
 
 ## DX-00 — Propose executable fenced-code verification
 

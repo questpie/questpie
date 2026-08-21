@@ -2,10 +2,10 @@
 
 - Status: selected internal prototype shape; no production or public API
   authority
-- Re-derived against: `feat/v4-beta-12` at `b8da3909`
+- Re-derived against: `feat/v4-beta-12` at `c024d953`
 - Input: PB-02 topology and lifecycle finding
-- Remaining proof: uncertain migration unlock, pre-healthy transaction-pool
-  refusal, Runtime Build tamper refusal, and generic durable-frontier convergence
+- Remaining proof: pre-healthy transaction-pool refusal, Runtime Build tamper
+  refusal, and generic durable-frontier convergence
 
 ## Decision
 
@@ -433,12 +433,12 @@ transaction-PgBouncer negative boundary.
 session advisory lock across two separately committed transactions, stable
 backend identity and temporary session state, callback-scope expiry, and lock
 cleanup after failure (`packages/runtime/src/postgres/index.ts:584`-`:740`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:668`-`:785`).
+`tests/integration/postgres/beta12-postgres-module.test.ts:694`-`:859`).
 
 `360ff8e0` bounds a saturated one-connection Pool, distinguishes checkout from
 connect timeout, releases a cancelled queued checkout when it is eventually
 assigned, and proves subsequent admission (`packages/runtime/src/postgres/index.ts:116`-`:150`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:437`-`:531`). The
+`tests/integration/postgres/beta12-postgres-module.test.ts:463`-`:557`). The
 contract vocabulary moved to `postgres/contract.ts`; the cross-domain import
 seam remains `postgres/index.ts` and the architecture gate passes.
 
@@ -447,7 +447,7 @@ and uses one transient direct session to run `pg_cancel_backend`. The active
 `pg_sleep` witness proves the server statement stops before the ordinary client
 is reused; failed cancellation destroys the client instead
 (`packages/runtime/src/postgres/index.ts:171`-`:199`, `:393`-`:411`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:533`-`:580`). This
+`tests/integration/postgres/beta12-postgres-module.test.ts:559`-`:606`). This
 does not use the driver's undocumented `Client.cancel` implementation.
 
 `160af3a8` kills a backend while a deferred trigger holds `COMMIT`. The Runtime
@@ -455,13 +455,13 @@ returns `commitOutcomeUnknown` with `callerMustResolveCommit`, destroys the
 fatal client, contains its late driver error inside the checkout scope, and
 admits the next transaction on a healthy connection
 (`packages/runtime/src/postgres/index.ts:201`-`:218`, `:483`-`:505`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:582`-`:630`).
+`tests/integration/postgres/beta12-postgres-module.test.ts:608`-`:656`).
 
 `0993433d` composes an internal shutdown signal into every admitted Transaction
 Scope. A callback held past its deadline is rejected, its client is ended, Pool
 drain completes, the Runtime becomes `closed`, and later admission refuses
 (`packages/runtime/src/postgres/index.ts:346`-`:369`, `:475`-`:560`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:632`-`:666`).
+`tests/integration/postgres/beta12-postgres-module.test.ts:658`-`:692`).
 
 `172720bf` adds bounded Pool/cancellation/destruction counters and proves the
 serialized failure/facts boundary. A real constraint error contains a sensitive
@@ -469,12 +469,12 @@ row value in its internal driver cause, but JSON contains only the stable code,
 phase, statement identity, SQLSTATE, and retry disposition; neither facts nor
 failure JSON contains the URL, SQL, or parameter
 (`packages/runtime/src/postgres/contract.ts:137`-`:161`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:369`-`:433`).
+`tests/integration/postgres/beta12-postgres-module.test.ts:395`-`:461`).
 
 `527be565` publishes a notification after committed `LISTEN` while startup
 reconciliation is deliberately held open. The queued reconciliation runs before
 the listener is accepted healthy, proving the startup wake is not dropped
-(`tests/integration/postgres/beta12-postgres-module.test.ts:862`-`:957`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:936`-`:1030`).
 
 `abfaa889` adds the Runtime generation router. Candidate transaction
 verification and candidate `LISTEN` plus startup reconciliation complete before
@@ -482,7 +482,7 @@ the atomic swap; the old generation continues admitting work while verification
 is held. Both an unreachable endpoint and invalid configuration leave generation
 2, its listener, and its cumulative facts authoritative
 (`packages/runtime/src/postgres/runtime.ts:26`-`:201`,
-`tests/integration/postgres/beta12-postgres-module.test.ts:1105`-`:1203`). The
+`tests/integration/postgres/beta12-postgres-module.test.ts:1179`-`:1277`). The
 stable listener handle follows the winning generation rather than retaining a
 closed Client.
 
@@ -491,7 +491,7 @@ closed Client.
 listener. The retained negative points the listener itself at transaction mode:
 startup reconciliation succeeds but the subsequent wake is absent, proving why
 the two URLs are not interchangeable
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1399`-`:1466`). CI
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1473`-`:1540`). CI
 runs the focused witness on PostgreSQL 17 with the pinned pooler image
 (`.github/workflows/ci.yml:85`-`:133`).
 
@@ -515,14 +515,25 @@ phase without serializing driver or callback details
 `packages/runtime/src/postgres/listener.ts:47`-`:68`, `:124`-`:177`). The
 retained hostile case covers malformed and unreachable credential-bearing URLs,
 a sensitive reconciliation failure, and a nested normalized database failure
-(`tests/integration/postgres/beta12-postgres-module.test.ts:1020`-`:1103`).
+(`tests/integration/postgres/beta12-postgres-module.test.ts:1094`-`:1177`).
 
-Still open in PB-03: uncertain migration unlock cleanup, the required pre-healthy
-transaction-pool capability negative, Runtime Build tamper refusal, and generic
-durable-frontier convergence across a disconnect. Actual Change Ledger
-integration and migration of existing Bun SQL callers remain downstream
-PB-04/Bun-removal work; PB-04 remains blocked until the callers move through
-this seam.
+`c024d953` closes uncertain migration cleanup. Connection configuration is
+validated before driver construction, including the transient migration path;
+the malformed credential-bearing control returns only `configuration/connect`
+(`packages/runtime/src/postgres/index.ts:43`-`:69`, `:538`-`:551`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:322`-`:346`). After
+user work, a false or failed advisory unlock becomes
+`sessionNotAffine/shutdown`, the pinned session is ended, and successful output
+is refused (`packages/runtime/src/postgres/index.ts:721`-`:749`). The retained
+PostgreSQL case terminates that session at cleanup, observes zero remaining
+migration sessions, and reacquires the same application lock
+(`tests/integration/postgres/beta12-postgres-module.test.ts:811`-`:857`).
+
+Still open in PB-03: the required pre-healthy transaction-pool capability
+negative, Runtime Build tamper refusal, and generic durable-frontier convergence
+across a disconnect. Actual Change Ledger integration and migration of existing
+Bun SQL callers remain downstream PB-04/Bun-removal work; PB-04 remains blocked
+until the callers move through this seam.
 
 ## Deletion test
 
