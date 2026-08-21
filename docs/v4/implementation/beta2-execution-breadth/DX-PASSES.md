@@ -273,6 +273,29 @@ frontiers and generation, and emits no duplicate frame (`:681`-`:702`). The
 PostgreSQL 17 lane at this head passes **11/11 with 185 assertions**, including
 six stable targeted repetitions.
 
+`325a069b` closes explicit drain during in-flight reconciliation. The real
+coordinator first reaches a quiescent initial result with exactly one retained
+generation. A committed Change Ledger fact plus notification then enters and
+holds evaluation two
+(`325a069b:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:758`-`:825`).
+Drain remains pending while that evaluation is held. After release, drain
+completes with the listener closed, the Runtime listener disabled, and later
+explicit scans refused (`:826`-`:843`). The durable scope is a withdrawn
+tombstone with zero watches and zero generations, while the already-pending
+carrier read stays silent (`:845`-`:884`). The PostgreSQL 17 targeted witness
+passes three stable repetitions and the full lane passes **12/12 with 197
+assertions**. This closes explicit drain; the distinct owner-abort lifecycle
+control remains the earlier `1ddfb42b` witness, not a claim made by this test.
+
+`0d3c66ac` closes single fallback ownership. A hostile compatibility tick source
+is deliberately forged into database-mode input while the listener records its
+own fallback configuration
+(`0d3c66ac:tests/integration/postgres/beta07-postgres-no-affinity-carrier.test.ts:407`-`:460`).
+Startup creates exactly one listener with the 10-second fallback and never arms
+the legacy source; explicit scan routes only to that listener
+(`:462`-`:473`). Concurrent drain closes the listener exactly once, still never
+touches the legacy source, and leaves later scans unavailable (`:475`-`:483`).
+
 The generated application remains on the compatibility path: its emitted
 module still imports Bun `SQL`, constructs `new SQL(input.postgres.url)`, and
 passes `sql` to the Live Query coordinator
@@ -280,14 +303,12 @@ passes `sql` to the Live Query coordinator
 still owns Runtime Build projection onto `RuntimePostgres`, the remaining Bun
 callers, and the production-wide deletion test.
 
-### Remaining PB-04 hostile closure matrix after `f09c97ec`
+### Remaining PB-04 hostile closure matrix after `0d3c66ac`
 
 | Missing hostile case                     | Exact falsifying witness required                                                                                                                                                                                                             |
 | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Runtime generation rotation              | Hold or queue reconciliation during candidate startup, prove the candidate mutates no process-local holder or frame before swap, then prove exactly one active-generation delivery; repeat with a failed candidate and retain the old winner. |
-| Drain during in-flight reconciliation    | Hold full reconciliation after it starts, race drain/owner abort, release the hold, and prove no post-drain publish, scope resurrection, or later scan.                                                                                       |
 | Coordinator-owned reconciliation failure | Force a real ledger/store/retention failure through the coordinator, prove normalized credential- and callback-redacted failure, then prove a later wake can recover.                                                                         |
-| Single fallback owner                    | Instrument database mode and prove it constructs no synthetic reconciliation timer in addition to the listener's fallback interval.                                                                                                           |
 
 PB-03's generic listener tests remain prerequisites for several rows, but they
 cannot substitute for these Change Ledger and coordinator-level witnesses. A
