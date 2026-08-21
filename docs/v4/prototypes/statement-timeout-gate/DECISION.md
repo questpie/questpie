@@ -619,6 +619,31 @@ Policy-filtered query. Its serving tail is therefore lower than its maximum
 suggests, and a bound derived from that number would be derived from test setup:
 the same DDL-in-the-tail trap recorded under item 1, in a second guise.
 
+**Attributed per statement since, and the forty times was fixture setup.**
+`log_statement = 'all'` is also `superuser` context, so setting it on the probe
+database alongside the duration logging recovers the SQL for every execution.
+Re-running the same three suites attributed all 4,870, reproducing the totals and
+percentiles above exactly. Excluding suite fixture seeding, the slowest **served**
+statement on each path is:
+
+| path           | slowest served statement                                      | max    | p95    | n   |
+| -------------- | ------------------------------------------------------------- | ------ | ------ | --- |
+| Mutation       | `SELECT TRUE AS "qp_locked" … LIMIT 1 FOR UPDATE`             | 17.064 | 15.560 | 6   |
+| Relational     | `WITH "qp_authorized" AS MATERIALIZED …` — the Policy query   | 3.177  | 2.902  | 3   |
+| Durable kernel | `SELECT state, attempt_count AS "attemptCount" …` — `readRun` | 3.329  | 2.939  | 11  |
+
+**So the spread is 1.05× between the relational and durable paths, and 5.37×
+only because of the lock.** The earlier "forty times" in this section is the
+relational path's 132.532 ms `insert into collaboration.messages`, which the
+attribution shows is four fixture-seeding statements with a p95 of 112.728 —
+setup, not service. Corrected here rather than above, because the aggregate
+numbers stand and only their interpretation was wrong.
+
+**The lock is not a single outlier.** Six executions of `qp_locked` with a p95 of
+15.560 ms means the slow lock wait is the normal case for that statement under
+this suite's contention, not a tail event. Every other served statement across
+three subsystems sits at or under 3.4 ms.
+
 **Scope.** One run per suite, warm local container, small fixtures. One test in
 the Mutation suite fails — "runs against the exact declared supported PostgreSQL
 major" — identically against the ordinary database, so it is a pre-existing
