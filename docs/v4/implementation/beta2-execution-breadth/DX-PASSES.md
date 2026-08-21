@@ -84,6 +84,17 @@ PgBouncer 1.24.1 transaction-mode lane with a direct-listener positive and a
 pooled-listener negative. Disconnect ledger convergence, additional hostile
 migration cleanup, and caller migration remain open.
 
+The first adversarial pass is retained in
+`docs/v4/research/production-backend/postgres-module-adversarial-audit.md`.
+`48429c3c` closes Runtime resurrection and concurrent listener ownership;
+`3e2cfa24` closes active migration cancellation, deadline, and timeout
+narrowing; `2428e8f7` bounds rotation and close; `e1bc6dde` prevents a reconnect
+from crossing close and proves zero remaining listener sessions; and
+`14205c25` retains failures produced during old-generation drain. PB-03 still
+does not authorize PB-04: normalized listener failures, uncertain migration
+unlock, the pre-healthy transaction-pool capability negative, generic durable-
+frontier convergence, and production caller migration remain open.
+
 ## DX-00 — Propose executable fenced-code verification
 
 The proposed gate extracts TypeScript fences from

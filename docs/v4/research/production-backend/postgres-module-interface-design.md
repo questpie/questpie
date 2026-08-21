@@ -495,9 +495,22 @@ the two URLs are not interchangeable
 runs the focused witness on PostgreSQL 17 with the pinned pooler image
 (`.github/workflows/ci.yml:85`-`:133`).
 
-Still open in PB-03: durable ledger convergence across a disconnect, additional
-hostile migration cleanup, and migration of existing Bun SQL callers. PB-04
-remains blocked until the callers move through this seam.
+The adversarial lifecycle pass is recorded in
+`postgres-module-adversarial-audit.md`. `48429c3c` closes Runtime resurrection
+and concurrent listener ownership (`packages/runtime/src/postgres/runtime.ts:148`-`:290`);
+`3e2cfa24` closes active migration cancellation, absolute deadline, and timeout
+narrowing (`packages/runtime/src/postgres/control.ts:3`-`:31`,
+`packages/runtime/src/postgres/index.ts:622`-`:782`); `2428e8f7` bounds rotation
+and close; `e1bc6dde` prevents reconnect from crossing close; and `14205c25`
+retains old-generation drain failures in cumulative facts. The retained hostile
+cases and external session observations are cited individually in the audit.
+
+Still open in PB-03: normalized listener/reconciliation failures, uncertain
+migration unlock cleanup, the required pre-healthy transaction-pool capability
+negative, decoder mismatch, and generic durable-frontier convergence across a
+disconnect. Actual Change Ledger integration and migration of existing Bun SQL
+callers remain downstream PB-04/Bun-removal work; PB-04 remains blocked until
+the callers move through this seam.
 
 ## Deletion test
 
