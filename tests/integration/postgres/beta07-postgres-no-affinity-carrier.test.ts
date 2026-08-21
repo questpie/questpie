@@ -404,6 +404,85 @@ test("the owner signal drains the database-mode coordinator listener", async () 
 	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
 });
 
+test("database mode owns one listener fallback and never arms the legacy wake", async () => {
+	const tickCalls = { start: 0, request: 0, drain: 0 };
+	const hostileTickSource: PostgresWakeTickSource = Object.freeze({
+		armInterval() {
+			tickCalls.start += 1;
+			return () => {
+				tickCalls.drain += 1;
+			};
+		},
+		armDeadline() {
+			tickCalls.request += 1;
+			return () => {};
+		},
+	});
+	const listenerCalls = {
+		close: 0,
+		fallbackIntervals: [] as number[],
+		request: 0,
+		start: 0,
+	};
+	const listener = {
+		facts: () => ({
+			state: "healthy" as const,
+			generation: 1,
+			reconnects: 0,
+			lastReconciledAt: Date.now(),
+		}),
+		requestReconcile: () => {
+			listenerCalls.request += 1;
+			return Promise.resolve();
+		},
+		close: async () => {
+			listenerCalls.close += 1;
+		},
+	} satisfies PostgresListener;
+	const postgres: Pick<RuntimePostgres, "transaction" | "listen"> = {
+		transaction: () => Promise.reject(new Error("unexpected transaction")),
+		listen(input) {
+			listenerCalls.start += 1;
+			listenerCalls.fallbackIntervals.push(input.fallbackIntervalMs);
+			return Promise.resolve(listener);
+		},
+	};
+	// Deliberately forge the statically disjoint selection at the runtime
+	// boundary. Database mode must ignore the legacy tick source completely.
+	const coordinator = createPostgresLiveQueryCoordinator({
+		program: liveQueryProgram,
+		postgres,
+		tickSource: hostileTickSource,
+		hmacKey: new Uint8Array(32).fill(7),
+		applicationName,
+		deploymentDigest,
+		wireVersion: 1,
+	} as unknown as Parameters<typeof createPostgresLiveQueryCoordinator>[0]);
+
+	await coordinator.start();
+	expect(listenerCalls).toEqual({
+		close: 0,
+		fallbackIntervals: [10_000],
+		request: 0,
+		start: 1,
+	});
+	expect(tickCalls).toEqual({ start: 0, request: 0, drain: 0 });
+
+	await coordinator.durable!.requestScan();
+	expect(listenerCalls.request).toBe(1);
+	expect(tickCalls).toEqual({ start: 0, request: 0, drain: 0 });
+
+	await Promise.all([coordinator.drain(), coordinator.drain()]);
+	expect(listenerCalls).toEqual({
+		close: 1,
+		fallbackIntervals: [10_000],
+		request: 1,
+		start: 1,
+	});
+	expect(tickCalls).toEqual({ start: 0, request: 0, drain: 0 });
+	await expect(coordinator.durable!.requestScan()).rejects.toThrow("not ready");
+});
+
 describe.skipIf(databases.length === 0)(
 	"BETA-07 no-affinity PostgreSQL carrier",
 	() => {
