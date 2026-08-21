@@ -67,12 +67,17 @@ transient pinned migration runner. The design comparison and deletion test are
 complete; executable PostgreSQL 16/17/18 and transaction-PgBouncer hostile proof
 still blocks production migration and PB-04.
 
-Executable PB-03 has started: `59fa031c` proves the static-statement transaction
-kernel and `63924ba7` proves committed LISTEN, notification wake, forced
-disconnect, reconnect, and reconcile-before-healthy against local PostgreSQL
-16/17/18. These are retained positive controls, not closure: PgBouncer,
-cancellation, saturation, commit ambiguity, pinned migration, rotation,
-shutdown, diagnostic redaction, and caller migration remain open.
+Executable PB-03 now retains seven real-database scenarios against PostgreSQL
+16, 17, and 18. `59fa031c` proves the static-statement transaction kernel;
+`63924ba7` proves committed LISTEN, notification wake, forced disconnect,
+reconnect, and reconcile-before-healthy; `732b78d8` proves pinned migration
+identity, advisory-lock ownership, and cleanup; `360ff8e0` proves bounded
+saturation and queued cancellation; `ca93e617` proves active SQL cancellation
+through the required direct endpoint; and `160af3a8` proves unknown COMMIT
+classification plus fatal-client eviction. These are retained positive and
+hostile controls, not closure: lost-wake convergence, rotation, forced
+shutdown, diagnostic redaction, PgBouncer, additional hostile migration
+cleanup, and caller migration remain open.
 
 ## DX-00 — Propose executable fenced-code verification
 

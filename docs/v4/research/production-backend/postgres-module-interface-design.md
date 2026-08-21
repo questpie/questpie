@@ -429,10 +429,38 @@ re-`LISTEN`, and reconciliation before healthy state. The witness does not yet
 prove ledger convergence for a wake lost during the disconnect or the
 transaction-PgBouncer negative boundary.
 
-Still open in PB-03: bounded checkout saturation, AbortSignal cancel-or-destroy,
-unknown COMMIT outcome, pinned migration affinity/lock ownership, rotation,
-forced shutdown, safe diagnostics, PgBouncer, and migration of existing Bun SQL
-callers. PB-04 remains blocked.
+`732b78d8` adds the direct migration runner. PostgreSQL 16, 17, and 18 prove one
+session advisory lock across two separately committed transactions, stable
+backend identity and temporary session state, callback-scope expiry, and lock
+cleanup after failure (`packages/runtime/src/postgres/index.ts:544`-`:700`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:503`-`:563`).
+
+`360ff8e0` bounds a saturated one-connection Pool, distinguishes checkout from
+connect timeout, releases a cancelled queued checkout when it is eventually
+assigned, and proves subsequent admission (`packages/runtime/src/postgres/index.ts:120`-`:150`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:308`-`:401`). The
+contract vocabulary moved to `postgres/contract.ts`; the cross-domain import
+seam remains `postgres/index.ts` and the architecture gate passes.
+
+`ca93e617` makes `directConnectionUrl` required by the ordinary database module
+and uses one transient direct session to run `pg_cancel_backend`. The active
+`pg_sleep` witness proves the server statement stops before the ordinary client
+is reused; failed cancellation destroys the client instead
+(`packages/runtime/src/postgres/index.ts:153`-`:180`, `:363`-`:385`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:404`-`:451`). This
+does not use the driver's undocumented `Client.cancel` implementation.
+
+`160af3a8` kills a backend while a deferred trigger holds `COMMIT`. The Runtime
+returns `commitOutcomeUnknown` with `callerMustResolveCommit`, destroys the
+fatal client, contains its late driver error inside the checkout scope, and
+admits the next transaction on a healthy connection
+(`packages/runtime/src/postgres/index.ts:183`-`:200`, `:457`-`:477`,
+`tests/integration/postgres/beta12-postgres-module.test.ts:453`-`:500`).
+
+Still open in PB-03: lost-wake ledger convergence, failed rotation retaining the
+old generation, forced shutdown, complete safe diagnostics, the
+transaction-PgBouncer boundary, additional hostile migration cleanup, and
+migration of existing Bun SQL callers. PB-04 remains blocked.
 
 ## Deletion test
 
