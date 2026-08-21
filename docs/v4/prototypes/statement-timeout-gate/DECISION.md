@@ -670,11 +670,45 @@ wait bound; a single pair cannot be tight for both.
 **The measured difference between paths is contention, not path.** The durable
 kernel's `readRun` takes `FOR UPDATE` by default too
 (`packages/runtime/src/durable/postgres-maintenance.ts:160`), so its 3.329 ms
-maximum reflects an uncontended run rather than a lock-free path. Under
-contention it would show the same shape as the Mutation path, and any per-path
-number derived from these runs inherits that assumption. **That is the strongest
-argument in this record for deriving per path from a contended workload rather
-than from whichever suite happened to be measured.**
+maximum reflects an uncontended run rather than a lock-free path. Any per-path
+number derived from these runs inherits that assumption, which argued for
+deriving from a contended workload rather than whichever suite was to hand.
+
+**Run against the contended workload, and the prediction in that paragraph was
+wrong.** `tests/load/beta08-worker-contention.ts` — 64 runs, 8 workers, a
+ten-connection pool — under the same capture, 7,225 paired statements:
+
+| population                     | n     | p50   | p95   | max    |
+| ------------------------------ | ----- | ----- | ----- | ------ |
+| all serving statements         | 7,225 | 0.051 | 1.029 | 23.091 |
+| `FOR UPDATE SKIP LOCKED` claim | 512   | 0.060 | 0.095 | 0.336  |
+| plain `FOR UPDATE`             | 129   | 0.016 | 0.027 | 0.044  |
+| `COMMIT`                       | 1,126 | 0.040 | 2.151 | 23.091 |
+
+Thirteen statements exceed 5 ms, one exceeds 20 ms, none exceeds 100 ms.
+
+**`SKIP LOCKED` never waited, measured where it could have failed.** 512
+executions — matching the 512 admissions the scenario reports — with a maximum of
+0.336 ms. This record's claim that "the durable claim path is unaffected because
+it uses `FOR UPDATE SKIP LOCKED`, which never waits" is now measured under
+eight-way contention rather than argued.
+
+**And plain `FOR UPDATE` did not wait either**, 129 executions at a 0.044 ms
+maximum, which is what the paragraph above predicted would show "the same shape
+as the Mutation path". It did not. Eight workers contending for a _queue_ take
+different rows; the Mutation `qp_locked` waits arise when several mutations key
+the same row. **So the lock-wait problem is same-row contention, not
+concurrency**, which narrows what the bound is protecting against more than
+anything else measured here.
+
+**The contended tail is `COMMIT`.** 1,126 executions, p95 2.151 ms, max
+23.091 ms — WAL and fsync, not locks, and not a statement any timeout should be
+sized to kill.
+
+**Read the numbers with the logging cost in view.** The scenario passed its
+budget under full statement logging at 517.798 ms against 2,000, versus a
+330.045 ms reference observation, so logging inflated the run by roughly half
+and these durations are upper bounds rather than clean measurements.
 
 **Scope.** One run per suite, warm local container, small fixtures. One test in
 the Mutation suite fails — "runs against the exact declared supported PostgreSQL
