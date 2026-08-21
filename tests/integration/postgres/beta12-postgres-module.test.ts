@@ -319,6 +319,32 @@ async function eventually(
 	}
 }
 
+test("redacts malformed migration connection configuration", () => {
+	const sensitiveUrl =
+		"postgres://qp-secret-user:qp-secret-password@[invalid/postgres";
+	let error: unknown;
+	try {
+		createMigrationPostgres({
+			directConnectionUrl: sensitiveUrl,
+			timeouts: {
+				statementMs: 1_000,
+				lockMs: 500,
+				idleInTransactionMs: 1_000,
+			},
+		});
+	} catch (failure) {
+		error = failure;
+	}
+	expect(JSON.parse(JSON.stringify(error))).toEqual({
+		name: "QuestpiePostgresError",
+		code: "configuration",
+		phase: "connect",
+		retry: "never",
+	});
+	expect(String(error)).not.toContain("qp-secret-user");
+	expect(String(error)).not.toContain("qp-secret-password");
+});
+
 postgresTest(
 	"executes a decoded static statement in one bounded transaction",
 	async () => {
@@ -781,6 +807,54 @@ postgresTest(
 				use: () => Promise.resolve("contention-recovered"),
 			}),
 		).resolves.toBe("contention-recovered");
+
+		const observer = database();
+		try {
+			await expect(
+				migration.run({
+					application: "pb03MigrationUncertainUnlock",
+					use: async (session) => {
+						const pid = await session.transaction({
+							mode: {
+								isolation: "readCommitted",
+								access: "readOnly",
+							},
+							use: (transaction) =>
+								transaction.execute(currentBackendPid, undefined),
+						});
+						const terminated = await observer.transaction({
+							mode: {
+								isolation: "readCommitted",
+								access: "readWrite",
+							},
+							use: (transaction) => transaction.execute(terminateBackend, pid),
+						});
+						expect(terminated).toBe(true);
+						return "must not report success";
+					},
+				}),
+			).rejects.toMatchObject({
+				code: "sessionNotAffine",
+				phase: "shutdown",
+				retry: "never",
+			});
+			await expect(
+				observer.transaction({
+					mode: { isolation: "readCommitted", access: "readOnly" },
+					use: (transaction) =>
+						transaction.execute(listenerSessionCount, "questpie-migration"),
+				}),
+			).resolves.toBe(0);
+			await expect(
+				migration.run({
+					application: "pb03MigrationUncertainUnlock",
+					control: { lockTimeoutMs: 100 },
+					use: () => Promise.resolve("uncertain-unlock-recovered"),
+				}),
+			).resolves.toBe("uncertain-unlock-recovered");
+		} finally {
+			await observer.close({ deadlineAt: Date.now() + 1_000 });
+		}
 	},
 );
 

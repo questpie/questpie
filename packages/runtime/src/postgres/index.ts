@@ -40,12 +40,20 @@ function positiveInteger(value: number): void {
 		});
 }
 
+function connectionUrl(value: unknown): value is string {
+	if (typeof value !== "string" || value.length === 0) return false;
+	try {
+		const parsed = new URL(value);
+		return parsed.protocol === "postgres:" || parsed.protocol === "postgresql:";
+	} catch {
+		return false;
+	}
+}
+
 function validateConfiguration(input: PostgresDatabaseConfiguration): void {
 	if (
-		typeof input.connectionUrl !== "string" ||
-		input.connectionUrl.length === 0 ||
-		typeof input.directConnectionUrl !== "string" ||
-		input.directConnectionUrl.length === 0
+		!connectionUrl(input.connectionUrl) ||
+		!connectionUrl(input.directConnectionUrl)
 	)
 		throw new QuestpiePostgresError({
 			code: "configuration",
@@ -533,10 +541,7 @@ export function createMigrationPostgres(
 		timeouts: PostgresDatabaseConfiguration["timeouts"];
 	}>,
 ): MigrationPostgres {
-	if (
-		typeof input.directConnectionUrl !== "string" ||
-		input.directConnectionUrl.length === 0
-	)
+	if (!connectionUrl(input.directConnectionUrl))
 		throw new QuestpiePostgresError({
 			code: "configuration",
 			phase: "connect",
@@ -570,6 +575,7 @@ export function createMigrationPostgres(
 				application_name: "questpie-migration",
 				connectionTimeoutMillis: 1_000,
 			});
+			client.on("error", () => {});
 			try {
 				await (signal
 					? withSignal(client.connect(), signal)
@@ -584,6 +590,8 @@ export function createMigrationPostgres(
 			let transactionActive = false;
 			let cancellation: Promise<void> | undefined;
 			let cancel: (() => void) | undefined;
+			let output!: Output;
+			let cleanupFailure: QuestpiePostgresError | undefined;
 			try {
 				const firstPid = await clientPid(client);
 				cancel = () => {
@@ -702,7 +710,7 @@ export function createMigrationPostgres(
 					},
 				});
 				try {
-					return await (signal
+					output = await (signal
 						? withSignal(runInput.use(session), signal)
 						: runInput.use(session));
 				} catch (error) {
@@ -715,15 +723,30 @@ export function createMigrationPostgres(
 				controlled.close();
 				if (cancel) signal?.removeEventListener("abort", cancel);
 				if (cancellation) await cancellation;
-				if (locked)
-					await client
-						.query({
+				if (locked) {
+					try {
+						const result = await client.query({
 							text: "SELECT pg_catalog.pg_advisory_unlock($1::bigint)",
 							values: [migrationLockKey(runInput.application)],
-						})
-						.catch(() => {});
+							rowMode: "array",
+						});
+						if (result.rows[0]?.[0] !== true)
+							cleanupFailure = new QuestpiePostgresError({
+								code: "sessionNotAffine",
+								phase: "shutdown",
+							});
+					} catch (error) {
+						cleanupFailure = new QuestpiePostgresError({
+							code: "sessionNotAffine",
+							phase: "shutdown",
+							cause: error,
+						});
+					}
+				}
 				await client.end().catch(() => {});
 			}
+			if (cleanupFailure) throw cleanupFailure;
+			return output;
 		},
 	});
 }
