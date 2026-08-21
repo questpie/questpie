@@ -27,12 +27,17 @@ and a reader should not have to reconstruct the current position from them.
 1. **Transaction-scoped `set_config` wherever a transaction already exists** —
    Mutation, relational, and the durable kernel transactions. This is the only
    part that gives the framework a bound it _guarantees_ rather than inherits,
-   and on the durable and Mutation paths it costs **no additional round trip**:
-   each of those already sends a `set_config` marker statement, and `set_config`
-   composes in one `SELECT`. Measured at 0.027 ms per transaction, server-side
-   work rather than a round trip — see "And it costs no round trip at all"
-   below. The relational path runs no marker, so there it is one added statement
-   after the `BEGIN` it already opens.
+   and on the **durable** paths it costs **no additional round trip**: the
+   durable kernel, maintenance and effects transactions each send a `set_config`
+   marker as their first statement, and `set_config` composes in one `SELECT`.
+   Measured at 0.027 ms per transaction, server-side work rather than a round
+   trip — see "And it costs no round trip at all" below. **The Mutation path is
+   not one of them**: its marker sits inside
+   `for (const dispatch of reactions.pending)`
+   (`packages/runtime/src/mutation/postgres.ts:270`, marker at `:281`), so a
+   Mutation that dispatches no Reaction sends no marker and there is nothing to
+   fold into. There, and on the relational path, the timeout is one added
+   statement after the `BEGIN` already opened.
 2. **A database- or role-level baseline for everything else**, as a deployment
    requirement asserted in conformance rather than serving-path code. It reaches
    the five bare-statement reads, which the transaction-scoped mechanism cannot.
@@ -267,6 +272,17 @@ same. Five call sites run it today, covering every path this gate is about:
 `packages/runtime/src/durable/postgres-maintenance.ts:136`,
 `packages/runtime/src/durable/postgres-effects.ts:77`, and the Mutation
 transaction at `packages/runtime/src/mutation/postgres.ts:281`.
+
+**Corrected under adversarial review: the Mutation site does not belong in that
+list.** The three durable call sites are the first statement inside their
+transaction wrapper, immediately after the `query` helper is defined, so they run
+on every durable transaction. The Mutation call at `:281` sits inside
+`for (const dispatch of reactions.pending)` (`:270`). A Mutation that dispatches
+no Reaction never runs it, and one that dispatches N runs it N times. **So the
+fold is free on the three durable paths and unavailable on the Mutation path**,
+which is the highest-volume write path and the one carrying the `qp_locked` lock
+this gate is most concerned with. There the timeout costs one added statement
+after `BEGIN`, the same as the relational path.
 
 Measured on PostgreSQL 17, 400 `BEGIN`/marker/`COMMIT` cycles after 50 warm-up
 rounds, comparing the shipped one-value marker against a three-value form
