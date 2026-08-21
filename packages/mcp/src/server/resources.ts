@@ -25,7 +25,7 @@ import {
 	scopesFromContext,
 } from "./policy.js";
 import type { RuntimeScope } from "./runtime.js";
-import { jsonResource } from "./runtime.js";
+import { jsonResource, toRequestContext } from "./runtime.js";
 import { toJsonSchema } from "./zod-json-schema.js";
 
 function fallbackExtra(requestId: string): McpHandlerExtra {
@@ -63,13 +63,7 @@ async function collectionSchema(
 	const collection = (scope.app.getCollections() as Record<string, any>)[name];
 	return introspectCollection(
 		collection,
-		{
-			db: ctx.db ?? scope.app.db,
-			session: ctx.session,
-			locale: ctx.locale,
-			accessMode: scope.accessMode,
-			stage: ctx.stage,
-		},
+		toRequestContext({ ...ctx, db: ctx.db ?? scope.app.db }, scope.accessMode),
 		scope.app,
 	);
 }
@@ -82,13 +76,7 @@ async function globalSchema(
 	const global = (scope.app.getGlobals() as Record<string, any>)[name];
 	return introspectGlobal(
 		global,
-		{
-			db: ctx.db ?? scope.app.db,
-			session: ctx.session,
-			locale: ctx.locale,
-			accessMode: scope.accessMode,
-			stage: ctx.stage,
-		},
+		toRequestContext({ ...ctx, db: ctx.db ?? scope.app.db }, scope.accessMode),
 		scope.app,
 	);
 }

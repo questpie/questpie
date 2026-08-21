@@ -477,6 +477,7 @@ async function evaluateGlobalAccess(
 		actor: context.actor,
 	});
 	const accessContext: GlobalAccessContext = {
+		...(context["~contextExtensions"] ?? {}),
 		...services,
 		locale: context.locale,
 	} as GlobalAccessContext;

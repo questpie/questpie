@@ -58,6 +58,7 @@ export interface ResolvedMcpPolicy {
 	workload?: McpWorkloadRequirement;
 	operationWorkloads: Record<string, McpWorkloadRequirement>;
 	fields?: { include?: string[]; exclude?: string[] };
+	relationLoading?: boolean;
 	description?: string;
 }
 
@@ -295,6 +296,7 @@ function normalizePolicy(
 		workload: defaults.workload,
 		operationWorkloads: { ...(defaults.operationWorkloads ?? {}) },
 		fields: defaults.fields,
+		relationLoading: defaults.relationLoading,
 		description: defaults.description,
 	};
 

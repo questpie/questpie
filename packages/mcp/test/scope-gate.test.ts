@@ -47,6 +47,17 @@ const lockedNotes = collection("lockedNotes")
 		delete: false,
 	});
 
+const tenantPosts = collection("tenantPosts")
+	.fields(({ f }) => ({ title: f.text(255).required() }))
+	.access({
+		read: (ctx) =>
+			(ctx as typeof ctx & { tenantId?: string }).tenantId === "tenant-a" &&
+			ctx.actor?.kind === "human",
+		create: false,
+		update: false,
+		delete: false,
+	});
+
 const siteSettings = global("siteSettings")
 	.fields(({ f }) => ({
 		siteName: f.text(255).required(),
@@ -54,6 +65,15 @@ const siteSettings = global("siteSettings")
 	.access({
 		read: ({ session }) => !!session,
 		update: ({ session }) => !!session,
+	});
+
+const tenantSettings = global("tenantSettings")
+	.fields(({ f }) => ({ label: f.text(255) }))
+	.access({
+		read: (ctx) =>
+			(ctx as typeof ctx & { tenantId?: string }).tenantId === "tenant-a" &&
+			ctx.actor?.kind === "human",
+		update: false,
 	});
 
 const reportRoute = route()
@@ -117,6 +137,16 @@ function oauthCtx(scopes: string[]): AppContext & Partial<RequestContext> {
 			tokenId: "token-1",
 		},
 	} as any) as unknown as AppContext & Partial<RequestContext>;
+}
+
+function tenantOauthCtx(
+	scopes: string[],
+): AppContext & Partial<RequestContext> {
+	return {
+		...oauthCtx(scopes),
+		actor: { kind: "human", id: "actor-a" },
+		"~contextExtensions": { tenantId: "tenant-a" },
+	};
 }
 
 // A ctx whose oauth `scopes` array is MUTABLE by reference. Because the runtime
@@ -221,8 +251,8 @@ describe("MO8 OAuth scope gate", () => {
 
 	beforeEach(async () => {
 		setup = await buildMockApp({
-			collections: { posts, lockedNotes },
-			globals: { siteSettings },
+			collections: { posts, lockedNotes, tenantPosts },
+			globals: { siteSettings, tenantSettings },
 			routes: { "reports/generate:POST": reportRoute },
 			mcpTools: { scoped: scopedCustomTool, open: openCustomTool },
 			// Enable write/delete tools over HTTP at the MCP-policy layer. The HTTP
@@ -233,6 +263,10 @@ describe("MO8 OAuth scope gate", () => {
 			// its `.access()` (proving the gate can only remove, never grant).
 			config: {
 				mcp: {
+					resources: {
+						collections: { tenantPosts: true },
+						globals: { tenantSettings: true },
+					},
 					crud: {
 						collections: {
 							posts: {
@@ -255,11 +289,15 @@ describe("MO8 OAuth scope gate", () => {
 									delete: true,
 								},
 							},
+							tenantPosts: {
+								operations: { list: true },
+							},
 						},
 						globals: {
 							siteSettings: {
 								operations: { get: true, update: true },
 							},
+							tenantSettings: { operations: { get: true } },
 						},
 					},
 					routes: {
@@ -302,6 +340,71 @@ describe("MO8 OAuth scope gate", () => {
 		expect(names).not.toContain("collections.posts.create");
 		expect(names).not.toContain("collections.posts.update");
 		expect(names).not.toContain("collections.posts.delete");
+	});
+
+	it("preserves request context extensions for collection access discovery", async () => {
+		const allowed = await listToolNames(
+			tenantOauthCtx([
+				"collections:tenantPosts:read",
+				"globals:tenantSettings:read",
+			]),
+			setup.app,
+		);
+		expect(allowed).toContain("collections.tenantPosts.list");
+		expect(allowed).toContain("globals.tenantSettings.get");
+
+		const denied = await listToolNames(
+			oauthCtx(["collections:tenantPosts:read", "globals:tenantSettings:read"]),
+			setup.app,
+		);
+		expect(denied).not.toContain("collections.tenantPosts.list");
+		expect(denied).not.toContain("globals.tenantSettings.get");
+	});
+
+	it("preserves request context extensions for schema resource discovery", async () => {
+		const allowedServer = await createMcpServer(setup.app, {
+			transport: "http",
+			ctx: tenantOauthCtx([
+				"collections:tenantPosts:read",
+				"globals:tenantSettings:read",
+			]),
+		});
+		const { client: allowedClient, close: closeAllowed } =
+			await connect(allowedServer);
+		try {
+			const collections = await allowedClient.readResource({
+				uri: "questpie://schema/collections",
+			});
+			const globals = await allowedClient.readResource({
+				uri: "questpie://schema/globals",
+			});
+			expect(JSON.stringify(collections.contents)).toContain("tenantPosts");
+			expect(JSON.stringify(globals.contents)).toContain("tenantSettings");
+		} finally {
+			await closeAllowed();
+		}
+
+		const deniedServer = await createMcpServer(setup.app, {
+			transport: "http",
+			ctx: oauthCtx([
+				"collections:tenantPosts:read",
+				"globals:tenantSettings:read",
+			]),
+		});
+		const { client: deniedClient, close: closeDenied } =
+			await connect(deniedServer);
+		try {
+			const collections = await deniedClient.readResource({
+				uri: "questpie://schema/collections",
+			});
+			const globals = await deniedClient.readResource({
+				uri: "questpie://schema/globals",
+			});
+			expect(JSON.stringify(collections.contents)).not.toContain("tenantPosts");
+			expect(JSON.stringify(globals.contents)).not.toContain("tenantSettings");
+		} finally {
+			await closeDenied();
+		}
 	});
 
 	it("oauth with read+write+delete scopes sees the full posts tool set", async () => {

@@ -18,8 +18,14 @@ const posts = collection("posts")
 		published: f.boolean().default(false),
 		scheduledAt: f.datetime(),
 		secret: f.text(255),
+		relatedPost: f.relation("posts"),
 	}))
 	.access({ read: true, create: true, update: true, delete: true });
+
+const versionedPosts = collection("versionedPosts")
+	.fields(({ f }) => ({ title: f.text(255).required() }))
+	.access({ read: true, create: true, update: true, delete: true })
+	.options({ optimisticConcurrency: true });
 
 const privateNotes = collection("privateNotes")
 	.fields(({ f }) => ({
@@ -179,7 +185,7 @@ describe("@questpie/mcp server", () => {
 		guardedToolAllowed = true;
 		reportRouteAllowed = true;
 		setup = await buildMockApp({
-			collections: { posts, privateNotes },
+			collections: { posts, privateNotes, versionedPosts },
 			globals: { siteSettings },
 			routes: {
 				"reports/generate:POST": reportRoute,
@@ -217,6 +223,9 @@ describe("@questpie/mcp server", () => {
 									create: true,
 									update: true,
 								},
+							},
+							versionedPosts: {
+								operations: { update: true, delete: true },
 							},
 						},
 						globals: {
@@ -515,6 +524,16 @@ describe("@questpie/mcp server", () => {
 			const createdId = (createResult.structuredContent as any).id;
 			expect(typeof createdId).toBe("string");
 
+			const sortedResult = await client.callTool({
+				name: "collections.posts.list",
+				arguments: { sort: { title: "asc" }, limit: 10 },
+			});
+			expect(
+				(sortedResult.structuredContent as any).docs.map(
+					(post: { title: string }) => post.title,
+				),
+			).toEqual(["Created", "Hello"]);
+
 			const ambiguousInstant = await client.callTool({
 				name: "collections.posts.create",
 				arguments: {
@@ -546,6 +565,50 @@ describe("@questpie/mcp server", () => {
 				arguments: { id: createdId },
 			});
 			expect((deleteResult.structuredContent as any).success).toBe(true);
+		} finally {
+			await close();
+		}
+	});
+
+	it("requires and forwards expectedRevision for optimistic collection writes", async () => {
+		const seeded = await setup.app.collections.versionedPosts.create(
+			{ title: "Version one" },
+			createTestContext({ accessMode: "system" }),
+		);
+		const server = await createMcpServer(setup.app, { transport: "http" });
+		const { client, close } = await connect(server);
+
+		try {
+			const tools = await client.listTools();
+			const updateTool = tools.tools.find(
+				(tool) => tool.name === "collections.versionedPosts.update",
+			);
+			expect(updateTool?.inputSchema.required).toContain("expectedRevision");
+
+			const missingRevision = await client.callTool({
+				name: "collections.versionedPosts.update",
+				arguments: { id: seeded.id, data: { title: "Unsafe" } },
+			});
+			expect(missingRevision.isError).toBe(true);
+
+			const updated = await client.callTool({
+				name: "collections.versionedPosts.update",
+				arguments: {
+					id: seeded.id,
+					data: { title: "Version two" },
+					expectedRevision: seeded.revision,
+				},
+			});
+			expect(updated.structuredContent).toMatchObject({
+				title: "Version two",
+				revision: 2,
+			});
+
+			const deleted = await client.callTool({
+				name: "collections.versionedPosts.delete",
+				arguments: { id: seeded.id, expectedRevision: 2 },
+			});
+			expect(deleted.isError).toBeUndefined();
 		} finally {
 			await close();
 		}
@@ -933,6 +996,44 @@ describe("@questpie/mcp server", () => {
 			expect(updateSchema).not.toContain("secret");
 			expect(globalSchema).toContain("siteName");
 			expect(globalSchema).not.toContain("privateToken");
+		} finally {
+			await close();
+		}
+	});
+
+	it("can disable generated relation expansion without hiding relation ids", async () => {
+		const server = await createMcpServer(setup.app, {
+			transport: "http",
+			config: {
+				crud: {
+					collections: {
+						posts: {
+							operations: { list: true, get: true },
+							fields: { include: ["id", "title", "relatedPost"] },
+							relationLoading: false,
+						},
+					},
+				},
+			},
+		});
+		const { client, close } = await connect(server);
+
+		try {
+			const tools = await client.listTools();
+			const listTool = tools.tools.find(
+				(tool) => tool.name === "collections.posts.list",
+			);
+			const schema = listTool?.inputSchema as {
+				properties?: Record<string, { properties?: Record<string, unknown> }>;
+			};
+			expect(schema.properties?.with?.properties).toEqual({});
+			expect(JSON.stringify(schema)).toContain("relatedPost");
+
+			const expanded = await client.callTool({
+				name: "collections.posts.list",
+				arguments: { with: { relatedPost: true } },
+			});
+			expect(expanded.isError).toBe(true);
 		} finally {
 			await close();
 		}
