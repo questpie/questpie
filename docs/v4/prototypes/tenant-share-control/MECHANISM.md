@@ -557,9 +557,39 @@ reaches for one.
 
 The cost is linear in the eligible backlog and negligible until the backlog is
 large: 1.876 ms at 2,000 rows, 294 ms at 200,000, once per worker poll cycle
-(`packages/runtime/src/durable/worker.ts:280`). That is an uncomfortable shape
-rather than a defect, because the backlog sizes where the sort costs real time
-are exactly the ones where fairness is worth paying for.
+(`packages/runtime/src/durable/worker.ts:280`). That was recorded as an
+uncomfortable shape rather than a defect, because the backlog sizes where the
+sort costs real time are exactly the ones where fairness is worth paying for.
+
+**That characterisation is too gentle, and the same numbers say why.** A poll
+admits at most `claimBatch` runs — 64 by default
+(`packages/runtime/src/durable/worker.ts:120`) — whatever the call costs. So the
+admission ceiling is `claimBatch / cost`:
+
+| eligible backlog | `admit()`  | ceiling         |
+| ---------------- | ---------- | --------------- |
+| 2,000            | 1.876 ms   | ≈ 34,100 runs/s |
+| 200,000          | 294.259 ms | ≈ 217 runs/s    |
+
+**The service rate falls as the queue grows** — 157× fewer runs admitted per
+second at the larger backlog. A queue whose service rate decreases with its own
+length has no stable equilibrium above the point where arrivals exceed that
+falling rate: past it, the backlog grows, admission slows, and the gap widens.
+Linear cost in the backlog is not merely expensive at scale; it removes the
+system's ability to catch up.
+
+This is the same shape the statement-timeout gate catalogues for retention and
+reconciliation — work whose failure or slowness enlarges its own next attempt —
+arriving here through cost rather than through a timeout. **It is also the
+sharpest argument for the backlog refusal that did not ship**, since a bound on
+the eligible set is what keeps the service rate flat.
+
+**What would overturn it.** These are single measurements at two backlog sizes on
+a warm local container, and the ceiling above assumes admission dominates a poll
+cycle. If claiming, running attempts and the rest of the cycle cost far more than
+`admit()` at both sizes, the 157× applies to a small share of the cycle and the
+instability argument weakens to a cost argument. Nothing here measures the rest
+of the cycle.
 
 **The two parts that did not ship are what would bound the part that did.**
 Backlog refusal at acceptance limits how many rows can be eligible at once, and
