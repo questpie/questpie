@@ -46,6 +46,29 @@ and a reader should not have to reconstruct the current position from them.
    requirement is ordering as well as configuration, and the conformance
    assertion has to read the value through a connection the application is
    already using. See the measured note under evidence-plan item 4.
+
+   **It does not break migrations, and the reason is a call rather than a
+   structure.** A role default reaches every connection the deployment opens,
+   including the compiler's schema and seed apply sessions, so a 200 ms baseline
+   would bound DDL that legitimately runs for minutes. It does not, because
+   `configurePostgresTimeouts` raises the session ceiling to
+   `statementTimeoutMs ?? 30_000` (`packages/compiler/src/postgres-session.ts:24`)
+   before any DDL runs. Measured on PostgreSQL 17 with a role carrying
+   `statement_timeout = '150ms'`: a fresh connection reads `150ms`, a session
+   that runs `set_config('statement_timeout','30000ms',false)` reads `30s` and
+   completes a one-second sleep, and a **control** connection without the
+   override dies `57014` on the same sleep — so the baseline was enforcing and
+   the override is what survived it.
+
+   **The dependency is worth naming because nothing enforces it.** Migrations are
+   safe under this gate only for as long as the apply paths keep calling
+   `configurePostgresTimeouts` first. Remove it, reorder it after the DDL, or add
+   an apply path that skips it, and every migration silently inherits the
+   deployment's serving bound. The one statement that already runs ahead of it —
+   `probeCommittedSession` (`packages/compiler/src/postgres-session.ts:215`), a
+   `pg_backend_pid()` inside a transaction — is exposed to the baseline and far
+   too small to reach it.
+
 3. **No wrap for those five reads.** Four are `run_id` point lookups that cannot
    grow with the table and the fifth, `admit`, is the scheduler rather than an
    operator surface. **That ground is wrong for `audit`, and the decision still
@@ -787,10 +810,14 @@ budget under full statement logging at 517.798 ms against 2,000, versus a
 and these durations are upper bounds rather than clean measurements.
 
 **Scope.** One run per suite, warm local container, small fixtures. One test in
-the Mutation suite fails — "runs against the exact declared supported PostgreSQL
-major" — identically against the ordinary database, so it is a pre-existing
-environment mismatch rather than an artefact of the probe, and the other four
-tests pass.
+the Mutation suite failed under the probe — "runs against the exact declared
+supported PostgreSQL major" — and it was my invocation, not a mismatch. The test
+reads `QUESTPIE_POSTGRES_MAJOR`, which is set only in CI
+(`.github/workflows/ci.yml:83` from the matrix, `:128` hardcoded) and never by
+`scripts/quality.ts`, so `bun test` leaves it undefined and
+`expect(undefined).toMatch(/^(16|17|18)$/)` fails. Re-run with the variable set
+as CI sets it, all five pass. The container is 17.10 and CI declares 17; nothing
+mismatched.
 
 **Both numbers an earlier revision proposed to ship were scope errors, and the
 record's own "derive, do not choose" rule is what they break.**
