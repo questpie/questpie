@@ -35,6 +35,18 @@ function nonemptyText(value: string, label: string): string {
 	return value;
 }
 
+function boundedText(
+	value: string,
+	minimum: number,
+	maximum: number,
+	label: string,
+): string {
+	const length = [...value].length;
+	if (value.includes("\0") || length < minimum || length > maximum)
+		throw new TypeError(`invalid PostgreSQL Durable ${label}`);
+	return value;
+}
+
 function uuid(value: string, label: string): string {
 	if (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/u.test(value))
 		throw new TypeError(`invalid PostgreSQL Durable ${label}`);
@@ -299,5 +311,88 @@ VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, 
 			result.rows.length !== 0
 		)
 			throw new TypeError("invalid PostgreSQL Durable event insert result");
+	},
+});
+
+export type DurableEffectFenceInput = Readonly<{
+	application: string;
+	runId: string;
+	attemptId: string;
+	leaseTokenDigest: string;
+}>;
+
+export const durableEffectFence: PostgresStatement<
+	DurableEffectFenceInput,
+	boolean
+> = definePostgresStatement({
+	name: "durable.effect.fence",
+	text: `SELECT 1 AS held FROM questpie_internal.durable_runs
+WHERE application_name = $1 AND run_id = $2
+  AND current_attempt_id = $3 AND lease_token_digest = $4
+FOR UPDATE`,
+	parameterCount: 4,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		uuid(input.attemptId, "attempt identity"),
+		digest(input.leaseTokenDigest),
+	],
+	decode(result) {
+		if (
+			result.command !== "SELECT" ||
+			result.rowCount === null ||
+			result.rowCount !== result.rows.length ||
+			result.rowCount < 0 ||
+			result.rowCount > 1
+		)
+			throw new TypeError("invalid PostgreSQL Durable effect fence result");
+		if (result.rowCount === 0) return false;
+		if (result.rows[0]?.length !== 1 || result.rows[0][0] !== 1)
+			throw new TypeError("invalid PostgreSQL Durable effect fence result");
+		return true;
+	},
+});
+
+export type DurableEffectSettleInput = Readonly<{
+	application: string;
+	runId: string;
+	effectName: string;
+	receipt: string;
+	attemptId: string;
+}>;
+
+export const durableEffectSettle: PostgresStatement<
+	DurableEffectSettleInput,
+	string | null
+> = definePostgresStatement({
+	name: "durable.effect.settle",
+	text: `UPDATE questpie_internal.durable_effects
+SET status = 'succeeded', receipt = $4, settled_attempt_id = $5,
+    settled_at = pg_catalog.transaction_timestamp()
+WHERE application_name = $1 AND run_id = $2 AND effect_name = $3
+  AND status IN ('ambiguous', 'pending')
+RETURNING effect_id::text`,
+	parameterCount: 5,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		boundedText(input.effectName, 1, 63, "effect name"),
+		boundedText(input.receipt, 0, 256, "effect receipt"),
+		uuid(input.attemptId, "attempt identity"),
+	],
+	decode(result) {
+		if (
+			result.command !== "UPDATE" ||
+			result.rowCount === null ||
+			result.rowCount !== result.rows.length ||
+			result.rowCount < 0 ||
+			result.rowCount > 1
+		)
+			throw new TypeError("invalid PostgreSQL Durable effect settle result");
+		if (result.rowCount === 0) return null;
+		const row = result.rows[0];
+		if (row?.length !== 1 || typeof row[0] !== "string")
+			throw new TypeError("invalid PostgreSQL Durable effect settle result");
+		return uuid(row[0], "effect identity");
 	},
 });

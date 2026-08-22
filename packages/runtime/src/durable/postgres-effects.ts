@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
+import { durableEffectFence, durableEffectSettle } from "./postgres-statements";
 import type { DurableClaim } from "./rows";
 import {
 	appendDurableRunEvent,
@@ -82,17 +83,12 @@ export function createPostgresDurableEffectLedger(
 		query: DurableQuery,
 		claim: DurableClaim,
 	): Promise<boolean> => {
-		const rows = await query(
-			`SELECT 1 AS held FROM questpie_internal.durable_runs
-WHERE application_name = $1 AND run_id = $2
-  AND current_attempt_id = $3 AND lease_token_digest = $4`,
-			[
-				input.application,
-				claim.runId,
-				claim.attemptId,
-				leaseTokenDigest(claim.leaseToken),
-			],
-		);
+		const rows = await query(durableEffectFence.text, [
+			input.application,
+			claim.runId,
+			claim.attemptId,
+			leaseTokenDigest(claim.leaseToken),
+		]);
 		return rows.length === 0;
 	};
 
@@ -146,21 +142,13 @@ WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
 		async settle(claim, request) {
 			return transaction(async (query) => {
 				if (await fenced(query, claim)) return "fenced" as const;
-				const settled = await query(
-					`UPDATE questpie_internal.durable_effects
-SET status = 'succeeded', receipt = $4, settled_attempt_id = $5,
-    settled_at = pg_catalog.transaction_timestamp()
-WHERE application_name = $1 AND run_id = $2 AND effect_name = $3
-  AND status IN ('ambiguous', 'pending')
-RETURNING effect_id`,
-					[
-						input.application,
-						claim.runId,
-						request.effectName,
-						request.receipt,
-						claim.attemptId,
-					],
-				);
+				const settled = await query(durableEffectSettle.text, [
+					input.application,
+					claim.runId,
+					request.effectName,
+					request.receipt,
+					claim.attemptId,
+				]);
 				if (settled.length > 0)
 					await appendDurableRunEvent(query, {
 						application: input.application,
