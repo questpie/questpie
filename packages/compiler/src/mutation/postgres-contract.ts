@@ -136,4 +136,5 @@ export interface PostgresCollectionOperationPlansV1 {
 		| PostgresCreateOperationPlanV1
 		| PostgresGetOperationPlanV1
 	)[];
+	readonly digest: string;
 }

@@ -163,6 +163,15 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 			unsignedMutationTransactionStatements,
 		),
 	};
+	const unsignedCollectionOperationPlans = {
+		format: "questpie.postgres-collection-operation-plans",
+		version: 1,
+		plans: [],
+	};
+	const collectionOperationPlansDigest = digest(
+		"questpie-postgres-collection-operation-plans-v1",
+		unsignedCollectionOperationPlans,
+	);
 	const artifactFiles = {
 		"app.ts": "export type App = unknown;\n",
 		"build-input.json": '{"format":"questpie.build-input"}\n',
@@ -230,6 +239,7 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 		postgresContextBootstrapPlansDigest: contextBootstrapPlans.digest,
 		postgresMutationTransactionStatementsDigest:
 			mutationTransactionStatements.digest,
+		postgresCollectionOperationPlansDigest: collectionOperationPlansDigest,
 		committedMigrationsDigest: fileDigest(
 			artifactFiles["committed-migrations.json"],
 		),

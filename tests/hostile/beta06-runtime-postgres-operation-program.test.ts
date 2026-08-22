@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 
-import { linkPostgresCollectionOperationPlans } from "../../packages/runtime/src/mutation";
+import { runtimeArtifactDigest } from "../../packages/runtime/src/application/artifact-protocol";
+import { linkPostgresCollectionOperationPlans as linkPlans } from "../../packages/runtime/src/mutation/postgres-program";
+import type { LinkedCollectionMutationProgramsV1 } from "../../packages/runtime/src/mutation/program";
 import { runtimePostgresProgramFixture } from "../support/beta06-runtime-postgres-program";
 
 type MutableRecord = Record<string, unknown>;
@@ -32,6 +34,34 @@ function parameters(value: MutableRecord, member: string): MutableRecord[] {
 	if (!Array.isArray(statement.parameters))
 		throw new TypeError(`fixture ${member} has no parameters`);
 	return statement.parameters.map(record);
+}
+
+function firstPlaceholder(value: MutableRecord, member: string) {
+	const candidate = parameters(value, member)[0];
+	if (!candidate) throw new TypeError(`fixture ${member} has no parameters`);
+	return {
+		position: Number(candidate.position),
+		postgresType: String(candidate.postgresType),
+	};
+}
+
+function linkPostgresCollectionOperationPlans(
+	input: Readonly<{
+		artifact: MutableRecord & { plans: MutableRecord[] };
+		operations: LinkedCollectionMutationProgramsV1;
+	}>,
+) {
+	const unsigned = {
+		format: input.artifact.format,
+		version: input.artifact.version,
+		plans: input.artifact.plans,
+	};
+	const digest = runtimeArtifactDigest(
+		"questpie-postgres-collection-operation-plans-v1",
+		unsigned,
+	);
+	input.artifact.digest = digest;
+	return linkPlans({ ...input, expectedDigest: digest });
 }
 
 test("rejects extra executable-plan keys", async () => {
@@ -201,4 +231,91 @@ test("rejects a literal whose PostgreSQL type disagrees with its codec", async (
 			operations: fixture.operations,
 		}),
 	).toThrow("codec or PostgreSQL type is invalid");
+});
+
+test("rejects a noncanonical PostgreSQL placeholder", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const get = plan(hostile, "query:channels.get");
+	const lock = record(get.lock);
+	const { position, postgresType } = firstPlaceholder(get, "lock");
+	lock.sql = String(lock.sql).replace(
+		`$${position}::${postgresType}`,
+		`$0${position}::${postgresType}`,
+	);
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("SQL placeholder is invalid");
+});
+
+test("rejects a repeated PostgreSQL placeholder with a different cast", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const get = plan(hostile, "query:channels.get");
+	const lock = record(get.lock);
+	const { position, postgresType } = firstPlaceholder(get, "lock");
+	const wrongType = postgresType === "text" ? "uuid" : "text";
+	const placeholder = `$${position}::${postgresType}`;
+	lock.sql = String(lock.sql).replace(
+		placeholder,
+		`($${position}::${wrongType} IS NOT NULL AND ${placeholder} IS NOT NULL)`,
+	);
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("SQL placeholder cast is invalid");
+});
+
+test("rejects a PostgreSQL cast that only prefixes the declared type", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const get = plan(hostile, "query:channels.get");
+	const lock = record(get.lock);
+	const { position, postgresType } = firstPlaceholder(get, "lock");
+	lock.sql = String(lock.sql).replace(
+		`$${position}::${postgresType}`,
+		`$${position}::${postgresType}[]`,
+	);
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("SQL placeholder cast is invalid");
+});
+
+test("does not count a placeholder inside a PostgreSQL string literal", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	const get = plan(hostile, "query:channels.get");
+	const lock = record(get.lock);
+	const { position, postgresType } = firstPlaceholder(get, "lock");
+	const placeholder = `$${position}::${postgresType}`;
+	lock.sql = String(lock.sql)
+		.replace(placeholder, `NULL::${postgresType}`)
+		.replace(" LIMIT 1", ` AND '${placeholder}' IS NOT NULL LIMIT 1`);
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+		}),
+	).toThrow("SQL placeholders do not match its parameters");
+});
+
+test("checks the independent digest before decoding a hostile plan", async () => {
+	const fixture = await compilation;
+	const hostile = artifact(fixture.artifact);
+	plan(hostile, "mutation:messages.create").runtimePlanner = true;
+	expect(() =>
+		linkPlans({
+			artifact: hostile,
+			operations: fixture.operations,
+			expectedDigest: String(fixture.artifact.digest),
+		}),
+	).toThrow("artifact digest is invalid");
 });

@@ -1,18 +1,17 @@
-import { decodeRelationalScalarCodec } from "../relational";
+import { runtimeArtifactDigest } from "../application/artifact-protocol";
+import { decodeRelationalScalarCodec } from "../relational/scalar";
 import { canonicalMutationBytes } from "./canonical";
 import {
-	decodePostgresExecutionFact,
-	decodePostgresLiteralCodec,
-	decodePostgresStatement as statement,
-	postgresTypeForScalarCodec,
-} from "./postgres-program-codec";
+	bindPostgresCollectionStatement,
+	decodePostgresCollectionParameters,
+} from "./postgres-collection-statement";
+import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import type {
 	FieldPath,
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
 	LinkedPostgresGetOperationPlanV1,
 	OutputAuthorityV1,
-	PostgresParameterV1,
 	PostgresResultV1,
 	RecordValue,
 } from "./postgres-program-types";
@@ -84,130 +83,6 @@ function same(left: unknown, right: unknown): boolean {
 			canonicalMutationBytes(right),
 		) === 0
 	);
-}
-
-function parameters(
-	value: unknown,
-	statement: string,
-	label: string,
-): readonly PostgresParameterV1[] {
-	const decoded = array(value, `${label} parameters`).map((raw, index) => {
-		const source = record(raw, `${label} parameter ${index}`);
-		const position = index + 1;
-		if (source.position !== position)
-			fail(`${label} parameter positions must be contiguous and ordered`);
-		const postgresType = text(
-			source.postgresType,
-			`${label} parameter postgresType`,
-		);
-		if (source.kind === "callerInput" || source.kind === "key") {
-			exact(
-				source,
-				["position", "postgresType", "kind", "path", "codec"],
-				`${label} parameter ${index}`,
-			);
-			const decodedCodec = decodeRelationalScalarCodec(
-				source.codec,
-				`${label} parameter ${index} codec`,
-			);
-			if (postgresType !== postgresTypeForScalarCodec(decodedCodec))
-				fail(
-					`${label} parameter ${position} PostgreSQL type disagrees with its codec`,
-				);
-			return Object.freeze({
-				position,
-				postgresType,
-				kind: source.kind,
-				path: path(source.path, `${label} parameter ${index} path`),
-				codec: decodedCodec,
-			});
-		}
-		if (source.kind === "executionFact") {
-			exact(
-				source,
-				["position", "postgresType", "kind", "source", "path", "codec"],
-				`${label} parameter ${index}`,
-			);
-			const factSource = text(
-				source.source,
-				`${label} parameter ${index} source`,
-			);
-			if (
-				!new Set(["authority", "operationTime", "principal", "tenant"]).has(
-					factSource,
-				)
-			)
-				fail(`${label} parameter ${index} execution source is invalid`);
-			const factPath = array(source.path, `${label} parameter ${index} path`);
-			if (
-				factPath.some((part) => typeof part !== "string" || part.length === 0)
-			)
-				fail(`${label} parameter ${index} path is invalid`);
-			const codec = decodePostgresExecutionFact(
-				factSource,
-				factPath as readonly string[],
-				source.codec,
-				postgresType,
-				`${label} parameter ${index}`,
-			);
-			return Object.freeze({
-				position,
-				postgresType,
-				kind: "executionFact" as const,
-				source: factSource,
-				path: Object.freeze(factPath as string[]),
-				codec,
-			});
-		}
-		if (source.kind === "literal") {
-			exact(
-				source,
-				["position", "postgresType", "kind", "value", "codec"],
-				`${label} parameter ${index}`,
-			);
-			if (
-				source.value !== null &&
-				!["boolean", "number", "string"].includes(typeof source.value)
-			)
-				fail(`${label} parameter ${index} literal is invalid`);
-			if (
-				typeof source.value === "number" &&
-				(!Number.isFinite(source.value) || Object.is(source.value, -0))
-			)
-				fail(`${label} parameter ${index} literal is invalid`);
-			const literalValue = source.value as null | boolean | number | string;
-			return Object.freeze({
-				position,
-				postgresType,
-				kind: "literal" as const,
-				value: literalValue,
-				codec: decodePostgresLiteralCodec(
-					source.codec,
-					postgresType,
-					literalValue,
-					`${label} parameter ${index}`,
-				),
-			});
-		}
-		fail(`${label} parameter ${index} kind is invalid`);
-	});
-	const referenced = new Set(
-		[...statement.matchAll(/\$(\d+)(?!\d)/g)].map((match) => Number(match[1])),
-	);
-	if (
-		referenced.size !== decoded.length ||
-		decoded.some(
-			(parameter) =>
-				!referenced.has(parameter.position) ||
-				!statement.includes(
-					`$${parameter.position}::${parameter.postgresType}`,
-				),
-		)
-	)
-		fail(
-			`${label} SQL placeholders do not match its parameters (referenced ${[...referenced].join(",")}; declared ${decoded.map(({ position, postgresType }) => `${position}::${postgresType}`).join(",")})`,
-		);
-	return Object.freeze(decoded);
 }
 
 function evidence(value: unknown, label: string): readonly string[] {
@@ -510,11 +385,21 @@ function createPlan(
 		return Object.freeze({
 			path: path(check.path, `${operation.identity} Field check ${index} path`),
 			sql,
-			parameters: parameters(
+			parameters: decodePostgresCollectionParameters(
 				check.parameters,
 				sql,
 				`${operation.identity} Field check ${index}`,
 			),
+			statement: bindPostgresCollectionStatement({
+				identity: operation.identity,
+				leaf: `field-authority-${index}`,
+				text: sql,
+				parameterCount: array(
+					check.parameters,
+					`${operation.identity} Field check ${index} parameters`,
+				).length,
+				booleanResult: true,
+			}),
 		});
 	});
 	if (
@@ -544,7 +429,7 @@ function createPlan(
 	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
 	if (!writeSql.includes(candidatePolicySql))
 		fail(`${operation.identity} write omits candidate Policy`);
-	const writeParameters = parameters(
+	const writeParameters = decodePostgresCollectionParameters(
 		write.parameters,
 		writeSql,
 		`${operation.identity} write`,
@@ -603,6 +488,13 @@ function createPlan(
 			sql: writeSql,
 			parameters: writeParameters,
 			result,
+			statement: bindPostgresCollectionStatement({
+				identity: operation.identity,
+				leaf: "write",
+				text: writeSql,
+				parameterCount: writeParameters.length,
+				result,
+			}),
 		}),
 		limits: Object.freeze({ rows: 100, durationMilliseconds: 5_000 }),
 		operation,
@@ -661,7 +553,7 @@ function getPlan(
 		!/\bFOR\s+UPDATE\b/i.test(lockSql)
 	)
 		fail(`${operation.identity} keyed lock is invalid`);
-	const lockParameters = parameters(
+	const lockParameters = decodePostgresCollectionParameters(
 		lock.parameters,
 		lockSql,
 		`${operation.identity} lock`,
@@ -687,7 +579,7 @@ function getPlan(
 	const readSql = statement(read.sql, `${operation.identity} read SQL`);
 	if (/\bFOR\s+UPDATE\b/i.test(readSql) || readSql === lockSql)
 		fail(`${operation.identity} lock and fresh Policy read were collapsed`);
-	const readParameters = parameters(
+	const readParameters = decodePostgresCollectionParameters(
 		read.parameters,
 		readSql,
 		`${operation.identity} read`,
@@ -730,12 +622,26 @@ function getPlan(
 			sql: lockSql,
 			parameters: lockParameters,
 			outcome: "internalLockedOrAbsent",
+			statement: bindPostgresCollectionStatement({
+				identity: operation.identity,
+				leaf: "lock",
+				text: lockSql,
+				parameterCount: lockParameters.length,
+				booleanResult: true,
+			}),
 		}),
 		read: Object.freeze({
 			freshAfterRowLockWait: true,
 			sql: readSql,
 			parameters: readParameters,
 			result,
+			statement: bindPostgresCollectionStatement({
+				identity: operation.identity,
+				leaf: "read",
+				text: readSql,
+				parameterCount: readParameters.length,
+				result,
+			}),
 		}),
 		outputAuthority: output,
 		limits: Object.freeze({ rows: 1, durationMilliseconds: 5_000 }),
@@ -747,15 +653,30 @@ export function linkPostgresCollectionOperationPlans(
 	input: Readonly<{
 		artifact: unknown;
 		operations: LinkedCollectionMutationProgramsV1;
+		expectedDigest: string;
 	}>,
 ): LinkedPostgresCollectionOperationPlansV1 {
 	const artifact = record(input.artifact, "artifact");
-	exact(artifact, ["format", "version", "plans"], "artifact");
+	exact(artifact, ["format", "version", "plans", "digest"], "artifact");
 	if (
 		artifact.format !== "questpie.postgres-collection-operation-plans" ||
 		artifact.version !== 1
 	)
 		fail("artifact header is invalid");
+	const artifactDigest = text(artifact.digest, "artifact digest");
+	const unsigned = Object.freeze({
+		format: artifact.format,
+		version: artifact.version,
+		plans: artifact.plans,
+	});
+	if (
+		artifactDigest !== input.expectedDigest ||
+		runtimeArtifactDigest(
+			"questpie-postgres-collection-operation-plans-v1",
+			unsigned,
+		) !== artifactDigest
+	)
+		fail("artifact digest is invalid");
 	const rawPlans = array(artifact.plans, "artifact plans");
 	const identities = rawPlans.map((raw, index) =>
 		text(record(raw, `plan ${index}`).identity, `plan ${index} identity`),

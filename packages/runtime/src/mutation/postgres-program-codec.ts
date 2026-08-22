@@ -1,4 +1,7 @@
-import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
+import {
+	decodeRelationalScalar,
+	type ScalarCodecV1,
+} from "../relational/scalar";
 
 function fail(message: string): never {
 	throw new TypeError(

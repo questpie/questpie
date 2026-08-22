@@ -76,6 +76,28 @@ export function verifyRuntimeArtifactFiles(
 		) !== build.postgresMutationTransactionStatementsDigest
 	)
 		fail("Mutation transaction statements semantic digest does not match");
+	const rawCollectionPlans =
+		files["postgres-collection-operation-plans.json"] === undefined
+			? {
+					format: "questpie.postgres-collection-operation-plans",
+					version: 1,
+					plans: [],
+					digest: build.postgresCollectionOperationPlansDigest,
+				}
+			: record(
+					parseJsonFile("postgres-collection-operation-plans.json"),
+					"postgres-collection-operation-plans.json",
+				);
+	const { digest: rawCollectionPlansDigest, ...unsignedCollectionPlans } =
+		rawCollectionPlans;
+	if (
+		rawCollectionPlansDigest !== build.postgresCollectionOperationPlansDigest ||
+		artifactDigest(
+			"questpie-postgres-collection-operation-plans-v1",
+			unsignedCollectionPlans,
+		) !== build.postgresCollectionOperationPlansDigest
+	)
+		fail("Collection operation plans semantic digest does not match");
 	if (
 		artifactDigest(
 			"questpie-runtime-executables-v1",

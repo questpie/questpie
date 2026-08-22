@@ -1,4 +1,8 @@
-import type { ScalarCodecV1 } from "../relational";
+import type {
+	PostgresParameter,
+	PostgresStatement,
+} from "../postgres/contract";
+import type { ScalarCodecV1 } from "../relational/scalar";
 import type {
 	FieldNormalizerProgramV1,
 	LinkedCollectionOperationProgramV1,
@@ -7,6 +11,13 @@ import type {
 
 export type RecordValue = Readonly<Record<string, unknown>>;
 export type FieldPath = readonly string[];
+export type PostgresCollectionRows = readonly Readonly<
+	Record<string, unknown>
+>[];
+export type PostgresCollectionStatement = PostgresStatement<
+	readonly PostgresParameter[],
+	PostgresCollectionRows
+>;
 
 export type PostgresParameterV1 =
 	| Readonly<{
@@ -70,12 +81,14 @@ export type LinkedPostgresGetOperationPlanV1 = Readonly<{
 		sql: string;
 		parameters: readonly PostgresParameterV1[];
 		outcome: "internalLockedOrAbsent";
+		statement: PostgresCollectionStatement;
 	}>;
 	read: Readonly<{
 		freshAfterRowLockWait: true;
 		sql: string;
 		parameters: readonly PostgresParameterV1[];
 		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
 	}>;
 	outputAuthority: OutputAuthorityV1;
 	limits: Readonly<{ rows: 1; durationMilliseconds: 5_000 }>;
@@ -116,6 +129,7 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 			path: FieldPath;
 			sql: string;
 			parameters: readonly PostgresParameterV1[];
+			statement: PostgresCollectionStatement;
 		}>[];
 	}>;
 	candidatePolicy: Readonly<{
@@ -128,6 +142,7 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 		sql: string;
 		parameters: readonly PostgresParameterV1[];
 		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
 	}>;
 	limits: Readonly<{ rows: 100; durationMilliseconds: 5_000 }>;
 	operation: LinkedCollectionOperationProgramV1;

@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
-import { linkCollectionMutationPrograms } from "../../packages/runtime/src/mutation";
+import { linkCollectionMutationPrograms } from "../../packages/runtime/src/mutation/program";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 

@@ -62,6 +62,7 @@ function applicationEntry(
 		schemaProjection: unknown;
 		contextBootstrapPlansDigest: string;
 		mutationTransactionStatementsDigest: string;
+		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;
@@ -186,6 +187,7 @@ function applicationEntry(
 			format: "questpie.postgres-collection-operation-plans",
 			version: 1,
 			plans: [],
+			digest: input.collectionOperationPlansDigest,
 		},
 		policies: [],
 	});
@@ -203,6 +205,7 @@ ${structuralImports.join("\n")}
 const schemaProjection = ${JSON.stringify(input.schemaProjection)};
 const expectedContextBootstrapPlansDigest = ${JSON.stringify(input.contextBootstrapPlansDigest)};
 const expectedMutationTransactionStatementsDigest = ${JSON.stringify(input.mutationTransactionStatementsDigest)};
+const expectedCollectionOperationPlansDigest = ${JSON.stringify(input.collectionOperationPlansDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
 const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
@@ -253,6 +256,7 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 		collectionPlans: linkPostgresCollectionOperationPlans({
 			artifact: raw.plans,
 			operations,
+			expectedDigest: expectedCollectionOperationPlansDigest,
 		}),
 		reactions: linkReactionProjection(${input.reactionArtifact ? `JSON.parse(artifactFiles["reaction-projection.json"])` : emptyReactionProjection}),
 	});
@@ -300,6 +304,8 @@ export async function createApplication(input) {
 		throw new TypeError("generated ContextBootstrap plans do not match Runtime Build");
 	if (loaded.artifacts.runtimeBuild.postgresMutationTransactionStatementsDigest !== expectedMutationTransactionStatementsDigest)
 		throw new TypeError("generated Mutation transaction statements do not match Runtime Build");
+	if (loaded.artifacts.runtimeBuild.postgresCollectionOperationPlansDigest !== expectedCollectionOperationPlansDigest)
+		throw new TypeError("generated Collection operation plans do not match Runtime Build");
 	const sql = new SQL(input.postgres.connectionUrl);
 	const postgresController = new AbortController();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
@@ -543,6 +549,7 @@ export async function renderApplicationBundle(
 		schemaProjection: unknown;
 		contextBootstrapPlansDigest: string;
 		mutationTransactionStatementsDigest: string;
+		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
 		realtime: boolean;

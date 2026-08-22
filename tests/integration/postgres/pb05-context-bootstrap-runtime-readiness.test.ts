@@ -93,6 +93,18 @@ postgresTest(
 					compiledRuntimeBuild.postgresContextBootstrapPlansDigest,
 				).length - 1,
 			).toBe(1);
+			const collectionDigestApplicationFiles = compiledApplicationFiles.filter(
+				([, bytes]) =>
+					bytes.includes(
+						compiledRuntimeBuild.postgresCollectionOperationPlansDigest,
+					),
+			);
+			expect(collectionDigestApplicationFiles).toHaveLength(1);
+			expect(
+				collectionDigestApplicationFiles[0]![1].split(
+					compiledRuntimeBuild.postgresCollectionOperationPlansDigest,
+				).length - 1,
+			).toBe(1);
 
 			const internal = await prepared.generated.loadInternal();
 			const createApplication = internal.createApplication as (
@@ -144,6 +156,10 @@ postgresTest(
 				generatedRoot,
 				"postgres-mutation-transaction-statements.json",
 			);
+			const collectionPlansPath = join(
+				generatedRoot,
+				"postgres-collection-operation-plans.json",
+			);
 			const runtimeBuildPath = join(generatedRoot, "runtime-build.json");
 			const checksumsPath = join(generatedRoot, "internal/checksums.json");
 			const plansBytes = await readFile(plansPath, "utf8");
@@ -151,6 +167,7 @@ postgresTest(
 				mutationStatementsPath,
 				"utf8",
 			);
+			const collectionPlansBytes = await readFile(collectionPlansPath, "utf8");
 			const runtimeBuildBytes = await readFile(runtimeBuildPath, "utf8");
 			const checksumsBytes = await readFile(checksumsPath, "utf8");
 			const plans = JSON.parse(plansBytes);
@@ -367,6 +384,112 @@ postgresTest(
 					writeFile(runtimeBuildPath, runtimeBuildBytes),
 					writeFile(checksumsPath, checksumsBytes),
 				]);
+
+				const collectionPlans = JSON.parse(collectionPlansBytes);
+				const collectionGetIndex = collectionPlans.plans.findIndex(
+					(plan: Readonly<{ member: string }>) => plan.member === "get",
+				);
+				expect(collectionGetIndex).toBeGreaterThanOrEqual(0);
+				const collectionGet = collectionPlans.plans[collectionGetIndex];
+				expect(collectionGet.read.sql).toContain(" LIMIT 1");
+				const { digest: _collectionPlansDigest, ...unsignedCollectionPlans } =
+					collectionPlans;
+				const forgedUnsignedCollectionPlans = {
+					...unsignedCollectionPlans,
+					plans: collectionPlans.plans.map(
+						(plan: Readonly<Record<string, unknown>>, index: number) =>
+							index === collectionGetIndex
+								? {
+										...plan,
+										read: {
+											...(plan.read as Readonly<Record<string, unknown>>),
+											sql: collectionGet.read.sql.replace(
+												" LIMIT 1",
+												" LIMIT 0",
+											),
+										},
+									}
+								: plan,
+					),
+				};
+				const forgedCollectionPlans = {
+					...forgedUnsignedCollectionPlans,
+					digest: artifactDigest(
+						"questpie-postgres-collection-operation-plans-v1",
+						forgedUnsignedCollectionPlans,
+					),
+				};
+				const forgedCollectionPlansBytes = canonicalArtifactBytes(
+					forgedCollectionPlans,
+				);
+				const forgedCollectionUnsignedRuntimeBuild = {
+					...unsignedRuntimeBuild,
+					postgresCollectionOperationPlansDigest: forgedCollectionPlans.digest,
+					inventory: unsignedRuntimeBuild.inventory.map(
+						(item: Readonly<{ path: string; digest: string }>) =>
+							item.path === "postgres-collection-operation-plans.json"
+								? {
+										...item,
+										digest: contentDigest(forgedCollectionPlansBytes),
+									}
+								: item,
+					),
+				};
+				const forgedCollectionRuntimeBuild = {
+					...forgedCollectionUnsignedRuntimeBuild,
+					digest: artifactDigest(
+						"questpie-runtime-build-v1",
+						forgedCollectionUnsignedRuntimeBuild,
+					),
+				};
+				const forgedCollectionRuntimeBuildBytes = canonicalArtifactBytes(
+					forgedCollectionRuntimeBuild,
+				);
+				const forgedCollectionChecksums = JSON.parse(checksumsBytes);
+				forgedCollectionChecksums.files = forgedCollectionChecksums.files.map(
+					(item: Readonly<{ path: string; digest: string }>) =>
+						item.path === "postgres-collection-operation-plans.json"
+							? {
+									...item,
+									digest: contentDigest(forgedCollectionPlansBytes),
+								}
+							: item.path === "runtime-build.json"
+								? {
+										...item,
+										digest: contentDigest(forgedCollectionRuntimeBuildBytes),
+									}
+								: item,
+				);
+				await Promise.all([
+					writeFile(collectionPlansPath, forgedCollectionPlansBytes),
+					writeFile(runtimeBuildPath, forgedCollectionRuntimeBuildBytes),
+					writeFile(
+						checksumsPath,
+						canonicalArtifactBytes(forgedCollectionChecksums),
+					),
+				]);
+				try {
+					await expect(
+						createApplication({
+							postgres: {
+								connectionUrl: `postgres://127.0.0.1:${address.port}/questpie`,
+								directConnectionUrl: `postgres://127.0.0.1:${address.port}/questpie`,
+							},
+							realtime: { hmacKey: new Uint8Array(32) },
+							maintenance: { authorize: () => true },
+						}),
+					).rejects.toThrow(
+						"generated Collection operation plans do not match Runtime Build",
+					);
+					expect(probe).toEqual({ context: 0, handler: 0 });
+					expect(databaseConnections).toBe(0);
+				} finally {
+					await Promise.all([
+						writeFile(collectionPlansPath, collectionPlansBytes),
+						writeFile(runtimeBuildPath, runtimeBuildBytes),
+						writeFile(checksumsPath, checksumsBytes),
+					]);
+				}
 
 				const forgedRoot = join(
 					temporary,

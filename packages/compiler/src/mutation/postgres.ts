@@ -1,4 +1,4 @@
-import { canonicalBytes, compareAscii } from "../canonical";
+import { canonicalBytes, compareAscii, digest } from "../canonical";
 import {
 	lowerPostgresMutationPolicyCheck,
 	lowerPostgresMutationPolicyChecks,
@@ -484,9 +484,13 @@ export function lowerPostgresCollectionOperationPlans(
 			);
 		})
 		.sort((left, right) => compareAscii(left.identity, right.identity));
-	return Object.freeze({
+	const unsigned = Object.freeze({
 		format: "questpie.postgres-collection-operation-plans",
 		version: 1,
 		plans: Object.freeze(plans),
+	});
+	return Object.freeze({
+		...unsigned,
+		digest: digest("questpie-postgres-collection-operation-plans-v1", unsigned),
 	});
 }

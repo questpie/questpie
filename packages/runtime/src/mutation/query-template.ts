@@ -1,4 +1,4 @@
-import { decodeRelationalScalarCodec } from "../relational";
+import { decodeRelationalScalarCodec } from "../relational/scalar";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 

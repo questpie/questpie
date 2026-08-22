@@ -429,6 +429,14 @@ export async function createArtifacts(
 			mutations.transactions,
 		);
 	}
+	const postgresCollectionOperationPlans =
+		lowerPostgresCollectionOperationPlans({
+			collectionOperations: operationSets.programs,
+			schemaProjection: schema,
+			policyProjection: relational.policy,
+			normalizerPrograms: operationSets.normalizers,
+			serverValuePrograms: operationSets.serverValues,
+		});
 	if (operationSets.sets.sets.length > 0) {
 		generated["collection-operation-set-projections.json"] = canonicalBytes(
 			operationSets.sets,
@@ -442,14 +450,6 @@ export async function createArtifacts(
 		generated["collection-operation-programs.json"] = canonicalBytes(
 			operationSets.programs,
 		);
-		const postgresCollectionOperationPlans =
-			lowerPostgresCollectionOperationPlans({
-				collectionOperations: operationSets.programs,
-				schemaProjection: schema,
-				policyProjection: relational.policy,
-				normalizerPrograms: operationSets.normalizers,
-				serverValuePrograms: operationSets.serverValues,
-			});
 		if (postgresCollectionOperationPlans.plans.length > 0)
 			generated["postgres-collection-operation-plans.json"] = canonicalBytes(
 				postgresCollectionOperationPlans,
@@ -512,6 +512,7 @@ export async function createArtifacts(
 			schemaProjection: schema,
 			contextBootstrapPlansDigest: contextBootstrapPlans.digest,
 			mutationTransactionStatementsDigest: mutationTransactionStatements.digest,
+			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
 			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
 			realtime: realtimeEnabled,
@@ -538,6 +539,8 @@ export async function createArtifacts(
 			postgresContextBootstrapPlansDigest: contextBootstrapPlans.digest,
 			postgresMutationTransactionStatementsDigest:
 				mutationTransactionStatements.digest,
+			postgresCollectionOperationPlansDigest:
+				postgresCollectionOperationPlans.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

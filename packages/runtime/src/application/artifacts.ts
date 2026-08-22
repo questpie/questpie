@@ -44,6 +44,7 @@ type RuntimeBuildV1 = Readonly<{
 	postgresQueryPlansDigest: string | null;
 	postgresContextBootstrapPlansDigest: string;
 	postgresMutationTransactionStatementsDigest: string;
+	postgresCollectionOperationPlansDigest: string;
 	committedMigrationsDigest: string;
 	migrationHead: string | null;
 	schemaFingerprint: string;
@@ -388,6 +389,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"postgresQueryPlansDigest",
 			"postgresContextBootstrapPlansDigest",
 			"postgresMutationTransactionStatementsDigest",
+			"postgresCollectionOperationPlansDigest",
 			"committedMigrationsDigest",
 			"migrationHead",
 			"schemaFingerprint",
@@ -444,6 +446,10 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	digestValue(
 		build.postgresMutationTransactionStatementsDigest,
 		"postgresMutationTransactionStatementsDigest",
+	);
+	digestValue(
+		build.postgresCollectionOperationPlansDigest,
+		"postgresCollectionOperationPlansDigest",
 	);
 	const later = record(build.later, "later compatibility");
 	exact(
