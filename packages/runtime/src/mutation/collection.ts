@@ -1,3 +1,7 @@
+import type {
+	PostgresParameter,
+	PostgresTransaction,
+} from "../postgres/contract";
 import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
@@ -11,6 +15,15 @@ type Path = readonly string[];
 type Parameter = LinkedPostgresGetOperationPlanV1["lock"]["parameters"][number];
 type ExecutionFactParameter = Extract<Parameter, { kind: "executionFact" }>;
 type Result = LinkedPostgresGetOperationPlanV1["read"]["result"][number];
+type CollectionLeaf =
+	| LinkedPostgresGetOperationPlanV1["lock"]
+	| LinkedPostgresGetOperationPlanV1["read"]
+	| LinkedPostgresCreateOperationPlanV1["fieldAuthority"]["checks"][number]
+	| LinkedPostgresCreateOperationPlanV1["write"];
+type ExecuteCollectionLeaf = (
+	leaf: CollectionLeaf,
+	parameters: readonly PostgresParameter[],
+) => Promise<readonly Row[]>;
 
 export type TransactionQuery = (
 	statement: string,
@@ -95,9 +108,13 @@ function exactPaths(
 		throw new TypeError(`${label} must have exactly the compiled Fields`);
 }
 
-function inputScalar(value: unknown, codec: ScalarCodecV1, nullable: boolean) {
+function inputScalar(
+	value: unknown,
+	codec: ScalarCodecV1,
+	nullable: boolean,
+): PostgresParameter {
 	if (value === null && nullable) return null;
-	return decodeRelationalScalar(value, codec, "date");
+	return decodeRelationalScalar(value, codec, "date") as PostgresParameter;
 }
 
 function setPath(target: Record<string, unknown>, path: Path, value: unknown) {
@@ -136,7 +153,7 @@ function executionFact(
 	parameter: ExecutionFactParameter,
 	facts: ExecutionFacts,
 	operationTime: Date,
-): unknown {
+): PostgresParameter {
 	const key = `${parameter.source}.${parameter.path.join(".")}`;
 	if (key === "authority.kind") return facts.authority.kind;
 	if (key === "principal.id") return facts.principal.id;
@@ -154,7 +171,7 @@ function bind(
 	facts: ExecutionFacts,
 	operationTime: Date,
 	nullableByPath: ReadonlyMap<string, boolean> = new Map(),
-) {
+): readonly PostgresParameter[] {
 	return parameters.map((parameter, index) => {
 		if (parameter.position !== index + 1)
 			throw new TypeError("Compiled Collection parameters are not positional");
@@ -181,10 +198,10 @@ function collectionMember(target: string): string {
 	return target.slice("collection:".length);
 }
 
-export function createPostgresCollectionMutationData(
+function createCollectionMutationData(
 	input: Readonly<{
 		plans: LinkedPostgresCollectionOperationPlansV1;
-		query: TransactionQuery;
+		executeLeaf: ExecuteCollectionLeaf;
 		facts: ExecutionFacts;
 		operationTime: Date;
 		consumeRows(count: number): void;
@@ -193,12 +210,12 @@ export function createPostgresCollectionMutationData(
 	const execute = async (
 		plan: LinkedPostgresCollectionOperationPlanV1,
 		started: number,
-		statement: string,
-		parameters: readonly unknown[],
+		leaf: CollectionLeaf,
+		parameters: readonly PostgresParameter[],
 	) => {
 		if (performance.now() - started > plan.limits.durationMilliseconds)
 			throw new TypeError("Collection operation exceeded its duration limit");
-		const rows = await input.query(statement, parameters);
+		const rows = await input.executeLeaf(leaf, parameters);
 		if (performance.now() - started > plan.limits.durationMilliseconds)
 			throw new TypeError("Collection operation exceeded its duration limit");
 		return rows;
@@ -242,7 +259,7 @@ export function createPostgresCollectionMutationData(
 									const locked = await execute(
 										plan,
 										started,
-										plan.lock.sql,
+										plan.lock,
 										bind(
 											plan.lock.parameters,
 											values,
@@ -257,7 +274,7 @@ export function createPostgresCollectionMutationData(
 									const rows = await execute(
 										plan,
 										started,
-										plan.read.sql,
+										plan.read,
 										bind(
 											plan.read.parameters,
 											values,
@@ -303,7 +320,7 @@ export function createPostgresCollectionMutationData(
 										const rows = await execute(
 											plan,
 											started,
-											check.sql,
+											check,
 											bind(
 												check.parameters,
 												values,
@@ -321,7 +338,7 @@ export function createPostgresCollectionMutationData(
 									const rows = await execute(
 										plan,
 										started,
-										plan.write.sql,
+										plan.write,
 										bind(
 											plan.write.parameters,
 											values,
@@ -344,4 +361,35 @@ export function createPostgresCollectionMutationData(
 			]),
 		),
 	);
+}
+
+export function createPostgresCollectionMutationData(
+	input: Readonly<{
+		plans: LinkedPostgresCollectionOperationPlansV1;
+		query: TransactionQuery;
+		facts: ExecutionFacts;
+		operationTime: Date;
+		consumeRows(count: number): void;
+	}>,
+) {
+	return createCollectionMutationData({
+		...input,
+		executeLeaf: (leaf, parameters) => input.query(leaf.sql, parameters),
+	});
+}
+
+export function createPostgresDatabaseCollectionMutationData(
+	input: Readonly<{
+		plans: LinkedPostgresCollectionOperationPlansV1;
+		transaction: PostgresTransaction;
+		facts: ExecutionFacts;
+		operationTime: Date;
+		consumeRows(count: number): void;
+	}>,
+) {
+	return createCollectionMutationData({
+		...input,
+		executeLeaf: (leaf, parameters) =>
+			input.transaction.execute(leaf.statement, parameters),
+	});
 }

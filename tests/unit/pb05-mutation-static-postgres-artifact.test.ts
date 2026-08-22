@@ -260,6 +260,7 @@ test("linked decoders enforce fixed PostgreSQL result shapes", async () => {
 		{ command: "INSERT", rowCount: 1, rows: [["901"]] },
 		{ command: "INSERT", rowCount: 1, rows: [[null, operationTime]] },
 		{ command: "INSERT", rowCount: 1, rows: [["901", "not-a-date"]] },
+		{ command: "INSERT", rowCount: 1, rows: [["901", new Date(Number.NaN)]] },
 	] as const)
 		expect(() => claim.decode(invalid)).toThrow();
 });

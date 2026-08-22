@@ -154,7 +154,11 @@ function decodeScalar(
 	if (codec === "text" && typeof value === "string" && value.length > 0)
 		return value;
 	if (codec === "bytea" && value instanceof Uint8Array) return value;
-	if (codec === "timestamptz" && value instanceof Date)
+	if (
+		codec === "timestamptz" &&
+		value instanceof Date &&
+		Number.isFinite(value.getTime())
+	)
 		return new Date(value.getTime());
 	throw new TypeError("invalid PostgreSQL Mutation result scalar");
 }
