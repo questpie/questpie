@@ -1,6 +1,14 @@
 import type { SQL } from "bun";
 
 import {
+	durableClaimAttemptInsert,
+	durableClaimAttemptsExhaust,
+	durableClaimAttemptsSupersede,
+	durableClaimRunExhaust,
+	durableClaimRunLease,
+	durableClaimRunSelect,
+} from "./postgres-claim-statements";
+import {
 	durableEventInsert,
 	durableEventSequenceBump,
 	type DurableEventErrorCode,
@@ -45,22 +53,6 @@ function postgresErrorNumber(error: unknown): string | null {
 	const errno = (error as Readonly<{ errno?: unknown }>).errno;
 	return typeof errno === "string" ? errno : null;
 }
-
-const runSelection = `run_id::text AS "runId",
-       dispatch_id::text AS "dispatchId",
-       resource_identity AS "resource",
-       tenant_id AS "tenantId",
-       principal_kind AS "principalKind",
-       principal_id AS "principalId",
-       context_input_bytes AS "contextInputBytes",
-       payload_bytes AS "payloadBytes",
-       retry_bytes AS "retryBytes",
-       runtime_build_digest AS "runtimeBuildDigest",
-       executable_digest AS "executableDigest",
-       causation_id AS "causationId",
-       correlation_id AS "correlationId",
-       cancellation_requested AS "cancellationRequested",
-       attempt_count AS "attemptCount"`;
 
 function claimRow(
 	row: DurableRow,
@@ -410,16 +402,10 @@ LIMIT $3`,
 			try {
 				return await transaction(
 					async (query): Promise<DurableClaimOutcome> => {
-						const [row] = await query(
-							`SELECT ${runSelection}
-FROM questpie_internal.durable_runs
-WHERE application_name = $1 AND run_id = $2
-  AND NOT cancellation_requested
-  AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
-    OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
-FOR UPDATE SKIP LOCKED`,
-							[input.application, request.runId],
-						);
+						const [row] = await query(durableClaimRunSelect.text, [
+							input.application,
+							request.runId,
+						]);
 						if (!row) return Object.freeze({ status: "skipped" as const });
 						const resource = durableText(row.resource, "Resource Identity");
 						const executableDigest = durableText(
@@ -437,21 +423,13 @@ FOR UPDATE SKIP LOCKED`,
 						const retry = decodeRetryBytes(row.retryBytes);
 						if (attemptNumber > retry.maximumAttempts) {
 							const staleAttempts = await query(
-								`UPDATE questpie_internal.durable_attempts
-SET outcome = 'failed', failure_code = 'RETRY_EXHAUSTED'
-WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL
-RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDigest"`,
+								durableClaimAttemptsExhaust.text,
 								[input.application, request.runId],
 							);
-							await query(
-								`UPDATE questpie_internal.durable_runs
-SET state = 'failed', current_attempt_id = NULL, lease_token_digest = NULL,
-    lease_expires_at = NULL, result_bytes = NULL,
-    failure_code = 'RETRY_EXHAUSTED', dead_letter = true,
-    terminal_at = pg_catalog.transaction_timestamp()
-WHERE application_name = $1 AND run_id = $2`,
-								[input.application, request.runId],
-							);
+							await query(durableClaimRunExhaust.text, [
+								input.application,
+								request.runId,
+							]);
 							const stale = staleAttempts[0];
 							await appendEvent(query, {
 								application: input.application,
@@ -479,32 +457,21 @@ WHERE application_name = $1 AND run_id = $2`,
 						}
 						const attemptId = crypto.randomUUID();
 						const leaseToken = crypto.randomUUID();
-						const [superseded] = await query(
-							`UPDATE questpie_internal.durable_runs
-SET state = 'running', attempt_count = $3, current_attempt_id = $4,
-    lease_token_digest = $5,
-    lease_expires_at = pg_catalog.transaction_timestamp() + make_interval(secs => $6::double precision)
-WHERE application_name = $1 AND run_id = $2
-RETURNING lease_expires_at AS "leaseExpiresAt",
-          pg_catalog.transaction_timestamp() + make_interval(secs => $7::double precision) AS "deadlineAt"`,
-							[
-								input.application,
-								request.runId,
-								attemptNumber,
-								attemptId,
-								leaseTokenDigest(leaseToken),
-								leaseMilliseconds / 1_000,
-								deadlineMilliseconds / 1_000,
-							],
-						);
+						const [superseded] = await query(durableClaimRunLease.text, [
+							input.application,
+							request.runId,
+							attemptNumber,
+							attemptId,
+							leaseTokenDigest(leaseToken),
+							leaseMilliseconds / 1_000,
+							deadlineMilliseconds / 1_000,
+						]);
 						if (!superseded) throw new TypeError("durable claim lost its run");
-						const previous = await query(
-							`UPDATE questpie_internal.durable_attempts
-SET outcome = 'leaseSuperseded'
-WHERE application_name = $1 AND run_id = $2 AND attempt_id <> $3 AND outcome IS NULL
-RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDigest"`,
-							[input.application, request.runId, attemptId],
-						);
+						const previous = await query(durableClaimAttemptsSupersede.text, [
+							input.application,
+							request.runId,
+							attemptId,
+						]);
 						const leaseExpiresAt = durableDate(
 							superseded.leaseExpiresAt,
 							"lease expiry",
@@ -513,23 +480,16 @@ RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDige
 							superseded.deadlineAt,
 							"attempt deadline",
 						);
-						await query(
-							`INSERT INTO questpie_internal.durable_attempts
-  (application_name, attempt_id, run_id, attempt_number, worker_id, lease_token_digest,
-   lease_expires_at, deadline_at, started_at, heartbeat_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
-   pg_catalog.transaction_timestamp(), pg_catalog.transaction_timestamp())`,
-							[
-								input.application,
-								attemptId,
-								request.runId,
-								attemptNumber,
-								request.workerId,
-								leaseTokenDigest(leaseToken),
-								leaseExpiresAt,
-								deadlineAt,
-							],
-						);
+						await query(durableClaimAttemptInsert.text, [
+							input.application,
+							attemptId,
+							request.runId,
+							attemptNumber,
+							request.workerId,
+							leaseTokenDigest(leaseToken),
+							leaseExpiresAt,
+							deadlineAt,
+						]);
 						const claim = claimRow(row, {
 							workerId: request.workerId,
 							attemptId,
