@@ -537,3 +537,69 @@ WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
 		});
 	},
 });
+
+export type DurableEffectReadInput = Readonly<{
+	application: string;
+	runId: string;
+}>;
+
+export type DurableEffectReadRow = Readonly<{
+	effectName: string;
+	effectId: string;
+	status: DurableEffectReservationRow["status"];
+	receipt: string | null;
+}>;
+
+export const durableEffectRead: PostgresStatement<
+	DurableEffectReadInput,
+	readonly DurableEffectReadRow[]
+> = definePostgresStatement({
+	name: "durable.effect.read",
+	text: `SELECT effect_name AS "effectName", effect_id::text AS "effectId",
+       status, receipt
+FROM questpie_internal.durable_effects
+WHERE application_name = $1 AND run_id = $2
+ORDER BY effect_name`,
+	parameterCount: 2,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+	],
+	decode(result) {
+		if (
+			result.command !== "SELECT" ||
+			result.rowCount === null ||
+			result.rowCount < 0 ||
+			result.rowCount !== result.rows.length
+		)
+			throw new TypeError("invalid PostgreSQL Durable effect read result");
+		return Object.freeze(
+			result.rows.map((row) => {
+				if (
+					row.length !== 4 ||
+					typeof row[0] !== "string" ||
+					typeof row[1] !== "string" ||
+					typeof row[2] !== "string" ||
+					!durableEffectStatuses.has(
+						row[2] as DurableEffectReservationRow["status"],
+					) ||
+					!(row[3] === null || typeof row[3] === "string")
+				)
+					throw new TypeError("invalid PostgreSQL Durable effect read row");
+				const status = row[2] as DurableEffectReservationRow["status"];
+				const receipt =
+					row[3] === null
+						? null
+						: boundedText(row[3], 0, 256, "effect receipt");
+				if ((status === "succeeded") !== (receipt !== null))
+					throw new TypeError("invalid PostgreSQL Durable effect read row");
+				return Object.freeze({
+					effectName: boundedText(row[0], 1, 63, "effect name"),
+					effectId: uuid(row[1], "effect identity"),
+					status,
+					receipt,
+				});
+			}),
+		);
+	},
+});

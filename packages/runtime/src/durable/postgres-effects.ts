@@ -4,6 +4,7 @@ import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
 import {
 	durableEffectAmbiguous,
 	durableEffectFence,
+	durableEffectRead,
 	durableEffectReservationInsert,
 	durableEffectReservationRead,
 	durableEffectSettle,
@@ -174,14 +175,10 @@ export function createPostgresDurableEffectLedger(
 			});
 		},
 		async read(runId) {
-			const rows = (await input.sql.unsafe(
-				`SELECT effect_name AS "effectName", effect_id::text AS "effectId",
-       status, receipt
-FROM questpie_internal.durable_effects
-WHERE application_name = $1 AND run_id = $2
-ORDER BY effect_name`,
-				[input.application, runId],
-			)) as unknown as readonly DurableRow[];
+			const rows = (await input.sql.unsafe(durableEffectRead.text, [
+				input.application,
+				runId,
+			])) as unknown as readonly DurableRow[];
 			return Object.freeze(rows.map(effectView));
 		},
 	});

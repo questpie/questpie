@@ -6,6 +6,7 @@ import { join } from "node:path";
 import { SQL } from "bun";
 
 import { createPostgresDatabaseDurableEffectAmbiguous } from "../../../packages/runtime/src/durable/postgres-database-effect-ambiguous";
+import { createPostgresDatabaseDurableEffectRead } from "../../../packages/runtime/src/durable/postgres-database-effect-read";
 import { createPostgresDatabaseDurableEffectReserve } from "../../../packages/runtime/src/durable/postgres-database-effect-reserve";
 import { createPostgresDatabaseDurableEffectSettle } from "../../../packages/runtime/src/durable/postgres-database-effect-settle";
 import {
@@ -613,6 +614,20 @@ postgres(
 					}),
 				).resolves.toMatchObject({ status: "reserved" });
 				await expect(count()).resolves.toBe(1);
+				const effects = await createPostgresDatabaseDurableEffectRead({
+					database,
+					application,
+				})(seed.claim.runId);
+				expect(effects.map(({ effectName }) => effectName)).toEqual([
+					seed.effectName,
+					rollbackEffect,
+				]);
+				expect(
+					effects.map(({ status, receipt }) => ({ status, receipt })),
+				).toEqual([
+					{ status: "succeeded", receipt: "provider:recovered" },
+					{ status: "pending", receipt: null },
+				]);
 			} finally {
 				await database.close({ deadlineAt: Date.now() + 5_000 });
 			}
