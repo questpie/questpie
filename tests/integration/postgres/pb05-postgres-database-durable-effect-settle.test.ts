@@ -6,10 +6,12 @@ import { join } from "node:path";
 import { SQL } from "bun";
 
 import { createPostgresDatabaseDurableEffectAmbiguous } from "../../../packages/runtime/src/durable/postgres-database-effect-ambiguous";
+import { createPostgresDatabaseDurableEffectReserve } from "../../../packages/runtime/src/durable/postgres-database-effect-reserve";
 import { createPostgresDatabaseDurableEffectSettle } from "../../../packages/runtime/src/durable/postgres-database-effect-settle";
 import {
 	durableEffectAmbiguous,
 	durableEffectFence,
+	durableEffectReservationRead,
 	durableEventInsert,
 	durableKernelMarker,
 } from "../../../packages/runtime/src/durable/postgres-statements";
@@ -67,6 +69,7 @@ type Seed = Readonly<{
 		correlationId: string;
 	}>;
 	effectName: string;
+	effectInput: Readonly<{ messageId: string }>;
 }>;
 
 async function prepareSeed(outputPath: string): Promise<Seed> {
@@ -122,6 +125,7 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
       correlationId: outcome.claim.correlationId,
     },
     effectName,
+    effectInput: { messageId: message.id },
   }));
 } finally {
   await disposeBeta08Harness();
@@ -236,6 +240,30 @@ WHERE effects.application_name = 'application:collaboration'
 		)
 			throw new TypeError("invalid ambiguous Durable effect inspection result");
 		return Object.freeze({ status: row[0], ambiguousEvents: row[1] });
+	},
+});
+
+const effectCount = definePostgresStatement<
+	Readonly<{ runId: string; effectName: string }>,
+	number
+>({
+	name: "durable.effect.test.count",
+	text: `SELECT count(*)::int FROM questpie_internal.durable_effects
+WHERE application_name = 'application:collaboration'
+  AND run_id = $1::uuid AND effect_name = $2::text`,
+	parameterCount: 2,
+	parameters: (input) => [input.runId, input.effectName],
+	decode(result) {
+		const row = result.rows[0];
+		if (
+			result.command !== "SELECT" ||
+			result.rowCount !== 1 ||
+			result.rows.length !== 1 ||
+			row?.length !== 1 ||
+			!Number.isSafeInteger(row[0])
+		)
+			throw new TypeError("invalid Durable effect count result");
+		return row[0] as number;
 	},
 });
 
@@ -486,6 +514,105 @@ postgres(
 							}),
 					}),
 				).resolves.toEqual({ status: "ambiguous", ambiguousEvents: 1 });
+			} finally {
+				await database.close({ deadlineAt: Date.now() + 5_000 });
+			}
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	},
+	120_000,
+);
+
+postgres(
+	"reserves, conflicts, recovers, and rolls an incomplete reservation back",
+	async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-pb05-reserve-"));
+		try {
+			const seed = await prepareSeed(join(temporary, "seed.json"));
+			const { createRuntimePostgres } =
+				await import("../../../packages/runtime/src/postgres");
+			const database = createRuntimePostgres(configuration());
+			try {
+				const reserve = createPostgresDatabaseDurableEffectReserve({
+					database,
+					application,
+				});
+				const matching = await reserve(seed.claim as DurableClaim, {
+					effectName: seed.effectName,
+					input: seed.effectInput,
+				});
+				expect(matching.status).toBe("reserved");
+				await expect(
+					reserve(seed.claim as DurableClaim, {
+						effectName: seed.effectName,
+						input: { messageId: "different" },
+					}),
+				).resolves.toMatchObject({ status: "conflict" });
+
+				await createPostgresDatabaseDurableEffectSettle({
+					database,
+					application,
+				})(seed.claim as DurableClaim, {
+					effectName: seed.effectName,
+					receipt: "provider:recovered",
+				});
+				await expect(
+					reserve(seed.claim as DurableClaim, {
+						effectName: seed.effectName,
+						input: seed.effectInput,
+					}),
+				).resolves.toMatchObject({
+					status: "recovered",
+					receipt: "provider:recovered",
+				});
+
+				const rollbackEffect = "deliver-secondary";
+				let readFaults = 0;
+				const faulting: PostgresTransactionRunner = {
+					transaction: (input) =>
+						database.transaction({
+							...input,
+							use: (transaction) =>
+								input.use({
+									...transaction,
+									async execute(statement, value) {
+										if (statement === durableEffectReservationRead) {
+											readFaults += 1;
+											throw new TypeError("forced reservation read failure");
+										}
+										return transaction.execute(statement, value);
+									},
+								} as PostgresTransaction),
+						}),
+				};
+				await expect(
+					createPostgresDatabaseDurableEffectReserve({
+						database: faulting,
+						application,
+					})(seed.claim as DurableClaim, {
+						effectName: rollbackEffect,
+						input: { attempt: 1 },
+					}),
+				).rejects.toThrow("forced reservation read failure");
+				expect(readFaults).toBe(1);
+				const count = () =>
+					database.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: (transaction) =>
+							transaction.execute(effectCount, {
+								runId: seed.claim.runId,
+								effectName: rollbackEffect,
+							}),
+					});
+				await expect(count()).resolves.toBe(0);
+				await expect(
+					reserve(seed.claim as DurableClaim, {
+						effectName: rollbackEffect,
+						input: { attempt: 1 },
+					}),
+				).resolves.toMatchObject({ status: "reserved" });
+				await expect(count()).resolves.toBe(1);
 			} finally {
 				await database.close({ deadlineAt: Date.now() + 5_000 });
 			}

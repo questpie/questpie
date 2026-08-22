@@ -434,3 +434,106 @@ RETURNING effect_id::text`,
 		return uuid(row[0], "effect identity");
 	},
 });
+
+export type DurableEffectReservationInsertInput = Readonly<{
+	application: string;
+	runId: string;
+	effectName: string;
+	effectId: string;
+	inputDigest: string;
+	attemptId: string;
+}>;
+
+export const durableEffectReservationInsert: PostgresStatement<
+	DurableEffectReservationInsertInput,
+	void
+> = definePostgresStatement({
+	name: "durable.effect.reservation.insert",
+	text: `INSERT INTO questpie_internal.durable_effects
+  (application_name, run_id, effect_name, effect_id, input_digest, status,
+   reserved_attempt_id, reserved_at)
+VALUES ($1, $2, $3, $4, $5, 'pending', $6, pg_catalog.transaction_timestamp())
+ON CONFLICT DO NOTHING`,
+	parameterCount: 6,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		boundedText(input.effectName, 1, 63, "effect name"),
+		uuid(input.effectId, "effect identity"),
+		digest(input.inputDigest),
+		uuid(input.attemptId, "attempt identity"),
+	],
+	decode(result) {
+		if (
+			result.command !== "INSERT" ||
+			result.rowCount === null ||
+			result.rowCount < 0 ||
+			result.rowCount > 1 ||
+			result.rows.length !== 0
+		)
+			throw new TypeError(
+				"invalid PostgreSQL Durable effect reservation result",
+			);
+	},
+});
+
+export type DurableEffectReservationReadInput = Readonly<{
+	application: string;
+	runId: string;
+	effectName: string;
+}>;
+
+export type DurableEffectReservationRow = Readonly<{
+	effectId: string;
+	status: "acknowledged" | "ambiguous" | "pending" | "succeeded";
+	receipt: string | null;
+	inputDigest: string;
+}>;
+
+const durableEffectStatuses: ReadonlySet<
+	DurableEffectReservationRow["status"]
+> = new Set(["acknowledged", "ambiguous", "pending", "succeeded"]);
+
+export const durableEffectReservationRead: PostgresStatement<
+	DurableEffectReservationReadInput,
+	DurableEffectReservationRow
+> = definePostgresStatement({
+	name: "durable.effect.reservation.read",
+	text: `SELECT effect_id::text AS "effectId", status, receipt, input_digest AS "inputDigest"
+FROM questpie_internal.durable_effects
+WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
+	parameterCount: 3,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		boundedText(input.effectName, 1, 63, "effect name"),
+	],
+	decode(result) {
+		const row = result.rows[0];
+		if (
+			result.command !== "SELECT" ||
+			result.rowCount !== 1 ||
+			result.rows.length !== 1 ||
+			row?.length !== 4 ||
+			typeof row[0] !== "string" ||
+			typeof row[1] !== "string" ||
+			!durableEffectStatuses.has(
+				row[1] as DurableEffectReservationRow["status"],
+			) ||
+			!(row[2] === null || typeof row[2] === "string") ||
+			typeof row[3] !== "string"
+		)
+			throw new TypeError("invalid PostgreSQL Durable effect reservation row");
+		const status = row[1] as DurableEffectReservationRow["status"];
+		const receipt =
+			row[2] === null ? null : boundedText(row[2], 0, 256, "effect receipt");
+		if ((status === "succeeded") !== (receipt !== null))
+			throw new TypeError("invalid PostgreSQL Durable effect reservation row");
+		return Object.freeze({
+			effectId: uuid(row[0], "effect identity"),
+			status,
+			receipt,
+			inputDigest: digest(row[3]),
+		});
+	},
+});

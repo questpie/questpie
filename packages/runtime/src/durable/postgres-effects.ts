@@ -4,6 +4,8 @@ import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
 import {
 	durableEffectAmbiguous,
 	durableEffectFence,
+	durableEffectReservationInsert,
+	durableEffectReservationRead,
 	durableEffectSettle,
 } from "./postgres-statements";
 import type { DurableClaim } from "./rows";
@@ -109,27 +111,19 @@ export function createPostgresDurableEffectLedger(
 			return transaction(async (query): Promise<DurableEffectReservation> => {
 				if (await fenced(query, claim))
 					return Object.freeze({ status: "fenced" as const });
-				await query(
-					`INSERT INTO questpie_internal.durable_effects
-  (application_name, run_id, effect_name, effect_id, input_digest, status,
-   reserved_attempt_id, reserved_at)
-VALUES ($1, $2, $3, $4, $5, 'pending', $6, pg_catalog.transaction_timestamp())
-ON CONFLICT DO NOTHING`,
-					[
-						input.application,
-						claim.runId,
-						request.effectName,
-						effectId,
-						inputDigest,
-						claim.attemptId,
-					],
-				);
-				const [row] = await query(
-					`SELECT status, receipt, input_digest AS "inputDigest"
-FROM questpie_internal.durable_effects
-WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
-					[input.application, claim.runId, request.effectName],
-				);
+				await query(durableEffectReservationInsert.text, [
+					input.application,
+					claim.runId,
+					request.effectName,
+					effectId,
+					inputDigest,
+					claim.attemptId,
+				]);
+				const [row] = await query(durableEffectReservationRead.text, [
+					input.application,
+					claim.runId,
+					request.effectName,
+				]);
 				if (!row) throw new TypeError("durable effect reservation is missing");
 				if (durableText(row.inputDigest, "effect input digest") !== inputDigest)
 					return Object.freeze({ status: "conflict" as const, effectId });
