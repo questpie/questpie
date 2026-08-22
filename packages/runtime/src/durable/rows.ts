@@ -1,4 +1,10 @@
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
+import {
+	durableEventInsert,
+	durableEventSequenceBump,
+	type DurableEventErrorCode,
+	type DurableEventKind,
+} from "./postgres-statements";
 import { durableKernelMarker } from "./postgres-statements";
 import type { LinkedReactionRetry } from "./projection";
 
@@ -247,39 +253,30 @@ export async function appendDurableRunEvent(
 	input: Readonly<{
 		application: string;
 		claim: DurableEventClaim;
-		kind: string;
-		errorCode?: string | null;
+		kind: DurableEventKind;
+		errorCode?: DurableEventErrorCode | null;
 	}>,
 ): Promise<void> {
-	const [bumped] = await query(
-		`UPDATE questpie_internal.durable_runs
-SET event_sequence = event_sequence + 1
-WHERE application_name = $1 AND run_id = $2
-RETURNING event_sequence AS "sequence"`,
-		[input.application, input.claim.runId],
-	);
+	const [bumped] = await query(durableEventSequenceBump.text, [
+		input.application,
+		input.claim.runId,
+	]);
 	if (!bumped) throw new TypeError("durable run history has no run");
-	await query(
-		`INSERT INTO questpie_internal.durable_run_events
-  (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
-   attempt_id, lease_token_digest, causation_id, correlation_id, kind, error_code)
-VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, $10, $11)`,
-		[
-			input.application,
-			input.claim.runId,
-			durableInteger(bumped.sequence, "run event sequence"),
-			input.claim.resource,
-			input.claim.dispatchId,
-			input.claim.attemptId,
-			input.claim.leaseToken === null
-				? null
-				: leaseTokenDigest(input.claim.leaseToken),
-			input.claim.causationId,
-			input.claim.correlationId,
-			input.kind,
-			input.errorCode ?? null,
-		],
-	);
+	await query(durableEventInsert.text, [
+		input.application,
+		input.claim.runId,
+		durableInteger(bumped.sequence, "run event sequence"),
+		input.claim.resource,
+		input.claim.dispatchId,
+		input.claim.attemptId,
+		input.claim.leaseToken === null
+			? null
+			: leaseTokenDigest(input.claim.leaseToken),
+		input.claim.causationId,
+		input.claim.correlationId,
+		input.kind,
+		input.errorCode ?? null,
+	]);
 }
 
 export function effectIdentity(

@@ -53,6 +53,78 @@ function leaseSeconds(value: number): number {
 	return value;
 }
 
+function nullableUuid(value: string | null, label: string): string | null {
+	return value === null ? null : uuid(value, label);
+}
+
+function nullableDigest(value: string | null): string | null {
+	return value === null ? null : digest(value);
+}
+
+function eventSequence(value: number): number {
+	if (!Number.isSafeInteger(value) || value < 1 || value > 1_024)
+		throw new TypeError("invalid PostgreSQL Durable event sequence");
+	return value;
+}
+
+function enumText<Value extends string>(
+	value: string,
+	values: ReadonlySet<string>,
+	label: string,
+): Value {
+	if (!values.has(value))
+		throw new TypeError(`invalid PostgreSQL Durable ${label}`);
+	return value as Value;
+}
+
+const durableEventKinds: ReadonlySet<string> = new Set([
+	"accepted",
+	"ambiguityAcknowledged",
+	"attemptStarted",
+	"cancellationRequested",
+	"cancelled",
+	"effectAmbiguous",
+	"effectSettled",
+	"failed",
+	"leaseSuperseded",
+	"retryScheduled",
+	"succeeded",
+]);
+
+const durableEventErrorCodes: ReadonlySet<string> = new Set([
+	"EFFECT_AMBIGUOUS",
+	"EFFECT_CONFLICT",
+	"HANDLER_FAILED",
+	"REACTION_ERROR",
+	"RESOURCE_LIMIT",
+	"RETRY_EXHAUSTED",
+	"RUN_AS_DENIED",
+	"VALIDATION_FAILED",
+]);
+
+export type DurableEventKind =
+	| "accepted"
+	| "ambiguityAcknowledged"
+	| "attemptStarted"
+	| "cancellationRequested"
+	| "cancelled"
+	| "effectAmbiguous"
+	| "effectSettled"
+	| "failed"
+	| "leaseSuperseded"
+	| "retryScheduled"
+	| "succeeded";
+
+export type DurableEventErrorCode =
+	| "EFFECT_AMBIGUOUS"
+	| "EFFECT_CONFLICT"
+	| "HANDLER_FAILED"
+	| "REACTION_ERROR"
+	| "RESOURCE_LIMIT"
+	| "RETRY_EXHAUSTED"
+	| "RUN_AS_DENIED"
+	| "VALIDATION_FAILED";
+
 export const durableKernelMarker: PostgresStatement<void, void> =
 	definePostgresStatement({
 		name: "durable.kernel.mark",
@@ -136,5 +208,96 @@ RETURNING deadline_at <= pg_catalog.transaction_timestamp() AS "deadlineExpired"
 			found: decoded.found,
 			deadlineExpired: decoded.value,
 		});
+	},
+});
+
+export type DurableEventSequenceBumpInput = Readonly<{
+	application: string;
+	runId: string;
+}>;
+
+export const durableEventSequenceBump: PostgresStatement<
+	DurableEventSequenceBumpInput,
+	Readonly<{ sequence: number }> | null
+> = definePostgresStatement({
+	name: "durable.event.sequence.bump",
+	text: `UPDATE questpie_internal.durable_runs
+SET event_sequence = event_sequence + 1
+WHERE application_name = $1 AND run_id = $2
+RETURNING event_sequence::int AS "sequence"`,
+	parameterCount: 2,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+	],
+	decode(result) {
+		if (
+			result.command !== "UPDATE" ||
+			result.rowCount === null ||
+			result.rowCount !== result.rows.length ||
+			result.rowCount < 0 ||
+			result.rowCount > 1
+		)
+			throw new TypeError("invalid PostgreSQL Durable event sequence result");
+		if (result.rowCount === 0) return null;
+		const row = result.rows[0];
+		if (row?.length !== 1)
+			throw new TypeError("invalid PostgreSQL Durable event sequence result");
+		return Object.freeze({
+			sequence: eventSequence(row[0] as number),
+		});
+	},
+});
+
+export type DurableEventInsertInput = Readonly<{
+	application: string;
+	runId: string;
+	sequence: number;
+	resource: string;
+	dispatchId: string;
+	attemptId: string | null;
+	leaseTokenDigest: string | null;
+	causationId: string;
+	correlationId: string;
+	kind: DurableEventKind;
+	errorCode: DurableEventErrorCode | null;
+}>;
+
+export const durableEventInsert: PostgresStatement<
+	DurableEventInsertInput,
+	void
+> = definePostgresStatement({
+	name: "durable.event.insert",
+	text: `INSERT INTO questpie_internal.durable_run_events
+  (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
+   attempt_id, lease_token_digest, causation_id, correlation_id, kind, error_code)
+VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, $10, $11)`,
+	parameterCount: 11,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		eventSequence(input.sequence),
+		nonemptyText(input.resource, "Resource Identity"),
+		uuid(input.dispatchId, "dispatch identity"),
+		nullableUuid(input.attemptId, "attempt identity"),
+		nullableDigest(input.leaseTokenDigest),
+		nonemptyText(input.causationId, "causation identity"),
+		nonemptyText(input.correlationId, "correlation identity"),
+		enumText<DurableEventKind>(input.kind, durableEventKinds, "event kind"),
+		input.errorCode === null
+			? null
+			: enumText<DurableEventErrorCode>(
+					input.errorCode,
+					durableEventErrorCodes,
+					"event error code",
+				),
+	],
+	decode(result) {
+		if (
+			result.command !== "INSERT" ||
+			result.rowCount !== 1 ||
+			result.rows.length !== 0
+		)
+			throw new TypeError("invalid PostgreSQL Durable event insert result");
 	},
 });

@@ -7,6 +7,7 @@ import {
 	createPostgresDurableMaintenance,
 	type DurableMaintenanceCommand,
 } from "../../../packages/runtime/src/durable/postgres-maintenance";
+import { durableEventSequenceBump } from "../../../packages/runtime/src/durable/postgres-statements";
 import { durableKernelMarkerStatement } from "../../../packages/runtime/src/durable/rows";
 import {
 	beta05Ids,
@@ -39,8 +40,7 @@ async function maintenanceStatements(
 	const unsafe = async (statement: string): Promise<readonly unknown[]> => {
 		statements.push(statement);
 		if (statement.includes("SELECT state")) return [row];
-		if (statement.includes('RETURNING event_sequence AS "sequence"'))
-			return [{ sequence: 2 }];
+		if (statement === durableEventSequenceBump.text) return [{ sequence: 2 }];
 		if (statement.includes('SELECT event_sequence AS "version"'))
 			return [{ version: 2 }];
 		return [];

@@ -1,6 +1,10 @@
 import type { SQL } from "bun";
 
 import {
+	durableEventInsert,
+	durableEventSequenceBump,
+	type DurableEventErrorCode,
+	type DurableEventKind,
 	durableAttemptHeartbeat,
 	durableRunHeartbeat,
 } from "./postgres-statements";
@@ -109,39 +113,30 @@ async function appendEvent(
 		dispatchId: string;
 		causationId: string;
 		correlationId: string;
-		kind: string;
+		kind: DurableEventKind;
 		attemptId?: string | null;
 		leaseTokenDigest?: string | null;
-		errorCode?: string | null;
+		errorCode?: DurableEventErrorCode | null;
 	}>,
 ): Promise<void> {
-	const [bumped] = await query(
-		`UPDATE questpie_internal.durable_runs
-SET event_sequence = event_sequence + 1
-WHERE application_name = $1 AND run_id = $2
-RETURNING event_sequence AS "sequence"`,
-		[input.application, input.runId],
-	);
+	const [bumped] = await query(durableEventSequenceBump.text, [
+		input.application,
+		input.runId,
+	]);
 	if (!bumped) throw new TypeError("durable run history has no run");
-	await query(
-		`INSERT INTO questpie_internal.durable_run_events
-  (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
-   attempt_id, lease_token_digest, causation_id, correlation_id, kind, error_code)
-VALUES ($1, $2, $3, pg_catalog.transaction_timestamp(), $4, $5, $6, $7, $8, $9, $10, $11)`,
-		[
-			input.application,
-			input.runId,
-			durableInteger(bumped.sequence, "run event sequence"),
-			input.resource,
-			input.dispatchId,
-			input.attemptId ?? null,
-			input.leaseTokenDigest ?? null,
-			input.causationId,
-			input.correlationId,
-			input.kind,
-			input.errorCode ?? null,
-		],
-	);
+	await query(durableEventInsert.text, [
+		input.application,
+		input.runId,
+		durableInteger(bumped.sequence, "run event sequence"),
+		input.resource,
+		input.dispatchId,
+		input.attemptId ?? null,
+		input.leaseTokenDigest ?? null,
+		input.causationId,
+		input.correlationId,
+		input.kind,
+		input.errorCode ?? null,
+	]);
 }
 
 export function createPostgresDurableKernel(
@@ -188,7 +183,7 @@ export function createPostgresDurableKernel(
 			failureCode: DurableFailureCode | null;
 			resultBytes: Uint8Array | null;
 			deadLetter: boolean;
-			eventKind: string;
+			eventKind: DurableEventKind;
 		}>,
 	): Promise<DurableTransition> =>
 		transaction(async (query) => {

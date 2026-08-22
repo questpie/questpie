@@ -1,6 +1,7 @@
 import type { SQL } from "bun";
 import { principal as principalKernel, type Principal } from "questpie";
 
+import type { DurableEventKind } from "./postgres-statements";
 import type { DurableRunState } from "./rows";
 import {
 	appendDurableRunEvent,
@@ -188,7 +189,7 @@ export function createPostgresDurableMaintenance(
 		query: DurableQuery,
 		run: DurableRow,
 		runId: string,
-		kind: string,
+		kind: DurableEventKind,
 	): Promise<void> => {
 		await appendDurableRunEvent(query, {
 			application: input.application,
