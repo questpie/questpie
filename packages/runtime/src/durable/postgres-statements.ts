@@ -396,3 +396,41 @@ RETURNING effect_id::text`,
 		return uuid(row[0], "effect identity");
 	},
 });
+
+export type DurableEffectAmbiguousInput = Readonly<{
+	application: string;
+	runId: string;
+	effectName: string;
+}>;
+
+export const durableEffectAmbiguous: PostgresStatement<
+	DurableEffectAmbiguousInput,
+	string | null
+> = definePostgresStatement({
+	name: "durable.effect.ambiguous",
+	text: `UPDATE questpie_internal.durable_effects
+SET status = 'ambiguous'
+WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'pending'
+RETURNING effect_id::text`,
+	parameterCount: 3,
+	parameters: (input) => [
+		nonemptyText(input.application, "application identity"),
+		uuid(input.runId, "run identity"),
+		boundedText(input.effectName, 1, 63, "effect name"),
+	],
+	decode(result) {
+		if (
+			result.command !== "UPDATE" ||
+			result.rowCount === null ||
+			result.rowCount !== result.rows.length ||
+			result.rowCount < 0 ||
+			result.rowCount > 1
+		)
+			throw new TypeError("invalid PostgreSQL Durable ambiguous effect result");
+		if (result.rowCount === 0) return null;
+		const row = result.rows[0];
+		if (row?.length !== 1 || typeof row[0] !== "string")
+			throw new TypeError("invalid PostgreSQL Durable ambiguous effect result");
+		return uuid(row[0], "effect identity");
+	},
+});

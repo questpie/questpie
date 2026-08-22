@@ -1,7 +1,11 @@
 import type { SQL } from "bun";
 
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
-import { durableEffectFence, durableEffectSettle } from "./postgres-statements";
+import {
+	durableEffectAmbiguous,
+	durableEffectFence,
+	durableEffectSettle,
+} from "./postgres-statements";
 import type { DurableClaim } from "./rows";
 import {
 	appendDurableRunEvent,
@@ -161,13 +165,11 @@ WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
 		async markAmbiguous(claim, request) {
 			return transaction(async (query) => {
 				if (await fenced(query, claim)) return "fenced" as const;
-				const ambiguous = await query(
-					`UPDATE questpie_internal.durable_effects
-SET status = 'ambiguous'
-WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'pending'
-RETURNING effect_id`,
-					[input.application, claim.runId, request.effectName],
-				);
+				const ambiguous = await query(durableEffectAmbiguous.text, [
+					input.application,
+					claim.runId,
+					request.effectName,
+				]);
 				if (ambiguous.length > 0)
 					await appendDurableRunEvent(query, {
 						application: input.application,

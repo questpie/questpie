@@ -5,9 +5,12 @@ import { join } from "node:path";
 
 import { SQL } from "bun";
 
+import { createPostgresDatabaseDurableEffectAmbiguous } from "../../../packages/runtime/src/durable/postgres-database-effect-ambiguous";
 import { createPostgresDatabaseDurableEffectSettle } from "../../../packages/runtime/src/durable/postgres-database-effect-settle";
 import {
+	durableEffectAmbiguous,
 	durableEffectFence,
+	durableEventInsert,
 	durableKernelMarker,
 } from "../../../packages/runtime/src/durable/postgres-statements";
 import {
@@ -207,6 +210,35 @@ WHERE effects.application_name = 'application:collaboration'
 	},
 });
 
+const ambiguousEffectState = definePostgresStatement<
+	Readonly<{ runId: string; effectName: string }>,
+	Readonly<{ status: string; ambiguousEvents: number }>
+>({
+	name: "durable.effect.test.inspect-ambiguous",
+	text: `SELECT effects.status,
+  (SELECT count(*)::int FROM questpie_internal.durable_run_events AS events
+   WHERE events.application_name = effects.application_name
+     AND events.run_id = effects.run_id AND events.kind = 'effectAmbiguous')
+FROM questpie_internal.durable_effects AS effects
+WHERE effects.application_name = 'application:collaboration'
+  AND effects.run_id = $1::uuid AND effects.effect_name = $2::text`,
+	parameterCount: 2,
+	parameters: (input) => [input.runId, input.effectName],
+	decode(result) {
+		const row = result.rows[0];
+		if (
+			result.command !== "SELECT" ||
+			result.rowCount !== 1 ||
+			result.rows.length !== 1 ||
+			row?.length !== 2 ||
+			typeof row[0] !== "string" ||
+			typeof row[1] !== "number"
+		)
+			throw new TypeError("invalid ambiguous Durable effect inspection result");
+		return Object.freeze({ status: row[0], ambiguousEvents: row[1] });
+	},
+});
+
 postgres(
 	"a committed lease supersession fences a waiting effect settlement",
 	async () => {
@@ -367,6 +399,94 @@ FROM pg_catalog.pg_stat_activity WHERE pid = $1::int`,
 					),
 				);
 				await observer.close({ timeout: 2 });
+				await database.close({ deadlineAt: Date.now() + 5_000 });
+			}
+		} finally {
+			await rm(temporary, { recursive: true, force: true });
+		}
+	},
+	120_000,
+);
+
+postgres(
+	"an event failure rolls an ambiguous effect transition back before a reusable success",
+	async () => {
+		const temporary = await mkdtemp(join(tmpdir(), "questpie-pb05-ambiguous-"));
+		try {
+			const seed = await prepareSeed(join(temporary, "seed.json"));
+			const { createRuntimePostgres } =
+				await import("../../../packages/runtime/src/postgres");
+			const database = createRuntimePostgres(configuration());
+			let eventFaults = 0;
+			const faulting: PostgresTransactionRunner = {
+				transaction: (input) =>
+					database.transaction({
+						...input,
+						use: (transaction) =>
+							input.use({
+								...transaction,
+								async execute(statement, value) {
+									if (statement === durableEventInsert) {
+										eventFaults += 1;
+										throw new TypeError("forced ambiguous event failure");
+									}
+									return transaction.execute(statement, value);
+								},
+							} as PostgresTransaction),
+					}),
+			};
+			try {
+				await expect(
+					createPostgresDatabaseDurableEffectAmbiguous({
+						database: faulting,
+						application,
+					})(seed.claim as DurableClaim, { effectName: seed.effectName }),
+				).rejects.toThrow("forced ambiguous event failure");
+				expect(eventFaults).toBe(1);
+				await expect(
+					database.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: (transaction) =>
+							transaction.execute(ambiguousEffectState, {
+								runId: seed.claim.runId,
+								effectName: seed.effectName,
+							}),
+					}),
+				).resolves.toEqual({ status: "pending", ambiguousEvents: 0 });
+
+				const executed: unknown[] = [];
+				const observed: PostgresTransactionRunner = {
+					transaction: (input) =>
+						database.transaction({
+							...input,
+							use: (transaction) =>
+								input.use({
+									...transaction,
+									async execute(statement, value) {
+										executed.push(statement);
+										return transaction.execute(statement, value);
+									},
+								} as PostgresTransaction),
+						}),
+				};
+				await expect(
+					createPostgresDatabaseDurableEffectAmbiguous({
+						database: observed,
+						application,
+					})(seed.claim as DurableClaim, { effectName: seed.effectName }),
+				).resolves.toBe("applied");
+				expect(executed).toContain(durableEffectAmbiguous);
+				await expect(
+					database.transaction({
+						mode: { isolation: "readCommitted", access: "readOnly" },
+						use: (transaction) =>
+							transaction.execute(ambiguousEffectState, {
+								runId: seed.claim.runId,
+								effectName: seed.effectName,
+							}),
+					}),
+				).resolves.toEqual({ status: "ambiguous", ambiguousEvents: 1 });
+			} finally {
 				await database.close({ deadlineAt: Date.now() + 5_000 });
 			}
 		} finally {
