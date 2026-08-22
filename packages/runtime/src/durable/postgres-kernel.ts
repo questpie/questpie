@@ -6,6 +6,7 @@ import {
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
 import { createPostgresDatabaseDurableClaim } from "./postgres-database-claim";
+import { createPostgresDatabaseDurableTerminal } from "./postgres-database-terminal";
 import {
 	durableEventInsert,
 	durableEventSequenceBump,
@@ -15,13 +16,7 @@ import {
 	durableRunHeartbeat,
 } from "./postgres-statements";
 import type { LinkedReactionProjection } from "./projection";
-import type {
-	DurableClaim,
-	DurableFailureCode,
-	DurableKernel,
-	DurableRunState,
-	DurableTransition,
-} from "./rows";
+import type { DurableKernel, DurableRunState } from "./rows";
 import {
 	durableBytes,
 	durableDate,
@@ -29,19 +24,9 @@ import {
 	durableText,
 	leaseTokenDigest,
 	markDurableKernelTransaction,
-	retryDelayMilliseconds,
 	type DurableQuery,
 	type DurableRow,
 } from "./rows";
-
-const permanentFailureCodes: ReadonlySet<DurableFailureCode> = new Set([
-	"EFFECT_AMBIGUOUS",
-	"EFFECT_CONFLICT",
-	"REACTION_ERROR",
-	"RESOURCE_LIMIT",
-	"RUN_AS_DENIED",
-	"VALIDATION_FAILED",
-]);
 
 function postgresErrorNumber(error: unknown): string | null {
 	if (!error || typeof error !== "object") return null;
@@ -119,7 +104,7 @@ export function createPostgresDurableKernel(
 			await markDurableKernelTransaction(query);
 			return use(query);
 		}) as Promise<Result>;
-	const claimDatabase: PostgresTransactionRunner = {
+	const compatibilityDatabase: PostgresTransactionRunner = {
 		async transaction(request) {
 			if (
 				request.mode.isolation !== "readCommitted" ||
@@ -158,138 +143,16 @@ export function createPostgresDurableKernel(
 		},
 	};
 	const databaseClaim = createPostgresDatabaseDurableClaim({
-		database: claimDatabase,
+		database: compatibilityDatabase,
 		application: input.application,
 		reactions: input.reactions,
 	});
 
-	const terminal = async (
-		claim: DurableClaim,
-		outcome: "cancelled" | "failed" | "succeeded",
-		detail: Readonly<{
-			state: DurableRunState;
-			failureCode: DurableFailureCode | null;
-			resultBytes: Uint8Array | null;
-			deadLetter: boolean;
-			eventKind: DurableEventKind;
-		}>,
-	): Promise<DurableTransition> =>
-		transaction(async (query) => {
-			const applied = await query(
-				`UPDATE questpie_internal.durable_runs
-SET state = $5, current_attempt_id = NULL, lease_token_digest = NULL, lease_expires_at = NULL,
-    result_bytes = $6, failure_code = $7, dead_letter = $8,
-    terminal_at = pg_catalog.transaction_timestamp()
-WHERE application_name = $1 AND run_id = $2
-  AND current_attempt_id = $3 AND lease_token_digest = $4
-RETURNING state`,
-				[
-					input.application,
-					claim.runId,
-					claim.attemptId,
-					leaseTokenDigest(claim.leaseToken),
-					detail.state,
-					detail.resultBytes,
-					detail.failureCode,
-					detail.deadLetter,
-				],
-			);
-			if (applied.length === 0)
-				return Object.freeze({
-					status: "fenced" as const,
-					state: null,
-					deadLetter: false,
-				});
-			await query(
-				`UPDATE questpie_internal.durable_attempts
-SET outcome = $3, failure_code = $4
-WHERE application_name = $1 AND attempt_id = $2`,
-				[
-					input.application,
-					claim.attemptId,
-					outcome,
-					outcome === "failed" ? detail.failureCode : null,
-				],
-			);
-			await appendEvent(query, {
-				application: input.application,
-				runId: claim.runId,
-				resource: claim.resource,
-				dispatchId: claim.dispatchId,
-				causationId: claim.causationId,
-				correlationId: claim.correlationId,
-				kind: detail.eventKind,
-				attemptId: claim.attemptId,
-				leaseTokenDigest: leaseTokenDigest(claim.leaseToken),
-				errorCode: detail.failureCode,
-			});
-			return Object.freeze({
-				status: "applied" as const,
-				state: detail.state,
-				deadLetter: detail.deadLetter,
-			});
-		});
-
-	const scheduleRetry = async (
-		claim: DurableClaim,
-		code: DurableFailureCode,
-	): Promise<DurableTransition> =>
-		transaction(async (query) => {
-			const delay = retryDelayMilliseconds(
-				claim.retry,
-				claim.attemptNumber,
-				random,
-			);
-			const applied = await query(
-				`UPDATE questpie_internal.durable_runs
-SET state = 'delayed', current_attempt_id = NULL, lease_token_digest = NULL,
-    lease_expires_at = NULL, failure_code = $5,
-    available_at = LEAST(
-      pg_catalog.transaction_timestamp() + make_interval(secs => $6::double precision),
-      horizon_at
-    )
-WHERE application_name = $1 AND run_id = $2
-  AND current_attempt_id = $3 AND lease_token_digest = $4
-RETURNING state`,
-				[
-					input.application,
-					claim.runId,
-					claim.attemptId,
-					leaseTokenDigest(claim.leaseToken),
-					code,
-					delay / 1_000,
-				],
-			);
-			if (applied.length === 0)
-				return Object.freeze({
-					status: "fenced" as const,
-					state: null,
-					deadLetter: false,
-				});
-			await query(
-				`UPDATE questpie_internal.durable_attempts
-SET outcome = 'failed', failure_code = $3
-WHERE application_name = $1 AND attempt_id = $2`,
-				[input.application, claim.attemptId, code],
-			);
-			await appendEvent(query, {
-				application: input.application,
-				runId: claim.runId,
-				resource: claim.resource,
-				dispatchId: claim.dispatchId,
-				causationId: claim.causationId,
-				correlationId: claim.correlationId,
-				kind: "retryScheduled",
-				attemptId: claim.attemptId,
-				leaseTokenDigest: leaseTokenDigest(claim.leaseToken),
-				errorCode: code,
-			});
-			return Object.freeze({
-				status: "applied" as const,
-				state: "delayed" as const,
-				deadLetter: false,
-			});
-		});
+	const databaseTerminal = createPostgresDatabaseDurableTerminal({
+		database: compatibilityDatabase,
+		application: input.application,
+		random,
+	});
 
 	return Object.freeze<DurableKernel>({
 		application: input.application,
@@ -407,38 +270,9 @@ LIMIT $3`,
 				});
 			});
 		},
-		succeed(claim, resultBytes) {
-			return terminal(claim, "succeeded", {
-				state: "succeeded",
-				failureCode: null,
-				resultBytes,
-				deadLetter: false,
-				eventKind: "succeeded",
-			});
-		},
-		fail(claim, failure) {
-			const exhausted = claim.attemptNumber >= claim.retry.maximumAttempts;
-			if (permanentFailureCodes.has(failure.code) || exhausted)
-				return terminal(claim, "failed", {
-					state: "failed",
-					failureCode: permanentFailureCodes.has(failure.code)
-						? failure.code
-						: "RETRY_EXHAUSTED",
-					resultBytes: null,
-					deadLetter: true,
-					eventKind: "failed",
-				});
-			return scheduleRetry(claim, failure.code);
-		},
-		cancel(claim) {
-			return terminal(claim, "cancelled", {
-				state: "cancelled",
-				failureCode: null,
-				resultBytes: null,
-				deadLetter: false,
-				eventKind: "cancelled",
-			});
-		},
+		succeed: databaseTerminal.succeed,
+		fail: databaseTerminal.fail,
+		cancel: databaseTerminal.cancel,
 		async inspect(runId) {
 			const [row] = (await input.sql.unsafe(
 				`SELECT run_id::text AS "runId", dispatch_id::text AS "dispatchId",

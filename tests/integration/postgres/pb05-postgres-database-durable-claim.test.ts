@@ -10,7 +10,9 @@ import {
 	durableClaimRunSelect,
 } from "../../../packages/runtime/src/durable/postgres-claim-statements";
 import { createPostgresDatabaseDurableClaim } from "../../../packages/runtime/src/durable/postgres-database-claim";
+import { createPostgresDatabaseDurableTerminal } from "../../../packages/runtime/src/durable/postgres-database-terminal";
 import { durableKernelMarker } from "../../../packages/runtime/src/durable/postgres-statements";
+import { durableAttemptComplete } from "../../../packages/runtime/src/durable/postgres-terminal-statements";
 import { linkReactionProjection } from "../../../packages/runtime/src/durable/projection";
 import {
 	definePostgresStatement,
@@ -105,6 +107,9 @@ type ClaimState = Readonly<{
 	currentAttemptId: string | null;
 	attempts: number;
 	attemptStarted: number;
+	attemptOutcome: string | null;
+	succeeded: number;
+	resultBytes: Uint8Array | null;
 }>;
 
 const inspectClaim = definePostgresStatement<string, ClaimState>({
@@ -118,7 +123,15 @@ const inspectClaim = definePostgresStatement<string, ClaimState>({
        (SELECT count(*)::int FROM questpie_internal.durable_run_events AS events
         WHERE events.application_name = runs.application_name
           AND events.run_id = runs.run_id
-          AND events.kind = 'attemptStarted')
+          AND events.kind = 'attemptStarted'),
+       (SELECT attempts.outcome FROM questpie_internal.durable_attempts AS attempts
+        WHERE attempts.application_name = runs.application_name
+          AND attempts.run_id = runs.run_id
+        ORDER BY attempts.attempt_number DESC LIMIT 1),
+       (SELECT count(*)::int FROM questpie_internal.durable_run_events AS events
+        WHERE events.application_name = runs.application_name
+          AND events.run_id = runs.run_id AND events.kind = 'succeeded'),
+       runs.result_bytes
 FROM questpie_internal.durable_runs AS runs
 WHERE runs.application_name = 'application:collaboration'
   AND runs.run_id = $1::uuid`,
@@ -130,12 +143,15 @@ WHERE runs.application_name = 'application:collaboration'
 			result.command !== "SELECT" ||
 			result.rowCount !== 1 ||
 			result.rows.length !== 1 ||
-			row?.length !== 5 ||
+			row?.length !== 8 ||
 			typeof row[0] !== "string" ||
 			typeof row[1] !== "number" ||
 			(row[2] !== null && typeof row[2] !== "string") ||
 			typeof row[3] !== "number" ||
-			typeof row[4] !== "number"
+			typeof row[4] !== "number" ||
+			(row[5] !== null && typeof row[5] !== "string") ||
+			typeof row[6] !== "number" ||
+			(row[7] !== null && !(row[7] instanceof Uint8Array))
 		)
 			throw new TypeError("invalid Durable claim inspection result");
 		return Object.freeze({
@@ -144,6 +160,9 @@ WHERE runs.application_name = 'application:collaboration'
 			currentAttemptId: row[2],
 			attempts: row[3],
 			attemptStarted: row[4],
+			attemptOutcome: row[5],
+			succeeded: row[6],
+			resultBytes: row[7],
 		});
 	},
 });
@@ -225,6 +244,9 @@ postgres(
 					currentAttemptId: null,
 					attempts: 0,
 					attemptStarted: 0,
+					attemptOutcome: null,
+					succeeded: 0,
+					resultBytes: null,
 				});
 
 				let release!: () => void;
@@ -263,10 +285,64 @@ postgres(
 					attemptCount: 1,
 					attempts: 1,
 					attemptStarted: 1,
+					attemptOutcome: null,
+					succeeded: 0,
+					resultBytes: null,
 				});
 				expect(committed.currentAttemptId).toBe(
 					outcome.status === "claimed" ? outcome.claim.attemptId : null,
 				);
+				if (outcome.status !== "claimed")
+					throw new TypeError("Durable terminal requires the claimed run");
+
+				let terminalFaults = 0;
+				const faultingTerminal = createPostgresDatabaseDurableTerminal({
+					database: {
+						transaction: (input) =>
+							database.transaction({
+								...input,
+								use: (transaction) =>
+									input.use({
+										...transaction,
+										async execute(statement, value) {
+											if (statement === durableAttemptComplete) {
+												terminalFaults += 1;
+												throw new TypeError("forced terminal refusal");
+											}
+											return transaction.execute(statement, value);
+										},
+									} as PostgresTransaction),
+							}),
+					},
+					application: "application:collaboration",
+				});
+				await expect(
+					faultingTerminal.succeed(outcome.claim, new Uint8Array([7])),
+				).rejects.toThrow("forced terminal refusal");
+				expect(terminalFaults).toBe(1);
+				expect(await state(database, prepared.runId)).toEqual(committed);
+
+				const terminal = createPostgresDatabaseDurableTerminal({
+					database,
+					application: "application:collaboration",
+				});
+				await expect(
+					terminal.succeed(outcome.claim, new Uint8Array([7])),
+				).resolves.toEqual({
+					status: "applied",
+					state: "succeeded",
+					deadLetter: false,
+				});
+				expect(await state(database, prepared.runId)).toEqual({
+					state: "succeeded",
+					attemptCount: 1,
+					currentAttemptId: null,
+					attempts: 1,
+					attemptStarted: 1,
+					attemptOutcome: "succeeded",
+					succeeded: 1,
+					resultBytes: new Uint8Array([7]),
+				});
 			} finally {
 				await database.close({ deadlineAt: Date.now() + 5_000 });
 			}
