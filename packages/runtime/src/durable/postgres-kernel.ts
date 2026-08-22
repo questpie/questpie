@@ -1,5 +1,9 @@
 import type { SQL } from "bun";
 
+import {
+	durableAttemptHeartbeat,
+	durableRunHeartbeat,
+} from "./postgres-statements";
 import type { LinkedReactionProjection } from "./projection";
 import type {
 	DurableClaim,
@@ -580,36 +584,24 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8,
 		},
 		async heartbeat(claim) {
 			return transaction(async (query) => {
-				const [held] = await query(
-					`UPDATE questpie_internal.durable_runs
-SET lease_expires_at = pg_catalog.transaction_timestamp()
-      + make_interval(secs => $5::double precision)
-WHERE application_name = $1 AND run_id = $2
-  AND current_attempt_id = $3 AND lease_token_digest = $4
-RETURNING cancellation_requested AS "cancellationRequested"`,
-					[
-						input.application,
-						claim.runId,
-						claim.attemptId,
-						leaseTokenDigest(claim.leaseToken),
-						claim.leaseMilliseconds / 1_000,
-					],
-				);
+				const [held] = await query(durableRunHeartbeat.text, [
+					input.application,
+					claim.runId,
+					claim.attemptId,
+					leaseTokenDigest(claim.leaseToken),
+					claim.leaseMilliseconds / 1_000,
+				]);
 				if (!held)
 					return Object.freeze({
 						status: "fenced" as const,
 						cancellationRequested: false,
 						deadlineExpired: false,
 					});
-				const [attempt] = await query(
-					`UPDATE questpie_internal.durable_attempts
-SET heartbeat_at = pg_catalog.transaction_timestamp(),
-    lease_expires_at = pg_catalog.transaction_timestamp()
-      + make_interval(secs => $3::double precision)
-WHERE application_name = $1 AND attempt_id = $2
-RETURNING deadline_at <= pg_catalog.transaction_timestamp() AS "deadlineExpired"`,
-					[input.application, claim.attemptId, claim.leaseMilliseconds / 1_000],
-				);
+				const [attempt] = await query(durableAttemptHeartbeat.text, [
+					input.application,
+					claim.attemptId,
+					claim.leaseMilliseconds / 1_000,
+				]);
 				return Object.freeze({
 					status: "held" as const,
 					cancellationRequested: held.cancellationRequested === true,

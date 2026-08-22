@@ -1,4 +1,5 @@
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
+import { durableKernelMarker } from "./postgres-statements";
 import type { LinkedReactionRetry } from "./projection";
 
 export type DurableRow = Readonly<Record<string, unknown>>;
@@ -135,8 +136,7 @@ export interface DurableKernel {
  * `questpie_internal` guard. Application and worker statements that never call
  * this are rejected by the run, attempt, event, and dispatch triggers.
  */
-export const durableKernelMarkerStatement =
-	"SELECT set_config('questpie.durable_kernel', 'on', true)";
+export const durableKernelMarkerStatement = durableKernelMarker.text;
 
 export async function markDurableKernelTransaction(
 	query: DurableQuery,
