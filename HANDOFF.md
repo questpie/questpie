@@ -13,15 +13,22 @@ handoff. Runtime and artifact integrity digests remain required product data.
 
 ## Workspace safety
 
-- Active implementation worktree:
-  `/home/drepkovsky/code/questpie-v4-beta-09`
-- Branch: `feat/v4-beta-12`
+- Canonical implementation worktree:
+  `/home/drepkovsky/code/questpie-v4`
+- Canonical branch: `feat/v4`
 - Expected working tree at this handoff: clean
-- The main `/home/drepkovsky/code/questpie-v4` worktree contains unrelated
-  user work. Do not edit, reset, clean, or derive beta artifacts there.
-- Never run concurrent fixture compilation or release generation in the shared
-  beta worktree. Bun's evaluator and generated directories are not isolated
-  against concurrent writers.
+- `feat/v4-beta-12` at `ed9b4578` is an ancestor of the consolidated branch.
+  The branch remains as a rollback checkpoint; its former beta worktree was
+  removed after consolidation.
+- The pre-consolidation `feat/v4` head is preserved at
+  `backup/feat-v4-pre-consolidation-20260823`. Unreviewed whitepaper, research,
+  and visual notes are preserved separately at
+  `research/v4-autopilot-notes-20260823`; they are not product authority.
+- The complete pre-consolidation dirty state is additionally recoverable from
+  stash `pre-consolidation feat/v4 dirty research 2026-08-23`.
+- Never run concurrent fixture compilation or release generation in the v4
+  worktree. Bun's evaluator and generated directories are not isolated against
+  concurrent writers.
 
 Start every task with `git status --short`, then use the repo-owned
 `.agents/skills/questpie-v4/SKILL.md`. Preserve unrelated changes.
@@ -59,8 +66,10 @@ compile -> migrate -> seed -> start -> browser Query
 ```
 
 It uses a real generated client, isolated headless Firefox, disposable
-PostgreSQL, a fixture-owned trusted demo Principal, and the generated durable
-worker. `questpie seed apply` and `questpie start --port` are executable.
+PostgreSQL, a temporary fixture demo-cookie `/api/whoami` ingress tracer, a
+fixture-owned trusted demo Principal binder for generated protocol calls, and
+the generated durable worker. `questpie seed apply` and
+`questpie start --port` are executable.
 
 Every backend or beta.2 capability must keep this journey green. A shortcut may
 exist only inside the fixture and must name its deletion owner. It may never
@@ -122,8 +131,8 @@ Principal binder is the visible application-composition shortcut.
 
 Recommended Route/Auth sequence:
 
-1. Add a temporary fixture demo-cookie `/api/whoami` tracer and name its
-   deletion in the same plan.
+1. **Completed at `ed9b4578`:** add a temporary fixture demo-cookie
+   `/api/whoami` tracer and name its deletion in the same plan.
 2. Extract the existing Service owner so application Services can safely serve
    pre-Context ingress and streamed-response lifetimes.
 3. Prove Runtime credential outcomes and Route execution with handcrafted
@@ -164,10 +173,11 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
 
-The latest broad run completed 458 passing tests with 174 environment-selected
-skips. Its only three failures were deterministic generated/release drift;
-those were refreshed afterward. Affected beta contracts and release gates pass.
-Two release dry-runs produced the same package checksum:
+After the documentation-only branch consolidation, `quality:full` passes in the
+canonical worktree: architecture, format ratchet, lint, typechecks, the complete
+environment-selected test suite, Knip reporting, workspace build, skill
+validation, and `git diff --check`. The release dry-run is retry-stable at the
+accepted package checksum:
 `81a3ed5dabbba6e92fd6d715dc8d09776347379b21e4c968cc0ee5d8e1aa4a5c`.
 
 Focused PostgreSQL evidence includes the real Firefox restart skeleton, Durable
@@ -175,10 +185,20 @@ maintenance/effect/kernel paths, timeout controls, and the 23-case PostgreSQL
 module lifecycle suite. `quality:release`, architecture, typechecks, and
 `git diff --check` pass at this handoff.
 
+Route/Auth commit 1 was developed through two red-green cycles. The final
+PostgreSQL 17 and headless Firefox tracer passes with 24 assertions, including
+missing, wrong, duplicate, malformed, and unrelated-cookie cases; exact
+`/api/whoami` response and cache/method headers; identity through Mutation and
+hard restart; and the original durable recovery journey. Independent Standards
+and Spec adversarial re-reviews both returned PASS.
+
 ## Immediate continuation
 
-1. Confirm the exact beta worktree and clean status.
-2. Start Route/Auth commit 1 with one red browser-tracer assertion.
+1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
+   status.
+2. Start Route/Auth commit 2 test-first: extract the existing Service owner so
+   application Services can serve pre-Context ingress and retain streamed
+   response lifetimes through EOF, error, and cancellation.
 3. Keep Route Product review separate from any new public Kernel/wire decision.
 4. Serialize generated builds and PostgreSQL schema-reset tests.
 5. Commit only coherent green boundaries; do not push, tag, publish, or contact
