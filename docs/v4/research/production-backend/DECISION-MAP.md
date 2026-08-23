@@ -11,9 +11,9 @@
   cron/checkpoints; Route/Auth remains the ADR-0015 application-composition
   boundary. The accepted proof is
   `docs/v4/prototypes/beta2-execution-breadth/`.
-- Delivery: ADR-0027 makes #6's first browser-runnable milestone the current
-  ticket. Questions #1-#5 then land as tracer-pulled replacements inside that
-  skeleton rather than blocking all executable application feedback.
+- Delivery: ADR-0027 made #6's browser-runnable milestone the regression
+  skeleton. Questions #1-#5 land as tracer-pulled replacements inside it rather
+  than blocking executable application feedback.
 
 ## Release sequence
 
@@ -31,10 +31,10 @@ Provider server/client objects and session UI stay in userland.
 
 ## Tracer-pulled order
 
-The current ticket is #6's first browser-runnable milestone. Start it with the
-accepted beta.1 paths and disposable PostgreSQL. First establish the complete
-path `compile -> migrate -> start -> Query -> Mutation -> browser Live Query ->
-committed Reaction -> restart`; then preserve it as the regression skeleton.
+The #6 browser-runnable milestone is established with the accepted beta.1 paths
+and disposable PostgreSQL. Preserve the complete path `compile -> migrate ->
+seed -> start -> Query -> Mutation -> browser Live Query -> committed Reaction
+-> restart` as the regression skeleton.
 The tracer may initially use the current PostgreSQL implementation while #1-#5
 replace its internals. It may not bypass Policy, transaction ownership,
 migration or Runtime artifact integrity, the Change Ledger, or durable recovery.

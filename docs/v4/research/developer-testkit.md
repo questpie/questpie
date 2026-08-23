@@ -2,8 +2,9 @@
 
 - Status: selected research direction; not an Accepted public API
 - Scope: reusable application and scenario testing for QUESTPIE developers
-- Current implementation: `packages/testkit` is a private, empty workspace
-  placeholder
+- Current implementation: `packages/testkit` remains private and contains the
+  first browser-tracer primitives: reverse-order aggregated cleanup, bounded
+  eventual assertions, and process-output readiness
 
 ## Decision boundary
 
@@ -91,8 +92,9 @@ table names or migration protocol versions.
 
 ## First reusable primitives
 
-The first extraction should be driven by two real repository callers and remain
-private until its public contract is proved. The likely order is:
+The first extraction is driven by the browser skeleton and remains private
+until a second application-facing caller proves its public contract. The likely
+order is:
 
 1. idempotent reverse-order cleanup with aggregated failures;
 2. bounded, secret-redacted evidence capture;

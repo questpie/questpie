@@ -18,7 +18,7 @@ the entire feature a formal proof project.
 
 ## 2. Pull one vertical through the runnable tracer
 
-The current ticket first establishes a browser-runnable skeleton through:
+The browser-runnable skeleton is established through:
 
 ```text
 compile -> migrate -> start -> Query -> Mutation -> browser Live Query
@@ -26,8 +26,9 @@ compile -> migrate -> start -> Query -> Mutation -> browser Live Query
 ```
 
 Use real generated direct, Fetch, and client paths with disposable PostgreSQL.
-After this first milestone passes, keep the journey runnable as the regression
-skeleton.
+Keep this journey runnable as the regression skeleton. The current Product
+frontier replaces its fixture-owned Principal shortcut with application-composed
+credential resolution and one authored Route.
 The next capability enters the backlog only when the tracer needs it, it removes
 a concrete tracer blocker, or it supersedes an unsafe decision. Land it in the
 tracer before designing the next capability.
