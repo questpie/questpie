@@ -13,6 +13,10 @@
 > superseded by [ADR-0025](./0025-remove-channels-from-core.md). Channels are
 > removed from QUESTPIE rather than deferred beyond beta.1.
 
+> [ADR-0027](./0027-simplify-v4-delivery-flow.md) replaces fixed phase
+> sequencing for future slices with tracer-pulled milestones. Beta.1's accepted
+> scope and compatibility seams remain unchanged.
+
 - Status: Accepted
 - Date: 2026-08-14
 

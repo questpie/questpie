@@ -1,5 +1,9 @@
 # QUESTPIE v4 contract proof map
 
+> **Historical/frozen proof ledger.** This map preserves accepted proof records;
+> it no longer sequences current delivery. `docs/v4/DELIVERY-FLOW.md` is the
+> current delivery-process authority under ADR-0027.
+
 > Current projection: ADR-0026 supersedes the separate Workflow Resource and
 > factory accepted by historical P18/P21 evidence. The durable semantics remain
 > current as Job checkpoints; reviewed proof records below are historical bytes.

@@ -25,6 +25,13 @@ its scenario budget. GitHub-hosted timing reports small changes and blocks only
 clear repeated regressions. Strict release budgets require tagged stable
 runners.
 
+The runnable tracer selects the smallest lane that can falsify its current
+change. Product slices use these deterministic lanes and normal review; they do
+not gain a formal acceptance-review lane. Kernel and exceptional release
+semantic acceptance follows the proof branch only when ADR-0027 requires it.
+CI verifies accepted v2 review records without model credentials; no ordinary
+Product lane invokes a model.
+
 ## Classification and ownership
 
 Use explicit workspace exports and real package/config/CLI entrypoints. Classify
@@ -35,7 +42,11 @@ production mode for shipped packages.
 
 Keep commands in `package.json`, behavior in config/CI, contributor workflow in
 `CONTRIBUTING.md`, security reporting in `SECURITY.md`, product truth in
-SPEC/ADRs/workbenches, and proof history in PROOF-MAP/manifests. Update this
+SPEC/ADRs/workbenches, historical proof evidence in its committed artifacts,
+and the current execution flow in `docs/v4/DELIVERY-FLOW.md`. Do not maintain
+living proof-head or canonical-digest ledgers in prose. Git commits and tags own
+historical content identity. Runtime semantic/integrity digests and generated
+acceptance-manifest hashes remain tool-derived contract evidence. Update this
 branch reference only for stable cross-task procedure.
 
 ## Acceptance packet secret scan

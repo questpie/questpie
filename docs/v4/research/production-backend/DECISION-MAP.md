@@ -11,6 +11,9 @@
   cron/checkpoints; Route/Auth remains the ADR-0015 application-composition
   boundary. The accepted proof is
   `docs/v4/prototypes/beta2-execution-breadth/`.
+- Delivery: ADR-0027 makes #6's first browser-runnable milestone the current
+  ticket. Questions #1-#5 then land as tracer-pulled replacements inside that
+  skeleton rather than blocking all executable application feedback.
 
 ## Release sequence
 
@@ -25,6 +28,23 @@ code or a reference Package integrates Better Auth or another provider, a Route
 resolves credentials into a trusted Principal, Context Resolution derives
 application context, and Policy remains the only QUESTPIE authorization model.
 Provider server/client objects and session UI stay in userland.
+
+## Tracer-pulled order
+
+The current ticket is #6's first browser-runnable milestone. Start it with the
+accepted beta.1 paths and disposable PostgreSQL. First establish the complete
+path `compile -> migrate -> start -> Query -> Mutation -> browser Live Query ->
+committed Reaction -> restart`; then preserve it as the regression skeleton.
+The tracer may initially use the current PostgreSQL implementation while #1-#5
+replace its internals. It may not bypass Policy, transaction ownership,
+migration or Runtime artifact integrity, the Change Ledger, or durable recovery.
+
+The tracer pulls #1-#5 when its next runnable milestone needs driver,
+connection, listener, cancellation, migration, or production-topology work.
+After each replacement, the same journey must stay green. Then #7 pulls Action,
+Route, and Job breadth one vertical at a time. A named downstream consumer may
+record deleted handwritten duplication as advisory adoption evidence. #8 follows
+observed authoring friction; #9 closes production evidence.
 
 ## #1: Which PostgreSQL driver does the Runtime own?
 
@@ -64,6 +84,9 @@ accept Bun's `SQL` type directly
 
 Blocked by: #1
 Type: Resolved research; focused interface proof remains
+Tier: Kernel for connection lifetime, transaction/session affinity, readiness,
+cancellation, timeout, rotation, and failure guarantees; Product for the public
+configuration projection after those guarantees are fixed
 
 ### Question
 
@@ -119,6 +142,9 @@ spelling still requires its focused executable proof before projection.
 
 Blocked by: #2
 Type: Prototype
+Tier: Kernel for transaction scope, row decoding, cancellation, timeout,
+migration locking, listener recovery, and resource bounds; Product for internal
+interface ergonomics that do not change those guarantees
 
 ### Question
 
@@ -191,8 +217,8 @@ does not mean Bun disappears from the project.
 
 ## #6: What runnable backend proves the developer journey?
 
-Blocked by: #4, #5
-Type: Prototype
+Blocked by: none
+Type: Immediate walking skeleton
 
 ### Question
 
@@ -203,15 +229,17 @@ Include scripts and failure diagnostics, not only test helpers.
 
 ### Answer
 
-This is beta.1's usability checkpoint before adding breadth: a developer must
-be able to learn QUESTPIE by running a backend, not by reading generated files.
-The guide must cover install, build, migration, Seed, start, direct and network
-calls, Mutation, watch, Reaction, restart, diagnostics, and the exact beta.1
-absence boundary.
+This first browser-runnable milestone is the current ticket and becomes the
+integration harness for #1-#5, not their final reward. A developer must be able to learn QUESTPIE by
+running a backend, not by reading generated files. The guide and executable
+fixture cover install, build, migration, Seed, start, direct and network calls,
+Mutation, browser watch, Reaction, restart, diagnostics, and the exact beta.1
+absence boundary. Production PostgreSQL internals replace the current path
+incrementally without breaking this journey.
 
 ## #7: Which accepted backend seams are still absent?
 
-Blocked by: #6
+Blocked by: first runnable #6 milestone
 Type: Resolved by ADR-0026; implementation slices remain
 
 ### Question
@@ -251,7 +279,7 @@ its PostgreSQL/ten-instance gates remain open.
 
 ## #8: Which authoring and documentation DX earns a focused pass?
 
-Blocked by: #6, #7
+Blocked by: observed friction in #6 and shipped #7 verticals
 Type: Discuss
 
 ### Question
@@ -270,7 +298,7 @@ Origins without an editor-specific authority path.
 
 ## #9: What production evidence closes the backend pass?
 
-Blocked by: #4, #5, #6, #7
+Blocked by: production-shaped #6 plus required #4, #5, and #7 milestones
 Type: Research
 
 ### Question

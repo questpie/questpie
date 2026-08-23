@@ -9,6 +9,10 @@
 > Partially superseded by [ADR-0024](./0024-descope-minimal-studio-from-beta-one.md)
 > for minimal Studio inspection in the first tracer.
 
+> Strengthened by [ADR-0027](./0027-simplify-v4-delivery-flow.md): the runnable
+> tracer now pulls future capability work, and each capability must land in that
+> tracer before further contract breadth.
+
 - Status: Accepted
 - Date: 2026-08-10
 

@@ -1,6 +1,6 @@
 # ADR 0027: Simplify V4 Delivery Around Runnable Tracers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-23
 
 ## Context
@@ -13,10 +13,10 @@ encouraged contract work ahead of its consumers.
 
 The repository now has enough accepted kernel authority to invert that flow.
 The runnable tracer should pull the next capability through the existing
-kernel. Autopilot should then prove that the capability removes downstream
-framework code. Formal semantic review remains valuable where a mistake changes
-a cross-process integrity or public architecture guarantee, but not for every
-Product increment.
+kernel. A named downstream consumer may provide advisory adoption evidence by
+deleting duplicated framework code. Formal semantic review remains valuable
+where a mistake changes a cross-process integrity or public architecture
+guarantee, but not for every Product increment.
 
 ## Decision
 
@@ -26,12 +26,13 @@ Every change is classified by the guarantee it changes, not by its package or
 feature name.
 
 **Kernel** work creates or changes a guarantee in static composition and
-artifact compatibility, schema lifecycle, transaction scope, Policy and
-nondisclosure, dispatch and Reaction, Change Ledger correctness, or durable
-identity, lease, fencing, retry, cancellation, checkpoint and executable
-compatibility. A Product feature uses Kernel rigor for the part that changes
-one of these guarantees. A Route credential transition, for example, is not
-ordinary Product work if it changes trusted Principal or Authority semantics.
+artifact compatibility, schema lifecycle, transaction scope, trusted Context
+Resolution, Principal or Authority, Policy and nondisclosure, dispatch and
+Reaction, Change Ledger correctness, or durable identity, lease, fencing,
+retry, cancellation, checkpoint and executable compatibility. A Product feature
+uses Kernel rigor for the part that changes one of these guarantees. A Route
+credential transition, for example, is not ordinary Product work if it changes
+trusted Principal or Authority semantics.
 
 **Product** work projects an accepted Kernel through Routes, application Auth
 composition, Files, CLI behavior, documentation, Studio views, generated-client
@@ -144,11 +145,17 @@ The executable flow and metrics are maintained in
 
 ## Supersession
 
-On acceptance, this ADR narrows ADR-0020's formal acceptance-review requirement
-and replaces proof-phase sequencing for future delivery. It strengthens
-ADR-0004's tracer ordering and changes ADR-0021's later-slice execution from a
-fixed phase queue to tracer-pulled milestones. Historical accepted proofs,
-heads, manifests, reviews, and released contracts are not reopened.
+This ADR narrows ADR-0020's formal acceptance-review requirement and replaces
+proof-phase sequencing for future delivery. It strengthens ADR-0004's tracer
+ordering and changes ADR-0021's later-slice execution from a fixed phase queue
+to tracer-pulled milestones. Historical accepted proofs, heads, manifests,
+reviews, and released contracts are not reopened.
+
+## Acceptance
+
+The repaired candidate received a fresh stateless Opus-medium `PASS`. The
+verified record is preserved in
+[`delivery-flow-simplification/REVIEW-02.json`](../v4/prototypes/delivery-flow-simplification/REVIEW-02.json).
 
 ## Rejected alternatives
 

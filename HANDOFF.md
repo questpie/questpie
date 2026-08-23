@@ -38,59 +38,15 @@ Live Query remains the built-in current-state mechanism; transient fanout is
 ordinary application/provider integration. The collaboration fixture's
 `Channel` Collection remains a domain noun.
 
-Fixed accepted proof authority:
+`docs/v4/DELIVERY-FLOW.md` is the current delivery-process authority under
+ADR-0027. Historical proof heads, BLOCKED/repair records, commands, and
+measurements remain in the frozen
+`docs/v4/research/framework-api-atlas/PROOF-MAP.md` and individual acceptance
+manifests; they are not copied into this living handoff.
 
-| Contract                             | Accepted head                              |
-| ------------------------------------ | ------------------------------------------ |
-| Foundation data/query                | `d03358b749c4c8efb769d1c0fed50e8fbf983fb0` |
-| P1 executable Definition compiler    | `713485a64bcc4795d960d576fea51da56bc4dcdd` |
-| P2 Context and Policy                | `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa` |
-| P2R1/BETA04 authority reviewed       | `f8e12ead9f667ecc2c6e5478a3071b7f23e67099` |
-| P2R1/BETA04 authority evidence       | `2ae1981740102ede7a5fc1e567b9645bd9d6fbe6` |
-| P3 Query/Mutation/lifecycle          | `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` |
-| P4 Live Query/ledger                 | `05fc96f3d07c70beaf7f654d79d6cfb46f427f92` |
-| P5 dispatch/Reaction                 | `3f8618613bde1bdd7e13863970eb1c140e201c6f` |
-| P6 Runtime/client/Studio             | `94c237c9aa910a60a332b1ef97473f34fe89d65b` |
-| P6R1 post-commit reviewed            | `deea51ba2799867825b120ec46ec5d8944991d1b` |
-| P6R1 review evidence                 | `cb568dc402462163d632a2d689da709a087f64ae` |
-| P6R1 accepted projection             | `d5bf7d0adadcda0f5b932e6b1a7c20df0e4102a6` |
-| Post-P6 gates                        | `a164e33e752ab54d48fcf903371938ecff3dc082` |
-| Reviewed post-P6 repair              | `79d7816dbf0b9b6e052706daf71fe173e1cbfc42` |
-| #17 Service/Route/Auth               | `79d3667019e0a4cda6f7652d24f2d9c6b68d4fca` |
-| #18 lifecycle/durable kernel         | `71463e99a70481b0950ae18d1ff409c034c1b158` |
-| #19 HA/optional acceleration         | `96829bd7b08ea54e60fdc7d5b077366235d2dfea` |
-| #20 File/Search/projections          | `6e056bc44c15740b2797a9489fe3823c3100bdad` |
-| #21 kernels/naming/exports           | `d50d4334b116a5bdc46e95cdabf566d8db938d37` |
-| #22 repository foundation            | `17008b0547f24b53d456530b798e8d96ae2e2b1e` |
-| #14 conformance map                  | `3a89c565cb1eba59815d106df1c06406ac20ac98` |
-| #15 beta.1 slice                     | `0d8e2543ff7e9d50bdab7d2b66b62ec4c35d8a6f` |
-| #301 API ergonomics reviewed proof   | `ff2dfa762c953f2511c5f65e6f930bac3da77868` |
-| #301 API ergonomics evidence         | `fbbf05d457f97927dc2b847b0ad049f26d887151` |
-| #289 BETA-02 reviewed implementation | `dca711f06ca4b3cc58adbc7b2e56799cabd4839a` |
-| #289 BETA-02 evidence                | `5a4681cae262309af3f8fd8edbc77feccec9cb24` |
-| #290 BETA-03 reviewed implementation | `f830e48c554b027afcb13efea6d3f900fd8c7ece` |
-| #290 BETA-03 evidence                | `1e2a367a72a7e012685912eccfa21d2085ac9b17` |
-| #291 BETA-04 reviewed implementation | `7918bac0c7d579142fc4882c23f6a61e82dc1a51` |
-| #291 BETA-04 evidence                | `a1a4265b886eb86c133433f6fa84b699457b1258` |
-| #292 BETA-05 reviewed implementation | `884b5d8a5f051b23d34705be9916140629187509` |
-| #292 BETA-05 evidence                | `61f4ae85b8ebebc1c5fb888707cd4f7e589ed985` |
-| #293 BETA-06 reviewed implementation | `ef37bd6b5fedef555f39e2e02a6e08fa1f2bce3c` |
-| #293 BETA-06 evidence                | `f9879efdfb2921ed747d353b6cb903398e9d67c3` |
-| #294 BETA-07 reviewed implementation | `d25d9388bdbe9a0512de155a79f01d2191d6eaa7` |
-| #294 BETA-07 evidence                | `dfa461162fdb211382708b9ad2a30cf10b564015` |
-| #295 BETA-08 reviewed implementation | `d0aedd54dc6420b48e632590a6c2319f8516bc9f` |
-| #295 BETA-08 evidence                | `78e81b67dfc41f612b0b36cf4cf5e0bafb0995ce` |
-| #317 P22R1 reviewed implementation   | `4463708e56a72e26f65b8d1d3a2c5d0bf5cd6d4b` |
-| #317 P22R1 evidence                  | `27d6f4f9`                                 |
-| ADR-0025 Channel removal reviewed    | `ed0dfa7c59e6132a26cc1adaa500ec200ad911c8` |
-| ADR-0025 acceptance evidence         | `053690f6`                                 |
-
-ADR-0008 through ADR-0025 and their accepted workbench/public projections are
-product authority. The exact review heads, BLOCKED/repair history, digests,
-commands, measurements, and remaining implementation edges live in
-`docs/v4/research/framework-api-atlas/PROOF-MAP.md` and each proof acceptance
-manifest. Do not reopen an accepted gate unless new authority directly changes
-it.
+ADR-0008 through ADR-0027 and their accepted workbench/public projections are
+product authority. Do not reopen an accepted gate unless new authority directly
+changes it.
 
 The accepted surface has one scalar, relational, durable, and Fetch kernel with
 restricted projections; seven generated executable factory kinds; Package and

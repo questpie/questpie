@@ -1,18 +1,17 @@
 # QUESTPIE v4 delivery flow
 
-Candidate ADR-0027 proposes the runnable tracer as the unit of delivery. This
-page is its candidate execution guide; Accepted ADRs still own product behavior
-and repository scripts remain command authority. Apply it as current process
-only after ADR-0027 receives formal acceptance.
+ADR-0027 makes the runnable tracer the unit of delivery. This page is the
+current execution guide; Accepted ADRs still own product behavior and repository
+scripts remain command authority.
 
 ## 1. Classify the changed guarantee
 
 Classify the issue before implementation:
 
-| Tier    | Change                                                                                                                                                                                        | Required evidence                                                                                                                                                                                          |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Kernel  | Changes composition/artifact compatibility, schema lifecycle, transaction, Policy/nondisclosure, dispatch/Reaction, Change Ledger, or durable identity/lease/fencing/checkpoint compatibility | Focused falsifiable proof, hostile tests, affected PostgreSQL/load/soak lanes, and formal acceptance only for a new or superseding public Kernel/architecture ADR or exceptional release semantic boundary |
-| Product | Projects an accepted Kernel through Route/application Auth, File, CLI, docs, Studio, client ergonomics, or another user-facing seam                                                           | Tracer-led TDD, ordinary integration tests, affected repository gates, and normal review                                                                                                                   |
+| Tier    | Change                                                                                                                                                                                                                                         | Required evidence                                                                                                                                                                                          |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kernel  | Changes composition/artifact compatibility, schema lifecycle, transaction, trusted Context Resolution, Principal/Authority, Policy/nondisclosure, dispatch/Reaction, Change Ledger, or durable identity/lease/fencing/checkpoint compatibility | Focused falsifiable proof, hostile tests, affected PostgreSQL/load/soak lanes, and formal acceptance only for a new or superseding public Kernel/architecture ADR or exceptional release semantic boundary |
+| Product | Projects an accepted Kernel through Route/application Auth, File, CLI, docs, Studio, client ergonomics, or another user-facing seam                                                                                                            | Tracer-led TDD, ordinary integration tests, affected repository gates, and normal review                                                                                                                   |
 
 A feature can contain both tiers. Split out only the Kernel claim; do not make
 the entire feature a formal proof project.
@@ -56,12 +55,9 @@ and tracer work does not invoke it. When it applies, use
 `bun run review:accept:v2` and retain its generated SHA-256 bindings. Record a
 `BLOCKED` result, repair on a new clean head, and run one replacement review.
 
-## 4. Measure downstream adoption when a consumer is named
+## 4. Optionally measure downstream adoption
 
-Autopilot is a planned second tracer, but its repository, owner, and executable
-harness are not yet pinned here. It is therefore not a delivery gate. When an
-issue names Autopilot or another concrete downstream repository and owner, it
-may record:
+When an issue names a concrete downstream repository and owner, it may record:
 
 - the downstream owner and duplicated responsibility;
 - handwritten downstream lines before and after;
@@ -79,8 +75,8 @@ The mandatory delivery scorecard is:
 2. Kernel regression and operational budgets passed;
 3. remaining abstraction and compatibility debt named.
 
-Downstream handwritten deletion is an advisory fourth signal until its
-consumer and harness are accepted.
+Downstream handwritten deletion is an advisory fourth signal, not a required
+scorecard row.
 
 ## 5. Run the weekly deletion review
 

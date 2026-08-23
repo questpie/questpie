@@ -1,5 +1,12 @@
 # ADR 0020: Establish the repository foundation
 
+> Partially superseded by
+> [ADR-0027](./0027-simplify-v4-delivery-flow.md). The repository-pinned v2
+> acceptance wrapper remains unchanged, but formal model acceptance is now
+> reserved for public Kernel/architecture ADRs and exceptional release semantic
+> boundaries. Ordinary Product and tracer increments use deterministic gates
+> and normal review.
+
 - Status: Accepted
 - Date: 2026-08-14
 

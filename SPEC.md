@@ -596,13 +596,39 @@ Studio path and parity requirement, re-scoping BETA-09 to backend maintenance
 compatibility. The long-term Studio boundary in ADR-0014 remains accepted but
 is not a beta.1 release gate.
 
+ADR-0027 replaces proof-phase sequencing for current delivery with one
+tracer-pulled flow. Kernel guarantees retain focused falsifiable proof and use
+formal stateless Opus-medium acceptance only for new or superseding public
+Kernel/architecture ADRs and exceptional release semantic boundaries. Product
+increments land through tracer-led TDD, ordinary integration tests,
+deterministic repository gates, and normal review. The first current milestone
+establishes the browser-runnable backend journey; later capabilities must land
+inside it before further contract breadth.
+
 ADR-0022 freezes the generated authoring ergonomics and Operation projection.
 ADR-0023 supersedes ADR-0014's incomplete post-commit Mutation outcome with
 Operation Wire v2 while retaining v1 Query compatibility.
 
-## 17. Next grilling sequence
+## 17. Current delivery sequence and historical grilling order
 
-Grill and record these contracts in order:
+ADR-0027 makes this the current sequence:
+
+1. Establish the first browser-runnable backend journey through compile,
+   migration, Query, Mutation, Live Query, committed Reaction, and restart.
+2. Let that tracer pull production PostgreSQL replacement work while preserving
+   the same journey. Connection topology and the deep PostgreSQL module use
+   Kernel rigor where they change transaction, session, cancellation, timeout,
+   recovery, or resource-bound guarantees.
+3. Land Action, Route, and scheduled/checkpointed Job as separate verticals in
+   the runnable tracer before opening the next capability contract.
+4. Pull OpenAPI/MCP projections and authoring/documentation DX from working
+   application friction, not isolated contract breadth.
+5. Close the release with the required PostgreSQL, multi-instance, rolling,
+   managed-provider, load, and soak evidence.
+
+The fixed grilling sequence below is historical decision provenance. It no
+longer sequences implementation. Its imperatives describe the retired process
+and do not direct current work:
 
 1. schema, migrations, Seeds, drift, and idempotency — accepted for tracer;
 2. Definition discovery, Resource naming, Owner, Origin, and Augmentation —

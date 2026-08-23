@@ -3,7 +3,9 @@
 QUESTPIE v4 is built as small tracer bullets against accepted public behavior.
 Install the Bun version in `packageManager` with `bun install`, then read
 `AGENTS.md`; its repository skill routes product, proof, implementation,
-documentation, and quality work to the right authority.
+documentation, and quality work to the right authority. The executable delivery
+loop and Kernel/Product classification live in
+[`docs/v4/DELIVERY-FLOW.md`](docs/v4/DELIVERY-FLOW.md).
 
 ## First contribution
 
@@ -12,6 +14,14 @@ hostile cases, budgets, and verification commands are complete. Keep the branch
 and pull request to that slice. Generated files are compiler-owned: edit their
 source or generator and prove a deterministic regeneration instead of hand
 editing output.
+
+The runnable tracer pulls the backlog. A Product slice lands through tracer-led
+TDD, ordinary integration tests, deterministic quality lanes, and normal
+review. Isolate a Kernel claim only when the change alters a composition,
+artifact, schema, transaction, authorization, ledger, or durable-execution
+guarantee. Formal stateless Opus acceptance is reserved for new or superseding
+public Kernel/architecture ADRs and exceptional release semantic boundaries;
+ordinary Product work does not create proof heads or acceptance records.
 
 Use a red test and the focused loop while iterating:
 
@@ -41,3 +51,9 @@ package directly from a developer checkout.
 If a command is slow, first confirm that it belongs to the selected lane. The
 changed loop targets seconds; PostgreSQL concurrency, managed providers, load,
 and soak run outside each red-green step.
+
+Do not copy proof heads or canonical digest tables into living process prose.
+Git commits and tags identify historical content. Runtime Build, executable,
+wire and artifact integrity digests, schema fingerprints, migration checksums,
+identity/checkpoint digests, and generated acceptance-manifest SHA-256 bindings
+remain required and tool-derived.

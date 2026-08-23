@@ -32,6 +32,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 24. [Descope Minimal Studio from Beta.1](./0024-descope-minimal-studio-from-beta-one.md)
 25. [Remove Channels from the Core](./0025-remove-channels-from-core.md)
 26. [Freeze Action and Unify Checkpointed Work in Job](./0026-freeze-action-and-unify-checkpointed-work-in-job.md)
+27. [Simplify V4 Delivery Around Runnable Tracers](./0027-simplify-v4-delivery-flow.md)
 
 ## Open decisions
 
@@ -60,6 +61,10 @@ application-composed Route/Auth, and moves the accepted closed checkpoint,
 timer, signal, and compatibility semantics into one Job Resource. Workflow and
 `defineWorkflow` are no longer current or deferred public surface; Reaction
 remains distinct over the shared durable kernel.
+ADR-0027 makes the runnable tracer pull future delivery, separates Kernel
+semantic acceptance from ordinary Product integration, timeboxes focused proof
+construction, preserves tool-derived integrity digests, and removes manually
+maintained proof/digest ledgers from living process prose.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path
@@ -79,3 +84,5 @@ Migration execution and Package Augmentation through the connected Runtime
 remain implementation gates, not newly accepted syntax.
 
 An accepted ADR does not authorize implementation outside the current tracer.
+ADR-0027's executable process and delivery scorecard live in
+[`docs/v4/DELIVERY-FLOW.md`](../v4/DELIVERY-FLOW.md).
