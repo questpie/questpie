@@ -462,10 +462,12 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			"realtime-wire-contract.json",
 		]);
 		expect(runtimeBuild).toMatchObject({
-			internalProtocol: "questpie.internal.v5",
+			internalProtocol: "questpie.internal.v6",
 			realtimeWireDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			later: {
 				changeLedgerDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+				durableCompatibilityDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				resumeDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
 		});
