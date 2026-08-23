@@ -1,73 +1,13 @@
 import type { SQL } from "bun";
 
-import {
-	QuestpiePostgresError,
-	transactionBrand,
-	type PostgresTransactionRunner,
-} from "../postgres/contract";
+import { createBunDurablePostgresTransactionRunner } from "./postgres-bun-compatibility";
 import { createPostgresDatabaseDurableClaim } from "./postgres-database-claim";
+import { createPostgresDatabaseDurableHeartbeat } from "./postgres-database-heartbeat";
+import { createPostgresDatabaseDurableInspection } from "./postgres-database-inspection";
+import { createPostgresDatabaseDurableScheduling } from "./postgres-database-scheduling";
 import { createPostgresDatabaseDurableTerminal } from "./postgres-database-terminal";
-import {
-	durableEventInsert,
-	durableEventSequenceBump,
-	type DurableEventErrorCode,
-	type DurableEventKind,
-	durableAttemptHeartbeat,
-	durableRunHeartbeat,
-} from "./postgres-statements";
 import type { LinkedReactionProjection } from "./projection";
-import type { DurableKernel, DurableRunState } from "./rows";
-import {
-	durableBytes,
-	durableDate,
-	durableInteger,
-	durableText,
-	leaseTokenDigest,
-	markDurableKernelTransaction,
-	type DurableQuery,
-	type DurableRow,
-} from "./rows";
-
-function postgresErrorNumber(error: unknown): string | null {
-	if (!error || typeof error !== "object") return null;
-	const errno = (error as Readonly<{ errno?: unknown }>).errno;
-	return typeof errno === "string" ? errno : null;
-}
-
-async function appendEvent(
-	query: DurableQuery,
-	input: Readonly<{
-		application: string;
-		runId: string;
-		resource: string;
-		dispatchId: string;
-		causationId: string;
-		correlationId: string;
-		kind: DurableEventKind;
-		attemptId?: string | null;
-		leaseTokenDigest?: string | null;
-		errorCode?: DurableEventErrorCode | null;
-	}>,
-): Promise<void> {
-	const [bumped] = await query(durableEventSequenceBump.text, [
-		input.application,
-		input.runId,
-	]);
-	if (!bumped) throw new TypeError("durable run history has no run");
-	await query(durableEventInsert.text, [
-		input.application,
-		input.runId,
-		durableInteger(bumped.sequence, "run event sequence"),
-		input.resource,
-		input.dispatchId,
-		input.attemptId ?? null,
-		input.leaseTokenDigest ?? null,
-		input.causationId,
-		input.correlationId,
-		input.kind,
-		input.errorCode ?? null,
-	]);
-}
+import type { DurableKernel } from "./rows";
 
 export function createPostgresDurableKernel(
 	input: Readonly<{
@@ -85,265 +25,49 @@ export function createPostgresDurableKernel(
 		maximumBatch > 64
 	)
 		throw new TypeError("durable claim batch must be between 1 and 64");
-	const executableDigests = [
-		...new Set(
-			[...input.reactions.byIdentity.values()].map(
-				(reaction) => reaction.contractDigest,
+	const executableDigests = Object.freeze(
+		[
+			...new Set(
+				[...input.reactions.byIdentity.values()].map(
+					(reaction) => reaction.contractDigest,
+				),
 			),
-		),
-	].sort();
-	const random = input.random ?? Math.random;
-	const transaction = <Result>(
-		use: (query: DurableQuery) => Promise<Result>,
-	): Promise<Result> =>
-		input.sql.begin(async (session) => {
-			const query: DurableQuery = (statement, parameters = []) =>
-				session.unsafe(statement, [...parameters]) as unknown as Promise<
-					readonly DurableRow[]
-				>;
-			await markDurableKernelTransaction(query);
-			return use(query);
-		}) as Promise<Result>;
-	const compatibilityDatabase: PostgresTransactionRunner = {
-		async transaction(request) {
-			if (
-				request.mode.isolation !== "readCommitted" ||
-				request.mode.access !== "readWrite"
-			)
-				throw new TypeError("Durable claim requires a read-write transaction");
-			try {
-				return (await input.sql.begin(async (session) =>
-					request.use({
-						[transactionBrand]: true,
-						async execute(statement, value) {
-							const rows = (await session
-								.unsafe(statement.text, [...statement.parameters(value)])
-								.values()) as unknown as readonly (readonly unknown[])[] & {
-								count: number;
-								command: string;
-							};
-							return statement.decode({
-								command: rows.command,
-								rowCount: rows.count,
-								rows,
-							});
-						},
-					}),
-				)) as Awaited<ReturnType<typeof request.use>>;
-			} catch (error) {
-				if (postgresErrorNumber(error) === "40001")
-					throw new QuestpiePostgresError({
-						code: "serializationFailure",
-						phase: "statement",
-						retry: "safeBeforeCommit",
-						cause: error,
-					});
-				throw error;
-			}
-		},
-	};
-	const databaseClaim = createPostgresDatabaseDurableClaim({
-		database: compatibilityDatabase,
+		].sort(),
+	);
+	const database = createBunDurablePostgresTransactionRunner(input.sql);
+	const scheduling = createPostgresDatabaseDurableScheduling({
+		database,
 		application: input.application,
-		reactions: input.reactions,
+		executableDigests,
+		maximumBatch,
 	});
-
-	const databaseTerminal = createPostgresDatabaseDurableTerminal({
-		database: compatibilityDatabase,
+	const inspection = createPostgresDatabaseDurableInspection({
+		database,
 		application: input.application,
-		random,
+	});
+	const terminal = createPostgresDatabaseDurableTerminal({
+		database,
+		application: input.application,
+		random: input.random ?? Math.random,
 	});
 
 	return Object.freeze<DurableKernel>({
 		application: input.application,
-		async reapCancelled(limit = maximumBatch) {
-			try {
-				return await transaction(async (query) => {
-					const cancelled = await query(
-						`UPDATE questpie_internal.durable_runs
-SET state = 'cancelled', current_attempt_id = NULL, lease_token_digest = NULL,
-    lease_expires_at = NULL, failure_code = NULL,
-    terminal_at = pg_catalog.transaction_timestamp()
-WHERE (application_name, run_id) IN (
-  SELECT application_name, run_id FROM questpie_internal.durable_runs
-  WHERE application_name = $1 AND cancellation_requested
-    AND (state IN ('delayed', 'ready')
-      OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
-  ORDER BY run_id
-  LIMIT $2
-)
-RETURNING run_id::text AS "runId", resource_identity AS "resource",
-          dispatch_id::text AS "dispatchId", causation_id AS "causationId",
-          correlation_id AS "correlationId"`,
-						[input.application, limit],
-					);
-					for (const row of cancelled) {
-						await query(
-							`UPDATE questpie_internal.durable_attempts
-SET outcome = 'cancelled'
-WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL`,
-							[input.application, durableText(row.runId, "run identity")],
-						);
-						await appendEvent(query, {
-							application: input.application,
-							runId: durableText(row.runId, "run identity"),
-							resource: durableText(row.resource, "Resource Identity"),
-							dispatchId: durableText(row.dispatchId, "dispatch identity"),
-							causationId: durableText(row.causationId, "causation identity"),
-							correlationId: durableText(
-								row.correlationId,
-								"correlation identity",
-							),
-							kind: "cancelled",
-						});
-					}
-					return cancelled.length;
-				});
-			} catch (error) {
-				if (postgresErrorNumber(error) === "40001") return 0;
-				throw error;
-			}
-		},
-		async admit(batch = maximumBatch) {
-			if (!Number.isSafeInteger(batch) || batch < 1 || batch > maximumBatch)
-				throw new TypeError(
-					`durable admission batch must be between 1 and ${maximumBatch}`,
-				);
-			const rows = (await input.sql.unsafe(
-				`WITH eligible AS (
-  SELECT run_id, resource_identity, executable_digest, available_at,
-         row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id) AS tenant_turn
-  FROM questpie_internal.durable_runs
-  WHERE application_name = $1
-    AND executable_digest IN (
-      SELECT pg_catalog.jsonb_array_elements_text(($2::text)::jsonb)
-    )
-    AND NOT cancellation_requested
-    AND ((state IN ('delayed', 'ready') AND available_at <= pg_catalog.transaction_timestamp())
-      OR (state = 'running' AND lease_expires_at <= pg_catalog.transaction_timestamp()))
-)
-SELECT run_id::text AS "runId", resource_identity AS "resource",
-       executable_digest AS "executableDigest"
-FROM eligible
-ORDER BY tenant_turn, available_at, run_id
-LIMIT $3`,
-				[input.application, JSON.stringify(executableDigests), batch],
-			)) as unknown as readonly DurableRow[];
-			return Object.freeze(
-				rows.map((row) =>
-					Object.freeze({
-						runId: durableText(row.runId, "run identity"),
-						resource: durableText(row.resource, "Resource Identity"),
-						executableDigest: durableText(
-							row.executableDigest,
-							"executable digest",
-						),
-					}),
-				),
-			);
-		},
-		claim: databaseClaim,
-		async heartbeat(claim) {
-			return transaction(async (query) => {
-				const [held] = await query(durableRunHeartbeat.text, [
-					input.application,
-					claim.runId,
-					claim.attemptId,
-					leaseTokenDigest(claim.leaseToken),
-					claim.leaseMilliseconds / 1_000,
-				]);
-				if (!held)
-					return Object.freeze({
-						status: "fenced" as const,
-						cancellationRequested: false,
-						deadlineExpired: false,
-					});
-				const [attempt] = await query(durableAttemptHeartbeat.text, [
-					input.application,
-					claim.attemptId,
-					claim.leaseMilliseconds / 1_000,
-				]);
-				return Object.freeze({
-					status: "held" as const,
-					cancellationRequested: held.cancellationRequested === true,
-					deadlineExpired: attempt?.deadlineExpired === true,
-				});
-			});
-		},
-		succeed: databaseTerminal.succeed,
-		fail: databaseTerminal.fail,
-		cancel: databaseTerminal.cancel,
-		async inspect(runId) {
-			const [row] = (await input.sql.unsafe(
-				`SELECT run_id::text AS "runId", dispatch_id::text AS "dispatchId",
-       resource_identity AS "resource", state, attempt_count AS "attemptCount",
-       current_attempt_id::text AS "currentAttemptId",
-       cancellation_requested AS "cancellationRequested", dead_letter AS "deadLetter",
-       failure_code AS "failureCode", result_bytes AS "resultBytes",
-       available_at AS "availableAt", terminal_at AS "terminalAt",
-       event_sequence AS "version"
-FROM questpie_internal.durable_runs
-WHERE application_name = $1 AND run_id = $2`,
-				[input.application, runId],
-			)) as unknown as readonly DurableRow[];
-			if (!row) return null;
-			return Object.freeze({
-				runId: durableText(row.runId, "run identity"),
-				version: durableInteger(row.version, "run version"),
-				dispatchId: durableText(row.dispatchId, "dispatch identity"),
-				resource: durableText(row.resource, "Resource Identity"),
-				state: durableText(row.state, "run state") as DurableRunState,
-				attemptCount: durableInteger(row.attemptCount, "attempt count"),
-				currentAttemptId:
-					row.currentAttemptId === null
-						? null
-						: durableText(row.currentAttemptId, "attempt identity"),
-				cancellationRequested: row.cancellationRequested === true,
-				deadLetter: row.deadLetter === true,
-				failureCode:
-					row.failureCode === null
-						? null
-						: durableText(row.failureCode, "failure code"),
-				resultBytes:
-					row.resultBytes === null
-						? null
-						: durableBytes(row.resultBytes, "result"),
-				availableAt: durableDate(row.availableAt, "availability"),
-				terminalAt:
-					row.terminalAt === null
-						? null
-						: durableDate(row.terminalAt, "terminal time"),
-			});
-		},
-		async events(runId) {
-			const rows = (await input.sql.unsafe(
-				`SELECT sequence, kind, attempt_id::text AS "attemptId",
-       lease_token_digest AS "leaseTokenDigest", error_code AS "errorCode"
-FROM questpie_internal.durable_run_events
-WHERE application_name = $1 AND run_id = $2
-ORDER BY sequence`,
-				[input.application, runId],
-			)) as unknown as readonly DurableRow[];
-			return Object.freeze(
-				rows.map((row) =>
-					Object.freeze({
-						sequence: durableInteger(row.sequence, "event sequence"),
-						kind: durableText(row.kind, "event kind"),
-						attemptId:
-							row.attemptId === null
-								? null
-								: durableText(row.attemptId, "attempt identity"),
-						leaseTokenDigest:
-							row.leaseTokenDigest === null
-								? null
-								: durableText(row.leaseTokenDigest, "lease token digest"),
-						errorCode:
-							row.errorCode === null
-								? null
-								: durableText(row.errorCode, "error code"),
-					}),
-				),
-			);
-		},
+		admit: scheduling.admit,
+		reapCancelled: scheduling.reapCancelled,
+		claim: createPostgresDatabaseDurableClaim({
+			database,
+			application: input.application,
+			reactions: input.reactions,
+		}),
+		heartbeat: createPostgresDatabaseDurableHeartbeat({
+			database,
+			application: input.application,
+		}),
+		succeed: terminal.succeed,
+		fail: terminal.fail,
+		cancel: terminal.cancel,
+		inspect: inspection.inspect,
+		events: inspection.events,
 	});
 }

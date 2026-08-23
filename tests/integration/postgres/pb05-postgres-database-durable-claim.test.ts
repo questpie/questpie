@@ -10,6 +10,9 @@ import {
 	durableClaimRunSelect,
 } from "../../../packages/runtime/src/durable/postgres-claim-statements";
 import { createPostgresDatabaseDurableClaim } from "../../../packages/runtime/src/durable/postgres-database-claim";
+import { createPostgresDatabaseDurableHeartbeat } from "../../../packages/runtime/src/durable/postgres-database-heartbeat";
+import { createPostgresDatabaseDurableInspection } from "../../../packages/runtime/src/durable/postgres-database-inspection";
+import { createPostgresDatabaseDurableScheduling } from "../../../packages/runtime/src/durable/postgres-database-scheduling";
 import { createPostgresDatabaseDurableTerminal } from "../../../packages/runtime/src/durable/postgres-database-terminal";
 import { durableKernelMarker } from "../../../packages/runtime/src/durable/postgres-statements";
 import { durableAttemptComplete } from "../../../packages/runtime/src/durable/postgres-terminal-statements";
@@ -52,7 +55,7 @@ function configuration() {
 	} as const;
 }
 
-type PreparedRun = Readonly<{ runId: string; projection: unknown }>;
+type PreparedRun = Readonly<{ runIds: readonly string[]; projection: unknown }>;
 
 async function prepareRun(outputPath: string): Promise<PreparedRun> {
 	const helper = new URL("./helpers/beta08-durable.ts", import.meta.url).href;
@@ -65,15 +68,17 @@ import { beta05Ids, beta05PostgresUrl } from ${JSON.stringify(runtimeHelper)};
 const database = new SQL(beta05PostgresUrl());
 try {
   const prepared = await beta08Harness(database);
-  const callId = "pb05-durable-claim-" + crypto.randomUUID();
-  await prepared.app.execution(
-    { principal: prepared.principal, context: { companyId: beta05Ids.company } },
-    async ({ mutations }) => mutations["message.publish"](
-      { channelId: beta05Ids.channel, body: "database claim" },
-      { callId },
-    ),
-  );
-  const [row] = await database.unsafe(
+  const runIds = [];
+  for (let index = 0; index < 3; index += 1) {
+    const callId = "pb05-durable-claim-" + crypto.randomUUID();
+    await prepared.app.execution(
+      { principal: prepared.principal, context: { companyId: beta05Ids.company } },
+      async ({ mutations }) => mutations["message.publish"](
+        { channelId: beta05Ids.channel, body: "database claim " + index },
+        { callId },
+      ),
+    );
+    const [row] = await database.unsafe(
     \`SELECT runs.run_id::text AS "runId"
 FROM questpie_internal.durable_runs AS runs
 JOIN questpie_internal.pending_reaction_intents AS intents
@@ -81,10 +86,12 @@ JOIN questpie_internal.pending_reaction_intents AS intents
  AND intents.record_id = runs.dispatch_id
 WHERE runs.application_name = 'application:collaboration' AND intents.call_id = $1\`,
     [callId],
-  );
-  if (!row?.runId) throw new Error("seeded Durable run is unavailable");
+    );
+    if (!row?.runId) throw new Error("seeded Durable run is unavailable");
+    runIds.push(row.runId);
+  }
   await Bun.write(${JSON.stringify(outputPath)}, JSON.stringify({
-    runId: row.runId,
+    runIds,
     projection: JSON.parse(prepared.reactionProjectionBytes),
   }));
 } finally {
@@ -181,6 +188,42 @@ FOR UPDATE`,
 	},
 });
 
+const requestCancellation = definePostgresStatement<
+	Readonly<{ runId: string; expireLease: boolean }>,
+	void
+>({
+	name: "durable.claim.request-cancellation",
+	text: `UPDATE questpie_internal.durable_runs
+SET cancellation_requested = true,
+    lease_expires_at = CASE WHEN $2 THEN transaction_timestamp() - interval '1 second'
+                            ELSE lease_expires_at END
+WHERE application_name = 'application:collaboration' AND run_id = $1::uuid`,
+	parameterCount: 2,
+	parameters: ({ runId, expireLease }) => [runId, expireLease],
+	decode(result) {
+		if (
+			result.command !== "UPDATE" ||
+			result.rowCount !== 1 ||
+			result.rows.length !== 0
+		)
+			throw new TypeError("failed to request Durable cancellation");
+	},
+});
+
+async function markCancelled(
+	database: PostgresTransactionRunner,
+	runId: string,
+	expireLease: boolean,
+): Promise<void> {
+	await database.transaction({
+		mode: { isolation: "readCommitted", access: "readWrite" },
+		use: async (transaction) => {
+			await transaction.execute(durableKernelMarker, undefined);
+			await transaction.execute(requestCancellation, { runId, expireLease });
+		},
+	});
+}
+
 async function state(
 	database: PostgresTransactionRunner,
 	runId: string,
@@ -192,16 +235,49 @@ async function state(
 }
 
 postgres(
-	"rolls back a failed static claim, skips a locked run, then claims it through the same RuntimePostgres",
+	"proves static Durable scheduling, inspection, heartbeat, claim, terminal, and cancellation paths",
 	async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-pb05-claim-"));
 		try {
 			const prepared = await prepareRun(join(temporary, "run.json"));
+			const [runId, readyCancellationRunId, runningCancellationRunId] =
+				prepared.runIds;
+			if (!runId || !readyCancellationRunId || !runningCancellationRunId)
+				throw new TypeError("Durable PostgreSQL tracer requires three runs");
 			const { createRuntimePostgres } =
 				await import("../../../packages/runtime/src/postgres");
 			const database = createRuntimePostgres(configuration());
 			try {
 				const reactions = linkReactionProjection(prepared.projection);
+				const executableDigests = [
+					...new Set(
+						[...reactions.byIdentity.values()].map(
+							(reaction) => reaction.contractDigest,
+						),
+					),
+				].sort();
+				const scheduling = createPostgresDatabaseDurableScheduling({
+					database,
+					application: "application:collaboration",
+					executableDigests,
+					maximumBatch: 8,
+				});
+				const inspection = createPostgresDatabaseDurableInspection({
+					database,
+					application: "application:collaboration",
+				});
+				const admissions = await scheduling.admit(8);
+				expect(admissions.map(({ runId }) => runId)).toEqual(
+					expect.arrayContaining(prepared.runIds),
+				);
+				expect(await inspection.inspect(runId)).toMatchObject({
+					runId,
+					state: "ready",
+					version: 1,
+				});
+				expect(await inspection.events(runId)).toEqual([
+					expect.objectContaining({ sequence: 1, kind: "accepted" }),
+				]);
 				const executed: object[] = [];
 				let faultCalls = 0;
 				const faulting: PostgresTransactionRunner = {
@@ -228,7 +304,7 @@ postgres(
 					reactions,
 				});
 				await expect(
-					faulted({ runId: prepared.runId, workerId: "worker:fault" }),
+					faulted({ runId, workerId: "worker:fault" }),
 				).rejects.toThrow("forced claim attempt refusal");
 				expect(executed).toEqual([
 					durableKernelMarker,
@@ -238,7 +314,7 @@ postgres(
 					durableClaimAttemptInsert,
 				]);
 				expect(faultCalls).toBe(1);
-				expect(await state(database, prepared.runId)).toEqual({
+				expect(await state(database, runId)).toEqual({
 					state: "ready",
 					attemptCount: 0,
 					currentAttemptId: null,
@@ -257,7 +333,7 @@ postgres(
 					mode: { isolation: "readCommitted", access: "readWrite" },
 					use: async (transaction) => {
 						await transaction.execute(durableKernelMarker, undefined);
-						await transaction.execute(lockRun, prepared.runId);
+						await transaction.execute(lockRun, runId);
 						entered();
 						await released;
 					},
@@ -269,17 +345,17 @@ postgres(
 					reactions,
 				});
 				await expect(
-					claim({ runId: prepared.runId, workerId: "worker:locked" }),
+					claim({ runId, workerId: "worker:locked" }),
 				).resolves.toEqual({ status: "skipped" });
 				release();
 				await holder;
 
 				const outcome = await claim({
-					runId: prepared.runId,
+					runId,
 					workerId: "worker:success",
 				});
 				expect(outcome.status).toBe("claimed");
-				const committed = await state(database, prepared.runId);
+				const committed = await state(database, runId);
 				expect(committed).toMatchObject({
 					state: "running",
 					attemptCount: 1,
@@ -294,6 +370,15 @@ postgres(
 				);
 				if (outcome.status !== "claimed")
 					throw new TypeError("Durable terminal requires the claimed run");
+				const heartbeat = createPostgresDatabaseDurableHeartbeat({
+					database,
+					application: "application:collaboration",
+				});
+				await expect(heartbeat(outcome.claim)).resolves.toEqual({
+					status: "held",
+					cancellationRequested: false,
+					deadlineExpired: false,
+				});
 
 				let terminalFaults = 0;
 				const faultingTerminal = createPostgresDatabaseDurableTerminal({
@@ -320,7 +405,7 @@ postgres(
 					faultingTerminal.succeed(outcome.claim, new Uint8Array([7])),
 				).rejects.toThrow("forced terminal refusal");
 				expect(terminalFaults).toBe(1);
-				expect(await state(database, prepared.runId)).toEqual(committed);
+				expect(await state(database, runId)).toEqual(committed);
 
 				const terminal = createPostgresDatabaseDurableTerminal({
 					database,
@@ -333,7 +418,7 @@ postgres(
 					state: "succeeded",
 					deadLetter: false,
 				});
-				expect(await state(database, prepared.runId)).toEqual({
+				expect(await state(database, runId)).toEqual({
 					state: "succeeded",
 					attemptCount: 1,
 					currentAttemptId: null,
@@ -342,6 +427,58 @@ postgres(
 					attemptOutcome: "succeeded",
 					succeeded: 1,
 					resultBytes: new Uint8Array([7]),
+				});
+				expect(await inspection.inspect(runId)).toMatchObject({
+					runId,
+					state: "succeeded",
+					version: 3,
+					resultBytes: new Uint8Array([7]),
+				});
+				expect(
+					(await inspection.events(runId)).map(({ kind }) => kind),
+				).toEqual(["accepted", "attemptStarted", "succeeded"]);
+
+				const cancellationClaim = await claim({
+					runId: runningCancellationRunId,
+					workerId: "worker:cancellation",
+					leaseMilliseconds: 1_000,
+				});
+				expect(cancellationClaim.status).toBe("claimed");
+				await markCancelled(database, readyCancellationRunId, false);
+				await markCancelled(database, runningCancellationRunId, true);
+				const concurrentReapers = await Promise.all([
+					scheduling.reapCancelled(1),
+					scheduling.reapCancelled(1),
+				]);
+				expect(concurrentReapers).toEqual([1, 1]);
+				await expect(scheduling.reapCancelled(8)).resolves.toBe(0);
+				for (const cancelledRunId of [
+					readyCancellationRunId,
+					runningCancellationRunId,
+				]) {
+					expect(await inspection.inspect(cancelledRunId)).toMatchObject({
+						runId: cancelledRunId,
+						state: "cancelled",
+						currentAttemptId: null,
+					});
+					const kinds = (await inspection.events(cancelledRunId)).map(
+						({ kind }) => kind,
+					);
+					expect(kinds).toEqual(
+						cancelledRunId === readyCancellationRunId
+							? ["accepted", "cancelled"]
+							: ["accepted", "attemptStarted", "cancelled"],
+					);
+				}
+				expect(await state(database, readyCancellationRunId)).toMatchObject({
+					state: "cancelled",
+					attempts: 0,
+					attemptOutcome: null,
+				});
+				expect(await state(database, runningCancellationRunId)).toMatchObject({
+					state: "cancelled",
+					attempts: 1,
+					attemptOutcome: "cancelled",
 				});
 			} finally {
 				await database.close({ deadlineAt: Date.now() + 5_000 });

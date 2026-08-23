@@ -8,13 +8,24 @@ test("durable admission is fair across tenants and hides incompatible work befor
 		parameters: readonly unknown[];
 	}> = [];
 	const executableDigest = "1".repeat(64);
-	const sql = {
+	const session = {
 		unsafe(statement: string, parameters: readonly unknown[] = []) {
+			if (statement === "SET TRANSACTION READ ONLY") return Promise.resolve([]);
 			(statements as Array<(typeof statements)[number]>).push({
 				statement,
 				parameters,
 			});
-			return Promise.resolve([]);
+			return Object.assign(Promise.resolve([]), {
+				values: () =>
+					Promise.resolve(
+						Object.assign([] as unknown[], { command: "SELECT", count: 0 }),
+					),
+			});
+		},
+	};
+	const sql = {
+		begin(use: (transaction: typeof session) => Promise<unknown>) {
+			return use(session);
 		},
 	};
 	const reactions = {
