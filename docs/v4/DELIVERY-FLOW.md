@@ -9,10 +9,10 @@ only after ADR-0027 receives formal acceptance.
 
 Classify the issue before implementation:
 
-| Tier    | Change                                                                                                                                                                                        | Required evidence                                                                                                                                            |
-| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Kernel  | Changes composition/artifact compatibility, schema lifecycle, transaction, Policy/nondisclosure, dispatch/Reaction, Change Ledger, or durable identity/lease/fencing/checkpoint compatibility | Focused falsifiable proof, hostile tests, affected PostgreSQL/load/soak lanes, and formal acceptance only at an ADR or exceptional release semantic boundary |
-| Product | Projects an accepted Kernel through Route/application Auth, File, CLI, docs, Studio, client ergonomics, or another user-facing seam                                                           | Tracer-led TDD, ordinary integration tests, affected repository gates, and normal review                                                                     |
+| Tier    | Change                                                                                                                                                                                        | Required evidence                                                                                                                                                                                          |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Kernel  | Changes composition/artifact compatibility, schema lifecycle, transaction, Policy/nondisclosure, dispatch/Reaction, Change Ledger, or durable identity/lease/fencing/checkpoint compatibility | Focused falsifiable proof, hostile tests, affected PostgreSQL/load/soak lanes, and formal acceptance only for a new or superseding public Kernel/architecture ADR or exceptional release semantic boundary |
+| Product | Projects an accepted Kernel through Route/application Auth, File, CLI, docs, Studio, client ergonomics, or another user-facing seam                                                           | Tracer-led TDD, ordinary integration tests, affected repository gates, and normal review                                                                                                                   |
 
 A feature can contain both tiers. Split out only the Kernel claim; do not make
 the entire feature a formal proof project.
@@ -52,12 +52,16 @@ expired.
 Formal stateless Opus-medium acceptance is used once only for a new or
 superseding public Kernel/architecture ADR, or for an exceptional release
 semantic boundary that deterministic checks cannot settle. Ordinary Product
-and tracer work does not invoke it. When it applies, use the pinned manifest
-wrapper and retain its generated SHA-256 bindings.
+and tracer work does not invoke it. When it applies, use
+`bun run review:accept:v2` and retain its generated SHA-256 bindings. Record a
+`BLOCKED` result, repair on a new clean head, and run one replacement review.
 
-## 4. Prove adoption in Autopilot
+## 4. Measure downstream adoption when a consumer is named
 
-For every relevant shipped capability, record:
+Autopilot is a planned second tracer, but its repository, owner, and executable
+harness are not yet pinned here. It is therefore not a delivery gate. When an
+issue names Autopilot or another concrete downstream repository and owner, it
+may record:
 
 - the downstream owner and duplicated responsibility;
 - handwritten downstream lines before and after;
@@ -69,17 +73,19 @@ vendoring, or moving equivalent behavior into generated output. Report zero
 honestly when the capability improves correctness or usability without deleting
 downstream code.
 
-The delivery scorecard is:
+The mandatory delivery scorecard is:
 
 1. runnable tracer milestone completed;
 2. Kernel regression and operational budgets passed;
-3. net downstream duplication deleted; and
-4. remaining abstraction and compatibility debt named.
+3. remaining abstraction and compatibility debt named.
+
+Downstream handwritten deletion is an advisory fourth signal until its
+consumer and harness are accepted.
 
 ## 5. Run the weekly deletion review
 
-Review abstractions against the runnable tracer, Autopilot, and explicit
-release compatibility seams.
+Review abstractions against the runnable tracer, named downstream consumers,
+and explicit release compatibility seams.
 
 - Delete an unaccepted abstraction with no consumer.
 - Open a focused superseding ADR for an Accepted public abstraction whose

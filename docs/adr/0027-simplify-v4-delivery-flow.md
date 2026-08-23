@@ -63,10 +63,12 @@ tracer blocker or supersedes an unsafe accepted decision. Each later capability
 must first land in the tracer. The tracer retains the right established by
 ADR-0004 to delete an abstraction that supplies no needed guarantee.
 
-Autopilot is the second tracer. Each relevant v4 capability must name the
-downstream duplication it removes and record net handwritten lines deleted.
-Deletion is an adoption signal, not a correctness oracle or a target that may
-be improved by moving or generating equivalent code.
+Autopilot is a planned second tracer, but this repository does not yet pin its
+repository location, owner, or executable harness. Until a focused decision
+does so, an issue may report downstream handwritten duplication deleted from a
+named consumer as an advisory adoption signal; it is not a delivery gate.
+Relocation, formatting, vendoring, and moving equivalent behavior into
+generated output do not count as deletion.
 
 ### Bounded proof work
 
@@ -89,9 +91,11 @@ formal model acceptance review. They use deterministic gates and normal human
 or agent code review. Exploratory adversarial review may help development but
 has no acceptance status.
 
-When formal review is required, the repository-pinned manifest wrapper remains
-the only protocol. Its generated SHA-256 authority-path and packet bindings are
-retained. Historical manifests and review records remain immutable.
+When formal review is required, `bun run review:accept:v2` remains the only
+acceptance protocol. Its generated SHA-256 authority-path and packet bindings
+are retained. A `BLOCKED` result is recorded, repaired on a new clean head, and
+followed by one replacement review. Historical manifests and review records
+remain immutable.
 
 ### Integrity digests are not documentation bookkeeping
 
@@ -116,11 +120,12 @@ cross-process semantics. Measurements and proof transcripts live with test
 artifacts rather than in the normative contract.
 
 Once each week, review accepted and proposed abstractions against the runnable
-tracer and Autopilot. An unaccepted abstraction with no consumer is deleted. An
-Accepted abstraction with no current consumer is a deletion candidate, but a
-focused superseding ADR is required when deletion changes public authority.
-Named compatibility seams required by a release decision are consumers for
-this purpose, not dead code by definition.
+tracer, named downstream consumers, and explicit compatibility seams. An
+unaccepted abstraction with no consumer is deleted. An Accepted abstraction
+with no current consumer is a deletion candidate, but a focused superseding ADR
+is required when deletion changes public authority. Named compatibility seams
+required by a release decision are consumers for this purpose, not dead code by
+definition.
 
 The executable flow and metrics are maintained in
 [`docs/v4/DELIVERY-FLOW.md`](../v4/DELIVERY-FLOW.md).

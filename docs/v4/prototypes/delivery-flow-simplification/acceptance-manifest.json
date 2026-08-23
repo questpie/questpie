@@ -3,9 +3,10 @@
 	"ticket": "ADR-0027",
 	"proof": "Adopt a risk-tiered, tracer-pulled QUESTPIE v4 delivery process that preserves Kernel guarantees and machine-derived integrity while removing formal proof ceremony from ordinary Product increments.",
 	"diffBase": "bfa5e6223dbb133db965896c816d798893df738d",
-	"reviewOutput": "docs/v4/prototypes/delivery-flow-simplification/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/delivery-flow-simplification/REVIEW-02.json",
 	"authorityHeads": {
-		"current v4 implementation head": "bfa5e6223dbb133db965896c816d798893df738d"
+		"current v4 implementation head": "bfa5e6223dbb133db965896c816d798893df738d",
+		"recorded blocked delivery-flow candidate": "1e8bd7314ef78917a18a8397d4aadb207fbb6eca"
 	},
 	"authorityDocuments": [
 		{
@@ -46,12 +47,17 @@
 		{
 			"name": "proposed delivery simplification",
 			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
-			"sha256": "4eadf210960ef0120c8d402c2b313c39bc7fce97b4654bbb2af0b4265417a093"
+			"sha256": "99755bf33fe0f80698fbd13de07b346127e6f79f1ac3299550eeb17b0551e03e"
 		},
 		{
 			"name": "candidate executable delivery flow",
 			"path": "docs/v4/DELIVERY-FLOW.md",
-			"sha256": "3aa231d469425396de532c74e9f796852516f78617354e5dce8b28afa9c63491"
+			"sha256": "74aea4ec2e689aacf5f6acd4167dd121205ba51c69aaab19d3935ad6ddfac0ae"
+		},
+		{
+			"name": "recorded blocked delivery-flow review",
+			"path": "docs/v4/prototypes/delivery-flow-simplification/REVIEW-01.json",
+			"sha256": "11ffb80a21bf1d15e8d1db6322777998044ecb05d82ad18f13001e9c3a632e1a"
 		}
 	],
 	"verification": [
@@ -75,8 +81,8 @@
 		"Focused Kernel proof construction has a default two-working-day budget; unresolved claims shrink, split or defer, while missing evidence never becomes PASS and required deterministic database, load or soak execution is not truncated.",
 		"Formal stateless Opus-medium review remains pinned to the repository manifest protocol and is reserved for new or superseding public Kernel or architecture ADRs and exceptional release semantic boundaries.",
 		"Manual proof-head and canonical-artifact digest ledgers leave living process prose, while Runtime, artifact, migration, schema, identity, checkpoint and generated acceptance-packet integrity digests remain mandatory and tool-derived.",
-		"Autopilot is the second tracer: downstream handwritten deletion is reported as an adoption metric paired with runnable behavior and Kernel regressions, never as a correctness oracle or a gameable sole target.",
+		"Autopilot remains a planned second tracer until its repository, owner and executable harness are accepted; deletion from a named downstream consumer is advisory evidence rather than a delivery gate or correctness oracle.",
 		"Weekly deletion review treats unconsumed abstractions as candidates; Accepted public authority changes only through a focused superseding ADR, and named release compatibility seams remain valid consumers.",
-		"The candidate changes only the proposed ADR, candidate execution guide and acceptance manifest; Accepted ADRs, skill routing, contribution policy, handoff, proof map and production decision map are projected only after a PASS."
+		"The candidate changes only the proposed ADR, candidate execution guide, acceptance manifest and immutable blocked review record; Accepted ADRs, skill routing, contribution policy, handoff, proof map and production decision map are projected only after a PASS."
 	]
 }
