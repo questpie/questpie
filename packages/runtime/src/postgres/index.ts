@@ -312,8 +312,16 @@ export function createPostgresDatabase(
 				});
 			throw failure({ error, phase: "checkout", signal });
 		}
-		const clientError = () => {};
+		let connectionEnded = false;
+		let connectionFailure: unknown;
+		const clientError = (error: Error) => {
+			connectionFailure = error;
+		};
+		const clientEnd = () => {
+			connectionEnded = true;
+		};
 		client.on("error", clientError);
+		client.on("end", clientEnd);
 		inFlight += 1;
 		let destroyed = false;
 		let destruction: Promise<void> | undefined;
@@ -325,7 +333,9 @@ export function createPostgresDatabase(
 			if (destruction) return destruction;
 			destroyed = true;
 			counters.destroyedConnections += 1;
-			destruction = new Promise((resolve) => client.once("end", resolve));
+			destruction = connectionEnded
+				? Promise.resolve()
+				: new Promise((resolve) => client.once("end", resolve));
 			client.release(true);
 			return destruction;
 		};
@@ -340,20 +350,35 @@ export function createPostgresDatabase(
 						);
 		};
 		signal?.addEventListener("abort", cancel, { once: true });
-		const execute: PostgresTransaction["execute"] = async (statement, value) =>
-			executeStatement({
+		const execute: PostgresTransaction["execute"] = async (
+			statement,
+			value,
+		) => {
+			if (connectionEnded || connectionFailure)
+				throw new QuestpiePostgresError({
+					code: "connectionLost",
+					phase: "statement",
+					statementName: statement.name,
+					cause: connectionFailure,
+				});
+			return executeStatement({
 				client,
 				statement,
 				value,
 				active: () => active,
 				signal,
 			});
+		};
 		const handle = Object.freeze({
 			[transactionBrand]: true as const,
 			execute,
 		});
 		const rollback = async (): Promise<void> => {
 			if (destroyed || commitSent) return;
+			if (connectionEnded || connectionFailure) {
+				await destroy();
+				return;
+			}
 			try {
 				await client.query("ROLLBACK");
 			} catch {
@@ -411,6 +436,15 @@ export function createPostgresDatabase(
 					await rollback();
 					throw failure({ error, phase: "statement", signal });
 				}
+				if (connectionEnded || connectionFailure) {
+					await destroy();
+					throw new QuestpiePostgresError({
+						code: "connectionLost",
+						phase: "commit",
+						retry: "safeBeforeCommit",
+						cause: connectionFailure,
+					});
+				}
 				commitSent = true;
 				try {
 					await client.query("COMMIT");
@@ -432,6 +466,7 @@ export function createPostgresDatabase(
 			if (cancellation) await cancellation;
 			if (destroyed) await destruction;
 			client.removeListener("error", clientError);
+			client.removeListener("end", clientEnd);
 			if (!destroyed) client.release();
 			inFlight -= 1;
 		}
