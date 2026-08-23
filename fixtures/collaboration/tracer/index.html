@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>QUESTPIE collaboration tracer</title>
+		<link rel="stylesheet" href="/styles.css" />
+	</head>
+	<body>
+		<main>
+			<p class="eyebrow">QUESTPIE v4 walking skeleton</p>
+			<h1>Collaboration stays live.</h1>
+			<p data-status aria-live="polite">starting</p>
+			<form>
+				<label for="message">Publish a message</label>
+				<div>
+					<input id="message" autocomplete="off" required />
+					<button type="submit">Publish</button>
+				</div>
+			</form>
+			<ul data-messages aria-label="Messages"></ul>
+		</main>
+		<script type="module" src="/tracer.js"></script>
+	</body>
+</html>

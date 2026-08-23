@@ -8,6 +8,11 @@
 		"#questpie/client": "./.questpie/generated/client.ts",
 		"#questpie/source/*": "./src/*"
 	},
+	"scripts": {
+		"tracer": "bun tracer/host.ts",
+		"tracer:setup": "questpie build && questpie migration apply && questpie seed apply",
+		"tracer:start": "bun tracer/host.ts --port=3000"
+	},
 	"dependencies": {
 		"@questpie/collaboration-audit": "workspace:*",
 		"questpie": "workspace:*"

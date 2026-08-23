@@ -16,5 +16,5 @@
 		"target": "ES2024",
 		"types": ["bun"]
 	},
-	"include": ["src/**/*.ts"]
+	"include": ["src/**/*.ts", "tracer/**/*.ts"]
 }

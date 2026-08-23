@@ -1,21 +1,37 @@
 #!/usr/bin/env bun
 
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import {
+	committedArtifactDirectories,
+	loadGeneratedSchemaProjection,
+	requestedPort,
+} from "./artifacts";
 
 type Compiler = Readonly<{
 	compileApplication(
 		input: Readonly<{ applicationRoot: string; outputDirectory?: string }>,
 	): Promise<unknown>;
 	loadCommittedMigration(path: string): Promise<unknown>;
+	loadCommittedSeed(path: string): Promise<unknown>;
 	applyCommittedMigrations(
 		input: Readonly<{
 			connectionString?: string;
 			migrations: readonly unknown[];
 		}>,
 	): Promise<Readonly<{ status: string }>>;
+	applyCommittedSeeds(
+		input: Readonly<{
+			connectionString?: string;
+			schema: unknown;
+			seeds: readonly unknown[];
+		}>,
+	): Promise<
+		Readonly<{ applied: readonly string[]; alreadyApplied: readonly string[] }>
+	>;
 }>;
 
 type GeneratedApplication = Readonly<{
@@ -60,17 +76,10 @@ function realtimeKey(): Uint8Array {
 	return Uint8Array.from(Buffer.from(encoded, "hex"));
 }
 
-async function migrationDirectories(root: string): Promise<string[]> {
-	const migrationsRoot = resolve(root, "questpie/migrations");
-	return (await readdir(migrationsRoot, { withFileTypes: true }))
-		.filter((entry) => entry.isDirectory())
-		.map((entry) => join(migrationsRoot, entry.name))
-		.sort();
-}
-
 async function main(): Promise<void> {
 	const root = process.cwd();
-	const [command, subcommand] = Bun.argv.slice(2);
+	const cliArguments = Bun.argv.slice(2);
+	const [command, subcommand] = cliArguments;
 	if (command === "build") {
 		await (await compiler()).compileApplication({ applicationRoot: root });
 		console.log("questpie: application build complete");
@@ -94,7 +103,7 @@ async function main(): Promise<void> {
 	if (command === "migration" && subcommand === "apply") {
 		const api = await compiler();
 		const migrations = await Promise.all(
-			(await migrationDirectories(root)).map((path) =>
+			(await committedArtifactDirectories(root, "migrations")).map((path) =>
 				api.loadCommittedMigration(path),
 			),
 		);
@@ -109,6 +118,24 @@ async function main(): Promise<void> {
 			result.status === "applied"
 				? "questpie: committed migrations applied"
 				: "questpie: committed migrations already applied",
+		);
+		return;
+	}
+	if (command === "seed" && subcommand === "apply") {
+		const api = await compiler();
+		const seeds = await Promise.all(
+			(await committedArtifactDirectories(root, "seeds")).map((path) =>
+				api.loadCommittedSeed(path),
+			),
+		);
+		if (seeds.length === 0) fail("no committed Seeds found");
+		const result = await api.applyCommittedSeeds({
+			connectionString: databaseUrl(),
+			schema: await loadGeneratedSchemaProjection(root),
+			seeds,
+		});
+		console.log(
+			`questpie: committed Seeds applied (${result.applied.length} new, ${result.alreadyApplied.length} already applied)`,
 		);
 		return;
 	}
@@ -129,7 +156,7 @@ async function main(): Promise<void> {
 			maintenance: { authorize: () => false },
 		});
 		const server = Bun.serve({
-			port: Number(process.env.PORT ?? "3000"),
+			port: requestedPort(cliArguments.slice(1), process.env.PORT),
 			fetch: (request) =>
 				application.fetch(
 					internal.bindIngressPrincipalForRequest(
@@ -148,7 +175,7 @@ async function main(): Promise<void> {
 		console.log(`questpie: listening on ${server.url}`);
 		return;
 	}
-	fail("use build, check, migration apply, or start");
+	fail("use build, check, migration apply, seed apply, or start");
 }
 
 await main();
