@@ -43,6 +43,7 @@ const eventKinds: ReadonlySet<string> = new Set([
 	"effectSettled",
 	"failed",
 	"leaseSuperseded",
+	"retryRequested",
 	"retryScheduled",
 	"succeeded",
 ]);

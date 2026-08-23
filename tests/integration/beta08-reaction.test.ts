@@ -107,6 +107,7 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 		"effectSettled",
 		"failed",
 		"leaseSuperseded",
+		"retryRequested",
 		"retryScheduled",
 		"succeeded",
 	]);
@@ -175,7 +176,7 @@ test("projects the executed Reaction and its shared durable kernel contract", as
 			reactionDigest: string | null;
 		}>;
 	}>;
-	expect(build.internalProtocol).toBe("questpie.internal.v5");
+	expect(build.internalProtocol).toBe("questpie.internal.v6");
 	expect(build.later.durableCompatibilityDigest).toBe(kernel.digest);
 	expect(build.later.reactionDigest).toMatch(/^[0-9a-f]{64}$/);
 

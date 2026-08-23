@@ -5,7 +5,7 @@ import {
 	fingerprint,
 	type SchemaProjectionV1,
 	verifyPostgresChangeCapture,
-	verifyInternalProtocolV5,
+	verifyInternalProtocolV6,
 } from "../schema";
 
 type RuntimeBuildReadiness = Readonly<{
@@ -129,7 +129,7 @@ export async function verifyPostgresRuntimeReadiness(
 		expected: RuntimeBuildReadiness;
 	}>,
 ): Promise<void> {
-	await verifyInternalProtocolV5(input.sql);
+	await verifyInternalProtocolV6(input.sql);
 	const committed = decodeCommittedMigrations(input.committedMigrations);
 	if (committed.head !== input.expected.migrationHead)
 		throw new TypeError(

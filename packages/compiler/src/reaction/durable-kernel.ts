@@ -86,6 +86,7 @@ const withoutDigest = {
 		"effectSettled",
 		"failed",
 		"leaseSuperseded",
+		"retryRequested",
 		"retryScheduled",
 		"succeeded",
 	] as const,

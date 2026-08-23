@@ -99,6 +99,7 @@ const durableEventKinds: ReadonlySet<string> = new Set([
 	"effectSettled",
 	"failed",
 	"leaseSuperseded",
+	"retryRequested",
 	"retryScheduled",
 	"succeeded",
 ]);
@@ -124,6 +125,7 @@ export type DurableEventKind =
 	| "effectSettled"
 	| "failed"
 	| "leaseSuperseded"
+	| "retryRequested"
 	| "retryScheduled"
 	| "succeeded";
 

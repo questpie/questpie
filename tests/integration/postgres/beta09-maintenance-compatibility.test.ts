@@ -7,7 +7,10 @@ import {
 	createPostgresDurableMaintenance,
 	type DurableMaintenanceCommand,
 } from "../../../packages/runtime/src/durable/postgres-maintenance";
-import { durableEventSequenceBump } from "../../../packages/runtime/src/durable/postgres-statements";
+import {
+	durableEventSequenceBump,
+	durableKernelMarker,
+} from "../../../packages/runtime/src/durable/postgres-statements";
 import { durableKernelMarkerStatement } from "../../../packages/runtime/src/durable/rows";
 import {
 	beta05Ids,
@@ -37,13 +40,39 @@ async function maintenanceStatements(
 		cancellationRequested: false,
 		version: 1,
 	};
-	const unsafe = async (statement: string): Promise<readonly unknown[]> => {
+	const unsafe = (statement: string) => {
 		statements.push(statement);
-		if (statement.includes("SELECT state")) return [row];
-		if (statement === durableEventSequenceBump.text) return [{ sequence: 2 }];
-		if (statement.includes('SELECT event_sequence AS "version"'))
-			return [{ version: 2 }];
-		return [];
+		let command = statement.trimStart().split(/\s+/u)[0]?.toUpperCase() ?? "";
+		let rows: unknown[][] = [];
+		let count = command === "INSERT" || command === "UPDATE" ? 1 : 0;
+		if (statement === durableKernelMarker.text) rows = [["on"]];
+		else if (statement.startsWith("SELECT state, attempt_count"))
+			rows = [
+				[
+					row.state,
+					row.attemptCount,
+					row.deadLetter,
+					row.resource,
+					row.dispatchId,
+					row.causationId,
+					row.correlationId,
+					row.cancellationRequested,
+					row.version,
+				],
+			];
+		else if (statement.startsWith("SELECT state\n")) rows = [[row.state]];
+		else if (statement === durableEventSequenceBump.text) rows = [[2]];
+		else if (statement.includes('SELECT event_sequence AS "version"'))
+			rows = [[2]];
+		else if (statement.includes("RETURNING effect_id::text")) {
+			rows = [];
+			count = 0;
+		}
+		if (rows.length > 0) count = rows.length;
+		const values = Object.assign(rows, { command, count });
+		return Object.assign(Promise.resolve(rows), {
+			values: () => Promise.resolve(values),
+		});
 	};
 	const sql = {
 		begin: async (use: (session: { unsafe: typeof unsafe }) => unknown) =>
@@ -306,7 +335,7 @@ postgresTest(
  * applies the command.
  */
 postgresTest(
-	"a caller with maintenance Authority still applies the command",
+	"current and compatible-v5 applications both apply authorized maintenance",
 	async () => {
 		const prepared = await harness();
 		const callId = "beta09-authority-2";
@@ -321,5 +350,20 @@ postgresTest(
 
 		expect(outcome.outcome).toBe("applied");
 		expect(outcome.rejectionCode).toBeNull();
+
+		const v5CallId = "beta09-authority-v5";
+		await publish(prepared, {
+			body: "beta09 v5 compatibility",
+			callId: v5CallId,
+		});
+		const v5RunId = await runIdentity(v5CallId);
+		const compatibleV5 = await prepared.createCompatibleV5Application();
+		await expect(
+			compatibleV5.durable.cancelRun({
+				runId: v5RunId,
+				reason: "compatible v5 operator",
+				actor: prepared.principal,
+			}),
+		).resolves.toMatchObject({ outcome: "applied", rejectionCode: null });
 	},
 );

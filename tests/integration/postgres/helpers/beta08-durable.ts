@@ -4,13 +4,11 @@ import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
 import { runtimeArtifactDigest } from "../../../../packages/runtime/src/application/artifact-protocol";
-import {
-	createPostgresDurableEffectLedger,
-	createPostgresDurableKernel,
-	linkReactionProjection,
-	type DurableEffectLedger,
-	type DurableKernel,
-} from "../../../../packages/runtime/src/index";
+import { createPostgresDurableEffectLedger } from "../../../../packages/runtime/src/durable/postgres-effects";
+import type { DurableEffectLedger } from "../../../../packages/runtime/src/durable/postgres-effects";
+import { createPostgresDurableKernel } from "../../../../packages/runtime/src/durable/postgres-kernel";
+import { linkReactionProjection } from "../../../../packages/runtime/src/durable/projection";
+import type { DurableKernel } from "../../../../packages/runtime/src/durable/rows";
 import {
 	beta05Ids,
 	beta05PostgresUrl,
@@ -147,6 +145,7 @@ export type Beta08Harness = Readonly<{
 	app: Beta08Application;
 	createSiblingApplication(): Promise<Beta08Application>;
 	createCompatibleV4Application(): Promise<Beta08Application>;
+	createCompatibleV5Application(): Promise<Beta08Application>;
 	fetch(request: Request): Promise<Response>;
 	bindPrincipal(request: Request): Request;
 	wireFrame(
@@ -243,6 +242,14 @@ WHERE datname = pg_catalog.current_database()
 		...v4Unsigned,
 		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v4Unsigned),
 	});
+	const { digest: _v6Digest, ...v5Unsigned } = {
+		...currentRuntimeBuild,
+		internalProtocol: "questpie.internal.v5",
+	};
+	const compatibleV5RuntimeBuildBytes = JSON.stringify({
+		...v5Unsigned,
+		digest: runtimeArtifactDigest("questpie-runtime-build-v1", v5Unsigned),
+	});
 	const createApplication = async (
 		runtimeBuildBytes = currentRuntimeBuildBytes,
 	) => {
@@ -288,6 +295,8 @@ WHERE datname = pg_catalog.current_database()
 		createSiblingApplication: createApplication,
 		createCompatibleV4Application: () =>
 			createApplication(compatibleV4RuntimeBuildBytes),
+		createCompatibleV5Application: () =>
+			createApplication(compatibleV5RuntimeBuildBytes),
 		fetch: (request: Request) => app.fetch(request),
 		bindPrincipal: (request: Request) =>
 			internal.bindIngressPrincipalForRequest(request, principal),

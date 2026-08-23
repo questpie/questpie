@@ -1,10 +1,22 @@
-import type { SQL } from "bun";
-
 import {
 	QuestpiePostgresError,
 	transactionBrand,
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
+
+type BunDurableQuery = Readonly<{
+	values(): Promise<unknown>;
+}>;
+
+type BunDurableSession = Readonly<{
+	unsafe(statement: string, parameters?: readonly unknown[]): BunDurableQuery;
+}>;
+
+type BunDurableSql = Readonly<{
+	begin<Output>(
+		use: (session: BunDurableSession) => Promise<Output>,
+	): Promise<Output>;
+}>;
 
 function postgresErrorNumber(error: unknown): string | null {
 	if (!error || typeof error !== "object") return null;
@@ -14,8 +26,9 @@ function postgresErrorNumber(error: unknown): string | null {
 
 /** Temporary PB-05 adapter. Generated ownership deletes this with Bun SQL. */
 export function createBunDurablePostgresTransactionRunner(
-	sql: SQL,
+	value: unknown,
 ): PostgresTransactionRunner {
+	const sql = value as BunDurableSql;
 	return Object.freeze({
 		async transaction(request) {
 			if (
@@ -26,7 +39,7 @@ export function createBunDurablePostgresTransactionRunner(
 					"Durable Bun compatibility requires read-committed transactions",
 				);
 			try {
-				return (await sql.begin(async (session) => {
+				return await sql.begin(async (session) => {
 					if (request.mode.access === "readOnly")
 						await session.unsafe("SET TRANSACTION READ ONLY");
 					return request.use({
@@ -45,7 +58,7 @@ export function createBunDurablePostgresTransactionRunner(
 							});
 						},
 					});
-				})) as Awaited<ReturnType<typeof request.use>>;
+				});
 			} catch (error) {
 				if (postgresErrorNumber(error) === "40001")
 					throw new QuestpiePostgresError({

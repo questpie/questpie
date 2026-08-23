@@ -2,11 +2,9 @@ import { afterAll, expect, test } from "bun:test";
 
 import { SQL } from "bun";
 
-import {
-	createDurableReactionWorker,
-	createDurableRunHandle,
-	linkReactionProjection,
-} from "../../../packages/runtime/src/index";
+import { createDurableRunHandle } from "../../../packages/runtime/src/durable/effects";
+import { linkReactionProjection } from "../../../packages/runtime/src/durable/projection";
+import { createDurableReactionWorker } from "../../../packages/runtime/src/durable/worker";
 import {
 	beta05Ids,
 	beta08Harness,
@@ -632,6 +630,8 @@ postgresTest(
 					outcome === "rejected" && rejectionCode === "NOT_AMBIGUOUS",
 			),
 		).toHaveLength(1);
+		const beforeRetry = await prepared.kernel.inspect(failedRun);
+		expect(beforeRetry).not.toBeNull();
 
 		const retries = await Promise.all([
 			prepared.maintenance.retryRun({
@@ -656,11 +656,19 @@ postgresTest(
 		).toHaveLength(1);
 		const retried = await prepared.kernel.inspect(failedRun);
 		expect(retried).toMatchObject({
+			version: beforeRetry!.version + 1,
 			state: "ready",
 			deadLetter: false,
 			failureCode: null,
 			terminalAt: null,
 		});
+		const retryHistory = (await prepared.kernel.events(failedRun)).map(
+			({ kind }) => kind,
+		);
+		expect(retryHistory.at(-1)).toBe("retryRequested");
+		expect(
+			retryHistory.filter((kind) => kind === "retryRequested"),
+		).toHaveLength(1);
 
 		// Racing commands share a transaction timestamp, so the audit records
 		// every attempt but fixes no order between the two contenders.

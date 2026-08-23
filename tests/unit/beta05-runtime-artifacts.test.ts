@@ -33,7 +33,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			version: 1,
 			application: "application:collaboration",
 			runtimeAbi: "questpie.runtime.v1",
-			internalProtocol: "questpie.internal.v5",
+			internalProtocol: "questpie.internal.v6",
 			compiler: {
 				version: "4.0.0-beta.1",
 				bunVersion: Bun.version,
@@ -52,7 +52,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		const compatibleBuild = JSON.parse(
 			first.generatedFiles["runtime-build.json"]!,
 		);
-		const { digest: _v5Digest, ...v4Unsigned } = {
+		const { digest: _v6Digest, ...v4Unsigned } = {
 			...compatibleBuild,
 			internalProtocol: "questpie.internal.v4",
 		};
@@ -72,7 +72,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			decodeRuntimeArtifacts({
 				runtimeBuild: {
 					...v4RuntimeBuild,
-					internalProtocol: "questpie.internal.v6",
+					internalProtocol: "questpie.internal.v7",
 				},
 				runtimeExecutables: executables,
 				operationContracts,
