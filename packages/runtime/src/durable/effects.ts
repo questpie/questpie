@@ -1,4 +1,4 @@
-import type { DurableEffectLedger } from "./postgres-effects";
+import type { DurableEffectLedger } from "./durable-effect-contract";
 import type { DurableClaim } from "./rows";
 
 export class DurableEffectAmbiguous extends Error {

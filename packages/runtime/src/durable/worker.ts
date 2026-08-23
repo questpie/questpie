@@ -5,6 +5,7 @@ import {
 } from "../codec";
 import { canonicalMutationBytes } from "../mutation/canonical";
 import { DeclaredOperationError } from "../operation";
+import type { DurableEffectLedger } from "./durable-effect-contract";
 import {
 	createDurableRunHandle,
 	DurableEffectAmbiguous,
@@ -12,7 +13,6 @@ import {
 	DurableLeaseLost,
 	type DurableRunHandle,
 } from "./effects";
-import type { DurableEffectLedger } from "./postgres-effects";
 import type {
 	LinkedReactionMember,
 	LinkedReactionProjection,

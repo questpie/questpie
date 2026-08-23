@@ -1,5 +1,5 @@
 import type { PostgresTransactionRunner } from "../postgres/contract";
-import type { DurableEffectView } from "./postgres-effects";
+import type { DurableEffectView } from "./durable-effect-contract";
 import { durableEffectRead } from "./postgres-statements";
 
 export function createPostgresDatabaseDurableEffectRead(

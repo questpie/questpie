@@ -1,6 +1,6 @@
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
 import type { PostgresTransactionRunner } from "../postgres/contract";
-import type { DurableEffectReservation } from "./postgres-effects";
+import type { DurableEffectReservation } from "./durable-effect-contract";
 import {
 	durableEffectFence,
 	durableEffectReservationInsert,
