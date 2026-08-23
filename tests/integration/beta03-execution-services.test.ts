@@ -247,6 +247,98 @@ test("aborts retained responses before closing application Services", async () =
 	}
 });
 
+test("shares one application Service between pre-Context ingress and execution", async () => {
+	const events: string[] = [];
+	let contextResolutions = 0;
+	const credentialService = defineService({
+		name: "credentials.application",
+		lifetime: "application",
+		effect: "external",
+		create: () => {
+			events.push("create");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose");
+		},
+	});
+	const ingressContext = defineContext({
+		name: "ingress.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => {
+			contextResolutions += 1;
+			return { tenant: { id: input.companyId }, values: {} };
+		},
+	});
+	const runtime = createApplicationRuntime({
+		services: [credentialService],
+		context: ingressContext,
+		bootstrap: () => ({ get: async () => null }),
+		project: async ({ service }) => ({
+			credentials: await service(credentialService),
+		}),
+	});
+
+	const [firstIngress, secondIngress] = await Promise.all([
+		runtime.applicationService(credentialService),
+		runtime.applicationService(credentialService),
+	]);
+	expect(firstIngress).toBe(secondIngress);
+	expect(contextResolutions).toBe(0);
+	expect(events).toEqual(["create"]);
+
+	const fromExecution = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ credentials }) => credentials,
+	);
+	expect(fromExecution).toBe(firstIngress);
+	expect(contextResolutions).toBe(1);
+	expect(events).toEqual(["create"]);
+
+	await runtime.close();
+	expect(events).toEqual(["create", "dispose"]);
+});
+
+test("refuses an unregistered application Service before Context Resolution", async () => {
+	let serviceCreates = 0;
+	let contextResolutions = 0;
+	const unregisteredService = defineService({
+		name: "credentials.unregistered",
+		lifetime: "application",
+		effect: "external",
+		create: () => {
+			serviceCreates += 1;
+			return Object.freeze({ ready: true });
+		},
+	});
+	const ingressContext = defineContext({
+		name: "unregistered.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => {
+			contextResolutions += 1;
+			return { tenant: { id: input.companyId }, values: {} };
+		},
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context: ingressContext,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+
+	await expect(runtime.applicationService(unregisteredService)).rejects.toThrow(
+		"is not registered by this Runtime",
+	);
+	expect({ serviceCreates, contextResolutions }).toEqual({
+		serviceCreates: 0,
+		contextResolutions: 0,
+	});
+	await runtime.close();
+});
+
 test("isolates application Services between Runtime instances", async () => {
 	let nextInstance = 0;
 	const disposals: number[] = [];
@@ -353,6 +445,114 @@ test("unwinds created dependencies after Service resolution failure", async () =
 		callbackCalls: 0,
 		events: ["create:dependency", "create:failing", "dispose:dependency"],
 	});
+	await runtime.close();
+});
+
+test("waits for concurrent Service dependencies before failure cleanup", async () => {
+	const events: string[] = [];
+	let releaseSlow!: () => void;
+	let markFailingCreated!: () => void;
+	let markSlowStarted!: () => void;
+	let markSlowCreated!: () => void;
+	const failingCreated = new Promise<void>((resolveCreated) => {
+		markFailingCreated = resolveCreated;
+	});
+	const slowStarted = new Promise<void>((resolveStarted) => {
+		markSlowStarted = resolveStarted;
+	});
+	const slowCreated = new Promise<void>((resolveCreated) => {
+		markSlowCreated = resolveCreated;
+	});
+	const slowRelease = new Promise<void>((resolveRelease) => {
+		releaseSlow = resolveRelease;
+	});
+	const slow = defineService({
+		name: "failure.concurrent-slow",
+		lifetime: "execution",
+		effect: "read",
+		create: async ({ signal }) => {
+			events.push("start:slow");
+			markSlowStarted();
+			await Promise.race([
+				slowRelease,
+				new Promise<void>((resolveAbort) => {
+					const onAbort = () => {
+						events.push("abort:slow");
+						resolveAbort();
+					};
+					if (signal.aborted) onAbort();
+					else signal.addEventListener("abort", onAbort, { once: true });
+				}),
+			]);
+			events.push("create:slow");
+			markSlowCreated();
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose:slow");
+		},
+	});
+	const failing = defineService({
+		name: "failure.concurrent-failing",
+		lifetime: "execution",
+		effect: "read",
+		create: async () => {
+			await slowStarted;
+			events.push("create:failing");
+			markFailingCreated();
+			throw new Error("concurrent dependency failed");
+		},
+	});
+	const parent = defineService({
+		name: "failure.concurrent-parent",
+		lifetime: "execution",
+		effect: "read",
+		dependencies: { slow, failing },
+		create: () => Object.freeze({ ready: true }),
+	});
+	const failureContext = defineContext({
+		name: "failure.concurrent-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [slow, failing, parent],
+		context: failureContext,
+		bootstrap: () => ({ get: async () => null }),
+		project: async ({ service }) => ({ parent: await service(parent) }),
+	});
+
+	const execution = runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		() => undefined,
+	);
+	const outcome = execution.then(
+		() => undefined,
+		(error: unknown) => {
+			events.push("caught");
+			return error;
+		},
+	);
+	await failingCreated;
+	await new Promise((resolveTurn) => setTimeout(resolveTurn, 0));
+	const abortedBeforeFallbackRelease = events.includes("abort:slow");
+	releaseSlow();
+	const error = await outcome;
+	await slowCreated;
+	expect(error).toBeInstanceOf(Error);
+	expect((error as Error).message).toBe("concurrent dependency failed");
+	expect(abortedBeforeFallbackRelease).toBe(true);
+	expect(events).toEqual([
+		"start:slow",
+		"create:failing",
+		"abort:slow",
+		"create:slow",
+		"dispose:slow",
+		"caught",
+	]);
 	await runtime.close();
 });
 
@@ -623,4 +823,75 @@ test("disposes execution Services after a response stream error", async () => {
 	await expect(response.text()).rejects.toThrow("stream failed");
 	expect(events).toEqual(["dispose"]);
 	await runtime.close();
+});
+
+test("disposes retained Services once after response consumer cancellation", async () => {
+	const events: string[] = [];
+	const dependency = defineService({
+		name: "streamCancel.dependency",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			events.push("create:dependency");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose:dependency");
+		},
+	});
+	const streamCancelService = defineService({
+		name: "streamCancel.execution",
+		lifetime: "execution",
+		effect: "read",
+		dependencies: { dependency },
+		create: ({ services }) => {
+			expect(services.dependency.ready).toBe(true);
+			events.push("create:stream");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			events.push("dispose:stream");
+		},
+	});
+	const streamCancelContext = defineContext({
+		name: "streamCancel.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [dependency, streamCancelService],
+		context: streamCancelContext,
+		bootstrap: () => ({ get: async () => null }),
+		project: async ({ service }) => ({
+			stream: await service(streamCancelService),
+		}),
+	});
+	const response = await runtime.execution(
+		{
+			principal: principal.user({ id: principalId }),
+			context: { companyId },
+		},
+		({ stream }) => {
+			expect(stream.ready).toBe(true);
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					cancel() {
+						events.push("cancel:source");
+					},
+				}),
+			);
+		},
+	);
+	const reader = response.body!.getReader();
+	await reader.cancel("client disconnected");
+	expect(events).toEqual([
+		"create:dependency",
+		"create:stream",
+		"cancel:source",
+		"dispose:stream",
+		"dispose:dependency",
+	]);
+
+	await runtime.close();
+	expect(events).toHaveLength(5);
 });
