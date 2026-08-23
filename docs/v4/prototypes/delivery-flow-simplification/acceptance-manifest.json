@@ -1,0 +1,82 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0027",
+	"proof": "Adopt a risk-tiered, tracer-pulled QUESTPIE v4 delivery process that preserves Kernel guarantees and machine-derived integrity while removing formal proof ceremony from ordinary Product increments.",
+	"diffBase": "bfa5e6223dbb133db965896c816d798893df738d",
+	"reviewOutput": "docs/v4/prototypes/delivery-flow-simplification/REVIEW.json",
+	"authorityHeads": {
+		"current v4 implementation head": "bfa5e6223dbb133db965896c816d798893df738d"
+	},
+	"authorityDocuments": [
+		{
+			"name": "canonical v4 specification",
+			"path": "SPEC.md",
+			"sha256": "3174fe55112de5c2ad5f54eb32d3405564db0f29b6205b5e384c3b3492b9116e"
+		},
+		{
+			"name": "current product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "0488886fcc9d235a7754017bd07a952b17ca7688e919e27f31e6a5f4127b9c8d"
+		},
+		{
+			"name": "current proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "53be1162c67a018ea8422952f7bcfbf150e08646766a7d89e9f7a778fb51792e"
+		},
+		{
+			"name": "accepted tracer-first decision",
+			"path": "docs/adr/0004-prove-one-tracer-before-capability-breadth.md",
+			"sha256": "7b07004ae80fc08741752feaa01feb04ce3af68adfd3353d8d9820c06223f702"
+		},
+		{
+			"name": "accepted repository and review protocol",
+			"path": "docs/adr/0020-establish-the-repository-foundation.md",
+			"sha256": "55f2cb05cac8005dc66de9090c487506ffabd16a4ba4ab84e1d3fa289ec4d9d7"
+		},
+		{
+			"name": "accepted beta one slice",
+			"path": "docs/adr/0021-slice-the-beta-one-release.md",
+			"sha256": "7a08a63226ee379cf1432166df86c248fed46fe3344b0f4d7de0e388b6ad9766"
+		},
+		{
+			"name": "current production backend decision map",
+			"path": "docs/v4/research/production-backend/DECISION-MAP.md",
+			"sha256": "8b27c09c0485108b61589feeebec12adeacaa6907b24a2cf38d8800f3d3869e9"
+		},
+		{
+			"name": "proposed delivery simplification",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "4eadf210960ef0120c8d402c2b313c39bc7fce97b4654bbb2af0b4265417a093"
+		},
+		{
+			"name": "candidate executable delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "3aa231d469425396de532c74e9f796852516f78617354e5dce8b28afa9c63491"
+		}
+	],
+	"verification": [
+		{
+			"command": "bunx oxfmt --check docs/adr/0027-simplify-v4-delivery-flow.md docs/v4/DELIVERY-FLOW.md docs/v4/prototypes/delivery-flow-simplification/acceptance-manifest.json",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run skill:check",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"Rigor is classified by the guarantee changed rather than a permanent feature taxonomy; Policy, nondisclosure, transaction, schema, artifact, ledger, dispatch, lease, fencing, cancellation, retry and checkpoint guarantees remain Kernel work wherever they appear.",
+		"Ordinary Product and tracer increments use TDD, integration tests, deterministic repository gates and normal review without proof heads, manual digest tables or fresh-model acceptance records.",
+		"The first current milestone establishes a browser-runnable compile-to-recovery skeleton, after which every capability lands in and preserves that skeleton before more contract breadth is designed.",
+		"Focused Kernel proof construction has a default two-working-day budget; unresolved claims shrink, split or defer, while missing evidence never becomes PASS and required deterministic database, load or soak execution is not truncated.",
+		"Formal stateless Opus-medium review remains pinned to the repository manifest protocol and is reserved for new or superseding public Kernel or architecture ADRs and exceptional release semantic boundaries.",
+		"Manual proof-head and canonical-artifact digest ledgers leave living process prose, while Runtime, artifact, migration, schema, identity, checkpoint and generated acceptance-packet integrity digests remain mandatory and tool-derived.",
+		"Autopilot is the second tracer: downstream handwritten deletion is reported as an adoption metric paired with runnable behavior and Kernel regressions, never as a correctness oracle or a gameable sole target.",
+		"Weekly deletion review treats unconsumed abstractions as candidates; Accepted public authority changes only through a focused superseding ADR, and named release compatibility seams remain valid consumers.",
+		"The candidate changes only the proposed ADR, candidate execution guide and acceptance manifest; Accepted ADRs, skill routing, contribution policy, handoff, proof map and production decision map are projected only after a PASS."
+	]
+}
