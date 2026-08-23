@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 
 import { SQL } from "bun";
 
+import { tracerIds } from "../../../fixtures/collaboration/tracer/constants";
 import {
 	CleanupStack,
 	eventually,
@@ -77,14 +78,23 @@ async function startHost(
 	return Object.freeze({ child, port: Number(ready.port) });
 }
 
-async function report(port: number): Promise<string | null> {
+type TracerReport = Readonly<{
+	phase?: unknown;
+	whoami?: Readonly<{
+		principal?: Readonly<{ id?: unknown; kind?: unknown }>;
+	}>;
+}>;
+
+async function report(port: number): Promise<TracerReport | null> {
 	try {
 		const response = await fetch(
 			`http://127.0.0.1:${port}/__questpie_tracer/report`,
 		);
 		if (!response.ok) return null;
-		const body = (await response.json()) as Readonly<{ phase?: unknown }>;
-		return typeof body.phase === "string" ? body.phase : null;
+		const body = (await response.json()) as unknown;
+		return body && typeof body === "object" && !Array.isArray(body)
+			? (body as TracerReport)
+			: null;
 	} catch {
 		return null;
 	}
@@ -120,9 +130,62 @@ postgresTest(
 
 			const first = await startHost(temporary, 0, true);
 			cleanup.defer(() => stop(first.child, "SIGKILL"));
+			const origin = `http://127.0.0.1:${first.port}`;
+			const ordinaryDocument = await fetch(`${origin}/`);
+			expect(ordinaryDocument.headers.get("set-cookie")).toBeNull();
+
+			const missingCredential = await fetch(`${origin}/api/whoami`);
+			expect(missingCredential.status).toBe(401);
+			expect(missingCredential.headers.get("cache-control")).toBe("no-store");
+
+			const issuedDocument = await fetch(`${origin}/?credential=demo-cookie`);
+			const issuedCookie = issuedDocument.headers
+				.get("set-cookie")
+				?.split(";", 1)[0];
+			expect(issuedCookie).toMatch(/^questpie_tracer_session=[a-f0-9]{32}$/);
+
+			const duplicateCredential = await fetch(`${origin}/api/whoami`, {
+				headers: { cookie: `${issuedCookie}; ${issuedCookie}` },
+			});
+			expect(duplicateCredential.status).toBe(401);
+
+			const malformedCredential = await fetch(`${origin}/api/whoami`, {
+				headers: { cookie: "questpie_tracer_session" },
+			});
+			expect(malformedCredential.status).toBe(401);
+
+			const wrongCredential = await fetch(`${origin}/api/whoami`, {
+				headers: { cookie: "questpie_tracer_session=wrong" },
+			});
+			expect(wrongCredential.status).toBe(401);
+
+			const recognizedCredential = await fetch(`${origin}/api/whoami`, {
+				headers: { cookie: `unrelated=value; ${issuedCookie}` },
+			});
+			expect(recognizedCredential.status).toBe(200);
+			expect(recognizedCredential.headers.get("cache-control")).toBe(
+				"no-store",
+			);
+			expect(recognizedCredential.headers.get("vary")).toBe("Cookie");
+			expect(await recognizedCredential.json()).toEqual({
+				principal: { id: tracerIds.principal, kind: "user" },
+			});
+
+			const wrongMethod = await fetch(`${origin}/api/whoami`, {
+				method: "POST",
+			});
+			expect(wrongMethod.status).toBe(405);
+			expect(wrongMethod.headers.get("allow")).toBe("GET");
+			expect(wrongMethod.headers.get("cache-control")).toBe("no-store");
+
 			const profile = join(temporary, "firefox-profile");
 			await mkdir(profile);
 			const body = `browser restart ${crypto.randomUUID()}`;
+			const browserUrl = new URL(`http://127.0.0.1:${first.port}/`);
+			browserUrl.searchParams.set("body", body);
+			// Fixture-only login surrogate: the document response sets the demo
+			// cookie that Firefox sends to /api/whoami.
+			browserUrl.searchParams.set("credential", "demo-cookie");
 			const browser = Bun.spawn(
 				[
 					"/usr/bin/firefox",
@@ -130,7 +193,7 @@ postgresTest(
 					"--no-remote",
 					"--profile",
 					profile,
-					`http://127.0.0.1:${first.port}/?body=${encodeURIComponent(body)}`,
+					browserUrl.toString(),
 				],
 				{
 					env: { ...process.env, MOZ_HEADLESS: "1" },
@@ -143,12 +206,32 @@ postgresTest(
 
 			expect(
 				await eventually(() => report(first.port), {
-					accept: (phase) => phase === "mutation-observed",
+					accept: (current) =>
+						current?.whoami?.principal?.kind === "user" &&
+						current.whoami.principal.id === tracerIds.principal,
+					description: "browser demo cookie recognized through /api/whoami",
+					intervalMilliseconds: 50,
+					timeoutMilliseconds: 30_000,
+				}),
+			).toMatchObject({
+				whoami: {
+					principal: { id: tracerIds.principal, kind: "user" },
+				},
+			});
+
+			expect(
+				await eventually(() => report(first.port), {
+					accept: (current) => current?.phase === "mutation-observed",
 					description: "browser-observed committed Mutation",
 					intervalMilliseconds: 50,
 					timeoutMilliseconds: 30_000,
 				}),
-			).toBe("mutation-observed");
+			).toMatchObject({
+				phase: "mutation-observed",
+				whoami: {
+					principal: { id: tracerIds.principal, kind: "user" },
+				},
+			});
 
 			await stop(first.child, "SIGKILL");
 			const recovered = await startHost(temporary, first.port, false);
@@ -156,12 +239,17 @@ postgresTest(
 
 			expect(
 				await eventually(() => report(recovered.port), {
-					accept: (phase) => phase === "recovered",
+					accept: (current) => current?.phase === "recovered",
 					description: "browser Live Query reconnect",
 					intervalMilliseconds: 50,
 					timeoutMilliseconds: 30_000,
 				}),
-			).toBe("recovered");
+			).toMatchObject({
+				phase: "recovered",
+				whoami: {
+					principal: { id: tracerIds.principal, kind: "user" },
+				},
+			});
 
 			const terminal = await eventually(
 				async () => {
