@@ -415,6 +415,8 @@ test("preserves typed Route execution failures and propagates request cancellati
 });
 
 test("projects decoded Route params and enforces body and duration limits", async () => {
+	let releaseLateHandler!: () => void;
+	let releaseStreamPull!: () => void;
 	const context = defineContext({
 		name: "route.limit-context",
 		input: codec.object({ companyId: codec.uuid() }),
@@ -447,17 +449,62 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 				credentials: "none",
 				admission: "public",
 				limits: { bodyBytes: 0, durationMs: 1 },
-				execute: ({ ctx }) =>
-					new Promise<Response>((_resolve, reject) => {
+				execute: ({ ctx }) => {
+					void new Promise<void>((resolve) => {
 						expect(ctx.deadline).toBeGreaterThan(Date.now() - 10);
-						ctx.signal.addEventListener(
-							"abort",
-							() => reject(ctx.signal.reason),
-							{
-								once: true,
-							},
-						);
-					}),
+						ctx.signal.addEventListener("abort", () => resolve(), {
+							once: true,
+						});
+					});
+					return new Promise<Response>((resolve) => {
+						releaseLateHandler = () => resolve(new Response("too late"));
+					});
+				},
+			},
+			{
+				identity: "route:limits.exact",
+				method: "GET",
+				path: "/assets",
+				credentials: "none",
+				admission: "public",
+				execute: () => new Response("exact"),
+			},
+			{
+				identity: "route:limits.wildcard",
+				method: "GET",
+				path: "/assets/*rest",
+				credentials: "none",
+				admission: "public",
+				execute: ({ ctx }) => new Response(`wildcard:${ctx.params.rest}`),
+			},
+			{
+				identity: "route:limits.stream",
+				method: "GET",
+				path: "/stream-deadline",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 0, durationMs: 1 },
+				execute: () =>
+					new Response(
+						new ReadableStream({
+							pull: (controller) =>
+								new Promise<void>((resolve) => {
+									releaseStreamPull = () => {
+										void controller;
+										resolve();
+									};
+								}),
+						}),
+					),
+			},
+			{
+				identity: "route:limits.ignored-body",
+				method: "POST",
+				path: "/ignored-body",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 4, durationMs: 1_000 },
+				execute: () => new Response(null, { status: 204 }),
 			},
 		],
 	});
@@ -482,11 +529,46 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 	expect(await tooLarge!.json()).toEqual({
 		error: { code: "RESOURCE_LIMIT", retryable: false },
 	});
+	const ignoredBody = await routes.fetch(
+		new Request("https://app.test/ignored-body", {
+			method: "POST",
+			body: new ReadableStream({
+				start(controller) {
+					controller.enqueue(new TextEncoder().encode("large"));
+					controller.close();
+				},
+			}),
+			duplex: "half",
+		} as RequestInit),
+	);
+	expect(ignoredBody!.status).toBe(413);
 	const expired = await routes.fetch(new Request("https://app.test/deadline"));
 	expect(expired!.status).toBe(429);
 	expect(await expired!.json()).toEqual({
 		error: { code: "RESOURCE_LIMIT", retryable: true },
 	});
+	releaseLateHandler();
+	expect(
+		await (await routes.fetch(new Request("https://app.test/assets")))!.text(),
+	).toBe("exact");
+	expect(
+		await (await routes.fetch(
+			new Request("https://app.test/assets/icons/logo"),
+		))!.text(),
+	).toBe("wildcard:icons/logo");
+	const streamed = await routes.fetch(
+		new Request("https://app.test/stream-deadline"),
+	);
+	await expect(streamed!.text()).rejects.toMatchObject({
+		name: "RouteResourceLimitError",
+	});
+	releaseStreamPull();
+	await expect(
+		routes.direct("route:limits.exact", {
+			request: new Request("https://app.test/assets", { method: "POST" }),
+			execution: { principal: principal.anonymous() },
+		}),
+	).rejects.toThrow("method does not match");
 	await runtime.close();
 });
 

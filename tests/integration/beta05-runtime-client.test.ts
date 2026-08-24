@@ -19,7 +19,7 @@ import {
 	type ExecutionEventV1,
 } from "../../packages/runtime/src/application";
 import type { MutationInvoker } from "../../packages/runtime/src/mutation";
-import { CommittedResultUnavailable } from "../../packages/runtime/src/operation/committed-result-unavailable";
+import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,

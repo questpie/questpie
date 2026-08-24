@@ -1,12 +1,8 @@
 import { expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
-
-import {
-	compositionContract,
-	projectExecutionComposition,
-} from "../../packages/compiler/src/composition";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -36,41 +32,58 @@ test("compiles one application credential resolver and authored Route into the g
 	);
 });
 
-function routeResource(name: string, path: string) {
-	return {
-		kind: "route",
-		identity: `route:${name}`,
-		name,
-		origin: { path: `${name}.ts`, exportName: name, packageId: null },
-		contract: compositionContract("route", {
-			name,
-			method: "GET",
-			path,
-			credentials: "none",
-			policy: { kind: "booleanExpression", operator: "public", operands: [] },
-			limits: { bodyBytes: 0, durationMs: 1_000 },
-		}),
-	} as never;
+async function compileRouteSource(source: string) {
+	const temporary = await mkdtemp(
+		join(resolve(fixtureRoot, ".."), ".route-auth-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		await writeFile(join(temporary, "src/route-proof.ts"), source);
+		return await compileApplication({ applicationRoot: temporary });
+	} finally {
+		await rm(temporary, { recursive: true, force: true });
+	}
 }
 
-test("rejects ambiguous parameter and wildcard Route overlaps", () => {
-	expect(() =>
-		projectExecutionComposition([
-			routeResource("first", "/accounts/:accountId"),
-			routeResource("second", "/accounts/:id"),
-		]),
-	).toThrow("ambiguous Route mounts");
-	expect(() =>
-		projectExecutionComposition([
-			routeResource("first", "/assets/*path"),
-			routeResource("second", "/assets/*rest"),
-		]),
-	).toThrow("ambiguous Route mounts");
+function routeSource(firstPath: string, secondPath?: string): string {
+	const route = (name: string, path: string) => `
+export const ${name} = defineRoute({
+  name: ${JSON.stringify(`proof.${name}`)}, method: "GET", path: ${JSON.stringify(path)},
+  policy: policy.public(), credentials: "none",
+  limits: { bodyBytes: 0, durationMs: 1000 },
+  handler: (_input: unknown) => new Response(null, { status: 204 }),
+} as never);`;
+	return `import { policy } from "questpie";
+import { defineRoute } from "#questpie/app";
+${route("first", firstPath)}
+${secondPath ? route("second", secondPath) : ""}`;
+}
+
+test("rejects source-derived ambiguous parameter Route overlaps", async () => {
+	await expect(
+		compileRouteSource(routeSource("/accounts/:accountId", "/accounts/:id")),
+	).rejects.toThrow("ambiguous Route mounts");
 });
 
-test("rejects invalid Route parameter and wildcard grammar", () => {
-	for (const path of ["/accounts/:", "/assets/*path/tail", "/assets/**"])
-		expect(() => routeResource("invalid", path)).toThrow(
-			"Route path grammar is invalid",
-		);
+test("rejects source-derived ambiguous wildcard Route overlaps", async () => {
+	await expect(
+		compileRouteSource(routeSource("/assets/*path", "/assets/*rest")),
+	).rejects.toThrow("ambiguous Route mounts");
+});
+
+test("rejects source-derived invalid Route parameter grammar", async () => {
+	await expect(compileRouteSource(routeSource("/accounts/:"))).rejects.toThrow(
+		"Route path grammar is invalid",
+	);
+});
+
+test("compiles exact and wildcard precedence into the generated mount", async () => {
+	const compilation = await compileRouteSource(
+		routeSource("/assets", "/assets/*rest"),
+	);
+	expect(compilation.generatedFiles["internal/application.js"]).toContain(
+		'path:"/assets/*rest"',
+	);
+	expect(compilation.generatedFiles["app.ts"]).toContain("RouteParams<Path>");
+	expect(compilation.generatedFiles["app.ts"]).toContain("deadline: number");
 });

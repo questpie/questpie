@@ -171,22 +171,30 @@ function matchRoutePath(
 	return index === values.length ? Object.freeze(params) : null;
 }
 
-function routeSpecificity(segments: readonly RoutePathSegment[]): string {
-	return segments
-		.map((segment) =>
-			segment.kind === "literal"
-				? "2"
+function compareRouteSpecificity(
+	left: readonly RoutePathSegment[],
+	right: readonly RoutePathSegment[],
+): number {
+	const rank = (segment: RoutePathSegment | undefined): number =>
+		segment === undefined
+			? 1
+			: segment.kind === "literal"
+				? 3
 				: segment.kind === "parameter"
-					? "1"
-					: "0",
-		)
-		.join("");
+					? 2
+					: 0;
+	for (let index = 0; index <= Math.max(left.length, right.length); index++) {
+		const compared = rank(right[index]) - rank(left[index]);
+		if (compared !== 0) return compared;
+	}
+	return 0;
 }
 
-function boundedRouteRequest(
+async function boundedRouteRequest(
 	request: Request,
 	limit: number,
-): Readonly<{ request: Request; exceeded(): boolean }> {
+	signal: AbortSignal,
+): Promise<Request> {
 	const contentLength = request.headers.get("content-length");
 	if (
 		contentLength !== null &&
@@ -194,32 +202,101 @@ function boundedRouteRequest(
 		Number(contentLength) > limit
 	)
 		throw new RouteResourceLimitError(413);
-	if (!request.body) return { request, exceeded: () => false };
+	if (!request.body) return new Request(request, { signal });
 	const reader = request.body.getReader();
-	let bytes = 0;
-	let exceeded = false;
-	const body = new ReadableStream<Uint8Array>({
-		async pull(controller) {
-			const next = await reader.read();
-			if (next.done) {
-				controller.close();
-				return;
-			}
-			bytes += next.value.byteLength;
-			if (bytes > limit) {
-				exceeded = true;
-				await reader.cancel(new RouteResourceLimitError(413));
-				controller.error(new RouteResourceLimitError(413));
-				return;
-			}
-			controller.enqueue(next.value);
-		},
-		cancel: (reason) => reader.cancel(reason),
-	});
-	return {
-		request: new Request(request, { body, duplex: "half" } as RequestInit),
-		exceeded: () => exceeded,
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	let rejectAbort!: (reason: unknown) => void;
+	const onAbort = () => {
+		void reader.cancel(signal.reason).catch(() => undefined);
+		rejectAbort(signal.reason);
 	};
+	const aborted = new Promise<never>((_resolve, reject) => {
+		rejectAbort = reject;
+		if (signal.aborted) onAbort();
+		else signal.addEventListener("abort", onAbort, { once: true });
+	});
+	try {
+		for (;;) {
+			const next = await Promise.race([reader.read(), aborted]);
+			if (next.done) break;
+			total += next.value.byteLength;
+			if (total > limit) {
+				void reader
+					.cancel(new RouteResourceLimitError(413))
+					.catch(() => undefined);
+				throw new RouteResourceLimitError(413);
+			}
+			chunks.push(next.value);
+		}
+	} finally {
+		signal.removeEventListener("abort", onAbort);
+	}
+	const body = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		body.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return new Request(request, {
+		body,
+		duplex: "half",
+		signal,
+	} as RequestInit);
+}
+
+function retainRouteControl(
+	response: Response,
+	signal: AbortSignal,
+	finalize: () => void,
+): Response {
+	if (!response.body) {
+		finalize();
+		return response;
+	}
+	const reader = response.body.getReader();
+	let output: ReadableStreamDefaultController<Uint8Array> | undefined;
+	const onAbort = () => {
+		void reader.cancel(signal.reason).catch(() => undefined);
+		output?.error(signal.reason);
+		finalize();
+	};
+	if (signal.aborted) onAbort();
+	else signal.addEventListener("abort", onAbort, { once: true });
+	const body = new ReadableStream<Uint8Array>({
+		start(controller) {
+			output = controller;
+		},
+		async pull(controller) {
+			try {
+				const next = await reader.read();
+				if (!next.done) {
+					controller.enqueue(next.value);
+					return;
+				}
+				finalize();
+				signal.removeEventListener("abort", onAbort);
+				controller.close();
+			} catch (error) {
+				finalize();
+				signal.removeEventListener("abort", onAbort);
+				controller.error(error);
+			}
+		},
+		async cancel(reason) {
+			try {
+				await reader.cancel(reason);
+			} finally {
+				finalize();
+				signal.removeEventListener("abort", onAbort);
+			}
+		},
+	});
+	return new Response(body, {
+		headers: response.headers,
+		status: response.status,
+		statusText: response.statusText,
+	});
 }
 
 export function createRuntimeRouteExecutor<
@@ -246,10 +323,11 @@ export function createRuntimeRouteExecutor<
 			return Object.freeze({
 				...binding,
 				segments,
-				specificity: routeSpecificity(segments),
 			});
 		})
-		.sort((left, right) => right.specificity.localeCompare(left.specificity));
+		.sort((left, right) =>
+			compareRouteSpecificity(left.segments, right.segments),
+		);
 	const byIdentity = new Map(
 		bindings.map((binding) => [binding.identity, binding]),
 	);
@@ -285,37 +363,56 @@ export function createRuntimeRouteExecutor<
 			bodyBytes: Number.MAX_SAFE_INTEGER,
 			durationMs: Number.MAX_SAFE_INTEGER,
 		};
-		const deadline = Date.now() + limits.durationMs;
+		const deadline = binding.limits
+			? Date.now() + limits.durationMs
+			: Number.MAX_SAFE_INTEGER;
 		const controller = new AbortController();
 		const onAbort = () => controller.abort(request.signal.reason);
 		if (request.signal.aborted) onAbort();
 		else request.signal.addEventListener("abort", onAbort, { once: true });
-		const timer = setTimeout(
-			() => controller.abort(new RouteResourceLimitError(429)),
-			Math.min(limits.durationMs, 2_147_483_647),
-		);
-		const bounded = boundedRouteRequest(
-			new Request(request, { signal: controller.signal }),
+		const timer = binding.limits
+			? setTimeout(
+					() => controller.abort(new RouteResourceLimitError(429)),
+					limits.durationMs,
+				)
+			: undefined;
+		const finalize = () => {
+			if (timer !== undefined) clearTimeout(timer);
+			request.signal.removeEventListener("abort", onAbort);
+		};
+		const bounded = await boundedRouteRequest(
+			request,
 			limits.bodyBytes,
+			controller.signal,
 		);
+		const aborted = new Promise<never>((_resolve, reject) => {
+			const rejectAbort = () => reject(controller.signal.reason);
+			if (controller.signal.aborted) rejectAbort();
+			else
+				controller.signal.addEventListener("abort", rejectAbort, {
+					once: true,
+				});
+		});
 		try {
-			return await input.runtime.route(
+			const pending = input.runtime.route(
 				{ principal: caller, signal: controller.signal, deadline },
 				async (scope) => {
 					const projected = await input.project(scope);
 					const response = await binding.execute({
-						request: bounded.request,
+						request: bounded,
 						ctx: Object.freeze({ ...projected, params, deadline }),
 					});
-					if (bounded.exceeded()) throw new RouteResourceLimitError(413);
 					if (!(response instanceof Response))
 						throw new TypeError("Route handler must return a Response");
 					return response;
 				},
 			);
-		} finally {
-			clearTimeout(timer);
-			request.signal.removeEventListener("abort", onAbort);
+			void pending.catch(() => undefined);
+			const response = await Promise.race([pending, aborted]);
+			return retainRouteControl(response, controller.signal, finalize);
+		} catch (error) {
+			finalize();
+			throw error;
 		}
 	};
 
@@ -392,6 +489,10 @@ export function createRuntimeRouteExecutor<
 			if (!params)
 				return Promise.reject(
 					new TypeError("Direct Route request path does not match"),
+				);
+			if (routeInput.request.method !== binding.method)
+				return Promise.reject(
+					new TypeError("Direct Route request method does not match"),
 				);
 			return execute(
 				binding,

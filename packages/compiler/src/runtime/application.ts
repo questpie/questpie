@@ -131,6 +131,22 @@ function applicationEntry(
 			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
 		})
 		.join(",\n");
+	const routeServiceEntries = input.resources
+		.filter((resource) => resource.kind === "service")
+		.sort((left, right) => compareAscii(left.identity, right.identity))
+		.map((resource) => {
+			const slot = input.slots.find(
+				(candidate) =>
+					candidate.kind === "service" &&
+					candidate.identity === resource.identity,
+			);
+			if (!slot)
+				throw new TypeError(
+					`Runtime Application lacks Service slot ${resource.identity}`,
+				);
+			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
+		})
+		.join(",\n");
 	const credentialResolver = input.resources.find(
 		(resource) => resource.kind === "credentialResolver",
 	);
@@ -488,7 +504,7 @@ export async function createApplication(input) {
 			${credentialResolverDefinition ? `credentials: { service: ${credentialResolverDefinition}.service, resolve: ${credentialResolverDefinition}.resolve },` : ""}
 			project: async ({ principal, service, signal, execution }) => Object.freeze({
 				principal,
-				services: Object.freeze({${applicationServiceEntries}}),
+				services: Object.freeze({${routeServiceEntries}}),
 				signal,
 				execution: (root, use) => execution(root, ({ execution: facts, ...operations }) => use(Object.freeze({
 					...facts,
