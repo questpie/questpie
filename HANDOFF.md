@@ -60,7 +60,7 @@ The first browser skeleton is established at
 `tests/integration/postgres/collaboration-walking-skeleton.test.ts`:
 
 ```text
-compile -> migrate -> seed -> start -> browser Query
+compile -> migrate -> seed -> generated direct Action -> start -> browser Query
         -> Mutation -> Live Query -> committed Reaction
         -> hard restart -> reconnect -> recovered Reaction
 ```
@@ -186,9 +186,14 @@ accepted Effect Identity, enforces semantic limits and Policy/deadline ordering,
 and terminally owns one execution-lifetime external-Service dependency graph.
 The graph is validated transitively before Service work; application-lifetime
 Services remain ordinary/Route Runtime ownership rather than Action capability.
-Compiler normalization, generated Policy/context projection and the direct
-tracer are now the active Action boundary, followed by the exact Wire v3 client
-and network adapter. Never hide Effect Identity in domain input, alias Mutation
+The generated direct Action boundary is integrated through `0cdfa8d5`:
+compiler normalization, exact executable/artifact binding, nested frozen
+null-prototype server Operation maps, generated Policy/context projection and
+the public direct caller all delegate to the one private Runtime owner. The
+collaboration tracer executes the authored external-Service Action before the
+existing PostgreSQL/Firefox journey and proves stable Effect Identity without
+coalescing or retry. Exact Wire v3 client/server transport is now the active
+Action boundary. Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
@@ -221,7 +226,7 @@ architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
 validation, and `git diff --check`. The release dry-run is retry-stable at the
 accepted package checksum
-`206d8641f2dce30a20b94c7588fdf1c56e91677b6aab0f997e6339becff20fe3`;
+`51df12dd081b557f545aa09635ee8eb0b0728dde6a46519b94ac7bd522aa9ac8`;
 the declaration checksum is
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
@@ -375,34 +380,43 @@ Spec reviews pass after hostiles closed pre-Policy clock disclosure, host-timer
 overflow, non-cooperative cleanup and direct or transitive application-Service
 escape.
 
-The final compiler-derived refresh changes only two hashed internal bundle
-chunk identities, `internal/application.js`, its aggregate checksum, and
-`runtime-build.json`; schema, migrations, Operation Wire, runtime executable
-inventory, Policy, Service, and public declarations remain unchanged. The
-generated relocation tracer passes with 25 assertions. A full Bun load exposed
-and closed one test-only Action type-fixture execution leak while preserving its
-negative type proof. The isolated PostgreSQL 17 plus Firefox walking skeleton
-passes with 26 assertions and its disposable container, port, and schemas are
-removed. `quality:full`, `quality:release`, architecture, all workspace and
-focused Action typechecks, release dry-run, and `git diff --check` pass at this
-closure.
+The generated direct Action Product boundary is integrated through `0cdfa8d5`.
+The compiler emits one exact Action contract and executable slot, retains
+Operation Wire v2 and its client bytes, and projects nested server Query,
+Mutation and Action maps as frozen null-prototype objects. Same-kind
+leaf/namespace collisions report both Origins and the absent namespace or
+Augmentation authority; unsafe and noncanonical names fail before generation.
+The generated Action owns only execution-lifetime external Services whose full
+dependency closure is execution-owned, and delegates Policy, Effect Identity,
+semantic limits, cancellation and cleanup to the one Runtime Action executor.
+The serialized compiler tracer passes with 13 assertions. The isolated
+PostgreSQL 17 plus Firefox walking skeleton passes with 109 assertions across
+generated direct Action, Query, Mutation, Live Query and restart recovery; its
+container, port and generated fixture output are removed. Archive portability
+records three current local samples and derives a 4-second compile budget plus
+a 2 MiB generated-byte budget; the selected-PR manifest is executable-bound to
+the same values. `quality:full`, `quality:release`, package relocation, release
+dry-run, architecture, workspace and focused Action typechecks, and
+`git diff --check` pass. Independent Standards and Spec re-reviews return PASS.
 
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Start one failing generated direct/network Action tracer. Land compiler
-   normalization, exact executable/artifact binding, generated Policy/context
-   projection and the public direct caller through the integrated private
-   Runtime owner until the direct leg is green. Then carry the same tracer
-   through exact Wire v3 client/server transport and close browser, artifact and
-   release evidence. Preserve the accepted no-retry and ambiguity semantics
-   throughout.
-3. Continue PB-05 by closing the finite internal statement, lock and
-   idle-in-transaction evidence required by the operational profile, then
-   perform the atomic one-Pool ownership flip in its own serialized boundary.
-   Preserve the measured owner paths as provisional evidence; do not derive
-   public ceilings or overlap the flip with generated/release work.
+2. Carry the integrated generated direct Action tracer through exact Operation
+   Wire v3 client/server transport. Reuse the same generated identity-to-direct
+   executor adapter; close retained v1/v2 compatibility, zero-work
+   `CLIENT_OUTDATED`, all eight post-dispatch ambiguity families, recursive
+   nondisclosure, browser, artifact and release evidence. Preserve the accepted
+   one-transport-call, zero-retry semantics throughout.
+3. Continue PB-05 by collecting the digest-bound local per-statement, lock and
+   idle-in-transaction evidence required by the operational profile. Exact
+   finite defaults and the atomic one-Pool ownership flip remain blocked until
+   the same fixed matrix runs on the selected managed PostgreSQL target, or the
+   authority explicitly relaxes that requirement. Preserve all current owner
+   paths as provisional evidence; do not reuse instrumentation controls as
+   defaults, derive public ceilings, or overlap this lane with generated/release
+   work.
 4. Keep independent Standards and Spec reviews on each Action and PB-05
    integration boundary. The accepted Effect/Wire proof is immutable evidence;
    ordinary production projection now follows tracer-led TDD rather than a new
