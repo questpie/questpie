@@ -2,18 +2,24 @@ import { beforeAll, expect, test } from "bun:test";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { codec, durable, operation, policy, principal } from "questpie";
+import {
+	codec,
+	defineCredentialResolver,
+	defineService,
+	durable,
+	operation,
+	policy,
+	principal,
+} from "questpie";
 
 import { compileApplication } from "@questpie/compiler";
 
 import {
 	createRuntimeApplication,
 	type ExecutionEventV1,
-} from "../../packages/runtime/src";
-import {
-	CommittedResultUnavailable,
-	type MutationInvoker,
-} from "../../packages/runtime/src/mutation";
+} from "../../packages/runtime/src/application";
+import type { MutationInvoker } from "../../packages/runtime/src/mutation";
+import { CommittedResultUnavailable } from "../../packages/runtime/src/operation/committed-result-unavailable";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -28,7 +34,14 @@ const messageId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61c1";
 type GeneratedCompilation = Awaited<ReturnType<typeof compileApplication>>;
 type RuntimeSlot = Readonly<{
 	identity: string;
-	kind: "context" | "mutation" | "query" | "reaction" | "service";
+	kind:
+		| "context"
+		| "credentialResolver"
+		| "mutation"
+		| "query"
+		| "reaction"
+		| "route"
+		| "service";
 	slot: "create" | "dispose" | "handler" | "resolve";
 	runtimeGraphDigest: string;
 	bundleExport: string;
@@ -65,6 +78,9 @@ let recordDelivery: Definition;
 let messagePublished: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
+let applicationCredentials: Definition;
+let demoAuth: Definition;
+let whoami: Definition;
 
 type QueryInput = Readonly<{
 	channelId: string;
@@ -117,6 +133,26 @@ beforeAll(async () => {
 	auditConnection = execution.auditConnection;
 	executionAudit = execution.executionAudit;
 	auditReader = audit.auditReader;
+	demoAuth = defineService({
+		name: "collaboration.demo-auth",
+		lifetime: "application",
+		effect: "external",
+		create: () => Object.freeze({}),
+	});
+	applicationCredentials = defineCredentialResolver({
+		name: "collaboration.credentials",
+		service: demoAuth as never,
+		resolve: () => ({ kind: "anonymous" }),
+	});
+	whoami = generatedApp.defineRoute({
+		name: "collaboration.whoami",
+		method: "GET",
+		path: "/api/whoami",
+		policy: policy.authenticated(),
+		credentials: "application",
+		limits: { bodyBytes: 0, durationMs: 1_000 },
+		handler: () => new Response(null, { status: 204 }),
+	});
 	channelMessagePage = structural.channelMessagePage;
 	publishMessage = generatedApp.defineMutation({
 		name: "message.publish",
@@ -244,10 +280,13 @@ beforeAll(async () => {
 function definitions(): ReadonlyMap<string, Definition> {
 	return new Map([
 		["context:app.context", collaborationContext],
+		["credentialResolver:collaboration.credentials", applicationCredentials],
 		["mutation:message.publish", publishMessage],
 		["mutation:message.recordDelivery", recordDelivery],
 		["query:messages.page", messagePage],
 		["reaction:messagePublished", messagePublished],
+		["route:collaboration.whoami", whoami],
+		["service:collaboration.demo-auth", demoAuth],
 		["service:audit.connection", auditConnection],
 		["service:audit.execution", executionAudit],
 		["service:questpie.auditReader", auditReader],
@@ -263,7 +302,8 @@ function executableBindings() {
 		const implementation =
 			slot.kind === "query" ||
 			slot.kind === "mutation" ||
-			slot.kind === "reaction"
+			slot.kind === "reaction" ||
+			slot.kind === "route"
 				? definition.handler
 				: definition[slot.slot];
 		serverExports[slot.bundleExport] = implementation;
@@ -276,7 +316,8 @@ function executableBindings() {
 			definition,
 			...(slot.kind === "query" ||
 			slot.kind === "mutation" ||
-			slot.kind === "reaction"
+			slot.kind === "reaction" ||
+			slot.kind === "route"
 				? { execute: implementation }
 				: {}),
 		});
@@ -321,7 +362,12 @@ async function runtimeHarness(
 			slots: bindings.slots as never,
 		},
 		program: {
-			services: [auditConnection, executionAudit, auditReader] as never,
+			services: [
+				demoAuth,
+				auditConnection,
+				executionAudit,
+				auditReader,
+			] as never,
 			context: collaborationContext as never,
 			bootstrap: () => ({
 				get: (async () => {

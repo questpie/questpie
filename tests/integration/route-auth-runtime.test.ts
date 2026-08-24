@@ -414,6 +414,82 @@ test("preserves typed Route execution failures and propagates request cancellati
 	await runtime.close();
 });
 
+test("projects decoded Route params and enforces body and duration limits", async () => {
+	const context = defineContext({
+		name: "route.limit-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const routes = createRuntimeRouteExecutor({
+		runtime,
+		project: ({ signal }) => ({ signal }),
+		bindings: [
+			{
+				identity: "route:limits.params",
+				method: "POST",
+				path: "/accounts/:accountId/*rest",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 4, durationMs: 1_000 },
+				execute: async ({ request, ctx }) =>
+					Response.json({ body: await request.text(), params: ctx.params }),
+			},
+			{
+				identity: "route:limits.deadline",
+				method: "GET",
+				path: "/deadline",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 0, durationMs: 1 },
+				execute: ({ ctx }) =>
+					new Promise<Response>((_resolve, reject) => {
+						expect(ctx.deadline).toBeGreaterThan(Date.now() - 10);
+						ctx.signal.addEventListener(
+							"abort",
+							() => reject(ctx.signal.reason),
+							{
+								once: true,
+							},
+						);
+					}),
+			},
+		],
+	});
+
+	const accepted = await routes.fetch(
+		new Request("https://app.test/accounts/a%20b/nested/path", {
+			method: "POST",
+			body: "four",
+		}),
+	);
+	expect(await accepted!.json()).toEqual({
+		body: "four",
+		params: { accountId: "a b", rest: "nested/path" },
+	});
+	const tooLarge = await routes.fetch(
+		new Request("https://app.test/accounts/a/path", {
+			method: "POST",
+			body: "large",
+		}),
+	);
+	expect(tooLarge!.status).toBe(413);
+	expect(await tooLarge!.json()).toEqual({
+		error: { code: "RESOURCE_LIMIT", retryable: false },
+	});
+	const expired = await routes.fetch(new Request("https://app.test/deadline"));
+	expect(expired!.status).toBe(429);
+	expect(await expired!.json()).toEqual({
+		error: { code: "RESOURCE_LIMIT", retryable: true },
+	});
+	await runtime.close();
+});
+
 test("maps Route admission before projection or handler execution", async () => {
 	let routeProjections = 0;
 	let handlerCalls = 0;

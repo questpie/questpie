@@ -1,5 +1,6 @@
 import {
 	principal,
+	type CredentialResolution,
 	type Principal,
 	type ServiceDefinition,
 	type ServiceDependencyMap,
@@ -26,10 +27,7 @@ type AnyCredentialService = ServiceDefinition<
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
-export type RuntimeCredentialOutcome =
-	| Readonly<{ kind: "anonymous" }>
-	| Readonly<{ kind: "resolved"; principal: Principal }>
-	| Readonly<{ kind: "unavailable" }>;
+export type RuntimeCredentialOutcome = CredentialResolution;
 
 export type RuntimeCredentialBinding<
 	Service extends AnyCredentialService = AnyCredentialService,
@@ -49,10 +47,15 @@ export type RuntimeRouteBinding<View> = Readonly<{
 	path: `/${string}`;
 	credentials: "application" | "none";
 	admission: OperationAdmission;
+	limits?: Readonly<{ bodyBytes: number; durationMs: number }>;
 	execute(
 		input: Readonly<{
 			request: Request;
-			ctx: View;
+			ctx: View &
+				Readonly<{
+					params: Readonly<Record<string, string>>;
+					deadline: number;
+				}>;
 		}>,
 	): MaybePromise<Response>;
 }>;
@@ -80,6 +83,12 @@ function failureResponse(
 }
 
 function executionFailureResponse(error: unknown): Response {
+	if (error instanceof RouteResourceLimitError)
+		return failureResponse(
+			"RESOURCE_LIMIT",
+			error.status === 429 ? 429 : 413,
+			error.status === 429,
+		);
 	if (error instanceof CommittedResultUnavailable)
 		return failureResponse(
 			error.code,
@@ -93,6 +102,124 @@ function executionFailureResponse(error: unknown): Response {
 			error.retryable,
 		);
 	return failureResponse("INTERNAL", 500);
+}
+
+class RouteResourceLimitError extends Error {
+	readonly status: 413 | 429;
+
+	constructor(status: 413 | 429) {
+		super("Route resource limit exceeded");
+		this.name = "RouteResourceLimitError";
+		this.status = status;
+	}
+}
+
+type RoutePathSegment =
+	| Readonly<{ kind: "literal"; value: string }>
+	| Readonly<{ kind: "parameter"; name: string }>
+	| Readonly<{ kind: "wildcard"; name: string }>;
+
+function parseRoutePath(path: string): readonly RoutePathSegment[] {
+	if (path === "/") return [];
+	return path
+		.slice(1)
+		.split("/")
+		.map((segment) =>
+			segment.startsWith(":")
+				? { kind: "parameter" as const, name: segment.slice(1) }
+				: segment.startsWith("*")
+					? {
+							kind: "wildcard" as const,
+							name: segment.slice(1) || "wildcard",
+						}
+					: { kind: "literal" as const, value: segment },
+		);
+}
+
+function matchRoutePath(
+	segments: readonly RoutePathSegment[],
+	pathname: string,
+): Readonly<Record<string, string>> | null {
+	const values = pathname === "/" ? [] : pathname.slice(1).split("/");
+	const params: Record<string, string> = {};
+	let index = 0;
+	for (const segment of segments) {
+		if (segment.kind === "wildcard") {
+			try {
+				params[segment.name] = values
+					.slice(index)
+					.map((value) => decodeURIComponent(value))
+					.join("/");
+			} catch {
+				return null;
+			}
+			return Object.freeze(params);
+		}
+		const value = values[index];
+		if (value === undefined) return null;
+		if (segment.kind === "literal") {
+			if (segment.value !== value) return null;
+		} else {
+			try {
+				params[segment.name] = decodeURIComponent(value);
+			} catch {
+				return null;
+			}
+		}
+		index += 1;
+	}
+	return index === values.length ? Object.freeze(params) : null;
+}
+
+function routeSpecificity(segments: readonly RoutePathSegment[]): string {
+	return segments
+		.map((segment) =>
+			segment.kind === "literal"
+				? "2"
+				: segment.kind === "parameter"
+					? "1"
+					: "0",
+		)
+		.join("");
+}
+
+function boundedRouteRequest(
+	request: Request,
+	limit: number,
+): Readonly<{ request: Request; exceeded(): boolean }> {
+	const contentLength = request.headers.get("content-length");
+	if (
+		contentLength !== null &&
+		/^\d+$/.test(contentLength) &&
+		Number(contentLength) > limit
+	)
+		throw new RouteResourceLimitError(413);
+	if (!request.body) return { request, exceeded: () => false };
+	const reader = request.body.getReader();
+	let bytes = 0;
+	let exceeded = false;
+	const body = new ReadableStream<Uint8Array>({
+		async pull(controller) {
+			const next = await reader.read();
+			if (next.done) {
+				controller.close();
+				return;
+			}
+			bytes += next.value.byteLength;
+			if (bytes > limit) {
+				exceeded = true;
+				await reader.cancel(new RouteResourceLimitError(413));
+				controller.error(new RouteResourceLimitError(413));
+				return;
+			}
+			controller.enqueue(next.value);
+		},
+		cancel: (reason) => reader.cancel(reason),
+	});
+	return {
+		request: new Request(request, { body, duplex: "half" } as RequestInit),
+		exceeded: () => exceeded,
+	};
 }
 
 export function createRuntimeRouteExecutor<
@@ -113,30 +240,32 @@ export function createRuntimeRouteExecutor<
 		): MaybePromise<RouteView>;
 	}>,
 ): RuntimeRouteExecutor {
-	const bindings = input.bindings.map((binding) =>
-		Object.freeze({ ...binding }),
-	);
+	const bindings = input.bindings
+		.map((binding) => {
+			const segments = parseRoutePath(binding.path);
+			return Object.freeze({
+				...binding,
+				segments,
+				specificity: routeSpecificity(segments),
+			});
+		})
+		.sort((left, right) => right.specificity.localeCompare(left.specificity));
 	const byIdentity = new Map(
 		bindings.map((binding) => [binding.identity, binding]),
 	);
-	const byMount = new Map(
-		bindings.map((binding) => [`${binding.method} ${binding.path}`, binding]),
+	const mounts = new Set(
+		bindings.map((binding) => `${binding.method} ${binding.path}`),
 	);
-	const allowedMethodsByPath = new Map<string, Set<string>>();
-	for (const binding of bindings) {
-		const methods = allowedMethodsByPath.get(binding.path) ?? new Set<string>();
-		methods.add(binding.method);
-		allowedMethodsByPath.set(binding.path, methods);
-	}
 	if (byIdentity.size !== bindings.length)
 		throw new TypeError("Runtime Route binding identity is duplicate");
-	if (byMount.size !== bindings.length)
+	if (mounts.size !== bindings.length)
 		throw new TypeError("Runtime Route binding mount is duplicate");
 
 	const execute = async (
 		binding: RuntimeRouteBinding<RouteView>,
 		request: Request,
 		caller: Principal,
+		params: Readonly<Record<string, string>>,
 	): Promise<Response> => {
 		if (!principal.is(caller))
 			throw new TypeError("Route requires a trusted Principal");
@@ -152,18 +281,42 @@ export function createRuntimeRouteExecutor<
 					: failureResponse("FORBIDDEN", 403);
 			throw error;
 		}
-		return input.runtime.route(
-			{ principal: caller, signal: request.signal },
-			async (scope) => {
-				const response = await binding.execute({
-					request,
-					ctx: await input.project(scope),
-				});
-				if (!(response instanceof Response))
-					throw new TypeError("Route handler must return a Response");
-				return response;
-			},
+		const limits = binding.limits ?? {
+			bodyBytes: Number.MAX_SAFE_INTEGER,
+			durationMs: Number.MAX_SAFE_INTEGER,
+		};
+		const deadline = Date.now() + limits.durationMs;
+		const controller = new AbortController();
+		const onAbort = () => controller.abort(request.signal.reason);
+		if (request.signal.aborted) onAbort();
+		else request.signal.addEventListener("abort", onAbort, { once: true });
+		const timer = setTimeout(
+			() => controller.abort(new RouteResourceLimitError(429)),
+			Math.min(limits.durationMs, 2_147_483_647),
 		);
+		const bounded = boundedRouteRequest(
+			new Request(request, { signal: controller.signal }),
+			limits.bodyBytes,
+		);
+		try {
+			return await input.runtime.route(
+				{ principal: caller, signal: controller.signal, deadline },
+				async (scope) => {
+					const projected = await input.project(scope);
+					const response = await binding.execute({
+						request: bounded.request,
+						ctx: Object.freeze({ ...projected, params, deadline }),
+					});
+					if (bounded.exceeded()) throw new RouteResourceLimitError(413);
+					if (!(response instanceof Response))
+						throw new TypeError("Route handler must return a Response");
+					return response;
+				},
+			);
+		} finally {
+			clearTimeout(timer);
+			request.signal.removeEventListener("abort", onAbort);
+		}
 	};
 
 	const resolveFetchPrincipal = async (
@@ -193,10 +346,18 @@ export function createRuntimeRouteExecutor<
 	return Object.freeze({
 		fetch: async (request: Request): Promise<Response | null> => {
 			const pathname = new URL(request.url).pathname;
-			const binding = byMount.get(`${request.method} ${pathname}`);
-			if (!binding) {
-				const allowed = allowedMethodsByPath.get(pathname);
-				if (!allowed) return null;
+			const matches = bindings
+				.map((binding) => ({
+					binding,
+					params: matchRoutePath(binding.segments, pathname),
+				}))
+				.filter((match) => match.params !== null);
+			const match = matches.find(
+				({ binding }) => binding.method === request.method,
+			);
+			if (!match) {
+				if (matches.length === 0) return null;
+				const allowed = new Set(matches.map(({ binding }) => binding.method));
 				return new Response(null, {
 					status: 405,
 					headers: {
@@ -205,10 +366,10 @@ export function createRuntimeRouteExecutor<
 					},
 				});
 			}
-			const caller = await resolveFetchPrincipal(binding, request);
+			const caller = await resolveFetchPrincipal(match.binding, request);
 			if (caller instanceof Response) return caller;
 			try {
-				return await execute(binding, request, caller);
+				return await execute(match.binding, request, caller, match.params!);
 			} catch (error) {
 				if (request.signal.aborted) throw request.signal.reason;
 				return executionFailureResponse(error);
@@ -224,10 +385,19 @@ export function createRuntimeRouteExecutor<
 			const binding = byIdentity.get(identity);
 			if (!binding)
 				return Promise.reject(new TypeError("Route binding not found"));
+			const params = matchRoutePath(
+				binding.segments,
+				new URL(routeInput.request.url).pathname,
+			);
+			if (!params)
+				return Promise.reject(
+					new TypeError("Direct Route request path does not match"),
+				);
 			return execute(
 				binding,
 				routeInput.request,
 				routeInput.execution.principal,
+				params,
 			);
 		},
 	});

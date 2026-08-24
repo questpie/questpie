@@ -131,6 +131,7 @@ export interface RuntimeApplication<Input, ExecutionView> {
 		input: Readonly<{
 			principal: Principal;
 			signal?: AbortSignal;
+			deadline?: number;
 		}>,
 		use: (
 			scope: RouteExecutionScope<
@@ -435,12 +436,13 @@ export async function createRuntimeApplication<
 		ContextInputOf<Context>,
 		ExecutionView
 	>["route"] = (root, use) =>
-		core.route(root, ({ principal: caller, service, signal }) =>
+		core.route(root, ({ principal: caller, service, signal, deadline }) =>
 			use(
 				Object.freeze({
 					principal: caller,
 					service,
 					signal,
+					deadline,
 					execution,
 				}),
 			),

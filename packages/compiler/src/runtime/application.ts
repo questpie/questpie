@@ -163,7 +163,7 @@ function applicationEntry(
 					`Runtime Application lacks Route slot ${resource.identity}`,
 				);
 			const definition = definitionName(slot);
-			return `Object.freeze({ identity: ${JSON.stringify(resource.identity)}, method: ${JSON.stringify(resource.contract.method)}, path: ${JSON.stringify(resource.contract.path)}, credentials: ${JSON.stringify(resource.contract.credentials)}, admission: ${JSON.stringify(resource.contract.admission)}, execute: ${definition}.handler })`;
+			return `Object.freeze({ identity: ${JSON.stringify(resource.identity)}, method: ${JSON.stringify(resource.contract.method)}, path: ${JSON.stringify(resource.contract.path)}, credentials: ${JSON.stringify(resource.contract.credentials)}, admission: ${JSON.stringify(resource.contract.admission)}, limits: ${JSON.stringify(resource.contract.limits)}, execute: ${definition}.handler })`;
 		})
 		.join(",\n");
 	const directRouteEntries = routes

@@ -31,6 +31,61 @@ function serviceIdentity(value: unknown): `service:${string}` {
 	return `service:${string(dependency.name, "Service dependency name")}`;
 }
 
+type RoutePathSegment =
+	| Readonly<{ kind: "literal"; value: string }>
+	| Readonly<{ kind: "parameter"; name: string }>
+	| Readonly<{ kind: "wildcard"; name: string }>;
+
+const routeParameterName = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function routePathSegments(path: string): readonly RoutePathSegment[] {
+	if (!path.startsWith("/") || path.includes("?") || path.includes("#"))
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			"Route path must be an absolute pathname",
+		);
+	if (path === "/") return [];
+	const rawSegments = path.slice(1).split("/");
+	if (rawSegments.some((segment) => segment.length === 0))
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			"Route path grammar is invalid",
+		);
+	return rawSegments.map((segment, index) => {
+		if (segment.startsWith(":")) {
+			const name = segment.slice(1);
+			if (!routeParameterName.test(name))
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					"Route path grammar is invalid",
+				);
+			return { kind: "parameter", name };
+		}
+		if (segment.startsWith("*")) {
+			const name = segment.slice(1) || "wildcard";
+			if (index !== rawSegments.length - 1 || !routeParameterName.test(name))
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					"Route path grammar is invalid",
+				);
+			return { kind: "wildcard", name };
+		}
+		return { kind: "literal", value: segment };
+	});
+}
+
+function routePathShape(path: string): string {
+	return routePathSegments(path)
+		.map((segment) =>
+			segment.kind === "literal" ? `/${segment.value}` : `/${segment.kind}`,
+		)
+		.join("");
+}
+
 export function compositionContract(
 	kind: string,
 	value: RecordValue,
@@ -113,12 +168,7 @@ export function compositionContract(
 				"Route method is invalid",
 			);
 		const path = string(value.path, "Route path");
-		if (!path.startsWith("/") || path.includes("?") || path.includes("#"))
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-013",
-				"structuralTypeError",
-				"Route path must be an absolute pathname",
-			);
+		routePathSegments(path);
 		const credentials = string(value.credentials, "Route credentials");
 		if (credentials !== "application" && credentials !== "none")
 			throw new CompilerDiagnosticError(
@@ -262,6 +312,7 @@ function validateRouteComposition(
 			);
 	}
 	const mounts = new Map<string, NormalizedResource>();
+	const shapes = new Map<string, NormalizedResource>();
 	for (const route of resources.filter(
 		(resource) => resource.kind === "route",
 	)) {
@@ -275,6 +326,16 @@ function validateRouteComposition(
 				{ origins: [prior.origin, route.origin] },
 			);
 		mounts.set(mount, route);
+		const shape = `${route.contract.method} ${routePathShape(String(route.contract.path))}`;
+		const ambiguous = shapes.get(shape);
+		if (ambiguous)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				`ambiguous Route mounts are owned by both ${ambiguous.identity} and ${route.identity}`,
+				{ origins: [ambiguous.origin, route.origin] },
+			);
+		shapes.set(shape, route);
 	}
 }
 

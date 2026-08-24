@@ -79,6 +79,7 @@ export interface ApplicationRuntime<Input, View> {
 		input: Readonly<{
 			principal: Principal;
 			signal?: AbortSignal;
+			deadline?: number;
 		}>,
 		use: (scope: RouteExecutionScope<Input, View>) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -88,6 +89,7 @@ export interface ApplicationRuntime<Input, View> {
 export type RouteExecutionScope<Input, View> = Readonly<{
 	principal: Principal;
 	signal: AbortSignal;
+	deadline: number | null;
 	service<Definition extends AnyService>(
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
@@ -208,7 +210,11 @@ export function createApplicationRuntime<
 			);
 		},
 		route: <Result>(
-			input: Readonly<{ principal: Principal; signal?: AbortSignal }>,
+			input: Readonly<{
+				principal: Principal;
+				signal?: AbortSignal;
+				deadline?: number;
+			}>,
 			use: (
 				scope: RouteExecutionScope<ContextInputOf<Context>, View>,
 			) => MaybePromise<Result>,
@@ -224,6 +230,7 @@ export function createApplicationRuntime<
 						Object.freeze({
 							principal: input.principal,
 							signal,
+							deadline: input.deadline ?? null,
 							service,
 							execution,
 						}),

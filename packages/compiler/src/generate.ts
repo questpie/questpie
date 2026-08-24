@@ -395,10 +395,23 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
-export type RouteContext = Readonly<{
+type RouteSegmentParams<Segment extends string> =
+	Segment extends \`:\${infer Name}\` ? Readonly<Record<Name, string>> :
+	Segment extends \`*\${infer Name}\` ? Readonly<Record<Name extends "" ? "wildcard" : Name, string>> :
+	Readonly<Record<never, never>>;
+
+export type RouteParams<Path extends string> =
+	string extends Path ? Readonly<Record<string, string>> :
+	Path extends \`\${infer Segment}/\${infer Rest}\`
+		? RouteSegmentParams<Segment> & RouteParams<Rest>
+		: RouteSegmentParams<Path>;
+
+export type RouteContext<Path extends \`/\${string}\` = \`/\${string}\`> = Readonly<{
 	principal: Principal;
+	params: RouteParams<Path>;
 	services: ExecutionServices;
 	signal: AbortSignal;
+	deadline: number;
 	execution<Result>(
 		input: ExecutionInput,
 		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
@@ -419,7 +432,7 @@ export type RouteDefinition<
 	readonly policy: Readonly<{ kind: "booleanExpression" }>;
 	readonly credentials: Credentials;
 	readonly limits: Readonly<{ bodyBytes: number; durationMs: number }>;
-	readonly handler: (input: Readonly<{ request: Request; ctx: RouteContext }>) => Response | Promise<Response>;
+	readonly handler: (input: Readonly<{ request: Request; ctx: RouteContext<Path> }>) => Response | Promise<Response>;
 }>;
 
 export type RouteFactory = <
@@ -434,7 +447,7 @@ export type RouteFactory = <
 	policy: Readonly<{ kind: "booleanExpression" }>;
 	credentials: Credentials;
 	limits: Readonly<{ bodyBytes: number; durationMs: number }>;
-	handler(input: Readonly<{ request: Request; ctx: RouteContext }>): Response | Promise<Response>;
+	handler(input: Readonly<{ request: Request; ctx: RouteContext<Path> }>): Response | Promise<Response>;
 }>) => RouteDefinition<Name, Method, Path, Credentials>;
 
 ${renderReactionDeclarations(resources, queryRuns)}
