@@ -224,7 +224,7 @@ export function createApplicationRuntime<
 					new TypeError("Route requires a trusted Principal"),
 				);
 			return services.execution(
-				{ signal: input.signal },
+				{ signal: input.signal, abortUse: true },
 				({ service, signal }) =>
 					use(
 						Object.freeze({

@@ -43,7 +43,7 @@ export interface ServiceOwner {
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
 	execution<Result>(
-		input: Readonly<{ signal?: AbortSignal }>,
+		input: Readonly<{ signal?: AbortSignal; abortUse?: boolean }>,
 		use: (scope: ExecutionScope) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
@@ -167,7 +167,7 @@ export function createServiceOwner(
 	};
 
 	const execution = async <Result>(
-		input: Readonly<{ signal?: AbortSignal }>,
+		input: Readonly<{ signal?: AbortSignal; abortUse?: boolean }>,
 		use: (scope: ExecutionScope) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> => {
 		if (state !== "open") throw new Error("Runtime is closing");
@@ -213,7 +213,7 @@ export function createServiceOwner(
 				use({
 					signal: controller.signal,
 					service: (definition) => {
-						if (controller.signal.aborted)
+						if (input.abortUse && controller.signal.aborted)
 							return Promise.reject(abortReason(controller.signal));
 						return resolveService(definition, {
 							cells,
@@ -224,19 +224,21 @@ export function createServiceOwner(
 				}),
 			);
 			void pendingUse.catch(() => undefined);
-			let rejectAbort!: (reason: unknown) => void;
-			const rejectOnAbort = () => rejectAbort(abortReason(controller.signal));
-			const aborted = new Promise<never>((_resolve, reject) => {
-				rejectAbort = reject;
-				controller.signal.addEventListener("abort", rejectOnAbort, {
-					once: true,
+			if (input.abortUse) {
+				let rejectAbort!: (reason: unknown) => void;
+				const rejectOnAbort = () => rejectAbort(abortReason(controller.signal));
+				const aborted = new Promise<never>((_resolve, reject) => {
+					rejectAbort = reject;
+					controller.signal.addEventListener("abort", rejectOnAbort, {
+						once: true,
+					});
 				});
-			});
-			try {
-				result = await Promise.race([pendingUse, aborted]);
-			} finally {
-				controller.signal.removeEventListener("abort", rejectOnAbort);
-			}
+				try {
+					result = await Promise.race([pendingUse, aborted]);
+				} finally {
+					controller.signal.removeEventListener("abort", rejectOnAbort);
+				}
+			} else result = await pendingUse;
 			controller.signal.throwIfAborted();
 		} catch (error) {
 			failed = true;

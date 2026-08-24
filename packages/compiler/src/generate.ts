@@ -373,7 +373,7 @@ export type RootExecution = Readonly<{
 	authority: Authority;
 	tenant: AppResolvedContext["tenant"];
 	values: AppResolvedContext["values"];
-	services: RouteServices;
+	services: ExecutionServices;
 	signal: AbortSignal;
 	deadline: number | null;
 }>;
@@ -420,7 +420,7 @@ export type RouteParams<Path extends string> =
 export type RouteContext<Path extends \`/\${string}\` = \`/\${string}\`> = Readonly<{
 	principal: Principal;
 	params: RouteParams<Path>;
-	services: ExecutionServices;
+	services: RouteServices;
 	signal: AbortSignal;
 	deadline: number;
 	execution<Result>(

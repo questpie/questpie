@@ -132,7 +132,10 @@ function applicationEntry(
 		})
 		.join(",\n");
 	const routeServiceEntries = input.resources
-		.filter((resource) => resource.kind === "service")
+		.filter(
+			(resource) =>
+				resource.kind === "service" && resource.origin.packageId === null,
+		)
 		.sort((left, right) => compareAscii(left.identity, right.identity))
 		.map((resource) => {
 			const slot = input.slots.find(
