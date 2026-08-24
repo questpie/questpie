@@ -4,7 +4,10 @@ import {
 	readCatalogColumns,
 	reduceCatalogTableColumns,
 } from "./catalog-reader-columns";
-import { readCatalogTableConstraintsAndIndexes } from "./catalog-reader-constraints";
+import {
+	readCatalogConstraintsAndIndexes,
+	reduceCatalogTableConstraintsAndIndexes,
+} from "./catalog-reader-constraints";
 import type { CatalogAccumulator, JsonRecord } from "./catalog-reader-types";
 import { readUnsupportedCatalogObjects } from "./catalog-reader-unsupported";
 import {
@@ -167,6 +170,10 @@ export async function readCatalogComparableInOwnedTransaction(
 				attachedTo: null,
 			});
 	const catalogColumns = await readCatalogColumns(sql, scope.applicationSchema);
+	const catalogConstraintsAndIndexes = await readCatalogConstraintsAndIndexes(
+		sql,
+		scope.applicationSchema,
+	);
 	for (const table of supportedTables) {
 		const columns = reduceCatalogTableColumns(
 			scope.applicationSchema,
@@ -174,11 +181,11 @@ export async function readCatalogComparableInOwnedTransaction(
 			catalogColumns,
 			state,
 		);
-		await readCatalogTableConstraintsAndIndexes(
-			sql,
+		reduceCatalogTableConstraintsAndIndexes(
 			scope.applicationSchema,
 			table,
 			columns,
+			catalogConstraintsAndIndexes,
 			state,
 		);
 	}
