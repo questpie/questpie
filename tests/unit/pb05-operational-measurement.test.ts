@@ -1,7 +1,13 @@
 import { expect, test } from "bun:test";
 
 import {
+	definePostgresStatement,
+	transactionBrand,
+	type PostgresTransactionRunner,
+} from "../../packages/runtime/src/postgres";
+import {
 	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
 	pb05RepresentativeOperations,
 } from "../support/pb05-operational-measurement";
 
@@ -142,4 +148,208 @@ test("measurement refuses missing inventory and malformed clocks", () => {
 		expect(() => measurement.statement(observation)).toThrow(
 			"invalid PB-05 statement observation",
 		);
+});
+
+test("transaction runner instrument records exact statements and preserves failures", async () => {
+	const statement = definePostgresStatement({
+		name: "query.representative",
+		text: "select 1",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => "decoded",
+	});
+	const failureStatement = definePostgresStatement({
+		name: "query.failure",
+		text: "select 2",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => undefined,
+	});
+	const failure = new Error("query failed");
+	const modes: unknown[] = [];
+	const database: PostgresTransactionRunner = {
+		transaction: async ({ mode, use }) => {
+			modes.push(mode);
+			return use({
+				[transactionBrand]: true,
+				execute: async (executed) => {
+					if (executed === failureStatement) throw failure;
+					return "decoded" as never;
+				},
+			});
+		},
+	};
+	const measurement = createPb05OperationalMeasurement();
+	const clock = [1, 4, 10, 15];
+	const instrumented = instrumentPb05TransactionRunner({
+		database,
+		measurement,
+		population: "query",
+		operation: "firstPage",
+		now: () => clock.shift()!,
+	});
+
+	await instrumented.transaction({
+		mode: { isolation: "repeatableRead", access: "readOnly" },
+		use: async (transaction) => {
+			await expect(transaction.execute(statement, undefined)).resolves.toBe(
+				"decoded",
+			);
+			await expect(
+				transaction.execute(failureStatement, undefined),
+			).rejects.toBe(failure);
+		},
+	});
+
+	expect(modes).toEqual([{ isolation: "repeatableRead", access: "readOnly" }]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"query:firstPage"
+		],
+	).toEqual({
+		statementExecutions: 2,
+		distinctStatements: ["query.representative", "query.failure"],
+		transactions: 1,
+		durationMs: 14,
+	});
+});
+
+test("transaction instrumentation rejects invalid config before database admission", () => {
+	let transactions = 0;
+	const database: PostgresTransactionRunner = {
+		transaction: async () => {
+			transactions += 1;
+			return undefined;
+		},
+	};
+	const measurement = createPb05OperationalMeasurement();
+
+	expect(() =>
+		instrumentPb05TransactionRunner({
+			database,
+			measurement,
+			population: "query",
+			operation: "unknown",
+		}),
+	).toThrow("invalid PB-05 instrumentation config");
+	expect(transactions).toBe(0);
+});
+
+test("transaction instrumentation refuses an invalid start clock before SQL", async () => {
+	const statement = definePostgresStatement({
+		name: "query.clock",
+		text: "select 1",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => undefined,
+	});
+	for (const now of [
+		() => Number.NaN,
+		() => {
+			throw new Error("clock unavailable");
+		},
+	]) {
+		let executions = 0;
+		const database: PostgresTransactionRunner = {
+			transaction: ({ use }) =>
+				use({
+					[transactionBrand]: true,
+					execute: async () => {
+						executions += 1;
+						return undefined as never;
+					},
+				}),
+		};
+		const instrumented = instrumentPb05TransactionRunner({
+			database,
+			measurement: createPb05OperationalMeasurement(),
+			population: "query",
+			operation: "firstPage",
+			now,
+		});
+
+		await expect(
+			instrumented.transaction({
+				mode: { isolation: "repeatableRead", access: "readOnly" },
+				use: (transaction) => transaction.execute(statement, undefined),
+			}),
+		).rejects.toThrow();
+		expect(executions).toBe(0);
+	}
+});
+
+test("observer and finish-clock failures cannot replace a database failure", async () => {
+	const statement = definePostgresStatement({
+		name: "query.primary-failure",
+		text: "select 1",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => undefined,
+	});
+	const primary = new Error("primary database failure");
+	for (const clock of [
+		[10, 5],
+		[10, new Error("finish clock failed")],
+	] as const) {
+		const values = [...clock];
+		const database: PostgresTransactionRunner = {
+			transaction: ({ use }) =>
+				use({
+					[transactionBrand]: true,
+					execute: async () => {
+						throw primary;
+					},
+				}),
+		};
+		const instrumented = instrumentPb05TransactionRunner({
+			database,
+			measurement: createPb05OperationalMeasurement(),
+			population: "query",
+			operation: "firstPage",
+			now: () => {
+				const value = values.shift();
+				if (value instanceof Error) throw value;
+				return value!;
+			},
+		});
+
+		await expect(
+			instrumented.transaction({
+				mode: { isolation: "repeatableRead", access: "readOnly" },
+				use: (transaction) => transaction.execute(statement, undefined),
+			}),
+		).rejects.toBe(primary);
+	}
+});
+
+test("observer failure after successful SQL remains visible", async () => {
+	const statement = definePostgresStatement({
+		name: "query.observer-failure",
+		text: "select 1",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => "result",
+	});
+	const database: PostgresTransactionRunner = {
+		transaction: ({ use }) =>
+			use({
+				[transactionBrand]: true,
+				execute: async () => "result" as never,
+			}),
+	};
+	const clock = [10, 5];
+	const instrumented = instrumentPb05TransactionRunner({
+		database,
+		measurement: createPb05OperationalMeasurement(),
+		population: "query",
+		operation: "firstPage",
+		now: () => clock.shift()!,
+	});
+
+	await expect(
+		instrumented.transaction({
+			mode: { isolation: "repeatableRead", access: "readOnly" },
+			use: (transaction) => transaction.execute(statement, undefined),
+		}),
+	).rejects.toThrow("invalid PB-05 statement observation");
 });

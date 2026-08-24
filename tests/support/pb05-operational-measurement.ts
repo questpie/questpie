@@ -1,3 +1,9 @@
+import {
+	transactionBrand,
+	type PostgresStatement,
+	type PostgresTransactionRunner,
+} from "../../packages/runtime/src/postgres";
+
 export const pb05RepresentativeOperations = Object.freeze({
 	readiness: Object.freeze(["startup"]),
 	context: Object.freeze(["rootBootstrap"]),
@@ -249,6 +255,72 @@ export function createPb05OperationalMeasurement() {
 						]),
 					),
 				),
+			});
+		},
+	});
+}
+
+export function instrumentPb05TransactionRunner(
+	input: Readonly<{
+		database: PostgresTransactionRunner;
+		measurement: ReturnType<typeof createPb05OperationalMeasurement>;
+		population: string;
+		operation: string;
+		now?: () => number;
+	}>,
+): PostgresTransactionRunner {
+	if (!operation(input.population, input.operation))
+		throw new TypeError("invalid PB-05 instrumentation config");
+	const now = input.now ?? performance.now.bind(performance);
+	const observationTime = (): number => {
+		const value = now();
+		if (!finiteTime(value))
+			throw new TypeError("invalid PB-05 instrumentation clock");
+		return value;
+	};
+	let transactionOrdinal = 0;
+	return Object.freeze({
+		async transaction(request) {
+			const transaction = `pb05:${input.population}:${input.operation}:${transactionOrdinal++}`;
+			return input.database.transaction({
+				...request,
+				use: (owned) =>
+					request.use({
+						[transactionBrand]: true,
+						async execute<Input, Output>(
+							statement: PostgresStatement<Input, Output>,
+							value: Input,
+						): Promise<Output> {
+							const startedAtMs = observationTime();
+							let output: Output;
+							try {
+								output = await owned.execute(statement, value);
+							} catch (primary) {
+								try {
+									input.measurement.statement({
+										population: input.population,
+										operation: input.operation,
+										name: statement.name,
+										transaction,
+										startedAtMs,
+										finishedAtMs: observationTime(),
+									});
+								} catch {
+									// Instrumentation cannot replace the database failure it observes.
+								}
+								throw primary;
+							}
+							input.measurement.statement({
+								population: input.population,
+								operation: input.operation,
+								name: statement.name,
+								transaction,
+								startedAtMs,
+								finishedAtMs: observationTime(),
+							});
+							return output;
+						},
+					}),
 			});
 		},
 	});
