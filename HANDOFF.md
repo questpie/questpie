@@ -166,10 +166,12 @@ cleanup. It deliberately exports no caller identity constructor, validation,
 derivation, compiler/client surface, or wire shape. Action limits also remain
 unimplemented: public field names, units, defaults, zero semantics, and their
 measurement boundary are unresolved. This is an internal capability kernel,
-not the complete direct Action Product surface. The next public Action boundary
-includes those limits and the focused Kernel decision for Operation Wire v3
-Effect Identity before network/client Action. Never hide Effect Identity in
-domain input or alias Mutation `callId`.
+not the complete direct Action Product surface. The focused public Action
+Kernel decision and proof are now active: they jointly own limits, caller stable
+Effect material and Runtime scoping, Operation Wire v3, explicit ambiguity,
+and direct/network parity. Public authority may be projected only after the
+deterministic proof and pinned formal acceptance pass. Never hide Effect
+Identity in domain input or alias Mutation `callId`.
 
 Ordinary Job is blocked by the PB-05 one-Pool flip and protocol v7 schema
 generalization. Do not encode Job as a Reaction intent. Cron and checkpoints
@@ -311,9 +313,10 @@ closure.
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Keep the integrated direct Action kernel internal. Stop before adding any
-   caller-facing Effect Identity spelling, validation, derivation, compiler/
-   client projection, or Operation Wire v3 surface.
+2. Complete and formally accept the focused Action Kernel proof before
+   projecting caller-facing Effect Identity, limits, compiler/client bindings,
+   or Operation Wire v3 into production. After PASS, immediately land the
+   direct/network Action Product vertical through the accepted internal kernel.
 3. Continue PB-05 only with actual Mutation-handler/realtime-apply and actual
    maintenance/reconciliation/retention owner-path measurement. Do not repeat
    the completed synthetic controls as Product evidence or project provisional
