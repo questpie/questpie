@@ -23,6 +23,10 @@ import {
 	type PostgresStatement,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const tenantId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
@@ -246,7 +250,7 @@ test("executes a fresh Mutation through one static read-committed database trans
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
 	let transactionCalls = 0;
-	const database: PostgresTransactionRunner = {
+	const unmeasured: PostgresTransactionRunner = {
 		async transaction(input) {
 			transactionCalls += 1;
 			controlSignal = input.control?.signal;
@@ -269,6 +273,13 @@ test("executes a fresh Mutation through one static read-committed database trans
 			});
 		},
 	};
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "mutation",
+		operation: "fresh",
+	});
 	const invoke = createPostgresDatabaseMutationInvoker<View>({
 		database,
 		application: "application:generic",
@@ -303,6 +314,20 @@ test("executes a fresh Mutation through one static read-committed database trans
 		"database-static-call",
 		expect.stringMatching(/^[0-9a-f]{64}$/),
 	]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"mutation:fresh"
+		],
+	).toMatchObject({
+		statementExecutions: 4,
+		distinctStatements: [
+			"mutation.receipt.claim",
+			"collection.widgets.create.authority",
+			"collection.widgets.create.write",
+			"mutation.receipt.commit",
+		],
+		transactions: 1,
+	});
 });
 
 test("refuses a malformed receipt transaction identity before the handler", async () => {
@@ -508,7 +533,7 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 	const resultBytes = new TextEncoder().encode(
 		JSON.stringify({ id: widgetId }),
 	);
-	const database: PostgresTransactionRunner = {
+	const unmeasured: PostgresTransactionRunner = {
 		transaction: (input) =>
 			input.use({
 				[transactionBrand]: true,
@@ -531,6 +556,13 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 				},
 			}),
 	};
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "mutation",
+		operation: "replay",
+	});
 	const invoke = createPostgresDatabaseMutationInvoker<View>({
 		database,
 		application: "application:generic",
@@ -548,4 +580,13 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 	});
 	expect(calls).toEqual(["mutation.receipt.claim", "mutation.receipt.read"]);
 	expect(handlerCalls).toBe(0);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"mutation:replay"
+		],
+	).toMatchObject({
+		statementExecutions: 2,
+		distinctStatements: ["mutation.receipt.claim", "mutation.receipt.read"],
+		transactions: 1,
+	});
 });
