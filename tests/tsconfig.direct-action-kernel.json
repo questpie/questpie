@@ -1,0 +1,11 @@
+{
+	"extends": "../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"strict": true,
+		"paths": {
+			"questpie": ["../packages/questpie/src/index.ts"]
+		}
+	},
+	"files": ["type/direct-action-kernel-contract.test.ts"]
+}

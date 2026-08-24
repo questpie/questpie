@@ -20,6 +20,8 @@ import { decodeOperationWireRoot } from "./wire";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
+const trustedExecutionFacts = new WeakSet<object>();
+
 export type RuntimeContextBootstrapFactory = (
 	signal: AbortSignal,
 ) => ContextBootstrap;
@@ -35,6 +37,19 @@ export type ExecutionFacts<Resolved> = Readonly<{
 	deadline: number | null;
 	liveQueryObservation: LiveQueryObservation | null;
 }>;
+
+export function isRuntimeExecutionFacts(
+	value: unknown,
+): value is ExecutionFacts<
+	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+> {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		trustedExecutionFacts.has(value) &&
+		principal.is((value as Readonly<{ principal?: unknown }>).principal),
+	);
+}
 
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
@@ -179,9 +194,14 @@ export function createApplicationRuntime<
 					deadline: input.deadline ?? null,
 					liveQueryObservation: input.liveQueryObservation ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
-				const view = await program.project({ facts, service });
-				signal.throwIfAborted();
-				return use(view);
+				trustedExecutionFacts.add(facts);
+				try {
+					const view = await program.project({ facts, service });
+					signal.throwIfAborted();
+					return await use(view);
+				} finally {
+					trustedExecutionFacts.delete(facts);
+				}
 			},
 		);
 	}
