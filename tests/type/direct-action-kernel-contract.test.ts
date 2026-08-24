@@ -72,34 +72,39 @@ function assertActionServiceProjection(
 
 void assertActionServiceProjection;
 
-declare const executor: RuntimeActionExecutor;
-declare const scope: RuntimeExecutionScope<
-	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
->;
-void executor.invoke("action:delivery.send", {
-	scope,
-	input: "hello",
-	effectKey: "provider-request",
-});
-// @ts-expect-error Ordinary Action requires caller-stable effectKey material.
-void executor.invoke("action:delivery.send", { scope, input: "hello" });
-void executor.invoke("action:delivery.send", {
-	scope,
-	input: "hello",
-	effectKey: "provider-request",
-	// @ts-expect-error Caller cannot supply the final Effect Identity alias.
-	effectId: "forged",
-});
-void executor.invoke("action:delivery.send", {
-	scope,
-	input: "hello",
-	effectKey: "provider-request",
-	callId: "direct-correlation",
-	timeoutMilliseconds: 1_000,
-});
-// @ts-expect-error callId correlates a call but cannot replace Effect material.
-void executor.invoke("action:delivery.send", {
-	scope,
-	input: "hello",
-	callId: "mutation-alias",
-});
+function actionInvocationContract(
+	executor: RuntimeActionExecutor,
+	scope: RuntimeExecutionScope<
+		Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+	>,
+): void {
+	void executor.invoke("action:delivery.send", {
+		scope,
+		input: "hello",
+		effectKey: "provider-request",
+	});
+	// @ts-expect-error Ordinary Action requires caller-stable effectKey material.
+	void executor.invoke("action:delivery.send", { scope, input: "hello" });
+	void executor.invoke("action:delivery.send", {
+		scope,
+		input: "hello",
+		effectKey: "provider-request",
+		// @ts-expect-error Caller cannot supply the final Effect Identity alias.
+		effectId: "forged",
+	});
+	void executor.invoke("action:delivery.send", {
+		scope,
+		input: "hello",
+		effectKey: "provider-request",
+		callId: "direct-correlation",
+		timeoutMilliseconds: 1_000,
+	});
+	// @ts-expect-error callId correlates a call but cannot replace Effect material.
+	void executor.invoke("action:delivery.send", {
+		scope,
+		input: "hello",
+		callId: "mutation-alias",
+	});
+}
+
+void actionInvocationContract;

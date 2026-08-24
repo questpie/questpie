@@ -14,6 +14,7 @@ export async function runtimePostgresProgramFixture() {
 	await rm(join(temporary, "src/message-publish.ts"));
 	await rm(join(temporary, "src/message-published.ts"));
 	await rm(join(temporary, "src/message-record-delivery.ts"));
+	await rm(join(temporary, "src/delivery-action.ts"));
 	try {
 		const generated = (await compileApplication({ applicationRoot: temporary }))
 			.generatedFiles;

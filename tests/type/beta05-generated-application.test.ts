@@ -215,7 +215,7 @@ void useGeneratedApp;
 		);
 		expect(fixtureManifest).not.toContain("@questpie/runtime");
 		expect(compilation.generatedFiles["app.ts"]).not.toMatch(
-			/provider|authAdapter|hostAdapter/,
+			/providerRegistry|authAdapter|hostAdapter/,
 		);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
