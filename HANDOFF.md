@@ -122,8 +122,11 @@ Remaining PB-05 work, in order:
    the database-mode Mutation, Durable kernel/effect-ledger, and trusted-
    Principal maintenance facades over one injected transaction runner. Legacy
    Bun-compatible facades remain unchanged.
-5. **Active:** add the compiler-owned database-mode readiness sibling and a
-   bundle-only completeness tracer before the ownership flip.
+5. **Readiness completed at `7961f385`; bundle tracer active:** the
+   compiler-owned database-mode sibling composes one Runtime-branded
+   repeatable-read/read-only transaction and the exact 16 prerequisite,
+   provider, catalog and change-capture descriptors. Add the bundle-only
+   completeness tracer before the ownership flip.
 6. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
    compatibility paths; never add a temporary second Pool.
@@ -321,9 +324,19 @@ composition for Mutation, Durable scheduling/claim/heartbeat/terminal/
 inspection, the Effect Ledger, and trusted-Principal maintenance. Fifty-seven
 focused tests pass with 264 assertions; Runtime typecheck and architecture pass.
 No facade constructs a Pool, and the legacy Bun-compatible implementations are
-byte-unchanged. The compiler-owned database readiness sibling and bundle
-completeness tracer remain prerequisites to the atomic generated ownership
-flip.
+byte-unchanged. The bundle completeness tracer remains the final prerequisite
+to the atomic generated ownership flip.
+
+The compiler-owned database readiness sibling is integrated at `7961f385`.
+Runtime remains the single owner of branded PostgreSQL statements and the exact
+protocol, application-binding and migration-receipt prerequisite descriptors;
+compiler composition injects those owners and adds its fixed provider, catalog,
+unsupported-object and change-capture descriptors inside one
+repeatable-read/read-only snapshot. Twenty-two post-integration tests pass with
+98 assertions; the brand/parity fixture, compiler and Runtime typechecks,
+declaration-build closure, architecture and `git diff --check` pass. The old Bun
+caller remains byte-unchanged until the atomic flip. A bundle-only completeness
+tracer is the remaining pre-flip PB-05 boundary.
 
 The direct Action pre-wire kernel is integrated at `8659ae87`, with external
 Service capability projection completed at `f04a3810`. Eleven focused Action
@@ -374,11 +387,10 @@ closure.
    through exact Wire v3 client/server transport and close browser, artifact and
    release evidence. Preserve the accepted no-retry and ambiguity semantics
    throughout.
-3. Continue PB-05 with the database-mode facade and private `bundle-core`
-   closure, followed by the compiler-owned readiness sibling and completeness
-   tracer. Preserve the measured owner paths as provisional evidence; do not
-   derive public ceilings. Do not perform the atomic one-Pool ownership flip
-   alongside generated/release work.
+3. Continue PB-05 with the bundle-only completeness tracer, then perform the
+   atomic one-Pool ownership flip in its own serialized boundary. Preserve the
+   measured owner paths as provisional evidence; do not derive public ceilings
+   or overlap the flip with generated/release work.
 4. Keep independent Standards and Spec reviews on each Action and PB-05
    integration boundary. The accepted Effect/Wire proof is immutable evidence;
    ordinary production projection now follows tracer-led TDD rather than a new
