@@ -1,0 +1,255 @@
+export const pb05RepresentativeOperations = Object.freeze({
+	readiness: Object.freeze(["startup"]),
+	context: Object.freeze(["rootBootstrap"]),
+	query: Object.freeze(["firstPage", "cursorPage"]),
+	mutation: Object.freeze(["fresh", "replay"]),
+	realtime: Object.freeze(["reconciliation", "apply", "retention"]),
+	durable: Object.freeze([
+		"claim",
+		"heartbeat",
+		"effectReserve",
+		"effectSettle",
+		"terminal",
+		"maintenance",
+	]),
+});
+
+type Population = keyof typeof pb05RepresentativeOperations;
+type ContentionOwner = "maintenance" | "reconciliation" | "retention";
+
+type StatementObservation = Readonly<{
+	population: string;
+	operation: string;
+	name: string;
+	transaction: string;
+	startedAtMs: number;
+	finishedAtMs: number;
+}>;
+
+type IdleGapObservation = Readonly<{
+	population: string;
+	operation: string;
+	phase: string;
+	startedAtMs: number;
+	finishedAtMs: number;
+}>;
+
+type ContentionObservation = Readonly<{
+	owner: string;
+	lockIdentity: string;
+	startedAtMs: number;
+	acquiredAtMs: number;
+	finishedAtMs: number;
+	outcome: "acquired" | "refused";
+}>;
+
+function finiteTime(value: number): boolean {
+	return Number.isFinite(value) && value >= 0;
+}
+
+function population(value: string): value is Population {
+	return Object.hasOwn(pb05RepresentativeOperations, value);
+}
+
+function operation(populationName: string, value: string): boolean {
+	return (
+		population(populationName) &&
+		(
+			pb05RepresentativeOperations[populationName] as readonly string[]
+		).includes(value)
+	);
+}
+
+function validStatement(value: StatementObservation): boolean {
+	return (
+		operation(value.population, value.operation) &&
+		value.name.length > 0 &&
+		value.transaction.length > 0 &&
+		finiteTime(value.startedAtMs) &&
+		finiteTime(value.finishedAtMs) &&
+		value.finishedAtMs >= value.startedAtMs
+	);
+}
+
+function validIdleGap(value: IdleGapObservation): boolean {
+	const supported =
+		(value.population === "mutation" &&
+			value.operation === "fresh" &&
+			value.phase === "handler") ||
+		(value.population === "realtime" &&
+			value.operation === "apply" &&
+			value.phase === "apply");
+	return (
+		supported &&
+		finiteTime(value.startedAtMs) &&
+		finiteTime(value.finishedAtMs) &&
+		value.finishedAtMs >= value.startedAtMs
+	);
+}
+
+function contentionOwner(value: string): value is ContentionOwner {
+	return ["maintenance", "reconciliation", "retention"].includes(value);
+}
+
+function validContention(value: ContentionObservation): boolean {
+	return (
+		contentionOwner(value.owner) &&
+		value.lockIdentity.length > 0 &&
+		finiteTime(value.startedAtMs) &&
+		finiteTime(value.acquiredAtMs) &&
+		finiteTime(value.finishedAtMs) &&
+		value.acquiredAtMs >= value.startedAtMs &&
+		value.finishedAtMs >= value.acquiredAtMs &&
+		(value.outcome === "acquired" ||
+			(value.outcome === "refused" &&
+				value.acquiredAtMs === value.finishedAtMs))
+	);
+}
+
+function emptyContention() {
+	return { samples: 0, waitMs: 0, heldMs: 0, acquired: 0 };
+}
+
+export function createPb05OperationalMeasurement() {
+	const statements: StatementObservation[] = [];
+	const idleGaps: IdleGapObservation[] = [];
+	const contention: ContentionObservation[] = [];
+
+	return Object.freeze({
+		statement(value: StatementObservation): void {
+			if (!validStatement(value))
+				throw new TypeError("invalid PB-05 statement observation");
+			statements.push(Object.freeze({ ...value }));
+		},
+		idleGap(value: IdleGapObservation): void {
+			if (!validIdleGap(value))
+				throw new TypeError("invalid PB-05 idle-gap observation");
+			idleGaps.push(Object.freeze({ ...value }));
+		},
+		contention(value: ContentionObservation): void {
+			if (!validContention(value))
+				throw new TypeError("invalid PB-05 contention observation");
+			contention.push(Object.freeze({ ...value }));
+		},
+		snapshot(options: Readonly<{ requireCompleteInventory?: boolean }> = {}) {
+			if (options.requireCompleteInventory !== false)
+				for (const [populationName, operations] of Object.entries(
+					pb05RepresentativeOperations,
+				))
+					for (const operationName of operations)
+						if (
+							!statements.some(
+								(statement) =>
+									statement.population === populationName &&
+									statement.operation === operationName,
+							)
+						)
+							throw new TypeError(
+								`missing PB-05 representative operation ${populationName}:${operationName}`,
+							);
+
+			const populations = Object.fromEntries(
+				Object.keys(pb05RepresentativeOperations).map((populationName) => {
+					const observed = statements.filter(
+						(statement) => statement.population === populationName,
+					);
+					return [
+						populationName,
+						Object.freeze({
+							statementExecutions: observed.length,
+							distinctStatements: new Set(observed.map(({ name }) => name))
+								.size,
+							transactions: new Set(
+								observed.map(({ transaction }) => transaction),
+							).size,
+						}),
+					];
+				}),
+			);
+			const operations = Object.fromEntries(
+				Object.entries(pb05RepresentativeOperations).flatMap(
+					([populationName, operationNames]) =>
+						operationNames.map((operationName) => {
+							const observed = statements.filter(
+								(statement) =>
+									statement.population === populationName &&
+									statement.operation === operationName,
+							);
+							const startedAtMs = Math.min(
+								...observed.map(({ startedAtMs }) => startedAtMs),
+							);
+							const finishedAtMs = Math.max(
+								...observed.map(({ finishedAtMs }) => finishedAtMs),
+							);
+							return [
+								`${populationName}:${operationName}`,
+								Object.freeze({
+									statementExecutions: observed.length,
+									distinctStatements: Object.freeze([
+										...new Set(observed.map(({ name }) => name)),
+									]),
+									transactions: new Set(
+										observed.map(({ transaction }) => transaction),
+									).size,
+									durationMs:
+										observed.length === 0 ? 0 : finishedAtMs - startedAtMs,
+								}),
+							];
+						}),
+				),
+			);
+			const gapSummary = Object.fromEntries(
+				[
+					...new Set(
+						idleGaps.map(
+							({ population, operation, phase }) =>
+								`${population}:${operation}:${phase}`,
+						),
+					),
+				].map((identity) => {
+					const durations = idleGaps
+						.filter(
+							({ population, operation, phase }) =>
+								`${population}:${operation}:${phase}` === identity,
+						)
+						.map(({ startedAtMs, finishedAtMs }) => finishedAtMs - startedAtMs);
+					return [
+						identity,
+						Object.freeze({
+							count: durations.length,
+							totalMs: durations.reduce((total, value) => total + value, 0),
+							maxMs: Math.max(...durations),
+						}),
+					];
+				}),
+			);
+			const contentionSummary = {
+				maintenance: emptyContention(),
+				reconciliation: emptyContention(),
+				retention: emptyContention(),
+			};
+			for (const sample of contention) {
+				const summary = contentionSummary[sample.owner as ContentionOwner];
+				summary.samples += 1;
+				summary.waitMs += sample.acquiredAtMs - sample.startedAtMs;
+				summary.heldMs += sample.finishedAtMs - sample.acquiredAtMs;
+				if (sample.outcome === "acquired") summary.acquired += 1;
+			}
+			return Object.freeze({
+				status: "PROVISIONAL_INTERNAL_EVIDENCE" as const,
+				publicCeilings: false as const,
+				populations: Object.freeze(populations),
+				operations: Object.freeze(operations),
+				idleGaps: Object.freeze(gapSummary),
+				contention: Object.freeze(
+					Object.fromEntries(
+						Object.entries(contentionSummary).map(([owner, summary]) => [
+							owner,
+							Object.freeze(summary),
+						]),
+					),
+				),
+			});
+		},
+	});
+}
