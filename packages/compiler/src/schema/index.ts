@@ -61,6 +61,7 @@ export {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	fingerprint,
+	fingerprintInOwnedTransaction,
 	inspectSchemaFingerprint,
 	providerObservations,
 } from "./postgres/fingerprint";

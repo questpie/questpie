@@ -276,10 +276,19 @@ export async function fingerprint(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<SchemaFingerprintV1> {
-	const evidence = await readOnlySnapshot(sql, async (transaction) => ({
-		observations: await providerObservations(transaction, schema),
-		comparable: await compareSchemaToCatalog(transaction, schema),
-	}));
+	return readOnlySnapshot(sql, (transaction) =>
+		fingerprintInOwnedTransaction(transaction, schema),
+	);
+}
+
+export async function fingerprintInOwnedTransaction(
+	sql: SQL,
+	schema: SchemaProjectionV1,
+): Promise<SchemaFingerprintV1> {
+	const evidence = {
+		observations: await providerObservations(sql, schema),
+		comparable: await compareSchemaToCatalog(sql, schema),
+	};
 	return {
 		format: "questpie.schema-fingerprint",
 		version: 1,

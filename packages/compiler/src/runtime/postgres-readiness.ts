@@ -1,12 +1,40 @@
 import type { SQL } from "bun";
 
 import { digest } from "../canonical";
+import { CompilerDiagnosticError } from "../diagnostic";
 import {
-	fingerprint,
+	fingerprintInOwnedTransaction,
 	type SchemaProjectionV1,
-	verifyPostgresChangeCapture,
 	verifyInternalProtocolV6,
 } from "../schema";
+
+export interface PostgresRuntimeReadinessSnapshotSql<Transaction> {
+	begin<Value>(
+		mode: "isolation level repeatable read read only",
+		use: (transaction: Transaction) => Promise<Value>,
+	): Promise<Value>;
+}
+
+export async function inPostgresRuntimeReadinessSnapshot<Transaction, Value>(
+	sql: PostgresRuntimeReadinessSnapshotSql<Transaction>,
+	use: (transaction: Transaction) => Promise<Value>,
+): Promise<Value> {
+	let diagnostic: CompilerDiagnosticError | undefined;
+	const value = await sql.begin(
+		"isolation level repeatable read read only",
+		async (transaction) => {
+			try {
+				return await use(transaction);
+			} catch (error) {
+				if (!(error instanceof CompilerDiagnosticError)) throw error;
+				diagnostic = error;
+				return undefined as Value;
+			}
+		},
+	);
+	if (diagnostic) throw diagnostic;
+	return value;
+}
 
 type RuntimeBuildReadiness = Readonly<{
 	migrationHead: string | null;
@@ -129,12 +157,30 @@ export async function verifyPostgresRuntimeReadiness(
 		expected: RuntimeBuildReadiness;
 	}>,
 ): Promise<void> {
-	await verifyInternalProtocolV6(input.sql);
 	const committed = decodeCommittedMigrations(input.committedMigrations);
 	if (committed.head !== input.expected.migrationHead)
 		throw new TypeError(
 			"committed migration head does not match Runtime Build",
 		);
+	return inPostgresRuntimeReadinessSnapshot(input.sql, (sql) =>
+		verifyPostgresRuntimeReadinessInOwnedTransaction({
+			sql,
+			schema: input.schema,
+			committed,
+			expected: input.expected,
+		}),
+	);
+}
+
+async function verifyPostgresRuntimeReadinessInOwnedTransaction(
+	input: Readonly<{
+		sql: SQL;
+		schema: SchemaProjectionV1;
+		committed: CommittedMigrations;
+		expected: RuntimeBuildReadiness;
+	}>,
+): Promise<void> {
+	await verifyInternalProtocolV6(input.sql);
 	const applicationName = input.schema.application.name;
 	const postgresSchema = input.schema.application.postgresSchema;
 	const bindings = await input.sql.unsafe<
@@ -163,9 +209,9 @@ export async function verifyPostgresRuntimeReadiness(
 		[applicationName],
 	);
 	if (
-		receipts.length !== committed.migrations.length ||
+		receipts.length !== input.committed.migrations.length ||
 		receipts.some((receipt, index) => {
-			const expected = committed.migrations[index];
+			const expected = input.committed.migrations[index];
 			return (
 				!expected ||
 				receipt.identity !== expected.identity ||
@@ -182,7 +228,10 @@ export async function verifyPostgresRuntimeReadiness(
 		throw new TypeError(
 			"PostgreSQL migration head does not match Runtime Build",
 		);
-	const liveFingerprint = await fingerprint(input.sql, input.schema);
+	const liveFingerprint = await fingerprintInOwnedTransaction(
+		input.sql,
+		input.schema,
+	);
 	const liveFingerprintDigest = digest(
 		"questpie-schema-fingerprint-v1",
 		liveFingerprint.comparable,
@@ -191,6 +240,4 @@ export async function verifyPostgresRuntimeReadiness(
 		throw new TypeError(
 			"PostgreSQL Schema Fingerprint does not match Runtime Build",
 		);
-	if (input.schema.changeCapture)
-		await verifyPostgresChangeCapture(input.sql, input.schema.changeCapture);
 }
