@@ -9,6 +9,7 @@ import {
 	createPb05OperationalMeasurement,
 	instrumentPb05OwnedTransaction,
 	instrumentPb05TransactionRunner,
+	observePb05AcceptedCallback,
 	pb05RepresentativeOperations,
 } from "../support/pb05-operational-measurement";
 
@@ -121,6 +122,85 @@ test("pure measurement separates idle gaps from contended lock waits", () => {
 		reconciliation: { samples: 1, waitMs: 3, heldMs: 4, acquired: 1 },
 		retention: { samples: 1, waitMs: 2, heldMs: 3, acquired: 1 },
 	});
+});
+
+test("accepted callback observer records the actual Mutation handler and realtime apply", async () => {
+	const measurement = createPb05OperationalMeasurement();
+	const clock = [10, 17, 20, 25];
+	const calls: string[] = [];
+
+	await expect(
+		observePb05AcceptedCallback({
+			measurement,
+			population: "mutation",
+			operation: "fresh",
+			phase: "handler",
+			now: () => clock.shift()!,
+			use: async () => {
+				calls.push("handler");
+				return "mutation-result";
+			},
+		}),
+	).resolves.toBe("mutation-result");
+	await expect(
+		observePb05AcceptedCallback({
+			measurement,
+			population: "realtime",
+			operation: "apply",
+			phase: "apply",
+			now: () => clock.shift()!,
+			use: async () => {
+				calls.push("apply");
+			},
+		}),
+	).resolves.toBeUndefined();
+
+	expect(calls).toEqual(["handler", "apply"]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).idleGaps,
+	).toEqual({
+		"mutation:fresh:handler": { count: 1, totalMs: 7, maxMs: 7 },
+		"realtime:apply:apply": { count: 1, totalMs: 5, maxMs: 5 },
+	});
+});
+
+test("accepted callback observer validates before work and preserves its primary failure", async () => {
+	const measurement = createPb05OperationalMeasurement();
+	let calls = 0;
+	await expect(
+		observePb05AcceptedCallback({
+			measurement,
+			population: "realtime",
+			operation: "reconciliation",
+			phase: "apply",
+			use: async () => {
+				calls += 1;
+			},
+		}),
+	).rejects.toThrow("invalid PB-05 idle-gap callback config");
+	expect(calls).toBe(0);
+
+	const primary = new Error("accepted callback failed");
+	const clock = [10, 5];
+	let rejected: unknown;
+	try {
+		await observePb05AcceptedCallback({
+			measurement,
+			population: "mutation",
+			operation: "fresh",
+			phase: "handler",
+			now: () => clock.shift()!,
+			use: async () => {
+				throw primary;
+			},
+		});
+	} catch (error) {
+		rejected = error;
+	}
+	expect(rejected).toBe(primary);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).idleGaps,
+	).toEqual({});
 });
 
 test("measurement refuses missing inventory and malformed clocks", () => {

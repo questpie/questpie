@@ -26,6 +26,7 @@ import {
 import {
 	createPb05OperationalMeasurement,
 	instrumentPb05TransactionRunner,
+	observePb05AcceptedCallback,
 } from "../support/pb05-operational-measurement";
 
 const tenantId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
@@ -232,6 +233,8 @@ const dispatchedOperation = {
 
 test("executes a fresh Mutation through one static read-committed database transaction", async () => {
 	const linked = fixedStatements();
+	const measurement = createPb05OperationalMeasurement();
+	const handlerClock = [10, 17];
 	let controlSignal: AbortSignal | undefined;
 	let handlerSignal: AbortSignal | undefined;
 	const signalOperation = {
@@ -240,10 +243,18 @@ test("executes a fresh Mutation through one static read-committed database trans
 			...operation.binding,
 			execute: async ({
 				ctx,
-			}: Readonly<{ ctx: View & { signal: AbortSignal } }>) => {
-				handlerSignal = ctx.signal;
-				return ctx.data.widgets.create({ input: { id: widgetId } });
-			},
+			}: Readonly<{ ctx: View & { signal: AbortSignal } }>) =>
+				observePb05AcceptedCallback({
+					measurement,
+					population: "mutation",
+					operation: "fresh",
+					phase: "handler",
+					now: () => handlerClock.shift()!,
+					use: async () => {
+						handlerSignal = ctx.signal;
+						return ctx.data.widgets.create({ input: { id: widgetId } });
+					},
+				}),
 		},
 	} as unknown as PreparedOperation<View>;
 	const calls: Array<
@@ -273,7 +284,6 @@ test("executes a fresh Mutation through one static read-committed database trans
 			});
 		},
 	};
-	const measurement = createPb05OperationalMeasurement();
 	const database = instrumentPb05TransactionRunner({
 		database: unmeasured,
 		measurement,
@@ -327,6 +337,11 @@ test("executes a fresh Mutation through one static read-committed database trans
 			"mutation.receipt.commit",
 		],
 		transactions: 1,
+	});
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).idleGaps,
+	).toEqual({
+		"mutation:fresh:handler": { count: 1, totalMs: 7, maxMs: 7 },
 	});
 });
 

@@ -94,6 +94,31 @@ function validIdleGap(value: IdleGapObservation): boolean {
 	);
 }
 
+type Pb05IdleGapCallback =
+	| Readonly<{
+			population: "mutation";
+			operation: "fresh";
+			phase: "handler";
+	  }>
+	| Readonly<{
+			population: "realtime";
+			operation: "apply";
+			phase: "apply";
+	  }>;
+
+function validIdleGapCallback(
+	value: Readonly<{ population: string; operation: string; phase: string }>,
+): value is Pb05IdleGapCallback {
+	return (
+		(value.population === "mutation" &&
+			value.operation === "fresh" &&
+			value.phase === "handler") ||
+		(value.population === "realtime" &&
+			value.operation === "apply" &&
+			value.phase === "apply")
+	);
+}
+
 function contentionOwner(value: string): value is ContentionOwner {
 	return ["maintenance", "reconciliation", "retention"].includes(value);
 }
@@ -259,6 +284,52 @@ export function createPb05OperationalMeasurement() {
 			});
 		},
 	});
+}
+
+export async function observePb05AcceptedCallback<Result>(
+	input: Readonly<{
+		population: string;
+		operation: string;
+		phase: string;
+		measurement: ReturnType<typeof createPb05OperationalMeasurement>;
+		now?: () => number;
+		use(): Promise<Result>;
+	}>,
+): Promise<Result> {
+	if (!validIdleGapCallback(input))
+		throw new TypeError("invalid PB-05 idle-gap callback config");
+	const now = input.now ?? performance.now.bind(performance);
+	const startedAtMs = now();
+	if (!finiteTime(startedAtMs))
+		throw new TypeError("invalid PB-05 instrumentation clock");
+	let result: Result;
+	try {
+		result = await input.use();
+	} catch (primary) {
+		try {
+			input.measurement.idleGap({
+				population: input.population,
+				operation: input.operation,
+				phase: input.phase,
+				startedAtMs,
+				finishedAtMs: now(),
+			});
+		} catch {
+			// Observation cannot replace the accepted callback failure it measures.
+		}
+		throw primary;
+	}
+	const finishedAtMs = now();
+	if (!finiteTime(finishedAtMs))
+		throw new TypeError("invalid PB-05 instrumentation clock");
+	input.measurement.idleGap({
+		population: input.population,
+		operation: input.operation,
+		phase: input.phase,
+		startedAtMs,
+		finishedAtMs,
+	});
+	return result;
 }
 
 export function instrumentPb05TransactionRunner(

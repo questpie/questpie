@@ -18,6 +18,7 @@ import {
 	createPb05OperationalMeasurement,
 	instrumentPb05OwnedTransaction,
 	instrumentPb05TransactionRunner,
+	observePb05AcceptedCallback,
 } from "../support/pb05-operational-measurement";
 
 const deploymentDigest = "a".repeat(64);
@@ -123,6 +124,7 @@ test("attributes reconciliation, apply, and retention without inventing a transa
 		},
 	});
 	const applied: string[] = [];
+	const applyClock = [20, 25];
 
 	await expect(
 		reconcilePostgresChangeLedger({
@@ -130,9 +132,17 @@ test("attributes reconciliation, apply, and retention without inventing a transa
 			application: "application:collaboration",
 			consumer: invalidation.consumer,
 			effect,
-			apply: (facts) => {
-				applied.push(...facts.map(({ factIdentity }) => factIdentity));
-			},
+			apply: (facts) =>
+				observePb05AcceptedCallback({
+					measurement,
+					population: "realtime",
+					operation: "apply",
+					phase: "apply",
+					now: () => applyClock.shift()!,
+					use: async () => {
+						applied.push(...facts.map(({ factIdentity }) => factIdentity));
+					},
+				}),
 		}),
 	).resolves.toEqual({
 		priorHorizon: "100",
@@ -203,5 +213,8 @@ test("attributes reconciliation, apply, and retention without inventing a transa
 			"live-query.retention-ledger-delete",
 		],
 		transactions: 1,
+	});
+	expect(snapshot.idleGaps).toEqual({
+		"realtime:apply:apply": { count: 1, totalMs: 5, maxMs: 5 },
 	});
 });
