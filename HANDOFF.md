@@ -111,13 +111,14 @@ Remaining PB-05 work, in order:
 2. **Completed at `0b25faae`:** complete database readiness—protocol catalog,
    schema fingerprint, and change-capture verification—runs in one
    repeatable-read/read-only snapshot.
-3. **Active:** representative readiness, Context, Query, Mutation, realtime,
-   and Durable statement populations are instrumented through the actual
-   transaction seams. The isolated instrumentation-hold and lock-shape controls
-   are complete at `dfb1a50c`. Next measure actual Mutation-handler and
-   realtime-apply idle gaps plus actual maintenance/reconciliation/retention
-   owner-path contention before deriving even provisional internal ceilings.
-4. Close remaining database-mode facades and `bundle-core` imports.
+3. **Completed through `62605756`:** representative readiness, Context, Query,
+   Mutation, realtime, and Durable statement populations are instrumented
+   through the actual transaction seams. The isolated instrumentation-hold and
+   lock-shape controls are complete at `dfb1a50c`; the actual Mutation handler,
+   realtime invalidation apply, and maintenance/reconciliation/retention owner
+   paths are measured through production owners at `62605756`. Results remain
+   provisional internal evidence and define no public ceiling.
+4. **Active:** close remaining database-mode facades and `bundle-core` imports.
 5. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
    compatibility paths; never add a temporary second Pool.
@@ -284,7 +285,23 @@ outputs are removed. Results remain `PROVISIONAL_INTERNAL_EVIDENCE` with
 `publicCeilings: false`: marker/sleep holds prove instrumentation only,
 simplified lock probes prove lock shape only, and blocker release is an
 acquisition proxy. Actual Mutation-handler/realtime-apply and owner-path
-contention evidence remains outstanding.
+contention evidence was still outstanding at that historical boundary and is
+closed separately below.
+
+The actual PB-05 owner-path measurement boundary is integrated through
+`62605756`. The runner compiles and artifact-binds the collaboration
+`message.publish` handler, measures the accepted Mutation handler and production
+realtime invalidation callback on their exact owning transactions, and probes
+the production Durable maintenance, reconciliation, and retention lock owners.
+Two uncontaminated serialized PostgreSQL 17 runs are structurally identical:
+16 Mutation and 16 realtime samples, eight samples for each contention owner,
+24 observed lock waits, and zero semantic failures. The runner keeps the
+Mutation/Durable QRN `application:collaboration` distinct from the realtime
+ledger and retention name `collaboration`; this closes an exact namespace
+hostile found by the measurement itself. The container, port, prepared fixture,
+and raw output are removed after both runs. Timing distributions remain
+`PROVISIONAL_INTERNAL_EVIDENCE` with `publicCeilings: false` and are not timeout
+or SLA authority.
 
 The direct Action pre-wire kernel is integrated at `8659ae87`, with external
 Service capability projection completed at `f04a3810`. Eleven focused Action
@@ -329,11 +346,11 @@ closure.
    is green; add exact Wire v3 client/server transport until the network leg is
    green; then close browser, artifact and release evidence. Preserve the
    accepted no-retry and ambiguity semantics throughout.
-3. Continue PB-05 only with actual Mutation-handler/realtime-apply and actual
-   maintenance/reconciliation/retention owner-path measurement. Do not repeat
-   the completed synthetic controls as Product evidence or project provisional
-   results as public ceilings. Do not perform the atomic one-Pool ownership
-   flip alongside generated/release work.
+3. Continue PB-05 with the database-mode facade and private `bundle-core`
+   closure, followed by the compiler-owned readiness sibling and completeness
+   tracer. Preserve the measured owner paths as provisional evidence; do not
+   derive public ceilings. Do not perform the atomic one-Pool ownership flip
+   alongside generated/release work.
 4. Keep independent Standards and Spec reviews on each Action and PB-05
    integration boundary. The accepted Effect/Wire proof is immutable evidence;
    ordinary production projection now follows tracer-led TDD rather than a new
