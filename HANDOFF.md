@@ -104,13 +104,14 @@ the one-Pool ownership flip is not complete. Completed prerequisites include:
 
 Remaining PB-05 work, in order:
 
-1. **Active:** fixed set-based whole-schema catalog statements and the pure
-   column/constraint/index reducers are integrated through `d297d854`.
-   Complete reader-equivalence/query-count hardening and its PostgreSQL
-   hostiles; do not reintroduce per-table or per-index catalog SQL.
-2. Run complete database readiness—protocol catalog, schema fingerprint, and
-   change-capture verification—in one repeatable-read/read-only snapshot.
-3. Measure representative readiness, Context, Query, Mutation, realtime, and
+1. **Completed through `fcec08d3`:** fixed set-based whole-schema catalog
+   statements, pure column/constraint/index reducers, exactly five fixed
+   executions, reader-equivalence/query-count hardening, and PostgreSQL
+   hostiles. Do not reintroduce per-table or per-index catalog SQL.
+2. **Completed at `0b25faae`:** complete database readiness—protocol catalog,
+   schema fingerprint, and change-capture verification—runs in one
+   repeatable-read/read-only snapshot.
+3. **Active:** measure representative readiness, Context, Query, Mutation, realtime, and
    Durable statement populations. Measure Mutation-handler and realtime-apply
    idle gaps plus maintenance/reconciliation/retention lock contention before
    deriving provisional internal ceilings.
@@ -187,7 +188,7 @@ architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
 validation, and `git diff --check`. The release dry-run is retry-stable at the
 accepted package checksum
-`56aed8bc3fd4fdeb60f4e97d9480527f1997415c2943e2e19487b015be28ac27`;
+`c17d695eaa414ccc69d8fb7bf1ed3c88e1d4ee627a55443bb2725c98bf28d702`;
 the declaration checksum is
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
@@ -236,15 +237,18 @@ ADR-0015, ADR-0014, SPEC, and Gates 8A/8B define cancellation as the terminal
 bounded execution-lifetime boundary; a non-cooperative handler cannot retain
 Runtime scope ownership or block close after cancellation.
 
-PB-05 catalog boundaries 1-3 are integrated through `d297d854`: five fixed
+PB-05 catalog boundaries are integrated through `fcec08d3`: five fixed
 whole-schema statement descriptors with closed decoders, then pure set-based
-column and constraint/index reducers. Seven focused unit tests pass with 49
-assertions; compiler typechecks, architecture, and `git diff --check` pass at
-the integration head. The isolated PostgreSQL 17 reader-equivalence lane passes
+column and constraint/index reducers, followed by one exact five-statement
+orchestrator. Eleven focused unit tests pass with 58 assertions. The isolated
+PostgreSQL 17 reader-equivalence lane passes
 16 cases with 40 assertions and three PostgreSQL-18-only skips, then removes its
 dedicated `questpie-pb05-catalog-reader` container. Independent Standards and
-Spec reviews return PASS for every boundary. Query-count/equivalence hardening
-remains the active PB-05 slice before the readiness snapshot.
+Spec reviews return PASS for every boundary. The one-snapshot readiness boundary
+is integrated at `0b25faae`; three focused tests pass with six assertions, and
+the generated PostgreSQL readiness tracer passes with 30 assertions before its
+dedicated container is removed. Compiler typechecks, architecture, and
+`git diff --check` pass. Operational measurement is the active PB-05 slice.
 
 ## Immediate continuation
 
@@ -254,9 +258,9 @@ remains the active PB-05 slice before the readiness snapshot.
    caller-facing Effect Identity spelling, validation, or derivation before the
    read-only authority review confirms it stays on the authorized side of the
    Operation Wire v3 decision boundary.
-3. Finish PB-05 reader-equivalence/query-count hardening, then land the
-   one-repeatable-read/read-only readiness snapshot. Do not perform the atomic
-   one-Pool ownership flip alongside generated/release work.
+3. Continue the PB-05 operational measurement boundary without projecting
+   provisional evidence as public ceilings. Do not perform the atomic one-Pool
+   ownership flip alongside generated/release work.
 4. Keep a read-only Effect Identity proof/review lane. Stop before the public
    Kernel decision; never hide Effect Identity in domain input or alias Mutation
    `callId`.
