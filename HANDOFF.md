@@ -404,7 +404,7 @@ dry-run, architecture, workspace and focused Action typechecks, and
 `git diff --check` pass. Independent Standards and Spec re-reviews return PASS.
 
 The private Operation Wire v3 staging boundary is integrated through
-`454966aa`. Ten focused hostiles pass with 82 assertions; the combined v2/v3
+`454966aa`. Ten focused tests pass with 82 assertions; the combined v2/v3
 compatibility matrix passes 18 tests with 157 assertions. The compiler and
 Runtime independently reject re-signed retained protocol/codec drift and
 malformed Action codec/error contracts, while canonical object property order
