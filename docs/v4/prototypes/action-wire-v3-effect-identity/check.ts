@@ -84,6 +84,34 @@ assert.throws(
 	() => deriveEffectIdentity({ ...scope, action: "delivery.publish" as never }),
 	/canonical action Resource Identity/,
 );
+for (const application of [
+	"application:Bad",
+	"application:bad..name",
+	"application:.bad",
+	"application:bad/name",
+	"application:",
+	"application:bad-name",
+	"application:bad!",
+	"query:collaboration",
+])
+	assert.throws(
+		() => deriveEffectIdentity({ ...scope, application: application as never }),
+		/canonical application Resource Identity/,
+	);
+for (const action of [
+	"action:Bad",
+	"action:bad..name",
+	"action:.bad",
+	"action:bad/name",
+	"action:",
+	"action:bad-name",
+	"action:bad!",
+	"mutation:message.publish",
+])
+	assert.throws(
+		() => deriveEffectIdentity({ ...scope, action: action as never }),
+		/canonical action Resource Identity/,
+	);
 assert.equal(
 	deriveEffectIdentity({
 		...scope,
@@ -107,7 +135,7 @@ const wireV3 = projectWireV3(retainedWireV2, wireV3Extension);
 const validated = validateWireV3(wireV3, retainedWireV2, wireV3Extension);
 assert.equal(
 	validated.digest,
-	"f25f10a361faf30faac1106fe1feb87516458a1a700ace022a56017d854f6c98",
+	"6c988aac5c1e707cbf83c5467f0ca5e07144a17008da23492f9c4147c6eb032e",
 );
 for (const mutate of [
 	(wire: Record<string, unknown>) => (wire.compatibility = { destroyed: true }),
@@ -130,6 +158,11 @@ for (const mutate of [
 		(wire.operations = [...(wire.operations as unknown[])].toReversed()),
 	(wire: Record<string, unknown>) =>
 		(wire.actionFailures = [...(wire.actionFailures as string[])].toReversed()),
+	(wire: Record<string, unknown>) =>
+		((wire.actionOutcomeAmbiguous as Record<string, unknown>).payload = [
+			"callId",
+			"effectKey",
+		]),
 ]) {
 	const hostile = structuredClone(wireV3) as Record<string, unknown>;
 	mutate(hostile);
@@ -554,7 +587,8 @@ for (const failure of [
 			error.code === "ACTION_OUTCOME_AMBIGUOUS" &&
 			error.retryable === false &&
 			error.payload.callId === `call:publish:${failure}` &&
-			error.payload.effectKey === scope.effectKey,
+			Object.keys(error.payload).join("\0") === "callId" &&
+			!JSON.stringify(error.payload).includes(scope.effectKey),
 	);
 	assert.equal(ambiguous.providerCalls, 1);
 	assert.equal(ambiguous.automaticRetries, 0);

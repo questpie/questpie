@@ -44,7 +44,8 @@ cancellation/response race fail closed as non-retryable
 `ACTION_OUTCOME_AMBIGUOUS`. A valid pre-execution rejection proves zero Action
 work and remains an ordinary rejection. Authored `outcomeUnknown` remains a
 declared provider outcome, not a framework transport error. No path retries
-automatically.
+automatically. The ambiguity payload returns only `callId` correlation;
+framework errors never echo the caller-owned `effectKey`.
 
 The request carries only remaining duration, never a wall-clock or cross-process
 monotonic instant. Direct and network adapters both take the earlier declared

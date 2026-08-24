@@ -78,7 +78,7 @@
 		"authoredOutcomeUnknownDistinct": true,
 		"automaticRetry": false,
 		"code": "ACTION_OUTCOME_AMBIGUOUS",
-		"payload": ["callId", "effectKey"],
+		"payload": ["callId"],
 		"retryable": false,
 		"triggers": [
 			"fetchRejectedAfterDispatch",

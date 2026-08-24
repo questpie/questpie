@@ -92,15 +92,11 @@ export function isEffectKey(value: unknown): value is string {
 }
 
 function ownerIdentity(value: unknown, prefix: string, label: string): string {
+	const qualifiedResourceName = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/u;
 	if (
 		typeof value !== "string" ||
 		!value.startsWith(`${prefix}:`) ||
-		value.length === prefix.length + 1 ||
-		value.includes("::") ||
-		/\s/u.test(value) ||
-		value.includes("\0") ||
-		hasLoneSurrogate(value) ||
-		value.normalize("NFC") !== value
+		!qualifiedResourceName.test(value.slice(prefix.length + 1))
 	)
 		throw new TypeError(
 			`${label} is not a canonical ${prefix} Resource Identity`,
@@ -156,9 +152,7 @@ export function deriveDurableEffectIdentity(
 export class ActionOutcomeAmbiguous extends Error {
 	readonly code = "ACTION_OUTCOME_AMBIGUOUS";
 	readonly retryable = false;
-	constructor(
-		readonly payload: Readonly<{ callId: string; effectKey: string }>,
-	) {
+	constructor(readonly payload: Readonly<{ callId: string }>) {
 		super("Action outcome is ambiguous after dispatch");
 		this.name = "ActionOutcomeAmbiguous";
 	}
@@ -453,7 +447,6 @@ export function createActionHarness(
 			) {
 				const error = new ActionOutcomeAmbiguous({
 					callId: invocation.callId,
-					effectKey: invocation.effectKey,
 				});
 				throw error;
 			}
