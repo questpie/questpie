@@ -34,7 +34,9 @@ import {
 	decodePb05RetentionAntagonistResult,
 	derivePb05OwnerPathMeasurements,
 	pb05OwnerPathStageAttribution,
+	pb05OwnerPathSemanticFailureAttribution,
 	settlePb05OwnedBlocker,
+	type Pb05OwnerPathSemanticOwner,
 	withPb05ReleasedBlocker,
 } from "../support/pb05-operational-load-safety";
 import {
@@ -367,6 +369,19 @@ const ownerWaits: Record<Owner, number[]> = {
 	retention: [],
 };
 const semanticResults: boolean[] = [];
+const semanticObservations: Readonly<{
+	owner: Pb05OwnerPathSemanticOwner;
+	sample: number;
+	passed: boolean;
+}>[] = [];
+function recordSemantic(
+	owner: Pb05OwnerPathSemanticOwner,
+	sample: number,
+	passed: boolean,
+): void {
+	semanticResults.push(passed);
+	semanticObservations.push(Object.freeze({ owner, sample, passed }));
+}
 let lockWaitProofs = 0;
 let schemaOwned = false;
 let prepared: Prepared | undefined;
@@ -599,7 +614,9 @@ try {
 			),
 			callId,
 		);
-		semanticResults.push(
+		recordSemantic(
+			"mutation-handler",
+			index,
 			result.committed === true &&
 				typeof result.value === "object" &&
 				result.value !== null &&
@@ -623,7 +640,9 @@ try {
 			sample: index,
 		};
 		const reconciliation = await reconcile(record);
-		semanticResults.push(
+		recordSemantic(
+			"realtime-reconciliation",
+			index,
 			reconciliation.facts.length > 0 &&
 				/^[0-9]+$/u.test(reconciliation.priorHorizon) &&
 				/^[0-9]+$/u.test(reconciliation.nextHorizon) &&
@@ -722,7 +741,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 					const admission = operationOwner.start(() =>
 						operationBoundary.run(operationOwner.signal, async () => {
 							const result = await use(waiterDatabase, index);
-							semanticResults.push(valid(result, index));
+							recordSemantic(owner, index, valid(result, index));
 							return result;
 						}),
 					);
@@ -910,7 +929,9 @@ WHERE application_name = $1
   AND authority_partition_digest = $2`,
 				[applicationName, authorityPartitionDigest],
 			);
-			semanticResults.push(
+			recordSemantic(
+				"retention-readback",
+				0,
 				retainedRows.length === 1 &&
 					retainedRows[0]?.generation === "1" &&
 					retainedRows[0].resultBytes.length === 1 &&
@@ -923,6 +944,13 @@ WHERE application_name = $1
 
 	diagnosticStage = { phase: "measurement-contract" };
 	diagnosticSignals = () => ({});
+	const semanticFailures =
+		pb05OwnerPathSemanticFailureAttribution(semanticObservations);
+	if (semanticFailures.length > 0)
+		console.error(
+			"PB-05 owner-path semantic failures",
+			JSON.stringify(semanticFailures),
+		);
 	const snapshot = measurement.snapshot({ requireCompleteInventory: false });
 	const measurements = derivePb05OwnerPathMeasurements({
 		snapshot,

@@ -86,6 +86,70 @@ export function countPb05SemanticFailures(results: readonly boolean[]): number {
 	return results.reduce((count, result) => count + (result ? 0 : 1), 0);
 }
 
+export type Pb05OwnerPathSemanticOwner =
+	| "mutation-handler"
+	| "realtime-reconciliation"
+	| "maintenance"
+	| "reconciliation"
+	| "retention"
+	| "retention-readback";
+
+function pb05OwnerPathSemanticOwner(
+	value: unknown,
+): value is Pb05OwnerPathSemanticOwner {
+	return (
+		value === "mutation-handler" ||
+		value === "realtime-reconciliation" ||
+		value === "maintenance" ||
+		value === "reconciliation" ||
+		value === "retention" ||
+		value === "retention-readback"
+	);
+}
+
+export function pb05OwnerPathSemanticFailureAttribution(
+	observations: readonly Readonly<{
+		owner: Pb05OwnerPathSemanticOwner;
+		sample: number;
+		passed: boolean;
+	}>[],
+): readonly Readonly<{ owner: Pb05OwnerPathSemanticOwner; sample: number }>[] {
+	const sampleLimit = (owner: Pb05OwnerPathSemanticOwner): number =>
+		owner === "mutation-handler" || owner === "realtime-reconciliation"
+			? 18
+			: owner === "retention-readback"
+				? 1
+				: 8;
+	if (observations.length !== 61)
+		throw new TypeError(
+			"PB-05 owner-path semantic observation matrix is invalid",
+		);
+	const seen = new Set<string>();
+	for (const { owner, sample, passed } of observations) {
+		if (
+			!pb05OwnerPathSemanticOwner(owner) ||
+			!Number.isSafeInteger(sample) ||
+			sample < 0 ||
+			sample >= sampleLimit(owner) ||
+			typeof passed !== "boolean" ||
+			seen.has(`${owner}:${sample}`)
+		)
+			throw new TypeError(
+				"PB-05 owner-path semantic observation matrix is invalid",
+			);
+		seen.add(`${owner}:${sample}`);
+	}
+	if (seen.size !== 61)
+		throw new TypeError(
+			"PB-05 owner-path semantic observation matrix is invalid",
+		);
+	return Object.freeze(
+		observations.flatMap(({ owner, sample, passed }) =>
+			passed ? [] : [Object.freeze({ owner, sample })],
+		),
+	);
+}
+
 type Pb05OwnerPathDiagnosticStage = Readonly<{
 	phase: string;
 	operation?: string;

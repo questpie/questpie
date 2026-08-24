@@ -19,6 +19,7 @@ import {
 	pb05OwnerPathStageAttribution,
 	pb05OperationalDatabase,
 	pb05OperationalResetOptIn,
+	pb05OwnerPathSemanticFailureAttribution,
 	pb05OwnerPathDatabase,
 	pb05OwnerPathResetOptIn,
 	settlePb05OwnedBlocker,
@@ -222,6 +223,76 @@ test("owner-path metrics require exact observer counts and transaction identitie
 
 test("semantic failures are derived from actual owner results", () => {
 	expect(countPb05SemanticFailures([true, false, true, false])).toBe(2);
+});
+
+test("semantic failure attribution distinguishes the two 18-sample callback owners", () => {
+	const matrix = [
+		...Array.from({ length: 18 }, (_, sample) => ({
+			owner: "mutation-handler" as const,
+			sample,
+			passed: true,
+		})),
+		...Array.from({ length: 18 }, (_, sample) => ({
+			owner: "realtime-reconciliation" as const,
+			sample,
+			passed: true,
+		})),
+		...(["maintenance", "reconciliation", "retention"] as const).flatMap(
+			(owner) =>
+				Array.from({ length: 8 }, (_, sample) => ({
+					owner,
+					sample,
+					passed: true,
+				})),
+		),
+		{ owner: "retention-readback" as const, sample: 0, passed: true },
+	];
+	expect(
+		pb05OwnerPathSemanticFailureAttribution(
+			matrix.map((entry) => ({
+				...entry,
+				passed: entry.owner !== "mutation-handler",
+			})),
+		),
+	).toEqual(
+		Array.from({ length: 18 }, (_, sample) => ({
+			owner: "mutation-handler",
+			sample,
+		})),
+	);
+	expect(
+		pb05OwnerPathSemanticFailureAttribution(
+			matrix.map((entry) => ({
+				...entry,
+				passed: entry.owner !== "realtime-reconciliation",
+			})),
+		),
+	).toEqual(
+		Array.from({ length: 18 }, (_, sample) => ({
+			owner: "realtime-reconciliation",
+			sample,
+		})),
+	);
+	for (const hostile of [
+		matrix.slice(0, -1),
+		[...matrix, matrix[0]!],
+		[...matrix.slice(0, -1), matrix[0]!],
+		[
+			...matrix.slice(0, -1),
+			{ owner: "retention-readback" as const, sample: 1, passed: true },
+		],
+		[
+			...matrix.slice(0, -1),
+			{
+				owner: "postgres://user:secret@example.invalid" as never,
+				sample: 0,
+				passed: false,
+			},
+		],
+	])
+		expect(() => pb05OwnerPathSemanticFailureAttribution(hostile)).toThrow(
+			"PB-05 owner-path semantic observation matrix is invalid",
+		);
 });
 
 test("retention antagonist accepts only the node-postgres void cell", () => {
