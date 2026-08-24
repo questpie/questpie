@@ -75,8 +75,24 @@ export interface ApplicationRuntime<Input, View> {
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
+	route<Result>(
+		input: Readonly<{
+			principal: Principal;
+			signal?: AbortSignal;
+		}>,
+		use: (scope: RouteExecutionScope<Input, View>) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
 }
+
+export type RouteExecutionScope<Input, View> = Readonly<{
+	principal: Principal;
+	signal: AbortSignal;
+	service<Definition extends AnyService>(
+		definition: Definition,
+	): Promise<ServiceInstance<Definition>>;
+	execution: ApplicationRuntime<Input, View>["execution"];
+}>;
 
 function deepFreeze<Value>(value: Value): Value {
 	if (!value || typeof value !== "object") return value;
@@ -191,6 +207,35 @@ export function createApplicationRuntime<
 				use,
 			);
 		},
+		route: <Result>(
+			input: Readonly<{ principal: Principal; signal?: AbortSignal }>,
+			use: (
+				scope: RouteExecutionScope<ContextInputOf<Context>, View>,
+			) => MaybePromise<Result>,
+		) => {
+			if (!principal.is(input.principal))
+				return Promise.reject(new Error("Route requires a trusted Principal"));
+			return services.execution(
+				{ signal: input.signal },
+				({ service, signal }) =>
+					use(
+						Object.freeze({
+							principal: input.principal,
+							signal,
+							service,
+							execution,
+						}),
+					),
+			);
+		},
 		close: services.close,
 	});
 }
+
+export { createRuntimeRouteExecutor } from "./routes";
+export type {
+	RuntimeCredentialBinding,
+	RuntimeCredentialOutcome,
+	RuntimeRouteBinding,
+	RuntimeRouteExecutor,
+} from "./routes";

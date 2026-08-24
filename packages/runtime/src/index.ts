@@ -10,12 +10,20 @@ export type {
 	RuntimeOperations,
 } from "./application";
 
-export { createApplicationRuntime } from "./execution";
+export {
+	createApplicationRuntime,
+	createRuntimeRouteExecutor,
+} from "./execution";
 export type {
 	ApplicationRuntime,
 	ExecutionFacts,
 	OperationWireRootFrame,
+	RouteExecutionScope,
+	RuntimeCredentialBinding,
+	RuntimeCredentialOutcome,
 	RuntimeProgram,
+	RuntimeRouteBinding,
+	RuntimeRouteExecutor,
 } from "./execution";
 
 export {
