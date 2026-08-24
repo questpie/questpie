@@ -4,6 +4,7 @@ import { access, cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+import { deriveDurableEffectIdentity, deriveEffectIdentity } from "./contract";
 import retainedWireV2 from "./retained-wire-v2.json";
 
 const canonicalRoot =
@@ -26,7 +27,11 @@ assert.equal(
 	0,
 	"canonical repository does not contain prerequisite c68309f3",
 );
-for (const path of ["packages/compiler", "fixtures/collaboration"]) {
+for (const path of [
+	"packages/compiler",
+	"packages/runtime",
+	"fixtures/collaboration",
+]) {
 	const proofTree = new TextDecoder()
 		.decode(
 			Bun.spawnSync(["git", "-C", canonicalRoot, "rev-parse", `HEAD:${path}`])
@@ -54,6 +59,66 @@ const { compileApplication } = (await import(compilerUrl)) as Readonly<{
 		input: Readonly<{ applicationRoot: string }>,
 	): Promise<Readonly<{ generatedFiles: Readonly<Record<string, string>> }>>;
 }>;
+const durableRowsUrl = new URL(
+	`file://${dependencyRoot}/packages/runtime/src/durable/rows.ts`,
+).href;
+const { effectIdentity: productionDurableEffectIdentity } = (await import(
+	durableRowsUrl
+)) as Readonly<{
+	effectIdentity(
+		application: string,
+		runId: string,
+		effectName: string,
+	): string;
+}>;
+
+for (const vector of [
+	{
+		application: "application:collaboration",
+		runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+		effectName: "deliver",
+		expected: "64a789a4-c319-5d2b-ac27-520d9808a941",
+	},
+	{
+		application: "application:collaboration",
+		runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a1",
+		effectName: "notify",
+		expected: "89bfe8da-1743-52dc-a499-8689a3b4d4bc",
+	},
+	{
+		application: "application:billing",
+		runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
+		effectName: "charge",
+		expected: "e044abb1-8329-555d-ac20-2c90a76acabc",
+	},
+] as const) {
+	const production = productionDurableEffectIdentity(
+		vector.application,
+		vector.runId,
+		vector.effectName,
+	);
+	assert.equal(production, vector.expected);
+	assert.equal(
+		deriveDurableEffectIdentity(
+			vector.application,
+			vector.runId,
+			vector.effectName,
+		),
+		production,
+		"proof durable Effect Identity model drifted from production",
+	);
+	assert.notEqual(
+		deriveEffectIdentity({
+			application: vector.application,
+			tenant: vector.runId,
+			principal: { kind: "service", id: "durable-proof" },
+			action: "action:delivery.publish",
+			effectKey: vector.effectName,
+		}),
+		production,
+		"ordinary Action and production durable Effect Identity domains collided",
+	);
+}
 
 const temporary = await mkdtemp(
 	join(tmpdir(), "questpie-action-wire-v3-repo-"),

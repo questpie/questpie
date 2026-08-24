@@ -493,6 +493,7 @@ export function projectWireV3(
 		"actionRequestKeys",
 		"effectKey",
 		"postDispatchResourceLimit",
+		"preExecutionRejection",
 	];
 	if (Object.keys(extension).sort().join("\0") !== allowed.join("\0"))
 		throw new TypeError("Wire v3 extension is not closed");

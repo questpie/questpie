@@ -124,5 +124,11 @@
 		"provesProviderNonacceptance": false,
 		"replayAuthorized": false,
 		"retryable": false
+	},
+	"preExecutionRejection": {
+		"code": "CLIENT_OUTDATED",
+		"frameKind": "failure",
+		"providerCalls": 0,
+		"retryable": false
 	}
 }

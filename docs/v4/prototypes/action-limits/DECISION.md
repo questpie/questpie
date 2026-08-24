@@ -1,7 +1,7 @@
 # Action limits candidate
 
 - Status: falsifiable candidate for the Action Kernel acceptance
-- Base: `79b56b6e8adae5c9e32b231bf22193b8b829713e`
+- Combined proof base and prerequisite: `c68309f3d0997cb3acb224a53d214d4f1516bbf2`
 - Scope: public limit names and semantics only; no compiler, Runtime, client,
   Effect Identity, or Operation Wire v3 shape is implemented here
 
@@ -45,12 +45,12 @@ codec encode and canonical measurement as network invocation; it cannot skip a
 measurement-only encode. Invalid input is `PROTOCOL_UNSUPPORTED`; invalid
 handler output or declared-error payload is sanitized `INTERNAL`.
 
-The base Runtime canonical kernel accepts a terminal lone high surrogate while
-the compiler kernel rejects it. The independent prerequisite repair landed at
-`c68309f3` with runtime/compiler canonical, Mutation, Live Query, Runtime
-typecheck, architecture, and diff-check evidence. This proof branch does not
-cherry-pick that production commit; it models the same strict rule, and Action
-integration must descend from or otherwise contain that exact repair.
+The earlier Runtime canonical kernel accepted a terminal lone high surrogate
+while the compiler kernel rejected it. The independent prerequisite repair
+landed at `c68309f3` with runtime/compiler canonical, Mutation, Live Query,
+Runtime typecheck, architecture, and diff-check evidence. The combined proof
+now descends from that exact production repair and imports its strict canonical
+kernel.
 
 ## Admission, deadline, and settlement order
 

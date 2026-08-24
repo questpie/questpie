@@ -7,16 +7,22 @@ import type {
 const caller: ActionCallerOptions = { effectKey: "stable-provider-material" };
 void caller.effectKey;
 
-// @ts-expect-error callers provide stable material, never the final Effect Identity
-const callerEffectId: ActionCallerOptions = { effectId: "forged" };
+const callerEffectId: ActionCallerOptions = {
+	effectKey: "stable-provider-material",
+	// @ts-expect-error callers provide stable material, never the final Effect Identity
+	effectId: "forged",
+};
 void callerEffectId;
 
 // @ts-expect-error Mutation callId is not an Effect Identity alias
 const mutationAlias: ActionCallerOptions = { callId: "mutation-receipt-only" };
 void mutationAlias;
 
-// @ts-expect-error idempotencyKey overclaims provider semantics and is not the contract
-const misleadingAlias: ActionCallerOptions = { idempotencyKey: "forged" };
+const misleadingAlias: ActionCallerOptions = {
+	effectKey: "stable-provider-material",
+	// @ts-expect-error idempotencyKey overclaims provider semantics and is not the contract
+	idempotencyKey: "forged",
+};
 void misleadingAlias;
 
 declare const facts: ActionHandlerFacts;

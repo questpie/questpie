@@ -15,6 +15,7 @@ dependency_root="${QUESTPIE_DEPENDENCY_ROOT:-$(
     while IFS= read -r candidate; do
       if test -x "$candidate/node_modules/typescript/bin/tsc" &&
         test "$(git -C "$candidate" rev-parse HEAD:packages/compiler 2>/dev/null)" = "$(git rev-parse HEAD:packages/compiler)" &&
+        test "$(git -C "$candidate" rev-parse HEAD:packages/runtime 2>/dev/null)" = "$(git rev-parse HEAD:packages/runtime)" &&
         test "$(git -C "$candidate" rev-parse HEAD:fixtures/collaboration 2>/dev/null)" = "$(git rev-parse HEAD:fixtures/collaboration)"; then
         printf '%s\n' "$candidate"
         break
@@ -36,6 +37,7 @@ bun "$dependency_root/node_modules/typescript/bin/tsc" \
   -p docs/v4/prototypes/action-limits/tsconfig.json
 bunx oxlint --deny-warnings docs/v4/prototypes/action-wire-v3-effect-identity/*.ts
 bunx oxfmt --check docs/v4/prototypes/action-wire-v3-effect-identity
+bun run architecture:check
 git diff --check
 ```
 

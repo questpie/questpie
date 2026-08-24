@@ -165,7 +165,7 @@ const wireV3 = projectWireV3(retainedWireV2, wireV3Extension);
 const validated = validateWireV3(wireV3, retainedWireV2, wireV3Extension);
 assert.equal(
 	validated.digest,
-	"6c988aac5c1e707cbf83c5467f0ca5e07144a17008da23492f9c4147c6eb032e",
+	"c7596e3eef673d11381f9c9c9a25f81308084dd0054b91cfa8ddf9afe45457a4",
 );
 for (const mutate of [
 	(wire: Record<string, unknown>) => (wire.compatibility = { destroyed: true }),
@@ -193,6 +193,9 @@ for (const mutate of [
 			"callId",
 			"effectKey",
 		]),
+	(wire: Record<string, unknown>) =>
+		((wire.preExecutionRejection as Record<string, unknown>).frameKind =
+			"rejection"),
 ]) {
 	const hostile = structuredClone(wireV3) as Record<string, unknown>;
 	mutate(hostile);
@@ -375,6 +378,10 @@ assert.deepEqual(validRejection.observedEffectIds, []);
 assert.deepEqual(validRejection.frames, [
 	{ error: { code: "CLIENT_OUTDATED", retryable: false }, kind: "failure" },
 ]);
+assert.equal(
+	(wireV3.preExecutionRejection as Readonly<Record<string, unknown>>).frameKind,
+	validRejection.frames[0]?.kind,
+);
 
 const direct = createActionHarness({ carrier: "direct" });
 const network = createActionHarness({ carrier: "network" });

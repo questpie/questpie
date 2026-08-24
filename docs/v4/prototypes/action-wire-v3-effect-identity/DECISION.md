@@ -24,11 +24,14 @@ The common SHA-256-to-UUID materializer preserves the durable ledger vector
 effect `deliver` as `64a789a4-c319-5d2b-ac27-520d9808a941`. Ordinary Actions
 use the disjoint `questpie.effect-identity.action.v1` domain, so they retain the
 existing UUID grammar/storage without colliding with durable Reaction/Job
-effects. The handler sees only Runtime-scoped `effect.id`; it cannot recover
-`effectKey`. Framework-owned outcome metadata and framework failures never add
-the key or UUID. An authored output or declared-error codec may deliberately
-return `effect.id`; Runtime does not corrupt application data with a secret
-scrubber and therefore makes no generic domain-payload nondisclosure claim.
+effects. The repository gate tree-binds and imports the production durable
+`effectIdentity` owner, then compares three pinned vectors with this proof model
+and with ordinary Action derivation. The handler sees only Runtime-scoped
+`effect.id`; it cannot recover `effectKey`. Framework-owned outcome metadata and
+framework failures never add the key or UUID. An authored output or
+declared-error codec may deliberately return `effect.id`; Runtime does not
+corrupt application data with a secret scrubber and therefore makes no generic
+domain-payload nondisclosure claim.
 
 Wire v3 is a full additive successor of the exact retained collaboration Wire
 v2 artifact. Query and Mutation retain their v2 request/response keys and
