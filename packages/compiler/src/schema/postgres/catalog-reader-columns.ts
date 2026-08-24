@@ -2,6 +2,10 @@ import type { SQL } from "bun";
 
 import { canonicalBytes } from "../../canonical";
 import { parseCatalogDefault } from "./catalog-expression";
+import {
+	catalogColumnsStatement,
+	type CatalogColumnRow,
+} from "./catalog-reader-statements";
 import type {
 	CatalogAccumulator,
 	CatalogColumn,
@@ -9,76 +13,40 @@ import type {
 	JsonRecord,
 } from "./catalog-reader-types";
 
-export async function readCatalogTableColumns(
+export async function readCatalogColumns(
 	sql: SQL,
 	applicationSchema: string,
+): Promise<readonly CatalogColumnRow[]> {
+	const rows = (await sql
+		.unsafe(catalogColumnsStatement.text, [applicationSchema])
+		.values()) as unknown as readonly (readonly unknown[])[] & {
+		readonly command: string;
+		readonly count: number;
+	};
+	return catalogColumnsStatement.decode({
+		command: rows.command,
+		rowCount: rows.count,
+		rows,
+	});
+}
+
+export function reduceCatalogTableColumns(
+	applicationSchema: string,
 	table: CatalogTable,
+	rows: readonly CatalogColumnRow[],
 	state: CatalogAccumulator,
-): Promise<readonly CatalogColumn[]> {
-	const columns = await sql<
-		{
-			name: string;
-			type: string;
-			typeNamespace: string;
-			typeExtension: string | null;
-			typeModifier: string | null;
-			nullable: boolean;
-			defaultExpression: string | null;
-			collation: string | null;
-			collationNamespace: string | null;
-			collationExtension: string | null;
-			identity: string;
-			generated: string;
-		}[]
-	>`
-		select a.attname as name,
-		       t.typname as type,
-		       tn.nspname as "typeNamespace",
-		       (
-		         select ext.extname
-		         from pg_catalog.pg_depend dep
-		         join pg_catalog.pg_extension ext on ext.oid = dep.refobjid
-		         where dep.classid = 'pg_catalog.pg_type'::pg_catalog.regclass
-		           and dep.objid = t.oid
-		           and dep.refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
-		           and dep.deptype = 'e'
-		         limit 1
-		       ) as "typeExtension",
-		       case when t.typname = 'numeric' then pg_catalog.format_type(a.atttypid, a.atttypmod) else null end as "typeModifier",
-		       not a.attnotnull as nullable,
-		       pg_catalog.pg_get_expr(d.adbin, d.adrelid) as "defaultExpression",
-		       coll.collname as collation,
-		       colln.nspname as "collationNamespace",
-		       (
-		         select ext.extname
-		         from pg_catalog.pg_depend dep
-		         join pg_catalog.pg_extension ext on ext.oid = dep.refobjid
-		         where dep.classid = 'pg_catalog.pg_collation'::pg_catalog.regclass
-		           and dep.objid = coll.oid
-		           and dep.refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
-		           and dep.deptype = 'e'
-		         limit 1
-		       ) as "collationExtension",
-		       a.attidentity as identity,
-		       a.attgenerated as generated
-		from pg_catalog.pg_attribute a
-		join pg_catalog.pg_class c on c.oid = a.attrelid
-		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-		join pg_catalog.pg_type t on t.oid = a.atttypid
-		join pg_catalog.pg_namespace tn on tn.oid = t.typnamespace
-		left join pg_catalog.pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
-		left join pg_catalog.pg_collation coll on coll.oid = a.attcollation and a.attcollation <> 0
-		left join pg_catalog.pg_namespace colln on colln.oid = coll.collnamespace
-		where n.nspname = ${applicationSchema} and c.relname = ${table.name}
-		  and a.attnum > 0 and not a.attisdropped
-		order by a.attname
-	`;
+): readonly CatalogColumn[] {
+	const columns = rows.filter((row) => row.table === table.name);
 	for (const column of columns) {
 		const type = catalogFieldType(column);
 		const defaultValue = parseCatalogDefault(column.defaultExpression);
 		const defaultFunction =
 			defaultValue?.kind === "randomUuid" || defaultValue?.kind === "now"
-				? await readDefaultFunctionDependency(sql, defaultValue.kind)
+				? {
+						name: column.defaultFunctionName,
+						namespace: column.defaultFunctionNamespace,
+						extension: column.defaultFunctionExtension,
+					}
 				: null;
 		const unsupportedColumnState =
 			type.kind === "unsupported" ||
@@ -147,34 +115,7 @@ export async function readCatalogTableColumns(
 				attachedTo: `${applicationSchema}.${table.name}`,
 			});
 	}
-	return columns;
-}
-
-async function readDefaultFunctionDependency(
-	sql: SQL,
-	kind: "randomUuid" | "now",
-): Promise<
-	| Readonly<{ name: string; namespace: string; extension: string | null }>
-	| undefined
-> {
-	const name = kind === "randomUuid" ? "gen_random_uuid" : "now";
-	const [functionDependency] = await sql<
-		{ name: string; namespace: string; extension: string | null }[]
-	>`
-		select p.proname as name, n.nspname as namespace, ext.extname as extension
-		from pg_catalog.pg_proc p
-		join pg_catalog.pg_namespace n on n.oid = p.pronamespace
-		left join pg_catalog.pg_depend owner
-		  on owner.classid = 'pg_catalog.pg_proc'::pg_catalog.regclass
-		 and owner.objid = p.oid
-		 and owner.refclassid = 'pg_catalog.pg_extension'::pg_catalog.regclass
-		 and owner.deptype = 'e'
-		left join pg_catalog.pg_extension ext on ext.oid = owner.refobjid
-		where n.nspname = 'pg_catalog' and p.proname = ${name} and p.pronargs = 0
-		order by p.oid
-		limit 1
-	`;
-	return functionDependency;
+	return columns.map(({ name, nullable }) => ({ name, nullable }));
 }
 
 function catalogFieldType(

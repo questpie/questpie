@@ -1,6 +1,9 @@
 import type { SQL } from "bun";
 
-import { readCatalogTableColumns } from "./catalog-reader-columns";
+import {
+	readCatalogColumns,
+	reduceCatalogTableColumns,
+} from "./catalog-reader-columns";
 import { readCatalogTableConstraintsAndIndexes } from "./catalog-reader-constraints";
 import type { CatalogAccumulator, JsonRecord } from "./catalog-reader-types";
 import { readUnsupportedCatalogObjects } from "./catalog-reader-unsupported";
@@ -163,11 +166,12 @@ export async function readCatalogComparableInOwnedTransaction(
 				qualifiedIdentity: `${scope.applicationSchema}.${table.name}`,
 				attachedTo: null,
 			});
+	const catalogColumns = await readCatalogColumns(sql, scope.applicationSchema);
 	for (const table of supportedTables) {
-		const columns = await readCatalogTableColumns(
-			sql,
+		const columns = reduceCatalogTableColumns(
 			scope.applicationSchema,
 			table,
+			catalogColumns,
 			state,
 		);
 		await readCatalogTableConstraintsAndIndexes(
