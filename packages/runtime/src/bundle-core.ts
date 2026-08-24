@@ -8,8 +8,10 @@ export {
 	readIngressPrincipal,
 } from "./operation";
 export {
+	createLinkedPostgresContextBootstrapFactory,
 	createPostgresContextBootstrap,
 	executeLinkedPostgresContextBootstrap,
+	executeLinkedPostgresQueryPlan,
 	executePostgresQuery,
 	linkPostgresContextBootstrapPlans,
 	linkPostgresQueryPlans,
@@ -32,7 +34,7 @@ export {
 	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
 } from "./durable";
-export { definePostgresStatement } from "./postgres";
+export { createRuntimePostgres, definePostgresStatement } from "./postgres";
 export type {
 	PostgresParameter,
 	PostgresStatement,
