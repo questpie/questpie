@@ -246,6 +246,13 @@ export function renderAppContract(
 				`readonly ${JSON.stringify(resource.name)}: ServiceInstance<${definitionType(resource)}>;`,
 		)
 		.join("\n\t");
+	const routeServices = applicationServices
+		.sort((left, right) => compareAscii(left.identity, right.identity))
+		.map((resource) => {
+			const instance = `ServiceInstance<${definitionType(resource)}>`;
+			return `readonly ${JSON.stringify(resource.name)}: ${resource.contract.lifetime === "execution" ? `() => Promise<${instance}>` : instance};`;
+		})
+		.join("\n\t");
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
 		.join("\n");
@@ -350,6 +357,10 @@ export type ExecutionServices = Readonly<{
 	${executionServices}
 }>;
 
+export type RouteServices = Readonly<{
+	${routeServices}
+}>;
+
 export type ExecutionInput = Readonly<{
 	principal: Principal;
 	context: AppContextInput;
@@ -362,7 +373,7 @@ export type RootExecution = Readonly<{
 	authority: Authority;
 	tenant: AppResolvedContext["tenant"];
 	values: AppResolvedContext["values"];
-	services: ExecutionServices;
+	services: RouteServices;
 	signal: AbortSignal;
 	deadline: number | null;
 }>;

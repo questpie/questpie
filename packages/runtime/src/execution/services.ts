@@ -209,15 +209,34 @@ export function createServiceOwner(
 		let result: Awaited<Result> | undefined;
 		try {
 			if (controller.signal.aborted) throw abortReason(controller.signal);
-			result = await use({
-				signal: controller.signal,
-				service: (definition) =>
-					resolveService(definition, {
-						cells,
-						owned,
-						signal: controller.signal,
-					}),
+			const pendingUse = Promise.resolve(
+				use({
+					signal: controller.signal,
+					service: (definition) => {
+						if (controller.signal.aborted)
+							return Promise.reject(abortReason(controller.signal));
+						return resolveService(definition, {
+							cells,
+							owned,
+							signal: controller.signal,
+						});
+					},
+				}),
+			);
+			void pendingUse.catch(() => undefined);
+			let rejectAbort!: (reason: unknown) => void;
+			const rejectOnAbort = () => rejectAbort(abortReason(controller.signal));
+			const aborted = new Promise<never>((_resolve, reject) => {
+				rejectAbort = reject;
+				controller.signal.addEventListener("abort", rejectOnAbort, {
+					once: true,
+				});
 			});
+			try {
+				result = await Promise.race([pendingUse, aborted]);
+			} finally {
+				controller.signal.removeEventListener("abort", rejectOnAbort);
+			}
 			controller.signal.throwIfAborted();
 		} catch (error) {
 			failed = true;

@@ -13,7 +13,7 @@ import {
 	executionFixtureState,
 	resetExecutionFixture,
 } from "../../fixtures/collaboration/src/execution";
-import { createApplicationRuntime } from "../../packages/runtime/src";
+import { createApplicationRuntime } from "../../packages/runtime/src/execution";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const lifecycleGolden = resolve(

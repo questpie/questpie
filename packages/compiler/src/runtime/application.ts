@@ -144,7 +144,7 @@ function applicationEntry(
 				throw new TypeError(
 					`Runtime Application lacks Service slot ${resource.identity}`,
 				);
-			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
+			return `${JSON.stringify(resource.name)}: ${resource.contract.lifetime === "execution" ? `() => service(${definitionName(slot)})` : `await service(${definitionName(slot)})`}`;
 		})
 		.join(",\n");
 	const credentialResolver = input.resources.find(

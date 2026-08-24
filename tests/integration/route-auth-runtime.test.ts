@@ -415,7 +415,6 @@ test("preserves typed Route execution failures and propagates request cancellati
 });
 
 test("projects decoded Route params and enforces body and duration limits", async () => {
-	let releaseLateHandler!: () => void;
 	let releaseStreamPull!: () => void;
 	const context = defineContext({
 		name: "route.limit-context",
@@ -456,9 +455,7 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 							once: true,
 						});
 					});
-					return new Promise<Response>((resolve) => {
-						releaseLateHandler = () => resolve(new Response("too late"));
-					});
+					return new Promise<Response>(() => undefined);
 				},
 			},
 			{
@@ -547,7 +544,6 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 	expect(await expired!.json()).toEqual({
 		error: { code: "RESOURCE_LIMIT", retryable: true },
 	});
-	releaseLateHandler();
 	expect(
 		await (await routes.fetch(new Request("https://app.test/assets")))!.text(),
 	).toBe("exact");

@@ -45,6 +45,49 @@ async function compileRouteSource(source: string) {
 	}
 }
 
+async function typecheckRouteParams(): Promise<void> {
+	const temporary = await mkdtemp(
+		join(resolve(fixtureRoot, ".."), ".route-auth-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const proof = join(temporary, "src/route-proof.ts");
+		await writeFile(proof, routeSource("/assets", "/assets/*rest"));
+		await compileApplication({ applicationRoot: temporary });
+		await writeFile(
+			proof,
+			`import { policy } from "questpie";
+import { defineRoute } from "#questpie/app";
+export const first = defineRoute({
+  name: "proof.first", method: "GET", path: "/assets",
+  policy: policy.public(), credentials: "none",
+  limits: { bodyBytes: 0, durationMs: 1000 },
+  handler: ({ ctx }) => {
+    void ctx.deadline;
+    // @ts-expect-error exact Route has no wildcard parameter
+    void ctx.params.rest;
+    return new Response(null, { status: 204 });
+  },
+});
+export const second = defineRoute({
+  name: "proof.second", method: "GET", path: "/assets/*rest",
+  policy: policy.public(), credentials: "none",
+  limits: { bodyBytes: 0, durationMs: 1000 },
+  handler: ({ ctx }) => {
+    const rest: string = ctx.params.rest;
+    void rest;
+    // @ts-expect-error wildcard Route exposes only its authored parameter
+    void ctx.params.missing;
+    return new Response(null, { status: 204 });
+  },
+});`,
+		);
+		await compileApplication({ applicationRoot: temporary });
+	} finally {
+		await rm(temporary, { recursive: true, force: true });
+	}
+}
+
 function routeSource(firstPath: string, secondPath?: string): string {
 	const route = (name: string, path: string) => `
 export const ${name} = defineRoute({
@@ -86,4 +129,8 @@ test("compiles exact and wildcard precedence into the generated mount", async ()
 	);
 	expect(compilation.generatedFiles["app.ts"]).toContain("RouteParams<Path>");
 	expect(compilation.generatedFiles["app.ts"]).toContain("deadline: number");
+});
+
+test("typechecks exact generated Route params and rejects unknown keys", async () => {
+	await expect(typecheckRouteParams()).resolves.toBeUndefined();
 });
