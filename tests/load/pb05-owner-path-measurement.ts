@@ -25,6 +25,7 @@ import {
 	beta05PostgresUrl,
 	prepareBeta05PostgresApplication,
 } from "../integration/postgres/helpers/beta05-runtime";
+import { importPb05FileBackedModule } from "../support/pb05-file-backed-module";
 import {
 	assertPb05OperationalMetrics,
 	assertPb05OwnerPathSchemaReset,
@@ -168,10 +169,12 @@ async function loadCompiledPublishMessage(
 		throw new TypeError(
 			"PB-05 could not compile the collaboration Mutation owner",
 		);
-	const bytes = await compiled.outputs[0]!.arrayBuffer();
-	const module = (await import(
-		`data:text/javascript;base64,${Buffer.from(bytes).toString("base64")}`
-	)) as Readonly<{ publishMessage?: CompiledPublishMessage }>;
+	const module = await importPb05FileBackedModule<
+		Readonly<{ publishMessage?: CompiledPublishMessage }>
+	>({
+		ownerRoot: applicationRoot,
+		moduleBytes: compiled.outputs[0]!,
+	});
 	if (
 		module.publishMessage?.name !== "message.publish" ||
 		typeof module.publishMessage.handler !== "function"
