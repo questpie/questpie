@@ -3,11 +3,12 @@
 	"ticket": "ACTION-KERNEL-WIRE-V3-EFFECT-IDENTITY",
 	"proof": "Accept one joint Action Kernel contract for explicit semantic limits, caller-stable effectKey material, Runtime-derived scoped Effect Identity, additive Operation Wire v3, non-retryable post-dispatch ambiguity, and direct/network parity without projecting public or production authority in this proof branch.",
 	"diffBase": "c68309f3d0997cb3acb224a53d214d4f1516bbf2",
-	"reviewOutput": "docs/v4/prototypes/action-wire-v3-effect-identity/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/action-wire-v3-effect-identity/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
 		"canonical prerequisite with Runtime and compiler lone-surrogate parity": "c68309f3d0997cb3acb224a53d214d4f1516bbf2",
 		"integrated Action semantic-limits proof": "8525b903a781aff43b6d6cb08dd365f3813b46bf",
-		"repaired combined Effect Identity and Wire v3 proof": "b4100cde58e8f8e7bb9df39599ed7915ef6bf3f8"
+		"prior blocked reviewed head": "fb09930752e0c775ae64665ce501125f1672d9d5",
+		"replacement combined Effect Identity and Wire v3 proof": "f71c5954259a989c4a586942fbf302973bae067b"
 	},
 	"authorityDocuments": [
 		{
@@ -19,6 +20,11 @@
 			"name": "proof construction and acceptance procedure",
 			"path": ".agents/skills/questpie-v4/references/proof.md",
 			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "prior blocked formal acceptance record",
+			"path": "docs/v4/prototypes/action-wire-v3-effect-identity/REVIEW.json",
+			"sha256": "745ba9f28504bbe89cef78e87ffa83ee03b7dd189d9dd0d18faaf224c71ac66d"
 		},
 		{
 			"name": "canonical product specification",
@@ -44,6 +50,16 @@
 			"name": "canonical definition composition and Resource Identity grammar",
 			"path": "docs/v4/definition-composition.md",
 			"sha256": "f085d9d10b314b0ca74054ead35045759ca5a58fae5593463e8a31bd468d6cea"
+		},
+		{
+			"name": "production durable Effect Identity owner",
+			"path": "packages/runtime/src/durable/rows.ts",
+			"sha256": "b01d1c69df5b08af35c539ae9cacca95bc7dd8098fe4806bf2b17ca61b00d579"
+		},
+		{
+			"name": "production durable Effect Identity reservation evidence",
+			"path": "tests/unit/pb05-postgres-database-durable-effect-reserve.test.ts",
+			"sha256": "a0380b6f45cd09bb967853bd0917a294d29493fbc8a9e04660af907510adce42"
 		},
 		{
 			"name": "accepted trusted Context and Policy ownership",
@@ -111,7 +127,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "dependency_root=\"${QUESTPIE_DEPENDENCY_ROOT:-$(git worktree list --porcelain | sed -n 's/^worktree //p' | while IFS= read -r candidate; do if test -x \"$candidate/node_modules/typescript/bin/tsc\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/compiler 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/compiler)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:fixtures/collaboration 2>/dev/null)\" = \"$(git rev-parse HEAD:fixtures/collaboration)\"; then printf '%s\\n' \"$candidate\"; break; fi; done)}\"; test -n \"$dependency_root\" || { echo \"Set QUESTPIE_DEPENDENCY_ROOT to a matching worktree with node_modules\" >&2; exit 1; }; QUESTPIE_CANONICAL_ROOT=\"$PWD\" QUESTPIE_DEPENDENCY_ROOT=\"$dependency_root\" bun run docs/v4/prototypes/action-wire-v3-effect-identity/repository-check.ts",
+			"command": "dependency_root=\"${QUESTPIE_DEPENDENCY_ROOT:-$(git worktree list --porcelain | sed -n 's/^worktree //p' | while IFS= read -r candidate; do if test -x \"$candidate/node_modules/typescript/bin/tsc\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/compiler 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/compiler)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/runtime 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/runtime)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:fixtures/collaboration 2>/dev/null)\" = \"$(git rev-parse HEAD:fixtures/collaboration)\"; then printf '%s\\n' \"$candidate\"; break; fi; done)}\"; test -n \"$dependency_root\" || { echo \"Set QUESTPIE_DEPENDENCY_ROOT to a matching worktree with node_modules\" >&2; exit 1; }; QUESTPIE_CANONICAL_ROOT=\"$PWD\" QUESTPIE_DEPENDENCY_ROOT=\"$dependency_root\" bun run docs/v4/prototypes/action-wire-v3-effect-identity/repository-check.ts",
 			"result": "PASS"
 		},
 		{
@@ -119,7 +135,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "dependency_root=\"${QUESTPIE_DEPENDENCY_ROOT:-$(git worktree list --porcelain | sed -n 's/^worktree //p' | while IFS= read -r candidate; do if test -x \"$candidate/node_modules/typescript/bin/tsc\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/compiler 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/compiler)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:fixtures/collaboration 2>/dev/null)\" = \"$(git rev-parse HEAD:fixtures/collaboration)\"; then printf '%s\\n' \"$candidate\"; break; fi; done)}\"; test -n \"$dependency_root\" || { echo \"Set QUESTPIE_DEPENDENCY_ROOT to a matching worktree with node_modules\" >&2; exit 1; }; bun \"$dependency_root/node_modules/typescript/bin/tsc\" --typeRoots \"$dependency_root/node_modules/@types\" -p docs/v4/prototypes/action-wire-v3-effect-identity/tsconfig.json && bun \"$dependency_root/node_modules/typescript/bin/tsc\" --typeRoots \"$dependency_root/node_modules/@types\" -p docs/v4/prototypes/action-limits/tsconfig.json",
+			"command": "dependency_root=\"${QUESTPIE_DEPENDENCY_ROOT:-$(git worktree list --porcelain | sed -n 's/^worktree //p' | while IFS= read -r candidate; do if test -x \"$candidate/node_modules/typescript/bin/tsc\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/compiler 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/compiler)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:packages/runtime 2>/dev/null)\" = \"$(git rev-parse HEAD:packages/runtime)\" && test \"$(git -C \"$candidate\" rev-parse HEAD:fixtures/collaboration 2>/dev/null)\" = \"$(git rev-parse HEAD:fixtures/collaboration)\"; then printf '%s\\n' \"$candidate\"; break; fi; done)}\"; test -n \"$dependency_root\" || { echo \"Set QUESTPIE_DEPENDENCY_ROOT to a matching worktree with node_modules\" >&2; exit 1; }; bun \"$dependency_root/node_modules/typescript/bin/tsc\" --typeRoots \"$dependency_root/node_modules/@types\" -p docs/v4/prototypes/action-wire-v3-effect-identity/tsconfig.json && bun \"$dependency_root/node_modules/typescript/bin/tsc\" --typeRoots \"$dependency_root/node_modules/@types\" -p docs/v4/prototypes/action-limits/tsconfig.json",
 			"result": "PASS"
 		},
 		{
@@ -142,7 +158,7 @@
 	"acceptanceCriteria": [
 		"The caller supplies exactly one required effectKey as stable provider material, not a final Effect Identity or idempotency guarantee. The key is NFC, reject-not-rewrite, 1 through 256 Unicode scalars, at most 1024 UTF-8 bytes, and rejects null scalars, lone surrogates, absence, and aliases such as effectId, idempotencyKey, or Mutation callId.",
 		"Runtime derives the UUID-shaped ordinary Action Effect Identity from already canonical application and Action Resource Identities, trusted tenant and validated Principal kind and id, plus effectKey under the disjoint questpie.effect-identity.action.v1 domain. Domain input and Mutation callId are excluded, and forged caller facts cannot own the final identity.",
-		"The existing durable application/run/effect UUID vector remains byte-identical while ordinary Action derivation is domain-separated. Handler context receives Runtime-scoped effect.id; callers never supply that final identity.",
+		"The repository gate imports the tree-bound production durable Effect Identity owner and pins three application/run/effect UUID vectors equal to the local compatibility model while ordinary Action derivation remains domain-separated. Handler context receives Runtime-scoped effect.id; callers never supply that final identity.",
 		"Ordinary Action invocation performs no automatic retry, coalescing, receipt-ledger claim, or exactly-once claim. Duplicate admissions may execute again with the same stable provider-visible Effect Identity, and application/provider receipt behavior remains explicit provider ownership.",
 		"Operation Wire v3 is one exact closed additive projection over the retained collaboration Wire v2 bytes. Operation and failure identity arrays are globally canonical-sorted; Query and Mutation retain their v2 contracts; a v1 or v2 Action request, including selected-operation/request-operation confusion, refuses CLIENT_OUTDATED before Context, Service, or handler work.",
 		"A valid pre-execution rejection proves zero Action work. After dispatch, fetch rejection, response loss or truncation, cancellation race, malformed content type, invalid JSON, unknown frame, or miscorrelated frame becomes non-retryable ACTION_OUTCOME_AMBIGUOUS with callId-only correlation, no echoed effectKey, and no automatic replay. Authored outcomeUnknown remains a distinct declared provider outcome.",
