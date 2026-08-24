@@ -4,7 +4,7 @@ import type {
 	definePostgresStatement,
 	PostgresTransactionRunner,
 	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
-} from "@questpie/runtime/bundle-core";
+} from "@questpie/runtime/bundle-core-types";
 
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";

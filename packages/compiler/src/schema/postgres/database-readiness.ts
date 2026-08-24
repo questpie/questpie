@@ -2,7 +2,7 @@ import type {
 	definePostgresStatement,
 	PostgresStatement,
 	PostgresTransaction,
-} from "@questpie/runtime/bundle-core";
+} from "@questpie/runtime/bundle-core-types";
 
 import type { SchemaProjectionV1 } from "../contracts";
 import type { SchemaFingerprintV1 } from "../postgres-types";
