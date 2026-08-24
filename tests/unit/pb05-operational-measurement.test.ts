@@ -7,6 +7,7 @@ import {
 } from "../../packages/runtime/src/postgres";
 import {
 	createPb05OperationalMeasurement,
+	instrumentPb05OwnedTransaction,
 	instrumentPb05TransactionRunner,
 	pb05RepresentativeOperations,
 } from "../support/pb05-operational-measurement";
@@ -352,4 +353,85 @@ test("observer failure after successful SQL remains visible", async () => {
 			use: (transaction) => transaction.execute(statement, undefined),
 		}),
 	).rejects.toThrow("invalid PB-05 statement observation");
+});
+
+test("shared transaction observer keeps reconciliation and apply attribution distinct", async () => {
+	const reconciliation = definePostgresStatement({
+		name: "live-query.reconciliation",
+		text: "select 1",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => undefined,
+	});
+	const apply = definePostgresStatement({
+		name: "live-query.apply",
+		text: "select 2",
+		parameterCount: 0,
+		parameters: () => [],
+		decode: () => undefined,
+	});
+	let transactions = 0;
+	const database: PostgresTransactionRunner = {
+		transaction: ({ use }) => {
+			transactions += 1;
+			return use({
+				[transactionBrand]: true,
+				execute: async () => undefined as never,
+			});
+		},
+	};
+	const measurement = createPb05OperationalMeasurement();
+	const measured = instrumentPb05TransactionRunner({
+		database,
+		measurement,
+		population: "realtime",
+		operation: "reconciliation",
+	});
+
+	await measured.transaction({
+		mode: { isolation: "repeatableRead", access: "readWrite" },
+		use: async (transaction) => {
+			await transaction.execute(reconciliation, undefined);
+			const applyTransaction = instrumentPb05OwnedTransaction({
+				transaction,
+				measurement,
+				population: "realtime",
+				operation: "apply",
+			});
+			await applyTransaction.execute(apply, undefined);
+		},
+	});
+
+	const snapshot = measurement.snapshot({ requireCompleteInventory: false });
+	expect(transactions).toBe(1);
+	expect(snapshot.populations.realtime).toEqual({
+		statementExecutions: 2,
+		distinctStatements: 2,
+		transactions: 1,
+	});
+	expect(snapshot.operations["realtime:reconciliation"]).toMatchObject({
+		statementExecutions: 1,
+		distinctStatements: ["live-query.reconciliation"],
+		transactions: 1,
+	});
+	expect(snapshot.operations["realtime:apply"]).toMatchObject({
+		statementExecutions: 1,
+		distinctStatements: ["live-query.apply"],
+		transactions: 1,
+	});
+});
+
+test("shared transaction observer refuses an uninstrumented owned transaction", () => {
+	const transaction = {
+		[transactionBrand]: true,
+		execute: async () => undefined as never,
+	};
+	expect(() =>
+		instrumentPb05OwnedTransaction({
+			transaction,
+			measurement: createPb05OperationalMeasurement(),
+			population: "realtime",
+			operation: "apply",
+		}),
+	).toThrow("PB-05 shared transaction is not instrumented");
 });

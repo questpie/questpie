@@ -1,6 +1,7 @@
 import {
 	transactionBrand,
 	type PostgresStatement,
+	type PostgresTransaction,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres";
 
@@ -272,12 +273,6 @@ export function instrumentPb05TransactionRunner(
 	if (!operation(input.population, input.operation))
 		throw new TypeError("invalid PB-05 instrumentation config");
 	const now = input.now ?? performance.now.bind(performance);
-	const observationTime = (): number => {
-		const value = now();
-		if (!finiteTime(value))
-			throw new TypeError("invalid PB-05 instrumentation clock");
-		return value;
-	};
 	let transactionOrdinal = 0;
 	return Object.freeze({
 		async transaction(request) {
@@ -285,43 +280,111 @@ export function instrumentPb05TransactionRunner(
 			return input.database.transaction({
 				...request,
 				use: (owned) =>
-					request.use({
-						[transactionBrand]: true,
-						async execute<Input, Output>(
-							statement: PostgresStatement<Input, Output>,
-							value: Input,
-						): Promise<Output> {
-							const startedAtMs = observationTime();
-							let output: Output;
-							try {
-								output = await owned.execute(statement, value);
-							} catch (primary) {
-								try {
-									input.measurement.statement({
-										population: input.population,
-										operation: input.operation,
-										name: statement.name,
-										transaction,
-										startedAtMs,
-										finishedAtMs: observationTime(),
-									});
-								} catch {
-									// Instrumentation cannot replace the database failure it observes.
-								}
-								throw primary;
-							}
-							input.measurement.statement({
-								population: input.population,
-								operation: input.operation,
-								name: statement.name,
-								transaction,
-								startedAtMs,
-								finishedAtMs: observationTime(),
-							});
-							return output;
-						},
-					}),
+					request.use(
+						observedPb05Transaction({
+							context: {
+								identity: transaction,
+								execute: (statement, value) => owned.execute(statement, value),
+							},
+							measurement: input.measurement,
+							population: input.population,
+							operation: input.operation,
+							now,
+						}),
+					),
 			});
 		},
+	});
+}
+
+const pb05TransactionContext = Symbol("PB-05 transaction observation context");
+
+type Pb05TransactionContext = Readonly<{
+	identity: string;
+	execute<Input, Output>(
+		statement: PostgresStatement<Input, Output>,
+		value: Input,
+	): Promise<Output>;
+}>;
+
+type Pb05ObservedTransaction = PostgresTransaction &
+	Readonly<{ [pb05TransactionContext]: Pb05TransactionContext }>;
+
+function observedPb05Transaction(
+	input: Readonly<{
+		context: Pb05TransactionContext;
+		measurement: ReturnType<typeof createPb05OperationalMeasurement>;
+		population: string;
+		operation: string;
+		now: () => number;
+	}>,
+): Pb05ObservedTransaction {
+	const observationTime = (): number => {
+		const value = input.now();
+		if (!finiteTime(value))
+			throw new TypeError("invalid PB-05 instrumentation clock");
+		return value;
+	};
+	return Object.freeze({
+		[transactionBrand]: true,
+		[pb05TransactionContext]: input.context,
+		async execute<Input, Output>(
+			statement: PostgresStatement<Input, Output>,
+			value: Input,
+		): Promise<Output> {
+			const startedAtMs = observationTime();
+			let output: Output;
+			try {
+				output = await input.context.execute(statement, value);
+			} catch (primary) {
+				try {
+					input.measurement.statement({
+						population: input.population,
+						operation: input.operation,
+						name: statement.name,
+						transaction: input.context.identity,
+						startedAtMs,
+						finishedAtMs: observationTime(),
+					});
+				} catch {
+					// Instrumentation cannot replace the database failure it observes.
+				}
+				throw primary;
+			}
+			input.measurement.statement({
+				population: input.population,
+				operation: input.operation,
+				name: statement.name,
+				transaction: input.context.identity,
+				startedAtMs,
+				finishedAtMs: observationTime(),
+			});
+			return output;
+		},
+	});
+}
+
+export function instrumentPb05OwnedTransaction(
+	input: Readonly<{
+		transaction: PostgresTransaction;
+		measurement: ReturnType<typeof createPb05OperationalMeasurement>;
+		population: string;
+		operation: string;
+		now?: () => number;
+	}>,
+): PostgresTransaction {
+	if (!operation(input.population, input.operation))
+		throw new TypeError("invalid PB-05 instrumentation config");
+	const context = (input.transaction as Partial<Pb05ObservedTransaction>)[
+		pb05TransactionContext
+	];
+	if (context === undefined)
+		throw new TypeError("PB-05 shared transaction is not instrumented");
+	return observedPb05Transaction({
+		context,
+		measurement: input.measurement,
+		population: input.population,
+		operation: input.operation,
+		now: input.now ?? performance.now.bind(performance),
 	});
 }
