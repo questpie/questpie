@@ -1,5 +1,6 @@
 export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-002"
+	| "QP-COMPOSE-003"
 	| "QP-COMPOSE-004"
 	| "QP-COMPOSE-005"
 	| "QP-COMPOSE-006"
@@ -12,6 +13,8 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-015"
 	| "QP-COMPOSE-017"
 	| "QP-COMPOSE-020"
+	| "QP-COMPOSE-023"
+	| "QP-COMPOSE-024"
 	| "QP-DATA-003"
 	| "QP-DATA-005"
 	| "QP-POLICY-001"
@@ -45,6 +48,7 @@ export type CompositionDiagnosticCode =
 
 const diagnosticClassesByCode = {
 	"QP-COMPOSE-002": ["duplicateResourceIdentity"],
+	"QP-COMPOSE-003": ["invalidResourceName"],
 	"QP-COMPOSE-004": ["unknownReference"],
 	"QP-COMPOSE-005": ["packageCompositionNotActivated"],
 	"QP-COMPOSE-006": ["invalidPackageManifest"],
@@ -57,6 +61,8 @@ const diagnosticClassesByCode = {
 	"QP-COMPOSE-015": ["invalidAugmentation"],
 	"QP-COMPOSE-017": ["invalidApplicationRoot"],
 	"QP-COMPOSE-020": ["duplicateContributionIdentity"],
+	"QP-COMPOSE-023": ["operationProjectionCollision"],
+	"QP-COMPOSE-024": ["operationProjectionUnsafeName"],
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
 	"QP-POLICY-001": ["missingDefaultPolicy"],

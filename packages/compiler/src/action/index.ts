@@ -200,6 +200,7 @@ export function renderActionDeclarations(
 		"Action",
 		actions(resources).map((resource) => ({
 			name: resource.name,
+			origin: resource.origin,
 			value: `(input: ${renderCodecType(resource.contract.input)}, options: Readonly<{ readonly effectKey: string; readonly callId?: string; readonly timeoutMilliseconds?: number }>) => Promise<${renderCodecType(resource.contract.output)}>`,
 		})),
 	);

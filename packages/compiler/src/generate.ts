@@ -212,6 +212,7 @@ function renderQueryOperations(
 			.filter((resource) => resource.kind === "query")
 			.map((resource) => ({
 				name: resource.name,
+				origin: resource.origin,
 				value: `(input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>`,
 			})),
 	);

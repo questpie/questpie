@@ -198,6 +198,7 @@ function applicationEntry(
 		"Query",
 		queries.map((resource) => ({
 			name: resource.name,
+			origin: resource.origin,
 			value: `(operationInput) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput)`,
 		})),
 	);
@@ -208,6 +209,7 @@ function applicationEntry(
 		"Mutation",
 		mutations.map((resource) => ({
 			name: resource.name,
+			origin: resource.origin,
 			value: `(operationInput, options) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput, options)`,
 		})),
 	);
@@ -245,6 +247,7 @@ function applicationEntry(
 		"Action",
 		actions.map((resource) => ({
 			name: resource.name,
+			origin: resource.origin,
 			value: `(actionInput, options) => {
 					const optionKeys = options && typeof options === "object" && !Array.isArray(options) ? Object.keys(options) : [];
 					if (!Object.hasOwn(options ?? {}, "effectKey") || optionKeys.some((key) => key !== "effectKey" && key !== "callId" && key !== "timeoutMilliseconds"))

@@ -1,19 +1,78 @@
 import { compareAscii } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
+import type { NormalizedResource } from "./types";
+
+type OperationOrigin = NormalizedResource["origin"];
 
 export type ServerOperationMember = Readonly<{
 	name: string;
+	origin: OperationOrigin;
 	value: string;
 }>;
 
-type Branch = Map<string, Branch | string>;
+type Leaf = Readonly<{ member: ServerOperationMember }>;
+type Branch = Map<string, Branch | Leaf>;
 
-function invalid(message: string): never {
+function originLabel(origin: OperationOrigin): string {
+	return `${origin.packageId ?? "application"}:${origin.logicalPath}#${origin.exportName}`;
+}
+
+function invalidName(kind: string, member: ServerOperationMember): never {
 	throw new CompilerDiagnosticError(
-		"QP-COMPOSE-013",
-		"structuralTypeError",
-		message,
+		"QP-COMPOSE-003",
+		"invalidResourceName",
+		`${kind} ${member.name} violates the Qualified Resource Name grammar at ${originLabel(member.origin)}`,
+		{ kind, name: member.name, origins: [member.origin] },
 	);
+}
+
+function unsafeName(kind: string, member: ServerOperationMember): never {
+	throw new CompilerDiagnosticError(
+		"QP-COMPOSE-024",
+		"operationProjectionUnsafeName",
+		`${kind} ${member.name} ends with then at ${originLabel(member.origin)}`,
+		{ kind, name: member.name, origins: [member.origin] },
+	);
+}
+
+function collision(
+	kind: string,
+	left: ServerOperationMember,
+	right: ServerOperationMember,
+): never {
+	const missingAuthority = "explicit namespace or Augmentation Contract";
+	throw new CompilerDiagnosticError(
+		"QP-COMPOSE-023",
+		"operationProjectionCollision",
+		`${kind} ${left.name} at ${originLabel(left.origin)} conflicts with ${right.name} at ${originLabel(right.origin)}; missing ${missingAuthority}`,
+		{
+			kind,
+			names: [left.name, right.name],
+			origins: [left.origin, right.origin],
+			missingAuthority,
+		},
+	);
+}
+
+function validateName(kind: string, member: ServerOperationMember): void {
+	if (
+		member.name.length > 255 ||
+		member.name
+			.split(".")
+			.some(
+				(segment) =>
+					segment.length > 63 || !/^[a-z][A-Za-z0-9]*$/.test(segment),
+			)
+	)
+		invalidName(kind, member);
+	if (member.name.split(".").at(-1) === "then") unsafeName(kind, member);
+}
+
+function firstLeaf(branch: Branch): Leaf {
+	for (const value of branch.values())
+		if (value instanceof Map) return firstLeaf(value);
+		else return value;
+	throw new TypeError("server Operation namespace is empty");
 }
 
 function operationTree(
@@ -24,23 +83,21 @@ function operationTree(
 	for (const member of members.toSorted((left, right) =>
 		compareAscii(left.name, right.name),
 	)) {
+		validateName(kind, member);
 		const segments = member.name.split(".");
-		if (segments.at(-1) === "then")
-			invalid(`${kind} ${member.name} cannot end with then`);
 		let branch = root;
 		for (const [index, segment] of segments.entries()) {
 			const existing = branch.get(segment);
 			const leaf = index === segments.length - 1;
 			if (leaf) {
 				if (existing instanceof Map)
-					invalid(`${kind} ${member.name} collides with an existing namespace`);
-				if (existing !== undefined)
-					invalid(`${kind} ${member.name} is duplicated`);
-				branch.set(segment, member.value);
+					collision(kind, firstLeaf(existing).member, member);
+				if (existing !== undefined) collision(kind, existing.member, member);
+				branch.set(segment, { member });
 				continue;
 			}
-			if (typeof existing === "string")
-				invalid(`${kind} ${member.name} extends an existing operation leaf`);
+			if (existing !== undefined && !(existing instanceof Map))
+				collision(kind, existing.member, member);
 			if (existing instanceof Map) {
 				branch = existing;
 				continue;
@@ -55,9 +112,9 @@ function operationTree(
 
 function renderTypeBranch(branch: Branch): string {
 	const members = [...branch].map(([name, value]) =>
-		typeof value === "string"
-			? `readonly ${JSON.stringify(name)}: ${value};`
-			: `readonly ${JSON.stringify(name)}: ${renderTypeBranch(value)};`,
+		value instanceof Map
+			? `readonly ${JSON.stringify(name)}: ${renderTypeBranch(value)};`
+			: `readonly ${JSON.stringify(name)}: ${value.member.value};`,
 	);
 	return `Readonly<{ ${members.join(" ")} }>`;
 }
@@ -65,7 +122,7 @@ function renderTypeBranch(branch: Branch): string {
 function renderValueBranch(branch: Branch): string {
 	const members = [...branch].map(
 		([name, value]) =>
-			`${JSON.stringify(name)}: ${typeof value === "string" ? value : renderValueBranch(value)}`,
+			`${JSON.stringify(name)}: ${value instanceof Map ? renderValueBranch(value) : value.member.value}`,
 	);
 	return `Object.freeze(Object.assign(Object.create(null), {${members.join(",")}}))`;
 }

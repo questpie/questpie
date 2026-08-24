@@ -20,6 +20,14 @@ import type {
 } from "../../packages/compiler/src/types";
 
 const codec = (value: unknown) => value;
+const operationOrigin = (logicalPath: string) =>
+	Object.freeze({
+		logicalPath,
+		exportName: "operation",
+		packageId: null,
+		span: null,
+		memberSpans: Object.freeze({}),
+	});
 const actionValue = Object.freeze({
 	__questpie: Object.freeze({ category: "definition", resourceKind: "action" }),
 	executableSlots: Object.freeze(["handler"]),
@@ -49,9 +57,21 @@ const actionValue = Object.freeze({
 
 test("renders nested frozen null-prototype server Operation maps", () => {
 	const source = renderServerOperationValue("Action", [
-		{ name: "constructor", value: "() => 'constructor'" },
-		{ name: "delivery.publish", value: "() => 'published'" },
-		{ name: "prototype", value: "() => 'prototype'" },
+		{
+			name: "constructor",
+			origin: operationOrigin("src/constructor.ts"),
+			value: "() => 'constructor'",
+		},
+		{
+			name: "delivery.publish",
+			origin: operationOrigin("src/delivery.ts"),
+			value: "() => 'published'",
+		},
+		{
+			name: "prototype",
+			origin: operationOrigin("src/prototype.ts"),
+			value: "() => 'prototype'",
+		},
 	]);
 	const operations = Function(`return (${source})`)() as Readonly<
 		Record<string, unknown>
@@ -68,29 +88,123 @@ test("renders nested frozen null-prototype server Operation maps", () => {
 	expect((operations.prototype as () => string)()).toBe("prototype");
 	expect(
 		renderServerOperationType("Action", [
-			{ name: "delivery.publish", value: "Publish" },
+			{
+				name: "delivery.publish",
+				origin: operationOrigin("src/delivery.ts"),
+				value: "Publish",
+			},
 		]),
 	).toBe(
 		'Readonly<{ readonly "delivery": Readonly<{ readonly "publish": Publish; }>; }>',
 	);
 });
 
-test("rejects ambiguous or thenable server Operation names", () => {
-	for (const members of [
-		[
-			{ name: "delivery", value: "Delivery" },
-			{ name: "delivery.publish", value: "Publish" },
-		],
-		[
-			{ name: "delivery.publish", value: "Publish" },
-			{ name: "delivery", value: "Delivery" },
-		],
-		[{ name: "delivery.then", value: "Then" }],
-		[{ name: "then", value: "Then" }],
-	] as const)
-		expect(() => renderServerOperationType("Action", members)).toThrow(
-			"QP-COMPOSE-013",
-		);
+test("reports exact same-kind projection collisions with both Origins and missing authority", () => {
+	const leafOrigin = operationOrigin("src/delivery.ts");
+	const childOrigin = operationOrigin("packages/mail/publish.ts");
+	for (const kind of ["Action", "Mutation", "Query"]) {
+		for (const members of [
+			[
+				{ name: "delivery", origin: leafOrigin, value: "Delivery" },
+				{
+					name: "delivery.publish",
+					origin: childOrigin,
+					value: "Publish",
+				},
+			],
+			[
+				{
+					name: "delivery.publish",
+					origin: childOrigin,
+					value: "Publish",
+				},
+				{ name: "delivery", origin: leafOrigin, value: "Delivery" },
+			],
+		] as const) {
+			let failure: unknown;
+			try {
+				renderServerOperationType(kind, members);
+			} catch (error) {
+				failure = error;
+			}
+			expect(failure).toMatchObject({
+				code: "QP-COMPOSE-023",
+				diagnosticClass: "operationProjectionCollision",
+				details: {
+					kind,
+					names: ["delivery", "delivery.publish"],
+					origins: [leafOrigin, childOrigin],
+					missingAuthority: "explicit namespace or Augmentation Contract",
+				},
+			});
+			expect(String(failure)).toContain("src/delivery.ts#operation");
+			expect(String(failure)).toContain("packages/mail/publish.ts#operation");
+		}
+	}
+});
+
+test("closed-validates server Operation Qualified Resource Names", () => {
+	const segment63 = `a${"A".repeat(62)}`;
+	const segment64 = `a${"A".repeat(63)}`;
+	const name255 = [segment63, segment63, segment63, segment63].join(".");
+	const name256 = [
+		segment63,
+		segment63,
+		segment63,
+		`a${"A".repeat(61)}`,
+		"a",
+	].join(".");
+	expect(name255).toHaveLength(255);
+	expect(name256).toHaveLength(256);
+	for (const kind of ["Action", "Mutation", "Query"]) {
+		for (const name of ["a", "oauth2Clients", "then.fire", segment63, name255])
+			expect(() =>
+				renderServerOperationType(kind, [
+					{ name, origin: operationOrigin(`src/${kind}.ts`), value: "Call" },
+				]),
+			).not.toThrow();
+		for (const name of [
+			"",
+			".delivery",
+			"delivery.",
+			"delivery..publish",
+			"Delivery",
+			"delivery_publish",
+			"delivery-publish",
+			"delivery/publish",
+			"delivery:publish",
+			"délivery",
+			segment64,
+			name256,
+		]) {
+			let failure: unknown;
+			const origin = operationOrigin(`src/${kind}-${name.length}.ts`);
+			try {
+				renderServerOperationType(kind, [{ name, origin, value: "Call" }]);
+			} catch (error) {
+				failure = error;
+			}
+			expect(failure).toMatchObject({
+				code: "QP-COMPOSE-003",
+				diagnosticClass: "invalidResourceName",
+				details: { kind, name, origins: [origin] },
+			});
+		}
+		for (const name of ["then", "delivery.then"]) {
+			let failure: unknown;
+			const origin = operationOrigin(`src/${kind}-then.ts`);
+			try {
+				renderServerOperationType(kind, [{ name, origin, value: "Call" }]);
+			} catch (error) {
+				failure = error;
+			}
+			expect(failure).toMatchObject({
+				code: "QP-COMPOSE-024",
+				diagnosticClass: "operationProjectionUnsafeName",
+				details: { kind, name, origins: [origin] },
+			});
+		}
+	}
 });
 
 async function discoverAction(properties: string) {

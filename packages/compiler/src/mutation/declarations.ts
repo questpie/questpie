@@ -19,6 +19,7 @@ export function renderMutationDeclarations(
 		"Mutation",
 		mutations(resources).map((resource) => ({
 			name: resource.name,
+			origin: resource.origin,
 			value: `(input: ${renderCodecType(resource.contract.input)}, options?: OperationCallOptions) => Promise<${renderCodecType(resource.contract.output)}>`,
 		})),
 	);
