@@ -326,7 +326,7 @@ function observedPb05Transaction(
 		return value;
 	};
 	return Object.freeze({
-		[transactionBrand]: true,
+		[transactionBrand]: true as const,
 		[pb05TransactionContext]: input.context,
 		async execute<Input, Output>(
 			statement: PostgresStatement<Input, Output>,

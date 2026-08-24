@@ -1,0 +1,49 @@
+{
+	"id": "pb05-operational-gaps-contention",
+	"kind": "load",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/pb05-operational-gaps-contention.ts"],
+	"budgetOwner": "PB-05",
+	"metrics": {
+		"timerControlSamples": {
+			"direction": "min",
+			"budget": 1,
+			"unit": "count"
+		},
+		"instrumentationMutationHandlerHoldControlSamples": {
+			"direction": "min",
+			"budget": 64,
+			"unit": "count"
+		},
+		"instrumentationRealtimeApplyHoldControlSamples": {
+			"direction": "min",
+			"budget": 64,
+			"unit": "count"
+		},
+		"maintenanceLockShapeControlSamples": {
+			"direction": "min",
+			"budget": 32,
+			"unit": "count"
+		},
+		"reconciliationLockShapeControlSamples": {
+			"direction": "min",
+			"budget": 32,
+			"unit": "count"
+		},
+		"retentionLockShapeControlSamples": {
+			"direction": "min",
+			"budget": 32,
+			"unit": "count"
+		},
+		"semanticFailures": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		},
+		"lockWaitProofFailures": {
+			"direction": "max",
+			"budget": 0,
+			"unit": "count"
+		}
+	}
+}
