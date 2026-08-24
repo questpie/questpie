@@ -11,7 +11,7 @@
 		"platform": "linux-x64",
 		"processor": "AMD Ryzen 5 5600G with Radeon Graphics",
 		"runnerClass": "reference-local",
-		"recordedAt": "2026-08-20",
+		"recordedAt": "2026-08-24",
 		"samples": 3,
 		"aggregation": "median by compileMs"
 	},
@@ -21,31 +21,31 @@
 		"taggedStableRunner": "PENDING"
 	},
 	"samples": {
-		"compileMs": [1815.059006, 1682.9732060000001, 1719.4365810000002]
+		"compileMs": [1794.2318480000001, 1492.849315, 1574.8830859999998]
 	},
 	"observed": {
-		"compileMs": 1719.4365810000002,
-		"typecheckMs": 1309.781659,
-		"generatedBytes": 751190,
-		"publicDeclarationBytes": 59299,
-		"typescriptTypes": 6923,
-		"typescriptInstantiations": 16808,
-		"typescriptMemoryKiB": 107698
+		"compileMs": 1574.8830859999998,
+		"typecheckMs": 1376.1553340000005,
+		"generatedBytes": 1081026,
+		"publicDeclarationBytes": 63917,
+		"typescriptTypes": 7208,
+		"typescriptInstantiations": 17262,
+		"typescriptMemoryKiB": 105462
 	},
 	"budgetDerivation": {
 		"compileMs": {
-			"referenceObservedMs": 1719.4365810000002,
+			"referenceObservedMs": 1574.8830859999998,
 			"multiplier": 2.5,
 			"roundUpQuantumMs": 1000
 		},
 		"generatedBytes": {
-			"referenceObservedBytes": 751190,
-			"roundUpPowerOfTwoBytes": 1048576
+			"referenceObservedBytes": 1081026,
+			"roundUpPowerOfTwoBytes": 2097152
 		}
 	},
 	"budgets": {
-		"compileMs": 5000,
-		"generatedBytes": 1048576,
+		"compileMs": 4000,
+		"generatedBytes": 2097152,
 		"typescriptInstantiations": 125000
 	},
 	"status": "PASS"
