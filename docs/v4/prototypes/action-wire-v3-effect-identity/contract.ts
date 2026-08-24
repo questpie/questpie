@@ -93,10 +93,17 @@ export function isEffectKey(value: unknown): value is string {
 
 function ownerIdentity(value: unknown, prefix: string, label: string): string {
 	const qualifiedResourceName = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/u;
+	if (typeof value !== "string" || !value.startsWith(`${prefix}:`))
+		throw new TypeError(
+			`${label} is not a canonical ${prefix} Resource Identity`,
+		);
+	const name = value.slice(prefix.length + 1);
+	const segments = name.split(".");
 	if (
-		typeof value !== "string" ||
-		!value.startsWith(`${prefix}:`) ||
-		!qualifiedResourceName.test(value.slice(prefix.length + 1))
+		!qualifiedResourceName.test(name) ||
+		name.length > 255 ||
+		segments.some((segment) => segment.length > 63) ||
+		(prefix === "action" && segments.at(-1) === "then")
 	)
 		throw new TypeError(
 			`${label} is not a canonical ${prefix} Resource Identity`,

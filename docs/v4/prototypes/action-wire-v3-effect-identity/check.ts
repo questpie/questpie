@@ -84,6 +84,30 @@ assert.throws(
 	() => deriveEffectIdentity({ ...scope, action: "delivery.publish" as never }),
 	/canonical action Resource Identity/,
 );
+const segment63 = `a${"A".repeat(62)}`;
+const segment64 = `a${"A".repeat(63)}`;
+const name255 = [51, 50, 50, 50, 50]
+	.map((length) => `a${"A".repeat(length - 1)}`)
+	.join(".");
+const name256 = [51, 51, 50, 50, 50]
+	.map((length) => `a${"A".repeat(length - 1)}`)
+	.join(".");
+assert.equal(segment63.length, 63);
+assert.equal(segment64.length, 64);
+assert.equal(name255.length, 255);
+assert.equal(name256.length, 256);
+assert.match(
+	deriveEffectIdentity({
+		...scope,
+		application: `application:${name255}`,
+		action: `action:${segment63}`,
+	}),
+	/^[0-9a-f-]{36}$/u,
+);
+assert.match(
+	deriveEffectIdentity({ ...scope, action: "action:then.fire" }),
+	/^[0-9a-f-]{36}$/u,
+);
 for (const application of [
 	"application:Bad",
 	"application:bad..name",
@@ -92,6 +116,8 @@ for (const application of [
 	"application:",
 	"application:bad-name",
 	"application:bad!",
+	`application:${segment64}`,
+	`application:${name256}`,
 	"query:collaboration",
 ])
 	assert.throws(
@@ -106,6 +132,10 @@ for (const action of [
 	"action:",
 	"action:bad-name",
 	"action:bad!",
+	`action:${segment64}`,
+	`action:${name256}`,
+	"action:then",
+	"action:x.then",
 	"mutation:message.publish",
 ])
 	assert.throws(
