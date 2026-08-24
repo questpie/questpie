@@ -6,6 +6,10 @@ import {
 	runtimeArtifactRecord as record,
 } from "./artifact-protocol";
 import { validateOperationWireV2 } from "./wire-v2-artifact";
+import {
+	validatePrivateActionOperation,
+	validatePrivateRetainedWireV2,
+} from "./wire-v3-contract-validation";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -102,6 +106,7 @@ function validateRetainedV2(value: unknown): JsonRecord {
 	exactKeys(retained, v2Keys, "retained Wire v2");
 	if (retained.format !== "questpie.operation-wire" || retained.version !== 2)
 		fail("retained Wire v2 discriminator is invalid");
+	validatePrivateRetainedWireV2(retained);
 	validateOperationWireV2(retained);
 	const unsigned = { ...retained };
 	delete unsigned.digest;
@@ -111,17 +116,7 @@ function validateRetainedV2(value: unknown): JsonRecord {
 }
 
 function actionOperation(value: unknown): JsonRecord {
-	const action = record(value, "Action operation");
-	exactKeys(
-		action,
-		["declaredErrors", "identity", "input", "output"],
-		"Action operation",
-	);
-	validResourceIdentity(action.identity, "action");
-	record(action.input, "Action input codec");
-	record(action.output, "Action output codec");
-	record(action.declaredErrors, "Action declared errors");
-	return action;
+	return validatePrivateActionOperation(value);
 }
 
 function fixedExtension() {

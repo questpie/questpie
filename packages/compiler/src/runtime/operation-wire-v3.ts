@@ -109,19 +109,181 @@ function operationIdentity(value: unknown): string {
 	fail("retained operation identity is invalid");
 }
 
+function text(value: unknown, label: string): string {
+	if (typeof value !== "string" || value.length === 0)
+		fail(`${label} is invalid`);
+	return value;
+}
+
+function codec(value: unknown, label: string, allowOptional = false): void {
+	const candidate = record(value, label);
+	const kind = candidate.kind;
+	if (
+		kind === "boolean" ||
+		kind === "integer" ||
+		kind === "text" ||
+		kind === "timestamp" ||
+		kind === "uuid"
+	) {
+		exactKeys(candidate, ["kind"], label);
+		return;
+	}
+	if (kind === "nullable" || kind === "optional") {
+		exactKeys(candidate, ["codec", "kind"], label);
+		if (kind === "optional" && !allowOptional)
+			fail(`${label} uses optional outside an object property`);
+		codec(candidate.codec, `${label}.codec`);
+		return;
+	}
+	if (kind === "array") {
+		exactKeys(candidate, ["items", "kind"], label);
+		codec(candidate.items, `${label}.items`);
+		return;
+	}
+	if (kind !== "object") fail(`${label} uses an unsupported codec`);
+	exactKeys(candidate, ["kind", "properties"], label);
+	const properties = record(candidate.properties, `${label}.properties`);
+	for (const key of Object.keys(properties))
+		codec(properties[key], `${label}.properties.${key}`, true);
+}
+
+function declaredErrors(value: unknown, label: string): void {
+	const errors = record(value, label);
+	const codes = new Set<string>();
+	for (const [key, raw] of Object.entries(errors)) {
+		text(key, `${label} key`);
+		const error = record(raw, `${label}.${key}`);
+		exactKeys(error, ["code", "payload", "status"], `${label}.${key}`);
+		const code = text(error.code, `${label}.${key}.code`);
+		if (codes.has(code)) fail(`${label} codes must be unique`);
+		codes.add(code);
+		if (
+			typeof error.status !== "number" ||
+			!Number.isInteger(error.status) ||
+			error.status < 400 ||
+			error.status > 599
+		)
+			fail(`${label}.${key}.status is invalid`);
+		if (error.payload !== null) codec(error.payload, `${label}.${key}.payload`);
+	}
+}
+
+function operationContract(value: unknown, label: string): JsonRecord {
+	const operation = record(value, label);
+	exactKeys(
+		operation,
+		["declaredErrors", "identity", "input", "output"],
+		label,
+	);
+	operationIdentity(operation.identity);
+	codec(operation.input, `${label}.input`);
+	codec(operation.output, `${label}.output`);
+	declaredErrors(operation.declaredErrors, `${label}.declaredErrors`);
+	return operation;
+}
+
 function validateRetainedV2(value: unknown): JsonRecord {
 	const retained = record(value, "retained Wire v2");
 	exactKeys(retained, v2Keys, "retained Wire v2");
 	if (retained.format !== "questpie.operation-wire" || retained.version !== 2)
 		fail("retained Wire v2 discriminator is invalid");
+	if (
+		typeof retained.application !== "string" ||
+		retained.path !== "/_questpie/operation" ||
+		retained.mediaType !==
+			"application/vnd.questpie.operation+json;version=1" ||
+		retained.principalSource !== "ingressOutsideBody" ||
+		retained.mutationAutomaticRetry !== false ||
+		typeof retained.clientContractDigest !== "string" ||
+		!/^[0-9a-f]{64}$/.test(retained.clientContractDigest)
+	)
+		fail("retained Wire v2 base contract is invalid");
+	const protocol = record(retained.protocol, "retained protocol");
+	exactKeys(protocol, ["name", "version"], "retained protocol");
+	if (protocol.name !== "questpie.operation" || protocol.version !== 1)
+		fail("retained protocol is invalid");
+	const limits = record(retained.limits, "retained limits");
+	exactKeys(limits, ["requestBytes", "responseBytes"], "retained limits");
+	if (
+		!Number.isSafeInteger(limits.requestBytes) ||
+		Number(limits.requestBytes) <= 0 ||
+		!Number.isSafeInteger(limits.responseBytes) ||
+		Number(limits.responseBytes) <= 0
+	)
+		fail("retained limits are invalid");
 	exact(retained.requestKeys, ordinaryRequestKeys, "retained request keys");
+	exact(
+		retained.responseKeys,
+		{
+			declaredError: ["callId", "error", "kind", "operation", "protocol"],
+			failure: ["callId", "error", "kind", "operation", "protocol"],
+			rejection: ["error", "kind"],
+			result: ["callId", "kind", "operation", "payload", "protocol"],
+		},
+		"retained response keys",
+	);
 	exact(retained.failures, v2Failures, "retained failure identities");
+	exact(
+		retained.resultKinds,
+		["declaredError", "failure", "result"],
+		"retained result kinds",
+	);
+	exact(
+		retained.failureDetails,
+		{
+			committedResultUnavailable: ["code", "retryable", "transactionId"],
+			ordinary: ["code", "retryable"],
+		},
+		"retained failure details",
+	);
+	exact(
+		retained.callIdentity,
+		{
+			equality: "exactUtf8AfterValidation",
+			kind: "text",
+			loneSurrogates: "forbidden",
+			maximumUnicodeScalars: 256,
+			maximumUtf8Bytes: 1_024,
+			minimumUnicodeScalars: 1,
+			normalization: "NFC",
+			normalizationBehavior: "rejectNotRewrite",
+			nullScalar: "forbidden",
+			runtimeDefaultWhenAbsent: "crypto.randomUUID",
+			uuidRequired: false,
+		},
+		"retained call identity",
+	);
+	exact(
+		retained.transactionIdentity,
+		{
+			canonicalPattern: "^[1-9][0-9]{0,19}$",
+			clientInterpretation: "opaque",
+			kind: "postgresXid8Text",
+			maximum: "18446744073709551615",
+		},
+		"retained transaction identity",
+	);
+	exact(
+		retained.committedResultUnavailable,
+		{
+			automaticRetry: false,
+			causeDisclosure: "forbidden",
+			classification: "frameworkTransactionOutcome",
+			frameCallIdSource: "acceptedRequest",
+			httpStatus: 500,
+			recovery: "replayExactMutationWithSameCallIdentity",
+			retryable: true,
+			transactionIdSource: "committedReceipt",
+			transactionOutcome: "committed",
+		},
+		"retained committed result outcome",
+	);
 	const operations = retained.operations;
 	if (!Array.isArray(operations)) fail("retained operations are invalid");
 	let previous: string | undefined;
-	for (const member of operations) {
-		const operation = record(member, "retained operation");
-		const current = operationIdentity(operation.identity);
+	for (const [index, member] of operations.entries()) {
+		const operation = operationContract(member, `retained operation ${index}`);
+		const current = operation.identity as string;
 		if (previous !== undefined && compareAscii(previous, current) >= 0)
 			fail("retained operations are not globally ASCII-sorted");
 		previous = current;
@@ -190,9 +352,9 @@ function actionContract(value: unknown): JsonRecord {
 		"Action operation",
 	);
 	identity(action.identity, "action");
-	record(action.input, "Action input codec");
-	record(action.output, "Action output codec");
-	record(action.declaredErrors, "Action declared errors");
+	codec(action.input, "Action input codec");
+	codec(action.output, "Action output codec");
+	declaredErrors(action.declaredErrors, "Action declared errors");
 	return structuredClone(action);
 }
 

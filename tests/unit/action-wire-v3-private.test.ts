@@ -18,19 +18,22 @@ function project() {
 	});
 }
 
-function signed(value: Readonly<Record<string, unknown>>) {
+function signed(
+	value: Readonly<Record<string, unknown>>,
+	domain = "questpie-operation-wire-v3",
+) {
 	const unsigned = { ...value };
 	delete unsigned.digest;
 	return {
 		...unsigned,
-		digest: digest("questpie-operation-wire-v3", unsigned),
+		digest: digest(domain, unsigned),
 	};
 }
 
-function retainedWithOperations(
-	operations: readonly Readonly<Record<string, unknown>>[],
-) {
-	const compatibility = retainedWireV2.compatibility;
+function resignRetained(change: Readonly<Record<string, unknown>>) {
+	const changed = { ...retainedWireV2, ...change };
+	const compatibility =
+		changed.compatibility as typeof retainedWireV2.compatibility;
 	const {
 		callIdentity: _callIdentity,
 		committedResultUnavailable: _committed,
@@ -40,23 +43,49 @@ function retainedWithOperations(
 		resultKinds: _resultKinds,
 		transactionIdentity: _transactionIdentity,
 		...shared
-	} = retainedWireV2;
+	} = changed;
 	const siblingV1 = {
 		...shared,
-		operations,
 		version: 1,
 		clientContractDigest: compatibility.clientContractDigest,
-		failures: retainedWireV2.failures.filter(
+		failures: changed.failures.filter(
 			(code) => code !== "COMMITTED_RESULT_UNAVAILABLE",
 		),
 	};
-	return signed({
-		...retainedWireV2,
-		operations,
-		compatibility: {
-			...compatibility,
-			wireV1Digest: digest("questpie-operation-wire-v1", siblingV1),
+	return signed(
+		{
+			...changed,
+			compatibility: {
+				...compatibility,
+				wireV1Digest: digest("questpie-operation-wire-v1", siblingV1),
+			},
 		},
+		"questpie-operation-wire-v2",
+	);
+}
+
+function legacyProject(
+	retained: Readonly<Record<string, unknown>>,
+	action: Readonly<Record<string, unknown>>,
+) {
+	const wire = project();
+	return signed({
+		...wire,
+		...retained,
+		version: 3,
+		compatibility: {
+			...(retained.compatibility as object),
+			wireV2Digest: retained.digest,
+			wireV2ActionExecution: "rejectBeforeContextServiceAndHandler",
+			wireV2MutationExecution: "allowed",
+			wireV2QueryExecution: "allowed",
+		},
+		operations: [
+			...(retained.operations as readonly Readonly<Record<string, unknown>>[]),
+			action,
+		].sort((left, right) =>
+			String(left.identity) < String(right.identity) ? -1 : 1,
+		),
 	});
 }
 
@@ -119,7 +148,9 @@ test("private projector rejects invalid retained pairs, grammar, and ordering", 
 				wireV1Digest: "0".repeat(64),
 			},
 		},
-		retainedWithOperations([...retainedWireV2.operations].toReversed()),
+		resignRetained({
+			operations: [...retainedWireV2.operations].toReversed(),
+		}),
 	] as const)
 		expect(() =>
 			projectOperationWireV3({ retainedWireV2: retained, actionOperation }),
@@ -140,6 +171,82 @@ test("private projector rejects invalid retained pairs, grammar, and ordering", 
 				actionOperation: { ...actionOperation, identity },
 			}),
 		).toThrow(/Action operation identity/);
+});
+
+test("producer independently rejects re-signed retained semantics and malformed Action contracts", () => {
+	const hostileRetained = resignRetained({
+		protocol: { name: "hostile.operation", version: 1 },
+	});
+	const hostileRetainedCodec = resignRetained({
+		operations: retainedWireV2.operations.map((operation, index) =>
+			index === 0 ? { ...operation, input: {} } : operation,
+		),
+	});
+	for (const [retained, pattern] of [
+		[hostileRetained, /protocol/],
+		[hostileRetainedCodec, /codec/],
+	] as const)
+		expect(() =>
+			projectOperationWireV3({
+				retainedWireV2: retained,
+				actionOperation,
+			}),
+		).toThrow(pattern);
+
+	for (const malformed of [
+		{ ...actionOperation, input: {} },
+		{
+			...actionOperation,
+			declaredErrors: {
+				bad: { code: "BAD", payload: null, status: 200 },
+			},
+		},
+	] as const)
+		expect(() =>
+			projectOperationWireV3({
+				retainedWireV2,
+				actionOperation: malformed,
+			}),
+		).toThrow();
+});
+
+test("consumer independently rejects re-signed caller-supplied semantic objects", () => {
+	const hostileRetained = resignRetained({
+		protocol: { name: "hostile.operation", version: 1 },
+	});
+	const hostileRetainedCodec = resignRetained({
+		operations: retainedWireV2.operations.map((operation, index) =>
+			index === 0 ? { ...operation, input: {} } : operation,
+		),
+	});
+	for (const [retained, pattern] of [
+		[hostileRetained, /protocol/],
+		[hostileRetainedCodec, /codec/],
+	] as const)
+		expect(() =>
+			validateOperationWireV3({
+				wire: legacyProject(retained, actionOperation),
+				retainedWireV2: retained,
+				actionOperation,
+			}),
+		).toThrow(pattern);
+
+	for (const malformedAction of [
+		{ ...actionOperation, input: {} },
+		{
+			...actionOperation,
+			declaredErrors: {
+				bad: { code: "BAD", payload: null, status: 200 },
+			},
+		},
+	] as const)
+		expect(() =>
+			validateOperationWireV3({
+				wire: legacyProject(retainedWireV2, malformedAction),
+				retainedWireV2,
+				actionOperation: malformedAction,
+			}),
+		).toThrow();
 });
 
 test("Runtime validator refuses recomputed semantic drift", () => {
