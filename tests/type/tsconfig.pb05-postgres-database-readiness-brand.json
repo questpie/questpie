@@ -1,0 +1,16 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": {
+			"@questpie/runtime/bundle-core": [
+				"../../packages/runtime/src/bundle-core-types.d.ts"
+			]
+		},
+		"types": []
+	},
+	"files": [
+		"pb05-postgres-database-readiness-brand.ts",
+		"pb05-runtime-bundle-core-type-parity.ts"
+	]
+}

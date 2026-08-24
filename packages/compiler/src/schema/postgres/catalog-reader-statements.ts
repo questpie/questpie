@@ -119,7 +119,7 @@ export interface CatalogIndexTermRow {
 	readonly position: number;
 }
 
-function defineCatalogStatement<Row>(
+export function defineCatalogStatement<Row>(
 	input: Readonly<{
 		name: string;
 		text: string;

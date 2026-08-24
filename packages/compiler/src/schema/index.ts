@@ -58,13 +58,16 @@ export {
 } from "./postgres/change-capture";
 export type { PostgresChangeCaptureV1 } from "./postgres/change-capture";
 export {
+	assertPostgresCatalogComparable,
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	fingerprint,
 	fingerprintInOwnedTransaction,
 	inspectSchemaFingerprint,
 	providerObservations,
+	validatePostgresProviderObservations,
 } from "./postgres/fingerprint";
+export { verifyPostgresDatabaseSchemaReadiness } from "./postgres/database-readiness";
 export { expectedComparable } from "./postgres/expected-fingerprint";
 export { childRecords, fail } from "./postgres/shared";
 export type {

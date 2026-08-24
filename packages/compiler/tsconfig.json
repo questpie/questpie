@@ -2,7 +2,10 @@
 	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
 		"outDir": "dist",
-		"rootDir": "src"
+		"rootDir": "src",
+		"paths": {
+			"@questpie/runtime/bundle-core": ["../runtime/src/bundle-core-types.d.ts"]
+		}
 	},
 	"include": ["src/**/*.ts"]
 }

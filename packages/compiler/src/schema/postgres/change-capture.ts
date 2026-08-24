@@ -24,7 +24,7 @@ type PostgresChangeCaptureCollectionV1 = Readonly<{
 	truncateTrigger: string;
 }>;
 
-type PostgresChangeCaptureTriggerV1 = Readonly<{
+export type PostgresChangeCaptureTriggerV1 = Readonly<{
 	table: string;
 	name: string;
 	type: number;
@@ -245,6 +245,13 @@ export async function verifyPostgresChangeCapture(
 		  and not t.tgisinternal
 		order by c.relname, t.tgname
 	`;
+	return assertPostgresChangeCapture(projection, actual);
+}
+
+export function assertPostgresChangeCapture(
+	projection: PostgresChangeCaptureV1,
+	actual: readonly PostgresChangeCaptureTriggerV1[],
+): void {
 	if (canonicalBytes(actual) === canonicalBytes(projection.triggerCatalog))
 		return;
 	return fail(

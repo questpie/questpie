@@ -10,6 +10,18 @@ import { verifyPostgresChangeCapture } from "./change-capture";
 import { expectedComparable } from "./expected-fingerprint";
 import { fail } from "./shared";
 
+export type PostgresProviderObservationRow = Readonly<{
+	serverVersion: string;
+	databaseCollation: string;
+	databaseCType: string;
+	databaseEncoding: string;
+	binaryCollationProvider: string | null;
+	binaryCollationDeterministic: boolean | null;
+}>;
+export type PostgresExtensionObservationRow = Readonly<{
+	name: string;
+	installedVersion: string;
+}>;
 type JsonRecord = Readonly<Record<string, unknown>>;
 type ProviderObservations = SchemaFingerprintV1["observations"];
 
@@ -101,6 +113,13 @@ function compareComparable(
 	return fingerprintMismatch(expected, actual);
 }
 
+export function assertPostgresCatalogComparable(
+	schema: SchemaProjectionV1,
+	actual: JsonRecord,
+): JsonRecord {
+	return compareComparable(expectedComparable(schema), actual);
+}
+
 function fingerprintMismatch(expected: JsonRecord, actual: JsonRecord): never {
 	if (
 		expected.applicationSchemaExists === true &&
@@ -176,16 +195,7 @@ export async function providerObservations(
 	sql: SQL,
 	schema: SchemaProjectionV1,
 ): Promise<ProviderObservations> {
-	const [database] = await sql<
-		{
-			serverVersion: string;
-			databaseCollation: string;
-			databaseCType: string;
-			databaseEncoding: string;
-			binaryCollationProvider: string | null;
-			binaryCollationDeterministic: boolean | null;
-		}[]
-	>`
+	const [database] = await sql<PostgresProviderObservationRow[]>`
 		select current_setting('server_version') as "serverVersion",
 		       datcollate as "databaseCollation",
 		       datctype as "databaseCType",
@@ -210,12 +220,23 @@ export async function providerObservations(
 	const extensions =
 		requiredExtensions.length === 0
 			? []
-			: await sql<{ name: string; installedVersion: string }[]>`
+			: await sql<PostgresExtensionObservationRow[]>`
 				select extname as name, extversion as "installedVersion"
 				from pg_catalog.pg_extension
 				where extname in ${sql(requiredExtensions)}
 				order by extname
 			`;
+	return validatePostgresProviderObservations(schema, database, extensions);
+}
+
+export function validatePostgresProviderObservations(
+	schema: SchemaProjectionV1,
+	database: PostgresProviderObservationRow | undefined,
+	extensions: readonly PostgresExtensionObservationRow[],
+): ProviderObservations {
+	const requiredExtensions = schema.requiredPostgres.extensions.map(
+		(item) => item.name,
+	);
 	if (!database)
 		return fail(
 			"QP-SCHEMA-007",

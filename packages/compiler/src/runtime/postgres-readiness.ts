@@ -1,10 +1,18 @@
 import type { SQL } from "bun";
 
+import type {
+	definePostgresStatement,
+	PostgresTransactionRunner,
+	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
+} from "@questpie/runtime/bundle-core";
+
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import {
 	fingerprintInOwnedTransaction,
+	internalProtocolV6Checksum,
 	type SchemaProjectionV1,
+	verifyPostgresDatabaseSchemaReadiness,
 	verifyInternalProtocolV6,
 } from "../schema";
 
@@ -170,6 +178,58 @@ export async function verifyPostgresRuntimeReadiness(
 			expected: input.expected,
 		}),
 	);
+}
+
+export async function verifyPostgresDatabaseRuntimeReadiness(
+	input: Readonly<{
+		database: PostgresTransactionRunner;
+		runtime: Readonly<{
+			definePostgresStatement: typeof definePostgresStatement;
+			verifyReadinessPrerequisites: typeof verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction;
+		}>;
+		schema: SchemaProjectionV1;
+		committedMigrations: unknown;
+		expected: RuntimeBuildReadiness;
+	}>,
+): Promise<void> {
+	const committed = decodeCommittedMigrations(input.committedMigrations);
+	if (committed.head !== input.expected.migrationHead)
+		throw new TypeError(
+			"committed migration head does not match Runtime Build",
+		);
+	let diagnostic: CompilerDiagnosticError | undefined;
+	await input.database.transaction({
+		mode: { isolation: "repeatableRead", access: "readOnly" },
+		use: async (transaction) => {
+			try {
+				await input.runtime.verifyReadinessPrerequisites({
+					transaction,
+					protocol: { version: 6, checksum: internalProtocolV6Checksum },
+					application: input.schema.application.name,
+					postgresSchema: input.schema.application.postgresSchema,
+					migrationHead: committed.head,
+					committedMigrations: committed.migrations,
+				});
+				const fingerprint = await verifyPostgresDatabaseSchemaReadiness(
+					transaction,
+					input.schema,
+					input.runtime.definePostgresStatement,
+				);
+				const fingerprintDigest = digest(
+					"questpie-schema-fingerprint-v1",
+					fingerprint.comparable,
+				);
+				if (fingerprintDigest !== input.expected.schemaFingerprint)
+					throw new TypeError(
+						"PostgreSQL Schema Fingerprint does not match Runtime Build",
+					);
+			} catch (error) {
+				if (!(error instanceof CompilerDiagnosticError)) throw error;
+				diagnostic = error;
+			}
+		},
+	});
+	if (diagnostic) throw diagnostic;
 }
 
 async function verifyPostgresRuntimeReadinessInOwnedTransaction(

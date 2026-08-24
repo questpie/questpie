@@ -1,62 +1,40 @@
-export const statementBrand: unique symbol = Symbol(
+import type {
+	DefinePostgresStatement,
+	PostgresFailureCode,
+	PostgresErrorPhase,
+	PostgresRetryDisposition,
+	statementBrand as statementBrandType,
+	transactionBrand as transactionBrandType,
+} from "./contract-types";
+
+export type {
+	MigrationPostgres,
+	MigrationPostgresSession,
+	PostgresControl,
+	PostgresDatabase,
+	PostgresDatabaseConfiguration,
+	PostgresFailureCode,
+	PostgresJson,
+	PostgresJsonValue,
+	PostgresParameter,
+	PostgresStatement,
+	PostgresTransaction,
+	PostgresTransactionMode,
+	PostgresTransactionRunner,
+} from "./contract-types";
+
+export const statementBrand: typeof statementBrandType = Symbol(
 	"questpie.postgres.statement",
-);
-export const transactionBrand: unique symbol = Symbol(
+) as typeof statementBrandType;
+export const transactionBrand: typeof transactionBrandType = Symbol(
 	"questpie.postgres.transaction",
-);
-
-export type PostgresJsonValue =
-	| null
-	| boolean
-	| number
-	| string
-	| readonly PostgresJsonValue[]
-	| Readonly<{ [key: string]: PostgresJsonValue }>;
-
-export type PostgresJson = Readonly<{
-	kind: "json";
-	value: PostgresJsonValue;
-}>;
-
-export type PostgresParameter =
-	| null
-	| boolean
-	| number
-	| bigint
-	| string
-	| Date
-	| Uint8Array
-	| readonly PostgresParameter[]
-	| PostgresJson;
-
-export type PostgresStatement<Input, Output> = Readonly<{
-	name: string;
-	text: string;
-	parameterCount: number;
-	parameters(input: Input): readonly PostgresParameter[];
-	decode(
-		result: Readonly<{
-			command: string;
-			rowCount: number | null;
-			rows: readonly (readonly unknown[])[];
-		}>,
-	): Output;
-	readonly [statementBrand]: true;
-}>;
+) as typeof transactionBrandType;
 
 function statementName(value: string): boolean {
 	return /^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$/u.test(value);
 }
 
-export function definePostgresStatement<Input, Output>(
-	input: Readonly<{
-		name: string;
-		text: string;
-		parameterCount: number;
-		parameters(input: Input): readonly PostgresParameter[];
-		decode: PostgresStatement<Input, Output>["decode"];
-	}>,
-): PostgresStatement<Input, Output> {
+export const definePostgresStatement: DefinePostgresStatement = (input) => {
 	if (!statementName(input.name))
 		throw new TypeError("invalid PostgreSQL statement name");
 	if (typeof input.text !== "string" || input.text.trim().length === 0)
@@ -64,70 +42,22 @@ export function definePostgresStatement<Input, Output>(
 	if (!Number.isSafeInteger(input.parameterCount) || input.parameterCount < 0)
 		throw new TypeError("invalid PostgreSQL statement parameter count");
 	return Object.freeze({ ...input, [statementBrand]: true as const });
-}
-
-export type PostgresTransactionMode = Readonly<{
-	isolation: "readCommitted" | "repeatableRead" | "serializable";
-	access: "readOnly" | "readWrite";
-	deferrable?: boolean;
-}>;
-
-export type PostgresControl = Readonly<{
-	signal?: AbortSignal;
-	deadlineAt?: number;
-	statementTimeoutMs?: number;
-	lockTimeoutMs?: number;
-}>;
-
-export interface PostgresTransaction {
-	readonly [transactionBrand]: true;
-	execute<Input, Output>(
-		statement: PostgresStatement<Input, Output>,
-		input: Input,
-	): Promise<Output>;
-}
-
-export type PostgresFailureCode =
-	| "configuration"
-	| "closed"
-	| "draining"
-	| "connectTimeout"
-	| "checkoutTimeout"
-	| "statementTimeout"
-	| "lockTimeout"
-	| "cancelled"
-	| "connectionLost"
-	| "queryFailed"
-	| "serializationFailure"
-	| "deadlock"
-	| "constraint"
-	| "invalidResult"
-	| "sessionNotAffine"
-	| "commitOutcomeUnknown";
+};
 
 export class QuestpiePostgresError extends Error {
 	readonly code: PostgresFailureCode;
-	readonly phase:
-		| "connect"
-		| "checkout"
-		| "begin"
-		| "statement"
-		| "commit"
-		| "rollback"
-		| "listen"
-		| "reconcile"
-		| "shutdown";
+	readonly phase: PostgresErrorPhase;
 	readonly statementName?: string;
 	readonly sqlState?: string;
-	readonly retry: "never" | "safeBeforeCommit" | "callerMustResolveCommit";
+	readonly retry: PostgresRetryDisposition;
 
 	constructor(
 		input: Readonly<{
 			code: PostgresFailureCode;
-			phase: QuestpiePostgresError["phase"];
+			phase: PostgresErrorPhase;
 			statementName?: string;
 			sqlState?: string;
-			retry?: QuestpiePostgresError["retry"];
+			retry?: PostgresRetryDisposition;
 			cause?: unknown;
 		}>,
 	) {
@@ -139,69 +69,4 @@ export class QuestpiePostgresError extends Error {
 		this.sqlState = input.sqlState;
 		this.retry = input.retry ?? "never";
 	}
-}
-
-export type PostgresDatabaseConfiguration = Readonly<{
-	connectionUrl: string;
-	directConnectionUrl: string;
-	pool: Readonly<{
-		max: number;
-		connectTimeoutMs: number;
-		checkoutTimeoutMs: number;
-		idleTimeoutMs: number;
-		maxLifetimeSeconds: number;
-	}>;
-	timeouts: Readonly<{
-		statementMs: number;
-		lockMs: number;
-		idleInTransactionMs: number;
-	}>;
-}>;
-
-export interface PostgresDatabase {
-	transaction<Output>(
-		input: Readonly<{
-			mode: PostgresTransactionMode;
-			control?: PostgresControl;
-			use(transaction: PostgresTransaction): Promise<Output>;
-		}>,
-	): Promise<Output>;
-	facts(): Readonly<{
-		state: "ready" | "draining" | "closed";
-		pool: Readonly<{
-			max: number;
-			total: number;
-			idle: number;
-			waiting: number;
-			inFlight: number;
-		}>;
-		counters: Readonly<{
-			checkoutTimeouts: number;
-			statementTimeouts: number;
-			cancellations: number;
-			destroyedConnections: number;
-		}>;
-	}>;
-	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
-}
-
-export type PostgresTransactionRunner = Pick<PostgresDatabase, "transaction">;
-
-export interface MigrationPostgresSession {
-	transaction<Value>(
-		input: Readonly<{
-			mode: PostgresTransactionMode;
-			use(transaction: PostgresTransaction): Promise<Value>;
-		}>,
-	): Promise<Value>;
-}
-
-export interface MigrationPostgres {
-	run<Output>(
-		input: Readonly<{
-			application: string;
-			control?: PostgresControl;
-			use(session: MigrationPostgresSession): Promise<Output>;
-		}>,
-	): Promise<Output>;
 }

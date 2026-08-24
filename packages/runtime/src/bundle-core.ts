@@ -1,4 +1,6 @@
 export { createRuntimeApplication } from "./application";
+export { verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction } from "./application/postgres-readiness-prerequisites";
+export type { ReadinessMigration } from "./application/postgres-readiness-prerequisites";
 export { createRuntimeRouteExecutor } from "./execution";
 export {
 	bindIngressPrincipal,
@@ -30,3 +32,10 @@ export {
 	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
 } from "./durable";
+export { definePostgresStatement } from "./postgres";
+export type {
+	PostgresParameter,
+	PostgresStatement,
+	PostgresTransaction,
+	PostgresTransactionRunner,
+} from "./postgres";

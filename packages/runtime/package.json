@@ -10,7 +10,7 @@
 		"./bundle-realtime": "./src/bundle-realtime.ts"
 	},
 	"scripts": {
-		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json",
+		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json && bun scripts/copy-source-declarations.ts",
 		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
 	},
 	"dependencies": {

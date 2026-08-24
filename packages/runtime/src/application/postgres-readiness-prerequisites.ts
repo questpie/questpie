@@ -1,6 +1,7 @@
 import {
 	definePostgresStatement,
 	type PostgresStatement,
+	type PostgresTransaction,
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
 
@@ -20,6 +21,22 @@ export type ReadinessMigration = Readonly<{
 	sequence: number;
 	parent: string | null;
 	checksum: string;
+}>;
+
+type ReadinessInput = Readonly<{
+	protocol: Readonly<{ version: 6; checksum: string }>;
+	application: string;
+	postgresSchema: string;
+	migrationHead: string | null;
+	committedMigrations: readonly ReadinessMigration[];
+}>;
+
+type ValidatedReadiness = Readonly<{
+	expectedProtocol: Protocol;
+	application: string;
+	postgresSchema: string;
+	migrationHead: string | null;
+	committed: readonly ReadinessMigration[];
 }>;
 
 function text(value: unknown, label: string): string {
@@ -174,15 +191,34 @@ function sameMigration(
  * projection checks.
  */
 export async function verifyPostgresDatabaseReadinessPrerequisites(
-	input: Readonly<{
-		database: PostgresTransactionRunner;
-		protocol: Readonly<{ version: 6; checksum: string }>;
-		application: string;
-		postgresSchema: string;
-		migrationHead: string | null;
-		committedMigrations: readonly ReadinessMigration[];
-	}>,
+	input: Readonly<
+		ReadinessInput & {
+			database: PostgresTransactionRunner;
+		}
+	>,
 ): Promise<void> {
+	const readiness = validateReadiness(input);
+	await input.database.transaction({
+		mode: { isolation: "repeatableRead", access: "readOnly" },
+		use: (transaction) =>
+			executePostgresDatabaseReadinessPrerequisites(transaction, readiness),
+	});
+}
+
+export async function verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction(
+	input: Readonly<
+		ReadinessInput & {
+			transaction: PostgresTransaction;
+		}
+	>,
+): Promise<void> {
+	return executePostgresDatabaseReadinessPrerequisites(
+		input.transaction,
+		validateReadiness(input),
+	);
+}
+
+function validateReadiness(input: ReadinessInput): ValidatedReadiness {
 	if (input.protocol.version !== 6)
 		throw new TypeError("expected PostgreSQL readiness protocol must be v6");
 	const expectedProtocol: Protocol = Object.freeze({
@@ -216,47 +252,54 @@ export async function verifyPostgresDatabaseReadinessPrerequisites(
 			: text(input.migrationHead, "migration head");
 	if ((committed.at(-1)?.identity ?? null) !== migrationHead)
 		throw new TypeError("committed migration head is invalid");
-
-	await input.database.transaction({
-		mode: { isolation: "repeatableRead", access: "readOnly" },
-		use: async (transaction) => {
-			const protocol = await transaction.execute(protocolStatement, undefined);
-			if (
-				protocol?.version !== expectedProtocol.version ||
-				protocol.checksum !== expectedProtocol.checksum
-			)
-				throw new TypeError("questpie_internal protocol v6 is not installed");
-			const bindings = await transaction.execute(applicationBindingStatement, {
-				application,
-				postgresSchema,
-			});
-			if (
-				bindings.length !== 1 ||
-				bindings[0]?.application !== application ||
-				bindings[0].postgresSchema !== postgresSchema
-			)
-				throw new TypeError(
-					"PostgreSQL Application binding does not match Runtime Build",
-				);
-			const receipts = await transaction.execute(
-				migrationReceiptsStatement,
-				application,
-			);
-			if (
-				receipts.length !== committed.length ||
-				receipts.some(
-					(receipt, index) =>
-						committed[index] === undefined ||
-						!sameMigration(receipt, committed[index]),
-				)
-			)
-				throw new TypeError(
-					"PostgreSQL migration history does not match Runtime Build",
-				);
-			if ((receipts.at(-1)?.identity ?? null) !== migrationHead)
-				throw new TypeError(
-					"PostgreSQL migration head does not match Runtime Build",
-				);
-		},
+	return Object.freeze({
+		expectedProtocol,
+		application,
+		postgresSchema,
+		migrationHead,
+		committed,
 	});
+}
+
+async function executePostgresDatabaseReadinessPrerequisites(
+	transaction: PostgresTransaction,
+	input: ValidatedReadiness,
+): Promise<void> {
+	const protocol = await transaction.execute(protocolStatement, undefined);
+	if (
+		protocol?.version !== input.expectedProtocol.version ||
+		protocol.checksum !== input.expectedProtocol.checksum
+	)
+		throw new TypeError("questpie_internal protocol v6 is not installed");
+	const bindings = await transaction.execute(applicationBindingStatement, {
+		application: input.application,
+		postgresSchema: input.postgresSchema,
+	});
+	if (
+		bindings.length !== 1 ||
+		bindings[0]?.application !== input.application ||
+		bindings[0].postgresSchema !== input.postgresSchema
+	)
+		throw new TypeError(
+			"PostgreSQL Application binding does not match Runtime Build",
+		);
+	const receipts = await transaction.execute(
+		migrationReceiptsStatement,
+		input.application,
+	);
+	if (
+		receipts.length !== input.committed.length ||
+		receipts.some(
+			(receipt, index) =>
+				input.committed[index] === undefined ||
+				!sameMigration(receipt, input.committed[index]),
+		)
+	)
+		throw new TypeError(
+			"PostgreSQL migration history does not match Runtime Build",
+		);
+	if ((receipts.at(-1)?.identity ?? null) !== input.migrationHead)
+		throw new TypeError(
+			"PostgreSQL migration head does not match Runtime Build",
+		);
 }
