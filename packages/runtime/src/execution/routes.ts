@@ -8,8 +8,11 @@ import {
 
 import {
 	assertOperationAdmission,
+	CommittedResultUnavailable,
 	type OperationAdmission,
 	OperationAdmissionError,
+	OperationFailure,
+	operationFailureStatus,
 } from "../operation";
 import type { ApplicationRuntime, RouteExecutionScope } from "./index";
 
@@ -49,7 +52,6 @@ export type RuntimeRouteBinding<View> = Readonly<{
 	execute(
 		input: Readonly<{
 			request: Request;
-			params: Readonly<Record<string, string>>;
 			ctx: View;
 		}>,
 	): MaybePromise<Response>;
@@ -67,18 +69,30 @@ export interface RuntimeRouteExecutor {
 }
 
 function failureResponse(
-	code:
-		| "CREDENTIALS_UNAVAILABLE"
-		| "FORBIDDEN"
-		| "INTERNAL"
-		| "UNAUTHENTICATED",
-	status: 401 | 403 | 500 | 503,
+	code: string,
+	status: number,
 	retryable = false,
 ): Response {
 	return Response.json(
 		{ error: { code, retryable } },
 		{ status, headers: { "cache-control": "no-store" } },
 	);
+}
+
+function executionFailureResponse(error: unknown): Response {
+	if (error instanceof CommittedResultUnavailable)
+		return failureResponse(
+			error.code,
+			operationFailureStatus(error.code),
+			error.retryable,
+		);
+	if (error instanceof OperationFailure)
+		return failureResponse(
+			error.code,
+			operationFailureStatus(error.code),
+			error.retryable,
+		);
+	return failureResponse("INTERNAL", 500);
 }
 
 export function createRuntimeRouteExecutor<
@@ -134,7 +148,6 @@ export function createRuntimeRouteExecutor<
 			async (scope) => {
 				const response = await binding.execute({
 					request,
-					params: Object.freeze({}),
 					ctx: await input.project(scope),
 				});
 				if (!(response instanceof Response))
@@ -176,8 +189,9 @@ export function createRuntimeRouteExecutor<
 			if (caller instanceof Response) return caller;
 			try {
 				return await execute(binding, request, caller);
-			} catch {
-				return failureResponse("INTERNAL", 500);
+			} catch (error) {
+				if (request.signal.aborted) throw request.signal.reason;
+				return executionFailureResponse(error);
 			}
 		},
 		direct: (

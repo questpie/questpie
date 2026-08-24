@@ -214,7 +214,9 @@ export function createApplicationRuntime<
 			) => MaybePromise<Result>,
 		) => {
 			if (!principal.is(input.principal))
-				return Promise.reject(new Error("Route requires a trusted Principal"));
+				return Promise.reject(
+					new TypeError("Route requires a trusted Principal"),
+				);
 			return services.execution(
 				{ signal: input.signal },
 				({ service, signal }) =>

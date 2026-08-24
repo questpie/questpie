@@ -6,6 +6,7 @@ import {
 	createApplicationRuntime,
 	createRuntimeRouteExecutor,
 } from "../../packages/runtime/src";
+import { OperationFailure } from "../../packages/runtime/src/operation";
 
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 
@@ -279,6 +280,88 @@ test("uses one Route handler for Fetch and direct invocation while direct bypass
 	expect(await fetched!.text()).toBe(await direct.text());
 	expect(credentialResolutions).toBe(1);
 	expect(handlerCalls).toBe(2);
+	await expect(
+		routes.direct("route:echo.raw", {
+			request: new Request("https://app.test/echo", {
+				method: "POST",
+				body: rawBody,
+			}),
+			execution: {
+				principal: {
+					questpiePrincipal: true,
+					kind: "user",
+					id: "forged",
+				} as never,
+			},
+		}),
+	).rejects.toThrow("Route requires a trusted Principal");
+	expect(handlerCalls).toBe(2);
+	await runtime.close();
+});
+
+test("preserves typed Route execution failures and propagates request cancellation", async () => {
+	const context = defineContext({
+		name: "route.failure-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const routes = createRuntimeRouteExecutor({
+		runtime,
+		project: ({ signal }) => ({ signal }),
+		bindings: [
+			{
+				identity: "route:failure.typed",
+				method: "GET",
+				path: "/failure/typed",
+				credentials: "none",
+				admission: "public",
+				execute: () => {
+					throw new OperationFailure("RUNTIME_UNAVAILABLE", true);
+				},
+			},
+			{
+				identity: "route:failure.cancelled",
+				method: "GET",
+				path: "/failure/cancelled",
+				credentials: "none",
+				admission: "public",
+				execute: ({ ctx }) =>
+					new Promise<Response>((_resolve, reject) => {
+						ctx.signal.addEventListener(
+							"abort",
+							() => reject(ctx.signal.reason),
+							{ once: true },
+						);
+					}),
+			},
+		],
+	});
+
+	const unavailable = await routes.fetch(
+		new Request("https://app.test/failure/typed"),
+	);
+	expect(unavailable!.status).toBe(503);
+	expect(await unavailable!.json()).toEqual({
+		error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
+	});
+
+	const controller = new AbortController();
+	const cancelled = routes.fetch(
+		new Request("https://app.test/failure/cancelled", {
+			signal: controller.signal,
+		}),
+	);
+	controller.abort(new DOMException("client disconnected", "AbortError"));
+	await expect(cancelled).rejects.toMatchObject({
+		name: "AbortError",
+		message: "client disconnected",
+	});
 	await runtime.close();
 });
 
