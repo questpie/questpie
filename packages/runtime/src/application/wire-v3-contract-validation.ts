@@ -2,6 +2,7 @@ import { decodeRuntimeCodecDescriptor } from "../codec";
 import {
 	exactRuntimeArtifactKeys as exactKeys,
 	failRuntimeArtifact as fail,
+	runtimeArtifactDigest as digest,
 	runtimeArtifactDigestValue as digestValue,
 	runtimeArtifactRecord as record,
 } from "./artifact-protocol";
@@ -21,7 +22,10 @@ const ordinaryRequestKeys = [
 ] as const;
 
 function exact(value: unknown, expected: unknown, label: string): void {
-	if (JSON.stringify(value) !== JSON.stringify(expected))
+	if (
+		digest("questpie.private-wire-v3-contract-exact", value) !==
+		digest("questpie.private-wire-v3-contract-exact", expected)
+	)
 		fail(`${label} is invalid`);
 }
 

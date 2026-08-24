@@ -249,6 +249,46 @@ test("consumer independently rejects re-signed caller-supplied semantic objects"
 		).toThrow();
 });
 
+test("producer and consumer treat re-signed response object order canonically", () => {
+	const reordered = resignRetained({
+		responseKeys: Object.fromEntries(
+			Object.entries(retainedWireV2.responseKeys).toReversed(),
+		),
+	});
+	const wire = projectOperationWireV3({
+		retainedWireV2: reordered,
+		actionOperation,
+	});
+	expect(wire.digest).toBe(project().digest);
+	expect(
+		validateOperationWireV3({
+			wire,
+			retainedWireV2: reordered,
+			actionOperation,
+		}).digest,
+	).toBe(wire.digest);
+
+	const reorderedArray = resignRetained({
+		responseKeys: {
+			...retainedWireV2.responseKeys,
+			result: [...retainedWireV2.responseKeys.result].toReversed(),
+		},
+	});
+	expect(() =>
+		projectOperationWireV3({
+			retainedWireV2: reorderedArray,
+			actionOperation,
+		}),
+	).toThrow(/response keys/);
+	expect(() =>
+		validateOperationWireV3({
+			wire: legacyProject(reorderedArray, actionOperation),
+			retainedWireV2: reorderedArray,
+			actionOperation,
+		}),
+	).toThrow(/response keys/);
+});
+
 test("Runtime validator refuses recomputed semantic drift", () => {
 	const wire = project();
 	expect(
