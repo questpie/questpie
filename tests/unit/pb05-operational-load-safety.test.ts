@@ -14,6 +14,7 @@ import {
 	countPb05SemanticFailures,
 	createPb05ContentionOperationOwner,
 	createPb05OperationAbortBoundary,
+	decodePb05RetentionAntagonistResult,
 	derivePb05OwnerPathMeasurements,
 	pb05OwnerPathStageAttribution,
 	pb05OperationalDatabase,
@@ -221,6 +222,27 @@ test("owner-path metrics require exact observer counts and transaction identitie
 
 test("semantic failures are derived from actual owner results", () => {
 	expect(countPb05SemanticFailures([true, false, true, false])).toBe(2);
+});
+
+test("retention antagonist accepts only the node-postgres void cell", () => {
+	const valid = {
+		command: "SELECT",
+		rowCount: 1,
+		rows: [[""]],
+	} as const;
+	expect(() => decodePb05RetentionAntagonistResult(valid)).not.toThrow();
+	for (const result of [
+		{ ...valid, rows: [[null]] },
+		{ ...valid, rows: [["void"]] },
+		{ ...valid, rows: [["", ""]] },
+		{ ...valid, rows: [] },
+		{ ...valid, rows: [[""], [""]] },
+		{ ...valid, rowCount: 0 },
+		{ ...valid, command: "UPDATE" },
+	])
+		expect(() => decodePb05RetentionAntagonistResult(result)).toThrow(
+			"invalid retention antagonist result",
+		);
 });
 
 test("a closed contention owner refuses a late operation and settles", async () => {

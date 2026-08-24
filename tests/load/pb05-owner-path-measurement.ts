@@ -31,6 +31,7 @@ import {
 	assertPb05OwnerPathSchemaReset,
 	createPb05ContentionOperationOwner,
 	createPb05OperationAbortBoundary,
+	decodePb05RetentionAntagonistResult,
 	derivePb05OwnerPathMeasurements,
 	pb05OwnerPathStageAttribution,
 	settlePb05OwnedBlocker,
@@ -284,9 +285,7 @@ const retentionAntagonist = definePostgresStatement({
 	parameterCount: 1,
 	parameters: (lockIdentity: string) => [lockIdentity],
 	decode(result) {
-		const row = oneRow(result, "retention antagonist");
-		if (row.length !== 1 || row[0] !== null)
-			throw new TypeError("invalid retention antagonist result");
+		decodePb05RetentionAntagonistResult(result);
 	},
 });
 

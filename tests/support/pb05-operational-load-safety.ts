@@ -141,6 +141,24 @@ export function pb05OwnerPathStageAttribution(
 	});
 }
 
+export function decodePb05RetentionAntagonistResult(
+	result: Readonly<{
+		command: string;
+		rowCount: number | null;
+		rows: readonly (readonly unknown[])[];
+	}>,
+): void {
+	const row = result.rows[0];
+	if (
+		result.command !== "SELECT" ||
+		result.rowCount !== 1 ||
+		result.rows.length !== 1 ||
+		row?.length !== 1 ||
+		row[0] !== ""
+	)
+		throw new TypeError("invalid retention antagonist result");
+}
+
 export function derivePb05OwnerPathMeasurements(
 	input: Readonly<{
 		snapshot: Pb05OwnerPathSnapshot;
