@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 
+import { actionDeadline, type ActionLimits } from "../action-limits/contract";
+
 export const effectKeyContract = Object.freeze({
 	kind: "text",
 	minimumUnicodeScalars: 1,
@@ -177,6 +179,8 @@ export class ActionPostDispatchResourceLimit extends Error {
 
 type ProviderOutcome =
 	| "accepted"
+	| "authoredResultDisclosure"
+	| "authoredDeclaredErrorDisclosure"
 	| "preExecutionRejected"
 	| "rejected"
 	| "outcomeUnknown"
@@ -191,13 +195,66 @@ type ProviderOutcome =
 	| "resultPayloadOverflow"
 	| "outcomeUnknownPayloadOverflow";
 
+function containsForbiddenText(
+	value: unknown,
+	forbidden: ReadonlySet<string>,
+): boolean {
+	if (typeof value === "string")
+		return [...forbidden].some((secret) => value.includes(secret));
+	if (Array.isArray(value))
+		return value.some((item) => containsForbiddenText(item, forbidden));
+	if (!value || typeof value !== "object") return false;
+	return Object.values(value).some((item) =>
+		containsForbiddenText(item, forbidden),
+	);
+}
+
+export function assertFrameworkOwnedOutcomeNondisclosure(
+	frame: unknown,
+	forbidden: readonly string[],
+): void {
+	if (!frame || typeof frame !== "object")
+		throw new TypeError("outcome frame is invalid");
+	const record = frame as Record<string, unknown>;
+	let frameworkOwned: unknown = record;
+	if (record.kind === "result") {
+		const { payload: _authoredPayload, ...metadata } = record;
+		frameworkOwned = metadata;
+	} else if (record.kind === "declaredError") {
+		if (!record.error || typeof record.error !== "object")
+			throw new TypeError("declared error frame is invalid");
+		const { payload: _authoredPayload, ...errorMetadata } =
+			record.error as Record<string, unknown>;
+		frameworkOwned = { ...record, error: errorMetadata };
+	}
+	if (containsForbiddenText(frameworkOwned, new Set(forbidden)))
+		throw new TypeError("framework-owned outcome disclosed Effect material");
+}
+
 export function createActionHarness(
-	input: Readonly<{ carrier: "direct" | "network" }>,
+	input: Readonly<{
+		carrier: "direct" | "network";
+		limits?: ActionLimits;
+		rootRemainingMilliseconds?: number | null;
+		callerMonotonicNow?: () => number;
+		runtimeMonotonicNow?: () => number;
+	}>,
 ) {
 	let providerCalls = 0;
 	const observedEffectIds: string[] = [];
+	const observedRemainingBudgets: number[] = [];
+	const observedLocalDeadlines: number[] = [];
 	const frames: unknown[] = [];
 	const frameBytes: string[] = [];
+	const limits = input.limits ?? {
+		inputBytes: 1_024,
+		resultBytes: 1_024,
+		durationMilliseconds: 5_000,
+	};
+	const callerMonotonicNow =
+		input.callerMonotonicNow ?? performance.now.bind(performance);
+	const runtimeMonotonicNow =
+		input.runtimeMonotonicNow ?? performance.now.bind(performance);
 	return {
 		get providerCalls() {
 			return providerCalls;
@@ -206,6 +263,8 @@ export function createActionHarness(
 			return 0;
 		},
 		observedEffectIds,
+		observedRemainingBudgets,
+		observedLocalDeadlines,
 		frames,
 		frameBytes,
 		async invoke(
@@ -219,6 +278,12 @@ export function createActionHarness(
 		) {
 			if ("preDispatchCancellation" in invocation)
 				throw invocation.preDispatchCancellation;
+			const callerStartedAt = callerMonotonicNow();
+			const callerDeadline = actionDeadline(limits, {
+				monotonicStartedAt: callerStartedAt,
+				rootRemainingMilliseconds: input.rootRemainingMilliseconds ?? null,
+			});
+			const timeoutMilliseconds = callerDeadline - callerStartedAt;
 			const request = {
 				application: invocation.application,
 				callId: invocation.callId,
@@ -228,7 +293,7 @@ export function createActionHarness(
 				input: invocation.input,
 				operation: invocation.action,
 				protocol: { name: "questpie.operation", version: 1 },
-				timeoutMilliseconds: 5_000,
+				timeoutMilliseconds,
 				wireDigest: "candidate-v3",
 			};
 			const roundTrip = <T>(value: T): T =>
@@ -252,7 +317,14 @@ export function createActionHarness(
 				canonical(expectedRequestKeys)
 			)
 				throw new TypeError("network server rejected non-exact Action request");
-			const record = (frame: unknown) => {
+			const runtimeStartedAt = runtimeMonotonicNow();
+			const localDeadline = actionDeadline(limits, {
+				monotonicStartedAt: runtimeStartedAt,
+				rootRemainingMilliseconds: admitted.timeoutMilliseconds,
+			});
+			observedRemainingBudgets.push(localDeadline - runtimeStartedAt);
+			observedLocalDeadlines.push(localDeadline);
+			const record = (frame: unknown, forbidden: readonly string[]) => {
 				const decoded = input.carrier === "network" ? roundTrip(frame) : frame;
 				const record = decoded as Record<string, unknown>;
 				const expected =
@@ -265,14 +337,18 @@ export function createActionHarness(
 					throw new TypeError(
 						"network client rejected non-exact outcome frame",
 					);
+				assertFrameworkOwnedOutcomeNondisclosure(decoded, forbidden);
 				frames.push(decoded);
 				frameBytes.push(`${canonical(decoded)}\n`);
 			};
 			if (invocation.provider === "preExecutionRejected") {
-				record({
-					error: { code: "CLIENT_OUTDATED", retryable: false },
-					kind: "failure",
-				});
+				record(
+					{
+						error: { code: "CLIENT_OUTDATED", retryable: false },
+						kind: "failure",
+					},
+					[invocation.effectKey],
+				);
 				throw new Error("CLIENT_OUTDATED");
 			}
 			const effectId = deriveEffectIdentity({
@@ -281,48 +357,88 @@ export function createActionHarness(
 			});
 			providerCalls += 1;
 			observedEffectIds.push(effectId);
+			if (invocation.provider === "authoredResultDisclosure") {
+				const result = Object.freeze({ receipt: effectId });
+				record(
+					{
+						callId: invocation.callId,
+						kind: "result",
+						operation: invocation.action,
+						payload: result,
+						protocol: { name: "questpie.operation", version: 1 },
+					},
+					[invocation.effectKey, effectId],
+				);
+				return result;
+			}
+			if (invocation.provider === "authoredDeclaredErrorDisclosure") {
+				record(
+					{
+						callId: invocation.callId,
+						error: {
+							code: "OUTCOME_UNKNOWN",
+							payload: { provider: effectId },
+							status: 502,
+						},
+						kind: "declaredError",
+						operation: invocation.action,
+						protocol: { name: "questpie.operation", version: 1 },
+					},
+					[invocation.effectKey, effectId],
+				);
+				throw new Error("provider.authoredDisclosure");
+			}
 			if (invocation.provider === "rejected") {
-				record({
-					callId: invocation.callId,
-					error: { code: "PROVIDER_REJECTED", payload: null, status: 422 },
-					kind: "declaredError",
-					operation: invocation.action,
-					protocol: { name: "questpie.operation", version: 1 },
-				});
+				record(
+					{
+						callId: invocation.callId,
+						error: { code: "PROVIDER_REJECTED", payload: null, status: 422 },
+						kind: "declaredError",
+						operation: invocation.action,
+						protocol: { name: "questpie.operation", version: 1 },
+					},
+					[invocation.effectKey, effectId],
+				);
 				throw new Error("provider.rejected");
 			}
 			if (invocation.provider === "outcomeUnknown") {
-				record({
-					callId: invocation.callId,
-					error: {
-						code: "OUTCOME_UNKNOWN",
-						payload: { provider: "unknown" },
-						status: 502,
+				record(
+					{
+						callId: invocation.callId,
+						error: {
+							code: "OUTCOME_UNKNOWN",
+							payload: { provider: "unknown" },
+							status: 502,
+						},
+						kind: "declaredError",
+						operation: invocation.action,
+						protocol: { name: "questpie.operation", version: 1 },
 					},
-					kind: "declaredError",
-					operation: invocation.action,
-					protocol: { name: "questpie.operation", version: 1 },
-				});
+					[invocation.effectKey, effectId],
+				);
 				throw new Error("provider.outcomeUnknown");
 			}
 			if (
 				invocation.provider === "resultPayloadOverflow" ||
 				invocation.provider === "outcomeUnknownPayloadOverflow"
 			) {
-				record({
-					callId: invocation.callId,
-					error: {
-						code: "RESOURCE_LIMIT",
-						doesNotClassifyProviderOutcome: true,
-						phase: "postHandler",
-						provesProviderNonacceptance: false,
-						replayAuthorized: false,
-						retryable: false,
+				record(
+					{
+						callId: invocation.callId,
+						error: {
+							code: "RESOURCE_LIMIT",
+							doesNotClassifyProviderOutcome: true,
+							phase: "postHandler",
+							provesProviderNonacceptance: false,
+							replayAuthorized: false,
+							retryable: false,
+						},
+						kind: "failure",
+						operation: invocation.action,
+						protocol: { name: "questpie.operation", version: 1 },
 					},
-					kind: "failure",
-					operation: invocation.action,
-					protocol: { name: "questpie.operation", version: 1 },
-				});
+					[invocation.effectKey, effectId],
+				);
 				throw new ActionPostDispatchResourceLimit();
 			}
 			if (
@@ -342,13 +458,16 @@ export function createActionHarness(
 				throw error;
 			}
 			const result = Object.freeze({ receipt: "provider:accepted" });
-			record({
-				callId: invocation.callId,
-				kind: "result",
-				operation: invocation.action,
-				payload: result,
-				protocol: { name: "questpie.operation", version: 1 },
-			});
+			record(
+				{
+					callId: invocation.callId,
+					kind: "result",
+					operation: invocation.action,
+					payload: result,
+					protocol: { name: "questpie.operation", version: 1 },
+				},
+				[invocation.effectKey, effectId],
+			);
 			return result;
 		},
 	};
@@ -377,11 +496,23 @@ export function projectWireV3(
 	];
 	if (Object.keys(extension).sort().join("\0") !== allowed.join("\0"))
 		throw new TypeError("Wire v3 extension is not closed");
-	const action = extension.actionOperation;
+	const action = extension.actionOperation as Record<string, unknown>;
+	const operations = [
+		...(retainedV2.operations as readonly Record<string, unknown>[]),
+		action,
+	].sort((left, right) =>
+		String(left.identity) < String(right.identity)
+			? -1
+			: String(left.identity) > String(right.identity)
+				? 1
+				: 0,
+	);
+	const actionFailures = [
+		...(extension.actionFailures as readonly string[]),
+	].sort();
 	const unsigned = {
 		...retainedV2,
 		version: 3,
-		operations: [...(retainedV2.operations as readonly unknown[]), action],
 		compatibility: {
 			...(retainedV2.compatibility as object),
 			wireV2Digest: retainedV2.digest,
@@ -390,6 +521,8 @@ export function projectWireV3(
 			wireV2QueryExecution: "allowed",
 		},
 		...extension,
+		actionFailures,
+		operations,
 	};
 	delete (unsigned as Record<string, unknown>).actionOperation;
 	delete (unsigned as Record<string, unknown>).digest;
@@ -413,13 +546,18 @@ function exactMembers(
 	expected: readonly string[],
 	label: string,
 ) {
-	if (canonical(actual) !== canonical(expected))
+	if (
+		!Array.isArray(actual) ||
+		actual.some((member) => typeof member !== "string") ||
+		canonical(actual) !== canonical([...expected].sort())
+	)
 		throw new TypeError(`${label} is not exact`);
 }
 
 export function validateWireV3(
 	value: unknown,
 	retainedV2: Readonly<Record<string, unknown>>,
+	extension: Readonly<Record<string, unknown>>,
 ): Readonly<{ digest: string }> {
 	if (!value || typeof value !== "object")
 		throw new TypeError("wire is not an object");
@@ -457,13 +595,28 @@ export function validateWireV3(
 	for (const [key, retained] of Object.entries(retainedCompatibility))
 		if (canonical(requiredCompatibility[key]) !== canonical(retained))
 			throw new TypeError(`Wire v3 changed retained compatibility ${key}`);
-	const retainedOperations = retainedV2.operations as readonly unknown[];
-	const operations = wire.operations as readonly unknown[] | undefined;
+	const retainedOperations = retainedV2.operations as readonly Record<
+		string,
+		unknown
+	>[];
+	const operations = wire.operations as
+		| readonly Record<string, unknown>[]
+		| undefined;
 	if (
 		!operations ||
-		canonical(operations.slice(0, retainedOperations.length)) !==
-			canonical(retainedOperations) ||
-		operations.length !== retainedOperations.length + 1
+		canonical(
+			operations.filter((operation) =>
+				retainedOperations.some(
+					(retained) => retained.identity === operation.identity,
+				),
+			),
+		) !== canonical(retainedOperations) ||
+		operations.length !== retainedOperations.length + 1 ||
+		operations.some(
+			(operation, index) =>
+				index > 0 &&
+				String(operations[index - 1]!.identity) >= String(operation.identity),
+		)
 	)
 		throw new TypeError("Wire v3 did not add exactly one Action operation");
 	const retainedRequestKeys = retainedV2.requestKeys as readonly string[];
@@ -497,7 +650,10 @@ export function validateWireV3(
 		throw new TypeError("wire ambiguity ownership is invalid");
 	exactMembers(
 		wire.actionFailures,
-		[...(retainedV2.failures as readonly string[]), "ACTION_OUTCOME_AMBIGUOUS"],
+		[
+			...(retainedV2.failures as readonly string[]),
+			"ACTION_OUTCOME_AMBIGUOUS",
+		].sort(),
 		"Action failures",
 	);
 	if (
@@ -517,6 +673,8 @@ export function validateWireV3(
 		throw new TypeError("Action failure details are invalid");
 	if (canonical(wire.effectKey) !== canonical(effectKeyContract))
 		throw new TypeError("wire effectKey grammar is invalid");
+	if (canonical(wire) !== canonical(projectWireV3(retainedV2, extension)))
+		throw new TypeError("Wire v3 artifact is not the exact closed projection");
 	return Object.freeze({ digest: actual });
 }
 
@@ -531,6 +689,20 @@ export function admitOperationRequest(
 		enterHandler(): void;
 	}>,
 ): "accepted" | "CLIENT_OUTDATED" {
+	const requestedOperation = input.request.operation;
+	if (typeof requestedOperation !== "string")
+		throw new TypeError("request operation is invalid");
+	if (requestedOperation !== input.operation) {
+		if (
+			input.version < 3 &&
+			(requestedOperation.startsWith("action:") ||
+				input.operation.startsWith("action:"))
+		)
+			return "CLIENT_OUTDATED";
+		throw new TypeError(
+			"request operation does not match the selected operation",
+		);
+	}
 	if (input.operation.startsWith("action:") && input.version < 3)
 		return "CLIENT_OUTDATED";
 	if (input.operation.startsWith("mutation:") && input.version === 1)

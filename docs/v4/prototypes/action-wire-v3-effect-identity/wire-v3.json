@@ -29,6 +29,7 @@
 		]
 	},
 	"actionFailures": [
+		"ACTION_OUTCOME_AMBIGUOUS",
 		"APPLICATION_MISMATCH",
 		"CLIENT_OUTDATED",
 		"COMMITTED_RESULT_UNAVAILABLE",
@@ -37,8 +38,7 @@
 		"NOT_FOUND",
 		"PROTOCOL_UNSUPPORTED",
 		"RESOURCE_LIMIT",
-		"RUNTIME_UNAVAILABLE",
-		"ACTION_OUTCOME_AMBIGUOUS"
+		"RUNTIME_UNAVAILABLE"
 	],
 	"actionLimitsProjection": {
 		"fields": ["durationMilliseconds", "inputBytes", "resultBytes"],

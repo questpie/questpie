@@ -10,14 +10,15 @@ Run the deterministic gates:
 ```sh
 bun run docs/v4/prototypes/action-wire-v3-effect-identity/check.ts
 bun run docs/v4/prototypes/action-wire-v3-effect-identity/portable-check.ts
-QUESTPIE_CANONICAL_ROOT="$PWD" \
+dependency_root="${QUESTPIE_DEPENDENCY_ROOT:-$PWD}"
+QUESTPIE_CANONICAL_ROOT="$PWD" QUESTPIE_DEPENDENCY_ROOT="$dependency_root" \
 	  bun run docs/v4/prototypes/action-wire-v3-effect-identity/repository-check.ts
-bun /home/drepkovsky/code/questpie-v4/node_modules/typescript/bin/tsc \
-  --typeRoots /home/drepkovsky/code/questpie-v4/node_modules/@types \
+bun "$dependency_root/node_modules/typescript/bin/tsc" \
+  --typeRoots "$dependency_root/node_modules/@types" \
   -p docs/v4/prototypes/action-wire-v3-effect-identity/tsconfig.json
 bun test docs/v4/prototypes/action-limits/check.test.ts
-bun /home/drepkovsky/code/questpie-v4/node_modules/typescript/bin/tsc \
-  --typeRoots /home/drepkovsky/code/questpie-v4/node_modules/@types \
+bun "$dependency_root/node_modules/typescript/bin/tsc" \
+  --typeRoots "$dependency_root/node_modules/@types" \
   -p docs/v4/prototypes/action-limits/tsconfig.json
 bunx oxlint --deny-warnings docs/v4/prototypes/action-wire-v3-effect-identity/*.ts
 bunx oxfmt --check docs/v4/prototypes/action-wire-v3-effect-identity

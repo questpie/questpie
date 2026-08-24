@@ -4,6 +4,7 @@ import {
 	ActionPostDispatchResourceLimit,
 	ActionOutcomeAmbiguous,
 	admitOperationRequest,
+	assertFrameworkOwnedOutcomeNondisclosure,
 	createActionHarness,
 	deriveDurableEffectIdentity,
 	deriveEffectIdentity,
@@ -103,10 +104,10 @@ assert.equal(
 );
 
 const wireV3 = projectWireV3(retainedWireV2, wireV3Extension);
-const validated = validateWireV3(wireV3, retainedWireV2);
+const validated = validateWireV3(wireV3, retainedWireV2, wireV3Extension);
 assert.equal(
 	validated.digest,
-	"670fa87e17df96e7ebba18b882e4e86c5925b7ff213396211d6f1c39530568e7",
+	"f25f10a361faf30faac1106fe1feb87516458a1a700ace022a56017d854f6c98",
 );
 for (const mutate of [
 	(wire: Record<string, unknown>) => (wire.compatibility = { destroyed: true }),
@@ -120,15 +121,51 @@ for (const mutate of [
 			...(wire.effectKey as object),
 			defaultWhenAbsent: "random",
 		}),
+	(wire: Record<string, unknown>) => (wire.extra = true),
+	(wire: Record<string, unknown>) =>
+		((wire.operations as Record<string, unknown>[])[0]!.declaredErrors = {
+			forged: true,
+		}),
+	(wire: Record<string, unknown>) =>
+		(wire.operations = [...(wire.operations as unknown[])].toReversed()),
+	(wire: Record<string, unknown>) =>
+		(wire.actionFailures = [...(wire.actionFailures as string[])].toReversed()),
 ]) {
 	const hostile = structuredClone(wireV3) as Record<string, unknown>;
 	mutate(hostile);
 	assert.throws(
-		() => validateWireV3(signWireV3ForHostile(hostile), retainedWireV2),
+		() =>
+			validateWireV3(
+				signWireV3ForHostile(hostile),
+				retainedWireV2,
+				wireV3Extension,
+			),
 		/invalid|changed|exact/,
 		"a recomputed self-hash must not authorize semantic mutation",
 	);
 }
+assert.deepEqual(
+	(wireV3.operations as readonly Readonly<{ identity: string }>[]).map(
+		({ identity }) => identity,
+	),
+	[
+		"action:delivery.publish",
+		"mutation:message.publish",
+		"query:messages.page",
+	],
+);
+assert.deepEqual(wireV3.actionFailures, [
+	"ACTION_OUTCOME_AMBIGUOUS",
+	"APPLICATION_MISMATCH",
+	"CLIENT_OUTDATED",
+	"COMMITTED_RESULT_UNAVAILABLE",
+	"DEADLINE_EXCEEDED",
+	"INTERNAL",
+	"NOT_FOUND",
+	"PROTOCOL_UNSUPPORTED",
+	"RESOURCE_LIMIT",
+	"RUNTIME_UNAVAILABLE",
+]);
 
 for (const invalid of [
 	undefined,
@@ -209,6 +246,41 @@ for (const retained of [
 			: { context: 0, service: 0, handler: 0 },
 	);
 }
+for (const version of [1, 2] as const) {
+	const { effectKey: _effectKey, ...retainedShape } = exactActionRequest;
+	const entered = { context: 0, service: 0, handler: 0 };
+	assert.equal(
+		admitOperationRequest({
+			version,
+			operation: "query:messages.page",
+			request: retainedShape,
+			wireV3,
+			enterContext: () => (entered.context += 1),
+			createService: () => (entered.service += 1),
+			enterHandler: () => (entered.handler += 1),
+		}),
+		"CLIENT_OUTDATED",
+		"a retained selected Query must not admit a request-authored Action",
+	);
+	assert.deepEqual(entered, { context: 0, service: 0, handler: 0 });
+}
+{
+	const entered = { context: 0, service: 0, handler: 0 };
+	assert.throws(
+		() =>
+			admitOperationRequest({
+				version: 3,
+				operation: "query:messages.page",
+				request: exactActionRequest,
+				wireV3,
+				enterContext: () => (entered.context += 1),
+				createService: () => (entered.service += 1),
+				enterHandler: () => (entered.handler += 1),
+			}),
+		/does not match the selected operation/,
+	);
+	assert.deepEqual(entered, { context: 0, service: 0, handler: 0 });
+}
 for (const request of [
 	(({ effectKey: _effectKey, ...missing }) => missing)(exactActionRequest),
 	{ ...exactActionRequest, extra: true },
@@ -270,6 +342,95 @@ for (const bytes of [...direct.frameBytes, ...network.frameBytes])
 		false,
 		"effect.id leaked to wire",
 	);
+
+const effectId = deriveEffectIdentity(scope);
+assert.throws(
+	() =>
+		assertFrameworkOwnedOutcomeNondisclosure(
+			{
+				error: {
+					code: "INTERNAL",
+					diagnostic: { nested: [`leaked:${effectId}`] },
+				},
+				kind: "failure",
+			},
+			[scope.effectKey, effectId],
+		),
+	/framework-owned outcome disclosed Effect material/,
+);
+for (const carrier of ["direct", "network"] as const) {
+	const authoredResult = createActionHarness({ carrier });
+	assert.deepEqual(
+		await authoredResult.invoke({
+			...scope,
+			callId: `call:authored-result:${carrier}`,
+			input: {},
+			provider: "authoredResultDisclosure",
+		}),
+		{ receipt: effectId },
+	);
+	assert.equal(
+		(authoredResult.frames[0] as Readonly<{ payload: { receipt: string } }>)
+			.payload.receipt,
+		effectId,
+		"codec-authorized authored output must not be secretly scrubbed",
+	);
+	const authoredError = createActionHarness({ carrier });
+	await assert.rejects(
+		authoredError.invoke({
+			...scope,
+			callId: `call:authored-error:${carrier}`,
+			input: {},
+			provider: "authoredDeclaredErrorDisclosure",
+		}),
+		/provider.authoredDisclosure/,
+	);
+	assert.equal(
+		(
+			authoredError.frames[0] as Readonly<{
+				error: { payload: { provider: string } };
+			}>
+		).error.payload.provider,
+		effectId,
+		"codec-authorized declared payload must remain application-owned",
+	);
+}
+
+const deadlineLimits = {
+	inputBytes: 1_024,
+	resultBytes: 1_024,
+	durationMilliseconds: 500,
+} as const;
+const directDeadline = createActionHarness({
+	carrier: "direct",
+	limits: deadlineLimits,
+	rootRemainingMilliseconds: 300,
+	callerMonotonicNow: () => 1_000,
+	runtimeMonotonicNow: () => 4_000,
+});
+const networkDeadline = createActionHarness({
+	carrier: "network",
+	limits: deadlineLimits,
+	rootRemainingMilliseconds: 300,
+	callerMonotonicNow: () => 7_000,
+	runtimeMonotonicNow: () => 9_000,
+});
+for (const harness of [directDeadline, networkDeadline])
+	await harness.invoke({
+		...scope,
+		callId: "call:remaining-budget",
+		input: {},
+		provider: "accepted",
+	});
+assert.deepEqual(directDeadline.observedRemainingBudgets, [300]);
+assert.deepEqual(networkDeadline.observedRemainingBudgets, [300]);
+assert.deepEqual(directDeadline.observedLocalDeadlines, [4_300]);
+assert.deepEqual(networkDeadline.observedLocalDeadlines, [9_300]);
+assert.deepEqual(
+	directDeadline.frameBytes,
+	networkDeadline.frameBytes,
+	"remaining-budget conversion changed direct/network outcome bytes",
+);
 
 for (const provider of [
 	"rejected",

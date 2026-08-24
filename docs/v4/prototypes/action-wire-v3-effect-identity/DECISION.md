@@ -25,7 +25,10 @@ effect `deliver` as `64a789a4-c319-5d2b-ac27-520d9808a941`. Ordinary Actions
 use the disjoint `questpie.effect-identity.action.v1` domain, so they retain the
 existing UUID grammar/storage without colliding with durable Reaction/Job
 effects. The handler sees only Runtime-scoped `effect.id`; it cannot recover
-`effectKey`, and no request or outcome frame discloses the UUID.
+`effectKey`. Framework-owned outcome metadata and framework failures never add
+the key or UUID. An authored output or declared-error codec may deliberately
+return `effect.id`; Runtime does not corrupt application data with a secret
+scrubber and therefore makes no generic domain-payload nondisclosure claim.
 
 Wire v3 is a full additive successor of the exact retained collaboration Wire
 v2 artifact. Query and Mutation retain their v2 request/response keys and
@@ -42,6 +45,12 @@ cancellation/response race fail closed as non-retryable
 work and remains an ordinary rejection. Authored `outcomeUnknown` remains a
 declared provider outcome, not a framework transport error. No path retries
 automatically.
+
+The request carries only remaining duration, never a wall-clock or cross-process
+monotonic instant. Direct and network adapters both take the earlier declared
+Action duration or remaining root budget, then convert that duration to a local
+monotonic deadline. The proof uses distinct caller and Runtime clocks and
+requires identical remaining budgets and outcome bytes.
 
 The sibling limits candidate is part of this joint head. Oversized success or
 declared-error payload after handler settlement is non-retryable post-handler
@@ -73,18 +82,18 @@ second limit or identity grammar.
 
 ## Ownership map
 
-| Concern                                         | Owner                                                    |
-| ----------------------------------------------- | -------------------------------------------------------- |
-| Stable material                                 | caller `effectKey`                                       |
-| Application, tenant, principal, Action identity | trusted Runtime facts                                    |
-| Final Effect Identity and lifetime              | Runtime Action scope                                     |
-| Provider acceptance/rejection/outcomeUnknown    | authored Service/provider                                |
-| Transport ambiguity after dispatch              | Wire v3 client framework                                 |
-| Duplicate/exactly-once semantics                | provider/application; not invented by Runtime            |
-| Cancellation before dispatch                    | caller-owned exact reason, zero Action work              |
-| Cancellation after dispatch                     | known valid outcome wins; otherwise framework ambiguity  |
-| Transaction semantics                           | none added by ordinary Action                            |
-| Identity visibility                             | handler `effect.id` only; absent from wire/domain output |
+| Concern                                         | Owner                                                                                                          |
+| ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Stable material                                 | caller `effectKey`                                                                                             |
+| Application, tenant, principal, Action identity | trusted Runtime facts                                                                                          |
+| Final Effect Identity and lifetime              | Runtime Action scope                                                                                           |
+| Provider acceptance/rejection/outcomeUnknown    | authored Service/provider                                                                                      |
+| Transport ambiguity after dispatch              | Wire v3 client framework                                                                                       |
+| Duplicate/exactly-once semantics                | provider/application; not invented by Runtime                                                                  |
+| Cancellation before dispatch                    | caller-owned exact reason, zero Action work                                                                    |
+| Cancellation after dispatch                     | known valid outcome wins; otherwise framework ambiguity                                                        |
+| Transaction semantics                           | none added by ordinary Action                                                                                  |
+| Identity visibility                             | handler `effect.id`; absent from framework metadata/failures; authored codec payloads remain application-owned |
 
 This proof deliberately stops before public projection. Formal acceptance must
 bind this combined Effect/Wire/limits head and prerequisite `c68309f3`; only a
