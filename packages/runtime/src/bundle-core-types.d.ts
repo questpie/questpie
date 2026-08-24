@@ -4,9 +4,9 @@ export {
 	type PostgresStatement,
 	type PostgresTransaction,
 	type PostgresTransactionRunner,
-} from "./postgres/contract-types";
+} from "./postgres/contract-types.js";
 
-import type { PostgresTransaction } from "./postgres/contract-types";
+import type { PostgresTransaction } from "./postgres/contract-types.js";
 
 export type ReadinessMigration = Readonly<{
 	identity: string;

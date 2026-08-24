@@ -23,6 +23,7 @@ for (const workspace of ["questpie", "runtime", "compiler"]) {
 	});
 	run(["bun", typescript, "-p", `packages/${workspace}/tsconfig.json`]);
 }
+run(["bun", "packages/runtime/scripts/copy-source-declarations.ts"]);
 
 const internal = resolve(repositoryRoot, "packages/questpie/dist/internal");
 rmSync(internal, { force: true, recursive: true });

@@ -165,6 +165,7 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			".": "./dist/index.js",
 			"./bundle": "./dist/bundle.js",
 			"./bundle-core": "./dist/bundle-core.js",
+			"./bundle-core-types": "./dist/bundle-core-types.d.ts",
 			"./bundle-realtime": "./dist/bundle-realtime.js",
 		});
 		install("@questpie/compiler", "packages/compiler", {
@@ -178,6 +179,30 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			mkdirSync(dirname(staged), { recursive: true });
 			symlinkSync(installed, staged);
 		}
+		const typeConsumer = join(temporary, "runtime-type-consumer.ts");
+		writeFileSync(
+			typeConsumer,
+			'import type { PostgresTransactionRunner } from "@questpie/runtime/bundle-core-types";\ndeclare const runner: PostgresTransactionRunner;\nvoid runner;\n',
+		);
+		const typecheck = Bun.spawnSync(
+			[
+				"bun",
+				join(nodeModules, "typescript", "bin", "tsc"),
+				"--noEmit",
+				"--module",
+				"NodeNext",
+				"--moduleResolution",
+				"NodeNext",
+				"--target",
+				"ES2022",
+				typeConsumer,
+			],
+			{ cwd: temporary, stdout: "pipe", stderr: "pipe" },
+		);
+		if (typecheck.exitCode !== 0)
+			fail(
+				`private Runtime declaration export is not consumable: ${typecheck.stdout.toString()}${typecheck.stderr.toString()}`.trim(),
+			);
 
 		const applicationRoot = join(temporary, "application");
 		cpSync(resolve("fixtures/collaboration"), applicationRoot, {

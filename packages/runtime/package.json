@@ -7,6 +7,7 @@
 		".": "./src/index.ts",
 		"./bundle": "./src/bundle.ts",
 		"./bundle-core": "./src/bundle-core.ts",
+		"./bundle-core-types": "./src/bundle-core-types.d.ts",
 		"./bundle-realtime": "./src/bundle-realtime.ts"
 	},
 	"scripts": {
