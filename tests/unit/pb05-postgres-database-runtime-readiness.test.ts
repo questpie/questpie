@@ -9,6 +9,10 @@ import {
 	type PostgresStatement,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const checksum = "a".repeat(64);
 const migrations: readonly ReadinessMigration[] = Object.freeze([
@@ -50,7 +54,8 @@ function runner(
 
 test("verifies protocol, binding, and receipts in one static read-only snapshot", async () => {
 	const observed = { transactions: 0, names: [] as string[] };
-	const database = runner((statement) => {
+	const measurement = createPb05OperationalMeasurement();
+	const unmeasured = runner((statement) => {
 		if (statement.name === "readiness.protocol.v6") return [[6, checksum]];
 		if (statement.name === "readiness.application-binding")
 			return [["application:collaboration", "collaboration"]];
@@ -58,6 +63,12 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 			return [["000001_create-collaboration", 1, null, checksum]];
 		throw new Error(`unexpected statement ${statement.name}`);
 	}, observed);
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "readiness",
+		operation: "startup",
+	});
 
 	await verifyPostgresDatabaseReadinessPrerequisites({
 		database,
@@ -75,6 +86,19 @@ test("verifies protocol, binding, and receipts in one static read-only snapshot"
 			"readiness.application-binding",
 			"readiness.migration-receipts",
 		],
+	});
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"readiness:startup"
+		],
+	).toMatchObject({
+		statementExecutions: 3,
+		distinctStatements: [
+			"readiness.protocol.v6",
+			"readiness.application-binding",
+			"readiness.migration-receipts",
+		],
+		transactions: 1,
 	});
 });
 

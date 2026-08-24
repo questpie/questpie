@@ -9,6 +9,10 @@ import {
 	type LinkedPostgresContextBootstrapPlan,
 	type LinkedPostgresContextBootstrapPlans,
 } from "../../packages/runtime/src/relational/context-bootstrap-database";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const unknownCollection = defineCollection({
 	name: "unknownRows",
@@ -71,8 +75,15 @@ function harness() {
 
 test("creates an immutable ContextBootstrap view bound to one root signal", async () => {
 	const active = harness();
-	const createBootstrap = createLinkedPostgresContextBootstrapFactory({
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
 		database: active.database,
+		measurement,
+		population: "context",
+		operation: "rootBootstrap",
+	});
+	const createBootstrap = createLinkedPostgresContextBootstrapFactory({
+		database,
 		plans: active.plans,
 		collections: [memberships],
 	});
@@ -107,6 +118,15 @@ test("creates an immutable ContextBootstrap view bound to one root signal", asyn
 		},
 	]);
 	expect(active.transactionCalls()).toBe(2);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"context:rootBootstrap"
+		],
+	).toMatchObject({
+		statementExecutions: 2,
+		distinctStatements: ["context.memberships"],
+		transactions: 2,
+	});
 });
 
 test("rejects unknown and unbranded Collections before transaction admission", async () => {

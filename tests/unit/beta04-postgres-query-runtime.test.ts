@@ -17,6 +17,10 @@ import {
 	linkPostgresQueryPlan,
 	linkPostgresQueryPlans,
 } from "../../packages/runtime/src/relational";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const templateDigest = "a".repeat(64);
 const policyProgramDigest = "b".repeat(64);
@@ -411,8 +415,9 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 	const linkedPlan = linkPostgresQueryPlan(databasePlan);
 	const modes: unknown[] = [];
 	const statements: unknown[] = [];
+	const measurement = createPb05OperationalMeasurement();
 	let transactions = 0;
-	const database = fakeDatabase({
+	const unmeasured = fakeDatabase({
 		rows: rows().map((row) => [
 			row.qp_f0,
 			row.qp_f1,
@@ -426,6 +431,12 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		},
 		onMode: (mode) => modes.push(mode),
 		onStatement: (statement) => statements.push(statement),
+	});
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "query",
+		operation: "firstPage",
 	});
 
 	const page = await executePostgresQuery({
@@ -462,6 +473,15 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		},
 		{ id: id2, createdAt: createdAt2, author: null },
 	]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"query:firstPage"
+		],
+	).toMatchObject({
+		statementExecutions: 1,
+		distinctStatements: ["query." + templateDigest],
+		transactions: 1,
+	});
 });
 
 test("rejects a Query statement cast mismatch before opening PostgreSQL", async () => {
