@@ -117,6 +117,12 @@ type GeneratedExecutionScope = Readonly<{
 	}>;
 }>;
 
+type GeneratedNetworkClient = Readonly<{
+	withContext(input: Readonly<{ companyId: string }>): Readonly<{
+		actions: Readonly<{ "delivery.publish": DeliveryAction }>;
+	}>;
+}>;
+
 async function report(port: number): Promise<TracerReport | null> {
 	try {
 		const response = await fetch(
@@ -160,46 +166,59 @@ postgresTest(
 				"0 new, 2 already applied",
 			);
 
-			const [{ createApp }, { principal }] = await Promise.all([
-				import(
-					`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?direct=${crypto.randomUUID()}`
-				) as Promise<
-					Readonly<{
-						createApp(input: unknown): Promise<{
-							execution<Result>(
+			const [{ createApp }, { createClient }, { principal }] =
+				await Promise.all([
+					import(
+						`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?direct=${crypto.randomUUID()}`
+					) as Promise<
+						Readonly<{
+							createApp(input: unknown): Promise<{
+								execution<Result>(
+									input: Readonly<{
+										principal: unknown;
+										context: Readonly<{ companyId: string }>;
+										signal?: AbortSignal;
+									}>,
+									use: (
+										scope: GeneratedExecutionScope,
+									) => Result | Promise<Result>,
+								): Promise<Awaited<Result>>;
+								fetch(request: Request): Promise<Response>;
+								routes: Readonly<
+									Record<
+										string,
+										Readonly<{
+											direct(input: unknown): Promise<Response>;
+										}>
+									>
+								>;
+								close(): Promise<void>;
+							}>;
+						}>
+					>,
+					import(
+						`${pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href}?network=${crypto.randomUUID()}`
+					) as Promise<
+						Readonly<{
+							createClient(
 								input: Readonly<{
-									principal: unknown;
-									context: Readonly<{ companyId: string }>;
-									signal?: AbortSignal;
+									baseUrl: string;
+									fetch(request: Request): Promise<Response>;
 								}>,
-								use: (
-									scope: GeneratedExecutionScope,
-								) => Result | Promise<Result>,
-							): Promise<Awaited<Result>>;
-							fetch(request: Request): Promise<Response>;
-							routes: Readonly<
-								Record<
-									string,
-									Readonly<{
-										direct(input: unknown): Promise<Response>;
-									}>
-								>
-							>;
-							close(): Promise<void>;
-						}>;
-					}>
-				>,
-				import(
-					`${pathToFileURL(questpieEntry).href}?principal=route`
-				) as Promise<
-					Readonly<{
-						principal: Readonly<{
-							anonymous(): unknown;
-							user(input: Readonly<{ id: string }>): unknown;
-						}>;
-					}>
-				>,
-			]);
+							): GeneratedNetworkClient;
+						}>
+					>,
+					import(
+						`${pathToFileURL(questpieEntry).href}?principal=route`
+					) as Promise<
+						Readonly<{
+							principal: Readonly<{
+								anonymous(): unknown;
+								user(input: Readonly<{ id: string }>): unknown;
+							}>;
+						}>
+					>,
+				]);
 			const routeApplication = await createApp({
 				postgres: {
 					connectionUrl: postgresUrl(),
@@ -242,6 +261,47 @@ postgresTest(
 							return actions.delivery.publish(input, options);
 						},
 					);
+				const generatedWire = JSON.parse(
+					await Bun.file(
+						join(temporary, ".questpie/generated/wire-contract.json"),
+					).text(),
+				) as Readonly<{
+					clientContractDigest: string;
+					compatibility: Readonly<{
+						wireV1Digest: string;
+						wireV2Digest: string;
+					}>;
+				}>;
+				for (const legacyDigest of [
+					generatedWire.compatibility.wireV1Digest,
+					generatedWire.compatibility.wireV2Digest,
+				]) {
+					const outdated = await routeApplication.fetch(
+						new Request("https://app.test/_questpie/operation", {
+							method: "POST",
+							headers: {
+								"content-type":
+									"application/vnd.questpie.operation+json;version=1",
+							},
+							body: JSON.stringify({
+								protocol: { name: "questpie.operation", version: 1 },
+								application: "application:collaboration",
+								clientContractDigest: generatedWire.clientContractDigest,
+								wireDigest: legacyDigest,
+								operation: "action:delivery.publish",
+								callId: "legacy-action-call",
+								context: { companyId: tracerIds.company },
+								input: { effectKey: "domain-legacy", message: "never-run" },
+								timeoutMilliseconds: 500,
+							}),
+						}),
+					);
+					expect(outdated.status).toBe(409);
+					expect(await outdated.json()).toEqual({
+						kind: "failure",
+						error: { code: "CLIENT_OUTDATED", retryable: false },
+					});
+				}
 
 				await expect(
 					routeApplication.execution(
@@ -285,6 +345,86 @@ postgresTest(
 					disposals: 1,
 					receipt: `delivery:${effectId}`,
 				});
+				let transportCalls = 0;
+				const networkClient = createClient({
+					baseUrl: "https://app.test",
+					fetch: (request) => {
+						transportCalls += 1;
+						const headers = new Headers(request.headers);
+						headers.set(
+							"cookie",
+							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						);
+						return routeApplication.fetch(new Request(request, { headers }));
+					},
+				}).withContext({ companyId: tracerIds.company });
+				const networkDelivery = await networkClient.actions["delivery.publish"](
+					{ effectKey: "domain-network", message: "delivery-network" },
+					{
+						effectKey: stableEffectKey,
+						callId: "delivery-network-1",
+						timeoutMilliseconds: 700,
+					},
+				);
+				expect(networkDelivery).toEqual({
+					attempt: 3,
+					disposals: 2,
+					receipt: `delivery:${effectId}`,
+				});
+				expect(transportCalls).toBe(1);
+				const maximumTimeoutEffectKey = "provider-maximum-timeout";
+				const directMaximumTimeout = await invokeDelivery(
+					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
+					{
+						effectKey: maximumTimeoutEffectKey,
+						callId: "delivery-direct-maximum",
+						timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
+					},
+				);
+				const networkMaximumTimeout = await networkClient.actions[
+					"delivery.publish"
+				](
+					{ effectKey: "domain-network-maximum", message: "delivery-maximum" },
+					{
+						effectKey: maximumTimeoutEffectKey,
+						callId: "delivery-network-maximum",
+						timeoutMilliseconds: Number.MAX_SAFE_INTEGER,
+					},
+				);
+				expect(networkMaximumTimeout.receipt).toBe(
+					directMaximumTimeout.receipt,
+				);
+				expect(transportCalls).toBe(2);
+				await expect(
+					networkClient.actions["delivery.publish"](
+						{
+							effectKey: "domain-network-rejected",
+							message: "delivery-refused-always-network",
+						},
+						{
+							effectKey: "provider-network-rejected",
+							callId: "delivery-network-rejected",
+						},
+					),
+				).rejects.toMatchObject({
+					code: "PROVIDER_REJECTED",
+					payload: null,
+					status: 502,
+				});
+				await expect(
+					networkClient.actions["delivery.publish"](
+						{
+							effectKey: "domain-network-timeout",
+							message: "delivery-blocked",
+						},
+						{
+							effectKey: "provider-network-timeout",
+							callId: "delivery-network-timeout",
+							timeoutMilliseconds: 10,
+						},
+					),
+				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
+				expect(transportCalls).toBe(4);
 
 				await expect(
 					invokeDelivery(
@@ -332,7 +472,7 @@ postgresTest(
 					{ effectKey: "domain-cleanup", message: "delivery-after-failure" },
 					{ effectKey: "provider-after-failure" },
 				);
-				expect(afterFailure).toMatchObject({ attempt: 6, disposals: 5 });
+				expect(afterFailure).toMatchObject({ attempt: 11, disposals: 10 });
 				await expect(
 					escapedAction!(
 						{ effectKey: "domain-escaped", message: "delivery-escaped" },

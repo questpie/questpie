@@ -58,6 +58,10 @@ export function renderClientContract(
 		(resource) =>
 			resource.kind === "mutation" && resource.contract.exposure === "network",
 	);
+	const actions = resources.filter(
+		(resource) =>
+			resource.kind === "action" && resource.contract.exposure === "network",
+	);
 	const watchableQueries = new Set(
 		input.realtime?.watchableQueries.map(({ identity }) => identity) ?? [],
 	);
@@ -93,14 +97,27 @@ export function renderClientContract(
 			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
 		})
 		.join("\n\t\t\t");
+	const actionDeclarations = actions
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}(operationInput: ${renderCodecType(resource.contract.input)}, options: ActionCallOptions): Promise<${renderCodecType(resource.contract.output)}>;`,
+		)
+		.join("\n\t\t");
+	const actionImplementations = actions
+		.map((resource) => {
+			const operationInput = renderCodecType(resource.contract.input);
+			const operationOutput = renderCodecType(resource.contract.output);
+			return `${JSON.stringify(resource.name)}: (operationInput: ${operationInput}, options: ActionCallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options),`;
+		})
+		.join("\n\t\t\t");
 	const outputCodecs = Object.fromEntries(
-		[...queries, ...mutations].map((resource) => [
+		[...queries, ...mutations, ...actions].map((resource) => [
 			resource.identity,
 			resource.contract.output,
 		]),
 	);
 	const declaredErrorContracts = Object.fromEntries(
-		[...queries, ...mutations].map((resource) => [
+		[...queries, ...mutations, ...actions].map((resource) => [
 			resource.identity,
 			Object.values(record(resource.contract.declaredErrors ?? {})).map(
 				(error) => {
@@ -115,6 +132,7 @@ export function renderClientContract(
 		]),
 	);
 	const mutationOperations = mutations.map((resource) => resource.identity);
+	const actionOperations = actions.map((resource) => resource.identity);
 	const { watchTypes, realtimeTypes, realtimeScope } = renderClientRealtime({
 		application: input.application,
 		clientContractDigest: input.clientContractDigest,
@@ -128,6 +146,9 @@ export interface CallOptions {
 	readonly signal?: AbortSignal;
 	readonly timeoutMilliseconds?: number;
 }
+export interface ActionCallOptions extends CallOptions {
+	readonly effectKey: string;
+}
 ${watchTypes}
 
 export interface GeneratedClientScope {
@@ -137,6 +158,9 @@ export interface GeneratedClientScope {
 	}>;
 	readonly mutations: Readonly<{
 		${mutationDeclarations}
+	}>;
+	readonly actions: Readonly<{
+		${actionDeclarations}
 	}>;
 	withContext(input: AppContextInput): GeneratedClientScope;
 }
@@ -157,17 +181,33 @@ export class CommittedResultUnavailable extends Error {
 	}
 }
 
+export class ActionOutcomeAmbiguous extends Error {
+	readonly name = "ActionOutcomeAmbiguous" as const;
+	readonly code = "ACTION_OUTCOME_AMBIGUOUS" as const;
+	readonly retryable = false as const;
+	readonly payload: Readonly<{ readonly callId: string }>;
+	constructor(callId: string) {
+		super("ACTION_OUTCOME_AMBIGUOUS");
+		this.payload = Object.freeze({ callId });
+		Object.freeze(this);
+	}
+}
+
 type WireRecord = Readonly<Record<string, unknown>>;
 ${realtimeTypes}
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
+const actionOperations = new Set<string>(${canonicalBytes(actionOperations).trim()});
 const failureCodes = new Set([
 	"APPLICATION_MISMATCH", "CLIENT_OUTDATED", "COMMITTED_RESULT_UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL",
 	"NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE",
 ]);
 
-function protocolFailure(): never { throw new Error("PROTOCOL_UNSUPPORTED"); }
+class ProtocolFailure extends Error {
+	constructor() { super("PROTOCOL_UNSUPPORTED"); }
+}
+function protocolFailure(): never { throw new ProtocolFailure(); }
 function wireRecord(value: unknown): WireRecord {
 	if (!value || typeof value !== "object" || Array.isArray(value)) return protocolFailure();
 	return value as WireRecord;
@@ -261,17 +301,39 @@ export function createClient(input: Readonly<{
 	readonly fetch?: typeof globalThis.fetch;
 }>): GeneratedClient {
 	const transport = input.fetch ?? globalThis.fetch;
-	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions = {}): Promise<Result> => {
+	const invoke = async <Result>(context: AppContextInput, operation: string, operationInput: unknown, options: CallOptions | ActionCallOptions = {}): Promise<Result> => {
 		const callId = options.callId ?? crypto.randomUUID();
 		if (!isCallIdentity(callId)) protocolFailure();
-		const response = await transport(new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
-			method: "POST",
-			headers: { "content-type": ${JSON.stringify(input.mediaType)} },
-			body: JSON.stringify({ protocol: { name: "questpie.operation", version: 1 }, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, wireDigest: ${JSON.stringify(input.wireDigest)}, operation, callId, context, input: operationInput, timeoutMilliseconds: options.timeoutMilliseconds ?? 5_000 }),
-			...(options.signal === undefined ? {} : { signal: options.signal }),
-		}));
-		if (response.headers.get("content-type") !== ${JSON.stringify(input.mediaType)}) protocolFailure();
-		const frame = wireRecord(await response.json());
+		const action = actionOperations.has(operation);
+		if (action) {
+			const optionKeys = Object.keys(options).sort();
+			if (!optionKeys.includes("effectKey") || optionKeys.some((key) => !["callId", "effectKey", "signal", "timeoutMilliseconds"].includes(key))) protocolFailure();
+			if (!isCallIdentity((options as ActionCallOptions).effectKey)) protocolFailure();
+			if (options.timeoutMilliseconds !== undefined && (!Number.isSafeInteger(options.timeoutMilliseconds) || options.timeoutMilliseconds <= 0)) protocolFailure();
+		}
+		if (options.signal?.aborted) throw options.signal.reason;
+		let request: Request;
+		try {
+			request = new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
+				method: "POST",
+				headers: { "content-type": ${JSON.stringify(input.mediaType)} },
+				body: JSON.stringify({ protocol: { name: "questpie.operation", version: 1 }, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, wireDigest: ${JSON.stringify(input.wireDigest)}, operation, callId, context, input: operationInput, timeoutMilliseconds: action ? options.timeoutMilliseconds ?? null : options.timeoutMilliseconds ?? 5_000, ...(action ? { effectKey: (options as ActionCallOptions).effectKey } : {}) }),
+				...(options.signal === undefined ? {} : { signal: options.signal }),
+			});
+		} catch {
+			protocolFailure();
+		}
+		let response: Response;
+		let frame: WireRecord;
+		try {
+			response = await transport(request);
+			if (response.headers.get("content-type") !== ${JSON.stringify(input.mediaType)}) protocolFailure();
+			frame = wireRecord(await response.json());
+		} catch (error) {
+			if (action) throw new ActionOutcomeAmbiguous(callId);
+			throw error;
+		}
+		try {
 		if (frame.kind === "result") {
 			exactKeys(frame, ["callId", "kind", "operation", "payload", "protocol"]);
 			verifyCorrelation(frame, operation, callId);
@@ -307,7 +369,12 @@ export function createClient(input: Readonly<{
 				: decode(contract.payload, detail.payload);
 			throw Object.assign(new Error(detail.code), { code: detail.code, status: detail.status, payload });
 		}
+		if (action) throw new ActionOutcomeAmbiguous(callId);
 		return protocolFailure();
+		} catch (error) {
+			if (action && error instanceof ProtocolFailure) throw new ActionOutcomeAmbiguous(callId);
+			throw error;
+		}
 	};
 	const scope = (next: AppContextInput): GeneratedClientScope => {
 		const context = immutableContext(next);
@@ -316,6 +383,8 @@ export function createClient(input: Readonly<{
 			${implementations}
 		}), mutations: Object.freeze({
 			${mutationImplementations}
+		}), actions: Object.freeze({
+			${actionImplementations}
 		}), withContext: scope });
 	};
 	return Object.freeze({ withContext: scope });

@@ -30,6 +30,7 @@ test("compiler emits exact wire v2 and binds its same-contract v1 sibling", asyn
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-wire-v2-"));
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
+		await rm(join(temporary, "src/delivery-action.ts"));
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});

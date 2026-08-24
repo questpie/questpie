@@ -15,6 +15,7 @@ import {
 	type ReactionProjectionV2,
 } from "../reaction";
 import type { ApplicationConfiguration, NormalizedResource } from "../types";
+import { projectOperationWireV3 } from "./operation-wire-v3";
 
 export { renderClientContract, renderCodecType } from "./client";
 export { projectRealtimeWireContract } from "./realtime-wire";
@@ -335,7 +336,21 @@ export function projectRuntimeContract(
 			"RUNTIME_UNAVAILABLE",
 		],
 	};
-	const wireDigest = digest("questpie-operation-wire-v2", wireWithoutDigest);
+	const retainedWireV2 = {
+		...wireWithoutDigest,
+		digest: digest("questpie-operation-wire-v2", wireWithoutDigest),
+	};
+	const networkActions = input.resources.filter(
+		(resource) =>
+			resource.kind === "action" && resource.contract.exposure === "network",
+	);
+	const wire =
+		networkActions.length === 0
+			? retainedWireV2
+			: projectOperationWireV3({
+					retainedWireV2,
+					actionOperations: operationContracts(networkActions, "direct"),
+				});
 	return {
 		clientContract,
 		clientContractDigest,
@@ -349,8 +364,8 @@ export function projectRuntimeContract(
 		runtimeExecutablesDigest,
 		reactions,
 		reactionDigest,
-		wire: { ...wireWithoutDigest, digest: wireDigest },
-		wireDigest,
+		wire,
+		wireDigest: String(wire.digest),
 	};
 }
 

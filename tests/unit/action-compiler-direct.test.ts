@@ -272,7 +272,7 @@ test("defaults only omitted Action network intent and preserves invalid values",
 	}
 });
 
-test("materializes omitted Action network intent in controlled discovery", async () => {
+test("materializes authored Action network intent in controlled discovery", async () => {
 	const fixture = resolve(import.meta.dir, "../../fixtures/collaboration");
 	const evaluated = await evaluateModules({
 		applicationRoot: fixture,
@@ -297,7 +297,7 @@ test("materializes omitted Action network intent in controlled discovery", async
 		"output",
 		"policy",
 	]);
-	expect(action?.network).toBe(false);
+	expect(action?.network).toBe(true);
 	expect(() => normalizeActionContract(action ?? {}, codec)).not.toThrow();
 });
 
@@ -400,7 +400,7 @@ test("projects only execution-owned external Action Service closures", () => {
 	]);
 });
 
-test("adds the direct Action artifact while retaining client and Wire v2 bytes", () => {
+test("adds direct Action artifacts and projects network intent through Wire v3", () => {
 	const contract = normalizeActionContract(actionValue, codec);
 	const action: NormalizedResource = {
 		identity: "action:delivery.publish",
@@ -462,7 +462,16 @@ test("adds the direct Action artifact while retaining client and Wire v2 bytes",
 	expect(projected.clientContract).toEqual(baseline.clientContract);
 	expect(projected.wire).toEqual(baseline.wire);
 	expect(stagedNetworkIntent.clientContract).toEqual(baseline.clientContract);
-	expect(stagedNetworkIntent.wire).toEqual(baseline.wire);
+	expect(stagedNetworkIntent.wire).toMatchObject({
+		version: 3,
+		compatibility: { wireV2Digest: baseline.wire.digest },
+	});
+	expect(stagedNetworkIntent.wire).not.toEqual(baseline.wire);
+	expect(
+		(
+			stagedNetworkIntent.wire.operations as readonly { identity: string }[]
+		).map(({ identity }) => identity),
+	).toEqual(["action:delivery.publish"]);
 	expect(stagedNetworkIntent.operationContracts.operations).toHaveLength(1);
 	expect(projected.operationContracts.operations).toEqual([
 		{

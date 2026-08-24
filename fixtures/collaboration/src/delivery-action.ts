@@ -57,6 +57,7 @@ export const deliveryProvider = defineService({
 
 export const publishDelivery = defineAction({
 	name: "delivery.publish",
+	network: true,
 	input: codec.object({
 		message: codec.text(),
 		// Domain data with this name is deliberately not Effect Identity material.

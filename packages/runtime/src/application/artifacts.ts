@@ -16,6 +16,10 @@ import {
 	type RuntimeExecutablesV1,
 } from "./executable-artifact";
 import { validateOperationWireV2 } from "./wire-v2-artifact";
+import {
+	operationWireV3ExtensionKeys,
+	validateRuntimeOperationWireV3,
+} from "./wire-v3-runtime-artifact";
 
 type RuntimeBuildV1 = Readonly<{
 	format: "questpie.runtime-build";
@@ -83,7 +87,7 @@ type RuntimeBuildV1 = Readonly<{
 
 type OperationWireContractBase = Readonly<{
 	format: "questpie.operation-wire";
-	version: 1 | 2;
+	version: 1 | 2 | 3;
 	application: string;
 	path: string;
 	mediaType: string;
@@ -111,7 +115,20 @@ type OperationWireContractV2 = OperationWireContractBase &
 		}>;
 	}>;
 
-type OperationWireContract = OperationWireContractV1 | OperationWireContractV2;
+type OperationWireContractV3 = OperationWireContractBase &
+	Readonly<{
+		version: 3;
+		compatibility: Readonly<{
+			clientContractDigest: string;
+			wireV1Digest: string;
+			wireV2Digest: string;
+		}>;
+	}>;
+
+type OperationWireContract =
+	| OperationWireContractV1
+	| OperationWireContractV2
+	| OperationWireContractV3;
 
 export type OperationContractsV1 = Readonly<{
 	format: "questpie.operation-contracts";
@@ -280,6 +297,7 @@ function decodeOperationWireContract(
 function decodeWire(value: unknown): OperationWireContract {
 	const wire = record(value, "wire contract");
 	const isV2 = wire.version === 2;
+	const isV3 = wire.version === 3;
 	exact(
 		wire,
 		[
@@ -297,7 +315,7 @@ function decodeWire(value: unknown): OperationWireContract {
 			"principalSource",
 			"mutationAutomaticRetry",
 			"clientContractDigest",
-			...(isV2
+			...(isV2 || isV3
 				? [
 						"failureDetails",
 						"resultKinds",
@@ -307,13 +325,14 @@ function decodeWire(value: unknown): OperationWireContract {
 						"compatibility",
 					]
 				: []),
+			...(isV3 ? [...operationWireV3ExtensionKeys] : []),
 			"digest",
 		],
 		"wire contract",
 	);
 	if (
 		wire.format !== "questpie.operation-wire" ||
-		(wire.version !== 1 && wire.version !== 2) ||
+		(wire.version !== 1 && wire.version !== 2 && wire.version !== 3) ||
 		typeof wire.application !== "string" ||
 		wire.path !== "/_questpie/operation" ||
 		wire.mediaType !== "application/vnd.questpie.operation+json;version=1" ||
@@ -376,7 +395,8 @@ function decodeWire(value: unknown): OperationWireContract {
 		)
 	)
 		fail("wire operations must be unique and sorted");
-	if (isV2) validateOperationWireV2(wire);
+	if (isV3) validateRuntimeOperationWireV3(wire);
+	else if (isV2) validateOperationWireV2(wire);
 	else if (
 		JSON.stringify(wire.failures) !==
 		JSON.stringify([
@@ -395,7 +415,11 @@ function decodeWire(value: unknown): OperationWireContract {
 	const { digest: _digest, ...unsigned } = wire;
 	if (
 		artifactDigest(
-			isV2 ? "questpie-operation-wire-v2" : "questpie-operation-wire-v1",
+			isV3
+				? "questpie-operation-wire-v3"
+				: isV2
+					? "questpie-operation-wire-v2"
+					: "questpie-operation-wire-v1",
 			unsigned,
 		) !== digest
 	)

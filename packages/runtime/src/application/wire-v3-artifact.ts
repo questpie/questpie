@@ -207,11 +207,11 @@ function fixedExtension() {
 
 function expectedWire(
 	retained: JsonRecord,
-	action: JsonRecord,
+	actions: readonly JsonRecord[],
 ): Readonly<Record<string, unknown>> {
 	const operations = [
 		...(retained.operations as readonly JsonRecord[]),
-		action,
+		...actions,
 	].sort((left, right) =>
 		String(left.identity) < String(right.identity)
 			? -1
@@ -257,11 +257,23 @@ export function validateOperationWireV3(
 	input: Readonly<{
 		wire: unknown;
 		retainedWireV2: unknown;
-		actionOperation: unknown;
+		actionOperation?: unknown;
+		actionOperations?: readonly unknown[];
 	}>,
 ): OperationWireV3Validation {
 	const retained = validateRetainedV2(input.retainedWireV2);
-	const action = actionOperation(input.actionOperation);
+	if (
+		(input.actionOperation === undefined) ===
+		(input.actionOperations === undefined)
+	)
+		fail("exactly one Action operation input form is required");
+	const actions = (input.actionOperations ?? [input.actionOperation]).map(
+		(candidate) => actionOperation(candidate),
+	);
+	if (actions.length === 0) fail("at least one Action operation is required");
+	const actionIdentities = actions.map((action) => action.identity as string);
+	if (new Set(actionIdentities).size !== actionIdentities.length)
+		fail("Action operations are duplicated");
 	const wire = record(input.wire, "Operation Wire v3");
 	exactKeys(wire, v3Keys, "Operation Wire v3");
 	if (wire.format !== "questpie.operation-wire" || wire.version !== 3)
@@ -270,7 +282,7 @@ export function validateOperationWireV3(
 	delete unsigned.digest;
 	if (wire.digest !== digest("questpie-operation-wire-v3", unsigned))
 		fail("Operation Wire v3 digest does not match");
-	exact(wire, expectedWire(retained, action), "Operation Wire v3 projection");
+	exact(wire, expectedWire(retained, actions), "Operation Wire v3 projection");
 	const compatibility = record(
 		retained.compatibility,
 		"retained compatibility",

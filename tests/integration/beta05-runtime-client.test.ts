@@ -413,6 +413,9 @@ async function runtimeHarness(
 			slots: bindings.slots as never,
 		},
 		program: {
+			invokeAction: async () => {
+				throw new Error("query-only Runtime harness cannot invoke Actions");
+			},
 			services: [
 				demoAuth,
 				deliveryProvider,

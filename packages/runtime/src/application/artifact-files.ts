@@ -121,9 +121,11 @@ export function verifyRuntimeArtifactFiles(
 	if (
 		rawWireDigest !== build.wireDigest ||
 		artifactDigest(
-			wireVersion === 2
-				? "questpie-operation-wire-v2"
-				: "questpie-operation-wire-v1",
+			wireVersion === 3
+				? "questpie-operation-wire-v3"
+				: wireVersion === 2
+					? "questpie-operation-wire-v2"
+					: "questpie-operation-wire-v1",
 			rawWireUnsigned,
 		) !== build.wireDigest
 	)

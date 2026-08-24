@@ -21,6 +21,18 @@ const requestKeys = [
 	"timeoutMilliseconds",
 	"wireDigest",
 ] as const;
+const actionRequestKeys = [
+	"application",
+	"callId",
+	"clientContractDigest",
+	"context",
+	"effectKey",
+	"input",
+	"operation",
+	"protocol",
+	"timeoutMilliseconds",
+	"wireDigest",
+] as const;
 
 export type OperationWireRequestV1 = Readonly<{
 	application: string;
@@ -32,7 +44,28 @@ export type OperationWireRequestV1 = Readonly<{
 	protocol: typeof operationProtocol;
 	timeoutMilliseconds: number | null;
 	wireDigest: string;
+	effectKey?: string;
 }>;
+
+function isActionEffectKey(value: unknown): value is string {
+	if (typeof value !== "string" || value.length === 0 || value.includes("\0"))
+		return false;
+	let scalars = 0;
+	for (let index = 0; index < value.length; index += 1) {
+		const unit = value.charCodeAt(index);
+		if (unit >= 0xd800 && unit <= 0xdbff) {
+			const next = value.charCodeAt(index + 1);
+			if (!(next >= 0xdc00 && next <= 0xdfff)) return false;
+			index += 1;
+		} else if (unit >= 0xdc00 && unit <= 0xdfff) return false;
+		scalars += 1;
+	}
+	return (
+		scalars <= 256 &&
+		Buffer.byteLength(value, "utf8") <= 1_024 &&
+		value.normalize("NFC") === value
+	);
+}
 
 export function decodeOperationWireRequest(
 	value: unknown,
@@ -40,9 +73,12 @@ export function decodeOperationWireRequest(
 	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
 	const frame = value as Readonly<Record<string, unknown>>;
 	const actual = Object.keys(frame).sort();
+	const expected = Object.hasOwn(frame, "effectKey")
+		? actionRequestKeys
+		: requestKeys;
 	if (
-		actual.length !== requestKeys.length ||
-		requestKeys.some((key, index) => key !== actual[index])
+		actual.length !== expected.length ||
+		expected.some((key, index) => key !== actual[index])
 	)
 		return null;
 	if (
@@ -66,7 +102,8 @@ export function decodeOperationWireRequest(
 		typeof frame.wireDigest !== "string" ||
 		(frame.timeoutMilliseconds !== null &&
 			(!Number.isSafeInteger(frame.timeoutMilliseconds) ||
-				(frame.timeoutMilliseconds as number) <= 0))
+				(frame.timeoutMilliseconds as number) <= 0)) ||
+		(Object.hasOwn(frame, "effectKey") && !isActionEffectKey(frame.effectKey))
 	)
 		return null;
 	return frame as OperationWireRequestV1;

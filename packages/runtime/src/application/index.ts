@@ -79,6 +79,17 @@ export interface RuntimeApplicationProgram<
 	readonly projectMutation?: (
 		scope: Parameters<RuntimeProgram<Context, OperationView>["project"]>[0],
 	) => MaybePromise<MutationInvoker<OperationView>>;
+	readonly invokeAction?: (
+		input: Readonly<{
+			identity: string;
+			input: unknown;
+			effectKey: string;
+			callId: string;
+			timeoutMilliseconds?: number;
+			execution: ExecutionView;
+			operations: RuntimeOperations;
+		}>,
+	) => MaybePromise<unknown>;
 	readonly resolvePrincipal: (
 		request: Request,
 	) => MaybePromise<Principal | null>;
@@ -211,6 +222,13 @@ export async function createRuntimeApplication<
 	const networkOperations = new Set(
 		artifacts.wireContract.operations.map(({ identity }) => identity),
 	);
+	const networkActionContracts = new Map(
+		artifacts.wireContract.operations
+			.filter((contract) => contract.identity.startsWith("action:"))
+			.map((contract) => [contract.identity, contract]),
+	);
+	if (networkActionContracts.size > 0 && !input.program.invokeAction)
+		throw new TypeError("Runtime network Action executor is unavailable");
 	await input.program.verifyReadiness?.(artifacts);
 	try {
 		await input.program.liveQueryCoordinator?.start();
@@ -410,7 +428,7 @@ export async function createRuntimeApplication<
 		ExecutionView
 	>["execution"] = (root, use) =>
 		executeRoot(root, async ({ invoke, view }) => {
-			const scope = Object.freeze({
+			const operations: RuntimeOperations = Object.freeze({
 				invoke: (
 					identity: string,
 					operationInput: unknown,
@@ -430,6 +448,9 @@ export async function createRuntimeApplication<
 					callSequence += 1;
 					return invoke(prepared, `direct:${callSequence}`);
 				},
+			});
+			const scope = Object.freeze({
+				...operations,
 				execution: await view.execution(),
 			});
 			return use(scope);
@@ -512,16 +533,22 @@ export async function createRuntimeApplication<
 			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
 		if (frame.application !== artifacts.runtimeBuild.application)
 			return operationWireResponse(rejectionFrame("APPLICATION_MISMATCH"), 409);
-		const currentV2 =
+		const current =
 			frame.clientContractDigest ===
 				artifacts.runtimeBuild.clientContractDigest &&
 			frame.wireDigest === artifacts.wireContract.digest;
+		const currentV2 =
+			artifacts.wireContract.version === 3 &&
+			frame.clientContractDigest ===
+				artifacts.wireContract.compatibility.clientContractDigest &&
+			frame.wireDigest === artifacts.wireContract.compatibility.wireV2Digest;
 		const currentV1 =
-			artifacts.wireContract.version === 2 &&
+			artifacts.wireContract.version !== 1 &&
 			frame.clientContractDigest ===
 				artifacts.wireContract.compatibility.clientContractDigest &&
 			frame.wireDigest === artifacts.wireContract.compatibility.wireV1Digest;
-		const retainedV1 =
+		const retainedLegacy =
+			!current &&
 			!currentV2 &&
 			(currentV1 ||
 				matchesRetainedClientPair(
@@ -529,9 +556,17 @@ export async function createRuntimeApplication<
 					frame.clientContractDigest,
 					frame.wireDigest,
 				));
-		if (!currentV2 && !retainedV1)
+		if (!current && !currentV2 && !retainedLegacy)
 			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
-		if (retainedV1) {
+		const actionRequest = frame.operation.startsWith("action:");
+		if (actionRequest && (!current || artifacts.wireContract.version !== 3))
+			return operationWireResponse(rejectionFrame("CLIENT_OUTDATED"), 409);
+		if (
+			(actionRequest && !Object.hasOwn(frame, "effectKey")) ||
+			(!actionRequest && Object.hasOwn(frame, "effectKey"))
+		)
+			return operationWireResponse(rejectionFrame("PROTOCOL_UNSUPPORTED"), 400);
+		if (retainedLegacy) {
 			const binding = queryBindings.find(
 				(candidate) => candidate.identity === frame.operation,
 			);
@@ -543,10 +578,15 @@ export async function createRuntimeApplication<
 				failureFrame(frame, "NOT_FOUND"),
 				operationFailureStatus("NOT_FOUND"),
 			);
-		let prepared: PreparedOperation<OperationView>;
+		let prepared: PreparedOperation<OperationView> | undefined;
+		const actionContract = actionRequest
+			? networkActionContracts.get(frame.operation)
+			: undefined;
 		let contextInput: ContextInputOf<Context>;
 		try {
-			prepared = operationEngine.prepare(frame.operation, frame.input);
+			if (actionRequest) {
+				if (!actionContract) throw new OperationFailure("NOT_FOUND");
+			} else prepared = operationEngine.prepare(frame.operation, frame.input);
 			contextInput = decodeRuntimeCodec<ContextInputOf<Context>>(
 				input.program.context.input as never,
 				frame.context,
@@ -590,15 +630,49 @@ export async function createRuntimeApplication<
 					context: contextInput,
 					signal: request.signal,
 					deadline:
-						frame.timeoutMilliseconds === null
+						actionRequest || frame.timeoutMilliseconds === null
 							? undefined
 							: nowMilliseconds() + frame.timeoutMilliseconds,
 				},
-				({ invoke }) => invoke(prepared, frame.callId),
+				async ({ invoke, view }) => {
+					if (!actionRequest) return invoke(prepared!, frame.callId);
+					const operations: RuntimeOperations = Object.freeze({
+						invoke: (
+							identity: string,
+							operationInput: unknown,
+							options?: Readonly<{
+								callId?: string;
+								signal?: AbortSignal;
+								deadline?: number;
+							}>,
+						) => {
+							const nested = operationEngine.prepare(identity, operationInput);
+							if (nested.binding.kind === "mutation") {
+								const callId = options?.callId ?? crypto.randomUUID();
+								if (!isOperationCallId(callId))
+									throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+								return invoke(nested, callId, options);
+							}
+							callSequence += 1;
+							return invoke(nested, `action:${callSequence}`, options);
+						},
+					});
+					return input.program.invokeAction!({
+						identity: frame.operation,
+						input: frame.input,
+						effectKey: frame.effectKey!,
+						callId: frame.callId,
+						...(frame.timeoutMilliseconds === null
+							? {}
+							: { timeoutMilliseconds: frame.timeoutMilliseconds }),
+						execution: await view.execution(),
+						operations,
+					});
+				},
 			);
 			const framed = resultFrame(
 				frame,
-				encodeRuntimeCodec(prepared.output, payload),
+				encodeRuntimeCodec((actionContract ?? prepared!).output, payload),
 			);
 			const bytes = JSON.stringify(framed);
 			if (
@@ -620,7 +694,12 @@ export async function createRuntimeApplication<
 			let operationError: unknown = error;
 			if (error instanceof DeclaredOperationError) {
 				try {
-					const declared = encodeDeclaredOperationError(prepared, error);
+					const declared = encodeDeclaredOperationError(
+						(actionContract
+							? { declaredErrors: actionContract.declaredErrors }
+							: prepared!) as PreparedOperation<OperationView>,
+						error,
+					);
 					return operationWireResponse(
 						declaredErrorFrame(frame, declared),
 						declared.status,

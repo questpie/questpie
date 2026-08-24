@@ -133,9 +133,12 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 		);
 		expect(wire).toMatchObject({
 			format: "questpie.operation-wire",
-			version: 2,
+			version: 3,
 			path: "/_questpie/operation",
 			protocol: { name: "questpie.operation", version: 1 },
+			compatibility: expect.objectContaining({
+				wireV2ActionExecution: "rejectBeforeContextServiceAndHandler",
+			}),
 		});
 		expect(wire.operations).toContainEqual(
 			expect.objectContaining({

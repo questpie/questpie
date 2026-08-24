@@ -458,17 +458,32 @@ function freezeDeep<Value>(value: Value): Value {
 export function projectOperationWireV3(
 	input: Readonly<{
 		retainedWireV2: unknown;
-		actionOperation: unknown;
+		actionOperation?: unknown;
+		actionOperations?: readonly unknown[];
 	}>,
 ): Readonly<Record<string, unknown>> {
 	const retained = validateRetainedV2(input.retainedWireV2);
-	const action = actionContract(input.actionOperation);
-	const actionIdentity = action.identity as string;
+	if (
+		(input.actionOperation === undefined) ===
+		(input.actionOperations === undefined)
+	)
+		fail("exactly one Action operation input form is required");
+	const actions = (input.actionOperations ?? [input.actionOperation]).map(
+		(candidate) => actionContract(candidate),
+	);
+	if (actions.length === 0) fail("at least one Action operation is required");
+	const actionIdentities = actions.map((action) => action.identity as string);
+	if (new Set(actionIdentities).size !== actionIdentities.length)
+		fail("Action operations are duplicated");
 	const retainedOperations = retained.operations as readonly JsonRecord[];
-	if (retainedOperations.some((member) => member.identity === actionIdentity))
+	if (
+		retainedOperations.some((member) =>
+			actionIdentities.includes(member.identity as string),
+		)
+	)
 		fail("Action operation collides with a retained operation");
-	const projectedExtension = extension(action);
-	const operations = [...retainedOperations, action].sort((left, right) =>
+	const projectedExtension = extension(actions[0]!);
+	const operations = [...retainedOperations, ...actions].sort((left, right) =>
 		compareAscii(String(left.identity), String(right.identity)),
 	);
 	const compatibility = record(

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { compileApplication } from "../../packages/compiler/src";
+import { decodeRuntimeArtifacts } from "../../packages/runtime/src/application/artifacts";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -35,7 +36,7 @@ async function compileFixture(includeAction: boolean) {
 	return compilation;
 }
 
-test("projects one authored Action into closed direct artifacts and bindings", async () => {
+test("projects one authored Action into exact direct and Wire v3 artifacts", async () => {
 	const baseline = await compileFixture(false);
 	const compilation = await compileFixture(true);
 	const contracts = JSON.parse(
@@ -109,12 +110,41 @@ test("projects one authored Action into closed direct artifacts and bindings", a
 	expect(app).toContain("actions: GeneratedActionOperations");
 	expect(runtime).toContain("createRuntimeActionExecutor");
 
-	// Authored `network` is normalized staging intent only. This direct-only slice
-	// deliberately has no network call path and leaves v2 client/Wire bytes exact.
-	expect(compilation.generatedFiles["client.ts"]).toBe(
-		baseline.generatedFiles["client.ts"],
-	);
-	expect(compilation.generatedFiles["wire-contract.json"]).toBe(
-		baseline.generatedFiles["wire-contract.json"],
-	);
+	const retainedWire = JSON.parse(
+		baseline.generatedFiles["wire-contract.json"]!,
+	) as Readonly<{ digest: string; version: number }>;
+	const wire = JSON.parse(
+		compilation.generatedFiles["wire-contract.json"]!,
+	) as Readonly<{
+		compatibility: Readonly<{ wireV2Digest: string }>;
+		digest: string;
+		operations: readonly Readonly<{ identity: string }>[];
+		version: number;
+	}>;
+	expect(retainedWire.version).toBe(2);
+	expect(wire.version).toBe(3);
+	expect(wire.compatibility.wireV2Digest).toBe(retainedWire.digest);
+	expect(wire.operations.map(({ identity }) => identity)).toEqual([
+		"action:delivery.publish",
+		"mutation:message.publish",
+		"query:messages.page",
+	]);
+	expect(wire.digest).not.toBe(retainedWire.digest);
+	const decoded = decodeRuntimeArtifacts({
+		runtimeBuild: JSON.parse(compilation.generatedFiles["runtime-build.json"]!),
+		runtimeExecutables: executables,
+		operationContracts: contracts,
+		wireContract: wire,
+	});
+	expect(decoded.wireContract.version).toBe(3);
+	expect(decoded.runtimeBuild.wireDigest).toBe(wire.digest);
+
+	const client = compilation.generatedFiles["client.ts"]!;
+	expect(client).not.toBe(baseline.generatedFiles["client.ts"]);
+	expect(client).toContain("readonly actions:");
+	expect(client).toContain("readonly effectKey: string");
+	expect(client).toContain('"delivery.publish":');
+	expect(client).toContain('"action:delivery.publish"');
+	expect(client).toContain("ACTION_OUTCOME_AMBIGUOUS");
+	expect(client).not.toContain("retry?:");
 });

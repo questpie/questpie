@@ -256,6 +256,21 @@ function applicationEntry(
 				}`,
 		})),
 	);
+	const networkActionCases = actions
+		.filter((resource) => resource.contract.exposure === "network")
+		.map((resource) => {
+			const access = resource.name
+				.split(".")
+				.map((segment) => `[${JSON.stringify(segment)}]`)
+				.join("");
+			return `case ${JSON.stringify(resource.identity)}:
+				return createDirectActions(execution.actionScope, operations)${access}(actionInput, {
+					effectKey,
+					callId,
+					...(timeoutMilliseconds === undefined ? {} : { timeoutMilliseconds }),
+				});`;
+		})
+		.join("\n");
 	const actionServiceEntries = actionServiceResources(input.resources)
 		.toSorted((left, right) => compareAscii(left.identity, right.identity))
 		.map((resource) => {
@@ -554,6 +569,12 @@ export async function createApplication(input) {
 					contextInputCodec: ${contextDefinition}.input,
 					runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 				});
+			},
+			invokeAction: ({ identity, input: actionInput, effectKey, callId, timeoutMilliseconds, execution, operations }) => {
+				switch (identity) {
+					${networkActionCases}
+					default: throw new OperationFailure("NOT_FOUND");
+				}
 			},
 			projectExecution: async (scope) => Object.freeze({
 				actionScope: scope,

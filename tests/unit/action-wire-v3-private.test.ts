@@ -138,6 +138,39 @@ test("private projector reproduces the accepted additive Wire v3 without mutatin
 	]);
 });
 
+test("projects and validates a canonical multi-Action inventory without changing the one-Action digest", () => {
+	const single = project();
+	const second = { ...actionOperation, identity: "action:delivery.retry" };
+	const wire = projectOperationWireV3({
+		retainedWireV2,
+		actionOperations: [second, actionOperation],
+	});
+	expect(project().digest).toBe(single.digest);
+	expect(
+		(wire.operations as readonly Readonly<{ identity: string }>[]).map(
+			({ identity }) => identity,
+		),
+	).toEqual([
+		"action:delivery.publish",
+		"action:delivery.retry",
+		"mutation:message.publish",
+		"query:messages.page",
+	]);
+	expect(
+		validateOperationWireV3({
+			wire,
+			retainedWireV2,
+			actionOperations: [actionOperation, second],
+		}).digest,
+	).toBe(wire.digest);
+	expect(() =>
+		projectOperationWireV3({
+			retainedWireV2,
+			actionOperations: [actionOperation, actionOperation],
+		}),
+	).toThrow(/duplicated/);
+});
+
 test("private projector rejects invalid retained pairs, grammar, and ordering", () => {
 	for (const retained of [
 		{ ...retainedWireV2, digest: "0".repeat(64) },
