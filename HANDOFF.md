@@ -133,8 +133,9 @@ Recommended Route/Auth sequence:
 
 1. **Completed at `ed9b4578`:** add a temporary fixture demo-cookie
    `/api/whoami` tracer and name its deletion in the same plan.
-2. Extract the existing Service owner so application Services can safely serve
-   pre-Context ingress and streamed-response lifetimes.
+2. **Completed at `69ad1b7f`:** extract the existing Service owner so
+   application Services can safely serve pre-Context ingress and retain
+   streamed-response lifetimes through EOF, error, and cancellation.
 3. Prove Runtime credential outcomes and Route execution with handcrafted
    closed bindings: resolved, anonymous, unavailable, direct bypass, Fetch
    parity, and response-body disposal.
@@ -192,14 +193,25 @@ missing, wrong, duplicate, malformed, and unrelated-cookie cases; exact
 hard restart; and the original durable recovery journey. Independent Standards
 and Spec adversarial re-reviews both returned PASS.
 
+Route/Auth commit 2 is complete at `69ad1b7f`. The extracted Service owner
+serves application Services before Context Resolution, shares the same
+application instance with ordinary executions, and retains execution Services
+through Response EOF, stream error, and consumer cancellation. Focused runtime
+integration, Runtime typecheck, architecture, full quality, release quality,
+and `git diff --check` passed at that head.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Start Route/Auth commit 2 test-first: extract the existing Service owner so
-   application Services can serve pre-Context ingress and retain streamed
-   response lifetimes through EOF, error, and cancellation.
+2. Start Route/Auth commit 3 test-first: prove Runtime credential outcomes and
+   Route execution through handcrafted closed bindings—resolved, anonymous,
+   typed unavailable without anonymous downgrade, direct Principal bypass,
+   Fetch parity, and response-body disposal through EOF, error, and
+   cancellation.
 3. Keep Route Product review separate from any new public Kernel/wire decision.
-4. Serialize generated builds and PostgreSQL schema-reset tests.
-5. Commit only coherent green boundaries; do not push, tag, publish, or contact
+4. Do not start the compiler/generated Route slice and do not remove the
+   fixture-owned `/api/whoami` shortcut in this boundary.
+5. Serialize generated builds and PostgreSQL schema-reset tests.
+6. Commit only coherent green boundaries; do not push, tag, publish, or contact
    external systems without explicit authority.
