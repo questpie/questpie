@@ -1,0 +1,38 @@
+{
+	"id": "pb05-owner-path-measurement",
+	"kind": "load",
+	"schedule": "manual",
+	"command": ["bun", "tests/load/pb05-owner-path-measurement.ts"],
+	"budgetOwner": "PB-05",
+	"status": "PROVISIONAL_INTERNAL_EVIDENCE",
+	"publicCeilings": false,
+	"metrics": {
+		"actualMutationHandlerSamples": {
+			"direction": "min",
+			"budget": 16,
+			"unit": "count"
+		},
+		"actualRealtimeApplySamples": {
+			"direction": "min",
+			"budget": 16,
+			"unit": "count"
+		},
+		"maintenanceOwnerPathSamples": {
+			"direction": "min",
+			"budget": 8,
+			"unit": "count"
+		},
+		"reconciliationOwnerPathSamples": {
+			"direction": "min",
+			"budget": 8,
+			"unit": "count"
+		},
+		"retentionOwnerPathSamples": {
+			"direction": "min",
+			"budget": 8,
+			"unit": "count"
+		},
+		"lockWaitProofs": { "direction": "min", "budget": 24, "unit": "count" },
+		"semanticFailures": { "direction": "max", "budget": 0, "unit": "count" }
+	}
+}
