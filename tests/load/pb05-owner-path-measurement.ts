@@ -7,6 +7,7 @@ import { principal } from "questpie";
 import { createPostgresDatabaseDurableMaintenance } from "../../packages/runtime/src/durable/postgres-database-maintenance";
 import type { ExecutionFacts } from "../../packages/runtime/src/execution";
 import {
+	createPostgresLiveQueryInvalidationEffect,
 	createPostgresLiveQueryRetention,
 	reconcilePostgresChangeLedger,
 } from "../../packages/runtime/src/live-query";
@@ -28,12 +29,15 @@ import {
 	assertPb05OperationalMetrics,
 	assertPb05OwnerPathSchemaReset,
 	createPb05ContentionOperationOwner,
+	createPb05OperationAbortBoundary,
 	derivePb05OwnerPathMeasurements,
+	settlePb05OwnedBlocker,
 	withPb05ReleasedBlocker,
 } from "../support/pb05-operational-load-safety";
 import {
 	createPb05OperationalMeasurement,
 	instrumentPb05OwnerContentionRunner,
+	instrumentPb05OwnedTransaction,
 	instrumentPb05TransactionRunner,
 	observePb05AcceptedCallback,
 } from "../support/pb05-operational-measurement";
@@ -43,7 +47,7 @@ if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER)
 
 const application = "application:collaboration";
 const applicationName = "collaboration";
-const consumer = "realtime:pb05-owner-path";
+let consumer = "";
 const warmupSamples = 2;
 const measuredCallbackSamples = 16;
 const measuredContentionSamples = 8;
@@ -52,6 +56,12 @@ const retentionLockIdentity = `questpie-retained-result-v1:${applicationName}:${
 
 type View = Readonly<{
 	data: Readonly<{
+		channels: Readonly<{
+			get(input: unknown): Promise<Readonly<Record<string, unknown>> | null>;
+		}>;
+		spaces: Readonly<{
+			get(input: unknown): Promise<Readonly<Record<string, unknown>> | null>;
+		}>;
 		messages: Readonly<{
 			create(input: unknown): Promise<Readonly<Record<string, unknown>>>;
 		}>;
@@ -64,6 +74,15 @@ type View = Readonly<{
 
 type Owner = "maintenance" | "reconciliation" | "retention";
 type Prepared = Awaited<ReturnType<typeof prepareBeta05PostgresApplication>>;
+type CompiledPublishMessage = Readonly<{
+	name: "message.publish";
+	input: unknown;
+	output: unknown;
+	errors: Readonly<Record<string, unknown>>;
+	handler(
+		input: Readonly<{ input: unknown; ctx: View; errors: unknown }>,
+	): Promise<unknown>;
+}>;
 
 function postgresUrl(applicationName: string): string {
 	const url = new URL(beta05PostgresUrl());
@@ -116,65 +135,89 @@ async function generatedFiles(prepared: Prepared, names: readonly string[]) {
 	);
 }
 
+async function loadCompiledPublishMessage(
+	prepared: Prepared,
+): Promise<CompiledPublishMessage> {
+	const applicationRoot = resolve(prepared.generated.generatedRoot, "../..");
+	const compiled = await Bun.build({
+		entrypoints: [resolve(applicationRoot, "src/message-publish.ts")],
+		target: "bun",
+		format: "esm",
+		packages: "bundle",
+		plugins: [
+			{
+				name: "pb05-owner-path-authoring-binding",
+				setup(builder) {
+					builder.onResolve({ filter: /^#questpie\/app$/u }, () => ({
+						path: "authoring-app",
+						namespace: "pb05-owner-path",
+					}));
+					builder.onLoad(
+						{ filter: /.*/u, namespace: "pb05-owner-path" },
+						() => ({
+							contents:
+								'export const defineMutation = (definition) => Object.freeze({ ...definition, kind: "mutation", identity: `mutation:${definition.name}`, network: definition.network === true });',
+							loader: "js",
+						}),
+					);
+				},
+			},
+		],
+	});
+	if (!compiled.success || compiled.outputs.length !== 1)
+		throw new TypeError(
+			"PB-05 could not compile the collaboration Mutation owner",
+		);
+	const bytes = await compiled.outputs[0]!.arrayBuffer();
+	const module = (await import(
+		`data:text/javascript;base64,${Buffer.from(bytes).toString("base64")}`
+	)) as Readonly<{ publishMessage?: CompiledPublishMessage }>;
+	if (
+		module.publishMessage?.name !== "message.publish" ||
+		typeof module.publishMessage.handler !== "function"
+	)
+		throw new TypeError(
+			"PB-05 compiled collaboration publishMessage owner is invalid",
+		);
+	return module.publishMessage;
+}
+
 function operation(
 	body: string,
+	definition: CompiledPublishMessage,
+	binding: Readonly<{ runtimeGraphDigest: string; bundleExport: string }>,
 	measurement: ReturnType<typeof createPb05OperationalMeasurement>,
 	record: boolean,
 ): PreparedOperation<View> {
-	const execute = async (input: unknown, ctx: View) => {
-		const message = await ctx.data.messages.create({
-			input: {
-				channelId: beta05Ids.channel,
-				authorMembershipId: beta05Ids.membership,
-				body: (input as { body: string }).body,
-			},
-		});
-		await ctx.data.messageEvents.create({
-			input: { messageId: message.id, kind: "published" },
-		});
-		await ctx.dispatch.messagePublished({
-			channelId: beta05Ids.channel,
-			companyId: beta05Ids.company,
-			messageId: message.id,
-		});
-		return message;
-	};
 	return {
 		admission: "authenticated",
 		binding: {
-			identity: "mutation:message.publish.database",
+			identity: "mutation:message.publish",
 			kind: "mutation",
 			slot: "handler",
-			runtimeGraphDigest: "a".repeat(64),
-			bundleExport: "publishDatabase",
-			execute: ({ input, ctx }: Readonly<{ input: unknown; ctx: View }>) =>
+			runtimeGraphDigest: binding.runtimeGraphDigest,
+			bundleExport: binding.bundleExport,
+			execute: (
+				input: Readonly<{ input: unknown; ctx: View; errors: unknown }>,
+			) =>
 				record
 					? observePb05AcceptedCallback({
 							measurement,
 							population: "mutation",
 							operation: "fresh",
 							phase: "handler",
-							use: () => execute(input, ctx as View),
+							use: () => definition.handler(input),
 						})
-					: execute(input, ctx as View),
-			definition: {
-				name: "message.publish.database",
-				handler: () => undefined,
-				errors: {},
-			},
+					: definition.handler(input),
+			definition,
 		},
-		inputCodec: { kind: "object", properties: { body: { kind: "text" } } },
-		output: {
-			kind: "object",
-			properties: {
-				id: { kind: "uuid" },
-				channelId: { kind: "uuid" },
-				body: { kind: "text" },
-				createdAt: { kind: "timestamp" },
-			},
-		},
-		declaredErrors: [],
-		input: { body },
+		inputCodec: definition.input,
+		output: definition.output,
+		declaredErrors: Object.entries(definition.errors).map(([name, error]) => ({
+			name,
+			...(error as object),
+		})),
+		input: { channelId: beta05Ids.channel, body },
 	} as unknown as PreparedOperation<View>;
 }
 
@@ -348,6 +391,7 @@ try {
 		"postgres-mutation-transaction-statements.json",
 		"policy-projection.json",
 		"runtime-build.json",
+		"runtime-executables.json",
 		"collection-operation-programs.json",
 		"field-normalizer-programs.json",
 		"server-value-programs.json",
@@ -371,7 +415,54 @@ try {
 		generated["runtime-build.json"]!,
 	) as Readonly<{
 		digest: string;
+		slots: readonly Readonly<{
+			identity: string;
+			kind: string;
+			slot: string;
+			runtimeGraphDigest: string;
+			bundleExport: string;
+		}>[];
 	}>;
+	const runtimeExecutables = JSON.parse(
+		generated["runtime-executables.json"]!,
+	) as Readonly<{
+		slots: readonly Readonly<{
+			identity: string;
+			slot: string;
+			origin: Readonly<{
+				path: string;
+				exportName: string;
+				packageId: string | null;
+			}>;
+			sourceDigest: string;
+		}>[];
+	}>;
+	const mutationBinding = runtimeBuild.slots.find(
+		(slot) =>
+			slot.identity === "mutation:message.publish" && slot.slot === "handler",
+	);
+	const mutationExecutable = runtimeExecutables.slots.find(
+		(slot) =>
+			slot.identity === "mutation:message.publish" && slot.slot === "handler",
+	);
+	if (
+		!mutationBinding ||
+		mutationBinding.kind !== "mutation" ||
+		!mutationExecutable ||
+		mutationExecutable.origin.exportName !== "publishMessage" ||
+		!/(?:^|\/)message-publish\.ts$/u.test(mutationExecutable.origin.path) ||
+		mutationExecutable.origin.packageId !== null ||
+		!/^[0-9a-f]{64}$/u.test(mutationExecutable.sourceDigest)
+	)
+		throw new TypeError(
+			"PB-05 Runtime artifacts do not bind collaboration publishMessage",
+		);
+	const publishMessage = await loadCompiledPublishMessage(prepared);
+	const invalidation = createPostgresLiveQueryInvalidationEffect({
+		deploymentDigest: runtimeBuild.digest,
+		fanoutPerBatch: 1_024,
+	});
+	consumer = invalidation.consumer;
 	const programs = mutation.linkCollectionMutationPrograms({
 		collectionOperations: JSON.parse(
 			generated["collection-operation-programs.json"]!,
@@ -437,12 +528,41 @@ try {
 		runtimeBuildDigest: runtimeBuild.digest,
 		facts,
 	});
-	await reconcilePostgresChangeLedger({
-		database: reconciliationDatabase,
-		application,
-		consumer,
-		apply: async () => undefined,
-	});
+	const reconcile = (record: boolean) =>
+		reconcilePostgresChangeLedger({
+			database: reconciliationDatabase,
+			application,
+			consumer,
+			apply: async () => undefined,
+			effect: Object.freeze({
+				consumer,
+				apply: (input) => {
+					if (input.transaction === undefined)
+						throw new TypeError(
+							"PB-05 realtime invalidation did not retain its owned transaction",
+						);
+					const appliedInput = {
+						...input,
+						transaction: instrumentPb05OwnedTransaction({
+							transaction: input.transaction,
+							measurement,
+							population: "realtime",
+							operation: "apply",
+						}),
+					};
+					return record
+						? observePb05AcceptedCallback({
+								measurement,
+								population: "realtime",
+								operation: "apply",
+								phase: "apply",
+								use: () => invalidation.apply(appliedInput),
+							})
+						: invalidation.apply(appliedInput);
+				},
+			}),
+		});
+	await reconcile(false);
 	for (
 		let index = 0;
 		index < warmupSamples + measuredCallbackSamples;
@@ -455,7 +575,13 @@ try {
 			]?.totalMs ?? 0;
 		const callId = `pb05-owner-path-${crypto.randomUUID()}`;
 		const result = await invoke(
-			operation(`owner-path-${callId}`, measurement, record),
+			operation(
+				`owner-path-${callId}`,
+				publishMessage,
+				mutationBinding,
+				measurement,
+				record,
+			),
 			callId,
 		);
 		semanticResults.push(
@@ -476,29 +602,9 @@ try {
 			measurement.snapshot({ requireCompleteInventory: false }).idleGaps[
 				"realtime:apply:apply"
 			]?.totalMs ?? 0;
-		let appliedFacts = 0;
-		const reconciliation = await reconcilePostgresChangeLedger({
-			database: reconciliationDatabase,
-			application,
-			consumer,
-			apply: (changes) => {
-				const use = async () => {
-					appliedFacts += changes.length;
-				};
-				return record
-					? observePb05AcceptedCallback({
-							measurement,
-							population: "realtime",
-							operation: "apply",
-							phase: "apply",
-							use,
-						})
-					: use();
-			},
-		});
+		const reconciliation = await reconcile(record);
 		semanticResults.push(
-			appliedFacts > 0 &&
-				reconciliation.facts.length === appliedFacts &&
+			reconciliation.facts.length > 0 &&
 				/^[0-9]+$/u.test(reconciliation.priorHorizon) &&
 				/^[0-9]+$/u.test(reconciliation.nextHorizon) &&
 				BigInt(reconciliation.nextHorizon) >=
@@ -530,6 +636,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 		owner: Owner,
 		waiterApplication: string,
 		waiterDatabase: PostgresTransactionRunner,
+		operationBoundary: ReturnType<typeof createPb05OperationAbortBoundary>,
 		use: (
 			database: PostgresTransactionRunner,
 			index: number,
@@ -540,7 +647,9 @@ ORDER BY accepted_at DESC LIMIT 1`,
 			const blockerReady = Promise.withResolvers<void>();
 			const releaseBlocker = Promise.withResolvers<void>();
 			const blockerController = new AbortController();
-			const operationOwner = createPb05ContentionOperationOwner();
+			const operationOwner = createPb05ContentionOperationOwner({
+				abortAfterCloseMs: 4_000,
+			});
 			let released = false;
 			const blocker = activeContentionControl
 				.transaction({
@@ -571,9 +680,9 @@ ORDER BY accepted_at DESC LIMIT 1`,
 					throw error;
 				});
 			void blocker.catch(() => undefined);
-			const blockerSettlement = blocker.catch((error) => {
-				if (released && blockerController.signal.aborted) return;
-				throw error;
+			const blockerSettlement = settlePb05OwnedBlocker(blocker, {
+				released: () => released,
+				signal: blockerController.signal,
 			});
 			void blockerSettlement.catch(() => undefined);
 			const before = measurement.snapshot({ requireCompleteInventory: false })
@@ -581,11 +690,14 @@ ORDER BY accepted_at DESC LIMIT 1`,
 			await withPb05ReleasedBlocker({
 				work: async () => {
 					await blockerReady.promise;
-					void operationOwner.start(async () => {
-						const result = await use(waiterDatabase, index);
-						semanticResults.push(valid(result, index));
-						return result;
-					});
+					const admission = operationOwner.start(() =>
+						operationBoundary.run(operationOwner.signal, async () => {
+							const result = await use(waiterDatabase, index);
+							semanticResults.push(valid(result, index));
+							return result;
+						}),
+					);
+					if (!admission.accepted) return;
 					await waitForLock(
 						activeContentionControl,
 						waiterApplication,
@@ -614,21 +726,24 @@ ORDER BY accepted_at DESC LIMIT 1`,
 	await withRuntimeDatabase(
 		"pb05-owner-path-maintenance",
 		async (maintenanceRuntime) => {
+			let cancelledVersion: number | undefined;
 			const measured = instrumentPb05OwnerContentionRunner({
 				database: maintenanceRuntime,
 				measurement,
 				owner: "maintenance",
 				lockIdentity: `${application}:${durableRunId}`,
 			});
+			const operationBoundary = createPb05OperationAbortBoundary(measured);
 			const maintenance = createPostgresDatabaseDurableMaintenance({
-				database: measured,
+				database: operationBoundary.database,
 				application,
 				authorize: () => true,
 			});
 			await runContention(
 				"maintenance",
 				"pb05-owner-path-maintenance",
-				measured,
+				operationBoundary.database,
+				operationBoundary,
 				() =>
 					maintenance.cancelRun({
 						runId: durableRunId,
@@ -644,11 +759,23 @@ ORDER BY accepted_at DESC LIMIT 1`,
 						typeof outcome.version !== "number"
 					)
 						return false;
-					return index === 0
-						? outcome.outcome === "applied" && outcome.rejectionCode === null
-						: outcome.outcome === "rejected" &&
-								(outcome.rejectionCode === "RUN_IS_TERMINAL" ||
-									outcome.rejectionCode === "ALREADY_REQUESTED");
+					if (index === 0) {
+						cancelledVersion = outcome.version;
+						return (
+							outcome.outcome === "applied" &&
+							outcome.rejectionCode === null &&
+							outcome.stateBefore === "ready" &&
+							outcome.stateAfter === "cancelled" &&
+							outcome.version > 0
+						);
+					}
+					return (
+						outcome.outcome === "rejected" &&
+						outcome.rejectionCode === "RUN_IS_TERMINAL" &&
+						outcome.stateBefore === "cancelled" &&
+						outcome.stateAfter === "cancelled" &&
+						outcome.version === cancelledVersion
+					);
 				},
 			);
 		},
@@ -663,10 +790,12 @@ ORDER BY accepted_at DESC LIMIT 1`,
 				owner: "reconciliation",
 				lockIdentity: `${application}:${consumer}`,
 			});
+			const operationBoundary = createPb05OperationAbortBoundary(measured);
 			await runContention(
 				"reconciliation",
 				"pb05-owner-path-reconciliation",
-				measured,
+				operationBoundary.database,
+				operationBoundary,
 				async (database) => {
 					let appliedFacts = 0;
 					const result = await reconcilePostgresChangeLedger({
@@ -687,10 +816,14 @@ ORDER BY accepted_at DESC LIMIT 1`,
 					const result = candidate.result as Readonly<Record<string, unknown>>;
 					return (
 						Array.isArray(result.facts) &&
+						result.facts.length === 0 &&
 						typeof candidate.appliedFacts === "number" &&
-						result.facts.length === candidate.appliedFacts &&
+						candidate.appliedFacts === 0 &&
 						typeof result.priorHorizon === "string" &&
-						typeof result.nextHorizon === "string"
+						typeof result.nextHorizon === "string" &&
+						/^[1-9][0-9]{0,19}$/u.test(result.priorHorizon) &&
+						/^[1-9][0-9]{0,19}$/u.test(result.nextHorizon) &&
+						BigInt(result.nextHorizon) >= BigInt(result.priorHorizon)
 					);
 				},
 			);
@@ -706,8 +839,9 @@ ORDER BY accepted_at DESC LIMIT 1`,
 				owner: "retention",
 				lockIdentity: retentionLockIdentity,
 			});
+			const operationBoundary = createPb05OperationAbortBoundary(measured);
 			const retention = createPostgresLiveQueryRetention({
-				database: measured,
+				database: operationBoundary.database,
 				hmacKey: new Uint8Array(32).fill(7),
 			});
 			const retained = {
@@ -727,9 +861,33 @@ ORDER BY accepted_at DESC LIMIT 1`,
 			await runContention(
 				"retention",
 				"pb05-owner-path-retention",
-				measured,
+				operationBoundary.database,
+				operationBoundary,
 				() => retention.acknowledge({ ...retained, resumeToken }),
 				(result) => result === undefined,
+			);
+			const retainedRows = await admin.unsafe<
+				readonly Readonly<{
+					generation: string;
+					resultBytes: Uint8Array;
+					dependencyPlanBytes: Uint8Array;
+				}>[]
+			>(
+				`SELECT retained_generation::text AS generation,
+       result_bytes AS "resultBytes",
+       dependency_plan_bytes AS "dependencyPlanBytes"
+FROM questpie_internal.retained_live_query_results
+WHERE application_name = $1
+  AND authority_partition_digest = $2`,
+				[applicationName, authorityPartitionDigest],
+			);
+			semanticResults.push(
+				retainedRows.length === 1 &&
+					retainedRows[0]?.generation === "1" &&
+					retainedRows[0].resultBytes.length === 1 &&
+					retainedRows[0].resultBytes[0] === 1 &&
+					retainedRows[0].dependencyPlanBytes.length === 1 &&
+					retainedRows[0].dependencyPlanBytes[0] === 2,
 			);
 		},
 	);
@@ -744,7 +902,8 @@ ORDER BY accepted_at DESC LIMIT 1`,
 			reconciliationTransactions: 1 + warmupSamples + measuredCallbackSamples,
 			semanticChecks:
 				(warmupSamples + measuredCallbackSamples) * 2 +
-				measuredContentionSamples * 3,
+				measuredContentionSamples * 3 +
+				1,
 		},
 		lockWaitProofs,
 		semanticResults,

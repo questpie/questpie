@@ -164,6 +164,46 @@ test("accepted callback observer records the actual Mutation handler and realtim
 	});
 });
 
+test("accepted callbacks retain their exact owning transaction identity", async () => {
+	const measurement = createPb05OperationalMeasurement();
+	const unmeasured: PostgresTransactionRunner = {
+		transaction: (input) =>
+			input.use({
+				[transactionBrand]: true,
+				execute: async () => undefined as never,
+			}),
+	};
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "mutation",
+		operation: "fresh",
+	});
+	await database.transaction({
+		mode: { isolation: "readCommitted", access: "readWrite" },
+		async use() {
+			for (let index = 0; index < 2; index += 1)
+				await observePb05AcceptedCallback({
+					measurement,
+					population: "mutation",
+					operation: "fresh",
+					phase: "handler",
+					use: async () => undefined,
+				});
+		},
+	});
+
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).acceptedCallbacks[
+			"mutation:fresh:handler"
+		],
+	).toEqual({
+		count: 2,
+		transactions: ["pb05:mutation:fresh:0"],
+		unowned: 0,
+	});
+});
+
 test("accepted callback observer validates before work and preserves its primary failure", async () => {
 	const measurement = createPb05OperationalMeasurement();
 	let calls = 0;
@@ -298,9 +338,9 @@ test("transaction runner instrument records exact statements and preserves failu
 test("transaction instrumentation rejects invalid config before database admission", () => {
 	let transactions = 0;
 	const database: PostgresTransactionRunner = {
-		transaction: async () => {
+		transaction: async <Output>() => {
 			transactions += 1;
-			return undefined;
+			return undefined as Output;
 		},
 	};
 	const measurement = createPb05OperationalMeasurement();
@@ -503,7 +543,7 @@ test("shared transaction observer keeps reconciliation and apply attribution dis
 
 test("shared transaction observer refuses an uninstrumented owned transaction", () => {
 	const transaction = {
-		[transactionBrand]: true,
+		[transactionBrand]: true as const,
 		execute: async () => undefined as never,
 	};
 	expect(() =>

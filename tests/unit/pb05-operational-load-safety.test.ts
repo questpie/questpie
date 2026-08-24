@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
 
+import {
+	transactionBrand,
+	type PostgresTransactionRunner,
+} from "../../packages/runtime/src/postgres";
 import ownerPathScenario from "../../quality/performance/pb05-owner-path-measurement.json";
 import {
 	assertPb05OperationalMetrics,
@@ -7,11 +11,13 @@ import {
 	assertPb05OwnerPathSchemaReset,
 	countPb05SemanticFailures,
 	createPb05ContentionOperationOwner,
+	createPb05OperationAbortBoundary,
 	derivePb05OwnerPathMeasurements,
 	pb05OperationalDatabase,
 	pb05OperationalResetOptIn,
 	pb05OwnerPathDatabase,
 	pb05OwnerPathResetOptIn,
+	settlePb05OwnedBlocker,
 	withPb05ReleasedBlocker,
 } from "../support/pb05-operational-load-safety";
 
@@ -71,7 +77,7 @@ test("metric contracts reject missing, surplus, and nonfinite evidence", () => {
 		{},
 		{ samples: 1, surplus: 0 },
 		{ samples: Number.NaN },
-	])
+	] as Readonly<Record<string, number>>[])
 		expect(() =>
 			assertPb05OperationalMetrics(measurements, contracts),
 		).toThrow();
@@ -114,6 +120,24 @@ function ownerPathSnapshot() {
 		idleGaps: {
 			"mutation:fresh:handler": { count: 16 },
 			"realtime:apply:apply": { count: 16 },
+		},
+		acceptedCallbacks: {
+			"mutation:fresh:handler": {
+				count: 16,
+				transactions: Array.from(
+					{ length: 16 },
+					(_, index) => `mutation:${index}`,
+				),
+				unowned: 0,
+			},
+			"realtime:apply:apply": {
+				count: 16,
+				transactions: Array.from(
+					{ length: 16 },
+					(_, index) => `realtime:${index}`,
+				),
+				unowned: 0,
+			},
 		},
 		contention: {
 			maintenance: { samples: 8, acquired: 8 },
@@ -170,6 +194,17 @@ test("owner-path metrics require exact observer counts and transaction identitie
 				mutation: { transactions: 1 },
 			},
 		},
+		{
+			...ownerPathSnapshot(),
+			acceptedCallbacks: {
+				...ownerPathSnapshot().acceptedCallbacks,
+				"mutation:fresh:handler": {
+					count: 16,
+					transactions: ["mutation:two-callbacks-one-transaction"],
+					unowned: 0,
+				},
+			},
+		},
 	])
 		expect(() =>
 			derivePb05OwnerPathMeasurements({
@@ -189,11 +224,11 @@ test("a closed contention owner refuses a late operation and settles", async () 
 	const owner = createPb05ContentionOperationOwner();
 	owner.close();
 	let operations = 0;
-	await expect(
+	expect(
 		owner.start(async () => {
 			operations += 1;
 		}),
-	).rejects.toThrow("PB-05 contention operation owner is closed");
+	).toEqual({ accepted: false });
 	await expect(owner.settlement).resolves.toBeUndefined();
 	expect(operations).toBe(0);
 });
@@ -202,13 +237,74 @@ test("an in-flight contention operation is captured by the fixed settlement", as
 	const owner = createPb05ContentionOperationOwner();
 	const operation = Promise.withResolvers<void>();
 	const started = owner.start(() => operation.promise);
+	expect(started.accepted).toBe(true);
 	owner.close();
 	operation.resolve();
-	await expect(started).resolves.toBeUndefined();
+	if (started.accepted) await expect(started.result).resolves.toBeUndefined();
 	await expect(owner.settlement).resolves.toBeUndefined();
-	await expect(owner.start(async () => undefined)).rejects.toThrow(
-		"PB-05 contention operation owner is closed",
+	expect(owner.start(async () => undefined)).toEqual({ accepted: false });
+});
+
+test("closing an already settled operation never arms its abort deadline", async () => {
+	const owner = createPb05ContentionOperationOwner({ abortAfterCloseMs: 10 });
+	const admission = owner.start(async () => "settled");
+	if (!admission.accepted)
+		throw new Error("operation was unexpectedly refused");
+	await expect(admission.result).resolves.toBe("settled");
+	await expect(owner.settlement).resolves.toBeUndefined();
+	owner.close();
+	await Bun.sleep(20);
+	expect(owner.signal.aborted).toBe(false);
+});
+
+test("blocker settlement suppresses only its exact owned abort reason", async () => {
+	const controller = new AbortController();
+	const owned = new DOMException("owned antagonist release", "AbortError");
+	controller.abort(owned);
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(owned), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).resolves.toBeUndefined();
+
+	const unrelated = new Error("blocker commit failed");
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(unrelated), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(unrelated);
+});
+
+test("an admitted operation that never settles is aborted after owner close", async () => {
+	let admittedSignal: AbortSignal | undefined;
+	const underlying: PostgresTransactionRunner = {
+		transaction(request) {
+			admittedSignal = request.control?.signal;
+			return new Promise((_, reject) => {
+				request.control?.signal?.addEventListener(
+					"abort",
+					() => reject(request.control?.signal?.reason),
+					{ once: true },
+				);
+			});
+		},
+	};
+	const boundary = createPb05OperationAbortBoundary(underlying);
+	const owner = createPb05ContentionOperationOwner({ abortAfterCloseMs: 10 });
+	const admission = owner.start(() =>
+		boundary.run(owner.signal, () =>
+			boundary.database.transaction({
+				mode: { isolation: "readCommitted", access: "readWrite" },
+				use: async () => ({ [transactionBrand]: true }),
+			}),
+		),
 	);
+	expect(admission.accepted).toBe(true);
+	owner.close();
+	await expect(owner.settlement).rejects.toBeInstanceOf(DOMException);
+	expect(admittedSignal?.aborted).toBe(true);
 });
 
 test("timeout before readiness closes the start gate and settles the control owner", async () => {
@@ -218,31 +314,47 @@ test("timeout before readiness closes the start gate and settles the control own
 	void ready.promise.catch(() => undefined);
 	void blocker.promise.catch(() => undefined);
 	let operations = 0;
+	let probes = 0;
 	let releases = 0;
-	await expect(
-		withPb05ReleasedBlocker({
-			work: async () => {
-				await ready.promise;
-				await owner.start(async () => {
-					operations += 1;
-				});
-			},
-			release: () => {
-				releases += 1;
-				owner.close();
-				ready.reject(new DOMException("control aborted", "AbortError"));
-				blocker.reject(new DOMException("control aborted", "AbortError"));
-			},
-			settlements: () => [
-				blocker.promise.catch(() => undefined),
-				owner.settlement,
-			],
-			workTimeoutMs: 10,
-			settlementTimeoutMs: 100,
-		}),
-	).rejects.toThrow("readiness/work timed out");
+	const unhandled: unknown[] = [];
+	const observeUnhandled = (event: PromiseRejectionEvent) => {
+		unhandled.push(event.reason);
+	};
+	globalThis.addEventListener("unhandledrejection", observeUnhandled);
+	try {
+		await expect(
+			withPb05ReleasedBlocker({
+				work: async () => {
+					await ready.promise;
+					const admission = owner.start(async () => {
+						operations += 1;
+					});
+					if (!admission.accepted) return;
+					probes += 1;
+					await admission.result;
+				},
+				release: () => {
+					releases += 1;
+					owner.close();
+					blocker.reject(new DOMException("control aborted", "AbortError"));
+				},
+				settlements: () => [
+					blocker.promise.catch(() => undefined),
+					owner.settlement,
+				],
+				workTimeoutMs: 10,
+				settlementTimeoutMs: 100,
+			}),
+		).rejects.toThrow("readiness/work timed out");
+		ready.resolve();
+		await Bun.sleep(0);
+	} finally {
+		globalThis.removeEventListener("unhandledrejection", observeUnhandled);
+	}
 	expect(releases).toBe(1);
 	expect(operations).toBe(0);
+	expect(probes).toBe(0);
+	expect(unhandled).toEqual([]);
 });
 
 test("failed lock proof releases and settles while preserving the primary error", async () => {

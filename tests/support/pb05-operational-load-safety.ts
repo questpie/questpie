@@ -60,6 +60,16 @@ export function assertPb05OperationalMetrics(
 type Pb05OwnerPathSnapshot = Readonly<{
 	populations: Readonly<Record<string, Readonly<{ transactions: number }>>>;
 	idleGaps: Readonly<Record<string, Readonly<{ count: number }>>>;
+	acceptedCallbacks: Readonly<
+		Record<
+			string,
+			Readonly<{
+				count: number;
+				transactions: readonly string[];
+				unowned: number;
+			}>
+		>
+	>;
 	contention: Readonly<
 		Record<string, Readonly<{ samples: number; acquired: number }>>
 	>;
@@ -83,9 +93,15 @@ export function derivePb05OwnerPathMeasurements(
 		semanticResults: readonly boolean[];
 	}>,
 ): Readonly<Record<string, number>> {
-	const mutationCallbacks =
+	const mutationAssociation =
+		input.snapshot.acceptedCallbacks["mutation:fresh:handler"];
+	const realtimeAssociation =
+		input.snapshot.acceptedCallbacks["realtime:apply:apply"];
+	const mutationCallbacks = mutationAssociation?.count;
+	const realtimeCallbacks = realtimeAssociation?.count;
+	const mutationGapCount =
 		input.snapshot.idleGaps["mutation:fresh:handler"]?.count;
-	const realtimeCallbacks =
+	const realtimeGapCount =
 		input.snapshot.idleGaps["realtime:apply:apply"]?.count;
 	const maintenance = input.snapshot.contention.maintenance;
 	const reconciliation = input.snapshot.contention.reconciliation;
@@ -94,6 +110,14 @@ export function derivePb05OwnerPathMeasurements(
 	if (
 		mutationCallbacks !== input.expected.callbackSamples ||
 		realtimeCallbacks !== input.expected.callbackSamples ||
+		mutationGapCount !== input.expected.callbackSamples ||
+		realtimeGapCount !== input.expected.callbackSamples ||
+		mutationAssociation?.transactions.length !==
+			input.expected.callbackSamples ||
+		realtimeAssociation?.transactions.length !==
+			input.expected.callbackSamples ||
+		mutationAssociation?.unowned !== 0 ||
+		realtimeAssociation?.unowned !== 0 ||
 		input.snapshot.populations.mutation?.transactions !==
 			input.expected.mutationTransactions ||
 		input.snapshot.populations.realtime?.transactions !==
@@ -119,20 +143,32 @@ export function derivePb05OwnerPathMeasurements(
 	});
 }
 
-export function createPb05ContentionOperationOwner() {
+export function createPb05ContentionOperationOwner(
+	options: Readonly<{ abortAfterCloseMs?: number }> = {},
+) {
+	const abortAfterCloseMs = options.abortAfterCloseMs ?? 100;
+	if (!Number.isSafeInteger(abortAfterCloseMs) || abortAfterCloseMs <= 0)
+		throw new TypeError("PB-05 contention abort deadline is invalid");
 	const settled = Promise.withResolvers<void>();
 	void settled.promise.catch(() => undefined);
+	const controller = new AbortController();
 	let accepting = true;
 	let started = false;
+	let finished = false;
+	let abortTimer: ReturnType<typeof setTimeout> | undefined;
 	return Object.freeze({
+		get signal(): AbortSignal {
+			return controller.signal;
+		},
 		get settlement(): Promise<void> {
 			return settled.promise;
 		},
-		start<Result>(use: () => Promise<Result>): Promise<Result> {
-			if (!accepting || started)
-				return Promise.reject(
-					new Error("PB-05 contention operation owner is closed"),
-				);
+		start<Result>(
+			use: () => Promise<Result>,
+		):
+			| Readonly<{ accepted: false }>
+			| Readonly<{ accepted: true; result: Promise<Result> }> {
+			if (!accepting || started) return Object.freeze({ accepted: false });
 			accepting = false;
 			started = true;
 			let operation: Promise<Result>;
@@ -142,15 +178,77 @@ export function createPb05ContentionOperationOwner() {
 				operation = Promise.reject(error);
 			}
 			void operation.then(
-				() => settled.resolve(),
-				(error) => settled.reject(error),
+				() => {
+					finished = true;
+					if (abortTimer !== undefined) clearTimeout(abortTimer);
+					settled.resolve();
+				},
+				(error) => {
+					finished = true;
+					if (abortTimer !== undefined) clearTimeout(abortTimer);
+					settled.reject(error);
+				},
 			);
 			void operation.catch(() => undefined);
-			return operation;
+			return Object.freeze({ accepted: true, result: operation });
 		},
 		close(): void {
 			accepting = false;
 			if (!started) settled.resolve();
+			else if (!finished && abortTimer === undefined)
+				abortTimer = setTimeout(
+					() =>
+						controller.abort(
+							new DOMException(
+								"PB-05 contention operation exceeded its close deadline",
+								"AbortError",
+							),
+						),
+					abortAfterCloseMs,
+				);
+		},
+	});
+}
+
+export async function settlePb05OwnedBlocker(
+	blocker: Promise<void>,
+	input: Readonly<{ released(): boolean; signal: AbortSignal }>,
+): Promise<void> {
+	try {
+		await blocker;
+	} catch (error) {
+		if (
+			input.released() &&
+			input.signal.aborted &&
+			error === input.signal.reason
+		)
+			return;
+		throw error;
+	}
+}
+
+export function createPb05OperationAbortBoundary(
+	database: PostgresTransactionRunner,
+) {
+	const context = new AsyncLocalStorage<AbortSignal>();
+	return Object.freeze({
+		database: Object.freeze({
+			transaction(request) {
+				const owned = context.getStore();
+				const signal =
+					owned && request.control?.signal
+						? AbortSignal.any([owned, request.control.signal])
+						: (owned ?? request.control?.signal);
+				return database.transaction({
+					...request,
+					...(signal
+						? { control: { ...request.control, signal } }
+						: { control: request.control }),
+				});
+			},
+		}) satisfies PostgresTransactionRunner,
+		run<Result>(signal: AbortSignal, use: () => Promise<Result>) {
+			return context.run(signal, use);
 		},
 	});
 }
@@ -236,3 +334,6 @@ export async function withPb05ReleasedBlocker<Value>(
 	if (rejected) throw rejected.reason;
 	return value as Value;
 }
+import { AsyncLocalStorage } from "node:async_hooks";
+
+import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";

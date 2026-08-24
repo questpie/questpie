@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import {
 	transactionBrand,
 	type PostgresStatement,
@@ -44,9 +46,12 @@ type IdleGapObservation = Readonly<{
 	population: string;
 	operation: string;
 	phase: string;
+	transaction?: string | null;
 	startedAtMs: number;
 	finishedAtMs: number;
 }>;
+
+const pb05AcceptedCallbackTransaction = new AsyncLocalStorage<string>();
 
 type ContentionObservation = Readonly<{
 	owner: string;
@@ -262,6 +267,31 @@ export function createPb05OperationalMeasurement() {
 					];
 				}),
 			);
+			const acceptedCallbacks = Object.fromEntries(
+				Object.keys(gapSummary).map((identity) => {
+					const observed = idleGaps.filter(
+						({ population, operation, phase }) =>
+							`${population}:${operation}:${phase}` === identity,
+					);
+					return [
+						identity,
+						Object.freeze({
+							count: observed.length,
+							transactions: Object.freeze(
+								[
+									...new Set(
+										observed.flatMap(({ transaction }) =>
+											transaction == null ? [] : [transaction],
+										),
+									),
+								].toSorted(),
+							),
+							unowned: observed.filter(({ transaction }) => transaction == null)
+								.length,
+						}),
+					];
+				}),
+			);
 			const contentionSummary = {
 				maintenance: emptyContention(),
 				reconciliation: emptyContention(),
@@ -280,6 +310,7 @@ export function createPb05OperationalMeasurement() {
 				populations: Object.freeze(populations),
 				operations: Object.freeze(operations),
 				idleGaps: Object.freeze(gapSummary),
+				acceptedCallbacks: Object.freeze(acceptedCallbacks),
 				contention: Object.freeze(
 					Object.fromEntries(
 						Object.entries(contentionSummary).map(([owner, summary]) => [
@@ -318,6 +349,7 @@ export async function observePb05AcceptedCallback<Result>(
 				population: input.population,
 				operation: input.operation,
 				phase: input.phase,
+				transaction: pb05AcceptedCallbackTransaction.getStore() ?? null,
 				startedAtMs,
 				finishedAtMs: now(),
 			});
@@ -333,6 +365,7 @@ export async function observePb05AcceptedCallback<Result>(
 		population: input.population,
 		operation: input.operation,
 		phase: input.phase,
+		transaction: pb05AcceptedCallbackTransaction.getStore() ?? null,
 		startedAtMs,
 		finishedAtMs,
 	});
@@ -439,19 +472,21 @@ export function instrumentPb05TransactionRunner(
 			const transaction = `pb05:${input.population}:${input.operation}:${transactionOrdinal++}`;
 			return input.database.transaction({
 				...request,
-				use: (owned) =>
-					request.use(
-						observedPb05Transaction({
-							context: {
-								identity: transaction,
-								execute: (statement, value) => owned.execute(statement, value),
-							},
-							measurement: input.measurement,
-							population: input.population,
-							operation: input.operation,
-							now,
-						}),
-					),
+				use: (owned) => {
+					const observed = observedPb05Transaction({
+						context: {
+							identity: transaction,
+							execute: (statement, value) => owned.execute(statement, value),
+						},
+						measurement: input.measurement,
+						population: input.population,
+						operation: input.operation,
+						now,
+					});
+					return pb05AcceptedCallbackTransaction.run(transaction, () =>
+						request.use(observed),
+					);
+				},
 			});
 		},
 	});
