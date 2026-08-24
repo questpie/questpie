@@ -322,9 +322,10 @@ closure.
    the completed synthetic controls as Product evidence or project provisional
    results as public ceilings. Do not perform the atomic one-Pool ownership
    flip alongside generated/release work.
-4. Keep a read-only Effect Identity proof/review lane. Stop before the public
-   Kernel decision; never hide Effect Identity in domain input or alias Mutation
-   `callId`.
+4. Keep an independent Effect Identity proof/review lane. A public Kernel
+   boundary activates deterministic proof plus pinned formal acceptance; it is
+   no longer a human stop. Never hide Effect Identity in domain input or alias
+   Mutation `callId`.
 5. The canonical integration owner serializes generated/release builds and
    PostgreSQL schema-reset tests, and integrates each independently green lane
    commit one at a time.
