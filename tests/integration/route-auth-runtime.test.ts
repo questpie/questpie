@@ -112,8 +112,20 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 		runtime,
 		credentials: {
 			service: auth,
-			resolve: ({ request, service }) => {
+			resolve: async ({ request, service }) => {
 				expect(service.ready).toBe(true);
+				if (request.headers.has("x-resolver-bug"))
+					throw new Error("credential provider detail must not escape");
+				if (request.headers.has("x-wait-for-abort")) {
+					request.signal.throwIfAborted();
+					await new Promise<never>((_resolve, reject) => {
+						request.signal.addEventListener(
+							"abort",
+							() => reject(request.signal.reason),
+							{ once: true },
+						);
+					});
+				}
 				return request.headers.has("x-provider-down")
 					? { kind: "unavailable" }
 					: { kind: "anonymous" };
@@ -160,6 +172,34 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 	expect({ handlerCalls, routeProjections }).toEqual({
 		handlerCalls: 1,
 		routeProjections: 1,
+	});
+
+	const resolverBug = await routes.fetch(
+		new Request("https://app.test/outcomes", {
+			headers: { "x-resolver-bug": "1" },
+		}),
+	);
+	expect(resolverBug!.status).toBe(500);
+	expect(await resolverBug!.json()).toEqual({
+		error: { code: "INTERNAL", retryable: false },
+	});
+	expect({ handlerCalls, routeProjections }).toEqual({
+		handlerCalls: 1,
+		routeProjections: 1,
+	});
+
+	const controller = new AbortController();
+	const cancelled = routes.fetch(
+		new Request("https://app.test/outcomes", {
+			headers: { "x-wait-for-abort": "1" },
+			signal: controller.signal,
+		}),
+	);
+	await Promise.resolve();
+	controller.abort(new DOMException("credential caller left", "AbortError"));
+	await expect(cancelled).rejects.toMatchObject({
+		name: "AbortError",
+		message: "credential caller left",
 	});
 	await runtime.close();
 });
@@ -350,6 +390,15 @@ test("preserves typed Route execution failures and propagates request cancellati
 	expect(await unavailable!.json()).toEqual({
 		error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
 	});
+	await expect(
+		routes.direct("route:failure.typed", {
+			request: new Request("https://app.test/failure/typed"),
+			execution: { principal: principal.anonymous() },
+		}),
+	).rejects.toMatchObject({
+		code: "RUNTIME_UNAVAILABLE",
+		retryable: true,
+	});
 
 	const controller = new AbortController();
 	const cancelled = routes.fetch(
@@ -361,6 +410,72 @@ test("preserves typed Route execution failures and propagates request cancellati
 	await expect(cancelled).rejects.toMatchObject({
 		name: "AbortError",
 		message: "client disconnected",
+	});
+	await runtime.close();
+});
+
+test("maps Route admission before projection or handler execution", async () => {
+	let routeProjections = 0;
+	let handlerCalls = 0;
+	const context = defineContext({
+		name: "route.admission-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const denied = () => {
+		handlerCalls += 1;
+		return new Response(null, { status: 204 });
+	};
+	const routes = createRuntimeRouteExecutor({
+		runtime,
+		project: () => {
+			routeProjections += 1;
+			return {};
+		},
+		bindings: [
+			{
+				identity: "route:admission.authenticated",
+				method: "GET",
+				path: "/admission/authenticated",
+				credentials: "application",
+				admission: "authenticated",
+				execute: denied,
+			},
+			{
+				identity: "route:admission.system",
+				method: "GET",
+				path: "/admission/system",
+				credentials: "none",
+				admission: "system",
+				execute: denied,
+			},
+		],
+	});
+
+	const unauthenticated = await routes.fetch(
+		new Request("https://app.test/admission/authenticated"),
+	);
+	expect(unauthenticated!.status).toBe(401);
+	expect(await unauthenticated!.json()).toEqual({
+		error: { code: "UNAUTHENTICATED", retryable: false },
+	});
+	const forbidden = await routes.direct("route:admission.system", {
+		request: new Request("https://app.test/admission/system"),
+		execution: { principal: principal.user({ id: "ordinary" }) },
+	});
+	expect(forbidden.status).toBe(403);
+	expect(await forbidden.json()).toEqual({
+		error: { code: "FORBIDDEN", retryable: false },
+	});
+	expect({ handlerCalls, routeProjections }).toEqual({
+		handlerCalls: 0,
+		routeProjections: 0,
 	});
 	await runtime.close();
 });

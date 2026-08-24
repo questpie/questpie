@@ -170,6 +170,7 @@ export function createRuntimeRouteExecutor<
 			);
 			outcome = await input.credentials.resolve({ request, service });
 		} catch {
+			if (request.signal.aborted) throw request.signal.reason;
 			return failureResponse("INTERNAL", 500);
 		}
 		if (outcome.kind === "unavailable")
