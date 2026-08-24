@@ -40,13 +40,18 @@ const binding = {
 
 void binding;
 
-declare const projection: RuntimeActionProjectionScope;
-declare const readService: ServiceDefinition<
-	"read-only",
-	"execution",
-	"read",
-	Readonly<Record<never, never>>,
-	Readonly<{ read(): string }>
->;
-// @ts-expect-error Action projection admits only external-effect Services.
-void projection.service(readService);
+function assertActionServiceProjection(
+	projection: RuntimeActionProjectionScope,
+	readService: ServiceDefinition<
+		"read-only",
+		"execution",
+		"read",
+		Readonly<Record<never, never>>,
+		Readonly<{ read(): string }>
+	>,
+): void {
+	// @ts-expect-error Action projection admits only external-effect Services.
+	void projection.service(readService);
+}
+
+void assertActionServiceProjection;

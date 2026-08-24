@@ -111,10 +111,12 @@ Remaining PB-05 work, in order:
 2. **Completed at `0b25faae`:** complete database readiness—protocol catalog,
    schema fingerprint, and change-capture verification—runs in one
    repeatable-read/read-only snapshot.
-3. **Active:** measure representative readiness, Context, Query, Mutation, realtime, and
-   Durable statement populations. Measure Mutation-handler and realtime-apply
-   idle gaps plus maintenance/reconciliation/retention lock contention before
-   deriving provisional internal ceilings.
+3. **Active:** representative readiness, Context, Query, Mutation, realtime,
+   and Durable statement populations are instrumented through the actual
+   transaction seams. The isolated instrumentation-hold and lock-shape controls
+   are complete at `dfb1a50c`. Next measure actual Mutation-handler and
+   realtime-apply idle gaps plus actual maintenance/reconciliation/retention
+   owner-path contention before deriving even provisional internal ceilings.
 4. Close remaining database-mode facades and `bundle-core` imports.
 5. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
@@ -156,9 +158,18 @@ Follow ADR-0015's accepted `policy` and
 `credentials: "application" | "none"` spelling. Do not add a framework Auth
 provider or leak credential/session UI into QUESTPIE.
 
-Action follows as two boundaries: direct Action first, then a focused public
-Kernel decision for Operation Wire v3 Effect Identity before network/client
-Action. Never hide Effect Identity in domain input or alias Mutation `callId`.
+Action follows as two boundaries. The internal pre-wire direct kernel is now
+integrated through `f04a3810`: Runtime-owned opaque Effect Identity reaches the
+handler, trusted execution facts and ordinary Authority are enforced, and only
+external-effect execution Services are projected with owned cancellation and
+cleanup. It deliberately exports no caller identity constructor, validation,
+derivation, compiler/client surface, or wire shape. Action limits also remain
+unimplemented: public field names, units, defaults, zero semantics, and their
+measurement boundary are unresolved. This is an internal capability kernel,
+not the complete direct Action Product surface. The next public Action boundary
+includes those limits and the focused Kernel decision for Operation Wire v3
+Effect Identity before network/client Action. Never hide Effect Identity in
+domain input or alias Mutation `callId`.
 
 Ordinary Job is blocked by the PB-05 one-Pool flip and protocol v7 schema
 generalization. Do not encode Job as a Reaction intent. Cron and checkpoints
@@ -183,12 +194,13 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
 
-At the Route/Auth closure, `quality:full` passes in the canonical worktree:
+At the current Action/PB-05 integration closure, `quality:full` passes in the
+canonical worktree:
 architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
 validation, and `git diff --check`. The release dry-run is retry-stable at the
 accepted package checksum
-`c17d695eaa414ccc69d8fb7bf1ed3c88e1d4ee627a55443bb2725c98bf28d702`;
+`206d8641f2dce30a20b94c7588fdf1c56e91677b6aab0f997e6339becff20fe3`;
 the declaration checksum is
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
@@ -250,17 +262,63 @@ the generated PostgreSQL readiness tracer passes with 30 assertions before its
 dedicated container is removed. Compiler typechecks, architecture, and
 `git diff --check` pass. Operational measurement is the active PB-05 slice.
 
+The PB-05 operational inventory is integrated through `ac09f87a`. Its closed
+provisional-only collector preserves database result/error identity and records
+the actual statement populations and transaction ownership for readiness,
+Context, Query, fresh/replayed Mutation, Durable claim/heartbeat/effect/
+terminal/maintenance paths, and realtime reconciliation/apply/retention. The
+realtime tracer proves apply shares the reconciliation transaction without
+double attribution. Sixty-seven focused tests pass with 301 assertions. No
+duration ceiling or public performance claim is projected; isolated PostgreSQL
+idle-hold and lock-contention controls remain the active measurement boundary.
+
+The bounded operational-control boundary is integrated at `dfb1a50c`. Twenty
+focused tests pass with 61 assertions. Its exact database plus opt-in guard,
+bounded blocker/settlement ownership, primary-error preservation, and cleanup
+hostiles pass. In one serialized isolated PostgreSQL 17 session, both focused
+control runs, the 1,000-sample Query and Mutation envelopes, and the
+1,000-sample-per-operation Durable envelope pass; the repeated control snapshot
+is structurally identical. The owned schema, container, port, and temporary raw
+outputs are removed. Results remain `PROVISIONAL_INTERNAL_EVIDENCE` with
+`publicCeilings: false`: marker/sleep holds prove instrumentation only,
+simplified lock probes prove lock shape only, and blocker release is an
+acquisition proxy. Actual Mutation-handler/realtime-apply and owner-path
+contention evidence remains outstanding.
+
+The direct Action pre-wire kernel is integrated at `8659ae87`, with external
+Service capability projection completed at `f04a3810`. Eleven focused Action
+tests pass with 42 assertions; the affected Runtime suite passes 40 tests with
+189 assertions, Runtime and capability-negative typechecks pass, architecture
+passes, and independent Standards and Spec reviews return PASS. The seam is
+internal only: no public Runtime barrel, compiler/client contract, Operation
+Wire field, caller Effect Identity grammar, or derivation is selected.
+Action limits and generated Policy/normalization remain outstanding, so these
+commits do not claim a complete public direct invocation surface.
+
+The final compiler-derived refresh changes only two hashed internal bundle
+chunk identities, `internal/application.js`, its aggregate checksum, and
+`runtime-build.json`; schema, migrations, Operation Wire, runtime executable
+inventory, Policy, Service, and public declarations remain unchanged. The
+generated relocation tracer passes with 25 assertions. A full Bun load exposed
+and closed one test-only Action type-fixture execution leak while preserving its
+negative type proof. The isolated PostgreSQL 17 plus Firefox walking skeleton
+passes with 26 assertions and its disposable container, port, and schemas are
+removed. `quality:full`, `quality:release`, architecture, all workspace and
+focused Action typechecks, release dry-run, and `git diff --check` pass at this
+closure.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Keep direct Action isolated in its writer worktree. Do not integrate any
-   caller-facing Effect Identity spelling, validation, or derivation before the
-   read-only authority review confirms it stays on the authorized side of the
-   Operation Wire v3 decision boundary.
-3. Continue the PB-05 operational measurement boundary without projecting
-   provisional evidence as public ceilings. Do not perform the atomic one-Pool
-   ownership flip alongside generated/release work.
+2. Keep the integrated direct Action kernel internal. Stop before adding any
+   caller-facing Effect Identity spelling, validation, derivation, compiler/
+   client projection, or Operation Wire v3 surface.
+3. Continue PB-05 only with actual Mutation-handler/realtime-apply and actual
+   maintenance/reconciliation/retention owner-path measurement. Do not repeat
+   the completed synthetic controls as Product evidence or project provisional
+   results as public ceilings. Do not perform the atomic one-Pool ownership
+   flip alongside generated/release work.
 4. Keep a read-only Effect Identity proof/review lane. Stop before the public
    Kernel decision; never hide Effect Identity in domain input or alias Mutation
    `callId`.
