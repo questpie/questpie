@@ -118,11 +118,16 @@ Remaining PB-05 work, in order:
    realtime invalidation apply, and maintenance/reconciliation/retention owner
    paths are measured through production owners at `62605756`. Results remain
    provisional internal evidence and define no public ceiling.
-4. **Active:** close remaining database-mode facades and `bundle-core` imports.
-5. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
+4. **Completed at `66b047c1`:** private `bundle-core` and domain barrels expose
+   the database-mode Mutation, Durable kernel/effect-ledger, and trusted-
+   Principal maintenance facades over one injected transaction runner. Legacy
+   Bun-compatible facades remain unchanged.
+5. **Active:** add the compiler-owned database-mode readiness sibling and a
+   bundle-only completeness tracer before the ownership flip.
+6. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
    compatibility paths; never add a temporary second Pool.
-6. Re-run browser, saturation, cancellation, listener, rotation, shutdown,
+7. Re-run browser, saturation, cancellation, listener, rotation, shutdown,
    Mutation, Durable, and startup PostgreSQL evidence.
 
 Compiler migration and Seed application keep their separately pinned direct
@@ -302,6 +307,16 @@ hostile found by the measurement itself. The container, port, prepared fixture,
 and raw output are removed after both runs. Timing distributions remain
 `PROVISIONAL_INTERNAL_EVIDENCE` with `publicCeilings: false` and are not timeout
 or SLA authority.
+
+The database-mode facade boundary is integrated at `66b047c1`. Private
+`bundle-core` and the Mutation/Durable domain barrels expose one injected-runner
+composition for Mutation, Durable scheduling/claim/heartbeat/terminal/
+inspection, the Effect Ledger, and trusted-Principal maintenance. Fifty-seven
+focused tests pass with 264 assertions; Runtime typecheck and architecture pass.
+No facade constructs a Pool, and the legacy Bun-compatible implementations are
+byte-unchanged. The compiler-owned database readiness sibling and bundle
+completeness tracer remain prerequisites to the atomic generated ownership
+flip.
 
 The direct Action pre-wire kernel is integrated at `8659ae87`, with external
 Service capability projection completed at `f04a3810`. Eleven focused Action
