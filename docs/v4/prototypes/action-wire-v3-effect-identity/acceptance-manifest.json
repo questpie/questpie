@@ -1,0 +1,151 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ACTION-KERNEL-WIRE-V3-EFFECT-IDENTITY",
+	"proof": "Accept one joint Action Kernel contract for explicit semantic limits, caller-stable effectKey material, Runtime-derived scoped Effect Identity, additive Operation Wire v3, non-retryable post-dispatch ambiguity, and direct/network parity without projecting public or production authority in this proof branch.",
+	"diffBase": "c68309f3d0997cb3acb224a53d214d4f1516bbf2",
+	"reviewOutput": "docs/v4/prototypes/action-wire-v3-effect-identity/REVIEW.json",
+	"authorityHeads": {
+		"canonical prerequisite with Runtime and compiler lone-surrogate parity": "c68309f3d0997cb3acb224a53d214d4f1516bbf2",
+		"integrated Action semantic-limits proof": "8525b903a781aff43b6d6cb08dd365f3813b46bf",
+		"repaired combined Effect Identity and Wire v3 proof": "24874e6947f7f12fb36bd6d6c558c1ccea3b5aff"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "fe905a006bcb8fc3ef4e64515a9ceb4821d5dd80c775beee12171eb891f82426"
+		},
+		{
+			"name": "canonical product language",
+			"path": "CONTEXT.md",
+			"sha256": "71fddec8e248806aea91bfd052fdf69d169b42cf9a9b7720cb28f0d71f774dc8"
+		},
+		{
+			"name": "accepted tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "current implementation and compatibility gates",
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "3020f0f2fa3d499fa828fd93a90e0ea7b1ca93db73b93409363b3fd0b0cad6d1"
+		},
+		{
+			"name": "accepted trusted Context and Policy ownership",
+			"path": "docs/adr/0010-freeze-trusted-context-and-relational-policy.md",
+			"sha256": "18c70edc3e0adaf6c04b42839a7bbde87f6f3364d5667bc63321b59e7152bea7"
+		},
+		{
+			"name": "accepted Query Mutation and explicit lifecycle boundary",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "accepted Transactional Dispatch Reaction and external-effect ownership",
+			"path": "docs/adr/0013-freeze-transactional-dispatch-and-reaction.md",
+			"sha256": "8164bf531b761ea05bfa0e71565a64e9c2923d8da26fff9630e641e1e44b0556"
+		},
+		{
+			"name": "accepted Runtime client envelope failure and cancellation semantics",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "accepted Service Route Auth composition and Policy boundary",
+			"path": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"sha256": "5db374d76fc838dc5ae2eaabc214e82b03e26c1526611ad9384f48c6f78e1ea9"
+		},
+		{
+			"name": "accepted shared durable kernel and stable effect identity",
+			"path": "docs/adr/0016-freeze-lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "c1b780549481dc8941c7a325f6a8160193b8c3d584d547b66e5dc0c77aa854fb"
+		},
+		{
+			"name": "accepted semantic kernels and public factory surface",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "d103a5de1cfe072fc220b8a1bc1aed850be2846af644f68c0fc875d0a844c2fa"
+		},
+		{
+			"name": "accepted Operation Wire v2 post-commit outcome contract",
+			"path": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"sha256": "47a26be509b42d8a8b82c0ef1bbde6b70667234b6b4c9c7d0a2d5ac3e439acdf"
+		},
+		{
+			"name": "accepted Action and unified Job checkpoint contract",
+			"path": "docs/adr/0026-freeze-action-and-unify-checkpointed-work-in-job.md",
+			"sha256": "c327aa569f6ae1716adefb6f7bc0281b5d81f2193eaae51bd0a4006a27ebb93d"
+		},
+		{
+			"name": "accepted risk-tiered proof and Product delivery process",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "Action Route and integration behavioral evidence",
+			"path": "docs/v4/design-fiction/routes-actions-and-integrations.md",
+			"sha256": "0b1f50dfcff429c8a3dd8fb91a5d42c9d3a890a35bceb4dbe59d46432fc64b70"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run docs/v4/prototypes/action-wire-v3-effect-identity/check.ts (derivation vectors, exact closed and canonically sorted Wire v3 artifact, resigned semantic hostiles, retained-version admission, direct/network parity, framework-owned nondisclosure, codec-authorized payload control, remaining-budget conversion, ambiguity and retry matrix)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run docs/v4/prototypes/action-wire-v3-effect-identity/portable-check.ts (relocated combined Wire, limits, and canonical-byte proof)",
+			"result": "PASS"
+		},
+		{
+			"command": "QUESTPIE_CANONICAL_ROOT=$PWD QUESTPIE_DEPENDENCY_ROOT=<canonical dependency worktree> bun run docs/v4/prototypes/action-wire-v3-effect-identity/repository-check.ts (prerequisite ancestry, compiler and fixture tree binding, relocated compilation, retained Wire v2 exact bytes and digests)",
+			"result": "PASS"
+		},
+		{
+			"command": "bun test docs/v4/prototypes/action-limits/check.test.ts (14 tests, 59 assertions)",
+			"result": "PASS"
+		},
+		{
+			"command": "portable TypeScript commands in docs/v4/prototypes/action-wire-v3-effect-identity/README.md for both Wire v3 and Action limits tsconfig files",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/action-wire-v3-effect-identity/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/action-wire-v3-effect-identity",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check (289 production TypeScript files)",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"The caller supplies exactly one required effectKey as stable provider material, not a final Effect Identity or idempotency guarantee. The key is NFC, reject-not-rewrite, 1 through 256 Unicode scalars, at most 1024 UTF-8 bytes, and rejects null scalars, lone surrogates, absence, and aliases such as effectId, idempotencyKey, or Mutation callId.",
+		"Runtime derives the UUID-shaped ordinary Action Effect Identity from already canonical application and Action Resource Identities, trusted tenant and validated Principal kind and id, plus effectKey under the disjoint questpie.effect-identity.action.v1 domain. Domain input and Mutation callId are excluded, and forged caller facts cannot own the final identity.",
+		"The existing durable application/run/effect UUID vector remains byte-identical while ordinary Action derivation is domain-separated. Handler context receives Runtime-scoped effect.id; callers never supply that final identity.",
+		"Ordinary Action invocation performs no automatic retry, coalescing, receipt-ledger claim, or exactly-once claim. Duplicate admissions may execute again with the same stable provider-visible Effect Identity, and application/provider receipt behavior remains explicit provider ownership.",
+		"Operation Wire v3 is one exact closed additive projection over the retained collaboration Wire v2 bytes. Operation and failure identity arrays are globally canonical-sorted; Query and Mutation retain their v2 contracts; a v1 or v2 Action request, including selected-operation/request-operation confusion, refuses CLIENT_OUTDATED before Context, Service, or handler work.",
+		"A valid pre-execution rejection proves zero Action work. After dispatch, fetch rejection, response loss or truncation, cancellation race, malformed content type, invalid JSON, unknown frame, or miscorrelated frame becomes non-retryable ACTION_OUTCOME_AMBIGUOUS with no automatic replay. Authored outcomeUnknown remains a distinct declared provider outcome.",
+		"Action limits are exactly inputBytes, resultBytes, and durationMilliseconds. Byte ceilings are positive safe integers; duration is a nonnegative safe integer whose zero denies only after trusted facts and Policy admission but before Effect read, codec work, capability projection, or handler work. Semantic bytes use strict canonical JSON line bytes and remain distinct from transport limits.",
+		"Known valid result, declared rejection, or declared ambiguity wins over a racing owned deadline. Oversized success or declared-error payload after handler settlement, including oversized authored outcomeUnknown, becomes non-retryable post-handler RESOURCE_LIMIT that does not prove provider nonacceptance and authorizes no replay.",
+		"Invocation boundaries carry a remaining duration rather than wall-clock or foreign monotonic timestamps. Each process converts the earlier declared Action duration or remaining root budget to its own local monotonic deadline; direct and network carriers preserve the same remaining budget and outcome bytes.",
+		"Framework-owned outcome metadata and framework failures recursively reject injected raw effectKey or derived effect.id. Authored result and declared-error payloads remain governed by their exact codecs and may deliberately return effect.id; Runtime performs no secret scrubbing and this decision makes no impossible generic domain-payload nondisclosure claim.",
+		"Policy remains the sole authorization model; Action gains no data facade, raw database, transaction, durable control, System elevation, Auth provider, schema, migration, session UI, or provider-hardcoded surface.",
+		"This combined candidate is executable proof only. It changes no Accepted ADR, public documentation, production Runtime/compiler/client, generated artifact, release artifact, PostgreSQL schema, or published package. Projection and implementation remain forbidden until one fresh manifest-pinned protocol-v2 formal review returns PASS."
+	]
+}
