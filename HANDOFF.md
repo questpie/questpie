@@ -122,11 +122,15 @@ Remaining PB-05 work, in order:
    the database-mode Mutation, Durable kernel/effect-ledger, and trusted-
    Principal maintenance facades over one injected transaction runner. Legacy
    Bun-compatible facades remain unchanged.
-5. **Readiness completed at `7961f385`; bundle tracer active:** the
+5. **Completed through `db5125f3`:** the
    compiler-owned database-mode sibling composes one Runtime-branded
    repeatable-read/read-only transaction and the exact 16 prerequisite,
-   provider, catalog and change-capture descriptors. Add the bundle-only
-   completeness tracer before the ownership flip.
+   provider, catalog and change-capture descriptors. The private bundle-only
+   completeness tracer proves that one injected runner reaches readiness,
+   Context, Query, Mutation, Durable and realtime composition without an
+   implicit Pool or Client. Finite internal statement, lock and
+   idle-in-transaction values remain the last evidence prerequisite before the
+   ownership flip; provisional measurement controls are not those values.
 6. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
    compatibility paths; never add a temporary second Pool.
@@ -336,7 +340,14 @@ repeatable-read/read-only snapshot. Twenty-two post-integration tests pass with
 98 assertions; the brand/parity fixture, compiler and Runtime typechecks,
 declaration-build closure, architecture and `git diff --check` pass. The old Bun
 caller remains byte-unchanged until the atomic flip. A bundle-only completeness
-tracer is the remaining pre-flip PB-05 boundary.
+tracer is integrated at `db5125f3`: one injected runner reaches the complete
+private database-mode composition, realtime apply shares the reconciliation
+transaction, retention remains separately owned, and an isolated hostile proves
+zero implicit `pg` Pool or Client construction. Eight focused tests pass with
+79 assertions; Runtime typecheck, architecture and `git diff --check` pass. The
+remaining pre-flip PB-05 boundary is finite internal statement, lock and
+idle-in-transaction evidence followed by the atomic ownership change; no public
+ceiling is implied.
 
 The direct Action pre-wire kernel is integrated at `8659ae87`, with external
 Service capability projection completed at `f04a3810`. Eleven focused Action
@@ -387,10 +398,11 @@ closure.
    through exact Wire v3 client/server transport and close browser, artifact and
    release evidence. Preserve the accepted no-retry and ambiguity semantics
    throughout.
-3. Continue PB-05 with the bundle-only completeness tracer, then perform the
-   atomic one-Pool ownership flip in its own serialized boundary. Preserve the
-   measured owner paths as provisional evidence; do not derive public ceilings
-   or overlap the flip with generated/release work.
+3. Continue PB-05 by closing the finite internal statement, lock and
+   idle-in-transaction evidence required by the operational profile, then
+   perform the atomic one-Pool ownership flip in its own serialized boundary.
+   Preserve the measured owner paths as provisional evidence; do not derive
+   public ceilings or overlap the flip with generated/release work.
 4. Keep independent Standards and Spec reviews on each Action and PB-05
    integration boundary. The accepted Effect/Wire proof is immutable evidence;
    ordinary production projection now follows tracer-led TDD rather than a new
