@@ -104,9 +104,10 @@ the one-Pool ownership flip is not complete. Completed prerequisites include:
 
 Remaining PB-05 work, in order:
 
-1. Replace the compiler catalog reader's per-table loop with fixed set-based
-   whole-schema statements and pure reducers. Land descriptors/decoder tests,
-   then columns, constraints/indexes, reader equivalence, and PG hostiles.
+1. **Active:** fixed set-based whole-schema catalog statements and the pure
+   column/constraint/index reducers are integrated through `d297d854`.
+   Complete reader-equivalence/query-count hardening and its PostgreSQL
+   hostiles; do not reintroduce per-table or per-index catalog SQL.
 2. Run complete database readiness—protocol catalog, schema fingerprint, and
    change-capture verification—in one repeatable-read/read-only snapshot.
 3. Measure representative readiness, Context, Query, Mutation, realtime, and
@@ -235,15 +236,26 @@ ADR-0015, ADR-0014, SPEC, and Gates 8A/8B define cancellation as the terminal
 bounded execution-lifetime boundary; a non-cooperative handler cannot retain
 Runtime scope ownership or block close after cancellation.
 
+PB-05 catalog boundaries 1-3 are integrated through `d297d854`: five fixed
+whole-schema statement descriptors with closed decoders, then pure set-based
+column and constraint/index reducers. Seven focused unit tests pass with 49
+assertions; compiler typechecks, architecture, and `git diff --check` pass at
+the integration head. The isolated PostgreSQL 17 reader-equivalence lane passes
+16 cases with 40 assertions and three PostgreSQL-18-only skips, then removes its
+dedicated `questpie-pb05-catalog-reader` container. Independent Standards and
+Spec reviews return PASS for every boundary. Query-count/equivalence hardening
+remains the active PB-05 slice before the readiness snapshot.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. From the Route/Auth closure head, use separate local writer worktrees for
-   direct Action and PB-05. Direct Action is the next Product frontier; do not
-   enter network/client Action or Operation Wire v3 there.
-3. In PB-05 order, land the fixed set-based whole-schema catalog reader and pure
-   reducers, then the one-snapshot readiness boundary. Do not perform the atomic
+2. Keep direct Action isolated in its writer worktree. Do not integrate any
+   caller-facing Effect Identity spelling, validation, or derivation before the
+   read-only authority review confirms it stays on the authorized side of the
+   Operation Wire v3 decision boundary.
+3. Finish PB-05 reader-equivalence/query-count hardening, then land the
+   one-repeatable-read/read-only readiness snapshot. Do not perform the atomic
    one-Pool ownership flip alongside generated/release work.
 4. Keep a read-only Effect Identity proof/review lane. Stop before the public
    Kernel decision; never hide Effect Identity in domain input or alias Mutation
