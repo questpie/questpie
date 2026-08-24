@@ -2,6 +2,7 @@ import {
 	canonicalJsonLine,
 	CanonicalJsonError,
 	sha256Digest,
+	uuidFromSha256Digest,
 } from "../canonical-json";
 
 export function canonicalMutationBytes(value: unknown): Uint8Array {
@@ -28,6 +29,5 @@ export function mutationDigest(bytes: Uint8Array): string {
 }
 
 export function deterministicUuid(bytes: Uint8Array): string {
-	const digest = sha256Digest(bytes);
-	return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+	return uuidFromSha256Digest(sha256Digest(bytes));
 }

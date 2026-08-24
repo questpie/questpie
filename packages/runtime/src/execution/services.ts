@@ -33,9 +33,20 @@ type OwnedService = Readonly<{
 
 type ExecutionScope = Readonly<{
 	signal: AbortSignal;
+	executionService<Definition extends AnyService>(
+		definition: Definition,
+	): Promise<ServiceInstance<Definition>>;
 	service<Definition extends AnyService>(
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
+	child<Result>(
+		input: Readonly<{
+			detachedTerminalCleanup?: boolean;
+			signal?: AbortSignal;
+			settledUseWinsAbort?: boolean;
+		}>,
+		use: (scope: ExecutionScope) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
 }>;
 
 export interface ServiceOwner {
@@ -43,7 +54,12 @@ export interface ServiceOwner {
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
 	execution<Result>(
-		input: Readonly<{ signal?: AbortSignal; abortUse?: boolean }>,
+		input: Readonly<{
+			signal?: AbortSignal;
+			abortUse?: boolean;
+			detachedTerminalCleanup?: boolean;
+			settledUseWinsAbort?: boolean;
+		}>,
 		use: (scope: ExecutionScope) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
 	close(): Promise<void>;
@@ -110,6 +126,7 @@ export function createServiceOwner(
 		definition: Definition,
 		execution: Readonly<{
 			cells: Map<string, Promise<unknown>>;
+			isClosed(): boolean;
 			owned: OwnedService[];
 			signal: AbortSignal;
 		}> | null,
@@ -143,15 +160,41 @@ export function createServiceOwner(
 						? applicationController.signal
 						: execution!.signal,
 			});
-			const owner =
-				definition.lifetime === "application"
-					? applicationOwned
-					: execution!.owned;
-			owner.push({ definition, instance });
+			const item = { definition, instance };
+			if (definition.lifetime === "application") applicationOwned.push(item);
+			else {
+				execution!.owned.push(item);
+				if (execution!.isClosed()) throw abortReason(execution!.signal);
+			}
 			return instance;
 		})();
 		cells.set(identity, created);
 		return created as Promise<ServiceInstance<Definition>>;
+	};
+
+	const isExecutionServiceGraph = (definition: AnyService): boolean => {
+		const active = new Set<AnyService>();
+		const complete = new Set<AnyService>();
+		const visit = (member: AnyService): boolean => {
+			if (
+				registered.get(serviceIdentity(member)) !== member ||
+				member.lifetime !== "execution" ||
+				active.has(member)
+			)
+				return false;
+			if (complete.has(member)) return true;
+			active.add(member);
+			for (const dependency of Object.values(member.dependencies))
+				if (!visit(dependency)) return false;
+			active.delete(member);
+			complete.add(member);
+			return true;
+		};
+		try {
+			return visit(definition);
+		} catch {
+			return false;
+		}
 	};
 
 	const application: ServiceOwner["application"] = (definition) => {
@@ -167,7 +210,12 @@ export function createServiceOwner(
 	};
 
 	const execution = async <Result>(
-		input: Readonly<{ signal?: AbortSignal; abortUse?: boolean }>,
+		input: Readonly<{
+			signal?: AbortSignal;
+			abortUse?: boolean;
+			detachedTerminalCleanup?: boolean;
+			settledUseWinsAbort?: boolean;
+		}>,
 		use: (scope: ExecutionScope) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> => {
 		if (state !== "open") throw new Error("Runtime is closing");
@@ -178,6 +226,9 @@ export function createServiceOwner(
 		else input.signal?.addEventListener("abort", onAbort, { once: true });
 		const cells = new Map<string, Promise<unknown>>();
 		const owned: OwnedService[] = [];
+		const childControllers = new Set<AbortController>();
+		const childScopes = new Set<Promise<unknown>>();
+		let closed = false;
 		let resolveScope!: () => void;
 		let rejectScope!: (error: unknown) => void;
 		const scopeDone = new Promise<void>((resolveDone, rejectDone) => {
@@ -193,7 +244,12 @@ export function createServiceOwner(
 			if (finalizePromise) return finalizePromise;
 			finalizePromise = (async () => {
 				input.signal?.removeEventListener("abort", onAbort);
+				for (const childController of childControllers)
+					childController.abort(
+						new DOMException("Parent execution scope closed", "AbortError"),
+					);
 				try {
+					await Promise.allSettled(childScopes);
 					await Promise.allSettled(cells.values());
 					await disposeOwned(owned);
 				} finally {
@@ -210,20 +266,54 @@ export function createServiceOwner(
 		let pendingUse: Promise<Awaited<Result>> | undefined;
 		try {
 			if (controller.signal.aborted) throw abortReason(controller.signal);
-			pendingUse = Promise.resolve(
-				use({
+			const scopedService = <Definition extends AnyService>(
+				definition: Definition,
+				requireExecutionGraph: boolean,
+			): Promise<ServiceInstance<Definition>> => {
+				if (input.abortUse && controller.signal.aborted)
+					return Promise.reject(abortReason(controller.signal));
+				if (requireExecutionGraph && !isExecutionServiceGraph(definition))
+					return Promise.reject(
+						new TypeError(
+							`${serviceIdentity(definition)} is not an execution-owned Service graph`,
+						),
+					);
+				return resolveService(definition, {
+					cells,
+					isClosed: () => closed,
+					owned,
 					signal: controller.signal,
-					service: (definition) => {
-						if (input.abortUse && controller.signal.aborted)
-							return Promise.reject(abortReason(controller.signal));
-						return resolveService(definition, {
-							cells,
-							owned,
-							signal: controller.signal,
-						});
-					},
-				}),
-			);
+				});
+			};
+			const scope: ExecutionScope = {
+				signal: controller.signal,
+				executionService: (definition) => scopedService(definition, true),
+				service: (definition) => scopedService(definition, false),
+				child: (childInput, childUse) => {
+					const childController = new AbortController();
+					childControllers.add(childController);
+					const signals = [controller.signal, childController.signal];
+					if (childInput.signal) signals.push(childInput.signal);
+					const child = execution(
+						{
+							signal: AbortSignal.any(signals),
+							abortUse: true,
+							detachedTerminalCleanup: childInput.detachedTerminalCleanup,
+							settledUseWinsAbort: childInput.settledUseWinsAbort,
+						},
+						childUse,
+					);
+					childScopes.add(child);
+					void child
+						.finally(() => {
+							childScopes.delete(child);
+							childControllers.delete(childController);
+						})
+						.catch(() => undefined);
+					return child;
+				},
+			};
+			pendingUse = Promise.resolve(use(Object.freeze(scope)));
 			void pendingUse.catch(() => undefined);
 			if (input.abortUse) {
 				let rejectAbort!: (reason: unknown) => void;
@@ -241,7 +331,7 @@ export function createServiceOwner(
 					controller.signal.removeEventListener("abort", rejectOnAbort);
 				}
 			} else result = await pendingUse;
-			controller.signal.throwIfAborted();
+			if (!input.settledUseWinsAbort) controller.signal.throwIfAborted();
 		} catch (error) {
 			failed = true;
 			primaryFailure = error;
@@ -254,6 +344,19 @@ export function createServiceOwner(
 						await lateResult.body.cancel(primaryFailure);
 				})
 				.catch(() => undefined);
+		if (input.detachedTerminalCleanup) {
+			closed = true;
+			if (!controller.signal.aborted)
+				controller.abort(
+					new DOMException("Child execution settled", "AbortError"),
+				);
+			const detachedCleanup = finalize();
+			void detachedCleanup.catch(() => undefined);
+			scopeControllers.delete(controller);
+			resolveScope();
+			if (failed) throw primaryFailure;
+			return result as Awaited<Result>;
+		}
 		if (!failed && result instanceof Response)
 			return (await retainResponseLifetime(
 				result,

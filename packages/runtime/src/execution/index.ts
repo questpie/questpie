@@ -57,6 +57,24 @@ export type RuntimeExecutionScope<Resolved> = Readonly<{
 	service<Definition extends AnyService>(
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
+	child<Result>(
+		input: Readonly<{
+			detachedTerminalCleanup?: boolean;
+			signal?: AbortSignal;
+			settledUseWinsAbort?: boolean;
+		}>,
+		use: (
+			scope: Readonly<{
+				signal: AbortSignal;
+				executionService<Definition extends AnyService>(
+					definition: Definition,
+				): Promise<ServiceInstance<Definition>>;
+				service<Definition extends AnyService>(
+					definition: Definition,
+				): Promise<ServiceInstance<Definition>>;
+			}>,
+		) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
 }>;
 
 export function isRuntimeExecutionScope(
@@ -169,7 +187,7 @@ export function createApplicationRuntime<
 			throw new Error("Execution requires a trusted Principal");
 		return services.execution(
 			{ signal: input.signal },
-			async ({ service, signal }) => {
+			async ({ child, service, signal }) => {
 				const decoded = deepFreeze(
 					decodeContextInput(program.context.input, input.context),
 				);
@@ -211,7 +229,7 @@ export function createApplicationRuntime<
 					liveQueryObservation: input.liveQueryObservation ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				trustedExecutionFacts.add(facts);
-				const scope = Object.freeze({ facts, service });
+				const scope = Object.freeze({ child, facts, service });
 				trustedExecutionScopes.add(scope);
 				try {
 					const view = await program.project(scope);

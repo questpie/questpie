@@ -3,9 +3,9 @@ import {
 	type ServiceDefinition,
 	type ServiceDependencyMap,
 	type ServiceInstance,
-	type ServiceLifetime,
 } from "questpie";
 
+import { canonicalJsonLine, CanonicalJsonError } from "../canonical-json";
 import {
 	decodeRuntimeCodec,
 	encodeRuntimeCodec,
@@ -25,6 +25,14 @@ import {
 	type OperationAdmission,
 	type RuntimeDeclaredErrorContract,
 } from "../operation";
+import {
+	actionMonotonicNow,
+	createActionControl,
+	type RuntimeActionClock,
+	type RuntimeActionLimits,
+	validActionLimits,
+} from "./control";
+import { deriveOrdinaryEffectIdentity, resourceIdentity } from "./identity";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
@@ -38,7 +46,7 @@ type ActionExecutionScope = RuntimeExecutionScope<
 
 type ExternalEffectService = ServiceDefinition<
 	string,
-	ServiceLifetime,
+	"execution",
 	"external",
 	ServiceDependencyMap,
 	unknown
@@ -55,6 +63,7 @@ export type RuntimeActionProjectionScope = ActionExecutionFacts &
 export type RuntimeActionBinding<Context> = Readonly<{
 	identity: `action:${string}`;
 	admission: OperationAdmission;
+	limits: RuntimeActionLimits;
 	input: RuntimeCodec;
 	output: RuntimeCodec;
 	declaredErrors: readonly RuntimeDeclaredErrorContract[];
@@ -70,18 +79,26 @@ export type RuntimeActionBinding<Context> = Readonly<{
 	): unknown | Promise<unknown>;
 }>;
 
-export interface RuntimeActionExecutor<Effect> {
+export interface RuntimeActionExecutor {
 	invoke(
 		identity: string,
 		invocation: Readonly<{
 			input: unknown;
-			effect: Effect;
-		}> &
-			(
-				| Readonly<{ scope: ActionExecutionScope }>
-				| Readonly<{ facts: ActionExecutionFacts }>
-			),
+			effectKey: string;
+			scope: ActionExecutionScope;
+		}>,
 	): Promise<unknown>;
+}
+
+export class RuntimeActionPostHandlerResourceLimit extends OperationFailure {
+	readonly phase = "postHandler";
+	readonly provesProviderNonacceptance = false;
+	readonly replayAuthorized = false;
+
+	constructor() {
+		super("RESOURCE_LIMIT", false);
+		this.name = "RuntimeActionPostHandlerResourceLimit";
+	}
 }
 
 function decodeInput(codec: RuntimeCodec, value: unknown): unknown {
@@ -104,6 +121,51 @@ function decodeOutput(codec: RuntimeCodec, value: unknown): unknown {
 	}
 }
 
+function encodedValue(
+	codec: RuntimeCodec,
+	value: unknown,
+	path: string,
+	failure: "INTERNAL" | "PROTOCOL_UNSUPPORTED",
+): unknown {
+	try {
+		return encodeRuntimeCodec(codec, value, path);
+	} catch (error) {
+		if (error instanceof RuntimeCodecError) throw new OperationFailure(failure);
+		throw error;
+	}
+}
+
+function semanticBytes(
+	value: unknown,
+	failure: "INTERNAL" | "PROTOCOL_UNSUPPORTED",
+): number {
+	try {
+		return canonicalJsonLine(value).byteLength;
+	} catch (error) {
+		if (error instanceof CanonicalJsonError)
+			throw new OperationFailure(failure);
+		throw error;
+	}
+}
+
+function enforceInputBytes(
+	binding: RuntimeActionBinding<unknown>,
+	encoded: unknown,
+): void {
+	if (
+		semanticBytes(encoded, "PROTOCOL_UNSUPPORTED") > binding.limits.inputBytes
+	)
+		throw new OperationFailure("RESOURCE_LIMIT");
+}
+
+function enforceResultBytes(
+	binding: RuntimeActionBinding<unknown>,
+	encoded: unknown,
+): void {
+	if (semanticBytes(encoded, "INTERNAL") > binding.limits.resultBytes)
+		throw new RuntimeActionPostHandlerResourceLimit();
+}
+
 function errorFactories(
 	contracts: readonly RuntimeDeclaredErrorContract[],
 ): Readonly<Record<string, (payload?: unknown) => DeclaredOperationError>> {
@@ -119,10 +181,10 @@ function errorFactories(
 }
 
 function validateDeclaredError(
-	contracts: readonly RuntimeDeclaredErrorContract[],
+	binding: RuntimeActionBinding<unknown>,
 	error: DeclaredOperationError,
 ): void {
-	const contract = contracts.find(
+	const contract = binding.declaredErrors.find(
 		(candidate) =>
 			candidate.code === error.code && candidate.status === error.status,
 	);
@@ -130,13 +192,15 @@ function validateDeclaredError(
 	try {
 		if (contract.payload === null) {
 			if (error.payload !== null) throw new OperationFailure("INTERNAL");
+			enforceResultBytes(binding, null);
 			return;
 		}
-		encodeRuntimeCodec(
+		const encoded = encodeRuntimeCodec(
 			contract.payload,
 			error.payload,
 			`$declaredError.${contract.key}.payload`,
 		);
+		enforceResultBytes(binding, encoded);
 	} catch (caught) {
 		if (caught instanceof OperationFailure) throw caught;
 		if (caught instanceof RuntimeCodecError)
@@ -153,7 +217,9 @@ function validBindingInventory<Context>(
 			bindings.length &&
 		bindings.every(
 			(binding) =>
-				binding.identity.length > "action:".length &&
+				resourceIdentity(binding.identity, "action").length >
+					"action:".length &&
+				validActionLimits(binding.limits) &&
 				new Set(binding.declaredErrors.map(({ key }) => key)).size ===
 					binding.declaredErrors.length &&
 				new Set(binding.declaredErrors.map(({ code }) => code)).size ===
@@ -162,13 +228,28 @@ function validBindingInventory<Context>(
 	);
 }
 
-export function createRuntimeActionExecutor<Context, Effect>(
+export function createRuntimeActionExecutor<Context>(
 	input: Readonly<{
+		application: `application:${string}`;
 		bindings: readonly RuntimeActionBinding<Context>[];
+		clock?: RuntimeActionClock;
 		project(scope: RuntimeActionProjectionScope): MaybePromise<Context>;
-		readEffectIdentity(effect: Effect): string;
 	}>,
-): RuntimeActionExecutor<Effect> {
+): RuntimeActionExecutor {
+	const application = resourceIdentity(input.application, "application");
+	const clock: RuntimeActionClock =
+		input.clock ??
+		Object.freeze({
+			cancel: (timer: unknown) =>
+				clearTimeout(timer as ReturnType<typeof setTimeout>),
+			monotonicNow: performance.now.bind(performance),
+			rootRemainingMilliseconds: (facts: ActionExecutionFacts) =>
+				facts.deadline === null
+					? null
+					: Math.max(0, facts.deadline - Date.now()),
+			schedule: (callback: () => void, delayMilliseconds: number) =>
+				setTimeout(callback, delayMilliseconds),
+		});
 	if (!validBindingInventory(input.bindings))
 		throw new TypeError("Runtime Action binding inventory is invalid");
 	const bindings = new Map(
@@ -180,75 +261,144 @@ export function createRuntimeActionExecutor<Context, Effect>(
 			identity: string,
 			invocation: Readonly<{
 				input: unknown;
-				effect: Effect;
-			}> &
-				(
-					| Readonly<{ scope: ActionExecutionScope }>
-					| Readonly<{ facts: ActionExecutionFacts }>
-				),
+				effectKey: string;
+				scope: ActionExecutionScope;
+			}>,
 		) => {
 			const binding = bindings.get(identity as `action:${string}`);
 			if (!binding) throw new OperationFailure("NOT_FOUND");
-			const executionScope = "scope" in invocation ? invocation.scope : null;
-			const facts =
-				"scope" in invocation ? invocation.scope.facts : invocation.facts;
+			const executionScope = invocation.scope;
+			const facts = executionScope.facts;
 			if (
-				(executionScope
-					? !isRuntimeExecutionScope(executionScope)
-					: !isRuntimeExecutionFacts(facts)) ||
+				!isRuntimeExecutionScope(executionScope) ||
+				!isRuntimeExecutionFacts(facts) ||
 				!principal.is(facts.principal)
 			)
 				throw new OperationFailure("INTERNAL");
+			let startedAt = 0;
+			let clockFailure: OperationFailure | undefined;
+			try {
+				startedAt = actionMonotonicNow(clock);
+			} catch (error) {
+				clockFailure =
+					error instanceof OperationFailure
+						? error
+						: new OperationFailure("INTERNAL");
+			}
 			assertOperationAdmission(binding.admission, facts);
-			facts.signal.throwIfAborted();
-			let effectIdentity: string;
+			if (clockFailure) throw clockFailure;
+			const control = createActionControl(
+				facts,
+				binding.limits.durationMilliseconds,
+				startedAt,
+				clock,
+			);
 			try {
-				effectIdentity = input.readEffectIdentity(invocation.effect);
-				if (typeof effectIdentity !== "string")
-					throw new TypeError(
-						"Effect Identity owner returned a non-string value",
-					);
-			} catch {
-				throw new OperationFailure("INTERNAL");
-			}
-			const decodedInput = decodeInput(binding.input, invocation.input);
-			let context: Context;
-			try {
-				context = await input.project(
-					Object.freeze({
-						...facts,
+				control.throwIfExpired();
+				const invocationKeys = Object.keys(invocation).sort();
+				if (
+					invocationKeys.length !== 3 ||
+					invocationKeys[0] !== "effectKey" ||
+					invocationKeys[1] !== "input" ||
+					invocationKeys[2] !== "scope"
+				)
+					throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+				let effectIdentity: string;
+				try {
+					effectIdentity = deriveOrdinaryEffectIdentity(
+						application,
+						binding.identity,
 						facts,
-						service: <Definition extends ExternalEffectService>(
-							definition: Definition,
-						) => {
-							if (definition.effect !== "external")
-								return Promise.reject(new OperationFailure("INTERNAL"));
-							if (!executionScope)
-								return Promise.reject(new OperationFailure("INTERNAL"));
-							return executionScope.service(definition);
-						},
-					}),
-				);
-			} catch (error) {
-				if (facts.signal.aborted && error === facts.signal.reason) throw error;
-				throw new OperationFailure("INTERNAL");
-			}
-			facts.signal.throwIfAborted();
-			try {
-				const raw = await binding.execute({
-					input: decodedInput,
-					ctx: context,
-					effect: Object.freeze({ id: effectIdentity }),
-					errors: errorFactories(binding.declaredErrors),
-				});
-				return decodeOutput(binding.output, raw);
-			} catch (error) {
-				if (error instanceof DeclaredOperationError) {
-					validateDeclaredError(binding.declaredErrors, error);
-					throw error;
+						invocation.effectKey,
+					);
+				} catch (error) {
+					if (error instanceof OperationFailure) throw error;
+					throw new OperationFailure("INTERNAL");
 				}
-				if (facts.signal.aborted && error === facts.signal.reason) throw error;
-				throw new OperationFailure("INTERNAL");
+				const decodedInput = decodeInput(binding.input, invocation.input);
+				const encodedInput = encodedValue(
+					binding.input,
+					decodedInput,
+					"$action.input",
+					"PROTOCOL_UNSUPPORTED",
+				);
+				enforceInputBytes(binding, encodedInput);
+				control.throwIfExpired();
+				const actionFacts = Object.freeze({
+					...facts,
+					signal: control.signal,
+					deadline: facts.deadline,
+				}) as ActionExecutionFacts;
+				const execute = async (
+					child: Readonly<{
+						signal: AbortSignal;
+						executionService<Definition extends ExternalEffectService>(
+							definition: Definition,
+						): Promise<ServiceInstance<Definition>>;
+					}>,
+				): Promise<unknown> => {
+					let context: Context;
+					try {
+						context = await input.project(
+							Object.freeze({
+								...actionFacts,
+								facts: actionFacts,
+								service: <Definition extends ExternalEffectService>(
+									definition: Definition,
+								) => {
+									if (
+										definition.effect !== "external" ||
+										definition.lifetime !== "execution"
+									)
+										return Promise.reject(new OperationFailure("INTERNAL"));
+									return child.executionService(definition);
+								},
+							}),
+						);
+					} catch (error) {
+						if (control.signal.aborted && error === control.signal.reason)
+							throw error;
+						throw new OperationFailure("INTERNAL");
+					}
+					control.throwIfExpired();
+					let raw: unknown;
+					try {
+						raw = await binding.execute({
+							input: decodedInput,
+							ctx: context,
+							effect: Object.freeze({ id: effectIdentity }),
+							errors: errorFactories(binding.declaredErrors),
+						});
+					} catch (error) {
+						if (error instanceof DeclaredOperationError) {
+							validateDeclaredError(binding, error);
+							throw error;
+						}
+						if (control.signal.aborted && error === control.signal.reason)
+							throw error;
+						throw new OperationFailure("INTERNAL");
+					}
+					const result = decodeOutput(binding.output, raw);
+					const encoded = encodedValue(
+						binding.output,
+						result,
+						"$action.output",
+						"INTERNAL",
+					);
+					enforceResultBytes(binding, encoded);
+					return result;
+				};
+
+				return await executionScope.child(
+					{
+						detachedTerminalCleanup: true,
+						signal: control.signal,
+						settledUseWinsAbort: true,
+					},
+					execute,
+				);
+			} finally {
+				control.close();
 			}
 		},
 	});

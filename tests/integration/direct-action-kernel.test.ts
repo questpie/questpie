@@ -12,6 +12,7 @@ import {
 	createRuntimeActionExecutor,
 	type RuntimeActionBinding,
 	type RuntimeActionProjectionScope,
+	RuntimeActionPostHandlerResourceLimit,
 } from "../../packages/runtime/src/action";
 import { createApplicationRuntime } from "../../packages/runtime/src/execution";
 import {
@@ -21,6 +22,13 @@ import {
 } from "../../packages/runtime/src/operation";
 
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
+const application = "application:collaboration" as const;
+const effectKey = "provider-request-2026-08-24-0001";
+const limits = Object.freeze({
+	inputBytes: 1_024,
+	resultBytes: 1_024,
+	durationMilliseconds: 5_000,
+});
 const inputCodec = {
 	kind: "object",
 	properties: { message: { kind: "text" } },
@@ -30,27 +38,7 @@ const outputCodec = {
 	properties: { receipt: { kind: "text" } },
 } as const;
 
-type EffectToken = Readonly<{ token: symbol }>;
-
-function effectOwner() {
-	const identities = new WeakMap<EffectToken, string>();
-	return Object.freeze({
-		issue(id: string): EffectToken {
-			const token = Object.freeze({ token: Symbol("opaque Action effect") });
-			identities.set(token, id);
-			return token;
-		},
-		read(token: EffectToken): string {
-			const identity = identities.get(token);
-			if (identity === undefined)
-				throw new TypeError("untrusted Effect Identity");
-			return identity;
-		},
-	});
-}
-
-test("runs one trusted opaque Effect Identity without deriving or retrying it", async () => {
-	const effects = effectOwner();
+test("derives one trusted Effect Identity without retrying", async () => {
 	const observed: string[] = [];
 	let calls = 0;
 	type ActionContext = Readonly<{
@@ -61,6 +49,7 @@ test("runs one trusted opaque Effect Identity without deriving or retrying it", 
 	const binding: RuntimeActionBinding<ActionContext> = {
 		identity: "action:delivery.send",
 		admission: "authenticated",
+		limits,
 		input: inputCodec,
 		output: outputCodec,
 		declaredErrors: [],
@@ -71,8 +60,8 @@ test("runs one trusted opaque Effect Identity without deriving or retrying it", 
 		},
 	};
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [binding],
-		readEffectIdentity: effects.read,
 		project: (facts): ActionContext => ({
 			principalId: facts.principal.id,
 			signal: facts.signal,
@@ -88,34 +77,162 @@ test("runs one trusted opaque Effect Identity without deriving or retrying it", 
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
-			invoke: (input: unknown, effect: EffectToken) =>
-				actions.invoke("action:delivery.send", { facts, input, effect }),
+		project: (scope) => ({
+			invoke: (input: unknown, stableKey: string) =>
+				actions.invoke("action:delivery.send", {
+					scope,
+					input,
+					effectKey: stableKey,
+				}),
 		}),
 	});
-	const trustedEffect = effects.issue("opaque-owned-identity");
-
 	const result = await runtime.execution(
 		{ principal: principal.user({ id: "user-1" }), context: { companyId } },
-		(scope) => scope.invoke({ message: "hello" }, trustedEffect),
+		(scope) => scope.invoke({ message: "hello" }, effectKey),
 	);
 
-	expect(result).toEqual({ receipt: "accepted:opaque-owned-identity" });
-	expect(observed).toEqual(["opaque-owned-identity"]);
-	expect(calls).toBe(1);
+	expect(result).toEqual({
+		receipt: "accepted:136ab1a4-7014-5ea7-ab8d-2fcd64f6a4a8",
+	});
+	expect(observed).toEqual(["136ab1a4-7014-5ea7-ab8d-2fcd64f6a4a8"]);
+	await runtime.execution(
+		{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+		(scope) => scope.invoke({ message: "changed input" }, effectKey),
+	);
+	expect(observed[1]).toBe(observed[0]);
+	await expect(
+		runtime.execution(
+			{
+				principal: principal.user({ id: `u${"x".repeat(300)}` }),
+				context: { companyId },
+			},
+			(scope) => scope.invoke({ message: "long trusted fact" }, effectKey),
+		),
+	).resolves.toMatchObject({ receipt: expect.stringMatching(/^accepted:/u) });
+	expect(calls).toBe(3);
 	await runtime.close();
 });
 
-test("rejects forged Principal, facts, Effect Identity, and Policy denial before work", async () => {
-	const effects = effectOwner();
+test("closed-validates ordinary Effect material and Action Resource identities", async () => {
+	let calls = 0;
+	const binding: RuntimeActionBinding<Readonly<{ signal: AbortSignal }>> = {
+		identity: "action:delivery.send",
+		admission: "authenticated",
+		limits,
+		input: inputCodec,
+		output: outputCodec,
+		declaredErrors: [],
+		execute: () => {
+			calls += 1;
+			return { receipt: "accepted" };
+		},
+	};
+	const actions = createRuntimeActionExecutor({
+		application,
+		bindings: [binding],
+		project: (scope) => Object.freeze({ signal: scope.facts.signal }),
+	});
+	const context = defineContext({
+		name: "action.effect-material",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: (
+				stableKey: string,
+				aliases: Readonly<Record<string, unknown>> = {},
+			) =>
+				actions.invoke("action:delivery.send", {
+					scope,
+					input: { message: "hello" },
+					effectKey: stableKey,
+					...aliases,
+				}),
+		}),
+	});
+	const execute = (
+		stableKey: string,
+		aliases?: Readonly<Record<string, unknown>>,
+	) =>
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke(stableKey, aliases),
+		);
+
+	await expect(execute("x".repeat(256))).resolves.toEqual({
+		receipt: "accepted",
+	});
+	await expect(execute("😀".repeat(256))).resolves.toEqual({
+		receipt: "accepted",
+	});
+	for (const candidate of [
+		"",
+		"x".repeat(257),
+		"😀".repeat(257),
+		"nul\0key",
+		"\ud800",
+		"\udc00",
+		"e\u0301",
+	])
+		await expect(execute(candidate)).rejects.toMatchObject({
+			code: "PROTOCOL_UNSUPPORTED",
+		});
+	for (const aliases of [
+		{ effectId: "forged" },
+		{ idempotencyKey: "forged" },
+		{ callId: "mutation-alias" },
+	])
+		await expect(execute(effectKey, aliases)).rejects.toMatchObject({
+			code: "PROTOCOL_UNSUPPORTED",
+		});
+	expect(calls).toBe(2);
+	await runtime.close();
+
+	const maxName = [
+		"a".repeat(63),
+		"b".repeat(63),
+		"c".repeat(63),
+		"d".repeat(63),
+	].join(".");
+	expect(() =>
+		createRuntimeActionExecutor({
+			application: `application:${maxName}`,
+			bindings: [{ ...binding, identity: "action:then.fire" }],
+			project: (scope) => Object.freeze({ signal: scope.facts.signal }),
+		}),
+	).not.toThrow();
+	for (const invalidIdentity of [
+		"action:then",
+		"action:x.then",
+		"action:Bad",
+		"action:double..dot",
+		`action:${"x".repeat(64)}`,
+		`action:${maxName}.e`,
+	])
+		expect(() =>
+			createRuntimeActionExecutor({
+				application,
+				bindings: [{ ...binding, identity: invalidIdentity } as never],
+				project: (scope) => Object.freeze({ signal: scope.facts.signal }),
+			}),
+		).toThrow("Runtime Action action identity is invalid");
+});
+
+test("rejects forged Principal, facts, Effect material, and Policy denial before work", async () => {
 	let calls = 0;
 	let forgedServiceCalls = 0;
 	let projectionCalls = 0;
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -125,7 +242,6 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => {
 			projectionCalls += 1;
 			return { signal: facts.signal };
@@ -147,9 +263,9 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 	});
 	await expect(
 		actions.invoke("action:delivery.send", {
-			facts: forgedFacts as never,
+			scope: Object.freeze({ facts: forgedFacts }) as never,
 			input: { message: "hello" },
-			effect: effects.issue("trusted-effect"),
+			effectKey,
 		}),
 	).rejects.toMatchObject({ code: "INTERNAL" });
 
@@ -163,11 +279,11 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 		context,
 		bootstrap: () => ({ get: async () => null }),
 		project: (executionScope) => ({
-			invoke: (effect: EffectToken) =>
+			invoke: (stableKey: string) =>
 				actions.invoke("action:delivery.send", {
-					facts: executionScope.facts,
+					scope: executionScope,
 					input: { message: "hello" },
-					effect,
+					effectKey: stableKey,
 				}),
 			invokeForgedScope: () =>
 				actions.invoke("action:delivery.send", {
@@ -179,22 +295,22 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 						},
 					}) as never,
 					input: { message: "hello" },
-					effect: effects.issue("trusted-effect"),
+					effectKey,
 				}),
 		}),
 	});
 	await expect(
 		runtime.execution(
 			{ principal: principal.anonymous(), context: { companyId } },
-			(scope) => scope.invoke(effects.issue("trusted-effect")),
+			(scope) => scope.invoke(effectKey),
 		),
 	).rejects.toBeInstanceOf(OperationAdmissionError);
 	await expect(
 		runtime.execution(
 			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
-			(scope) => scope.invoke(Object.freeze({ token: Symbol("forged") })),
+			(scope) => scope.invoke("not\u0000trusted"),
 		),
-	).rejects.toMatchObject({ code: "INTERNAL" });
+	).rejects.toMatchObject({ code: "PROTOCOL_UNSUPPORTED" });
 	await expect(
 		runtime.execution(
 			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
@@ -207,9 +323,7 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 	await runtime.close();
 });
 
-test("keeps known Action outcomes authoritative across a concurrent abort", async () => {
-	const effects = effectOwner();
-	const controller = new AbortController();
+test("keeps a validated declared Action outcome typed", async () => {
 	let settle!: (value: "ambiguous" | "result") => void;
 	const outcome = new Promise<"ambiguous" | "result">((resolve) => {
 		settle = resolve;
@@ -220,10 +334,12 @@ test("keeps known Action outcomes authoritative across a concurrent abort", asyn
 		markEntered = resolve;
 	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [
@@ -243,7 +359,6 @@ test("keeps known Action outcomes authoritative across a concurrent abort", asyn
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -255,12 +370,12 @@ test("keeps known Action outcomes authoritative across a concurrent abort", asyn
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (scope) => ({
 			invoke: () =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -268,13 +383,11 @@ test("keeps known Action outcomes authoritative across a concurrent abort", asyn
 		{
 			principal: principal.user({ id: "user-1" }),
 			context: { companyId },
-			signal: controller.signal,
 		},
 		(scope) => scope.invoke(),
 	);
 	await entered;
 	expect(calls).toBe(1);
-	controller.abort(new DOMException("caller left", "AbortError"));
 	settle("ambiguous");
 
 	await expect(pending).rejects.toEqual(
@@ -284,7 +397,6 @@ test("keeps known Action outcomes authoritative across a concurrent abort", asyn
 });
 
 test("propagates only owned cancellation without erasing known results", async () => {
-	const effects = effectOwner();
 	const owned = new DOMException("caller left", "AbortError");
 	const controller = new AbortController();
 	let mode: "cancel" | "result" | "unrelated" = "cancel";
@@ -293,10 +405,12 @@ test("propagates only owned cancellation without erasing known results", async (
 		entered = resolve;
 	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -317,7 +431,6 @@ test("propagates only owned cancellation without erasing known results", async (
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -329,12 +442,12 @@ test("propagates only owned cancellation without erasing known results", async (
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (scope) => ({
 			invoke: () =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -367,8 +480,7 @@ test("propagates only owned cancellation without erasing known results", async (
 	await runtime.close();
 });
 
-test("retains a validated Action result when its root aborts after handler start", async () => {
-	const effects = effectOwner();
+test("reports an abort that wins before a later Action result", async () => {
 	const controller = new AbortController();
 	let finishHandler!: () => void;
 	const handlerMayFinish = new Promise<void>((resolve) => {
@@ -379,10 +491,12 @@ test("retains a validated Action result when its root aborts after handler start
 		handlerEntered = resolve;
 	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -393,7 +507,6 @@ test("retains a validated Action result when its root aborts after handler start
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -405,12 +518,12 @@ test("retains a validated Action result when its root aborts after handler start
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (scope) => ({
 			invoke: () =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -432,25 +545,102 @@ test("retains a validated Action result when its root aborts after handler start
 	);
 	void root.catch(() => undefined);
 	await entered;
-	controller.abort(new DOMException("caller left", "AbortError"));
+	const reason = new DOMException("caller left", "AbortError");
+	controller.abort(reason);
+	await expect(actionOutcome).rejects.toBe(reason);
 	finishHandler();
-
-	await expect(actionOutcome).resolves.toEqual({
-		receipt: "known-after-abort",
-	});
 	finishRoot();
 	await expect(root).rejects.toMatchObject({ name: "AbortError" });
 	await runtime.close();
 });
 
-test("sanitizes malformed input, output, declared errors, and handler failures once", async () => {
-	const effects = effectOwner();
-	let calls = 0;
+test("keeps a validated result when owned cleanup observes a racing abort", async () => {
+	const controller = new AbortController();
+	const reason = new DOMException("deadline raced cleanup", "AbortError");
+	let disposals = 0;
+	const provider = defineService({
+		name: "action.settled-result-provider",
+		lifetime: "execution",
+		effect: "external",
+		create: () => Object.freeze({ ready: true }),
+		dispose: () => {
+			disposals += 1;
+			controller.abort(reason);
+		},
+	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
+				input: inputCodec,
+				output: outputCodec,
+				declaredErrors: [],
+				execute: () => ({ receipt: "known-before-cleanup" }),
+			},
+		],
+		project: async (scope) => {
+			await scope.service(provider);
+			return Object.freeze({ signal: scope.facts.signal });
+		},
+	});
+	const context = defineContext({
+		name: "action.settled-result-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	let actionOutcome!: Promise<unknown>;
+	let markActionStarted!: () => void;
+	const actionStarted = new Promise<void>((resolve) => {
+		markActionStarted = resolve;
+	});
+	const runtime = createApplicationRuntime({
+		services: [provider],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: () =>
+				actions.invoke("action:delivery.send", {
+					scope,
+					input: { message: "hello" },
+					effectKey,
+				}),
+		}),
+	});
+	const root = runtime.execution(
+		{
+			principal: principal.user({ id: "user-1" }),
+			context: { companyId },
+			signal: controller.signal,
+		},
+		(scope) => {
+			actionOutcome = scope.invoke();
+			markActionStarted();
+			return actionOutcome;
+		},
+	);
+	void root.catch(() => undefined);
+
+	await actionStarted;
+	await expect(actionOutcome).resolves.toEqual({
+		receipt: "known-before-cleanup",
+	});
+	await expect(root).rejects.toBe(reason);
+	expect(disposals).toBe(1);
+	await runtime.close();
+});
+
+test("sanitizes malformed input, output, declared errors, and handler failures once", async () => {
+	let calls = 0;
+	const actions = createRuntimeActionExecutor({
+		application,
+		bindings: [
+			{
+				identity: "action:delivery.send",
+				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [
@@ -476,7 +666,6 @@ test("sanitizes malformed input, output, declared errors, and handler failures o
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -488,12 +677,12 @@ test("sanitizes malformed input, output, declared errors, and handler failures o
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (scope) => ({
 			invoke: (input: unknown) =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope,
 					input,
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -519,12 +708,138 @@ test("sanitizes malformed input, output, declared errors, and handler failures o
 	await runtime.close();
 });
 
+test("enforces exact semantic input, result, and declared-error byte limits", async () => {
+	let calls = 0;
+	let outcome: "declared" | "result" = "result";
+	const binding: RuntimeActionBinding<Readonly<{ signal: AbortSignal }>> = {
+		identity: "action:delivery.bytes",
+		admission: "authenticated",
+		limits: {
+			inputBytes: 4,
+			resultBytes: 4,
+			durationMilliseconds: 5_000,
+		},
+		input: { kind: "text" },
+		output: { kind: "text" },
+		declaredErrors: [
+			{
+				key: "rejected",
+				code: "PROVIDER_REJECTED",
+				status: 422,
+				payload: { kind: "text" },
+			},
+		],
+		execute: ({ input, errors }) => {
+			calls += 1;
+			if (outcome === "declared") throw errors.rejected("xx");
+			return input;
+		},
+	};
+	const actions = createRuntimeActionExecutor({
+		application,
+		bindings: [binding],
+		project: (scope) => Object.freeze({ signal: scope.facts.signal }),
+	});
+	const context = defineContext({
+		name: "action.byte-limits",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			executionScope: scope,
+			invoke: (input: string) =>
+				actions.invoke("action:delivery.bytes", { scope, input, effectKey }),
+		}),
+	});
+
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke("x"),
+		),
+	).resolves.toBe("x");
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke("xx"),
+		),
+	).rejects.toEqual(new OperationFailure("RESOURCE_LIMIT"));
+	expect(calls).toBe(1);
+
+	const oversizedOutput = {
+		...binding,
+		execute: () => "xx",
+	} satisfies RuntimeActionBinding<Readonly<{ signal: AbortSignal }>>;
+	const oversizedOutputActions = createRuntimeActionExecutor({
+		application,
+		bindings: [oversizedOutput],
+		project: (scope) => Object.freeze({ signal: scope.facts.signal }),
+	});
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) =>
+				oversizedOutputActions.invoke("action:delivery.bytes", {
+					scope: scope.executionScope,
+					input: "x",
+					effectKey,
+				}),
+		),
+	).rejects.toBeInstanceOf(RuntimeActionPostHandlerResourceLimit);
+
+	outcome = "declared";
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke("x"),
+		),
+	).rejects.toBeInstanceOf(RuntimeActionPostHandlerResourceLimit);
+	await runtime.close();
+});
+
+test("rejects every incomplete or unsafe Action limit map", () => {
+	const base = {
+		identity: "action:delivery.limits",
+		admission: "authenticated",
+		input: { kind: "text" },
+		output: { kind: "text" },
+		declaredErrors: [],
+		execute: () => "ok",
+	} as const;
+	for (const candidate of [
+		undefined,
+		{},
+		{ inputBytes: 1, resultBytes: 1 },
+		{ inputBytes: 0, resultBytes: 1, durationMilliseconds: 1 },
+		{ inputBytes: 1, resultBytes: 0, durationMilliseconds: 1 },
+		{ inputBytes: 1, resultBytes: 1, durationMilliseconds: -1 },
+		{ inputBytes: 1, resultBytes: 1, durationMilliseconds: 1.5 },
+		{
+			inputBytes: 1,
+			resultBytes: 1,
+			durationMilliseconds: Number.MAX_SAFE_INTEGER + 1,
+		},
+		{ inputBytes: 1, resultBytes: 1, durationMilliseconds: 1, extra: 1 },
+	])
+		expect(() =>
+			createRuntimeActionExecutor({
+				application,
+				bindings: [{ ...base, limits: candidate } as never],
+				project: () => Object.freeze({ signal: new AbortController().signal }),
+			}),
+		).toThrow("Runtime Action binding inventory is invalid");
+});
+
 test("cancel-before-handler and duplicate inventories fail without work", async () => {
-	const effects = effectOwner();
 	let calls = 0;
 	const binding: RuntimeActionBinding<Readonly<{ signal: AbortSignal }>> = {
 		identity: "action:delivery.send",
 		admission: "authenticated",
+		limits,
 		input: inputCodec,
 		output: outputCodec,
 		declaredErrors: [],
@@ -535,15 +850,15 @@ test("cancel-before-handler and duplicate inventories fail without work", async 
 	};
 	expect(() =>
 		createRuntimeActionExecutor({
+			application,
 			bindings: [binding, binding],
-			readEffectIdentity: effects.read,
 			project: (facts) => ({ signal: facts.signal }),
 		}),
 	).toThrow("Runtime Action binding inventory is invalid");
 
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [binding],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -557,12 +872,12 @@ test("cancel-before-handler and duplicate inventories fail without work", async 
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (scope) => ({
 			invoke: () =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -581,13 +896,14 @@ test("cancel-before-handler and duplicate inventories fail without work", async 
 });
 
 test("expires Runtime-owned Action scope with its execution lifetime", async () => {
-	const effects = effectOwner();
 	let calls = 0;
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -597,7 +913,6 @@ test("expires Runtime-owned Action scope with its execution lifetime", async () 
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: (facts) => ({ signal: facts.signal }),
 	});
 	const context = defineContext({
@@ -614,7 +929,7 @@ test("expires Runtime-owned Action scope with its execution lifetime", async () 
 				actions.invoke("action:delivery.send", {
 					scope: executionScope,
 					input: { message: "late" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
@@ -631,8 +946,7 @@ test("expires Runtime-owned Action scope with its execution lifetime", async () 
 	await runtime.close();
 });
 
-test("projects one external execution Service and cleans it after Action outcomes", async () => {
-	const effects = effectOwner();
+test("isolates concurrent Action Services and cleans them after every outcome", async () => {
 	let creations = 0;
 	let disposals = 0;
 	let sends = 0;
@@ -662,10 +976,12 @@ test("projects one external execution Service and cleans it after Action outcome
 		signal: AbortSignal;
 	}>;
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [
@@ -693,7 +1009,6 @@ test("projects one external execution Service and cleans it after Action outcome
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: async (
 			scope: RuntimeActionProjectionScope,
 		): Promise<ActionContext> =>
@@ -716,7 +1031,7 @@ test("projects one external execution Service and cleans it after Action outcome
 				actions.invoke("action:delivery.send", {
 					scope,
 					input: { message },
-					effect: effects.issue(`opaque:${message}`),
+					effectKey: `provider:${message}`,
 				}),
 		}),
 	});
@@ -731,8 +1046,8 @@ test("projects one external execution Service and cleans it after Action outcome
 		{ receipt: "provider:two" },
 	]);
 	expect({ creations, disposals, sends }).toEqual({
-		creations: 1,
-		disposals: 1,
+		creations: 2,
+		disposals: 2,
 		sends: 2,
 	});
 	await expect(
@@ -742,8 +1057,8 @@ test("projects one external execution Service and cleans it after Action outcome
 		),
 	).rejects.toEqual(new DeclaredOperationError("PROVIDER_REJECTED", 422));
 	expect({ creations, disposals, sends }).toEqual({
-		creations: 2,
-		disposals: 2,
+		creations: 3,
+		disposals: 3,
 		sends: 2,
 	});
 
@@ -760,15 +1075,14 @@ test("projects one external execution Service and cleans it after Action outcome
 	controller.abort(new DOMException("caller left", "AbortError"));
 	await expect(cancellation).rejects.toMatchObject({ name: "AbortError" });
 	expect({ creations, disposals, sends }).toEqual({
-		creations: 3,
-		disposals: 3,
+		creations: 4,
+		disposals: 4,
 		sends: 2,
 	});
 	await runtime.close();
 });
 
 test("preserves owned cancellation while an external Service is projecting", async () => {
-	const effects = effectOwner();
 	const lifecycle: string[] = [];
 	let handlerCalls = 0;
 	let markCreateEntered!: () => void;
@@ -804,10 +1118,12 @@ test("preserves owned cancellation while an external Service is projecting", asy
 		},
 	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits,
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -817,7 +1133,6 @@ test("preserves owned cancellation while an external Service is projecting", asy
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: async (scope) =>
 			Object.freeze({
 				provider: await scope.service(delivery),
@@ -838,7 +1153,7 @@ test("preserves owned cancellation while an external Service is projecting", asy
 				actionInvocation = actions.invoke("action:delivery.send", {
 					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				});
 				return actionInvocation;
 			},
@@ -870,24 +1185,76 @@ test("preserves owned cancellation while an external Service is projecting", asy
 	await expect(runtime.close()).resolves.toBeUndefined();
 });
 
-test("rejects transaction-safe Service projection before creation or handler work", async () => {
-	const effects = effectOwner();
-	let creations = 0;
+test("rejects non-external or application Service projection before owned work", async () => {
+	let applicationCreations = 0;
+	let applicationDisposals = 0;
+	let executionCreations = 0;
+	let mode:
+		| "application-create"
+		| "application-dispose"
+		| "read"
+		| "transitive-create"
+		| "transitive-dispose" = "read";
+	let readCreations = 0;
 	let handlerCalls = 0;
 	const transactionSafe = defineService({
 		name: "action.transaction-safe",
 		lifetime: "execution",
 		effect: "read",
 		create: () => {
-			creations += 1;
+			readCreations += 1;
 			return Object.freeze({ read: () => "must-not-project" });
 		},
 	});
+	const applicationCreate = defineService({
+		name: "action.application-create",
+		lifetime: "application",
+		effect: "external",
+		create: () => {
+			applicationCreations += 1;
+			return new Promise<never>(() => undefined);
+		},
+	});
+	const applicationDispose = defineService({
+		name: "action.application-dispose",
+		lifetime: "application",
+		effect: "read",
+		create: () => {
+			applicationCreations += 1;
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			applicationDisposals += 1;
+			return new Promise<never>(() => undefined);
+		},
+	});
+	const transitiveCreate = defineService({
+		name: "action.transitive-create",
+		lifetime: "execution",
+		effect: "external",
+		dependencies: { applicationCreate },
+		create: () => {
+			executionCreations += 1;
+			return Object.freeze({ ready: true });
+		},
+	});
+	const transitiveDispose = defineService({
+		name: "action.transitive-dispose",
+		lifetime: "execution",
+		effect: "external",
+		dependencies: { applicationDispose },
+		create: () => {
+			executionCreations += 1;
+			return Object.freeze({ ready: true });
+		},
+	});
 	const actions = createRuntimeActionExecutor({
+		application,
 		bindings: [
 			{
 				identity: "action:delivery.send",
 				admission: "authenticated",
+				limits: { ...limits, durationMilliseconds: 5 },
 				input: inputCodec,
 				output: outputCodec,
 				declaredErrors: [],
@@ -897,9 +1264,18 @@ test("rejects transaction-safe Service projection before creation or handler wor
 				},
 			},
 		],
-		readEffectIdentity: effects.read,
 		project: async (scope) => {
-			await scope.service(transactionSafe as never);
+			const candidate =
+				mode === "read"
+					? transactionSafe
+					: mode === "application-create"
+						? applicationCreate
+						: mode === "application-dispose"
+							? applicationDispose
+							: mode === "transitive-create"
+								? transitiveCreate
+								: transitiveDispose;
+			await scope.service(candidate as never);
 			return Object.freeze({ signal: scope.facts.signal });
 		},
 	});
@@ -909,7 +1285,13 @@ test("rejects transaction-safe Service projection before creation or handler wor
 		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
 	});
 	const runtime = createApplicationRuntime({
-		services: [transactionSafe],
+		services: [
+			transactionSafe,
+			applicationCreate,
+			applicationDispose,
+			transitiveCreate,
+			transitiveDispose,
+		],
 		context,
 		bootstrap: () => ({ get: async () => null }),
 		project: (scope) => ({
@@ -917,20 +1299,51 @@ test("rejects transaction-safe Service projection before creation or handler wor
 				actions.invoke("action:delivery.send", {
 					scope,
 					input: { message: "hello" },
-					effect: effects.issue("opaque-owned-identity"),
+					effectKey,
 				}),
 		}),
 	});
 
-	await expect(
-		runtime.execution(
-			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
-			(scope) => scope.invoke(),
-		),
-	).rejects.toMatchObject({ code: "INTERNAL" });
-	expect({ creations, handlerCalls }).toEqual({
-		creations: 0,
+	for (const selected of [
+		"read",
+		"application-create",
+		"application-dispose",
+		"transitive-create",
+		"transitive-dispose",
+	] as const) {
+		mode = selected;
+		await expect(
+			runtime.execution(
+				{
+					principal: principal.user({ id: "user-1" }),
+					context: { companyId },
+				},
+				(scope) => scope.invoke(),
+			),
+		).rejects.toMatchObject({ code: "INTERNAL" });
+	}
+	expect({
+		applicationCreations,
+		applicationDisposals,
+		executionCreations,
+		handlerCalls,
+		readCreations,
+	}).toEqual({
+		applicationCreations: 0,
+		applicationDisposals: 0,
+		executionCreations: 0,
 		handlerCalls: 0,
+		readCreations: 0,
 	});
-	await runtime.close();
+	await expect(
+		Promise.race([
+			runtime.close(),
+			new Promise<never>((_resolve, reject) =>
+				setTimeout(
+					() => reject(new Error("rejected graph retained close")),
+					100,
+				),
+			),
+		]),
+	).resolves.toBeUndefined();
 });

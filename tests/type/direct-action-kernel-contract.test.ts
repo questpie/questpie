@@ -2,8 +2,10 @@ import type { Principal, ServiceDefinition } from "questpie";
 
 import type {
 	RuntimeActionBinding,
+	RuntimeActionExecutor,
 	RuntimeActionProjectionScope,
 } from "../../packages/runtime/src/action";
+import type { RuntimeExecutionScope } from "../../packages/runtime/src/execution";
 
 type ActionContext = Readonly<{
 	principal: Principal;
@@ -14,6 +16,11 @@ type ActionContext = Readonly<{
 const binding = {
 	identity: "action:delivery.send",
 	admission: "authenticated",
+	limits: {
+		inputBytes: 1_024,
+		resultBytes: 1_024,
+		durationMilliseconds: 5_000,
+	},
 	input: { kind: "text" },
 	output: { kind: "text" },
 	declaredErrors: [],
@@ -49,9 +56,44 @@ function assertActionServiceProjection(
 		Readonly<Record<never, never>>,
 		Readonly<{ read(): string }>
 	>,
+	applicationExternalService: ServiceDefinition<
+		"application-external",
+		"application",
+		"external",
+		Readonly<Record<never, never>>,
+		Readonly<{ send(): void }>
+	>,
 ): void {
 	// @ts-expect-error Action projection admits only external-effect Services.
 	void projection.service(readService);
+	// @ts-expect-error Action terminal projection admits only execution Services.
+	void projection.service(applicationExternalService);
 }
 
 void assertActionServiceProjection;
+
+declare const executor: RuntimeActionExecutor;
+declare const scope: RuntimeExecutionScope<
+	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+>;
+void executor.invoke("action:delivery.send", {
+	scope,
+	input: "hello",
+	effectKey: "provider-request",
+});
+// @ts-expect-error Ordinary Action requires caller-stable effectKey material.
+void executor.invoke("action:delivery.send", { scope, input: "hello" });
+void executor.invoke("action:delivery.send", {
+	scope,
+	input: "hello",
+	effectKey: "provider-request",
+	// @ts-expect-error Caller cannot supply the final Effect Identity alias.
+	effectId: "forged",
+});
+void executor.invoke("action:delivery.send", {
+	scope,
+	input: "hello",
+	effectKey: "provider-request",
+	// @ts-expect-error Mutation callId is not Effect Identity material here.
+	callId: "mutation-alias",
+});

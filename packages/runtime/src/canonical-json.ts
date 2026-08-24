@@ -69,3 +69,12 @@ export function canonicalJsonLine(value: unknown): Uint8Array {
 export function sha256Digest(bytes: Uint8Array | string): string {
 	return createHash("sha256").update(bytes).digest("hex");
 }
+
+/** Materializes the Runtime's accepted UUID-shaped identity from a SHA-256 digest. */
+export function uuidFromSha256Digest(digest: string): string {
+	if (!/^[0-9a-f]{64}$/u.test(digest))
+		throw new TypeError(
+			"SHA-256 identity digest must be lowercase hexadecimal",
+		);
+	return `${digest.slice(0, 8)}-${digest.slice(8, 12)}-5${digest.slice(13, 16)}-a${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+}
