@@ -24,6 +24,13 @@ export const pb05RepresentativeOperations = Object.freeze({
 type Population = keyof typeof pb05RepresentativeOperations;
 type ContentionOwner = "maintenance" | "reconciliation" | "retention";
 
+const pb05ContentionLockStatements: Readonly<Record<ContentionOwner, string>> =
+	Object.freeze({
+		maintenance: "durable.maintenance.run.read-locked",
+		reconciliation: "live-query.reconciliation-horizon-read",
+		retention: "live-query.retention-authority-lock",
+	});
+
 type StatementObservation = Readonly<{
 	population: string;
 	operation: string;
@@ -330,6 +337,88 @@ export async function observePb05AcceptedCallback<Result>(
 		finishedAtMs,
 	});
 	return result;
+}
+
+export function instrumentPb05OwnerContentionRunner(
+	input: Readonly<{
+		database: PostgresTransactionRunner;
+		measurement: ReturnType<typeof createPb05OperationalMeasurement>;
+		owner: string;
+		lockIdentity: string;
+		now?: () => number;
+	}>,
+): PostgresTransactionRunner {
+	if (!contentionOwner(input.owner) || input.lockIdentity.length === 0)
+		throw new TypeError("invalid PB-05 owner contention config");
+	const owner = input.owner;
+	const lockStatement = pb05ContentionLockStatements[owner];
+	const now = input.now ?? performance.now.bind(performance);
+	const observationTime = (): number => {
+		const value = now();
+		if (!finiteTime(value))
+			throw new TypeError("invalid PB-05 instrumentation clock");
+		return value;
+	};
+	return Object.freeze({
+		async transaction(request) {
+			const startedAtMs = observationTime();
+			let acquiredAtMs: number | undefined;
+			let result: Awaited<ReturnType<typeof request.use>>;
+			try {
+				result = await input.database.transaction({
+					...request,
+					use: (owned) =>
+						request.use(
+							Object.freeze({
+								[transactionBrand]: true as const,
+								async execute<Input, Output>(
+									statement: PostgresStatement<Input, Output>,
+									value: Input,
+								): Promise<Output> {
+									const output = await owned.execute(statement, value);
+									if (statement.name === lockStatement) {
+										if (acquiredAtMs !== undefined)
+											throw new TypeError(
+												"PB-05 owner acquired its contention lock more than once",
+											);
+										acquiredAtMs = observationTime();
+									}
+									return output;
+								},
+							}),
+						),
+				});
+			} catch (primary) {
+				try {
+					const finishedAtMs = observationTime();
+					input.measurement.contention({
+						owner,
+						lockIdentity: input.lockIdentity,
+						startedAtMs,
+						acquiredAtMs: acquiredAtMs ?? finishedAtMs,
+						finishedAtMs,
+						outcome: acquiredAtMs === undefined ? "refused" : "acquired",
+					});
+				} catch {
+					// Observation cannot replace the owner-path failure it measures.
+				}
+				throw primary;
+			}
+			if (acquiredAtMs === undefined)
+				throw new TypeError(
+					`PB-05 ${owner} owner did not execute ${lockStatement}`,
+				);
+			input.measurement.contention({
+				owner,
+				lockIdentity: input.lockIdentity,
+				startedAtMs,
+				acquiredAtMs,
+				finishedAtMs: observationTime(),
+				outcome: "acquired",
+			});
+			return result;
+		},
+	});
 }
 
 export function instrumentPb05TransactionRunner(
