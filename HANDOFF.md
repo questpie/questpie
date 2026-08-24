@@ -136,9 +136,12 @@ Recommended Route/Auth sequence:
 2. **Completed at `69ad1b7f`:** extract the existing Service owner so
    application Services can safely serve pre-Context ingress and retain
    streamed-response lifetimes through EOF, error, and cancellation.
-3. Prove Runtime credential outcomes and Route execution with handcrafted
-   closed bindings: resolved, anonymous, unavailable, direct bypass, Fetch
-   parity, and response-body disposal.
+3. **Completed at `e5a0618a`:** prove Runtime credential outcomes and Route
+   execution with handcrafted closed bindings: resolved, resolver and
+   zero-resolver anonymous, typed unavailable without downgrade, direct trusted
+   Principal bypass, Fetch/direct handler parity, explicit Context transition,
+   admission before work, cancellation, and response-body disposal through
+   EOF, error, and consumer cancellation.
 4. Compile and mount one application credential resolver and Route, then delete
    the fixture shortcut and all tracer use of the internal Principal binder.
 5. Refresh derived generated/release artifacts only after the tracer passes.
@@ -200,18 +203,30 @@ through Response EOF, stream error, and consumer cancellation. Focused runtime
 integration, Runtime typecheck, architecture, full quality, release quality,
 and `git diff --check` passed at that head.
 
+Route/Auth commit 3 is complete at `e5a0618a`. Seven focused Runtime Route/Auth
+tests pass with 46 assertions. Architecture, lint, all workspace typechecks,
+and `git diff --check` pass. Parallel read-only `claude -p` Standards and Spec
+adversarial re-reviews both returned PASS after hostile closure for forged
+Principals, credential and handler cancellation, typed failure preservation,
+resolver-bug sanitization, and admission-before-work behavior.
+
+The complete test lane otherwise passes but intentionally reports the three
+derived-artifact drifts owned by Route/Auth step 5: the checked release checksum
+and two generated application bundle filenames. Do not refresh or claim the
+full/release gate green until the compiler/generated Route tracer in step 4
+passes.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Start Route/Auth commit 3 test-first: prove Runtime credential outcomes and
-   Route execution through handcrafted closed bindings—resolved, anonymous,
-   typed unavailable without anonymous downgrade, direct Principal bypass,
-   Fetch parity, and response-body disposal through EOF, error, and
-   cancellation.
+2. Route/Auth commit 4 is the next implementation boundary: compile and mount
+   one application credential resolver and Route through the completed Runtime
+   kernel, then replace the fixture-owned Principal shortcut only after the
+   tracer passes.
 3. Keep Route Product review separate from any new public Kernel/wire decision.
-4. Do not start the compiler/generated Route slice and do not remove the
-   fixture-owned `/api/whoami` shortcut in this boundary.
+4. Until commit 4 begins, retain the fixture-owned `/api/whoami` shortcut and
+   do not refresh generated or release artifacts.
 5. Serialize generated builds and PostgreSQL schema-reset tests.
 6. Commit only coherent green boundaries; do not push, tag, publish, or contact
    external systems without explicit authority.
