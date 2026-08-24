@@ -14,6 +14,7 @@ export {
 } from "./relational";
 export {
 	createPostgresMutationInvoker,
+	createPostgresDatabaseMutationInvoker,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
 	linkReactionProjection,
@@ -24,5 +25,8 @@ export {
 	createPostgresDurableEffectLedger,
 	createPostgresDurableKernel,
 	createPostgresDurableMaintenance,
+	createPostgresDatabaseDurableEffectLedger,
+	createPostgresDatabaseDurableKernel,
+	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
 } from "./durable";

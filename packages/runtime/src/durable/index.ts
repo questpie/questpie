@@ -13,12 +13,14 @@ export type {
 	DurableRunHandle,
 } from "./effects";
 export { createPostgresDurableEffectLedger } from "./postgres-effects";
+export { createPostgresDatabaseDurableEffectLedger } from "./postgres-database-effect-ledger";
 export type {
 	DurableEffectLedger,
 	DurableEffectStatus,
 	DurableEffectView,
 } from "./postgres-effects";
 export { createPostgresDurableKernel } from "./postgres-kernel";
+export { createPostgresDatabaseDurableKernel } from "./postgres-database-kernel";
 export type {
 	DurableAdmission,
 	DurableClaim,
@@ -32,6 +34,7 @@ export type {
 	DurableTransition,
 } from "./rows";
 export { createPostgresDurableMaintenance } from "./postgres-maintenance";
+export { createPostgresDatabaseDurablePrincipalMaintenance } from "./postgres-database-principal-maintenance";
 export type {
 	DurableMaintenance,
 	DurableMaintenanceAuthority,
