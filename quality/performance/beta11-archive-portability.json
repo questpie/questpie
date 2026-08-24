@@ -7,12 +7,12 @@
 	"metrics": {
 		"compileMs": {
 			"direction": "max",
-			"budget": 5000,
+			"budget": 4000,
 			"unit": "ms"
 		},
 		"generatedBytes": {
 			"direction": "max",
-			"budget": 1048576,
+			"budget": 2097152,
 			"unit": "bytes"
 		},
 		"typescriptInstantiations": {

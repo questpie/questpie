@@ -5,6 +5,8 @@ import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
+import scenario from "../../quality/performance/beta11-archive-portability.json";
+
 test("BETA-11 archive portability stays inside its stable-runner budgets", async () => {
 	const baseline = (await Bun.file(
 		resolve(
@@ -27,6 +29,13 @@ test("BETA-11 archive portability stays inside its stable-runner budgets", async
 		}>;
 	}>;
 	const compileDerivation = baseline.budgetDerivation.compileMs;
+	expect(scenario.metrics.compileMs.budget).toBe(baseline.budgets.compileMs);
+	expect(scenario.metrics.generatedBytes.budget).toBe(
+		baseline.budgets.generatedBytes,
+	);
+	expect(scenario.metrics.typescriptInstantiations.budget).toBe(
+		baseline.budgets.typescriptInstantiations,
+	);
 	expect(
 		Math.ceil(
 			(compileDerivation.referenceObservedMs * compileDerivation.multiplier) /
