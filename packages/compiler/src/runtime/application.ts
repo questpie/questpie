@@ -83,7 +83,10 @@ function applicationEntry(
 		return `definition${index}`;
 	};
 	const executable = (kind: string): boolean =>
-		kind === "query" || kind === "mutation" || kind === "reaction";
+		kind === "query" ||
+		kind === "mutation" ||
+		kind === "reaction" ||
+		kind === "route";
 	const bindingEntries = input.slots.map((slot) => {
 		const definition = definitionName(slot);
 		const handler = executable(slot.kind);
@@ -127,6 +130,47 @@ function applicationEntry(
 				);
 			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
 		})
+		.join(",\n");
+	const credentialResolver = input.resources.find(
+		(resource) => resource.kind === "credentialResolver",
+	);
+	const credentialResolverDefinition = credentialResolver
+		? definitionName(
+				input.slots.find(
+					(slot) =>
+						slot.identity === credentialResolver.identity &&
+						slot.slot === "resolve",
+				) ??
+					(() => {
+						throw new TypeError(
+							`Runtime Application lacks credential resolver slot ${credentialResolver.identity}`,
+						);
+					})(),
+			)
+		: null;
+	const routes = input.resources
+		.filter((resource) => resource.kind === "route")
+		.sort((left, right) => compareAscii(left.name, right.name));
+	const routeBindings = routes
+		.map((resource) => {
+			const slot = input.slots.find(
+				(candidate) =>
+					candidate.identity === resource.identity &&
+					candidate.slot === "handler",
+			);
+			if (!slot)
+				throw new TypeError(
+					`Runtime Application lacks Route slot ${resource.identity}`,
+				);
+			const definition = definitionName(slot);
+			return `Object.freeze({ identity: ${JSON.stringify(resource.identity)}, method: ${JSON.stringify(resource.contract.method)}, path: ${JSON.stringify(resource.contract.path)}, credentials: ${JSON.stringify(resource.contract.credentials)}, admission: ${JSON.stringify(resource.contract.admission)}, execute: ${definition}.handler })`;
+		})
+		.join(",\n");
+	const directRouteEntries = routes
+		.map(
+			(resource) =>
+				`${JSON.stringify(resource.name)}: Object.freeze({ direct: (routeInput) => routeExecutor.direct(${JSON.stringify(resource.identity)}, routeInput) })`,
+		)
 		.join(",\n");
 	const queries = input.resources
 		.filter((resource) => resource.kind === "query")
@@ -197,7 +241,8 @@ function applicationEntry(
 		reactions: [],
 	});
 	return `import { SQL } from "bun";
-import { bindIngressPrincipal, readIngressPrincipal } from "questpie:runtime-ingress";
+import { principal } from "questpie";
+import { bindIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
 ${imports.join("\n")}
 ${structuralImports.join("\n")}
@@ -293,11 +338,13 @@ export async function createApplication(input) {
 		createPostgresDurableMaintenance,
 		createPostgresMutationInvoker,
 		createRuntimeApplication,
+		createRuntimeRouteExecutor,
 		durablePrincipal,
 		executePostgresQuery,
 		linkPostgresContextBootstrapPlans,
 		linkPostgresMutationTransactionStatements,
 		linkPostgresQueryPlans,
+		OperationFailure,
 	} = runtimeModule;
 	const loaded = await loadRuntimeArtifacts();
 	if (loaded.artifacts.runtimeBuild.postgresContextBootstrapPlansDigest !== expectedContextBootstrapPlansDigest)
@@ -317,6 +364,19 @@ export async function createApplication(input) {
 	let liveQueryCoordinator;
 	let mutationArtifacts;
 	let runtime;
+	let routeExecutor;
+	const resolveApplicationPrincipal = async (request) => {
+		${
+			credentialResolverDefinition
+				? `const service = await runtime.applicationService(${credentialResolverDefinition}.service);
+		const outcome = await ${credentialResolverDefinition}.resolve({ request, service });
+		if (outcome.kind === "unavailable")
+			throw new OperationFailure("CREDENTIALS_UNAVAILABLE", true);
+		if (outcome.kind === "anonymous") return principal.anonymous();
+		return outcome.principal;`
+				: "return principal.anonymous();"
+		}
+	};
 	try {
 		liveQueryCoordinator = ${
 			input.realtime
@@ -344,7 +404,7 @@ export async function createApplication(input) {
 			services: [${serviceDefinitions.join(", ")}],
 			context: ${contextDefinition},
 			bootstrap: bootstrapFactory,
-			resolvePrincipal: readIngressPrincipal,
+			resolvePrincipal: resolveApplicationPrincipal,
 			liveQueryCoordinator,
 			${input.realtime ? "createRealtime: realtimeModule.createRuntimeRealtime," : ""}
 			verifyReadiness: (artifacts) => {
@@ -421,6 +481,21 @@ export async function createApplication(input) {
 				deadline: facts.deadline,
 			}),
 		},
+		});
+		routeExecutor = createRuntimeRouteExecutor({
+			runtime,
+			bindings: [${routeBindings}],
+			${credentialResolverDefinition ? `credentials: { service: ${credentialResolverDefinition}.service, resolve: ${credentialResolverDefinition}.resolve },` : ""}
+			project: async ({ principal, service, signal, execution }) => Object.freeze({
+				principal,
+				services: Object.freeze({${applicationServiceEntries}}),
+				signal,
+				execution: (root, use) => execution(root, ({ execution: facts, ...operations }) => use(Object.freeze({
+					...facts,
+					queries: Object.freeze({${directQueries}}),
+					mutations: Object.freeze({${directMutations}}),
+				}))),
+			}),
 		});
 	} catch (error) {
 		postgresController.abort(new DOMException("Runtime startup failed", "AbortError"));
@@ -513,13 +588,14 @@ export async function createApplication(input) {
 	});
 	let closePromise;
 	return Object.freeze({
-		fetch: runtime.fetch,
+		fetch: async (request) => (await routeExecutor.fetch(request)) ?? runtime.fetch(request),
 		execution: (root, use) => runtime.execution(root, ({ execution, ...operations }) => use(Object.freeze({
 			...execution,
 			queries: Object.freeze({${directQueries}}),
 			mutations: Object.freeze({${directMutations}}),
 		}))),
 		durable,
+		routes: Object.freeze({${directRouteEntries}}),
 		close: () => {
 			if (!closePromise) {
 				const deadlineAt = Date.now() + 30_000;

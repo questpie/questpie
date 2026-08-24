@@ -102,7 +102,10 @@ export function createRuntimeRouteExecutor<
 	CredentialService extends AnyCredentialService = AnyCredentialService,
 >(
 	input: Readonly<{
-		runtime: ApplicationRuntime<Input, ExecutionView>;
+		runtime: Pick<
+			ApplicationRuntime<Input, ExecutionView>,
+			"applicationService" | "route"
+		>;
 		bindings: readonly RuntimeRouteBinding<RouteView>[];
 		credentials?: RuntimeCredentialBinding<CredentialService>;
 		project(
@@ -119,6 +122,12 @@ export function createRuntimeRouteExecutor<
 	const byMount = new Map(
 		bindings.map((binding) => [`${binding.method} ${binding.path}`, binding]),
 	);
+	const allowedMethodsByPath = new Map<string, Set<string>>();
+	for (const binding of bindings) {
+		const methods = allowedMethodsByPath.get(binding.path) ?? new Set<string>();
+		methods.add(binding.method);
+		allowedMethodsByPath.set(binding.path, methods);
+	}
 	if (byIdentity.size !== bindings.length)
 		throw new TypeError("Runtime Route binding identity is duplicate");
 	if (byMount.size !== bindings.length)
@@ -185,7 +194,17 @@ export function createRuntimeRouteExecutor<
 		fetch: async (request: Request): Promise<Response | null> => {
 			const pathname = new URL(request.url).pathname;
 			const binding = byMount.get(`${request.method} ${pathname}`);
-			if (!binding) return null;
+			if (!binding) {
+				const allowed = allowedMethodsByPath.get(pathname);
+				if (!allowed) return null;
+				return new Response(null, {
+					status: 405,
+					headers: {
+						allow: [...allowed].sort().join(", "),
+						"cache-control": "no-store",
+					},
+				});
+			}
 			const caller = await resolveFetchPrincipal(binding, request);
 			if (caller instanceof Response) return caller;
 			try {

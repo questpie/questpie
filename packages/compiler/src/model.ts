@@ -448,7 +448,12 @@ export function normalizeResources(
 				},
 				value: item.value,
 			});
-		} else if (kind === "service" || kind === "context") {
+		} else if (
+			kind === "service" ||
+			kind === "context" ||
+			kind === "credentialResolver" ||
+			kind === "route"
+		) {
 			resources.push({
 				identity,
 				kind,

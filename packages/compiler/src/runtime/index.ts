@@ -143,9 +143,15 @@ export function projectRuntimeContract(
 	);
 	const slots = input.resources
 		.filter((resource) =>
-			["context", "mutation", "query", "reaction", "service"].includes(
-				resource.kind,
-			),
+			[
+				"context",
+				"credentialResolver",
+				"mutation",
+				"query",
+				"reaction",
+				"route",
+				"service",
+			].includes(resource.kind),
 		)
 		.flatMap((resource) => {
 			const origin = {
@@ -163,7 +169,9 @@ export function projectRuntimeContract(
 				resource.contract,
 			);
 			const executableSlots =
-				resource.kind === "query" || resource.kind === "mutation"
+				resource.kind === "query" ||
+				resource.kind === "mutation" ||
+				resource.kind === "route"
 					? ["handler"]
 					: (resource.contract.executableSlots as readonly string[]);
 			return executableSlots.map((slot) => {

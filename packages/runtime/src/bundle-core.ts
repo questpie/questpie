@@ -1,5 +1,10 @@
 export { createRuntimeApplication } from "./application";
-export { bindIngressPrincipal, readIngressPrincipal } from "./operation";
+export { createRuntimeRouteExecutor } from "./execution";
+export {
+	bindIngressPrincipal,
+	OperationFailure,
+	readIngressPrincipal,
+} from "./operation";
 export {
 	createPostgresContextBootstrap,
 	executeLinkedPostgresContextBootstrap,

@@ -1,4 +1,8 @@
-import type { ContextDefinition, ServiceDefinition } from "questpie";
+import type {
+	ContextDefinition,
+	CredentialResolverDefinition,
+	ServiceDefinition,
+} from "questpie";
 
 import type { RuntimeExecutableBinding } from "../operation";
 import type { RuntimeArtifactsV1 } from "./artifacts";
@@ -19,6 +23,26 @@ export type RuntimeReactionBinding = Readonly<{
 export type RuntimeExecutableInventoryBinding<View> =
 	| RuntimeExecutableBinding<View>
 	| RuntimeReactionBinding
+	| Readonly<{
+			identity: string;
+			kind: "credentialResolver";
+			slot: "resolve";
+			runtimeGraphDigest: string;
+			bundleExport: string;
+			definition: CredentialResolverDefinition;
+	  }>
+	| Readonly<{
+			identity: string;
+			kind: "route";
+			slot: "handler";
+			runtimeGraphDigest: string;
+			bundleExport: string;
+			definition: Readonly<{
+				name: string;
+				handler: (input: never) => unknown | Promise<unknown>;
+			}>;
+			execute: (input: never) => unknown | Promise<unknown>;
+	  }>
 	| Readonly<{
 			identity: string;
 			kind: "context";
@@ -124,7 +148,8 @@ export function validateRuntimeExecutableBindings<View>(
 			(binding) =>
 				(binding.kind === "query" ||
 					binding.kind === "mutation" ||
-					binding.kind === "reaction") &&
+					binding.kind === "reaction" ||
+					binding.kind === "route") &&
 				(binding.definition.name !==
 					binding.identity.slice(`${binding.kind}:`.length) ||
 					binding.definition.handler !== binding.execute),
@@ -146,9 +171,13 @@ export function validateRuntimeExecutableBindings<View>(
 				case "query":
 				case "mutation":
 				case "reaction":
+				case "route":
 					implementation = binding.execute;
 					break;
 				case "context":
+					implementation = binding.definition.resolve;
+					break;
+				case "credentialResolver":
 					implementation = binding.definition.resolve;
 					break;
 				case "service":

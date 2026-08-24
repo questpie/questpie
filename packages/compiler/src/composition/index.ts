@@ -76,6 +76,92 @@ export function compositionContract(
 			input: record(value.input, "Context input codec"),
 			executableSlots: value.executableSlots,
 		};
+	if (kind === "credentialResolver") {
+		const service = record(value.service, "Credential resolver Service");
+		const serviceBrand = record(
+			service["__questpie"],
+			"Credential resolver Service brand",
+		);
+		if (
+			serviceBrand.resourceKind !== "service" ||
+			service.lifetime !== "application" ||
+			service.effect !== "external"
+		)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"Credential resolver requires one application external Service",
+			);
+		return {
+			format: "questpie.credential-resolver-definition-contract",
+			version: 1,
+			name: string(value.name, "Credential resolver name"),
+			service: serviceIdentity(service),
+			executableSlots: ["resolve"],
+		};
+	}
+	if (kind === "route") {
+		const method = string(value.method, "Route method");
+		if (
+			!["DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"].includes(
+				method,
+			)
+		)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"Route method is invalid",
+			);
+		const path = string(value.path, "Route path");
+		if (!path.startsWith("/") || path.includes("?") || path.includes("#"))
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"Route path must be an absolute pathname",
+			);
+		const credentials = string(value.credentials, "Route credentials");
+		if (credentials !== "application" && credentials !== "none")
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"Route credentials must be application or none",
+			);
+		const policy = record(value.policy, "Route policy");
+		const admission = string(policy.operator, "Route policy operator");
+		if (
+			policy.kind !== "booleanExpression" ||
+			!Array.isArray(policy.operands) ||
+			policy.operands.length !== 0 ||
+			(admission !== "authenticated" && admission !== "public")
+		)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-013",
+				"structuralTypeError",
+				"Route policy must be policy.authenticated() or policy.public()",
+			);
+		const limits = record(value.limits, "Route limits");
+		for (const key of ["bodyBytes", "durationMs"])
+			if (!Number.isSafeInteger(limits[key]) || Number(limits[key]) < 0)
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					`Route limits.${key} must be a nonnegative safe integer`,
+				);
+		return {
+			format: "questpie.route-definition-contract",
+			version: 1,
+			name: string(value.name, "Route name"),
+			method,
+			path,
+			credentials,
+			admission,
+			limits: {
+				bodyBytes: limits.bodyBytes,
+				durationMs: limits.durationMs,
+			},
+			executableSlots: ["handler"],
+		};
+	}
 	throw new CompilerDiagnosticError(
 		"QP-COMPOSE-013",
 		"structuralTypeError",
@@ -145,6 +231,53 @@ function validateServiceGraph(resources: readonly NormalizedResource[]): void {
 		visit(identity);
 }
 
+function validateRouteComposition(
+	resources: readonly NormalizedResource[],
+): void {
+	const resolvers = resources.filter(
+		(resource) => resource.kind === "credentialResolver",
+	);
+	if (resolvers.length > 1)
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			"an Application may define at most one credential resolver",
+		);
+	const services = new Map(
+		resources
+			.filter((resource) => resource.kind === "service")
+			.map((resource) => [resource.identity, resource]),
+	);
+	for (const resolver of resolvers) {
+		const service = services.get(String(resolver.contract.service));
+		if (
+			!service ||
+			service.contract.lifetime !== "application" ||
+			service.contract.effect !== "external"
+		)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-004",
+				"unknownReference",
+				`${resolver.identity} requires application external ${String(resolver.contract.service)}`,
+			);
+	}
+	const mounts = new Map<string, NormalizedResource>();
+	for (const route of resources.filter(
+		(resource) => resource.kind === "route",
+	)) {
+		const mount = `${route.contract.method} ${route.contract.path}`;
+		const prior = mounts.get(mount);
+		if (prior)
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-002",
+				"duplicateResourceIdentity",
+				`${mount} is owned by both ${prior.identity} and ${route.identity}`,
+				{ origins: [prior.origin, route.origin] },
+			);
+		mounts.set(mount, route);
+	}
+}
+
 export function projectExecutionComposition(
 	resources: readonly NormalizedResource[],
 ): Readonly<{
@@ -152,6 +285,7 @@ export function projectExecutionComposition(
 	context: RecordValue;
 }> {
 	validateServiceGraph(resources);
+	validateRouteComposition(resources);
 	const contexts = resources.filter((resource) => resource.kind === "context");
 	if (contexts.length > 1)
 		throw new CompilerDiagnosticError(

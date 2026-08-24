@@ -101,6 +101,8 @@ const server = Bun.serve({
 		if (url.pathname === "/tracer.js")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
 		if (url.pathname === "/api/whoami") {
+			if (process.env.QUESTPIE_TRACER_COMPILED_ROUTE === "1")
+				return application.fetch(request);
 			if (request.method !== "GET")
 				return new Response(null, {
 					headers: { ...whoamiHeaders, allow: "GET" },

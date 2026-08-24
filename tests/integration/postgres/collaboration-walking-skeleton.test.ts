@@ -2,6 +2,7 @@ import { afterAll, expect, test } from "bun:test";
 import { cp, mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 import { SQL } from "bun";
 
@@ -61,6 +62,7 @@ async function startHost(
 		env: {
 			...process.env,
 			DATABASE_URL: postgresUrl(),
+			QUESTPIE_TRACER_COMPILED_ROUTE: "1",
 			...(pauseWorker ? { QUESTPIE_TRACER_PAUSE_WORKER: "1" } : {}),
 		},
 		stdin: "ignore",
@@ -117,7 +119,7 @@ postgresTest(
 				'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
 			);
 			await cp(fixtureRoot, temporary, { recursive: true });
-			await installQuestpieForTracer(temporary);
+			const questpieEntry = await installQuestpieForTracer(temporary);
 
 			runCli(temporary, ["build"]);
 			runCli(temporary, ["migration", "apply"]);
@@ -127,6 +129,70 @@ postgresTest(
 			expect(runCli(temporary, ["seed", "apply"])).toContain(
 				"0 new, 2 already applied",
 			);
+
+			const [{ createApp }, { principal }] = await Promise.all([
+				import(
+					`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?direct=${crypto.randomUUID()}`
+				) as Promise<
+					Readonly<{
+						createApp(input: unknown): Promise<{
+							fetch(request: Request): Promise<Response>;
+							routes: Readonly<
+								Record<
+									string,
+									Readonly<{
+										direct(input: unknown): Promise<Response>;
+									}>
+								>
+							>;
+							close(): Promise<void>;
+						}>;
+					}>
+				>,
+				import(
+					`${pathToFileURL(questpieEntry).href}?principal=route`
+				) as Promise<
+					Readonly<{
+						principal: Readonly<{
+							user(input: Readonly<{ id: string }>): unknown;
+						}>;
+					}>
+				>,
+			]);
+			const routeApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(23) },
+				maintenance: { authorize: () => false },
+			});
+			try {
+				const generatedFetch = await routeApplication.fetch(
+					new Request("https://app.test/api/whoami", {
+						headers: {
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						},
+					}),
+				);
+				expect(await generatedFetch.json()).toEqual({
+					principal: { id: tracerIds.principal, kind: "user" },
+				});
+				const direct = await routeApplication.routes[
+					"collaboration.whoami"
+				]!.direct({
+					request: new Request("https://app.test/api/whoami"),
+					execution: {
+						principal: principal.user({ id: tracerIds.principal }),
+					},
+				});
+				expect(await direct.json()).toEqual({
+					principal: { id: tracerIds.principal, kind: "user" },
+				});
+			} finally {
+				await routeApplication.close();
+			}
 
 			const first = await startHost(temporary, 0, true);
 			cleanup.defer(() => stop(first.child, "SIGKILL"));

@@ -41,6 +41,11 @@ export type {
 	ServiceInstances,
 	ServiceLifetime,
 } from "./service";
+export { defineCredentialResolver } from "./credential-resolver";
+export type {
+	CredentialResolution,
+	CredentialResolverDefinition,
+} from "./credential-resolver";
 export { durable } from "./durable";
 export type {
 	DurableDuration,

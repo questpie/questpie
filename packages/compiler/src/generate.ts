@@ -208,7 +208,7 @@ function renderQueryOperations(
 		.join("\n\t");
 }
 
-const factoryNames = ["defineAction", "defineRoute", "defineJob"] as const;
+const factoryNames = ["defineAction", "defineJob"] as const;
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -287,6 +287,19 @@ export function renderAppContract(
 			fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
 		fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),
 	});
+	const routes = resources
+		.filter((resource) => resource.kind === "route")
+		.sort((left, right) => compareAscii(left.name, right.name));
+	const routeNames =
+		routes.length === 0
+			? "never"
+			: routes.map((resource) => JSON.stringify(resource.name)).join(" | ");
+	const directRoutes = routes
+		.map(
+			(resource) =>
+				`readonly ${JSON.stringify(resource.name)}: Readonly<{ direct(input: Readonly<{ request: Request; execution: Readonly<{ principal: Principal }> }>): Promise<Response>; }>;`,
+		)
+		.join("\n\t");
 	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
@@ -382,6 +395,48 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 
 type EmptyDefinitionFactory = (definition: never) => never;
 
+export type RouteContext = Readonly<{
+	principal: Principal;
+	services: ExecutionServices;
+	signal: AbortSignal;
+	execution<Result>(
+		input: ExecutionInput,
+		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
+	): Promise<Awaited<Result>>;
+}>;
+
+export type RouteDefinition<
+	Name extends ${routeNames},
+	Method extends "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT",
+	Path extends \`/\${string}\`,
+	Credentials extends "application" | "none",
+> = Readonly<{
+	readonly kind: "route";
+	readonly identity: \`route:\${Name}\`;
+	readonly name: Name;
+	readonly method: Method;
+	readonly path: Path;
+	readonly policy: Readonly<{ kind: "booleanExpression" }>;
+	readonly credentials: Credentials;
+	readonly limits: Readonly<{ bodyBytes: number; durationMs: number }>;
+	readonly handler: (input: Readonly<{ request: Request; ctx: RouteContext }>) => Response | Promise<Response>;
+}>;
+
+export type RouteFactory = <
+	const Name extends ${routeNames},
+	const Method extends "DELETE" | "GET" | "HEAD" | "OPTIONS" | "PATCH" | "POST" | "PUT",
+	const Path extends \`/\${string}\`,
+	const Credentials extends "application" | "none",
+>(definition: Readonly<{
+	name: Name;
+	method: Method;
+	path: Path;
+	policy: Readonly<{ kind: "booleanExpression" }>;
+	credentials: Credentials;
+	limits: Readonly<{ bodyBytes: number; durationMs: number }>;
+	handler(input: Readonly<{ request: Request; ctx: RouteContext }>): Response | Promise<Response>;
+}>) => RouteDefinition<Name, Method, Path, Credentials>;
+
 ${renderReactionDeclarations(resources, queryRuns)}
 
 ${renderDurableDeclarations()}
@@ -393,6 +448,11 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	network: definition.network === true,
 })) as QueryFactory;
 ${renderMutationFactory()}
+export const defineRoute: RouteFactory = ((definition) => Object.freeze({
+	...definition,
+	kind: "route" as const,
+	identity: \`route:\${definition.name}\` as const,
+})) as RouteFactory;
 ${otherFactories}
 
 export interface CommittedResultUnavailable extends Error {
@@ -412,6 +472,9 @@ export interface GeneratedApp {
 		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	readonly durable: GeneratedDurable;
+	readonly routes: Readonly<{
+		${directRoutes}
+	}>;
 	close(): Promise<void>;
 }
 

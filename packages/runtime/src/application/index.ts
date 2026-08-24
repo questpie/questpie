@@ -3,6 +3,10 @@ import {
 	type ContextDefinition,
 	type ContextInputOf,
 	type Principal,
+	type ServiceDefinition,
+	type ServiceDependencyMap,
+	type ServiceEffect,
+	type ServiceInstance,
 } from "questpie";
 
 import {
@@ -10,7 +14,11 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import { createApplicationRuntime, type RuntimeProgram } from "../execution";
+import {
+	createApplicationRuntime,
+	type RouteExecutionScope,
+	type RuntimeProgram,
+} from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
@@ -97,6 +105,17 @@ export interface RuntimeOperations {
 }
 
 export interface RuntimeApplication<Input, ExecutionView> {
+	applicationService<
+		Definition extends ServiceDefinition<
+			string,
+			"application",
+			ServiceEffect,
+			ServiceDependencyMap,
+			unknown
+		>,
+	>(
+		definition: Definition,
+	): Promise<ServiceInstance<Definition>>;
 	execution<Result>(
 		input: Readonly<{
 			principal: Principal;
@@ -106,6 +125,18 @@ export interface RuntimeApplication<Input, ExecutionView> {
 		}>,
 		use: (
 			scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
+		) => MaybePromise<Result>,
+	): Promise<Awaited<Result>>;
+	route<Result>(
+		input: Readonly<{
+			principal: Principal;
+			signal?: AbortSignal;
+		}>,
+		use: (
+			scope: RouteExecutionScope<
+				Input,
+				RuntimeOperations & Readonly<{ execution: ExecutionView }>
+			>,
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
 	fetch(request: Request): Promise<Response>;
@@ -400,6 +431,20 @@ export async function createRuntimeApplication<
 			});
 			return use(scope);
 		});
+	const route: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["route"] = (root, use) =>
+		core.route(root, ({ principal: caller, service, signal }) =>
+			use(
+				Object.freeze({
+					principal: caller,
+					service,
+					signal,
+					execution,
+				}),
+			),
+		);
 	let realtimeCallSequence = 0;
 	const realtime =
 		input.program.createRealtime?.({
@@ -523,7 +568,13 @@ export async function createRuntimeApplication<
 		let resolvedPrincipal: Principal | null;
 		try {
 			resolvedPrincipal = await input.program.resolvePrincipal(request);
-		} catch {
+		} catch (error) {
+			if (request.signal.aborted) throw request.signal.reason;
+			if (error instanceof OperationFailure)
+				return operationWireResponse(
+					failureFrame(frame, error.code, error.retryable),
+					operationFailureStatus(error.code),
+				);
 			return operationWireResponse(failureFrame(frame, "INTERNAL"), 500);
 		}
 		if (!resolvedPrincipal || !principal.is(resolvedPrincipal))
@@ -655,5 +706,11 @@ export async function createRuntimeApplication<
 		return closePromise;
 	};
 
-	return Object.freeze({ execution, fetch, close });
+	return Object.freeze({
+		applicationService: core.applicationService,
+		execution,
+		fetch,
+		route,
+		close,
+	});
 }
