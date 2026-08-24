@@ -35,7 +35,10 @@ function fileDigest(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
 }
 
-function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
+function runtimeArtifacts(
+	additionalSlots: readonly unknown[] = [],
+	actionContractIdentities?: readonly string[],
+) {
 	const runtimeExecutables = {
 		format: "questpie.runtime-executables",
 		version: 1,
@@ -134,10 +137,37 @@ function runtimeArtifacts(additionalSlots: readonly unknown[] = []) {
 		...unsignedWire,
 		digest: digest("questpie-operation-wire-v1", unsignedWire),
 	};
+	const inferredActionIdentities = additionalSlots.flatMap((raw) => {
+		const slot = raw as Readonly<{ identity?: unknown; kind?: unknown }>;
+		return slot.kind === "action" && typeof slot.identity === "string"
+			? [slot.identity]
+			: [];
+	});
+	const actionOperations = (
+		actionContractIdentities ?? inferredActionIdentities
+	).map((identity) => ({
+		identity,
+		input: { kind: "text" },
+		output: { kind: "text" },
+		declaredErrors: {},
+		admission: "authenticated",
+		limits: {
+			inputBytes: 1_024,
+			resultBytes: 1_024,
+			durationMilliseconds: 1_000,
+		},
+	}));
 	const operationContracts = {
 		format: "questpie.operation-contracts",
 		version: 1,
-		operations: unsignedWire.operations,
+		operations: [...actionOperations, ...unsignedWire.operations].sort(
+			(left, right) =>
+				left.identity < right.identity
+					? -1
+					: left.identity > right.identity
+						? 1
+						: 0,
+		),
 	};
 	const unsignedContextBootstrapPlans = {
 		format: "questpie.postgres-context-bootstrap-plans",
@@ -1094,9 +1124,10 @@ test("sanitizes unknown operation errors identically for direct and wire calls",
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
-test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", async () => {
+test("rejects missing, duplicate, stale, wrong-kind and cross-build Action bindings", async () => {
 	let resolves = 0;
 	let handlerCalls = 0;
+	let actionCalls = 0;
 	const context = defineContext({
 		name: "app.context",
 		input: codec.object({ companyId: codec.uuid() }),
@@ -1117,39 +1148,166 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", a
 		handlerCalls += 1;
 		return { count: 1 };
 	});
+	const actionExecute = () => {
+		actionCalls += 1;
+		return { receipt: "not reached" };
+	};
+	const actionSlot = {
+		identity: "action:delivery.publish",
+		kind: "action" as const,
+		slot: "handler" as const,
+		origin: {
+			path: "src/delivery-action.ts",
+			exportName: "publishDelivery",
+			packageId: null,
+		},
+		sourceDigest: sha("a"),
+		contractDigest: sha("b"),
+		runtimeGraphDigest: sha("c"),
+		bundleExport: "action_delivery_publish_handler",
+	};
+	const actionBinding = {
+		identity: actionSlot.identity,
+		kind: actionSlot.kind,
+		slot: actionSlot.slot,
+		runtimeGraphDigest: actionSlot.runtimeGraphDigest,
+		bundleExport: actionSlot.bundleExport,
+		execute: actionExecute,
+		definition: { name: "delivery.publish", handler: actionExecute },
+	};
+	const artifacts = () => runtimeArtifacts([actionSlot]);
+	const mismatchedContractDigest = () => {
+		const original = artifacts();
+		const { digest: _digest, ...unsigned } = original.runtimeBuild;
+		const changed = { ...unsigned, operationContractsDigest: sha("0") };
+		return {
+			...original,
+			runtimeBuild: {
+				...changed,
+				digest: digest("questpie-runtime-build-v1", changed),
+			},
+		};
+	};
+	const program = {
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
+			signal: facts.signal,
+		}),
+		resolvePrincipal: async () => principal.anonymous(),
+	};
+	const accepted = artifacts();
+	const application = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(accepted),
+		artifactFiles: accepted.artifactFiles,
+		...executableBindings(accepted, [
+			contextBinding,
+			queryBinding,
+			actionBinding,
+		]),
+		program,
+	});
+	await application.close({ deadlineAt: Date.now() + 2_000 });
 	const cases: readonly Readonly<{
 		name: string;
+		message: string;
 		artifacts: unknown;
 		bindings: unknown;
 		runtimeBuildDigest?: string;
 	}>[] = [
 		{
+			name: "slot-without-contract",
+			message:
+				"Action executable and operation contract inventories do not match",
+			artifacts: runtimeArtifacts([actionSlot], []),
+			bindings: [contextBinding, queryBinding, actionBinding],
+		},
+		{
+			name: "contract-without-slot",
+			message:
+				"Action executable and operation contract inventories do not match",
+			artifacts: runtimeArtifacts([], [actionSlot.identity]),
+			bindings: [contextBinding, queryBinding],
+		},
+		{
+			name: "contract-identity-mismatch",
+			message:
+				"Action executable and operation contract inventories do not match",
+			artifacts: runtimeArtifacts([actionSlot], ["action:delivery.other"]),
+			bindings: [contextBinding, queryBinding, actionBinding],
+		},
+		{
+			name: "action-kind-with-query-identity",
+			message: "Action executable kind does not match its identity",
+			artifacts: runtimeArtifacts(
+				[{ ...actionSlot, identity: "query:delivery.publish" }],
+				[],
+			),
+			bindings: [contextBinding, queryBinding, actionBinding],
+		},
+		{
+			name: "query-kind-with-action-identity",
+			message: "Action executable kind does not match its identity",
+			artifacts: runtimeArtifacts([{ ...actionSlot, kind: "query" }], []),
+			bindings: [contextBinding, queryBinding, actionBinding],
+		},
+		{
+			name: "contract-digest-mismatch",
+			message: "operation contract digest does not match",
+			artifacts: mismatchedContractDigest(),
+			bindings: [contextBinding, queryBinding, actionBinding],
+		},
+		{
 			name: "missing",
-			artifacts: runtimeArtifacts(),
-			bindings: [contextBinding],
+			message: "Runtime executable binding does not match",
+			artifacts: artifacts(),
+			bindings: [contextBinding, queryBinding],
 		},
 		{
 			name: "duplicate",
-			artifacts: runtimeArtifacts(),
-			bindings: [contextBinding, queryBinding, queryBinding],
+			message: "Runtime executable binding is duplicate",
+			artifacts: artifacts(),
+			bindings: [contextBinding, queryBinding, actionBinding, actionBinding],
 		},
 		{
 			name: "stale",
-			artifacts: runtimeArtifacts(),
+			message: "Runtime executable binding does not match",
+			artifacts: artifacts(),
 			bindings: [
 				contextBinding,
-				{ ...queryBinding, runtimeGraphDigest: sha("0") },
+				queryBinding,
+				{ ...actionBinding, runtimeGraphDigest: sha("0") },
 			],
 		},
 		{
 			name: "wrong-kind",
-			artifacts: runtimeArtifacts(),
-			bindings: [contextBinding, { ...queryBinding, kind: "service" }],
+			message: "Runtime executable binding does not match",
+			artifacts: artifacts(),
+			bindings: [
+				contextBinding,
+				queryBinding,
+				{ ...actionBinding, kind: "service" },
+			],
+		},
+		{
+			name: "wrong-handler-pointer",
+			message: "Runtime operation executable binding does not match",
+			artifacts: artifacts(),
+			bindings: [
+				contextBinding,
+				queryBinding,
+				{
+					...actionBinding,
+					definition: { ...actionBinding.definition, handler: () => null },
+				},
+			],
 		},
 		{
 			name: "cross-build",
-			artifacts: runtimeArtifacts(),
-			bindings: [contextBinding, queryBinding],
+			message: "Runtime executable binding is from another build",
+			artifacts: artifacts(),
+			bindings: [contextBinding, queryBinding, actionBinding],
 			runtimeBuildDigest: sha("0"),
 		},
 	];
@@ -1170,18 +1328,20 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build bindings", a
 							.runtimeBuild.digest,
 					slots: hostile.bindings as never,
 				},
-				serverExports: serverExportsFor([contextBinding, queryBinding]),
-				program: {
-					services: [],
-					context,
-					bootstrap: () => ({ get: async () => null }),
-					project: ({ facts }) => ({ signal: facts.signal }),
-					resolvePrincipal: async () => principal.anonymous(),
-				},
+				serverExports: serverExportsFor([
+					contextBinding,
+					queryBinding,
+					actionBinding,
+				]),
+				program,
 			}),
-		).rejects.toThrow();
+		).rejects.toThrow(hostile.message);
 	}
-	expect({ handlerCalls, resolves }).toEqual({ handlerCalls: 0, resolves: 0 });
+	expect({ actionCalls, handlerCalls, resolves }).toEqual({
+		actionCalls: 0,
+		handlerCalls: 0,
+		resolves: 0,
+	});
 });
 
 test("pairs the exact Context and Service exports before readiness", async () => {

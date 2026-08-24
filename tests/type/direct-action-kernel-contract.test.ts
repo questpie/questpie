@@ -94,6 +94,12 @@ void executor.invoke("action:delivery.send", {
 	scope,
 	input: "hello",
 	effectKey: "provider-request",
-	// @ts-expect-error Mutation callId is not Effect Identity material here.
+	callId: "direct-correlation",
+	timeoutMilliseconds: 1_000,
+});
+// @ts-expect-error callId correlates a call but cannot replace Effect material.
+void executor.invoke("action:delivery.send", {
+	scope,
+	input: "hello",
 	callId: "mutation-alias",
 });

@@ -56,7 +56,7 @@ export async function bundleApplicationEntry(
 						{ filter: /.*/, namespace: "questpie-authoring" },
 						() => ({
 							contents:
-								'const define = (kind) => (definition) => Object.freeze({ ...definition, kind, identity: `${kind}:${definition.name}`, network: definition.network === true }); export const defineQuery = define("query"); export const defineMutation = define("mutation"); export const defineRoute = define("route"); export const defineReaction = (definition) => Object.freeze({ ...definition, kind: "reaction", identity: `reaction:${definition.name}` });',
+								'const define = (kind) => (definition) => Object.freeze({ ...definition, kind, identity: `${kind}:${definition.name}`, network: definition.network === true }); export const defineQuery = define("query"); export const defineMutation = define("mutation"); export const defineAction = (definition) => Object.freeze({ ...definition, kind: "action", identity: `action:${definition.name}`, network: Object.hasOwn(definition, "network") ? definition.network : false }); export const defineRoute = define("route"); export const defineReaction = (definition) => Object.freeze({ ...definition, kind: "reaction", identity: `reaction:${definition.name}` });',
 							loader: "js",
 						}),
 					);

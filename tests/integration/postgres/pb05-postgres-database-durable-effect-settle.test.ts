@@ -87,7 +87,7 @@ try {
   const callId = "pb05-effect-fence-" + crypto.randomUUID();
   const message = await prepared.app.execution(
     { principal: prepared.principal, context: { companyId: beta05Ids.company } },
-    ({ mutations }) => mutations["message.publish"](
+    ({ mutations }) => mutations.message.publish(
       { channelId: beta05Ids.channel, body: "database effect fence" },
       { callId },
     ),

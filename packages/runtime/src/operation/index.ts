@@ -123,6 +123,11 @@ export type RuntimeDeclaredErrorContract = Readonly<{
 
 export type RuntimeOperationContract = Readonly<{
 	admission?: OperationAdmission;
+	limits?: Readonly<{
+		inputBytes: number;
+		resultBytes: number;
+		durationMilliseconds: number;
+	}>;
 	identity: string;
 	input: RuntimeCodec;
 	output: RuntimeCodec;

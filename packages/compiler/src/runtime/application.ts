@@ -1,4 +1,6 @@
+import { actionServiceResources, executionServiceResources } from "../action";
 import { compareAscii } from "../canonical";
+import { renderServerOperationValue } from "../server-operation-map";
 import type {
 	ApplicationConfiguration,
 	NormalizedResource,
@@ -83,6 +85,7 @@ function applicationEntry(
 		return `definition${index}`;
 	};
 	const executable = (kind: string): boolean =>
+		kind === "action" ||
 		kind === "query" ||
 		kind === "mutation" ||
 		kind === "reaction" ||
@@ -112,25 +115,22 @@ function applicationEntry(
 				.map((slot) => definitionName(slot)),
 		),
 	];
-	const applicationServiceEntries = input.resources
-		.filter(
-			(resource) =>
-				resource.kind === "service" && resource.origin.packageId === null,
-		)
-		.sort((left, right) => compareAscii(left.name, right.name))
-		.map((resource) => {
-			const slot = input.slots.find(
-				(candidate) =>
-					candidate.kind === "service" &&
-					candidate.identity === resource.identity,
-			);
-			if (!slot)
-				throw new TypeError(
-					`Runtime Application lacks Service slot ${resource.identity}`,
+	const renderExecutionServiceEntries = (owner: "service" | "scope.service") =>
+		executionServiceResources(input.resources)
+			.toSorted((left, right) => compareAscii(left.name, right.name))
+			.map((resource) => {
+				const slot = input.slots.find(
+					(candidate) =>
+						candidate.kind === "service" &&
+						candidate.identity === resource.identity,
 				);
-			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
-		})
-		.join(",\n");
+				if (!slot)
+					throw new TypeError(
+						`Runtime Application lacks Service slot ${resource.identity}`,
+					);
+				return `${JSON.stringify(resource.name)}: await ${owner}(${definitionName(slot)})`;
+			})
+			.join(",\n");
 	const routeServiceEntries = input.resources
 		.filter(
 			(resource) =>
@@ -194,20 +194,79 @@ function applicationEntry(
 	const queries = input.resources
 		.filter((resource) => resource.kind === "query")
 		.sort((left, right) => compareAscii(left.name, right.name));
-	const directQueries = queries
-		.map(
-			(resource) =>
-				`${JSON.stringify(resource.name)}: (operationInput) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput)`,
-		)
-		.join(",\n");
+	const directQueries = renderServerOperationValue(
+		"Query",
+		queries.map((resource) => ({
+			name: resource.name,
+			value: `(operationInput) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput)`,
+		})),
+	);
 	const mutations = input.resources
 		.filter((resource) => resource.kind === "mutation")
 		.sort((left, right) => compareAscii(left.name, right.name));
-	const directMutations = mutations
-		.map(
-			(resource) =>
-				`${JSON.stringify(resource.name)}: (operationInput, options) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput, options)`,
-		)
+	const directMutations = renderServerOperationValue(
+		"Mutation",
+		mutations.map((resource) => ({
+			name: resource.name,
+			value: `(operationInput, options) => operations.invoke(${JSON.stringify(resource.identity)}, operationInput, options)`,
+		})),
+	);
+	const actions = input.resources
+		.filter((resource) => resource.kind === "action")
+		.sort((left, right) => compareAscii(left.name, right.name));
+	const actionBindings = actions
+		.map((resource) => {
+			const slot = input.slots.find(
+				(candidate) =>
+					candidate.identity === resource.identity &&
+					candidate.slot === "handler",
+			);
+			if (!slot)
+				throw new TypeError(
+					`Runtime Application lacks Action slot ${resource.identity}`,
+				);
+			const definition = definitionName(slot);
+			return `(() => {
+				const contract = actionContracts.get(${JSON.stringify(resource.identity)});
+				if (!contract) throw new TypeError("generated Action contract is unavailable");
+				return Object.freeze({
+					identity: contract.identity,
+					admission: contract.admission,
+					limits: contract.limits,
+					input: contract.input,
+					output: contract.output,
+					declaredErrors: Object.freeze(Object.entries(contract.declaredErrors).map(([key, error]) => Object.freeze({ key, code: error.code, status: error.status, payload: error.payload }))),
+					execute: ${definition}.handler,
+				});
+			})()`;
+		})
+		.join(",\n");
+	const directActions = renderServerOperationValue(
+		"Action",
+		actions.map((resource) => ({
+			name: resource.name,
+			value: `(actionInput, options) => {
+					const optionKeys = options && typeof options === "object" && !Array.isArray(options) ? Object.keys(options) : [];
+					if (!Object.hasOwn(options ?? {}, "effectKey") || optionKeys.some((key) => key !== "effectKey" && key !== "callId" && key !== "timeoutMilliseconds"))
+						throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+					return actions.invoke(${JSON.stringify(resource.identity)}, { input: actionInput, scope, ...options });
+				}`,
+		})),
+	);
+	const actionServiceEntries = actionServiceResources(input.resources)
+		.toSorted((left, right) => compareAscii(left.identity, right.identity))
+		.map((resource) => {
+			const slot = input.slots.find(
+				(candidate) =>
+					candidate.kind === "service" &&
+					candidate.identity === resource.identity,
+			);
+			if (!slot)
+				throw new TypeError(
+					`Runtime Application lacks Action Service slot ${resource.identity}`,
+				);
+			return `${JSON.stringify(resource.name)}: await service(${definitionName(slot)})`;
+		})
 		.join(",\n");
 	const queryProjection = record(input.queryProjection, "Query Projection");
 	const structuralQueries = queryProjection.queries as readonly RecordValue[];
@@ -357,9 +416,11 @@ export async function createApplication(input) {
 		createPostgresDurableMaintenance,
 		createPostgresMutationInvoker,
 		createRuntimeApplication,
+		createRuntimeActionExecutor,
 		createRuntimeRouteExecutor,
 		durablePrincipal,
 		executePostgresQuery,
+		failRuntimeApplicationStartup,
 		linkPostgresContextBootstrapPlans,
 		linkPostgresMutationTransactionStatements,
 		linkPostgresQueryPlans,
@@ -384,6 +445,7 @@ export async function createApplication(input) {
 	let mutationArtifacts;
 	let runtime;
 	let routeExecutor;
+	let createDirectActions;
 	const resolveApplicationPrincipal = async (request) => {
 		${
 			credentialResolverDefinition
@@ -490,17 +552,39 @@ export async function createApplication(input) {
 					runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 				});
 			},
-			projectExecution: async ({ facts, service }) => Object.freeze({
+			projectExecution: async (scope) => Object.freeze({
+				actionScope: scope,
+				principal: scope.facts.principal,
+				authority: scope.facts.authority,
+				tenant: scope.facts.tenant,
+				values: scope.facts.values,
+				services: Object.freeze({${renderExecutionServiceEntries("scope.service")}}),
+				signal: scope.facts.signal,
+				deadline: scope.facts.deadline,
+			}),
+		},
+		});
+		const actionContracts = new Map(loaded.artifacts.operationContracts.operations
+			.filter((contract) => contract.identity.startsWith("action:"))
+			.map((contract) => [contract.identity, contract]));
+		createDirectActions = (scope, operations) => {
+			const actions = createRuntimeActionExecutor({
+				application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
+				bindings: Object.freeze([${actionBindings}]),
+				project: async ({ facts, service }) => Object.freeze({
 				principal: facts.principal,
 				authority: facts.authority,
 				tenant: facts.tenant,
 				values: facts.values,
-				services: Object.freeze({${applicationServiceEntries}}),
+				services: Object.freeze({${actionServiceEntries}}),
 				signal: facts.signal,
 				deadline: facts.deadline,
+				queries: ${directQueries},
+				mutations: ${directMutations},
 			}),
-		},
-		});
+			});
+			return ${directActions};
+		};
 		routeExecutor = createRuntimeRouteExecutor({
 			runtime,
 			bindings: [${routeBindings}],
@@ -509,17 +593,23 @@ export async function createApplication(input) {
 				principal,
 				services: Object.freeze({${routeServiceEntries}}),
 				signal,
-				execution: (root, use) => execution(root, ({ execution: facts, ...operations }) => use(Object.freeze({
+				execution: (root, use) => execution(root, ({ execution: { actionScope, ...facts }, ...operations }) => use(Object.freeze({
 					...facts,
-					queries: Object.freeze({${directQueries}}),
-					mutations: Object.freeze({${directMutations}}),
+					queries: ${directQueries},
+					mutations: ${directMutations},
+					actions: createDirectActions(actionScope, operations),
 				}))),
 			}),
 		});
 	} catch (error) {
-		postgresController.abort(new DOMException("Runtime startup failed", "AbortError"));
-		await sql.close();
-		throw error;
+		return failRuntimeApplicationStartup({
+			error,
+			runtime,
+			abort: () => postgresController.abort(new DOMException("Runtime startup failed", "AbortError")),
+			closeSql: (deadlineAt) => sql.close({
+				timeout: Math.max(0, Math.floor((deadlineAt - Date.now()) / 1_000)),
+			}),
+		});
 	}
 	const reactionBindings = new Map(slotBindings
 		.filter((binding) => binding.kind === "reaction")
@@ -541,7 +631,7 @@ export async function createApplication(input) {
 		if (!binding) throw new TypeError("Reaction executable is unavailable");
 		return runtime.execution(
 			{ principal: durablePrincipal(principal), context: contextInput, signal },
-			({ execution, ...operations }) => binding.execute({
+			({ execution: { actionScope: _actionScope, ...execution }, ...operations }) => binding.execute({
 				input: reactionInput,
 				ctx: Object.freeze({
 					...execution,
@@ -566,8 +656,8 @@ export async function createApplication(input) {
 							});
 						},
 					}),
-					queries: Object.freeze({${directQueries}}),
-					mutations: Object.freeze({${directMutations}}),
+					queries: ${directQueries},
+					mutations: ${directMutations},
 					run,
 					attempt,
 				}),
@@ -608,10 +698,11 @@ export async function createApplication(input) {
 	let closePromise;
 	return Object.freeze({
 		fetch: async (request) => (await routeExecutor.fetch(request)) ?? runtime.fetch(request),
-		execution: (root, use) => runtime.execution(root, ({ execution, ...operations }) => use(Object.freeze({
+		execution: (root, use) => runtime.execution(root, ({ execution: { actionScope, ...execution }, ...operations }) => use(Object.freeze({
 			...execution,
-			queries: Object.freeze({${directQueries}}),
-			mutations: Object.freeze({${directMutations}}),
+			queries: ${directQueries},
+			mutations: ${directMutations},
+			actions: createDirectActions(actionScope, operations),
 		}))),
 		durable,
 		routes: Object.freeze({${directRouteEntries}}),

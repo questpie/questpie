@@ -322,14 +322,16 @@ postgresTest(
 							"audit.connection": Readonly<{ id: number }>;
 							"audit.execution": Readonly<{ connectionId: number }>;
 						}>;
-						queries: Readonly<
-							Record<string, (queryInput: unknown) => Promise<unknown>>
-						>;
+						queries: Readonly<{
+							messages: Readonly<{
+								page(queryInput: unknown): Promise<unknown>;
+							}>;
+						}>;
 					}>) => {
 						expect(tenant.id).toBe(beta05Ids.company);
 						expect(services["audit.connection"].id).toBe(1);
 						expect(services["audit.execution"].connectionId).toBe(1);
-						return queries["messages.page"]!(input);
+						return queries.messages.page(input);
 					},
 				);
 				const runtimeBuild = JSON.parse(runtimeBuildBytes);

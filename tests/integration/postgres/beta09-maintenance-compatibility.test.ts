@@ -136,7 +136,7 @@ async function publish(
 			context: { companyId: beta05Ids.company },
 		},
 		async ({ mutations }) => {
-			const message = await mutations["message.publish"](
+			const message = await mutations.message.publish(
 				{ channelId: beta05Ids.channel, body: input.body },
 				{ callId: input.callId },
 			);

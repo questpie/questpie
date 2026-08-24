@@ -144,7 +144,7 @@ async function useGeneratedApp() {
 			context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
 			signal: AbortSignal.timeout(5_000),
 		},
-		({ queries }) => queries["messages.page"]({
+		({ queries }) => queries.messages.page({
 			channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
 			first: 20,
 			after: null,

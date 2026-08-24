@@ -232,17 +232,16 @@ postgresTest(
 					{ principal: user, context },
 					(
 						scope: Readonly<{
-							mutations: Readonly<
-								Record<
-									string,
-									(
+							mutations: Readonly<{
+								message: Readonly<{
+									publish: (
 										input: unknown,
 										options: Readonly<{ callId: string }>,
-									) => Promise<unknown>
-								>
-							>;
+									) => Promise<unknown>;
+								}>;
+							}>;
 						}>,
-					) => scope.mutations["message.publish"]!(mutationInput, { callId }),
+					) => scope.mutations.message.publish(mutationInput, { callId }),
 				)) as PublishedMessage;
 				expect(replay).toEqual({
 					id: expect.any(String),

@@ -1,6 +1,8 @@
 export { createRuntimeApplication } from "./application";
 export { verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction } from "./application/postgres-readiness-prerequisites";
 export type { ReadinessMigration } from "./application/postgres-readiness-prerequisites";
+export { failRuntimeApplicationStartup } from "./application/startup-cleanup";
+export { createRuntimeActionExecutor } from "./action";
 export { createRuntimeRouteExecutor } from "./execution";
 export {
 	bindIngressPrincipal,

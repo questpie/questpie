@@ -49,7 +49,7 @@ export const messagePublished = defineReaction({
 				deliverMessage({ attempt, body, effectId }),
 			recover: ({ effectId }) => lookupDelivery({ body, effectId }),
 		});
-		const recorded = await ctx.mutations["message.recordDelivery"](
+		const recorded = await ctx.mutations.message.recordDelivery(
 			{ messageId: input.messageId },
 			{ callId: `run:${ctx.run.id}` },
 		);

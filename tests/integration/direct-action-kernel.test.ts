@@ -78,17 +78,29 @@ test("derives one trusted Effect Identity without retrying", async () => {
 		context,
 		bootstrap: () => ({ get: async () => null }),
 		project: (scope) => ({
-			invoke: (input: unknown, stableKey: string) =>
+			invoke: (
+				input: unknown,
+				stableKey: string,
+				options?: Readonly<{
+					callId?: string;
+					timeoutMilliseconds?: number;
+				}>,
+			) =>
 				actions.invoke("action:delivery.send", {
 					scope,
 					input,
 					effectKey: stableKey,
+					...options,
 				}),
 		}),
 	});
 	const result = await runtime.execution(
 		{ principal: principal.user({ id: "user-1" }), context: { companyId } },
-		(scope) => scope.invoke({ message: "hello" }, effectKey),
+		(scope) =>
+			scope.invoke({ message: "hello" }, effectKey, {
+				callId: "correlation-one",
+				timeoutMilliseconds: 1_000,
+			}),
 	);
 
 	expect(result).toEqual({
@@ -97,7 +109,11 @@ test("derives one trusted Effect Identity without retrying", async () => {
 	expect(observed).toEqual(["136ab1a4-7014-5ea7-ab8d-2fcd64f6a4a8"]);
 	await runtime.execution(
 		{ principal: principal.user({ id: "user-1" }), context: { companyId } },
-		(scope) => scope.invoke({ message: "changed input" }, effectKey),
+		(scope) =>
+			scope.invoke({ message: "changed input" }, effectKey, {
+				callId: "correlation-two",
+				timeoutMilliseconds: 2_000,
+			}),
 	);
 	expect(observed[1]).toBe(observed[0]);
 	await expect(
@@ -110,6 +126,85 @@ test("derives one trusted Effect Identity without retrying", async () => {
 		),
 	).resolves.toMatchObject({ receipt: expect.stringMatching(/^accepted:/u) });
 	expect(calls).toBe(3);
+	await runtime.close();
+});
+
+test("validates direct Action correlation and applies caller timeout to the same budget", async () => {
+	let handlerCalls = 0;
+	let projectionCalls = 0;
+	const actions = createRuntimeActionExecutor({
+		application,
+		bindings: [
+			{
+				identity: "action:delivery.timeout",
+				admission: "authenticated",
+				limits,
+				input: { kind: "text" },
+				output: { kind: "text" },
+				declaredErrors: [],
+				execute: () => {
+					handlerCalls += 1;
+					return new Promise<never>(() => undefined);
+				},
+			},
+		],
+		project: () => {
+			projectionCalls += 1;
+			return Object.freeze({});
+		},
+	});
+	const context = defineContext({
+		name: "action.timeout-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: (overrides: Readonly<Record<string, unknown>>) =>
+				actions.invoke("action:delivery.timeout", {
+					scope,
+					input: "hello",
+					effectKey,
+					...overrides,
+				} as never),
+		}),
+	});
+	const execute = (overrides: Readonly<Record<string, unknown>>) =>
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke(overrides),
+		);
+
+	for (const invalid of [
+		{ callId: "" },
+		{ timeoutMilliseconds: 0 },
+		{ retry: true },
+	])
+		await expect(execute(invalid)).rejects.toEqual(
+			new OperationFailure("PROTOCOL_UNSUPPORTED"),
+		);
+	expect({ handlerCalls, projectionCalls }).toEqual({
+		handlerCalls: 0,
+		projectionCalls: 0,
+	});
+	await expect(
+		Promise.race([
+			execute({
+				callId: "direct-correlation",
+				timeoutMilliseconds: 5,
+			}),
+			new Promise<never>((_resolve, reject) =>
+				setTimeout(() => reject(new Error("caller timeout was ignored")), 100),
+			),
+		]),
+	).rejects.toEqual(new OperationFailure("DEADLINE_EXCEEDED"));
+	expect({ handlerCalls, projectionCalls }).toEqual({
+		handlerCalls: 1,
+		projectionCalls: 1,
+	});
 	await runtime.close();
 });
 
@@ -181,11 +276,7 @@ test("closed-validates ordinary Effect material and Action Resource identities",
 		await expect(execute(candidate)).rejects.toMatchObject({
 			code: "PROTOCOL_UNSUPPORTED",
 		});
-	for (const aliases of [
-		{ effectId: "forged" },
-		{ idempotencyKey: "forged" },
-		{ callId: "mutation-alias" },
-	])
+	for (const aliases of [{ effectId: "forged" }, { idempotencyKey: "forged" }])
 		await expect(execute(effectKey, aliases)).rejects.toMatchObject({
 			code: "PROTOCOL_UNSUPPORTED",
 		});

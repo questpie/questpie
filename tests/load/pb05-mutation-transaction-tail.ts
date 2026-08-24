@@ -24,15 +24,14 @@ type RawSample = Readonly<{
 }>;
 
 type MutationScope = Readonly<{
-	mutations: Readonly<
-		Record<
-			string,
-			(
+	mutations: Readonly<{
+		message: Readonly<{
+			publish: (
 				input: unknown,
 				options: Readonly<{ callId: string }>,
-			) => Promise<unknown>
-		>
-	>;
+			) => Promise<unknown>;
+		}>;
+	}>;
 }>;
 
 type GeneratedApplication = Readonly<{
@@ -139,7 +138,7 @@ try {
 	const invoke = (pair: Pair) =>
 		application!.execution(root, async (scope) => {
 			const started = performance.now();
-			const result = await scope.mutations["message.publish"]!(pair.input, {
+			const result = await scope.mutations.message.publish(pair.input, {
 				callId: pair.callId,
 			});
 			return Object.freeze({

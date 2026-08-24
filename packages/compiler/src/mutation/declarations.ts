@@ -1,4 +1,5 @@
 import { renderCodecType } from "../runtime";
+import { renderServerOperationType } from "../server-operation-map";
 import type { NormalizedResource } from "../types";
 
 function mutations(resources: readonly NormalizedResource[]) {
@@ -14,12 +15,13 @@ export function renderMutationDeclarations(
 			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
 		})
 		.join("\n\t");
-	const operations = mutations(resources)
-		.map(
-			(resource) =>
-				`readonly ${JSON.stringify(resource.name)}: (input: ${renderCodecType(resource.contract.input)}, options?: OperationCallOptions) => Promise<${renderCodecType(resource.contract.output)}>;`,
-		)
-		.join("\n\t");
+	const operations = renderServerOperationType(
+		"Mutation",
+		mutations(resources).map((resource) => ({
+			name: resource.name,
+			value: `(input: ${renderCodecType(resource.contract.input)}, options?: OperationCallOptions) => Promise<${renderCodecType(resource.contract.output)}>`,
+		})),
+	);
 	return `export interface GeneratedMutations {
 	${definitions}
 }
@@ -30,9 +32,7 @@ export interface OperationCallOptions {
 	readonly deadline?: number;
 }
 
-export type GeneratedMutationOperations = Readonly<{
-	${operations}
-}>;
+export type GeneratedMutationOperations = ${operations};
 
 export type MutationDefinition<Name extends keyof GeneratedMutations, Errors extends OperationErrorMap> = Readonly<{
 	readonly kind: "mutation";

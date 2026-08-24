@@ -14,15 +14,14 @@ const database = process.env.PGHOST ? new SQL({ max: 2 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 
 type MutationScope = Readonly<{
-	mutations: Readonly<
-		Record<
-			string,
-			(
+	mutations: Readonly<{
+		message: Readonly<{
+			publish: (
 				input: unknown,
 				options: Readonly<{ callId: string }>,
-			) => Promise<unknown>
-		>
-	>;
+			) => Promise<unknown>;
+		}>;
+	}>;
 }>;
 
 function derivedBudget(
@@ -83,7 +82,7 @@ postgresTest(
 				application!.execution(
 					{ principal: user, context },
 					(scope: MutationScope) =>
-						scope.mutations["message.publish"]!(
+						scope.mutations.message.publish(
 							{
 								channelId: beta05Ids.channel,
 								body: `measured transaction ${index}`,

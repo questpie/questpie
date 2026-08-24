@@ -108,7 +108,7 @@ try {
 				context: { companyId: beta05Ids.company },
 			},
 			({ mutations }) =>
-				mutations["message.publish"](
+				mutations.message.publish(
 					{
 						channelId: beta05Ids.channel,
 						body: `PB-05 Durable envelope ${index}`,

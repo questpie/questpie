@@ -44,7 +44,7 @@ export const recordDeposited = defineReaction({
 			)
 		)
 			throw errors.recordUnavailable();
-		const appended = await ctx.mutations["provenance.recordReaction"](input, {
+		const appended = await ctx.mutations.provenance.recordReaction(input, {
 			callId: `run:${ctx.run.id}`,
 		});
 		return { ...input, provenanceSequence: appended.sequence };

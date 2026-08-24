@@ -69,7 +69,7 @@ try {
   const callId = "pb05-durable-heartbeat-" + crypto.randomUUID();
   await prepared.app.execution(
     { principal: prepared.principal, context: { companyId: beta05Ids.company } },
-    async ({ mutations }) => mutations["message.publish"](
+    async ({ mutations }) => mutations.message.publish(
       { channelId: beta05Ids.channel, body: "database heartbeat" },
       { callId },
     ),

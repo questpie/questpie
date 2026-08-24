@@ -9,6 +9,7 @@ import {
 type RuntimeExecutableSlotV1 = Readonly<{
 	identity: string;
 	kind:
+		| "action"
 		| "context"
 		| "credentialResolver"
 		| "mutation"
@@ -60,7 +61,8 @@ export function decodeRuntimeExecutables(value: unknown): RuntimeExecutablesV1 {
 			`slot ${index}`,
 		);
 		if (
-			(slot.kind !== "context" &&
+			(slot.kind !== "action" &&
+				slot.kind !== "context" &&
 				slot.kind !== "credentialResolver" &&
 				slot.kind !== "mutation" &&
 				slot.kind !== "query" &&
@@ -71,7 +73,8 @@ export function decodeRuntimeExecutables(value: unknown): RuntimeExecutablesV1 {
 				slot.slot !== "dispose" &&
 				slot.slot !== "handler" &&
 				slot.slot !== "resolve") ||
-			((slot.kind === "query" ||
+			((slot.kind === "action" ||
+				slot.kind === "query" ||
 				slot.kind === "mutation" ||
 				slot.kind === "reaction" ||
 				slot.kind === "route") &&

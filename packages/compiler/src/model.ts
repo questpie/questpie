@@ -1,3 +1,4 @@
+import { normalizeActionContract } from "./action";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
@@ -475,6 +476,22 @@ export function normalizeResources(
 				kind,
 				name,
 				contract: operationContract(kind, item.value),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "action") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: normalizeActionContract(item.value, codecContract),
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

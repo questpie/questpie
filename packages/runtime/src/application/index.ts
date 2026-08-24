@@ -204,7 +204,9 @@ export async function createRuntimeApplication<
 	const queryBindings = validatedBindings.operations;
 	const operationEngine = createOperationEngine(
 		queryBindings,
-		artifacts.operationContracts.operations,
+		artifacts.operationContracts.operations.filter(
+			(contract) => !contract.identity.startsWith("action:"),
+		),
 	);
 	const networkOperations = new Set(
 		artifacts.wireContract.operations.map(({ identity }) => identity),

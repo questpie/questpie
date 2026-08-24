@@ -66,41 +66,47 @@ type GeneratedApplication = Readonly<{
 		use: (
 			scope: Readonly<{
 				queries: Readonly<{
-					"records.page"(input: QueryInput): Promise<Page<RecordNode>>;
-					"provenance.page"(
-						input: Readonly<{
-							archiveCode: string;
-							catalogueNumber: string;
-							first: number;
-							after: string | null;
-						}>,
-					): Promise<
-						Page<
-							Readonly<{
-								sequence: number;
-								kind: string;
-								note: string;
-							}>
-						>
-					>;
+					records: Readonly<{
+						page(input: QueryInput): Promise<Page<RecordNode>>;
+					}>;
+					provenance: Readonly<{
+						page(
+							input: Readonly<{
+								archiveCode: string;
+								catalogueNumber: string;
+								first: number;
+								after: string | null;
+							}>,
+						): Promise<
+							Page<
+								Readonly<{
+									sequence: number;
+									kind: string;
+									note: string;
+								}>
+							>
+						>;
+					}>;
 				}>;
 				mutations: Readonly<{
-					"record.deposit"(
-						input: Readonly<{
-							archiveCode: string;
-							catalogueNumber: string;
-							visibility: string;
-							title: string;
-							body: string;
-						}>,
-						options: Readonly<{ callId: string }>,
-					): Promise<
-						Readonly<{
-							archiveCode: string;
-							catalogueNumber: string;
-							createdAt: Date;
-						}>
-					>;
+					record: Readonly<{
+						deposit(
+							input: Readonly<{
+								archiveCode: string;
+								catalogueNumber: string;
+								visibility: string;
+								title: string;
+								body: string;
+							}>,
+							options: Readonly<{ callId: string }>,
+						): Promise<
+							Readonly<{
+								archiveCode: string;
+								catalogueNumber: string;
+								createdAt: Date;
+							}>
+						>;
+					}>;
 				}>;
 			}>,
 		) => Result | Promise<Result>,
@@ -283,7 +289,7 @@ postgresTest(
 				return await application.execution(
 					{ principal: caller, context: { archiveCode } },
 					({ queries }) =>
-						queries["records.page"]({ archiveCode, first: 100, after: null }),
+						queries.records.page({ archiveCode, first: 100, after: null }),
 				);
 			} catch (error) {
 				throw new Error(`records.page failed for ${archiveCode}`, {
@@ -366,7 +372,7 @@ postgresTest(
 			const deposited = await application.execution(
 				{ principal: authorized, context: { archiveCode: "national" } },
 				({ mutations }) =>
-					mutations["record.deposit"](
+					mutations.record.deposit(
 						{
 							archiveCode: "national",
 							catalogueNumber: "N-003",
@@ -409,7 +415,7 @@ postgresTest(
 			const provenance = await application.execution(
 				{ principal: authorized, context: { archiveCode: "national" } },
 				({ queries }) =>
-					queries["provenance.page"]({
+					queries.provenance.page({
 						archiveCode: "national",
 						catalogueNumber: "N-003",
 						first: 100,

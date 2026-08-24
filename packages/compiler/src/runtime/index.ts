@@ -86,7 +86,9 @@ function operationContracts(
 	return resources
 		.filter(
 			(resource) =>
-				(resource.kind === "query" || resource.kind === "mutation") &&
+				(resource.kind === "query" ||
+					resource.kind === "mutation" ||
+					(exposure === "direct" && resource.kind === "action")) &&
 				(exposure === "direct" || resource.contract.exposure === "network"),
 		)
 		.map((resource) => ({
@@ -96,7 +98,12 @@ function operationContracts(
 			declaredErrors: resource.contract.declaredErrors ?? {},
 			...(includeAdmission && resource.kind === "mutation"
 				? { admission: mutationAdmission(resource) }
-				: {}),
+				: includeAdmission && resource.kind === "action"
+					? {
+							admission: resource.contract.admission,
+							limits: resource.contract.limits,
+						}
+					: {}),
 		}))
 		.sort((left, right) => compareAscii(left.identity, right.identity));
 }
@@ -144,6 +151,7 @@ export function projectRuntimeContract(
 	const slots = input.resources
 		.filter((resource) =>
 			[
+				"action",
 				"context",
 				"credentialResolver",
 				"mutation",
@@ -169,6 +177,7 @@ export function projectRuntimeContract(
 				resource.contract,
 			);
 			const executableSlots =
+				resource.kind === "action" ||
 				resource.kind === "query" ||
 				resource.kind === "mutation" ||
 				resource.kind === "route"

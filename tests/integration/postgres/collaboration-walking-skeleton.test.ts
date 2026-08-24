@@ -86,6 +86,37 @@ type TracerReport = Readonly<{
 	}>;
 }>;
 
+type DeliveryActionResult = Readonly<{
+	attempt: number;
+	disposals: number;
+	receipt: string;
+}>;
+
+type DeliveryAction = (
+	input: Readonly<{ effectKey: string; message: string }>,
+	options: Readonly<{
+		effectKey: string;
+		callId?: string;
+		timeoutMilliseconds?: number;
+	}>,
+) => Promise<DeliveryActionResult>;
+
+type GeneratedExecutionScope = Readonly<{
+	actions: Readonly<{
+		delivery: Readonly<{ publish: DeliveryAction }>;
+	}>;
+	queries: Readonly<{
+		messages: Readonly<{ page: unknown }>;
+	}>;
+	mutations: Readonly<{
+		message: Readonly<{ publish: unknown }>;
+	}>;
+	services: Readonly<{
+		"audit.execution": unknown;
+		"collaboration.demo-auth": unknown;
+	}>;
+}>;
+
 async function report(port: number): Promise<TracerReport | null> {
 	try {
 		const response = await fetch(
@@ -135,6 +166,16 @@ postgresTest(
 				) as Promise<
 					Readonly<{
 						createApp(input: unknown): Promise<{
+							execution<Result>(
+								input: Readonly<{
+									principal: unknown;
+									context: Readonly<{ companyId: string }>;
+									signal?: AbortSignal;
+								}>,
+								use: (
+									scope: GeneratedExecutionScope,
+								) => Result | Promise<Result>,
+							): Promise<Awaited<Result>>;
 							fetch(request: Request): Promise<Response>;
 							routes: Readonly<
 								Record<
@@ -153,6 +194,7 @@ postgresTest(
 				) as Promise<
 					Readonly<{
 						principal: Readonly<{
+							anonymous(): unknown;
 							user(input: Readonly<{ id: string }>): unknown;
 						}>;
 					}>
@@ -167,6 +209,137 @@ postgresTest(
 				maintenance: { authorize: () => false },
 			});
 			try {
+				const executionInput = {
+					principal: principal.user({ id: tracerIds.principal }),
+					context: { companyId: tracerIds.company },
+				};
+				let escapedAction: DeliveryAction | undefined;
+				const invokeDelivery = (
+					input: Readonly<{ effectKey: string; message: string }>,
+					options: Parameters<DeliveryAction>[1],
+				) =>
+					routeApplication.execution(
+						executionInput,
+						({ actions, mutations, queries, services }) => {
+							expect(Object.hasOwn(services, "delivery.provider")).toBe(false);
+							expect(Object.hasOwn(services, "audit.execution")).toBe(true);
+							expect(Object.hasOwn(services, "collaboration.demo-auth")).toBe(
+								true,
+							);
+							expect(Object.getPrototypeOf(actions)).toBeNull();
+							expect(Object.isFrozen(actions)).toBe(true);
+							expect(Object.getPrototypeOf(actions.delivery)).toBeNull();
+							expect(Object.isFrozen(actions.delivery)).toBe(true);
+							expect(Object.getPrototypeOf(queries)).toBeNull();
+							expect(Object.isFrozen(queries)).toBe(true);
+							expect(Object.getPrototypeOf(queries.messages)).toBeNull();
+							expect(Object.isFrozen(queries.messages)).toBe(true);
+							expect(Object.getPrototypeOf(mutations)).toBeNull();
+							expect(Object.isFrozen(mutations)).toBe(true);
+							expect(Object.getPrototypeOf(mutations.message)).toBeNull();
+							expect(Object.isFrozen(mutations.message)).toBe(true);
+							escapedAction = actions.delivery.publish;
+							return actions.delivery.publish(input, options);
+						},
+					);
+
+				await expect(
+					routeApplication.execution(
+						{
+							principal: principal.anonymous(),
+							context: { companyId: tracerIds.company },
+						},
+						({ actions }) =>
+							actions.delivery.publish(
+								{ effectKey: "domain-denied", message: "denied" },
+								{ effectKey: "denied-provider-request" },
+							),
+					),
+				).rejects.toMatchObject({ code: "unauthenticated" });
+
+				const stableEffectKey = "provider-request-2026-08-24-0001";
+				const effectId = "6a58264b-7e1b-58db-abfa-b46e3cd5cd7f";
+				const firstDelivery = await invokeDelivery(
+					{ effectKey: "domain-input-one", message: "delivery-first" },
+					{
+						effectKey: stableEffectKey,
+						callId: "delivery-direct-1",
+						timeoutMilliseconds: 900,
+					},
+				);
+				expect(firstDelivery).toEqual({
+					attempt: 1,
+					disposals: 0,
+					receipt: `delivery:${effectId}`,
+				});
+				const secondDelivery = await invokeDelivery(
+					{ effectKey: "domain-input-two", message: "delivery-second" },
+					{
+						effectKey: stableEffectKey,
+						callId: "delivery-direct-2",
+						timeoutMilliseconds: 800,
+					},
+				);
+				expect(secondDelivery).toEqual({
+					attempt: 2,
+					disposals: 1,
+					receipt: `delivery:${effectId}`,
+				});
+
+				await expect(
+					invokeDelivery(
+						{
+							effectKey: "domain-rejected",
+							message: "delivery-refused-always",
+						},
+						{ effectKey: "provider-rejected" },
+					),
+				).rejects.toMatchObject({
+					code: "PROVIDER_REJECTED",
+					payload: null,
+					status: 502,
+				});
+				await expect(
+					invokeDelivery(
+						{ effectKey: "domain-timeout", message: "delivery-blocked" },
+						{
+							effectKey: "provider-timeout",
+							callId: "delivery-timeout",
+							timeoutMilliseconds: 10,
+						},
+					),
+				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
+				const cancellation = new AbortController();
+				const cancellationReason = new DOMException(
+					"direct Action cancelled",
+					"AbortError",
+				);
+				const cancelledDelivery = routeApplication.execution(
+					{ ...executionInput, signal: cancellation.signal },
+					({ actions }) =>
+						actions.delivery.publish(
+							{ effectKey: "domain-cancel", message: "delivery-blocked" },
+							{
+								effectKey: "provider-cancel",
+								timeoutMilliseconds: 900,
+							},
+						),
+				);
+				setTimeout(() => cancellation.abort(cancellationReason), 10);
+				await expect(cancelledDelivery).rejects.toBe(cancellationReason);
+
+				const afterFailure = await invokeDelivery(
+					{ effectKey: "domain-cleanup", message: "delivery-after-failure" },
+					{ effectKey: "provider-after-failure" },
+				);
+				expect(afterFailure).toMatchObject({ attempt: 6, disposals: 5 });
+				await expect(
+					escapedAction!(
+						{ effectKey: "domain-escaped", message: "delivery-escaped" },
+						{ effectKey: "provider-escaped" },
+					),
+				).rejects.toBeDefined();
+
 				const generatedFetch = await routeApplication.fetch(
 					new Request("https://app.test/api/whoami", {
 						headers: {

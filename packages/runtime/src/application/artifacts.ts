@@ -65,6 +65,7 @@ type RuntimeBuildV1 = Readonly<{
 	slots: readonly Readonly<{
 		identity: string;
 		kind:
+			| "action"
 			| "context"
 			| "credentialResolver"
 			| "mutation"
@@ -166,7 +167,10 @@ function decodeOperationWireContract(
 		operation.identity,
 		`wire operation ${index} identity`,
 	);
-	const carriesAdmission = direct && identity.startsWith("mutation:");
+	const carriesAdmission =
+		direct &&
+		(identity.startsWith("mutation:") || identity.startsWith("action:"));
+	const carriesLimits = direct && identity.startsWith("action:");
 	exact(
 		operation,
 		[
@@ -175,6 +179,7 @@ function decodeOperationWireContract(
 			"output",
 			"declaredErrors",
 			...(carriesAdmission ? ["admission"] : []),
+			...(carriesLimits ? ["limits"] : []),
 		],
 		`wire operation ${index}`,
 	);
@@ -186,6 +191,36 @@ function decodeOperationWireContract(
 		)
 	)
 		fail(`wire operation ${index} admission is invalid`);
+	let limits: Readonly<{
+		inputBytes: number;
+		resultBytes: number;
+		durationMilliseconds: number;
+	}> | null = null;
+	if (carriesLimits) {
+		const candidate = record(
+			operation.limits,
+			`wire operation ${index} limits`,
+		);
+		exact(
+			candidate,
+			["durationMilliseconds", "inputBytes", "resultBytes"],
+			`wire operation ${index} limits`,
+		);
+		if (
+			!Number.isSafeInteger(candidate.inputBytes) ||
+			Number(candidate.inputBytes) <= 0 ||
+			!Number.isSafeInteger(candidate.resultBytes) ||
+			Number(candidate.resultBytes) <= 0 ||
+			!Number.isSafeInteger(candidate.durationMilliseconds) ||
+			Number(candidate.durationMilliseconds) < 0
+		)
+			fail(`wire operation ${index} limits are invalid`);
+		limits = Object.freeze({
+			inputBytes: Number(candidate.inputBytes),
+			resultBytes: Number(candidate.resultBytes),
+			durationMilliseconds: Number(candidate.durationMilliseconds),
+		});
+	}
 	const rawDeclaredErrors = record(
 		operation.declaredErrors,
 		`wire operation ${index} declared errors`,
@@ -229,6 +264,7 @@ function decodeOperationWireContract(
 			? { admission: admission as "authenticated" | "public" | "system" }
 			: {}),
 		identity,
+		...(limits ? { limits } : {}),
 		input: decodeRuntimeCodecDescriptor(
 			operation.input,
 			`$wire.operations[${index}].input`,
@@ -645,6 +681,31 @@ export function decodeRuntimeArtifacts(value: unknown): RuntimeArtifactsV1 {
 		runtimeBuild.runtimeExecutablesDigest
 	)
 		fail("runtime executable digest does not match");
+	if (
+		artifactDigest(
+			"questpie-operation-contracts-v1",
+			envelope.operationContracts,
+		) !== runtimeBuild.operationContractsDigest
+	)
+		fail("operation contract digest does not match");
+	const actionSlots = runtimeExecutables.slots
+		.filter((slot) => slot.kind === "action")
+		.map((slot) => slot.identity);
+	if (
+		runtimeExecutables.slots.some(
+			(slot) =>
+				(slot.kind === "action") !== slot.identity.startsWith("action:"),
+		)
+	)
+		fail("Action executable kind does not match its identity");
+	const actionContracts = operationContracts.operations
+		.filter((contract) => contract.identity.startsWith("action:"))
+		.map((contract) => contract.identity);
+	if (
+		actionSlots.length !== actionContracts.length ||
+		actionSlots.some((identity, index) => identity !== actionContracts[index])
+	)
+		fail("Action executable and operation contract inventories do not match");
 	if (
 		!wireContract.operations.every((operation) =>
 			operationContracts.operations.some(

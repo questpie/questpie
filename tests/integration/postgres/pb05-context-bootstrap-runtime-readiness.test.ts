@@ -113,9 +113,11 @@ postgresTest(
 				execution(
 					input: unknown,
 					use: (scope: {
-						queries: Readonly<
-							Record<string, (input: unknown) => Promise<unknown>>
-						>;
+						queries: Readonly<{
+							messages: Readonly<{
+								page(input: unknown): Promise<unknown>;
+							}>;
+						}>;
 					}) => unknown,
 				): Promise<unknown>;
 				close(): Promise<void>;
@@ -137,7 +139,7 @@ postgresTest(
 						context: { companyId: beta05Ids.company },
 					},
 					(scope) =>
-						scope.queries["messages.page"]({
+						scope.queries.messages.page({
 							channelId: beta05Ids.channel,
 							first: 1,
 							after: null,

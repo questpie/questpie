@@ -37,7 +37,7 @@ WHERE runs.application_name = 'application:collaboration' AND intents.call_id = 
 };
 const publish = (prepared, callId, body) => prepared.app.execution(
   { principal: prepared.principal, context: { companyId: beta05Ids.company } },
-  async ({ mutations }) => mutations["message.publish"](
+  async ({ mutations }) => mutations.message.publish(
     { channelId: beta05Ids.channel, body }, { callId },
   ),
 );

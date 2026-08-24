@@ -1,3 +1,9 @@
+import {
+	actionServiceResources,
+	executionServiceResources,
+	renderActionDeclarations,
+	renderActionFactory,
+} from "./action";
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
 import {
@@ -16,6 +22,7 @@ import type {
 	RelationalGeneratedSelectionV1,
 } from "./relational";
 import { renderCodecType } from "./runtime";
+import { renderServerOperationType } from "./server-operation-map";
 import type { NormalizedResource } from "./types";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -199,16 +206,18 @@ function renderQueries(resources: readonly NormalizedResource[]): string {
 function renderQueryOperations(
 	resources: readonly NormalizedResource[],
 ): string {
-	return resources
-		.filter((resource) => resource.kind === "query")
-		.map(
-			(resource) =>
-				`readonly ${JSON.stringify(resource.name)}: (input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>;`,
-		)
-		.join("\n\t");
+	return renderServerOperationType(
+		"Query",
+		resources
+			.filter((resource) => resource.kind === "query")
+			.map((resource) => ({
+				name: resource.name,
+				value: `(input: ${renderCodecType(resource.contract.input)}) => Promise<${renderCodecType(resource.contract.output)}>`,
+			})),
+	);
 }
 
-const factoryNames = ["defineAction", "defineJob"] as const;
+const factoryNames = ["defineJob"] as const;
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -240,7 +249,7 @@ export function renderAppContract(
 			resource.kind === "service" && resource.origin.packageId === null,
 	);
 	const contextDefinition = context ? definitionType(context) : "never";
-	const executionServices = applicationServices
+	const executionServices = executionServiceResources(resources)
 		.map(
 			(resource) =>
 				`readonly ${JSON.stringify(resource.name)}: ServiceInstance<${definitionType(resource)}>;`,
@@ -252,6 +261,12 @@ export function renderAppContract(
 			const instance = `ServiceInstance<${definitionType(resource)}>`;
 			return `readonly ${JSON.stringify(resource.name)}: ${resource.contract.lifetime === "execution" ? `() => Promise<${instance}>` : instance};`;
 		})
+		.join("\n\t");
+	const actionServices = actionServiceResources(resources)
+		.map(
+			(resource) =>
+				`readonly ${JSON.stringify(resource.name)}: ServiceInstance<${definitionType(resource)}>;`,
+		)
 		.join("\n\t");
 	const otherFactories = factoryNames
 		.map((name) => `export declare const ${name}: EmptyDefinitionFactory;`)
@@ -330,9 +345,9 @@ export interface GeneratedQueries {
 
 ${renderMutationDeclarations(resources)}
 
-export type GeneratedQueryOperations = Readonly<{
-	${renderQueryOperations(resources)}
-}>;
+${renderActionDeclarations(resources)}
+
+export type GeneratedQueryOperations = ${renderQueryOperations(resources)};
 
 export interface QueryContext {
 	readonly data: Readonly<GeneratedData>;
@@ -361,6 +376,10 @@ export type RouteServices = Readonly<{
 	${routeServices}
 }>;
 
+export type ActionServices = Readonly<{
+	${actionServices}
+}>;
+
 export type ExecutionInput = Readonly<{
 	principal: Principal;
 	context: AppContextInput;
@@ -377,6 +396,12 @@ export type RootExecution = Readonly<{
 	signal: AbortSignal;
 	deadline: number | null;
 }>;
+
+export interface ActionContext extends Omit<RootExecution, "services"> {
+	readonly services: ActionServices;
+	readonly queries: GeneratedQueryOperations;
+	readonly mutations: GeneratedMutationOperations;
+}
 
 export type QueryDefinition<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly kind: "query";
@@ -425,7 +450,7 @@ export type RouteContext<Path extends \`/\${string}\` = \`/\${string}\`> = Reado
 	deadline: number;
 	execution<Result>(
 		input: ExecutionInput,
-		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
+		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 }>;
 
@@ -472,6 +497,7 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	network: definition.network === true,
 })) as QueryFactory;
 ${renderMutationFactory()}
+${renderActionFactory()}
 export const defineRoute: RouteFactory = ((definition) => Object.freeze({
 	...definition,
 	kind: "route" as const,
@@ -493,7 +519,7 @@ export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations }>) => Result | Promise<Result>,
+		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	readonly durable: GeneratedDurable;
 	readonly routes: Readonly<{

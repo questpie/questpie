@@ -21,6 +21,7 @@ import {
 import {
 	assertOperationAdmission,
 	DeclaredOperationError,
+	isOperationCallId,
 	OperationFailure,
 	type OperationAdmission,
 	type RuntimeDeclaredErrorContract,
@@ -83,9 +84,11 @@ export interface RuntimeActionExecutor {
 	invoke(
 		identity: string,
 		invocation: Readonly<{
+			callId?: string;
 			input: unknown;
 			effectKey: string;
 			scope: ActionExecutionScope;
+			timeoutMilliseconds?: number;
 		}>,
 	): Promise<unknown>;
 }
@@ -260,9 +263,11 @@ export function createRuntimeActionExecutor<Context>(
 		invoke: async (
 			identity: string,
 			invocation: Readonly<{
+				callId?: string;
 				input: unknown;
 				effectKey: string;
 				scope: ActionExecutionScope;
+				timeoutMilliseconds?: number;
 			}>,
 		) => {
 			const binding = bindings.get(identity as `action:${string}`);
@@ -286,23 +291,44 @@ export function createRuntimeActionExecutor<Context>(
 						: new OperationFailure("INTERNAL");
 			}
 			assertOperationAdmission(binding.admission, facts);
+			const invocationKeys = Object.keys(invocation).sort();
+			if (
+				invocationKeys.length < 3 ||
+				invocationKeys.length > 5 ||
+				!invocationKeys.includes("effectKey") ||
+				!invocationKeys.includes("input") ||
+				!invocationKeys.includes("scope") ||
+				invocationKeys.some(
+					(key) =>
+						!(
+							[
+								"callId",
+								"effectKey",
+								"input",
+								"scope",
+								"timeoutMilliseconds",
+							] as const
+						).includes(key as never),
+				) ||
+				(invocation.callId !== undefined &&
+					!isOperationCallId(invocation.callId)) ||
+				(invocation.timeoutMilliseconds !== undefined &&
+					(!Number.isSafeInteger(invocation.timeoutMilliseconds) ||
+						invocation.timeoutMilliseconds <= 0))
+			)
+				throw new OperationFailure("PROTOCOL_UNSUPPORTED");
 			if (clockFailure) throw clockFailure;
 			const control = createActionControl(
 				facts,
-				binding.limits.durationMilliseconds,
+				Math.min(
+					binding.limits.durationMilliseconds,
+					invocation.timeoutMilliseconds ?? Number.MAX_SAFE_INTEGER,
+				),
 				startedAt,
 				clock,
 			);
 			try {
 				control.throwIfExpired();
-				const invocationKeys = Object.keys(invocation).sort();
-				if (
-					invocationKeys.length !== 3 ||
-					invocationKeys[0] !== "effectKey" ||
-					invocationKeys[1] !== "input" ||
-					invocationKeys[2] !== "scope"
-				)
-					throw new OperationFailure("PROTOCOL_UNSUPPORTED");
 				let effectIdentity: string;
 				try {
 					effectIdentity = deriveOrdinaryEffectIdentity(

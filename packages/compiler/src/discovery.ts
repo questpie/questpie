@@ -398,7 +398,16 @@ const make = (resourceKind) => (definition) => Object.freeze({
 });
 export const defineQuery = make("query");
 export const defineMutation = make("mutation");
-export const defineAction = make("action");
+export const defineAction = (definition) => {
+  if (!definition || typeof definition !== "object" || Array.isArray(definition) || typeof definition.handler !== "function")
+    throw new Error("QP-COMPOSE-013 Action handler must be executable");
+  return Object.freeze({
+    ...definition,
+    network: Object.hasOwn(definition, "network") ? definition.network : false,
+    executableSlots: Object.freeze(["handler"]),
+    __questpie: Object.freeze({ category: "definition", resourceKind: "action" }),
+  });
+};
 export const defineRoute = make("route");
 export const defineReaction = make("reaction");
 export const defineJob = make("job");

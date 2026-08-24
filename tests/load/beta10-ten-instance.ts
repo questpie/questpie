@@ -58,7 +58,7 @@ try {
 					context: { companyId: beta05Ids.company },
 				},
 				({ mutations }) =>
-					mutations["message.publish"](input, {
+					mutations.message.publish(input, {
 						callId: `beta10-direct-${String(index).padStart(5, "0")}`,
 					}),
 			);

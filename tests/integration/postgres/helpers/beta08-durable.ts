@@ -129,10 +129,12 @@ type Beta08Application = Readonly<{
 		use: (
 			scope: Readonly<{
 				mutations: Readonly<{
-					"message.publish"(
-						input: Readonly<{ channelId: string; body: string }>,
-						options: Readonly<{ callId: string }>,
-					): Promise<Readonly<{ id: string }>>;
+					message: Readonly<{
+						publish(
+							input: Readonly<{ channelId: string; body: string }>,
+							options: Readonly<{ callId: string }>,
+						): Promise<Readonly<{ id: string }>>;
+					}>;
 				}>;
 			}>,
 		) => Promise<Result> | Result,
