@@ -1,9 +1,11 @@
 import { expect, test } from "bun:test";
 
 import {
+	QuestpiePostgresError,
 	transactionBrand,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres";
+import { postgresFailure } from "../../packages/runtime/src/postgres/errors";
 import ownerPathScenario from "../../quality/performance/pb05-owner-path-measurement.json";
 import {
 	assertPb05OperationalMetrics,
@@ -13,6 +15,7 @@ import {
 	createPb05ContentionOperationOwner,
 	createPb05OperationAbortBoundary,
 	derivePb05OwnerPathMeasurements,
+	pb05OwnerPathStageAttribution,
 	pb05OperationalDatabase,
 	pb05OperationalResetOptIn,
 	pb05OwnerPathDatabase,
@@ -268,6 +271,96 @@ test("blocker settlement suppresses only its exact owned abort reason", async ()
 		}),
 	).resolves.toBeUndefined();
 
+	const runtimeCancellation = postgresFailure({
+		error: owned,
+		phase: "statement",
+		signal: controller.signal,
+	});
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(runtimeCancellation), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).resolves.toBeUndefined();
+
+	const unrelatedOwned = new DOMException(
+		"unrelated cancellation",
+		"AbortError",
+	);
+	const unrelatedCancellation = new QuestpiePostgresError({
+		code: "cancelled",
+		phase: "statement",
+		cause: unrelatedOwned,
+	});
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(unrelatedCancellation), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(unrelatedCancellation);
+
+	const wrongPhase = new QuestpiePostgresError({
+		code: "cancelled",
+		phase: "commit",
+		cause: owned,
+	});
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(wrongPhase), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(wrongPhase);
+
+	const timeout = new QuestpiePostgresError({
+		code: "statementTimeout",
+		phase: "statement",
+		cause: owned,
+	});
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(timeout), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(timeout);
+
+	for (const failure of [
+		new QuestpiePostgresError({
+			code: "queryFailed",
+			phase: "rollback",
+			cause: owned,
+		}),
+		new QuestpiePostgresError({
+			code: "connectionLost",
+			phase: "statement",
+			cause: owned,
+		}),
+	])
+		await expect(
+			settlePb05OwnedBlocker(Promise.reject(failure), {
+				released: () => true,
+				signal: controller.signal,
+			}),
+		).rejects.toBe(failure);
+
+	const lookalike = {
+		code: "cancelled",
+		phase: "statement",
+		cause: owned,
+	};
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(lookalike), {
+			released: () => true,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(lookalike);
+
+	await expect(
+		settlePb05OwnedBlocker(Promise.reject(runtimeCancellation), {
+			released: () => false,
+			signal: controller.signal,
+		}),
+	).rejects.toBe(runtimeCancellation);
+
 	const unrelated = new Error("blocker commit failed");
 	await expect(
 		settlePb05OwnedBlocker(Promise.reject(unrelated), {
@@ -275,6 +368,27 @@ test("blocker settlement suppresses only its exact owned abort reason", async ()
 			signal: controller.signal,
 		}),
 	).rejects.toBe(unrelated);
+});
+
+test("owner-path stage attribution is bounded and redacts unknown reasons", () => {
+	const antagonist = new AbortController();
+	antagonist.abort(new DOMException("PB-05 antagonist released", "AbortError"));
+	const unknown = new AbortController();
+	unknown.abort(new Error("postgres://user:secret@example.invalid/database"));
+	expect(
+		pb05OwnerPathStageAttribution(
+			{ phase: "contention", operation: "maintenance", sample: 0 },
+			{ unknown: unknown.signal, antagonist: antagonist.signal },
+		),
+	).toEqual({
+		phase: "contention",
+		operation: "maintenance",
+		sample: 0,
+		signals: {
+			antagonist: { aborted: true, reason: "antagonist-release" },
+			unknown: { aborted: true, reason: "other:Error" },
+		},
+	});
 });
 
 test("an admitted operation that never settles is aborted after owner close", async () => {

@@ -32,6 +32,7 @@ import {
 	createPb05ContentionOperationOwner,
 	createPb05OperationAbortBoundary,
 	derivePb05OwnerPathMeasurements,
+	pb05OwnerPathStageAttribution,
 	settlePb05OwnedBlocker,
 	withPb05ReleasedBlocker,
 } from "../support/pb05-operational-load-safety";
@@ -374,6 +375,12 @@ let runtime: ReturnType<typeof createRuntimePostgres> | undefined;
 let contentionControl: ReturnType<typeof createRuntimePostgres> | undefined;
 let runFailed = false;
 let primary: unknown;
+let diagnosticStage: Readonly<{
+	phase: string;
+	operation?: string;
+	sample?: number;
+}> = { phase: "database-identity" };
+let diagnosticSignals = (): Readonly<Record<string, AbortSignal>> => ({});
 
 try {
 	const [identity] = await admin.unsafe<
@@ -388,6 +395,7 @@ try {
 	});
 	schemaOwned = true;
 
+	diagnosticStage = { phase: "application-prepare" };
 	prepared = await prepareBeta05PostgresApplication(admin);
 	const generated = await generatedFiles(prepared, [
 		"postgres-collection-operation-plans.json",
@@ -572,6 +580,11 @@ try {
 		index += 1
 	) {
 		const record = index >= warmupSamples;
+		diagnosticStage = {
+			phase: "callback",
+			operation: "mutation-handler",
+			sample: index,
+		};
 		const priorMutation =
 			measurement.snapshot({ requireCompleteInventory: false }).idleGaps[
 				"mutation:fresh:handler"
@@ -605,6 +618,11 @@ try {
 			measurement.snapshot({ requireCompleteInventory: false }).idleGaps[
 				"realtime:apply:apply"
 			]?.totalMs ?? 0;
+		diagnosticStage = {
+			phase: "callback",
+			operation: "realtime-apply",
+			sample: index,
+		};
 		const reconciliation = await reconcile(record);
 		semanticResults.push(
 			reconciliation.facts.length > 0 &&
@@ -654,6 +672,15 @@ ORDER BY accepted_at DESC LIMIT 1`,
 				abortAfterCloseMs: 4_000,
 			});
 			let released = false;
+			diagnosticStage = {
+				phase: "contention",
+				operation: owner,
+				sample: index,
+			};
+			diagnosticSignals = () => ({
+				antagonist: blockerController.signal,
+				owner: operationOwner.signal,
+			});
 			const blocker = activeContentionControl
 				.transaction({
 					mode: { isolation: "readCommitted", access: "readWrite" },
@@ -895,6 +922,8 @@ WHERE application_name = $1
 		},
 	);
 
+	diagnosticStage = { phase: "measurement-contract" };
+	diagnosticSignals = () => ({});
 	const snapshot = measurement.snapshot({ requireCompleteInventory: false });
 	const measurements = derivePb05OwnerPathMeasurements({
 		snapshot,
@@ -937,6 +966,12 @@ WHERE application_name = $1
 		}),
 	);
 } catch (error) {
+	console.error(
+		"PB-05 owner-path stage failure",
+		JSON.stringify(
+			pb05OwnerPathStageAttribution(diagnosticStage, diagnosticSignals()),
+		),
+	);
 	runFailed = true;
 	primary = error;
 } finally {

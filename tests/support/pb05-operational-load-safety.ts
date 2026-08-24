@@ -1,3 +1,10 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+
+import {
+	QuestpiePostgresError,
+	type PostgresTransactionRunner,
+} from "../../packages/runtime/src/postgres";
+
 export const pb05OperationalDatabase =
 	"questpie_pb05_operational_measurement" as const;
 export const pb05OperationalResetOptIn =
@@ -77,6 +84,63 @@ type Pb05OwnerPathSnapshot = Readonly<{
 
 export function countPb05SemanticFailures(results: readonly boolean[]): number {
 	return results.reduce((count, result) => count + (result ? 0 : 1), 0);
+}
+
+type Pb05OwnerPathDiagnosticStage = Readonly<{
+	phase: string;
+	operation?: string;
+	sample?: number;
+}>;
+
+function pb05OwnedSignalReason(signal: AbortSignal): string | null {
+	if (!signal.aborted) return null;
+	const reason = signal.reason;
+	if (
+		reason instanceof DOMException &&
+		reason.name === "AbortError" &&
+		reason.message === "PB-05 antagonist released"
+	)
+		return "antagonist-release";
+	if (
+		reason instanceof DOMException &&
+		reason.name === "AbortError" &&
+		reason.message === "PB-05 contention operation exceeded its close deadline"
+	)
+		return "operation-close-deadline";
+	if (reason instanceof DOMException && reason.name === "TimeoutError")
+		return "timeout";
+	return reason instanceof Error
+		? `other:${reason.name}`
+		: `other:${typeof reason}`;
+}
+
+export function pb05OwnerPathStageAttribution(
+	stage: Pb05OwnerPathDiagnosticStage,
+	signals: Readonly<Record<string, AbortSignal>> = {},
+): Readonly<{
+	phase: string;
+	operation?: string;
+	sample?: number;
+	signals: Readonly<
+		Record<string, Readonly<{ aborted: boolean; reason: string | null }>>
+	>;
+}> {
+	return Object.freeze({
+		...stage,
+		signals: Object.freeze(
+			Object.fromEntries(
+				Object.entries(signals)
+					.toSorted(([left], [right]) => left.localeCompare(right))
+					.map(([name, signal]) => [
+						name,
+						Object.freeze({
+							aborted: signal.aborted,
+							reason: pb05OwnedSignalReason(signal),
+						}),
+					]),
+			),
+		),
+	});
 }
 
 export function derivePb05OwnerPathMeasurements(
@@ -220,7 +284,11 @@ export async function settlePb05OwnedBlocker(
 		if (
 			input.released() &&
 			input.signal.aborted &&
-			error === input.signal.reason
+			(error === input.signal.reason ||
+				(error instanceof QuestpiePostgresError &&
+					error.code === "cancelled" &&
+					error.phase === "statement" &&
+					error.cause === input.signal.reason))
 		)
 			return;
 		throw error;
@@ -334,6 +402,3 @@ export async function withPb05ReleasedBlocker<Value>(
 	if (rejected) throw rejected.reason;
 	return value as Value;
 }
-import { AsyncLocalStorage } from "node:async_hooks";
-
-import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";
