@@ -109,9 +109,7 @@ function pb05OwnedSignalReason(signal: AbortSignal): string | null {
 		return "operation-close-deadline";
 	if (reason instanceof DOMException && reason.name === "TimeoutError")
 		return "timeout";
-	return reason instanceof Error
-		? `other:${reason.name}`
-		: `other:${typeof reason}`;
+	return reason instanceof Error ? "other-error" : "other-reason";
 }
 
 export function pb05OwnerPathStageAttribution(

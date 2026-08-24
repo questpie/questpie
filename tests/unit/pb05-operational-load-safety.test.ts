@@ -374,21 +374,33 @@ test("owner-path stage attribution is bounded and redacts unknown reasons", () =
 	const antagonist = new AbortController();
 	antagonist.abort(new DOMException("PB-05 antagonist released", "AbortError"));
 	const unknown = new AbortController();
-	unknown.abort(new Error("postgres://user:secret@example.invalid/database"));
-	expect(
-		pb05OwnerPathStageAttribution(
-			{ phase: "contention", operation: "maintenance", sample: 0 },
-			{ unknown: unknown.signal, antagonist: antagonist.signal },
-		),
-	).toEqual({
+	const secretError = new Error(
+		"postgres://user:secret@example.invalid/database",
+	);
+	secretError.name = "credential-user-secret";
+	unknown.abort(secretError);
+	const unknownReason = new AbortController();
+	unknownReason.abort({ token: "secret-token" });
+	const attribution = pb05OwnerPathStageAttribution(
+		{ phase: "contention", operation: "maintenance", sample: 0 },
+		{
+			unknownReason: unknownReason.signal,
+			unknown: unknown.signal,
+			antagonist: antagonist.signal,
+		},
+	);
+	expect(attribution).toEqual({
 		phase: "contention",
 		operation: "maintenance",
 		sample: 0,
 		signals: {
 			antagonist: { aborted: true, reason: "antagonist-release" },
-			unknown: { aborted: true, reason: "other:Error" },
+			unknown: { aborted: true, reason: "other-error" },
+			unknownReason: { aborted: true, reason: "other-reason" },
 		},
 	});
+	expect(JSON.stringify(attribution)).not.toContain("secret");
+	expect(JSON.stringify(attribution)).not.toContain("postgres://");
 });
 
 test("an admitted operation that never settles is aborted after owner close", async () => {
