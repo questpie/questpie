@@ -524,8 +524,11 @@ heartbeat or request a durable state transition.
 
 ### Effect Identity
 
-The stable identity of one logical external effect for a Durable Run. It is
-derived from the Resource, Durable Run, and a declared literal effect name.
+The Runtime-owned stable identity of one logical external effect. An ordinary
+Action derives it from trusted Runtime scope plus caller-supplied stable
+`effectKey` material. A durable Reaction or Job derives it from the Resource,
+Durable Run, and a declared literal effect or ordered checkpoint name. Effect
+Identity is metadata, never domain input or Mutation Call Identity.
 
 ### Queue
 

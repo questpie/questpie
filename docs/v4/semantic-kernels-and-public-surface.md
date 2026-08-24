@@ -78,6 +78,16 @@ These server Operation maps are frozen null-prototype objects. Names such as
 `constructor` and `prototype` are ordinary own members, not inherited Object
 helpers.
 
+Every direct or network Action call supplies required `effectKey` metadata in
+its generated options. The key is caller-stable material, not domain input, a
+Mutation `callId`, or the final Effect Identity. Runtime scopes the UUID-shaped
+`effect.id` to trusted application, Tenant, Principal and Action identity and
+exposes only that derived value to the handler. Generated Action Definitions
+require exact `inputBytes`, `resultBytes`, and `durationMilliseconds` semantic
+limits. Operation Wire v3 adds the Action request while retaining v1/v2 Query
+and Mutation compatibility; post-dispatch transport uncertainty is explicit,
+non-retryable ambiguity and never automatic replay.
+
 ## Realtime and generated projections
 
 Live Query is a compiler-earned projection: compilation adds `.watch` to the

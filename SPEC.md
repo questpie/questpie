@@ -223,6 +223,17 @@ The semantic Operations are:
 - Route: an explicit HTTP escape hatch for webhooks, streaming, files, or custom
   protocol control.
 
+An ordinary direct or network Action call supplies required stable `effectKey`
+metadata. Runtime derives the final Effect Identity from trusted application,
+Tenant, Principal and Action identity; neither domain input nor Mutation
+`callId` can replace it. A Job Action checkpoint instead derives the identity
+from its Durable Run and ordered checkpoint and exposes no author override.
+Every Action owns required semantic `inputBytes`, `resultBytes`, and
+`durationMilliseconds` limits. Direct and Operation Wire v3 network calls enter
+the same semantic kernel. Wire v1/v2 never executes Action, and an unknowable
+post-dispatch transport outcome is explicit non-retryable ambiguity rather than
+success, rollback, rejection, or automatic replay.
+
 Routes are mounted into the single generated `app.fetch` and have a generated
 direct projection requiring an explicit ingress Principal. Raw Route context
 has exact Fetch values, cancellation/deadline, and Route-safe Services, but no
