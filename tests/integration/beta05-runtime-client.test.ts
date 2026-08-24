@@ -47,7 +47,12 @@ type RuntimeSlot = Readonly<{
 	runtimeGraphDigest: string;
 	bundleExport: string;
 }>;
-type Definition = Readonly<Record<string, unknown>>;
+type Definition = Readonly<{
+	create?: unknown;
+	dispose?: unknown;
+	handler?: unknown;
+	resolve?: unknown;
+}>;
 
 let compilation: GeneratedCompilation;
 let runtimeBuild: Readonly<Record<string, unknown>>;
