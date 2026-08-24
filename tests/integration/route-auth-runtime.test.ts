@@ -634,6 +634,33 @@ test("maps Route admission before projection or handler execution", async () => 
 	await runtime.close();
 });
 
+test("cleans a Route scope when its handler synchronously aborts before yielding", async () => {
+	const context = defineContext({
+		name: "route.sync-abort-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const source = new AbortController();
+	const aborted = runtime.route(
+		{ principal: principal.anonymous(), signal: source.signal },
+		() => {
+			source.abort(new DOMException("sync route abort", "AbortError"));
+			return new Promise<never>(() => undefined);
+		},
+	);
+	await expect(aborted).rejects.toMatchObject({
+		name: "AbortError",
+		message: "sync route abort",
+	});
+	await runtime.close();
+});
+
 test("disposes Route execution Services after response EOF, error, and cancellation", async () => {
 	const events: string[] = [];
 	let nextService = 0;

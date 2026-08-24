@@ -232,6 +232,7 @@ export function createServiceOwner(
 					controller.signal.addEventListener("abort", rejectOnAbort, {
 						once: true,
 					});
+					if (controller.signal.aborted) rejectOnAbort();
 				});
 				try {
 					result = await Promise.race([pendingUse, aborted]);
