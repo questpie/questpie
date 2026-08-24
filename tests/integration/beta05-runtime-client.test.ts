@@ -35,6 +35,7 @@ type GeneratedCompilation = Awaited<ReturnType<typeof compileApplication>>;
 type RuntimeSlot = Readonly<{
 	identity: string;
 	kind:
+		| "action"
 		| "context"
 		| "credentialResolver"
 		| "mutation"
@@ -73,6 +74,8 @@ let collaborationContext: Definition;
 let auditConnection: Definition;
 let executionAudit: Definition;
 let auditReader: Definition;
+let deliveryProvider: Definition;
+let publishDelivery: Definition;
 let publishMessage: Definition;
 let recordDelivery: Definition;
 let messagePublished: Definition;
@@ -133,6 +136,45 @@ beforeAll(async () => {
 	auditConnection = execution.auditConnection;
 	executionAudit = execution.executionAudit;
 	auditReader = audit.auditReader;
+	deliveryProvider = defineService({
+		name: "delivery.provider",
+		lifetime: "execution",
+		effect: "external",
+		create: () => Object.freeze({}),
+		dispose: () => undefined,
+	});
+	publishDelivery = generatedApp.defineAction({
+		name: "delivery.publish",
+		input: codec.object({
+			message: codec.text(),
+			effectKey: codec.text(),
+		}),
+		output: codec.object({
+			attempt: codec.integer(),
+			disposals: codec.integer(),
+			receipt: codec.text(),
+		}),
+		policy: policy.authenticated(),
+		errors: {
+			providerRejected: operation.error({
+				code: "PROVIDER_REJECTED",
+				status: 502,
+			}),
+			outcomeUnknown: operation.error({
+				code: "OUTCOME_UNKNOWN",
+				status: 503,
+				payload: codec.object({ reason: codec.text() }),
+			}),
+		},
+		limits: {
+			inputBytes: 4_096,
+			resultBytes: 4_096,
+			durationMilliseconds: 1_000,
+		},
+		handler: () => {
+			throw new Error("Action is outside this Query-only runtime harness");
+		},
+	});
 	demoAuth = defineService({
 		name: "collaboration.demo-auth",
 		lifetime: "application",
@@ -279,6 +321,7 @@ beforeAll(async () => {
 
 function definitions(): ReadonlyMap<string, Definition> {
 	return new Map([
+		["action:delivery.publish", publishDelivery],
 		["context:app.context", collaborationContext],
 		["credentialResolver:collaboration.credentials", applicationCredentials],
 		["mutation:message.publish", publishMessage],
@@ -287,6 +330,7 @@ function definitions(): ReadonlyMap<string, Definition> {
 		["reaction:messagePublished", messagePublished],
 		["route:collaboration.whoami", whoami],
 		["service:collaboration.demo-auth", demoAuth],
+		["service:delivery.provider", deliveryProvider],
 		["service:audit.connection", auditConnection],
 		["service:audit.execution", executionAudit],
 		["service:questpie.auditReader", auditReader],
@@ -300,6 +344,7 @@ function executableBindings() {
 		const definition = byIdentity.get(slot.identity);
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
+			slot.kind === "action" ||
 			slot.kind === "query" ||
 			slot.kind === "mutation" ||
 			slot.kind === "reaction" ||
@@ -314,7 +359,8 @@ function executableBindings() {
 			runtimeGraphDigest: slot.runtimeGraphDigest,
 			bundleExport: slot.bundleExport,
 			definition,
-			...(slot.kind === "query" ||
+			...(slot.kind === "action" ||
+			slot.kind === "query" ||
 			slot.kind === "mutation" ||
 			slot.kind === "reaction" ||
 			slot.kind === "route"
@@ -364,6 +410,7 @@ async function runtimeHarness(
 		program: {
 			services: [
 				demoAuth,
+				deliveryProvider,
 				auditConnection,
 				executionAudit,
 				auditReader,
