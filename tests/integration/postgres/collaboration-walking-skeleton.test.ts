@@ -62,7 +62,6 @@ async function startHost(
 		env: {
 			...process.env,
 			DATABASE_URL: postgresUrl(),
-			QUESTPIE_TRACER_COMPILED_ROUTE: "1",
 			...(pauseWorker ? { QUESTPIE_TRACER_PAUSE_WORKER: "1" } : {}),
 		},
 		stdin: "ignore",

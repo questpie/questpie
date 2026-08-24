@@ -1,11 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-import { principal } from "questpie";
-
 import { createApp } from "../.questpie/generated/app";
-import { bindIngressPrincipalForRequest } from "../.questpie/generated/internal/application.js";
-import { tracerIds } from "./constants";
+import { demoSessionCookieName, demoSessionToken } from "../src/route-auth";
 
 const root = resolve(import.meta.dir, "..");
 const databaseUrl =
@@ -42,9 +39,6 @@ const application = await createApp({
 	realtime: { hmacKey: new Uint8Array(32).fill(23) },
 	maintenance: { authorize: () => false },
 });
-const demoPrincipal = principal.user({ id: tracerIds.principal });
-const demoSessionCookieName = "questpie_tracer_session";
-const demoSessionToken = "f18f8b8e0e1446079dc6e6d4755505f9";
 let report: Readonly<Record<string, unknown>> = Object.freeze({
 	phase: "host-ready",
 	connections: 0,
@@ -52,30 +46,6 @@ let report: Readonly<Record<string, unknown>> = Object.freeze({
 
 const response = (body: BodyInit, contentType: string) =>
 	new Response(body, { headers: { "content-type": contentType } });
-
-function hasDemoSession(request: Request): boolean {
-	const cookie = request.headers.get("cookie");
-	if (cookie === null) return false;
-
-	let matches = 0;
-	for (const rawPair of cookie.split(";")) {
-		const pair = rawPair.trim();
-		const separator = pair.indexOf("=");
-		if (separator <= 0) return false;
-		const name = pair.slice(0, separator).trim();
-		const value = pair.slice(separator + 1).trim();
-		if (name !== demoSessionCookieName) continue;
-		if (value !== demoSessionToken || matches > 0) return false;
-		matches += 1;
-	}
-
-	return matches === 1;
-}
-
-const whoamiHeaders = Object.freeze({
-	"cache-control": "no-store",
-	vary: "Cookie",
-});
 
 const server = Bun.serve({
 	port,
@@ -100,27 +70,6 @@ const server = Bun.serve({
 			return response(styles, "text/css; charset=utf-8");
 		if (url.pathname === "/tracer.js")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
-		if (url.pathname === "/api/whoami") {
-			if (process.env.QUESTPIE_TRACER_COMPILED_ROUTE === "1")
-				return application.fetch(request);
-			if (request.method !== "GET")
-				return new Response(null, {
-					headers: { ...whoamiHeaders, allow: "GET" },
-					status: 405,
-				});
-
-			// Deletion owner: Route/Auth commit 4 moves cookie recognition into the
-			// compiled credential resolver and Service, moves this response into an
-			// authored Route mounted by app.fetch, and removes this manual branch and
-			// cookie parser plus the internal Principal binder.
-			if (!hasDemoSession(request))
-				return new Response(null, { headers: whoamiHeaders, status: 401 });
-
-			return Response.json(
-				{ principal: { kind: "user", id: tracerIds.principal } },
-				{ headers: whoamiHeaders },
-			);
-		}
 		if (url.pathname === "/__questpie_tracer/report") {
 			if (request.method === "POST") {
 				const body = await request.json();
@@ -131,11 +80,7 @@ const server = Bun.serve({
 			}
 			return Response.json(report);
 		}
-		if (url.pathname.startsWith("/_questpie/"))
-			return application.fetch(
-				bindIngressPrincipalForRequest(request, demoPrincipal),
-			);
-		return new Response("Not found", { status: 404 });
+		return application.fetch(request);
 	},
 });
 
