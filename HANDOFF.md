@@ -192,8 +192,12 @@ null-prototype server Operation maps, generated Policy/context projection and
 the public direct caller all delegate to the one private Runtime owner. The
 collaboration tracer executes the authored external-Service Action before the
 existing PostgreSQL/Firefox journey and proves stable Effect Identity without
-coalescing or retry. Exact Wire v3 client/server transport is now the active
-Action boundary. Never hide Effect Identity in domain input, alias Mutation
+coalescing or retry. The private, non-projecting Wire v3 contract is integrated
+through `454966aa`: compiler projection and Runtime validation independently
+close the full retained v2/v1 and Action grammar, preserve canonical object-key
+semantics, and negotiate incompatible Action requests before Context, Service
+or handler work. Exact generated Wire v3 client/server transport is now the
+active Action boundary. Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
@@ -226,7 +230,7 @@ architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
 validation, and `git diff --check`. The release dry-run is retry-stable at the
 accepted package checksum
-`51df12dd081b557f545aa09635ee8eb0b0728dde6a46519b94ac7bd522aa9ac8`;
+`4ee5998d8b76290c45c00871d43745d1b2f493959b2d3d2deabdde29e490a4f9`;
 the declaration checksum is
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
@@ -399,12 +403,23 @@ the same values. `quality:full`, `quality:release`, package relocation, release
 dry-run, architecture, workspace and focused Action typechecks, and
 `git diff --check` pass. Independent Standards and Spec re-reviews return PASS.
 
+The private Operation Wire v3 staging boundary is integrated through
+`454966aa`. Ten focused hostiles pass with 82 assertions; the combined v2/v3
+compatibility matrix passes 18 tests with 157 assertions. The compiler and
+Runtime independently reject re-signed retained protocol/codec drift and
+malformed Action codec/error contracts, while canonical object property order
+remains non-semantic and nested array order remains exact. The accepted v3
+digest `c7596e3eef673d11381f9c9c9a25f81308084dd0054b91cfa8ddf9afe45457a4`
+is reproduced without changing the existing v2 projector or client. The seam
+is still private and unbarrelled; generated/client/server projection remains
+the next coherent boundary.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Carry the integrated generated direct Action tracer through exact Operation
-   Wire v3 client/server transport. Reuse the same generated identity-to-direct
+2. Carry the integrated generated direct Action tracer and private Wire v3
+   contract through exact client/server transport. Reuse the same generated identity-to-direct
    executor adapter; close retained v1/v2 compatibility, zero-work
    `CLIENT_OUTDATED`, all eight post-dispatch ambiguity families, recursive
    nondisclosure, browser, artifact and release evidence. Preserve the accepted
