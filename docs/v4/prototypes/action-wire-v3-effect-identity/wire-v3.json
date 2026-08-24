@@ -1,0 +1,128 @@
+{
+	"actionEffectIdentity": {
+		"automaticRetry": false,
+		"callerMaterial": "effectKey",
+		"derivationDomain": "questpie.effect-identity.action.v1",
+		"derivationFields": [
+			"application",
+			"tenant",
+			"principalKind",
+			"principalId",
+			"action",
+			"effectKey"
+		],
+		"domainInputExcluded": true,
+		"handlerAccess": "effect.id",
+		"internalFormat": "uuid",
+		"mutationCallIdExcluded": true,
+		"wireDisclosure": false
+	},
+	"actionFailureDetails": {
+		"actionOutcomeAmbiguous": ["code", "retryable"],
+		"postHandlerResourceLimit": [
+			"code",
+			"doesNotClassifyProviderOutcome",
+			"phase",
+			"provesProviderNonacceptance",
+			"replayAuthorized",
+			"retryable"
+		]
+	},
+	"actionFailures": [
+		"APPLICATION_MISMATCH",
+		"CLIENT_OUTDATED",
+		"COMMITTED_RESULT_UNAVAILABLE",
+		"DEADLINE_EXCEEDED",
+		"INTERNAL",
+		"NOT_FOUND",
+		"PROTOCOL_UNSUPPORTED",
+		"RESOURCE_LIMIT",
+		"RUNTIME_UNAVAILABLE",
+		"ACTION_OUTCOME_AMBIGUOUS"
+	],
+	"actionLimitsProjection": {
+		"fields": ["durationMilliseconds", "inputBytes", "resultBytes"],
+		"semanticCanonicalJsonLineBytes": true,
+		"transportLimitsDistinct": true
+	},
+	"actionOperation": {
+		"declaredErrors": {
+			"outcomeUnknown": {
+				"code": "OUTCOME_UNKNOWN",
+				"payload": {
+					"kind": "object",
+					"properties": { "provider": { "kind": "text" } }
+				},
+				"status": 502
+			},
+			"providerRejected": {
+				"code": "PROVIDER_REJECTED",
+				"payload": null,
+				"status": 422
+			}
+		},
+		"identity": "action:delivery.publish",
+		"input": {
+			"kind": "object",
+			"properties": {
+				"body": { "kind": "text" },
+				"effectKey": { "kind": "text" }
+			}
+		},
+		"output": {
+			"kind": "object",
+			"properties": { "receipt": { "kind": "text" } }
+		}
+	},
+	"actionOutcomeAmbiguous": {
+		"authoredOutcomeUnknownDistinct": true,
+		"automaticRetry": false,
+		"code": "ACTION_OUTCOME_AMBIGUOUS",
+		"payload": ["callId", "effectKey"],
+		"retryable": false,
+		"triggers": [
+			"fetchRejectedAfterDispatch",
+			"responseLostAfterDispatch",
+			"cancellationRaceAfterDispatch",
+			"malformedContentTypeAfterDispatch",
+			"invalidJsonAfterDispatch",
+			"unknownFrameAfterDispatch",
+			"miscorrelatedFrameAfterDispatch",
+			"connectionTruncatedAfterDispatch"
+		]
+	},
+	"actionRequestKeys": [
+		"application",
+		"callId",
+		"clientContractDigest",
+		"context",
+		"effectKey",
+		"input",
+		"operation",
+		"protocol",
+		"timeoutMilliseconds",
+		"wireDigest"
+	],
+	"effectKey": {
+		"absenceBehavior": "reject",
+		"equality": "exactUtf8AfterValidation",
+		"kind": "text",
+		"loneSurrogates": "forbidden",
+		"maximumUnicodeScalars": 256,
+		"maximumUtf8Bytes": 1024,
+		"minimumUnicodeScalars": 1,
+		"normalization": "NFC",
+		"normalizationBehavior": "rejectNotRewrite",
+		"nullScalar": "forbidden",
+		"required": true
+	},
+	"postDispatchResourceLimit": {
+		"automaticRetry": false,
+		"code": "RESOURCE_LIMIT",
+		"doesNotClassifyProviderOutcome": true,
+		"phase": "postHandler",
+		"provesProviderNonacceptance": false,
+		"replayAuthorized": false,
+		"retryable": false
+	}
+}

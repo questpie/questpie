@@ -1,0 +1,165 @@
+{
+	"application": "application:collaboration",
+	"callIdentity": {
+		"equality": "exactUtf8AfterValidation",
+		"kind": "text",
+		"loneSurrogates": "forbidden",
+		"maximumUnicodeScalars": 256,
+		"maximumUtf8Bytes": 1024,
+		"minimumUnicodeScalars": 1,
+		"normalization": "NFC",
+		"normalizationBehavior": "rejectNotRewrite",
+		"nullScalar": "forbidden",
+		"runtimeDefaultWhenAbsent": "crypto.randomUUID",
+		"uuidRequired": false
+	},
+	"clientContractDigest": "9086deef5b7df476df3840182b8e20a372ec9da2ea37be70fa0674aae5dd9076",
+	"committedResultUnavailable": {
+		"automaticRetry": false,
+		"causeDisclosure": "forbidden",
+		"classification": "frameworkTransactionOutcome",
+		"frameCallIdSource": "acceptedRequest",
+		"httpStatus": 500,
+		"recovery": "replayExactMutationWithSameCallIdentity",
+		"retryable": true,
+		"transactionIdSource": "committedReceipt",
+		"transactionOutcome": "committed"
+	},
+	"compatibility": {
+		"clientContractDigest": "9086deef5b7df476df3840182b8e20a372ec9da2ea37be70fa0674aae5dd9076",
+		"wireV1Digest": "5e95eb656702b28ae229f7a36de94e0ee1e44c1b4100fc93f8f222f0ca36727c",
+		"wireV1MutationExecution": "rejectBeforeContextAndOperation",
+		"wireV1QueryExecution": "allowed",
+		"wireV1RejectionCode": "CLIENT_OUTDATED",
+		"wireV1Source": "sameApplicationClientContractAndOperations"
+	},
+	"digest": "4d8dfdda7d345318ff6dc9954a771ceff227eb6ffc534a581df84cf31e807270",
+	"failureDetails": {
+		"committedResultUnavailable": ["code", "retryable", "transactionId"],
+		"ordinary": ["code", "retryable"]
+	},
+	"failures": [
+		"APPLICATION_MISMATCH",
+		"CLIENT_OUTDATED",
+		"COMMITTED_RESULT_UNAVAILABLE",
+		"DEADLINE_EXCEEDED",
+		"INTERNAL",
+		"NOT_FOUND",
+		"PROTOCOL_UNSUPPORTED",
+		"RESOURCE_LIMIT",
+		"RUNTIME_UNAVAILABLE"
+	],
+	"format": "questpie.operation-wire",
+	"limits": { "requestBytes": 1048576, "responseBytes": 1048576 },
+	"mediaType": "application/vnd.questpie.operation+json;version=1",
+	"mutationAutomaticRetry": false,
+	"operations": [
+		{
+			"declaredErrors": {
+				"channelUnavailable": {
+					"code": "CHANNEL_UNAVAILABLE",
+					"payload": null,
+					"status": 404
+				},
+				"idempotencyConflict": {
+					"code": "IDEMPOTENCY_CONFLICT",
+					"payload": {
+						"kind": "object",
+						"properties": { "callId": { "kind": "text" } }
+					},
+					"status": 409
+				}
+			},
+			"identity": "mutation:message.publish",
+			"input": {
+				"kind": "object",
+				"properties": {
+					"body": { "kind": "text" },
+					"channelId": { "kind": "uuid" }
+				}
+			},
+			"output": {
+				"kind": "object",
+				"properties": {
+					"body": { "kind": "text" },
+					"channelId": { "kind": "uuid" },
+					"createdAt": { "kind": "timestamp" },
+					"id": { "kind": "uuid" }
+				}
+			}
+		},
+		{
+			"declaredErrors": {},
+			"identity": "query:messages.page",
+			"input": {
+				"kind": "object",
+				"properties": {
+					"after": { "codec": { "kind": "text" }, "kind": "nullable" },
+					"channelId": { "kind": "uuid" },
+					"first": { "kind": "integer" }
+				}
+			},
+			"output": {
+				"kind": "object",
+				"properties": {
+					"nodes": {
+						"items": {
+							"kind": "object",
+							"properties": {
+								"author": {
+									"codec": {
+										"kind": "object",
+										"properties": {
+											"id": { "kind": "uuid" },
+											"role": { "kind": "text" }
+										}
+									},
+									"kind": "nullable"
+								},
+								"body": { "codec": { "kind": "text" }, "kind": "optional" },
+								"createdAt": { "kind": "timestamp" },
+								"id": { "kind": "uuid" }
+							}
+						},
+						"kind": "array"
+					},
+					"pageInfo": {
+						"kind": "object",
+						"properties": {
+							"endCursor": { "codec": { "kind": "text" }, "kind": "nullable" },
+							"hasNextPage": { "kind": "boolean" }
+						}
+					}
+				}
+			}
+		}
+	],
+	"path": "/_questpie/operation",
+	"principalSource": "ingressOutsideBody",
+	"protocol": { "name": "questpie.operation", "version": 1 },
+	"requestKeys": [
+		"application",
+		"callId",
+		"clientContractDigest",
+		"context",
+		"input",
+		"operation",
+		"protocol",
+		"timeoutMilliseconds",
+		"wireDigest"
+	],
+	"responseKeys": {
+		"declaredError": ["callId", "error", "kind", "operation", "protocol"],
+		"failure": ["callId", "error", "kind", "operation", "protocol"],
+		"rejection": ["error", "kind"],
+		"result": ["callId", "kind", "operation", "payload", "protocol"]
+	},
+	"resultKinds": ["declaredError", "failure", "result"],
+	"transactionIdentity": {
+		"canonicalPattern": "^[1-9][0-9]{0,19}$",
+		"clientInterpretation": "opaque",
+		"kind": "postgresXid8Text",
+		"maximum": "18446744073709551615"
+	},
+	"version": 2
+}
