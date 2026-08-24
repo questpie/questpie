@@ -10,6 +10,7 @@ import ownerPathScenario from "../../quality/performance/pb05-owner-path-measure
 import {
 	assertPb05OperationalMetrics,
 	assertPb05OperationalSchemaReset,
+	assertPb05OwnerPathApplicationIdentities,
 	assertPb05OwnerPathSchemaReset,
 	countPb05SemanticFailures,
 	createPb05ContentionOperationOwner,
@@ -62,6 +63,32 @@ test("owner-path reset has an independent exact database and opt-in", () => {
 	});
 	resets += 1;
 	expect(resets).toBe(1);
+});
+
+test("owner-path keeps Mutation QRN separate from realtime ledger application name", () => {
+	expect(() =>
+		assertPb05OwnerPathApplicationIdentities({
+			mutationApplication: "application:collaboration",
+			realtimeApplicationName: "collaboration",
+		}),
+	).not.toThrow();
+	for (const input of [
+		{
+			mutationApplication: "collaboration",
+			realtimeApplicationName: "collaboration",
+		},
+		{
+			mutationApplication: "application:collaboration",
+			realtimeApplicationName: "application:collaboration",
+		},
+		{
+			mutationApplication: "collaboration",
+			realtimeApplicationName: "application:collaboration",
+		},
+	])
+		expect(() => assertPb05OwnerPathApplicationIdentities(input)).toThrow(
+			"PB-05 owner-path application identities are invalid",
+		);
 });
 
 test("a wrong database cannot reach destructive reset work", () => {

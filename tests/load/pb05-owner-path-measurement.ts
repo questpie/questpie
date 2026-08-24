@@ -28,6 +28,7 @@ import {
 import { importPb05FileBackedModule } from "../support/pb05-file-backed-module";
 import {
 	assertPb05OperationalMetrics,
+	assertPb05OwnerPathApplicationIdentities,
 	assertPb05OwnerPathSchemaReset,
 	createPb05ContentionOperationOwner,
 	createPb05OperationAbortBoundary,
@@ -50,14 +51,18 @@ import {
 if (!process.env.PGHOST || !process.env.PGDATABASE || !process.env.PGUSER)
 	throw new Error("PB-05 owner-path measurement requires PostgreSQL");
 
-const application = "application:collaboration";
-const applicationName = "collaboration";
+const mutationApplication = "application:collaboration";
+const realtimeApplicationName = "collaboration";
+assertPb05OwnerPathApplicationIdentities({
+	mutationApplication,
+	realtimeApplicationName,
+});
 let consumer = "";
 const warmupSamples = 2;
 const measuredCallbackSamples = 16;
 const measuredContentionSamples = 8;
 const authorityPartitionDigest = "a".repeat(64);
-const retentionLockIdentity = `questpie-retained-result-v1:${applicationName}:${authorityPartitionDigest}`;
+const retentionLockIdentity = `questpie-retained-result-v1:${realtimeApplicationName}:${authorityPartitionDigest}`;
 
 type View = Readonly<{
 	data: Readonly<{
@@ -542,7 +547,7 @@ try {
 	>;
 	const invoke = createPostgresDatabaseMutationInvoker<View>({
 		database: mutationDatabase,
-		application,
+		application: mutationApplication,
 		transactionStatements,
 		collectionPlans,
 		reactions,
@@ -556,7 +561,7 @@ try {
 	const reconcile = (record: boolean) =>
 		reconcilePostgresChangeLedger({
 			database: reconciliationDatabase,
-			application,
+			application: realtimeApplicationName,
 			consumer,
 			apply: async () => undefined,
 			effect: Object.freeze({
@@ -706,12 +711,12 @@ ORDER BY accepted_at DESC LIMIT 1`,
 					async use(transaction) {
 						if (owner === "maintenance")
 							await transaction.execute(maintenanceAntagonist, {
-								application,
+								application: mutationApplication,
 								runId: durableRunId,
 							});
 						else if (owner === "reconciliation")
 							await transaction.execute(reconciliationAntagonist, {
-								application,
+								application: realtimeApplicationName,
 								consumer,
 							});
 						else
@@ -779,12 +784,12 @@ ORDER BY accepted_at DESC LIMIT 1`,
 				database: maintenanceRuntime,
 				measurement,
 				owner: "maintenance",
-				lockIdentity: `${application}:${durableRunId}`,
+				lockIdentity: `${mutationApplication}:${durableRunId}`,
 			});
 			const operationBoundary = createPb05OperationAbortBoundary(measured);
 			const maintenance = createPostgresDatabaseDurableMaintenance({
 				database: operationBoundary.database,
-				application,
+				application: mutationApplication,
 				authorize: () => true,
 			});
 			await runContention(
@@ -836,7 +841,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 				database: reconciliationRuntime,
 				measurement,
 				owner: "reconciliation",
-				lockIdentity: `${application}:${consumer}`,
+				lockIdentity: `${realtimeApplicationName}:${consumer}`,
 			});
 			const operationBoundary = createPb05OperationAbortBoundary(measured);
 			await runContention(
@@ -848,7 +853,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 					let appliedFacts = 0;
 					const result = await reconcilePostgresChangeLedger({
 						database,
-						application,
+						application: realtimeApplicationName,
 						consumer,
 						apply: async (facts) => {
 							appliedFacts += facts.length;
@@ -894,7 +899,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 			});
 			const retained = {
 				binding: {
-					applicationName,
+					applicationName: realtimeApplicationName,
 					deploymentDigest: "b".repeat(64),
 					authorityPartitionDigest,
 					queryIdentity: "messages.page",
@@ -927,7 +932,7 @@ ORDER BY accepted_at DESC LIMIT 1`,
 FROM questpie_internal.retained_live_query_results
 WHERE application_name = $1
   AND authority_partition_digest = $2`,
-				[applicationName, authorityPartitionDigest],
+				[realtimeApplicationName, authorityPartitionDigest],
 			);
 			recordSemantic(
 				"retention-readback",

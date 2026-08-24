@@ -12,6 +12,19 @@ export const pb05OperationalResetOptIn =
 export const pb05OwnerPathDatabase = "questpie_pb05_owner_path" as const;
 export const pb05OwnerPathResetOptIn = "questpie_pb05_owner_path" as const;
 
+export function assertPb05OwnerPathApplicationIdentities(
+	input: Readonly<{
+		mutationApplication: string;
+		realtimeApplicationName: string;
+	}>,
+): void {
+	if (
+		input.mutationApplication !== "application:collaboration" ||
+		input.realtimeApplicationName !== "collaboration"
+	)
+		throw new TypeError("PB-05 owner-path application identities are invalid");
+}
+
 export function assertPb05OperationalSchemaReset(
 	input: Readonly<{
 		database: string | undefined;
