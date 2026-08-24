@@ -1,6 +1,9 @@
-import type { Principal } from "questpie";
+import type { Principal, ServiceDefinition } from "questpie";
 
-import type { RuntimeActionBinding } from "../../packages/runtime/src/action";
+import type {
+	RuntimeActionBinding,
+	RuntimeActionProjectionScope,
+} from "../../packages/runtime/src/action";
 
 type ActionContext = Readonly<{
 	principal: Principal;
@@ -36,3 +39,14 @@ const binding = {
 } satisfies RuntimeActionBinding<ActionContext>;
 
 void binding;
+
+declare const projection: RuntimeActionProjectionScope;
+declare const readService: ServiceDefinition<
+	"read-only",
+	"execution",
+	"read",
+	Readonly<Record<never, never>>,
+	Readonly<{ read(): string }>
+>;
+// @ts-expect-error Action projection admits only external-effect Services.
+void projection.service(readService);

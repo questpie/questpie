@@ -1,4 +1,10 @@
-import { principal } from "questpie";
+import {
+	principal,
+	type ServiceDefinition,
+	type ServiceDependencyMap,
+	type ServiceInstance,
+	type ServiceLifetime,
+} from "questpie";
 
 import {
 	decodeRuntimeCodec,
@@ -6,7 +12,12 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import { type ExecutionFacts, isRuntimeExecutionFacts } from "../execution";
+import {
+	type ExecutionFacts,
+	isRuntimeExecutionFacts,
+	isRuntimeExecutionScope,
+	type RuntimeExecutionScope,
+} from "../execution";
 import {
 	assertOperationAdmission,
 	DeclaredOperationError,
@@ -20,6 +31,26 @@ type MaybePromise<Value> = Value | Promise<Value>;
 type ActionExecutionFacts = ExecutionFacts<
 	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
 >;
+
+type ActionExecutionScope = RuntimeExecutionScope<
+	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+>;
+
+type ExternalEffectService = ServiceDefinition<
+	string,
+	ServiceLifetime,
+	"external",
+	ServiceDependencyMap,
+	unknown
+>;
+
+export type RuntimeActionProjectionScope = ActionExecutionFacts &
+	Readonly<{
+		facts: ActionExecutionFacts;
+		service<Definition extends ExternalEffectService>(
+			definition: Definition,
+		): Promise<ServiceInstance<Definition>>;
+	}>;
 
 export type RuntimeActionBinding<Context> = Readonly<{
 	identity: `action:${string}`;
@@ -43,10 +74,13 @@ export interface RuntimeActionExecutor<Effect> {
 	invoke(
 		identity: string,
 		invocation: Readonly<{
-			facts: ActionExecutionFacts;
 			input: unknown;
 			effect: Effect;
-		}>,
+		}> &
+			(
+				| Readonly<{ scope: ActionExecutionScope }>
+				| Readonly<{ facts: ActionExecutionFacts }>
+			),
 	): Promise<unknown>;
 }
 
@@ -131,7 +165,7 @@ function validBindingInventory<Context>(
 export function createRuntimeActionExecutor<Context, Effect>(
 	input: Readonly<{
 		bindings: readonly RuntimeActionBinding<Context>[];
-		project(facts: ActionExecutionFacts): MaybePromise<Context>;
+		project(scope: RuntimeActionProjectionScope): MaybePromise<Context>;
 		readEffectIdentity(effect: Effect): string;
 	}>,
 ): RuntimeActionExecutor<Effect> {
@@ -145,20 +179,28 @@ export function createRuntimeActionExecutor<Context, Effect>(
 		invoke: async (
 			identity: string,
 			invocation: Readonly<{
-				facts: ActionExecutionFacts;
 				input: unknown;
 				effect: Effect;
-			}>,
+			}> &
+				(
+					| Readonly<{ scope: ActionExecutionScope }>
+					| Readonly<{ facts: ActionExecutionFacts }>
+				),
 		) => {
 			const binding = bindings.get(identity as `action:${string}`);
 			if (!binding) throw new OperationFailure("NOT_FOUND");
+			const executionScope = "scope" in invocation ? invocation.scope : null;
+			const facts =
+				"scope" in invocation ? invocation.scope.facts : invocation.facts;
 			if (
-				!isRuntimeExecutionFacts(invocation.facts) ||
-				!principal.is(invocation.facts.principal)
+				(executionScope
+					? !isRuntimeExecutionScope(executionScope)
+					: !isRuntimeExecutionFacts(facts)) ||
+				!principal.is(facts.principal)
 			)
 				throw new OperationFailure("INTERNAL");
-			assertOperationAdmission(binding.admission, invocation.facts);
-			invocation.facts.signal.throwIfAborted();
+			assertOperationAdmission(binding.admission, facts);
+			facts.signal.throwIfAborted();
 			let effectIdentity: string;
 			try {
 				effectIdentity = input.readEffectIdentity(invocation.effect);
@@ -172,11 +214,26 @@ export function createRuntimeActionExecutor<Context, Effect>(
 			const decodedInput = decodeInput(binding.input, invocation.input);
 			let context: Context;
 			try {
-				context = await input.project(invocation.facts);
-			} catch {
+				context = await input.project(
+					Object.freeze({
+						...facts,
+						facts,
+						service: <Definition extends ExternalEffectService>(
+							definition: Definition,
+						) => {
+							if (definition.effect !== "external")
+								return Promise.reject(new OperationFailure("INTERNAL"));
+							if (!executionScope)
+								return Promise.reject(new OperationFailure("INTERNAL"));
+							return executionScope.service(definition);
+						},
+					}),
+				);
+			} catch (error) {
+				if (facts.signal.aborted && error === facts.signal.reason) throw error;
 				throw new OperationFailure("INTERNAL");
 			}
-			invocation.facts.signal.throwIfAborted();
+			facts.signal.throwIfAborted();
 			try {
 				const raw = await binding.execute({
 					input: decodedInput,
@@ -190,11 +247,7 @@ export function createRuntimeActionExecutor<Context, Effect>(
 					validateDeclaredError(binding.declaredErrors, error);
 					throw error;
 				}
-				if (
-					invocation.facts.signal.aborted &&
-					error === invocation.facts.signal.reason
-				)
-					throw error;
+				if (facts.signal.aborted && error === facts.signal.reason) throw error;
 				throw new OperationFailure("INTERNAL");
 			}
 		},

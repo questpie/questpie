@@ -21,6 +21,7 @@ import { decodeOperationWireRoot } from "./wire";
 type MaybePromise<Value> = Value | Promise<Value>;
 
 const trustedExecutionFacts = new WeakSet<object>();
+const trustedExecutionScopes = new WeakSet<object>();
 
 export type RuntimeContextBootstrapFactory = (
 	signal: AbortSignal,
@@ -51,17 +52,32 @@ export function isRuntimeExecutionFacts(
 	);
 }
 
+export type RuntimeExecutionScope<Resolved> = Readonly<{
+	facts: ExecutionFacts<Resolved>;
+	service<Definition extends AnyService>(
+		definition: Definition,
+	): Promise<ServiceInstance<Definition>>;
+}>;
+
+export function isRuntimeExecutionScope(
+	value: unknown,
+): value is RuntimeExecutionScope<
+	Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+> {
+	return Boolean(
+		value &&
+		typeof value === "object" &&
+		trustedExecutionScopes.has(value) &&
+		isRuntimeExecutionFacts((value as Readonly<{ facts?: unknown }>).facts),
+	);
+}
+
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
 	readonly context: Context;
 	readonly bootstrap: RuntimeContextBootstrapFactory;
 	readonly project: (
-		scope: Readonly<{
-			facts: ExecutionFacts<ContextResolvedOf<Context>>;
-			service<Definition extends AnyService>(
-				definition: Definition,
-			): Promise<ServiceInstance<Definition>>;
-		}>,
+		scope: RuntimeExecutionScope<ContextResolvedOf<Context>>,
 	) => MaybePromise<View>;
 }
 
@@ -195,11 +211,14 @@ export function createApplicationRuntime<
 					liveQueryObservation: input.liveQueryObservation ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				trustedExecutionFacts.add(facts);
+				const scope = Object.freeze({ facts, service });
+				trustedExecutionScopes.add(scope);
 				try {
-					const view = await program.project({ facts, service });
+					const view = await program.project(scope);
 					signal.throwIfAborted();
 					return await use(view);
 				} finally {
+					trustedExecutionScopes.delete(scope);
 					trustedExecutionFacts.delete(facts);
 				}
 			},

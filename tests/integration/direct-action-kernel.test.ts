@@ -1,10 +1,17 @@
 import { expect, test } from "bun:test";
 
-import { codec, defineContext, principal } from "questpie";
+import {
+	codec,
+	defineContext,
+	defineService,
+	principal,
+	type ServiceInstance,
+} from "questpie";
 
 import {
 	createRuntimeActionExecutor,
 	type RuntimeActionBinding,
+	type RuntimeActionProjectionScope,
 } from "../../packages/runtime/src/action";
 import { createApplicationRuntime } from "../../packages/runtime/src/execution";
 import {
@@ -102,6 +109,7 @@ test("runs one trusted opaque Effect Identity without deriving or retrying it", 
 test("rejects forged Principal, facts, Effect Identity, and Policy denial before work", async () => {
 	const effects = effectOwner();
 	let calls = 0;
+	let forgedServiceCalls = 0;
 	let projectionCalls = 0;
 	const actions = createRuntimeActionExecutor({
 		bindings: [
@@ -154,12 +162,24 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (executionScope) => ({
 			invoke: (effect: EffectToken) =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					facts: executionScope.facts,
 					input: { message: "hello" },
 					effect,
+				}),
+			invokeForgedScope: () =>
+				actions.invoke("action:delivery.send", {
+					scope: Object.freeze({
+						facts: executionScope.facts,
+						service: () => {
+							forgedServiceCalls += 1;
+							return Promise.reject(new Error("must-not-resolve"));
+						},
+					}) as never,
+					input: { message: "hello" },
+					effect: effects.issue("trusted-effect"),
 				}),
 		}),
 	});
@@ -175,7 +195,14 @@ test("rejects forged Principal, facts, Effect Identity, and Policy denial before
 			(scope) => scope.invoke(Object.freeze({ token: Symbol("forged") })),
 		),
 	).rejects.toMatchObject({ code: "INTERNAL" });
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invokeForgedScope(),
+		),
+	).rejects.toMatchObject({ code: "INTERNAL" });
 	expect(calls).toBe(0);
+	expect(forgedServiceCalls).toBe(0);
 	expect(projectionCalls).toBe(0);
 	await runtime.close();
 });
@@ -553,7 +580,7 @@ test("cancel-before-handler and duplicate inventories fail without work", async 
 	await runtime.close();
 });
 
-test("expires Runtime-owned Action facts with their execution lifetime", async () => {
+test("expires Runtime-owned Action scope with its execution lifetime", async () => {
 	const effects = effectOwner();
 	let calls = 0;
 	const actions = createRuntimeActionExecutor({
@@ -582,10 +609,10 @@ test("expires Runtime-owned Action facts with their execution lifetime", async (
 		services: [],
 		context,
 		bootstrap: () => ({ get: async () => null }),
-		project: ({ facts }) => ({
+		project: (executionScope) => ({
 			invoke: () =>
 				actions.invoke("action:delivery.send", {
-					facts,
+					scope: executionScope,
 					input: { message: "late" },
 					effect: effects.issue("opaque-owned-identity"),
 				}),
@@ -601,5 +628,309 @@ test("expires Runtime-owned Action facts with their execution lifetime", async (
 
 	await expect(invokeAfterRoot()).rejects.toMatchObject({ code: "INTERNAL" });
 	expect(calls).toBe(0);
+	await runtime.close();
+});
+
+test("projects one external execution Service and cleans it after Action outcomes", async () => {
+	const effects = effectOwner();
+	let creations = 0;
+	let disposals = 0;
+	let sends = 0;
+	let cancelEntered!: () => void;
+	const enteredCancellation = new Promise<void>((resolve) => {
+		cancelEntered = resolve;
+	});
+	const delivery = defineService({
+		name: "action.delivery-provider",
+		lifetime: "execution",
+		effect: "external",
+		create: () => {
+			creations += 1;
+			return Object.freeze({
+				send(message: string) {
+					sends += 1;
+					return `provider:${message}`;
+				},
+			});
+		},
+		dispose: () => {
+			disposals += 1;
+		},
+	});
+	type ActionContext = Readonly<{
+		provider: ServiceInstance<typeof delivery>;
+		signal: AbortSignal;
+	}>;
+	const actions = createRuntimeActionExecutor({
+		bindings: [
+			{
+				identity: "action:delivery.send",
+				admission: "authenticated",
+				input: inputCodec,
+				output: outputCodec,
+				declaredErrors: [
+					{
+						key: "providerRejected",
+						code: "PROVIDER_REJECTED",
+						status: 422,
+						payload: null,
+					},
+				],
+				execute: async ({ input, ctx, errors }) => {
+					const message = (input as Readonly<{ message: string }>).message;
+					if (message === "reject") throw errors.providerRejected();
+					if (message === "cancel") {
+						cancelEntered();
+						await new Promise<never>((_resolve, reject) =>
+							ctx.signal.addEventListener(
+								"abort",
+								() => reject(ctx.signal.reason),
+								{ once: true },
+							),
+						);
+					}
+					return { receipt: ctx.provider.send(message) };
+				},
+			},
+		],
+		readEffectIdentity: effects.read,
+		project: async (
+			scope: RuntimeActionProjectionScope,
+		): Promise<ActionContext> =>
+			Object.freeze({
+				provider: await scope.service(delivery),
+				signal: scope.facts.signal,
+			}),
+	});
+	const context = defineContext({
+		name: "action.service-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [delivery],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: (message: string) =>
+				actions.invoke("action:delivery.send", {
+					scope,
+					input: { message },
+					effect: effects.issue(`opaque:${message}`),
+				}),
+		}),
+	});
+
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			async (scope) => Promise.all([scope.invoke("one"), scope.invoke("two")]),
+		),
+	).resolves.toEqual([
+		{ receipt: "provider:one" },
+		{ receipt: "provider:two" },
+	]);
+	expect({ creations, disposals, sends }).toEqual({
+		creations: 1,
+		disposals: 1,
+		sends: 2,
+	});
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke("reject"),
+		),
+	).rejects.toEqual(new DeclaredOperationError("PROVIDER_REJECTED", 422));
+	expect({ creations, disposals, sends }).toEqual({
+		creations: 2,
+		disposals: 2,
+		sends: 2,
+	});
+
+	const controller = new AbortController();
+	const cancellation = runtime.execution(
+		{
+			principal: principal.user({ id: "user-1" }),
+			context: { companyId },
+			signal: controller.signal,
+		},
+		(scope) => scope.invoke("cancel"),
+	);
+	await enteredCancellation;
+	controller.abort(new DOMException("caller left", "AbortError"));
+	await expect(cancellation).rejects.toMatchObject({ name: "AbortError" });
+	expect({ creations, disposals, sends }).toEqual({
+		creations: 3,
+		disposals: 3,
+		sends: 2,
+	});
+	await runtime.close();
+});
+
+test("preserves owned cancellation while an external Service is projecting", async () => {
+	const effects = effectOwner();
+	const lifecycle: string[] = [];
+	let handlerCalls = 0;
+	let markCreateEntered!: () => void;
+	const createEntered = new Promise<void>((resolve) => {
+		markCreateEntered = resolve;
+	});
+	const support = defineService({
+		name: "action.cancellation-support",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			lifecycle.push("create:support");
+			return Object.freeze({ ready: true });
+		},
+		dispose: () => {
+			lifecycle.push("dispose:support");
+		},
+	});
+	const delivery = defineService({
+		name: "action.cancellation-delivery",
+		lifetime: "execution",
+		effect: "external",
+		dependencies: { support },
+		create: async ({ services, signal }) => {
+			expect(services.support.ready).toBe(true);
+			lifecycle.push("create:delivery:start");
+			markCreateEntered();
+			await new Promise<never>((_resolve, reject) => {
+				const rejectAbort = () => reject(signal.reason);
+				if (signal.aborted) rejectAbort();
+				else signal.addEventListener("abort", rejectAbort, { once: true });
+			});
+		},
+	});
+	const actions = createRuntimeActionExecutor({
+		bindings: [
+			{
+				identity: "action:delivery.send",
+				admission: "authenticated",
+				input: inputCodec,
+				output: outputCodec,
+				declaredErrors: [],
+				execute: () => {
+					handlerCalls += 1;
+					return { receipt: "must-not-run" };
+				},
+			},
+		],
+		readEffectIdentity: effects.read,
+		project: async (scope) =>
+			Object.freeze({
+				provider: await scope.service(delivery),
+			}),
+	});
+	const context = defineContext({
+		name: "action.service-cancellation-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	let actionInvocation!: Promise<unknown>;
+	const runtime = createApplicationRuntime({
+		services: [support, delivery],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: () => {
+				actionInvocation = actions.invoke("action:delivery.send", {
+					scope,
+					input: { message: "hello" },
+					effect: effects.issue("opaque-owned-identity"),
+				});
+				return actionInvocation;
+			},
+		}),
+	});
+	const controller = new AbortController();
+	const reason = new DOMException(
+		"caller left during projection",
+		"AbortError",
+	);
+	const root = runtime.execution(
+		{
+			principal: principal.user({ id: "user-1" }),
+			context: { companyId },
+			signal: controller.signal,
+		},
+		(scope) => scope.invoke(),
+	);
+	await createEntered;
+	controller.abort(reason);
+	await expect(root).rejects.toBe(reason);
+	await expect(actionInvocation).rejects.toBe(reason);
+	expect(handlerCalls).toBe(0);
+	expect(lifecycle).toEqual([
+		"create:support",
+		"create:delivery:start",
+		"dispose:support",
+	]);
+	await expect(runtime.close()).resolves.toBeUndefined();
+});
+
+test("rejects transaction-safe Service projection before creation or handler work", async () => {
+	const effects = effectOwner();
+	let creations = 0;
+	let handlerCalls = 0;
+	const transactionSafe = defineService({
+		name: "action.transaction-safe",
+		lifetime: "execution",
+		effect: "read",
+		create: () => {
+			creations += 1;
+			return Object.freeze({ read: () => "must-not-project" });
+		},
+	});
+	const actions = createRuntimeActionExecutor({
+		bindings: [
+			{
+				identity: "action:delivery.send",
+				admission: "authenticated",
+				input: inputCodec,
+				output: outputCodec,
+				declaredErrors: [],
+				execute: () => {
+					handlerCalls += 1;
+					return { receipt: "must-not-run" };
+				},
+			},
+		],
+		readEffectIdentity: effects.read,
+		project: async (scope) => {
+			await scope.service(transactionSafe as never);
+			return Object.freeze({ signal: scope.facts.signal });
+		},
+	});
+	const context = defineContext({
+		name: "action.read-service-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [transactionSafe],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: (scope) => ({
+			invoke: () =>
+				actions.invoke("action:delivery.send", {
+					scope,
+					input: { message: "hello" },
+					effect: effects.issue("opaque-owned-identity"),
+				}),
+		}),
+	});
+
+	await expect(
+		runtime.execution(
+			{ principal: principal.user({ id: "user-1" }), context: { companyId } },
+			(scope) => scope.invoke(),
+		),
+	).rejects.toMatchObject({ code: "INTERNAL" });
+	expect({ creations, handlerCalls }).toEqual({
+		creations: 0,
+		handlerCalls: 0,
+	});
 	await runtime.close();
 });
