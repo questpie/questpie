@@ -7,7 +7,7 @@
 	"authorityHeads": {
 		"canonical prerequisite with Runtime and compiler lone-surrogate parity": "c68309f3d0997cb3acb224a53d214d4f1516bbf2",
 		"integrated Action semantic-limits proof": "8525b903a781aff43b6d6cb08dd365f3813b46bf",
-		"repaired combined Effect Identity and Wire v3 proof": "6b61607bb361d297ce5382cac80b07d94d2a650b"
+		"repaired combined Effect Identity and Wire v3 proof": "b4100cde58e8f8e7bb9df39599ed7915ef6bf3f8"
 	},
 	"authorityDocuments": [
 		{
@@ -39,6 +39,11 @@
 			"name": "current implementation and compatibility gates",
 			"path": "docs/v4/implementation-gates.md",
 			"sha256": "3020f0f2fa3d499fa828fd93a90e0ea7b1ca93db73b93409363b3fd0b0cad6d1"
+		},
+		{
+			"name": "canonical definition composition and Resource Identity grammar",
+			"path": "docs/v4/definition-composition.md",
+			"sha256": "f085d9d10b314b0ca74054ead35045759ca5a58fae5593463e8a31bd468d6cea"
 		},
 		{
 			"name": "accepted trusted Context and Policy ownership",
@@ -126,7 +131,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bun run architecture:check (289 production TypeScript files)",
+			"command": "bun run architecture:check",
 			"result": "PASS"
 		},
 		{
