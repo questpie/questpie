@@ -363,6 +363,8 @@ export function createRuntimeRouteExecutor<
 			bodyBytes: Number.MAX_SAFE_INTEGER,
 			durationMs: Number.MAX_SAFE_INTEGER,
 		};
+		if (binding.limits && limits.durationMs === 0)
+			throw new RouteResourceLimitError(429);
 		const deadline = binding.limits
 			? Date.now() + limits.durationMs
 			: Number.MAX_SAFE_INTEGER;
@@ -380,20 +382,20 @@ export function createRuntimeRouteExecutor<
 			if (timer !== undefined) clearTimeout(timer);
 			request.signal.removeEventListener("abort", onAbort);
 		};
-		const bounded = await boundedRouteRequest(
-			request,
-			limits.bodyBytes,
-			controller.signal,
-		);
-		const aborted = new Promise<never>((_resolve, reject) => {
-			const rejectAbort = () => reject(controller.signal.reason);
-			if (controller.signal.aborted) rejectAbort();
-			else
-				controller.signal.addEventListener("abort", rejectAbort, {
-					once: true,
-				});
-		});
 		try {
+			const bounded = await boundedRouteRequest(
+				request,
+				limits.bodyBytes,
+				controller.signal,
+			);
+			const aborted = new Promise<never>((_resolve, reject) => {
+				const rejectAbort = () => reject(controller.signal.reason);
+				if (controller.signal.aborted) rejectAbort();
+				else
+					controller.signal.addEventListener("abort", rejectAbort, {
+						once: true,
+					});
+			});
 			const pending = input.runtime.route(
 				{ principal: caller, signal: controller.signal, deadline },
 				async (scope) => {
@@ -422,22 +424,39 @@ export function createRuntimeRouteExecutor<
 	): Promise<Principal | Response> => {
 		if (binding.credentials === "none" || !input.credentials)
 			return principal.anonymous();
-		let outcome: RuntimeCredentialOutcome;
 		try {
 			const service = await input.runtime.applicationService(
 				input.credentials.service,
 			);
-			outcome = await input.credentials.resolve({ request, service });
+			const outcome: unknown = await input.credentials.resolve({
+				request,
+				service,
+			});
+			if (!outcome || typeof outcome !== "object" || Array.isArray(outcome))
+				throw new TypeError("Credential resolver outcome is invalid");
+			const keys = Object.keys(outcome);
+			if (
+				(outcome as { kind?: unknown }).kind === "unavailable" &&
+				keys.length === 1
+			)
+				return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
+			if (
+				(outcome as { kind?: unknown }).kind === "anonymous" &&
+				keys.length === 1
+			)
+				return principal.anonymous();
+			if (
+				(outcome as { kind?: unknown }).kind === "resolved" &&
+				keys.length === 2 &&
+				keys.includes("principal") &&
+				principal.is((outcome as { principal?: unknown }).principal)
+			)
+				return (outcome as { principal: Principal }).principal;
+			throw new TypeError("Credential resolver outcome is invalid");
 		} catch {
 			if (request.signal.aborted) throw request.signal.reason;
 			return failureResponse("INTERNAL", 500);
 		}
-		if (outcome.kind === "unavailable")
-			return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
-		if (outcome.kind === "anonymous") return principal.anonymous();
-		if (!principal.is(outcome.principal))
-			return failureResponse("INTERNAL", 500);
-		return outcome.principal;
 	};
 
 	return Object.freeze({

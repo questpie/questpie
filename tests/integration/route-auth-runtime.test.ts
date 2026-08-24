@@ -114,6 +114,8 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 			service: auth,
 			resolve: async ({ request, service }) => {
 				expect(service.ready).toBe(true);
+				if (request.headers.has("x-malformed-outcome"))
+					return undefined as never;
 				if (request.headers.has("x-resolver-bug"))
 					throw new Error("credential provider detail must not escape");
 				if (request.headers.has("x-wait-for-abort")) {
@@ -154,6 +156,20 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 		new Request("https://app.test/outcomes"),
 	);
 	expect(await anonymous!.json()).toEqual({ principalKind: "anonymous" });
+	expect({ handlerCalls, routeProjections }).toEqual({
+		handlerCalls: 1,
+		routeProjections: 1,
+	});
+
+	const malformed = await routes.fetch(
+		new Request("https://app.test/outcomes", {
+			headers: { "x-malformed-outcome": "1" },
+		}),
+	);
+	expect(malformed!.status).toBe(500);
+	expect(await malformed!.json()).toEqual({
+		error: { code: "INTERNAL", retryable: false },
+	});
 	expect({ handlerCalls, routeProjections }).toEqual({
 		handlerCalls: 1,
 		routeProjections: 1,
@@ -416,6 +432,7 @@ test("preserves typed Route execution failures and propagates request cancellati
 
 test("projects decoded Route params and enforces body and duration limits", async () => {
 	let releaseStreamPull!: () => void;
+	let zeroDurationHandlerCalls = 0;
 	const context = defineContext({
 		name: "route.limit-context",
 		input: codec.object({ companyId: codec.uuid() }),
@@ -442,21 +459,35 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 					Response.json({ body: await request.text(), params: ctx.params }),
 			},
 			{
+				identity: "route:limits.zero-duration",
+				method: "GET",
+				path: "/zero-duration",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 0, durationMs: 0 },
+				execute: () => {
+					zeroDurationHandlerCalls += 1;
+					return new Response(null, { status: 204 });
+				},
+			},
+			{
 				identity: "route:limits.deadline",
 				method: "GET",
 				path: "/deadline",
 				credentials: "none",
 				admission: "public",
 				limits: { bodyBytes: 0, durationMs: 1 },
-				execute: ({ ctx }) => {
-					void new Promise<void>((resolve) => {
+				execute: ({ ctx }) =>
+					new Promise<Response>((_resolve, reject) => {
 						expect(ctx.deadline).toBeGreaterThan(Date.now() - 10);
-						ctx.signal.addEventListener("abort", () => resolve(), {
-							once: true,
-						});
-					});
-					return new Promise<Response>(() => undefined);
-				},
+						ctx.signal.addEventListener(
+							"abort",
+							() => reject(ctx.signal.reason),
+							{
+								once: true,
+							},
+						);
+					}),
 			},
 			{
 				identity: "route:limits.exact",
@@ -539,6 +570,17 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 		} as RequestInit),
 	);
 	expect(ignoredBody!.status).toBe(413);
+	const zeroDuration = await routes.fetch(
+		new Request("https://app.test/zero-duration"),
+	);
+	expect(zeroDuration!.status).toBe(429);
+	await expect(
+		routes.direct("route:limits.zero-duration", {
+			request: new Request("https://app.test/zero-duration"),
+			execution: { principal: principal.anonymous() },
+		}),
+	).rejects.toMatchObject({ name: "RouteResourceLimitError", status: 429 });
+	expect(zeroDurationHandlerCalls).toBe(0);
 	const expired = await routes.fetch(new Request("https://app.test/deadline"));
 	expect(expired!.status).toBe(429);
 	expect(await expired!.json()).toEqual({
@@ -565,6 +607,66 @@ test("projects decoded Route params and enforces body and duration limits", asyn
 			execution: { principal: principal.anonymous() },
 		}),
 	).rejects.toThrow("method does not match");
+	await runtime.close();
+});
+
+test("releases Route request control after a body-limit failure", async () => {
+	const context = defineContext({
+		name: "route.body-cleanup-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const routes = createRuntimeRouteExecutor({
+		runtime,
+		project: () => ({}),
+		bindings: [
+			{
+				identity: "route:limits.body-cleanup",
+				method: "POST",
+				path: "/body-cleanup",
+				credentials: "none",
+				admission: "public",
+				limits: { bodyBytes: 0, durationMs: 60_000 },
+				execute: () => new Response(null, { status: 204 }),
+			},
+		],
+	});
+	const source = new AbortController();
+	let abortListeners = 0;
+	const add = source.signal.addEventListener.bind(source.signal);
+	const remove = source.signal.removeEventListener.bind(source.signal);
+	Object.defineProperties(source.signal, {
+		addEventListener: {
+			value: (...arguments_: Parameters<AbortSignal["addEventListener"]>) => {
+				if (arguments_[0] === "abort") abortListeners += 1;
+				return add(...arguments_);
+			},
+		},
+		removeEventListener: {
+			value: (
+				...arguments_: Parameters<AbortSignal["removeEventListener"]>
+			) => {
+				if (arguments_[0] === "abort") abortListeners -= 1;
+				return remove(...arguments_);
+			},
+		},
+	});
+	const response = await routes.fetch(
+		new Request("https://app.test/body-cleanup", {
+			method: "POST",
+			headers: { "content-length": "1" },
+			body: "x",
+			signal: source.signal,
+		}),
+	);
+	expect(response!.status).toBe(413);
+	expect(abortListeners).toBe(0);
 	await runtime.close();
 });
 
@@ -658,6 +760,48 @@ test("cleans a Route scope when its handler synchronously aborts before yielding
 		name: "AbortError",
 		message: "sync route abort",
 	});
+	await runtime.close();
+});
+
+test("cancels a late Route response after its caller has aborted", async () => {
+	let releaseHandler!: () => void;
+	const handlerReleased = new Promise<void>((resolve) => {
+		releaseHandler = resolve;
+	});
+	let bodyCancelled = false;
+	const context = defineContext({
+		name: "route.late-response-context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const runtime = createApplicationRuntime({
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }) => facts,
+	});
+	const source = new AbortController();
+	const route = runtime.route(
+		{ principal: principal.anonymous(), signal: source.signal },
+		async () => {
+			await handlerReleased;
+			return new Response(
+				new ReadableStream({
+					cancel() {
+						bodyCancelled = true;
+					},
+				}),
+			);
+		},
+	);
+	source.abort(new DOMException("route caller left", "AbortError"));
+	await expect(route).rejects.toMatchObject({
+		name: "AbortError",
+		message: "route caller left",
+	});
+	releaseHandler();
+	for (let index = 0; index < 10; index += 1) await Promise.resolve();
+	expect(bodyCancelled).toBe(true);
 	await runtime.close();
 });
 

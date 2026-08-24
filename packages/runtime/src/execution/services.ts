@@ -207,9 +207,10 @@ export function createServiceOwner(
 		let failed = false;
 		let primaryFailure: unknown;
 		let result: Awaited<Result> | undefined;
+		let pendingUse: Promise<Awaited<Result>> | undefined;
 		try {
 			if (controller.signal.aborted) throw abortReason(controller.signal);
-			const pendingUse = Promise.resolve(
+			pendingUse = Promise.resolve(
 				use({
 					signal: controller.signal,
 					service: (definition) => {
@@ -246,6 +247,13 @@ export function createServiceOwner(
 			primaryFailure = error;
 			if (!controller.signal.aborted) controller.abort(error);
 		}
+		if (failed && input.abortUse && pendingUse)
+			void pendingUse
+				.then(async (lateResult) => {
+					if (lateResult instanceof Response && lateResult.body)
+						await lateResult.body.cancel(primaryFailure);
+				})
+				.catch(() => undefined);
 		if (!failed && result instanceof Response)
 			return (await retainResponseLifetime(
 				result,

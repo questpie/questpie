@@ -66,9 +66,9 @@ compile -> migrate -> seed -> start -> browser Query
 ```
 
 It uses a real generated client, isolated headless Firefox, disposable
-PostgreSQL, a temporary fixture demo-cookie `/api/whoami` ingress tracer, a
-fixture-owned trusted demo Principal binder for generated protocol calls, and
-the generated durable worker. `questpie seed apply` and
+PostgreSQL, the compiler-generated application credential resolver and Route,
+Policy-authorized generated protocol calls, and the generated durable worker.
+`questpie seed apply` and
 `questpie start --port` are executable.
 
 Every backend or beta.2 capability must keep this journey green. A shortcut may
@@ -142,9 +142,13 @@ Recommended Route/Auth sequence:
    Principal bypass, Fetch/direct handler parity, explicit Context transition,
    admission before work, cancellation, and response-body disposal through
    EOF, error, and consumer cancellation.
-4. Compile and mount one application credential resolver and Route, then delete
-   the fixture shortcut and all tracer use of the internal Principal binder.
-5. Refresh derived generated/release artifacts only after the tracer passes.
+4. **Completed at `c7282030`:** compile and mount one application credential
+   resolver and Route, then delete the fixture shortcut and all tracer use of
+   the internal Principal binder.
+5. **Completed in the Route/Auth closure following `c7282030`:** refresh only
+   the derived generated/release artifacts, repeat the Firefox/PostgreSQL tracer
+   and full release-sensitive verification, then adversarially review and close
+   Route/Auth.
 
 Follow ADR-0015's accepted `policy` and
 `credentials: "application" | "none"` spelling. Do not add a framework Auth
@@ -177,12 +181,14 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
 
-After the documentation-only branch consolidation, `quality:full` passes in the
-canonical worktree: architecture, format ratchet, lint, typechecks, the complete
+At the Route/Auth closure, `quality:full` passes in the canonical worktree:
+architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
 validation, and `git diff --check`. The release dry-run is retry-stable at the
-accepted package checksum:
-`81a3ed5dabbba6e92fd6d715dc8d09776347379b21e4c968cc0ee5d8e1aa4a5c`.
+accepted package checksum
+`56aed8bc3fd4fdeb60f4e97d9480527f1997415c2943e2e19487b015be28ac27`;
+the declaration checksum is
+`18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
 Focused PostgreSQL evidence includes the real Firefox restart skeleton, Durable
 maintenance/effect/kernel paths, timeout controls, and the 23-case PostgreSQL
@@ -210,23 +216,40 @@ adversarial re-reviews both returned PASS after hostile closure for forged
 Principals, credential and handler cancellation, typed failure preservation,
 resolver-bug sanitization, and admission-before-work behavior.
 
-The complete test lane otherwise passes but intentionally reports the three
-derived-artifact drifts owned by Route/Auth step 5: the checked release checksum
-and two generated application bundle filenames. Do not refresh or claim the
-full/release gate green until the compiler/generated Route tracer in step 4
-passes.
+Route/Auth commit 4 is complete at `c7282030`. The compiler-generated
+application now mounts one application credential resolver and Route through
+the Runtime kernel; the fixture-owned `/api/whoami` shortcut and tracer use of
+the internal Principal binder are removed. Hostile follow-ups close mount
+limits, deadline and precedence behavior, aborted scopes, service projection
+contracts, and the synchronous abort race.
+
+Route/Auth step 5 is complete in this closure. The exact compiler-derived
+goldens and release checksum are refreshed; the isolated PostgreSQL 17 and
+headless Firefox tracer passes with 26 assertions. Eleven focused Runtime
+Route/Auth tests pass with 69 assertions, including body-control cleanup,
+zero-duration admission, malformed resolver outcomes, never-settling abort
+drain, and late-response cancellation. `quality:full`, `quality:release`,
+architecture, all workspace typechecks, and `git diff --check` pass. Independent
+Standards review returns PASS. A separate authority adjudication confirms that
+ADR-0015, ADR-0014, SPEC, and Gates 8A/8B define cancellation as the terminal
+bounded execution-lifetime boundary; a non-cooperative handler cannot retain
+Runtime scope ownership or block close after cancellation.
 
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Route/Auth commit 4 is the next implementation boundary: compile and mount
-   one application credential resolver and Route through the completed Runtime
-   kernel, then replace the fixture-owned Principal shortcut only after the
-   tracer passes.
-3. Keep Route Product review separate from any new public Kernel/wire decision.
-4. Until commit 4 begins, retain the fixture-owned `/api/whoami` shortcut and
-   do not refresh generated or release artifacts.
-5. Serialize generated builds and PostgreSQL schema-reset tests.
+2. From the Route/Auth closure head, use separate local writer worktrees for
+   direct Action and PB-05. Direct Action is the next Product frontier; do not
+   enter network/client Action or Operation Wire v3 there.
+3. In PB-05 order, land the fixed set-based whole-schema catalog reader and pure
+   reducers, then the one-snapshot readiness boundary. Do not perform the atomic
+   one-Pool ownership flip alongside generated/release work.
+4. Keep a read-only Effect Identity proof/review lane. Stop before the public
+   Kernel decision; never hide Effect Identity in domain input or alias Mutation
+   `callId`.
+5. The canonical integration owner serializes generated/release builds and
+   PostgreSQL schema-reset tests, and integrates each independently green lane
+   commit one at a time.
 6. Commit only coherent green boundaries; do not push, tag, publish, or contact
    external systems without explicit authority.
