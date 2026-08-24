@@ -21,6 +21,10 @@ import type {
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const application = "application:collaboration";
 const runId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200";
@@ -85,12 +89,19 @@ function harness(
 			throw new TypeError("unexpected maintenance statement");
 		},
 	} as PostgresTransaction;
-	const database = {
+	const unmeasured = {
 		transaction: ({ mode, use }) => {
 			modes.push(mode);
 			return use(transaction);
 		},
 	} as PostgresTransactionRunner;
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "durable",
+		operation: "maintenance",
+	});
 	let ids = 0;
 	const maintenance = createPostgresDatabaseDurableMaintenance({
 		database,
@@ -98,7 +109,7 @@ function harness(
 		authorize: () => input.authorized,
 		randomUUID: () => (ids++ === 0 ? commandId : cancellationId),
 	});
-	return { calls, maintenance, modes };
+	return { calls, maintenance, measurement, modes };
 }
 
 test("Authority denial is audited without taking or disclosing a row lock", async () => {
@@ -123,7 +134,7 @@ test("Authority denial is audited without taking or disclosing a row lock", asyn
 });
 
 test("an authorized running cancellation is one marked, audited event transaction", async () => {
-	const { calls, maintenance } = harness({ authorized: true });
+	const { calls, maintenance, measurement } = harness({ authorized: true });
 	await expect(
 		maintenance.cancelRun({
 			runId,
@@ -137,6 +148,17 @@ test("an authorized running cancellation is one marked, audited event transactio
 		stateBefore: "running",
 		stateAfter: "running",
 		version: 2,
+	});
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"durable:maintenance"
+		],
+	).toMatchObject({
+		statementExecutions: calls.length,
+		distinctStatements: calls.map(({ statement }) =>
+			"name" in statement ? statement.name : "",
+		),
+		transactions: 1,
 	});
 	expect(calls.map(({ statement }) => statement)).toEqual([
 		durableKernelMarker,

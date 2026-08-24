@@ -20,6 +20,10 @@ import {
 	QuestpiePostgresError,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const runId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200";
 const dispatchId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201";
@@ -73,7 +77,7 @@ test("claims through one exact static database transaction", async () => {
 	> = [];
 	const leaseExpiresAt = new Date("2026-08-22T00:00:30.000Z");
 	const deadlineAt = new Date("2026-08-22T00:05:00.000Z");
-	const database: PostgresTransactionRunner = {
+	const unmeasured: PostgresTransactionRunner = {
 		transaction(input) {
 			expect(input.mode).toEqual({
 				isolation: "readCommitted",
@@ -99,6 +103,13 @@ test("claims through one exact static database transaction", async () => {
 			});
 		},
 	};
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "durable",
+		operation: "claim",
+	});
 	const claim = createPostgresDatabaseDurableClaim({
 		database,
 		application: "application:collaboration",
@@ -140,6 +151,17 @@ test("claims through one exact static database transaction", async () => {
 		30,
 		300,
 	]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"durable:claim"
+		],
+	).toMatchObject({
+		statementExecutions: 7,
+		distinctStatements: calls.map(({ statement }) =>
+			"name" in statement ? statement.name : "",
+		),
+		transactions: 1,
+	});
 });
 
 test("skips unavailable and refuses incompatible executable work before mutation", async () => {

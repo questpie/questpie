@@ -13,6 +13,10 @@ import type {
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const claim = Object.freeze({
 	runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
@@ -39,12 +43,19 @@ test("settles a Durable effect and appends one event in one static transaction",
 			throw new TypeError("unexpected Durable effect statement");
 		},
 	} as PostgresTransaction;
-	const database = {
+	const unmeasured = {
 		transaction: async ({ mode, use }) => {
 			expect(mode).toEqual({ isolation: "readCommitted", access: "readWrite" });
 			return use(transaction);
 		},
 	} as PostgresTransactionRunner;
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "durable",
+		operation: "effectSettle",
+	});
 
 	const settle = createPostgresDatabaseDurableEffectSettle({
 		database,
@@ -73,6 +84,21 @@ test("settles a Durable effect and appends one event in one static transaction",
 		effectName: "deliver",
 		receipt: "provider:receipt",
 		attemptId: claim.attemptId,
+	});
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"durable:effectSettle"
+		],
+	).toMatchObject({
+		statementExecutions: 5,
+		distinctStatements: [
+			"durable.kernel.mark",
+			"durable.effect.fence",
+			"durable.effect.settle",
+			"durable.event.sequence.bump",
+			"durable.event.insert",
+		],
+		transactions: 1,
 	});
 });
 

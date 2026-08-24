@@ -16,6 +16,10 @@ import type {
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const claim = Object.freeze({
 	runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
@@ -65,14 +69,22 @@ function harness(input?: Readonly<{ runApplied?: boolean }>) {
 			throw new TypeError("unexpected terminal statement");
 		},
 	} as PostgresTransaction;
-	const database = {
+	const unmeasured = {
 		transaction: ({ mode, use }) => {
 			expect(mode).toEqual({ isolation: "readCommitted", access: "readWrite" });
 			return use(transaction);
 		},
 	} as PostgresTransactionRunner;
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "durable",
+		operation: "terminal",
+	});
 	return {
 		calls,
+		measurement,
 		terminal: createPostgresDatabaseDurableTerminal({
 			database,
 			application: "application:collaboration",
@@ -96,7 +108,7 @@ test("applies success and cancellation through the exact static transaction", as
 			"cancelled",
 		],
 	] as const) {
-		const { calls, terminal } = harness();
+		const { calls, measurement, terminal } = harness();
 		await expect(invoke(terminal)).resolves.toEqual({
 			status: "applied",
 			state,
@@ -110,6 +122,21 @@ test("applies success and cancellation through the exact static transaction", as
 			durableEventInsert,
 		]);
 		expect(calls[4]?.value).toMatchObject({ kind: event });
+		expect(
+			measurement.snapshot({ requireCompleteInventory: false }).operations[
+				"durable:terminal"
+			],
+		).toMatchObject({
+			statementExecutions: 5,
+			distinctStatements: [
+				"durable.kernel.mark",
+				"durable.terminal.run",
+				"durable.terminal.attempt",
+				"durable.event.sequence.bump",
+				"durable.event.insert",
+			],
+			transactions: 1,
+		});
 	}
 });
 

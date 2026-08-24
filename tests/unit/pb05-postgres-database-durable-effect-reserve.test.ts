@@ -12,6 +12,10 @@ import type {
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const claim = Object.freeze({
 	runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
@@ -55,11 +59,18 @@ test("reserves one deterministic effect through exact static statements", async 
 	const effectId = "64a789a4-c319-5d2b-ac27-520d9808a941";
 	const inputDigest =
 		"8511a4633e1124451288e6801dd0f73f027c843498639d8de0931303667e1d42";
-	const reserve = createPostgresDatabaseDurableEffectReserve({
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
 		database: databaseFor(
 			{ effectId, status: "pending", receipt: null, inputDigest },
 			calls,
 		),
+		measurement,
+		population: "durable",
+		operation: "effectReserve",
+	});
+	const reserve = createPostgresDatabaseDurableEffectReserve({
+		database,
 		application: "application:collaboration",
 	});
 
@@ -79,6 +90,20 @@ test("reserves one deterministic effect through exact static statements", async 
 		effectId,
 		inputDigest,
 		attemptId: claim.attemptId,
+	});
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"durable:effectReserve"
+		],
+	).toMatchObject({
+		statementExecutions: 4,
+		distinctStatements: [
+			"durable.kernel.mark",
+			"durable.effect.fence",
+			"durable.effect.reservation.insert",
+			"durable.effect.reservation.read",
+		],
+		transactions: 1,
 	});
 });
 

@@ -9,6 +9,10 @@ import {
 import type { DurableClaim } from "../../packages/runtime/src/durable/rows";
 import { transactionBrand } from "../../packages/runtime/src/postgres/contract";
 import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres/contract";
+import {
+	createPb05OperationalMeasurement,
+	instrumentPb05TransactionRunner,
+} from "../support/pb05-operational-measurement";
 
 const claim = Object.freeze({
 	runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
@@ -44,7 +48,7 @@ test("heartbeats the run and attempt through one static database transaction", a
 	const calls: Array<
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
-	const database: PostgresTransactionRunner = {
+	const unmeasured: PostgresTransactionRunner = {
 		transaction: (input) => {
 			expect(input.mode).toEqual({
 				isolation: "readCommitted",
@@ -67,6 +71,13 @@ test("heartbeats the run and attempt through one static database transaction", a
 			});
 		},
 	};
+	const measurement = createPb05OperationalMeasurement();
+	const database = instrumentPb05TransactionRunner({
+		database: unmeasured,
+		measurement,
+		population: "durable",
+		operation: "heartbeat",
+	});
 	const heartbeat = createPostgresDatabaseDurableHeartbeat({
 		database,
 		application: "application:collaboration",
@@ -94,6 +105,19 @@ test("heartbeats the run and attempt through one static database transaction", a
 			parameters: ["application:collaboration", claim.attemptId, 30],
 		},
 	]);
+	expect(
+		measurement.snapshot({ requireCompleteInventory: false }).operations[
+			"durable:heartbeat"
+		],
+	).toMatchObject({
+		statementExecutions: 3,
+		distinctStatements: [
+			"durable.kernel.mark",
+			"durable.heartbeat.run",
+			"durable.heartbeat.attempt",
+		],
+		transactions: 1,
+	});
 });
 
 test("a fenced run skips the attempt heartbeat", async () => {
