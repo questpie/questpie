@@ -1,13 +1,8 @@
 import type { SQL } from "bun";
 
-import {
-	readCatalogColumns,
-	reduceCatalogTableColumns,
-} from "./catalog-reader-columns";
-import {
-	readCatalogConstraintsAndIndexes,
-	reduceCatalogTableConstraintsAndIndexes,
-} from "./catalog-reader-constraints";
+import { reduceCatalogTableColumns } from "./catalog-reader-columns";
+import { reduceCatalogTableConstraintsAndIndexes } from "./catalog-reader-constraints";
+import { readCatalogSchemaSets } from "./catalog-reader-sets";
 import type { CatalogAccumulator, JsonRecord } from "./catalog-reader-types";
 import { readUnsupportedCatalogObjects } from "./catalog-reader-unsupported";
 import {
@@ -100,33 +95,8 @@ export async function readCatalogComparableInOwnedTransaction(
 			installedExtensions,
 		);
 
-	const relations = await sql<
-		{
-			name: string;
-			kind: string;
-			inheritanceInvolved: boolean;
-			persistence: string;
-			replicaIdentity: string;
-			rowSecurityEnabled: boolean;
-			rowSecurityForced: boolean;
-		}[]
-	>`
-		select c.relname as name,
-		       c.relkind::text as kind,
-		       exists(
-		         select 1 from pg_catalog.pg_inherits inheritance
-		         where inheritance.inhrelid = c.oid or inheritance.inhparent = c.oid
-		       ) as "inheritanceInvolved",
-		       c.relpersistence::text as persistence,
-		       c.relreplident::text as "replicaIdentity",
-		       c.relrowsecurity as "rowSecurityEnabled",
-		       c.relforcerowsecurity as "rowSecurityForced"
-		from pg_catalog.pg_class c
-		join pg_catalog.pg_namespace n on n.oid = c.relnamespace
-		where n.nspname = ${scope.applicationSchema}
-		  and c.relkind <> 'i'
-		order by c.relname
-	`;
+	const catalog = await readCatalogSchemaSets(sql, scope.applicationSchema);
+	const relations = catalog.relations;
 	const tables = relations.filter((relation) => relation.kind === "r");
 	const supportedTables = tables.filter(
 		(table) =>
@@ -169,23 +139,18 @@ export async function readCatalogComparableInOwnedTransaction(
 				qualifiedIdentity: `${scope.applicationSchema}.${table.name}`,
 				attachedTo: null,
 			});
-	const catalogColumns = await readCatalogColumns(sql, scope.applicationSchema);
-	const catalogConstraintsAndIndexes = await readCatalogConstraintsAndIndexes(
-		sql,
-		scope.applicationSchema,
-	);
 	for (const table of supportedTables) {
 		const columns = reduceCatalogTableColumns(
 			scope.applicationSchema,
 			table,
-			catalogColumns,
+			catalog.columns,
 			state,
 		);
 		reduceCatalogTableConstraintsAndIndexes(
 			scope.applicationSchema,
 			table,
 			columns,
-			catalogConstraintsAndIndexes,
+			catalog,
 			state,
 		);
 	}

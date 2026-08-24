@@ -100,6 +100,10 @@ test("pure constraint/index reducer preserves supported objects and dependencies
 			indexTerms: [
 				term(),
 				term({
+					table: "other",
+					operatorClassDefault: false,
+				}),
+				term({
 					index: "messages_body_idx",
 					field: "body",
 					operatorClass: "text_ops",
@@ -153,6 +157,60 @@ test("pure constraint/index reducer preserves supported objects and dependencies
 			schema: "pg_catalog",
 			name: "text_ops",
 			extension: null,
+		},
+	]);
+});
+
+test("pure index reducer rejects orphan terms without cross-table name aliasing", () => {
+	const accumulator = state();
+	reduceCatalogTableConstraintsAndIndexes(
+		"collaboration",
+		{ name: "messages" },
+		[{ name: "id", nullable: false }],
+		{
+			constraints: [primaryKey],
+			indexes: [index()],
+			indexTerms: [term(), term({ index: "orphan_idx" })],
+		},
+		accumulator,
+	);
+
+	expect(accumulator.objects).toHaveLength(1);
+	expect(accumulator.unsupportedObjects).toEqual([
+		{
+			kind: "other",
+			qualifiedIdentity: "collaboration.orphan_idx",
+			attachedTo: "collaboration.messages",
+		},
+	]);
+});
+
+test("pure index reducer rejects a shuffled complete term set", () => {
+	const accumulator = state();
+	reduceCatalogTableConstraintsAndIndexes(
+		"collaboration",
+		{ name: "messages" },
+		[
+			{ name: "id", nullable: false },
+			{ name: "body", nullable: true },
+		],
+		{
+			constraints: [{ ...primaryKey, fields: ["id", "body"] }],
+			indexes: [index({ keyTermCount: 2, totalTermCount: 2 })],
+			indexTerms: [
+				term({ field: "body", position: 2 }),
+				term({ field: "id", position: 1 }),
+			],
+		},
+		accumulator,
+	);
+
+	expect(accumulator.objects).toEqual([]);
+	expect(accumulator.unsupportedObjects).toEqual([
+		{
+			kind: "other",
+			qualifiedIdentity: "collaboration.messages.messages_pk",
+			attachedTo: "collaboration.messages",
 		},
 	]);
 });

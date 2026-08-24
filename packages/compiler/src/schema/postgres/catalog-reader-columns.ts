@@ -1,34 +1,12 @@
-import type { SQL } from "bun";
-
 import { canonicalBytes } from "../../canonical";
 import { parseCatalogDefault } from "./catalog-expression";
-import {
-	catalogColumnsStatement,
-	type CatalogColumnRow,
-} from "./catalog-reader-statements";
+import type { CatalogColumnRow } from "./catalog-reader-statements";
 import type {
 	CatalogAccumulator,
 	CatalogColumn,
 	CatalogTable,
 	JsonRecord,
 } from "./catalog-reader-types";
-
-export async function readCatalogColumns(
-	sql: SQL,
-	applicationSchema: string,
-): Promise<readonly CatalogColumnRow[]> {
-	const rows = (await sql
-		.unsafe(catalogColumnsStatement.text, [applicationSchema])
-		.values()) as unknown as readonly (readonly unknown[])[] & {
-		readonly command: string;
-		readonly count: number;
-	};
-	return catalogColumnsStatement.decode({
-		command: rows.command,
-		rowCount: rows.count,
-		rows,
-	});
-}
 
 export function reduceCatalogTableColumns(
 	applicationSchema: string,

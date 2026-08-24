@@ -12,6 +12,31 @@ export interface CatalogStatement<Row> {
 	decode(result: CatalogResult): readonly Row[];
 }
 
+export interface CatalogStatementSql {
+	unsafe(
+		text: string,
+		parameters: unknown[],
+	): Readonly<{ values(): Promise<unknown> }>;
+}
+
+export async function executeCatalogStatement<Row>(
+	sql: CatalogStatementSql,
+	statement: CatalogStatement<Row>,
+	applicationSchema: string,
+): Promise<readonly Row[]> {
+	const rows = (await sql
+		.unsafe(statement.text, [...statement.parameters(applicationSchema)])
+		.values()) as readonly (readonly unknown[])[] & {
+		readonly command: string;
+		readonly count: number;
+	};
+	return statement.decode({
+		command: rows.command,
+		rowCount: rows.count,
+		rows,
+	});
+}
+
 export interface CatalogRelationRow {
 	readonly name: string;
 	readonly kind: string;

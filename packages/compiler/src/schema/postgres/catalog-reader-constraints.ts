@@ -1,14 +1,9 @@
-import type { SQL } from "bun";
-
 import { canonicalBytes, compareAscii } from "../../canonical";
 import { parseCatalogCheck } from "./catalog-expression";
-import {
-	catalogConstraintsStatement,
-	catalogIndexesStatement,
-	catalogIndexTermsStatement,
-	type CatalogConstraintRow,
-	type CatalogIndexRow,
-	type CatalogIndexTermRow,
+import type {
+	CatalogConstraintRow,
+	CatalogIndexRow,
+	CatalogIndexTermRow,
 } from "./catalog-reader-statements";
 import type {
 	CatalogAccumulator,
@@ -20,55 +15,6 @@ export interface CatalogConstraintAndIndexRows {
 	readonly constraints: readonly CatalogConstraintRow[];
 	readonly indexes: readonly CatalogIndexRow[];
 	readonly indexTerms: readonly CatalogIndexTermRow[];
-}
-
-async function executeCatalogStatement<Row>(
-	sql: SQL,
-	statement: Readonly<{
-		text: string;
-		decode(
-			result: Readonly<{
-				command: string;
-				rowCount: number | null;
-				rows: readonly (readonly unknown[])[];
-			}>,
-		): readonly Row[];
-	}>,
-	applicationSchema: string,
-): Promise<readonly Row[]> {
-	const rows = (await sql
-		.unsafe(statement.text, [applicationSchema])
-		.values()) as unknown as readonly (readonly unknown[])[] & {
-		readonly command: string;
-		readonly count: number;
-	};
-	return statement.decode({
-		command: rows.command,
-		rowCount: rows.count,
-		rows,
-	});
-}
-
-export async function readCatalogConstraintsAndIndexes(
-	sql: SQL,
-	applicationSchema: string,
-): Promise<CatalogConstraintAndIndexRows> {
-	const constraints = await executeCatalogStatement(
-		sql,
-		catalogConstraintsStatement,
-		applicationSchema,
-	);
-	const indexes = await executeCatalogStatement(
-		sql,
-		catalogIndexesStatement,
-		applicationSchema,
-	);
-	const indexTerms = await executeCatalogStatement(
-		sql,
-		catalogIndexTermsStatement,
-		applicationSchema,
-	);
-	return { constraints, indexes, indexTerms };
 }
 
 export function reduceCatalogTableConstraintsAndIndexes(
@@ -216,6 +162,20 @@ function readIndexes(
 	state: CatalogAccumulator,
 ): void {
 	const indexes = rows.indexes.filter((index) => index.table === table.name);
+	const indexNames = new Set(indexes.map((index) => index.name));
+	const orphanIndexNames = new Set(
+		rows.indexTerms
+			.filter(
+				(term) => term.table === table.name && !indexNames.has(term.index),
+			)
+			.map((term) => term.index),
+	);
+	for (const index of orphanIndexNames)
+		state.unsupportedObjects.push({
+			kind: "other",
+			qualifiedIdentity: `${applicationSchema}.${index}`,
+			attachedTo: `${applicationSchema}.${table.name}`,
+		});
 	for (const index of indexes) {
 		const terms = rows.indexTerms.filter(
 			(term) => term.table === table.name && term.index === index.name,
