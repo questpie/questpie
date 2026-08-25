@@ -16,6 +16,64 @@ export type PendingDurableDispatch = Readonly<{
 	payloadBytes: Uint8Array;
 }>;
 
+type JobCapability = Readonly<{
+	accept(
+		payload: unknown,
+		options: JobAcceptanceOptions,
+	): Promise<JobAcceptanceReceipt>;
+}>;
+
+function freezeJobCapabilities(
+	jobs: LinkedJobProjection,
+	jobAcceptance: JobAcceptance,
+): Readonly<Record<string, unknown>> {
+	const root: Record<string, unknown> = Object.create(null);
+	for (const [member, job] of jobs.members) {
+		const segments = member.split(".");
+		let branch = root;
+		for (const [index, segment] of segments.entries()) {
+			const leaf = index === segments.length - 1;
+			const existing = branch[segment];
+			if (leaf) {
+				if (existing !== undefined)
+					throw new TypeError("Job capability path collides");
+				branch[segment] = Object.freeze({
+					async accept(payload: unknown, options: JobAcceptanceOptions) {
+						return jobAcceptance.accept(job, payload, options);
+					},
+				} satisfies JobCapability);
+				continue;
+			}
+			if (existing === undefined) {
+				const child: Record<string, unknown> = Object.create(null);
+				branch[segment] = child;
+				branch = child;
+				continue;
+			}
+			if (
+				typeof existing !== "object" ||
+				existing === null ||
+				Object.hasOwn(existing, "accept")
+			)
+				throw new TypeError("Job capability path collides");
+			branch = existing as Record<string, unknown>;
+		}
+	}
+	const freeze = (branch: Record<string, unknown>): void => {
+		for (const value of Object.values(branch)) {
+			if (
+				typeof value === "object" &&
+				value !== null &&
+				!Object.hasOwn(value, "accept")
+			)
+				freeze(value as Record<string, unknown>);
+		}
+		Object.freeze(branch);
+	};
+	freeze(root);
+	return root;
+}
+
 /** Reactions retain one legacy fact slot; Jobs use independently keyed acceptance. */
 export function createDurableDispatch(
 	reactions: LinkedReactionProjection,
@@ -23,17 +81,7 @@ export function createDurableDispatch(
 	jobAcceptance: JobAcceptance,
 ): Readonly<{
 	dispatch: Readonly<Record<string, (payload: unknown) => Promise<void>>>;
-	jobs: Readonly<
-		Record<
-			string,
-			Readonly<{
-				accept(
-					payload: unknown,
-					options: JobAcceptanceOptions,
-				): Promise<JobAcceptanceReceipt>;
-			}>
-		>
-	>;
+	jobs: Readonly<Record<string, unknown>>;
 	pending: readonly PendingDurableDispatch[];
 }> {
 	const pending: PendingDurableDispatch[] = [];
@@ -71,19 +119,9 @@ export function createDurableDispatch(
 			async (payload: unknown) => accept(member, reaction, payload),
 		]),
 	);
-	const jobMembers = Object.fromEntries(
-		[...jobs.members].map(([member, job]) => [
-			member,
-			Object.freeze({
-				async accept(payload: unknown, options: JobAcceptanceOptions) {
-					return jobAcceptance.accept(job, payload, options);
-				},
-			}),
-		]),
-	);
 	return Object.freeze({
 		dispatch: Object.freeze(dispatch),
-		jobs: Object.freeze(jobMembers),
+		jobs: freezeJobCapabilities(jobs, jobAcceptance),
 		pending,
 	});
 }
