@@ -514,7 +514,8 @@ export function projectRuntimeBuild(
 			changeLedgerDigest: input.liveQueryDigests.changeLedger,
 			resumeDigest: input.liveQueryDigests.resume,
 			durableCompatibilityDigest:
-				input.runtime.reactions.reactions.length === 0
+				input.runtime.reactions.reactions.length === 0 &&
+				input.runtime.jobs.jobs.length === 0
 					? null
 					: durableKernelDigest,
 			reactionDigest:
