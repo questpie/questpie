@@ -96,6 +96,13 @@
         "questpie": "workspace:*",
       },
     },
+    "fixtures/team-support-desk": {
+      "name": "@questpie/fixture-team-support-desk",
+      "version": "4.0.0-beta.1",
+      "dependencies": {
+        "questpie": "workspace:*",
+      },
+    },
     "packages/compiler": {
       "name": "@questpie/compiler",
       "version": "4.0.0-beta.1",
@@ -592,6 +599,8 @@
     "@questpie/fixture-archive": ["@questpie/fixture-archive@workspace:fixtures/archive"],
 
     "@questpie/fixture-collaboration": ["@questpie/fixture-collaboration@workspace:fixtures/collaboration"],
+
+    "@questpie/fixture-team-support-desk": ["@questpie/fixture-team-support-desk@workspace:fixtures/team-support-desk"],
 
     "@questpie/runtime": ["@questpie/runtime@workspace:packages/runtime"],
 
