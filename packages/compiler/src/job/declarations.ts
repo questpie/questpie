@@ -11,7 +11,7 @@ export function renderJobDispatch(
 	return jobs(resources)
 		.map(
 			(resource) =>
-				`${JSON.stringify(resource.name)}: Readonly<{ dispatch(input: ${renderCodecType(resource.contract.input)}): Promise<JobRunReceipt>; }>;`,
+				`${JSON.stringify(resource.name)}: Readonly<{ accept(input: ${renderCodecType(resource.contract.input)}, options: JobAcceptanceOptions): Promise<JobRunReceipt<${JSON.stringify(resource.name)}>>; }>;`,
 		)
 		.join("\n\t\t");
 }
@@ -29,7 +29,12 @@ export function renderJobDeclarations(
 \t${definitions}
 }
 
-export type JobRunReceipt = Readonly<{ runId: string; resource: \`job:\${string}\` }>;
+export interface JobAcceptanceOptions {
+\treadonly idempotencyKey: string;
+\treadonly notBefore?: Date;
+}
+
+export type JobRunReceipt<Name extends keyof GeneratedJobs> = Readonly<{ readonly runId: string; readonly resource: \`job:\${Name & string}\` }>;
 
 export type JobContext = Omit<RootExecution, "services"> & Readonly<{
 \trun: Readonly<{ id: string }>;
