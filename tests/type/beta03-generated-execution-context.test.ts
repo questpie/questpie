@@ -41,6 +41,7 @@ type ResolvedContext = Expect<Equal<
 	Readonly<{
 		tenant: Readonly<{ id: string }>;
 		values: Readonly<{
+			contextResolutionId: ReturnType<typeof crypto.randomUUID>;
 			selectedMembershipId: string;
 			selectedMembershipPrincipalId: string;
 			selectedMembershipScope: string;

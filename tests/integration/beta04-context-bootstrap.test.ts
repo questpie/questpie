@@ -84,6 +84,7 @@ test("Context authorizes only a current active company Membership", async () => 
 	);
 	expect(facts.tenant).toEqual({ id: companyId });
 	expect(facts.values).toEqual({
+		contextResolutionId: expect.stringMatching(/^[0-9a-f-]{36}$/),
 		selectedMembershipId: membershipId,
 		selectedMembershipPrincipalId: principalId,
 		selectedMembershipScope: "company",

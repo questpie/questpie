@@ -173,11 +173,16 @@ type View = Readonly<{
 type JobView = View &
 	Readonly<{
 		jobs: Readonly<{
-			"reports.companyDigest": Readonly<{
-				accept(
-					value: unknown,
-					options: Readonly<{ idempotencyKey: string; notBefore?: Date }>,
-				): Promise<Readonly<{ runId: string; resource: string }>>;
+			reports: Readonly<{
+				companyDigest: Readonly<{
+					accept(
+						value: unknown,
+						options: Readonly<{
+							idempotencyKey: string;
+							notBefore?: Date;
+						}>,
+					): Promise<Readonly<{ runId: string; resource: string }>>;
+				}>;
 			}>;
 		}>;
 	}>;
@@ -566,21 +571,21 @@ test("accepts multiple independently keyed Jobs inside one Mutation transaction"
 		binding: {
 			...operation.binding,
 			execute: async ({ ctx }: Readonly<{ ctx: JobView }>) => {
-				const first = await ctx.jobs["reports.companyDigest"].accept(
+				const first = await ctx.jobs.reports.companyDigest.accept(
 					{ widgetId },
 					{
 						idempotencyKey: "morning",
 						notBefore: new Date("2026-08-22T01:00:00.000Z"),
 					},
 				);
-				const replay = await ctx.jobs["reports.companyDigest"].accept(
+				const replay = await ctx.jobs.reports.companyDigest.accept(
 					{ widgetId },
 					{
 						idempotencyKey: "morning",
 						notBefore: new Date("2026-08-22T01:00:00.000Z"),
 					},
 				);
-				const second = await ctx.jobs["reports.companyDigest"].accept(
+				const second = await ctx.jobs.reports.companyDigest.accept(
 					{ widgetId },
 					{ idempotencyKey: "evening" },
 				);

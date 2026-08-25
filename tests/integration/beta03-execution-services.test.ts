@@ -72,6 +72,7 @@ test("coalesces execution Service creation and cancels in reverse cleanup order"
 			expect(first.connectionId).toBe(1);
 			expect(Object.isFrozen(facts)).toBe(true);
 			expect(facts.values).toEqual({
+				contextResolutionId: expect.stringMatching(/^[0-9a-f-]{36}$/),
 				selectedMembershipId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5",
 				selectedMembershipPrincipalId: principalId,
 				selectedMembershipScope: "company",
