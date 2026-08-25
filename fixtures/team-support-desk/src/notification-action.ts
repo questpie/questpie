@@ -13,6 +13,13 @@ class NotificationProviderRejection extends Error {
 	}
 }
 
+class NotificationOutcomeUnknown extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "NotificationOutcomeUnknown";
+	}
+}
+
 // Current v4 Service Definitions have no public application-config injection
 // seam. The local tracer therefore owns this disposable receiver address.
 export const localNotificationReceiverUrl =
@@ -49,7 +56,9 @@ export const notificationProvider = defineService({
 				const receipt = response.headers.get("x-team-support-receipt");
 				await response.body?.cancel();
 				if (receipt === null || receipt.length === 0 || receipt.length > 128)
-					throw new NotificationProviderRejection(502);
+					throw new NotificationOutcomeUnknown(
+						"notification provider returned no bounded receipt",
+					);
 				return Object.freeze({ receipt });
 			},
 		});
@@ -107,6 +116,8 @@ export const sendTicketSummary = defineAction({
 			if (ctx.signal.aborted && error === ctx.signal.reason) throw error;
 			if (error instanceof NotificationProviderRejection)
 				throw errors.providerRejected();
+			if (error instanceof NotificationOutcomeUnknown)
+				throw errors.outcomeUnknown();
 			throw errors.outcomeUnknown();
 		}
 	},
