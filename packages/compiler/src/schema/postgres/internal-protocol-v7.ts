@@ -68,6 +68,23 @@ async function protocolRow(
 	return protocol;
 }
 
+function isMissingProtocolRelation(error: unknown): boolean {
+	if (typeof error !== "object" || error === null) return false;
+	const postgresError = error as { code?: unknown; errno?: unknown };
+	return postgresError.code === "42P01" || postgresError.errno === "42P01";
+}
+
+async function protocolRowBeforeCutover(
+	sql: SQL,
+): Promise<Readonly<{ version: number; checksum: string }> | undefined> {
+	try {
+		return await protocolRow(sql);
+	} catch (error) {
+		if (isMissingProtocolRelation(error)) return undefined;
+		throw error;
+	}
+}
+
 export async function verifyInternalProtocolV7(sql: SQL): Promise<void> {
 	const protocol = await protocolRow(sql);
 	if (
@@ -91,7 +108,7 @@ export async function ensureInternalProtocolV7(
 	signal?: AbortSignal,
 ): Promise<void> {
 	await assertBackendPid(sql, expectedPid, "before internal protocol v7");
-	const protocolBefore = await protocolRow(sql).catch(() => undefined);
+	const protocolBefore = await protocolRowBeforeCutover(sql);
 	assertProtocolV7Cutover(protocolBefore, cutover);
 	if (protocolBefore?.version !== 7)
 		await ensureInternalProtocolV6(
