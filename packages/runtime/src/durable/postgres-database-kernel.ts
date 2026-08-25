@@ -1,4 +1,5 @@
 import type { PostgresTransactionRunner } from "../postgres";
+import type { LinkedJobProjection } from "./job-projection";
 import { createPostgresDatabaseDurableClaim } from "./postgres-database-claim";
 import { createPostgresDatabaseDurableHeartbeat } from "./postgres-database-heartbeat";
 import { createPostgresDatabaseDurableInspection } from "./postgres-database-inspection";
@@ -12,6 +13,7 @@ export function createPostgresDatabaseDurableKernel(
 		database: PostgresTransactionRunner;
 		application: string;
 		reactions: LinkedReactionProjection;
+		jobs?: LinkedJobProjection;
 		claimBatch?: number;
 		random?: () => number;
 	}>,
@@ -26,9 +28,10 @@ export function createPostgresDatabaseDurableKernel(
 	const executableDigests = Object.freeze(
 		[
 			...new Set(
-				[...input.reactions.byIdentity.values()].map(
-					(reaction) => reaction.contractDigest,
-				),
+				[
+					...input.reactions.byIdentity.values(),
+					...(input.jobs?.byIdentity.values() ?? []),
+				].map((definition) => definition.contractDigest),
 			),
 		].sort(),
 	);
@@ -56,6 +59,7 @@ export function createPostgresDatabaseDurableKernel(
 			database: input.database,
 			application: input.application,
 			reactions: input.reactions,
+			jobs: input.jobs,
 		}),
 		heartbeat: createPostgresDatabaseDurableHeartbeat({
 			database: input.database,

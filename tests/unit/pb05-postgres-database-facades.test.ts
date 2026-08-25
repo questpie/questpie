@@ -12,6 +12,7 @@ import {
 	createPostgresDatabaseDurableEffectLedger as createEffectFromDurable,
 	createPostgresDatabaseDurableKernel as createKernelFromDurable,
 	createPostgresDatabaseDurablePrincipalMaintenance as createMaintenanceFromDurable,
+	type LinkedJobProjection,
 	type LinkedReactionProjection,
 } from "../../packages/runtime/src/durable";
 import {
@@ -35,6 +36,43 @@ const commandId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201";
 const reactions = {
 	byIdentity: new Map(),
 } as unknown as LinkedReactionProjection;
+
+test("database Durable admission combines exact Job and Reaction digests", async () => {
+	const admittedDigests: string[] = [];
+	const reactionDigest = "c".repeat(64);
+	const jobDigest = "b".repeat(64);
+	const projectedReactions = {
+		byIdentity: new Map([
+			["reaction:messages.published", { contractDigest: reactionDigest }],
+		]),
+	} as unknown as LinkedReactionProjection;
+	const jobs = {
+		byIdentity: new Map([
+			["job:reports.companyDigest", { contractDigest: jobDigest }],
+		]),
+	} as unknown as LinkedJobProjection;
+	const kernel = createPostgresDatabaseDurableKernel({
+		application,
+		reactions: projectedReactions,
+		jobs,
+		database: {
+			transaction: (input) =>
+				input.use({
+					[transactionBrand]: true,
+					async execute(statement, value) {
+						expect(statement).toBe(durableAdmissionSelect);
+						admittedDigests.push(
+							...JSON.parse(statement.parameters(value)[1] as string),
+						);
+						return [] as never;
+					},
+				}),
+		},
+	});
+
+	await expect(kernel.admit(1)).resolves.toEqual([]);
+	expect(admittedDigests).toEqual([jobDigest, reactionDigest]);
+});
 
 test("private bundle-core exposes the database-mode domain facades", () => {
 	expect(createPostgresDatabaseMutationInvoker).toBe(createMutationFromDomain);

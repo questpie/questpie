@@ -45,6 +45,7 @@ export type DurableClaim = Readonly<{
 	runId: string;
 	dispatchId: string;
 	resource: string;
+	semanticVersion: number;
 	attemptId: string;
 	attemptNumber: number;
 	leaseToken: string;

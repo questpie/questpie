@@ -103,6 +103,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 				runId,
 				"018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
 				"reaction:messagePublished",
+				1,
 				"tenant:one",
 				"user",
 				"user:one",
@@ -120,6 +121,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 	});
 	expect(selected).toMatchObject({
 		runId,
+		semanticVersion: 1,
 		principalKind: "user",
 		attemptCount: 1,
 	});
@@ -133,6 +135,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 					runId,
 					"018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
 					"reaction:messagePublished",
+					1,
 					"tenant:one",
 					"root",
 					"user:one",

@@ -13,6 +13,7 @@ import {
 	DurableLeaseLost,
 	type DurableRunHandle,
 } from "./effects";
+import type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 import type {
 	LinkedReactionMember,
 	LinkedReactionProjection,
@@ -25,6 +26,7 @@ export type DurableAttemptHandle = Readonly<{
 }>;
 
 export type DurableAttemptRequest = Readonly<{
+	capability: "reaction";
 	claim: DurableClaim;
 	reaction: LinkedReactionMember;
 	input: unknown;
@@ -34,10 +36,38 @@ export type DurableAttemptRequest = Readonly<{
 	run: DurableRunHandle;
 	attempt: DurableAttemptHandle;
 	errors: Readonly<Record<string, (payload?: unknown) => Error>>;
+	assertResolvedTenant(tenantId: string): void;
 }>;
 
 export type DurableAttemptExecutor = (
 	request: DurableAttemptRequest,
+) => Promise<unknown>;
+
+export type DurableJobRunHandle = Readonly<{
+	id: string;
+	dispatchId: string;
+}>;
+
+export type DurableJobAttemptRequest = Readonly<{
+	capability: "job";
+	claim: DurableClaim;
+	job: LinkedJobMember;
+	input: unknown;
+	contextInput: unknown;
+	principal: Readonly<{ kind: "anonymous" | "service" | "user"; id: string }>;
+	signal: AbortSignal;
+	run: DurableJobRunHandle;
+	attempt: DurableAttemptHandle;
+	errors: Readonly<Record<string, (payload?: unknown) => Error>>;
+	assertResolvedTenant(tenantId: string): void;
+}>;
+
+export type DurableWorkAttemptRequest =
+	| DurableAttemptRequest
+	| DurableJobAttemptRequest;
+
+export type DurableWorkAttemptExecutor = (
+	request: DurableWorkAttemptRequest,
 ) => Promise<unknown>;
 
 export type DurableWorkerOutcome = Readonly<{
@@ -71,18 +101,57 @@ export interface DurableWorker {
 	readonly draining: boolean;
 }
 
+type LinkedDurableMember = LinkedReactionMember | LinkedJobMember;
+
+type AvailableDurableDefinition =
+	| Readonly<{ capability: "reaction"; definition: LinkedReactionMember }>
+	| Readonly<{ capability: "job"; definition: LinkedJobMember }>;
+
+const emptyJobProjection: LinkedJobProjection = Object.freeze({
+	members: new Map(),
+	byIdentity: new Map(),
+});
+
+class DurableRunAsDenied extends Error {
+	readonly code = "notFound";
+	constructor() {
+		super("Durable run-as tenant is unavailable");
+		this.name = "DurableRunAsDenied";
+	}
+}
+
 function errorFactories(
-	reaction: LinkedReactionMember,
+	definition: LinkedDurableMember,
 ): Readonly<Record<string, (payload?: unknown) => Error>> {
 	return Object.freeze(
 		Object.fromEntries(
-			Object.entries(reaction.declaredErrors).map(([key, declared]) => [
+			Object.entries(definition.declaredErrors).map(([key, declared]) => [
 				key,
 				(payload: unknown = null) =>
 					new DeclaredOperationError(declared.code, declared.status, payload),
 			]),
 		),
 	);
+}
+
+function availableDefinition(
+	resource: string,
+	executableDigest: string,
+	input: Readonly<{
+		reactions: LinkedReactionProjection;
+		jobs: LinkedJobProjection;
+	}>,
+): AvailableDurableDefinition | null {
+	const reaction = input.reactions.byIdentity.get(resource);
+	if (reaction?.contractDigest === executableDigest)
+		return Object.freeze({
+			capability: "reaction" as const,
+			definition: reaction,
+		});
+	const job = input.jobs.byIdentity.get(resource);
+	if (job?.contractDigest === executableDigest)
+		return Object.freeze({ capability: "job" as const, definition: job });
+	return null;
 }
 
 function isRunAsDenial(error: unknown): boolean {
@@ -95,6 +164,8 @@ function classify(error: unknown): DurableFailureCode {
 	// A payload or result outside its compiled codec can never become valid on a
 	// later attempt, so it is permanent rather than retried to exhaustion.
 	if (error instanceof RuntimeCodecError) return "VALIDATION_FAILED";
+	// Protocol v7 retains the physical REACTION_ERROR code for declared durable
+	// handler failures so Job execution does not require a rolling schema split.
 	if (error instanceof DeclaredOperationError) return "REACTION_ERROR";
 	if (error instanceof DurableEffectAmbiguous) return "EFFECT_AMBIGUOUS";
 	if (error instanceof DurableEffectConflict) return "EFFECT_CONFLICT";
@@ -102,12 +173,13 @@ function classify(error: unknown): DurableFailureCode {
 	return "HANDLER_FAILED";
 }
 
-export function createDurableReactionWorker(
+export function createDurableWorker(
 	input: Readonly<{
 		kernel: DurableKernel;
 		ledger: DurableEffectLedger;
 		reactions: LinkedReactionProjection;
-		execute: DurableAttemptExecutor;
+		jobs: LinkedJobProjection;
+		execute: DurableWorkAttemptExecutor;
 		workerId?: string;
 		claimBatch?: number;
 		leaseMilliseconds?: number;
@@ -137,8 +209,9 @@ export function createDurableReactionWorker(
 
 	const runAttempt = async (
 		claim: DurableClaim,
-		reaction: LinkedReactionMember,
+		available: AvailableDurableDefinition,
 	): Promise<DurableWorkerOutcome> => {
+		const definition = available.definition;
 		const controller = new AbortController();
 		let fenced = false;
 		let cancelled = claim.cancellationRequested;
@@ -172,38 +245,65 @@ export function createDurableReactionWorker(
 			if (cancelled)
 				controller.abort(new DOMException("Run cancelled", "AbortError"));
 			const decodedInput = decodeRuntimeCodec(
-				reaction.input,
+				definition.input,
 				JSON.parse(new TextDecoder().decode(claim.payloadBytes)),
-				"$reaction.input",
+				`$${available.capability}.input`,
 			);
-			const result = await input.execute({
+			const common = {
 				claim,
-				reaction,
 				input: decodedInput,
 				contextInput: JSON.parse(
 					new TextDecoder().decode(claim.contextInputBytes),
 				),
 				principal: claim.principal,
 				signal: controller.signal,
-				run: createDurableRunHandle({
-					ledger: input.ledger,
-					claim,
-					declaredEffects: reaction.effects,
-					signal: controller.signal,
-				}),
 				attempt: Object.freeze({
 					number: claim.attemptNumber,
 					heartbeat: observe,
 				}),
-				errors: errorFactories(reaction),
-			});
+				errors: errorFactories(definition),
+				assertResolvedTenant(tenantId: string) {
+					if (tenantId !== claim.tenantId) throw new DurableRunAsDenied();
+				},
+			};
+			const result = await input.execute(
+				available.capability === "reaction"
+					? Object.freeze({
+							...common,
+							capability: "reaction" as const,
+							reaction: available.definition,
+							run: createDurableRunHandle({
+								ledger: input.ledger,
+								claim,
+								declaredEffects: available.definition.effects,
+								signal: controller.signal,
+							}),
+						})
+					: Object.freeze({
+							...common,
+							capability: "job" as const,
+							job: available.definition,
+							run: Object.freeze({
+								id: claim.runId,
+								dispatchId: claim.dispatchId,
+							}),
+						}),
+			);
 			const validated = decodeRuntimeCodec(
-				reaction.output,
-				encodeRuntimeCodec(reaction.output, result, "$reaction.result"),
-				"$reaction.result",
+				definition.output,
+				encodeRuntimeCodec(
+					definition.output,
+					result,
+					`$${available.capability}.result`,
+				),
+				`$${available.capability}.result`,
 			);
 			const bytes = canonicalMutationBytes(
-				encodeRuntimeCodec(reaction.output, validated, "$reaction.result"),
+				encodeRuntimeCodec(
+					definition.output,
+					validated,
+					`$${available.capability}.result`,
+				),
 			);
 			if (bytes.byteLength > resultBytesLimit) failureCode = "RESOURCE_LIMIT";
 			else resultBytes = bytes;
@@ -282,11 +382,12 @@ export function createDurableReactionWorker(
 			let claimed = 0;
 			let refusedIncompatible = 0;
 			for (const admission of admissions) {
-				const reaction = input.reactions.byIdentity.get(admission.resource);
-				if (
-					!reaction ||
-					reaction.contractDigest !== admission.executableDigest
-				) {
+				const available = availableDefinition(
+					admission.resource,
+					admission.executableDigest,
+					input,
+				);
+				if (!available) {
 					refusedIncompatible += 1;
 					outcomes.push(
 						Object.freeze({
@@ -331,7 +432,7 @@ export function createDurableReactionWorker(
 					continue;
 				}
 				claimed += 1;
-				outcomes.push(await runAttempt(outcome.claim, reaction));
+				outcomes.push(await runAttempt(outcome.claim, available));
 			}
 			return Object.freeze({
 				workerId,
@@ -341,6 +442,32 @@ export function createDurableReactionWorker(
 				refusedIncompatible,
 				outcomes: Object.freeze(outcomes),
 			});
+		},
+	});
+}
+
+/** Legacy Reaction-only entry point retained for generated v6/v7 applications. */
+export function createDurableReactionWorker(
+	input: Readonly<{
+		kernel: DurableKernel;
+		ledger: DurableEffectLedger;
+		reactions: LinkedReactionProjection;
+		execute: DurableAttemptExecutor;
+		workerId?: string;
+		claimBatch?: number;
+		leaseMilliseconds?: number;
+		heartbeatMilliseconds?: number;
+		attemptDeadlineMilliseconds?: number;
+		resultBytesLimit?: number;
+	}>,
+): DurableWorker {
+	return createDurableWorker({
+		...input,
+		jobs: emptyJobProjection,
+		execute: (request) => {
+			if (request.capability !== "reaction")
+				throw new TypeError("Reaction worker received non-Reaction work");
+			return input.execute(request);
 		},
 	});
 }

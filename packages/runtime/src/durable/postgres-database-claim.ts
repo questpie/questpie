@@ -3,6 +3,7 @@ import {
 	type PostgresTransaction,
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
+import type { LinkedJobProjection } from "./job-projection";
 import {
 	durableClaimAttemptInsert,
 	durableClaimAttemptsExhaust,
@@ -54,6 +55,7 @@ function claim(
 		runId: row.runId,
 		dispatchId: row.dispatchId,
 		resource: row.resource,
+		semanticVersion: row.semanticVersion,
 		attemptId: input.attemptId,
 		attemptNumber: input.attemptNumber,
 		leaseToken: input.leaseToken,
@@ -113,6 +115,7 @@ export function createPostgresDatabaseDurableClaim(
 		database: PostgresTransactionRunner;
 		application: string;
 		reactions: LinkedReactionProjection;
+		jobs?: LinkedJobProjection;
 		randomUUID?: () => string;
 	}>,
 ): (request: ClaimRequest) => Promise<DurableClaimOutcome> {
@@ -145,7 +148,14 @@ export function createPostgresDatabaseDurableClaim(
 					if (row === null)
 						return Object.freeze({ status: "skipped" as const });
 					const reaction = input.reactions.byIdentity.get(row.resource);
-					if (!reaction || reaction.contractDigest !== row.executableDigest)
+					const job = input.jobs?.byIdentity.get(row.resource);
+					const compatible = reaction
+						? row.semanticVersion === 1 &&
+							reaction.contractDigest === row.executableDigest
+						: job !== undefined &&
+							job.semanticVersion === row.semanticVersion &&
+							job.contractDigest === row.executableDigest;
+					if (!compatible)
 						return Object.freeze({
 							status: "refused" as const,
 							code: "EXECUTABLE_RETIRED" as const,

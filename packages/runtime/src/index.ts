@@ -53,6 +53,7 @@ export type {
 
 export {
 	createDurableReactionWorker,
+	createDurableWorker,
 	createDurableRunHandle,
 	DurableEffectAmbiguous,
 	DurableEffectConflict,
@@ -66,6 +67,10 @@ export type {
 	DurableAttemptExecutor,
 	DurableAttemptHandle,
 	DurableAttemptRequest,
+	DurableJobAttemptRequest,
+	DurableJobRunHandle,
+	DurableWorkAttemptExecutor,
+	DurableWorkAttemptRequest,
 	DurableClaim,
 	DurableEffectHandle,
 	DurableEffectLedger,

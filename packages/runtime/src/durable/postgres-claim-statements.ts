@@ -113,6 +113,7 @@ export type DurableClaimRun = Readonly<{
 	runId: string;
 	dispatchId: string;
 	resource: string;
+	semanticVersion: number;
 	tenantId: string;
 	principalKind: DurablePrincipalKind;
 	principalId: string;
@@ -132,6 +133,7 @@ type RunIdentityInput = Readonly<{ application: string; runId: string }>;
 const runSelection = `run_id::text AS "runId",
        dispatch_id::text AS "dispatchId",
        resource_identity AS "resource",
+       semantic_version AS "semanticVersion",
        tenant_id AS "tenantId",
        principal_kind AS "principalKind",
        principal_id AS "principalId",
@@ -173,26 +175,32 @@ FOR UPDATE SKIP LOCKED`,
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (result.rowCount === 0) return null;
 		const row = result.rows[0];
-		if (row?.length !== 15)
+		if (row?.length !== 16)
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
-		if (typeof row[13] !== "boolean")
+		if (typeof row[14] !== "boolean")
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		return Object.freeze({
 			runId: uuid(row[0] as string, "run identity"),
 			dispatchId: uuid(row[1] as string, "dispatch identity"),
 			resource: text(row[2] as string, "Resource Identity"),
-			tenantId: text(row[3] as string, "Tenant"),
-			principalKind: principalKind(row[4]),
-			principalId: text(row[5] as string, "Principal identity"),
-			contextInputBytes: bytes(row[6], 262_144, "Context input"),
-			payloadBytes: bytes(row[7], 262_144, "payload"),
-			retryBytes: bytes(row[8], 4_096, "retry program"),
-			runtimeBuildDigest: digest(row[9] as string, "Runtime Build digest"),
-			executableDigest: digest(row[10] as string, "executable digest"),
-			causationId: text(row[11] as string, "causation identity"),
-			correlationId: text(row[12] as string, "correlation identity"),
-			cancellationRequested: row[13],
-			attemptCount: integer(row[14] as number, 0, 8, "attempt count"),
+			semanticVersion: integer(
+				row[3] as number,
+				1,
+				Number.MAX_SAFE_INTEGER,
+				"semantic version",
+			),
+			tenantId: text(row[4] as string, "Tenant"),
+			principalKind: principalKind(row[5]),
+			principalId: text(row[6] as string, "Principal identity"),
+			contextInputBytes: bytes(row[7], 262_144, "Context input"),
+			payloadBytes: bytes(row[8], 262_144, "payload"),
+			retryBytes: bytes(row[9], 4_096, "retry program"),
+			runtimeBuildDigest: digest(row[10] as string, "Runtime Build digest"),
+			executableDigest: digest(row[11] as string, "executable digest"),
+			causationId: text(row[12] as string, "causation identity"),
+			correlationId: text(row[13] as string, "correlation identity"),
+			cancellationRequested: row[14],
+			attemptCount: integer(row[15] as number, 0, 8, "attempt count"),
 		});
 	},
 });

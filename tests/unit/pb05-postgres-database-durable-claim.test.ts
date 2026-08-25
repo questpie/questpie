@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import type { LinkedJobProjection } from "../../packages/runtime/src/durable/job-projection";
 import {
 	durableClaimAttemptsExhaust,
 	durableClaimAttemptInsert,
@@ -48,14 +49,31 @@ const reactions = {
 		],
 	]),
 } as unknown as LinkedReactionProjection;
+const jobs = {
+	byIdentity: new Map([
+		[
+			"job:reports.companyDigest",
+			{
+				semanticVersion: 2,
+				contractDigest: "d".repeat(64),
+			},
+		],
+	]),
+} as unknown as LinkedJobProjection;
 
 function selectedRun(
-	input: Readonly<{ attemptCount?: number; executableDigest?: string }> = {},
+	input: Readonly<{
+		attemptCount?: number;
+		executableDigest?: string;
+		resource?: string;
+		semanticVersion?: number;
+	}> = {},
 ) {
 	return {
 		runId,
 		dispatchId,
-		resource: "reaction:messagePublished",
+		resource: input.resource ?? "reaction:messagePublished",
+		semanticVersion: input.semanticVersion ?? 1,
 		tenantId: "tenant:one",
 		principalKind: "user" as const,
 		principalId: "user:one",
@@ -114,6 +132,7 @@ test("claims through one exact static database transaction", async () => {
 		database,
 		application: "application:collaboration",
 		reactions,
+		jobs,
 		randomUUID: (() => {
 			const values = [attemptId, leaseToken];
 			return () => values.shift()!;
@@ -126,6 +145,7 @@ test("claims through one exact static database transaction", async () => {
 		status: "claimed",
 		claim: {
 			runId,
+			semanticVersion: 1,
 			attemptId,
 			attemptNumber: 1,
 			leaseToken,
@@ -168,6 +188,12 @@ test("skips unavailable and refuses incompatible executable work before mutation
 	for (const selection of [
 		null,
 		selectedRun({ executableDigest: "c".repeat(64) }),
+		selectedRun({ semanticVersion: 2 }),
+		selectedRun({
+			resource: "job:reports.companyDigest",
+			executableDigest: "d".repeat(64),
+			semanticVersion: 1,
+		}),
 	]) {
 		const calls: object[] = [];
 		const database: PostgresTransactionRunner = {
@@ -186,6 +212,7 @@ test("skips unavailable and refuses incompatible executable work before mutation
 			database,
 			application: "application:collaboration",
 			reactions,
+			jobs,
 		});
 		await expect(claim({ runId, workerId: "worker:one" })).resolves.toEqual(
 			selection === null
@@ -236,6 +263,7 @@ test("terminalizes an exhausted claim and records one failed event", async () =>
 		database,
 		application: "application:collaboration",
 		reactions,
+		jobs,
 	});
 
 	await expect(claim({ runId, workerId: "worker:one" })).resolves.toEqual({
@@ -261,6 +289,7 @@ test("normalizes only database serialization failure to a skipped claim", async 
 		database: { transaction: () => Promise.reject(failure) },
 		application: "application:collaboration",
 		reactions,
+		jobs,
 	});
 	await expect(claim({ runId, workerId: "worker:one" })).resolves.toEqual({
 		status: "skipped",
@@ -274,6 +303,7 @@ test("normalizes only database serialization failure to a skipped claim", async 
 		database: { transaction: () => Promise.reject(ordinary) },
 		application: "application:collaboration",
 		reactions,
+		jobs,
 	});
 	await expect(failing({ runId, workerId: "worker:one" })).rejects.toBe(
 		ordinary,

@@ -52,11 +52,15 @@ export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 export { durablePrincipal } from "./principal";
 export { markDurableKernelTransaction } from "./rows";
 export type { DurableActor, DurableQuery } from "./rows";
-export { createDurableReactionWorker } from "./worker";
+export { createDurableReactionWorker, createDurableWorker } from "./worker";
 export type {
 	DurableAttemptExecutor,
 	DurableAttemptHandle,
 	DurableAttemptRequest,
+	DurableJobAttemptRequest,
+	DurableJobRunHandle,
+	DurableWorkAttemptExecutor,
+	DurableWorkAttemptRequest,
 	DurableWorker,
 	DurableWorkerOutcome,
 	DurableWorkerTrace,
