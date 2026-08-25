@@ -130,7 +130,7 @@ try {
 		`SELECT intents.call_id AS "callId", runs.run_id::text AS "runId",
        runs.state, runs.attempt_count AS "attemptCount"
 FROM questpie_internal.durable_runs AS runs
-JOIN questpie_internal.pending_reaction_intents AS intents
+JOIN questpie_internal.durable_dispatches AS intents
   ON intents.application_name = runs.application_name
  AND intents.record_id = runs.dispatch_id
 WHERE runs.application_name = 'application:collaboration'
@@ -281,7 +281,7 @@ WHERE runs.application_name = 'application:collaboration' AND runs.run_id = $1`,
 		`WITH measured_runs AS (
   SELECT runs.run_id, runs.state
   FROM questpie_internal.durable_runs AS runs
-  JOIN questpie_internal.pending_reaction_intents AS intents
+  JOIN questpie_internal.durable_dispatches AS intents
     ON intents.application_name = runs.application_name
    AND intents.record_id = runs.dispatch_id
   WHERE runs.application_name = 'application:collaboration'

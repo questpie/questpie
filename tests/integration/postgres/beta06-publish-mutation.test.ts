@@ -61,10 +61,10 @@ async function mutationCounts(callId: string) {
 	>(
 		`SELECT
   (SELECT count(*)::int FROM collaboration.message_events e
-   JOIN questpie_internal.pending_reaction_intents i
+   JOIN questpie_internal.durable_dispatches i
      ON i.call_id = $1::text
     AND convert_from(i.payload_bytes, 'UTF8')::jsonb ->> 'messageId' = e.message_id::text) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1::text) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $1::text) AS intents,
   (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1::text) AS receipts`,
 		[callId],
 	);
@@ -84,7 +84,7 @@ async function persistedMutationRows() {
 	>(`SELECT
   (SELECT count(*)::int FROM collaboration.messages) AS messages,
   (SELECT count(*)::int FROM collaboration.message_events) AS audit,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches) AS intents,
   (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts) AS receipts`);
 	return counts;
 }
@@ -146,7 +146,7 @@ async function atomicBundle(callId: string, messageId: string) {
   convert_from(intent.payload_bytes, 'UTF8')::jsonb AS payload,
   receipt.principal_id AS "principalId",
   receipt.principal_kind AS "principalKind",
-  intent.reaction_name AS "reactionName",
+  intent.resource_identity AS "reactionName",
   convert_from(receipt.result_bytes, 'UTF8')::jsonb AS result,
   receipt.transaction_id::text AS "receiptTransactionId",
   receipt.xmin::text AS "receiptVersion",
@@ -155,7 +155,7 @@ async function atomicBundle(callId: string, messageId: string) {
   intent.state,
   receipt.tenant_id AS "tenantId"
 FROM questpie_internal.mutation_call_receipts receipt
-JOIN questpie_internal.pending_reaction_intents intent
+JOIN questpie_internal.durable_dispatches intent
   ON intent.application_name = receipt.application_name
  AND intent.tenant_id = receipt.tenant_id
  AND intent.source_operation = receipt.operation_name

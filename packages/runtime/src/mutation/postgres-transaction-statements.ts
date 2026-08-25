@@ -31,15 +31,15 @@ const statementContracts: Readonly<Record<string, StatementContract>> =
 			returnedRows: [0, 0],
 			columns: [],
 		},
-		"mutation.dispatch.intent.accept": {
+		"mutation.dispatch.accept": {
 			parameterCount: 2,
 			command: "UPDATE",
 			affectedRows: [0, 1],
 			returnedRows: [0, 1],
 			columns: [{ key: "dispatchId", codec: "text", nullable: false }],
 		},
-		"mutation.dispatch.intent.insert": {
-			parameterCount: 12,
+		"mutation.dispatch.insert": {
+			parameterCount: 13,
 			command: "INSERT",
 			affectedRows: [1, 1],
 			returnedRows: [0, 0],
@@ -53,7 +53,7 @@ const statementContracts: Readonly<Record<string, StatementContract>> =
 			columns: [{ key: "enabled", codec: "text", nullable: false }],
 		},
 		"mutation.dispatch.run.insert": {
-			parameterCount: 16,
+			parameterCount: 17,
 			command: "INSERT",
 			affectedRows: [0, 1],
 			returnedRows: [0, 1],

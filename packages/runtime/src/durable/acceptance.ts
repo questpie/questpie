@@ -44,7 +44,7 @@ export async function acceptDurableDispatch(
 ): Promise<DurableAcceptance | null> {
 	await markDurableKernelTransaction(input.query);
 	const advanced = await input.query(
-		`UPDATE questpie_internal.pending_reaction_intents
+		`UPDATE questpie_internal.durable_dispatches
 SET state = 'accepted'
 WHERE application_name = $1 AND record_id = $2 AND state = 'pending'
 RETURNING record_id::text AS "dispatchId"`,
@@ -57,11 +57,11 @@ RETURNING record_id::text AS "dispatchId"`,
 	);
 	const inserted = await input.query(
 		`INSERT INTO questpie_internal.durable_runs
-  (application_name, run_id, dispatch_id, resource_identity, tenant_id, principal_kind, principal_id,
+  (application_name, run_id, dispatch_id, resource_identity, semantic_version, tenant_id, principal_kind, principal_id,
    run_as, context_input_bytes, payload_bytes, retry_bytes, runtime_build_digest, executable_digest,
    causation_kind, causation_id, correlation_id, state, attempt_count, available_at, horizon_at,
    cancellation_requested, event_sequence, dead_letter, accepted_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, 'caller', $8, $9, $10, $11, $12,
+VALUES ($1, $2, $3, $4, 1, $5, $6, $7, 'caller', $8, $9, $10, $11, $12,
    'mutationDispatch', $13, $14, 'ready', 0, $15, $16, false, 1, false, $15)
 ON CONFLICT DO NOTHING
 RETURNING run_id::text AS "runId"`,

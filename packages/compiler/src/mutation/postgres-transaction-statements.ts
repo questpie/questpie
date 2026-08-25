@@ -48,8 +48,8 @@ VALUES ($1, $2, 1, $3, $4, $5, $6, $7, 'accepted')`,
 			result: result("INSERT", range(1), range(0)),
 		},
 		{
-			identity: "mutation.dispatch.intent.accept",
-			text: `UPDATE questpie_internal.pending_reaction_intents
+			identity: "mutation.dispatch.accept",
+			text: `UPDATE questpie_internal.durable_dispatches
 SET state = 'accepted'
 WHERE application_name = $1 AND record_id = $2 AND state = 'pending'
 RETURNING record_id::text AS "dispatchId"`,
@@ -59,11 +59,11 @@ RETURNING record_id::text AS "dispatchId"`,
 			]),
 		},
 		{
-			identity: "mutation.dispatch.intent.insert",
-			text: `INSERT INTO questpie_internal.pending_reaction_intents
-  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, record_id, reaction_name, input_digest, payload_bytes, transaction_id, recorded_at, state)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.pg_current_xact_id(), $12, 'pending')`,
-			parameterCount: 12,
+			identity: "mutation.dispatch.insert",
+			text: `INSERT INTO questpie_internal.durable_dispatches
+  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot, record_id, resource_kind, resource_identity, input_digest, payload_bytes, transaction_id, recorded_at, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, pg_catalog.pg_current_xact_id(), $13, 'pending')`,
+			parameterCount: 13,
 			result: result("INSERT", range(1), range(0)),
 		},
 		{
@@ -77,15 +77,15 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, pg_catalog.pg_current_xact
 		{
 			identity: "mutation.dispatch.run.insert",
 			text: `INSERT INTO questpie_internal.durable_runs
-  (application_name, run_id, dispatch_id, resource_identity, tenant_id, principal_kind, principal_id,
+  (application_name, run_id, dispatch_id, resource_identity, semantic_version, tenant_id, principal_kind, principal_id,
    run_as, context_input_bytes, payload_bytes, retry_bytes, runtime_build_digest, executable_digest,
    causation_kind, causation_id, correlation_id, state, attempt_count, available_at, horizon_at,
    cancellation_requested, event_sequence, dead_letter, accepted_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, 'caller', $8, $9, $10, $11, $12,
-   'mutationDispatch', $13, $14, 'ready', 0, $15, $16, false, 1, false, $15)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'caller', $9, $10, $11, $12, $13,
+   'mutationDispatch', $14, $15, 'ready', 0, $16, $17, false, 1, false, $16)
 ON CONFLICT DO NOTHING
 RETURNING run_id::text AS "runId"`,
-			parameterCount: 16,
+			parameterCount: 17,
 			result: result("INSERT", range(0, 1), range(0, 1), [
 				{ key: "runId", codec: "text", nullable: false },
 			]),

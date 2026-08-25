@@ -35,9 +35,9 @@ const widgetId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b63a0";
 const operationTime = new Date("2026-08-22T00:00:00.000Z");
 
 const fixedIdentities = [
+	"mutation.dispatch.accept",
 	"mutation.dispatch.event.insert",
-	"mutation.dispatch.intent.accept",
-	"mutation.dispatch.intent.insert",
+	"mutation.dispatch.insert",
 	"mutation.dispatch.kernel.mark",
 	"mutation.dispatch.run.insert",
 	"mutation.receipt.claim",
@@ -61,10 +61,10 @@ function statement(
 function fixedStatements(): LinkedPostgresMutationTransactionStatements {
 	const parameterCounts = new Map<string, number>([
 		["mutation.dispatch.event.insert", 7],
-		["mutation.dispatch.intent.accept", 2],
-		["mutation.dispatch.intent.insert", 12],
+		["mutation.dispatch.accept", 2],
+		["mutation.dispatch.insert", 13],
 		["mutation.dispatch.kernel.mark", 0],
-		["mutation.dispatch.run.insert", 16],
+		["mutation.dispatch.run.insert", 17],
 		["mutation.receipt.claim", 7],
 		["mutation.receipt.commit", 8],
 		["mutation.receipt.read", 6],
@@ -436,10 +436,7 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 						candidate === linked.get("mutation.dispatch.kernel.mark")?.statement
 					)
 						return [{ enabled: "on" }] as never;
-					if (
-						candidate ===
-						linked.get("mutation.dispatch.intent.accept")?.statement
-					)
+					if (candidate === linked.get("mutation.dispatch.accept")?.statement)
 						return [{ dispatchId: parameters[1] }] as never;
 					if (
 						candidate === linked.get("mutation.dispatch.run.insert")?.statement
@@ -468,16 +465,16 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 		"collection.widgets.create.authority",
 		"collection.widgets.create.write",
 		"mutation.dispatch.kernel.mark",
-		"mutation.dispatch.intent.insert",
+		"mutation.dispatch.insert",
 		"mutation.dispatch.kernel.mark",
-		"mutation.dispatch.intent.accept",
+		"mutation.dispatch.accept",
 		"mutation.dispatch.run.insert",
 		"mutation.dispatch.event.insert",
 		"mutation.receipt.commit",
 	]);
-	expect(calls[4]?.parameters).toHaveLength(12);
+	expect(calls[4]?.parameters).toHaveLength(13);
 	expect(calls[6]?.parameters[1]).toBe(calls[4]?.parameters[7]);
-	expect(calls[7]?.parameters).toHaveLength(16);
+	expect(calls[7]?.parameters).toHaveLength(17);
 	expect(calls[8]?.parameters[1]).toBe(calls[7]?.parameters[1]);
 });
 

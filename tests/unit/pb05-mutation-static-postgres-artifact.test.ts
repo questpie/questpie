@@ -9,9 +9,9 @@ const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const compilationPromise = compileApplication({ applicationRoot: fixtureRoot });
 
 const identities = [
+	"mutation.dispatch.accept",
 	"mutation.dispatch.event.insert",
-	"mutation.dispatch.intent.accept",
-	"mutation.dispatch.intent.insert",
+	"mutation.dispatch.insert",
 	"mutation.dispatch.kernel.mark",
 	"mutation.dispatch.run.insert",
 	"mutation.receipt.claim",
@@ -54,9 +54,9 @@ test("Runtime Build binds the compiled fixed Mutation statement artifact", async
 	expect(
 		artifact.statements.map(({ identity }: { identity: string }) => identity),
 	).toEqual([
+		"mutation.dispatch.accept",
 		"mutation.dispatch.event.insert",
-		"mutation.dispatch.intent.accept",
-		"mutation.dispatch.intent.insert",
+		"mutation.dispatch.insert",
 		"mutation.dispatch.kernel.mark",
 		"mutation.dispatch.run.insert",
 		"mutation.receipt.claim",

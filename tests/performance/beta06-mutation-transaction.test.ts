@@ -113,7 +113,7 @@ postgresTest(
 				>
 			>(`SELECT
   (SELECT count(*)::int FROM collaboration.message_events) AS audits,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches) AS intents,
   (SELECT count(*)::int FROM collaboration.messages) AS messages,
   (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts) AS receipts`);
 			expect(rows).toEqual({

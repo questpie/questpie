@@ -127,6 +127,7 @@ test("projects one authored Action into exact direct and Wire v3 artifacts", asy
 	expect(wire.operations.map(({ identity }) => identity)).toEqual([
 		"action:delivery.publish",
 		"mutation:message.publish",
+		"mutation:message.requestDigest",
 		"query:messages.page",
 	]);
 	expect(wire.digest).not.toBe(retainedWire.digest);

@@ -38,6 +38,7 @@ type RuntimeSlot = Readonly<{
 		| "action"
 		| "context"
 		| "credentialResolver"
+		| "job"
 		| "mutation"
 		| "query"
 		| "reaction"
@@ -83,7 +84,9 @@ let deliveryProvider: Definition;
 let publishDelivery: Definition;
 let publishMessage: Definition;
 let recordDelivery: Definition;
+let requestDigest: Definition;
 let messagePublished: Definition;
+let companyDigest: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
 let applicationCredentials: Definition;
@@ -278,6 +281,36 @@ beforeAll(async () => {
 			messageId,
 		}),
 	});
+	companyDigest = generatedApp.defineJob({
+		name: "reports.companyDigest",
+		input: codec.object({ companyId: codec.uuid() }),
+		output: codec.object({ companyId: codec.uuid() }),
+		runAs: durable.caller({ whenDenied: "fail" }),
+		retry: durable.retry({
+			maximumAttempts: 5,
+			initialDelay: "1s",
+			backoff: "exponential",
+			maximumDelay: "60s",
+			jitter: "full",
+			horizon: "24h",
+		}),
+		handler: ({ input }: { input: { companyId: string } }) => ({
+			companyId: input.companyId,
+		}),
+	});
+	requestDigest = generatedApp.defineMutation({
+		name: "message.requestDigest",
+		network: true,
+		input: codec.object({ companyId: codec.uuid() }),
+		output: codec.object({ runId: codec.uuid(), resource: codec.text() }),
+		policy: policy.authenticated(),
+		errors: {},
+		handler: () => {
+			throw new Error(
+				"Job Mutation is outside this Query-only runtime harness",
+			);
+		},
+	});
 	messagePage = generatedApp.defineQuery({
 		name: "messages.page",
 		network: true,
@@ -329,8 +362,10 @@ function definitions(): ReadonlyMap<string, Definition> {
 		["action:delivery.publish", publishDelivery],
 		["context:app.context", collaborationContext],
 		["credentialResolver:collaboration.credentials", applicationCredentials],
+		["job:reports.companyDigest", companyDigest],
 		["mutation:message.publish", publishMessage],
 		["mutation:message.recordDelivery", recordDelivery],
+		["mutation:message.requestDigest", requestDigest],
 		["query:messages.page", messagePage],
 		["reaction:messagePublished", messagePublished],
 		["route:collaboration.whoami", whoami],
@@ -350,6 +385,7 @@ function executableBindings() {
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
 			slot.kind === "action" ||
+			slot.kind === "job" ||
 			slot.kind === "query" ||
 			slot.kind === "mutation" ||
 			slot.kind === "reaction" ||
@@ -365,6 +401,7 @@ function executableBindings() {
 			bundleExport: slot.bundleExport,
 			definition,
 			...(slot.kind === "action" ||
+			slot.kind === "job" ||
 			slot.kind === "query" ||
 			slot.kind === "mutation" ||
 			slot.kind === "reaction" ||

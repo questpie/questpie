@@ -222,9 +222,12 @@ async function buildBeta08Durable(
 	const currentRuntimeBuild = JSON.parse(currentRuntimeBuildBytes) as Readonly<
 		Record<string, unknown>
 	>;
+	const { jobDigest: _jobDigest, ...compatibleLater } =
+		currentRuntimeBuild.later as Readonly<Record<string, unknown>>;
 	const { digest: _currentDigest, ...v4Unsigned } = {
 		...currentRuntimeBuild,
 		internalProtocol: "questpie.internal.v4",
+		later: compatibleLater,
 	};
 	const compatibleV4RuntimeBuildBytes = JSON.stringify({
 		...v4Unsigned,
@@ -233,6 +236,7 @@ async function buildBeta08Durable(
 	const { digest: _v6Digest, ...v5Unsigned } = {
 		...currentRuntimeBuild,
 		internalProtocol: "questpie.internal.v5",
+		later: compatibleLater,
 	};
 	const compatibleV5RuntimeBuildBytes = JSON.stringify({
 		...v5Unsigned,

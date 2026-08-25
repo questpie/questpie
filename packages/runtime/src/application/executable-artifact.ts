@@ -12,6 +12,7 @@ type RuntimeExecutableSlotV1 = Readonly<{
 		| "action"
 		| "context"
 		| "credentialResolver"
+		| "job"
 		| "mutation"
 		| "query"
 		| "reaction"
@@ -64,6 +65,7 @@ export function decodeRuntimeExecutables(value: unknown): RuntimeExecutablesV1 {
 			(slot.kind !== "action" &&
 				slot.kind !== "context" &&
 				slot.kind !== "credentialResolver" &&
+				slot.kind !== "job" &&
 				slot.kind !== "mutation" &&
 				slot.kind !== "query" &&
 				slot.kind !== "reaction" &&
@@ -74,6 +76,7 @@ export function decodeRuntimeExecutables(value: unknown): RuntimeExecutablesV1 {
 				slot.slot !== "handler" &&
 				slot.slot !== "resolve") ||
 			((slot.kind === "action" ||
+				slot.kind === "job" ||
 				slot.kind === "query" ||
 				slot.kind === "mutation" ||
 				slot.kind === "reaction" ||

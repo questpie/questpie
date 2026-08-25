@@ -2,6 +2,7 @@ import { normalizeActionContract } from "./action";
 import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { normalizeJobContract } from "./job";
 import { normalizeDeclaredErrors } from "./operation-errors";
 import { normalizeReactionContract } from "./reaction";
 import { normalizeBoundPolicy } from "./relational";
@@ -508,6 +509,22 @@ export function normalizeResources(
 				kind,
 				name,
 				contract: normalizeReactionContract(item.value, codecContract),
+				contributions: [],
+				origin: {
+					logicalPath: item.logicalPath,
+					exportName: item.exportName,
+					packageId: item.packageId,
+					span: item.span,
+					memberSpans: item.memberSpans,
+				},
+				value: item.value,
+			});
+		} else if (kind === "job") {
+			resources.push({
+				identity,
+				kind,
+				name,
+				contract: normalizeJobContract(item.value, codecContract),
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

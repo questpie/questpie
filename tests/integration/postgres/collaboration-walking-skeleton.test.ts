@@ -109,7 +109,13 @@ type GeneratedExecutionScope = Readonly<{
 		messages: Readonly<{ page: unknown }>;
 	}>;
 	mutations: Readonly<{
-		message: Readonly<{ publish: unknown }>;
+		message: Readonly<{
+			publish: unknown;
+			requestDigest(
+				input: Readonly<{ companyId: string }>,
+				options: Readonly<{ callId: string }>,
+			): Promise<Readonly<{ runId: string; resource: string }>>;
+		}>;
 	}>;
 	services: Readonly<{
 		"audit.execution": unknown;
@@ -671,9 +677,10 @@ postgresTest(
    WHERE events.message_id = (convert_from(intents.payload_bytes, 'UTF8')::jsonb->>'messageId')::uuid
      AND events.kind = 'delivered') AS delivered
 FROM questpie_internal.durable_runs AS runs
-JOIN questpie_internal.pending_reaction_intents AS intents
+JOIN questpie_internal.durable_dispatches AS intents
   ON intents.application_name = runs.application_name
  AND intents.record_id = runs.dispatch_id
+WHERE intents.resource_kind = 'reaction'
 ORDER BY runs.accepted_at DESC
 LIMIT 1`,
 					);
@@ -687,6 +694,68 @@ LIMIT 1`,
 				},
 			);
 			expect(terminal).toEqual({ state: "succeeded", delivered: 1 });
+
+			const jobCallId = `job-mutation-${crypto.randomUUID()}`;
+			const jobApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(23) },
+				maintenance: { authorize: () => false },
+			});
+			const acceptJob = () =>
+				jobApplication.execution(
+					{
+						principal: principal.user({ id: tracerIds.principal }),
+						context: { companyId: tracerIds.company },
+					},
+					({ mutations }) =>
+						mutations.message.requestDigest(
+							{ companyId: tracerIds.company },
+							{ callId: jobCallId },
+						),
+				);
+			let acceptedJob: Readonly<{ runId: string; resource: string }>;
+			try {
+				acceptedJob = await acceptJob();
+				expect(await acceptJob()).toEqual(acceptedJob);
+			} finally {
+				await jobApplication.close();
+			}
+			expect(acceptedJob).toMatchObject({
+				resource: "job:reports.companyDigest",
+			});
+			const [jobRecord] = await database!.unsafe<
+				readonly Readonly<{
+					dispatches: number;
+					events: number;
+					resource: string;
+					runId: string;
+					semanticVersion: number;
+					state: string;
+				}>[]
+			>(
+				`SELECT count(*) OVER ()::int AS dispatches,
+  runs.run_id::text AS "runId", runs.resource_identity AS resource,
+  runs.semantic_version AS "semanticVersion", runs.state,
+  (SELECT count(*)::int FROM questpie_internal.durable_run_events events
+   WHERE events.application_name = runs.application_name AND events.run_id = runs.run_id) AS events
+FROM questpie_internal.durable_dispatches dispatches
+JOIN questpie_internal.durable_runs runs
+  ON runs.application_name = dispatches.application_name
+ AND runs.dispatch_id = dispatches.record_id
+WHERE dispatches.call_id = $1 AND dispatches.resource_kind = 'job'`,
+				[jobCallId],
+			);
+			expect(jobRecord).toEqual({
+				dispatches: 1,
+				events: 1,
+				resource: "job:reports.companyDigest",
+				runId: acceptedJob.runId,
+				semanticVersion: 1,
+				state: "ready",
+			});
 		} finally {
 			await cleanup.dispose();
 		}

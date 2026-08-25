@@ -47,6 +47,8 @@ export type {
 	LinkedReactionProjection,
 	LinkedReactionRetry,
 } from "./projection";
+export { linkJobProjection } from "./job-projection";
+export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 export { durablePrincipal } from "./principal";
 export { markDurableKernelTransaction } from "./rows";
 export type { DurableActor, DurableQuery } from "./rows";

@@ -6,6 +6,7 @@ import {
 } from "./action";
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
+import { renderJobDeclarations, renderJobDispatch } from "./job";
 import {
 	renderGeneratedMutationData,
 	renderMutationDeclarations,
@@ -218,7 +219,7 @@ function renderQueryOperations(
 	);
 }
 
-const factoryNames = ["defineJob"] as const;
+const factoryNames = [] as const;
 
 export function renderAppContract(
 	resources: readonly NormalizedResource[],
@@ -363,6 +364,9 @@ export interface MutationContext extends Omit<RootExecution, "services"> {
 	readonly dispatch: Readonly<{
 		${renderReactionDispatch(resources)}
 	}>;
+	readonly jobs: Readonly<{
+		${renderJobDispatch(resources)}
+	}>;
 }
 
 type ApplicationContextDefinition = ${contextDefinition};
@@ -488,6 +492,8 @@ export type RouteFactory = <
 }>) => RouteDefinition<Name, Method, Path, Credentials>;
 
 ${renderReactionDeclarations(resources, queryRuns)}
+
+${renderJobDeclarations(resources)}
 
 ${renderDurableDeclarations()}
 

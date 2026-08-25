@@ -1,6 +1,6 @@
 import type { RuntimeCodec } from "../codec";
 import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
-import type { LinkedReactionProjection } from "../durable";
+import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
 import { durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
 import type { ExecutionFacts } from "../execution";
@@ -22,7 +22,7 @@ import {
 	mutationDigest,
 } from "./canonical";
 import { createPostgresDatabaseCollectionMutationData } from "./collection";
-import { createReactionDispatch } from "./dispatch";
+import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 import type {
@@ -31,15 +31,19 @@ import type {
 } from "./postgres-transaction-statements";
 
 const fixedIdentities = [
+	"mutation.dispatch.accept",
 	"mutation.dispatch.event.insert",
-	"mutation.dispatch.intent.accept",
-	"mutation.dispatch.intent.insert",
+	"mutation.dispatch.insert",
 	"mutation.dispatch.kernel.mark",
 	"mutation.dispatch.run.insert",
 	"mutation.receipt.claim",
 	"mutation.receipt.commit",
 	"mutation.receipt.read",
 ] as const;
+const emptyJobs: LinkedJobProjection = Object.freeze({
+	members: new Map(),
+	byIdentity: new Map(),
+});
 type FixedIdentity = (typeof fixedIdentities)[number];
 
 function fixedStatements(
@@ -140,6 +144,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 		transactionStatements: LinkedPostgresMutationTransactionStatements;
 		collectionPlans: LinkedPostgresCollectionOperationPlansV1;
 		reactions: LinkedReactionProjection;
+		jobs?: LinkedJobProjection;
 		contextInputCodec: RuntimeCodec;
 		runtimeBuildDigest: string;
 		facts: ExecutionFacts<
@@ -235,7 +240,27 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								throw new TypeError("Mutation exceeded its business row limit");
 						},
 					});
-					const reactions = createReactionDispatch(input.reactions);
+					const recordIdForSlot = (dispatchSlot: string) =>
+						deterministicUuid(
+							inputScopeBytes({
+								application: input.application,
+								tenantId: facts.tenant.id,
+								operation: operation.binding.identity,
+								principalKind: facts.principal.kind,
+								principalId: facts.principal.id,
+								callId,
+								dispatchSlot,
+							}),
+						);
+					const durableDispatch = createDurableDispatch(
+						input.reactions,
+						input.jobs ?? emptyJobs,
+						(slot, job) =>
+							Object.freeze({
+								runId: durableRunIdentity(recordIdForSlot(slot)),
+								resource: job.identity as `job:${string}`,
+							}),
+					);
 					const ctx = Object.freeze({
 						principal: facts.principal,
 						authority: facts.authority,
@@ -247,7 +272,8 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						operationTime: owner.operationTime,
 						callId,
 						transactionId,
-						dispatch: reactions.dispatch,
+						dispatch: durableDispatch.dispatch,
+						jobs: durableDispatch.jobs,
 					});
 					const result = await operation.binding.execute({
 						input: operation.input,
@@ -264,18 +290,8 @@ export function createPostgresDatabaseMutationInvoker<View>(
 					);
 					if (resultBytes.byteLength > 1_048_576)
 						throw new TypeError("Mutation result exceeds its byte limit");
-					for (const dispatch of reactions.pending) {
-						const recordId = deterministicUuid(
-							inputScopeBytes({
-								application: input.application,
-								tenantId: facts.tenant.id,
-								operation: operation.binding.identity,
-								principalKind: facts.principal.kind,
-								principalId: facts.principal.id,
-								callId,
-								dispatchSlot: dispatch.slot,
-							}),
-						);
+					for (const dispatch of durableDispatch.pending) {
+						const recordId = recordIdForSlot(dispatch.slot);
 						const firstMarker = await transaction.execute(
 							statements["mutation.dispatch.kernel.mark"].statement,
 							[],
@@ -285,7 +301,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								"Durable kernel transaction marker is unavailable",
 							);
 						await transaction.execute(
-							statements["mutation.dispatch.intent.insert"].statement,
+							statements["mutation.dispatch.insert"].statement,
 							[
 								input.application,
 								facts.tenant.id,
@@ -295,7 +311,8 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								callId,
 								dispatch.slot,
 								recordId,
-								dispatch.reaction.identity,
+								dispatch.resourceKind,
+								dispatch.resource.identity,
 								mutationDigest(dispatch.payloadBytes),
 								dispatch.payloadBytes,
 								owner.operationTime,
@@ -310,12 +327,12 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								"Durable kernel transaction marker is unavailable",
 							);
 						const advanced = await transaction.execute(
-							statements["mutation.dispatch.intent.accept"].statement,
+							statements["mutation.dispatch.accept"].statement,
 							[input.application, recordId],
 						);
 						if (advanced.length !== 1 || advanced[0]!.dispatchId !== recordId)
 							throw new TypeError(
-								"Reaction dispatch acceptance did not advance",
+								"Durable dispatch acceptance did not advance",
 							);
 						const runId = durableRunIdentity(recordId);
 						const inserted = await transaction.execute(
@@ -324,7 +341,10 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								input.application,
 								runId,
 								recordId,
-								dispatch.reaction.identity,
+								dispatch.resource.identity,
+								dispatch.resourceKind === "job"
+									? dispatch.resource.semanticVersion
+									: 1,
 								facts.tenant.id,
 								facts.principal.kind,
 								facts.principal.id,
@@ -335,21 +355,21 @@ export function createPostgresDatabaseMutationInvoker<View>(
 									),
 								),
 								dispatch.payloadBytes,
-								retryBytes(dispatch.reaction.retry),
+								retryBytes(dispatch.resource.retry),
 								input.runtimeBuildDigest,
-								dispatch.reaction.contractDigest,
+								dispatch.resource.contractDigest,
 								callId,
 								callId,
 								owner.operationTime,
 								new Date(
 									owner.operationTime.getTime() +
-										dispatch.reaction.retry.horizonMilliseconds,
+										dispatch.resource.retry.horizonMilliseconds,
 								),
 							],
 						);
 						if (inserted.length !== 1 || inserted[0]!.runId !== runId)
 							throw new TypeError(
-								"Reaction dispatch acceptance did not advance",
+								"Durable dispatch acceptance did not advance",
 							);
 						await transaction.execute(
 							statements["mutation.dispatch.event.insert"].statement,
@@ -357,7 +377,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								input.application,
 								runId,
 								owner.operationTime,
-								dispatch.reaction.identity,
+								dispatch.resource.identity,
 								recordId,
 								callId,
 								callId,

@@ -7,6 +7,7 @@ import {
 	contentDigest,
 	digest,
 } from "../canonical";
+import { projectJobContracts, type JobProjectionV1 } from "../job";
 import {
 	durableKernelContract,
 	durableKernelDigest,
@@ -58,6 +59,8 @@ export interface RuntimeContractProjection {
 	readonly runtimeExecutablesDigest: string;
 	readonly reactions: ReactionProjectionV2;
 	readonly reactionDigest: string;
+	readonly jobs: JobProjectionV1;
+	readonly jobDigest: string;
 	readonly durableKernel: DurableKernelContractV1;
 	readonly wire: Readonly<Record<string, unknown>>;
 	readonly wireDigest: string;
@@ -132,6 +135,8 @@ export function projectRuntimeContract(
 	};
 	const reactions = projectReactionContracts(input.resources);
 	const reactionDigest = digest("questpie-reaction-projection-v2", reactions);
+	const jobs = projectJobContracts(input.resources);
+	const jobDigest = digest("questpie-job-projection-v1", jobs);
 	const clientContract = {
 		format: "questpie.generated-client-contract",
 		version: 1,
@@ -155,6 +160,7 @@ export function projectRuntimeContract(
 				"action",
 				"context",
 				"credentialResolver",
+				"job",
 				"mutation",
 				"query",
 				"reaction",
@@ -364,6 +370,8 @@ export function projectRuntimeContract(
 		runtimeExecutablesDigest,
 		reactions,
 		reactionDigest,
+		jobs,
+		jobDigest,
 		wire,
 		wireDigest: String(wire.digest),
 	};
@@ -463,7 +471,7 @@ export function projectRuntimeBuild(
 		version: 1,
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
-		internalProtocol: "questpie.internal.v6",
+		internalProtocol: "questpie.internal.v7",
 		compiler,
 		compilerRuntimeBuildDigest: digest(
 			"questpie-compiler-runtime-build-v1",
@@ -513,6 +521,8 @@ export function projectRuntimeBuild(
 				input.runtime.reactions.reactions.length === 0
 					? null
 					: input.runtime.reactionDigest,
+			jobDigest:
+				input.runtime.jobs.jobs.length === 0 ? null : input.runtime.jobDigest,
 		},
 		inventory,
 	};

@@ -31,7 +31,8 @@ type RuntimeBuildV1 = Readonly<{
 		| "questpie.internal.v3"
 		| "questpie.internal.v4"
 		| "questpie.internal.v5"
-		| "questpie.internal.v6";
+		| "questpie.internal.v6"
+		| "questpie.internal.v7";
 	compiler: Readonly<{
 		version: string;
 		bunVersion: string;
@@ -64,6 +65,7 @@ type RuntimeBuildV1 = Readonly<{
 		resumeDigest: string | null;
 		durableCompatibilityDigest: string | null;
 		reactionDigest: string | null;
+		jobDigest: string | null;
 	}>;
 	executableSlots: readonly string[];
 	slots: readonly Readonly<{
@@ -73,6 +75,7 @@ type RuntimeBuildV1 = Readonly<{
 			| "context"
 			| "credentialResolver"
 			| "mutation"
+			| "job"
 			| "query"
 			| "reaction"
 			| "route"
@@ -436,7 +439,9 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	const durable =
 		internalProtocol === "questpie.internal.v4" ||
 		internalProtocol === "questpie.internal.v5" ||
-		internalProtocol === "questpie.internal.v6";
+		internalProtocol === "questpie.internal.v6" ||
+		internalProtocol === "questpie.internal.v7";
+	const jobs = internalProtocol === "questpie.internal.v7";
 	const v3 = internalProtocol === "questpie.internal.v3" || durable;
 	exact(
 		build,
@@ -528,6 +533,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"resumeDigest",
 			"durableCompatibilityDigest",
 			"reactionDigest",
+			...(jobs ? ["jobDigest"] : []),
 		],
 		"later compatibility",
 	);
@@ -543,6 +549,8 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	}
 	if (later.reactionDigest !== null)
 		digestValue(later.reactionDigest, "reactionDigest");
+	if (jobs && later.jobDigest !== null)
+		digestValue(later.jobDigest, "jobDigest");
 	const compiler = record(build.compiler, "compiler");
 	exact(
 		compiler,
@@ -653,6 +661,11 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 	)
 		fail("reactionDigest does not match reaction-projection inventory");
 	if (
+		jobs &&
+		(later.jobDigest === null) !== !inventoryDigests.has("job-projection.json")
+	)
+		fail("jobDigest does not match job-projection inventory");
+	if (
 		(later.durableCompatibilityDigest === null) !==
 		!inventoryDigests.has("durable-kernel.json")
 	)
@@ -665,7 +678,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		string(build[key], key);
 	if (build.runtimeAbi !== "questpie.runtime.v1")
 		fail("unsupported Runtime ABI");
-	if (!/^questpie\.internal\.v[2-6]$/.test(internalProtocol as string))
+	if (!/^questpie\.internal\.v[2-7]$/.test(internalProtocol as string))
 		fail("unsupported internal protocol");
 	if (build.migrationHead !== null)
 		string(build.migrationHead, "migrationHead");

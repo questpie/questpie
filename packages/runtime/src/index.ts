@@ -59,6 +59,7 @@ export {
 	DurableLeaseLost,
 	durablePrincipal,
 	linkReactionProjection,
+	linkJobProjection,
 } from "./durable";
 export type {
 	DurableActor,

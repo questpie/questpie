@@ -89,7 +89,7 @@ async function runIdentity(callId: string): Promise<string> {
 	const [row] = await database!.unsafe<readonly Readonly<{ runId: string }>[]>(
 		`SELECT runs.run_id::text AS "runId"
 FROM questpie_internal.durable_runs AS runs
-JOIN questpie_internal.pending_reaction_intents AS intents
+JOIN questpie_internal.durable_dispatches AS intents
   ON intents.application_name = runs.application_name
  AND intents.record_id = runs.dispatch_id
 WHERE runs.application_name = 'application:collaboration' AND intents.call_id = $1`,
@@ -150,11 +150,11 @@ postgresTest(
 		>(
 			`SELECT
   (SELECT count(*)::int FROM questpie_internal.durable_runs AS runs
-    JOIN questpie_internal.pending_reaction_intents AS intents
+    JOIN questpie_internal.durable_dispatches AS intents
       ON intents.application_name = runs.application_name
      AND intents.record_id = runs.dispatch_id
    WHERE intents.call_id = $1) AS runs,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $1) AS intents`,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $1) AS intents`,
 			[callId],
 		);
 		expect(dispatchCount).toEqual({ runs: 1, intents: 1 });

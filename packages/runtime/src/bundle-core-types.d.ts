@@ -18,7 +18,7 @@ export type ReadinessMigration = Readonly<{
 export declare function verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction(
 	input: Readonly<{
 		transaction: PostgresTransaction;
-		protocol: Readonly<{ version: 6; checksum: string }>;
+		protocol: Readonly<{ version: 7; checksum: string }>;
 		application: string;
 		postgresSchema: string;
 		migrationHead: string | null;

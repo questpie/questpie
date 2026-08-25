@@ -6,7 +6,10 @@ import { SQL } from "bun";
 import { principal } from "questpie";
 
 import type { ExecutionFacts } from "../../../packages/runtime/src/execution";
-import { linkReactionProjection } from "../../../packages/runtime/src/mutation";
+import {
+	linkJobProjection,
+	linkReactionProjection,
+} from "../../../packages/runtime/src/mutation";
 import { createPostgresDatabaseMutationInvoker } from "../../../packages/runtime/src/mutation/postgres-database";
 import type { PreparedOperation } from "../../../packages/runtime/src/operation";
 import type {
@@ -168,6 +171,7 @@ postgres(
 			"field-normalizer-programs.json",
 			"server-value-programs.json",
 			"reaction-projection.json",
+			"job-projection.json",
 		]);
 		const collectionArtifact = JSON.parse(
 			generated["postgres-collection-operation-plans.json"]!,
@@ -217,6 +221,9 @@ postgres(
 		const reactions = linkReactionProjection(
 			JSON.parse(generated["reaction-projection.json"]!),
 		);
+		const jobs = linkJobProjection(
+			JSON.parse(generated["job-projection.json"]!),
+		);
 		const database = createRuntimePostgres(configuration());
 		const facts = {
 			principal: principal.user({ id: beta05Ids.principal }),
@@ -241,6 +248,7 @@ postgres(
 				transactionStatements,
 				collectionPlans,
 				reactions,
+				jobs,
 				contextInputCodec: {
 					kind: "object",
 					properties: { companyId: { kind: "uuid" } },
@@ -316,9 +324,9 @@ postgres(
   (SELECT count(*)::int FROM collaboration.messages WHERE id = $1) AS messages,
   (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audits,
   (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $2) AS receipts,
-  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $2) AS intents,
-  (SELECT count(*)::int FROM questpie_internal.durable_runs WHERE dispatch_id IN (SELECT record_id FROM questpie_internal.pending_reaction_intents WHERE call_id = $2)) AS runs,
-  (SELECT count(*)::int FROM questpie_internal.durable_run_events WHERE run_id IN (SELECT run_id FROM questpie_internal.durable_runs WHERE dispatch_id IN (SELECT record_id FROM questpie_internal.pending_reaction_intents WHERE call_id = $2))) AS events`,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $2) AS intents,
+  (SELECT count(*)::int FROM questpie_internal.durable_runs WHERE dispatch_id IN (SELECT record_id FROM questpie_internal.durable_dispatches WHERE call_id = $2)) AS runs,
+  (SELECT count(*)::int FROM questpie_internal.durable_run_events WHERE run_id IN (SELECT run_id FROM questpie_internal.durable_runs WHERE dispatch_id IN (SELECT record_id FROM questpie_internal.durable_dispatches WHERE call_id = $2))) AS events`,
 				[messageId, callId],
 			);
 			expect(counts).toEqual({
@@ -334,9 +342,9 @@ postgres(
 				  (SELECT count(*)::int FROM collaboration.messages WHERE body = $1) AS messages,
 				  (SELECT count(*)::int FROM collaboration.message_events e JOIN collaboration.messages m ON m.id = e.message_id WHERE m.body = $1) AS audits,
 				  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $2) AS receipts,
-				  (SELECT count(*)::int FROM questpie_internal.pending_reaction_intents WHERE call_id = $2) AS intents,
-				  (SELECT count(*)::int FROM questpie_internal.durable_runs r JOIN questpie_internal.pending_reaction_intents i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS runs,
-				  (SELECT count(*)::int FROM questpie_internal.durable_run_events e JOIN questpie_internal.durable_runs r ON r.run_id = e.run_id JOIN questpie_internal.pending_reaction_intents i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS events`,
+				  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $2) AS intents,
+				  (SELECT count(*)::int FROM questpie_internal.durable_runs r JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS runs,
+				  (SELECT count(*)::int FROM questpie_internal.durable_run_events e JOIN questpie_internal.durable_runs r ON r.run_id = e.run_id JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS events`,
 				[rollbackBody, rollbackCall],
 			);
 			expect(rolledBack).toEqual({

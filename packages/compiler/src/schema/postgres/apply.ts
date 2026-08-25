@@ -27,7 +27,7 @@ import {
 	providerObservations,
 	schemaExists,
 } from "./fingerprint";
-import { ensureInternalProtocolV6 } from "./internal-protocol-v6";
+import { ensureInternalProtocolV7 } from "./internal-protocol-v7";
 import { fail } from "./shared";
 
 const schemaDiagnosticCodes = new Set<string>([
@@ -259,7 +259,7 @@ export async function applyCommittedMigrations(
 				"current database is unavailable",
 			);
 		await providerObservations(session, target);
-		await ensureInternalProtocolV6(
+		await ensureInternalProtocolV7(
 			session,
 			database.name,
 			firstPid,

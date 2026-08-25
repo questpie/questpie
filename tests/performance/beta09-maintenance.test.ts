@@ -70,7 +70,7 @@ postgresTest(
 		>(
 			`SELECT runs.run_id::text AS "runId", runs.event_sequence AS version
 FROM questpie_internal.durable_runs AS runs
-JOIN questpie_internal.pending_reaction_intents AS intents
+JOIN questpie_internal.durable_dispatches AS intents
   ON intents.application_name = runs.application_name
  AND intents.record_id = runs.dispatch_id
 WHERE runs.application_name = 'application:collaboration'
@@ -102,7 +102,7 @@ FROM questpie_internal.durable_maintenance_commands AS commands
 JOIN questpie_internal.durable_runs AS measured_runs
   ON measured_runs.application_name = commands.application_name
  AND measured_runs.run_id = commands.run_id
-JOIN questpie_internal.pending_reaction_intents AS measured_intents
+JOIN questpie_internal.durable_dispatches AS measured_intents
   ON measured_intents.application_name = measured_runs.application_name
  AND measured_intents.record_id = measured_runs.dispatch_id
 WHERE commands.application_name = 'application:collaboration'

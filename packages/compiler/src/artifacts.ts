@@ -419,6 +419,11 @@ export async function createArtifacts(
 	};
 	if (runtime.reactions.reactions.length > 0) {
 		generated["reaction-projection.json"] = canonicalBytes(runtime.reactions);
+	}
+	if (runtime.jobs.jobs.length > 0) {
+		generated["job-projection.json"] = canonicalBytes(runtime.jobs);
+	}
+	if (runtime.reactions.reactions.length > 0 || runtime.jobs.jobs.length > 0) {
 		generated["durable-kernel.json"] = canonicalBytes(runtime.durableKernel);
 	}
 	if (mutations.projection.mutations.length > 0) {
@@ -515,6 +520,7 @@ export async function createArtifacts(
 			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
 			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
+			jobArtifact: runtime.jobs.jobs.length > 0,
 			realtime: realtimeEnabled,
 			readinessEntry,
 			runtimeCoreBundleEntry,

@@ -7,7 +7,7 @@ import type {
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import {
-	internalProtocolV6Checksum,
+	internalProtocolV7Checksum,
 	type SchemaProjectionV1,
 	verifyPostgresDatabaseSchemaReadiness,
 } from "../schema";
@@ -149,7 +149,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 			try {
 				await input.runtime.verifyReadinessPrerequisites({
 					transaction,
-					protocol: { version: 6, checksum: internalProtocolV6Checksum },
+					protocol: { version: 7, checksum: internalProtocolV7Checksum },
 					application: input.schema.application.name,
 					postgresSchema: input.schema.application.postgresSchema,
 					migrationHead: committed.head,

@@ -7,6 +7,7 @@ import type {
 	PackageInventory,
 } from "../types";
 import { bundleApplicationEntry } from "./application-bundle";
+import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
 type RuntimeExecutableSlot = Readonly<{
@@ -68,6 +69,7 @@ function applicationEntry(
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		jobArtifact: boolean;
 		realtime: boolean;
 	}>,
 ): string {
@@ -89,6 +91,7 @@ function applicationEntry(
 		kind === "action" ||
 		kind === "query" ||
 		kind === "mutation" ||
+		kind === "job" ||
 		kind === "reaction" ||
 		kind === "route";
 	const bindingEntries = input.slots.map((slot) => {
@@ -352,11 +355,6 @@ function applicationEntry(
 		},
 		policies: [],
 	});
-	const emptyReactionProjection = JSON.stringify({
-		format: "questpie.reaction-projection",
-		version: 1,
-		reactions: [],
-	});
 	return `import { principal } from "questpie";
 import { bindIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresDatabaseRuntimeReadiness } from "questpie:runtime-readiness";
@@ -392,7 +390,7 @@ async function loadRuntimeArtifacts() {
 }
 
 function linkMutationArtifacts(runtimeModule, artifactFiles) {
-	const { linkCollectionMutationPrograms, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
+	const { linkCollectionMutationPrograms, linkJobProjection, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
 	const raw = ${
 		input.collectionOperationArtifacts
 			? `{
@@ -419,7 +417,8 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 			operations,
 			expectedDigest: expectedCollectionOperationPlansDigest,
 		}),
-		reactions: linkReactionProjection(${input.reactionArtifact ? `JSON.parse(artifactFiles["reaction-projection.json"])` : emptyReactionProjection}),
+		reactions: linkReactionProjection(${input.reactionArtifact ? `JSON.parse(artifactFiles["reaction-projection.json"])` : emptyDurableProjections.reactions}),
+		jobs: linkJobProjection(${input.jobArtifact ? `JSON.parse(artifactFiles["job-projection.json"])` : emptyDurableProjections.jobs}),
 	});
 }
 
@@ -586,6 +585,7 @@ export async function createApplication(input) {
 					facts,
 					collectionPlans: mutationArtifacts.collectionPlans,
 					reactions: mutationArtifacts.reactions,
+					jobs: mutationArtifacts.jobs,
 					contextInputCodec: ${contextDefinition}.input,
 					runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 				});
@@ -779,6 +779,7 @@ export async function renderApplicationBundle(
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
 		reactionArtifact: boolean;
+		jobArtifact: boolean;
 		realtime: boolean;
 		readinessEntry: string;
 		runtimeCoreBundleEntry: string;

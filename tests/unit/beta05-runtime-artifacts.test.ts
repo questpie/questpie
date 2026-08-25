@@ -33,7 +33,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			version: 1,
 			application: "application:collaboration",
 			runtimeAbi: "questpie.runtime.v1",
-			internalProtocol: "questpie.internal.v6",
+			internalProtocol: "questpie.internal.v7",
 			compiler: {
 				version: "4.0.0-beta.1",
 				bunVersion: Bun.version,
@@ -44,17 +44,24 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				resumeDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				durableCompatibilityDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 				reactionDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
+				jobDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 			},
 		});
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({ path: "reaction-projection.json" }),
 		);
+		expect(runtimeBuild.inventory).toContainEqual(
+			expect.objectContaining({ path: "job-projection.json" }),
+		);
 		const compatibleBuild = JSON.parse(
 			first.generatedFiles["runtime-build.json"]!,
 		);
-		const { digest: _v6Digest, ...v4Unsigned } = {
+		const { digest: _v7Digest, ...v4Unsigned } = {
 			...compatibleBuild,
 			internalProtocol: "questpie.internal.v4",
+			later: (({ jobDigest: _jobDigest, ...later }) => later)(
+				compatibleBuild.later,
+			),
 		};
 		const v4RuntimeBuild = {
 			...v4Unsigned,
@@ -72,7 +79,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			decodeRuntimeArtifacts({
 				runtimeBuild: {
 					...v4RuntimeBuild,
-					internalProtocol: "questpie.internal.v7",
+					internalProtocol: "questpie.internal.v8",
 				},
 				runtimeExecutables: executables,
 				operationContracts,

@@ -179,6 +179,68 @@ function renderDelta(base: Snapshot, live: Snapshot, version: string): string {
 	].join(String.fromCharCode(10));
 }
 
+function renderFullCatalogModules(
+	live: Snapshot,
+	version: string,
+): ReadonlyMap<string, string> {
+	const prefix = `packages/compiler/src/schema/postgres/internal-protocol-v${version}-catalog`;
+	const indent = String.fromCharCode(9);
+	const row = (entries: readonly unknown[]): string =>
+		indent +
+		"[" +
+		entries.map((entry) => JSON.stringify(entry)).join(", ") +
+		"],";
+	const block = (name: string, rows: readonly string[]): string =>
+		`export const ${name} = [` +
+		(rows.length === 0 ? "" : `\n${rows.join("\n")}`) +
+		"\n] as const;";
+	const header = `/** Generated from a live PostgreSQL catalog after applying \`internalProtocolV${version}Sql\`. */`;
+	const constraintMiddle = Math.ceil(live.constraints.length / 2);
+	const constraintsA = live.constraints.slice(0, constraintMiddle);
+	const constraintsB = live.constraints.slice(constraintMiddle);
+	const main = [
+		header,
+		"",
+		`import { internalProtocolV${version}ConstraintsA } from "./internal-protocol-v${version}-catalog-constraints-a";`,
+		`import { internalProtocolV${version}ConstraintsB } from "./internal-protocol-v${version}-catalog-constraints-b";`,
+		"",
+		`export { internalProtocolV${version}Columns } from "./internal-protocol-v${version}-catalog-columns";`,
+		`export { internalProtocolV${version}Indexes } from "./internal-protocol-v${version}-catalog-indexes";`,
+		"",
+		block(
+			`internalProtocolV${version}Tables`,
+			live.tables.map((name) => indent + JSON.stringify(name) + ","),
+		),
+		"",
+		block(`internalProtocolV${version}ReplacedConstraints`, []),
+		"",
+		`export const internalProtocolV${version}Constraints = [`,
+		`\t...internalProtocolV${version}ConstraintsA,`,
+		`\t...internalProtocolV${version}ConstraintsB,`,
+		"] as const;",
+		"",
+	].join("\n");
+	return new Map([
+		[`${prefix}.ts`, main],
+		[
+			`${prefix}-columns.ts`,
+			`${header}\n\n${block(`internalProtocolV${version}Columns`, live.columns.map(row))}\n`,
+		],
+		[
+			`${prefix}-constraints-a.ts`,
+			`${header}\n\n${block(`internalProtocolV${version}ConstraintsA`, constraintsA.map(row))}\n`,
+		],
+		[
+			`${prefix}-constraints-b.ts`,
+			`${header}\n\n${block(`internalProtocolV${version}ConstraintsB`, constraintsB.map(row))}\n`,
+		],
+		[
+			`${prefix}-indexes.ts`,
+			`${header}\n\n${block(`internalProtocolV${version}Indexes`, live.indexes.map(row))}\n`,
+		],
+	]);
+}
+
 async function formatted(source: string, path: string): Promise<string> {
 	await Bun.write(path, source);
 	const result = Bun.spawnSync(["bunx", "oxfmt", path], {
@@ -199,24 +261,43 @@ if (snapshotPath) {
 
 const version = flag("emit");
 const basePath = flag("base");
-if (!version || !/^[1-9]\d*$/.test(version) || !basePath) {
+const full = cliArguments.includes("--full");
+if (!version || !/^[1-9]\d*$/.test(version) || (!full && !basePath)) {
 	console.error(
 		"require --emit <positive-version> --base <snapshot>, or --snapshot <file>",
 	);
 	process.exit(1);
 }
 
-const base = JSON.parse(await Bun.file(basePath).text()) as Snapshot;
-const rendered = renderDelta(base, await readCatalog(), version);
+const base = full
+	? ({
+			tables: [],
+			columns: [],
+			constraints: [],
+			indexes: [],
+		} satisfies Snapshot)
+	: (JSON.parse(await Bun.file(basePath!).text()) as Snapshot);
+const live = await readCatalog();
 const modulePath = `packages/compiler/src/schema/postgres/internal-protocol-v${version}-catalog.ts`;
+const modules = full
+	? renderFullCatalogModules(live, version)
+	: new Map([[modulePath, renderDelta(base, live, version)]]);
 
 if (cliArguments.includes("--check")) {
 	const directory = await mkdtemp(join(tmpdir(), "questpie-protocol-catalog-"));
 	let matches = false;
 	try {
-		const existing = await Bun.file(modulePath).text();
-		const candidate = await formatted(rendered, join(directory, "catalog.ts"));
-		matches = existing === candidate;
+		const comparisons = await Promise.all(
+			[...modules].map(async ([path, source], index) => {
+				const existing = await Bun.file(path).text();
+				const candidate = await formatted(
+					source,
+					join(directory, `catalog-${index}.ts`),
+				);
+				return existing === candidate;
+			}),
+		);
+		matches = comparisons.every(Boolean);
 	} finally {
 		await rm(directory, { recursive: true, force: true });
 	}
@@ -228,5 +309,5 @@ if (cliArguments.includes("--check")) {
 	process.exit(0);
 }
 
-await formatted(rendered, modulePath);
-console.log(`wrote ${modulePath}`);
+for (const [path, source] of modules) await formatted(source, path);
+console.log(`wrote ${[...modules.keys()].join(", ")}`);

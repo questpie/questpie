@@ -21,6 +21,7 @@ export {
 	createPostgresDatabaseMutationInvoker,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
+	linkJobProjection,
 	linkReactionProjection,
 } from "./mutation";
 export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-transaction-statements";

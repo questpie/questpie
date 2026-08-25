@@ -20,6 +20,19 @@ export type RuntimeReactionBinding = Readonly<{
 	execute: (input: never) => unknown | Promise<unknown>;
 }>;
 
+export type RuntimeJobBinding = Readonly<{
+	identity: string;
+	kind: "job";
+	slot: "handler";
+	runtimeGraphDigest: string;
+	bundleExport: string;
+	definition: Readonly<{
+		name: string;
+		handler: (input: never) => unknown | Promise<unknown>;
+	}>;
+	execute: (input: never) => unknown | Promise<unknown>;
+}>;
+
 export type RuntimeActionInventoryBinding = Readonly<{
 	identity: string;
 	kind: "action";
@@ -36,6 +49,7 @@ export type RuntimeActionInventoryBinding = Readonly<{
 export type RuntimeExecutableInventoryBinding<View> =
 	| RuntimeExecutableBinding<View>
 	| RuntimeActionInventoryBinding
+	| RuntimeJobBinding
 	| RuntimeReactionBinding
 	| Readonly<{
 			identity: string;
@@ -161,6 +175,7 @@ export function validateRuntimeExecutableBindings<View>(
 		candidates.some(
 			(binding) =>
 				(binding.kind === "action" ||
+					binding.kind === "job" ||
 					binding.kind === "query" ||
 					binding.kind === "mutation" ||
 					binding.kind === "reaction" ||
@@ -184,6 +199,7 @@ export function validateRuntimeExecutableBindings<View>(
 			let implementation: unknown;
 			switch (binding.kind) {
 				case "action":
+				case "job":
 				case "query":
 				case "mutation":
 				case "reaction":
