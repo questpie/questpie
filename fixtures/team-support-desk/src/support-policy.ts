@@ -354,7 +354,7 @@ export const ticketPolicy = definePolicy(tickets, {
 				assigneeMembershipId: staff,
 				priority: staff,
 				status: staff,
-				closedAt: query.not(query.always()),
+				closedAt: staff,
 				lastSlaFollowUpAt: query.not(query.always()),
 				updatedAt: query.not(query.always()),
 			};
