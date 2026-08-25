@@ -1838,6 +1838,61 @@ test("separates runtime deadlines from Fetch disconnect cancellation", async () 
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
+test("preserves caller cancellation while Context Resolution is failing", async () => {
+	let releaseResolution!: () => void;
+	const resolutionBlocked = new Promise<void>((resolve) => {
+		releaseResolution = resolve;
+	});
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: async () => {
+			await resolutionBlocked;
+			throw new Error("PostgreSQL cancelled during begin");
+		},
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(() => ({ count: 1 })),
+	];
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+		},
+	});
+	const cancellation = new AbortController();
+	const reason = new DOMException("caller cancelled", "AbortError");
+	const pending = app.execution(
+		{
+			principal: principal.anonymous(),
+			context: {
+				companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+			},
+			signal: cancellation.signal,
+		},
+		(operations) => operations.invoke("query:messages.page", { first: 1 }),
+	);
+	cancellation.abort(reason);
+	releaseResolution();
+	await expect(pending).rejects.toBe(reason);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
 test("refuses a late result from a handler that ignores deadline cancellation", async () => {
 	const events: unknown[] = [];
 	const { app, releases } = await createHoldingRuntime({

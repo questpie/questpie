@@ -454,17 +454,24 @@ postgresTest(
 					"direct Action cancelled",
 					"AbortError",
 				);
+				let markExecutionReady!: () => void;
+				const executionReady = new Promise<void>((resolve) => {
+					markExecutionReady = resolve;
+				});
 				const cancelledDelivery = routeApplication.execution(
 					{ ...executionInput, signal: cancellation.signal },
-					({ actions }) =>
-						actions.delivery.publish(
+					({ actions }) => {
+						markExecutionReady();
+						return actions.delivery.publish(
 							{ effectKey: "domain-cancel", message: "delivery-blocked" },
 							{
 								effectKey: "provider-cancel",
 								timeoutMilliseconds: 900,
 							},
-						),
+						);
+					},
 				);
+				await executionReady;
 				setTimeout(() => cancellation.abort(cancellationReason), 10);
 				await expect(cancelledDelivery).rejects.toBe(cancellationReason);
 

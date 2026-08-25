@@ -412,6 +412,8 @@ export async function createRuntimeApplication<
 			if (error instanceof CommittedResultUnavailable) throw error;
 			if (controlled.deadlineExpired && !committedMutation)
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
+			if (controlled.controller.signal.aborted && !committedMutation)
+				throw controlled.controller.signal.reason;
 			throw error;
 		} finally {
 			activeRoots.delete(pending);
@@ -422,7 +424,6 @@ export async function createRuntimeApplication<
 			else activeByPrincipal.set(principalKey, remaining);
 		}
 	};
-
 	const execution: RuntimeApplication<
 		ContextInputOf<Context>,
 		ExecutionView
