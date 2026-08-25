@@ -218,6 +218,7 @@ async function assertMigrationBoundary(
 
 export async function applyCommittedMigrations(
 	input: Readonly<{
+		allowNonRollingProtocolV7?: boolean;
 		connectionString?: string;
 		migrations: readonly CommittedMigration[];
 	}> &
@@ -264,6 +265,9 @@ export async function applyCommittedMigrations(
 			database.name,
 			firstPid,
 			control,
+			{
+				allowNonRollingProtocolV7: input.allowNonRollingProtocolV7,
+			},
 			input.signal,
 		);
 		const applicationKey = lockKey(

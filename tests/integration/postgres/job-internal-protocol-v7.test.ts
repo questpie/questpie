@@ -4,6 +4,10 @@ import { SQL } from "bun";
 
 import { backendPid } from "../../../packages/compiler/src/postgres-session";
 import {
+	ensureInternalProtocolV6,
+	internalProtocolV6Checksum,
+} from "../../../packages/compiler/src/schema/postgres/internal-protocol-v6";
+import {
 	ensureInternalProtocolV7,
 	internalProtocolV7Checksum,
 	verifyInternalProtocolV7,
@@ -22,6 +26,54 @@ afterAll(async () => {
 });
 
 describe.skipIf(!database)("Job internal protocol v7", () => {
+	test("requires an explicit non-rolling cutover before changing an existing protocol", async () => {
+		const session = await database!.reserve();
+		try {
+			const [current] = await session<{ databaseName: string }[]>`
+				select current_database() as "databaseName"
+			`;
+			const pid = await backendPid(session);
+			await ensureInternalProtocolV6(
+				session,
+				current!.databaseName,
+				pid,
+				control,
+			);
+
+			await expect(
+				ensureInternalProtocolV7(session, current!.databaseName, pid, control),
+			).rejects.toMatchObject({
+				code: "QP-SCHEMA-020",
+				diagnosticClass: "destructiveAcknowledgementRequired",
+			});
+			const [unchanged] = await session<
+				Readonly<Array<{ version: number; checksum: string; legacy: boolean }>>
+			>`
+				select version,
+				       checksum,
+				       to_regclass('questpie_internal.pending_reaction_intents') is not null as legacy
+				from questpie_internal.protocol
+				where singleton = true
+			`;
+			expect(unchanged).toEqual({
+				version: 6,
+				checksum: internalProtocolV6Checksum,
+				legacy: true,
+			});
+
+			await ensureInternalProtocolV7(
+				session,
+				current!.databaseName,
+				pid,
+				control,
+				{ allowNonRollingProtocolV7: true },
+			);
+			await verifyInternalProtocolV7(session);
+		} finally {
+			session.release();
+		}
+	});
+
 	test("generalizes durable dispatch identity and pins run semantic version", async () => {
 		const session = await database!.reserve();
 		try {

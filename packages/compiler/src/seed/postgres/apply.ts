@@ -205,6 +205,7 @@ async function executeSeedStep(
 
 export async function applyCommittedSeeds(
 	input: Readonly<{
+		allowNonRollingProtocolV7?: boolean;
 		connectionString?: string;
 		schema: SchemaProjectionV1;
 		seeds: readonly CommittedSeedV1[];
@@ -244,6 +245,9 @@ export async function applyCommittedSeeds(
 			database.name,
 			expectedPid,
 			control,
+			{
+				allowNonRollingProtocolV7: input.allowNonRollingProtocolV7,
+			},
 			input.signal,
 		);
 		await assertBackendPid(session, expectedPid, "Seed bootstrap");

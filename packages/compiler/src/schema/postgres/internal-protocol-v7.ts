@@ -39,6 +39,26 @@ const internalProtocolV7Catalog: InternalProtocolCatalog = Object.freeze({
 	indexes: Object.freeze([...internalProtocolV7Indexes]),
 });
 
+export type ProtocolV7Cutover = Readonly<{
+	allowNonRollingProtocolV7?: boolean;
+}>;
+
+export function assertProtocolV7Cutover(
+	protocol: Readonly<{ version: number; checksum: string }> | undefined,
+	cutover: ProtocolV7Cutover,
+): void {
+	if (
+		protocol !== undefined &&
+		protocol.version !== 7 &&
+		cutover.allowNonRollingProtocolV7 !== true
+	)
+		fail(
+			"QP-SCHEMA-020",
+			"destructiveAcknowledgementRequired",
+			"protocol v7 is a non-rolling upgrade; stop every v6 Runtime and explicitly allow the cutover before migration",
+		);
+}
+
 async function protocolRow(
 	sql: SQL,
 ): Promise<Readonly<{ version: number; checksum: string }> | undefined> {
@@ -67,10 +87,12 @@ export async function ensureInternalProtocolV7(
 	databaseName: string,
 	expectedPid: number,
 	control: PostgresControl,
+	cutover: ProtocolV7Cutover = {},
 	signal?: AbortSignal,
 ): Promise<void> {
 	await assertBackendPid(sql, expectedPid, "before internal protocol v7");
 	const protocolBefore = await protocolRow(sql).catch(() => undefined);
+	assertProtocolV7Cutover(protocolBefore, cutover);
 	if (protocolBefore?.version !== 7)
 		await ensureInternalProtocolV6(
 			sql,
