@@ -5,6 +5,7 @@ import { join } from "node:path";
 
 import { SQL } from "bun";
 
+import { runtimeArtifactDigest as artifactDigest } from "../../../packages/runtime/src/application/artifact-protocol";
 import {
 	beta05Ids,
 	beta05PostgresUrl,
@@ -21,12 +22,6 @@ const postgresTest = process.env.PGHOST ? test : test.skip;
 
 function contentDigest(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
-}
-
-function artifactDigest(domain: string, value: unknown): string {
-	return createHash("sha256")
-		.update(`${domain}\0${JSON.stringify(value)}\n`)
-		.digest("hex");
 }
 
 postgresTest(
@@ -105,37 +100,85 @@ postgresTest(
 
 			const { digest: _wireDigest, ...unsignedWire } = JSON.parse(wireBytes);
 			const {
+				actionEffectIdentity: _actionEffectIdentity,
+				actionFailureDetails: _actionFailureDetails,
+				actionFailures: _actionFailures,
+				actionLimitsProjection: _actionLimitsProjection,
+				actionOutcomeAmbiguous: _actionOutcomeAmbiguous,
+				actionRequestKeys: _actionRequestKeys,
+				effectKey: _effectKey,
 				failureDetails: _failureDetails,
 				resultKinds: _resultKinds,
 				callIdentity: _callIdentity,
 				transactionIdentity: _transactionIdentity,
 				committedResultUnavailable: _committedResultUnavailable,
 				compatibility: originalCompatibility,
+				operations: wireOperations,
+				postDispatchResourceLimit: _postDispatchResourceLimit,
+				preExecutionRejection: _preExecutionRejection,
 				...sharedWire
 			} = unsignedWire;
+			const retainedOperations = wireOperations.filter(
+				(operation: Readonly<{ identity: string }>) =>
+					!operation.identity.startsWith("action:"),
+			);
 			const forgedV1Sibling = {
 				...sharedWire,
 				version: 1,
 				application: "application:forged",
+				operations: retainedOperations,
 				failures: unsignedWire.failures.filter(
 					(code: string) => code !== "COMMITTED_RESULT_UNAVAILABLE",
 				),
 			};
+			const forgedV1Digest = artifactDigest(
+				"questpie-operation-wire-v1",
+				forgedV1Sibling,
+			);
+			const forgedUnsignedV2 = { ...unsignedWire };
+			for (const key of [
+				"actionEffectIdentity",
+				"actionFailureDetails",
+				"actionFailures",
+				"actionLimitsProjection",
+				"actionOutcomeAmbiguous",
+				"actionRequestKeys",
+				"effectKey",
+				"postDispatchResourceLimit",
+				"preExecutionRejection",
+			])
+				delete forgedUnsignedV2[key];
+			Object.assign(forgedUnsignedV2, {
+				version: 2,
+				application: "application:forged",
+				operations: retainedOperations,
+				compatibility: {
+					clientContractDigest: originalCompatibility.clientContractDigest,
+					wireV1Digest: forgedV1Digest,
+					wireV1Source: originalCompatibility.wireV1Source,
+					wireV1MutationExecution:
+						originalCompatibility.wireV1MutationExecution,
+					wireV1QueryExecution: originalCompatibility.wireV1QueryExecution,
+					wireV1RejectionCode: originalCompatibility.wireV1RejectionCode,
+				},
+			});
+			const forgedV2Digest = artifactDigest(
+				"questpie-operation-wire-v2",
+				forgedUnsignedV2,
+			);
 			const forgedUnsignedWire = {
 				...unsignedWire,
 				application: "application:forged",
 				compatibility: {
 					...originalCompatibility,
-					wireV1Digest: artifactDigest(
-						"questpie-operation-wire-v1",
-						forgedV1Sibling,
-					),
+					wireV1Digest: forgedV1Digest,
+					wireV2Digest: forgedV2Digest,
 				},
 			};
 			const forgedWire = {
 				...forgedUnsignedWire,
 				digest: artifactDigest(
-					"questpie-operation-wire-v2",
+					"questpie-operation-wire-v3",
 					forgedUnsignedWire,
 				),
 			};
@@ -345,7 +388,11 @@ postgresTest(
 					"http://runtime.test/_questpie/operation",
 					{
 						method: "POST",
-						headers: { "content-type": wire.mediaType },
+						headers: {
+							"content-type": wire.mediaType,
+							cookie:
+								"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						},
 						body: JSON.stringify({
 							application: runtimeBuild.application,
 							callId: crypto.randomUUID(),
@@ -362,7 +409,7 @@ postgresTest(
 				const rawResponse = await application.fetch(
 					internal.bindIngressPrincipalForRequest(rawRequest, user),
 				);
-				expect(rawResponse.status).toBe(200);
+				expect(rawResponse.status, await rawResponse.clone().text()).toBe(200);
 				const rawFrame = (await rawResponse.json()) as Readonly<{
 					kind: string;
 					payload: unknown;
@@ -374,8 +421,16 @@ postgresTest(
 					baseUrl: "http://runtime.test",
 					fetch: (request: Request) => {
 						clientFetches += 1;
+						const headers = new Headers(request.headers);
+						headers.set(
+							"cookie",
+							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+						);
 						return application.fetch(
-							internal.bindIngressPrincipalForRequest(request, user),
+							internal.bindIngressPrincipalForRequest(
+								new Request(request, { headers }),
+								user,
+							),
 						);
 					},
 				});

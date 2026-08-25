@@ -7,10 +7,7 @@ import type {
 	PackageInventory,
 } from "../types";
 import { bundleApplicationEntry } from "./application-bundle";
-import {
-	renderPostgresRuntimeImports,
-	renderPostgresRuntimeOwnership,
-} from "./postgres-runtime-ownership";
+import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
 type RuntimeExecutableSlot = Readonly<{
 	identity: string;
@@ -450,7 +447,7 @@ export async function createApplication(input) {
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
 		createDurableReactionWorker,
-		${renderPostgresRuntimeImports()},
+		${postgresRuntimeTemplates.renderPostgresRuntimeImports()},
 		createRuntimeApplication,
 		createRuntimeActionExecutor,
 		createRuntimeRouteExecutor,
@@ -468,7 +465,7 @@ export async function createApplication(input) {
 		throw new TypeError("generated Mutation transaction statements do not match Runtime Build");
 	if (loaded.artifacts.runtimeBuild.postgresCollectionOperationPlansDigest !== expectedCollectionOperationPlansDigest)
 		throw new TypeError("generated Collection operation plans do not match Runtime Build");
-	${renderPostgresRuntimeOwnership()}
+	${postgresRuntimeTemplates.renderPostgresRuntimeOwnership()}
 	const postgresController = new AbortController();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
 	let queryPlans;
@@ -558,13 +555,13 @@ export async function createApplication(input) {
 				data: Object.freeze({
 					run: (definition, operationInput) => {
 						const queryDigest = structuralQueryDigests.get(definition);
-						const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
-						if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
-					return executePostgresDatabaseQuery({
-							linkedPlan: queryPlans.get(queryDigest),
+						const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
+						if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
+						return executePostgresDatabaseQuery({
+							linkedPlan,
 							binding: {
-								templateDigest: plan.templateDigest,
-								values: plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
+								templateDigest: linkedPlan.plan.templateDigest,
+								values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
 							},
 							executionFacts: {
 								authority: facts.authority,
@@ -683,13 +680,13 @@ export async function createApplication(input) {
 					data: Object.freeze({
 						run: (definition, operationInput) => {
 							const queryDigest = structuralQueryDigests.get(definition);
-							const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
-							if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
+							const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
+							if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
 							return executePostgresDatabaseQuery({
-								linkedPlan: queryPlans.get(queryDigest),
+								linkedPlan,
 								binding: {
-									templateDigest: plan.templateDigest,
-									values: plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
+									templateDigest: linkedPlan.plan.templateDigest,
+									values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
 								},
 								executionFacts: {
 									authority: execution.authority,
@@ -742,6 +739,7 @@ export async function createApplication(input) {
 	});
 	let closePromise;
 	return Object.freeze({
+		${postgresRuntimeTemplates.renderPostgresRuntimeFacts()}
 		fetch: async (request) => (await routeExecutor.fetch(request)) ?? runtime.fetch(request),
 		execution: (root, use) => runtime.execution(root, ({ execution: { actionScope, ...execution }, ...operations }) => use(Object.freeze({
 			...execution,
@@ -757,7 +755,7 @@ export async function createApplication(input) {
 				for (const worker of durableWorkers) worker.beginDrain();
 				closePromise = runtime.close({ deadlineAt }).finally(() => {
 					postgresController.abort(new DOMException("Runtime closed", "AbortError"));
-				return postgresRuntime.close({ deadlineAt });
+					return postgresRuntime.close({ deadlineAt });
 				});
 			}
 			return closePromise;

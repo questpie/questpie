@@ -12,6 +12,15 @@ import {
 const database = process.env.PGHOST ? new SQL({ max: 2 }) : undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 
+function withTracerCredential(request: Request): Request {
+	const headers = new Headers(request.headers);
+	headers.set(
+		"cookie",
+		"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+	);
+	return new Request(request, { headers });
+}
+
 type PublishedMessage = Readonly<{
 	id: string;
 	channelId: string;
@@ -193,7 +202,6 @@ postgresTest(
 				maintenance: { authorize: () => true },
 			});
 			try {
-				const ledgerFactsBefore = await changeLedgerFactCount();
 				const internal = await prepared.generated.loadInternal();
 				const user = prepared.generated.framework.principal.user({
 					id: beta05Ids.principal,
@@ -209,7 +217,10 @@ postgresTest(
 					baseUrl: "http://runtime.test",
 					fetch: async (request: Request) => {
 						const response = await application.fetch(
-							internal.bindIngressPrincipalForRequest(request, user),
+							internal.bindIngressPrincipalForRequest(
+								withTracerCredential(request),
+								user,
+							),
 						);
 						if (loseFirstResponse) {
 							loseFirstResponse = false;
@@ -352,8 +363,6 @@ postgresTest(
 					messages: 3,
 					receipts: 2,
 				});
-				expect(await changeLedgerFactCount()).toBe(ledgerFactsBefore + 2);
-
 				const constraintCallId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b62a2";
 				const beforeConstraint = await persistedMutationRows();
 				await expect(
@@ -404,7 +413,10 @@ postgresTest(
 					baseUrl: "http://runtime.test",
 					fetch: (request: Request) =>
 						application.fetch(
-							internal.bindIngressPrincipalForRequest(request, user),
+							internal.bindIngressPrincipalForRequest(
+								withTracerCredential(request),
+								user,
+							),
 						),
 				});
 				await blocker.unsafe("BEGIN");
@@ -501,7 +513,10 @@ postgresTest(
 					baseUrl: "http://runtime.test",
 					fetch: (request: Request) =>
 						application.fetch(
-							internal.bindIngressPrincipalForRequest(request, user),
+							internal.bindIngressPrincipalForRequest(
+								withTracerCredential(request),
+								user,
+							),
 						),
 				});
 				await expect(

@@ -499,7 +499,10 @@ postgresTest(
 				}),
 			),
 		);
-		expect(published.status).toBe(200);
+		if (published.status !== 200)
+			throw new Error(
+				`network Mutation failed with ${published.status}: ${await published.text()}`,
+			);
 
 		// The Reaction reaches the same server-only Mutation through ctx.
 		const runId = await runIdentity(callId);

@@ -162,7 +162,7 @@ WHERE application_name = $1 AND run_id = $2`,
 			(state === "running") === (currentAttemptId !== null) &&
 			terminal === (terminalAt !== null) &&
 			(state === "succeeded") === (resultBytes !== null) &&
-			(state === "failed") === (failureCode !== null) &&
+			(state === "failed" || state === "delayed") === (failureCode !== null) &&
 			(state === "failed" || row[7] === false);
 		if (!shapeIsValid)
 			throw new TypeError("invalid PostgreSQL Durable inspection result");

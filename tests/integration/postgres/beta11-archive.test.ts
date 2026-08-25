@@ -340,13 +340,16 @@ postgresTest(
 			let sawInitial = false;
 			const client = prepared.client.createClient({
 				baseUrl: "http://runtime.test",
-				fetch: (request: Request) =>
-					application.fetch(
+				fetch: (request: Request) => {
+					const headers = new Headers(request.headers);
+					headers.set("x-questpie-archive-principal", authorized.id);
+					return application.fetch(
 						prepared.internal.bindIngressPrincipalForRequest(
-							request,
+							new Request(request, { headers }),
 							authorized,
 						),
-					),
+					);
+				},
 			}) as GeneratedClient;
 			const stop = client
 				.withContext({ archiveCode: "national" })
@@ -367,7 +370,13 @@ postgresTest(
 					},
 					{ onError: (error) => failures.push(error.code) },
 				);
-			await within(initial.promise, 5_000);
+			try {
+				await within(initial.promise, 5_000);
+			} catch (error) {
+				throw new Error(`archive initial watch failed: ${failures.join(",")}`, {
+					cause: error,
+				});
+			}
 
 			const deposited = await application.execution(
 				{ principal: authorized, context: { archiveCode: "national" } },

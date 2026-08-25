@@ -14,17 +14,17 @@ import {
 	createPostgresLiveQueryRetention,
 	type RetainedLiveQueryBinding,
 } from "../../../packages/runtime/src/live-query/postgres-retention";
-import { createPostgresDatabase } from "../../../packages/runtime/src/postgres";
+import { createRuntimePostgres } from "../../../packages/runtime/src/postgres";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const concurrentDatabase = process.env.PGHOST ? new SQL({ max: 8 }) : undefined;
 const snapshotDatabase = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const pgDatabase = process.env.PGHOST
-	? createPostgresDatabase({
+	? createRuntimePostgres({
 			connectionUrl: postgresUrl(),
 			directConnectionUrl: postgresUrl(),
 			pool: {
-				max: 2,
+				max: 8,
 				connectTimeoutMs: 2_000,
 				checkoutTimeoutMs: 2_000,
 				idleTimeoutMs: 5_000,
@@ -219,7 +219,7 @@ describe.skipIf(!database)(
 			"retains at most 128 acknowledged tokens in one Principal authority partition",
 			async () => {
 				const retention = createPostgresLiveQueryRetention({
-					sql: concurrentDatabase!,
+					database: pgDatabase!,
 					hmacKey,
 				});
 				const { retainedGeneration: _generation, ...lookupBinding } = binding;
@@ -263,7 +263,7 @@ describe.skipIf(!database)(
 			"retains below an unrelated PostgreSQL snapshot, then prunes after every consumer advances",
 			async () => {
 				const retention = createPostgresLiveQueryRetention({
-					sql: database!,
+					database: pgDatabase!,
 					hmacKey,
 				});
 				const snapshotStarted = Promise.withResolvers<string>();
@@ -295,7 +295,7 @@ describe.skipIf(!database)(
 					for (const consumer of ["primary", "lagging"])
 						expect(
 							await reconcilePostgresChangeLedger({
-								sql: database!,
+								database: pgDatabase!,
 								application: "collaboration",
 								consumer,
 								apply: () => undefined,
@@ -322,7 +322,7 @@ describe.skipIf(!database)(
 						expect(
 							(
 								await reconcilePostgresChangeLedger({
-									sql: database!,
+									database: pgDatabase!,
 									application: "collaboration",
 									consumer,
 									apply: () => undefined,
@@ -345,7 +345,7 @@ describe.skipIf(!database)(
 				`;
 					for (const consumer of ["primary", "lagging"])
 						await reconcilePostgresChangeLedger({
-							sql: database!,
+							database: pgDatabase!,
 							application: "collaboration",
 							consumer,
 							apply: () => undefined,
@@ -371,7 +371,7 @@ describe.skipIf(!database)(
 			"runs PostgreSQL-clock retention pruning from the production wake scan",
 			async () => {
 				const retention = createPostgresLiveQueryRetention({
-					sql: database!,
+					database: pgDatabase!,
 					hmacKey,
 				});
 				const result = completeResult();
@@ -394,7 +394,7 @@ describe.skipIf(!database)(
 
 				const coordinator = createPostgresLiveQueryCoordinator({
 					program: runtimeProgram,
-					sql: database!,
+					postgres: pgDatabase!,
 					hmacKey,
 					applicationName: "collaboration",
 					deploymentDigest: binding.deploymentDigest,

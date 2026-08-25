@@ -200,7 +200,7 @@ describe.skipIf(!database)(
 					fanoutPerBatch: 1_024,
 				});
 				await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: ledgerDatabase!,
 					application,
 					consumer: effect.consumer,
 					apply: () => undefined,

@@ -1,7 +1,5 @@
 import { createHash } from "node:crypto";
 
-import type { SQL } from "bun";
-
 import { assertOperationAdmission } from "../operation";
 import type { PostgresParameter, PostgresTransactionRunner } from "../postgres";
 import {
@@ -9,7 +7,6 @@ import {
 	type CursorOrderTerm,
 	type CursorScalar,
 } from "./cursor";
-import { executePostgresStatement } from "./postgres";
 import {
 	executeLinkedPostgresQueryPlan,
 	type LinkedPostgresQueryPlan,
@@ -684,41 +681,6 @@ async function executePostgresQueryWithRows(
 			),
 		);
 		return page;
-	});
-}
-
-export function executePostgresQuery(
-	input: PostgresQueryExecutionInput &
-		(
-			| Readonly<{
-					plan: PostgresQueryPlanV1;
-					sql: SQL;
-					linkedPlan?: never;
-					database?: never;
-			  }>
-			| Readonly<{
-					linkedPlan: LinkedPostgresQueryPlan;
-					database: PostgresTransactionRunner;
-					plan?: never;
-					sql?: never;
-			  }>
-		),
-): Promise<DataQueryPage> {
-	if (input.linkedPlan)
-		return executePostgresDatabaseQuery({
-			...input,
-			linkedPlan: input.linkedPlan,
-			database: input.database,
-		});
-	return executePostgresQueryWithRows({
-		...input,
-		plan: input.plan,
-		read: (parameters, signal) =>
-			executePostgresStatement(input.sql, {
-				statement: input.plan.sql,
-				parameters,
-				signal,
-			}),
 	});
 }
 

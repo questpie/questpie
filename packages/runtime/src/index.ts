@@ -30,7 +30,7 @@ export {
 	createCursorBindingV2,
 	DataCursorBindingError,
 	DataQueryExecutionError,
-	executePostgresQuery,
+	executePostgresDatabaseQuery,
 } from "./relational";
 export type {
 	CursorOrderTerm,
@@ -54,9 +54,6 @@ export type {
 export {
 	createDurableReactionWorker,
 	createDurableRunHandle,
-	createPostgresDurableEffectLedger,
-	createPostgresDurableKernel,
-	createPostgresDurableMaintenance,
 	DurableEffectAmbiguous,
 	DurableEffectConflict,
 	DurableLeaseLost,

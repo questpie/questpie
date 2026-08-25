@@ -227,6 +227,24 @@ postgresTest(
 				realtime: { hmacKey: new Uint8Array(32).fill(23) },
 				maintenance: { authorize: () => false },
 			});
+			type PostgresFacts = Readonly<{
+				state: string;
+				generation: number;
+				pool: Readonly<{ max: number; total: number }>;
+				listener: string | Readonly<{ state: string; generation: number }>;
+			}>;
+			const postgresFacts = () =>
+				(
+					routeApplication as unknown as Readonly<
+						Record<symbol, () => PostgresFacts>
+					>
+				)[Symbol.for("questpie.internal.postgres-facts")]!();
+			expect(postgresFacts()).toMatchObject({
+				state: "ready",
+				generation: 1,
+				pool: { max: 10 },
+				listener: { state: "healthy", generation: 1 },
+			});
 			try {
 				const executionInput = {
 					principal: principal.user({ id: tracerIds.principal }),
@@ -511,6 +529,12 @@ postgresTest(
 				});
 			} finally {
 				await routeApplication.close();
+				expect(postgresFacts()).toMatchObject({
+					state: "closed",
+					generation: 1,
+					pool: { max: 10, total: 0 },
+					listener: "disabled",
+				});
 			}
 
 			const first = await startHost(temporary, 0, true);

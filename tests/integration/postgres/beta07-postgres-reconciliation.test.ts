@@ -11,10 +11,38 @@ import {
 	reconcilePostgresChangeLedger,
 	type ChangeLedgerFactV1,
 } from "../../../packages/runtime/src/live-query";
+import { createPostgresDatabase } from "../../../packages/runtime/src/postgres";
 
 const database = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const lowerDatabase = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
 const higherDatabase = process.env.PGHOST ? new SQL({ max: 1 }) : undefined;
+const connectionUrl = (() => {
+	const url = new URL("postgres://localhost/postgres");
+	url.hostname = process.env.PGHOST ?? "127.0.0.1";
+	url.port = process.env.PGPORT ?? "5432";
+	url.username = process.env.PGUSER ?? "postgres";
+	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.href;
+})();
+const pgDatabase = process.env.PGHOST
+	? createPostgresDatabase({
+			connectionUrl,
+			directConnectionUrl: connectionUrl,
+			pool: {
+				max: 2,
+				connectTimeoutMs: 2_000,
+				checkoutTimeoutMs: 2_000,
+				idleTimeoutMs: 5_000,
+				maxLifetimeSeconds: 60,
+			},
+			timeouts: {
+				statementMs: 10_000,
+				lockMs: 1_000,
+				idleInTransactionMs: 10_000,
+			},
+		})
+	: undefined;
 const postgresTest = process.env.PGHOST ? test : test.skip;
 const control = { lockTimeoutMs: 1_000, statementTimeoutMs: 10_000 } as const;
 const application = "frontierProbe";
@@ -62,6 +90,7 @@ DROP SCHEMA IF EXISTS questpie_internal CASCADE;`);
 	await database?.close({ timeout: 0 });
 	await lowerDatabase?.close({ timeout: 0 });
 	await higherDatabase?.close({ timeout: 0 });
+	await pgDatabase?.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 describe.skipIf(!database)("BETA-07 PostgreSQL reconciliation frontier", () => {
@@ -89,7 +118,7 @@ describe.skipIf(!database)("BETA-07 PostgreSQL reconciliation frontier", () => {
 			`;
 				const firstApplied: ChangeLedgerFactV1[] = [];
 				const first = await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: pgDatabase!,
 					application,
 					consumer,
 					apply: (facts) => firstApplied.push(...facts),
@@ -104,7 +133,7 @@ describe.skipIf(!database)("BETA-07 PostgreSQL reconciliation frontier", () => {
 				await lower;
 				const secondApplied: ChangeLedgerFactV1[] = [];
 				const second = await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: pgDatabase!,
 					application,
 					consumer,
 					apply: (facts) => secondApplied.push(...facts),
@@ -128,7 +157,7 @@ describe.skipIf(!database)("BETA-07 PostgreSQL reconciliation frontier", () => {
 				values ('wrapped', 'local sequence is not authority')
 			`;
 				const third = await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: pgDatabase!,
 					application,
 					consumer,
 					apply: () => undefined,
@@ -145,7 +174,7 @@ describe.skipIf(!database)("BETA-07 PostgreSQL reconciliation frontier", () => {
 					from generate_series(1, 17) value
 				`);
 				const widened = await reconcilePostgresChangeLedger({
-					sql: database!,
+					database: pgDatabase!,
 					application,
 					consumer,
 					apply: () => undefined,

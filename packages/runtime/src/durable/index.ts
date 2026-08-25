@@ -12,14 +12,13 @@ export type {
 	DurableEffectScope,
 	DurableRunHandle,
 } from "./effects";
-export { createPostgresDurableEffectLedger } from "./postgres-effects";
 export { createPostgresDatabaseDurableEffectLedger } from "./postgres-database-effect-ledger";
 export type {
 	DurableEffectLedger,
+	DurableEffectReservation,
 	DurableEffectStatus,
 	DurableEffectView,
-} from "./postgres-effects";
-export { createPostgresDurableKernel } from "./postgres-kernel";
+} from "./durable-effect-contract";
 export { createPostgresDatabaseDurableKernel } from "./postgres-database-kernel";
 export type {
 	DurableAdmission,
@@ -33,7 +32,6 @@ export type {
 	DurableRunView,
 	DurableTransition,
 } from "./rows";
-export { createPostgresDurableMaintenance } from "./postgres-maintenance";
 export { createPostgresDatabaseDurablePrincipalMaintenance } from "./postgres-database-principal-maintenance";
 export type {
 	DurableMaintenance,
@@ -42,7 +40,7 @@ export type {
 	DurableMaintenanceCommand,
 	DurableMaintenanceOutcome,
 	DurableMaintenanceRejection,
-} from "./postgres-maintenance";
+} from "./maintenance-contract";
 export { linkReactionProjection } from "./projection";
 export type {
 	LinkedReactionMember,

@@ -1,21 +1,17 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
-import type { SQL } from "bun";
-
 import { canonicalJsonLine, sha256Digest } from "../canonical-json";
 import type { PostgresTransactionRunner } from "../postgres";
 import {
 	acknowledgePostgresRetainedResult,
 	prunePostgresLiveQueryRetention,
 	readPostgresRetainedResult,
-	type PostgresRetainedResultRow,
 } from "./postgres-retention-database";
 
 const digestPattern = /^[0-9a-f]{64}$/;
 const identityPattern = /^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/;
 const retainedResultBytesLimit = 1_048_576;
 const dependencyPlanBytesLimit = 262_144;
-const retainedTokensPerPrincipal = 128;
 const postgresBigintMaximum = 9_223_372_036_854_775_807n;
 const postgresIntegerMaximum = 2_147_483_647;
 
@@ -63,17 +59,10 @@ type PostgresLiveQueryPruneResult = Readonly<{
 	ledgerFacts: number;
 }>;
 
-type PostgresLiveQueryRetentionInput =
-	| Readonly<{
-			database: PostgresTransactionRunner;
-			sql?: never;
-			hmacKey: Uint8Array;
-	  }>
-	| Readonly<{
-			database?: never;
-			sql: SQL;
-			hmacKey: Uint8Array;
-	  }>;
+type PostgresLiveQueryRetentionInput = Readonly<{
+	database: PostgresTransactionRunner;
+	hmacKey: Uint8Array;
+}>;
 
 export type PostgresLiveQueryRetention = Readonly<{
 	mint(result: RetainedLiveQueryCompleteResult): string;
@@ -330,94 +319,21 @@ export function createPostgresLiveQueryRetention(
 					"resume token does not bind the acknowledged result",
 				);
 			const tokenDigest = sha256Digest(result.resumeToken);
-			if (input.database !== undefined)
-				return acknowledgePostgresRetainedResult(
-					input.database,
-					result,
-					tokenDigest,
-				);
-			await input.sql.begin(async (transaction) => {
-				await transaction`
-					select pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
-					  ${`questpie-retained-result-v1:${result.binding.applicationName}:${result.binding.authorityPartitionDigest}`},
-					  0
-					))
-				`;
-				await transaction`
-					delete from questpie_internal.retained_live_query_results
-					where application_name = ${result.binding.applicationName}
-					  and authority_partition_digest = ${result.binding.authorityPartitionDigest}
-					  and expires_at <= transaction_timestamp()
-				`;
-				const inserted = await transaction<{ tokenDigest: string }[]>`
-					insert into questpie_internal.retained_live_query_results
-					(application_name, token_digest, authority_partition_digest, deployment_digest,
-					 query_identity, input_digest, wire_version, retained_generation, result_bytes,
-					 dependency_plan_bytes)
-					values (${result.binding.applicationName}, ${tokenDigest},
-					 ${result.binding.authorityPartitionDigest}, ${result.binding.deploymentDigest},
-					 ${result.binding.queryIdentity}, ${result.binding.inputDigest},
-					 ${result.binding.wireVersion}, ${result.binding.retainedGeneration},
-					 ${result.resultBytes}, ${result.dependencyPlanBytes})
-					on conflict (application_name, token_digest) do update
-					set token_digest = excluded.token_digest
-					where retained_live_query_results.authority_partition_digest = excluded.authority_partition_digest
-					  and retained_live_query_results.deployment_digest = excluded.deployment_digest
-					  and retained_live_query_results.query_identity = excluded.query_identity
-					  and retained_live_query_results.input_digest = excluded.input_digest
-					  and retained_live_query_results.wire_version = excluded.wire_version
-					  and retained_live_query_results.retained_generation = excluded.retained_generation
-					  and retained_live_query_results.result_bytes = excluded.result_bytes
-					  and retained_live_query_results.dependency_plan_bytes = excluded.dependency_plan_bytes
-					returning token_digest as "tokenDigest"
-				`;
-				if (inserted.length !== 1 || inserted[0]?.tokenDigest !== tokenDigest)
-					throw new TypeError("retained result identity conflicts");
-				await transaction`
-					with evicted as (
-					  select token_digest
-					  from questpie_internal.retained_live_query_results
-					  where application_name = ${result.binding.applicationName}
-					    and authority_partition_digest = ${result.binding.authorityPartitionDigest}
-					  order by created_at desc, token_digest desc
-					  offset ${retainedTokensPerPrincipal}
-					)
-					delete from questpie_internal.retained_live_query_results retained
-					using evicted
-					where retained.application_name = ${result.binding.applicationName}
-					  and retained.token_digest = evicted.token_digest
-				`;
-			});
+			return acknowledgePostgresRetainedResult(
+				input.database,
+				result,
+				tokenDigest,
+			);
 		},
 		async resume({ binding, resumeToken }) {
 			validateLookupBinding(binding);
 			const candidateToken = typeof resumeToken === "string" ? resumeToken : "";
 			const payload = decode(candidateToken);
-			const row =
-				input.database !== undefined
-					? await readPostgresRetainedResult(
-							input.database,
-							binding,
-							sha256Digest(candidateToken),
-						)
-					: (
-							await input.sql<PostgresRetainedResultRow[]>`
-				select deployment_digest as "deploymentDigest",
-				       authority_partition_digest as "authorityPartitionDigest",
-				       query_identity as "queryIdentity", input_digest as "inputDigest",
-				       wire_version as "wireVersion", retained_generation as "retainedGeneration",
-				       result_bytes as "resultBytes", dependency_plan_bytes as "dependencyPlanBytes"
-				from questpie_internal.retained_live_query_results
-				where application_name = ${binding.applicationName}
-				  and token_digest = ${sha256Digest(candidateToken)}
-				  and deployment_digest = ${binding.deploymentDigest}
-				  and authority_partition_digest = ${binding.authorityPartitionDigest}
-				  and query_identity = ${binding.queryIdentity}
-				  and input_digest = ${binding.inputDigest}
-				  and wire_version = ${binding.wireVersion}
-				  and expires_at > transaction_timestamp()
-			`
-						)[0];
+			const row = await readPostgresRetainedResult(
+				input.database,
+				binding,
+				sha256Digest(candidateToken),
+			);
 			const resultBytes = bytes(row?.resultBytes);
 			const dependencyPlanBytes = bytes(row?.dependencyPlanBytes);
 			if (
@@ -448,36 +364,7 @@ export function createPostgresLiveQueryRetention(
 		},
 		async prune({ applicationName }) {
 			validIdentity(applicationName, "application identity");
-			if (input.database !== undefined)
-				return prunePostgresLiveQueryRetention(input.database, applicationName);
-			return input.sql.begin(async (transaction) => {
-				const [retained] = await transaction<{ count: number }[]>`
-					with deleted as (
-					  delete from questpie_internal.retained_live_query_results
-					  where application_name = ${applicationName}
-					    and expires_at <= transaction_timestamp()
-					  returning 1
-					)
-					select count(*)::integer as count from deleted
-				`;
-				const [ledger] = await transaction<{ count: number }[]>`
-					with minimum as (
-					  select min(xid_horizon) as horizon
-					  from questpie_internal.reconciliation_consumers
-					  where application_name = ${applicationName}
-					), deleted as (
-					  delete from questpie_internal.change_ledger facts using minimum
-					  where facts.application_name = ${applicationName}
-					    and facts.transaction_id < minimum.horizon
-					  returning 1
-					)
-					select count(*)::integer as count from deleted
-				`;
-				return Object.freeze({
-					retainedResults: retained?.count ?? 0,
-					ledgerFacts: ledger?.count ?? 0,
-				});
-			});
+			return prunePostgresLiveQueryRetention(input.database, applicationName);
 		},
 	});
 }

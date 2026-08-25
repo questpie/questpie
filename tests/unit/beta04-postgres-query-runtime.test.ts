@@ -1,10 +1,8 @@
 import { expect, test } from "bun:test";
 
-import type { SQL } from "bun";
-
 import {
 	DataQueryExecutionError,
-	executePostgresQuery,
+	executePostgresDatabaseQuery,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
 import {
@@ -320,44 +318,49 @@ function rows() {
 	];
 }
 
-function fakeSql(
+function fakeDatabaseFromRows(
 	query: (
 		statement: string,
 		parameters: readonly unknown[],
 	) =>
 		| readonly Readonly<Record<string, unknown>>[]
 		| Promise<readonly Readonly<Record<string, unknown>>[]>,
-	onReserve?: () => void,
-): SQL {
-	const pending = (
-		promise: Promise<readonly Readonly<Record<string, unknown>>[]>,
-	) => {
-		const value = {
-			cancel: () => value,
-			execute: () => value,
-			// oxlint-disable-next-line unicorn/no-thenable -- Bun PendingQuery is intentionally awaitable.
-			then: promise.then.bind(promise),
-		};
-		return value;
-	};
+	onTransaction?: () => void,
+): PostgresTransactionRunner {
 	return {
-		async reserve() {
-			onReserve?.();
-			return {
-				close: async () => {},
-				release: () => {},
-				unsafe(statement: string, parameters: readonly unknown[] = []) {
-					if (
-						statement === "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY" ||
-						statement === "COMMIT" ||
-						statement === "ROLLBACK"
-					)
-						return pending(Promise.resolve([]));
-					return pending(Promise.resolve(query(statement, parameters)));
+		async transaction<Output>(input: {
+			use(transaction: unknown): Promise<Output>;
+		}): Promise<Output> {
+			onTransaction?.();
+			return input.use({
+				execute: async (
+					statement: {
+						text: string;
+						parameters(value: unknown): readonly unknown[];
+						decode(result: unknown): unknown;
+					},
+					parameters: unknown,
+				) => {
+					const rows = await query(
+						statement.text,
+						statement.parameters(parameters),
+					);
+					return statement.decode({
+						command: "SELECT",
+						rowCount: rows.length,
+						rows: rows.map((row) => [
+							row.qp_f0,
+							row.qp_f1,
+							row.qp_g1,
+							row.qp_f2,
+							row.qp_r3_present,
+							row.qp_r3_f0,
+						]),
+					});
 				},
-			};
+			});
 		},
-	} as unknown as SQL;
+	} as PostgresTransactionRunner;
 }
 
 function fakeDatabase(
@@ -439,7 +442,7 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		operation: "firstPage",
 	});
 
-	const page = await executePostgresQuery({
+	const page = await executePostgresDatabaseQuery({
 		linkedPlan,
 		binding,
 		executionFacts,
@@ -500,7 +503,7 @@ test("rejects a Query statement cast mismatch before opening PostgreSQL", async 
 	await expect(
 		(async () => {
 			const linkedPlan = linkPostgresQueryPlan(tampered);
-			return executePostgresQuery({
+			return executePostgresDatabaseQuery({
 				linkedPlan,
 				binding,
 				executionFacts,
@@ -623,22 +626,22 @@ test("binds one exact authorized page and decodes structural disclosure", async 
 	const calls: Array<
 		Readonly<{ sql: string; parameters: readonly unknown[] }>
 	> = [];
-	const sql = fakeSql((statement, parameters) => {
+	const database = fakeDatabaseFromRows((statement, parameters) => {
 		calls.push({ sql: statement, parameters });
 		return rows();
 	});
 
-	const page = await executePostgresQuery({
-		plan,
+	const page = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
 		binding,
 		executionFacts,
-		sql,
+		database,
 		maximumPageSize: 50,
 	});
 
 	expect(calls).toEqual([
 		{
-			sql: plan.sql,
+			sql: databasePlan.sql,
 			parameters: [
 				executionFacts.tenant.id,
 				"north",
@@ -688,11 +691,11 @@ test("observes only the successful relational page branch and its decoded Relati
 		},
 	]);
 
-	const page = await executePostgresQuery({
-		plan,
+	const page = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
 		binding,
 		executionFacts,
-		sql: fakeSql(() => rows()),
+		database: fakeDatabaseFromRows(() => rows()),
 		observer: observation,
 	});
 	const observed = observation.finish();
@@ -755,11 +758,13 @@ test("does not observe failed SQL or invalid relational output", async () => {
 	const failedSql = createLiveQueryObservation(query);
 	failedSql.recordContext("context:request", []);
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding,
 			executionFacts,
-			sql: fakeSql(() => Promise.reject(new Error("database unavailable"))),
+			database: fakeDatabaseFromRows(() =>
+				Promise.reject(new Error("database unavailable")),
+			),
 			observer: failedSql,
 		}),
 	).rejects.toThrow("database unavailable");
@@ -772,11 +777,11 @@ test("does not observe failed SQL or invalid relational output", async () => {
 	const invalidRows = rows();
 	invalidRows[0] = { ...invalidRows[0], qp_f0: "not-a-uuid" };
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding,
 			executionFacts,
-			sql: fakeSql(() => invalidRows),
+			database: fakeDatabaseFromRows(() => invalidRows),
 			observer: failedOutput,
 		}),
 	).rejects.toMatchObject({ code: "QP-DATA-001", phase: "execute" });
@@ -790,11 +795,11 @@ test("normalizes PostgreSQL timestamp Dates before result and cursor validation"
 		...row,
 		qp_f2: new Date(String(row.qp_f2)),
 	}));
-	const page = await executePostgresQuery({
-		plan,
+	const page = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
 		binding,
 		executionFacts,
-		sql: fakeSql(() => dateRows),
+		database: fakeDatabaseFromRows(() => dateRows),
 	});
 
 	expect(page.nodes[0]?.createdAt).toBe(createdAt1);
@@ -806,7 +811,7 @@ test("normalizes PostgreSQL timestamp Dates before result and cursor validation"
 
 test("rejects exact binding failures before opening a transaction", async () => {
 	let transactions = 0;
-	const sql = fakeSql(
+	const database = fakeDatabaseFromRows(
 		() => [],
 		() => {
 			transactions += 1;
@@ -855,11 +860,11 @@ test("rejects exact binding failures before opening a transaction", async () => 
 
 	for (const hostile of invalidBindings) {
 		try {
-			await executePostgresQuery({
-				plan,
+			await executePostgresDatabaseQuery({
+				linkedPlan: linkPostgresQueryPlan(databasePlan),
 				binding: hostile.binding,
 				executionFacts,
-				sql,
+				database,
 				maximumPageSize: 50,
 			});
 			expect.unreachable("binding should fail");
@@ -874,11 +879,11 @@ test("rejects exact binding failures before opening a transaction", async () => 
 	}
 
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding,
 			executionFacts,
-			sql,
+			database,
 			maximumPageSize: 1,
 		}),
 	).rejects.toMatchObject({ code: "QP-DATA-012", phase: "bind" });
@@ -886,11 +891,11 @@ test("rejects exact binding failures before opening a transaction", async () => 
 });
 
 test("rejects a cursor scope mismatch before SQL", async () => {
-	const firstPage = await executePostgresQuery({
-		plan,
+	const firstPage = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
 		binding,
 		executionFacts,
-		sql: fakeSql(() => rows().slice(0, 1)),
+		database: fakeDatabaseFromRows(() => rows().slice(0, 1)),
 	});
 	let transactions = 0;
 	const changedScope = {
@@ -900,8 +905,8 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 		),
 	};
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding: {
 				...changedScope,
 				values: changedScope.values.map((item) =>
@@ -911,7 +916,7 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 				),
 			},
 			executionFacts,
-			sql: fakeSql(
+			database: fakeDatabaseFromRows(
 				() => [],
 				() => {
 					transactions += 1;
@@ -923,16 +928,16 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 });
 
 test("rejects a tampered cursor before reserving PostgreSQL", async () => {
-	const firstPage = await executePostgresQuery({
-		plan,
+	const firstPage = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
 		binding,
 		executionFacts,
-		sql: fakeSql(() => rows().slice(0, 1)),
+		database: fakeDatabaseFromRows(() => rows().slice(0, 1)),
 	});
 	let reservations = 0;
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding: {
 				...binding,
 				values: binding.values.map((item) =>
@@ -942,7 +947,7 @@ test("rejects a tampered cursor before reserving PostgreSQL", async () => {
 				),
 			},
 			executionFacts,
-			sql: fakeSql(
+			database: fakeDatabaseFromRows(
 				() => [],
 				() => {
 					reservations += 1;
@@ -956,18 +961,18 @@ test("rejects a tampered cursor before reserving PostgreSQL", async () => {
 test("propagates cancellation through the transaction and query seam", async () => {
 	const controller = new AbortController();
 	let cleanupObserved = false;
-	const sql = fakeSql(() => {
+	const database = fakeDatabaseFromRows(() => {
 		controller.abort(new Error("stop"));
 		cleanupObserved = true;
 		return rows();
 	});
 
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding,
 			executionFacts,
-			sql,
+			database,
 			signal: controller.signal,
 		}),
 	).rejects.toThrow("stop");
@@ -978,11 +983,11 @@ test("rejects an invalid returned scalar at the execute boundary", async () => {
 	const invalidRows = rows();
 	invalidRows[0] = { ...invalidRows[0], qp_f0: "not-a-uuid" };
 	await expect(
-		executePostgresQuery({
-			plan,
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(databasePlan),
 			binding,
 			executionFacts,
-			sql: fakeSql(() => invalidRows),
+			database: fakeDatabaseFromRows(() => invalidRows),
 		}),
 	).rejects.toMatchObject({
 		blocking: "none",

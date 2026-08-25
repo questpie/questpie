@@ -29,3 +29,7 @@ export function renderPostgresRuntimeOwnership(): string {
 	});
 	const database = Object.freeze({ transaction: postgresRuntime.transaction });`;
 }
+
+export function renderPostgresRuntimeFacts(): string {
+	return `[Symbol.for("questpie.internal.postgres-facts")]: () => postgresRuntime.facts(),`;
+}

@@ -1,12 +1,8 @@
-import type { SQL } from "bun";
-
 import {
 	createPostgresLiveQueryRetention,
 	createPostgresRealtimeScopeStore,
-	createPostgresReconciliationWake,
 	reconcilePostgresChangeLedger,
 	type PostgresLiveQueryInvalidationEffect,
-	type PostgresWakeTickSource,
 } from "../../live-query";
 import {
 	definePostgresChannel,
@@ -15,17 +11,9 @@ import {
 	type RuntimePostgres,
 } from "../../postgres";
 
-export type PostgresCoordinatorRuntimeSelection =
-	| Readonly<{
-			postgres: Pick<RuntimePostgres, "transaction" | "listen">;
-			sql?: never;
-			tickSource?: never;
-	  }>
-	| Readonly<{
-			postgres?: never;
-			sql: SQL;
-			tickSource?: PostgresWakeTickSource;
-	  }>;
+export type PostgresCoordinatorRuntimeSelection = Readonly<{
+	postgres: Pick<RuntimePostgres, "transaction" | "listen">;
+}>;
 
 type RuntimeInput = PostgresCoordinatorRuntimeSelection &
 	Readonly<{
@@ -36,17 +24,15 @@ type RuntimeInput = PostgresCoordinatorRuntimeSelection &
 	}>;
 
 export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
-	const stableDatabase: PostgresTransactionRunner | undefined = input.postgres
-		? Object.freeze({ transaction: input.postgres.transaction })
-		: undefined;
+	const stableDatabase: PostgresTransactionRunner = Object.freeze({
+		transaction: input.postgres.transaction,
+	});
 	const persistence = (database?: PostgresTransactionRunner) => {
-		const source = input.postgres
-			? { database: database ?? stableDatabase! }
-			: { sql: input.sql };
+		const current = database ?? stableDatabase;
 		return Object.freeze({
-			store: createPostgresRealtimeScopeStore(source),
+			store: createPostgresRealtimeScopeStore({ database: current }),
 			retention: createPostgresLiveQueryRetention({
-				...source,
+				database: current,
 				hmacKey: input.hmacKey,
 			}),
 		});
@@ -56,7 +42,7 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 		signal: AbortSignal,
 	) =>
 		reconcilePostgresChangeLedger({
-			...(input.postgres ? { database: database! } : { sql: input.sql }),
+			database: database ?? stableDatabase,
 			application: input.applicationName,
 			consumer: input.effect.consumer,
 			apply() {},
@@ -82,7 +68,7 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 		  ) => Promise<void>)
 		| undefined;
 	const runFullReconciliation = (
-		database: PostgresTransactionRunner | undefined,
+		database: PostgresTransactionRunner,
 		signal: AbortSignal,
 	): Promise<void> => {
 		if (!reconcileFull)
@@ -91,19 +77,12 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 			);
 		return reconcileFull(database, signal);
 	};
-	let wake = input.postgres
-		? undefined
-		: createPostgresReconciliationWake({
-				reconcile: (signal) => runFullReconciliation(undefined, signal),
-				tickSource: input.tickSource,
-				signal: input.signal,
-			});
 	let listener: PostgresListener | undefined;
 	let draining = false;
 	let drainDeadlineAt: number | undefined;
 
 	return Object.freeze({
-		databaseMode: input.postgres !== undefined,
+		databaseMode: true,
 		steady: persistence(),
 		persistence,
 		reconcileLedger,
@@ -120,45 +99,36 @@ export function createPostgresCoordinatorRuntime(input: RuntimeInput) {
 			reconcileFull = reconcile;
 		},
 		async start(): Promise<void> {
-			if (input.postgres) {
-				const started = await input.postgres.listen({
-					channel: definePostgresChannel("questpie_change"),
-					fallbackIntervalMs: 10_000,
-					reconcile: ({ admission, database, signal }) => {
-						drainController.signal.throwIfAborted();
-						const bounded = boundedSignal(signal);
-						bounded.throwIfAborted();
-						return admission === "candidate"
-							? reconcileLedger(database, bounded).then(() => undefined)
-							: runFullReconciliation(database, bounded);
-					},
-				});
-				if (draining) {
-					await started.close({ deadlineAt: drainDeadlineAt ?? Date.now() });
-					throw new Error("Live Query coordinator stopped during startup");
-				}
-				listener = started;
-				return;
+			const started = await input.postgres.listen({
+				channel: definePostgresChannel("questpie_change"),
+				fallbackIntervalMs: 10_000,
+				reconcile: ({ admission, database, signal }) => {
+					drainController.signal.throwIfAborted();
+					const bounded = boundedSignal(signal);
+					bounded.throwIfAborted();
+					return admission === "candidate"
+						? reconcileLedger(database, bounded).then(() => undefined)
+						: runFullReconciliation(database, bounded);
+				},
+			});
+			if (draining) {
+				await started.close({ deadlineAt: drainDeadlineAt ?? Date.now() });
+				throw new Error("Live Query coordinator stopped during startup");
 			}
-			await wake!.start();
+			listener = started;
 		},
 		requestScan(): Promise<void> {
 			if (listener) return listener.requestReconcile();
-			if (wake) return wake.requestScan();
 			return Promise.reject(new Error("Live Query coordinator is not started"));
 		},
 		async drain(input: Readonly<{ deadlineAt: number }>): Promise<void> {
-			const deadlineAt = input.deadlineAt;
 			draining = true;
-			drainDeadlineAt ??= deadlineAt;
+			drainDeadlineAt ??= input.deadlineAt;
 			drainController.abort(
 				new DOMException("Live Query coordinator draining", "AbortError"),
 			);
-			const shutdown = Object.freeze({ deadlineAt: drainDeadlineAt });
-			await listener?.close(shutdown);
+			await listener?.close({ deadlineAt: drainDeadlineAt });
 			listener = undefined;
-			await wake?.drain(shutdown);
-			wake = undefined;
 		},
 	});
 }

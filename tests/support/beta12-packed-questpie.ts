@@ -23,7 +23,7 @@ export async function installQuestpieForTracer(
 			throw new Error(
 				`failed to extract packed questpie: ${extracted.stderr.toString().trim()}`,
 			);
-		for (const dependency of ["typescript", "@types"]) {
+		for (const dependency of ["typescript", "@types", "pg"]) {
 			const installed = join(applicationRoot, "node_modules", dependency);
 			await rm(installed, { force: true, recursive: true });
 			await symlink(

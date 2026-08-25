@@ -4,11 +4,17 @@ import type { SQL } from "bun";
 import type { Principal } from "questpie";
 
 import { runtimeArtifactDigest } from "../../../../packages/runtime/src/application/artifact-protocol";
-import { createPostgresDurableEffectLedger } from "../../../../packages/runtime/src/durable/postgres-effects";
-import type { DurableEffectLedger } from "../../../../packages/runtime/src/durable/postgres-effects";
-import { createPostgresDurableKernel } from "../../../../packages/runtime/src/durable/postgres-kernel";
+import {
+	createPostgresDatabaseDurableEffectLedger,
+	createPostgresDatabaseDurableKernel,
+	type DurableEffectLedger,
+} from "../../../../packages/runtime/src/durable";
 import { linkReactionProjection } from "../../../../packages/runtime/src/durable/projection";
 import type { DurableKernel } from "../../../../packages/runtime/src/durable/rows";
+import type {
+	PostgresDatabase,
+	PostgresTransactionRunner,
+} from "../../../../packages/runtime/src/postgres";
 import {
 	beta05Ids,
 	beta05PostgresUrl,
@@ -162,6 +168,7 @@ export type Beta08Harness = Readonly<{
 	}>;
 	kernel: DurableKernel;
 	ledger: DurableEffectLedger;
+	database: PostgresTransactionRunner;
 	maintenance: Beta08Durable;
 	kernelWith(
 		options: Readonly<{ random?: () => number; claimBatch?: number }>,
@@ -179,27 +186,6 @@ export type Beta08Harness = Readonly<{
 async function buildBeta08Durable(
 	database: SQL,
 ): Promise<Readonly<{ harness: Beta08Harness; dispose: () => Promise<void> }>> {
-	// The lane runs one process per file back to back, and rebuilding the
-	// application schema takes an exclusive lock. A departing process that has
-	// not released its connections yet would deadlock the reset, so this one
-	// closes them and waits for the backends to actually go.
-	for (let attempt = 0; attempt < 200; attempt += 1) {
-		const [remaining] = await database.unsafe<
-			readonly Readonly<{ others: number }>[]
-		>(
-			`SELECT count(*)::int AS others FROM pg_catalog.pg_stat_activity
-WHERE datname = pg_catalog.current_database()
-  AND pid <> pg_catalog.pg_backend_pid()`,
-		);
-		if ((remaining?.others ?? 0) === 0) break;
-		await database.unsafe(
-			`SELECT pg_catalog.pg_terminate_backend(pid)
-FROM pg_catalog.pg_stat_activity
-WHERE datname = pg_catalog.current_database()
-  AND pid <> pg_catalog.pg_backend_pid()`,
-		);
-		await Bun.sleep(25);
-	}
 	const prepared = await prepareBeta05PostgresApplication(database);
 	// The relocated fixture links its own `questpie` module, so its branded
 	// Principal is the trusted value the maintenance surface requires.
@@ -274,6 +260,27 @@ WHERE datname = pg_catalog.current_database()
 		}
 	};
 	const app = await createApplication();
+	// Load the source database owner only after the generated application bundle.
+	// Bun cannot load the source `pg` entry while the independently bundled copy
+	// is still being initialized by the generated module.
+	const { createPostgresDatabase } =
+		await import("../../../../packages/runtime/src/postgres");
+	const runtimeDatabase: PostgresDatabase = createPostgresDatabase({
+		connectionUrl: beta05PostgresUrl(),
+		directConnectionUrl: beta05PostgresUrl(),
+		pool: {
+			max: 4,
+			connectTimeoutMs: 5_000,
+			checkoutTimeoutMs: 5_000,
+			idleTimeoutMs: 1_000,
+			maxLifetimeSeconds: 60,
+		},
+		timeouts: {
+			statementMs: 10_000,
+			lockMs: 2_000,
+			idleInTransactionMs: 10_000,
+		},
+	});
 	const reactionProjectionBytes = await Bun.file(
 		resolve(prepared.generated.generatedRoot, "reaction-projection.json"),
 	).text();
@@ -300,8 +307,17 @@ WHERE datname = pg_catalog.current_database()
 		createCompatibleV5Application: () =>
 			createApplication(compatibleV5RuntimeBuildBytes),
 		fetch: (request: Request) => app.fetch(request),
-		bindPrincipal: (request: Request) =>
-			internal.bindIngressPrincipalForRequest(request, principal),
+		bindPrincipal: (request: Request) => {
+			const headers = new Headers(request.headers);
+			headers.set(
+				"cookie",
+				"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
+			);
+			return internal.bindIngressPrincipalForRequest(
+				new Request(request, { headers }),
+				principal,
+			);
+		},
 		wireFrame: (operation: string, input: unknown) =>
 			Object.freeze({
 				mediaType: wire.mediaType,
@@ -318,23 +334,24 @@ WHERE datname = pg_catalog.current_database()
 				}),
 			}),
 		compilation: prepared.compilation,
-		kernel: createPostgresDurableKernel({
-			sql: database,
+		database: runtimeDatabase,
+		kernel: createPostgresDatabaseDurableKernel({
+			database: runtimeDatabase,
 			application: beta08Application,
 			reactions,
 		}),
 		kernelWith: (
 			options: Readonly<{ random?: () => number; claimBatch?: number }>,
 		) =>
-			createPostgresDurableKernel({
-				sql: database,
+			createPostgresDatabaseDurableKernel({
+				database: runtimeDatabase,
 				application: beta08Application,
 				reactions,
 				claimBatch: options.claimBatch,
 				random: options.random,
 			}),
-		ledger: createPostgresDurableEffectLedger({
-			sql: database,
+		ledger: createPostgresDatabaseDurableEffectLedger({
+			database: runtimeDatabase,
 			application: beta08Application,
 		}),
 		// The maintenance surface the generated application publishes: its
@@ -351,6 +368,7 @@ WHERE datname = pg_catalog.current_database()
 			await Promise.allSettled(
 				[...applications].map((application) => application.close()),
 			);
+			await runtimeDatabase.close({ deadlineAt: Date.now() + 5_000 });
 			await prepared.dispose();
 		},
 	});
@@ -382,7 +400,7 @@ export async function disposeBeta08Harness(): Promise<void> {
  * bytes were retired.
  */
 export function retiredDurableKernel(
-	database: SQL,
+	database: PostgresTransactionRunner,
 	reactionProjectionBytes: string,
 ): DurableKernel {
 	const projection = JSON.parse(reactionProjectionBytes) as Readonly<{
@@ -390,8 +408,8 @@ export function retiredDurableKernel(
 	}>;
 	for (const reaction of projection.reactions)
 		reaction.contractDigest = "0".repeat(64);
-	return createPostgresDurableKernel({
-		sql: database,
+	return createPostgresDatabaseDurableKernel({
+		database,
 		application: beta08Application,
 		reactions: linkReactionProjection(projection),
 	});

@@ -70,7 +70,15 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		expect(bundle).toContain("input.realtime.hmacKey");
 		expect(bundle).not.toContain("new SQL");
 		expect(linkedApplication).not.toContain('from"bun"');
-		expect(linkedApplication).toContain("createRuntimePostgres");
+		expect(linkedApplication.match(/createRuntimePostgres\(\{/g)).toHaveLength(
+			1,
+		);
+		expect(linkedApplication).toContain("max:10");
+		expect(linkedApplication).toMatch(/connectTimeoutMs:(?:5e3|5000)/);
+		expect(linkedApplication).toMatch(/checkoutTimeoutMs:(?:5e3|5000)/);
+		expect(linkedApplication).toContain(
+			'Symbol.for("questpie.internal.postgres-facts")',
+		);
 		expect(linkedApplication).toContain(
 			"createLinkedPostgresContextBootstrapFactory",
 		);
@@ -85,7 +93,9 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		expect(linkedApplication).toContain(
 			"createPostgresDatabaseDurablePrincipalMaintenance",
 		);
-		expect(bundle).toContain("postgresRuntime.close");
+		expect(linkedApplication.match(/postgresRuntime\.close\(\{/g)).toHaveLength(
+			2,
+		);
 		for (const path of [
 			"query-watchability.json",
 			"live-query-dependency-algebra.json",

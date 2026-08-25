@@ -463,7 +463,7 @@ postgresTest(
 		await publish(prepared, { body: "executable retirement", callId });
 		const runId = await runIdentity(callId);
 		const retired = retiredDurableKernel(
-			database!,
+			prepared.database,
 			prepared.reactionProjectionBytes,
 		);
 		expect(await retired.claim({ runId, workerId: "worker:retired" })).toEqual({

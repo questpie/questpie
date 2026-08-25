@@ -1,5 +1,3 @@
-import type { SQL } from "bun";
-
 import { isPostgresTransactionId } from "../operation";
 import {
 	definePostgresStatement,
@@ -9,21 +7,6 @@ import {
 import type { PostgresLiveQueryInvalidationEffect } from "./postgres-durable-invalidation";
 
 type Row = Readonly<Record<string, unknown>>;
-
-interface AbortableQuery extends PromiseLike<readonly Row[]> {
-	cancel(): AbortableQuery;
-	execute(): AbortableQuery;
-}
-
-interface TransactionSession {
-	unsafe(statement: string, parameters?: readonly unknown[]): AbortableQuery;
-	close(options: Readonly<{ timeout: 0 }>): Promise<void>;
-	release(): void | Promise<void>;
-}
-
-interface PostgresPool {
-	reserve(): Promise<TransactionSession>;
-}
 
 export type ChangeLedgerFactV1 = Readonly<{
 	factIdentity: string;
@@ -54,34 +37,13 @@ type PostgresChangeReconciliationCommon = Readonly<{
 	signal?: AbortSignal;
 }>;
 
-type PostgresChangeReconciliationInput =
-	| (PostgresChangeReconciliationCommon &
-			Readonly<{ database: PostgresTransactionRunner; sql?: never }>)
-	| (PostgresChangeReconciliationCommon &
-			Readonly<{ database?: never; sql: SQL }>);
+type PostgresChangeReconciliationInput = PostgresChangeReconciliationCommon &
+	Readonly<{ database: PostgresTransactionRunner }>;
 type ConsumerIdentity = Readonly<{ application: string; consumer: string }>;
 type ConsumerHorizon = ConsumerIdentity & Readonly<{ nextHorizon: string }>;
 const uuidPattern =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const positiveIntegerPattern = /^[1-9][0-9]*$/;
-async function execute(
-	session: TransactionSession,
-	statement: string,
-	parameters: readonly unknown[] = [],
-	signal?: AbortSignal,
-): Promise<readonly Row[]> {
-	signal?.throwIfAborted();
-	const query = session.unsafe(statement, parameters).execute();
-	const cancel = () => query.cancel();
-	signal?.addEventListener("abort", cancel, { once: true });
-	if (signal?.aborted) cancel();
-	try {
-		return await query;
-	} finally {
-		signal?.removeEventListener("abort", cancel);
-	}
-}
-
 function text(value: unknown, path: string): string {
 	if (typeof value !== "string" || value.length === 0)
 		throw new TypeError(`${path} must be nonempty text`);
@@ -328,130 +290,6 @@ async function reconcilePostgresDatabaseChangeLedgerAttempt(
 	});
 }
 
-async function reconcilePostgresChangeLedgerAttempt(
-	input: PostgresChangeReconciliationInput,
-): Promise<ChangeReconciliationResultV1> {
-	const application = text(input.application, "Change Ledger application");
-	const consumer = text(input.consumer, "Change Ledger consumer");
-	if (input.effect && input.effect.consumer !== consumer)
-		throw new TypeError(
-			"Change Ledger consumer must match the deployment invalidation effect",
-		);
-	const session = await (input.sql as unknown as PostgresPool).reserve();
-	let transaction = false;
-	try {
-		await execute(
-			session,
-			"BEGIN ISOLATION LEVEL REPEATABLE READ",
-			[],
-			input.signal,
-		);
-		transaction = true;
-		await execute(
-			session,
-			`INSERT INTO questpie_internal.reconciliation_consumers
-  (application_name, consumer_id, xid_horizon, acknowledged_at)
-VALUES ($1, $2, pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot()), pg_catalog.clock_timestamp())
-ON CONFLICT DO NOTHING`,
-			[application, consumer],
-			input.signal,
-		);
-		const horizonRows = await execute(
-			session,
-			`SELECT xid_horizon::text AS "priorHorizon",
-       pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot())::text AS "nextHorizon"
-FROM questpie_internal.reconciliation_consumers
-WHERE application_name = $1 AND consumer_id = $2
-FOR UPDATE`,
-			[application, consumer],
-			input.signal,
-		);
-		const horizon = decodeHorizon(horizonRows[0]);
-		const rows = await execute(
-			session,
-			`SELECT fact_identity::text AS "factIdentity",
-       fact_id::text AS "factId",
-       transaction_id::text AS "transactionId",
-       collection_identity AS collection,
-       change_kind AS kind,
-       old_key AS "oldKey",
-       new_key AS "newKey",
-       conservative,
-       captured_at AS "capturedAt"
-FROM questpie_internal.change_ledger AS ledger
-WHERE application_name = $1
-  AND transaction_id >= $3::xid8
-  AND transaction_id < $4::xid8
-  AND NOT EXISTS (
-    SELECT 1
-    FROM questpie_internal.processed_change_facts AS processed
-    WHERE processed.application_name = ledger.application_name
-      AND processed.consumer_id = $2
-      AND processed.fact_identity = ledger.fact_identity
-  )
-ORDER BY transaction_id, fact_id`,
-			[application, consumer, horizon.priorHorizon, horizon.nextHorizon],
-			input.signal,
-		);
-		const facts = Object.freeze(rows.map(decodeFact));
-		await input.apply(facts, {
-			prior: horizon.priorHorizon,
-			next: horizon.nextHorizon,
-		});
-		await input.effect?.apply({
-			application,
-			facts,
-			execute: (statement, parameters = []) =>
-				execute(session, statement, parameters, input.signal),
-		});
-		if (facts.length > 0) {
-			const factIdentities = `{${facts
-				.map(({ factIdentity }) => factIdentity)
-				.join(",")}}`;
-			await execute(
-				session,
-				`INSERT INTO questpie_internal.processed_change_facts
-  (application_name, consumer_id, fact_identity, processed_at)
-SELECT $1, $2, fact_identity, pg_catalog.clock_timestamp()
-FROM pg_catalog.unnest($3::uuid[]) AS fact_identity
-ON CONFLICT DO NOTHING`,
-				[application, consumer, factIdentities],
-				input.signal,
-			);
-		}
-		await execute(
-			session,
-			`UPDATE questpie_internal.reconciliation_consumers
-SET xid_horizon = $3::xid8, acknowledged_at = pg_catalog.clock_timestamp()
-WHERE application_name = $1 AND consumer_id = $2`,
-			[application, consumer, horizon.nextHorizon],
-			input.signal,
-		);
-		await execute(session, "COMMIT", [], input.signal);
-		transaction = false;
-		return Object.freeze({
-			priorHorizon: horizon.priorHorizon,
-			nextHorizon: horizon.nextHorizon,
-			facts,
-		});
-	} catch (error) {
-		if (transaction) {
-			try {
-				await execute(session, "ROLLBACK");
-			} catch {
-				// A disconnected PostgreSQL session already rolled the transaction back.
-			}
-		}
-		throw error;
-	} finally {
-		try {
-			await session.release();
-		} catch {
-			await session.close({ timeout: 0 }).catch(() => {});
-		}
-	}
-}
-
 function isSerializationFailure(error: unknown): boolean {
 	if (error instanceof QuestpiePostgresError)
 		return error.code === "serializationFailure";
@@ -485,12 +323,7 @@ export async function reconcilePostgresChangeLedger(
 ): Promise<ChangeReconciliationResultV1> {
 	for (let attempt = 1; ; attempt += 1) {
 		try {
-			return input.database !== undefined
-				? await reconcilePostgresDatabaseChangeLedgerAttempt({
-						...input,
-						database: input.database,
-					})
-				: await reconcilePostgresChangeLedgerAttempt(input);
+			return await reconcilePostgresDatabaseChangeLedgerAttempt(input);
 		} catch (error) {
 			if (!isSerializationFailure(error) || attempt === 16) throw error;
 			await waitForReconciliationRetry(attempt, input.signal);
