@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light" />
+		<title>Team Support Desk</title>
+		<link rel="stylesheet" href="/styles.css" />
+	</head>
+	<body>
+		<header class="topbar">
+			<a class="brand" href="/" aria-label="Team Support Desk home">
+				<span class="brand-mark" aria-hidden="true">Q</span>
+				<span><strong>Support Desk</strong><small>Team operations</small></span>
+			</a>
+			<div class="session" aria-label="Signed-in persona">
+				<span class="presence" aria-hidden="true"></span>
+				<span
+					><small>Signed in as</small
+					><strong data-persona>Loading…</strong></span
+				>
+			</div>
+		</header>
+
+		<main class="workspace">
+			<section class="queue" aria-labelledby="queue-heading">
+				<header class="queue-heading">
+					<div>
+						<p class="eyebrow">Active workspace</p>
+						<h1 id="queue-heading">Ticket queue</h1>
+					</div>
+					<button class="primary" type="button" data-create-open>
+						New ticket
+					</button>
+				</header>
+
+				<form class="reference-search" data-search-form role="search">
+					<label for="reference-search">Find exact reference</label>
+					<div class="field-row">
+						<input
+							id="reference-search"
+							name="reference"
+							placeholder="SUP-1001"
+							autocomplete="off"
+						/>
+						<button type="submit">Find</button>
+					</div>
+				</form>
+
+				<div class="filters" aria-label="Queue filters">
+					<label
+						>Status
+						<select data-status-filter>
+							<option value="">All statuses</option>
+							<option value="open">Open</option>
+							<option value="closed">Closed</option>
+						</select>
+					</label>
+					<label
+						>Team
+						<select data-team-filter>
+							<option value="">All teams</option>
+						</select>
+					</label>
+				</div>
+
+				<div
+					class="state-banner"
+					data-queue-state
+					role="status"
+					aria-live="polite"
+				>
+					Loading queue…
+				</div>
+				<ul
+					class="ticket-list"
+					data-ticket-list
+					aria-label="Tickets"
+					aria-busy="true"
+				></ul>
+				<nav class="pagination" aria-label="Ticket pages">
+					<button type="button" data-page-previous disabled>Previous</button>
+					<span data-page-number>Page 1</span>
+					<button type="button" data-page-next disabled>Next</button>
+				</nav>
+			</section>
+
+			<section class="detail" aria-labelledby="detail-heading">
+				<div class="detail-empty" data-detail-empty>
+					<span class="empty-glyph" aria-hidden="true">↗</span>
+					<h2 id="detail-heading">Choose a ticket</h2>
+					<p>
+						Select an item from the queue to see its conversation and available
+						actions.
+					</p>
+				</div>
+
+				<div class="detail-content" data-detail-content hidden>
+					<header class="detail-header">
+						<div>
+							<p class="reference" data-detail-reference></p>
+							<h2 data-detail-summary></h2>
+						</div>
+						<span class="status-pill" data-detail-status></span>
+					</header>
+
+					<div class="detail-meta" data-detail-meta></div>
+					<p class="description" data-detail-description></p>
+					<div class="labels" data-labels aria-label="Ticket labels"></div>
+
+					<div class="action-bar" aria-label="Ticket actions">
+						<button type="button" data-action-edit>Edit</button>
+						<button type="button" data-action-assign>Assign to me</button>
+						<button type="button" data-action-summary>Send summary</button>
+						<button
+							class="primary"
+							type="button"
+							data-action-transition
+						></button>
+					</div>
+					<p
+						class="action-status"
+						data-action-status
+						role="status"
+						aria-live="polite"
+					></p>
+
+					<section class="activity" aria-labelledby="activity-heading">
+						<header>
+							<h3 id="activity-heading">Activity</h3>
+							<span data-comment-count></span>
+						</header>
+						<div
+							class="state-banner"
+							data-comments-state
+							role="status"
+							aria-live="polite"
+						></div>
+						<ol class="comments" data-comments></ol>
+						<form class="comment-form" data-comment-form>
+							<label for="comment-body">Add a comment</label>
+							<textarea
+								id="comment-body"
+								name="body"
+								rows="3"
+								required
+								maxlength="2000"
+								placeholder="Share an update with the team…"
+							></textarea>
+							<div>
+								<span data-comment-hint
+									>Visible to this ticket’s participants</span
+								><button class="primary" type="submit">Comment</button>
+							</div>
+						</form>
+					</section>
+				</div>
+			</section>
+		</main>
+
+		<dialog data-create-dialog>
+			<form method="dialog" data-create-form>
+				<header>
+					<div>
+						<p class="eyebrow">New request</p>
+						<h2>Create ticket</h2>
+					</div>
+					<button
+						class="icon-button"
+						type="button"
+						data-dialog-close
+						aria-label="Close create ticket dialog"
+					>
+						×
+					</button>
+				</header>
+				<label
+					>Reference<input
+						name="reference"
+						required
+						maxlength="40"
+						placeholder="SUP-1042"
+				/></label>
+				<label>Summary<input name="summary" required maxlength="160" /></label>
+				<label
+					>Description<textarea
+						name="description"
+						required
+						rows="5"
+						maxlength="4000"
+					></textarea>
+				</label>
+				<div class="form-grid">
+					<label
+						>Priority<select name="priority">
+							<option value="normal">Normal</option>
+							<option value="high">High</option>
+							<option value="urgent">Urgent</option>
+						</select></label
+					>
+					<label
+						>Team<select name="teamId" data-create-team required></select
+					></label>
+				</div>
+				<p class="form-error" data-create-error role="alert"></p>
+				<footer>
+					<button type="button" data-dialog-close>Cancel</button
+					><button class="primary" type="submit">Create ticket</button>
+				</footer>
+			</form>
+		</dialog>
+
+		<dialog data-edit-dialog>
+			<form method="dialog" data-edit-form>
+				<header>
+					<div>
+						<p class="eyebrow">Ticket details</p>
+						<h2>Edit ticket</h2>
+					</div>
+					<button
+						class="icon-button"
+						type="button"
+						data-dialog-close
+						aria-label="Close edit ticket dialog"
+					>
+						×
+					</button>
+				</header>
+				<label>Summary<input name="summary" required maxlength="160" /></label>
+				<label
+					>Description<textarea
+						name="description"
+						required
+						rows="5"
+						maxlength="4000"
+					></textarea>
+				</label>
+				<label
+					>Priority<select name="priority">
+						<option value="normal">Normal</option>
+						<option value="high">High</option>
+						<option value="urgent">Urgent</option>
+					</select></label
+				>
+				<p class="form-error" data-edit-error role="alert"></p>
+				<footer>
+					<button type="button" data-dialog-close>Cancel</button
+					><button class="primary" type="submit">Save changes</button>
+				</footer>
+			</form>
+		</dialog>
+
+		<script type="module" src="/desk.js"></script>
+	</body>
+</html>
