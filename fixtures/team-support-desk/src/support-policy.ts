@@ -79,7 +79,11 @@ export const membershipPolicy = definePolicy(memberships, {
 					actor.role.equal("admin"),
 				),
 			);
-			return { role: admin, status: admin, updatedAt: admin };
+			return {
+				role: admin,
+				status: admin,
+				updatedAt: query.not(query.always()),
+			};
 		},
 	},
 });
@@ -132,7 +136,11 @@ export const teamPolicy = definePolicy(teams, {
 					actor.role.in(["agent", "admin"]),
 				),
 			);
-			return { name: staff, routingStatus: staff, updatedAt: staff };
+			return {
+				name: staff,
+				routingStatus: staff,
+				updatedAt: query.not(query.always()),
+			};
 		},
 	},
 });
@@ -170,6 +178,7 @@ export const ticketPolicy = definePolicy(tickets, {
 				candidate.priority.in(["low", "normal", "high", "urgent"]),
 				candidate.status.equal("open"),
 				candidate.closedAt.isNull(),
+				candidate.lastSlaFollowUpAt.isNull(),
 				policy.exists(teams, ({ row: team }) =>
 					query.and(
 						team.id.equal(candidate.teamId),
@@ -289,8 +298,30 @@ export const ticketPolicy = definePolicy(tickets, {
 							candidate.priority.equal(current.priority),
 							candidate.status.equal(current.status),
 							candidate.closedAt.isNull(),
-							candidate.assigneeMembershipId.isNull(),
-							current.assigneeMembershipId.isNull(),
+							query.or(
+								query.and(
+									candidate.assigneeMembershipId.isNull(),
+									current.assigneeMembershipId.isNull(),
+								),
+								query.and(
+									query.not(candidate.assigneeMembershipId.isNull()),
+									query.not(current.assigneeMembershipId.isNull()),
+									candidate.assigneeMembershipId.equal(
+										current.assigneeMembershipId,
+									),
+								),
+							),
+							query.or(
+								query.and(
+									candidate.lastSlaFollowUpAt.isNull(),
+									current.lastSlaFollowUpAt.isNull(),
+								),
+								query.and(
+									query.not(candidate.lastSlaFollowUpAt.isNull()),
+									query.not(current.lastSlaFollowUpAt.isNull()),
+									candidate.lastSlaFollowUpAt.equal(current.lastSlaFollowUpAt),
+								),
+							),
 						),
 					),
 				),
@@ -323,9 +354,9 @@ export const ticketPolicy = definePolicy(tickets, {
 				assigneeMembershipId: staff,
 				priority: staff,
 				status: staff,
-				closedAt: staff,
-				lastSlaFollowUpAt: staff,
-				updatedAt: editableText,
+				closedAt: query.not(query.always()),
+				lastSlaFollowUpAt: query.not(query.always()),
+				updatedAt: query.not(query.always()),
 			};
 		},
 	},
