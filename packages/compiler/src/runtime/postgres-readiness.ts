@@ -1,5 +1,3 @@
-import type { SQL } from "bun";
-
 import type {
 	definePostgresStatement,
 	PostgresTransactionRunner,
@@ -9,40 +7,10 @@ import type {
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import {
-	fingerprintInOwnedTransaction,
 	internalProtocolV6Checksum,
 	type SchemaProjectionV1,
 	verifyPostgresDatabaseSchemaReadiness,
-	verifyInternalProtocolV6,
 } from "../schema";
-
-export interface PostgresRuntimeReadinessSnapshotSql<Transaction> {
-	begin<Value>(
-		mode: "isolation level repeatable read read only",
-		use: (transaction: Transaction) => Promise<Value>,
-	): Promise<Value>;
-}
-
-export async function inPostgresRuntimeReadinessSnapshot<Transaction, Value>(
-	sql: PostgresRuntimeReadinessSnapshotSql<Transaction>,
-	use: (transaction: Transaction) => Promise<Value>,
-): Promise<Value> {
-	let diagnostic: CompilerDiagnosticError | undefined;
-	const value = await sql.begin(
-		"isolation level repeatable read read only",
-		async (transaction) => {
-			try {
-				return await use(transaction);
-			} catch (error) {
-				if (!(error instanceof CompilerDiagnosticError)) throw error;
-				diagnostic = error;
-				return undefined as Value;
-			}
-		},
-	);
-	if (diagnostic) throw diagnostic;
-	return value;
-}
 
 type RuntimeBuildReadiness = Readonly<{
 	migrationHead: string | null;
@@ -157,29 +125,6 @@ function decodeCommittedMigrations(value: unknown): CommittedMigrations {
 	});
 }
 
-export async function verifyPostgresRuntimeReadiness(
-	input: Readonly<{
-		sql: SQL;
-		schema: SchemaProjectionV1;
-		committedMigrations: unknown;
-		expected: RuntimeBuildReadiness;
-	}>,
-): Promise<void> {
-	const committed = decodeCommittedMigrations(input.committedMigrations);
-	if (committed.head !== input.expected.migrationHead)
-		throw new TypeError(
-			"committed migration head does not match Runtime Build",
-		);
-	return inPostgresRuntimeReadinessSnapshot(input.sql, (sql) =>
-		verifyPostgresRuntimeReadinessInOwnedTransaction({
-			sql,
-			schema: input.schema,
-			committed,
-			expected: input.expected,
-		}),
-	);
-}
-
 export async function verifyPostgresDatabaseRuntimeReadiness(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
@@ -230,74 +175,4 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 		},
 	});
 	if (diagnostic) throw diagnostic;
-}
-
-async function verifyPostgresRuntimeReadinessInOwnedTransaction(
-	input: Readonly<{
-		sql: SQL;
-		schema: SchemaProjectionV1;
-		committed: CommittedMigrations;
-		expected: RuntimeBuildReadiness;
-	}>,
-): Promise<void> {
-	await verifyInternalProtocolV6(input.sql);
-	const applicationName = input.schema.application.name;
-	const postgresSchema = input.schema.application.postgresSchema;
-	const bindings = await input.sql.unsafe<
-		readonly Readonly<{ applicationName: string; postgresSchema: string }>[]
-	>(
-		'SELECT application_name AS "applicationName", postgres_schema AS "postgresSchema" FROM questpie_internal.application_bindings WHERE application_name = $1 OR postgres_schema = $2 ORDER BY application_name',
-		[applicationName, postgresSchema],
-	);
-	if (
-		bindings.length !== 1 ||
-		bindings[0]?.applicationName !== applicationName ||
-		bindings[0].postgresSchema !== postgresSchema
-	)
-		throw new TypeError(
-			"PostgreSQL Application binding does not match Runtime Build",
-		);
-	const receipts = await input.sql.unsafe<
-		readonly Readonly<{
-			identity: string;
-			sequence: number;
-			parent: string | null;
-			checksum: string;
-		}>[]
-	>(
-		"SELECT migration_identity AS identity, sequence, parent_identity AS parent, checksum FROM questpie_internal.schema_migration_receipts WHERE application_name = $1 ORDER BY sequence",
-		[applicationName],
-	);
-	if (
-		receipts.length !== input.committed.migrations.length ||
-		receipts.some((receipt, index) => {
-			const expected = input.committed.migrations[index];
-			return (
-				!expected ||
-				receipt.identity !== expected.identity ||
-				receipt.sequence !== expected.sequence ||
-				receipt.parent !== expected.parent ||
-				receipt.checksum !== expected.checksum
-			);
-		})
-	)
-		throw new TypeError(
-			"PostgreSQL migration history does not match Runtime Build",
-		);
-	if ((receipts.at(-1)?.identity ?? null) !== input.expected.migrationHead)
-		throw new TypeError(
-			"PostgreSQL migration head does not match Runtime Build",
-		);
-	const liveFingerprint = await fingerprintInOwnedTransaction(
-		input.sql,
-		input.schema,
-	);
-	const liveFingerprintDigest = digest(
-		"questpie-schema-fingerprint-v1",
-		liveFingerprint.comparable,
-	);
-	if (liveFingerprintDigest !== input.expected.schemaFingerprint)
-		throw new TypeError(
-			"PostgreSQL Schema Fingerprint does not match Runtime Build",
-		);
 }

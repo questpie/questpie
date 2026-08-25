@@ -236,7 +236,7 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 ## Verification snapshot
 
 The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
-`quality:full` and `quality:release` pass, including 580 local tests, strict
+`quality:full` and `quality:release` pass, including 577 local tests, strict
 Knip, package contract, build, skill validation, release dry-run and all 19
 owned performance manifests. Three orphaned manifests whose commands targeted
 removed compatibility files were deleted with their stale baselines. The clean
@@ -259,19 +259,16 @@ provisioning harness on both selected managed targets:
 No credential, provider receipt, provisioning code, `pg_stat_activity`
 observer, backend termination mechanism, public timeout, SLA, or
 transaction-pool compatibility claim was added. The release artifact checksum
-is `d650a35ded27a803973ba355f02738aef4c8d17a65b98cff22aac7ac7832386d`;
+is `ec444869bbdf40600028dd2fc28f82616722116e56d67052886b60a6de3504cf`;
 the declaration checksum remains
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
-At the current Action/PB-05 integration closure, `quality:full` passes in the
+At the earlier Action/PB-05 integration closure, `quality:full` passed in the
 canonical worktree:
 architecture, format ratchet, lint, typechecks, the complete
 environment-selected test suite, Knip reporting, workspace build, skill
-validation, and `git diff --check`. The release dry-run is retry-stable at the
-accepted package checksum
-`4ee5998d8b76290c45c00871d43745d1b2f493959b2d3d2deabdde29e490a4f9`;
-the declaration checksum is
-`18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
+validation, and `git diff --check`. Its then-current release dry-run was
+retry-stable; the current accepted checksums are recorded above.
 
 Focused PostgreSQL evidence includes the real Firefox restart skeleton, Durable
 maintenance/effect/kernel paths, timeout controls, and the 23-case PostgreSQL

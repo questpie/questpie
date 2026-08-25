@@ -50,7 +50,7 @@ Those are answerable **per identity**, on the same terms as the audit.
 2. **Staleness** — how old is the newest fact it can show me?
 
 For **artifact**, staleness is meaningless by design. The build is pinned at
-startup and `verifyPostgresRuntimeReadiness` refuses to start on any mismatch,
+startup and database-mode Runtime readiness refuses to start on any mismatch,
 so a running Runtime showing "artifact: fresh" is reporting a precondition of
 its own existence. A staleness clock there is decoration.
 
