@@ -66,8 +66,8 @@ async function start(): Promise<void> {
 	});
 	type TicketPage = Awaited<ReturnType<(typeof desk.queries)["tickets.list"]>>;
 	type TicketListNode = TicketPage["nodes"][number];
-	type TicketDetail = Awaited<
-		ReturnType<(typeof desk.queries)["tickets.detail"]>
+	type TicketDetail = NonNullable<
+		Awaited<ReturnType<(typeof desk.queries)["tickets.detail"]>>
 	>;
 	type CommentPage = Awaited<
 		ReturnType<(typeof desk.queries)["comments.page"]>
@@ -83,6 +83,8 @@ async function start(): Promise<void> {
 	const nextButton = element<HTMLButtonElement>("[data-page-next]");
 	const pageNumber = element<HTMLElement>("[data-page-number]");
 	const detailEmpty = element<HTMLElement>("[data-detail-empty]");
+	const detailEmptyTitle = element<HTMLElement>("[data-detail-empty] h2");
+	const detailEmptyMessage = element<HTMLElement>("[data-detail-empty] p");
 	const detailContent = element<HTMLElement>("[data-detail-content]");
 	const commentsState = element<HTMLElement>("[data-comments-state]");
 	const commentsList = element<HTMLOListElement>("[data-comments]");
@@ -98,6 +100,8 @@ async function start(): Promise<void> {
 	const editDialog = element<HTMLDialogElement>("[data-edit-dialog]");
 	const createForm = element<HTMLFormElement>("[data-create-form]");
 	const editForm = element<HTMLFormElement>("[data-edit-form]");
+	const searchForm = element<HTMLFormElement>("[data-search-form]");
+	const commentForm = element<HTMLFormElement>("[data-comment-form]");
 	const createTeam = element<HTMLSelectElement>("[data-create-team]");
 	for (const close of document.querySelectorAll<HTMLButtonElement>(
 		"[data-dialog-close]",
@@ -112,6 +116,7 @@ async function start(): Promise<void> {
 	let queueRequest = 0;
 	let detailRequest = 0;
 	let busy = false;
+	const currentTicket = (): TicketDetail | null => selected;
 
 	function setBusy(next: boolean): void {
 		busy = next;
@@ -323,9 +328,8 @@ async function start(): Promise<void> {
 		const request = ++detailRequest;
 		detailEmpty.hidden = false;
 		detailContent.hidden = true;
-		detailEmpty.querySelector("h2")!.textContent = "Loading ticket…";
-		detailEmpty.querySelector("p")!.textContent =
-			"Fetching details and activity.";
+		detailEmptyTitle.textContent = "Loading ticket…";
+		detailEmptyMessage.textContent = "Fetching details and activity.";
 		try {
 			const [ticket, comments, labels] = await Promise.all([
 				desk.queries["tickets.detail"]({ id: ticketId }),
@@ -333,6 +337,15 @@ async function start(): Promise<void> {
 				desk.queries["labels.page"]({ after: null, first: 50, ticketId }),
 			]);
 			if (request !== detailRequest) return;
+			if (ticket === null) {
+				selected = null;
+				detailEmpty.hidden = false;
+				detailContent.hidden = true;
+				detailEmptyTitle.textContent = "Ticket unavailable";
+				detailEmptyMessage.textContent =
+					"The ticket no longer exists or is outside your access.";
+				return;
+			}
 			renderDetail(ticket);
 			renderComments(comments);
 			renderLabels(labels);
@@ -348,8 +361,8 @@ async function start(): Promise<void> {
 			selected = null;
 			detailEmpty.hidden = false;
 			detailContent.hidden = true;
-			detailEmpty.querySelector("h2")!.textContent = "Ticket unavailable";
-			detailEmpty.querySelector("p")!.textContent = message(error);
+			detailEmptyTitle.textContent = "Ticket unavailable";
+			detailEmptyMessage.textContent = message(error);
 		}
 	}
 
@@ -380,36 +393,38 @@ async function start(): Promise<void> {
 	});
 	nextButton.addEventListener("click", () => {
 		const cursor = currentPage?.pageInfo.endCursor;
-		if (!currentPage?.pageInfo.hasNextPage || cursor === null) return;
+		if (
+			!currentPage?.pageInfo.hasNextPage ||
+			cursor === null ||
+			cursor === undefined
+		)
+			return;
 		pageIndex += 1;
 		cursors[pageIndex] = cursor;
 		void loadQueue();
 	});
 
-	element<HTMLFormElement>("[data-search-form]").addEventListener(
-		"submit",
-		(event) => {
-			event.preventDefault();
-			const data = new FormData(event.currentTarget);
-			const reference = String(data.get("reference") ?? "").trim();
-			if (!reference) return;
-			queueState.textContent = `Finding ${reference}…`;
-			void desk.queries["tickets.searchByReference"]({ reference }).then(
-				(ticket) => {
-					if (ticket === null) {
-						queueState.textContent = `No ticket has reference ${reference}.`;
-						return;
-					}
-					queueState.textContent = `Found ${ticket.reference}.`;
-					void selectTicket(ticket.id);
-				},
-				(error: unknown) => {
-					queueState.dataset.kind = "error";
-					queueState.textContent = `Search failed: ${message(error)}.`;
-				},
-			);
-		},
-	);
+	searchForm.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const data = new FormData(searchForm);
+		const reference = String(data.get("reference") ?? "").trim();
+		if (!reference) return;
+		queueState.textContent = `Finding ${reference}…`;
+		void desk.queries["tickets.searchByReference"]({ reference }).then(
+			(ticket) => {
+				if (ticket === null) {
+					queueState.textContent = `No ticket has reference ${reference}.`;
+					return;
+				}
+				queueState.textContent = `Found ${ticket.reference}.`;
+				void selectTicket(ticket.id);
+			},
+			(error: unknown) => {
+				queueState.dataset.kind = "error";
+				queueState.textContent = `Search failed: ${message(error)}.`;
+			},
+		);
+	});
 
 	element<HTMLButtonElement>("[data-create-open]").addEventListener(
 		"click",
@@ -489,41 +504,39 @@ async function start(): Promise<void> {
 			.finally(() => setBusy(false));
 	});
 
-	element<HTMLFormElement>("[data-comment-form]").addEventListener(
-		"submit",
-		(event) => {
-			event.preventDefault();
-			if (!selected || busy) return;
-			const form = event.currentTarget;
-			const body = String(new FormData(form).get("body") ?? "").trim();
-			if (!body) return;
-			void mutate("Adding comment", () =>
-				desk.mutations["ticket.addComment"](
-					{ body, ticketId: selected!.id },
-					{ callId: `browser:comment:${crypto.randomUUID()}` },
-				),
-			).then(() => form.reset());
-		},
-	);
-	assignButton.addEventListener(
-		"click",
-		() =>
-			void mutate("Assigning ticket", () =>
-				desk.mutations["ticket.assign"](
-					{
-						assigneeMembershipId: session.membershipId,
-						ticketId: selected!.id,
-					},
-					{ callId: `browser:assign:${crypto.randomUUID()}` },
-				),
+	commentForm.addEventListener("submit", (event) => {
+		event.preventDefault();
+		const ticket = selected;
+		if (ticket === null || busy) return;
+		const body = String(new FormData(commentForm).get("body") ?? "").trim();
+		if (!body) return;
+		void mutate("Adding comment", () =>
+			desk.mutations["ticket.addComment"](
+				{ body, ticketId: ticket.id },
+				{ callId: `browser:comment:${crypto.randomUUID()}` },
 			),
-	);
+		).then(() => commentForm.reset());
+	});
+	assignButton.addEventListener("click", () => {
+		const ticket = selected;
+		if (ticket === null) return;
+		void mutate("Assigning ticket", () =>
+			desk.mutations["ticket.assign"](
+				{
+					assigneeMembershipId: session.membershipId,
+					ticketId: ticket.id,
+				},
+				{ callId: `browser:assign:${crypto.randomUUID()}` },
+			),
+		);
+	});
 	transitionButton.addEventListener("click", () => {
-		if (!selected) return;
-		const close = selected.status !== "closed";
+		const ticket = selected;
+		if (ticket === null) return;
+		const close = ticket.status !== "closed";
 		void mutate(close ? "Closing ticket" : "Reopening ticket", () =>
 			desk.mutations[close ? "ticket.close" : "ticket.reopen"](
-				{ ticketId: selected!.id },
+				{ ticketId: ticket.id },
 				{
 					callId: `browser:${close ? "close" : "reopen"}:${crypto.randomUUID()}`,
 				},
@@ -531,11 +544,12 @@ async function start(): Promise<void> {
 		);
 	});
 	summaryButton.addEventListener("click", () => {
-		if (!selected || busy) return;
-		const effectKey = `browser:summary:${selected.reference}:${crypto.randomUUID()}`;
+		const ticket = selected;
+		if (ticket === null || busy) return;
+		const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
 		void mutate("Sending summary", async () => {
 			const result = await desk.actions["notification.sendTicketSummary"](
-				{ ticketId: selected!.id },
+				{ ticketId: ticket.id },
 				{ effectKey, timeoutMilliseconds: 3_000 },
 			);
 			setActionStatus(`Summary sent · ${result.providerReceipt}`);
@@ -571,18 +585,16 @@ async function start(): Promise<void> {
 		"tracerReference",
 	);
 	if (tracerReference !== null) {
-		const searchForm = element<HTMLFormElement>("[data-search-form]");
 		searchForm.querySelector<HTMLInputElement>("input")!.value =
 			tracerReference;
 		searchForm.requestSubmit();
 		await until(
-			() => selected?.reference === tracerReference,
+			() => currentTicket()?.reference === tracerReference,
 			"Firefox exact-reference search",
 		);
 		const commentBody =
 			new URL(location.href).searchParams.get("tracerComment") ??
 			`Firefox update ${crypto.randomUUID()}`;
-		const commentForm = element<HTMLFormElement>("[data-comment-form]");
 		commentForm.querySelector<HTMLTextAreaElement>("textarea")!.value =
 			commentBody;
 		commentForm.requestSubmit();
@@ -595,26 +607,29 @@ async function start(): Promise<void> {
 			() => actionStatus.textContent?.includes("complete") === true && !busy,
 			"Firefox summary Action",
 		);
-		if (selected?.status === "closed") {
+		if (currentTicket()?.status === "closed") {
 			transitionButton.click();
 			await until(
-				() => selected?.status !== "closed" && !busy,
+				() => currentTicket()?.status !== "closed" && !busy,
 				"Firefox reopen Mutation",
 			);
 		}
 		transitionButton.click();
 		await until(
-			() => selected?.status === "closed" && !busy,
+			() => currentTicket()?.status === "closed" && !busy,
 			"Firefox close Mutation",
 		);
 		transitionButton.click();
 		await until(
-			() => selected?.status !== "closed" && !busy,
+			() => currentTicket()?.status !== "closed" && !busy,
 			"Firefox second reopen Mutation",
 		);
 		statusFilter.value = "open";
 		statusFilter.dispatchEvent(new Event("change"));
-		teamFilter.value = selected!.teamId;
+		const filteredTicket = currentTicket();
+		if (filteredTicket === null)
+			throw new Error("Firefox selected ticket disappeared before filtering");
+		teamFilter.value = filteredTicket.teamId;
 		teamFilter.dispatchEvent(new Event("change"));
 		await until(
 			() => ticketList.ariaBusy === "false",
