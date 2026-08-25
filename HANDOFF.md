@@ -212,10 +212,20 @@ Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
-Ordinary Job now starts with protocol v7 schema generalization and the first
-Mutation-owned tracer. Do not encode Job as a Reaction intent. Cron and
-checkpoints follow only after direct, Mutation-owned, and delayed ordinary Job
-acceptance passes through the shared kernel.
+The first ordinary Job boundary is integrated at `eaadd4ea`. Protocol v7
+generalizes the physical dispatch ledger without encoding Job as a Reaction,
+stores a positive semantic version on every Durable Run, and preserves existing
+Reaction rows as version 1. The compiler emits one exact Job Definition,
+executable binding and server-only projection. A generated Mutation accepts one
+Job atomically through `ctx.jobs.<name>.dispatch(...)`, returns a stable run
+receipt, and shares the existing Mutation receipt, Durable Run, event, retry and
+lifecycle kernel. The generated browser client exposes no generic Job control.
+
+The next Product frontier is direct ordinary Job acceptance, followed by
+delayed acceptance. Do not add worker execution, Cron, checkpoints, signals, a
+second Queue/runtime, or generic browser controls to the direct-acceptance
+slice. Cron and checkpoints follow only after direct, Mutation-owned, and
+delayed ordinary Job acceptance pass through the shared kernel.
 
 OpenAPI/MCP projections and authoring/documentation DX are pulled after these
 working verticals. Studio remains outside the beta.1/beta.2 release sequence.
@@ -234,6 +244,38 @@ and package-isolation proof. Artifact tampering, internal-table access, backend
 PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
+
+The protocol-v7 and first Mutation-owned Job boundary is integrated at
+`eaadd4ea`. `quality:release` passes with architecture and format ratchets,
+lint, all workspace typechecks, 578 local tests, package/release dry-run, strict
+Knip, workspace/docs build, skill validation, all 19 owned performance
+manifests, and `git diff --check`. The complete registered PostgreSQL 17 lane
+passes; the final local PostgreSQL/Firefox collaboration tracer passes 140
+assertions and proves one idempotent Mutation call creates exactly one Job
+dispatch, accepted event and ready Durable Run with semantic version 1.
+
+The unchanged product tracer also passed on both selected managed targets with
+manual disposable provisioning and cleanup only:
+
+- dedicated CNPG PostgreSQL 18.2: existing migrations plus 140-assertion tracer
+  PASS in 45.5 seconds, then the logical database and owner role were removed;
+- Supabase PostgreSQL 17.6: existing migrations plus 140-assertion tracer PASS
+  in 54.4 seconds with `sslmode=no-verify`, then database, admin membership and
+  owner role were removed.
+
+No credential, provider receipt, provisioning/evidence harness,
+`pg_stat_activity` observer, `pg_signal_backend` mechanism, transaction-pool
+claim, worker execution, Cron, checkpoint, signal, or browser Job control was
+added. The release artifact checksum is
+`9f85e703575d04dbf3eb08d5cd1a8adb2f6c1f00d907cc9b8470682fba32267a`;
+the declaration checksum remains
+`18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
+
+The required independent Standards and Spec review commands were both invoked
+with `claude-fable-5`, but the external reviewer returned no verdict because
+its account spend limit was reached. Do not record that as PASS. Retry the two
+read-only reviews with `opus-5` before treating the adversarial-review gate as
+closed; any blocker takes priority over direct Job acceptance.
 
 The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
 `quality:full` and `quality:release` pass, including 577 local tests, strict
