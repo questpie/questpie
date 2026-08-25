@@ -3,6 +3,8 @@ import { codec, defineService, operation, policy } from "questpie";
 import { defineAction } from "#questpie/app";
 import type { ActionServices, ExecutionServices } from "#questpie/app";
 
+import { postTicketSummary } from "../runtime/notification-provider";
+
 class NotificationProviderRejection extends Error {
 	readonly status: number;
 
@@ -39,27 +41,14 @@ export const notificationProvider = defineService({
 				summary: string;
 				status: string;
 			}) => {
-				const response = await fetch(receiver, {
-					method: "POST",
-					signal,
-					headers: {
-						"content-type": "application/json",
-						"idempotency-key": input.effectId,
-						"x-questpie-effect-id": input.effectId,
-					},
-					body: JSON.stringify(input),
-				});
-				if (!response.ok) {
-					await response.body?.cancel();
-					throw new NotificationProviderRejection(response.status);
-				}
-				const receipt = response.headers.get("x-team-support-receipt");
-				await response.body?.cancel();
-				if (receipt === null || receipt.length === 0 || receipt.length > 128)
+				const result = await postTicketSummary(receiver, input, signal);
+				if (result.kind === "rejected")
+					throw new NotificationProviderRejection(502);
+				if (result.kind === "outcomeUnknown")
 					throw new NotificationOutcomeUnknown(
-						"notification provider returned no bounded receipt",
+						"notification provider returned no durable receipt",
 					);
-				return Object.freeze({ receipt });
+				return Object.freeze({ receipt: result.receipt });
 			},
 		});
 	},

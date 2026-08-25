@@ -35,7 +35,6 @@ export const slaFollowUp = defineJob({
 		ticketId: codec.uuid(),
 		reference: codec.text(),
 		dueAt: codec.timestamp(),
-		completedAt: codec.timestamp(),
 		attemptNumber: codec.integer(),
 	}),
 	runAs: durable.caller({ whenDenied: "fail" }),
@@ -55,7 +54,6 @@ export const slaFollowUp = defineJob({
 			ticketId: input.ticketId,
 			reference: input.reference,
 			dueAt: input.dueAt,
-			completedAt: new Date(),
 			attemptNumber: ctx.attempt.number,
 		};
 	},
@@ -85,7 +83,7 @@ function jobAcceptanceCapabilityContract(
 	app: GeneratedApp,
 	execution: ExecutionInput,
 ): Promise<unknown> {
-	const dueAt = new Date(Date.now() + 60_000);
+	const dueAt = new Date("2030-01-01T00:00:00.000Z");
 	return app.execution(execution, ({ jobs }) =>
 		jobs.ticket.slaFollowUp.accept(
 			{
