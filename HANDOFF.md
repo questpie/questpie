@@ -49,7 +49,9 @@ two risk tiers.
 
 External release evidence remains honest:
 
-- managed Supabase conformance is WITHHELD because credentials are absent;
+- managed PostgreSQL conformance remains WITHHELD until the final one-Pool
+  Runtime passes the existing product tracer on the selected CNPG and Supabase
+  targets; credentials stay outside the repository;
 - transaction-pool compatibility is not claimed;
 - the tagged stable-runner gate, version tag, and npm publication require the
   release environment and human authority.
@@ -128,9 +130,9 @@ Remaining PB-05 work, in order:
    provider, catalog and change-capture descriptors. The private bundle-only
    completeness tracer proves that one injected runner reaches readiness,
    Context, Query, Mutation, Durable and realtime composition without an
-   implicit Pool or Client. Finite internal statement, lock and
-   idle-in-transaction values remain the last evidence prerequisite before the
-   ownership flip; provisional measurement controls are not those values.
+   implicit Pool or Client. Existing conservative finite statement, lock and
+   idle-in-transaction controls are sufficient internal safety defaults for the
+   ownership flip. They are not public ceilings or performance claims.
 6. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
    same boundary remove generated Bun SQL construction and all production Bun
    compatibility paths; never add a temporary second Pool.
@@ -196,8 +198,9 @@ coalescing or retry. The private, non-projecting Wire v3 contract is integrated
 through `454966aa`: compiler projection and Runtime validation independently
 close the full retained v2/v1 and Action grammar, preserve canonical object-key
 semantics, and negotiate incompatible Action requests before Context, Service
-or handler work. Exact generated Wire v3 client/server transport is now the
-active Action boundary. Never hide Effect Identity in domain input, alias Mutation
+or handler work. Exact generated Wire v3 client/server transport is integrated
+at `a5c16251` and delegates network execution to the same direct Runtime owner.
+Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
@@ -411,33 +414,35 @@ malformed Action codec/error contracts, while canonical object property order
 remains non-semantic and nested array order remains exact. The accepted v3
 digest `c7596e3eef673d11381f9c9c9a25f81308084dd0054b91cfa8ddf9afe45457a4`
 is reproduced without changing the existing v2 projector or client. The seam
-is still private and unbarrelled; generated/client/server projection remains
-the next coherent boundary.
+was subsequently carried through generated client/server transport at
+`a5c16251`; retained-client and ambiguity coverage are closed there.
 
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Carry the integrated generated direct Action tracer and private Wire v3
-   contract through exact client/server transport. Reuse the same generated identity-to-direct
-   executor adapter; close retained v1/v2 compatibility, zero-work
-   `CLIENT_OUTDATED`, all eight post-dispatch ambiguity families, recursive
-   nondisclosure, browser, artifact and release evidence. Preserve the accepted
-   one-transport-call, zero-retry semantics throughout.
-3. Continue PB-05 by collecting the digest-bound local per-statement, lock and
-   idle-in-transaction evidence required by the operational profile. Exact
-   finite defaults and the atomic one-Pool ownership flip remain blocked until
-   the same fixed matrix runs on the selected managed PostgreSQL target, or the
-   authority explicitly relaxes that requirement. Preserve all current owner
-   paths as provisional evidence; do not reuse instrumentation controls as
-   defaults, derive public ceilings, or overlap this lane with generated/release
-   work.
-4. Keep independent Standards and Spec reviews on each Action and PB-05
-   integration boundary. The accepted Effect/Wire proof is immutable evidence;
-   ordinary production projection now follows tracer-led TDD rather than a new
-   formal acceptance round.
-5. The canonical integration owner serializes generated/release builds and
-   PostgreSQL schema-reset tests, and integrates each independently green lane
-   commit one at a time.
-6. Commit only coherent green boundaries; do not push, tag, publish, or contact
-   external systems without explicit authority.
+2. Perform the atomic generated `createRuntimePostgres` one-Pool Product flip.
+   Start with one minimal ownership tracer: one bounded `pg` Pool, one direct
+   listener Client, one Runtime lifecycle, and no generated production Bun
+   `SQL`. Route Query, Mutation, Durable and realtime through the already
+   integrated database-mode composition, then remove the replaced production
+   Bun compatibility paths in the same boundary.
+3. Do not extend the historical PB-05 managed-evidence, provisioning, receipt,
+   `pg_stat_activity`, lock-observer or backend-termination harnesses. They are
+   not prerequisites for the ownership flip. Local Docker is optional test
+   infrastructure, not product architecture.
+4. After the final one-Pool Runtime is green locally, connect directly to the
+   selected CNPG and Supabase targets. Manually create one disposable logical
+   database and ordinary owner login where the provider permits it, run the
+   existing migrations and existing PostgreSQL/browser product tracer, record
+   the result, and remove only the created database and role. Do not build a new
+   TypeScript provisioning or evidence framework for this operation.
+5. Run affected PostgreSQL lifecycle evidence, `quality:full`, release-sensitive
+   verification and independent Standards/Spec review against the exact green
+   Product boundary. Managed measurements may inform later tuning but do not
+   derive public timeout or SLA claims.
+6. Continue directly with protocol v7 schema generalization and the first
+   ordinary Mutation-owned Job tracer. Cron and checkpoints remain later
+   slices.
+7. Commit only coherent green boundaries. Do not push, tag or publish without
+   explicit authority.
