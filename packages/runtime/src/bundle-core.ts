@@ -30,6 +30,7 @@ export {
 	createDurableReactionWorker,
 	createDurableWorker,
 	createDurableJobContext,
+	createDurableReactionContext,
 	createJobAcceptance,
 	createPostgresDatabaseDurableEffectLedger,
 	createPostgresDatabaseDurableKernel,

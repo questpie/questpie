@@ -43,34 +43,36 @@ export function renderDurableWorkerOwner(
 				if (!binding) throw new TypeError("Reaction executable is unavailable");
 				return binding.execute({
 					input: request.input,
-					ctx: Object.freeze({
-						...execution,
-						data: Object.freeze({
-							run: (definition, operationInput) => {
-								const queryDigest = structuralQueryDigests.get(definition);
-								const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
-								if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
-								return executePostgresDatabaseQuery({
-									linkedPlan,
-									binding: {
-										templateDigest: linkedPlan.plan.templateDigest,
-										values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
-									},
-									executionFacts: {
-										authority: execution.authority,
-										principal: { id: execution.principal.id, kind: execution.principal.kind },
-										tenant: { id: execution.tenant.id },
-									},
-									database,
-									signal: execution.signal,
-								});
-							},
+					ctx: createDurableReactionContext(
+						execution,
+						Object.freeze({
+							data: Object.freeze({
+								run: (definition, operationInput) => {
+									const queryDigest = structuralQueryDigests.get(definition);
+									const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
+									if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
+									return executePostgresDatabaseQuery({
+										linkedPlan,
+										binding: {
+											templateDigest: linkedPlan.plan.templateDigest,
+											values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
+										},
+										executionFacts: {
+											authority: execution.authority,
+											principal: { id: execution.principal.id, kind: execution.principal.kind },
+											tenant: { id: execution.tenant.id },
+										},
+										database,
+										signal: execution.signal,
+									});
+								},
+							}),
+							queries: ${input.directQueries},
+							mutations: ${input.directMutations},
 						}),
-						queries: ${input.directQueries},
-						mutations: ${input.directMutations},
-						run: request.run,
-						attempt: request.attempt,
-					}),
+						request.run,
+						request.attempt,
+					),
 					errors: request.errors,
 				});
 			},

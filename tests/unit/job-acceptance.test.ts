@@ -239,3 +239,38 @@ test("scopes stable identity by Principal while keeping idempotency material opa
 	expect(first).not.toEqual(second);
 	expect(JSON.stringify([...store.records.values()])).not.toContain(key);
 });
+
+test("reserves the command limit before concurrent persistence", async () => {
+	const release = Promise.withResolvers<void>();
+	const writes: JobAcceptanceRecord[] = [];
+	const owner = acceptance({
+		async accept(record) {
+			writes.push(record);
+			await release.promise;
+			return Object.freeze({ status: "accepted" as const });
+		},
+	});
+	const attempts = Array.from({ length: 101 }, (_, index) =>
+		owner.accept(
+			job,
+			{ companyId: tenantId },
+			{ idempotencyKey: `concurrent:${index}` },
+		),
+	);
+
+	await Promise.resolve();
+	const writesBeforeRelease = writes.length;
+	release.resolve();
+	const outcomes = await Promise.allSettled(attempts);
+
+	expect(writesBeforeRelease).toBe(100);
+	expect(outcomes.filter(({ status }) => status === "fulfilled")).toHaveLength(
+		100,
+	);
+	expect(outcomes[100]).toMatchObject({
+		status: "rejected",
+		reason: expect.objectContaining({
+			message: "Job acceptance transaction exceeds its command limit",
+		}),
+	});
+});

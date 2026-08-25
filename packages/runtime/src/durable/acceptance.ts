@@ -180,7 +180,11 @@ export function createJobAcceptance(
 	);
 	const locallyAccepted = new Map<
 		string,
-		Readonly<{ requestDigest: string; receipt: JobAcceptanceReceipt }>
+		Readonly<{
+			requestDigest: string;
+			receipt: JobAcceptanceReceipt;
+			outcome: Promise<JobAcceptanceReceipt>;
+		}>
 	>();
 	return Object.freeze({
 		async accept(
@@ -221,7 +225,7 @@ export function createJobAcceptance(
 			if (local) {
 				if (local.requestDigest !== requestDigest)
 					throw new JobAcceptanceConflict(local.receipt);
-				return local.receipt;
+				return local.outcome;
 			}
 			if (locallyAccepted.size >= 100)
 				throw new TypeError(
@@ -259,17 +263,31 @@ export function createJobAcceptance(
 				horizonAt,
 				acceptedAt: new Date(acceptedAt.getTime()),
 			}) satisfies JobAcceptanceRecord;
-			const outcome = await input.transaction.accept(record);
-			if (
-				outcome.status === "existing" &&
-				outcome.requestDigest !== requestDigest
-			)
-				throw new JobAcceptanceConflict(receipt);
-			locallyAccepted.set(
-				dispatchId,
-				Object.freeze({ requestDigest, receipt }),
-			);
-			return receipt;
+			const deferred = Promise.withResolvers<JobAcceptanceReceipt>();
+			const localEntry = Object.freeze({
+				requestDigest,
+				receipt,
+				outcome: deferred.promise,
+			});
+			locallyAccepted.set(dispatchId, localEntry);
+			void Promise.resolve()
+				.then(() => input.transaction.accept(record))
+				.then(
+					(outcome) => {
+						if (
+							outcome.status === "existing" &&
+							outcome.requestDigest !== requestDigest
+						)
+							deferred.reject(new JobAcceptanceConflict(receipt));
+						else deferred.resolve(receipt);
+					},
+					(error: unknown) => {
+						if (locallyAccepted.get(dispatchId) === localEntry)
+							locallyAccepted.delete(dispatchId);
+						deferred.reject(error);
+					},
+				);
+			return deferred.promise;
 		},
 	});
 }
