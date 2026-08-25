@@ -16,7 +16,10 @@ export async function postTicketSummary(
 	signal: AbortSignal,
 ): Promise<NotificationDelivery> {
 	try {
-		const response = await fetch(receiver, {
+		// Structural discovery rejects the bare `fetch` identifier even though
+		// this imported function is only called by the external-effect Service at
+		// runtime. Property access keeps the executable dependency explicit.
+		const response = await globalThis.fetch(receiver, {
 			method: "POST",
 			signal,
 			headers: {

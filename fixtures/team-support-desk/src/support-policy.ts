@@ -328,6 +328,26 @@ export const ticketPolicy = definePolicy(tickets, {
 			),
 	},
 	fields: {
+		create: ({ candidate, principal, tenant }) => {
+			const activeRequester = policy.exists(memberships, ({ row: requester }) =>
+				query.and(
+					requester.id.equal(candidate.requesterMembershipId),
+					requester.organizationId.equal(tenant.id),
+					requester.principalId.equal(principal.id),
+					requester.status.equal("active"),
+				),
+			);
+			return {
+				teamId: activeRequester,
+				requesterMembershipId: activeRequester,
+				assigneeMembershipId: activeRequester,
+				reference: activeRequester,
+				priority: activeRequester,
+				status: activeRequester,
+				summary: activeRequester,
+				description: activeRequester,
+			};
+		},
 		update: ({ current, principal, tenant }) => {
 			const staff = policy.exists(memberships, ({ row: actor }) =>
 				query.and(
@@ -430,6 +450,24 @@ export const commentPolicy = definePolicy(comments, {
 				),
 			),
 	},
+	fields: {
+		create: ({ candidate, principal, tenant }) => {
+			const activeAuthor = policy.exists(memberships, ({ row: author }) =>
+				query.and(
+					author.id.equal(candidate.authorMembershipId),
+					author.organizationId.equal(tenant.id),
+					author.principalId.equal(principal.id),
+					author.status.equal("active"),
+				),
+			);
+			return {
+				ticketId: activeAuthor,
+				authorMembershipId: activeAuthor,
+				body: activeAuthor,
+				kind: activeAuthor,
+			};
+		},
+	},
 });
 
 export const labelPolicy = definePolicy(labels, {
@@ -520,6 +558,21 @@ export const labelPolicy = definePolicy(labels, {
 			),
 	},
 	fields: {
+		create: ({ principal, tenant }) => {
+			const admin = policy.exists(memberships, ({ row: actor }) =>
+				query.and(
+					actor.organizationId.equal(tenant.id),
+					actor.principalId.equal(principal.id),
+					actor.status.equal("active"),
+					actor.role.equal("admin"),
+				),
+			);
+			return {
+				ticketId: admin,
+				name: admin,
+				color: admin,
+			};
+		},
 		update: ({ principal, tenant }) => {
 			const admin = policy.exists(memberships, ({ row: actor }) =>
 				query.and(

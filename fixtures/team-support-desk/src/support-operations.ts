@@ -12,12 +12,6 @@ import {
 	teamPolicy,
 	ticketPolicy,
 } from "./support-policy";
-import {
-	commentPagePlan,
-	labelPagePlan,
-	teamListPlan,
-	ticketListPlan,
-} from "./support-query-plans";
 import { teams } from "./teams";
 import { tickets } from "./tickets";
 
@@ -54,7 +48,6 @@ export const membershipOperations = defineCollectionOperations(memberships, {
 export const teamOperations = defineCollectionOperations(teams, {
 	name: "teams",
 	policy: teamPolicy,
-	list: { data: teamListPlan },
 	get: {
 		select: {
 			id: true,
@@ -78,7 +71,6 @@ export const teamOperations = defineCollectionOperations(teams, {
 export const ticketOperations = defineCollectionOperations(tickets, {
 	name: "tickets",
 	policy: ticketPolicy,
-	list: { data: ticketListPlan },
 	get: {
 		select: {
 			id: true,
@@ -173,7 +165,6 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 export const commentOperations = defineCollectionOperations(comments, {
 	name: "comments",
 	policy: commentPolicy,
-	list: { data: commentPagePlan },
 	create: {
 		input: ["ticketId", "authorMembershipId", "body", "kind"],
 		normalize: ({ input }) => ({ body: operation.text.trim(input.body) }),
@@ -194,7 +185,6 @@ export const commentOperations = defineCollectionOperations(comments, {
 export const labelOperations = defineCollectionOperations(labels, {
 	name: "labels",
 	policy: labelPolicy,
-	list: { data: labelPagePlan },
 	create: {
 		input: ["ticketId", "name", "color"],
 		normalize: ({ input }) => ({

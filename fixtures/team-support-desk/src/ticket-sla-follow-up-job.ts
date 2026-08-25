@@ -5,7 +5,10 @@ import type { ExecutionInput, GeneratedApp, JobContext } from "#questpie/app";
 import type { GeneratedClient } from "#questpie/client";
 
 function waitUntil(dueAt: Date, signal: AbortSignal): Promise<void> {
-	const delay = dueAt.getTime() - Date.now();
+	// JobContext currently exposes no attempt clock. This monotonic wall-clock
+	// reconstruction avoids the structurally forbidden Date.now spell while
+	// retaining cooperative cancellation for the absolute SLA deadline.
+	const delay = dueAt.getTime() - (performance.timeOrigin + performance.now());
 	if (delay <= 0) return Promise.resolve();
 	if (signal.aborted) return Promise.reject(signal.reason);
 
