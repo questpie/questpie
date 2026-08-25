@@ -61,7 +61,13 @@ async function startHost(
 		heartbeatMilliseconds?: number;
 		attemptDeadlineMilliseconds?: number;
 	}> = {},
-): Promise<Readonly<{ child: Child; port: number }>> {
+): Promise<
+	Readonly<{
+		child: Child;
+		output: ReadableStream<Uint8Array>;
+		port: number;
+	}>
+> {
 	const child = Bun.spawn(["bun", "tracer/host.ts", `--port=${port}`], {
 		cwd: root,
 		env: {
@@ -94,7 +100,8 @@ async function startHost(
 		stdout: "pipe",
 		stderr: "pipe",
 	});
-	const line = await waitForOutputLine(child.stdout, {
+	const [readiness, output] = child.stdout.tee();
+	const line = await waitForOutputLine(readiness, {
 		accept: (candidate) => candidate.includes('"event":"ready"'),
 		description: "collaboration tracer host readiness",
 		timeoutMilliseconds: 30_000,
@@ -102,7 +109,7 @@ async function startHost(
 	const ready = JSON.parse(line) as Readonly<{ port?: unknown }>;
 	if (!Number.isSafeInteger(ready.port) || Number(ready.port) <= 0)
 		throw new TypeError("collaboration tracer readiness port is invalid");
-	return Object.freeze({ child, port: Number(ready.port) });
+	return Object.freeze({ child, output, port: Number(ready.port) });
 }
 
 type JobAttemptProbe = Readonly<{
@@ -876,7 +883,7 @@ LIMIT 1`,
 			});
 			cleanup.defer(() => stop(firstJobHost.child, "SIGKILL"));
 			const firstRestartProbe = JSON.parse(
-				await waitForOutputLine(firstJobHost.child.stdout, {
+				await waitForOutputLine(firstJobHost.output, {
 					accept: (line) =>
 						line.includes('"event":"collaboration-job-attempt"') &&
 						line.includes(`"runId":"${restartJob.runId}"`) &&
@@ -934,7 +941,7 @@ WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'`,
 			});
 			cleanup.defer(() => stop(recoveredJobHost.child, "SIGTERM"));
 			const secondRestartProbe = JSON.parse(
-				await waitForOutputLine(recoveredJobHost.child.stdout, {
+				await waitForOutputLine(recoveredJobHost.output, {
 					accept: (line) =>
 						line.includes('"event":"collaboration-job-attempt"') &&
 						line.includes(`"runId":"${restartJob.runId}"`) &&
@@ -1266,6 +1273,138 @@ ORDER BY attempt_number`,
 					replacementApplication.close(),
 				]);
 			}
+
+			const policyApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(23) },
+				maintenance: { authorize: () => false },
+			});
+			const deniedRun = await policyApplication
+				.execution(
+					{
+						principal: principal.user({ id: tracerIds.principal }),
+						context: { companyId: tracerIds.company },
+					},
+					({ jobs }) =>
+						jobs.reports.companyDigest.accept(
+							{
+								companyId: tracerIds.company,
+								restartProbe: "hardRestart",
+							},
+							{ idempotencyKey: `policy-job-${crypto.randomUUID()}` },
+						),
+				)
+				.finally(() => policyApplication.close());
+			expect(deniedRun).toMatchObject({
+				resource: "job:reports.companyDigest",
+			});
+			const revokedMembership = await database!.unsafe<
+				readonly Readonly<{ role: string; status: string }>[]
+			>(
+				`UPDATE collaboration.memberships
+SET status = 'revoked'
+WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'
+RETURNING role, status`,
+				[tracerIds.company, tracerIds.principal],
+			);
+			expect(revokedMembership).toEqual([{ role: "owner", status: "revoked" }]);
+
+			const policyHost = await startHost(temporary, 0, {
+				leaseMilliseconds: 1_000,
+				heartbeatMilliseconds: 200,
+				attemptDeadlineMilliseconds: 5_000,
+			});
+			cleanup.defer(() => stop(policyHost.child, "SIGTERM"));
+			const denied = await eventually(
+				async () => {
+					const [row] = await database!.unsafe<
+						readonly Readonly<{
+							attemptCount: number;
+							attemptFailureCode: string;
+							attemptOutcome: string;
+							currentAttemptId: string | null;
+							deadLetter: boolean;
+							failureCode: string;
+							resultBytes: Uint8Array | null;
+							state: string;
+							workerId: string;
+						}>[]
+					>(
+						`SELECT runs.state, runs.attempt_count AS "attemptCount",
+  runs.current_attempt_id::text AS "currentAttemptId",
+  runs.dead_letter AS "deadLetter", runs.failure_code AS "failureCode",
+  runs.result_bytes AS "resultBytes", attempts.worker_id AS "workerId",
+  attempts.outcome AS "attemptOutcome",
+  attempts.failure_code AS "attemptFailureCode"
+FROM questpie_internal.durable_runs runs
+JOIN questpie_internal.durable_attempts attempts
+  ON attempts.application_name = runs.application_name
+ AND attempts.run_id = runs.run_id
+WHERE runs.application_name = 'application:collaboration' AND runs.run_id = $1`,
+						[deniedRun.runId],
+					);
+					return row ?? null;
+				},
+				{
+					accept: (row) =>
+						row?.state === "failed" && row.failureCode === "RUN_AS_DENIED",
+					description: "current run-as policy rejects revoked Job caller",
+					intervalMilliseconds: 25,
+					timeoutMilliseconds: 30_000,
+				},
+			);
+			expect(denied).toEqual({
+				attemptCount: 1,
+				attemptFailureCode: "RUN_AS_DENIED",
+				attemptOutcome: "failed",
+				currentAttemptId: null,
+				deadLetter: true,
+				failureCode: "RUN_AS_DENIED",
+				resultBytes: null,
+				state: "failed",
+				workerId: `collaboration-tracer:${policyHost.child.pid}`,
+			});
+			const deniedEvents = await database!.unsafe<
+				readonly Readonly<{
+					attemptId: string | null;
+					errorCode: string | null;
+					kind: string;
+					sequence: number;
+				}>[]
+			>(
+				`SELECT sequence, kind, attempt_id::text AS "attemptId",
+  error_code AS "errorCode"
+FROM questpie_internal.durable_run_events
+WHERE application_name = 'application:collaboration' AND run_id = $1
+ORDER BY sequence`,
+				[deniedRun.runId],
+			);
+			expect(deniedEvents).toEqual([
+				{
+					attemptId: null,
+					errorCode: null,
+					kind: "accepted",
+					sequence: 1,
+				},
+				{
+					attemptId: expect.any(String),
+					errorCode: null,
+					kind: "attemptStarted",
+					sequence: 2,
+				},
+				{
+					attemptId: deniedEvents[1]?.attemptId,
+					errorCode: "RUN_AS_DENIED",
+					kind: "failed",
+					sequence: 3,
+				},
+			]);
+			await stop(policyHost.child, "SIGTERM");
+			const policyHostOutput = await new Response(policyHost.output).text();
+			expect(policyHostOutput).not.toContain(`"runId":"${deniedRun.runId}"`);
 		} finally {
 			await cleanup.dispose();
 		}
