@@ -71,7 +71,8 @@ function inboundEvent(value: unknown): InboundTicketEvent | null {
 		return null;
 	for (const key of expected) if (typeof event[key] !== "string") return null;
 	if (
-		!uuidPattern.test(event.eventId as string) ||
+		(event.eventId as string).length === 0 ||
+		(event.eventId as string).length > 128 ||
 		!uuidPattern.test(event.organizationId as string) ||
 		!uuidPattern.test(event.membershipId as string) ||
 		!uuidPattern.test(event.teamId as string)
