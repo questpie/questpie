@@ -117,6 +117,19 @@ type GeneratedExecutionScope = Readonly<{
 			): Promise<Readonly<{ runId: string; resource: string }>>;
 		}>;
 	}>;
+	jobs: Readonly<{
+		reports: Readonly<{
+			companyDigest: Readonly<{
+				accept(
+					input: Readonly<{ companyId: string }>,
+					options: Readonly<{
+						idempotencyKey: string;
+						notBefore?: Date;
+					}>,
+				): Promise<Readonly<{ runId: string; resource: string }>>;
+			}>;
+		}>;
+	}>;
 	services: Readonly<{
 		"audit.execution": unknown;
 		"collaboration.demo-auth": unknown;
@@ -190,6 +203,15 @@ postgresTest(
 									) => Result | Promise<Result>,
 								): Promise<Awaited<Result>>;
 								fetch(request: Request): Promise<Response>;
+								durable: Readonly<{
+									cancelRun(
+										input: Readonly<{
+											runId: string;
+											reason: string;
+											actor: unknown;
+										}>,
+									): Promise<unknown>;
+								}>;
 								routes: Readonly<
 									Record<
 										string,
@@ -702,7 +724,7 @@ LIMIT 1`,
 					directConnectionUrl: postgresUrl(),
 				},
 				realtime: { hmacKey: new Uint8Array(32).fill(23) },
-				maintenance: { authorize: () => false },
+				maintenance: { authorize: () => true },
 			});
 			const acceptJob = () =>
 				jobApplication.execution(
@@ -716,18 +738,66 @@ LIMIT 1`,
 							{ callId: jobCallId },
 						),
 				);
+			const acceptDirectJob = (
+				companyId: string,
+				idempotencyKey: string,
+				notBefore?: Date,
+			) =>
+				jobApplication.execution(
+					{
+						principal: principal.user({ id: tracerIds.principal }),
+						context: { companyId: tracerIds.company },
+					},
+					({ jobs }) =>
+						jobs.reports.companyDigest.accept(
+							{ companyId },
+							{
+								idempotencyKey,
+								...(notBefore === undefined ? {} : { notBefore }),
+							},
+						),
+				);
 			let acceptedJob: Readonly<{ runId: string; resource: string }>;
+			let directJob: Readonly<{ runId: string; resource: string }>;
+			let delayedJob: Readonly<{ runId: string; resource: string }>;
+			let cancelledJob: Readonly<{ runId: string; resource: string }>;
 			try {
 				acceptedJob = await acceptJob();
 				expect(await acceptJob()).toEqual(acceptedJob);
+				const directKey = `direct-job-${crypto.randomUUID()}`;
+				directJob = await acceptDirectJob(tracerIds.company, directKey);
+				expect(await acceptDirectJob(tracerIds.company, directKey)).toEqual(
+					directJob,
+				);
+				await expect(
+					acceptDirectJob(tracerIds.channel, directKey),
+				).rejects.toMatchObject({ code: "JOB_ACCEPTANCE_CONFLICT" });
+				delayedJob = await acceptDirectJob(
+					tracerIds.company,
+					`delayed-job-${crypto.randomUUID()}`,
+					new Date(Date.now() + 1_000),
+				);
+				cancelledJob = await acceptDirectJob(
+					tracerIds.company,
+					`cancelled-job-${crypto.randomUUID()}`,
+					new Date(Date.now() + 60_000),
+				);
+				await expect(
+					jobApplication.durable.cancelRun({
+						runId: cancelledJob.runId,
+						reason: "collaboration tracer cancellation",
+						actor: principal.user({ id: tracerIds.principal }),
+					}),
+				).resolves.toMatchObject({ outcome: "applied" });
 			} finally {
 				await jobApplication.close();
 			}
 			expect(acceptedJob).toMatchObject({
 				resource: "job:reports.companyDigest",
 			});
-			const [jobRecord] = await database!.unsafe<
+			const jobRecords = await database!.unsafe<
 				readonly Readonly<{
+					causationKind: string;
 					dispatches: number;
 					events: number;
 					resource: string;
@@ -739,6 +809,7 @@ LIMIT 1`,
 				`SELECT count(*) OVER ()::int AS dispatches,
   runs.run_id::text AS "runId", runs.resource_identity AS resource,
   runs.semantic_version AS "semanticVersion", runs.state,
+  runs.causation_kind AS "causationKind",
   (SELECT count(*)::int FROM questpie_internal.durable_run_events events
    WHERE events.application_name = runs.application_name AND events.run_id = runs.run_id) AS events
 FROM questpie_internal.durable_dispatches dispatches
@@ -748,14 +819,62 @@ JOIN questpie_internal.durable_runs runs
 WHERE dispatches.call_id = $1 AND dispatches.resource_kind = 'job'`,
 				[jobCallId],
 			);
-			expect(jobRecord).toEqual({
-				dispatches: 1,
-				events: 1,
-				resource: "job:reports.companyDigest",
-				runId: acceptedJob.runId,
-				semanticVersion: 1,
-				state: "ready",
-			});
+			expect(jobRecords).toHaveLength(2);
+			expect(jobRecords).toContainEqual(
+				expect.objectContaining({
+					causationKind: "mutationDispatch",
+					dispatches: 2,
+					resource: "job:reports.companyDigest",
+					runId: acceptedJob.runId,
+					semanticVersion: 1,
+				}),
+			);
+			const mutationRunIds = jobRecords.map(({ runId }) => runId);
+			const terminalJobs = await eventually(
+				async () =>
+					database!.unsafe<
+						readonly Readonly<{
+							causationKind: string;
+							events: number;
+							runId: string;
+							state: string;
+						}>[]
+					>(
+						`SELECT runs.run_id::text AS "runId", runs.state,
+  runs.causation_kind AS "causationKind",
+  (SELECT count(*)::int FROM questpie_internal.durable_run_events events
+   WHERE events.application_name = runs.application_name AND events.run_id = runs.run_id) AS events
+FROM questpie_internal.durable_runs runs
+WHERE runs.run_id IN ($1, $2, $3, $4, $5)
+ORDER BY runs.run_id`,
+						[
+							...mutationRunIds,
+							directJob.runId,
+							delayedJob.runId,
+							cancelledJob.runId,
+						],
+					),
+				{
+					accept: (rows) =>
+						rows.length === 5 &&
+						rows.filter(({ state }) => state === "succeeded").length === 4 &&
+						rows.filter(({ state }) => state === "cancelled").length === 1,
+					description: "ordinary Job execution, delay, and cancellation",
+					intervalMilliseconds: 50,
+					timeoutMilliseconds: 30_000,
+				},
+			);
+			expect(terminalJobs).toHaveLength(5);
+			expect(
+				terminalJobs.filter(
+					({ causationKind }) => causationKind === "explicit",
+				),
+			).toHaveLength(3);
+			expect(
+				terminalJobs
+					.filter(({ state }) => state === "succeeded")
+					.every(({ events }) => events >= 3),
+			).toBe(true);
 		} finally {
 			await cleanup.dispose();
 		}

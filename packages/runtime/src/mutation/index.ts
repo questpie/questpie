@@ -8,6 +8,7 @@ export { createPostgresCollectionMutationData } from "./collection";
 export { linkJobProjection, linkReactionProjection } from "../durable";
 export type { LinkedReactionProjection } from "../durable";
 export { createPostgresDatabaseMutationInvoker } from "./postgres-database";
+export { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 export { linkCollectionMutationPrograms } from "./program";
 export { linkPostgresCollectionOperationPlans } from "./postgres-program";
 export { linkPostgresMutationTransactionStatements } from "./postgres-transaction-statements";

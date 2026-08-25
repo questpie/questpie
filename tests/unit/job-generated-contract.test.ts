@@ -76,11 +76,17 @@ test("keeps Job acceptance on the Mutation Job map and out of shared contexts", 
 		"export interface MutationContext",
 		"type ApplicationContextDefinition",
 	);
-	expect(mutation).toContain("readonly jobs: Readonly<{");
 	expect(mutation).toContain(
-		'"reports.companyDigest": Readonly<{ accept(input:',
+		"readonly jobs: Readonly<GeneratedJobAcceptances>;",
 	);
 	expect(mutation).not.toContain("dispatch(input:");
+	expect(app).toContain('"reports.companyDigest": Readonly<{ accept(input:');
+	expect(app).toMatch(
+		/RouteContext[\s\S]*execution<Result>[\s\S]*jobs: GeneratedJobAcceptances/,
+	);
+	expect(app).toMatch(
+		/GeneratedApp[\s\S]*execution<Result>[\s\S]*jobs: GeneratedJobAcceptances/,
+	);
 
 	for (const context of [
 		between(

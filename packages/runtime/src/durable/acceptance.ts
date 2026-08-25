@@ -1,4 +1,8 @@
-import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
+import {
+	decodeRuntimeCodec,
+	encodeRuntimeCodec,
+	type RuntimeCodec,
+} from "../codec";
 import {
 	canonicalMutationBytes,
 	deterministicUuid,
@@ -118,12 +122,6 @@ function acceptedTimestamp(value: Date): Date {
 	return new Date(value.getTime());
 }
 
-function immutableBytes(value: Uint8Array, label: string): Uint8Array {
-	if (!(value instanceof Uint8Array))
-		throw new TypeError(`Job ${label} must be bytes`);
-	return Uint8Array.from(value);
-}
-
 function jobAcceptanceIdentity(
 	input: Readonly<{
 		application: string;
@@ -156,7 +154,8 @@ export function createJobAcceptance(
 		application: string;
 		tenantId: string;
 		principal: DurableActor;
-		contextInputBytes: Uint8Array;
+		contextInput: unknown;
+		contextInputCodec: RuntimeCodec;
 		runtimeBuildDigest: string;
 		acceptedAt: Date;
 		causation: Readonly<{
@@ -168,9 +167,16 @@ export function createJobAcceptance(
 	}>,
 ): JobAcceptance {
 	const acceptedAt = acceptedTimestamp(input.acceptedAt);
-	const contextInputBytes = immutableBytes(
-		input.contextInputBytes,
-		"Context input",
+	const contextInputBytes = canonicalMutationBytes(
+		encodeRuntimeCodec(
+			input.contextInputCodec,
+			decodeRuntimeCodec(
+				input.contextInputCodec,
+				input.contextInput,
+				"$job.context",
+			),
+			"$job.context",
+		),
 	);
 	const locallyAccepted = new Map<
 		string,

@@ -110,6 +110,15 @@ describe.skipIf(!database)("Job internal protocol v7", () => {
 				{ table: "durable_dispatches", column: "resource_kind" },
 				{ table: "durable_runs", column: "semantic_version" },
 			]);
+			const [causation] = await session<{ definition: string }[]>`
+				select pg_catalog.pg_get_constraintdef(oid, true) as definition
+				from pg_catalog.pg_constraint
+				where connamespace = 'questpie_internal'::regnamespace
+				  and conname = 'durable_run_causation_kind_known'
+			`;
+			expect(causation?.definition).toBe(
+				"CHECK (causation_kind = ANY (ARRAY['explicit'::text, 'mutationDispatch'::text]))",
+			);
 			const [legacy] = await session<{ exists: boolean }[]>`
 				select to_regclass('questpie_internal.pending_reaction_intents') is not null as exists
 			`;

@@ -213,6 +213,9 @@ test("projects one Mutation-owned Job acceptance without a second durable runtim
 		expect.objectContaining({ path: "job-projection.json" }),
 	);
 	expect(compilation.generatedFiles["app.ts"]).toContain(
+		'"reports.companyDigest": Readonly<{ accept',
+	);
+	expect(compilation.generatedFiles["app.ts"]).not.toContain(
 		'"reports.companyDigest": Readonly<{ dispatch',
 	);
 	expect(compilation.generatedFiles["client.ts"]).not.toContain(

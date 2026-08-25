@@ -2,9 +2,9 @@ import type {
 	JobAcceptanceRecord,
 	JobAcceptanceTransaction,
 } from "../durable/acceptance";
-import type { DurableActor } from "../durable/rows";
 import type { PostgresTransaction } from "../postgres/contract";
 import type { LinkedPostgresMutationTransactionStatement } from "./postgres-transaction-statements";
+import type { LinkedPostgresMutationTransactionStatements } from "./postgres-transaction-statements";
 
 const statementIdentities = [
 	"mutation.dispatch.accept",
@@ -26,33 +26,44 @@ async function requireMarker(
 		throw new TypeError("Durable kernel transaction marker is unavailable");
 }
 
-/** Persists one normalized Job acceptance in the owning Mutation transaction. */
-export function createPostgresMutationJobAcceptanceTransaction(
+/** Persists one normalized Job acceptance in an explicit or Mutation-owned transaction. */
+export function createPostgresJobAcceptanceTransaction(
 	input: Readonly<{
 		transaction: PostgresTransaction;
-		statements: Readonly<
-			Record<StatementIdentity, LinkedPostgresMutationTransactionStatement>
-		>;
+		statements: LinkedPostgresMutationTransactionStatements;
 		application: string;
-		operation: string;
+		sourceOperation: string;
 		callId: string;
-		principal: DurableActor;
 	}>,
 ): JobAcceptanceTransaction {
+	const statements = Object.freeze(
+		Object.fromEntries(
+			statementIdentities.map((identity) => {
+				const statement = input.statements.get(identity);
+				if (!statement || statement.identity !== identity)
+					throw new TypeError(
+						"PostgreSQL Job acceptance statements are incomplete",
+					);
+				return [identity, statement] as const;
+			}),
+		),
+	) as Readonly<
+		Record<StatementIdentity, LinkedPostgresMutationTransactionStatement>
+	>;
 	return Object.freeze({
 		accept: async (record: JobAcceptanceRecord) => {
 			await requireMarker(
 				input.transaction,
-				input.statements["mutation.dispatch.kernel.mark"],
+				statements["mutation.dispatch.kernel.mark"],
 			);
 			const claimed = await input.transaction.execute(
-				input.statements["mutation.job.acceptance.claim"].statement,
+				statements["mutation.job.acceptance.claim"].statement,
 				[
 					input.application,
 					record.tenantId,
-					input.operation,
-					input.principal.kind,
-					input.principal.id,
+					input.sourceOperation,
+					record.principal.kind,
+					record.principal.id,
 					input.callId,
 					record.dispatchId,
 					record.dispatchId,
@@ -65,7 +76,7 @@ export function createPostgresMutationJobAcceptanceTransaction(
 			);
 			if (claimed.length === 0) {
 				const existing = await input.transaction.execute(
-					input.statements["mutation.job.acceptance.read"].statement,
+					statements["mutation.job.acceptance.read"].statement,
 					[input.application, record.dispatchId],
 				);
 				const requestDigest = existing[0]?.requestDigest;
@@ -82,10 +93,10 @@ export function createPostgresMutationJobAcceptanceTransaction(
 				throw new TypeError("Job acceptance claim did not advance");
 			await requireMarker(
 				input.transaction,
-				input.statements["mutation.dispatch.kernel.mark"],
+				statements["mutation.dispatch.kernel.mark"],
 			);
 			const advanced = await input.transaction.execute(
-				input.statements["mutation.dispatch.accept"].statement,
+				statements["mutation.dispatch.accept"].statement,
 				[input.application, record.dispatchId],
 			);
 			if (
@@ -94,7 +105,7 @@ export function createPostgresMutationJobAcceptanceTransaction(
 			)
 				throw new TypeError("Job acceptance did not advance");
 			const inserted = await input.transaction.execute(
-				input.statements["mutation.dispatch.run.insert"].statement,
+				statements["mutation.dispatch.run.insert"].statement,
 				[
 					input.application,
 					record.runId,
@@ -121,7 +132,7 @@ export function createPostgresMutationJobAcceptanceTransaction(
 			if (inserted.length !== 1 || inserted[0]!.runId !== record.runId)
 				throw new TypeError("Job acceptance run did not advance");
 			await input.transaction.execute(
-				input.statements["mutation.dispatch.event.insert"].statement,
+				statements["mutation.dispatch.event.insert"].statement,
 				[
 					input.application,
 					record.runId,

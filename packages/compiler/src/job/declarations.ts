@@ -25,8 +25,13 @@ export function renderJobDeclarations(
 				`${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(resource.contract.input)}; output: ${renderCodecType(resource.contract.output)}; }>;`,
 		)
 		.join("\n\t");
+	const acceptances = renderJobDispatch(resources);
 	return `export interface GeneratedJobs {
 \t${definitions}
+}
+
+export interface GeneratedJobAcceptances {
+\t${acceptances}
 }
 
 export interface JobAcceptanceOptions {

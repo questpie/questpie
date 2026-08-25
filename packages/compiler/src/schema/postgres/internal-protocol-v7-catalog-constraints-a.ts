@@ -299,7 +299,7 @@ export const internalProtocolV7ConstraintsA = [
 		"durable_runs",
 		"durable_run_causation_kind_known",
 		"c",
-		"CHECK (causation_kind = 'mutationDispatch'::text)",
+		"CHECK (causation_kind = ANY (ARRAY['explicit'::text, 'mutationDispatch'::text]))",
 	],
 	[
 		"durable_runs",

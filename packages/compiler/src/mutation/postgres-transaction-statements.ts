@@ -82,12 +82,36 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, pg_catalog.pg_current
    causation_kind, causation_id, correlation_id, state, attempt_count, available_at, horizon_at,
    cancellation_requested, event_sequence, dead_letter, accepted_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'caller', $9, $10, $11, $12, $13,
-   'mutationDispatch', $14, $15, 'ready', 0, $16, $17, false, 1, false, $16)
+   $14, $15, $16, $17, 0, $18, $19, false, 1, false, $20)
 ON CONFLICT DO NOTHING
 RETURNING run_id::text AS "runId"`,
-			parameterCount: 17,
+			parameterCount: 20,
 			result: result("INSERT", range(0, 1), range(0, 1), [
 				{ key: "runId", codec: "text", nullable: false },
+			]),
+		},
+		{
+			identity: "mutation.job.acceptance.claim",
+			text: `INSERT INTO questpie_internal.durable_dispatches
+  (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot,
+   record_id, resource_kind, resource_identity, input_digest, payload_bytes, transaction_id, recorded_at, state)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+   pg_catalog.pg_current_xact_id(), $13, 'pending')
+ON CONFLICT DO NOTHING
+RETURNING record_id::text AS "dispatchId"`,
+			parameterCount: 13,
+			result: result("INSERT", range(0, 1), range(0, 1), [
+				{ key: "dispatchId", codec: "text", nullable: false },
+			]),
+		},
+		{
+			identity: "mutation.job.acceptance.read",
+			text: `SELECT input_digest AS "requestDigest"
+FROM questpie_internal.durable_dispatches
+WHERE application_name = $1 AND record_id = $2`,
+			parameterCount: 2,
+			result: result("SELECT", range(1), range(1), [
+				{ key: "requestDigest", codec: "text", nullable: false },
 			]),
 		},
 		{

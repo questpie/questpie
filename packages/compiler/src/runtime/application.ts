@@ -7,6 +7,11 @@ import type {
 	PackageInventory,
 } from "../types";
 import { bundleApplicationEntry } from "./application-bundle";
+import { renderDurableWorkerOwner } from "./application-durable";
+import {
+	renderDirectJobAcceptance,
+	renderDirectJobOperations,
+} from "./application-jobs";
 import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
@@ -260,6 +265,7 @@ function applicationEntry(
 				}`,
 		})),
 	);
+	const directJobs = renderDirectJobOperations(input.resources);
 	const networkActionCases = actions
 		.filter((resource) => resource.contract.exposure === "network")
 		.map((resource) => {
@@ -445,7 +451,9 @@ export async function createApplication(input) {
 	const runtimeModule = await import("questpie:runtime-core");
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
-		createDurableReactionWorker,
+		createDurableWorker,
+		createJobAcceptance,
+		createPostgresJobAcceptanceTransaction,
 		${postgresRuntimeTemplates.renderPostgresRuntimeImports()},
 		createRuntimeApplication,
 		createRuntimeActionExecutor,
@@ -483,6 +491,7 @@ export async function createApplication(input) {
 	let runtime;
 	let routeExecutor;
 	let createDirectActions;
+	let createDirectJobs;
 	const resolveApplicationPrincipal = async (request) => {
 		${
 			credentialResolverDefinition
@@ -629,6 +638,7 @@ export async function createApplication(input) {
 			});
 			return ${directActions};
 		};
+		${renderDirectJobAcceptance({ application: `application:${input.configuration.application.name}`, contextDefinition, directJobOperations: directJobs })}
 		routeExecutor = createRuntimeRouteExecutor({
 			runtime,
 			bindings: [${routeBindings}],
@@ -642,6 +652,7 @@ export async function createApplication(input) {
 					queries: ${directQueries},
 					mutations: ${directMutations},
 					actions: createDirectActions(actionScope, operations),
+					jobs: createDirectJobs(facts, root.context),
 				}))),
 			}),
 		});
@@ -653,72 +664,7 @@ export async function createApplication(input) {
 			closePostgres: (deadlineAt) => postgresRuntime.close({ deadlineAt }),
 		});
 	}
-	const reactionBindings = new Map(slotBindings
-		.filter((binding) => binding.kind === "reaction")
-		.map((binding) => [binding.identity, binding]));
-	const durableApplication = ${JSON.stringify(`application:${input.configuration.application.name}`)};
-	const durableKernel = createPostgresDatabaseDurableKernel({
-		database,
-		application: durableApplication,
-		reactions: mutationArtifacts.reactions,
-	});
-	const durableLedger = createPostgresDatabaseDurableEffectLedger({ database, application: durableApplication });
-	const durableMaintenance = createPostgresDatabaseDurablePrincipalMaintenance({
-		database,
-		application: durableApplication,
-		authorize: input.maintenance.authorize,
-	});
-	const durableExecute = ({ reaction, input: reactionInput, contextInput, principal, signal, run, attempt, errors }) => {
-		const binding = reactionBindings.get(reaction.identity);
-		if (!binding) throw new TypeError("Reaction executable is unavailable");
-		return runtime.execution(
-			{ principal: durablePrincipal(principal), context: contextInput, signal },
-			({ execution: { actionScope: _actionScope, ...execution }, ...operations }) => binding.execute({
-				input: reactionInput,
-				ctx: Object.freeze({
-					...execution,
-					data: Object.freeze({
-						run: (definition, operationInput) => {
-							const queryDigest = structuralQueryDigests.get(definition);
-							const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
-							if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
-							return executePostgresDatabaseQuery({
-								linkedPlan,
-								binding: {
-									templateDigest: linkedPlan.plan.templateDigest,
-									values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
-								},
-								executionFacts: {
-									authority: execution.authority,
-									principal: { id: execution.principal.id, kind: execution.principal.kind },
-									tenant: { id: execution.tenant.id },
-								},
-								database,
-								signal: execution.signal,
-							});
-						},
-					}),
-					queries: ${directQueries},
-					mutations: ${directMutations},
-					run,
-					attempt,
-				}),
-				errors,
-			}),
-		);
-	};
-	const durableWorkers = new Set();
-	const createWorker = (options) => {
-		const worker = createDurableReactionWorker({
-			...options,
-			kernel: durableKernel,
-			ledger: durableLedger,
-			reactions: mutationArtifacts.reactions,
-			execute: durableExecute,
-		});
-		durableWorkers.add(worker);
-		return worker;
-	};
+	${renderDurableWorkerOwner({ application: `application:${input.configuration.application.name}`, directQueries, directMutations })}
 	let defaultWorker;
 	const durable = Object.freeze({
 		worker: createWorker,
@@ -746,6 +692,7 @@ export async function createApplication(input) {
 			queries: ${directQueries},
 			mutations: ${directMutations},
 			actions: createDirectActions(actionScope, operations),
+			jobs: createDirectJobs(execution, root.context),
 		}))),
 		durable,
 		routes: Object.freeze({${directRouteEntries}}),

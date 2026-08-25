@@ -129,6 +129,56 @@ The payload repeats `companyId` so the stored caller Context is independently
 decodable and can be checked against the intended company. It is not Policy
 evidence. Current Membership still decides access on every Physical Attempt.
 
+## Accept an ordinary Job
+
+Use a Job when the application asks for durable work directly. A Job is not a
+Reaction with a different name: it has an authored idempotency key and may be
+accepted without a preceding Mutation fact.
+
+Inside a Mutation, call the generated Job member. Every call joins the same
+PostgreSQL transaction as the business writes and Mutation receipt:
+
+```ts title="src/features/request-company-digest.ts"
+const primary = await ctx.jobs["reports.companyDigest"].accept(
+	{ companyId: ctx.tenant.id },
+	{ idempotencyKey: `company-digest:${ctx.tenant.id}:primary` },
+);
+
+await ctx.jobs["reports.companyDigest"].accept(
+	{ companyId: ctx.tenant.id },
+	{
+		idempotencyKey: `company-digest:${ctx.tenant.id}:delayed`,
+		notBefore: new Date(ctx.operationTime.getTime() + 60_000),
+	},
+);
+```
+
+One Mutation may accept up to 100 independently keyed Jobs. Rollback removes
+all of them. `notBefore` is an absolute `Date`; there is no relative-delay
+option whose meaning could change on replay.
+
+A server Execution uses the same generated member outside a Mutation:
+
+```ts
+const receipt = await app.execution(executionInput, ({ jobs }) =>
+	jobs.reports.companyDigest.accept(
+		{ companyId: executionInput.context.companyId },
+		{ idempotencyKey: "customer-request:018f5f6e" },
+	),
+);
+```
+
+Both forms return `{ runId, resource }`, where `resource` retains the literal
+Job identity. Reusing the same scoped key with the same canonical input,
+`notBefore`, Context input, and run-as material returns that receipt. Changing
+any of those request values fails with `JOB_ACCEPTANCE_CONFLICT`.
+
+The browser client has no `jobs` member. Expose a Policy-protected Mutation when
+a browser must request the work. Job handlers also cannot accept another Job,
+open a database handle, or mutate a lease. Direct acceptance costs one separate
+read-committed transaction; Mutation-owned acceptance is the form to use when
+the Job and business rows must commit or roll back together.
+
 ## Know which identity stays stable
 
 | Identity              | Meaning                                       |
@@ -226,13 +276,19 @@ it needs. Readiness fails when those bytes are missing or incompatible. Drain
 stops new claims, then lets current claims finish or their leases expire. A
 deployment cannot silently replace code that a pending run still references.
 
+Protocol v7 is a non-rolling cutover from v6. Stop every v6 Runtime before
+running `questpie migration apply --allow-non-rolling-protocol-v7`. Without that
+explicit acknowledgement, the migration refuses to write. Compatible v7
+Runtime builds may still roll normally after the cutover.
+
 Durable events are append-only. They contain safe correlation identities and
 error codes, not credentials, raw payloads, secrets, or stack traces.
 
-Reaction is the committed-fact projection of the shared durable kernel. Use a
-Job for explicitly requested or checkpointed durable work; generic browser
-worker controls remain absent. ADR-0026 removes the separate Workflow Resource
-and assigns its closed checkpoints, timers, and signals to Job.
+Reaction is the committed-fact projection of the shared durable kernel. Job is
+the explicitly accepted projection. Generic browser worker controls remain
+absent. Cron, checkpoints, timers, and signals are separate Job slices; this
+ordinary Job boundary does not add them. ADR-0026 removes the separate Workflow
+Resource and assigns that future closed orchestration surface to Job.
 
 QUESTPIE authors only ordinary B-tree Indexes for durable state. It emits no
 row-level security. Policy remains the authorization model.

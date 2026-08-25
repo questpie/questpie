@@ -19,6 +19,7 @@ export {
 } from "./relational";
 export {
 	createPostgresDatabaseMutationInvoker,
+	createPostgresJobAcceptanceTransaction,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
 	linkJobProjection,

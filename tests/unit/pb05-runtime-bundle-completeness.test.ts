@@ -128,6 +128,8 @@ function mutationStatements() {
 		"mutation.dispatch.insert",
 		"mutation.dispatch.kernel.mark",
 		"mutation.dispatch.run.insert",
+		"mutation.job.acceptance.claim",
+		"mutation.job.acceptance.read",
 		"mutation.receipt.claim",
 		"mutation.receipt.commit",
 		"mutation.receipt.read",

@@ -24,7 +24,7 @@ import {
 import { createPostgresDatabaseCollectionMutationData } from "./collection";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
-import { createPostgresMutationJobAcceptanceTransaction } from "./postgres-job-acceptance";
+import { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 import type {
 	LinkedPostgresMutationTransactionStatement,
@@ -255,23 +255,19 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								dispatchSlot,
 							}),
 						);
-					const jobTransaction = createPostgresMutationJobAcceptanceTransaction(
-						{
-							transaction,
-							statements,
-							application: input.application,
-							operation: operation.binding.identity,
-							callId,
-							principal: facts.principal,
-						},
-					);
+					const jobTransaction = createPostgresJobAcceptanceTransaction({
+						transaction,
+						statements: input.transactionStatements,
+						application: input.application,
+						sourceOperation: operation.binding.identity,
+						callId,
+					});
 					const jobAcceptance = createJobAcceptance({
 						application: input.application,
 						tenantId: facts.tenant.id,
 						principal: facts.principal,
-						contextInputBytes: canonicalMutationBytes(
-							encodeRuntimeCodec(input.contextInputCodec, facts.contextInput),
-						),
+						contextInput: facts.contextInput,
+						contextInputCodec: input.contextInputCodec,
 						runtimeBuildDigest: input.runtimeBuildDigest,
 						acceptedAt: owner.operationTime,
 						causation: Object.freeze({

@@ -60,7 +60,7 @@ function acceptance(
 	transaction: JobAcceptanceTransaction,
 	overrides: Readonly<{
 		acceptedAt?: Date;
-		contextInputBytes?: Uint8Array;
+		contextInput?: Readonly<{ companyId: string }>;
 		principalId?: string;
 	}> = {},
 ) {
@@ -68,9 +68,11 @@ function acceptance(
 		application: "application:collaboration",
 		tenantId,
 		principal: principal.user({ id: overrides.principalId ?? principalId }),
-		contextInputBytes:
-			overrides.contextInputBytes ??
-			new TextEncoder().encode('{"companyId":"tenant"}\n'),
+		contextInput: overrides.contextInput ?? { companyId: "tenant" },
+		contextInputCodec: {
+			kind: "object",
+			properties: { companyId: { kind: "text" } },
+		},
 		runtimeBuildDigest: "d".repeat(64),
 		acceptedAt: overrides.acceptedAt ?? acceptedAt,
 		causation: Object.freeze({
@@ -137,7 +139,7 @@ test("conflicts when one scoped Job identity changes input, notBefore, Context, 
 		const next =
 			changed === "context"
 				? acceptance(store.transaction, {
-						contextInputBytes: new TextEncoder().encode("{}\n"),
+						contextInput: { companyId: "changed" },
 					})
 				: acceptance(store.transaction);
 		const changedJob =
@@ -173,7 +175,8 @@ test("preserves explicit causation and distinct accepted and delayed timestamps"
 		application: "application:collaboration",
 		tenantId,
 		principal: principal.user({ id: principalId }),
-		contextInputBytes: new TextEncoder().encode("{}\n"),
+		contextInput: {},
+		contextInputCodec: { kind: "object", properties: {} },
 		runtimeBuildDigest: "d".repeat(64),
 		acceptedAt,
 		causation: Object.freeze({

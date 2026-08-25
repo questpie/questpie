@@ -6,7 +6,7 @@ import {
 } from "./action";
 import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
-import { renderJobDeclarations, renderJobDispatch } from "./job";
+import { renderJobDeclarations } from "./job";
 import {
 	renderGeneratedMutationData,
 	renderMutationDeclarations,
@@ -364,9 +364,7 @@ export interface MutationContext extends Omit<RootExecution, "services"> {
 	readonly dispatch: Readonly<{
 		${renderReactionDispatch(resources)}
 	}>;
-	readonly jobs: Readonly<{
-		${renderJobDispatch(resources)}
-	}>;
+	readonly jobs: Readonly<GeneratedJobAcceptances>;
 }
 
 type ApplicationContextDefinition = ${contextDefinition};
@@ -455,7 +453,7 @@ export type RouteContext<Path extends \`/\${string}\` = \`/\${string}\`> = Reado
 	deadline: number;
 	execution<Result>(
 		input: ExecutionInput,
-		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations }>) => Result | Promise<Result>,
+		use: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations; jobs: GeneratedJobAcceptances }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 }>;
 
@@ -526,7 +524,7 @@ export interface GeneratedApp {
 	fetch(request: Request): Promise<Response>;
 	execution<Result>(
 		input: ExecutionInput,
-		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations }>) => Result | Promise<Result>,
+		callback: (execution: RootExecution & Readonly<{ queries: GeneratedQueryOperations; mutations: GeneratedMutationOperations; actions: GeneratedActionOperations; jobs: GeneratedJobAcceptances }>) => Result | Promise<Result>,
 	): Promise<Awaited<Result>>;
 	readonly durable: GeneratedDurable;
 	readonly routes: Readonly<{

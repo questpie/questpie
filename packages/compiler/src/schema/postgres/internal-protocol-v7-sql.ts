@@ -39,4 +39,10 @@ ALTER TABLE questpie_internal.durable_runs
 ALTER TABLE questpie_internal.durable_runs
   ADD CONSTRAINT durable_run_semantic_version_positive
   CHECK (semantic_version > 0);
+
+ALTER TABLE questpie_internal.durable_runs
+  DROP CONSTRAINT durable_run_causation_kind_known;
+ALTER TABLE questpie_internal.durable_runs
+  ADD CONSTRAINT durable_run_causation_kind_known
+  CHECK (causation_kind IN ('explicit', 'mutationDispatch'));
 `;
