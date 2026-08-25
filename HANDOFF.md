@@ -252,15 +252,16 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
 
-The ordinary Job vertical is integrated through `a55dabf4`. `quality:full` and
-`quality:release` pass with architecture and format ratchets, lint, all
-workspace typechecks and tests, package/release dry-run, strict Knip,
-workspace/docs build, skill validation, all 19 owned performance manifests and
-`git diff --check`. The complete registered PostgreSQL 17 lane passes. Its
-local PostgreSQL/Firefox collaboration tracer passes 147 assertions and proves
-direct, immediate, delayed, multi-Mutation and cancelled Job acceptance;
-idempotent replay and conflicts; Job and legacy Reaction execution; heartbeat,
-settlement and hard-restart recovery; and `explicit` versus
+The ordinary Job vertical and its adversarial review repairs are integrated
+through `ce01f0e32`. `quality:release` passes with architecture and format
+ratchets, lint, all workspace typechecks and tests, package/release dry-run,
+strict Knip, workspace/docs build, skill validation, all 19 owned performance
+manifests and `git diff --check`. The complete registered PostgreSQL 17 lane
+passes. Its local PostgreSQL/Firefox collaboration tracer passes 169 assertions
+and proves direct, immediate, delayed, multi-Mutation and cancelled Job
+acceptance; idempotent replay and conflicts; Job and legacy Reaction execution;
+heartbeat, settlement, hard-restart recovery, fresh attempt authority,
+current run-as refusal and stale-worker fencing; and `explicit` versus
 `mutationDispatch` causation.
 
 The unchanged product tracer also passed on both selected managed targets with
@@ -280,9 +281,12 @@ Job control was added. The release artifact checksum is
 the declaration checksum remains
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
-The final independent Standards and Spec review of the complete Job diff is the
-remaining closure gate at this snapshot. Any blocker takes priority over
-recording the vertical as accepted.
+Independent final Standards and Spec reviews of `2b1db967..ce01f0e32` both
+PASS with no remaining findings. Their blockers were repaired and re-reviewed:
+protocol-v7 admission now treats only SQLSTATE `42P01` as a fresh install;
+Reaction Context uses an explicit capability whitelist; and the 100-command
+acceptance bound reserves before persistence, including under 101 concurrent
+calls.
 
 The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
 `quality:full` and `quality:release` pass, including 577 local tests, strict
