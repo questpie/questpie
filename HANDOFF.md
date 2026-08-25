@@ -49,9 +49,9 @@ two risk tiers.
 
 External release evidence remains honest:
 
-- managed PostgreSQL conformance remains WITHHELD until the final one-Pool
-  Runtime passes the existing product tracer on the selected CNPG and Supabase
-  targets; credentials stay outside the repository;
+- the final one-Pool Runtime passes the existing product tracer directly on the
+  selected CNPG and Supabase targets; the manual disposable targets and their
+  cleanup are recorded below, while credentials stay outside the repository;
 - transaction-pool compatibility is not claimed;
 - the tagged stable-runner gate, version tag, and npm publication require the
   release environment and human authority.
@@ -89,8 +89,13 @@ PB-01 through PB-04 are selected and implemented internally:
 - database-mode immediate LISTEN/NOTIFY wake exists while the Change Ledger and
   periodic reconciliation remain correctness authority.
 
-PB-05 is active. Generated production still constructs one Bun `SQL` pool, so
-the one-Pool ownership flip is not complete. Completed prerequisites include:
+PB-05 is complete through `a4b1afbe`. Generated production constructs one
+`createRuntimePostgres` owner with one bounded `pg` Pool and one direct listener
+Client. Query, Context, Mutation, Durable and realtime all use its injected
+database transaction seam. Production Runtime has no Bun SQL import,
+construction, injected SQL facade, or Bun compatibility barrel.
+
+The closure retains these prerequisites:
 
 - static Query and Context plans/linkers;
 - execution-scoped Context cancellation factory;
@@ -104,7 +109,7 @@ the one-Pool ownership flip is not complete. Completed prerequisites include:
 - race-safe settlement when PostgreSQL terminates an idle transaction before a
   second statement or before COMMIT.
 
-Remaining PB-05 work, in order:
+PB-05 integration history:
 
 1. **Completed through `fcec08d3`:** fixed set-based whole-schema catalog
    statements, pure column/constraint/index reducers, exactly five fixed
@@ -120,10 +125,9 @@ Remaining PB-05 work, in order:
    realtime invalidation apply, and maintenance/reconciliation/retention owner
    paths are measured through production owners at `62605756`. Results remain
    provisional internal evidence and define no public ceiling.
-4. **Completed at `66b047c1`:** private `bundle-core` and domain barrels expose
+4. **Completed at `66b047c1`:** private `bundle-core` and domain barrels exposed
    the database-mode Mutation, Durable kernel/effect-ledger, and trusted-
-   Principal maintenance facades over one injected transaction runner. Legacy
-   Bun-compatible facades remain unchanged.
+   Principal maintenance facades over one injected transaction runner.
 5. **Completed through `db5125f3`:** the
    compiler-owned database-mode sibling composes one Runtime-branded
    repeatable-read/read-only transaction and the exact 16 prerequisite,
@@ -133,11 +137,15 @@ Remaining PB-05 work, in order:
    implicit Pool or Client. Existing conservative finite statement, lock and
    idle-in-transaction controls are sufficient internal safety defaults for the
    ownership flip. They are not public ceilings or performance claims.
-6. Perform one atomic generated `createRuntimePostgres` ownership flip. In the
-   same boundary remove generated Bun SQL construction and all production Bun
-   compatibility paths; never add a temporary second Pool.
-7. Re-run browser, saturation, cancellation, listener, rotation, shutdown,
-   Mutation, Durable, and startup PostgreSQL evidence.
+6. **Completed through `6bd91955`, `19f3dd10`, and `a4b1afbe`:** the atomic
+   generated ownership flip, root-cancellation repair, and removal of replaced
+   production Bun SQL paths. The compiler ownership tracer pins one generated
+   `createRuntimePostgres` call and the product tracer reads operational facts
+   before and after close.
+7. **Completed at `a4b1afbe`:** browser, saturation, cancellation, listener,
+   rotation, shutdown, Mutation, Durable, startup and packed-package PostgreSQL
+   verification. Historical compatibility/evidence tests whose only owner was
+   a removed Bun facade or backend observer were removed with that facade.
 
 Compiler migration and Seed application keep their separately pinned direct
 session until their own `pg` migration. Do not wrap arbitrary SQL in branded
@@ -204,10 +212,10 @@ Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
-Ordinary Job is blocked by the PB-05 one-Pool flip and protocol v7 schema
-generalization. Do not encode Job as a Reaction intent. Cron and checkpoints
-follow only after direct, Mutation-owned, and delayed ordinary Job acceptance
-passes through the shared kernel.
+Ordinary Job now starts with protocol v7 schema generalization and the first
+Mutation-owned tracer. Do not encode Job as a Reaction intent. Cron and
+checkpoints follow only after direct, Mutation-owned, and delayed ordinary Job
+acceptance passes through the shared kernel.
 
 OpenAPI/MCP projections and authoring/documentation DX are pulled after these
 working verticals. Studio remains outside the beta.1/beta.2 release sequence.
@@ -226,6 +234,32 @@ and package-isolation proof. Artifact tampering, internal-table access, backend
 PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
+
+The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
+`quality:full` and `quality:release` pass, including 582 local tests, strict
+Knip, package contract, build, skill validation, release dry-run and all 21
+performance manifests. The clean PostgreSQL 17 lane passes every registered
+integration file. Its collaboration walking skeleton passes 137 assertions and
+checks generated Runtime facts at ready and closed lifecycle states.
+
+The same existing collaboration product tracer passed without a repository
+provisioning harness on both selected managed targets:
+
+- dedicated CNPG PostgreSQL 18.2: manually created ordinary owner and C.UTF-8
+  logical database, existing migrations plus tracer PASS with 137 assertions in
+  38.4 seconds, then database and role removed;
+- Supabase PostgreSQL 17.6: manually created ordinary owner and C.UTF-8 logical
+  database after granting the admin membership needed for `SET ROLE`, existing
+  migrations plus tracer PASS with 137 assertions in 48.5 seconds using
+  `sslmode=no-verify` for the provider's self-signed chain, then database,
+  membership and role removed.
+
+No credential, provider receipt, provisioning code, `pg_stat_activity`
+observer, backend termination mechanism, public timeout, SLA, or
+transaction-pool compatibility claim was added. The release artifact checksum
+is `4bbfd1eeba5b32b3419df63342ed9d5963501149af9021b420435badd0902d9c`;
+the declaration checksum remains
+`18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
 At the current Action/PB-05 integration closure, `quality:full` passes in the
 canonical worktree:
@@ -421,28 +455,19 @@ was subsequently carried through generated client/server transport at
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Perform the atomic generated `createRuntimePostgres` one-Pool Product flip.
-   Start with one minimal ownership tracer: one bounded `pg` Pool, one direct
-   listener Client, one Runtime lifecycle, and no generated production Bun
-   `SQL`. Route Query, Mutation, Durable and realtime through the already
-   integrated database-mode composition, then remove the replaced production
-   Bun compatibility paths in the same boundary.
-3. Do not extend the historical PB-05 managed-evidence, provisioning, receipt,
-   `pg_stat_activity`, lock-observer or backend-termination harnesses. They are
-   not prerequisites for the ownership flip. Local Docker is optional test
-   infrastructure, not product architecture.
-4. After the final one-Pool Runtime is green locally, connect directly to the
-   selected CNPG and Supabase targets. Manually create one disposable logical
-   database and ordinary owner login where the provider permits it, run the
-   existing migrations and existing PostgreSQL/browser product tracer, record
-   the result, and remove only the created database and role. Do not build a new
-   TypeScript provisioning or evidence framework for this operation.
-5. Run affected PostgreSQL lifecycle evidence, `quality:full`, release-sensitive
-   verification and independent Standards/Spec review against the exact green
-   Product boundary. Managed measurements may inform later tuning but do not
-   derive public timeout or SLA claims.
-6. Continue directly with protocol v7 schema generalization and the first
-   ordinary Mutation-owned Job tracer. Cron and checkpoints remain later
-   slices.
-7. Commit only coherent green boundaries. Do not push, tag or publish without
+2. Run independent Standards and Spec adversarial reviews against the exact
+   `c731082e..a4b1afbe` Product boundary. Repair every blocker and repeat the
+   affected gates before moving the frontier.
+3. Continue directly with protocol v7 schema generalization and the first
+   ordinary Mutation-owned Job tracer. Start test-first with one collaboration
+   Mutation that atomically creates the Job's durable record; keep direct and
+   delayed Job execution for following slices.
+4. Reuse the accepted Durable kernel properties, but give Job its own Resource,
+   artifact and protocol identities. Do not encode Job as a Reaction intent or
+   add Cron/checkpoint semantics in the first slice.
+5. Keep the existing browser/PostgreSQL product tracer green and use larger
+   coherent Product slices. Do not reopen historical PB-05 evidence harnesses,
+   managed provisioning, backend observers, transaction-pool claims or public
+   performance ceilings.
+6. Commit only coherent green boundaries. Do not push, tag or publish without
    explicit authority.
