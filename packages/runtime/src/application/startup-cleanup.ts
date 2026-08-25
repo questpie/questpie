@@ -7,7 +7,7 @@ export async function failRuntimeApplicationStartup(
 		error: unknown;
 		abort(): void;
 		runtime: PartialRuntime | undefined;
-		closeSql(deadlineAt: number): Promise<void>;
+		closePostgres(deadlineAt: number): Promise<void>;
 	}>,
 ): Promise<never> {
 	const deadlineAt = Date.now() + 30_000;
@@ -23,7 +23,7 @@ export async function failRuntimeApplicationStartup(
 			// The startup failure remains primary.
 		}
 	try {
-		await input.closeSql(deadlineAt);
+		await input.closePostgres(deadlineAt);
 	} catch {
 		// The startup failure remains primary.
 	}

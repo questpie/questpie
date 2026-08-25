@@ -593,33 +593,26 @@ function queryObservation(
 	});
 }
 
-export async function executePostgresQuery(
-	input: Readonly<{
-		binding: DataQueryBindingV1;
-		executionFacts: QueryExecutionFacts;
-		maximumPageSize?: number;
-		signal?: AbortSignal;
-		observer?: PostgresQueryObserver;
-	}> &
-		(
-			| Readonly<{
-					plan: PostgresQueryPlanV1;
-					sql: SQL;
-					linkedPlan?: never;
-					database?: never;
-			  }>
-			| Readonly<{
-					linkedPlan: LinkedPostgresQueryPlan;
-					database: PostgresTransactionRunner;
-					plan?: never;
-					sql?: never;
-			  }>
-		),
+type PostgresQueryExecutionInput = Readonly<{
+	binding: DataQueryBindingV1;
+	executionFacts: QueryExecutionFacts;
+	maximumPageSize?: number;
+	signal?: AbortSignal;
+	observer?: PostgresQueryObserver;
+}>;
+
+async function executePostgresQueryWithRows(
+	input: PostgresQueryExecutionInput &
+		Readonly<{
+			plan: PostgresQueryPlanV1;
+			read(
+				parameters: readonly PostgresParameter[],
+				signal?: AbortSignal,
+			): Promise<readonly PostgresQueryRow[]>;
+		}>,
 ): Promise<DataQueryPage> {
 	input.signal?.throwIfAborted();
-	const plan = input.linkedPlan?.plan ?? input.plan;
-	if (plan === undefined)
-		throw new TypeError("missing compiled PostgreSQL Query plan");
+	const plan = input.plan;
 	const maximumPageSize = input.maximumPageSize ?? 100;
 	if (!Number.isSafeInteger(maximumPageSize) || maximumPageSize < 1)
 		throw new TypeError("maximumPageSize must be a positive integer");
@@ -661,18 +654,7 @@ export async function executePostgresQuery(
 			input.executionFacts,
 			boundary,
 		);
-		const rows = input.linkedPlan
-			? await executeLinkedPostgresQueryPlan(
-					input.database,
-					input.linkedPlan,
-					parameters,
-					input.signal,
-				)
-			: await executePostgresStatement(input.sql, {
-					statement: plan.sql,
-					parameters,
-					signal: input.signal,
-				});
+		const rows = await input.read(parameters, input.signal);
 		input.signal?.throwIfAborted();
 		const first = values.get(plan.page.first.parameter);
 		if (typeof first !== "number")
@@ -702,5 +684,60 @@ export async function executePostgresQuery(
 			),
 		);
 		return page;
+	});
+}
+
+export function executePostgresQuery(
+	input: PostgresQueryExecutionInput &
+		(
+			| Readonly<{
+					plan: PostgresQueryPlanV1;
+					sql: SQL;
+					linkedPlan?: never;
+					database?: never;
+			  }>
+			| Readonly<{
+					linkedPlan: LinkedPostgresQueryPlan;
+					database: PostgresTransactionRunner;
+					plan?: never;
+					sql?: never;
+			  }>
+		),
+): Promise<DataQueryPage> {
+	if (input.linkedPlan)
+		return executePostgresDatabaseQuery({
+			...input,
+			linkedPlan: input.linkedPlan,
+			database: input.database,
+		});
+	return executePostgresQueryWithRows({
+		...input,
+		plan: input.plan,
+		read: (parameters, signal) =>
+			executePostgresStatement(input.sql, {
+				statement: input.plan.sql,
+				parameters,
+				signal,
+			}),
+	});
+}
+
+export function executePostgresDatabaseQuery(
+	input: PostgresQueryExecutionInput &
+		Readonly<{
+			linkedPlan: LinkedPostgresQueryPlan;
+			database: PostgresTransactionRunner;
+		}>,
+): Promise<DataQueryPage> {
+	return executePostgresQueryWithRows({
+		...input,
+		plan: input.linkedPlan.plan,
+		read: (parameters, signal) =>
+			executeLinkedPostgresQueryPlan(
+				input.database,
+				input.linkedPlan,
+				parameters,
+				signal,
+			),
 	});
 }

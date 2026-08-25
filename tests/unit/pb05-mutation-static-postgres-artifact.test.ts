@@ -74,7 +74,7 @@ test("Runtime Build binds the compiled fixed Mutation statement artifact", async
 		application.indexOf(
 			"generated Mutation transaction statements do not match Runtime Build",
 		),
-	).toBeLessThan(application.indexOf("new SQL"));
+	).toBeLessThan(application.indexOf("createRuntimePostgres({"));
 	expect(application).toContain("linkPostgresMutationTransactionStatements({");
 
 	const { decodeRuntimeArtifacts } =

@@ -9,7 +9,7 @@ import { compileApplication } from "@questpie/compiler";
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const repositoryRoot = resolve(import.meta.dir, "../..");
 
-test("relocated generated application links Mutation and private Live Query programs", async () => {
+test("relocated generated application owns one PostgreSQL Runtime without Bun SQL", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-beta06-wiring-"));
 	try {
 		await cp(fixtureRoot, temporary, {
@@ -62,13 +62,30 @@ test("relocated generated application links Mutation and private Live Query prog
 		expect(bundle).toContain("linkCollectionMutationPrograms");
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
 		expect(bundle).toContain("linkReactionProjection");
-		expect(linkedApplication).toContain("createPostgresCollectionMutationData");
+		expect(linkedApplication).toContain(
+			"createPostgresDatabaseCollectionMutationData",
+		);
 		expect(bundle).toContain("createPostgresLiveQueryCoordinator");
 		expect(bundle).toContain("linkLiveQueryProgram");
 		expect(bundle).toContain("input.realtime.hmacKey");
-		expect(bundle.indexOf("hmacKey.byteLength")).toBeLessThan(
-			bundle.indexOf("new SQL"),
+		expect(bundle).not.toContain("new SQL");
+		expect(linkedApplication).not.toContain('from"bun"');
+		expect(linkedApplication).toContain("createRuntimePostgres");
+		expect(linkedApplication).toContain(
+			"createLinkedPostgresContextBootstrapFactory",
 		);
+		expect(linkedApplication).toContain("executePostgresDatabaseQuery");
+		expect(linkedApplication).toContain(
+			"createPostgresDatabaseMutationInvoker",
+		);
+		expect(linkedApplication).toContain("createPostgresDatabaseDurableKernel");
+		expect(linkedApplication).toContain(
+			"createPostgresDatabaseDurableEffectLedger",
+		);
+		expect(linkedApplication).toContain(
+			"createPostgresDatabaseDurablePrincipalMaintenance",
+		);
+		expect(bundle).toContain("postgresRuntime.close");
 		for (const path of [
 			"query-watchability.json",
 			"live-query-dependency-algebra.json",
@@ -89,6 +106,15 @@ test("relocated generated application links Mutation and private Live Query prog
 		])
 			expect(bundle).toContain(`artifactFiles["${path}"]`);
 		expect(linkedApplication).not.toContain("createPostgresMutationData");
+		for (const replaced of [
+			"createPostgresContextBootstrap",
+			"executePostgresQuery",
+			"createPostgresMutationInvoker",
+			"createPostgresDurableEffectLedger",
+			"createPostgresDurableKernel",
+			"createPostgresDurableMaintenance",
+		])
+			expect(bundle).not.toContain(replaced);
 		expect(linkedApplication).not.toContain("@questpie/runtime");
 
 		const internalApplication = await import(

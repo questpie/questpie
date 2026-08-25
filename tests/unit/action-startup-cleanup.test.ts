@@ -21,7 +21,7 @@ test("closes one partially ready Runtime and preserves its startup failure", asy
 					return Promise.reject(cleanupFailure);
 				},
 			},
-			closeSql: () => {
+			closePostgres: () => {
 				calls.push("sql.close");
 				return Promise.reject(cleanupFailure);
 			},

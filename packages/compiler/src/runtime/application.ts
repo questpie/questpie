@@ -7,6 +7,10 @@ import type {
 	PackageInventory,
 } from "../types";
 import { bundleApplicationEntry } from "./application-bundle";
+import {
+	renderPostgresRuntimeImports,
+	renderPostgresRuntimeOwnership,
+} from "./postgres-runtime-ownership";
 
 type RuntimeExecutableSlot = Readonly<{
 	identity: string;
@@ -307,6 +311,26 @@ function applicationEntry(
 				`[structuralQuery${index}, ${JSON.stringify(String(query.digest))}]`,
 		)
 		.join(",\n");
+	const collectionDefinitions = input.resources
+		.filter((resource) => resource.kind === "collection")
+		.sort((left, right) => compareAscii(left.identity, right.identity))
+		.map((resource, index) => {
+			imports.push(
+				`import { ${resource.origin.exportName} as collectionDefinition${index} } from ${JSON.stringify(
+					sourceModule(
+						{
+							path: resource.origin.logicalPath,
+							exportName: resource.origin.exportName,
+							packageId: resource.origin.packageId,
+						},
+						input.configuration,
+						input.inventories,
+					),
+				)};`,
+			);
+			return `collectionDefinition${index}`;
+		})
+		.join(", ");
 	const emptyCollectionArtifacts = JSON.stringify({
 		programs: {
 			format: "questpie.collection-operation-programs",
@@ -336,10 +360,9 @@ function applicationEntry(
 		version: 1,
 		reactions: [],
 	});
-	return `import { SQL } from "bun";
-import { principal } from "questpie";
+	return `import { principal } from "questpie";
 import { bindIngressPrincipal } from "questpie:runtime-ingress";
-import { verifyPostgresRuntimeReadiness } from "questpie:runtime-readiness";
+import { verifyPostgresDatabaseRuntimeReadiness } from "questpie:runtime-readiness";
 ${imports.join("\n")}
 ${structuralImports.join("\n")}
 
@@ -414,7 +437,6 @@ function linkLiveQueryArtifacts(runtimeModule, artifactFiles) {
 		limits: JSON.parse(artifactFiles["live-query-limits.json"]),
 	});
 }
-
 export const bindIngressPrincipalForRequest = bindIngressPrincipal;
 
 export async function createApplication(input) {
@@ -428,16 +450,11 @@ export async function createApplication(input) {
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
 		createDurableReactionWorker,
-		createPostgresContextBootstrap,
-		createPostgresDurableEffectLedger,
-		createPostgresDurableKernel,
-		createPostgresDurableMaintenance,
-		createPostgresMutationInvoker,
+		${renderPostgresRuntimeImports()},
 		createRuntimeApplication,
 		createRuntimeActionExecutor,
 		createRuntimeRouteExecutor,
 		durablePrincipal,
-		executePostgresQuery,
 		failRuntimeApplicationStartup,
 		linkPostgresContextBootstrapPlans,
 		linkPostgresMutationTransactionStatements,
@@ -451,13 +468,19 @@ export async function createApplication(input) {
 		throw new TypeError("generated Mutation transaction statements do not match Runtime Build");
 	if (loaded.artifacts.runtimeBuild.postgresCollectionOperationPlansDigest !== expectedCollectionOperationPlansDigest)
 		throw new TypeError("generated Collection operation plans do not match Runtime Build");
-	const sql = new SQL(input.postgres.connectionUrl);
+	${renderPostgresRuntimeOwnership()}
 	const postgresController = new AbortController();
 	const committedMigrations = JSON.parse(loaded.artifactFiles["committed-migrations.json"]);
 	let queryPlans;
-	const bootstrapFactory = createPostgresContextBootstrap({
-		sql,
-		schema: schemaProjection,
+	const contextBootstrapPlans = linkPostgresContextBootstrapPlans({
+		artifact: loaded.artifactFiles["postgres-context-bootstrap-plans.json"],
+		schemaProjection,
+		expectedDigest: expectedContextBootstrapPlansDigest,
+	});
+	const bootstrapFactory = createLinkedPostgresContextBootstrapFactory({
+		database,
+		plans: contextBootstrapPlans,
+		collections: [${collectionDefinitions}],
 	});
 	let liveQueryCoordinator;
 	let mutationArtifacts;
@@ -481,7 +504,7 @@ export async function createApplication(input) {
 			input.realtime
 				? `realtimeModule.createPostgresLiveQueryCoordinator({
 		program: linkLiveQueryArtifacts(realtimeModule, loaded.artifactFiles),
-		sql,
+		postgres: postgresRuntime,
 		hmacKey: input.realtime.hmacKey,
 		applicationName: ${JSON.stringify(input.configuration.application.name)},
 		deploymentDigest: loaded.artifacts.runtimeBuild.digest,
@@ -511,11 +534,6 @@ export async function createApplication(input) {
 					artifact: loaded.artifactFiles["postgres-mutation-transaction-statements.json"],
 					expectedDigest: expectedMutationTransactionStatementsDigest,
 				});
-				linkPostgresContextBootstrapPlans({
-					artifact: loaded.artifactFiles["postgres-context-bootstrap-plans.json"],
-					schemaProjection,
-					expectedDigest: expectedContextBootstrapPlansDigest,
-				});
 				mutationArtifacts = Object.freeze({
 					...linkMutationArtifacts(runtimeModule, loaded.artifactFiles),
 					transactionStatements: mutationTransactionStatements,
@@ -525,8 +543,12 @@ export async function createApplication(input) {
 					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryDigests);
 				else if (structuralQueryDigests.size !== 0)
 					throw new TypeError("PostgreSQL Query plans are unavailable");
-				return verifyPostgresRuntimeReadiness({
-					sql,
+				return verifyPostgresDatabaseRuntimeReadiness({
+					database,
+					runtime: {
+						definePostgresStatement,
+						verifyReadinessPrerequisites: verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
+					},
 					schema: schemaProjection,
 					committedMigrations,
 					expected: artifacts.runtimeBuild,
@@ -538,8 +560,8 @@ export async function createApplication(input) {
 						const queryDigest = structuralQueryDigests.get(definition);
 						const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
 						if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
-						return executePostgresQuery({
-							plan,
+					return executePostgresDatabaseQuery({
+							linkedPlan: queryPlans.get(queryDigest),
 							binding: {
 								templateDigest: plan.templateDigest,
 								values: plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
@@ -549,7 +571,7 @@ export async function createApplication(input) {
 								principal: { id: facts.principal.id, kind: facts.principal.kind },
 								tenant: { id: facts.tenant.id },
 							},
-							sql,
+							database,
 							signal: facts.signal,
 							observer: facts.liveQueryObservation ?? undefined,
 						});
@@ -560,9 +582,10 @@ export async function createApplication(input) {
 			projectMutation: ({ facts }) => {
 				if (!mutationArtifacts)
 					throw new TypeError("Mutation artifacts are not linked");
-				return createPostgresMutationInvoker({
-					sql,
+				return createPostgresDatabaseMutationInvoker({
+					database,
 					application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
+					transactionStatements: mutationArtifacts.transactionStatements,
 					facts,
 					collectionPlans: mutationArtifacts.collectionPlans,
 					reactions: mutationArtifacts.reactions,
@@ -630,23 +653,21 @@ export async function createApplication(input) {
 			error,
 			runtime,
 			abort: () => postgresController.abort(new DOMException("Runtime startup failed", "AbortError")),
-			closeSql: (deadlineAt) => sql.close({
-				timeout: Math.max(0, Math.floor((deadlineAt - Date.now()) / 1_000)),
-			}),
+			closePostgres: (deadlineAt) => postgresRuntime.close({ deadlineAt }),
 		});
 	}
 	const reactionBindings = new Map(slotBindings
 		.filter((binding) => binding.kind === "reaction")
 		.map((binding) => [binding.identity, binding]));
 	const durableApplication = ${JSON.stringify(`application:${input.configuration.application.name}`)};
-	const durableKernel = createPostgresDurableKernel({
-		sql,
+	const durableKernel = createPostgresDatabaseDurableKernel({
+		database,
 		application: durableApplication,
 		reactions: mutationArtifacts.reactions,
 	});
-	const durableLedger = createPostgresDurableEffectLedger({ sql, application: durableApplication });
-	const durableMaintenance = createPostgresDurableMaintenance({
-		sql,
+	const durableLedger = createPostgresDatabaseDurableEffectLedger({ database, application: durableApplication });
+	const durableMaintenance = createPostgresDatabaseDurablePrincipalMaintenance({
+		database,
 		application: durableApplication,
 		authorize: input.maintenance.authorize,
 	});
@@ -664,8 +685,8 @@ export async function createApplication(input) {
 							const queryDigest = structuralQueryDigests.get(definition);
 							const plan = queryDigest && queryPlans?.get(queryDigest)?.plan;
 							if (!plan) throw new TypeError("Structural Query is not in the Runtime Build");
-							return executePostgresQuery({
-								plan,
+							return executePostgresDatabaseQuery({
+								linkedPlan: queryPlans.get(queryDigest),
 								binding: {
 									templateDigest: plan.templateDigest,
 									values: plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
@@ -675,7 +696,7 @@ export async function createApplication(input) {
 									principal: { id: execution.principal.id, kind: execution.principal.kind },
 									tenant: { id: execution.tenant.id },
 								},
-								sql,
+								database,
 								signal: execution.signal,
 							});
 						},
@@ -736,9 +757,7 @@ export async function createApplication(input) {
 				for (const worker of durableWorkers) worker.beginDrain();
 				closePromise = runtime.close({ deadlineAt }).finally(() => {
 					postgresController.abort(new DOMException("Runtime closed", "AbortError"));
-					return sql.close({
-						timeout: Math.max(0, Math.floor((deadlineAt - Date.now()) / 1_000)),
-					});
+				return postgresRuntime.close({ deadlineAt });
 				});
 			}
 			return closePromise;

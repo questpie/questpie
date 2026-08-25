@@ -11,15 +11,13 @@ export {
 } from "./operation";
 export {
 	createLinkedPostgresContextBootstrapFactory,
-	createPostgresContextBootstrap,
 	executeLinkedPostgresContextBootstrap,
 	executeLinkedPostgresQueryPlan,
-	executePostgresQuery,
+	executePostgresDatabaseQuery,
 	linkPostgresContextBootstrapPlans,
 	linkPostgresQueryPlans,
 } from "./relational";
 export {
-	createPostgresMutationInvoker,
 	createPostgresDatabaseMutationInvoker,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
@@ -28,9 +26,6 @@ export {
 export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-transaction-statements";
 export {
 	createDurableReactionWorker,
-	createPostgresDurableEffectLedger,
-	createPostgresDurableKernel,
-	createPostgresDurableMaintenance,
 	createPostgresDatabaseDurableEffectLedger,
 	createPostgresDatabaseDurableKernel,
 	createPostgresDatabaseDurablePrincipalMaintenance,

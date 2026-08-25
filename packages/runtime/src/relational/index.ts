@@ -6,7 +6,11 @@ export type {
 	UsedExecutionFacts,
 } from "./cursor";
 
-export { DataQueryExecutionError, executePostgresQuery } from "./query";
+export {
+	DataQueryExecutionError,
+	executePostgresDatabaseQuery,
+	executePostgresQuery,
+} from "./query";
 export { decodeRelationalScalar, decodeRelationalScalarCodec } from "./scalar";
 export { createPostgresContextBootstrap } from "./bootstrap";
 export {
