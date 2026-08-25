@@ -1,20 +1,12 @@
 {
-	"id": "beta04-query-binding",
+	"id": "beta04-query-runtime",
 	"kind": "micro",
 	"schedule": "selected-pr",
-	"command": ["bun", "test", "tests/performance/beta04-query-binding.test.ts"],
+	"command": ["bun", "test", "tests/performance/beta04-query-runtime.test.ts"],
 	"budgetOwner": "BETA-04",
 	"metrics": {
-		"compileAndLowerMs": {
-			"direction": "max",
-			"budget": 5000,
-			"unit": "ms"
-		},
-		"bindDecode100Ms": {
-			"direction": "max",
-			"budget": 120,
-			"unit": "ms"
-		},
+		"compileAndLowerMs": { "direction": "max", "budget": 5000, "unit": "ms" },
+		"bindDecode100Ms": { "direction": "max", "budget": 100, "unit": "ms" },
 		"publicDeclarationBytes": {
 			"direction": "max",
 			"budget": 125000,

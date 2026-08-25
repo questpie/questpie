@@ -25,9 +25,7 @@
 		"unit/beta06-declared-operation-errors.test.ts",
 		"unit/beta06-operation-set-projection.test.ts",
 		"unit/beta06-operation-wire-v2.test.ts",
-		"unit/beta06-postcommit-mutation.test.ts",
 		"unit/beta06-reaction-contract.test.ts",
-		"unit/beta06-runtime-mutation-transaction.test.ts",
 		"unit/beta07-live-query-projection.test.ts"
 	]
 }

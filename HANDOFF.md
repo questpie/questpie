@@ -236,9 +236,11 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 ## Verification snapshot
 
 The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
-`quality:full` and `quality:release` pass, including 582 local tests, strict
-Knip, package contract, build, skill validation, release dry-run and all 21
-performance manifests. The clean PostgreSQL 17 lane passes every registered
+`quality:full` and `quality:release` pass, including 580 local tests, strict
+Knip, package contract, build, skill validation, release dry-run and all 19
+owned performance manifests. Three orphaned manifests whose commands targeted
+removed compatibility files were deleted with their stale baselines. The clean
+PostgreSQL 17 lane passes every registered
 integration file. Its collaboration walking skeleton passes 137 assertions and
 checks generated Runtime facts at ready and closed lifecycle states.
 
@@ -257,7 +259,7 @@ provisioning harness on both selected managed targets:
 No credential, provider receipt, provisioning code, `pg_stat_activity`
 observer, backend termination mechanism, public timeout, SLA, or
 transaction-pool compatibility claim was added. The release artifact checksum
-is `4bbfd1eeba5b32b3419df63342ed9d5963501149af9021b420435badd0902d9c`;
+is `d650a35ded27a803973ba355f02738aef4c8d17a65b98cff22aac7ac7832386d`;
 the declaration checksum remains
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 

@@ -12,8 +12,11 @@ import {
 import {
 	linkLiveQueryProgram,
 	type ObservedLiveQueryPlanV1,
-	type PostgresWakeTickSource,
 } from "../../packages/runtime/src/live-query";
+import {
+	createRuntimePostgres,
+	type RuntimePostgres,
+} from "../../packages/runtime/src/postgres";
 import baseline from "../../quality/baselines/beta07-recompute-fanout.json";
 import scenario from "../../quality/performance/beta07-recompute-fanout.json";
 
@@ -28,6 +31,16 @@ const authorityDigest = "b".repeat(64);
 const inputDigest = "c".repeat(64);
 const watches = 2_050;
 const sql = new SQL({ max: 1 });
+
+function postgresUrl(): string {
+	const url = new URL("postgres://localhost/");
+	url.hostname = process.env.PGHOST!;
+	url.port = process.env.PGPORT ?? "5432";
+	url.username = process.env.PGUSER!;
+	url.pathname = `/${process.env.PGDATABASE!}`;
+	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
+	return url.toString();
+}
 
 const projection = projectLiveQueryCompilation({
 	resources: [],
@@ -45,17 +58,6 @@ const program = linkLiveQueryProgram({
 	captureBoundary: projection.artifacts["change-capture-boundary.json"],
 	limits: projection.artifacts["live-query-limits.json"],
 });
-
-function dormantTicks(): PostgresWakeTickSource {
-	return {
-		armInterval() {
-			return () => {};
-		},
-		armDeadline() {
-			return () => {};
-		},
-	};
-}
 
 function observedPlan(): ObservedLiveQueryPlanV1 {
 	const unsigned = {
@@ -98,6 +100,7 @@ function derivedBudget(
 let coordinator:
 	| ReturnType<typeof createPostgresLiveQueryCoordinator>
 	| undefined;
+let runtimePostgres: RuntimePostgres | undefined;
 try {
 	await sql.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE");
 	const [database] = await sql<{ name: string; major: number }[]>`
@@ -112,14 +115,30 @@ try {
 		lockTimeoutMs: 1_000,
 		statementTimeoutMs: 120_000,
 	});
+	const connectionUrl = postgresUrl();
+	runtimePostgres = createRuntimePostgres({
+		connectionUrl,
+		directConnectionUrl: connectionUrl,
+		pool: {
+			max: 4,
+			connectTimeoutMs: 5_000,
+			checkoutTimeoutMs: 5_000,
+			idleTimeoutMs: 1_000,
+			maxLifetimeSeconds: 60,
+		},
+		timeouts: {
+			statementMs: 120_000,
+			lockMs: 2_000,
+			idleInTransactionMs: 10_000,
+		},
+	});
 	coordinator = createPostgresLiveQueryCoordinator({
 		program,
-		sql,
+		postgres: runtimePostgres,
 		hmacKey: new Uint8Array(32).fill(17),
 		applicationName: application,
 		deploymentDigest,
 		wireVersion: 1,
-		tickSource: dormantTicks(),
 	});
 	await coordinator.start();
 
@@ -227,6 +246,9 @@ try {
 	);
 } finally {
 	await coordinator?.drain({ deadlineAt: Date.now() + 2_000 }).catch(() => {});
+	await runtimePostgres
+		?.close({ deadlineAt: Date.now() + 2_000 })
+		.catch(() => {});
 	await sql
 		.unsafe("DROP SCHEMA IF EXISTS questpie_internal CASCADE")
 		.catch(() => {});

@@ -8,7 +8,6 @@ import { createPostgresLiveQueryCoordinator } from "../../../packages/runtime/sr
 import {
 	reconcilePostgresChangeLedger,
 	type LinkedLiveQueryProgramV1,
-	type PostgresWakeTickSource,
 } from "../../../packages/runtime/src/live-query";
 import {
 	createPostgresLiveQueryRetention,
@@ -64,17 +63,6 @@ function postgresUrl(): string {
 	url.pathname = `/${process.env.PGDATABASE ?? "postgres"}`;
 	if (process.env.PGPASSWORD) url.password = process.env.PGPASSWORD;
 	return url.href;
-}
-
-function dormantTicks(): PostgresWakeTickSource {
-	return {
-		armInterval() {
-			return () => {};
-		},
-		armDeadline() {
-			return () => {};
-		},
-	};
 }
 
 async function ensure(sql: SQL): Promise<void> {
@@ -399,7 +387,6 @@ describe.skipIf(!database)(
 					applicationName: "collaboration",
 					deploymentDigest: binding.deploymentDigest,
 					wireVersion: binding.wireVersion,
-					tickSource: dormantTicks(),
 				});
 				try {
 					await coordinator.start();

@@ -81,6 +81,29 @@ test("reads a run and its append-only event history in read-only transactions", 
 });
 
 test("inspection decoders reject malformed and reordered results", () => {
+	expect(
+		durableRunInspect.decode({
+			command: "SELECT",
+			rowCount: 1,
+			rows: [
+				[
+					runId,
+					dispatchId,
+					"reaction:x",
+					"delayed",
+					1,
+					null,
+					false,
+					false,
+					"HANDLER_FAILED",
+					null,
+					new Date("2026-08-23T00:00:01.000Z"),
+					null,
+					3,
+				],
+			],
+		}),
+	).toMatchObject({ state: "delayed", failureCode: "HANDLER_FAILED" });
 	expect(() =>
 		durableRunInspect.decode({
 			command: "SELECT",

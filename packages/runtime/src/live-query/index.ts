@@ -20,8 +20,6 @@ export {
 	createPostgresLiveQueryRetention,
 	type RetainedLiveQueryCompleteResult,
 } from "./postgres-retention";
-export { createPostgresReconciliationWake } from "./postgres-wake";
-export type { PostgresWakeTickSource } from "./postgres-wake";
 export { linkLiveQueryProgram } from "./program";
 export type {
 	LinkedLiveQueryProgramV1,
