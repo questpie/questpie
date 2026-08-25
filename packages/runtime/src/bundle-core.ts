@@ -28,6 +28,7 @@ export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-t
 export {
 	createDurableReactionWorker,
 	createDurableWorker,
+	createJobAcceptance,
 	createPostgresDatabaseDurableEffectLedger,
 	createPostgresDatabaseDurableKernel,
 	createPostgresDatabaseDurablePrincipalMaintenance,

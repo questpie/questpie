@@ -1,5 +1,18 @@
-export { acceptDurableDispatch, durableRunIdentity } from "./acceptance";
-export type { DurableAcceptance } from "./acceptance";
+export {
+	acceptDurableDispatch,
+	createJobAcceptance,
+	durableRunIdentity,
+	JobAcceptanceConflict,
+} from "./acceptance";
+export type {
+	DurableAcceptance,
+	JobAcceptance,
+	JobAcceptanceOptions,
+	JobAcceptanceReceipt,
+	JobAcceptanceRecord,
+	JobAcceptanceTransaction,
+	JobAcceptanceTransactionOutcome,
+} from "./acceptance";
 export {
 	createDurableRunHandle,
 	DurableEffectAmbiguous,

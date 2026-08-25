@@ -1,39 +1,37 @@
 import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
 import type {
-	LinkedJobMember,
+	JobAcceptance,
+	JobAcceptanceOptions,
+	JobAcceptanceReceipt,
 	LinkedJobProjection,
 	LinkedReactionMember,
 	LinkedReactionProjection,
 } from "../durable";
 import { canonicalMutationBytes } from "./canonical";
 
-export type PendingDurableDispatch =
-	| Readonly<{
-			slot: string;
-			resourceKind: "job";
-			resource: LinkedJobMember;
-			payloadBytes: Uint8Array;
-	  }>
-	| Readonly<{
-			slot: string;
-			resourceKind: "reaction";
-			resource: LinkedReactionMember;
-			payloadBytes: Uint8Array;
-	  }>;
+export type PendingDurableDispatch = Readonly<{
+	slot: string;
+	resourceKind: "reaction";
+	resource: LinkedReactionMember;
+	payloadBytes: Uint8Array;
+}>;
 
-type JobReceipt = Readonly<{ runId: string; resource: `job:${string}` }>;
-
-/** One Mutation may accept one transaction-joined durable command or fact. */
+/** Reactions retain one legacy fact slot; Jobs use independently keyed acceptance. */
 export function createDurableDispatch(
 	reactions: LinkedReactionProjection,
 	jobs: LinkedJobProjection,
-	receipt: (slot: string, resource: LinkedJobMember) => JobReceipt,
+	jobAcceptance: JobAcceptance,
 ): Readonly<{
 	dispatch: Readonly<Record<string, (payload: unknown) => Promise<void>>>;
 	jobs: Readonly<
 		Record<
 			string,
-			Readonly<{ dispatch(payload: unknown): Promise<JobReceipt> }>
+			Readonly<{
+				accept(
+					payload: unknown,
+					options: JobAcceptanceOptions,
+				): Promise<JobAcceptanceReceipt>;
+			}>
 		>
 	>;
 	pending: readonly PendingDurableDispatch[];
@@ -41,8 +39,7 @@ export function createDurableDispatch(
 	const pending: PendingDurableDispatch[] = [];
 	const accept = (
 		slot: string,
-		resourceKind: "job" | "reaction",
-		resource: LinkedJobMember | LinkedReactionMember,
+		resource: LinkedReactionMember,
 		payload: unknown,
 	) => {
 		if (pending.length >= 1)
@@ -60,35 +57,26 @@ export function createDurableDispatch(
 		if (payloadBytes.byteLength > 262_144)
 			throw new TypeError("Durable payload exceeds its byte limit");
 		pending.push(
-			resourceKind === "job"
-				? Object.freeze({
-						slot,
-						resourceKind,
-						resource: resource as LinkedJobMember,
-						payloadBytes,
-					})
-				: Object.freeze({
-						slot,
-						resourceKind,
-						resource: resource as LinkedReactionMember,
-						payloadBytes,
-					}),
+			Object.freeze({
+				slot,
+				resourceKind: "reaction" as const,
+				resource,
+				payloadBytes,
+			}),
 		);
 	};
 	const dispatch = Object.fromEntries(
 		[...reactions.members].map(([member, reaction]) => [
 			member,
-			async (payload: unknown) => accept(member, "reaction", reaction, payload),
+			async (payload: unknown) => accept(member, reaction, payload),
 		]),
 	);
 	const jobMembers = Object.fromEntries(
 		[...jobs.members].map(([member, job]) => [
 			member,
 			Object.freeze({
-				async dispatch(payload: unknown) {
-					const slot = `job:${member}`;
-					accept(slot, "job", job, payload);
-					return receipt(slot, job);
+				async accept(payload: unknown, options: JobAcceptanceOptions) {
+					return jobAcceptance.accept(job, payload, options);
 				},
 			}),
 		]),

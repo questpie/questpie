@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 import { principal } from "questpie";
 
 import {
+	linkJobProjection,
 	linkReactionProjection,
 	type LinkedReactionProjection,
 } from "../../packages/runtime/src/durable";
@@ -40,6 +41,8 @@ const fixedIdentities = [
 	"mutation.dispatch.insert",
 	"mutation.dispatch.kernel.mark",
 	"mutation.dispatch.run.insert",
+	"mutation.job.acceptance.claim",
+	"mutation.job.acceptance.read",
 	"mutation.receipt.claim",
 	"mutation.receipt.commit",
 	"mutation.receipt.read",
@@ -64,7 +67,9 @@ function fixedStatements(): LinkedPostgresMutationTransactionStatements {
 		["mutation.dispatch.accept", 2],
 		["mutation.dispatch.insert", 13],
 		["mutation.dispatch.kernel.mark", 0],
-		["mutation.dispatch.run.insert", 17],
+		["mutation.dispatch.run.insert", 20],
+		["mutation.job.acceptance.claim", 13],
+		["mutation.job.acceptance.read", 2],
 		["mutation.receipt.claim", 7],
 		["mutation.receipt.commit", 8],
 		["mutation.receipt.read", 6],
@@ -165,6 +170,18 @@ type View = Readonly<{
 	}>;
 }>;
 
+type JobView = View &
+	Readonly<{
+		jobs: Readonly<{
+			"reports.companyDigest": Readonly<{
+				accept(
+					value: unknown,
+					options: Readonly<{ idempotencyKey: string; notBefore?: Date }>,
+				): Promise<Readonly<{ runId: string; resource: string }>>;
+			}>;
+		}>;
+	}>;
+
 const operation = {
 	admission: "authenticated",
 	binding: {
@@ -213,6 +230,40 @@ const reactions = linkReactionProjection({
 			origin: {
 				path: "src/reactions.ts",
 				exportName: "notifyWidget",
+				packageId: null,
+			},
+		},
+	],
+});
+
+const jobs = linkJobProjection({
+	format: "questpie.job-projection",
+	version: 1,
+	jobs: [
+		{
+			identity: "job:reports.companyDigest",
+			semanticVersion: 1,
+			input: {
+				kind: "object",
+				properties: { widgetId: { kind: "uuid" } },
+			},
+			output: { kind: "object", properties: {} },
+			declaredErrors: {},
+			runAs: { actor: "caller", whenDenied: "fail" },
+			retry: {
+				maximumAttempts: 3,
+				initialDelayMilliseconds: 1_000,
+				backoff: "exponential",
+				maximumDelayMilliseconds: 60_000,
+				jitter: "full",
+				horizonMilliseconds: 86_400_000,
+			},
+			signals: {},
+			schedule: null,
+			contractDigest: "e".repeat(64),
+			origin: {
+				path: "src/company-digest.ts",
+				exportName: "companyDigest",
 				packageId: null,
 			},
 		},
@@ -474,8 +525,104 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 	]);
 	expect(calls[4]?.parameters).toHaveLength(13);
 	expect(calls[6]?.parameters[1]).toBe(calls[4]?.parameters[7]);
-	expect(calls[7]?.parameters).toHaveLength(17);
+	expect(calls[7]?.parameters).toHaveLength(20);
 	expect(calls[8]?.parameters[1]).toBe(calls[7]?.parameters[1]);
+});
+
+test("accepts multiple independently keyed Jobs inside one Mutation transaction", async () => {
+	const linked = fixedStatements();
+	const calls: Array<
+		Readonly<{ name: string; parameters: readonly unknown[] }>
+	> = [];
+	const database: PostgresTransactionRunner = {
+		transaction: (input) =>
+			input.use({
+				[transactionBrand]: true,
+				async execute(candidate, value) {
+					const parameters = candidate.parameters(value);
+					calls.push({ name: candidate.name, parameters });
+					if (candidate === linked.get("mutation.receipt.claim")?.statement)
+						return [{ transactionId: "905", operationTime }] as never;
+					if (
+						candidate === linked.get("mutation.dispatch.kernel.mark")?.statement
+					)
+						return [{ enabled: "on" }] as never;
+					if (
+						candidate === linked.get("mutation.job.acceptance.claim")?.statement
+					)
+						return [{ dispatchId: parameters[7] }] as never;
+					if (candidate === linked.get("mutation.dispatch.accept")?.statement)
+						return [{ dispatchId: parameters[1] }] as never;
+					if (
+						candidate === linked.get("mutation.dispatch.run.insert")?.statement
+					)
+						return [{ runId: parameters[1] }] as never;
+					return [] as never;
+				},
+			}),
+	};
+	const jobOperation = {
+		...operation,
+		binding: {
+			...operation.binding,
+			execute: async ({ ctx }: Readonly<{ ctx: JobView }>) => {
+				const first = await ctx.jobs["reports.companyDigest"].accept(
+					{ widgetId },
+					{
+						idempotencyKey: "morning",
+						notBefore: new Date("2026-08-22T01:00:00.000Z"),
+					},
+				);
+				const replay = await ctx.jobs["reports.companyDigest"].accept(
+					{ widgetId },
+					{
+						idempotencyKey: "morning",
+						notBefore: new Date("2026-08-22T01:00:00.000Z"),
+					},
+				);
+				const second = await ctx.jobs["reports.companyDigest"].accept(
+					{ widgetId },
+					{ idempotencyKey: "evening" },
+				);
+				expect(replay).toEqual(first);
+				expect(second).not.toEqual(first);
+				return { id: widgetId };
+			},
+		},
+	} as unknown as PreparedOperation<JobView>;
+	const invoke = createPostgresDatabaseMutationInvoker<JobView>({
+		database,
+		application: "application:generic",
+		transactionStatements: linked,
+		collectionPlans,
+		reactions: emptyReactions,
+		jobs,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+
+	await expect(invoke(jobOperation, "database-jobs-call")).resolves.toEqual({
+		committed: true,
+		value: { id: widgetId },
+	});
+	expect(
+		calls.filter(({ name }) => name === "mutation.job.acceptance.claim"),
+	).toHaveLength(2);
+	expect(
+		calls.filter(({ name }) => name === "mutation.dispatch.run.insert"),
+	).toHaveLength(2);
+	const runCalls = calls.filter(
+		({ name }) => name === "mutation.dispatch.run.insert",
+	);
+	expect(runCalls[0]?.parameters[13]).toBe("mutationDispatch");
+	expect(runCalls[0]?.parameters[16]).toBe("delayed");
+	expect(runCalls[0]?.parameters[17]).toEqual(
+		new Date("2026-08-22T01:00:00.000Z"),
+	);
+	expect(runCalls[0]?.parameters[19]).toEqual(operationTime);
+	expect(runCalls[1]?.parameters[16]).toBe("ready");
+	expect(calls.at(-1)?.name).toBe("mutation.receipt.commit");
 });
 
 test("wraps only a caller-resolvable commit outcome after learning the xid", async () => {

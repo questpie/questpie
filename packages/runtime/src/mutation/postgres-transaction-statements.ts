@@ -53,11 +53,25 @@ const statementContracts: Readonly<Record<string, StatementContract>> =
 			columns: [{ key: "enabled", codec: "text", nullable: false }],
 		},
 		"mutation.dispatch.run.insert": {
-			parameterCount: 17,
+			parameterCount: 20,
 			command: "INSERT",
 			affectedRows: [0, 1],
 			returnedRows: [0, 1],
 			columns: [{ key: "runId", codec: "text", nullable: false }],
+		},
+		"mutation.job.acceptance.claim": {
+			parameterCount: 13,
+			command: "INSERT",
+			affectedRows: [0, 1],
+			returnedRows: [0, 1],
+			columns: [{ key: "dispatchId", codec: "text", nullable: false }],
+		},
+		"mutation.job.acceptance.read": {
+			parameterCount: 2,
+			command: "SELECT",
+			affectedRows: [1, 1],
+			returnedRows: [1, 1],
+			columns: [{ key: "requestDigest", codec: "text", nullable: false }],
 		},
 		"mutation.receipt.claim": {
 			parameterCount: 7,

@@ -1,7 +1,7 @@
 import type { RuntimeCodec } from "../codec";
 import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
 import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
-import { durableRunIdentity } from "../durable/acceptance";
+import { createJobAcceptance, durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
 import type { ExecutionFacts } from "../execution";
 import {
@@ -24,6 +24,7 @@ import {
 import { createPostgresDatabaseCollectionMutationData } from "./collection";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
+import { createPostgresMutationJobAcceptanceTransaction } from "./postgres-job-acceptance";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 import type {
 	LinkedPostgresMutationTransactionStatement,
@@ -36,6 +37,8 @@ const fixedIdentities = [
 	"mutation.dispatch.insert",
 	"mutation.dispatch.kernel.mark",
 	"mutation.dispatch.run.insert",
+	"mutation.job.acceptance.claim",
+	"mutation.job.acceptance.read",
 	"mutation.receipt.claim",
 	"mutation.receipt.commit",
 	"mutation.receipt.read",
@@ -252,14 +255,36 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								dispatchSlot,
 							}),
 						);
+					const jobTransaction = createPostgresMutationJobAcceptanceTransaction(
+						{
+							transaction,
+							statements,
+							application: input.application,
+							operation: operation.binding.identity,
+							callId,
+							principal: facts.principal,
+						},
+					);
+					const jobAcceptance = createJobAcceptance({
+						application: input.application,
+						tenantId: facts.tenant.id,
+						principal: facts.principal,
+						contextInputBytes: canonicalMutationBytes(
+							encodeRuntimeCodec(input.contextInputCodec, facts.contextInput),
+						),
+						runtimeBuildDigest: input.runtimeBuildDigest,
+						acceptedAt: owner.operationTime,
+						causation: Object.freeze({
+							kind: "mutationDispatch" as const,
+							id: callId,
+							correlationId: callId,
+						}),
+						transaction: jobTransaction,
+					});
 					const durableDispatch = createDurableDispatch(
 						input.reactions,
 						input.jobs ?? emptyJobs,
-						(slot, job) =>
-							Object.freeze({
-								runId: durableRunIdentity(recordIdForSlot(slot)),
-								resource: job.identity as `job:${string}`,
-							}),
+						jobAcceptance,
 					);
 					const ctx = Object.freeze({
 						principal: facts.principal,
@@ -342,9 +367,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								runId,
 								recordId,
 								dispatch.resource.identity,
-								dispatch.resourceKind === "job"
-									? dispatch.resource.semanticVersion
-									: 1,
+								1,
 								facts.tenant.id,
 								facts.principal.kind,
 								facts.principal.id,
@@ -358,13 +381,16 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								retryBytes(dispatch.resource.retry),
 								input.runtimeBuildDigest,
 								dispatch.resource.contractDigest,
+								"mutationDispatch",
 								callId,
 								callId,
+								"ready",
 								owner.operationTime,
 								new Date(
 									owner.operationTime.getTime() +
 										dispatch.resource.retry.horizonMilliseconds,
 								),
+								owner.operationTime,
 							],
 						);
 						if (inserted.length !== 1 || inserted[0]!.runId !== runId)
