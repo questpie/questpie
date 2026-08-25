@@ -38,7 +38,7 @@ Start every task with `git status --short`, then use the repo-owned
 BETA-01 through BETA-12 are implemented and accepted as the beta.1 core. The
 checked package runs the collaboration and archive tracers on PostgreSQL 17.
 The core includes deterministic compilation, migrations and immutable Seeds,
-Context and Policy, Query, idempotent Mutation and transactional dispatch,
+Context and Policy, Query, idempotent Mutation and transactional acceptance,
 durable Change Ledger Live Query, Reaction execution, fenced maintenance,
 multi-instance recovery, portability, and release/package verification.
 
@@ -62,9 +62,9 @@ The first browser skeleton is established at
 `tests/integration/postgres/collaboration-walking-skeleton.test.ts`:
 
 ```text
-compile -> migrate -> seed -> generated direct Action -> start -> browser Query
-        -> Mutation -> Live Query -> committed Reaction
-        -> hard restart -> reconnect -> recovered Reaction
+compile -> migrate -> seed -> generated direct Action -> start -> direct Job
+        -> browser Query -> Mutation with two Jobs -> Job/Reaction worker
+        -> Live Query -> hard restart -> reconnect -> recovered Reaction
 ```
 
 It uses a real generated client, isolated headless Firefox, disposable
@@ -212,20 +212,27 @@ Never hide Effect Identity in domain input, alias Mutation
 `callId`, echo raw `effectKey` from framework failures, or add automatic Action
 retry.
 
-The first ordinary Job boundary is integrated at `eaadd4ea`. Protocol v7
-generalizes the physical dispatch ledger without encoding Job as a Reaction,
+The ordinary Job vertical is integrated through `a55dabf4`. Protocol v7
+generalizes the physical acceptance ledger without encoding Job as a Reaction,
 stores a positive semantic version on every Durable Run, and preserves existing
-Reaction rows as version 1. The compiler emits one exact Job Definition,
-executable binding and server-only projection. A generated Mutation accepts one
-Job atomically through `ctx.jobs.<name>.dispatch(...)`, returns a stable run
-receipt, and shares the existing Mutation receipt, Durable Run, event, retry and
-lifecycle kernel. The generated browser client exposes no generic Job control.
+Reaction rows as version 1. Upgrading an existing installation to v7 is an
+explicit safe non-rolling cutover; `questpie migrate apply` refuses it unless
+the operator supplies `--accept-non-rolling-internal-protocol-v7-cutover`.
 
-The next Product frontier is direct ordinary Job acceptance, followed by
-delayed acceptance. Do not add worker execution, Cron, checkpoints, signals, a
-second Queue/runtime, or generic browser controls to the direct-acceptance
-slice. Cron and checkpoints follow only after direct, Mutation-owned, and
-delayed ordinary Job acceptance pass through the shared kernel.
+The compiler emits exact Job Definitions and executable bindings, a server-only
+`accept` capability, and no `dispatch` alias or browser Job capability. Both
+`app.execution.jobs.<name>.accept(...)` and
+`ctx.jobs.<name>.accept(...)` use the same deep transactional owner. One
+Mutation may accept several independently keyed Jobs, including absolute
+`notBefore` work. Replaying an identical idempotency identity returns the same
+receipt; changing canonical input, `notBefore`, or run-as conflicts.
+
+Generated Runtime startup admits Job-only and mixed Job/Reaction artifacts into
+one durable worker. Jobs and legacy Reactions share claim, heartbeat, retry,
+cancellation, stale-worker fencing, settlement and restart recovery. Each
+attempt creates fresh Execution, Context and Policy state before invoking its
+handler. Cron, Collection triggers, checkpoint redesign, workflow orchestration
+and generic browser Job control remain outside this boundary.
 
 OpenAPI/MCP projections and authoring/documentation DX are pulled after these
 working verticals. Studio remains outside the beta.1/beta.2 release sequence.
@@ -245,14 +252,16 @@ PID/lock probes, and statement fault injection remain repository-only tools.
 
 ## Verification snapshot
 
-The protocol-v7 and first Mutation-owned Job boundary is integrated at
-`eaadd4ea`. `quality:release` passes with architecture and format ratchets,
-lint, all workspace typechecks, 578 local tests, package/release dry-run, strict
-Knip, workspace/docs build, skill validation, all 19 owned performance
-manifests, and `git diff --check`. The complete registered PostgreSQL 17 lane
-passes; the final local PostgreSQL/Firefox collaboration tracer passes 140
-assertions and proves one idempotent Mutation call creates exactly one Job
-dispatch, accepted event and ready Durable Run with semantic version 1.
+The ordinary Job vertical is integrated through `a55dabf4`. `quality:full` and
+`quality:release` pass with architecture and format ratchets, lint, all
+workspace typechecks and tests, package/release dry-run, strict Knip,
+workspace/docs build, skill validation, all 19 owned performance manifests and
+`git diff --check`. The complete registered PostgreSQL 17 lane passes. Its
+local PostgreSQL/Firefox collaboration tracer passes 147 assertions and proves
+direct, immediate, delayed, multi-Mutation and cancelled Job acceptance;
+idempotent replay and conflicts; Job and legacy Reaction execution; heartbeat,
+settlement and hard-restart recovery; and `explicit` versus
+`mutationDispatch` causation.
 
 The unchanged product tracer also passed on both selected managed targets with
 manual disposable provisioning and cleanup only:
@@ -265,17 +274,15 @@ manual disposable provisioning and cleanup only:
 
 No credential, provider receipt, provisioning/evidence harness,
 `pg_stat_activity` observer, `pg_signal_backend` mechanism, transaction-pool
-claim, worker execution, Cron, checkpoint, signal, or browser Job control was
-added. The release artifact checksum is
-`9f85e703575d04dbf3eb08d5cd1a8adb2f6c1f00d907cc9b8470682fba32267a`;
+claim, Cron, Collection trigger, checkpoint, workflow orchestration or browser
+Job control was added. The release artifact checksum is
+`9819564c64035397b601378a4a98336ad40a8726bb7ecf9a17ea3cd88979e5ca`;
 the declaration checksum remains
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
-The required independent Standards and Spec review commands were both invoked
-with `claude-fable-5`, but the external reviewer returned no verdict because
-its account spend limit was reached. Do not record that as PASS. Retry the two
-read-only reviews with `opus-5` before treating the adversarial-review gate as
-closed; any blocker takes priority over direct Job acceptance.
+The final independent Standards and Spec review of the complete Job diff is the
+remaining closure gate at this snapshot. Any blocker takes priority over
+recording the vertical as accepted.
 
 The one-Pool PB-05 Product boundary is integrated through `a4b1afbe`.
 `quality:full` and `quality:release` pass, including 577 local tests, strict
@@ -496,19 +503,9 @@ was subsequently carried through generated client/server transport at
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Run independent Standards and Spec adversarial reviews against the exact
-   `c731082e..a4b1afbe` Product boundary. Repair every blocker and repeat the
-   affected gates before moving the frontier.
-3. Continue directly with protocol v7 schema generalization and the first
-   ordinary Mutation-owned Job tracer. Start test-first with one collaboration
-   Mutation that atomically creates the Job's durable record; keep direct and
-   delayed Job execution for following slices.
-4. Reuse the accepted Durable kernel properties, but give Job its own Resource,
-   artifact and protocol identities. Do not encode Job as a Reaction intent or
-   add Cron/checkpoint semantics in the first slice.
-5. Keep the existing browser/PostgreSQL product tracer green and use larger
-   coherent Product slices. Do not reopen historical PB-05 evidence harnesses,
-   managed provisioning, backend observers, transaction-pool claims or public
-   performance ceilings.
-6. Commit only coherent green boundaries. Do not push, tag or publish without
-   explicit authority.
+2. Treat the ordinary Job vertical through `a55dabf4` as closed only after the
+   final independent Standards and Spec reviews recorded above pass.
+3. Do not reopen this boundary by adding Cron, Collection triggers,
+   checkpoints, generic browser control or workflow orchestration without new
+   product authority.
+4. Do not push, tag or publish without explicit authority.
