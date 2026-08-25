@@ -63,6 +63,7 @@ export const collaborationContext = defineContext({
 		return {
 			tenant: context.tenant({ id: membership.companyId }),
 			values: {
+				contextResolutionId: crypto.randomUUID(),
 				selectedMembershipId: membership.id,
 				selectedMembershipPrincipalId: membership.principalId,
 				selectedMembershipScope: membership.scopeKey,

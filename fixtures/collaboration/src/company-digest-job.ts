@@ -6,8 +6,19 @@ import type { GeneratedClient } from "#questpie/client";
 
 export const companyDigest = defineJob({
 	name: "reports.companyDigest",
-	input: codec.object({ companyId: codec.uuid() }),
-	output: codec.object({ companyId: codec.uuid() }),
+	input: codec.object({
+		companyId: codec.uuid(),
+		// The collaboration product tracer owns this crash barrier and its removal;
+		// it is fixture input, not a framework Job-control capability.
+		restartProbe: codec.optional(codec.text()),
+	}),
+	output: codec.object({
+		attemptNumber: codec.integer(),
+		companyId: codec.uuid(),
+		contextResolutionId: codec.uuid(),
+		invocationId: codec.uuid(),
+		role: codec.text(),
+	}),
 	runAs: durable.caller({ whenDenied: "fail" }),
 	retry: durable.retry({
 		maximumAttempts: 5,
@@ -25,7 +36,38 @@ export const companyDigest = defineJob({
 		)
 			throw new TypeError("Job context leaked an action-only capability");
 		await ctx.attempt.heartbeat();
-		return { companyId: input.companyId };
+		if (
+			input.restartProbe !== undefined &&
+			input.restartProbe !== "hardRestart" &&
+			input.restartProbe !== "staleSettlement"
+		)
+			throw new TypeError("unknown collaboration Job restart probe");
+		const invocationId = crypto.randomUUID();
+		if (input.restartProbe === "hardRestart")
+			console.log(
+				JSON.stringify({
+					event: "collaboration-job-attempt",
+					attemptNumber: ctx.attempt.number,
+					contextResolutionId: ctx.values.contextResolutionId,
+					invocationId,
+					role: ctx.values.selectedRole,
+					runId: ctx.run.id,
+				}),
+			);
+		if (ctx.attempt.number === 1 && input.restartProbe !== undefined)
+			await new Promise((resolve) =>
+				setTimeout(
+					resolve,
+					input.restartProbe === "hardRestart" ? 10_000 : 4_000,
+				),
+			);
+		return {
+			attemptNumber: ctx.attempt.number,
+			companyId: input.companyId,
+			contextResolutionId: ctx.values.contextResolutionId,
+			invocationId,
+			role: ctx.values.selectedRole,
+		};
 	},
 });
 

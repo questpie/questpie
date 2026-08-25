@@ -85,9 +85,34 @@ const server = Bun.serve({
 });
 
 let stopping = false;
+// The collaboration product tracer owns these bounded lease controls so its
+// crash/reclaim oracle does not depend on production defaults or wall-clock luck.
+function workerInteger(name: string): number | undefined {
+	const raw = process.env[name];
+	if (raw === undefined) return undefined;
+	const value = Number(raw);
+	if (!Number.isSafeInteger(value) || value <= 0)
+		throw new TypeError(`${name} must be a positive integer`);
+	return value;
+}
+const leaseMilliseconds = workerInteger(
+	"QUESTPIE_TRACER_WORKER_LEASE_MILLISECONDS",
+);
+const heartbeatMilliseconds = workerInteger(
+	"QUESTPIE_TRACER_WORKER_HEARTBEAT_MILLISECONDS",
+);
+const attemptDeadlineMilliseconds = workerInteger(
+	"QUESTPIE_TRACER_WORKER_ATTEMPT_DEADLINE_MILLISECONDS",
+);
 const worker = application.durable.worker({
 	workerId: `collaboration-tracer:${process.pid}`,
+	...(leaseMilliseconds === undefined ? {} : { leaseMilliseconds }),
+	...(heartbeatMilliseconds === undefined ? {} : { heartbeatMilliseconds }),
+	...(attemptDeadlineMilliseconds === undefined
+		? {}
+		: { attemptDeadlineMilliseconds }),
 });
+console.log(JSON.stringify({ event: "ready", port: server.port, root }));
 const workerLoop =
 	process.env.QUESTPIE_TRACER_PAUSE_WORKER === "1"
 		? Promise.resolve()
@@ -109,4 +134,3 @@ async function close(): Promise<void> {
 }
 process.once("SIGINT", () => void close());
 process.once("SIGTERM", () => void close());
-console.log(JSON.stringify({ event: "ready", port: server.port, root }));

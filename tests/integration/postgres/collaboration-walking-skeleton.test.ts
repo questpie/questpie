@@ -55,14 +55,40 @@ async function stop(child: Child, signal: NodeJS.Signals): Promise<void> {
 async function startHost(
 	root: string,
 	port: number,
-	pauseWorker: boolean,
+	options: Readonly<{
+		pauseWorker?: boolean;
+		leaseMilliseconds?: number;
+		heartbeatMilliseconds?: number;
+		attemptDeadlineMilliseconds?: number;
+	}> = {},
 ): Promise<Readonly<{ child: Child; port: number }>> {
 	const child = Bun.spawn(["bun", "tracer/host.ts", `--port=${port}`], {
 		cwd: root,
 		env: {
 			...process.env,
 			DATABASE_URL: postgresUrl(),
-			...(pauseWorker ? { QUESTPIE_TRACER_PAUSE_WORKER: "1" } : {}),
+			...(options.pauseWorker ? { QUESTPIE_TRACER_PAUSE_WORKER: "1" } : {}),
+			...(options.leaseMilliseconds === undefined
+				? {}
+				: {
+						QUESTPIE_TRACER_WORKER_LEASE_MILLISECONDS: String(
+							options.leaseMilliseconds,
+						),
+					}),
+			...(options.heartbeatMilliseconds === undefined
+				? {}
+				: {
+						QUESTPIE_TRACER_WORKER_HEARTBEAT_MILLISECONDS: String(
+							options.heartbeatMilliseconds,
+						),
+					}),
+			...(options.attemptDeadlineMilliseconds === undefined
+				? {}
+				: {
+						QUESTPIE_TRACER_WORKER_ATTEMPT_DEADLINE_MILLISECONDS: String(
+							options.attemptDeadlineMilliseconds,
+						),
+					}),
 		},
 		stdin: "ignore",
 		stdout: "pipe",
@@ -78,6 +104,30 @@ async function startHost(
 		throw new TypeError("collaboration tracer readiness port is invalid");
 	return Object.freeze({ child, port: Number(ready.port) });
 }
+
+type JobAttemptProbe = Readonly<{
+	attemptNumber: number;
+	contextResolutionId: string;
+	invocationId: string;
+	role: string;
+	runId: string;
+}>;
+
+type GeneratedDurableWorkerTrace = Readonly<{
+	workerId: string;
+	claimed: number;
+	outcomes: readonly Readonly<{
+		attemptNumber: number;
+		failureCode: string | null;
+		outcome: string;
+		runId: string;
+	}>[];
+}>;
+
+type GeneratedDurableWorker = Readonly<{
+	poll(): Promise<GeneratedDurableWorkerTrace>;
+	beginDrain(): void;
+}>;
 
 type TracerReport = Readonly<{
 	phase?: unknown;
@@ -121,7 +171,10 @@ type GeneratedExecutionScope = Readonly<{
 		reports: Readonly<{
 			companyDigest: Readonly<{
 				accept(
-					input: Readonly<{ companyId: string }>,
+					input: Readonly<{
+						companyId: string;
+						restartProbe?: "hardRestart" | "staleSettlement";
+					}>,
 					options: Readonly<{
 						idempotencyKey: string;
 						notBefore?: Date;
@@ -162,7 +215,7 @@ afterAll(async () => {
 });
 
 postgresTest(
-	"runs compile, migrate, seed, Query, Mutation, browser Live Query, and Reaction recovery",
+	"runs compile, migrate, seed, Query, Mutation, browser Live Query, and durable recovery",
 	async () => {
 		const cleanup = new CleanupStack();
 		const temporary = await mkdtemp(
@@ -204,6 +257,15 @@ postgresTest(
 								): Promise<Awaited<Result>>;
 								fetch(request: Request): Promise<Response>;
 								durable: Readonly<{
+									worker(
+										options?: Readonly<{
+											workerId?: string;
+											claimBatch?: number;
+											leaseMilliseconds?: number;
+											heartbeatMilliseconds?: number;
+											attemptDeadlineMilliseconds?: number;
+										}>,
+									): GeneratedDurableWorker;
 									cancelRun(
 										input: Readonly<{
 											runId: string;
@@ -565,7 +627,7 @@ postgresTest(
 				});
 			}
 
-			const first = await startHost(temporary, 0, true);
+			const first = await startHost(temporary, 0, { pauseWorker: true });
 			cleanup.defer(() => stop(first.child, "SIGKILL"));
 			const origin = `http://127.0.0.1:${first.port}`;
 			const ordinaryDocument = await fetch(`${origin}/`);
@@ -671,7 +733,7 @@ postgresTest(
 			});
 
 			await stop(first.child, "SIGKILL");
-			const recovered = await startHost(temporary, first.port, false);
+			const recovered = await startHost(temporary, first.port);
 			cleanup.defer(() => stop(recovered.child, "SIGTERM"));
 
 			expect(
@@ -716,6 +778,7 @@ LIMIT 1`,
 				},
 			);
 			expect(terminal).toEqual({ state: "succeeded", delivered: 1 });
+			await stop(recovered.child, "SIGTERM");
 
 			const jobCallId = `job-mutation-${crypto.randomUUID()}`;
 			const jobApplication = await createApp({
@@ -742,6 +805,7 @@ LIMIT 1`,
 				companyId: string,
 				idempotencyKey: string,
 				notBefore?: Date,
+				restartProbe?: "hardRestart" | "staleSettlement",
 			) =>
 				jobApplication.execution(
 					{
@@ -750,7 +814,10 @@ LIMIT 1`,
 					},
 					({ jobs }) =>
 						jobs.reports.companyDigest.accept(
-							{ companyId },
+							{
+								companyId,
+								...(restartProbe === undefined ? {} : { restartProbe }),
+							},
 							{
 								idempotencyKey,
 								...(notBefore === undefined ? {} : { notBefore }),
@@ -761,6 +828,7 @@ LIMIT 1`,
 			let directJob: Readonly<{ runId: string; resource: string }>;
 			let delayedJob: Readonly<{ runId: string; resource: string }>;
 			let cancelledJob: Readonly<{ runId: string; resource: string }>;
+			let restartJob: Readonly<{ runId: string; resource: string }>;
 			try {
 				acceptedJob = await acceptJob();
 				expect(await acceptJob()).toEqual(acceptedJob);
@@ -789,12 +857,92 @@ LIMIT 1`,
 						actor: principal.user({ id: tracerIds.principal }),
 					}),
 				).resolves.toMatchObject({ outcome: "applied" });
+				restartJob = await acceptDirectJob(
+					tracerIds.company,
+					`restart-job-${crypto.randomUUID()}`,
+					undefined,
+					"hardRestart",
+				);
 			} finally {
 				await jobApplication.close();
 			}
 			expect(acceptedJob).toMatchObject({
 				resource: "job:reports.companyDigest",
 			});
+			const firstJobHost = await startHost(temporary, 0, {
+				leaseMilliseconds: 1_000,
+				heartbeatMilliseconds: 200,
+				attemptDeadlineMilliseconds: 30_000,
+			});
+			cleanup.defer(() => stop(firstJobHost.child, "SIGKILL"));
+			const firstRestartProbe = JSON.parse(
+				await waitForOutputLine(firstJobHost.child.stdout, {
+					accept: (line) =>
+						line.includes('"event":"collaboration-job-attempt"') &&
+						line.includes(`"runId":"${restartJob.runId}"`) &&
+						line.includes('"attemptNumber":1'),
+					description: "first ordinary Job attempt before hard restart",
+					timeoutMilliseconds: 30_000,
+				}),
+			) as JobAttemptProbe;
+			expect(firstRestartProbe).toMatchObject({
+				attemptNumber: 1,
+				role: "admin",
+				runId: restartJob.runId,
+			});
+			expect(firstRestartProbe?.contextResolutionId).toMatch(/^[0-9a-f-]{36}$/);
+			expect(firstRestartProbe?.invocationId).toMatch(/^[0-9a-f-]{36}$/);
+
+			const [preRestartClaim] = await database!.unsafe<
+				readonly Readonly<{
+					attemptId: string;
+					attemptNumber: number;
+					leaseTokenDigest: string;
+					state: string;
+					workerId: string;
+				}>[]
+			>(
+				`SELECT runs.state, attempts.attempt_id::text AS "attemptId",
+  attempts.attempt_number AS "attemptNumber", attempts.worker_id AS "workerId",
+  attempts.lease_token_digest AS "leaseTokenDigest"
+FROM questpie_internal.durable_runs runs
+JOIN questpie_internal.durable_attempts attempts
+  ON attempts.application_name = runs.application_name
+ AND attempts.attempt_id = runs.current_attempt_id
+WHERE runs.application_name = 'application:collaboration'
+  AND runs.run_id = $1`,
+				[restartJob.runId],
+			);
+			expect(preRestartClaim).toMatchObject({
+				attemptNumber: 1,
+				state: "running",
+				workerId: `collaboration-tracer:${firstJobHost.child.pid}`,
+			});
+			expect(preRestartClaim?.leaseTokenDigest).toMatch(/^[0-9a-f]{64}$/);
+
+			await database!.unsafe(
+				`UPDATE collaboration.memberships
+SET role = 'owner'
+WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'`,
+				[tracerIds.company, tracerIds.principal],
+			);
+			await stop(firstJobHost.child, "SIGKILL");
+			const recoveredJobHost = await startHost(temporary, firstJobHost.port, {
+				leaseMilliseconds: 1_000,
+				heartbeatMilliseconds: 200,
+				attemptDeadlineMilliseconds: 30_000,
+			});
+			cleanup.defer(() => stop(recoveredJobHost.child, "SIGTERM"));
+			const secondRestartProbe = JSON.parse(
+				await waitForOutputLine(recoveredJobHost.child.stdout, {
+					accept: (line) =>
+						line.includes('"event":"collaboration-job-attempt"') &&
+						line.includes(`"runId":"${restartJob.runId}"`) &&
+						line.includes('"attemptNumber":2'),
+					description: "ordinary Job attempt reclaimed after hard restart",
+					timeoutMilliseconds: 30_000,
+				}),
+			) as JobAttemptProbe;
 			const jobRecords = await database!.unsafe<
 				readonly Readonly<{
 					causationKind: string;
@@ -845,36 +993,279 @@ WHERE dispatches.call_id = $1 AND dispatches.resource_kind = 'job'`,
   (SELECT count(*)::int FROM questpie_internal.durable_run_events events
    WHERE events.application_name = runs.application_name AND events.run_id = runs.run_id) AS events
 FROM questpie_internal.durable_runs runs
-WHERE runs.run_id IN ($1, $2, $3, $4, $5)
+WHERE runs.run_id IN ($1, $2, $3, $4, $5, $6)
 ORDER BY runs.run_id`,
 						[
 							...mutationRunIds,
 							directJob.runId,
 							delayedJob.runId,
 							cancelledJob.runId,
+							restartJob.runId,
 						],
 					),
 				{
 					accept: (rows) =>
-						rows.length === 5 &&
-						rows.filter(({ state }) => state === "succeeded").length === 4 &&
+						rows.length === 6 &&
+						rows.filter(({ state }) => state === "succeeded").length === 5 &&
 						rows.filter(({ state }) => state === "cancelled").length === 1,
 					description: "ordinary Job execution, delay, and cancellation",
 					intervalMilliseconds: 50,
 					timeoutMilliseconds: 30_000,
 				},
 			);
-			expect(terminalJobs).toHaveLength(5);
+			expect(terminalJobs).toHaveLength(6);
 			expect(
 				terminalJobs.filter(
 					({ causationKind }) => causationKind === "explicit",
 				),
-			).toHaveLength(3);
+			).toHaveLength(4);
 			expect(
 				terminalJobs
 					.filter(({ state }) => state === "succeeded")
 					.every(({ events }) => events >= 3),
 			).toBe(true);
+
+			const hardRestartProbes = [firstRestartProbe, secondRestartProbe];
+			expect(
+				hardRestartProbes.map(({ attemptNumber, role, runId }) => ({
+					attemptNumber,
+					role,
+					runId,
+				})),
+			).toEqual([
+				{ attemptNumber: 1, role: "admin", runId: restartJob.runId },
+				{ attemptNumber: 2, role: "owner", runId: restartJob.runId },
+			]);
+			expect(recoveredJobHost.child.pid).not.toBe(firstJobHost.child.pid);
+			expect(hardRestartProbes[1]?.contextResolutionId).not.toBe(
+				hardRestartProbes[0]?.contextResolutionId,
+			);
+			expect(hardRestartProbes[1]?.invocationId).not.toBe(
+				hardRestartProbes[0]?.invocationId,
+			);
+
+			const recoveredAttempts = await database!.unsafe<
+				readonly Readonly<{
+					attemptId: string;
+					attemptNumber: number;
+					leaseTokenDigest: string;
+					outcome: string;
+					workerId: string;
+				}>[]
+			>(
+				`SELECT attempt_id::text AS "attemptId", attempt_number AS "attemptNumber",
+  worker_id AS "workerId", lease_token_digest AS "leaseTokenDigest", outcome
+FROM questpie_internal.durable_attempts
+WHERE application_name = 'application:collaboration' AND run_id = $1
+ORDER BY attempt_number`,
+				[restartJob.runId],
+			);
+			expect(
+				recoveredAttempts.map(
+					({ attemptId, attemptNumber, outcome, workerId }) => ({
+						attemptId,
+						attemptNumber,
+						outcome,
+						workerId,
+					}),
+				),
+			).toEqual([
+				{
+					attemptId: preRestartClaim?.attemptId,
+					attemptNumber: 1,
+					outcome: "leaseSuperseded",
+					workerId: `collaboration-tracer:${firstJobHost.child.pid}`,
+				},
+				{
+					attemptId: expect.any(String),
+					attemptNumber: 2,
+					outcome: "succeeded",
+					workerId: `collaboration-tracer:${recoveredJobHost.child.pid}`,
+				},
+			]);
+			expect(recoveredAttempts[1]?.leaseTokenDigest).not.toBe(
+				recoveredAttempts[0]?.leaseTokenDigest,
+			);
+			const [restartResult] = await database!.unsafe<
+				readonly Readonly<{
+					attemptNumber: number;
+					contextResolutionId: string;
+					invocationId: string;
+					role: string;
+				}>[]
+			>(
+				`SELECT
+  (convert_from(result_bytes, 'UTF8')::jsonb->>'attemptNumber')::int AS "attemptNumber",
+  convert_from(result_bytes, 'UTF8')::jsonb->>'contextResolutionId' AS "contextResolutionId",
+  convert_from(result_bytes, 'UTF8')::jsonb->>'invocationId' AS "invocationId",
+  convert_from(result_bytes, 'UTF8')::jsonb->>'role' AS role
+FROM questpie_internal.durable_runs
+WHERE application_name = 'application:collaboration' AND run_id = $1`,
+				[restartJob.runId],
+			);
+			expect(restartResult).toEqual({
+				attemptNumber: 2,
+				contextResolutionId: hardRestartProbes[1]?.contextResolutionId,
+				invocationId: hardRestartProbes[1]?.invocationId,
+				role: "owner",
+			});
+
+			await stop(recoveredJobHost.child, "SIGTERM");
+			const staleApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(23) },
+				maintenance: { authorize: () => true },
+			});
+			const replacementApplication = await createApp({
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(23) },
+				maintenance: { authorize: () => true },
+			});
+			try {
+				const staleRun = await staleApplication.execution(
+					{
+						principal: principal.user({ id: tracerIds.principal }),
+						context: { companyId: tracerIds.company },
+					},
+					({ jobs }) =>
+						jobs.reports.companyDigest.accept(
+							{
+								companyId: tracerIds.company,
+								restartProbe: "staleSettlement",
+							},
+							{ idempotencyKey: `stale-job-${crypto.randomUUID()}` },
+						),
+				);
+				const staleWorker = staleApplication.durable.worker({
+					workerId: "collaboration-tracer:stale",
+					claimBatch: 1,
+					leaseMilliseconds: 1_000,
+					heartbeatMilliseconds: 200,
+					attemptDeadlineMilliseconds: 1_000,
+				});
+				const stalePoll = staleWorker.poll();
+				expect(
+					await eventually(
+						async () => {
+							const [attempt] = await database!.unsafe<
+								readonly Readonly<{
+									attemptNumber: number;
+									state: string;
+									workerId: string;
+								}>[]
+							>(
+								`SELECT runs.state, attempts.attempt_number AS "attemptNumber",
+  attempts.worker_id AS "workerId"
+FROM questpie_internal.durable_runs runs
+JOIN questpie_internal.durable_attempts attempts
+  ON attempts.application_name = runs.application_name
+ AND attempts.attempt_id = runs.current_attempt_id
+WHERE runs.application_name = 'application:collaboration' AND runs.run_id = $1`,
+								[staleRun.runId],
+							);
+							return attempt ?? null;
+						},
+						{
+							accept: (attempt) =>
+								attempt?.attemptNumber === 1 &&
+								attempt.state === "running" &&
+								attempt.workerId === "collaboration-tracer:stale",
+							description: "stale Job attempt owns its first lease",
+							intervalMilliseconds: 25,
+							timeoutMilliseconds: 30_000,
+						},
+					),
+				).toEqual({
+					attemptNumber: 1,
+					state: "running",
+					workerId: "collaboration-tracer:stale",
+				});
+				const replacementWorker = replacementApplication.durable.worker({
+					workerId: "collaboration-tracer:replacement",
+					claimBatch: 1,
+					leaseMilliseconds: 1_000,
+					heartbeatMilliseconds: 200,
+					attemptDeadlineMilliseconds: 5_000,
+				});
+				const replacementTrace = await eventually(
+					() => replacementWorker.poll(),
+					{
+						accept: (trace) =>
+							trace.outcomes.some(
+								(outcome) =>
+									outcome.runId === staleRun.runId &&
+									outcome.attemptNumber === 2 &&
+									outcome.outcome === "succeeded",
+							),
+						description: "replacement worker owns stale Job run",
+						intervalMilliseconds: 50,
+						timeoutMilliseconds: 30_000,
+					},
+				);
+				expect(replacementTrace.outcomes).toContainEqual(
+					expect.objectContaining({
+						attemptNumber: 2,
+						outcome: "succeeded",
+						runId: staleRun.runId,
+					}),
+				);
+				const staleTrace = await stalePoll;
+				expect(staleTrace.outcomes).toContainEqual(
+					expect.objectContaining({
+						attemptNumber: 1,
+						failureCode: "HANDLER_FAILED",
+						outcome: "fenced",
+						runId: staleRun.runId,
+					}),
+				);
+				const staleAttempts = await database!.unsafe<
+					readonly Readonly<{
+						attemptNumber: number;
+						leaseTokenDigest: string;
+						outcome: string;
+						workerId: string;
+					}>[]
+				>(
+					`SELECT attempt_number AS "attemptNumber", worker_id AS "workerId",
+  lease_token_digest AS "leaseTokenDigest", outcome
+FROM questpie_internal.durable_attempts
+WHERE application_name = 'application:collaboration' AND run_id = $1
+ORDER BY attempt_number`,
+					[staleRun.runId],
+				);
+				expect(
+					staleAttempts.map(({ attemptNumber, outcome, workerId }) => ({
+						attemptNumber,
+						outcome,
+						workerId,
+					})),
+				).toEqual([
+					{
+						attemptNumber: 1,
+						outcome: "leaseSuperseded",
+						workerId: "collaboration-tracer:stale",
+					},
+					{
+						attemptNumber: 2,
+						outcome: "succeeded",
+						workerId: "collaboration-tracer:replacement",
+					},
+				]);
+				expect(staleAttempts[1]?.leaseTokenDigest).not.toBe(
+					staleAttempts[0]?.leaseTokenDigest,
+				);
+			} finally {
+				await Promise.all([
+					staleApplication.close(),
+					replacementApplication.close(),
+				]);
+			}
 		} finally {
 			await cleanup.dispose();
 		}
