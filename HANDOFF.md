@@ -276,7 +276,7 @@ No credential, provider receipt, provisioning/evidence harness,
 `pg_stat_activity` observer, `pg_signal_backend` mechanism, transaction-pool
 claim, Cron, Collection trigger, checkpoint, workflow orchestration or browser
 Job control was added. The release artifact checksum is
-`acbed10030145828b0c77ba7555591a8e00cdbf1b24c3e5293e54c275ea03f78`;
+`088eaf6bdf513de4944009bfd42fb3f1b3fdb6a1974a8308753fa6b032bd9304`;
 the declaration checksum remains
 `18ed5444bf1c9203b0a6263b2c54c84203b7a2227df993f3e2962ebf367e164b`.
 
