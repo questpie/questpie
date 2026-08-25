@@ -139,12 +139,12 @@ Inside a Mutation, call the generated Job member. Every call joins the same
 PostgreSQL transaction as the business writes and Mutation receipt:
 
 ```ts title="src/features/request-company-digest.ts"
-const primary = await ctx.jobs["reports.companyDigest"].accept(
+const primary = await ctx.jobs.reports.companyDigest.accept(
 	{ companyId: ctx.tenant.id },
 	{ idempotencyKey: `company-digest:${ctx.tenant.id}:primary` },
 );
 
-await ctx.jobs["reports.companyDigest"].accept(
+await ctx.jobs.reports.companyDigest.accept(
 	{ companyId: ctx.tenant.id },
 	{
 		idempotencyKey: `company-digest:${ctx.tenant.id}:delayed`,

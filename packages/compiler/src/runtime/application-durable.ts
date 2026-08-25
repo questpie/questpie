@@ -28,14 +28,14 @@ export function renderDurableWorkerOwner(
 	const durableExecute = (request) => {
 		return runtime.execution(
 			{ principal: durablePrincipal(request.principal), context: request.contextInput, signal: request.signal },
-			({ execution: { actionScope: _actionScope, ...execution }, ...operations }) => {
+			({ execution, ...operations }) => {
 				request.assertResolvedTenant(execution.tenant.id);
 				if (request.capability === "job") {
 					const binding = jobBindings.get(request.job.identity);
 					if (!binding) throw new TypeError("Job executable is unavailable");
 					return binding.execute({
 						input: request.input,
-						ctx: Object.freeze({ ...execution, run: request.run, attempt: request.attempt }),
+						ctx: createDurableJobContext(execution, request.run, request.attempt),
 						errors: request.errors,
 					});
 				}

@@ -18,6 +18,12 @@ export const companyDigest = defineJob({
 		horizon: "24h",
 	}),
 	handler: async ({ input, ctx }) => {
+		if (
+			Object.hasOwn(ctx, "services") ||
+			Object.hasOwn(ctx, "actionScope") ||
+			Object.hasOwn(ctx, "actions")
+		)
+			throw new TypeError("Job context leaked an action-only capability");
 		await ctx.attempt.heartbeat();
 		return { companyId: input.companyId };
 	},
@@ -34,12 +40,12 @@ function jobAcceptanceCapabilityContract(
 	// @ts-expect-error browser clients expose no generic Job acceptance surface
 	void client.jobs;
 	return app.execution(executionInput, async ({ jobs }) => {
-		const receipt = await jobs["reports.companyDigest"].accept(
+		const receipt = await jobs.reports.companyDigest.accept(
 			{ companyId: executionInput.context.companyId },
 			{ idempotencyKey: "direct-company-digest" },
 		);
 		// @ts-expect-error dispatch was replaced, not retained as an alias
-		void jobs["reports.companyDigest"].dispatch;
+		void jobs.reports.companyDigest.dispatch;
 		return receipt;
 	});
 }

@@ -2,8 +2,8 @@ import { expect, test } from "bun:test";
 
 import { renderAppContract } from "../../packages/compiler/src/generate";
 import {
+	renderJobAcceptances,
 	renderJobDeclarations,
-	renderJobDispatch,
 } from "../../packages/compiler/src/job";
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
 import type { NormalizedResource } from "../../packages/compiler/src/types";
@@ -44,8 +44,8 @@ function between(source: string, start: string, end: string): string {
 }
 
 test("renders the final server-only Job acceptance contract", () => {
-	expect(renderJobDispatch(resources)).toBe(
-		'"reports.companyDigest": Readonly<{ accept(input: Readonly<{ readonly "companyId": string; }>, options: JobAcceptanceOptions): Promise<JobRunReceipt<"reports.companyDigest">>; }>;',
+	expect(renderJobAcceptances(resources)).toBe(
+		'Readonly<{ readonly "reports": Readonly<{ readonly "companyDigest": Readonly<{ accept(input: Readonly<{ readonly "companyId": string; }>, options: JobAcceptanceOptions): Promise<JobRunReceipt<"reports.companyDigest">>; }>; }>; }>',
 	);
 
 	const declarations = renderJobDeclarations(resources);
@@ -80,7 +80,12 @@ test("keeps Job acceptance on the Mutation Job map and out of shared contexts", 
 		"readonly jobs: Readonly<GeneratedJobAcceptances>;",
 	);
 	expect(mutation).not.toContain("dispatch(input:");
-	expect(app).toContain('"reports.companyDigest": Readonly<{ accept(input:');
+	expect(app).toContain(
+		'export type GeneratedJobAcceptances = Readonly<{ readonly "reports": Readonly<{ readonly "companyDigest": Readonly<{ accept(input:',
+	);
+	expect(app).not.toContain(
+		'export interface GeneratedJobAcceptances {\n\t"reports.companyDigest"',
+	);
 	expect(app).toMatch(
 		/RouteContext[\s\S]*execution<Result>[\s\S]*jobs: GeneratedJobAcceptances/,
 	);

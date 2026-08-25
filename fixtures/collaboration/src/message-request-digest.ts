@@ -13,11 +13,11 @@ export const requestCompanyDigest = defineMutation({
 	policy: policy.authenticated(),
 	errors: {},
 	handler: async ({ input, ctx }) => {
-		const primary = await ctx.jobs["reports.companyDigest"].accept(
+		const primary = await ctx.jobs.reports.companyDigest.accept(
 			{ companyId: input.companyId },
 			{ idempotencyKey: `company-digest:${input.companyId}:primary` },
 		);
-		await ctx.jobs["reports.companyDigest"].accept(
+		await ctx.jobs.reports.companyDigest.accept(
 			{ companyId: input.companyId },
 			{
 				idempotencyKey: `company-digest:${input.companyId}:delayed`,

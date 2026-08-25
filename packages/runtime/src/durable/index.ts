@@ -62,6 +62,7 @@ export type {
 } from "./projection";
 export { linkJobProjection } from "./job-projection";
 export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
+export { createDurableJobContext } from "./job-context";
 export { durablePrincipal } from "./principal";
 export { markDurableKernelTransaction } from "./rows";
 export type { DurableActor, DurableQuery } from "./rows";

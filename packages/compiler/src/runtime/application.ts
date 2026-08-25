@@ -451,6 +451,7 @@ export async function createApplication(input) {
 	const runtimeModule = await import("questpie:runtime-core");
 	${input.realtime ? 'const realtimeModule = await import("questpie:runtime-realtime");' : ""}
 	const {
+		createDurableJobContext,
 		createDurableWorker,
 		createJobAcceptance,
 		createPostgresJobAcceptanceTransaction,

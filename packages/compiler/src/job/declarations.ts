@@ -1,19 +1,22 @@
 import { renderCodecType } from "../runtime/client";
+import { renderServerOperationType } from "../server-operation-map";
 import type { NormalizedResource } from "../types";
 
 function jobs(resources: readonly NormalizedResource[]) {
 	return resources.filter((resource) => resource.kind === "job");
 }
 
-export function renderJobDispatch(
+export function renderJobAcceptances(
 	resources: readonly NormalizedResource[],
 ): string {
-	return jobs(resources)
-		.map(
-			(resource) =>
-				`${JSON.stringify(resource.name)}: Readonly<{ accept(input: ${renderCodecType(resource.contract.input)}, options: JobAcceptanceOptions): Promise<JobRunReceipt<${JSON.stringify(resource.name)}>>; }>;`,
-		)
-		.join("\n\t\t");
+	return renderServerOperationType(
+		"Job",
+		jobs(resources).map((resource) => ({
+			name: resource.name,
+			origin: resource.origin,
+			value: `Readonly<{ accept(input: ${renderCodecType(resource.contract.input)}, options: JobAcceptanceOptions): Promise<JobRunReceipt<${JSON.stringify(resource.name)}>>; }>`,
+		})),
+	);
 }
 
 export function renderJobDeclarations(
@@ -25,14 +28,12 @@ export function renderJobDeclarations(
 				`${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(resource.contract.input)}; output: ${renderCodecType(resource.contract.output)}; }>;`,
 		)
 		.join("\n\t");
-	const acceptances = renderJobDispatch(resources);
+	const acceptances = renderJobAcceptances(resources);
 	return `export interface GeneratedJobs {
 \t${definitions}
 }
 
-export interface GeneratedJobAcceptances {
-\t${acceptances}
-}
+export type GeneratedJobAcceptances = ${acceptances};
 
 export interface JobAcceptanceOptions {
 \treadonly idempotencyKey: string;

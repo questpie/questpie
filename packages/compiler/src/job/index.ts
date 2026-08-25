@@ -3,7 +3,7 @@ import { CompilerDiagnosticError } from "../diagnostic";
 import { normalizeDeclaredErrors } from "../operation-errors";
 import type { NormalizedResource } from "../types";
 
-export { renderJobDeclarations, renderJobDispatch } from "./declarations";
+export { renderJobAcceptances, renderJobDeclarations } from "./declarations";
 
 type RecordValue = Readonly<Record<string, unknown>>;
 

@@ -1,7 +1,4 @@
-import type {
-	JobAcceptanceRecord,
-	JobAcceptanceTransaction,
-} from "../durable/acceptance";
+import type { JobAcceptanceRecord, JobAcceptanceTransaction } from "../durable";
 import type { PostgresTransaction } from "../postgres/contract";
 import type { LinkedPostgresMutationTransactionStatement } from "./postgres-transaction-statements";
 import type { LinkedPostgresMutationTransactionStatements } from "./postgres-transaction-statements";

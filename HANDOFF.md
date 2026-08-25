@@ -216,8 +216,8 @@ The ordinary Job vertical is integrated through `a55dabf4`. Protocol v7
 generalizes the physical acceptance ledger without encoding Job as a Reaction,
 stores a positive semantic version on every Durable Run, and preserves existing
 Reaction rows as version 1. Upgrading an existing installation to v7 is an
-explicit safe non-rolling cutover; `questpie migrate apply` refuses it unless
-the operator supplies `--accept-non-rolling-internal-protocol-v7-cutover`.
+explicit safe non-rolling cutover; `questpie migration apply` refuses it unless
+the operator supplies `--allow-non-rolling-protocol-v7`.
 
 The compiler emits exact Job Definitions and executable bindings, a server-only
 `accept` capability, and no `dispatch` alias or browser Job capability. Both
