@@ -215,19 +215,13 @@ export const addTicketComment = defineMutation({
 				kind: "public",
 			},
 		});
-		const ticket = await ctx.data.tickets.update({
-			key: { id: current.id },
-			patch: {},
-		});
-		if (ticket === null) throw errors.ticketUnavailable();
-
 		const dueAt = new Date(ctx.operationTime.getTime() + 1_500);
 		const job = await ctx.jobs.ticket.slaFollowUp.accept(
 			{
-				organizationId: ticket.organizationId,
-				ticketId: ticket.id,
-				reference: ticket.reference,
-				summary: ticket.summary,
+				organizationId: current.organizationId,
+				ticketId: current.id,
+				reference: current.reference,
+				summary: current.summary,
 				dueAt,
 			},
 			{ idempotencyKey: `comment:${comment.id}:sla-follow-up` },

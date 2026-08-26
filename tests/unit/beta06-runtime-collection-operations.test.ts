@@ -283,6 +283,32 @@ function dataFor(
 	});
 }
 
+test("rejects an empty update patch before PostgreSQL", async () => {
+	let calls = 0;
+	const data = dataFor(
+		[
+			{
+				identity: "mutation:records.update",
+				member: "update",
+				target: "collection:records",
+				operation: {
+					keyFields: [["id"]],
+					callerInputFields: [["title"]],
+				},
+			},
+		],
+		async () => {
+			calls += 1;
+			return [];
+		},
+	);
+
+	await expect(data.records.update({ key: { id }, patch: {} })).rejects.toThrow(
+		"Collection update patch must not be empty",
+	);
+	expect(calls).toBe(0);
+});
+
 test("nested get locks first, rechecks fresh Policy, and omits a guarded Field", async () => {
 	const calls: Array<readonly [string, readonly unknown[]]> = [];
 	const data = dataFor([getPlan()], async (statement, parameters = []) => {

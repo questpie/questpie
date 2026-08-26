@@ -426,6 +426,10 @@ function createCollectionMutationData(
 										patch,
 										"Collection update patch",
 									);
+									if (suppliedPaths.length === 0)
+										throw new TypeError(
+											"Collection update patch must not be empty",
+										);
 									allowedPaths(
 										suppliedPaths,
 										plan.operation.callerInputFields,
