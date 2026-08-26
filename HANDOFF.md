@@ -56,6 +56,55 @@ External release evidence remains honest:
 - the tagged stable-runner gate, version tag, and npm publication require the
   release environment and human authority.
 
+## Team Support Desk reference application
+
+The second application-facing v4 consumer is implemented at
+`fixtures/team-support-desk` through code head `5fe7983cd`. It is a
+production-like, tenant-aware support desk built only on the public v4
+interface. Organization, Membership, Team, Ticket, Comment, and Label
+Collections are split by domain locality with their Policy and Operation
+definitions. The vertical covers lifecycle/server-derived Fields, paged and
+filtered list/detail/search Queries with Relations, create/comment/edit/assign/
+close/reopen Mutations, row-lock-backed concurrent close, a signed inbound
+webhook Route, an HTTP notification Action with Runtime-owned Effect Identity,
+Mutation-owned immediate and directly accepted delayed Jobs, retry,
+cancellation, and hard-restart recovery.
+
+The browser is a minimal React 19 and ReactDOM application compiled by Bun into
+one minified bundle. All application Query, Mutation, and Action traffic uses
+`#questpie/client`; the only two manual browser `fetch` calls live in the
+explicit fixture-control module for session bootstrap and Firefox completion
+reporting. The host serves static tracer assets and delegates every framework
+request to `application.fetch`. Generated app/client modules are the direct,
+network, and browser type authority; the PostgreSQL tracer does not duplicate
+their request or response contracts.
+
+The tracer exposed and closed two narrow framework correctness defects:
+
+- generated Collection `update` authority existed in declarations but lacked a
+  PostgreSQL compiler/runtime program; it now executes one keyed row lock,
+  fresh current and candidate Policy, sparse Field authority, pure candidate
+  construction, server values, compare-and-set outcome, and authorized output;
+- inspection of a directly scheduled delayed Job incorrectly required a
+  failure code at attempt zero; the invariant now distinguishes initial delay
+  from retry delay.
+
+Local closure evidence on PostgreSQL 17 and Firefox 154 is one passing test
+with 47 assertions. It includes generated-client browser use, direct generated
+operations, the real HTTP Action receiver, signed webhook replay, delayed Job
+inspection, retry, cancellation persistence, and lease-expiry recovery after a
+hard host restart. `bun run check-types`, focused compiler/runtime/durable
+regressions, architecture, `quality:release`, and `git diff --check` pass. The
+concrete application friction and proposed deeper seams are recorded in
+`docs/v4/implementation/team-support-desk/DX-EVIDENCE.md`; no React adapter or
+new public client interface was added.
+
+The first final adversarial review found a private cross-domain Runtime import,
+duplicated create/update candidate decoding, hand-authored tracer wire types,
+and this stale handoff. The code findings are closed by `c1aa0c122` and
+`5fe7983cd`; the independent Standards and Spec rerun is the only remaining
+closure check for this handoff update.
+
 ## Runnable regression skeleton
 
 The first browser skeleton is established at
@@ -507,9 +556,13 @@ was subsequently carried through generated client/server transport at
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Treat the ordinary Job vertical through `a55dabf4` as closed only after the
-   final independent Standards and Spec reviews recorded above pass.
-3. Do not reopen this boundary by adding Cron, Collection triggers,
+2. Treat Team Support Desk through `5fe7983cd` as the current golden reference
+   consumer. Read its fixture-local `README.md` for the shortest module and
+   execution map, and keep every application browser call on the generated
+   client.
+3. Treat the reference application as closed only after the final independent
+   Standards and Spec rerun recorded above passes.
+4. Do not reopen this boundary by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-4. Do not push, tag or publish without explicit authority.
+5. Do not push, tag or publish without explicit authority.

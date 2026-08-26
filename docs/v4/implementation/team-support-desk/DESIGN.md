@@ -1,6 +1,6 @@
 # Team Support Desk application design
 
-- Status: implementation proposal
+- Status: implemented reference application
 - Date: 2026-08-26
 - Classification: Product tracer over Accepted v4 Kernels; any discovered
   declaration/runtime correctness defect is split into the smallest Kernel fix

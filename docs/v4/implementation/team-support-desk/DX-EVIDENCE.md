@@ -1,6 +1,7 @@
 # Team Support Desk QUESTPIE v4 DX evidence
 
-- Status: living evidence from one production-like application consumer
+- Status: closed reference evidence from one production-like application
+  consumer
 - Consumer: `fixtures/team-support-desk`
 - Rule: every row points to real application code or an exact blocker; this is
   not a speculative syntax backlog
