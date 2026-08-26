@@ -220,6 +220,40 @@ export async function validateStructuralSources(
 	scope: "application" | "package",
 	activePackages: ReadonlySet<string>,
 ): Promise<void> {
+	const executableSlotFactories = new Map<string, ReadonlySet<string>>([
+		["defineAction", new Set(["handler"])],
+		["defineContext", new Set(["resolve"])],
+		["defineCredentialResolver", new Set(["resolve"])],
+		["defineJob", new Set(["handler"])],
+		["defineMutation", new Set(["handler"])],
+		["defineQuery", new Set(["handler"])],
+		["defineReaction", new Set(["handler"])],
+		["defineRoute", new Set(["handler"])],
+		["defineService", new Set(["create", "dispose"])],
+	]);
+	const propertyName = (node: ts.PropertyName): string | null =>
+		ts.isIdentifier(node) || ts.isStringLiteral(node) ? node.text : null;
+	const startsExecutableSlot = (node: ts.Node): boolean => {
+		if (!ts.isFunctionLike(node)) return false;
+		const member = node.parent;
+		if (
+			(!ts.isPropertyAssignment(member) || member.initializer !== node) &&
+			!ts.isMethodDeclaration(member)
+		)
+			return false;
+		const object = member.parent;
+		const call = object.parent;
+		if (
+			!ts.isObjectLiteralExpression(object) ||
+			!ts.isCallExpression(call) ||
+			call.arguments[0] !== object ||
+			!ts.isIdentifier(call.expression)
+		)
+			return false;
+		const slots = executableSlotFactories.get(call.expression.text);
+		const name = propertyName(member.name);
+		return name !== null && slots?.has(name) === true;
+	};
 	for (const path of files) {
 		const sourceText = await readFile(path, "utf8");
 		const source = ts.createSourceFile(
@@ -237,10 +271,17 @@ export async function validateStructuralSources(
 				{ path: logicalPath(process.cwd(), path) },
 			);
 		};
-		const visit = (node: ts.Node, functionDepth = 0): void => {
+		const visit = (
+			node: ts.Node,
+			functionDepth = 0,
+			executableDepth = 0,
+		): void => {
 			const nextFunctionDepth = ts.isFunctionLike(node)
 				? functionDepth + 1
 				: functionDepth;
+			const nextExecutableDepth = startsExecutableSlot(node)
+				? executableDepth + 1
+				: executableDepth;
 			if (
 				ts.isMetaProperty(node) &&
 				node.keywordToken === ts.SyntaxKind.ImportKeyword
@@ -248,7 +289,8 @@ export async function validateStructuralSources(
 				impure("import.meta is forbidden in structural source");
 			if (
 				ts.isCallExpression(node) &&
-				node.expression.kind === ts.SyntaxKind.ImportKeyword
+				node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+				executableDepth === 0
 			)
 				impure("dynamic import is forbidden in structural source");
 			if (ts.isAwaitExpression(node) && functionDepth === 0)
@@ -296,7 +338,9 @@ export async function validateStructuralSources(
 				impure(
 					`${node.expression.text} construction is forbidden in structural source`,
 				);
-			ts.forEachChild(node, (child) => visit(child, nextFunctionDepth));
+			ts.forEachChild(node, (child) =>
+				visit(child, nextFunctionDepth, nextExecutableDepth),
+			);
 		};
 		visit(source);
 		for (const statement of source.statements) {

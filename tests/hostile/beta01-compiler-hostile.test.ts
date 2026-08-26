@@ -286,6 +286,43 @@ export const auditById = defineQuery({
 		);
 	});
 
+	test("keeps runtime-only imports inside a Service executable slot", async () => {
+		const executableRoot = await fixtureCopy("service-runtime-import");
+		await writeFile(
+			join(executableRoot, "src/runtime-service.ts"),
+			`import { defineService } from "questpie";
+export const runtimeService = defineService({
+  name: "runtime.import",
+  lifetime: "application",
+  effect: "external",
+  create: async () => {
+    const { runtimeValue } = await import("../provider");
+    return runtimeValue;
+  },
+});
+`,
+		);
+		await writeFile(
+			join(executableRoot, "provider.ts"),
+			"export const runtimeValue = globalThis.process.env.RUNTIME_VALUE ?? 'runtime';\n",
+		);
+		await compileApplication({ applicationRoot: executableRoot });
+
+		const structuralRoot = await fixtureCopy("structural-dynamic-import");
+		await writeFile(
+			join(structuralRoot, "src/impure.ts"),
+			'export const structuralImport = import("../provider");\n',
+		);
+		await writeFile(
+			join(structuralRoot, "provider.ts"),
+			"export const runtimeValue = 'runtime';\n",
+		);
+		await expectDiagnostic(
+			() => compileApplication({ applicationRoot: structuralRoot }),
+			"QP-COMPOSE-010",
+		);
+	});
+
 	test("hashes inherited TypeScript configuration", async () => {
 		const root = await fixtureCopy("tsconfig-graph");
 		const configPath = join(root, "tsconfig.json");
