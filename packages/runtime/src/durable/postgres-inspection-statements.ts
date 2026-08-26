@@ -156,13 +156,15 @@ WHERE application_name = $1 AND run_id = $2`,
 			throw new TypeError("invalid PostgreSQL Durable inspection result");
 		const terminalAt =
 			row[11] === null ? null : date(row[11], "inspection terminal time");
+		const attemptCount = integer(row[4], 0, 8, "inspection attempt count");
 		const terminal =
 			state === "cancelled" || state === "failed" || state === "succeeded";
 		const shapeIsValid =
 			(state === "running") === (currentAttemptId !== null) &&
 			terminal === (terminalAt !== null) &&
 			(state === "succeeded") === (resultBytes !== null) &&
-			(state === "failed" || state === "delayed") === (failureCode !== null) &&
+			(state === "failed" || (state === "delayed" && attemptCount > 0)) ===
+				(failureCode !== null) &&
 			(state === "failed" || row[7] === false);
 		if (!shapeIsValid)
 			throw new TypeError("invalid PostgreSQL Durable inspection result");
@@ -172,7 +174,7 @@ WHERE application_name = $1 AND run_id = $2`,
 			dispatchId: uuid(row[1], "inspection dispatch identity"),
 			resource: text(row[2], "inspection Resource Identity"),
 			state,
-			attemptCount: integer(row[4], 0, 8, "inspection attempt count"),
+			attemptCount,
 			currentAttemptId,
 			cancellationRequested: row[6],
 			deadLetter: row[7],

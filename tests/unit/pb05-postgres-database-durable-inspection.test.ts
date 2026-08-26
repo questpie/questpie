@@ -89,6 +89,29 @@ test("inspection decoders reject malformed and reordered results", () => {
 				[
 					runId,
 					dispatchId,
+					"job:ticket.slaFollowUp",
+					"delayed",
+					0,
+					null,
+					false,
+					false,
+					null,
+					null,
+					new Date("2026-08-23T00:00:01.000Z"),
+					null,
+					1,
+				],
+			],
+		}),
+	).toMatchObject({ state: "delayed", attemptCount: 0, failureCode: null });
+	expect(
+		durableRunInspect.decode({
+			command: "SELECT",
+			rowCount: 1,
+			rows: [
+				[
+					runId,
+					dispatchId,
 					"reaction:x",
 					"delayed",
 					1,
