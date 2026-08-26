@@ -13,6 +13,7 @@ import type {
 	GeneratedJobs,
 } from "../../../fixtures/team-support-desk/.questpie/generated/app";
 import {
+	supportAuthCredentials,
 	supportPersonas,
 	supportTracerIds,
 } from "../../../fixtures/team-support-desk/tracer/constants";
@@ -31,7 +32,6 @@ const postgresTest = process.env.PGHOST ? test : test.skip;
 const receiverOrigin = "http://127.0.0.1:43121";
 const integrationKey = "team-support-desk-local-integration-key-v1";
 const webhookSecret = "team-support-local-webhook-signing-key-v1";
-const sessionSecret = "team-support-desk-local-session-signing-key-v1";
 const firefoxBinary = process.env.FIREFOX_BIN ?? "/usr/bin/firefox";
 
 function postgresUrl(): string {
@@ -54,6 +54,20 @@ function runCli(root: string, arguments_: readonly string[]): string {
 	expect(
 		result.exitCode,
 		`${arguments_.join(" ")}\n${result.stdout.toString()}${result.stderr.toString()}`,
+	).toBe(0);
+	return result.stdout.toString();
+}
+
+function runFixtureScript(root: string, name: string): string {
+	const result = Bun.spawnSync(["bun", "run", name], {
+		cwd: root,
+		env: { ...process.env, DATABASE_URL: postgresUrl() },
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	expect(
+		result.exitCode,
+		`${name}\n${result.stdout.toString()}${result.stderr.toString()}`,
 	).toBe(0);
 	return result.stdout.toString();
 }
@@ -136,21 +150,10 @@ async function hmacHex(secret: string, body: string): Promise<string> {
 	return Buffer.from(value).toString("hex");
 }
 
-async function sessionToken(principalId: string): Promise<string> {
-	const unsigned = `v1.${principalId}.2000000000`;
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(sessionSecret),
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["sign"],
-	);
-	const signature = await crypto.subtle.sign(
-		"HMAC",
-		key,
-		new TextEncoder().encode(unsigned),
-	);
-	return `${unsigned}.${Buffer.from(signature).toString("base64url")}`;
+function responseCookie(response: Response): string {
+	const value = response.headers.get("set-cookie")?.split(";", 1)[0];
+	if (!value) throw new TypeError("Better Auth response did not set a cookie");
+	return value;
 }
 
 function executionInput(
@@ -219,6 +222,12 @@ postgresTest(
 	"runs the production-like Team Support Desk through direct, generated, durable, webhook, and Firefox seams",
 	async () => {
 		const cleanup = new CleanupStack();
+		const previousDatabaseUrl = process.env.DATABASE_URL;
+		process.env.DATABASE_URL = postgresUrl();
+		cleanup.defer(() => {
+			if (previousDatabaseUrl === undefined) delete process.env.DATABASE_URL;
+			else process.env.DATABASE_URL = previousDatabaseUrl;
+		});
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-team-support-"));
 		cleanup.defer(() => rm(temporary, { force: true, recursive: true }));
 		try {
@@ -231,7 +240,7 @@ postgresTest(
 			// Repository PostgreSQL setup/cleanup only. No application assertion below
 			// reads framework or application tables.
 			await database!.unsafe(
-				'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+				'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE; DROP TABLE IF EXISTS support_auth_verification, support_auth_account, support_auth_session, support_auth_user CASCADE;',
 			);
 			await cp(fixtureRoot, temporary, { recursive: true });
 			const questpieEntry = await installQuestpieForTracer(temporary);
@@ -240,6 +249,13 @@ postgresTest(
 			runCli(temporary, ["migration", "apply"]);
 			expect(runCli(temporary, ["seed", "apply"])).toContain("new");
 			expect(runCli(temporary, ["seed", "apply"])).toContain("0 new");
+			runFixtureScript(temporary, "auth:migrate");
+			expect(runFixtureScript(temporary, "auth:seed")).toContain(
+				"Better Auth demo identities ready: 3",
+			);
+			expect(runFixtureScript(temporary, "auth:seed")).toContain(
+				"Better Auth demo identities ready: 3",
+			);
 
 			const [{ createApp }, { createClient }, { principal }] =
 				await Promise.all([
@@ -488,9 +504,22 @@ postgresTest(
 				),
 			).rejects.toMatchObject({ code: "NOTIFICATION_PROVIDER_REJECTED" });
 
-			const cookie = `questpie_team_support_session=${await sessionToken(supportTracerIds.principalAgent)}`;
+			const authOrigin = "https://team-support.test";
+			const signIn = await app.fetch(
+				new Request(`${authOrigin}/api/auth/sign-in/email`, {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: authOrigin,
+					},
+					body: JSON.stringify(supportAuthCredentials.agent),
+				}),
+			);
+			expect(signIn.status).toBe(200);
+			const cookie = responseCookie(signIn);
+			expect(cookie).toStartWith("team-support.session_token=");
 			const browserClient = createClient({
-				baseUrl: "https://team-support.test",
+				baseUrl: authOrigin,
 				fetch: (request) => {
 					const headers = new Headers(request.headers);
 					headers.set("cookie", cookie);
@@ -652,6 +681,18 @@ postgresTest(
 			};
 			const firstHost = await startHost(temporary, 0, hostWorker);
 			cleanup.defer(() => stop(firstHost.child, "SIGKILL"));
+			const hostOrigin = `http://127.0.0.1:${firstHost.port}`;
+			const hostSignIn = await fetch(`${hostOrigin}/api/auth/sign-in/email`, {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					origin: hostOrigin,
+				},
+				body: JSON.stringify(supportAuthCredentials.agent),
+			});
+			expect(hostSignIn.status).toBe(200);
+			const restartCookie = responseCookie(hostSignIn);
+			expect(restartCookie).toStartWith("team-support.session_token=");
 			const running = await eventually(
 				() => app.durable.inspect(restart.runId),
 				{
@@ -675,6 +716,14 @@ postgresTest(
 				hostWorker,
 			);
 			cleanup.defer(() => stop(recoveredHost.child, "SIGTERM"));
+			const recoveredSession = await fetch(
+				`http://127.0.0.1:${recoveredHost.port}/api/auth/get-session`,
+				{ headers: { cookie: restartCookie } },
+			);
+			expect(recoveredSession.status).toBe(200);
+			expect(await recoveredSession.json()).toMatchObject({
+				user: { id: supportTracerIds.principalAgent, roleHint: "agent" },
+			});
 			const recoveredRun = await eventually(
 				() => app.durable.inspect(restart.runId),
 				{
@@ -701,7 +750,7 @@ postgresTest(
 			await mkdir(profile);
 			const firefoxComment = `Firefox operator update ${crypto.randomUUID()}`;
 			const browserUrl = new URL(`http://127.0.0.1:${recoveredHost.port}/`);
-			browserUrl.searchParams.set("persona", "agent");
+			browserUrl.searchParams.set("tracerPersona", "agent");
 			browserUrl.searchParams.set("tracerComment", firefoxComment);
 			browserUrl.searchParams.set(
 				"tracerReference",
@@ -734,6 +783,7 @@ postgresTest(
 					timeoutMilliseconds: 40_000,
 				}),
 			).toMatchObject({
+				authProvider: "better-auth",
 				commentBody: firefoxComment,
 				phase: "firefox-complete",
 				reference: supportTracerIds.referenceOpen,
@@ -748,7 +798,7 @@ postgresTest(
 		} finally {
 			await cleanup.dispose();
 			await database!.unsafe(
-				'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+				'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE; DROP TABLE IF EXISTS support_auth_verification, support_auth_account, support_auth_session, support_auth_user CASCADE;',
 			);
 		}
 	},

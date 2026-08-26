@@ -2,15 +2,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 import { createApp } from "../.questpie/generated/app";
-import {
-	supportPersonas,
-	supportTracerIds,
-	type SupportPersona,
-} from "./constants";
 
 const root = resolve(import.meta.dir, "..");
-const sessionCookieName = "questpie_team_support_session";
-const sessionSecret = "team-support-desk-local-session-signing-key-v1";
 
 function portFromArguments(): number {
 	const argument = Bun.argv.find((candidate) =>
@@ -30,54 +23,6 @@ function workerInteger(name: string): number | undefined {
 	if (!Number.isSafeInteger(value) || value <= 0)
 		throw new TypeError(`${name} must be a positive integer`);
 	return value;
-}
-
-function personaName(value: string | null): SupportPersona {
-	return value === "customer" || value === "admin" ? value : "agent";
-}
-
-function base64Url(bytes: ArrayBuffer): string {
-	return Buffer.from(bytes).toString("base64url");
-}
-
-async function sessionToken(principalId: string): Promise<string> {
-	// A fixed future expiry makes the fixture credential stable across a hard
-	// process restart while retaining the production credential grammar.
-	const unsigned = `v1.${principalId}.2000000000`;
-	const key = await crypto.subtle.importKey(
-		"raw",
-		new TextEncoder().encode(sessionSecret),
-		{ name: "HMAC", hash: "SHA-256" },
-		false,
-		["sign"],
-	);
-	const signature = await crypto.subtle.sign(
-		"HMAC",
-		key,
-		new TextEncoder().encode(unsigned),
-	);
-	return `${unsigned}.${base64Url(signature)}`;
-}
-
-const personaTokens = new Map<string, SupportPersona>();
-for (const [name, persona] of Object.entries(supportPersonas) as Array<
-	[SupportPersona, (typeof supportPersonas)[SupportPersona]]
->)
-	personaTokens.set(await sessionToken(persona.principalId), name);
-
-function cookieValue(headers: Headers, name: string): string | null {
-	const cookie = headers.get("cookie");
-	if (cookie === null) return null;
-	let result: string | null = null;
-	for (const raw of cookie.split(";")) {
-		const pair = raw.trim();
-		const separator = pair.indexOf("=");
-		if (separator <= 0) return null;
-		if (pair.slice(0, separator).trim() !== name) continue;
-		if (result !== null) return null;
-		result = pair.slice(separator + 1).trim();
-	}
-	return result;
 }
 
 type ReceiverReceipt = Readonly<{
@@ -162,36 +107,12 @@ const server = Bun.serve({
 	port: portFromArguments(),
 	async fetch(request) {
 		const url = new URL(request.url);
-		if (url.pathname === "/" && request.method === "GET") {
-			const persona = personaName(url.searchParams.get("persona"));
-			const headers = new Headers({
-				"cache-control": "no-store",
-				"content-type": "text/html; charset=utf-8",
-				"set-cookie": `${sessionCookieName}=${await sessionToken(supportPersonas[persona].principalId)}; Path=/; HttpOnly; SameSite=Strict`,
-			});
-			return new Response(html, { headers });
-		}
+		if (url.pathname === "/" && request.method === "GET")
+			return response(html, "text/html; charset=utf-8");
 		if (url.pathname === "/styles.css" && request.method === "GET")
 			return response(styles, "text/css; charset=utf-8");
 		if (url.pathname === "/desk.js" && request.method === "GET")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
-		if (
-			url.pathname === "/__team_support/session" &&
-			request.method === "GET"
-		) {
-			const token = cookieValue(request.headers, sessionCookieName);
-			const personaName = token === null ? undefined : personaTokens.get(token);
-			if (personaName === undefined) return new Response(null, { status: 401 });
-			const persona = supportPersonas[personaName];
-			return Response.json(
-				{
-					...persona,
-					organizationId: supportTracerIds.organization,
-					role: personaName,
-				},
-				{ headers: { "cache-control": "no-store", vary: "Cookie" } },
-			);
-		}
 		if (url.pathname === "/__team_support/report") {
 			if (request.method === "GET") return Response.json(latestReport);
 			if (request.method === "POST") {

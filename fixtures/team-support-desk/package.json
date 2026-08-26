@@ -8,13 +8,22 @@
 		"#questpie/client": "./.questpie/generated/client.ts",
 		"#questpie/source/*": "./src/*"
 	},
+	"scripts": {
+		"auth:migrate": "auth migrate --config tracer/auth/migration-config.ts --yes",
+		"auth:seed": "bun tracer/auth/seed.ts",
+		"tracer": "bun tracer/host.ts"
+	},
 	"dependencies": {
+		"better-auth": "1.7.1",
+		"pg": "8.23.0",
 		"questpie": "workspace:*",
 		"react": "19.2.8",
 		"react-dom": "19.2.8"
 	},
 	"devDependencies": {
+		"@types/pg": "8.23.1",
 		"@types/react": "19.2.17",
-		"@types/react-dom": "19.2.3"
+		"@types/react-dom": "19.2.3",
+		"auth": "1.7.1"
 	}
 }

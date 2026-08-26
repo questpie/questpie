@@ -1,6 +1,6 @@
 import type { CSSProperties, FormEvent } from "react";
 
-import type { FixtureSession } from "../fixture-control";
+import type { SupportSession } from "../auth/client";
 import type { CommentPage, LabelPage, TicketDetail } from "../questpie";
 import { dateTime } from "../shared/format";
 
@@ -17,7 +17,7 @@ type TicketDetailPanelProps = Readonly<{
 	onEdit: () => void;
 	onSummary: () => void;
 	onTransition: () => void;
-	session: FixtureSession;
+	session: SupportSession;
 	ticket: TicketDetail | null;
 }>;
 

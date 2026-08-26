@@ -1,3 +1,4 @@
+import { demoAuthIdentities } from "../src/auth/demo-identities";
 import { demoIds } from "../src/demo-ids";
 
 export const supportTracerIds = Object.freeze({
@@ -19,19 +20,36 @@ export const supportTracerIds = Object.freeze({
 
 export const supportPersonas = Object.freeze({
 	customer: Object.freeze({
-		label: "Customer",
-		membershipId: supportTracerIds.membershipCustomer,
-		principalId: supportTracerIds.principalCustomer,
+		label: demoAuthIdentities.customer.label,
+		membershipId: demoAuthIdentities.customer.membershipHint,
+		principalId: demoAuthIdentities.customer.principalId,
 	}),
 	agent: Object.freeze({
-		label: "Agent",
-		membershipId: supportTracerIds.membershipAgent,
-		principalId: supportTracerIds.principalAgent,
+		label: demoAuthIdentities.agent.label,
+		membershipId: demoAuthIdentities.agent.membershipHint,
+		principalId: demoAuthIdentities.agent.principalId,
 	}),
 	admin: Object.freeze({
-		label: "Admin",
-		membershipId: supportTracerIds.membershipAdmin,
-		principalId: supportTracerIds.principalAdmin,
+		label: demoAuthIdentities.admin.label,
+		membershipId: demoAuthIdentities.admin.membershipHint,
+		principalId: demoAuthIdentities.admin.principalId,
+	}),
+});
+
+// Public, local-only credentials for the reference application's three demo
+// identities. They are test data, never deployment secrets.
+export const supportAuthCredentials = Object.freeze({
+	customer: Object.freeze({
+		email: demoAuthIdentities.customer.email,
+		password: demoAuthIdentities.customer.password,
+	}),
+	agent: Object.freeze({
+		email: demoAuthIdentities.agent.email,
+		password: demoAuthIdentities.agent.password,
+	}),
+	admin: Object.freeze({
+		email: demoAuthIdentities.admin.email,
+		password: demoAuthIdentities.admin.password,
 	}),
 });
 

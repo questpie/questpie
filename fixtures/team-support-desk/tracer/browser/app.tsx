@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import type { FixtureSession } from "./fixture-control";
+import type { SupportSession } from "./auth/client";
 import { reportFixturePhase } from "./fixture-control";
 import type {
 	CommentPage,
@@ -23,10 +23,15 @@ type DetailState = Readonly<{
 
 type DeskApplicationProps = Readonly<{
 	desk: SupportDesk;
-	session: FixtureSession;
+	onSignOut: () => Promise<void>;
+	session: SupportSession;
 }>;
 
-export function DeskApplication({ desk, session }: DeskApplicationProps) {
+export function DeskApplication({
+	desk,
+	onSignOut,
+	session,
+}: DeskApplicationProps) {
 	const [page, setPage] = useState<TicketPage | null>(null);
 	const [pageIndex, setPageIndex] = useState(0);
 	const [cursors, setCursors] = useState<ReadonlyArray<string | null>>([null]);
@@ -298,6 +303,7 @@ export function DeskApplication({ desk, session }: DeskApplicationProps) {
 			setCursors([null]);
 			await loadQueue("open", ticket.teamId, null, 0);
 			await reportFixturePhase({
+				authProvider: "better-auth",
 				commentBody,
 				phase: "firefox-complete",
 				reference: tracerReference,
@@ -371,6 +377,13 @@ export function DeskApplication({ desk, session }: DeskApplicationProps) {
 							{session.label} · {session.role}
 						</strong>
 					</span>
+					<button
+						className="sign-out"
+						onClick={() => void onSignOut()}
+						type="button"
+					>
+						Sign out
+					</button>
 				</div>
 			</header>
 
