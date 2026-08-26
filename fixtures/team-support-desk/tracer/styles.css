@@ -51,7 +51,11 @@ body {
 	place-items: center;
 	padding: 1.25rem;
 	background:
-		radial-gradient(circle at top left, rgb(183 226 197 / 45%), transparent 35rem),
+		radial-gradient(
+			circle at top left,
+			rgb(183 226 197 / 45%),
+			transparent 35rem
+		),
 		#eef0ea;
 }
 .auth-card {
