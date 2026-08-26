@@ -23,9 +23,16 @@ export type PostgresParameterV1 =
 	| Readonly<{
 			position: number;
 			postgresType: string;
-			kind: "callerInput" | "key";
+			kind: "callerInput" | "key" | "patchValue";
 			path: FieldPath;
 			codec: ScalarCodecV1;
+	  }>
+	| Readonly<{
+			position: number;
+			postgresType: "boolean";
+			kind: "patchPresent";
+			path: FieldPath;
+			codec: "boolean";
 	  }>
 	| Readonly<{
 			position: number;
@@ -148,9 +155,42 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 	operation: LinkedCollectionOperationProgramV1;
 }>;
 
+export type LinkedPostgresUpdateOperationPlanV1 = Readonly<{
+	identity: string;
+	target: string;
+	member: "update";
+	policy: string;
+	outputCardinality: "optionalOne";
+	lifecycle: readonly [
+		"keyedRowLock",
+		"freshCurrentPolicy",
+		"sparseCallerFieldAuthority",
+		"pureNormalization",
+		"serverValues",
+		"completeCandidateValidation",
+		"candidatePolicy",
+		"postgresConstraints",
+		"selection",
+		"outputFieldAuthority",
+		"outputValidation",
+	];
+	normalizerProgram: FieldNormalizerProgramV1 | null;
+	serverValueProgram: ServerValueProgramV1 | null;
+	candidate: LinkedPostgresCreateOperationPlanV1["candidate"];
+	lock: LinkedPostgresGetOperationPlanV1["lock"];
+	fieldAuthority: LinkedPostgresCreateOperationPlanV1["fieldAuthority"];
+	currentPolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
+	candidatePolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
+	outputAuthority: OutputAuthorityV1;
+	write: LinkedPostgresCreateOperationPlanV1["write"];
+	limits: Readonly<{ rows: 100; durationMilliseconds: 5_000 }>;
+	operation: LinkedCollectionOperationProgramV1;
+}>;
+
 export type LinkedPostgresCollectionOperationPlanV1 =
 	| LinkedPostgresCreateOperationPlanV1
-	| LinkedPostgresGetOperationPlanV1;
+	| LinkedPostgresGetOperationPlanV1
+	| LinkedPostgresUpdateOperationPlanV1;
 
 export type LinkedPostgresCollectionOperationPlansV1 = Readonly<{
 	plans: readonly LinkedPostgresCollectionOperationPlanV1[];

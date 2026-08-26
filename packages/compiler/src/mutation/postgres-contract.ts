@@ -7,9 +7,14 @@ export type PostgresOperationParameterV1 = Readonly<{
 }> &
 	(
 		| Readonly<{
-				kind: "callerInput" | "key";
+				kind: "callerInput" | "key" | "patchValue";
 				path: readonly string[];
 				codec: ScalarCodecV1;
+		  }>
+		| Readonly<{
+				kind: "patchPresent";
+				path: readonly string[];
+				codec: "boolean";
 		  }>
 		| Readonly<{
 				kind: "executionFact";
@@ -129,12 +134,44 @@ export interface PostgresCreateOperationPlanV1 {
 	readonly limits: Readonly<{ rows: number; durationMilliseconds: number }>;
 }
 
+export interface PostgresUpdateOperationPlanV1 {
+	readonly identity: CollectionOperationProgramV1["identity"];
+	readonly target: CollectionOperationProgramV1["target"];
+	readonly member: "update";
+	readonly policy: CollectionOperationProgramV1["policy"];
+	readonly outputCardinality: "optionalOne";
+	readonly lifecycle: readonly [
+		"keyedRowLock",
+		"freshCurrentPolicy",
+		"sparseCallerFieldAuthority",
+		"pureNormalization",
+		"serverValues",
+		"completeCandidateValidation",
+		"candidatePolicy",
+		"postgresConstraints",
+		"selection",
+		"outputFieldAuthority",
+		"outputValidation",
+	];
+	readonly normalizerProgram: Readonly<Record<string, unknown>> | null;
+	readonly serverValueProgram: Readonly<Record<string, unknown>> | null;
+	readonly candidate: PostgresCreateOperationPlanV1["candidate"];
+	readonly lock: PostgresGetOperationPlanV1["lock"];
+	readonly fieldAuthority: PostgresCreateOperationPlanV1["fieldAuthority"];
+	readonly currentPolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
+	readonly candidatePolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
+	readonly outputAuthority: PostgresCreateOperationPlanV1["outputAuthority"];
+	readonly write: PostgresCreateOperationPlanV1["write"];
+	readonly limits: Readonly<{ rows: number; durationMilliseconds: number }>;
+}
+
 export interface PostgresCollectionOperationPlansV1 {
 	readonly format: "questpie.postgres-collection-operation-plans";
 	readonly version: 1;
 	readonly plans: readonly (
 		| PostgresCreateOperationPlanV1
 		| PostgresGetOperationPlanV1
+		| PostgresUpdateOperationPlanV1
 	)[];
 	readonly digest: string;
 }

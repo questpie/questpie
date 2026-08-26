@@ -4,6 +4,7 @@ import {
 	lowerPostgresMutationPolicyChecks,
 	postgresMutationCollection,
 	type PolicyProgramV1,
+	type PolicyExpressionV1,
 	type PostgresMutationCollectionV1,
 	type PostgresMutationFieldV1,
 } from "../relational";
@@ -12,6 +13,7 @@ import type {
 	PostgresCollectionOperationPlansV1,
 	PostgresCreateOperationPlanV1,
 	PostgresGetOperationPlanV1,
+	PostgresUpdateOperationPlanV1,
 } from "./postgres-contract";
 import {
 	executionParameter,
@@ -20,6 +22,7 @@ import {
 	items,
 	linkedProgram,
 	path,
+	patchParameters,
 	policyFor,
 	policyParameters,
 	postgresType,
@@ -429,6 +432,284 @@ function createPlan(
 	});
 }
 
+function updatePlan(
+	operation: CollectionOperationProgramV1,
+	collection: PostgresMutationCollectionV1,
+	policy: PolicyProgramV1,
+	schema: unknown,
+	normalizer: RecordValue | null,
+	serverValues: RecordValue | null,
+): PostgresUpdateOperationPlanV1 {
+	if (operation.outputCardinality !== "optionalOne")
+		throw new TypeError(
+			`${operation.identity} update cardinality must be optionalOne`,
+		);
+	const update = policy.operations.update;
+	if (!update) throw new TypeError(`${policy.identity} has no update Policy`);
+	const candidateExpression: PolicyExpressionV1 =
+		update.candidate.kind === "sameRelationalScopeAsRead"
+			? (policy.operations.read?.rows ??
+				(() => {
+					throw new TypeError(
+						`${policy.identity} update candidate inherits a missing read Policy`,
+					);
+				})())
+			: update.candidate;
+	const candidateAliases: Readonly<Record<string, string>> =
+		update.candidate.kind === "sameRelationalScopeAsRead"
+			? { row: "qp_candidate" }
+			: { current: "qp_current", candidate: "qp_candidate" };
+	const selectedRules = policy.fields?.selectedOutput ?? [];
+	const outputRules = operation.selectedFieldPaths.map((selectedPath) =>
+		selectedRules.find(
+			(rule) => canonicalBytes(rule.path) === canonicalBytes(selectedPath),
+		),
+	);
+	const policyChecks = lowerPostgresMutationPolicyChecks({
+		schema,
+		checks: [
+			{ expression: update.current, aliases: { current: "qp_current" } },
+			{ expression: candidateExpression, aliases: candidateAliases },
+			...outputRules.flatMap((rule) =>
+				rule ? [{ expression: rule.when, aliases: { row: "qp_row" } }] : [],
+			),
+		],
+	});
+	const currentCheck = policyChecks.checks[0]!;
+	const candidateCheck = policyChecks.checks[1]!;
+	const guardChecks = policyChecks.checks.slice(2);
+	const parameters = policyParameters(policyChecks.parameters);
+	const lockParameters = new Parameters();
+	const lockPredicates = operation.keyFields.map((keyPath) => {
+		const field = fieldByPath(collection, keyPath);
+		return `${quote("qp_lock_row")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(lockParameters, "key", field)}`;
+	});
+	const keyPredicates = operation.keyFields.map((keyPath) => {
+		const field = fieldByPath(collection, keyPath);
+		return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(parameters, "key", field)}`;
+	});
+	const targetPredicates = operation.keyFields.map((keyPath) => {
+		const field = fieldByPath(collection, keyPath);
+		return `${quote("qp_target")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(parameters, "key", field)}`;
+	});
+	const expressions = new Map<string, string>(
+		collection.fields.map(
+			(field) =>
+				[
+					canonicalBytes(field.path),
+					`${quote("qp_current")}.${quote(field.column)}`,
+				] as const,
+		),
+	);
+	const patch = new Map<
+		string,
+		Readonly<{ present: string; value: string; current: string }>
+	>();
+	const steps: Record<string, unknown>[] = [];
+	for (const callerPath of operation.callerInputFields) {
+		const field = fieldByPath(collection, callerPath);
+		const bound = patchParameters(parameters, field);
+		const current = `${quote("qp_current")}.${quote(field.column)}`;
+		patch.set(canonicalBytes(field.path), { ...bound, current });
+		expressions.set(
+			canonicalBytes(field.path),
+			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
+		);
+		steps.push({ phase: "callerInput", target: field.path });
+	}
+	for (const rawStep of normalizer
+		? items(normalizer.steps, "normalizer steps")
+		: []) {
+		const step = record(rawStep, "normalizer step");
+		const target = path(step.target, "normalizer target");
+		const expression = record(step.expression, "normalizer expression");
+		const source = path(expression.source, "normalizer source");
+		const sourcePatch = patch.get(canonicalBytes(source));
+		if (!sourcePatch)
+			throw new TypeError("normalizer source is not update caller input");
+		if (expression.kind !== "trim" && expression.kind !== "trimIfPresent")
+			throw new TypeError(`unsupported normalizer ${String(expression.kind)}`);
+		expressions.set(
+			canonicalBytes(target),
+			`CASE WHEN ${sourcePatch.present} THEN btrim(${sourcePatch.value}) ELSE ${sourcePatch.current} END`,
+		);
+		steps.push({ phase: "normalizer", target, transform: expression.kind });
+	}
+	for (const rawAssignment of serverValues
+		? items(serverValues.assignments, "server value assignments")
+		: []) {
+		const assignment = record(rawAssignment, "server value assignment");
+		const target = path(assignment.target, "server value target");
+		const source = path(assignment.source, "server value source");
+		const field = fieldByPath(collection, target);
+		if (assignment.mode !== "overwrite")
+			throw new TypeError(
+				`unsupported server value mode ${String(assignment.mode)}`,
+			);
+		const [sourceRoot, ...sourcePath] = source;
+		if (
+			!sourceRoot ||
+			(sourceRoot !== "operationTime" && sourcePath.length === 0) ||
+			(sourceRoot === "operationTime" && sourcePath.length !== 0)
+		)
+			throw new TypeError(
+				"server value source must be a closed execution operand",
+			);
+		expressions.set(
+			canonicalBytes(target),
+			executionParameter(parameters, sourceRoot, sourcePath, field),
+		);
+		steps.push({ phase: "serverValue", target, mode: "overwrite", source });
+	}
+	const candidateColumns = collection.fields.map(
+		(field) =>
+			`${expressions.get(canonicalBytes(field.path))!} AS ${quote(field.column)}`,
+	);
+	const updateRules = policy.fields?.callerInput.update ?? [];
+	const authorityChecks = operation.callerInputFields.map((callerPath) => {
+		const rule = updateRules.find(
+			(candidate) =>
+				canonicalBytes(candidate.path) === canonicalBytes(callerPath),
+		);
+		if (!rule)
+			throw new TypeError(
+				`${policy.identity} has no update Field authority for ${callerPath.join(".")}`,
+			);
+		const lowered = lowerPostgresMutationPolicyChecks({
+			schema,
+			checks: [
+				{ expression: update.current, aliases: { current: "qp_current" } },
+				{ expression: rule.when, aliases: { current: "qp_current" } },
+			],
+		});
+		const checkParameters = policyParameters(lowered.parameters);
+		const predicates = operation.keyFields.map((keyPath) => {
+			const field = fieldByPath(collection, keyPath);
+			return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(checkParameters, "key", field)}`;
+		});
+		return Object.freeze({
+			path: callerPath,
+			sql: `SELECT TRUE FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...predicates, lowered.checks[0]!.sql, lowered.checks[1]!.sql].join(" AND ")} LIMIT 1`,
+			parameters: checkParameters.values(),
+		});
+	});
+	const baseOutput = result(collection, operation.selectedFieldPaths);
+	let guardIndex = 0;
+	const joins: string[] = [];
+	const outputAuthority: OutputAuthorityEntry[] = [];
+	const output = baseOutput.map((item, index) => {
+		const rule = outputRules[index];
+		if (!rule) {
+			outputAuthority.push({
+				path: item.path,
+				conditional: false,
+				mutableEvidenceCollections: [],
+			});
+			return item;
+		}
+		const guard = guardChecks[guardIndex++]!;
+		const guardAlias = `qp_guard_${index}`;
+		const guardColumn = `${item.column}_allowed`;
+		joins.push(
+			`CROSS JOIN LATERAL (SELECT ${guard.sql} AS ${quote("allowed")}) AS ${quote(guardAlias)}`,
+		);
+		outputAuthority.push({
+			path: item.path,
+			conditional: true,
+			guardColumn,
+			mutableEvidenceCollections: guard.mutableEvidenceCollections,
+		});
+		return Object.freeze({ ...item, guardColumn });
+	});
+	const selected = output.flatMap((item, index) => {
+		const field = fieldByPath(collection, item.path);
+		const value =
+			field.codec.kind === "timestamp"
+				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_row")}.${quote(field.column)})`
+				: `${quote("qp_row")}.${quote(field.column)}`;
+		if (!item.guardColumn) return [`${value} AS ${quote(item.column)}`];
+		const guardAlias = `qp_guard_${index}`;
+		return [
+			`CASE WHEN ${quote(guardAlias)}.${quote("allowed")} THEN ${value} ELSE NULL END AS ${quote(item.column)}`,
+			`${quote(guardAlias)}.${quote("allowed")} AS ${quote(item.guardColumn)}`,
+		];
+	});
+	const assignments = collection.fields.map(
+		(field) =>
+			`${quote(field.column)} = ${quote("qp_candidate")}.${quote(field.column)}`,
+	);
+	const currentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...keyPredicates, currentCheck.sql].join(" AND ")} LIMIT 1)`;
+	const candidateCte = `${quote("qp_candidate")} AS (SELECT ${candidateColumns.join(", ")} FROM ${quote("qp_current")})`;
+	const updatedCte = `${quote("qp_updated")} AS (UPDATE ${collection.table} AS ${quote("qp_target")} SET ${assignments.join(", ")} FROM ${quote("qp_candidate")}, ${quote("qp_current")} WHERE ${[...targetPredicates, candidateCheck.sql].join(" AND ")} RETURNING ${quote("qp_target")}.*)`;
+	return Object.freeze({
+		identity: operation.identity,
+		target: operation.target,
+		member: "update",
+		policy: operation.policy,
+		outputCardinality: "optionalOne",
+		lifecycle: Object.freeze([
+			"keyedRowLock",
+			"freshCurrentPolicy",
+			"sparseCallerFieldAuthority",
+			"pureNormalization",
+			"serverValues",
+			"completeCandidateValidation",
+			"candidatePolicy",
+			"postgresConstraints",
+			"selection",
+			"outputFieldAuthority",
+			"outputValidation",
+		] as const),
+		normalizerProgram: normalizer,
+		serverValueProgram: serverValues,
+		candidate: Object.freeze({
+			steps: Object.freeze(steps),
+			fields: Object.freeze(
+				collection.fields.map((field) =>
+					Object.freeze({
+						path: field.path,
+						codec: field.codec,
+						nullable: field.nullable,
+					}),
+				),
+			),
+		}),
+		lock: Object.freeze({
+			sql: `SELECT TRUE AS ${quote("qp_locked")} FROM ${collection.table} AS ${quote("qp_lock_row")} WHERE ${lockPredicates.join(" AND ")} LIMIT 1 FOR UPDATE`,
+			parameters: lockParameters.values(),
+			outcome: "internalLockedOrAbsent" as const,
+		}),
+		fieldAuthority: Object.freeze({
+			suppliedPathsOnly: true,
+			checks: Object.freeze(authorityChecks),
+		}),
+		currentPolicy: Object.freeze({
+			freshAfterRowLockWait: true,
+			mutableEvidenceCollections: currentCheck.mutableEvidenceCollections,
+			sql: currentCheck.sql,
+		}),
+		candidatePolicy: Object.freeze({
+			freshAfterRowLockWait: true,
+			mutableEvidenceCollections: candidateCheck.mutableEvidenceCollections,
+			sql: candidateCheck.sql,
+		}),
+		outputAuthority: Object.freeze({
+			freshAfterRowLockWait: true as const,
+			selectedPaths: Object.freeze(outputAuthority),
+		}),
+		write: Object.freeze({
+			sql: `WITH ${currentCte}, ${candidateCte}, ${updatedCte} SELECT ${selected.join(", ")} FROM ${quote("qp_updated")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
+			parameters: parameters.values(),
+			result: output,
+		}),
+		limits: Object.freeze({
+			rows:
+				"rowsWritten" in operation.limits ? operation.limits.rowsWritten : 0,
+			durationMilliseconds: operation.limits.durationMilliseconds,
+		}),
+	});
+}
+
 export function lowerPostgresCollectionOperationPlans(
 	input: Readonly<{
 		collectionOperations: unknown;
@@ -444,9 +725,8 @@ export function lowerPostgresCollectionOperationPlans(
 		"operations",
 	) as readonly CollectionOperationProgramV1[];
 	const plans = operations
-		.filter(
-			(operation) =>
-				operation.member === "get" || operation.member === "create",
+		.filter((operation) =>
+			["get", "create", "update"].includes(operation.member),
 		)
 		.map((operation) => {
 			const collection = postgresMutationCollection(
@@ -460,27 +740,38 @@ export function lowerPostgresCollectionOperationPlans(
 				);
 			if (operation.member === "get")
 				return getPlan(operation, collection, policy, input.schemaProjection);
+			const normalizer = linkedProgram(
+				input.normalizerPrograms,
+				"questpie.field-normalizer-programs",
+				"programs",
+				"normalizer program",
+				operation,
+				operation.normalizerProgramDigest,
+			);
+			const serverValues = linkedProgram(
+				input.serverValuePrograms,
+				"questpie.server-value-programs",
+				"programs",
+				"server value program",
+				operation,
+				operation.serverValueProgramDigest,
+			);
+			if (operation.member === "update")
+				return updatePlan(
+					operation,
+					collection,
+					policy,
+					input.schemaProjection,
+					normalizer,
+					serverValues,
+				);
 			return createPlan(
 				operation,
 				collection,
 				policy,
 				input.schemaProjection,
-				linkedProgram(
-					input.normalizerPrograms,
-					"questpie.field-normalizer-programs",
-					"programs",
-					"normalizer program",
-					operation,
-					operation.normalizerProgramDigest,
-				),
-				linkedProgram(
-					input.serverValuePrograms,
-					"questpie.server-value-programs",
-					"programs",
-					"server value program",
-					operation,
-					operation.serverValueProgramDigest,
-				),
+				normalizer,
+				serverValues,
 			);
 		})
 		.sort((left, right) => compareAscii(left.identity, right.identity));

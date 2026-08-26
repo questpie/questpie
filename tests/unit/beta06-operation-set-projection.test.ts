@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -17,6 +17,25 @@ test("lowers an unbranded Collection Operation Set to exact P3 programs", async 
 		await rm(join(temporary, "src/message-published.ts"));
 		await rm(join(temporary, "src/message-record-delivery.ts"));
 		await rm(join(temporary, "src/delivery-action.ts"));
+		const policyPath = join(temporary, "src/message-policy.ts");
+		const policySource = await readFile(policyPath, "utf8");
+		await writeFile(
+			policyPath,
+			policySource
+				.replace(
+					"\tcreate: {",
+					`\tupdate: {
+\t\tadmit: policy.authenticated(),
+\t\trows: ({ current }) => current.id.equal(current.id),
+\t\tcandidate: ({ candidate, current }) => candidate.id.equal(current.id),
+\t},
+\tcreate: {`,
+				)
+				.replace(
+					"\tfields: {\n\t\tcreate:",
+					"\tfields: {\n\t\tupdate: ({ current }) => ({ body: current.id.equal(current.id) }),\n\t\tcreate:",
+				),
+		);
 		await writeFile(
 			join(temporary, "src/message-operations.ts"),
 			`import { defineCollectionOperations, mutation } from "questpie";
@@ -267,6 +286,10 @@ export const messageOperations = defineCollectionOperations(messages, {
 					member: "create",
 				}),
 				expect.objectContaining({
+					identity: "mutation:messages.update",
+					member: "update",
+				}),
+				expect.objectContaining({
 					identity: "query:messages.get",
 					member: "get",
 				}),
@@ -377,6 +400,38 @@ export const messageOperations = defineCollectionOperations(messages, {
 			"postgres-collection-operation-plans.json",
 			"server-value-programs.json",
 		]);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+});
+
+test("lowers an authorized Collection update into the PostgreSQL runtime artifact", async () => {
+	const temporary = await mkdtemp(join(tmpdir(), "questpie-operation-update-"));
+	try {
+		await cp(
+			resolve(import.meta.dir, "../../fixtures/team-support-desk"),
+			temporary,
+			{ recursive: true },
+		);
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
+			outputDirectory: join(temporary, ".questpie/generated"),
+		});
+		const postgresPlans = JSON.parse(
+			compilation.generatedFiles["postgres-collection-operation-plans.json"] ??
+				"null",
+		) as Readonly<{
+			plans: readonly Readonly<{ identity: string; member: string }>[];
+		}>;
+
+		expect(
+			postgresPlans.plans.find(
+				({ identity }) => identity === "mutation:tickets.update",
+			),
+		).toMatchObject({
+			identity: "mutation:tickets.update",
+			member: "update",
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

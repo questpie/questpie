@@ -8,6 +8,7 @@ import type {
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
 	LinkedPostgresGetOperationPlanV1,
+	LinkedPostgresUpdateOperationPlanV1,
 } from "./postgres-program";
 
 type Row = Readonly<Record<string, unknown>>;
@@ -19,7 +20,10 @@ type CollectionLeaf =
 	| LinkedPostgresGetOperationPlanV1["lock"]
 	| LinkedPostgresGetOperationPlanV1["read"]
 	| LinkedPostgresCreateOperationPlanV1["fieldAuthority"]["checks"][number]
-	| LinkedPostgresCreateOperationPlanV1["write"];
+	| LinkedPostgresCreateOperationPlanV1["write"]
+	| LinkedPostgresUpdateOperationPlanV1["lock"]
+	| LinkedPostgresUpdateOperationPlanV1["fieldAuthority"]["checks"][number]
+	| LinkedPostgresUpdateOperationPlanV1["write"];
 type ExecuteCollectionLeaf = (
 	leaf: CollectionLeaf,
 	parameters: readonly PostgresParameter[],
@@ -67,6 +71,18 @@ function valueAt(value: Row, path: Path): unknown {
 	return current;
 }
 
+function hasValueAt(value: Row, path: Path): boolean {
+	let current: unknown = value;
+	for (const [index, part] of path.entries()) {
+		if (!current || typeof current !== "object" || Array.isArray(current))
+			return false;
+		if (!Object.hasOwn(current, part)) return false;
+		current = (current as Row)[part];
+		if (index < path.length - 1 && current === undefined) return false;
+	}
+	return true;
+}
+
 function inputPaths(
 	value: unknown,
 	label: string,
@@ -106,6 +122,20 @@ function exactPaths(
 		expectedKeys.some((key, index) => key !== actualKeys[index])
 	)
 		throw new TypeError(`${label} must have exactly the compiled Fields`);
+}
+
+function allowedPaths(
+	actual: readonly Path[],
+	allowed: readonly Path[],
+	label: string,
+) {
+	const allowedKeys = new Set(allowed.map(pathKey));
+	const actualKeys = actual.map(pathKey);
+	if (
+		new Set(actualKeys).size !== actualKeys.length ||
+		actualKeys.some((key) => !allowedKeys.has(key))
+	)
+		throw new TypeError(`${label} contains undeclared Fields`);
 }
 
 function inputScalar(
@@ -178,9 +208,16 @@ function bind(
 		if (parameter.kind === "literal") return parameter.value;
 		if (parameter.kind === "executionFact")
 			return executionFact(parameter, facts, operationTime);
+		if (parameter.kind === "patchPresent") {
+			if (!values.callerInput)
+				throw new TypeError("Compiled Collection patch has no value source");
+			return hasValueAt(values.callerInput, parameter.path);
+		}
 		const source = parameter.kind === "key" ? values.key : values.callerInput;
 		if (!source)
 			throw new TypeError("Compiled Collection parameter has no value source");
+		if (parameter.kind === "patchValue" && !hasValueAt(source, parameter.path))
+			return null;
 		return inputScalar(
 			valueAt(source, parameter.path),
 			parameter.codec,
@@ -225,12 +262,14 @@ function createCollectionMutationData(
 		{
 			create?: LinkedPostgresCreateOperationPlanV1;
 			get?: LinkedPostgresGetOperationPlanV1;
+			update?: LinkedPostgresUpdateOperationPlanV1;
 		}
 	>();
 	for (const plan of input.plans.plans) {
 		const name = collectionMember(plan.target);
 		const members = collections.get(name) ?? {};
 		if (plan.member === "create") members.create = plan;
+		else if (plan.member === "update") members.update = plan;
 		else members.get = plan;
 		collections.set(name, members);
 	}
@@ -352,6 +391,106 @@ function createCollectionMutationData(
 									if (rows.length > plan.limits.rows || rows.length !== 1)
 										throw new TypeError(
 											"Collection create exceeded its row limit",
+										);
+									return decodeRow(rows[0]!, plan.write.result);
+								},
+							}
+						: {}),
+					...(plans.update
+						? {
+								update: async (rawRequest: unknown) => {
+									const plan = plans.update!;
+									const started = performance.now();
+									const request = record(
+										rawRequest,
+										"Collection update request",
+									);
+									exactPaths(
+										Object.keys(request)
+											.sort()
+											.map((key) => [key]),
+										[["key"], ["patch"]],
+										"Collection update request",
+									);
+									const key = record(request.key, "Collection key");
+									const patch = record(
+										request.patch,
+										"Collection update patch",
+									);
+									exactPaths(
+										inputPaths(key, "Collection key"),
+										plan.operation.keyFields,
+										"Collection key",
+									);
+									const suppliedPaths = inputPaths(
+										patch,
+										"Collection update patch",
+									);
+									allowedPaths(
+										suppliedPaths,
+										plan.operation.callerInputFields,
+										"Collection update patch",
+									);
+									const nullableByPath = new Map(
+										plan.candidate.fields.map(
+											(field) => [pathKey(field.path), field.nullable] as const,
+										),
+									);
+									const values = { key, callerInput: patch };
+									const locked = await execute(
+										plan,
+										started,
+										plan.lock,
+										bind(
+											plan.lock.parameters,
+											values,
+											input.facts,
+											input.operationTime,
+										),
+									);
+									if (locked.length === 0) return null;
+									if (locked.length !== 1)
+										throw new TypeError(
+											"Collection update lock returned multiple rows",
+										);
+									const supplied = new Set(suppliedPaths.map(pathKey));
+									for (const check of plan.fieldAuthority.checks) {
+										if (!supplied.has(pathKey(check.path))) continue;
+										const rows = await execute(
+											plan,
+											started,
+											check,
+											bind(
+												check.parameters,
+												values,
+												input.facts,
+												input.operationTime,
+												nullableByPath,
+											),
+										);
+										if (rows.length === 0) return null;
+										if (rows.length !== 1)
+											throw new TypeError(
+												"Collection update Field authority returned multiple rows",
+											);
+									}
+									const rows = await execute(
+										plan,
+										started,
+										plan.write,
+										bind(
+											plan.write.parameters,
+											values,
+											input.facts,
+											input.operationTime,
+											nullableByPath,
+										),
+									);
+									input.consumeRows(rows.length);
+									if (rows.length === 0) return null;
+									if (rows.length > plan.limits.rows || rows.length !== 1)
+										throw new TypeError(
+											"Collection update exceeded its row limit",
 										);
 									return decodeRow(rows[0]!, plan.write.result);
 								},
