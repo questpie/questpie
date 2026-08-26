@@ -26,6 +26,8 @@ fixture-only shortcuts leaking into application code.
   durable worker, and delegates every framework request to `application.fetch`.
 - `tracer/browser/main.tsx` bootstraps React 19. `browser/app.tsx` coordinates
   local UI state, while `browser/tickets/*` owns queue, detail, and dialogs.
+  `browser/tickets/edit-input.ts` derives role-aware edit input from the
+  generated client contract, `browser/tracer/*` owns Firefox automation,
   `browser/auth/*` owns Better Auth login/session/logout, and
   `browser/questpie.ts` is the only application-data transport boundary.
 
@@ -101,4 +103,6 @@ tailscale serve --bg --https=8444 http://127.0.0.1:43120
 
 Open `https://<machine>.<tailnet>.ts.net:8444/` from an authorized tailnet
 device. Do not use Funnel for this fixture. Inspect existing Serve mappings
-before adding or removing this port so unrelated services remain untouched.
+before adding or removing this port so unrelated services remain untouched. To
+remove only this mapping, run `tailscale serve --https=8444 off` (with `sudo`
+when the local Tailscale operator policy requires it).

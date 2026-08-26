@@ -59,7 +59,7 @@ External release evidence remains honest:
 ## Team Support Desk reference application
 
 The second application-facing v4 consumer is implemented at
-`fixtures/team-support-desk` through code head `7a4e33a87`. It is a
+`fixtures/team-support-desk` through code head `5fdb5adac`. It is a
 production-like, tenant-aware support desk built only on the public v4
 interface. Organization, Membership, Team, Ticket, Comment, and Label
 Collections are split by domain locality with their Policy and Operation
@@ -86,7 +86,7 @@ Generated app/client modules are the direct, network, and browser type
 authority; the PostgreSQL tracer does not duplicate their request or response
 contracts.
 
-The tracer exposed and closed two narrow framework correctness defects:
+The tracer exposed and closed four narrow framework correctness defects:
 
 - generated Collection `update` authority existed in declarations but lacked a
   PostgreSQL compiler/runtime program; it now executes one keyed row lock,
@@ -99,17 +99,31 @@ The tracer exposed and closed two narrow framework correctness defects:
   source. Dynamic imports are now admitted only inside recognized executable
   Definition slots while module-level imports remain rejected by
   `QP-COMPOSE-010`.
+- runtime Collection updates admitted an empty patch despite the Accepted
+  contract. They now reject it before PostgreSQL; `ticket.addComment` uses its
+  already authorized Ticket snapshot for Mutation-owned Job input instead of a
+  server-value-only touch update.
 
 The Better Auth extension tracer passes locally on PostgreSQL 17 and Firefox
-with 58 assertions. It includes idempotent auth migration/seed, generated-client
+with 60 assertions. It includes idempotent auth migration/seed, generated-client
 browser use with a real Better Auth cookie, auth session survival plus Job
 lease-expiry recovery after a hard host restart, direct generated operations,
 the real HTTP Action receiver, signed webhook replay, delayed Job inspection,
-retry, and cancellation persistence. The concrete application friction and
+retry, cancellation persistence, and a customer edit that omits the staff-only
+priority Field. The concrete application friction and
 proposed deeper seams—including the separate bounded auth pool, absent typed
 Service configuration, and runtime-package bundling workaround—is recorded in
 `docs/v4/implementation/team-support-desk/DX-EVIDENCE.md`; no React adapter or
 new public client interface was added.
+
+The final `quality:release`, PostgreSQL 17/Firefox tracer, Standards review, and
+Spec review pass. The manual test host is loopback-only on `127.0.0.1:43120` and
+Tailscale Serve adds only
+`https://devbox.tail9c2c07.ts.net:8444/ -> http://127.0.0.1:43120`; existing
+ports 443 and 8443 remain unchanged and Funnel is not enabled. The disposable
+PostgreSQL 17 container listens on loopback port 55432. Remove only the desk
+mapping with `sudo tailscale serve --https=8444 off` when the manual session is
+finished.
 
 ## Runnable regression skeleton
 
