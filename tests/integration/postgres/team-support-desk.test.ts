@@ -26,6 +26,7 @@ const receiverOrigin = "http://127.0.0.1:43121";
 const integrationKey = "team-support-desk-local-integration-key-v1";
 const webhookSecret = "team-support-local-webhook-signing-key-v1";
 const sessionSecret = "team-support-desk-local-session-signing-key-v1";
+const firefoxBinary = process.env.FIREFOX_BIN ?? "/usr/bin/firefox";
 
 function postgresUrl(): string {
 	const url = new URL("postgres://localhost/");
@@ -139,6 +140,20 @@ type TicketDetail = TicketSummary &
 			role: string;
 		}> | null;
 	}>;
+type TicketMutationResult = Readonly<{
+	id: string;
+	organizationId: string;
+	teamId: string;
+	requesterMembershipId: string;
+	assigneeMembershipId: string | null;
+	reference: string;
+	priority: string;
+	status: string;
+	summary: string;
+	description: string;
+	updatedAt: Date;
+	closedAt: Date | null;
+}>;
 type TicketPage = Readonly<{
 	nodes: readonly TicketSummary[];
 	pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean }>;
@@ -193,7 +208,7 @@ type Scope = Readonly<{
 					teamId: string;
 				}>,
 			): Promise<TicketPage>;
-			detail(input: Readonly<{ id: string }>): Promise<TicketDetail>;
+			detail(input: Readonly<{ id: string }>): Promise<TicketDetail | null>;
 			searchByReference(
 				input: Readonly<{ reference: string }>,
 			): Promise<TicketSummary | null>;
@@ -210,7 +225,7 @@ type Scope = Readonly<{
 					description: string;
 				}>,
 				options: Readonly<{ callId: string }>,
-			): Promise<TicketDetail>;
+			): Promise<TicketMutationResult>;
 			edit(
 				input: Readonly<{
 					ticketId: string;
@@ -220,26 +235,38 @@ type Scope = Readonly<{
 					description?: string;
 				}>,
 				options: Readonly<{ callId: string }>,
-			): Promise<TicketDetail>;
+			): Promise<TicketMutationResult>;
 			assign(
 				input: Readonly<{
 					ticketId: string;
 					assigneeMembershipId: string | null;
 				}>,
 				options: Readonly<{ callId: string }>,
-			): Promise<TicketDetail>;
+			): Promise<TicketMutationResult>;
 			close(
 				input: Readonly<{ ticketId: string }>,
 				options: Readonly<{ callId: string }>,
-			): Promise<TicketDetail>;
+			): Promise<TicketMutationResult>;
 			reopen(
 				input: Readonly<{ ticketId: string }>,
 				options: Readonly<{ callId: string }>,
-			): Promise<TicketDetail>;
+			): Promise<TicketMutationResult>;
 			addComment(
 				input: Readonly<{ ticketId: string; body: string }>,
 				options: Readonly<{ callId: string }>,
-			): Promise<Readonly<{ comment: unknown; job: JobReceipt }>>;
+			): Promise<
+				Readonly<{
+					comment: Readonly<{
+						id: string;
+						ticketId: string;
+						authorMembershipId: string;
+						body: string;
+						kind: string;
+						createdAt: Date;
+					}>;
+					job: JobReceipt;
+				}>
+			>;
 		}>;
 	}>;
 	actions: Readonly<{
@@ -407,6 +434,12 @@ postgresTest(
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-team-support-"));
 		cleanup.defer(() => rm(temporary, { force: true, recursive: true }));
 		try {
+			const versionRows = (await database!.unsafe(
+				"SHOW server_version_num",
+			)) as Array<Readonly<{ server_version_num: string }>>;
+			expect(
+				Math.trunc(Number(versionRows[0]?.server_version_num) / 10_000),
+			).toBe(17);
 			// Repository PostgreSQL setup/cleanup only. No application assertion below
 			// reads framework or application tables.
 			await database!.unsafe(
@@ -911,7 +944,7 @@ postgresTest(
 			);
 			const browser = Bun.spawn(
 				[
-					"/usr/bin/firefox",
+					firefoxBinary,
 					"--headless",
 					"--no-remote",
 					"--profile",
