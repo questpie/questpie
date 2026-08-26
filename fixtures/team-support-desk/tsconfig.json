@@ -6,6 +6,7 @@
 		"moduleResolution": "Bundler",
 		"noEmit": true,
 		"noUncheckedIndexedAccess": true,
+		"jsx": "react-jsx",
 		"paths": {
 			"#questpie/app": ["./.questpie/generated/app.ts"],
 			"#questpie/client": ["./.questpie/generated/client.ts"],
@@ -16,5 +17,5 @@
 		"target": "ES2024",
 		"types": ["bun"]
 	},
-	"include": ["src/**/*.ts", "tracer/**/*.ts"]
+	"include": ["src/**/*.ts", "tracer/**/*.ts", "tracer/**/*.tsx"]
 }

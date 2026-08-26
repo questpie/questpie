@@ -131,7 +131,7 @@ const [html, styles, browserBuild] = await Promise.all([
 	readFile(resolve(import.meta.dir, "index.html"), "utf8"),
 	readFile(resolve(import.meta.dir, "styles.css"), "utf8"),
 	Bun.build({
-		entrypoints: [resolve(import.meta.dir, "client.ts")],
+		entrypoints: [resolve(import.meta.dir, "browser/main.tsx")],
 		format: "esm",
 		minify: true,
 		target: "browser",
@@ -139,6 +139,8 @@ const [html, styles, browserBuild] = await Promise.all([
 ]);
 if (!browserBuild.success)
 	throw new Error(browserBuild.logs.map(({ message }) => message).join("\n"));
+if (browserBuild.outputs.length !== 1)
+	throw new TypeError("Team Support Desk must compile to one browser bundle");
 const browserJavaScript = await browserBuild.outputs[0]!.text();
 const application = await createApp({
 	postgres: { connectionUrl: databaseUrl, directConnectionUrl: databaseUrl },

@@ -9,6 +9,12 @@
 		"#questpie/source/*": "./src/*"
 	},
 	"dependencies": {
-		"questpie": "workspace:*"
+		"questpie": "workspace:*",
+		"react": "19.2.8",
+		"react-dom": "19.2.8"
+	},
+	"devDependencies": {
+		"@types/react": "19.2.17",
+		"@types/react-dom": "19.2.3"
 	}
 }

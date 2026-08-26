@@ -1,0 +1,98 @@
+import { defineCollectionOperations, mutation, operation } from "questpie";
+
+import { tickets } from "../tickets";
+import { ticketPolicy } from "./policy";
+
+export const ticketOperations = defineCollectionOperations(tickets, {
+	name: "tickets",
+	policy: ticketPolicy,
+	get: {
+		select: {
+			id: true,
+			organizationId: true,
+			teamId: true,
+			requesterMembershipId: true,
+			assigneeMembershipId: true,
+			reference: true,
+			priority: true,
+			status: true,
+			summary: true,
+			description: true,
+			createdAt: true,
+			updatedAt: true,
+			closedAt: true,
+			lastSlaFollowUpAt: true,
+		},
+	},
+	create: {
+		input: [
+			"teamId",
+			"requesterMembershipId",
+			"assigneeMembershipId",
+			"reference",
+			"priority",
+			"status",
+			"summary",
+			"description",
+		],
+		normalize: ({ input }) => ({
+			reference: operation.text.trim(input.reference),
+			summary: operation.text.trim(input.summary),
+			description: operation.text.trim(input.description),
+		}),
+		values: ({ tenant, operationTime }) => ({
+			organizationId: mutation.overwrite(tenant.id),
+			createdAt: mutation.overwrite(operationTime),
+			updatedAt: mutation.overwrite(operationTime),
+		}),
+		select: {
+			id: true,
+			organizationId: true,
+			teamId: true,
+			requesterMembershipId: true,
+			assigneeMembershipId: true,
+			reference: true,
+			priority: true,
+			status: true,
+			summary: true,
+			description: true,
+			createdAt: true,
+			updatedAt: true,
+			closedAt: true,
+		},
+	},
+	update: {
+		input: [
+			"teamId",
+			"assigneeMembershipId",
+			"priority",
+			"status",
+			"summary",
+			"description",
+			"closedAt",
+			"lastSlaFollowUpAt",
+		],
+		normalize: ({ input }) => ({
+			summary: operation.text.trimIfPresent(input.summary),
+			description: operation.text.trimIfPresent(input.description),
+		}),
+		values: ({ operationTime }) => ({
+			updatedAt: mutation.overwrite(operationTime),
+		}),
+		select: {
+			id: true,
+			organizationId: true,
+			teamId: true,
+			requesterMembershipId: true,
+			assigneeMembershipId: true,
+			reference: true,
+			priority: true,
+			status: true,
+			summary: true,
+			description: true,
+			createdAt: true,
+			updatedAt: true,
+			closedAt: true,
+		},
+	},
+});

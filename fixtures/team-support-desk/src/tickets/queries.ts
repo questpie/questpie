@@ -3,16 +3,13 @@ import { codec } from "questpie";
 import { defineQuery } from "#questpie/app";
 
 import {
-	commentPagePlan,
-	labelPagePlan,
-	teamListPlan,
 	ticketDetailPlan,
 	ticketListByStatusAndTeamPlan,
 	ticketListByStatusPlan,
 	ticketListByTeamPlan,
 	ticketListPlan,
 	ticketSearchByReferencePlan,
-} from "./support-query-plans";
+} from "./query-plans";
 
 const pageInfoCodec = codec.object({
 	endCursor: codec.nullable(codec.text()),
@@ -196,81 +193,4 @@ export const searchTicketByReference = defineQuery({
 			? { ...ticket, updatedAt: timestamp(ticket.updatedAt) }
 			: null;
 	},
-});
-
-export const pageComments = defineQuery({
-	name: "comments.page",
-	network: true,
-	input: codec.object({ ticketId: codec.uuid(), ...pageInputCodec }),
-	output: codec.object({
-		nodes: codec.array(
-			codec.object({
-				id: codec.uuid(),
-				ticketId: codec.uuid(),
-				authorMembershipId: codec.uuid(),
-				body: codec.text(),
-				kind: codec.text(),
-				createdAt: codec.timestamp(),
-				author: codec.nullable(membershipSummaryCodec),
-			}),
-		),
-		pageInfo: pageInfoCodec,
-	}),
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(commentPagePlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((comment) => ({
-				...comment,
-				createdAt: timestamp(comment.createdAt),
-			})),
-		};
-	},
-});
-
-export const pageLabels = defineQuery({
-	name: "labels.page",
-	network: true,
-	input: codec.object({ ticketId: codec.uuid(), ...pageInputCodec }),
-	output: codec.object({
-		nodes: codec.array(
-			codec.object({
-				id: codec.uuid(),
-				organizationId: codec.uuid(),
-				ticketId: codec.uuid(),
-				name: codec.text(),
-				color: codec.text(),
-				createdAt: codec.timestamp(),
-			}),
-		),
-		pageInfo: pageInfoCodec,
-	}),
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(labelPagePlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((label) => ({
-				...label,
-				createdAt: timestamp(label.createdAt),
-			})),
-		};
-	},
-});
-
-export const listTeams = defineQuery({
-	name: "teams.list",
-	network: true,
-	input: codec.object({ organizationId: codec.uuid(), ...pageInputCodec }),
-	output: codec.object({
-		nodes: codec.array(
-			codec.object({
-				id: codec.uuid(),
-				organizationId: codec.uuid(),
-				name: codec.text(),
-				routingStatus: codec.text(),
-			}),
-		),
-		pageInfo: pageInfoCodec,
-	}),
-	handler: ({ input, ctx }) => ctx.data.run(teamListPlan, input),
 });

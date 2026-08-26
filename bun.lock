@@ -101,6 +101,12 @@
       "version": "4.0.0-beta.1",
       "dependencies": {
         "questpie": "workspace:*",
+        "react": "19.2.8",
+        "react-dom": "19.2.8",
+      },
+      "devDependencies": {
+        "@types/react": "19.2.17",
+        "@types/react-dom": "19.2.3",
       },
     },
     "packages/compiler": {
