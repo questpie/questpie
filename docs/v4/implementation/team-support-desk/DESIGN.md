@@ -11,9 +11,10 @@
 Team Support Desk is a multi-tenant browser Operator App. A customer opens a
 ticket and comments on it. An agent filters and pages the queue, opens a detail
 view with team, requester, assignee, comments, and labels, edits and assigns the
-ticket, then closes or reopens it. An application-composed signed session
-selects Principal; Context selects one Organization; current Membership
-evidence remains the authorization truth.
+ticket, then closes or reopens it. Better Auth owns email/password identity and
+the durable browser session; an application Service resolves that session to a
+Principal. Context selects one Organization, and current Membership evidence
+remains the authorization truth.
 
 An inbound integration posts a signed webhook to create a ticket through a raw
 Route and an explicit application Execution. An agent may invoke one Action
@@ -24,15 +25,15 @@ retry, cancellation, lease expiry, and hard-restart recovery.
 
 ## Deep modules
 
-| Module                | Small interface                                                                        | Hidden implementation and invariant                                                                                                                                                                       | Seam and test surface                                                                                                      |
-| --------------------- | -------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Support domain        | Six Collection Definitions: Organization, Membership, Team, Ticket, Comment, Label     | keys, Relations, B-tree Indexes, lifecycle Fields, explicit server-owned timestamps, and migration/Seed artifacts                                                                                         | public Collection/Relation interface; compile, migrate, seed, generated data types                                         |
-| Tenant authorization  | one credential resolver, one Context Definition, and one default Policy per Collection | signed browser sessions, webhook integration credentials, tenant selection, active Membership evidence, customer/agent/admin role rules, row scope, Field authority, nondisclosure, and lock-time recheck | credential/Context/Policy interface; direct, network, Route transition, Query, Mutation, Job attempts                      |
-| Ticket operations     | generated Query/Mutation/Action maps                                                   | list/detail/reference search, filters, cursor pages, nested `toOne` Relations, create/comment/edit/assign/close/reopen transitions, explicit lifecycle writes, exact errors, and idempotent calls         | generated Operation interface shared by direct and browser callers                                                         |
-| Inbound webhook       | `POST /webhooks/support/inbound`                                                       | application credential resolution, bounded body, HMAC verification, replay identity, explicit same-Principal `ctx.execution`, and server-only Mutation                                                    | generated Route direct member and mounted `app.fetch`                                                                      |
-| Notification delivery | one `notification.sendTicketSummary` Action                                            | Query composition, Runtime-owned Effect Identity, execution-lifetime external Service, cancellable HTTP POST, declared rejection/ambiguity, semantic limits                                               | generated direct and Wire v3 Action callers; HTTP receiver is an external test target, not a second framework adapter seam |
-| SLA work              | one `ticket.slaFollowUp` Job and its generated `accept` capability                     | caller run-as, immutable accepted ticket snapshot, bounded retry, heartbeat, due-time wait, durable result, fencing and recovery                                                                          | direct and Mutation-owned Job acceptance; generated worker and server `inspect`/`events`/cancel surface                    |
-| Browser desk          | one generated-client-backed page                                                       | persona session, filters, reference search, cursor paging, queue/detail state, forms, optimistic busy/error states, and accessible responsive layout                                                      | browser DOM and generated client; Firefox is the acceptance adapter                                                        |
+| Module                | Small interface                                                                                                 | Hidden implementation and invariant                                                                                                                                                                             | Seam and test surface                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Support domain        | Six Collection Definitions: Organization, Membership, Team, Ticket, Comment, Label                              | keys, Relations, B-tree Indexes, lifecycle Fields, explicit server-owned timestamps, and migration/Seed artifacts                                                                                               | public Collection/Relation interface; compile, migrate, seed, generated data types                                         |
+| Tenant authorization  | one Better Auth Service, one credential resolver, one Context Definition, and one default Policy per Collection | standard Better Auth sessions, webhook integration credentials, tenant selection, active Membership evidence, customer/agent/admin role rules, row scope, Field authority, nondisclosure, and lock-time recheck | Service/Route/credential/Context/Policy interface; direct, network, Route transition, Query, Mutation, Job attempts        |
+| Ticket operations     | generated Query/Mutation/Action maps                                                                            | list/detail/reference search, filters, cursor pages, nested `toOne` Relations, create/comment/edit/assign/close/reopen transitions, explicit lifecycle writes, exact errors, and idempotent calls               | generated Operation interface shared by direct and browser callers                                                         |
+| Inbound webhook       | `POST /webhooks/support/inbound`                                                                                | application credential resolution, bounded body, HMAC verification, replay identity, explicit same-Principal `ctx.execution`, and server-only Mutation                                                          | generated Route direct member and mounted `app.fetch`                                                                      |
+| Notification delivery | one `notification.sendTicketSummary` Action                                                                     | Query composition, Runtime-owned Effect Identity, execution-lifetime external Service, cancellable HTTP POST, declared rejection/ambiguity, semantic limits                                                     | generated direct and Wire v3 Action callers; HTTP receiver is an external test target, not a second framework adapter seam |
+| SLA work              | one `ticket.slaFollowUp` Job and its generated `accept` capability                                              | caller run-as, immutable accepted ticket snapshot, bounded retry, heartbeat, due-time wait, durable result, fencing and recovery                                                                                | direct and Mutation-owned Job acceptance; generated worker and server `inspect`/`events`/cancel surface                    |
+| Browser desk          | one generated-client-backed page                                                                                | persona session, filters, reference search, cursor paging, queue/detail state, forms, optimistic busy/error states, and accessible responsive layout                                                            | browser DOM and generated client; Firefox is the acceptance adapter                                                        |
 
 The deletion test is deliberate: deleting Tenant authorization would duplicate
 membership/role conditions across every Operation; deleting Ticket operations
@@ -150,9 +151,13 @@ orchestration, but it may not bind a Principal internally, access framework
 tables for application behavior, invoke raw SQL from Definitions, or call a
 Runtime binder.
 
-The single application credential resolver recognizes either a signed browser
-session cookie or a dedicated integration credential header and returns the
-corresponding Principal. The webhook Route declares
+The application credential resolver asks the Better Auth Service to validate a
+browser session or recognizes a dedicated integration credential header, then
+returns the corresponding Principal. Organization, Membership, and role fields
+stored with the Better Auth user are routing hints only; Context reloads the
+current Membership before Policy executes. Public credential-free QUESTPIE
+Routes delegate `GET` and `POST /api/auth/*` to Better Auth's standard handler.
+The webhook Route declares
 `credentials: "application"` and authenticated admission; it then verifies the
 body HMAC and replay/event identity before entering
 `ctx.execution({ principal: ctx.principal, context: { organizationId } }, ...)`.
