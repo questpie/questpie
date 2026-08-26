@@ -26,6 +26,15 @@ import {
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
+function hasPhysicalChangeCapture(schema: SchemaProjectionV1): boolean {
+	const capture = schema.changeCapture;
+	return (
+		capture !== undefined &&
+		capture.collections.length > 0 &&
+		capture.sql.trim().length > 0
+	);
+}
+
 const kindRank: readonly MigrationStepKindV1[] = [
 	"createApplicationSchema",
 	"renameCollection",
@@ -174,7 +183,7 @@ export function createSteps(
 				}),
 			);
 	}
-	if (includeChangeCapture && target.changeCapture)
+	if (includeChangeCapture && hasPhysicalChangeCapture(target))
 		steps.push(
 			step({
 				kind: "addChangeCapture",
@@ -302,8 +311,8 @@ export function destructiveDeltaSteps(
 		"target Collection",
 	);
 	const steps: MigrationStepV1[] = [];
-	const baseHasChangeCapture = base.changeCapture !== undefined;
-	const targetHasChangeCapture = target.changeCapture !== undefined;
+	const baseHasChangeCapture = hasPhysicalChangeCapture(base);
+	const targetHasChangeCapture = hasPhysicalChangeCapture(target);
 	if (baseHasChangeCapture !== targetHasChangeCapture) {
 		if (baseHasChangeCapture)
 			steps.push(

@@ -174,6 +174,64 @@ describe("BETA-02 migration artifacts", () => {
 		);
 	});
 
+	test("omits a physical Change Capture step for an empty projection", async () => {
+		const frozen = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+		);
+		const targetSchema = structuredClone(frozen.targetSchema);
+		targetSchema.changeCapture = {
+			version: 1,
+			applicationName: targetSchema.application.name,
+			postgresSchema: targetSchema.application.postgresSchema,
+			collections: [],
+			triggerCatalog: [],
+			fingerprint: "empty",
+			sql: "\n",
+		};
+		const planned = createMigrationPlan({
+			targetSchema,
+			slug: "create-empty-capture",
+		});
+
+		expect(planned.plan.steps).not.toContainEqual(
+			expect.objectContaining({ kind: "addChangeCapture" }),
+		);
+		const committed = createCommittedMigration({
+			plan: planned.plan,
+			baseSchema: planned.baseSchema,
+			targetSchema,
+			currentSchema: targetSchema,
+			planDigest: planned.digest,
+			localMigrations: [],
+		});
+		expect(committed.files["up.sql"]).not.toEndWith("\n\n");
+
+		const enabledSchema = structuredClone(targetSchema);
+		enabledSchema.changeCapture = {
+			...enabledSchema.changeCapture,
+			collections: [
+				{
+					identity: "collection:messages",
+					postgresName: "messages",
+					keyColumns: ["id"],
+					rowTrigger: "capture_messages_row",
+					truncateTrigger: "capture_messages_truncate",
+				},
+			],
+			fingerprint: "enabled",
+			sql: "SELECT 1;\n",
+		};
+		const enable = createMigrationPlan({
+			baseSchema: targetSchema,
+			targetSchema: enabledSchema,
+			baseMigration: committed.identity,
+			slug: "enable-capture",
+		});
+		expect(enable.plan.steps).toContainEqual(
+			expect.objectContaining({ kind: "addChangeCapture" }),
+		);
+	});
+
 	test("loads the committed six-file collaboration migration byte for byte", async () => {
 		const committed = await loadCommittedMigration(
 			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
