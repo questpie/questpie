@@ -59,7 +59,7 @@ External release evidence remains honest:
 ## Team Support Desk reference application
 
 The second application-facing v4 consumer is implemented at
-`fixtures/team-support-desk` through code head `5fe7983cd`. It is a
+`fixtures/team-support-desk` through code head `7a4e33a87`. It is a
 production-like, tenant-aware support desk built only on the public v4
 interface. Organization, Membership, Team, Ticket, Comment, and Label
 Collections are split by domain locality with their Policy and Operation
@@ -71,13 +71,20 @@ Mutation-owned immediate and directly accepted delayed Jobs, retry,
 cancellation, and hard-restart recovery.
 
 The browser is a minimal React 19 and ReactDOM application compiled by Bun into
-one minified bundle. All application Query, Mutation, and Action traffic uses
-`#questpie/client`; the only two manual browser `fetch` calls live in the
-explicit fixture-control module for session bootstrap and Firefox completion
-reporting. The host serves static tracer assets and delegates every framework
-request to `application.fetch`. Generated app/client modules are the direct,
-network, and browser type authority; the PostgreSQL tracer does not duplicate
-their request or response contracts.
+one minified bundle. Better Auth 1.7 owns email/password login, durable sessions,
+and its React auth client. Public QUESTPIE Routes delegate `/api/auth/*` to the
+standard Better Auth handler; the application Service validates sessions and
+the credential resolver emits a user Principal. Organization, Membership, and
+role session fields are non-authoritative routing hints: Context re-reads the
+current Membership and Policy remains QUESTPIE-owned.
+
+All application Query, Mutation, and Action traffic uses `#questpie/client`;
+the only manual browser `fetch` lives in the explicit fixture-control module
+for Firefox completion reporting. The host serves static tracer assets and
+delegates every framework request, including auth, to `application.fetch`.
+Generated app/client modules are the direct, network, and browser type
+authority; the PostgreSQL tracer does not duplicate their request or response
+contracts.
 
 The tracer exposed and closed two narrow framework correctness defects:
 
@@ -88,22 +95,21 @@ The tracer exposed and closed two narrow framework correctness defects:
 - inspection of a directly scheduled delayed Job incorrectly required a
   failure code at attempt zero; the invariant now distinguishes initial delay
   from retry delay.
+- executable-only third-party imports were incorrectly validated as structural
+  source. Dynamic imports are now admitted only inside recognized executable
+  Definition slots while module-level imports remain rejected by
+  `QP-COMPOSE-010`.
 
-Local closure evidence on PostgreSQL 17 and Firefox 154 is one passing test
-with 47 assertions. It includes generated-client browser use, direct generated
-operations, the real HTTP Action receiver, signed webhook replay, delayed Job
-inspection, retry, cancellation persistence, and lease-expiry recovery after a
-hard host restart. `bun run check-types`, focused compiler/runtime/durable
-regressions, architecture, `quality:release`, and `git diff --check` pass. The
-concrete application friction and proposed deeper seams are recorded in
+The Better Auth extension tracer passes locally on PostgreSQL 17 and Firefox
+with 58 assertions. It includes idempotent auth migration/seed, generated-client
+browser use with a real Better Auth cookie, auth session survival plus Job
+lease-expiry recovery after a hard host restart, direct generated operations,
+the real HTTP Action receiver, signed webhook replay, delayed Job inspection,
+retry, and cancellation persistence. The concrete application friction and
+proposed deeper seams—including the separate bounded auth pool, absent typed
+Service configuration, and runtime-package bundling workaround—is recorded in
 `docs/v4/implementation/team-support-desk/DX-EVIDENCE.md`; no React adapter or
 new public client interface was added.
-
-The first final adversarial review found a private cross-domain Runtime import,
-duplicated create/update candidate decoding, hand-authored tracer wire types,
-and this stale handoff. The code findings are closed by `c1aa0c122` and
-`5fe7983cd`. Independent Standards and Spec reruns over the complete closure
-tree both return PASS with no remaining findings.
 
 ## Runnable regression skeleton
 
