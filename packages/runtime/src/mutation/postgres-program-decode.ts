@@ -1,7 +1,8 @@
-import { decodeRelationalScalarCodec } from "../relational/scalar";
+import { decodeRelationalScalarCodec } from "../relational";
 import { canonicalMutationBytes } from "./canonical";
 import type {
 	FieldPath,
+	LinkedPostgresCreateOperationPlanV1,
 	OutputAuthorityV1,
 	PostgresResultV1,
 	RecordValue,
@@ -55,6 +56,38 @@ export function path(value: unknown, label: string): FieldPath {
 	)
 		fail(`${label} is invalid`);
 	return Object.freeze(result as string[]);
+}
+
+export function candidateFields(
+	value: unknown,
+	identity: string,
+): LinkedPostgresCreateOperationPlanV1["candidate"]["fields"] {
+	const fields = array(value, `${identity} candidate fields`).map(
+		(raw, index) => {
+			const field = record(raw, `${identity} candidate field ${index}`);
+			exact(
+				field,
+				["path", "codec", "nullable"],
+				`${identity} candidate field ${index}`,
+			);
+			if (typeof field.nullable !== "boolean")
+				fail(`${identity} candidate field ${index} nullable is invalid`);
+			return Object.freeze({
+				path: path(field.path, `${identity} candidate field ${index} path`),
+				codec: decodeRelationalScalarCodec(
+					field.codec,
+					`${identity} candidate field ${index} codec`,
+				),
+				nullable: field.nullable,
+			});
+		},
+	);
+	if (
+		new Set(fields.map(({ path: fieldPath }) => JSON.stringify(fieldPath)))
+			.size !== fields.length
+	)
+		fail(`${identity} candidate fields must be unique`);
+	return Object.freeze(fields);
 }
 
 export function same(left: unknown, right: unknown): boolean {

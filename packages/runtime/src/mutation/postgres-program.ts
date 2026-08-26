@@ -1,5 +1,4 @@
 import { runtimeArtifactDigest } from "../application/artifact-protocol";
-import { decodeRelationalScalarCodec } from "../relational/scalar";
 import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
@@ -7,6 +6,7 @@ import {
 import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import {
 	array,
+	candidateFields,
 	evidence,
 	exact,
 	fail,
@@ -137,37 +137,7 @@ function createPlan(
 		}
 		return Object.freeze({ ...step });
 	});
-	const fields = array(
-		candidate.fields,
-		`${operation.identity} candidate fields`,
-	).map((raw, index) => {
-		const field = record(raw, `${operation.identity} candidate field ${index}`);
-		exact(
-			field,
-			["path", "codec", "nullable"],
-			`${operation.identity} candidate field ${index}`,
-		);
-		if (typeof field.nullable !== "boolean")
-			fail(
-				`${operation.identity} candidate field ${index} nullable is invalid`,
-			);
-		return Object.freeze({
-			path: path(
-				field.path,
-				`${operation.identity} candidate field ${index} path`,
-			),
-			codec: decodeRelationalScalarCodec(
-				field.codec,
-				`${operation.identity} candidate field ${index} codec`,
-			),
-			nullable: field.nullable,
-		});
-	});
-	if (
-		new Set(fields.map(({ path }) => JSON.stringify(path))).size !==
-		fields.length
-	)
-		fail(`${operation.identity} candidate fields must be unique`);
+	const fields = candidateFields(candidate.fields, operation.identity);
 	for (const callerPath of operation.callerInputFields)
 		if (
 			!steps.some(

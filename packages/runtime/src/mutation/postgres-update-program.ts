@@ -1,4 +1,3 @@
-import { decodeRelationalScalarCodec } from "../relational/scalar";
 import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
@@ -6,6 +5,7 @@ import {
 import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import {
 	array,
+	candidateFields,
 	evidence,
 	exact,
 	fail,
@@ -87,32 +87,7 @@ export function updatePlan(
 		path(step.target, `${operation.identity} candidate step ${index} target`);
 		return Object.freeze({ ...step });
 	});
-	const fields = array(
-		candidate.fields,
-		`${operation.identity} candidate fields`,
-	).map((raw, index) => {
-		const field = record(raw, `${operation.identity} candidate field ${index}`);
-		exact(
-			field,
-			["path", "codec", "nullable"],
-			`${operation.identity} candidate field ${index}`,
-		);
-		if (typeof field.nullable !== "boolean")
-			fail(
-				`${operation.identity} candidate field ${index} nullable is invalid`,
-			);
-		return Object.freeze({
-			path: path(
-				field.path,
-				`${operation.identity} candidate field ${index} path`,
-			),
-			codec: decodeRelationalScalarCodec(
-				field.codec,
-				`${operation.identity} candidate field ${index} codec`,
-			),
-			nullable: field.nullable,
-		});
-	});
+	const fields = candidateFields(candidate.fields, operation.identity);
 	const lock = record(plan.lock, `${operation.identity} lock`);
 	exact(lock, ["sql", "parameters", "outcome"], `${operation.identity} lock`);
 	const lockSql = statement(lock.sql, `${operation.identity} lock SQL`);
