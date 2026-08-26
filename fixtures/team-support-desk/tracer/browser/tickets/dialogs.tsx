@@ -1,5 +1,6 @@
 import type { FormEvent, RefObject } from "react";
 
+import type { SupportSession } from "../auth/client";
 import type { TeamPage, TicketDetail } from "../questpie";
 
 type CreateDialogProps = Readonly<{
@@ -96,6 +97,7 @@ type EditDialogProps = Readonly<{
 	dialogRef: RefObject<HTMLDialogElement | null>;
 	error: string;
 	onSubmit: (data: FormData) => void;
+	role: SupportSession["role"];
 	ticket: TicketDetail | null;
 }>;
 
@@ -104,6 +106,7 @@ export function EditTicketDialog({
 	dialogRef,
 	error,
 	onSubmit,
+	role,
 	ticket,
 }: EditDialogProps) {
 	function submit(event: FormEvent<HTMLFormElement>): void {
@@ -146,14 +149,16 @@ export function EditTicketDialog({
 						defaultValue={ticket?.description}
 					/>
 				</label>
-				<label>
-					Priority
-					<select name="priority" defaultValue={ticket?.priority}>
-						<option value="normal">Normal</option>
-						<option value="high">High</option>
-						<option value="urgent">Urgent</option>
-					</select>
-				</label>
+				{role === "customer" ? null : (
+					<label>
+						Priority
+						<select name="priority" defaultValue={ticket?.priority}>
+							<option value="normal">Normal</option>
+							<option value="high">High</option>
+							<option value="urgent">Urgent</option>
+						</select>
+					</label>
+				)}
 				<p className="form-error" role="alert">
 					{error}
 				</p>

@@ -257,22 +257,31 @@ postgresTest(
 				"Better Auth demo identities ready: 3",
 			);
 
-			const [{ createApp }, { createClient }, { principal }] =
-				await Promise.all([
-					import(
-						`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?app=${crypto.randomUUID()}`
-					) as Promise<
-						typeof import("../../../fixtures/team-support-desk/.questpie/generated/app")
-					>,
-					import(
-						`${pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href}?client=${crypto.randomUUID()}`
-					) as Promise<
-						typeof import("../../../fixtures/team-support-desk/.questpie/generated/client")
-					>,
-					import(
-						`${pathToFileURL(questpieEntry).href}?principal=${crypto.randomUUID()}`
-					) as Promise<typeof import("../../../packages/questpie/src/index")>,
-				]);
+			const [
+				{ createApp },
+				{ createClient },
+				{ principal },
+				{ ticketEditInput },
+			] = await Promise.all([
+				import(
+					`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?app=${crypto.randomUUID()}`
+				) as Promise<
+					typeof import("../../../fixtures/team-support-desk/.questpie/generated/app")
+				>,
+				import(
+					`${pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href}?client=${crypto.randomUUID()}`
+				) as Promise<
+					typeof import("../../../fixtures/team-support-desk/.questpie/generated/client")
+				>,
+				import(
+					`${pathToFileURL(questpieEntry).href}?principal=${crypto.randomUUID()}`
+				) as Promise<typeof import("../../../packages/questpie/src/index")>,
+				import(
+					`${pathToFileURL(join(temporary, "tracer/browser/tickets/edit-input.ts")).href}?editInput=${crypto.randomUUID()}`
+				) as Promise<
+					typeof import("../../../fixtures/team-support-desk/tracer/browser/tickets/edit-input")
+				>,
+			]);
 
 			let rejectNext = false;
 			const directReceipts: Array<
@@ -537,6 +546,53 @@ postgresTest(
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);
+
+			const customerSignIn = await app.fetch(
+				new Request(`${authOrigin}/api/auth/sign-in/email`, {
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						origin: authOrigin,
+					},
+					body: JSON.stringify(supportAuthCredentials.customer),
+				}),
+			);
+			expect(customerSignIn.status).toBe(200);
+			const customerCookie = responseCookie(customerSignIn);
+			const customerBrowserClient = createClient({
+				baseUrl: authOrigin,
+				fetch: (request) => {
+					const headers = new Headers(request.headers);
+					headers.set("cookie", customerCookie);
+					return app.fetch(new Request(request, { headers }));
+				},
+			}).withContext({
+				organizationId: supportTracerIds.organization,
+				membershipId: supportTracerIds.membershipCustomer,
+			});
+			const customerEditForm = new FormData();
+			customerEditForm.set("summary", "Customer supplied updated summary");
+			customerEditForm.set(
+				"description",
+				"Customer supplied updated description.",
+			);
+			customerEditForm.set("priority", "urgent");
+			const customerEdited = await customerBrowserClient.mutations[
+				"ticket.edit"
+			](
+				ticketEditInput(
+					"customer",
+					customerEditForm,
+					supportTracerIds.ticketOpen,
+				),
+				{ callId: `browser:customer-edit:${crypto.randomUUID()}` },
+			);
+			expect(customerEdited).toMatchObject({
+				description: "Customer supplied updated description.",
+				id: supportTracerIds.ticketOpen,
+				priority: "high",
+				summary: "Customer supplied updated summary",
+			});
 
 			const webhookBody = JSON.stringify({
 				eventId: `webhook:${crypto.randomUUID()}`,

@@ -111,10 +111,10 @@ Effect Identity material, exact success type, and a declared provider error.
 
 ## Durable and external-effect journeys
 
-1. `ticket.addComment` writes the Comment, explicitly advances Ticket
-   `updatedAt`, and accepts `ticket.slaFollowUp` immediately in the same
-   Mutation transaction. Its Job input is an immutable ticket reference,
-   summary, SLA due time, and Organization id captured by the Mutation; current
+1. `ticket.addComment` writes the Comment and accepts `ticket.slaFollowUp`
+   immediately in the same Mutation transaction. Its Job input is an immutable
+   ticket reference, summary, SLA due time, and Organization id from the
+   Policy-authorized Ticket snapshot already read by the Mutation; current
    ordinary `JobContext` exposes no data or generated Operation callers.
 2. A direct server execution accepts the same Job with an absolute
    `notBefore`; the worker proves it cannot run early.
@@ -160,7 +160,7 @@ Routes delegate `GET` and `POST /api/auth/*` to Better Auth's standard handler.
 The webhook Route declares
 `credentials: "application"` and authenticated admission; it then verifies the
 body HMAC and replay/event identity before entering
-`ctx.execution({ principal: ctx.principal, context: { organizationId } }, ...)`.
+`ctx.execution({ principal: ctx.principal, context: { organizationId, membershipId } }, ...)`.
 It never upgrades an anonymous Principal in the handler. The verified webhook
 event id is the server-only create Mutation's stable `callId`, so a valid
 duplicate recovers the same committed result.

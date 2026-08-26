@@ -13,7 +13,9 @@ import type {
 import { errorMessage } from "./shared/format";
 import { TicketDetailPanel } from "./tickets/detail";
 import { CreateTicketDialog, EditTicketDialog } from "./tickets/dialogs";
+import { ticketEditInput } from "./tickets/edit-input";
 import { TicketQueue } from "./tickets/queue";
+import { firefoxJourneyFromUrl, runFirefoxJourney } from "./tracer/journey";
 
 type DetailState = Readonly<{
 	comments: CommentPage;
@@ -241,75 +243,22 @@ export function DeskApplication({
 	}, [desk, loadQueue, session.organizationId, session.role]);
 
 	useEffect(() => {
-		const tracerReference = new URL(location.href).searchParams.get(
-			"tracerReference",
-		);
-		if (!ready || tracerReference === null || tracerStarted.current) return;
+		const journey = firefoxJourneyFromUrl(location.href);
+		if (!ready || journey === null || tracerStarted.current) return;
 		tracerStarted.current = true;
-		void (async () => {
-			let ticket = await searchTicket(tracerReference);
-			if (ticket === null)
-				throw new Error("Firefox exact-reference search failed");
-			const commentBody =
-				new URL(location.href).searchParams.get("tracerComment") ??
-				`Firefox update ${crypto.randomUUID()}`;
-			let ticketId = ticket.id;
-			await executeTicketOperation("Adding comment", ticketId, () =>
-				desk.mutations["ticket.addComment"](
-					{ body: commentBody, ticketId },
-					{ callId: `browser:comment:${crypto.randomUUID()}` },
-				),
-			);
-			const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-			await executeTicketOperation("Sending summary", ticketId, async () => {
-				const result = await desk.actions["notification.sendTicketSummary"](
-					{ ticketId },
-					{ effectKey, timeoutMilliseconds: 3_000 },
-				);
-				await reportFixturePhase({
-					effectId: result.effectId,
-					effectKey,
-					phase: "summary-sent",
-					receipt: result.providerReceipt,
-					ticketReference: result.ticketReference,
-				});
-			});
-			if (ticket.status === "closed")
-				ticket = await executeTicketOperation(
-					"Reopening ticket",
-					ticketId,
-					() =>
-						desk.mutations["ticket.reopen"](
-							{ ticketId },
-							{ callId: `browser:reopen:${crypto.randomUUID()}` },
-						),
-				);
-			ticketId = ticket.id;
-			ticket = await executeTicketOperation("Closing ticket", ticketId, () =>
-				desk.mutations["ticket.close"](
-					{ ticketId },
-					{ callId: `browser:close:${crypto.randomUUID()}` },
-				),
-			);
-			ticketId = ticket.id;
-			ticket = await executeTicketOperation("Reopening ticket", ticketId, () =>
-				desk.mutations["ticket.reopen"](
-					{ ticketId },
-					{ callId: `browser:reopen:${crypto.randomUUID()}` },
-				),
-			);
-			setStatusFilter("open");
-			setTeamFilter(ticket.teamId);
-			setCursors([null]);
-			await loadQueue("open", ticket.teamId, null, 0);
-			await reportFixturePhase({
-				authProvider: "better-auth",
-				commentBody,
-				phase: "firefox-complete",
-				reference: tracerReference,
-				role: session.role,
-			});
-		})().catch(async (error: unknown) => {
+		void runFirefoxJourney({
+			...journey,
+			desk,
+			executeTicketOperation,
+			loadFilteredQueue: (status, teamId) => loadQueue(status, teamId, null, 0),
+			role: session.role,
+			searchTicket,
+			selectFilters: (status, teamId) => {
+				setStatusFilter(status);
+				setTeamFilter(teamId);
+				setCursors([null]);
+			},
+		}).catch(async (error: unknown) => {
 			await reportFixturePhase({
 				error: errorMessage(error),
 				phase: "desk-error",
@@ -529,18 +478,14 @@ export function DeskApplication({
 					setEditError("");
 					void executeTicketOperation("Saving changes", ticket.id, () =>
 						desk.mutations["ticket.edit"](
-							{
-								description: String(data.get("description")),
-								priority: String(data.get("priority")),
-								summary: String(data.get("summary")),
-								ticketId: ticket.id,
-							},
+							ticketEditInput(session.role, data, ticket.id),
 							{ callId: `browser:edit:${crypto.randomUUID()}` },
 						),
 					)
 						.then(() => editDialog.current?.close())
 						.catch((error: unknown) => setEditError(errorMessage(error)));
 				}}
+				role={session.role}
 				ticket={ticket}
 			/>
 		</>
