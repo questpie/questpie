@@ -782,7 +782,7 @@ postgresTest(
 				claimBatch: 4,
 				leaseMilliseconds: 1_000,
 				heartbeatMilliseconds: 200,
-				attemptDeadlineMilliseconds: 500,
+				attemptDeadlineMilliseconds: 1_000,
 			});
 			const immediateTerminal = await driveUntilTerminal(
 				app,

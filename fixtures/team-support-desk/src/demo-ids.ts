@@ -19,6 +19,10 @@ export const demoIds = Object.freeze({
 		customerOpen: `${prefix}7131`,
 		agentClosed: `${prefix}7132`,
 	}),
+	references: Object.freeze({
+		customerOpen: "SUP-1042",
+		agentClosed: "SUP-1038",
+	}),
 	comments: Object.freeze({
 		customer: `${prefix}7141`,
 		agent: `${prefix}7142`,

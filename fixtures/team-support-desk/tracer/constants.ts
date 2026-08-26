@@ -1,3 +1,5 @@
+import { demoIds } from "../src/demo-ids";
+
 export const supportTracerIds = Object.freeze({
 	organization: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7100",
 	principalCustomer: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7101",
@@ -11,8 +13,8 @@ export const supportTracerIds = Object.freeze({
 	teamPlatform: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7121",
 	ticketOpen: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
 	ticketClosed: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7132",
-	referenceOpen: "SUP-1001",
-	referenceClosed: "SUP-1002",
+	referenceOpen: demoIds.references.customerOpen,
+	referenceClosed: demoIds.references.agentClosed,
 });
 
 export const supportPersonas = Object.freeze({

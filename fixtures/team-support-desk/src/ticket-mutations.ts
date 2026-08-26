@@ -28,6 +28,40 @@ const transitionRejected = operation.error({
 	status: 409,
 });
 
+function ticketResult(
+	ticket: Readonly<{
+		id: string;
+		organizationId: string;
+		teamId: string;
+		requesterMembershipId: string;
+		assigneeMembershipId: string | null;
+		reference: string;
+		priority: string;
+		status: string;
+		summary: string;
+		description: string;
+		createdAt: Date;
+		updatedAt: Date;
+		closedAt: Date | null;
+	}>,
+) {
+	return {
+		id: ticket.id,
+		organizationId: ticket.organizationId,
+		teamId: ticket.teamId,
+		requesterMembershipId: ticket.requesterMembershipId,
+		assigneeMembershipId: ticket.assigneeMembershipId,
+		reference: ticket.reference,
+		priority: ticket.priority,
+		status: ticket.status,
+		summary: ticket.summary,
+		description: ticket.description,
+		createdAt: ticket.createdAt,
+		updatedAt: ticket.updatedAt,
+		closedAt: ticket.closedAt,
+	};
+}
+
 export const createTicket = defineMutation({
 	name: "ticket.create",
 	network: true,
@@ -54,7 +88,7 @@ export const createTicket = defineMutation({
 				description: input.description,
 			},
 		});
-		return ticket;
+		return ticketResult(ticket);
 	},
 });
 
@@ -86,7 +120,7 @@ export const editTicket = defineMutation({
 			},
 		});
 		if (updated === null) throw errors.ticketUnavailable();
-		return updated;
+		return ticketResult(updated);
 	},
 });
 
@@ -106,7 +140,7 @@ export const assignTicket = defineMutation({
 			patch: { assigneeMembershipId: input.assigneeMembershipId },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
-		return updated;
+		return ticketResult(updated);
 	},
 });
 
@@ -129,7 +163,7 @@ export const closeTicket = defineMutation({
 			patch: { status: "closed", closedAt: ctx.operationTime },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
-		return updated;
+		return ticketResult(updated);
 	},
 });
 
@@ -149,7 +183,7 @@ export const reopenTicket = defineMutation({
 			patch: { status: "open", closedAt: null },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
-		return updated;
+		return ticketResult(updated);
 	},
 });
 
