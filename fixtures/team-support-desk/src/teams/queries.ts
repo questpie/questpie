@@ -14,10 +14,6 @@ const pageInputCodec = {
 	after: codec.nullable(codec.text()),
 } as const;
 
-function timestamp(value: Date | string): Date {
-	return value instanceof Date ? value : new Date(value);
-}
-
 export const listTeams = defineQuery({
 	name: "teams.list",
 	network: true,
