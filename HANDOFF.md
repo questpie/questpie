@@ -576,7 +576,7 @@ was subsequently carried through generated client/server transport at
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Treat Team Support Desk through `5fe7983cd` as the current golden reference
+2. Treat Team Support Desk through `5fdb5adac` as the current golden reference
    consumer. Read its fixture-local `README.md` for the shortest module and
    execution map, and keep every application browser call on the generated
    client.
