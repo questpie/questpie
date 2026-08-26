@@ -102,8 +102,8 @@ new public client interface was added.
 The first final adversarial review found a private cross-domain Runtime import,
 duplicated create/update candidate decoding, hand-authored tracer wire types,
 and this stale handoff. The code findings are closed by `c1aa0c122` and
-`5fe7983cd`; the independent Standards and Spec rerun is the only remaining
-closure check for this handoff update.
+`5fe7983cd`. Independent Standards and Spec reruns over the complete closure
+tree both return PASS with no remaining findings.
 
 ## Runnable regression skeleton
 
@@ -560,8 +560,8 @@ was subsequently carried through generated client/server transport at
    consumer. Read its fixture-local `README.md` for the shortest module and
    execution map, and keep every application browser call on the generated
    client.
-3. Treat the reference application as closed only after the final independent
-   Standards and Spec rerun recorded above passes.
+3. Treat the reference application as closed with the independent Standards
+   and Spec PASS recorded above.
 4. Do not reopen this boundary by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
