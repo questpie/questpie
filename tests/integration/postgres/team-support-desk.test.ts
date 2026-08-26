@@ -6,6 +6,12 @@ import { pathToFileURL } from "node:url";
 
 import { SQL } from "bun";
 
+import type {
+	DurableRunView,
+	GeneratedApp,
+	GeneratedDurable,
+	GeneratedJobs,
+} from "../../../fixtures/team-support-desk/.questpie/generated/app";
 import {
 	supportPersonas,
 	supportTracerIds,
@@ -114,224 +120,6 @@ async function startHost(
 	});
 }
 
-type TicketSummary = Readonly<{
-	id: string;
-	organizationId: string;
-	teamId: string;
-	requesterMembershipId: string;
-	assigneeMembershipId: string | null;
-	reference: string;
-	priority: string;
-	status: string;
-	summary: string;
-	updatedAt: Date;
-	team: Readonly<{ id: string; name: string; routingStatus: string }> | null;
-	assignee: Readonly<{ id: string; principalId: string; role: string }> | null;
-}>;
-type TicketDetail = TicketSummary &
-	Readonly<{
-		description: string;
-		createdAt: Date;
-		closedAt: Date | null;
-		lastSlaFollowUpAt: Date | null;
-		requester: Readonly<{
-			id: string;
-			principalId: string;
-			role: string;
-		}> | null;
-	}>;
-type TicketMutationResult = Readonly<{
-	id: string;
-	organizationId: string;
-	teamId: string;
-	requesterMembershipId: string;
-	assigneeMembershipId: string | null;
-	reference: string;
-	priority: string;
-	status: string;
-	summary: string;
-	description: string;
-	updatedAt: Date;
-	closedAt: Date | null;
-}>;
-type TicketPage = Readonly<{
-	nodes: readonly TicketSummary[];
-	pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean }>;
-}>;
-type JobReceipt = Readonly<{ runId: string; resource: string }>;
-type JobInput = Readonly<{
-	organizationId: string;
-	ticketId: string;
-	reference: string;
-	summary: string;
-	dueAt: Date;
-}>;
-type RunView = Readonly<{
-	runId: string;
-	state: "cancelled" | "delayed" | "failed" | "ready" | "running" | "succeeded";
-	attemptCount: number;
-	currentAttemptId: string | null;
-	resultBytes: Uint8Array | null;
-	version: number;
-}>;
-type RunEvent = Readonly<{
-	sequence: number;
-	kind: string;
-	attemptId: string | null;
-	leaseTokenDigest: string | null;
-}>;
-type Scope = Readonly<{
-	queries: Readonly<{
-		tickets: Readonly<{
-			list(
-				input: Readonly<{ first: number; after: string | null }>,
-			): Promise<TicketPage>;
-			listByStatus(
-				input: Readonly<{
-					first: number;
-					after: string | null;
-					status: string;
-				}>,
-			): Promise<TicketPage>;
-			listByTeam(
-				input: Readonly<{
-					first: number;
-					after: string | null;
-					teamId: string;
-				}>,
-			): Promise<TicketPage>;
-			listByStatusAndTeam(
-				input: Readonly<{
-					first: number;
-					after: string | null;
-					status: string;
-					teamId: string;
-				}>,
-			): Promise<TicketPage>;
-			detail(input: Readonly<{ id: string }>): Promise<TicketDetail | null>;
-			searchByReference(
-				input: Readonly<{ reference: string }>,
-			): Promise<TicketSummary | null>;
-		}>;
-	}>;
-	mutations: Readonly<{
-		ticket: Readonly<{
-			create(
-				input: Readonly<{
-					teamId: string;
-					reference: string;
-					priority: string;
-					summary: string;
-					description: string;
-				}>,
-				options: Readonly<{ callId: string }>,
-			): Promise<TicketMutationResult>;
-			edit(
-				input: Readonly<{
-					ticketId: string;
-					teamId?: string;
-					priority?: string;
-					summary?: string;
-					description?: string;
-				}>,
-				options: Readonly<{ callId: string }>,
-			): Promise<TicketMutationResult>;
-			assign(
-				input: Readonly<{
-					ticketId: string;
-					assigneeMembershipId: string | null;
-				}>,
-				options: Readonly<{ callId: string }>,
-			): Promise<TicketMutationResult>;
-			close(
-				input: Readonly<{ ticketId: string }>,
-				options: Readonly<{ callId: string }>,
-			): Promise<TicketMutationResult>;
-			reopen(
-				input: Readonly<{ ticketId: string }>,
-				options: Readonly<{ callId: string }>,
-			): Promise<TicketMutationResult>;
-			addComment(
-				input: Readonly<{ ticketId: string; body: string }>,
-				options: Readonly<{ callId: string }>,
-			): Promise<
-				Readonly<{
-					comment: Readonly<{
-						id: string;
-						ticketId: string;
-						authorMembershipId: string;
-						body: string;
-						kind: string;
-						createdAt: Date;
-					}>;
-					job: JobReceipt;
-				}>
-			>;
-		}>;
-	}>;
-	actions: Readonly<{
-		notification: Readonly<{
-			sendTicketSummary(
-				input: Readonly<{ ticketId: string }>,
-				options: Readonly<{
-					effectKey: string;
-					callId?: string;
-					timeoutMilliseconds?: number;
-				}>,
-			): Promise<
-				Readonly<{
-					effectId: string;
-					ticketReference: string;
-					providerReceipt: string;
-				}>
-			>;
-		}>;
-	}>;
-	jobs: Readonly<{
-		ticket: Readonly<{
-			slaFollowUp: Readonly<{
-				accept(
-					input: JobInput,
-					options: Readonly<{ idempotencyKey: string; notBefore?: Date }>,
-				): Promise<JobReceipt>;
-			}>;
-		}>;
-	}>;
-}>;
-type Durable = Readonly<{
-	worker(
-		options: Readonly<{
-			workerId: string;
-			claimBatch?: number;
-			leaseMilliseconds: number;
-			heartbeatMilliseconds: number;
-			attemptDeadlineMilliseconds: number;
-		}>,
-	): Readonly<{ poll(): Promise<unknown>; beginDrain(): void }>;
-	inspect(runId: string): Promise<RunView | null>;
-	events(runId: string): Promise<readonly RunEvent[]>;
-	cancelRun(
-		input: Readonly<{
-			runId: string;
-			reason: string;
-			actor: unknown;
-			expectedVersion?: number;
-		}>,
-	): Promise<Readonly<{ outcome: string; stateAfter: string }>>;
-}>;
-type GeneratedApp = Readonly<{
-	execution<Result>(
-		input: Readonly<{
-			principal: unknown;
-			context: Readonly<{ organizationId: string; membershipId: string }>;
-		}>,
-		use: (scope: Scope) => Result | Promise<Result>,
-	): Promise<Awaited<Result>>;
-	fetch(request: Request): Promise<Response>;
-	durable: Durable;
-	close(): Promise<void>;
-}>;
-
 async function hmacHex(secret: string, body: string): Promise<string> {
 	const key = await crypto.subtle.importKey(
 		"raw",
@@ -366,7 +154,7 @@ async function sessionToken(principalId: string): Promise<string> {
 }
 
 function executionInput(
-	principal: unknown,
+	principal: Parameters<GeneratedApp["execution"]>[0]["principal"],
 	persona: (typeof supportPersonas)[keyof typeof supportPersonas],
 ) {
 	return {
@@ -381,9 +169,9 @@ function executionInput(
 async function driveUntilTerminal(
 	app: GeneratedApp,
 	runId: string,
-	worker: ReturnType<Durable["worker"]>,
+	worker: ReturnType<GeneratedDurable["worker"]>,
 	timeoutMilliseconds = 30_000,
-): Promise<RunView> {
+): Promise<DurableRunView> {
 	return eventually(
 		async () => {
 			const before = await app.durable.inspect(runId);
@@ -397,7 +185,7 @@ async function driveUntilTerminal(
 			return app.durable.inspect(runId);
 		},
 		{
-			accept: (run): run is RunView =>
+			accept: (run): run is DurableRunView =>
 				run?.state === "succeeded" ||
 				run?.state === "failed" ||
 				run?.state === "cancelled",
@@ -458,39 +246,16 @@ postgresTest(
 					import(
 						`${pathToFileURL(join(temporary, ".questpie/generated/app.ts")).href}?app=${crypto.randomUUID()}`
 					) as Promise<
-						Readonly<{ createApp(input: unknown): Promise<GeneratedApp> }>
+						typeof import("../../../fixtures/team-support-desk/.questpie/generated/app")
 					>,
 					import(
 						`${pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href}?client=${crypto.randomUUID()}`
 					) as Promise<
-						Readonly<{
-							createClient(
-								input: Readonly<{ baseUrl: string; fetch?: typeof fetch }>,
-							): Readonly<{
-								withContext(
-									input: Readonly<{
-										organizationId: string;
-										membershipId: string;
-									}>,
-								): Readonly<{
-									queries: Readonly<{
-										"tickets.list": (
-											input: Readonly<{ first: number; after: string | null }>,
-										) => Promise<TicketPage>;
-									}>;
-								}>;
-							}>;
-						}>
+						typeof import("../../../fixtures/team-support-desk/.questpie/generated/client")
 					>,
 					import(
 						`${pathToFileURL(questpieEntry).href}?principal=${crypto.randomUUID()}`
-					) as Promise<
-						Readonly<{
-							principal: Readonly<{
-								user(input: Readonly<{ id: string }>): unknown;
-							}>;
-						}>
-					>,
+					) as Promise<typeof import("../../../packages/questpie/src/index")>,
 				]);
 
 			let rejectNext = false;
@@ -792,7 +557,7 @@ postgresTest(
 			expect(immediateTerminal.state).toBe("succeeded");
 
 			const acceptJob = (
-				input: JobInput,
+				input: GeneratedJobs["ticket.slaFollowUp"]["input"],
 				idempotencyKey: string,
 				notBefore?: Date,
 			) =>
