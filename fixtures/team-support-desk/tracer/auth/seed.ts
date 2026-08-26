@@ -13,7 +13,7 @@ try {
 					password: identity.password,
 				},
 			});
-		} catch (signUpError) {
+		} catch {
 			try {
 				await infrastructure.auth.api.signInEmail({
 					body: {
@@ -22,10 +22,9 @@ try {
 					},
 				});
 			} catch (signInError) {
-				throw new AggregateError(
-					[signUpError, signInError],
-					`Could not seed or verify ${identity.email}`,
-				);
+				throw new Error(`Could not seed or verify ${identity.email}`, {
+					cause: signInError,
+				});
 			}
 		}
 	}
