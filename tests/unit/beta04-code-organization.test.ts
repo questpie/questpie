@@ -35,6 +35,20 @@ test("projects the exact generated Query declaration contract behind the relatio
 					],
 				},
 			},
+			{
+				format: "questpie.policy-program",
+				version: 1,
+				identity: "policy:memberships.default",
+				target: "collection:memberships",
+				attachment: { kind: "default", requiredForNormalDataAccess: true },
+				operations: {},
+				fields: {
+					callerInput: { suppliedPathsOnly: true },
+					selectedOutput: [
+						{ path: ["id"], when: { kind: "constant", value: true } },
+					],
+				},
+			},
 		],
 		queries: [
 			{
@@ -82,7 +96,7 @@ test("projects the exact generated Query declaration contract behind the relatio
 								kind: "field",
 								key: "id",
 								field: "collection:memberships/field:id",
-								optional: false,
+								optional: true,
 							},
 						],
 					},

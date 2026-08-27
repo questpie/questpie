@@ -240,6 +240,40 @@ describe("BETA-04 relational normalization", () => {
 				field: "collection:countries/field:name",
 			},
 		]);
+
+		const tooDeep = structuredClone(input) as Record<string, unknown>;
+		const teamInput = (tooDeep.select as Array<Record<string, unknown>>)[0]!;
+		const organizationInput = (
+			teamInput.select as Array<Record<string, unknown>>
+		)[0]!;
+		const regionInput = (
+			organizationInput.select as Array<Record<string, unknown>>
+		)[0]!;
+		const countryInput = (
+			regionInput.select as Array<Record<string, unknown>>
+		)[0]!;
+		countryInput.select = [
+			{
+				kind: "toOne",
+				key: "continent",
+				relation: "collection:countries/relation:continent",
+				select: [
+					{
+						kind: "field",
+						key: "id",
+						field: "collection:continents/field:id",
+					},
+				],
+			},
+		];
+		expect(() =>
+			normalizeDataQueryTemplate(tooDeep, {
+				schemaProjectionDigest: "a".repeat(64),
+				dataContractProjectionDigest: "b".repeat(64),
+			}),
+		).toThrow(
+			"QP-DATA-022 relationDepthExceeded team.organization.region.country.continent",
+		);
 	});
 
 	test("selects one default Policy and reports zero or two deterministically", () => {

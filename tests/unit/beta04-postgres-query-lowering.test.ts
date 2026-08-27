@@ -486,6 +486,79 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 	expect(changedRelationPlan.disclosureProgramDigest).not.toBe(
 		plan.disclosureProgramDigest,
 	);
+	const publicRoot = messagePolicy();
+	publicRoot.operations.read!.admission = { kind: "public" };
+	const publicRootPlan = lowerPostgresQueryPlan({
+		schema: schema(),
+		query,
+		policies: policies.map((entry) =>
+			entry.program.identity === publicRoot.identity
+				? { ...entry, program: publicRoot }
+				: entry,
+		),
+	});
+	expect(publicRootPlan.usedExecutionFacts).toContain("principalKind");
+	expect(publicRootPlan.parameters).toContainEqual(
+		expect.objectContaining({
+			kind: "executionFact",
+			source: "principal",
+			path: ["kind"],
+		}),
+	);
+	const publicRelation: PolicyProgramV1 = {
+		...membershipPolicy,
+		operations: {
+			read: {
+				...membershipPolicy.operations.read!,
+				admission: { kind: "public" },
+			},
+		},
+	};
+	expect(() =>
+		lowerPostgresQueryPlan({
+			schema: schema(),
+			query,
+			policies: policies.map((entry) =>
+				entry.program.identity === publicRelation.identity
+					? { ...entry, program: publicRelation }
+					: entry,
+			),
+		}),
+	).not.toThrow();
+	const conditionallyDisclosedRelation: PolicyProgramV1 = {
+		...membershipPolicy,
+		fields: {
+			callerInput: { suppliedPathsOnly: true },
+			selectedOutput: [
+				{
+					path: ["role"],
+					when: equal(
+						execution("authority", ["kind"], "authority"),
+						literal("system", "authority"),
+					),
+					deniedEncoding: "omitProperty",
+				},
+			],
+		},
+	};
+	const conditionalPlan = lowerPostgresQueryPlan({
+		schema: schema(),
+		query,
+		policies: policies.map((entry) =>
+			entry.program.identity === conditionallyDisclosedRelation.identity
+				? { ...entry, program: conditionallyDisclosedRelation }
+				: entry,
+		),
+	});
+	const author = conditionalPlan.result.find(
+		(result) => result.kind === "toOne" && result.key === "author",
+	);
+	expect(author?.kind).toBe("toOne");
+	expect(
+		author?.kind === "toOne"
+			? author.fields.find(({ key }) => key === "role")?.guardColumn
+			: undefined,
+	).toMatch(/^qp_relation_[A-Za-z0-9_]+_allowed_[0-9]+$/);
 
 	expect(JSON.stringify(plan, null, 2)).toMatchSnapshot();
 	expect(
@@ -528,6 +601,7 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 	expect(plan.binding.parameters).toEqual(template.parameters);
 	expect(plan.usedExecutionFacts).toEqual([
 		"authorityKind",
+		"principalKind",
 		"principalId",
 		"tenantId",
 	]);

@@ -49,6 +49,9 @@ function measureDatabaseRuntime(plan: unknown): Readonly<{
 			qp_author_present: null,
 			qp_author_id: null,
 			qp_author_role: null,
+			qp_relation_0_present: null,
+			qp_relation_0_value_0: null,
+			qp_relation_0_value_1: null,
 			qp_body: "measured",
 			qp_body_allowed: true,
 			qp_createdAt: "2026-08-15T10:00:00.000Z",
@@ -58,7 +61,9 @@ function measureDatabaseRuntime(plan: unknown): Readonly<{
 			? (item.guardColumn === undefined ? [item.column] : [item.column, item.guardColumn])
 			: [
 					item.presenceColumn,
-					...item.fields.map(({ column }) => column),
+					...item.fields.flatMap((field) => field.guardColumn === undefined
+						? [field.column]
+						: [field.column, field.guardColumn]),
 					...resultColumns(item.relations ?? []),
 				]);
 		const columns = resultColumns(plan.result);

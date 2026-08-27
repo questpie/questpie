@@ -44,22 +44,42 @@ export function projectRelationalGeneratedContract(
 	const policies = new Map(
 		input.policies.map((program) => [program.identity, program] as const),
 	);
+	const defaultPolicies = new Map(
+		input.policies
+			.filter((program) => program.attachment.kind === "default")
+			.map((program) => [program.target, program] as const),
+	);
+	const nestedOptionalPaths = (field: FieldIdentity): ReadonlySet<string> => {
+		const collection = field.slice(0, field.indexOf("/field:"));
+		return new Set(
+			defaultPolicies
+				.get(collection as PolicyProgramV1["target"])
+				?.fields?.selectedOutput.map((rule) => rule.path.join("/")) ?? [],
+		);
+	};
 	const projectSelection = (
 		selection: RootQuerySelectionV1,
 		optionalPaths: ReadonlySet<string>,
+		nested = false,
 	): RelationalGeneratedSelectionV1 => {
-		if (selection.kind === "field")
+		if (selection.kind === "field") {
+			const paths = nested
+				? nestedOptionalPaths(selection.field)
+				: optionalPaths;
 			return Object.freeze({
 				kind: "field",
 				key: selection.key,
 				field: selection.field,
-				optional: optionalPaths.has(fieldPath(selection.field)),
+				optional: paths.has(fieldPath(selection.field)),
 			});
+		}
 		return Object.freeze({
 			kind: "toOne",
 			key: selection.key,
 			select: Object.freeze(
-				selection.select.map((child) => projectSelection(child, new Set())),
+				selection.select.map((child) =>
+					projectSelection(child, new Set(), true),
+				),
 			),
 		});
 	};

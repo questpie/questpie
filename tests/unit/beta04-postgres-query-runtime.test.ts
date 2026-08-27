@@ -753,6 +753,50 @@ test("observes only the successful relational page branch and its decoded Relati
 	});
 });
 
+test("observes a Relation endpoint when its selector contains no scalar fields", async () => {
+	const relationOnlyPlan = {
+		...databasePlan,
+		sql: `SELECT
+	NULL::uuid AS "qp_f0",
+	NULL::text AS "qp_f1",
+	TRUE AS "qp_g1",
+	NULL::timestamptz AS "qp_f2",
+	TRUE AS "qp_r3_present"
+WHERE $1::uuid IS NOT NULL
+	AND $2::text IS NOT NULL
+	AND cardinality($3::text[]) >= 0
+	AND NOT $4::boolean
+	AND $5::timestamptz IS NULL
+	AND $6::uuid IS NULL
+	AND $7::integer > 0;\n`,
+		result: databasePlan.result.map((item) =>
+			item.kind === "toOne"
+				? { ...item, collection: "collection:users", fields: [] }
+				: item,
+		),
+	} as const satisfies PostgresQueryPlanV1;
+	const observation = createLiveQueryObservation(watchability());
+	observation.recordContext("context:request", []);
+
+	const page = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(relationOnlyPlan),
+		binding,
+		executionFacts,
+		database: fakeDatabase({
+			rows: [[id1, "visible", true, createdAt1, true]],
+		}),
+		observer: observation,
+	});
+
+	expect(page.nodes[0]?.author).toEqual({});
+	expect(observation.finish().tokens).toContainEqual(
+		expect.objectContaining({
+			kind: "relationEndpoint",
+			collection: "collection:users",
+		}),
+	);
+});
+
 test("does not observe failed SQL or invalid relational output", async () => {
 	const query = watchability();
 	const failedSql = createLiveQueryObservation(query);
@@ -942,6 +986,41 @@ test("rejects a cursor scope mismatch before SQL", async () => {
 			binding: {
 				...changedScope,
 				values: changedScope.values.map((item) =>
+					item.parameter === "after"
+						? { ...item, value: firstPage.pageInfo.endCursor }
+						: item,
+				),
+			},
+			executionFacts,
+			database: fakeDatabaseFromRows(
+				() => [],
+				() => {
+					transactions += 1;
+				},
+			),
+		}),
+	).rejects.toMatchObject({ code: "QP-DATA-013", phase: "bind" });
+	expect(transactions).toBe(0);
+});
+
+test("rejects a cursor after only the reached Relation Policy closure changes", async () => {
+	const firstPage = await executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(databasePlan),
+		binding,
+		executionFacts,
+		database: fakeDatabaseFromRows(() => rows().slice(0, 1)),
+	});
+	let transactions = 0;
+	const changedDisclosure = {
+		...databasePlan,
+		disclosureProgramDigest: "c".repeat(64),
+	};
+	await expect(
+		executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(changedDisclosure),
+			binding: {
+				...binding,
+				values: binding.values.map((item) =>
 					item.parameter === "after"
 						? { ...item, value: firstPage.pageInfo.endCursor }
 						: item,

@@ -49,6 +49,7 @@ export type PostgresQueryResultV1 =
 			kind: "toOne";
 			key: string;
 			relation: string;
+			collection: string;
 			presenceColumn: string;
 			fields: readonly Readonly<{
 				key: string;
@@ -56,6 +57,7 @@ export type PostgresQueryResultV1 =
 				column: string;
 				codec: ScalarCodecV1;
 				nullable: boolean;
+				guardColumn?: string;
 			}>[];
 			relations?: readonly Extract<PostgresQueryResultV1, { kind: "toOne" }>[];
 	  }>;
@@ -70,6 +72,7 @@ export interface PostgresQueryPlanV1 {
 	readonly disclosureProgramDigest: string;
 	readonly usedExecutionFacts: readonly (
 		| "authorityKind"
+		| "principalKind"
 		| "principalId"
 		| "tenantId"
 	)[];
@@ -140,13 +143,17 @@ function projectionEntries(
 
 function usedExecutionFacts(
 	parameters: readonly PostgresQueryParameterV1[],
-): readonly ("authorityKind" | "principalId" | "tenantId")[] {
-	const used = new Set<"authorityKind" | "principalId" | "tenantId">();
+): readonly ("authorityKind" | "principalKind" | "principalId" | "tenantId")[] {
+	const used = new Set<
+		"authorityKind" | "principalKind" | "principalId" | "tenantId"
+	>();
 	for (const parameter of parameters) {
 		if (parameter.kind !== "executionFact") continue;
 		const path = parameter.path.join(".");
 		if (parameter.source === "authority" && path === "kind")
 			used.add("authorityKind");
+		else if (parameter.source === "principal" && path === "kind")
+			used.add("principalKind");
 		else if (parameter.source === "principal" && path === "id")
 			used.add("principalId");
 		else if (parameter.source === "tenant" && path === "id")
@@ -156,9 +163,19 @@ function usedExecutionFacts(
 				`unsupported Policy cursor fact ${parameter.source}.${path}`,
 			);
 	}
-	return (["authorityKind", "principalId", "tenantId"] as const).filter(
-		(fact) => used.has(fact),
-	);
+	return (
+		["authorityKind", "principalKind", "principalId", "tenantId"] as const
+	).filter((fact) => used.has(fact));
+}
+
+function admissionSql(
+	admission: "authenticated" | "public" | "system",
+	parameters: PostgresParameters,
+): string {
+	if (admission === "public") return "TRUE";
+	if (admission === "system")
+		return `(${parameters.execution("authority", ["kind"], "authority")} IS NOT DISTINCT FROM ${parameters.literal("system", "authority")})`;
+	return `(${parameters.execution("principal", ["kind"], "text")} IS DISTINCT FROM ${parameters.literal("anonymous", "text")})`;
 }
 
 function selectedPolicy(
@@ -216,19 +233,16 @@ function relationJoin(
 	const read = policy.program.operations.read;
 	if (!read)
 		throw new TypeError(`Policy ${policy.program.identity} denies read`);
-	if ((policy.program.fields?.selectedOutput.length ?? 0) > 0)
-		throw new TypeError(
-			"nested conditional output requires a later lowering slice",
-		);
 	const pathKey = path.join("_");
 	const rowAlias = `qp_relation_${pathKey}_row`;
 	const relationAlias = `qp_relation_${pathKey}`;
 	const aliases = new Map([["row", rowAlias]]);
-	const disclosure = policyExpressionSql(read.rows, {
+	const rowDisclosure = policyExpressionSql(read.rows, {
 		catalog,
 		parameters,
 		aliases,
 	});
+	const disclosure = admissionSql(read.admission.kind, parameters);
 	const correlations = relation.fields.map((source, relationIndex) => {
 		const targetIdentity = relation.references[relationIndex];
 		if (!targetIdentity)
@@ -245,14 +259,40 @@ function relationJoin(
 		.map((fieldSelection, fieldIndex) => {
 			const field = requiredField(catalog, fieldSelection.field);
 			const column = `qp_relation_${pathKey}_value_${fieldIndex}`;
+			const rule = policy.program.fields?.selectedOutput.find(
+				(candidate) =>
+					JSON.stringify(candidate.path) === JSON.stringify(field.path),
+			);
+			const guardColumn = `qp_relation_${pathKey}_allowed_${fieldIndex}`;
+			const guardAlias = `qp_relation_${pathKey}_guard_${fieldIndex}`;
+			const guard = rule
+				? policyExpressionSql(rule.when, {
+						catalog,
+						parameters,
+						aliases,
+					})
+				: null;
 			return {
-				inner: `${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(column)}`,
+				inner:
+					guard === null
+						? [
+								`${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(column)}`,
+							]
+						: [
+								`CASE WHEN ${quoteIdentifier(guardAlias)}."allowed" THEN ${fieldValueSql(field, rowAlias)} ELSE NULL END AS ${quoteIdentifier(column)}`,
+								`${quoteIdentifier(guardAlias)}."allowed" AS ${quoteIdentifier(guardColumn)}`,
+							],
+				guardJoin:
+					guard === null
+						? null
+						: `CROSS JOIN LATERAL (SELECT ${guard} AS "allowed") AS ${quoteIdentifier(guardAlias)}`,
 				result: {
 					key: fieldSelection.key,
 					field: field.identity,
 					column,
 					codec: field.codec,
 					nullable: field.nullable,
+					...(guard === null ? {} : { guardColumn }),
 				},
 			};
 		});
@@ -276,15 +316,24 @@ function relationJoin(
 	const presenceColumn = `qp_relation_${pathKey}_present`;
 	const innerColumns = [
 		`TRUE AS ${quoteIdentifier(presenceColumn)}`,
-		...selected.map(({ inner }) => inner),
+		...selected.flatMap(({ inner }) => inner),
 		...nested.flatMap(({ columns }) => columns),
 	];
 	const columnNames = [
 		presenceColumn,
-		...selected.map(({ result }) => result.column),
+		...selected.flatMap(({ result }) => [
+			result.column,
+			...(result.guardColumn === undefined ? [] : [result.guardColumn]),
+		]),
 		...nested.flatMap(({ columnNames }) => columnNames),
 	];
-	const join = `LEFT JOIN LATERAL (SELECT ${innerColumns.join(", ")} FROM ${qualifiedTable(catalog, target)} AS ${quoteIdentifier(rowAlias)}${nested.length > 0 ? ` ${nested.map(({ join }) => join).join(" ")}` : ""} WHERE ${[...correlations, disclosure].join(" AND ")} LIMIT 1) AS ${quoteIdentifier(relationAlias)} ON TRUE`;
+	const ownedJoins = [
+		...selected.flatMap(({ guardJoin }) =>
+			guardJoin === null ? [] : [guardJoin],
+		),
+		...nested.map(({ join }) => join),
+	];
+	const join = `LEFT JOIN LATERAL (SELECT ${innerColumns.join(", ")} FROM ${qualifiedTable(catalog, target)} AS ${quoteIdentifier(rowAlias)}${ownedJoins.length > 0 ? ` ${ownedJoins.join(" ")}` : ""} WHERE ${[...correlations, disclosure, rowDisclosure].join(" AND ")} LIMIT 1) AS ${quoteIdentifier(relationAlias)} ON TRUE`;
 	return {
 		join,
 		columns: columnNames.map(
@@ -296,6 +345,7 @@ function relationJoin(
 			kind: "toOne",
 			key: selection.key,
 			relation: relation.identity,
+			collection: target.identity,
 			presenceColumn,
 			fields: selected.map(({ result }) => result),
 			relations: nested.map(({ result }) => result),
@@ -404,10 +454,6 @@ export function lowerPostgresQueryPlan(
 		const relatedRead = related.operations.read;
 		if (!relatedRead)
 			throw new TypeError(`Policy ${related.identity} denies read`);
-		if (relatedRead.admission.kind !== read.admission.kind)
-			throw new TypeError(
-				`Relation Policy ${related.identity} has incompatible admission`,
-			);
 	}
 	const parameters = new PostgresParameters();
 	const pageAlias = "qp_row";

@@ -694,6 +694,12 @@ process.stdout.write(JSON.stringify(found));
 					"invalidOperator",
 					"controlled relational evaluation found an unknown operator",
 				);
+			if (child.stderr.toString().includes("QP-DATA-022"))
+				throw new CompilerDiagnosticError(
+					"QP-DATA-022",
+					"relationDepthExceeded",
+					"controlled relational evaluation exceeded the measured Relation depth",
+				);
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",
 				"structuralTypeError",

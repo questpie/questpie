@@ -328,12 +328,28 @@ export function relationRef(name: string, member: string): string {
 
 export const relation = Object.freeze({
 	toOne: <
-		const Target extends CollectionDefinition<any, any, any, any, any>,
+		const TargetName extends string,
+		const TargetFields extends Readonly<Record<string, FieldNode>>,
+		const TargetConstraints extends Readonly<
+			Record<string, ConstraintMemberDefinition>
+		>,
+		const TargetIndexes extends Readonly<
+			Record<string, { readonly fields: readonly IndexField[] }>
+		>,
+		const TargetRelations extends Readonly<
+			Record<string, RelationDefinition | InverseRelationDefinition>
+		>,
 		const Fields extends readonly FieldReference[],
-		const References extends readonly FieldReferences<Target["fields"]>[],
+		const References extends readonly FieldReferences<TargetFields>[],
 	>(
 		input: Readonly<{
-			target: Target;
+			target: CollectionDefinition<
+				TargetName,
+				TargetFields,
+				TargetConstraints,
+				TargetIndexes,
+				TargetRelations
+			>;
 			fields: Fields;
 			references: References;
 			onDelete?: RelationDefinition["onDelete"];
@@ -341,10 +357,16 @@ export const relation = Object.freeze({
 			postgres?: { name: string };
 		}>,
 	): RelationDefinition<
-		`collection:${Target["name"]}`,
+		`collection:${TargetName}`,
 		Fields,
 		References,
-		Target
+		CollectionDefinition<
+			TargetName,
+			TargetFields,
+			TargetConstraints,
+			TargetIndexes,
+			TargetRelations
+		>
 	> =>
 		Object.freeze({
 			kind: "toOne",

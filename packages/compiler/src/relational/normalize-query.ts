@@ -76,17 +76,26 @@ function normalizeFilter(value: unknown, related: boolean): RootQueryFilterV1 {
 	return cloneJson(filter) as RootQueryFilterV1;
 }
 
-function normalizeSelection(value: unknown): RootQuerySelectionV1 {
+function normalizeSelection(
+	value: unknown,
+	depth = 0,
+	path: readonly string[] = [],
+): RootQuerySelectionV1 {
 	const selection = record(value, "Query selection");
 	if (selection.kind === "field") return cloneJson(selection) as never;
 	if (selection.kind !== "toOne")
 		throw new TypeError(
 			`unsupported Query selection ${String(selection.kind)}`,
 		);
+	const key = string(selection.key, "selection key");
+	if (depth >= 4)
+		throw new TypeError(
+			`QP-DATA-022 relationDepthExceeded ${[...path, key].join(".")}`,
+		);
 	return {
 		...selection,
 		select: array(selection.select, "toOne selection")
-			.map(normalizeSelection)
+			.map((child) => normalizeSelection(child, depth + 1, [...path, key]))
 			.sort((left, right) =>
 				compareAscii(
 					string(left.key, "selection key"),
@@ -133,7 +142,7 @@ export function normalizeDataQueryTemplate(
 		.map(normalizeParameter)
 		.sort((left, right) => compareAscii(left.name, right.name));
 	const select = array(input.select, "Query selection")
-		.map(normalizeSelection)
+		.map((selection) => normalizeSelection(selection))
 		.sort((left, right) => compareAscii(left.key, right.key));
 	return {
 		format: "questpie.data-query-template",

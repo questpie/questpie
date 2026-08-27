@@ -80,6 +80,7 @@ type ResultFieldV1 = Readonly<{
 	column: string;
 	codec: ScalarCodecV1;
 	nullable: boolean;
+	guardColumn?: string;
 }>;
 
 export type PostgresQueryResultV1 =
@@ -88,6 +89,7 @@ export type PostgresQueryResultV1 =
 			kind: "toOne";
 			key: string;
 			relation: string;
+			collection?: string;
 			presenceColumn: string;
 			fields: readonly ResultFieldV1[];
 			relations?: readonly Extract<PostgresQueryResultV1, { kind: "toOne" }>[];
@@ -103,6 +105,7 @@ export interface PostgresQueryPlanV1 {
 	readonly disclosureProgramDigest?: string;
 	readonly usedExecutionFacts: readonly (
 		| "authorityKind"
+		| "principalKind"
 		| "principalId"
 		| "tenantId"
 	)[];
@@ -349,6 +352,8 @@ function executionFact(
 	const path = parameter.path.join(".");
 	if (parameter.source === "authority" && path === "kind")
 		return facts.authority.kind;
+	if (parameter.source === "principal" && path === "kind")
+		return facts.principal.kind;
 	if (parameter.source === "principal" && path === "id")
 		return facts.principal.id;
 	if (parameter.source === "tenant" && path === "id") return facts.tenant.id;
@@ -367,6 +372,8 @@ function sparseExecutionFacts(
 		const path = parameter.path.join(".");
 		if (parameter.source === "authority" && path === "kind")
 			expected.add("authorityKind");
+		else if (parameter.source === "principal" && path === "kind")
+			expected.add("principalKind");
 		else if (parameter.source === "principal" && path === "id")
 			expected.add("principalId");
 		else if (parameter.source === "tenant" && path === "id")
@@ -383,11 +390,14 @@ function sparseExecutionFacts(
 		throw new TypeError("invalid compiled Policy cursor fact scope");
 	const result: {
 		authorityKind?: "ordinary" | "system";
+		principalKind?: "anonymous" | "service" | "user";
 		principalId?: string;
 		tenantId?: string;
 	} = {};
 	for (const key of plan.usedExecutionFacts) {
 		if (key === "authorityKind") result.authorityKind = facts.authority.kind;
+		else if (key === "principalKind")
+			result.principalKind = facts.principal.kind;
 		else if (key === "principalId") result.principalId = facts.principal.id;
 		else if (key === "tenantId") result.tenantId = facts.tenant.id;
 		else
@@ -476,7 +486,15 @@ function decodeRelatedRow(
 	item: Extract<PostgresQueryResultV1, { kind: "toOne" }>,
 ): Readonly<Record<string, unknown>> {
 	const related: Record<string, unknown> = {};
-	for (const field of item.fields) related[field.key] = decodeField(row, field);
+	for (const field of item.fields) {
+		if (field.guardColumn !== undefined) {
+			const guard = row[field.guardColumn];
+			if (guard === false) continue;
+			if (guard !== true)
+				throw new DataQueryExecutionError("QP-DATA-001", "execute");
+		}
+		related[field.key] = decodeField(row, field);
+	}
 	for (const nested of item.relations ?? []) {
 		const present = row[nested.presenceColumn];
 		if (present === null) related[nested.key] = null;
@@ -581,6 +599,7 @@ function queryObservation(
 			const collections = new Set(
 				item.fields.map(({ field }) => collectionOfField(field)),
 			);
+			if (item.collection !== undefined) collections.add(item.collection);
 			if (collections.size !== 1)
 				throw new TypeError("invalid compiled Relation target Collection");
 			let endpoints = 0;
@@ -593,7 +612,7 @@ function queryObservation(
 			return [
 				Object.freeze({
 					relation: item.relation,
-					collection: [...collections][0]!,
+					collection: item.collection ?? [...collections][0]!,
 					endpoints,
 					misses,
 				}),

@@ -40,7 +40,11 @@ function resultColumns(
 				: [item.column, item.guardColumn];
 		return [
 			item.presenceColumn,
-			...item.fields.map(({ column }) => column),
+			...item.fields.flatMap((field) =>
+				field.guardColumn === undefined
+					? [field.column]
+					: [field.column, field.guardColumn],
+			),
 			...resultColumns(item.relations ?? []),
 		];
 	});

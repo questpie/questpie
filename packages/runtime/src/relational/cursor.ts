@@ -25,6 +25,7 @@ export type CursorOrderTerm = Readonly<{
 
 export type UsedExecutionFacts = Readonly<{
 	authorityKind?: "ordinary" | "system";
+	principalKind?: "anonymous" | "service" | "user";
 	principalId?: string;
 	tenantId?: string;
 }>;
@@ -116,6 +117,10 @@ function encodePolicyCursorScopeV1(scope: PolicyCursorScopeV1): string {
 		);
 	if (scope.usedExecutionFacts.principalId !== undefined)
 		facts.push(`"principalId":${quote(scope.usedExecutionFacts.principalId)}`);
+	if (scope.usedExecutionFacts.principalKind !== undefined)
+		facts.push(
+			`"principalKind":${quote(scope.usedExecutionFacts.principalKind)}`,
+		);
 	if (scope.usedExecutionFacts.tenantId !== undefined)
 		facts.push(`"tenantId":${quote(scope.usedExecutionFacts.tenantId)}`);
 	return `{"format":"questpie.policy-cursor-scope","policyProgramDigest":${quote(scope.policyProgramDigest)},"usedExecutionFacts":{${facts.join(",")}},"version":1}\n`;
@@ -239,7 +244,10 @@ export function createCursorCodecV2(
 		throw new TypeError("invalid compiled cursor binding");
 	const factKeys = Object.keys(input.usedExecutionFacts).sort();
 	const hasUnknownFact = factKeys.some(
-		(key) => !["authorityKind", "principalId", "tenantId"].includes(key),
+		(key) =>
+			!["authorityKind", "principalId", "principalKind", "tenantId"].includes(
+				key,
+			),
 	);
 	const hasUndefinedFact = factKeys.some(
 		(key) =>
@@ -249,6 +257,11 @@ export function createCursorCodecV2(
 		input.usedExecutionFacts.authorityKind !== undefined &&
 		input.usedExecutionFacts.authorityKind !== "ordinary" &&
 		input.usedExecutionFacts.authorityKind !== "system";
+	const hasInvalidPrincipalKind =
+		input.usedExecutionFacts.principalKind !== undefined &&
+		input.usedExecutionFacts.principalKind !== "anonymous" &&
+		input.usedExecutionFacts.principalKind !== "service" &&
+		input.usedExecutionFacts.principalKind !== "user";
 	const hasInvalidStringFact = ["principalId", "tenantId"].some((key) => {
 		const value = input.usedExecutionFacts[key as "principalId" | "tenantId"];
 		return (
@@ -260,6 +273,7 @@ export function createCursorCodecV2(
 		hasUnknownFact ||
 		hasUndefinedFact ||
 		hasInvalidAuthorityKind ||
+		hasInvalidPrincipalKind ||
 		hasInvalidStringFact
 	)
 		throw new TypeError("invalid compiled Policy cursor scope");
