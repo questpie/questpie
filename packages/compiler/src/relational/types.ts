@@ -89,7 +89,7 @@ export type RootQuerySelectionV1 =
 			kind: "toOne";
 			key: string;
 			relation: RelationIdentity;
-			select: readonly FieldQuerySelectionV1[];
+			select: readonly RootQuerySelectionV1[];
 	  }>;
 
 export type QueryParameterV1 =

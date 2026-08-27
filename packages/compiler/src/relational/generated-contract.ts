@@ -15,12 +15,7 @@ export type RelationalGeneratedSelectionV1 =
 	| Readonly<{
 			kind: "toOne";
 			key: string;
-			select: readonly Readonly<{
-				kind: "field";
-				key: string;
-				field: FieldIdentity;
-				optional: false;
-			}>[];
+			select: readonly RelationalGeneratedSelectionV1[];
 	  }>;
 
 export interface RelationalGeneratedContractV1 {
@@ -49,6 +44,25 @@ export function projectRelationalGeneratedContract(
 	const policies = new Map(
 		input.policies.map((program) => [program.identity, program] as const),
 	);
+	const projectSelection = (
+		selection: RootQuerySelectionV1,
+		optionalPaths: ReadonlySet<string>,
+	): RelationalGeneratedSelectionV1 => {
+		if (selection.kind === "field")
+			return Object.freeze({
+				kind: "field",
+				key: selection.key,
+				field: selection.field,
+				optional: optionalPaths.has(fieldPath(selection.field)),
+			});
+		return Object.freeze({
+			kind: "toOne",
+			key: selection.key,
+			select: Object.freeze(
+				selection.select.map((child) => projectSelection(child, new Set())),
+			),
+		});
+	};
 	return Object.freeze({
 		queries: Object.freeze(
 			input.queries.map((query) => {
@@ -64,29 +78,9 @@ export function projectRelationalGeneratedContract(
 						exportName: query.origin.exportName,
 					}),
 					select: Object.freeze(
-						query.select.map((selection): RelationalGeneratedSelectionV1 => {
-							if (selection.kind === "field")
-								return Object.freeze({
-									kind: "field",
-									key: selection.key,
-									field: selection.field,
-									optional: optionalPaths.has(fieldPath(selection.field)),
-								});
-							return Object.freeze({
-								kind: "toOne",
-								key: selection.key,
-								select: Object.freeze(
-									selection.select.map((field) =>
-										Object.freeze({
-											kind: "field" as const,
-											key: field.key,
-											field: field.field,
-											optional: false as const,
-										}),
-									),
-								),
-							});
-						}),
+						query.select.map((selection) =>
+							projectSelection(selection, optionalPaths),
+						),
 					),
 				});
 			}),

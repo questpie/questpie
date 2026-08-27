@@ -90,6 +90,7 @@ export type PostgresQueryResultV1 =
 			relation: string;
 			presenceColumn: string;
 			fields: readonly ResultFieldV1[];
+			relations?: readonly Extract<PostgresQueryResultV1, { kind: "toOne" }>[];
 	  }>;
 
 export interface PostgresQueryPlanV1 {
@@ -99,6 +100,7 @@ export interface PostgresQueryPlanV1 {
 	readonly templateDigest: string;
 	readonly policy: string;
 	readonly policyProgramDigest: string;
+	readonly disclosureProgramDigest?: string;
 	readonly usedExecutionFacts: readonly (
 		| "authorityKind"
 		| "principalId"
@@ -464,12 +466,25 @@ function decodeRow(
 		}
 		if (present !== true)
 			throw new DataQueryExecutionError("QP-DATA-001", "execute");
-		const related: Record<string, unknown> = {};
-		for (const field of item.fields)
-			related[field.key] = decodeField(row, field);
-		output[item.key] = related;
+		output[item.key] = decodeRelatedRow(row, item);
 	}
 	return Object.freeze(output);
+}
+
+function decodeRelatedRow(
+	row: PostgresQueryRow,
+	item: Extract<PostgresQueryResultV1, { kind: "toOne" }>,
+): Readonly<Record<string, unknown>> {
+	const related: Record<string, unknown> = {};
+	for (const field of item.fields) related[field.key] = decodeField(row, field);
+	for (const nested of item.relations ?? []) {
+		const present = row[nested.presenceColumn];
+		if (present === null) related[nested.key] = null;
+		else if (present === true)
+			related[nested.key] = decodeRelatedRow(row, nested);
+		else throw new DataQueryExecutionError("QP-DATA-001", "execute");
+	}
+	return Object.freeze(related);
 }
 
 function orderTerms(plan: PostgresQueryPlanV1): readonly CursorOrderTerm[] {
@@ -558,29 +573,34 @@ function queryObservation(
 			);
 		return Object.freeze({ parameter, value });
 	});
-	const relations = plan.result.flatMap((item) => {
-		if (item.kind !== "toOne") return [];
-		const collections = new Set(
-			item.fields.map(({ field }) => collectionOfField(field)),
-		);
-		if (collections.size !== 1)
-			throw new TypeError("invalid compiled Relation target Collection");
-		let endpoints = 0;
-		let misses = 0;
-		for (const row of visibleRows) {
-			const present = row[item.presenceColumn];
-			if (present === true) endpoints += 1;
-			else if (present === null) misses += 1;
-		}
-		return [
-			Object.freeze({
-				relation: item.relation,
-				collection: [...collections][0]!,
-				endpoints,
-				misses,
-			}),
-		];
-	});
+	const observeRelations = (
+		items: readonly PostgresQueryResultV1[],
+	): PostgresQueryObservationV1["relations"] =>
+		items.flatMap((item) => {
+			if (item.kind !== "toOne") return [];
+			const collections = new Set(
+				item.fields.map(({ field }) => collectionOfField(field)),
+			);
+			if (collections.size !== 1)
+				throw new TypeError("invalid compiled Relation target Collection");
+			let endpoints = 0;
+			let misses = 0;
+			for (const row of visibleRows) {
+				const present = row[item.presenceColumn];
+				if (present === true) endpoints += 1;
+				else if (present === null) misses += 1;
+			}
+			return [
+				Object.freeze({
+					relation: item.relation,
+					collection: [...collections][0]!,
+					endpoints,
+					misses,
+				}),
+				...observeRelations(item.relations ?? []),
+			];
+		});
+	const relations = observeRelations(plan.result);
 	const after = values.get(plan.page.after.parameter);
 	if (after !== null && typeof after !== "string")
 		throw new TypeError("invalid compiled cursor binding");
@@ -626,6 +646,8 @@ async function executePostgresQueryWithRows(
 		plan.version !== 1 ||
 		!digestPattern.test(plan.templateDigest) ||
 		!digestPattern.test(plan.policyProgramDigest) ||
+		(plan.disclosureProgramDigest !== undefined &&
+			!digestPattern.test(plan.disclosureProgramDigest)) ||
 		!(["authenticated", "public", "system"] as const).includes(
 			plan.admission,
 		) ||
@@ -644,7 +666,8 @@ async function executePostgresQueryWithRows(
 	const cursor = createCursorBindingV2({
 		templateDigest: plan.templateDigest,
 		scopeDigest: sha256("questpie-data-query-scope-v1", scopeBytes),
-		policyProgramDigest: plan.policyProgramDigest,
+		policyProgramDigest:
+			plan.disclosureProgramDigest ?? plan.policyProgramDigest,
 		usedExecutionFacts: sparseExecutionFacts(plan, input.executionFacts),
 		order: orderTerms(plan),
 	});

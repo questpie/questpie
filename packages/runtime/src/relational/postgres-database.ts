@@ -38,7 +38,11 @@ function resultColumns(
 			return item.guardColumn === undefined
 				? [item.column]
 				: [item.column, item.guardColumn];
-		return [item.presenceColumn, ...item.fields.map(({ column }) => column)];
+		return [
+			item.presenceColumn,
+			...item.fields.map(({ column }) => column),
+			...resultColumns(item.relations ?? []),
+		];
 	});
 }
 
@@ -68,14 +72,16 @@ function validateResultColumns(plan: PostgresQueryPlanV1): readonly string[] {
 		columns.some((column) => !/^qp_[A-Za-z0-9_]+$/u.test(column))
 	)
 		throw new TypeError("Query result columns are invalid");
+	const rootFrom = plan.sql.indexOf(' FROM "qp_page" AS ');
+	const rootProjection = rootFrom < 0 ? plan.sql : plan.sql.slice(0, rootFrom);
 	let previous = -1;
 	for (const column of columns) {
 		const projection = 'AS "' + column + '"';
-		const position = plan.sql.indexOf(projection);
+		const position = rootProjection.indexOf(projection);
 		if (
 			position === -1 ||
 			position <= previous ||
-			plan.sql.indexOf(projection, position + projection.length) !== -1
+			rootProjection.indexOf(projection, position + projection.length) !== -1
 		)
 			throw new TypeError(
 				"Query SQL result projection does not match its result columns",
@@ -95,6 +101,8 @@ export function linkPostgresQueryPlan(
 		!/^[0-9a-f]{64}$/u.test(plan.queryDigest) ||
 		plan.queryDigest !== plan.templateDigest ||
 		!/^[0-9a-f]{64}$/u.test(plan.policyProgramDigest) ||
+		(plan.disclosureProgramDigest !== undefined &&
+			!/^[0-9a-f]{64}$/u.test(plan.disclosureProgramDigest)) ||
 		typeof plan.sql !== "string" ||
 		plan.sql.trim().length === 0
 	)

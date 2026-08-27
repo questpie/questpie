@@ -83,7 +83,12 @@ export const ticketQueue = defineQuery({
 			teamId: true,
 			updatedAt: true,
 			team: {
-				select: { id: true, name: true, routingStatus: true },
+				select: {
+					id: true,
+					name: true,
+					routingStatus: true,
+					organization: { select: { id: true, name: true } },
+				},
 			},
 			assignee: {
 				select: { id: true, principalId: true, role: true },

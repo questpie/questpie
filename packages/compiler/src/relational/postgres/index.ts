@@ -57,6 +57,7 @@ export type PostgresQueryResultV1 =
 				codec: ScalarCodecV1;
 				nullable: boolean;
 			}>[];
+			relations?: readonly Extract<PostgresQueryResultV1, { kind: "toOne" }>[];
 	  }>;
 
 export interface PostgresQueryPlanV1 {
@@ -66,6 +67,7 @@ export interface PostgresQueryPlanV1 {
 	readonly templateDigest: string;
 	readonly policy: string;
 	readonly policyProgramDigest: string;
+	readonly disclosureProgramDigest: string;
 	readonly usedExecutionFacts: readonly (
 		| "authorityKind"
 		| "principalId"
@@ -196,7 +198,7 @@ function defaultPolicy(
 
 function relationJoin(
 	selection: Extract<RootQuerySelectionV1, { kind: "toOne" }>,
-	index: number,
+	path: readonly number[],
 	rootAlias: string,
 	catalog: PostgresCatalog,
 	parameters: PostgresParameters,
@@ -204,7 +206,8 @@ function relationJoin(
 ): Readonly<{
 	join: string;
 	columns: readonly string[];
-	result: PostgresQueryResultV1;
+	columnNames: readonly string[];
+	result: Extract<PostgresQueryResultV1, { kind: "toOne" }>;
 }> {
 	const relation = catalog.relations.get(selection.relation);
 	if (!relation) throw new TypeError(`unknown Relation ${selection.relation}`);
@@ -217,8 +220,9 @@ function relationJoin(
 		throw new TypeError(
 			"nested conditional output requires a later lowering slice",
 		);
-	const rowAlias = `qp_relation_${index}_row`;
-	const relationAlias = `qp_relation_${index}`;
+	const pathKey = path.join("_");
+	const rowAlias = `qp_relation_${pathKey}_row`;
+	const relationAlias = `qp_relation_${pathKey}`;
 	const aliases = new Map([["row", rowAlias]]);
 	const disclosure = policyExpressionSql(read.rows, {
 		catalog,
@@ -233,38 +237,87 @@ function relationJoin(
 		const targetField = requiredField(catalog, targetIdentity);
 		return `${quoteIdentifier(rowAlias)}.${quoteIdentifier(targetField.postgresName)} IS NOT DISTINCT FROM ${quoteIdentifier(rootAlias)}.${quoteIdentifier(sourceField.postgresName)}`;
 	});
-	const selected = selection.select.map((fieldSelection, fieldIndex) => {
-		const field = requiredField(catalog, fieldSelection.field);
-		const innerColumn = `qp_value_${fieldIndex}`;
-		const column = `qp_${selection.key}_${fieldSelection.key}`;
-		return {
-			inner: `${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(innerColumn)}`,
-			outer: `${quoteIdentifier(relationAlias)}.${quoteIdentifier(innerColumn)} AS ${quoteIdentifier(column)}`,
-			result: {
-				key: fieldSelection.key,
-				field: field.identity,
-				column,
-				codec: field.codec,
-				nullable: field.nullable,
-			},
-		};
-	});
-	const presenceColumn = `qp_${selection.key}_present`;
-	const join = `LEFT JOIN LATERAL (SELECT TRUE AS "qp_present"${selected.length > 0 ? `, ${selected.map(({ inner }) => inner).join(", ")}` : ""} FROM ${qualifiedTable(catalog, target)} AS ${quoteIdentifier(rowAlias)} WHERE ${[...correlations, disclosure].join(" AND ")} LIMIT 1) AS ${quoteIdentifier(relationAlias)} ON TRUE`;
+	const selected = selection.select
+		.filter(
+			(selection): selection is FieldQuerySelectionV1 =>
+				selection.kind === "field",
+		)
+		.map((fieldSelection, fieldIndex) => {
+			const field = requiredField(catalog, fieldSelection.field);
+			const column = `qp_relation_${pathKey}_value_${fieldIndex}`;
+			return {
+				inner: `${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(column)}`,
+				result: {
+					key: fieldSelection.key,
+					field: field.identity,
+					column,
+					codec: field.codec,
+					nullable: field.nullable,
+				},
+			};
+		});
+	const nested = selection.select
+		.filter(
+			(
+				selection,
+			): selection is Extract<RootQuerySelectionV1, { kind: "toOne" }> =>
+				selection.kind === "toOne",
+		)
+		.map((child, index) =>
+			relationJoin(
+				child,
+				[...path, index],
+				rowAlias,
+				catalog,
+				parameters,
+				policies,
+			),
+		);
+	const presenceColumn = `qp_relation_${pathKey}_present`;
+	const innerColumns = [
+		`TRUE AS ${quoteIdentifier(presenceColumn)}`,
+		...selected.map(({ inner }) => inner),
+		...nested.flatMap(({ columns }) => columns),
+	];
+	const columnNames = [
+		presenceColumn,
+		...selected.map(({ result }) => result.column),
+		...nested.flatMap(({ columnNames }) => columnNames),
+	];
+	const join = `LEFT JOIN LATERAL (SELECT ${innerColumns.join(", ")} FROM ${qualifiedTable(catalog, target)} AS ${quoteIdentifier(rowAlias)}${nested.length > 0 ? ` ${nested.map(({ join }) => join).join(" ")}` : ""} WHERE ${[...correlations, disclosure].join(" AND ")} LIMIT 1) AS ${quoteIdentifier(relationAlias)} ON TRUE`;
 	return {
 		join,
-		columns: [
-			`${quoteIdentifier(relationAlias)}."qp_present" AS ${quoteIdentifier(presenceColumn)}`,
-			...selected.map(({ outer }) => outer),
-		],
+		columns: columnNames.map(
+			(column) =>
+				`${quoteIdentifier(relationAlias)}.${quoteIdentifier(column)} AS ${quoteIdentifier(column)}`,
+		),
+		columnNames,
 		result: {
 			kind: "toOne",
 			key: selection.key,
 			relation: relation.identity,
 			presenceColumn,
 			fields: selected.map(({ result }) => result),
+			relations: nested.map(({ result }) => result),
 		},
 	};
+}
+
+function relationPolicyClosure(
+	selection: readonly RootQuerySelectionV1[],
+	catalog: PostgresCatalog,
+	policies: readonly PolicyProjectionEntry[],
+): readonly PolicyProgramV1[] {
+	return selection.flatMap((selected) => {
+		if (selected.kind === "field") return [];
+		const relation = catalog.relations.get(selected.relation);
+		if (!relation) throw new TypeError(`unknown Relation ${selected.relation}`);
+		const policy = defaultPolicy(relation.target, policies);
+		return [
+			policy.program,
+			...relationPolicyClosure(selected.select, catalog, policies),
+		];
+	});
 }
 
 function rootFieldResult(
@@ -342,6 +395,20 @@ export function lowerPostgresQueryPlan(
 	const read = policy.program.operations.read;
 	if (!read)
 		throw new TypeError(`Policy ${policy.program.identity} denies read`);
+	const relatedPolicies = relationPolicyClosure(
+		input.query.template.select,
+		catalog,
+		input.policies,
+	);
+	for (const related of relatedPolicies) {
+		const relatedRead = related.operations.read;
+		if (!relatedRead)
+			throw new TypeError(`Policy ${related.identity} denies read`);
+		if (relatedRead.admission.kind !== read.admission.kind)
+			throw new TypeError(
+				`Relation Policy ${related.identity} has incompatible admission`,
+			);
+	}
 	const parameters = new PostgresParameters();
 	const pageAlias = "qp_row";
 	const policySql = policyExpressionSql(read.rows, {
@@ -399,7 +466,7 @@ export function lowerPostgresQueryPlan(
 		}
 		const rendered = relationJoin(
 			selection,
-			index,
+			[index],
 			pageAlias,
 			catalog,
 			parameters,
@@ -425,6 +492,10 @@ export function lowerPostgresQueryPlan(
 		templateDigest: input.query.digest,
 		policy: policy.program.identity,
 		policyProgramDigest: digest("questpie-policy-program-v1", policy.program),
+		disclosureProgramDigest: digest("questpie-query-policy-closure-v1", {
+			root: policy.program,
+			relations: relatedPolicies,
+		}),
 		usedExecutionFacts: usedExecutionFacts(positionalParameters),
 		admission: read.admission.kind,
 		binding: Object.freeze({

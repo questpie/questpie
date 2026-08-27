@@ -28,7 +28,7 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 			'"tickets.queue": Readonly<{ input: Readonly<{ readonly "after": string | null; readonly "first": number; readonly "statuses": ReadonlyArray<string> | null; readonly "teamIds": ReadonlyArray<string> | null; }>;',
 		);
 		expect(generatedApp).toContain(
-			'readonly "team": Readonly<{ readonly "id": string; readonly "name": string; readonly "routingStatus": string; }> | null;',
+			'readonly "team": Readonly<{ readonly "id": string; readonly "name": string; readonly "organization": Readonly<{ readonly "id": string; readonly "name": string; }> | null; readonly "routingStatus": string; }> | null;',
 		);
 		expect(generatedApp).toContain(
 			'readonly "assignee": Readonly<{ readonly "id": string; readonly "principalId": string; readonly "role": string; }> | null;',

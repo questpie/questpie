@@ -38,6 +38,7 @@ export type {
 	PolicyExpressionV1,
 	PolicyProgramV1,
 	RootQueryFilterV1,
+	RootQuerySelectionV1,
 	ScalarCodecV1,
 } from "./types";
 

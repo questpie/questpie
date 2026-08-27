@@ -86,9 +86,7 @@ function normalizeSelection(value: unknown): RootQuerySelectionV1 {
 	return {
 		...selection,
 		select: array(selection.select, "toOne selection")
-			.map((child) =>
-				record(cloneJson(record(child, "Field selection")), "Field selection"),
-			)
+			.map(normalizeSelection)
 			.sort((left, right) =>
 				compareAscii(
 					string(left.key, "selection key"),

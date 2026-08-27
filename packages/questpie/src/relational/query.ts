@@ -254,6 +254,10 @@ type CollectionRelations = Readonly<
 	Record<string, RelationDefinition | InverseRelationDefinition>
 >;
 
+type LiteralKeys<Value> = {
+	[Key in keyof Value]: string extends Key ? never : Key;
+}[keyof Value];
+
 type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 	[Key in keyof Fields]?: Fields[Key] extends
 		| DataFieldDescriptor<
@@ -268,19 +272,16 @@ type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 		: never;
 }> &
 	Readonly<{
-		[Key in keyof Relations]?: Relations[Key] extends RelationDefinition<
+		[Key in LiteralKeys<Relations>]?: Relations[Key] extends RelationDefinition<
 			string & `collection:${string}`,
 			readonly FieldReference[],
 			readonly FieldReference[],
 			infer Target
 		>
-			? Target extends CollectionDefinition<
-					string,
-					infer TargetFields,
-					any,
-					any,
-					infer TargetRelations
-				>
+			? Target extends Readonly<{
+					fields: infer TargetFields extends FieldMap;
+					relations: infer TargetRelations extends CollectionRelations;
+				}>
 				? Readonly<{
 						select: ObjectSelection<TargetFields, TargetRelations>;
 					}>
@@ -331,13 +332,10 @@ type SelectedObject<
 					readonly FieldReference[],
 					infer Target
 				>
-				? Target extends CollectionDefinition<
-						string,
-						infer TargetFields,
-						any,
-						any,
-						infer TargetRelations
-					>
+				? Target extends Readonly<{
+						fields: infer TargetFields extends FieldMap;
+						relations: infer TargetRelations extends CollectionRelations;
+					}>
 					? Selection[Key] extends Readonly<{ select: infer Nested }>
 						? SelectedObject<TargetFields, TargetRelations, Nested> | null
 						: never

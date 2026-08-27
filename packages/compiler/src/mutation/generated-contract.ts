@@ -1,5 +1,9 @@
 import { compareAscii } from "../canonical";
-import { normalizeBoundPolicy, type DataQueryTemplateV1 } from "../relational";
+import {
+	normalizeBoundPolicy,
+	type DataQueryTemplateV1,
+	type RootQuerySelectionV1,
+} from "../relational";
 import type { NormalizedResource } from "../types";
 import type {
 	CollectionOperationProgramsV1,
@@ -82,18 +86,18 @@ function listSelection(
 	types: MutationDataTypeRenderer,
 	optionalPaths: ReadonlySet<string>,
 ): string {
-	const fields = template.select
-		.map((selected) => {
-			if (selected.kind === "field")
-				return `readonly ${JSON.stringify(selected.key)}${optionalPaths.has(fieldIdentityPath(selected.field)) ? "?" : ""}: ${types.fieldIdentity(selected.field)};`;
-			return `readonly ${JSON.stringify(selected.key)}: Readonly<{ ${selected.select
-				.map(
-					(field) =>
-						`readonly ${JSON.stringify(field.key)}: ${types.fieldIdentity(field.field)};`,
-				)
-				.join(" ")} }> | null;`;
-		})
-		.join(" ");
+	const render = (
+		selections: readonly RootQuerySelectionV1[],
+		paths: ReadonlySet<string>,
+	): string =>
+		selections
+			.map((selected) => {
+				if (selected.kind === "field")
+					return `readonly ${JSON.stringify(selected.key)}${paths.has(fieldIdentityPath(selected.field)) ? "?" : ""}: ${types.fieldIdentity(selected.field)};`;
+				return `readonly ${JSON.stringify(selected.key)}: Readonly<{ ${render(selected.select, new Set())} }> | null;`;
+			})
+			.join(" ");
+	const fields = render(template.select, optionalPaths);
 	return `Readonly<{ ${fields} }>`;
 }
 

@@ -166,19 +166,23 @@ function compileDataQuery(value) {
         descending: (options) => ({ kind: "order", field: identity, direction: "desc", nulls: options.nulls }),
       }];
     }));
-  const fields = makeFields(collection);
-  const relations = Object.fromEntries(Object.entries(collection.relations).flatMap(([name, relation]) => {
+  const compileSelection = (selection) => Object.entries(selection).map(([key, selected]) => selected.kind === "toOne"
+    ? { ...selected, key }
+    : { kind: "field", key, field: selected.__queryField });
+  const makeRelations = (owner) => Object.fromEntries(Object.entries(owner.relations).flatMap(([name, relation]) => {
     if (relation.kind !== "toOne") return [];
     const target = relationalCollections.get(relation.target.slice("collection:".length));
     if (!target) throw new Error("QP-DATA unknown Relation target " + relation.target);
     return [[name, {
       select: (callback) => ({
         kind: "toOne",
-        relation: collectionIdentity(collection) + "/relation:" + name,
-        select: Object.entries(callback({ fields: makeFields(target), relations: {} })).map(([key, field]) => ({ kind: "field", key, field: field.__queryField })),
+        relation: collectionIdentity(owner) + "/relation:" + name,
+        select: compileSelection(callback({ fields: makeFields(target), relations: makeRelations(target) })),
       }),
     }]];
   }));
+  const fields = makeFields(collection);
+  const relations = makeRelations(collection);
   const queryExpression = (candidate) => {
     if (candidate?.kind !== "booleanExpression") return candidate;
     if (candidate.operator === "and" || candidate.operator === "or") return { kind: candidate.operator, expressions: candidate.operands.map(queryExpression) };
@@ -213,9 +217,7 @@ function compileDataQuery(value) {
   const templateInput = {
     from: collectionIdentity(collection),
     parameters,
-    select: Object.entries(selection).map(([key, selected]) => selected.kind === "toOne"
-      ? { ...selected, key }
-      : { kind: "field", key, field: selected.__queryField }),
+    select: compileSelection(selection),
     filter: template.where === null ? null : queryExpression(template.where({ fields, parameters: template.parameters })),
     order: order.map(({ field, direction, nulls }) => ({ field, direction, nulls })),
     page: { kind: "forwardCursor", first: parameterOperand(page.first), after: parameterOperand(page.after), uniqueConstraint: collectionIdentity(collection) + "/constraint:" + unique.name },
@@ -235,8 +237,8 @@ function compileDataQuery(value) {
     throw new Error("QP-DATA unknown selected Field " + identity);
   };
   const selectedCodec = (selected) => selected.kind === "toOne"
-    ? { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, operationFieldCodec(fieldForIdentity(child.field))])) } }
-    : operationFieldCodec(fieldForIdentity(selected.__queryField));
+    ? { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, selectedCodec(child)])) } }
+    : operationFieldCodec(fieldForIdentity(selected.field ?? selected.__queryField));
   return {
     templateInput,
     input: { kind: "object", properties: Object.fromEntries(Object.entries(template.parameters).map(([name, parameter]) => [name, parameterCodec(parameter)])) },

@@ -392,7 +392,9 @@ postgresTest(
 			).toBe(true);
 			expect(
 				listEvidence.queue.nodes.every(
-					({ team }) => team?.routingStatus === "active",
+					({ team }) =>
+						team?.routingStatus === "active" &&
+						team.organization?.name === "Northwind Support",
 				),
 			).toBe(true);
 			expect(listEvidence.emptyQueue.nodes).toEqual([]);

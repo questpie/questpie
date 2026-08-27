@@ -54,9 +54,14 @@ function measureDatabaseRuntime(plan: unknown): Readonly<{
 			qp_createdAt: "2026-08-15T10:00:00.000Z",
 			qp_id: ${JSON.stringify(messageId)},
 		};
-		const columns = plan.result.flatMap((item) => item.kind === "field"
+		const resultColumns = (result) => result.flatMap((item) => item.kind === "field"
 			? (item.guardColumn === undefined ? [item.column] : [item.column, item.guardColumn])
-			: [item.presenceColumn, ...item.fields.map(({ column }) => column)]);
+			: [
+					item.presenceColumn,
+					...item.fields.map(({ column }) => column),
+					...resultColumns(item.relations ?? []),
+				]);
+		const columns = resultColumns(plan.result);
 		const row = columns.map((column) => values[column]);
 		const database = {
 			async transaction(input) {

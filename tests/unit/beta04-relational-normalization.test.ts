@@ -179,6 +179,69 @@ describe("BETA-04 relational normalization", () => {
 		);
 	});
 
+	test("normalizes object-authored selections recursively through four to-one hops", () => {
+		const input = queryInput() as unknown as Record<string, unknown>;
+		input.select = [
+			{
+				kind: "toOne",
+				key: "team",
+				relation: "collection:tickets/relation:team",
+				select: [
+					{
+						kind: "toOne",
+						key: "organization",
+						relation: "collection:teams/relation:organization",
+						select: [
+							{
+								kind: "toOne",
+								key: "region",
+								relation: "collection:organizations/relation:region",
+								select: [
+									{
+										kind: "toOne",
+										key: "country",
+										relation: "collection:regions/relation:country",
+										select: [
+											{
+												kind: "field",
+												key: "name",
+												field: "collection:countries/field:name",
+											},
+										],
+									},
+								],
+							},
+						],
+					},
+				],
+			},
+		];
+		const template = normalizeDataQueryTemplate(input, {
+			schemaProjectionDigest: "a".repeat(64),
+			dataContractProjectionDigest: "b".repeat(64),
+		});
+		const team = template.select[0];
+		expect(team?.kind).toBe("toOne");
+		if (team?.kind !== "toOne") throw new Error("expected team Relation");
+		const organization = team.select[0];
+		expect(organization?.kind).toBe("toOne");
+		if (organization?.kind !== "toOne")
+			throw new Error("expected organization Relation");
+		const region = organization.select[0];
+		expect(region?.kind).toBe("toOne");
+		if (region?.kind !== "toOne") throw new Error("expected region Relation");
+		const country = region.select[0];
+		expect(country?.kind).toBe("toOne");
+		if (country?.kind !== "toOne") throw new Error("expected country Relation");
+		expect(country.select).toEqual([
+			{
+				kind: "field",
+				key: "name",
+				field: "collection:countries/field:name",
+			},
+		]);
+	});
+
 	test("selects one default Policy and reports zero or two deterministically", () => {
 		const [only] = normalizePolicyPrograms([membershipPolicy]);
 		expect(
