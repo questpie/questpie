@@ -17,7 +17,10 @@ type TicketSelectionScope = Parameters<
 	>[0]["select"]
 >[0];
 
-const ticketSelection = ({ fields, relations }: TicketSelectionScope) => ({
+const ticketSearchSelection = ({
+	fields,
+	relations,
+}: TicketSelectionScope) => ({
 	id: fields.id,
 	organizationId: fields.organizationId,
 	teamId: fields.teamId,
@@ -38,90 +41,6 @@ const ticketSelection = ({ fields, relations }: TicketSelectionScope) => ({
 		principalId: assignee.principalId,
 		role: assignee.role,
 	})),
-});
-
-export const ticketListPlan = dataQuery<AppData["collections"]["tickets"]>()({
-	from: "tickets",
-	parameters: pageParameters,
-	select: ticketSelection,
-	where: null,
-	orderBy: ({ fields }) => [
-		fields.updatedAt.descending({ nulls: "last" }),
-		fields.id.descending({ nulls: "last" }),
-	],
-	page: ({ parameters }) =>
-		query.forwardCursor({
-			first: parameters.first,
-			after: parameters.after,
-		}),
-});
-
-export const ticketListByStatusPlan = dataQuery<
-	AppData["collections"]["tickets"]
->()({
-	from: "tickets",
-	parameters: {
-		...pageParameters,
-		status: query.parameter.text({ nullable: false }),
-	},
-	select: ticketSelection,
-	where: ({ fields, parameters }) => fields.status.equal(parameters.status),
-	orderBy: ({ fields }) => [
-		fields.updatedAt.descending({ nulls: "last" }),
-		fields.id.descending({ nulls: "last" }),
-	],
-	page: ({ parameters }) =>
-		query.forwardCursor({
-			first: parameters.first,
-			after: parameters.after,
-		}),
-});
-
-export const ticketListByTeamPlan = dataQuery<
-	AppData["collections"]["tickets"]
->()({
-	from: "tickets",
-	parameters: {
-		...pageParameters,
-		teamId: query.parameter.uuid({ nullable: false }),
-	},
-	select: ticketSelection,
-	where: ({ fields, parameters }) => fields.teamId.equal(parameters.teamId),
-	orderBy: ({ fields }) => [
-		fields.updatedAt.descending({ nulls: "last" }),
-		fields.id.descending({ nulls: "last" }),
-	],
-	page: ({ parameters }) =>
-		query.forwardCursor({
-			first: parameters.first,
-			after: parameters.after,
-		}),
-});
-
-export const ticketListByStatusAndTeamPlan = dataQuery<
-	AppData["collections"]["tickets"]
->()({
-	from: "tickets",
-	parameters: {
-		...pageParameters,
-		status: query.parameter.text({ nullable: false }),
-		teamId: query.parameter.uuid({ nullable: false }),
-	},
-	select: ticketSelection,
-	where: ({ fields, parameters }) =>
-		query.and(
-			fields.status.equal(parameters.status),
-			fields.teamId.equal(parameters.teamId),
-		),
-	orderBy: ({ fields }) => [
-		fields.updatedAt.descending({ nulls: "last" }),
-		fields.id.descending({ nulls: "last" }),
-	],
-	page: ({ parameters }) =>
-		query.forwardCursor({
-			first: parameters.first,
-			after: parameters.after,
-		}),
 });
 
 export const ticketDetailPlan = dataQuery<AppData["collections"]["tickets"]>()({
@@ -178,7 +97,7 @@ export const ticketSearchByReferencePlan = dataQuery<
 		reference: query.parameter.text({ nullable: false }),
 		...pageParameters,
 	},
-	select: ticketSelection,
+	select: ticketSearchSelection,
 	where: ({ fields, parameters }) =>
 		fields.reference.equal(parameters.reference),
 	orderBy: ({ fields }) => [fields.id.ascending({ nulls: "last" })],

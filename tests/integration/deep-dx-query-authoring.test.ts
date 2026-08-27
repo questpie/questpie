@@ -42,6 +42,15 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 		expect(compilation.generatedFiles["client.ts"]).toContain(
 			'"tickets.queue"',
 		);
+		for (const deleted of [
+			'"tickets.list"',
+			'"tickets.listByStatus"',
+			'"tickets.listByTeam"',
+			'"tickets.listByStatusAndTeam"',
+		]) {
+			expect(generatedApp).not.toContain(deleted);
+			expect(compilation.generatedFiles["client.ts"]).not.toContain(deleted);
+		}
 		const queryProjection = JSON.parse(
 			compilation.generatedFiles["query-projection.json"] ?? "null",
 		) as Readonly<{ queries: readonly Readonly<Record<string, unknown>>[] }>;

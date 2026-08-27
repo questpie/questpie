@@ -74,25 +74,12 @@ export function DeskApplication({
 			setQueueKind("loading");
 			setQueueMessage("Loading queue…");
 			try {
-				const input = { after, first: 8 } as const;
-				const nextPage =
-					status && teamId
-						? await desk.queries["tickets.listByStatusAndTeam"]({
-								...input,
-								status,
-								teamId,
-							})
-						: status
-							? await desk.queries["tickets.listByStatus"]({
-									...input,
-									status,
-								})
-							: teamId
-								? await desk.queries["tickets.listByTeam"]({
-										...input,
-										teamId,
-									})
-								: await desk.queries["tickets.list"](input);
+				const nextPage = await desk.queries["tickets.queue"]({
+					after,
+					first: 8,
+					statuses: status ? [status] : null,
+					teamIds: teamId ? [teamId] : null,
+				});
 				if (request === queueRequest.current) {
 					setPage(nextPage);
 					setPageIndex(index);

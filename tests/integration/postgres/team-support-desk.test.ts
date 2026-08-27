@@ -352,22 +352,29 @@ postgresTest(
 						statuses: [],
 						teamIds: null,
 					});
-					const first = await queries.tickets.list({ after: null, first: 1 });
-					const open = await queries.tickets.listByStatus({
+					const first = await queries.tickets.queue({
 						after: null,
-						first: 10,
-						status: "open",
+						first: 1,
+						statuses: null,
+						teamIds: null,
 					});
-					const team = await queries.tickets.listByTeam({
+					const open = await queries.tickets.queue({
 						after: null,
 						first: 10,
-						teamId: supportTracerIds.teamPlatform,
+						statuses: ["open"],
+						teamIds: null,
 					});
-					const combined = await queries.tickets.listByStatusAndTeam({
+					const team = await queries.tickets.queue({
 						after: null,
 						first: 10,
-						status: "open",
-						teamId: supportTracerIds.teamPlatform,
+						statuses: null,
+						teamIds: [supportTracerIds.teamPlatform],
+					});
+					const combined = await queries.tickets.queue({
+						after: null,
+						first: 10,
+						statuses: ["open"],
+						teamIds: [supportTracerIds.teamPlatform],
 					});
 					const searched = await queries.tickets.searchByReference({
 						reference: supportTracerIds.referenceOpen,
@@ -477,7 +484,13 @@ postgresTest(
 							membershipId: supportTracerIds.membershipAgent,
 						},
 					},
-					({ queries }) => queries.tickets.list({ after: null, first: 10 }),
+					({ queries }) =>
+						queries.tickets.queue({
+							after: null,
+							first: 10,
+							statuses: null,
+							teamIds: null,
+						}),
 				),
 			).rejects.toMatchObject({ code: expect.any(String) });
 
@@ -572,9 +585,11 @@ postgresTest(
 			});
 			expect(
 				(
-					await browserClient.queries["tickets.list"]({
+					await browserClient.queries["tickets.queue"]({
 						after: null,
 						first: 20,
+						statuses: null,
+						teamIds: null,
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);

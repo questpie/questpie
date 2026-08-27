@@ -12,7 +12,7 @@ export type SupportDesk = ReturnType<typeof createSupportDesk>;
 // These intentionally awkward application-local aliases are DX evidence, not
 // a parallel wire contract: every field remains inferred from #questpie/client.
 export type TicketPage = Awaited<
-	ReturnType<SupportDesk["queries"]["tickets.list"]>
+	ReturnType<SupportDesk["queries"]["tickets.queue"]>
 >;
 export type TicketListNode = TicketPage["nodes"][number];
 export type TicketDetail = NonNullable<

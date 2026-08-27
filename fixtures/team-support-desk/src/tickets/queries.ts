@@ -3,19 +3,7 @@ import { codec, expr } from "questpie";
 import { defineQuery } from "#questpie/app";
 
 import { tickets } from "../tickets";
-import {
-	ticketDetailPlan,
-	ticketListByStatusAndTeamPlan,
-	ticketListByStatusPlan,
-	ticketListByTeamPlan,
-	ticketListPlan,
-	ticketSearchByReferencePlan,
-} from "./query-plans";
-
-const pageInfoCodec = codec.object({
-	endCursor: codec.nullable(codec.text()),
-	hasNextPage: codec.boolean(),
-});
+import { ticketDetailPlan, ticketSearchByReferencePlan } from "./query-plans";
 
 const membershipSummaryCodec = codec.object({
 	id: codec.uuid(),
@@ -44,16 +32,6 @@ const ticketSummaryCodec = codec.object({
 	assignee: codec.nullable(membershipSummaryCodec),
 });
 
-const ticketPageCodec = codec.object({
-	nodes: codec.array(ticketSummaryCodec),
-	pageInfo: pageInfoCodec,
-});
-
-const pageInputCodec = {
-	first: codec.integer(),
-	after: codec.nullable(codec.text()),
-} as const;
-
 function timestamp(value: Date | string): Date {
 	return value instanceof Date ? value : new Date(value);
 }
@@ -79,8 +57,14 @@ export const ticketQueue = defineQuery({
 		},
 		select: {
 			id: true,
+			organizationId: true,
 			status: true,
 			teamId: true,
+			requesterMembershipId: true,
+			assigneeMembershipId: true,
+			reference: true,
+			priority: true,
+			summary: true,
 			updatedAt: true,
 			team: {
 				select: {
@@ -99,78 +83,6 @@ export const ticketQueue = defineQuery({
 			after: parameters.after,
 		}),
 	}),
-});
-
-export const listTickets = defineQuery({
-	name: "tickets.list",
-	network: true,
-	input: codec.object(pageInputCodec),
-	output: ticketPageCodec,
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(ticketListPlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((ticket) => ({
-				...ticket,
-				updatedAt: timestamp(ticket.updatedAt),
-			})),
-		};
-	},
-});
-
-export const listTicketsByStatus = defineQuery({
-	name: "tickets.listByStatus",
-	network: true,
-	input: codec.object({ ...pageInputCodec, status: codec.text() }),
-	output: ticketPageCodec,
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(ticketListByStatusPlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((ticket) => ({
-				...ticket,
-				updatedAt: timestamp(ticket.updatedAt),
-			})),
-		};
-	},
-});
-
-export const listTicketsByTeam = defineQuery({
-	name: "tickets.listByTeam",
-	network: true,
-	input: codec.object({ ...pageInputCodec, teamId: codec.uuid() }),
-	output: ticketPageCodec,
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(ticketListByTeamPlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((ticket) => ({
-				...ticket,
-				updatedAt: timestamp(ticket.updatedAt),
-			})),
-		};
-	},
-});
-
-export const listTicketsByStatusAndTeam = defineQuery({
-	name: "tickets.listByStatusAndTeam",
-	network: true,
-	input: codec.object({
-		...pageInputCodec,
-		status: codec.text(),
-		teamId: codec.uuid(),
-	}),
-	output: ticketPageCodec,
-	handler: async ({ input, ctx }) => {
-		const page = await ctx.data.run(ticketListByStatusAndTeamPlan, input);
-		return {
-			...page,
-			nodes: page.nodes.map((ticket) => ({
-				...ticket,
-				updatedAt: timestamp(ticket.updatedAt),
-			})),
-		};
-	},
 });
 
 const ticketDetailCodec = codec.object({
