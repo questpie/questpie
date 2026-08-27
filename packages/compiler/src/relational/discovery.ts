@@ -175,7 +175,7 @@ function compileDataQuery(value) {
       select: (callback) => ({
         kind: "toOne",
         relation: collectionIdentity(collection) + "/relation:" + name,
-        select: Object.entries(callback({ fields: makeFields(target) })).map(([key, field]) => ({ kind: "field", key, field: field.__queryField })),
+        select: Object.entries(callback({ fields: makeFields(target), relations: {} })).map(([key, field]) => ({ kind: "field", key, field: field.__queryField })),
       }),
     }]];
   }));

@@ -23,8 +23,15 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 			applicationRoot: temporary,
 		});
 
-		expect(compilation.generatedFiles["app.ts"]).toContain(
-			'"tickets.queue": Readonly<{ input: Readonly<{ readonly "after": string | null; readonly "first": number; readonly "statuses": ReadonlyArray<string> | null; readonly "teamIds": ReadonlyArray<string> | null; }>; output: Readonly<{ readonly "nodes": ReadonlyArray<Readonly<{ readonly "id": string; readonly "status": string; readonly "teamId": string; readonly "updatedAt": Date; }>>; readonly "pageInfo": Readonly<{ readonly "endCursor": string | null; readonly "hasNextPage": boolean; }>; }>; handlerOutput:',
+		const generatedApp = compilation.generatedFiles["app.ts"] ?? "";
+		expect(generatedApp).toContain(
+			'"tickets.queue": Readonly<{ input: Readonly<{ readonly "after": string | null; readonly "first": number; readonly "statuses": ReadonlyArray<string> | null; readonly "teamIds": ReadonlyArray<string> | null; }>;',
+		);
+		expect(generatedApp).toContain(
+			'readonly "team": Readonly<{ readonly "id": string; readonly "name": string; readonly "routingStatus": string; }> | null;',
+		);
+		expect(generatedApp).toContain(
+			'readonly "assignee": Readonly<{ readonly "id": string; readonly "principalId": string; readonly "role": string; }> | null;',
 		);
 		expect(compilation.generatedFiles["app.ts"]).toContain(
 			"queries: GeneratedQueryOperations",

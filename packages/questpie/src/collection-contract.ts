@@ -37,6 +37,7 @@ export interface RelationDefinition<
 	Target extends `collection:${string}` = `collection:${string}`,
 	Fields extends readonly FieldReference[] = readonly FieldReference[],
 	References extends readonly FieldReference[] = readonly FieldReference[],
+	TargetCollection = unknown,
 > {
 	readonly kind: "toOne";
 	readonly target: Target;
@@ -45,6 +46,8 @@ export interface RelationDefinition<
 	readonly onDelete: "restrict" | "cascade" | "setNull" | "noAction";
 	readonly onUpdate: "restrict" | "cascade" | "setNull" | "noAction";
 	readonly postgresName: string | null;
+	/** Type-only target shape used by Collection-owned relational authoring. */
+	readonly __targetCollection?: TargetCollection;
 }
 
 export type RelationReference<
@@ -109,5 +112,5 @@ export interface CollectionDefinition<
 	readonly relations: Relations;
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
-	readonly list: CollectionListAuthoring<Fields>;
+	readonly list: CollectionListAuthoring<Fields, Relations>;
 }

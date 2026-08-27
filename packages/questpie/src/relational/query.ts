@@ -1,4 +1,10 @@
 import type { Codec, CodecValue } from "../codec";
+import type {
+	CollectionDefinition,
+	FieldReference,
+	InverseRelationDefinition,
+	RelationDefinition,
+} from "../collection-contract";
 import type { DataFieldDescriptor } from "../field-contract";
 import type { FieldDefinition } from "../field-contract";
 import type { FieldNode } from "../shape";
@@ -244,7 +250,11 @@ type CodecParameterOperands<Parameters extends CodecParameterMap> = {
 	readonly [Key in keyof Parameters]: CodecParameterOperand<Parameters[Key]>;
 };
 
-type ScalarSelection<Fields> = Readonly<{
+type CollectionRelations = Readonly<
+	Record<string, RelationDefinition | InverseRelationDefinition>
+>;
+
+type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 	[Key in keyof Fields]?: Fields[Key] extends
 		| DataFieldDescriptor<
 				FieldIdentity,
@@ -256,6 +266,30 @@ type ScalarSelection<Fields> = Readonly<{
 		| FieldDefinition
 		? true
 		: never;
+}> &
+	Readonly<{
+		[Key in keyof Relations]?: Relations[Key] extends RelationDefinition<
+			string & `collection:${string}`,
+			readonly FieldReference[],
+			readonly FieldReference[],
+			infer Target
+		>
+			? Target extends CollectionDefinition<
+					string,
+					infer TargetFields,
+					any,
+					any,
+					infer TargetRelations
+				>
+				? Readonly<{
+						select: ObjectSelection<TargetFields, TargetRelations>;
+					}>
+				: never
+			: never;
+	}>;
+
+type ScalarSelection<Fields> = Readonly<{
+	[Key in keyof Fields]?: true;
 }>;
 
 type SelectedScalars<Fields, Selection extends ScalarSelection<Fields>> = {
@@ -280,10 +314,45 @@ type SelectedScalars<Fields, Selection extends ScalarSelection<Fields>> = {
 			: never;
 };
 
-export interface CollectionListAuthoring<Fields extends FieldMap> {
+type SelectedObject<
+	Fields,
+	Relations extends CollectionRelations,
+	Selection,
+> = {
+	-readonly [Key in keyof Selection]: Key extends keyof Fields
+		? SelectedScalars<
+				Fields,
+				Pick<Selection, Key> & ScalarSelection<Fields>
+			>[Key]
+		: Key extends keyof Relations
+			? Relations[Key] extends RelationDefinition<
+					string & `collection:${string}`,
+					readonly FieldReference[],
+					readonly FieldReference[],
+					infer Target
+				>
+				? Target extends CollectionDefinition<
+						string,
+						infer TargetFields,
+						any,
+						any,
+						infer TargetRelations
+					>
+					? Selection[Key] extends Readonly<{ select: infer Nested }>
+						? SelectedObject<TargetFields, TargetRelations, Nested> | null
+						: never
+					: never
+				: never
+			: never;
+};
+
+export interface CollectionListAuthoring<
+	Fields extends FieldMap,
+	Relations extends CollectionRelations,
+> {
 	<
 		const Parameters extends CodecParameterMap,
-		const Selection extends ScalarSelection<Fields>,
+		const Selection extends ObjectSelection<Fields, Relations>,
 	>(
 		definition: Readonly<{
 			parameters: Parameters;
@@ -328,13 +397,16 @@ export interface CollectionListAuthoring<Fields extends FieldMap> {
 		}>,
 	): DataQueryDefinition<
 		CodecParameterValues<Parameters>,
-		SelectedScalars<Fields, Selection>
+		SelectedObject<Fields, Relations, Selection>
 	>;
 }
 
-export function collectionList<Fields extends FieldMap>(
-	collection: Readonly<{ name: string; fields: Fields }>,
-): CollectionListAuthoring<Fields> {
+export function collectionList<
+	Fields extends FieldMap,
+	Relations extends CollectionRelations,
+>(
+	collection: Readonly<{ name: string; fields: Fields; relations: Relations }>,
+): CollectionListAuthoring<Fields, Relations> {
 	return ((definition: Readonly<Record<string, unknown>>) => {
 		const codecs = codecRecord(definition.parameters);
 		const parameters = Object.fromEntries(
@@ -357,12 +429,11 @@ export function collectionList<Fields extends FieldMap>(
 			template: Object.freeze({
 				from: collection.name,
 				parameters: Object.freeze(parameters),
-				select: ({ fields }: Readonly<{ fields: CodecRecord }>) =>
-					Object.freeze(
-						Object.fromEntries(
-							Object.keys(selection).map((key) => [key, fields[key]]),
-						),
-					),
+				select: ({
+					fields,
+					relations,
+				}: Readonly<{ fields: CodecRecord; relations: CodecRecord }>) =>
+					materializeObjectSelection(selection, fields, relations),
 				where: ({
 					fields,
 					parameters: operands,
@@ -394,7 +465,7 @@ export function collectionList<Fields extends FieldMap>(
 					}),
 			}),
 		});
-	}) as unknown as CollectionListAuthoring<Fields>;
+	}) as unknown as CollectionListAuthoring<Fields, Relations>;
 }
 
 type DescriptorFieldKey<Descriptor extends DataQueryDescriptor> =
@@ -445,6 +516,37 @@ function codecRecord(value: unknown): CodecRecord {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError("Query parameter must be a codec");
 	return value as CodecRecord;
+}
+
+function materializeObjectSelection(
+	selection: CodecRecord,
+	fields: CodecRecord,
+	relations: CodecRecord,
+): CodecRecord {
+	return Object.freeze(
+		Object.fromEntries(
+			Object.entries(selection).map(([key, selected]) => {
+				if (selected === true) return [key, fields[key]];
+				const relation = codecRecord(relations[key]);
+				const nested = codecRecord(codecRecord(selected).select);
+				return [
+					key,
+					(
+						relation.select as (
+							callback: (
+								scope: Readonly<{
+									fields: CodecRecord;
+									relations: CodecRecord;
+								}>,
+							) => CodecRecord,
+						) => unknown
+					)((scope) =>
+						materializeObjectSelection(nested, scope.fields, scope.relations),
+					),
+				];
+			}),
+		),
+	);
 }
 
 function queryParameterFromCodec(value: unknown): AnyQueryParameter {

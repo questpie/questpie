@@ -390,6 +390,11 @@ postgresTest(
 			expect(
 				listEvidence.queue.nodes.every(({ status }) => status === "open"),
 			).toBe(true);
+			expect(
+				listEvidence.queue.nodes.every(
+					({ team }) => team?.routingStatus === "active",
+				),
+			).toBe(true);
 			expect(listEvidence.emptyQueue.nodes).toEqual([]);
 			expect(listEvidence.first.nodes).toHaveLength(1);
 			expect(listEvidence.first.pageInfo.hasNextPage).toBe(true);

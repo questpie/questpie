@@ -341,7 +341,12 @@ export const relation = Object.freeze({
 			onUpdate?: RelationDefinition["onUpdate"];
 			postgres?: { name: string };
 		}>,
-	): RelationDefinition<`collection:${TargetName}`, Fields, References> =>
+	): RelationDefinition<
+		`collection:${TargetName}`,
+		Fields,
+		References,
+		CollectionDefinition<TargetName, TargetFields>
+	> =>
 		Object.freeze({
 			kind: "toOne",
 			target: collectionIdentity(input.target),
@@ -511,7 +516,7 @@ export interface SeedDefinition<
 }
 
 function collectionIdentity<const Name extends string>(
-	collection: CollectionDefinition<Name>,
+	collection: Readonly<{ name: Name }>,
 ): `collection:${Name}` {
 	return `collection:${collection.name}`;
 }
