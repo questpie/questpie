@@ -75,17 +75,20 @@ export function controlledEvaluationFailure(
 			"relationDepthExceeded",
 			"controlled relational evaluation exceeded the measured Relation depth",
 		);
-	if (stderr.includes("QP-DATA-025"))
-		return new CompilerDiagnosticError(
-			"QP-DATA-025",
-			"unsupportedExpressionCapability",
-			"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
-			{ capability: "expr.exists", alternative: "relation.some" },
-		);
+	if (stderr.includes("QP-DATA-025")) return unsupportedExpressionCapability();
 	return new CompilerDiagnosticError(
 		"QP-COMPOSE-013",
 		"structuralTypeError",
 		"controlled child evaluation failed",
+	);
+}
+
+export function unsupportedExpressionCapability(): CompilerDiagnosticError {
+	return new CompilerDiagnosticError(
+		"QP-DATA-025",
+		"unsupportedExpressionCapability",
+		"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
+		{ capability: "expr.exists", alternative: "relation.some" },
 	);
 }
 
