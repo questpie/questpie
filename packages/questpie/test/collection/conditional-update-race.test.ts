@@ -10,8 +10,8 @@
  * pglite is single-connection, so true parallel transactions cannot
  * interleave here. Instead these tests mutate rows in the exact TOCTOU
  * window — `beforeChange`/`beforeDelete` hooks run after the pre-SELECT and
- * before the write transaction — via raw drizzle writes (autocommit), and
- * assert the semantic outcome: a row claimed in the window must NOT be
+ * before the row lock — via raw writes on the hook transaction, and assert
+ * the semantic outcome: a row claimed in the window must NOT be
  * double-claimed, losers are reported by the return value, and afterChange /
  * versioning fire for winners only.
  */
@@ -131,10 +131,10 @@ describe("atomic conditional writes (claim-checked)", () => {
 		afterChangeCount = 0;
 
 		// Steal the row AFTER the pre-SELECT (which saw owner = null) and
-		// BEFORE the write transaction — exactly the race window.
-		onBeforeChange = async () => {
+		// BEFORE the row lock — exactly the claim-check window.
+		onBeforeChange = async ({ db }) => {
 			const table = claimsTable();
-			await setup.app.db
+			await db
 				.update(table)
 				.set({ owner: "intruder" })
 				.where(eq(getColumn(table, "id")!, created.id));
@@ -181,11 +181,11 @@ describe("atomic conditional writes (claim-checked)", () => {
 
 		// Steal row B in the TOCTOU window (once)
 		let stolen = false;
-		onBeforeChange = async () => {
+		onBeforeChange = async ({ db }) => {
 			if (stolen) return;
 			stolen = true;
 			const table = claimsTable();
-			await setup.app.db
+			await db
 				.update(table)
 				.set({ status: "claimed" })
 				.where(eq(getColumn(table, "id")!, b.id));
@@ -232,9 +232,9 @@ describe("atomic conditional writes (claim-checked)", () => {
 		);
 
 		// A competing writer bumps the revision in the race window
-		onBeforeChange = async () => {
+		onBeforeChange = async ({ db }) => {
 			const table = claimsTable();
-			await setup.app.db
+			await db
 				.update(table)
 				.set({ revision: 2 })
 				.where(eq(getColumn(table, "id")!, created.id));
@@ -263,11 +263,9 @@ describe("atomic conditional writes (claim-checked)", () => {
 			ctx,
 		);
 
-		onBeforeChange = async () => {
+		onBeforeChange = async ({ db }) => {
 			const table = claimsTable();
-			await setup.app.db
-				.delete(table)
-				.where(eq(getColumn(table, "id")!, created.id));
+			await db.delete(table).where(eq(getColumn(table, "id")!, created.id));
 		};
 
 		await expect(
@@ -284,11 +282,9 @@ describe("atomic conditional writes (claim-checked)", () => {
 			ctx,
 		);
 
-		onBeforeDelete = async () => {
+		onBeforeDelete = async ({ db }) => {
 			const table = claimsTable();
-			await setup.app.db
-				.delete(table)
-				.where(eq(getColumn(table, "id")!, created.id));
+			await db.delete(table).where(eq(getColumn(table, "id")!, created.id));
 		};
 
 		await expect(
@@ -309,11 +305,11 @@ describe("atomic conditional writes (claim-checked)", () => {
 
 		// Revive row B in the TOCTOU window (once)
 		let revived = false;
-		onBeforeDelete = async () => {
+		onBeforeDelete = async ({ db }) => {
 			if (revived) return;
 			revived = true;
 			const table = claimsTable();
-			await setup.app.db
+			await db
 				.update(table)
 				.set({ status: "active" })
 				.where(eq(getColumn(table, "id")!, b.id));
@@ -348,10 +344,10 @@ describe("atomic conditional writes (claim-checked)", () => {
 		);
 
 		// Steal the en translation in the race window
-		onBeforeChange = async () => {
+		onBeforeChange = async ({ db }) => {
 			const i18nTable =
 				setup.app.collections.localized_claims["~internalI18nTable"];
-			await setup.app.db
+			await db
 				.update(i18nTable)
 				.set({ name: "Stolen" })
 				.where(

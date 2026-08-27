@@ -130,7 +130,7 @@ describe("starter auth credential collections", () => {
 				},
 				userCtx,
 			),
-		).rejects.toThrow("permission to create");
+		).rejects.toThrow("Access denied");
 
 		await expect(
 			setup.app.collections.apikey.create(
@@ -142,7 +142,7 @@ describe("starter auth credential collections", () => {
 				},
 				userCtx,
 			),
-		).rejects.toThrow("permission to create");
+		).rejects.toThrow("Access denied");
 		await expect(
 			setup.app.collections.session.updateById(
 				{
@@ -151,10 +151,10 @@ describe("starter auth credential collections", () => {
 				},
 				userCtx,
 			),
-		).rejects.toThrow("permission to update");
+		).rejects.toThrow("Access denied");
 		await expect(
 			setup.app.collections.session.deleteById({ id: created.id }, userCtx),
-		).rejects.toThrow("permission to delete");
+		).rejects.toThrow("Access denied");
 		await expect(
 			setup.app.collections.session.deleteMany(
 				{ where: { userId: "user-1" } },

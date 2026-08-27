@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { sql } from "drizzle-orm";
+
 import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
+import { ApiError } from "../../src/server/errors/index.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
 import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
@@ -11,6 +14,10 @@ let onBeforeChange: (() => Promise<void>) | undefined;
 let onBeforeDelete: (() => Promise<void>) | undefined;
 let beforeTransitionFacts = 0;
 let observedDeleteRevision: number | undefined;
+let beforeOperationDeleteRuns = 0;
+let beforeDeleteRuns = 0;
+let guardedHookMode: "update" | "delete" | undefined;
+let guardedHookTenantId: string | undefined;
 
 const optimisticTags = collection("optimistic_tags")
 	.fields(({ f }) => ({
@@ -41,6 +48,9 @@ const optimisticTags = collection("optimistic_tags")
 	})
 	.access({ introspect: true })
 	.hooks({
+		beforeOperation: ({ operation }) => {
+			if (operation === "delete") beforeOperationDeleteRuns++;
+		},
 		beforeChange: async ({ original, operation }) => {
 			if (operation === "update") {
 				observedOriginalRevision = original?.revision;
@@ -48,6 +58,7 @@ const optimisticTags = collection("optimistic_tags")
 			}
 		},
 		beforeDelete: async () => {
+			beforeDeleteRuns++;
 			await onBeforeDelete?.();
 		},
 		afterDelete: ({ data }) => {
@@ -88,6 +99,69 @@ const retainedTags = collection("retained_tags")
 		versioning: { maxVersions: 2 },
 		optimisticConcurrency: true,
 	});
+const guardedDocuments = collection("guarded_documents")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.options({ optimisticConcurrency: true })
+	.access({
+		update: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+		delete: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+	})
+	.hooks({
+		beforeChange: async ({ db, operation, original }) => {
+			if (operation !== "update" || guardedHookMode !== "update") return;
+			await db.execute(sql`
+				UPDATE guarded_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+		beforeDelete: async ({ db, original }) => {
+			if (guardedHookMode !== "delete") return;
+			await db.execute(sql`
+				UPDATE guarded_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+	});
+const guardedLegacyDocuments = collection("guarded_legacy_documents")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.access({
+		update: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+		delete: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+	})
+	.hooks({
+		beforeChange: async ({ db, operation, original }) => {
+			if (operation !== "update" || guardedHookMode !== "update") return;
+			await db.execute(sql`
+				UPDATE guarded_legacy_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+		beforeDelete: async ({ db, original }) => {
+			if (guardedHookMode !== "delete") return;
+			await db.execute(sql`
+				UPDATE guarded_legacy_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+	});
 
 describe("generated CRUD optimistic concurrency", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -99,14 +173,20 @@ describe("generated CRUD optimistic concurrency", () => {
 		onBeforeDelete = undefined;
 		beforeTransitionFacts = 0;
 		observedDeleteRevision = undefined;
+		beforeOperationDeleteRuns = 0;
+		beforeDeleteRuns = 0;
+		guardedHookMode = undefined;
+		guardedHookTenantId = undefined;
 		setup = await buildMockApp({
 			collections: {
+				guardedLegacyDocuments,
 				optimisticTags,
 				optimisticGroups,
 				optimisticTagGroups,
 				legacyTags,
 				tenantDocuments,
 				retainedTags,
+				guardedDocuments,
 			},
 		});
 		await runTestDbMigrations(setup.app);
@@ -124,6 +204,261 @@ describe("generated CRUD optimistic concurrency", () => {
 		expect(() => invalid.build()).toThrow(
 			'cannot declare framework-owned field "revision"',
 		);
+	});
+
+	it("hides guarded update and delete targets before revision checks", async () => {
+		const ownerId = crypto.randomUUID();
+		const strangerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedDocuments.create(
+			{ tenantId: ownerId, title: "Private" },
+			context,
+		);
+		const stranger = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: strangerId }),
+		});
+
+		const capture = (promise: Promise<unknown>) =>
+			promise.catch((error: ApiError) => error) as Promise<ApiError>;
+		const foreignUpdate = await capture(
+			setup.app.collections.guardedDocuments.updateById(
+				{ id: guarded.id, expectedRevision: 999, data: { title: "Probe" } },
+				stranger,
+			),
+		);
+		const absentUpdate = await capture(
+			setup.app.collections.guardedDocuments.updateById(
+				{
+					id: crypto.randomUUID(),
+					expectedRevision: 999,
+					data: { title: "Probe" },
+				},
+				stranger,
+			),
+		);
+		expect(foreignUpdate.toJSON(false)).toEqual(absentUpdate.toJSON(false));
+
+		const foreignDelete = await capture(
+			setup.app.collections.guardedDocuments.deleteById(
+				{ id: guarded.id, expectedRevision: 999 },
+				stranger,
+			),
+		);
+		const absentDelete = await capture(
+			setup.app.collections.guardedDocuments.deleteById(
+				{ id: crypto.randomUUID(), expectedRevision: 999 },
+				stranger,
+			),
+		);
+		expect(foreignDelete.toJSON(false)).toEqual(absentDelete.toJSON(false));
+
+		const foreignBulkUpdate = await capture(
+			setup.app.collections.guardedDocuments.updateMany(
+				{
+					where: { tenantId: ownerId },
+					data: { title: "Probe" },
+					expectedRevisions: [{ id: guarded.id, expectedRevision: 999 }],
+				},
+				stranger,
+			),
+		);
+		const absentBulkUpdate = await capture(
+			setup.app.collections.guardedDocuments.updateMany(
+				{
+					where: { tenantId: crypto.randomUUID() },
+					data: { title: "Probe" },
+					expectedRevisions: [],
+				},
+				stranger,
+			),
+		);
+		expect(foreignBulkUpdate.toJSON(false)).toEqual(
+			absentBulkUpdate.toJSON(false),
+		);
+
+		const foreignBulkDelete = await capture(
+			setup.app.collections.guardedDocuments.deleteMany(
+				{
+					where: { tenantId: ownerId },
+					expectedRevisions: [{ id: guarded.id, expectedRevision: 999 }],
+				},
+				stranger,
+			),
+		);
+		const absentBulkDelete = await capture(
+			setup.app.collections.guardedDocuments.deleteMany(
+				{ where: { tenantId: crypto.randomUUID() }, expectedRevisions: [] },
+				stranger,
+			),
+		);
+		expect(foreignBulkDelete.toJSON(false)).toEqual(
+			absentBulkDelete.toJSON(false),
+		);
+	});
+
+	it("rejects a stale delete before running delete hooks", async () => {
+		const tag = await setup.app.collections.optimisticTags.create(
+			{ name: "Stale delete" },
+			context,
+		);
+
+		await expect(
+			setup.app.collections.optimisticTags.deleteById(
+				{ id: tag.id, expectedRevision: tag.revision + 1 },
+				context,
+			),
+		).rejects.toThrow("Optimistic concurrency conflict");
+		expect(beforeOperationDeleteRuns).toBe(0);
+		expect(beforeDeleteRuns).toBe(0);
+	});
+
+	it("rechecks guarded updates after hooks mutate access fields", async () => {
+		const ownerId = crypto.randomUUID();
+		const foreignTenantId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedDocuments.create(
+			{ tenantId: ownerId, title: "Original" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "update";
+		guardedHookTenantId = foreignTenantId;
+
+		await expect(
+			setup.app.collections.guardedDocuments.updateById(
+				{
+					id: guarded.id,
+					expectedRevision: guarded.revision,
+					data: { title: "Unauthorized" },
+				},
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		const unchanged = await setup.app.collections.guardedDocuments.findOne(
+			{ where: { id: guarded.id } },
+			context,
+		);
+		expect(unchanged).toMatchObject({ tenantId: ownerId, title: "Original" });
+	});
+
+	it("rechecks guarded bulk deletes after hooks mutate access fields", async () => {
+		const ownerId = crypto.randomUUID();
+		const foreignTenantId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedDocuments.create(
+			{ tenantId: ownerId, title: "Keep" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = foreignTenantId;
+
+		await expect(
+			setup.app.collections.guardedDocuments.deleteMany(
+				{
+					where: { id: guarded.id },
+					expectedRevisions: [
+						{ id: guarded.id, expectedRevision: guarded.revision },
+					],
+				},
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		const unchanged = await setup.app.collections.guardedDocuments.findOne(
+			{ where: { id: guarded.id } },
+			context,
+		);
+		expect(unchanged).toMatchObject({ tenantId: ownerId, title: "Keep" });
+	});
+
+	it("rolls back legacy update hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Original" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "update";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.updateById(
+				{ id: guarded.id, data: { title: "Unauthorized" } },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Original" });
+	});
+
+	it("rolls back legacy deleteById hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Keep by id" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.deleteById(
+				{ id: guarded.id },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Keep by id" });
+	});
+
+	it("rolls back legacy deleteMany hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Keep in bulk" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.deleteMany(
+				{ where: { id: guarded.id } },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Keep in bulk" });
 	});
 
 	it("creates revision 1 and advances it once from the expected revision", async () => {
