@@ -1718,7 +1718,23 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					_hookDepth,
 				},
 				async () => {
-					// Execute beforeOperation hook
+					// Enforce access control
+					const canCreate = await this.enforceAccessControl(
+						"create",
+						normalized,
+						null,
+						input,
+					);
+					if (canCreate === false) {
+						this.throwNeutralWriteDenial("create");
+					}
+					if (
+						typeof canCreate === "object" &&
+						!(await matchesStrictAccessConditions(canCreate, input))
+					) {
+						this.throwNeutralWriteDenial("create");
+					}
+
 					await this.executeHooks(
 						this.state.hooks?.beforeOperation,
 						this.createHookContext({
@@ -1728,21 +1744,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							db,
 						}),
 					);
-
-					// Enforce access control
-					const canCreate = await this.enforceAccessControl(
-						"create",
-						normalized,
-						null,
-						input,
-					);
-					if (canCreate === false) {
-						throw ApiError.forbidden({
-							operation: "create",
-							resource: this.state.name,
-							reason: "User does not have permission to create records",
-						});
-					}
 
 					// Execute beforeValidate hook (transform input before validation)
 					await this.executeHooks(
@@ -2153,6 +2154,76 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		return byId;
 	}
 
+	private throwNeutralWriteDenial(
+		operation: "create" | "update" | "delete",
+	): never {
+		throw ApiError.forbidden({
+			operation,
+			resource: this.state.name,
+			reason: "Access denied",
+		});
+	}
+
+	private hasUnconditionalUpdateAuthority(
+		context: CRUDContext,
+		_data: Record<string, any>,
+	): boolean {
+		if (context.accessMode === "system") return true;
+		const rule = this.state.access?.update ?? this.app?.defaultAccess?.update;
+		return rule === true || (rule === undefined && !!context.session);
+	}
+
+	private async enforceUpdateAuthority(
+		records: any[],
+		context: CRUDContext,
+		data: Record<string, any>,
+	): Promise<void> {
+		for (const existing of records) {
+			const canUpdate = await this.enforceAccessControl(
+				"update",
+				context,
+				existing,
+				data,
+			);
+			if (
+				canUpdate === false ||
+				(typeof canUpdate === "object" &&
+					!(await this.checkAccessConditions(canUpdate, existing)))
+			) {
+				this.throwNeutralWriteDenial("update");
+			}
+		}
+	}
+
+	private hasUnconditionalDeleteAuthority(
+		context: CRUDContext,
+		_params: unknown,
+	): boolean {
+		if (context.accessMode === "system") return true;
+		const rule = this.state.access?.delete ?? this.app?.defaultAccess?.delete;
+		return rule === true || (rule === undefined && !!context.session);
+	}
+
+	private async enforceDeleteAuthority(
+		row: OptimisticConcurrencyRecord,
+		context: CRUDContext,
+		params: unknown,
+	): Promise<void> {
+		const canDelete = await this.enforceAccessControl(
+			"delete",
+			context,
+			row,
+			params,
+		);
+		if (
+			canDelete === false ||
+			(typeof canDelete === "object" &&
+				!(await this.checkAccessConditions(canDelete, row)))
+		) {
+			this.throwNeutralWriteDenial("delete");
+		}
+	}
+
 	/**
 	 * Shared core update handler for updateById and updateMany
 	 * Ensures consistency in access control, hooks, validation, and re-fetching.
@@ -2215,6 +2286,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				)) as PaginatedResult<any>;
 				if (result.docs.length === 0) {
 					if (isBatch) {
+						if (!this.hasUnconditionalUpdateAuthority(normalized, data)) {
+							this.throwNeutralWriteDenial("update");
+						}
 						this.assertExpectedRevisions(
 							params as {
 								expectedRevisions?: Array<{
@@ -2226,10 +2300,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						);
 						return [];
 					}
-					throw ApiError.notFound(
-						"Record",
-						String((params as { id: string | number }).id),
-					);
+					if (await this.hasUnconditionalUpdateAuthority(normalized, data)) {
+						throw ApiError.notFound(
+							"Record",
+							String((params as { id: string | number }).id),
+						);
+					}
+					this.throwNeutralWriteDenial("update");
 				}
 				await lockRelationSourceForWrite({
 					tx,
@@ -2247,6 +2324,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				});
 				if (claimedIds.length === 0) {
 					if (isBatch) {
+						if (!this.hasUnconditionalUpdateAuthority(normalized, data)) {
+							this.throwNeutralWriteDenial("update");
+						}
 						this.assertExpectedRevisions(
 							params as {
 								expectedRevisions?: Array<{
@@ -2258,16 +2338,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						);
 						return [];
 					}
-					throw ApiError.notFound(
-						"Record",
-						String((params as { id: string | number }).id),
-					);
+					if (await this.hasUnconditionalUpdateAuthority(normalized, data)) {
+						throw ApiError.notFound(
+							"Record",
+							String((params as { id: string | number }).id),
+						);
+					}
+					this.throwNeutralWriteDenial("update");
 				}
 				const lockedRows = await tx
 					.select()
 					.from(this.table)
 					.where(inArray(getColumn(this.table, "id")!, claimedIds))
 					.for("update");
+				await this.enforceUpdateAuthority(lockedRows, normalized, data);
 				if (isBatch) {
 					this.assertExpectedRevisions(
 						params as {
@@ -2291,18 +2375,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			});
 		}
 
-		// 1. Execute beforeOperation hook
-		await this.executeHooks(
-			this.state.hooks?.beforeOperation,
-			this.createHookContext({
-				data,
-				operation: "update",
-				context: normalized,
-				db,
-			}),
-		);
-
-		// 2. Load existing records
+		// 1. Load existing records. Hooks must not observe whether a target exists
+		// until the caller has passed row authority below.
 		// Use system mode to ensure hooks have access to full records regardless of read permissions
 		const findOptions: FindManyOptions = isBatch
 			? { where: (params as { where: Where }).where }
@@ -2322,6 +2396,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 		if (records.length === 0) {
 			if (isBatch) {
+				if (!this.hasUnconditionalUpdateAuthority(normalized, data)) {
+					this.throwNeutralWriteDenial("update");
+				}
 				this.assertExpectedRevisions(
 					params as {
 						expectedRevisions?: Array<{
@@ -2333,11 +2410,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				);
 				return [];
 			}
-			throw ApiError.notFound(
-				"Record",
-				String((params as { id: string | number }).id),
-			);
+			if (await this.hasUnconditionalUpdateAuthority(normalized, data)) {
+				throw ApiError.notFound(
+					"Record",
+					String((params as { id: string | number }).id),
+				);
+			}
+			this.throwNeutralWriteDenial("update");
 		}
+
+		await this.enforceUpdateAuthority(records, normalized, data);
 		const expectedRevisions = isBatch
 			? this.assertExpectedRevisions(
 					params as {
@@ -2350,36 +2432,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				)
 			: undefined;
 
-		// 3. Process each record (Access Control + beforeValidate)
-		for (const existing of records) {
-			// Enforce access control
-			const canUpdate = await this.enforceAccessControl(
-				"update",
-				normalized,
-				existing,
+		await this.executeHooks(
+			this.state.hooks?.beforeOperation,
+			this.createHookContext({
 				data,
-			);
-			if (canUpdate === false) {
-				throw ApiError.forbidden({
-					operation: "update",
-					resource: this.state.name,
-					reason: `User does not have permission to update record ${existing.id}`,
-				});
-			}
-			if (typeof canUpdate === "object") {
-				const matchesConditions = await this.checkAccessConditions(
-					canUpdate,
-					existing,
-				);
-				if (!matchesConditions) {
-					throw ApiError.forbidden({
-						operation: "update",
-						resource: this.state.name,
-						reason: `Record ${existing.id} does not match access control conditions`,
-					});
-				}
-			}
+				operation: "update",
+				context: normalized,
+				db,
+			}),
+		);
 
+		// 3. Process each record (beforeValidate)
+		for (const existing of records) {
 			// Execute beforeValidate hook (transform input before validation)
 			await this.executeHooks(
 				this.state.hooks?.beforeValidate,
@@ -2796,29 +2860,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						db: hookDb,
 					}),
 				);
-				const canDelete = await this.enforceAccessControl(
-					"delete",
-					hookContext,
-					row,
-					params,
-				);
-				if (canDelete === false) {
-					throw ApiError.forbidden({
-						operation: "delete",
-						resource: this.state.name,
-						reason: "User does not have permission to delete this record",
-					});
-				}
-				if (
-					typeof canDelete === "object" &&
-					!(await this.checkAccessConditions(canDelete, row))
-				) {
-					throw ApiError.forbidden({
-						operation: "delete",
-						resource: this.state.name,
-						reason: "Record does not match access control conditions",
-					});
-				}
 				await this.executeCollectionHooksWithGlobal(
 					"beforeDelete",
 					this.state.hooks?.beforeDelete,
@@ -2846,9 +2887,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					!preimage ||
 					(this.state.options.softDelete && preimage.deletedAt != null)
 				) {
-					throw ApiError.notFound("Record", id);
+					if (await this.hasUnconditionalDeleteAuthority(normalized, params)) {
+						throw ApiError.notFound("Record", id);
+					}
+					this.throwNeutralWriteDenial("delete");
 				}
 				existing = preimage;
+				await this.enforceDeleteAuthority(preimage, normalized, params);
 				await runDeleteGuardsAndHooks(preimage, normalized, db);
 				stagedCrdtOwner = await this.stageCrdtOwner(preimage);
 			}
@@ -2870,8 +2915,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						(this.state.options.softDelete &&
 							lockedBeforeDelete.deletedAt != null)
 					) {
-						throw ApiError.notFound("Record", id);
+						if (
+							await this.hasUnconditionalDeleteAuthority(normalized, params)
+						) {
+							throw ApiError.notFound("Record", id);
+						}
+						this.throwNeutralWriteDenial("delete");
 					}
+					await this.enforceDeleteAuthority(
+						lockedBeforeDelete,
+						txContext,
+						params,
+					);
 					this.assertExpectedRevision(params, [lockedBeforeDelete]);
 					await runDeleteGuardsAndHooks(lockedBeforeDelete, txContext, tx);
 					const [revalidated] = await tx
@@ -2887,6 +2942,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							"Canonical row changed during delete hooks",
 						);
 					}
+					await this.enforceDeleteAuthority(revalidated, txContext, params);
 					this.assertExpectedRevision(params, [revalidated]);
 					currentExisting = revalidated;
 					crdtFallbackOwner = lockedBeforeDelete;
@@ -3413,8 +3469,22 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							update.expectedRevision,
 						]),
 					);
+					if (locked.length !== ids.length) {
+						const unconditional = await Promise.all(
+							params.updates.map((update) =>
+								this.hasUnconditionalUpdateAuthority(normalized, update.data),
+							),
+						);
+						if (!unconditional.every(Boolean)) {
+							this.throwNeutralWriteDenial("update");
+						}
+						throw ApiError.conflict("Optimistic concurrency conflict");
+					}
+					for (const row of locked) {
+						const update = params.updates.find((entry) => entry.id === row.id)!;
+						await this.enforceUpdateAuthority([row], normalized, update.data);
+					}
 					if (
-						locked.length !== ids.length ||
 						locked.some(
 							(row: OptimisticConcurrencyRecord) =>
 								row.revision !== expectedById.get(row.id),
@@ -3469,10 +3539,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const { docs: records } = await find({ where: params.where }, normalized);
 
 			if (records.length === 0) {
+				if (!(await this.hasUnconditionalDeleteAuthority(normalized, params))) {
+					this.throwNeutralWriteDenial("delete");
+				}
 				this.assertExpectedRevisions(params, records);
 				return { success: true, count: 0 };
 			}
-			const expectedRevisions = this.assertExpectedRevisions(params, records);
+			let expectedRevisions: Map<string | number, number> | undefined;
 			const optimisticConcurrency = this.getOptimisticConcurrency();
 			const stagedCrdtOwners = new Map<
 				string | number,
@@ -3487,23 +3560,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					count: records.length,
 				};
 				for (const record of records) {
-					const canDelete = await this.enforceAccessControl(
-						"delete",
-						normalized,
-						record,
-						params,
-					);
-					if (
-						canDelete === false ||
-						(typeof canDelete === "object" &&
-							!(await this.checkAccessConditions(canDelete, record)))
-					) {
-						throw ApiError.forbidden({
-							operation: "delete",
-							resource: this.state.name,
-							reason: `User does not have permission to delete record ${record.id}`,
-						});
-					}
+					await this.enforceDeleteAuthority(record, normalized, params);
 					await this.executeCollectionHooksWithGlobal(
 						"beforeDelete",
 						this.state.hooks?.beforeDelete,
@@ -3523,6 +3580,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						if (staged) stagedCrdtOwners.set(record.id, staged);
 					}),
 				);
+				expectedRevisions = this.assertExpectedRevisions(params, records);
 			}
 
 			// 3. Batched DELETE query
@@ -3539,10 +3597,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					includeDeleted: false,
 					stage: normalized.stage,
 				});
-				if (expectedRevisions && winnerIdList.length !== records.length) {
-					throw ApiError.conflict("Optimistic concurrency conflict");
+				if (winnerIdList.length === 0) {
+					if (
+						!(await this.hasUnconditionalDeleteAuthority(normalized, params))
+					) {
+						this.throwNeutralWriteDenial("delete");
+					}
+					return [];
 				}
-				if (winnerIdList.length === 0) return [];
 
 				let lockedBeforeDelete = await tx
 					.select()
@@ -3560,18 +3622,33 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						activeIds.has(record.id),
 					);
 					if (winnerIdList.length === 0) {
-						if (expectedRevisions) {
-							throw ApiError.conflict("Optimistic concurrency conflict");
+						if (
+							!(await this.hasUnconditionalDeleteAuthority(normalized, params))
+						) {
+							this.throwNeutralWriteDenial("delete");
 						}
 						return [];
 					}
 				}
+				if (optimisticConcurrency) {
+					for (const record of lockedBeforeDelete) {
+						await this.enforceDeleteAuthority(record, txContext, params);
+					}
+					expectedRevisions = this.assertExpectedRevisions(
+						params,
+						lockedBeforeDelete,
+					);
+				}
+				const expectedRevisionMap = expectedRevisions;
+				if (expectedRevisionMap && winnerIdList.length !== records.length) {
+					throw ApiError.conflict("Optimistic concurrency conflict");
+				}
 				if (
-					expectedRevisions &&
-					(lockedBeforeDelete.length !== expectedRevisions.size ||
+					expectedRevisionMap &&
+					(lockedBeforeDelete.length !== expectedRevisionMap.size ||
 						lockedBeforeDelete.some(
 							(record: OptimisticConcurrencyRecord) =>
-								record.revision !== expectedRevisions.get(record.id),
+								record.revision !== expectedRevisionMap.get(record.id),
 						))
 				) {
 					throw ApiError.conflict("Optimistic concurrency conflict");
@@ -3586,23 +3663,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						count: claimedRecords.length,
 					};
 					for (const record of claimedRecords) {
-						const canDelete = await this.enforceAccessControl(
-							"delete",
-							txContext,
-							record,
-							params,
-						);
-						if (
-							canDelete === false ||
-							(typeof canDelete === "object" &&
-								!(await this.checkAccessConditions(canDelete, record)))
-						) {
-							throw ApiError.forbidden({
-								operation: "delete",
-								resource: this.state.name,
-								reason: `User does not have permission to delete record ${record.id}`,
-							});
-						}
 						await this.executeCollectionHooksWithGlobal(
 							"beforeDelete",
 							this.state.hooks?.beforeDelete,
@@ -3633,10 +3693,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 							lockedBeforeDelete.some(
 								(record: { deletedAt?: unknown }) => record.deletedAt != null,
 							)) ||
-						(expectedRevisions &&
+						(expectedRevisionMap &&
 							lockedBeforeDelete.some(
 								(record: OptimisticConcurrencyRecord) =>
-									record.revision !== expectedRevisions.get(record.id),
+									record.revision !== expectedRevisionMap.get(record.id),
 							))
 					) {
 						throw ApiError.conflict(

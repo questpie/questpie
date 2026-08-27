@@ -31,11 +31,39 @@ const errorTest = collection("error_test")
 		timestamps: true,
 	});
 
+let deniedCreateHooks = 0;
+const deniedCreateTest = collection("denied_create_test")
+	.fields(({ f }) => ({ title: f.text(100).required() }))
+	.access({ create: false })
+	.hooks({ beforeOperation: () => void (deniedCreateHooks += 1) });
+
+const scopedCreateTest = collection("scoped_create_test")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.access({ create: () => ({ tenantId: "allowed" }) });
+
+const operatorCreateTest = collection("operator_create_test")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.access({ create: () => ({ NOT: { tenantId: { eq: "foreign" } } }) });
+
 describe("error handling", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
 
 	beforeEach(async () => {
-		setup = await buildMockApp({ collections: { error_test: errorTest } });
+		deniedCreateHooks = 0;
+		setup = await buildMockApp({
+			collections: {
+				error_test: errorTest,
+				denied_create_test: deniedCreateTest,
+				scoped_create_test: scopedCreateTest,
+				operator_create_test: operatorCreateTest,
+			},
+		});
 		await runTestDbMigrations(setup.app);
 	});
 
@@ -89,15 +117,59 @@ describe("error handling", () => {
 				systemCtx,
 			);
 
-			await expect(
+			const update = (id: string) =>
 				setup.app.collections.error_test.updateById(
-					{
-						id: record.id,
-						data: { title: "Updated Title" },
-					},
+					{ id, data: { title: "Updated Title" } },
+					userCtx,
+				);
+			const known = await update(record.id).catch((error: ApiError) => error);
+			const absent = await update(crypto.randomUUID()).catch(
+				(error: ApiError) => error,
+			);
+
+			expect(known).toBeInstanceOf(ApiError);
+			expect(absent).toBeInstanceOf(ApiError);
+			expect(known.toJSON(false)).toEqual(absent.toJSON(false));
+			expect(known.context?.access?.reason).toBe("Access denied");
+		});
+
+		it("uses the neutral access reason for denied creates", async () => {
+			const userCtx = createTestContext({ accessMode: "user", role: "user" });
+
+			await expect(
+				setup.app.collections.denied_create_test.create(
+					{ id: crypto.randomUUID(), title: "Secret target" },
 					userCtx,
 				),
-			).rejects.toThrow("User does not have permission to update");
+			).rejects.toThrow("Access denied");
+			expect(deniedCreateHooks).toBe(0);
+		});
+
+		it("enforces create access predicates against the proposed row", async () => {
+			const userCtx = createTestContext({ accessMode: "user", role: "user" });
+
+			await expect(
+				setup.app.collections.scoped_create_test.create(
+					{ tenantId: "foreign", title: "Probe" },
+					userCtx,
+				),
+			).rejects.toThrow("Access denied");
+			const allowed = await setup.app.collections.scoped_create_test.create(
+				{ tenantId: "allowed", title: "Accepted" },
+				userCtx,
+			);
+			expect(allowed.title).toBe("Accepted");
+		});
+
+		it("fails closed for create predicates unsupported by the in-memory matcher", async () => {
+			const userCtx = createTestContext({ accessMode: "user", role: "user" });
+
+			await expect(
+				setup.app.collections.operator_create_test.create(
+					{ tenantId: "foreign", title: "Probe" },
+					userCtx,
+				),
+			).rejects.toThrow("Access denied");
 		});
 
 		it("should throw ApiError with field-level access violation", async () => {
@@ -124,7 +196,7 @@ describe("error handling", () => {
 					},
 					userCtx,
 				),
-			).rejects.toThrow("User does not have permission to update");
+			).rejects.toThrow("Access denied");
 		});
 
 		it("should throw ApiError for database constraint violation", async () => {
