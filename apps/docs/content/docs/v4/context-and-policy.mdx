@@ -539,8 +539,9 @@ reads mutable evidence where the operation runs, including again after a
 row-lock wait.
 
 `expr.exists` is available only in a Policy program. A Query filter that uses
-it fails compilation with `QP-DATA-025 unsupportedExpressionCapability`; use the
-Query Relation and quantifier surface for disclosure-authorized filtering.
+it fails compilation with `QP-DATA-025 unsupportedExpressionCapability`.
+Query filters currently compose only their declared row Fields and parameters;
+relational Query filtering is not part of this surface yet.
 
 ## Push row scope into SQL
 
