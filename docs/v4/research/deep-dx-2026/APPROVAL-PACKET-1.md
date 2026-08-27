@@ -1,6 +1,8 @@
 # QUESTPIE v4 Deep-DX approval packet #1, version 2
 
-- Status: research proposal awaiting human approval; not product authority
+- Status: research proposal, directionally approved by human review but not
+  ratified; not product authority (section 24 records the approved
+  direction and the genuinely remaining items)
 - Date: 2026-08-27
 - Supersedes: the packet #1 scope in
   [FABLE-SYNTHESIS.md](./FABLE-SYNTHESIS.md) and the stale field-evolution
@@ -64,17 +66,22 @@ ceremony:
    generated loader, and never enter manifests or digests. Services a
    credential resolver depends on are compiler-required eager; a lazy
    creation failure is retried, never a permanently poisoned Promise. Better
-   Auth stays application composition with its own bounded pool and an
-   explicit external-schema declaration until a deeper shared capability and
-   Package-level migration projection are proved.
+   Auth stays application composition with its own bounded pool, moved into
+   its own dedicated PostgreSQL schema outside the application schema and
+   declared (reported, never fingerprinted) rather than excluded table by
+   table, until a deeper shared capability and Package-level migration
+   projection are proved.
 7. **Honest transport story.** `POST /_questpie/operation` remains the
    first-party RPC transport. Real HTTP is an explicit per-Operation
    projection with object pickers, a mandatory `Idempotency-Key` mapping for
-   Mutations, and reserved surfacing of the accepted post-commit outcome;
-   OpenAPI covers only what is explicitly projected or sufficiently
-   declared; MCP is a separate explicit projection through the same executor
-   and Policy. Three compiler-owned collision domains reject every collision
-   with both Origins.
+   Mutations, and the accepted `COMMITTED_RESULT_UNAVAILABLE` post-commit
+   outcome surfaced as HTTP 500 with its exact ADR-0023 body; OpenAPI covers
+   only what is explicitly projected or sufficiently declared; MCP is a
+   separate explicit projection through the same executor and Policy. Two
+   compiler-owned collision domains — one HTTP routing trie shared by raw
+   Routes and Operation HTTP projections, one MCP tool namespace — reject
+   every collision with both Origins; application and Package contributions
+   are contribution classes inside those domains, not domains of their own.
 8. **Capability Packages, not plugins.** The first extension proofs are one
    staged pg_search-backed Search vertical and one PostGIS vertical, both
    parameterizing fixed core-implemented expression and index node kinds.
@@ -163,6 +170,7 @@ import { useQuery, useLiveQuery, useMutation } from "questpie/react";
 
 // capability Packages: explicitly activated structural Definitions
 import { searchIndex } from "@questpie/pg-search";
+import { geo } from "@questpie/postgis";
 ```
 
 The lists above are the load-bearing names, not an exhaustive export
@@ -252,31 +260,27 @@ export const tickets = defineCollection({
 		}),
 	},
 	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
+		primary: constraint.primaryKey({ fields: { id: true } }),
 		tenantReference: constraint.unique({
-			fields: ["organizationId", "reference"],
+			fields: { organizationId: true, reference: true },
 		}),
 	},
 	relations: {
 		organization: relation.toOne({
 			target: organizations,
-			fields: ["organizationId"],
-			references: ["id"],
+			on: { organizationId: "id" },
 		}),
 		team: relation.toOne({
 			target: teams,
-			fields: ["teamId"],
-			references: ["id"],
+			on: { teamId: "id" },
 		}),
 		requester: relation.toOne({
 			target: memberships,
-			fields: ["requesterMembershipId"],
-			references: ["id"],
+			on: { requesterMembershipId: "id" },
 		}),
 		assignee: relation.toOne({
 			target: memberships,
-			fields: ["assigneeMembershipId"],
-			references: ["id"],
+			on: { assigneeMembershipId: "id" },
 			onDelete: "setNull",
 		}),
 		// Inverse relations use the accepted relationRef spelling so the child
@@ -300,10 +304,19 @@ export const tickets = defineCollection({
 });
 ```
 
-Two authored-surface conveniences ride along, both ledger entries (S14):
-`nullable` becomes optional with default `false`, and `relation.toMany`
+Three authored-surface conveniences ride along. Two are ledger entries:
+`nullable` becomes optional with default `false` (S14), and `relation.toMany`
 inverse authoring (already implemented and retained by ADR-0019) becomes
-loadable by structural reads (S12/additive list).
+loadable by structural reads (S12/additive list). The third is not a ledger
+entry at all: `constraint.primaryKey`, `constraint.unique`, and
+`relation.toOne` replace today's parallel `fields`/`references` arrays with
+the same object-mapping/picker convention `select` already uses —
+`fields: { id: true }` for a constraint's column set (authored key order is
+the column order), `on: { localField: targetField }` for a relation's join
+columns. No Accepted ADR fixes the array spelling, so this is unconstrained
+authoring surface rather than a supersession; the compiler lowers either
+spelling to byte-identical Schema Projection, Constraint, and Relation
+artifacts.
 
 - **The author writes:** provenance as small Field modifiers. Nothing else
   changes at the Collection.
@@ -540,8 +553,10 @@ Semantics this example pins:
 - A singular parent may own one cursor-paged nested to-many page; its nested
   cursor binds into the same DataCursor scope as the root parameters.
 - The chain comment → author (membership) → organization plus ticket → team →
-  organization exercises three relation hops against the proposed depth
-  budget of four (`QP-DATA-022` fires on the fifth); each hop's rows pass
+  organization exercises three relation hops against a bounded depth budget
+  guarded by `QP-DATA-022`; the exact ceiling is an implementation
+  measurement against this vertical and Autopilot, not yet ratified (section
+  6 states the open range and the S12 ledger status); each hop's rows pass
   the target Collection's disclosure Policy.
 
 ### 4.5 Parent membership through quantifiers
@@ -927,14 +942,21 @@ export const addTicketComment = defineMutation({
 			values: { authorMembershipId: ctx.values.membershipId },
 			select: true,
 		});
+		// The whole point of this Job is to run once, at the SLA deadline.
+		// `notBefore` tells the Runtime not to dispatch an attempt at all
+		// until that instant, so no worker, lease, or heartbeat exists before
+		// then. Passing `dueAt` as ordinary Job input and waiting it out with
+		// `ctx.attempt.sleepUntil` inside a live attempt (section 10) would
+		// hold a worker for the whole delay for no reason.
+		const dueAt = new Date(ctx.now.getTime() + 1_500);
 		const job = await ctx.jobs.ticket.slaFollowUp.accept({
 			input: {
 				organizationId: ticket.organizationId,
 				ticketId: ticket.id,
 				reference: ticket.reference,
 				summary: ticket.summary,
-				dueAt: new Date(ctx.now.getTime() + 1_500),
 			},
+			notBefore: dueAt,
 			// No idempotencyKey: the compiler proves this callsite executes at
 			// most once per Mutation call (it is not inside a loop or a repeated
 			// helper), so the identity derives from the Mutation Call Identity,
@@ -953,7 +975,10 @@ the compiler cannot prove the callsite runs at most once per Mutation call
 server-direct acceptance, and for deliberate cross-call deduplication.
 Replaying the identical identity returns the same receipt; changed canonical
 input, `notBefore`, or run-as conflicts. Rollback of the Mutation removes the
-acceptance.
+acceptance. **`notBefore` is the ordinary way to delay a Job**: the Runtime
+holds the accepted work durably and dispatches no attempt, no worker, and no
+lease until the instant arrives. It is the correct tool whenever the delay is
+the reason the Job exists, exactly as in 4.9.
 
 ### 4.9 Ordinary Job without lease ceremony
 
@@ -970,7 +995,6 @@ export const slaFollowUp = defineJob({
 		ticketId: codec.uuid(),
 		reference: codec.text(),
 		summary: codec.text(),
-		dueAt: codec.timestamp(),
 	}),
 	output: codec.object({
 		ticketId: codec.uuid(),
@@ -986,7 +1010,9 @@ export const slaFollowUp = defineJob({
 		horizon: "1h",
 	}),
 	handler: async ({ input, ctx }) => {
-		await ctx.attempt.sleepUntil(input.dueAt); // signal-aware, clock-owned
+		// notBefore already held this attempt back until the deadline; the
+		// handler just does the follow-up work now. No sleep, no lease held
+		// waiting for the clock.
 		return { ticketId: input.ticketId, followedUpAt: ctx.attempt.now() };
 	},
 });
@@ -995,12 +1021,17 @@ export const slaFollowUp = defineJob({
 Compared with the current fixture handler, the manual
 `await ctx.attempt.heartbeat()` opener, the `performance.timeOrigin`
 wall-clock reconstruction, and the `ctx.signal.throwIfAborted()` closer are
-gone. The exact liveness contract is in section 10: automatic heartbeat runs
-on a Runtime timer and stops at the attempt deadline, so neither a CPU-bound
-loop nor an I/O-bound hang can hold a lease forever; `sleepUntil` must fit
-inside the remaining attempt budget, and a crash mid-sleep re-sleeps a fresh
-attempt toward the same absolute instant. `ctx.attempt.heartbeat()` and
-`ctx.signal` remain documented escape hatches for long CPU-bound work.
+gone, and so is any in-attempt wait: `notBefore` on acceptance (4.8) is the
+whole delay mechanism, so no worker exists until the deadline and no lease is
+held waiting for it. The exact liveness contract is in section 10: automatic
+heartbeat runs on a Runtime timer and stops at the attempt deadline, so
+neither a CPU-bound loop nor an I/O-bound hang can hold a lease forever.
+`ctx.attempt.sleepUntil` remains a documented advanced control for a short
+wait inside an already-running attempt (an in-process pause bounded by the
+remaining attempt budget, not a durable timer); it is the wrong tool for this
+Job, and for any Job whose entire purpose is to run once at a future instant.
+`ctx.attempt.heartbeat()` and `ctx.signal` remain documented escape hatches
+for long CPU-bound work.
 
 ### 4.10 Better Auth composition with typed config
 
@@ -1054,13 +1085,18 @@ const { "teamSupport.auth": authConfig } = await loadAppConfig();
 export const { auth } = await createSupportBetterAuth(authConfig);
 ```
 
-Provider schema: the four `support_auth_*` tables stay provider-owned today,
-which is honest evidence of a gap, not an endorsement. Section 13 defines the
-two closure paths (an explicit bounded external-schema declaration for
-application composition now; one-lifecycle migration projection before any
-Auth Package ships, per ADR-0005). Session organization/membership/role
-fields stay non-authoritative hints; Context re-reads the Membership; Policy
-stays QUESTPIE-owned.
+Provider schema: today's fixture still runs Better Auth's tables
+(`support_auth_*`) inside the same PostgreSQL schema as the application,
+distinguished only by a name prefix — honest evidence of a gap, not an
+endorsement, and not a shape this packet proposes to keep. Section 13 defines
+the two closure paths: application composition moves Better Auth into its
+**own dedicated PostgreSQL schema**, physically outside the one application
+schema ADR-0006 and `docs/v4/schema-lifecycle.md` already require, where it
+is structurally exempt from fingerprinting rather than individually
+name-excluded table by table; one-lifecycle migration projection remains
+required before any Auth Package ships, per ADR-0005. Session
+organization/membership/role fields stay non-authoritative hints; Context
+re-reads the Membership; Policy stays QUESTPIE-owned.
 
 ### 4.11 One explicit HTTP projection and one MCP projection
 
@@ -1095,8 +1131,8 @@ export const ticketDetail = defineQuery({
 Both projections are explicit opt-ins beside `network: true`, both call the
 same generated Operation adapter, and neither owns a handler, Policy rule, or
 schema of its own. Mutation HTTP projections additionally carry the mandatory
-`Idempotency-Key` mapping and the reserved post-commit outcome surface
-(section 15).
+`Idempotency-Key` mapping and the ADR-0023 HTTP `500` post-commit outcome
+surface (section 15).
 
 ### 4.12 Generated client, vanilla observation, React, optimistic overlay
 
@@ -1313,9 +1349,12 @@ nullableFilterPosition`.
   composes selections and each use site revalidates. An omitted `select`
   anywhere (kernel calls, nested `list`) defaults to the complete scalar
   row. There is no exclusion syntax, so no include/exclude ambiguity.
-- **Relations.** To-one relations nest `{ select }` and may chain within the
-  proposed depth budget of four hops (`QP-DATA-022` with the exact path and
-  Origin beyond it). To-many relations load through
+- **Relations.** To-one relations nest `{ select }` and may chain multiple
+  hops up to a bounded depth guarded by `QP-DATA-022` (the exact path and
+  Origin reported beyond it); the fixed one-hop cap is superseded in
+  direction by a bounded multi-hop cap (S12), but the exact ceiling is an
+  implementation measurement, not yet ratified (section 19). To-many
+  relations load through
   `{ list: { where?, orderBy, first, page?, select? } }`: under a singular
   parent (`get`, or a proven unique row) `page` may carry a cursor; under a
   plural parent only bounded top-N `first` is legal. Full child paging under
@@ -1326,10 +1365,11 @@ nullableFilterPosition`.
   empty-relation semantics and disclosure-authorized universe defined in
   4.5. `expr.exists` is not Query-filter surface (section 7).
 - **Aggregates.** `relation.count()` in selection, computed over the same
-  authorized universe as the corresponding `some`. At most four aggregate
-  members per plan (proposed; slice 1 pins the number with measured
-  evidence), counted into the dependency and expression-node budgets.
-  Further aggregates wait for a consumer.
+  authorized universe as the corresponding `some`. A bounded number of
+  aggregate members per plan, counted into the dependency and
+  expression-node budgets; the exact ceiling is an implementation
+  measurement slice 1 pins against Support Desk and Autopilot, not a
+  ratified constant (section 19). Further aggregates wait for a consumer.
 - **Reuse.** Selections are plain composable values; predicates are ordinary
   functions typed with `PolicyScope` and `RowOperand<typeof collection>`
   (4.2). A compiled use site derives normalized nodes, dependency facts, and
@@ -1345,9 +1385,9 @@ nullableFilterPosition`.
   scopes itself to `ctx.values` facts today; plan-backed predicates see
   only `{ row, parameters }`. Giving plan predicates read-only
   `principal`/`tenant`/`values` operands, so the common caller-scoped list
-  can stay plan-backed, is a proposed additive extension awaiting approval
-  (section 24): the operands already exist in Policy programs and their
-  reached facts already enter the cursor policy scope.
+  can stay plan-backed, is an approved additive extension (section 24): the
+  operands already exist in Policy programs and their reached facts already
+  enter the cursor policy scope.
 - **Live Query.** `.watch` appears on the same callable generated Query when
   compilation proves watchability; the observed-dependency plan covers data,
   Policy, tenancy, Relation, quantifier, aggregate, and pagination reads.
@@ -1665,19 +1705,45 @@ failed(failure) | uncertain(callId, recover)`. `uncertain` is the honest
   integrity. Version pinning and supply-chain integrity remain the
   lockfile's job inside the Build Input; this member adds no second pinning
   authority.
-- **Provider schema.** Two closure paths, both explicit:
-  - application composition (today's fixture) uses a bounded
-    **external-schema declaration**: the application names the
-    provider-owned tables (`support_auth_*`), drift verification excludes
-    exactly those and reports them as externally owned, and no unified
-    drift-safety claim covers them. This turns the current silent second
-    migrator into a declared, reviewed boundary;
+- **Provider schema.** Two closure paths, both explicit, neither a per-table
+  exclusion:
+  - application composition (today's fixture) moves Better Auth into **its
+    own dedicated PostgreSQL schema**, declared by name and physically
+    outside the one application schema `docs/v4/schema-lifecycle.md`
+    already requires (section 1 of that document; ADR-0006 "application
+    objects live in one explicit application schema"). This is not a new
+    exemption mechanism: an object outside the application schema is
+    already ignored by drift unless a managed object depends on it
+    (`docs/v4/schema-lifecycle.md` section 8), so a dedicated provider
+    schema is automatically out of fingerprint scope by the existing rule,
+    not by a newly authored per-table carve-out. What is new is purely a
+    reporting convenience: the application names the external schema so
+    `questpie drift`/`questpie explain` positively **report its existence
+    and provider ownership** instead of silently omitting it, while still
+    making **no fingerprint or drift-safety claim over its contents**. This
+    replaces naming individual provider-owned tables inside the application
+    schema, which is not just weaker but structurally wrong: any object left
+    inside the application schema that the compiler did not place there is
+    `unexpectedObject` drift by the existing rule, so per-table exclusions
+    would have to carve exceptions into that rule rather than compose with
+    it. Schema artifact v1 still exposes no authoring syntax for a
+    dependency declared _inside_ the application schema beyond the existing
+    `pg_catalog`-builtin and `requiredPostgres`-extension cases; nothing here
+    adds one. This turns the current silent second migrator into a declared,
+    reviewed boundary at the schema level;
   - a reusable Auth **Package** must project its schema through the one
     Compiled Manifest / Migration Plan / checksum / fingerprint / drift
     lifecycle before it ships; ADR-0005 is explicit that a native Auth API
-    does not permit a second hidden schema migrator.
-    Slice 5 lands the declaration, repairs `tracer/auth/migration-config.ts`
-    to the generated loader, and adds the drift hostile.
+    does not permit a second hidden schema migrator, and
+    `docs/v4/schema-lifecycle.md` rejects a Package-owned migrator outright.
+    Slice 5 lands the dedicated-schema declaration, repairs
+    `tracer/auth/migration-config.ts` to the generated loader, and adds the
+    drift hostile: an object left inside the application schema without a
+    matching Schema Projection member is still `unexpectedObject` drift,
+    exactly as for any application-authored object; the declared external
+    schema's own _contents_ are still never inspected — reporting its
+    existence is not a promise to detect changes inside it, and the hostile
+    must prove the packet does not accidentally claim otherwise.
 - **Better Auth** is the first proof (4.10); the second materially different
   proof for any generic provider seam is a custom signed-cookie or API-key
   credential path with no provider schema (the fixture's integration-key
@@ -1736,7 +1802,8 @@ provider subtree is the named condition for revisiting modes 2 or 3 through
 a focused supersession. No universal routing plugin system is created for
 one provider mount.
 
-This recommendation is isolated for final human approval in section 24.
+This recommendation (mode 1, exclusive per-pattern subtree ownership) is
+human-approved in direction; section 24 records it.
 
 ## 15. RPC, real HTTP, OpenAPI, and MCP projections
 
@@ -1752,10 +1819,17 @@ This recommendation is isolated for final human approval in section 24.
   this packet; multiple bindings are deferred with slice 6 as owner. Rules:
   - no automatic REST derivation from Operation names;
   - GET only for Queries whose input encodes deterministically into
-    path/query within a proposed 2,048-byte encoded path-plus-query budget
-    (aligned with the accepted cursor envelope); otherwise POST; exceeding
-    the budget at bind time is the ordinary execution limit diagnostic, and
-    an unprovable budget at compile time is an Origin diagnostic;
+    path/query within a bounded encoded path-plus-query budget; otherwise
+    POST; exceeding the budget at bind time is the ordinary execution limit
+    diagnostic, and an unprovable budget at compile time is an Origin
+    diagnostic. The exact byte ceiling is an implementation measurement, not
+    a ratified constant (section 19): the accepted `DataCursorV1`/`V2`
+    envelope alone is already bound at up to 2,048 bytes
+    (ADR-0008), so a single cursor-bearing query parameter can already
+    consume the whole of any budget near that size before the path, method
+    prefix, or any other parameter is counted. A cursor-paged GET projection
+    must prove headroom for the rest of the request, not merely cite the
+    cursor bound as if the two budgets were the same number;
   - every Mutation projection automatically binds the caller-supplied
     `Idempotency-Key` request header to the Operation's `callId`, so HTTP
     retries reach the accepted exact-duplicate replay instead of minting
@@ -1764,11 +1838,15 @@ This recommendation is isolated for final human approval in section 24.
     guessing at a manual spelling);
   - response bodies use the exact declared output/error codecs and fail
     closed; framework outcomes keep their meaning: the accepted post-commit
-    outcome (`COMMITTED_RESULT_UNAVAILABLE`, with its recovery identities)
-    is surfaced through one reserved status and body shape, is documented
-    as non-retryable-without-identity, and is never flattened into a
-    generic 500/retry hint; Action ambiguity keeps its non-retryable
-    meaning likewise;
+    outcome is HTTP `500` carrying the exact ADR-0023 body —
+    `{ code: "COMMITTED_RESULT_UNAVAILABLE", retryable: true, transactionId }`
+    with top-level `callId` — never a sanitized generic `INTERNAL` `500`, and
+    never a different or newly invented status; ADR-0023 froze this mapping
+    and this packet does not reopen it. The body is documented as
+    non-retryable-without-identity: `retryable: true` means only that
+    replaying the exact Mutation under the same `callId` recovers the
+    receipt, not that the transport may retry automatically. Action
+    ambiguity keeps its own non-retryable meaning likewise;
   - unrepresentable mappings are Origin diagnostics, not silent omissions
     (proposed `QP-COMPOSE-026 httpProjectionInvalid`, also covering
     path/method collisions with both Origins).
@@ -1778,28 +1856,46 @@ This recommendation is isolated for final human approval in section 24.
   Routes that declare sufficient explicit schemas; everything else is
   omitted with a diagnostic. `operationId` derives deterministically from
   Resource Identity; security schemes describe credential transport only and
-  never claim Policy semantics.
+  never claim Policy semantics. Whether the OpenAPI document is emitted for
+  the build **at all** remains the unchanged Accepted ADR-0019
+  `questpie.json` `projections` selection; the `http` member never implies
+  emission by itself. The two questions are orthogonal and both stay: an
+  Operation can carry a fully valid `http` member — and be a real, routable
+  HTTP endpoint — in a build where `questpie.json` leaves `openapi`
+  unemitted, and `questpie.json` cannot itself expose an Operation over HTTP
+  without that Operation's own `http` member (ledger S10).
 - **MCP** is a native compiler projection selected per Operation via the
-  `mcp` member, separate from `network: true`. Tools reuse the same
+  `mcp` member, separate from `network: true`. The same orthogonality holds:
+  `questpie.json` selects whether the MCP server surface is emitted for the
+  build at all; the per-Operation `mcp` member selects which Operations are
+  tools within it once emitted. Tools reuse the same
   executor, Context, Policy, limits, typed outcomes, and Execution Envelope;
   input JSON Schema derives from the input codec; outcomes map deliberately:
   successful output and declared errors become structured content and
   tool-execution errors, framework failures become protocol errors, and the
-  post-commit outcome is a reserved tool-execution error carrying its
-  recovery identities. `readOnly`/destructive annotations are untrusted
+  post-commit outcome is a tool-execution error carrying the same
+  `{ code, retryable, transactionId, callId }` recovery identities as HTTP.
+  ADR-0023 fixes only the HTTP `500` mapping; MCP has no accepted mapping
+  today, so this is an additive, protocol-appropriate error shape this
+  packet proposes for approval — it changes no outcome, only how the same
+  outcome is carried over the MCP protocol. `readOnly`/destructive
+  annotations are untrusted
   hints, never authorization. MCP ingress is not a second trust path: the
   MCP endpoint mounts like any ingress and resolves Principal through the
   one ADR-0015 credential resolver; confirmation, rate limits, and audit
   sit around the same executor in the host binding.
-- **Collision domains.** The compiler owns three collision domains across
-  application and Package contributions, sharing Origin-reporting but not a
-  data structure: one path trie for raw Routes plus Operation HTTP
-  projections (`QP-COMPOSE-025/026`), and one flat tool-name namespace for
-  MCP identities (proposed `QP-COMPOSE-027 mcpToolCollision`). Every
-  collision is a compile-time failure with both Origins; there is no
-  source-order or package-order precedence. Packages contribute Operations
-  plus structural HTTP/MCP metadata and receive no code-generation
-  callbacks.
+- **Collision domains.** The compiler owns two collision domains, each one
+  shared data structure across every contributor: one global HTTP routing
+  trie holding both raw Routes and Operation HTTP projections together
+  (`QP-COMPOSE-025/026`), and one global flat MCP tool-name namespace
+  (proposed `QP-COMPOSE-027 mcpToolCollision`). Application and Package
+  contributions are contribution _classes_, not separate collision domains:
+  a Package-contributed Route and an application-authored Route collide in
+  the same one HTTP trie exactly as two application Routes would, and
+  likewise for MCP tool names. Every collision is a compile-time failure
+  with both Origins; there is no source-order or package-order precedence.
+  Packages contribute Operations plus structural HTTP/MCP metadata and
+  receive no code-generation callbacks.
 - **Digests.** `http` and `mcp` members enter the projection artifacts and
   their digests; they do not change Operation Wire bytes, so a deployment
   can change HTTP/MCP presentation without breaking retained RPC clients.
@@ -1857,11 +1953,26 @@ types.
 **Stage 2 (a separate slice)**: semantic/vector retrieval and hybrid
 retrieval with RRF. Stage 2's first deliverable is the embedding-generation
 ownership model, which stage 1 deliberately does not need: producing an
-embedding is an external effect, so it belongs to the derived-projection
-worker through an explicit external-effect seam with Action-grade ambiguity
-handling, and an embedding failure affects freshness, never authority.
-Claiming hybrid retrieval before that model exists would be dishonest about
-where the external call lives.
+embedding is an external effect, and QUESTPIE already owns exactly one
+external-effect contract with ambiguity handling — Action — plus exactly one
+durable-retry contract — Job. Stage 2 composes those two instead of a new
+seam: Transactional Dispatch still records the committed source key exactly
+as stage 1 does; the derived-projection worker still rereads the current row
+and updates the document deterministically; where a fresh or changed
+embedding is needed, that worker **accepts a Job**, and the Job handler uses
+the closed checkpoint `step` helper (ADR-0026) to call a **named generated
+Action** that performs the actual provider call. The checkpoint binds the
+Action's Effect Identity from the Job's run plus the ordered checkpoint name,
+so a retried attempt cannot double-call the provider, and Action's existing
+ambiguous-outcome contract — not a new one — governs what happens when the
+call's result is lost. The resulting vector is written back through the same
+idempotent per-document update stage 1 already uses. No third seam type is
+invented: an embedding failure or ambiguity is a Job retry with a normal
+Action outcome, and it affects freshness, never authority. If this
+composition does not hold up under proof, stage 2 stays explicitly deferred
+rather than shipping an invented seam; claiming hybrid retrieval before the
+ownership model is demonstrated would be dishonest about where the external
+call lives.
 
 Accepted Search authority preserved verbatim (ADR-0018): Search is a
 committed derived projection, not authorization; the index returns candidate
@@ -1891,6 +2002,131 @@ Deployment honesty, documented with the proof:
 - an absent or incompatible extension version fails readiness explicitly and
   names the extension, the found version, and the requirement.
 
+### 17.1 Worked example: ticket full-text search
+
+A capability list is not authoring evidence. This is the concrete stage-1
+vertical against Support Desk, in the same rubric as section 4.
+
+```ts
+// src/tickets/search.ts
+import { searchIndex } from "@questpie/pg-search";
+
+import { tickets } from "../tickets";
+
+export const ticketSearchIndex = searchIndex(tickets, {
+	name: "tickets.fullText",
+	fields: {
+		reference: { weight: "high" },
+		summary: { weight: "high", highlight: true },
+		description: { weight: "normal", highlight: true },
+	},
+	filterable: { status: true, teamId: true, priority: true },
+});
+```
+
+```ts
+// src/tickets/queries.ts
+import { codec, policy } from "questpie";
+
+import { defineQuery } from "#questpie/app";
+
+import { ticketSearchIndex } from "./search";
+
+export const ticketSearch = defineQuery({
+	name: "tickets.search",
+	network: true,
+	policy: policy.authenticated(),
+	query: ticketSearchIndex.search({
+		parameters: {
+			term: codec.text({ minLength: 1, maxLength: 200 }),
+			status: codec.nullable(codec.list(codec.text(), { maximum: 8 })),
+			first: codec.integer({ minimum: 1, maximum: 50 }),
+			after: codec.nullable(codec.cursor()),
+		},
+		term: ({ parameters }) => parameters.term,
+		where: ({ row: ticket, parameters }) => ticket.status.in(parameters.status),
+		select: { id: true, reference: true, summary: true, status: true },
+		highlight: { summary: true, description: true },
+		page: ({ parameters }) => ({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+	}),
+});
+```
+
+The generated client calls it exactly like any other Query — same nested
+`client.queries.<domain>.<name>` map, same one-object envelope (4.12/11), no
+Search-specific client surface:
+
+```ts
+// browser/questpie.ts
+const results = await desk.queries.tickets.search({
+	input: { term: "printer offline", status: ["open"], first: 10, after: null },
+});
+// results: TicketsSearchResult — results.nodes[0].highlights.summary,
+// results.nodes[0].rank, results.pageInfo, all generated, none handwritten.
+```
+
+- **The author writes:** an index Definition over the existing `tickets`
+  Collection value (never a raw SQL DDL string) naming which Fields are
+  ranked, highlighted, or filterable, plus one plan-backed Query built from
+  the index's own `search(...)` constructor. The words pg_search, Tantivy,
+  and BM25 never appear.
+- **TypeScript infers:** `TicketsSearchInput` = `{ term: string; status:
+string[] | null; first: number; after: string | null }`;
+  `TicketsSearchResult` = `{ nodes: Array<{ id: string; reference: string;
+summary: string; status: string; highlights: { summary?: string[];
+description?: string[] }; rank: number }>; pageInfo: { endCursor: string |
+null; hasNextPage: boolean } }`. `highlights` and `rank` exist only because
+  `highlight`/`term` were authored; an index with no `highlight` entries
+  never emits a `highlights` member.
+- **The compiler generates:** a `requiredPostgres` entry for the `pg_search`
+  extension with its version bound; a Search Projection Definition in the
+  Compiled Manifest (index name, source Collection, field weights, the
+  `filterable` set, document schema version); one migration step that
+  creates or updates the BM25 index configuration inside the one Migration
+  Plan lifecycle (no second migrator); the query/wire/client types above.
+- **Runtime owns:** rereading the committed row after Transactional Dispatch
+  records its key (stage 1, no external effect), idempotently updating or
+  removing the document, issuing the BM25 query, and the one bounded rejoin
+  plan that turns candidate keys into authorized rows before paging.
+- **Migration/readiness ownership:** the BM25 index migration step is owned
+  by the pg_search Package inside the one Compiled Manifest / Migration Plan
+  / Schema Fingerprint lifecycle — unlike Better Auth's current gap (section
+  13), there is no second migrator to close. The Schema Fingerprint
+  recognizes the index as owned by the declared `pg_search` extension (the
+  existing `requiredPostgres`-owned exemption in
+  `docs/v4/schema-lifecycle.md`, not a new mechanism). Readiness fails
+  explicitly, naming `pg_search`, the found version, and the requirement,
+  before the first request.
+- **Policy protects:** the engine returns candidate keys and ranks only; the
+  rejoin plan re-applies `ticketPolicy`'s existing `read.rows` (tenant
+  equality, staff-or-requester) over the same authorized universe used by
+  every other Query, so a stale, forged, deleted, foreign-tenant, or
+  newly-denied candidate discloses nothing, including through `rank`,
+  `highlights`, or pagination (ADR-0018, unchanged).
+- **Deleted handwritten code:** `ticketSearchByReferencePlan` in
+  `src/tickets/query-plans.ts`, named and deliberately kept alive in
+  sections 4.3 and 21 until this exact slice lands.
+- **Invalid examples:**
+  - `where: ({ row: ticket, parameters }) =>
+ticket.description.equal(parameters.term)`: `description` is indexed for
+    ranking/highlighting but not declared `filterable`, so it cannot be used
+    as an exact-match predicate; proposed `QP-SEARCH-001 unfilterableField`
+    names the field and the declared `filterable` set.
+  - a `term` value built as the literal string `summary:<caller text> AND
+status:open` (an author hand-assembling what looks like provider query
+    syntax instead of passing the caller's plain search text): raw Tantivy
+    query syntax is not the QUESTPIE Search language, so the whole string is
+    treated as a literal search term, never parsed as a query grammar — this
+    searches for that literal punctuation instead of filtering, which is a
+    behavioral footgun, not something the compiler can reliably diagnose in
+    the general case. Proposed `QP-SEARCH-002 rawQuerySyntaxRejected` fires
+    only in the narrow case the compiler can statically prove: a bare
+    provider-reserved operator token authored directly where a `term` value
+    was expected.
+
 ## 18. PostGIS proof and the proposed extension seam
 
 PostGIS is the second, materially different extension proof: database
@@ -1910,6 +2146,126 @@ projection, and codec projection into generated contracts. Everything
 capability-specific (BM25 grammar, RRF, SRID rules, spatial operator
 semantics) stays outside any seam. If the two proofs do not converge, no
 seam is extracted and both remain first-party capability Packages.
+
+### 18.1 Worked example: nearby-team lookup
+
+The concrete stage vertical against Support Desk: an office location on
+`teams`, and a bounded-radius Query over it.
+
+```ts
+// src/teams.ts (extended Field)
+import { geo } from "@questpie/postgis";
+
+// added to teams' existing `fields`:
+officeLocation: geo.point({ srid: 4326, nullable: true }),
+```
+
+```ts
+// src/teams/queries.ts
+import { geo } from "@questpie/postgis";
+import { codec, policy } from "questpie";
+
+import { defineQuery } from "#questpie/app";
+
+import { teams } from "../teams";
+
+export const nearbyTeams = defineQuery({
+	name: "teams.nearby",
+	network: true,
+	policy: policy.authenticated(),
+	query: teams.list({
+		parameters: {
+			origin: geo.parameter({ srid: 4326 }),
+			radiusMeters: codec.integer({ minimum: 1, maximum: 50_000 }),
+			first: codec.integer({ minimum: 1, maximum: 50 }),
+			after: codec.nullable(codec.cursor()),
+		},
+		where: ({ row: team, parameters }) =>
+			team.officeLocation.within(parameters.origin, parameters.radiusMeters),
+		orderBy: { id: "asc" },
+		select: { id: true, name: true, officeLocation: true },
+		page: ({ parameters }) => ({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+	}),
+});
+```
+
+The generated client calls it the same way as `tickets.search` above — the
+same nested `client.queries.<domain>.<name>` map, the same one-object
+envelope, no PostGIS-specific client surface:
+
+```ts
+// browser/questpie.ts
+const nearby = await desk.queries.teams.nearby({
+	input: {
+		origin: { longitude: 14.4378, latitude: 50.0755, srid: 4326 },
+		radiusMeters: 5_000,
+		first: 10,
+		after: null,
+	},
+});
+// nearby: TeamsNearbyResult — nearby.nodes[0].officeLocation is the
+// generated GeoPoint client type, nearby.pageInfo is ordinary paging.
+```
+
+- **The author writes:** one geography Field via `geo.point(...)` beside
+  ordinary `field.*` members, and a spatial predicate via the field
+  operand's own `.within(origin, radiusMeters)` method — the same "method on
+  the field operand" shape as `.equal`/`.in`/`.isNull`, not a new freestanding
+  helper — inside an ordinary `where`. No raw `ST_*` call, no handwritten
+  migration, no SRID juggling.
+- **TypeScript infers:** `TeamsNearbyInput` = `{ origin: GeoPoint;
+radiusMeters: number; first: number; after: string | null }`;
+  `TeamsNearbyResult` = `{ nodes: Array<{ id: string; name: string;
+officeLocation: GeoPoint | null }>; pageInfo: {...} }`, where the generated
+  `GeoPoint` client type is `{ longitude: number; latitude: number; srid:
+number }` — canonical bytes, never raw WKB/EWKB.
+- **The compiler generates:** a `requiredPostgres` entry for `postgis` with
+  its version bound; `officeLocation` lowers to a
+  `geography(Point, 4326)` column through a capability-scoped codec/type
+  projection (canonical bytes in the Schema Projection and Data Contract);
+  a capability-scoped GiST spatial index Definition that participates in the
+  one migration/fingerprint lifecycle exactly like a B-tree index; the
+  query/wire/client types above.
+- **Runtime owns:** lowering `.within(...)` to the core-implemented spatial
+  operator node parameterized by the PostGIS capability (section 16 — the
+  Package parameterizes a fixed node kind, it does not register a callback),
+  binding `origin`/`radiusMeters` as statement parameters, and returning
+  ordinary rows through the same one-snapshot Query path as any other plan.
+- **Migration/readiness ownership:** the spatial column type and index enter
+  the one Compiled Manifest / Migration Plan / Schema Fingerprint lifecycle
+  exactly like pg_search's BM25 index (17.1); the Fingerprint recognizes them
+  as owned by the declared `postgis` extension through the same
+  `requiredPostgres`-owned exemption, not a second mechanism. Readiness
+  fails explicitly, naming `postgis`, the found version, and the
+  requirement.
+- **Policy protects:** `officeLocation` is an ordinary Field of `teams`, so
+  it is covered by `teams`' existing read Policy like any other Field — no
+  spatial-specific authorization path exists or is needed. This is a
+  deliberate contrast with 17.1: PostGIS scalar storage rides the ordinary
+  Collection Policy path; pg_search Search rides the candidate-key-rejoin
+  path. Both are Policy-safe, and neither borrows the other's mechanism.
+- **Deleted handwritten code:** none. PostGIS is net-new Support Desk
+  surface, not a replacement for existing hand-rolled logic — an honest zero
+  row (section 21's convention), not an estimate rounded down. The deletion
+  test here is negative instead: no application-authored SQL, raw `ST_*`
+  call, or hand-maintained spatial migration appears anywhere in the
+  vertical.
+- **Invalid examples:**
+  - `orderBy: { officeLocation: "asc" }`: a geometry/geography-typed Field
+    has no natural total order, so it is excluded from `OrderObject`
+    eligibility entirely, even though it is a declared Field; proposed
+    `QP-GEO-001 unorderableGeometryField`. Ordering by distance from a point
+    is not supported; page an ordinary Field and bound the spatial predicate
+    in `where` instead, the same "page the Collection you order by" rule
+    section 6 already states for relation-nested ordering.
+  - `origin: { longitude: 14.4, latitude: 50.1, srid: 3857 }` bound against
+    a column declared `srid: 4326`: rejected rather than silently
+    reprojected, because silent reprojection could shift `within` results
+    without the caller knowing; proposed `QP-GEO-002 sridMismatch` names the
+    declared and supplied SRID.
 
 ## 19. Compiler guarantees and diagnostics
 
@@ -1931,16 +2287,28 @@ lifecycleRecursionExceeded`, `QP-DATA-025
 unsupportedExpressionCapability` (capability-branding violations get
   their own code rather than widening `QP-COMPOSE-013`, whose recorded
   overload follow-up the first slice also closes), `QP-COMPOSE-025
-routeSubtreeCollision`, `QP-COMPOSE-026 httpProjectionInvalid`, and
-  `QP-COMPOSE-027 mcpToolCollision`. Each registry addition follows the
-  accepted revision process; implementations cannot invent spellings;
+routeSubtreeCollision`, `QP-COMPOSE-026 httpProjectionInvalid`,
+  `QP-COMPOSE-027 mcpToolCollision`, `QP-SEARCH-001 unfilterableField`,
+  `QP-SEARCH-002 rawQuerySyntaxRejected` (17.1), `QP-GEO-001
+unorderableGeometryField`, and `QP-GEO-002 sridMismatch` (18.1). Each
+  registry addition follows the accepted revision process; implementations
+  cannot invent spellings;
 - hard budgets: the accepted 100-row pages, bounded list parameters,
-  dependency counts, expression nodes, and declaration size, plus the
-  proposed relation depth of four hops, at most four aggregate members per
-  plan, the 2,048-byte GET encoded path-plus-query budget, and the
-  TypeScript instantiation budget SPEC section 6 already requires (the
-  exact fraction stays an implementation-gate decision; slice 1 measures
-  this vertical against it), each failing with the exact path and Origin;
+  dependency counts, expression nodes, and declaration size stay ratified
+  constants. Three further ceilings are **proposed but unratified**: relation
+  depth (this packet's examples use four), the maximum aggregate members per
+  plan (this packet's examples use four), and the GET encoded
+  path-plus-query byte budget. Boundedness itself is approved for all three;
+  the exact numbers are implementation measurements slice 1 must prove
+  against Support Desk and representative Autopilot slices before
+  ratification, exactly like the TypeScript instantiation budget SPEC
+  section 6 already requires (the exact fraction likewise stays an
+  implementation-gate decision). The GET byte budget additionally cannot be
+  set independent of the accepted cursor bound: `DataCursorV1`/`V2` alone is
+  already bound at up to 2,048 bytes (ADR-0008), so measurement must confirm
+  real headroom for path, method, and other parameters around a
+  cursor-bearing GET, not merely reuse the cursor's own bound as the whole
+  request's budget. Each failure reports the exact path and Origin;
 - static parity: generated declarations and Runtime projections must expose
   identical member inventories (the current `ctx.data` declaration/runtime
   disagreement is a repair gate before any of this ships).
@@ -1950,22 +2318,22 @@ routeSubtreeCollision`, `QP-COMPOSE-026 httpProjectionInvalid`, and
 Each entry names the exact clause and the change class. Additive extensions
 are listed separately and are not supersessions.
 
-| #   | ADR and clause                                                                                                                                                                                                                                                               | Change                                                                                                                                                                                                                                                                                                                                                                                            |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S1  | ADR-0011: “`defineCollectionOperations(collection, body)` is closed compile-time shorthand. Selected `list`, `get`, `create`, `update`, and `delete` members lower … to ordinary Query or Mutation Resources.”                                                               | **Superseded.** The always-generated internal CRUD kernel plus named Operations replace the shorthand. `defineCollectionOperations` is removed after the Collection+Mutation slice; existing fixtures migrate to named Operations.                                                                                                                                                                |
-| S2  | ADR-0011: “The Context exposes a transaction-stable `operationTime` …”                                                                                                                                                                                                       | **Superseded (spelling).** The public name becomes `ctx.now`; semantics unchanged.                                                                                                                                                                                                                                                                                                                |
-| S3  | ADR-0011: “`createdAt` and `updatedAt` remain ordinary Fields. Any server value or `updatedAt` change is an explicit Mutation-owned assignment.” and ADR-0008: “automatically advancing `updatedAt` belongs to the later transaction-owned Mutation contract.”               | **Superseded.** `onUpdate: "now"` makes `updatedAt` a database-owned invariant with compiler-owned migration, fingerprint, returned-value, and Change Ledger semantics; it also applies to explicitly supported managed writers.                                                                                                                                                                  |
-| S4  | ADR-0011: “Sparse caller Field authority runs before closed pure normalization. Schema defaults and closed server `values` then construct the complete candidate …”                                                                                                          | **Superseded (extended semantics).** The fixed order is retained, but the write model gains Field provenance and a named-Mutation trusted `values` lane: caller Field authority applies only to the caller patch over the provenance-derived surface; `values` assignments skip caller Field authority by definition and still pass normalization, validation, candidate Policy, and constraints. |
-| S5  | ADR-0011: “Lifecycle jobs have explicit owners: closed Field normalization, closed server values, a named Mutation …, a transaction-owned typed dispatch intent …, and an Action … There is no general hook catalogue.” and the matching ADR-0016 lifecycle-mapping clauses. | **Superseded (narrow).** The four fixed Collection phases `normalize`/`validate`/`check`/`afterWrite` become authored executable slices with the capability bounds in section 8. Still no general hook catalogue, priorities, or ordering registry.                                                                                                                                               |
-| S6  | ADR-0010: “`definePolicy(collection, body)` … `policy.exists(collection, predicate)` provides bounded, compiler-authored, boolean-only relational evidence …”                                                                                                                | **Superseded (spelling only).** The vocabulary becomes `expr.*` with `expr.exists` restricted to Policy programs; every evidence semantic clause of ADR-0010 is retained verbatim.                                                                                                                                                                                                                |
-| S7  | ADR-0019: “Existing `shape`, `value`, `constraint`, `relation`, `relationRef`, `dataQuery`, `query`, `index`, `seed`, `mutation`, `context`, and `principal` jobs remain available.”                                                                                         | **Superseded (partial).** `dataQuery` and the `query.*` expression and parameter namespaces are replaced by Collection-noun plans, `expr.*`, and codec-kernel parameters (`codec.list`, `codec.cursor`); the remaining names stay.                                                                                                                                                                |
-| S8  | ADR-0022: “Direct client/App maps retain their accepted exact-key spelling.”                                                                                                                                                                                                 | **Superseded.** The generated client adopts nested kind/domain maps with the same QP-COMPOSE-023/024 collision rules; exact Resource Identity remains wire/artifact/tooling authority.                                                                                                                                                                                                            |
-| S9  | ADR-0015: “Creation is lazy and coalesced.”                                                                                                                                                                                                                                  | **Superseded (extended).** Lazy remains the default; `eager: true` readiness Services (compiler-required for credential-resolver dependencies) and non-poisoning lazy failure retry are added; disposal and lifetime clauses unchanged.                                                                                                                                                           |
-| S10 | ADR-0019: “A source-controlled `questpie.json` `projections` object selects them; `questpie build` emits them …”                                                                                                                                                             | **Superseded.** Per-Operation `http` and `mcp` members replace the coarse `projections` selection object; emission, explain, and compiler ownership clauses stay.                                                                                                                                                                                                                                 |
-| S11 | Deep-DX DECISION-MAP #3: “A Collection must not silently publish new caller input or output when a Field is added.” and FABLE-SYNTHESIS packet item 5.                                                                                                                       | **Corrected (research, not ADR).** Replaced by the derived-versus-pinned model in section 5, including the runtime compatibility story for retained clients, cursors, and Live Query.                                                                                                                                                                                                             |
-| S12 | ADR-0008: “Structural Query v1 has exact selection, closed filters, explicit total ordering, forward cursor pagination, **one-hop Relations**, and declared dependencies.”                                                                                                   | **Superseded.** Bounded multi-hop to-one traversal (proposed depth four) replaces the one-hop cap, with `QP-DATA-022` guarding the budget.                                                                                                                                                                                                                                                        |
-| S13 | ADR-0008 grammar: “Scalar and scalar-list parameters are non-null; cursor is the only nullable parameter.”                                                                                                                                                                   | **Superseded.** Nullable parameters become optional filters under the formal positive-conjunction rule (section 6) with `QP-DATA-020` guarding position.                                                                                                                                                                                                                                          |
-| S14 | Foundational grammar: `field.*` options require `nullable`.                                                                                                                                                                                                                  | **Superseded (authored spelling only).** `nullable` defaults to `false`; equivalent declarations produce byte-identical Schema Projection, following the ADR-0008 revision precedent for authored-TypeScript-only changes.                                                                                                                                                                        |
+| #   | ADR and clause                                                                                                                                                                                                                                                               | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | ADR-0011: “`defineCollectionOperations(collection, body)` is closed compile-time shorthand. Selected `list`, `get`, `create`, `update`, and `delete` members lower … to ordinary Query or Mutation Resources.”                                                               | **Superseded.** The always-generated internal CRUD kernel plus named Operations replace the shorthand. `defineCollectionOperations` is removed after the Collection+Mutation slice; existing fixtures migrate to named Operations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S2  | ADR-0011: “The Context exposes a transaction-stable `operationTime` …”                                                                                                                                                                                                       | **Superseded (spelling).** The public name becomes `ctx.now`; semantics unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S3  | ADR-0011: “`createdAt` and `updatedAt` remain ordinary Fields. Any server value or `updatedAt` change is an explicit Mutation-owned assignment.” and ADR-0008: “automatically advancing `updatedAt` belongs to the later transaction-owned Mutation contract.”               | **Superseded.** `onUpdate: "now"` makes `updatedAt` a database-owned invariant with compiler-owned migration, fingerprint, returned-value, and Change Ledger semantics; it also applies to explicitly supported managed writers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| S4  | ADR-0011: “Sparse caller Field authority runs before closed pure normalization. Schema defaults and closed server `values` then construct the complete candidate …”                                                                                                          | **Superseded (extended semantics).** The fixed order is retained, but the write model gains Field provenance and a named-Mutation trusted `values` lane: caller Field authority applies only to the caller patch over the provenance-derived surface; `values` assignments skip caller Field authority by definition and still pass normalization, validation, candidate Policy, and constraints.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| S5  | ADR-0011: “Lifecycle jobs have explicit owners: closed Field normalization, closed server values, a named Mutation …, a transaction-owned typed dispatch intent …, and an Action … There is no general hook catalogue.” and the matching ADR-0016 lifecycle-mapping clauses. | **Superseded (narrow).** The four fixed Collection phases `normalize`/`validate`/`check`/`afterWrite` become authored executable slices with the capability bounds in section 8. Still no general hook catalogue, priorities, or ordering registry.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| S6  | ADR-0010: “`definePolicy(collection, body)` … `policy.exists(collection, predicate)` provides bounded, compiler-authored, boolean-only relational evidence …”                                                                                                                | **Superseded (spelling only).** The vocabulary becomes `expr.*` with `expr.exists` restricted to Policy programs; every evidence semantic clause of ADR-0010 is retained verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S7  | ADR-0019: “Existing `shape`, `value`, `constraint`, `relation`, `relationRef`, `dataQuery`, `query`, `index`, `seed`, `mutation`, `context`, and `principal` jobs remain available.”                                                                                         | **Superseded (partial).** `dataQuery` and the `query.*` expression and parameter namespaces are replaced by Collection-noun plans, `expr.*`, and codec-kernel parameters (`codec.list`, `codec.cursor`); the remaining names stay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S8  | ADR-0022: “Direct client/App maps retain their accepted exact-key spelling.”                                                                                                                                                                                                 | **Superseded.** The generated client adopts nested kind/domain maps with the same QP-COMPOSE-023/024 collision rules; exact Resource Identity remains wire/artifact/tooling authority.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| S9  | ADR-0015: “Creation is lazy and coalesced.”                                                                                                                                                                                                                                  | **Superseded (extended).** Lazy remains the default; `eager: true` readiness Services (compiler-required for credential-resolver dependencies) and non-poisoning lazy failure retry are added; disposal and lifetime clauses unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| S10 | ADR-0019: “A source-controlled `questpie.json` `projections` object selects them; `questpie build` emits them …”                                                                                                                                                             | **Not superseded — additive and orthogonal.** Global artifact selection and per-Operation exposure answer different questions and both stay: `questpie.json`'s `projections` object continues to select whether the OpenAPI/MCP/skill build artifacts are emitted for the application at all (unchanged; skill projections are untouched by this packet); the new per-Operation `http`/`mcp` members select and configure which Operations participate in an emitted artifact and how. Neither replaces the other, and an Operation may carry `http`/`mcp` members while `questpie.json` leaves that artifact kind unemitted. No clause of ADR-0019 is contradicted, so this is reclassified out of the supersession count; it was misclassified as superseded in the prior repair pass (section 23). |
+| S11 | Deep-DX DECISION-MAP #3: “A Collection must not silently publish new caller input or output when a Field is added.” and FABLE-SYNTHESIS packet item 5.                                                                                                                       | **Corrected (research, not ADR).** Replaced by the derived-versus-pinned model in section 5, including the runtime compatibility story for retained clients, cursors, and Live Query.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| S12 | ADR-0008: “Structural Query v1 has exact selection, closed filters, explicit total ordering, forward cursor pagination, **one-hop Relations**, and declared dependencies.”                                                                                                   | **Superseded (direction only).** Bounded multi-hop to-one traversal replaces the fixed one-hop cap, with `QP-DATA-022` guarding whatever the ceiling is measured to be. The one-hop-to-bounded-multi-hop direction is approved; the specific depth (four, in this packet's examples) is an unratified implementation candidate, not part of this supersession, and must be measured against Support Desk and Autopilot before any exact number is accepted (section 19).                                                                                                                                                                                                                                                                                                                              |
+| S13 | ADR-0008 grammar: “Scalar and scalar-list parameters are non-null; cursor is the only nullable parameter.”                                                                                                                                                                   | **Superseded.** Nullable parameters become optional filters under the formal positive-conjunction rule (section 6) with `QP-DATA-020` guarding position.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| S14 | Foundational grammar: `field.*` options require `nullable`.                                                                                                                                                                                                                  | **Superseded (authored spelling only).** `nullable` defaults to `false`; equivalent declarations produce byte-identical Schema Projection, following the ADR-0008 revision precedent for authored-TypeScript-only changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 
 Additive extensions that are **not** supersessions: to-many loading,
 quantifiers, and `count()` (the “projected `toMany`” and aggregates contracts
@@ -1974,9 +2342,16 @@ already implemented and retained by ADR-0019); Job acceptance object envelope
 and compiler-derived default identity (generated surface, not ADR-frozen);
 named client type aliases; `.observe`/`.key` descriptor members;
 `questpie/react`; Service `config`, `eager`, and `runtime.packages`; the
-external-schema declaration; the HTTP `Idempotency-Key` convention and
-reserved post-commit surfacing (ADR-0023-compatible surface additions); the
-pg_search and PostGIS proofs (the “focused decision” ADR-0018 required).
+dedicated-schema declaration for an application-composed provider (reports
+external ownership of a schema already outside fingerprint scope; fingerprints
+nothing new); per-Operation `http` and `mcp` members alongside the unchanged
+`questpie.json` `projections` build-level selection (S10 — see the ledger row
+below: global emission selection and per-Operation exposure are orthogonal,
+so nothing is superseded); the HTTP `Idempotency-Key` convention and the
+ADR-0023-compatible HTTP `500` body plus the additive MCP outcome mapping;
+the pg_search and PostGIS proofs (the “focused decision” ADR-0018 required),
+including their embedding-generation composition of existing Job and Action
+primitives (section 17).
 
 Not touched: ADR-0013 Reaction, ADR-0023 post-commit outcome semantics,
 ADR-0026 Job checkpoint language, ADR-0028 Effect Identity/limits/Wire v3,
@@ -2047,15 +2422,15 @@ generated source.
 
 The seven hesitations, evaluated:
 
-| #   | Hesitation                                                                 | Class                                                     | Resolution                                                                                                                                                                      |
-| --- | -------------------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Caller-scoped plan predicate (`parameters.callerMembershipId` placeholder) | missing-docs, plus a real surface gap                     | Documented the handler-Query pattern with plain-value binding; plan-scope execution-fact operands proposed as approval item 24.9                                                |
-| 2   | Ordering by a to-one related field                                         | missing-docs (modeling guidance)                          | Documented “page the Collection you order by”; the watched-tickets read pages `tickets` with a `some(watchers)` quantifier; relation-nested `orderBy` explicitly does not exist |
-| 3   | Non-primary unique lookup for unwatch                                      | missing-docs, resolved by a kernel refinement             | `key` now accepts any declared unique constraint's complete column set (section 8)                                                                                              |
-| 4   | Job `runAs` for a recipient who is not the caller                          | missing-capability (confirmed)                            | Documented caller-only run-as with the recipient-as-data pattern; service-principal recipe named as approval item 24.10; the audit's invented `durable.system` was not adopted  |
-| 5   | Checking target-ticket readability without duplicating read Policy         | missing-docs                                              | Documented the kernel-read pattern (`get` returning `null` is the readability check); a recursive `readable()` evidence primitive stays rejected per ADR-0010                   |
-| 6   | Unique-constraint conflict mapping                                         | insufficient-diagnostics, resolved by a kernel refinement | Typed `ConstraintViolation` with the declared constraint name and a documented remap idiom (section 8)                                                                          |
-| 7   | Bounded `afterWrite` fan-out                                               | insufficient-docs plus a confirmed capability edge        | Explicit `first` required, Mutation budgets bound the work; unbounded durable fan-out named as approval item 24.11                                                              |
+| #   | Hesitation                                                                 | Class                                                     | Resolution                                                                                                                                                                                                       |
+| --- | -------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Caller-scoped plan predicate (`parameters.callerMembershipId` placeholder) | missing-docs, plus a real surface gap                     | Documented the handler-Query pattern with plain-value binding; plan-scope execution-fact operands are approved (section 24)                                                                                      |
+| 2   | Ordering by a to-one related field                                         | missing-docs (modeling guidance)                          | Documented “page the Collection you order by”; the watched-tickets read pages `tickets` with a `some(watchers)` quantifier; relation-nested `orderBy` explicitly does not exist                                  |
+| 3   | Non-primary unique lookup for unwatch                                      | missing-docs, resolved by a kernel refinement             | `key` now accepts any declared unique constraint's complete column set (section 8)                                                                                                                               |
+| 4   | Job `runAs` for a recipient who is not the caller                          | missing-capability (confirmed)                            | Documented caller-only run-as with the recipient-as-data pattern; service-principal recipe named as a deferred gap, not an approval question (section 24); the audit's invented `durable.system` was not adopted |
+| 5   | Checking target-ticket readability without duplicating read Policy         | missing-docs                                              | Documented the kernel-read pattern (`get` returning `null` is the readability check); a recursive `readable()` evidence primitive stays rejected per ADR-0010                                                    |
+| 6   | Unique-constraint conflict mapping                                         | insufficient-diagnostics, resolved by a kernel refinement | Typed `ConstraintViolation` with the declared constraint name and a documented remap idiom (section 8)                                                                                                           |
+| 7   | Bounded `afterWrite` fan-out                                               | insufficient-docs plus a confirmed capability edge        | Explicit `first` required, Mutation budgets bound the work; unbounded durable fan-out named as a deferred gap, not an approval question (section 24)                                                             |
 
 One additional gap the audit exposed without logging it: it guessed a
 manual `headers: { "Idempotency-Key": "callId" }` spelling for the
@@ -2090,8 +2465,9 @@ alone, with no Runtime, compiler, or generated implementation source open.
 1. **Query + Relations.** Tracer: `tickets.queue` + `tickets.detail` +
    `tickets.escalations` replacing the four list Queries in Support Desk,
    through browser and Live Query, plus one caller-scoped handler Query
-   (the audit's watched-tickets shape); if section 24 approves plan-scope
-   execution-fact operands, this slice lands and cursor-scopes them. Kernel claims: one snapshot per Query
+   (the audit's watched-tickets shape); plan-scope execution-fact operands
+   are approved (section 24), so this slice lands and cursor-scopes them.
+   Kernel claims: one snapshot per Query
    root; Policy-before-filter with quantifiers; cursor scope with nested
    pages; disclosure-authorized quantifier universe under `.watch`
    (dependency observation across hidden related rows). Hostile tests:
@@ -2139,20 +2515,25 @@ alone, with no Runtime, compiler, or generated implementation source open.
    back; revoked data removal. Deletion: app.tsx orchestration and aliases.
 5. **Config + Service + Auth + Route mount.** Tracer: Better Auth on typed
    config with the generated `loadAppConfig()` CLI path, compiler-required
-   eager, runtime packages, and the external-schema declaration for
-   `support_auth_*`; integration-key second credential path; non-Auth
-   provider Service used by Route and Action. Kernel claims: secrets absent
-   from all artifacts; readiness failure taxonomy; lazy failure retry;
-   drain semantics; drift verification reporting declared external tables
-   as externally owned. Hostiles: conflicting credentials precedence;
-   provider outage vs absent credential; config secret in diagnostics;
-   undeclared provider table caught by drift. Deletion: env reads, the
-   ambient migration-config read, bundler workaround.
+   eager, runtime packages, and moving Better Auth into its own dedicated
+   PostgreSQL schema with a declared, reported, unfingerprinted boundary
+   (section 13); integration-key second credential path; non-Auth provider
+   Service used by Route and Action. Kernel claims: secrets absent from all
+   artifacts; readiness failure taxonomy; lazy failure retry; drain
+   semantics; drift verification reporting the declared external schema as
+   externally owned. Hostiles: conflicting credentials precedence; provider
+   outage vs absent credential; config secret in diagnostics; an
+   undeclared object inside the application schema caught by the existing
+   `unexpectedObject` drift rule; the declared external schema's contents
+   provably never inspected, so reported ownership is never mistaken for a
+   drift-safety claim. Deletion: env reads, the ambient migration-config
+   read, bundler workaround.
 6. **HTTP + OpenAPI + MCP.** Tracer: `tickets.detail` HTTP projection plus a
    Mutation projection with `Idempotency-Key`, the webhook Route in one
    OpenAPI document, and one MCP tool called through a real MCP client
    against Policy. Kernel claims: same executor; outcome fidelity including
-   the reserved post-commit surface on HTTP and MCP; collision domains.
+   the ADR-0023 HTTP `500` post-commit body and its additive MCP mapping;
+   two collision domains.
    Hostiles: ambiguous mappings; GET encoding budget; HTTP retry without
    the idempotency header; MCP metadata-as-authorization attempt. Owns the
    deferred multi-binding decision.
@@ -2163,11 +2544,12 @@ alone, with no Runtime, compiler, or generated implementation source open.
    primary-only rejoin. Hostiles: stale/forged/foreign-tenant candidates;
    revocation between index and rejoin; revocation committed on primary
    not yet visible on a replica (topology rejection); missing extension.
-8. **pg_search stage 2 + PostGIS + seam decision.** Tracer: embedding-
-   generation ownership model, then hybrid/RRF retrieval; one geo
-   Collection with spatial operators and index through the same Package
-   contract; then the seam hypothesis evaluated with both proofs on the
-   table.
+8. **pg_search stage 2 + PostGIS + seam decision.** Tracer: the
+   embedding-generation ownership model as a Job-accepts-and-checkpoints-an-
+   Action composition (section 17), proved or explicitly deferred before any
+   hybrid/RRF retrieval claim; one geo Collection with spatial operators and
+   index through the same Package contract (section 18); then the seam
+   hypothesis evaluated with both proofs on the table.
 9. **Representative Autopilot port + measured deletion.** Tracer: the
    sampled Route-to-Operation migration slices; the adoption scorecard of
    section 21 becomes claims instead of estimates.
@@ -2210,9 +2592,13 @@ Blockers repaired:
    proof: the leak wins, so the restriction ships.
 4. **HTTP projection had no idempotency identity and no post-commit
    surface** (lane 3). Section 15 now mandates the `Idempotency-Key` to
-   `callId` mapping for Mutation projections and reserves an HTTP status/
-   body and an MCP outcome bucket for `COMMITTED_RESULT_UNAVAILABLE` with
-   its recovery identities.
+   `callId` mapping for Mutation projections and restores the accepted
+   ADR-0023 HTTP `500` status and exact body for
+   `COMMITTED_RESULT_UNAVAILABLE`, plus an additive MCP outcome mapping of
+   the same recovery identities — the HTTP mapping is preserved from
+   ADR-0023, not newly reserved or invented (a later focused pass found
+   this section had drifted into vaguer "reserved status" language; see the
+   focused-repair record below).
 5. **Better Auth provider schema and the broken CLI config path** (lane 4).
    Section 13 defines the external-schema declaration now and the ADR-0005
    Package obligation later; 4.10 shows the repaired
@@ -2239,9 +2625,11 @@ and the structurally narrowed `afterWrite` ctx (lane 3); attempt-deadline
 bound on automatic heartbeat and exact `sleepUntil` semantics (lane 3);
 compiler-required eager for credential-resolver dependencies (lane 3);
 staged pg_search with the embedding-ownership gate, primary-only rejoin, and
-the official-image default (lane 4); three collision domains with their own
-diagnostic codes instead of one trie and instead of widening
-`QP-COMPOSE-013` (lane 4); config six-surface coverage and the shared-value
+the official-image default (lane 4); two collision domains (one shared HTTP
+trie, one MCP namespace) with their own diagnostic codes instead of widening
+`QP-COMPOSE-013` (lane 4; a later focused pass found the domain count itself
+had drifted to "three" in prose without a third domain ever being defined —
+see the section 23 focused-repair record below); config six-surface coverage and the shared-value
 duplication rule (lane 4); per-row React mutation state and the removed
 `callId === ticket.id` comparison (lane 1); typed reusable predicates via
 `PolicyScope`/`RowOperand` (lane 1); `parameters` naming unified, `expr`
@@ -2250,8 +2638,11 @@ documented, kernel `select` and nullable-default rules stated, 4.11 merged
 into the 4.4 Definition, `assignTicket`/`reopenTicket` added, and the
 `query-plans.ts` deletion claim corrected to four of six plans (lane 1).
 Ledger repairs: S12 (one-hop supersession), S13 (nullable parameters), S14
-(`nullable` optional), S10 rewritten as the real ADR-0019 `projections`
-supersession (lanes 2+4). Minor repairs (orderBy spread honesty, depth
+(`nullable` optional), S10 rewritten as an ADR-0019 `projections` supersession
+(lanes 2+4) — a later focused pass found that rewrite itself imprecise
+(global emission selection and per-Operation exposure are orthogonal, so
+nothing is actually superseded) and reclassified it; see the ledger row and
+the section 23 focused-repair record below. Minor repairs (orderBy spread honesty, depth
 number, secret-unwrap wording, `runtime.packages` purpose, section 3
 non-exhaustive note, section 2 reuse note, multi-binding deferral, MCP
 ingress statement, digest participation) are folded in place.
@@ -2271,41 +2662,138 @@ implicit `Idempotency-Key` binding, and three new approval questions,
 while confirming every primitive choice and both idempotency rules
 survived first contact with a model that had never seen the design.
 
-## 24. Remaining human approval decisions
+### Focused repair-pass self-critique (2026-08-27)
 
-1. **Q63 Route wildcard mode.** Approve exclusive per-pattern subtree
-   ownership as specified in section 14, or select fallback/augmentable
-   instead.
-2. **Supersession ledger.** Approve each S1-S14 entry individually; any
-   rejection re-opens the affected section.
-3. **Provenance spelling.** Approve the Field-modifier spelling
-   (`server`/`immutable`/`onUpdate`, optional `nullable`) or request the
-   alternative explicit `write: { create, update }` matrix from the
-   redesign candidate.
-4. **Expression vocabulary.** Approve `expr` as the shared vocabulary name
-   and the Policy-only restriction of `expr.exists`.
-5. **Client envelope.** Approve the one-object call envelope and nested
-   client maps as the generated client's primary surface.
-6. **HTTP idempotency and post-commit surface.** Approve the mandatory
-   `Idempotency-Key` mapping and the reserved
-   `COMMITTED_RESULT_UNAVAILABLE` HTTP/MCP surfacing.
-7. **Provider schema.** Approve the bounded external-schema declaration for
-   application-composed providers, with one-lifecycle projection mandatory
-   for Packages.
-8. **pg_search deployment.** Approve the official ParadeDB image as the
-   proof default, with the owned-image fallback only under the named
-   version-matrix condition.
-9. **Plan-scope execution facts.** Approve (or defer) read-only
-   `principal`/`tenant`/`values` operands in plan-backed Query predicates,
-   so the common caller-scoped list needs no handler (two independent
-   audit requirements hit this; the interim handler pattern is
-   documented).
-10. **Service-principal run-as.** Acknowledge the confirmed gap: a trusted
-    non-caller run-as recipe for Jobs that act for a recipient rather than
-    the accepting caller. It stays with the later trigger seam; approving
-    this item only names it, it does not add `durable.system` now.
-11. **Durable fan-out.** Acknowledge the confirmed gap: fanning one
-    committed fact out to an unbounded recipient set needs a durable
-    pattern outside the Mutation transaction (today's answer is bounded
-    in-transaction fan-out only). Owned by the later Job trigger/breadth
-    work.
+A sixth pass, restricted to exactly the ten blockers a human review returned
+against this packet, repaired: Field/Constraint/Relation array spellings;
+missing pg_search/PostGIS authoring evidence; the SLA Job's `sleepUntil`
+misuse; three unratified numeric constants; the S10 ledger misclassification;
+loose HTTP post-commit wording against ADR-0023; per-table Better Auth drift
+exclusions; an invented Search-worker external-effect seam; and collision-
+domain terminology. After making those repairs, this pass ran one hostile
+read restricted to the same ten blockers and their immediate surroundings,
+looking specifically for repairs that were incomplete, inconsistent with
+each other, or that introduced a fresh error. It found and repaired:
+
+1. **Broken Markdown in the new pg_search invalid example.** A JS template
+   literal (containing its own backticks) was nested inside a single-backtick
+   inline-code span, which does not render. Rewritten to describe the
+   footgun in prose instead of an inline literal.
+2. **A wrong cross-reference in the new PostGIS invalid example.** The
+   ordering hostile cited "4.5" for the "page the Collection you order by"
+   rule; that rule is stated in section 6, not 4.5 (4.5 is the quantifier
+   membership example). Corrected to cite section 6.
+3. **An API-shape inconsistency in the new PostGIS example.** The spatial
+   predicate was drafted as a freestanding `geo.within(field, a, b)` call,
+   breaking with every other predicate in this packet, which is a method on
+   the field operand (`.equal`, `.in`, `.isNull`, …). Changed to
+   `team.officeLocation.within(origin, radiusMeters)` in the code and the
+   two prose mentions that named the old shape.
+4. **A self-contradiction in the Better Auth schema repair**, in both
+   section 13 and section 22 slice 5. The repair correctly states that a
+   dedicated external schema's contents are never fingerprinted, then
+   separately claimed a hostile test proves "an object silently added to the
+   declared external schema" is "surfaced" — which only a fingerprint could
+   detect. Corrected both to scope the drift hostile to the application
+   schema (where `unexpectedObject` genuinely applies) and to state plainly
+   that the external schema's contents are provably never inspected, so
+   reported ownership is never mistaken for a drift-safety claim.
+5. **An incomplete S10 repair.** The ledger row was corrected, but section
+   15's own OpenAPI and MCP bullets never said that `questpie.json`
+   continues to gate whether those artifacts are emitted at all — a reader
+   of section 15 alone would not know the two mechanisms are orthogonal.
+   Added that clause to both bullets.
+6. **Stale "reserved" HTTP/collision-domain wording outside the sections
+   directly named by the blockers.** Section 4.11's wrap-up prose and
+   section 22 slice 6 still said "the reserved post-commit surface" instead
+   of naming HTTP `500`; section 22 slice 6 still said "collision domains"
+   without the corrected count; section 24 item 6 still said "the reserved
+   `COMMITTED_RESULT_UNAVAILABLE` HTTP/MCP surfacing." All three repaired to
+   match section 15's corrected language.
+7. **Stale table-level Better Auth wording in section 22 slice 5**, left
+   over from before the section 13 rewrite (`support_auth_*`, "declared
+   external tables," "undeclared provider table"). Repaired to the
+   dedicated-schema language section 13 now uses.
+
+No finding reopened Q63, expression vocabulary, provenance spelling, client
+envelope shape, or any other already-approved direction; all seven are
+narrow consistency and correctness repairs of this pass's own edits. Every
+item above is fixed in place, not merely logged.
+
+## 24. Human approval record and remaining ratification
+
+This packet's status is **directionally approved, not ratified**: human
+review has decided the direction of every item below except the two listed
+under "Genuinely remaining." Direction is not implementation authority —
+each item still needs its own focused superseding decision (section 20's
+rule) before any ADR, SPEC, CONTEXT, or public-documentation edit, and the
+numbered slices in section 22 remain the path to that evidence.
+
+### Approved in direction
+
+1. **Q63 Route wildcard mode.** Exclusive per-pattern subtree ownership
+   (mode 1, section 14) is approved; fallback and augmentable modes are not
+   adopted.
+2. **Provenance spelling.** The Field-modifier spelling
+   (`server`/`immutable`/`onUpdate`, optional `nullable`) is approved; the
+   alternative explicit `write: { create, update }` matrix is not adopted.
+3. **Expression vocabulary.** `expr` as the shared vocabulary name and the
+   Policy-only restriction of `expr.exists` are approved.
+4. **Client envelope.** The one-object call envelope and nested client maps
+   as the generated client's primary surface are approved.
+5. **HTTP idempotency and post-commit surface.** The mandatory
+   `Idempotency-Key` mapping, the preserved (not reopened) ADR-0023 HTTP
+   `500` `COMMITTED_RESULT_UNAVAILABLE` body, and the additive MCP
+   tool-execution-error surfacing of the same outcome are approved.
+6. **Plan-scope execution facts.** Read-only `principal`/`tenant`/`values`
+   operands in plan-backed Query predicates are approved, with their
+   reached facts bound into cursor scope exactly as Policy programs already
+   are, so the common caller-scoped list needs no handler; slice 1 (section 22) lands them.
+7. **Supersession ledger direction.** S1-S9, S11, S13, and S14 (section 20)
+   are approved in direction. Two entries carry a different, more specific
+   status:
+   - **S10** is rejected as originally written — it claimed a false
+     supersession — and repaired: global `questpie.json` artifact-emission
+     selection and per-Operation `http`/`mcp` exposure are orthogonal, so
+     nothing is superseded; the ledger row states this.
+   - **S12** (bounded multi-hop Relations replacing the fixed one-hop cap)
+     is approved in direction only. No specific depth is ratified; this
+     packet's examples use 4 as an unratified implementation candidate, not
+     an accepted constant (see "Genuinely remaining" below).
+
+### Rejected and repaired
+
+- **Per-table Better Auth drift exclusions** are rejected as originally
+  written and repaired to a dedicated provider-owned PostgreSQL schema
+  outside the application schema (section 13): the schema's existence and
+  provider ownership are reported, its contents are never fingerprinted,
+  and no individual table is named for exclusion inside the application
+  schema.
+
+### Deferred gaps (named, not approval questions)
+
+These are confirmed capability gaps this packet does not attempt to close.
+They are named here so neither is silently reinvented later; recording this
+packet's approved direction does not approve any design for either.
+
+- **Service-principal run-as.** A trusted non-caller run-as recipe for Jobs
+  that act for a recipient rather than the accepting caller. Stays with the
+  later trigger seam; this packet does not add `durable.system`.
+- **Durable fan-out.** Fanning one committed fact out to an unbounded
+  recipient set needs a durable pattern outside the Mutation transaction;
+  today's answer is bounded in-transaction fan-out only. Owned by the later
+  Job trigger/breadth work.
+
+### Genuinely remaining
+
+1. **Numeric ratification.** Relation depth, the maximum aggregate members
+   per plan, and the GET encoded path-plus-query byte budget are bounded in
+   direction (S12 above) but not ratified as exact numbers. Slice 1
+   (section 22) must measure all three against Support Desk and
+   representative Autopilot slices before any is accepted (section 19); the
+   GET budget additionally needs proof of real headroom around the accepted
+   2,048-byte cursor bound.
+2. **pg_search deployment default.** Whether the official ParadeDB image is
+   the accepted proof default, with an owned-image fallback only under the
+   named version-matrix condition (section 17), has not been put to human
+   decision.

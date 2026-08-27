@@ -53,19 +53,31 @@ possible write surface; Policy decides per-request authority over it.
 defineCollection({
   name: string,                       // qualified lower-camel name
   fields: Record<string, Field>,
-  constraints: { name: constraint.primaryKey({ fields }) |
-    constraint.unique({ fields }) | constraint.check(...) },
+  constraints: { name: constraint.primaryKey({ fields: FieldPicker }) |
+    constraint.unique({ fields: FieldPicker }) | constraint.check(...) },
   relations: Record<string, Relation>,
   lifecycle?: { normalize?, validate?, check?, afterWrite? },
-  indexes?: Record<string, index({ fields })>,
+  indexes?: Record<string, index({ fields: IndexFieldPicker })>,
 })
 ```
 
+Constraints, Relations, and Index all take an object mapping instead of a
+positional array; no Accepted ADR fixes the array spelling, so this is
+ordinary authoring sugar over byte-identical artifacts.
+
+- `FieldPicker` = `Record<fieldName, true>`. Authored key order is the
+  constraint's column order (`{ organizationId: true, reference: true }`).
+- `IndexFieldPicker` = `Record<fieldName, true | "asc" | "desc" |
+{ direction: "asc" | "desc", nulls: "first" | "last" }>`; `true` is a plain
+  ascending column, reusing the same value grammar `orderBy` uses.
+
 ### Relations
 
-- `relation.toOne({ target, fields, references, onDelete? })` on the side
-  that stores the foreign key. `onDelete`: `"setNull" | "restrict" |
-"cascade"`.
+- `relation.toOne({ target, on, onDelete? })` on the side that stores the
+  foreign key. `on: Record<localFieldName, targetFieldName>` maps each local
+  column to the target column it references — one object instead of two
+  parallel `fields`/`references` arrays that must stay the same length and
+  order. `onDelete`: `"setNull" | "restrict" | "cascade"`.
 - `relation.toMany({ inverseOf: relationRef(collectionName, relationName) })`
   on the inverse side. `relationRef` is a string reference, so the parent
   module never imports the child module.
@@ -116,7 +128,8 @@ collection.get({
   field, page that Collection instead and express membership with a
   quantifier.
 - `SelectionObject` entries: `field: true`; to-one
-  `relation: { select: SelectionObject }` (up to four hops); to-many
+  `relation: { select: SelectionObject }` (bounded hops — candidate value 4
+  in current examples, not yet ratified; see Budgets below); to-many
   `relation: { list: { where?, orderBy, first?, page?, select? } }`;
   computed `name: ({ row }) => row.relation.count()` (exactly one
   recognized aggregate call). Omitted nested `select` means the complete
@@ -128,9 +141,11 @@ collection.get({
   is disabled when bound `null`. Legal only directly inside `expr.and`
   (or as the entire filter) and never under `expr.not` or as a bare
   `expr.or` branch.
-- Budgets: pages max 100 rows; relation depth max 4; at most 4 computed
-  aggregate members per plan; list parameters bounded by their declared
-  maximum.
+- Budgets: pages max 100 rows (ratified). Relation depth and the maximum
+  computed aggregate members per plan are also bounded, but their exact
+  ceilings (4 and 4 in current examples) are unratified implementation
+  candidates pending measurement against Support Desk and Autopilot, not
+  accepted constants. List parameters are bounded by their declared maximum.
 - Scope: `where` and nested callbacks receive `{ row, parameters }`. In a
   plan-backed Query those are the only operands; a read scoped to the
   caller (for example “rows of my membership”) is a handler Query, whose
@@ -276,9 +291,15 @@ data; there is no run-as-system or run-as-other recipe.
 - Heartbeat is automatic until the attempt deadline; manual
   `attempt.heartbeat()` matters only for CPU-bound loops that starve the
   event loop.
-- `attempt.sleepUntil(date)`: signal-aware wait inside the current attempt;
-  targets beyond the attempt budget are rejected (use `notBefore`); after a
-  crash the fresh attempt re-sleeps toward the same absolute instant.
+- `attempt.sleepUntil(date)`: an **advanced** signal-aware wait inside an
+  attempt that is already running for some other reason — not durable
+  scheduling, since it holds a live worker and lease for the wait. Targets
+  beyond the attempt budget are rejected (use `notBefore` on acceptance
+  instead, which holds no worker at all until the instant arrives); after a
+  crash the fresh attempt re-sleeps toward the same absolute instant rather
+  than resuming a saved wait. When a delay is the whole reason a Job exists,
+  accept it with `notBefore`; never accept immediately and `sleepUntil` the
+  target as the sole mechanism.
 
 Acceptance (Mutation context or server execution):
 
@@ -346,8 +367,12 @@ mcp: { tool: string, description: string, readOnly?: boolean }
   not declared in `request.headers`, and retries carrying the same key
   recover the committed result.
 - Declared errors map to statuses in `responses`; framework outcomes keep
-  their exact meaning (a possibly-committed result is reported as such and
-  is never a generic retryable error).
+  their exact meaning. A Mutation whose commit succeeded but whose response
+  was lost reports HTTP `500` with the accepted ADR-0023 body — `{ code:
+"COMMITTED_RESULT_UNAVAILABLE", retryable: true, transactionId }` plus
+  top-level `callId` — never a sanitized generic `500` and never a different
+  status; `retryable: true` means replay under the same `callId` recovers
+  the receipt, not that the transport retries automatically.
 - `mcp.tool` names must be unique application-wide; tools run through the
   same Policy, limits, and typed outcomes as every call.
 
@@ -401,7 +426,7 @@ callId?, recover? }`. `recover()` replays the same call identity to fetch
 | `QP-DATA-010 invalidCursor`                   | cursor does not match the current plan/parameters/authority scope; restart pagination              |
 | `QP-DATA-020 nullableFilterPosition`          | optional filter outside a positive `expr.and` position                                             |
 | `QP-DATA-021 nestedCursorUnderPluralParent`   | cursor paging on a nested list under a plural parent                                               |
-| `QP-DATA-022 relationDepthExceeded`           | selection or filter beyond four relation hops                                                      |
+| `QP-DATA-022 relationDepthExceeded`           | selection or filter beyond the bounded relation-hop limit (unratified candidate: 4)                |
 | `QP-DATA-023 databaseOwnedField`              | a lane supplied an `onUpdate` database-owned field                                                 |
 | `QP-DATA-024 lifecycleRecursionExceeded`      | afterWrite write chain exceeded its depth bound                                                    |
 | `QP-DATA-025 unsupportedExpressionCapability` | `expr.exists` in a Query filter, or a computed selection that is not one recognized aggregate call |

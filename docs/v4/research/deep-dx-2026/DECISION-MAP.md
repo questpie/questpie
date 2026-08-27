@@ -13,7 +13,14 @@
   the three benchmark reports beside this map, the
   [Fable cross-model synthesis](./FABLE-SYNTHESIS.md), and the repaired
   [approval packet #1 v2](./APPROVAL-PACKET-1.md) with its four recorded
-  adversarial review lanes
+  adversarial review lanes plus one later focused repair pass (packet
+  section 23) that closed ten blockers found in review: Field/Constraint/
+  Relation authoring consistency, complete pg_search and PostGIS worked
+  examples, ordinary delayed-Job direction, three unratified numeric
+  constants, the questpie.json/per-Operation projection ledger entry, exact
+  ADR-0023 HTTP preservation, a dedicated Better Auth provider schema,
+  Search embedding composition over Job and Action, and collision-domain
+  terminology
 
 Every ticket must compare materially different interfaces against one complete
 vertical. A convenience is not earned by one fixture: it needs a deep owner,

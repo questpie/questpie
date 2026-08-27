@@ -110,26 +110,23 @@ export const tickets = defineCollection({
 		}),
 	},
 	constraints: {
-		primary: constraint.primaryKey({ fields: ["id"] }),
+		primary: constraint.primaryKey({ fields: { id: true } }),
 		tenantReference: constraint.unique({
-			fields: ["organizationId", "reference"],
+			fields: { organizationId: true, reference: true },
 		}),
 	},
 	relations: {
 		team: relation.toOne({
 			target: teams,
-			fields: ["teamId"],
-			references: ["id"],
+			on: { teamId: "id" },
 		}),
 		requester: relation.toOne({
 			target: memberships,
-			fields: ["requesterMembershipId"],
-			references: ["id"],
+			on: { requesterMembershipId: "id" },
 		}),
 		assignee: relation.toOne({
 			target: memberships,
-			fields: ["assigneeMembershipId"],
-			references: ["id"],
+			on: { assigneeMembershipId: "id" },
 			onDelete: "setNull",
 		}),
 		// The child Collection declares `ticket: relation.toOne(...)` toward
@@ -150,15 +147,26 @@ export const tickets = defineCollection({
 	},
 	indexes: {
 		tenantUpdated: index({
-			fields: [
-				"organizationId",
-				{ field: "updatedAt", order: "desc", nulls: "last" },
-				{ field: "id", order: "desc", nulls: "last" },
-			],
+			fields: {
+				organizationId: true,
+				updatedAt: { direction: "desc", nulls: "last" },
+				id: { direction: "desc", nulls: "last" },
+			},
 		}),
 	},
 });
 ```
+
+Constraints, Relations, and Index all take the same object-mapping/picker
+shape `select` uses instead of positional arrays: `fields: { id: true }`
+picks a column set (authored key order is the column order); a Relation's
+`on: { localField: targetField }` maps join columns directly instead of two
+parallel `fields`/`references` arrays that must stay the same length and
+order; an Index's `fields` value is `true` for a plain ascending column or
+`{ direction, nulls }` for the same options `orderBy` already uses. No
+Accepted ADR fixes the old array spelling, so this is plain authoring sugar:
+either spelling compiles to byte-identical Schema Projection and migration
+bytes.
 
 ### Field provenance
 
@@ -282,7 +290,9 @@ composes into a larger selection.
 
 ### Relations in selections
 
-To-one relations nest `{ select }` and chain up to four hops:
+To-one relations nest `{ select }` and chain up to a bounded number of hops
+(candidate value 4 in current examples; the exact ceiling is an
+implementation measurement, not yet ratified — see the API reference):
 
 ```ts
 team: { select: { id: true, organization: { select: { name: true } } } },
@@ -607,9 +617,10 @@ The pieces:
   and re-runs Policy on current and candidate inside the transaction. An
   omitted `select` returns the complete scalar row.
 - `key` accepts the primary key or the complete column set of any declared
-  unique constraint, so a row with a natural identity (for example a
-  `unique(["ticketId", "membershipId"])` join row) is fetched or deleted
-  by that identity directly; no surrogate-id pre-lookup is needed.
+  unique constraint, so a row with a natural identity (for example a join
+  row with `constraint.unique({ fields: { ticketId: true, membershipId:
+true } })`) is fetched or deleted by that identity directly; no
+  surrogate-id pre-lookup is needed.
 - A `create` or `update` that loses a race to a declared unique constraint
   throws a typed `ConstraintViolation` carrying the declared constraint
   name and no raw database detail. Catch it and rethrow your declared
@@ -659,7 +670,6 @@ export const slaFollowUp = defineJob({
 	name: "ticket.slaFollowUp",
 	input: codec.object({
 		ticketId: codec.uuid(),
-		dueAt: codec.timestamp(),
 	}),
 	output: codec.object({
 		ticketId: codec.uuid(),
@@ -675,17 +685,20 @@ export const slaFollowUp = defineJob({
 		horizon: "1h",
 	}),
 	handler: async ({ input, ctx }) => {
-		await ctx.attempt.sleepUntil(input.dueAt);
+		// The delay already happened before this attempt ever started (see
+		// `notBefore` below) — the handler just does the work.
 		return { ticketId: input.ticketId, followedUpAt: ctx.attempt.now() };
 	},
 });
 ```
 
-Accept it inside a Mutation transaction:
+Accept it inside a Mutation transaction, delayed to the deadline:
 
 ```ts
+const dueAt = new Date(ctx.now.getTime() + 1_500);
 const job = await ctx.jobs.ticket.slaFollowUp.accept({
-	input: { ticketId: ticket.id, dueAt },
+	input: { ticketId: ticket.id },
+	notBefore: dueAt,
 });
 ```
 
@@ -693,7 +706,11 @@ The rules:
 
 - The acceptance envelope is one object:
   `{ input, idempotencyKey?, notBefore? }`. `notBefore` delays the run
-  until an absolute time.
+  until an absolute time: the Runtime dispatches no attempt, starts no
+  worker, and holds no lease before then. When a delay is the entire reason
+  a Job exists — as here — `notBefore` is the whole mechanism; do not accept
+  the Job immediately and `sleepUntil` the due time inside the handler,
+  which would hold a live attempt for the whole wait for no reason.
 - You may omit `idempotencyKey` only when the compiler can prove the
   callsite runs at most once per Mutation call. **Inside a loop, a batch,
   a shared helper, or any server-direct acceptance
@@ -716,10 +733,15 @@ The rules:
   the event loop, call `ctx.attempt.heartbeat()` periodically or check
   `ctx.signal`.
 - `ctx.attempt.now()` is the runtime-owned clock (ambient `Date.now()` is
-  rejected in structural code). `ctx.attempt.sleepUntil(date)` waits within
-  the current attempt; a target beyond the attempt budget is rejected with
-  a pointer to `notBefore`; after a crash the fresh attempt re-sleeps
-  toward the same absolute instant.
+  rejected in structural code). `ctx.attempt.sleepUntil(date)` is an
+  **advanced** control for a short pause inside an attempt that is already
+  running for some other reason; it is not durable scheduling — it holds a
+  live worker and lease for the wait, a target beyond the attempt budget is
+  rejected with a pointer to `notBefore`, and after a crash the fresh
+  attempt re-sleeps toward the same absolute instant rather than resuming
+  a saved wait. If the delay is the reason the Job exists, accept it with
+  `notBefore` instead (as above); reach for `sleepUntil` only for a bounded
+  pause a handler needs mid-attempt.
 - Retry follows the declared bounded program; cancellation is cooperative
   and durable. Browser code has no Job surface; expose user-visible status
   or cancellation as ordinary Policy-protected Queries and Mutations.
@@ -855,6 +877,11 @@ export const ticketDetail = defineQuery({
   `Idempotency-Key` request header as the Mutation's call identity; you do
   not declare it. HTTP retries carrying the same key recover the committed
   result instead of double-writing.
+- If a Mutation commits but the response is lost, HTTP reports it as
+  `500` with the accepted ADR-0023 body (`code`, `retryable: true`,
+  `transactionId`, plus `callId`) — never a generic sanitized `500` and never
+  a different status. Replay the same request with the same
+  `Idempotency-Key` to recover the receipt.
 - MCP tools run through the same Policy and limits as every other call;
   `readOnly` is a hint for clients, never authorization.
 - OpenAPI is generated from HTTP-projected Operations and from Routes that
