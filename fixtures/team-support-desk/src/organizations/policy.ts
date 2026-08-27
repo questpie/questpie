@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
 import { organizations } from "../organizations";
@@ -8,10 +8,10 @@ export const organizationPolicy = definePolicy(organizations, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			query.and(
+			expr.and(
 				row.id.equal(tenant.id),
-				policy.exists(memberships, ({ row: membership }) =>
-					query.and(
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
 						membership.organizationId.equal(row.id),
 						membership.principalId.equal(principal.id),
 						membership.status.equal("active"),

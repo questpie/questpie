@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { channels } from "./channels";
 import { companies } from "./companies";
@@ -10,18 +10,18 @@ import { spaces } from "./spaces";
 const readableMessageRows = policy.rows(
 	messages,
 	({ row: message, principal, tenant }) =>
-		policy.exists(channels, ({ row: channel }) =>
-			query.and(
+		expr.exists(channels, ({ row: channel }) =>
+			expr.and(
 				channel.id.equal(message.channelId),
-				policy.exists(spaces, ({ row: space }) =>
-					query.and(
+				expr.exists(spaces, ({ row: space }) =>
+					expr.and(
 						space.id.equal(channel.spaceId),
-						policy.exists(companies, ({ row: company }) =>
-							query.and(
+						expr.exists(companies, ({ row: company }) =>
+							expr.and(
 								company.id.equal(space.companyId),
 								company.id.equal(tenant.id),
-								policy.exists(memberships, ({ row: membership }) =>
-									query.and(
+								expr.exists(memberships, ({ row: membership }) =>
+									expr.and(
 										membership.companyId.equal(company.id),
 										membership.principalId.equal(principal.id),
 										membership.scopeKey.equal("company"),
@@ -45,20 +45,20 @@ export const messagePolicy = definePolicy(messages, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			query.and(
-				policy.exists(channels, ({ row: channel }) =>
-					query.and(
+			expr.and(
+				expr.exists(channels, ({ row: channel }) =>
+					expr.and(
 						channel.id.equal(candidate.channelId),
-						policy.exists(spaces, ({ row: space }) =>
-							query.and(
+						expr.exists(spaces, ({ row: space }) =>
+							expr.and(
 								space.id.equal(channel.spaceId),
 								space.companyId.equal(tenant.id),
 							),
 						),
 					),
 				),
-				policy.exists(memberships, ({ row: membership }) =>
-					query.and(
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
 						membership.id.equal(candidate.authorMembershipId),
 						membership.companyId.equal(tenant.id),
 						membership.principalId.equal(principal.id),
@@ -70,8 +70,8 @@ export const messagePolicy = definePolicy(messages, {
 	},
 	fields: {
 		create: ({ candidate, principal, tenant }) => ({
-			authorMembershipId: policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			authorMembershipId: expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.id.equal(candidate.authorMembershipId),
 					membership.companyId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
@@ -79,8 +79,8 @@ export const messagePolicy = definePolicy(messages, {
 					membership.status.equal("active"),
 				),
 			),
-			channelId: policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			channelId: expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.companyId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
 					membership.scopeKey.equal("company"),
@@ -88,8 +88,8 @@ export const messagePolicy = definePolicy(messages, {
 					candidate.channelId.notEqual("00000000-0000-0000-0000-000000000000"),
 				),
 			),
-			body: policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			body: expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.companyId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
 					membership.scopeKey.equal("company"),
@@ -98,8 +98,8 @@ export const messagePolicy = definePolicy(messages, {
 			),
 		}),
 		output: ({ row, principal, tenant }) => ({
-			body: policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			body: expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.companyId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
 					membership.scopeKey.equal("company"),
@@ -117,12 +117,12 @@ export const channelPolicy = definePolicy(channels, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row: channel, principal, tenant }) =>
-			policy.exists(spaces, ({ row: space }) =>
-				query.and(
+			expr.exists(spaces, ({ row: space }) =>
+				expr.and(
 					space.id.equal(channel.spaceId),
 					space.companyId.equal(tenant.id),
-					policy.exists(memberships, ({ row: membership }) =>
-						query.and(
+					expr.exists(memberships, ({ row: membership }) =>
+						expr.and(
 							membership.companyId.equal(tenant.id),
 							membership.principalId.equal(principal.id),
 							membership.scopeKey.equal("company"),
@@ -139,10 +139,10 @@ export const spacePolicy = definePolicy(spaces, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row: space, principal, tenant }) =>
-			query.and(
+			expr.and(
 				space.companyId.equal(tenant.id),
-				policy.exists(memberships, ({ row: membership }) =>
-					query.and(
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
 						membership.companyId.equal(tenant.id),
 						membership.principalId.equal(principal.id),
 						membership.scopeKey.equal("company"),
@@ -158,18 +158,18 @@ export const messageEventPolicy = definePolicy(messageEvents, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			policy.exists(messages, ({ row: message }) =>
-				query.and(
+			expr.exists(messages, ({ row: message }) =>
+				expr.and(
 					message.id.equal(candidate.messageId),
-					policy.exists(channels, ({ row: channel }) =>
-						query.and(
+					expr.exists(channels, ({ row: channel }) =>
+						expr.and(
 							channel.id.equal(message.channelId),
-							policy.exists(spaces, ({ row: space }) =>
-								query.and(
+							expr.exists(spaces, ({ row: space }) =>
+								expr.and(
 									space.id.equal(channel.spaceId),
 									space.companyId.equal(tenant.id),
-									policy.exists(memberships, ({ row: membership }) =>
-										query.and(
+									expr.exists(memberships, ({ row: membership }) =>
+										expr.and(
 											membership.companyId.equal(tenant.id),
 											membership.principalId.equal(principal.id),
 											membership.scopeKey.equal("company"),
@@ -185,8 +185,8 @@ export const messageEventPolicy = definePolicy(messageEvents, {
 	},
 	fields: {
 		create: ({ candidate, principal, tenant }) => ({
-			messageId: policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			messageId: expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.companyId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
 					membership.scopeKey.equal("company"),

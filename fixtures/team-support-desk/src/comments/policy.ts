@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { comments } from "../comments";
 import { memberships } from "../memberships";
@@ -9,18 +9,18 @@ export const commentPolicy = definePolicy(comments, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			policy.exists(tickets, ({ row: ticket }) =>
-				query.and(
+			expr.exists(tickets, ({ row: ticket }) =>
+				expr.and(
 					ticket.id.equal(row.ticketId),
 					ticket.organizationId.equal(tenant.id),
-					policy.exists(memberships, ({ row: membership }) =>
-						query.and(
+					expr.exists(memberships, ({ row: membership }) =>
+						expr.and(
 							membership.organizationId.equal(tenant.id),
 							membership.principalId.equal(principal.id),
 							membership.status.equal("active"),
-							query.or(
+							expr.or(
 								membership.role.in(["agent", "admin"]),
-								query.and(
+								expr.and(
 									membership.role.equal("customer"),
 									ticket.requesterMembershipId.equal(membership.id),
 								),
@@ -33,35 +33,35 @@ export const commentPolicy = definePolicy(comments, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			query.and(
+			expr.and(
 				candidate.kind.in(["public", "internal"]),
-				policy.exists(memberships, ({ row: author }) =>
-					query.and(
+				expr.exists(memberships, ({ row: author }) =>
+					expr.and(
 						author.id.equal(candidate.authorMembershipId),
 						author.organizationId.equal(tenant.id),
 						author.principalId.equal(principal.id),
 						author.status.equal("active"),
-						query.or(
+						expr.or(
 							candidate.kind.equal("public"),
-							query.and(
+							expr.and(
 								candidate.kind.equal("internal"),
 								author.role.in(["agent", "admin"]),
 							),
 						),
 					),
 				),
-				policy.exists(tickets, ({ row: ticket }) =>
-					query.and(
+				expr.exists(tickets, ({ row: ticket }) =>
+					expr.and(
 						ticket.id.equal(candidate.ticketId),
 						ticket.organizationId.equal(tenant.id),
-						policy.exists(memberships, ({ row: membership }) =>
-							query.and(
+						expr.exists(memberships, ({ row: membership }) =>
+							expr.and(
 								membership.organizationId.equal(tenant.id),
 								membership.principalId.equal(principal.id),
 								membership.status.equal("active"),
-								query.or(
+								expr.or(
 									membership.role.in(["agent", "admin"]),
-									query.and(
+									expr.and(
 										membership.role.equal("customer"),
 										ticket.requesterMembershipId.equal(membership.id),
 									),
@@ -74,8 +74,8 @@ export const commentPolicy = definePolicy(comments, {
 	},
 	fields: {
 		create: ({ candidate, principal, tenant }) => {
-			const activeAuthor = policy.exists(memberships, ({ row: author }) =>
-				query.and(
+			const activeAuthor = expr.exists(memberships, ({ row: author }) =>
+				expr.and(
 					author.id.equal(candidate.authorMembershipId),
 					author.organizationId.equal(tenant.id),
 					author.principalId.equal(principal.id),

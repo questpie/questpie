@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
 
@@ -7,12 +7,12 @@ export const membershipPolicy = definePolicy(memberships, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			query.and(
+			expr.and(
 				row.organizationId.equal(tenant.id),
-				query.or(
+				expr.or(
 					row.principalId.equal(principal.id),
-					policy.exists(memberships, ({ row: actor }) =>
-						query.and(
+					expr.exists(memberships, ({ row: actor }) =>
+						expr.and(
 							actor.organizationId.equal(tenant.id),
 							actor.principalId.equal(principal.id),
 							actor.status.equal("active"),
@@ -25,10 +25,10 @@ export const membershipPolicy = definePolicy(memberships, {
 	update: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: actor }) =>
-					query.and(
+				expr.exists(memberships, ({ row: actor }) =>
+					expr.and(
 						actor.organizationId.equal(tenant.id),
 						actor.principalId.equal(principal.id),
 						actor.status.equal("active"),
@@ -37,7 +37,7 @@ export const membershipPolicy = definePolicy(memberships, {
 				),
 			),
 		candidate: ({ current, candidate }) =>
-			query.and(
+			expr.and(
 				candidate.id.equal(current.id),
 				candidate.organizationId.equal(current.organizationId),
 				candidate.principalId.equal(current.principalId),
@@ -48,8 +48,8 @@ export const membershipPolicy = definePolicy(memberships, {
 	},
 	fields: {
 		update: ({ principal, tenant }) => {
-			const admin = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const admin = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.organizationId.equal(tenant.id),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),
@@ -59,7 +59,7 @@ export const membershipPolicy = definePolicy(memberships, {
 			return {
 				role: admin,
 				status: admin,
-				updatedAt: query.not(query.always()),
+				updatedAt: expr.not(expr.always()),
 			};
 		},
 	},

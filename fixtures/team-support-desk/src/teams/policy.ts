@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
 import { teams } from "../teams";
@@ -8,10 +8,10 @@ export const teamPolicy = definePolicy(teams, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			query.and(
+			expr.and(
 				row.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: membership }) =>
-					query.and(
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
 						membership.organizationId.equal(tenant.id),
 						membership.principalId.equal(principal.id),
 						membership.status.equal("active"),
@@ -22,10 +22,10 @@ export const teamPolicy = definePolicy(teams, {
 	update: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: actor }) =>
-					query.and(
+				expr.exists(memberships, ({ row: actor }) =>
+					expr.and(
 						actor.organizationId.equal(tenant.id),
 						actor.principalId.equal(principal.id),
 						actor.status.equal("active"),
@@ -34,7 +34,7 @@ export const teamPolicy = definePolicy(teams, {
 				),
 			),
 		candidate: ({ current, candidate }) =>
-			query.and(
+			expr.and(
 				candidate.id.equal(current.id),
 				candidate.organizationId.equal(current.organizationId),
 				candidate.createdAt.equal(current.createdAt),
@@ -43,8 +43,8 @@ export const teamPolicy = definePolicy(teams, {
 	},
 	fields: {
 		update: ({ principal, tenant }) => {
-			const staff = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const staff = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.organizationId.equal(tenant.id),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),
@@ -54,7 +54,7 @@ export const teamPolicy = definePolicy(teams, {
 			return {
 				name: staff,
 				routingStatus: staff,
-				updatedAt: query.not(query.always()),
+				updatedAt: expr.not(expr.always()),
 			};
 		},
 	},

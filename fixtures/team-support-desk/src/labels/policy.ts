@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { labels } from "../labels";
 import { memberships } from "../memberships";
@@ -9,20 +9,20 @@ export const labelPolicy = definePolicy(labels, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			query.and(
+			expr.and(
 				row.organizationId.equal(tenant.id),
-				policy.exists(tickets, ({ row: ticket }) =>
-					query.and(
+				expr.exists(tickets, ({ row: ticket }) =>
+					expr.and(
 						ticket.id.equal(row.ticketId),
 						ticket.organizationId.equal(tenant.id),
-						policy.exists(memberships, ({ row: membership }) =>
-							query.and(
+						expr.exists(memberships, ({ row: membership }) =>
+							expr.and(
 								membership.organizationId.equal(tenant.id),
 								membership.principalId.equal(principal.id),
 								membership.status.equal("active"),
-								query.or(
+								expr.or(
 									membership.role.in(["agent", "admin"]),
-									query.and(
+									expr.and(
 										membership.role.equal("customer"),
 										ticket.requesterMembershipId.equal(membership.id),
 									),
@@ -36,16 +36,16 @@ export const labelPolicy = definePolicy(labels, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			query.and(
+			expr.and(
 				candidate.organizationId.equal(tenant.id),
-				policy.exists(tickets, ({ row: ticket }) =>
-					query.and(
+				expr.exists(tickets, ({ row: ticket }) =>
+					expr.and(
 						ticket.id.equal(candidate.ticketId),
 						ticket.organizationId.equal(tenant.id),
 					),
 				),
-				policy.exists(memberships, ({ row: actor }) =>
-					query.and(
+				expr.exists(memberships, ({ row: actor }) =>
+					expr.and(
 						actor.organizationId.equal(tenant.id),
 						actor.principalId.equal(principal.id),
 						actor.status.equal("active"),
@@ -57,10 +57,10 @@ export const labelPolicy = definePolicy(labels, {
 	update: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: actor }) =>
-					query.and(
+				expr.exists(memberships, ({ row: actor }) =>
+					expr.and(
 						actor.organizationId.equal(tenant.id),
 						actor.principalId.equal(principal.id),
 						actor.status.equal("active"),
@@ -69,7 +69,7 @@ export const labelPolicy = definePolicy(labels, {
 				),
 			),
 		candidate: ({ current, candidate }) =>
-			query.and(
+			expr.and(
 				candidate.id.equal(current.id),
 				candidate.organizationId.equal(current.organizationId),
 				candidate.ticketId.equal(current.ticketId),
@@ -79,10 +79,10 @@ export const labelPolicy = definePolicy(labels, {
 	delete: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: actor }) =>
-					query.and(
+				expr.exists(memberships, ({ row: actor }) =>
+					expr.and(
 						actor.organizationId.equal(tenant.id),
 						actor.principalId.equal(principal.id),
 						actor.status.equal("active"),
@@ -93,8 +93,8 @@ export const labelPolicy = definePolicy(labels, {
 	},
 	fields: {
 		create: ({ principal, tenant }) => {
-			const admin = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const admin = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.organizationId.equal(tenant.id),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),
@@ -108,8 +108,8 @@ export const labelPolicy = definePolicy(labels, {
 			};
 		},
 		update: ({ principal, tenant }) => {
-			const admin = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const admin = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.organizationId.equal(tenant.id),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),

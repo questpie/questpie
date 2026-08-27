@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { memberships } from "../memberships";
 import { teams } from "../teams";
@@ -7,16 +7,16 @@ import { tickets } from "../tickets";
 const readableTicketRows = policy.rows(
 	tickets,
 	({ row: ticket, principal, tenant }) =>
-		query.and(
+		expr.and(
 			ticket.organizationId.equal(tenant.id),
-			policy.exists(memberships, ({ row: membership }) =>
-				query.and(
+			expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
 					membership.organizationId.equal(tenant.id),
 					membership.principalId.equal(principal.id),
 					membership.status.equal("active"),
-					query.or(
+					expr.or(
 						membership.role.in(["agent", "admin"]),
-						query.and(
+						expr.and(
 							membership.role.equal("customer"),
 							ticket.requesterMembershipId.equal(membership.id),
 						),
@@ -32,30 +32,30 @@ export const ticketPolicy = definePolicy(tickets, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			query.and(
+			expr.and(
 				candidate.organizationId.equal(tenant.id),
 				candidate.priority.in(["low", "normal", "high", "urgent"]),
 				candidate.status.equal("open"),
 				candidate.closedAt.isNull(),
 				candidate.lastSlaFollowUpAt.isNull(),
-				policy.exists(teams, ({ row: team }) =>
-					query.and(
+				expr.exists(teams, ({ row: team }) =>
+					expr.and(
 						team.id.equal(candidate.teamId),
 						team.organizationId.equal(tenant.id),
 					),
 				),
-				policy.exists(memberships, ({ row: requester }) =>
-					query.and(
+				expr.exists(memberships, ({ row: requester }) =>
+					expr.and(
 						requester.id.equal(candidate.requesterMembershipId),
 						requester.organizationId.equal(tenant.id),
 						requester.principalId.equal(principal.id),
 						requester.status.equal("active"),
 					),
 				),
-				query.or(
+				expr.or(
 					candidate.assigneeMembershipId.isNull(),
-					policy.exists(memberships, ({ row: assignee }) =>
-						query.and(
+					expr.exists(memberships, ({ row: assignee }) =>
+						expr.and(
 							assignee.id.equal(candidate.assigneeMembershipId),
 							assignee.organizationId.equal(tenant.id),
 							assignee.status.equal("active"),
@@ -68,16 +68,16 @@ export const ticketPolicy = definePolicy(tickets, {
 	update: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.organizationId.equal(tenant.id),
-				policy.exists(memberships, ({ row: membership }) =>
-					query.and(
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
 						membership.organizationId.equal(tenant.id),
 						membership.principalId.equal(principal.id),
 						membership.status.equal("active"),
-						query.or(
+						expr.or(
 							membership.role.in(["agent", "admin"]),
-							query.and(
+							expr.and(
 								membership.role.equal("customer"),
 								current.requesterMembershipId.equal(membership.id),
 							),
@@ -86,50 +86,50 @@ export const ticketPolicy = definePolicy(tickets, {
 				),
 			),
 		candidate: ({ current, candidate, principal, tenant }) =>
-			query.and(
+			expr.and(
 				candidate.id.equal(current.id),
 				candidate.organizationId.equal(current.organizationId),
 				candidate.requesterMembershipId.equal(current.requesterMembershipId),
 				candidate.createdAt.equal(current.createdAt),
 				candidate.priority.in(["low", "normal", "high", "urgent"]),
 				candidate.status.in(["open", "closed"]),
-				query.or(
-					query.and(
+				expr.or(
+					expr.and(
 						current.status.equal("open"),
 						current.closedAt.isNull(),
 						candidate.status.equal("open"),
 						candidate.closedAt.isNull(),
 					),
-					query.and(
+					expr.and(
 						current.status.equal("closed"),
-						query.not(current.closedAt.isNull()),
+						expr.not(current.closedAt.isNull()),
 						candidate.status.equal("closed"),
-						query.not(candidate.closedAt.isNull()),
+						expr.not(candidate.closedAt.isNull()),
 						candidate.closedAt.equal(current.closedAt),
 					),
-					query.and(
+					expr.and(
 						current.status.equal("open"),
 						current.closedAt.isNull(),
 						candidate.status.equal("closed"),
-						query.not(candidate.closedAt.isNull()),
+						expr.not(candidate.closedAt.isNull()),
 					),
-					query.and(
+					expr.and(
 						current.status.equal("closed"),
-						query.not(current.closedAt.isNull()),
+						expr.not(current.closedAt.isNull()),
 						candidate.status.equal("open"),
 						candidate.closedAt.isNull(),
 					),
 				),
-				policy.exists(teams, ({ row: team }) =>
-					query.and(
+				expr.exists(teams, ({ row: team }) =>
+					expr.and(
 						team.id.equal(candidate.teamId),
 						team.organizationId.equal(tenant.id),
 					),
 				),
-				query.or(
+				expr.or(
 					candidate.assigneeMembershipId.isNull(),
-					policy.exists(memberships, ({ row: assignee }) =>
-						query.and(
+					expr.exists(memberships, ({ row: assignee }) =>
+						expr.and(
 							assignee.id.equal(candidate.assigneeMembershipId),
 							assignee.organizationId.equal(tenant.id),
 							assignee.status.equal("active"),
@@ -137,17 +137,17 @@ export const ticketPolicy = definePolicy(tickets, {
 						),
 					),
 				),
-				query.or(
-					policy.exists(memberships, ({ row: actor }) =>
-						query.and(
+				expr.or(
+					expr.exists(memberships, ({ row: actor }) =>
+						expr.and(
 							actor.organizationId.equal(tenant.id),
 							actor.principalId.equal(principal.id),
 							actor.status.equal("active"),
 							actor.role.in(["agent", "admin"]),
 						),
 					),
-					policy.exists(memberships, ({ row: actor }) =>
-						query.and(
+					expr.exists(memberships, ({ row: actor }) =>
+						expr.and(
 							actor.id.equal(current.requesterMembershipId),
 							actor.principalId.equal(principal.id),
 							actor.status.equal("active"),
@@ -157,27 +157,27 @@ export const ticketPolicy = definePolicy(tickets, {
 							candidate.priority.equal(current.priority),
 							candidate.status.equal(current.status),
 							candidate.closedAt.isNull(),
-							query.or(
-								query.and(
+							expr.or(
+								expr.and(
 									candidate.assigneeMembershipId.isNull(),
 									current.assigneeMembershipId.isNull(),
 								),
-								query.and(
-									query.not(candidate.assigneeMembershipId.isNull()),
-									query.not(current.assigneeMembershipId.isNull()),
+								expr.and(
+									expr.not(candidate.assigneeMembershipId.isNull()),
+									expr.not(current.assigneeMembershipId.isNull()),
 									candidate.assigneeMembershipId.equal(
 										current.assigneeMembershipId,
 									),
 								),
 							),
-							query.or(
-								query.and(
+							expr.or(
+								expr.and(
 									candidate.lastSlaFollowUpAt.isNull(),
 									current.lastSlaFollowUpAt.isNull(),
 								),
-								query.and(
-									query.not(candidate.lastSlaFollowUpAt.isNull()),
-									query.not(current.lastSlaFollowUpAt.isNull()),
+								expr.and(
+									expr.not(candidate.lastSlaFollowUpAt.isNull()),
+									expr.not(current.lastSlaFollowUpAt.isNull()),
 									candidate.lastSlaFollowUpAt.equal(current.lastSlaFollowUpAt),
 								),
 							),
@@ -188,8 +188,8 @@ export const ticketPolicy = definePolicy(tickets, {
 	},
 	fields: {
 		create: ({ candidate, principal, tenant }) => {
-			const activeRequester = policy.exists(memberships, ({ row: requester }) =>
-				query.and(
+			const activeRequester = expr.exists(memberships, ({ row: requester }) =>
+				expr.and(
 					requester.id.equal(candidate.requesterMembershipId),
 					requester.organizationId.equal(tenant.id),
 					requester.principalId.equal(principal.id),
@@ -208,16 +208,16 @@ export const ticketPolicy = definePolicy(tickets, {
 			};
 		},
 		update: ({ current, principal, tenant }) => {
-			const staff = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const staff = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.organizationId.equal(tenant.id),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),
 					actor.role.in(["agent", "admin"]),
 				),
 			);
-			const requester = policy.exists(memberships, ({ row: actor }) =>
-				query.and(
+			const requester = expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
 					actor.id.equal(current.requesterMembershipId),
 					actor.principalId.equal(principal.id),
 					actor.status.equal("active"),
@@ -225,7 +225,7 @@ export const ticketPolicy = definePolicy(tickets, {
 					current.status.equal("open"),
 				),
 			);
-			const editableText = query.or(staff, requester);
+			const editableText = expr.or(staff, requester);
 			return {
 				summary: editableText,
 				description: editableText,
@@ -234,8 +234,8 @@ export const ticketPolicy = definePolicy(tickets, {
 				priority: staff,
 				status: staff,
 				closedAt: staff,
-				lastSlaFollowUpAt: query.not(query.always()),
-				updatedAt: query.not(query.always()),
+				lastSlaFollowUpAt: expr.not(expr.always()),
+				updatedAt: expr.not(expr.always()),
 			};
 		},
 	},

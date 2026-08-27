@@ -1,4 +1,4 @@
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 
 import { embargoes } from "./embargoes";
 import { provenance } from "./provenance";
@@ -10,12 +10,12 @@ export const recordPolicy = definePolicy(records, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row: record, principal }) =>
-			query.or(
-				query.and(
+			expr.or(
+				expr.and(
 					record.visibility.equal("public"),
-					query.not(
-						policy.exists(embargoes, ({ row: embargo }) =>
-							query.and(
+					expr.not(
+						expr.exists(embargoes, ({ row: embargo }) =>
+							expr.and(
 								embargo.archiveCode.equal(record.archiveCode),
 								embargo.catalogueNumber.equal(record.catalogueNumber),
 								embargo.status.equal("active"),
@@ -23,8 +23,8 @@ export const recordPolicy = definePolicy(records, {
 						),
 					),
 				),
-				policy.exists(researchPermits, ({ row: permit }) =>
-					query.and(
+				expr.exists(researchPermits, ({ row: permit }) =>
+					expr.and(
 						permit.programmeCode.equal("programme-linguistics"),
 						permit.archiveCode.equal(record.archiveCode),
 						permit.principalId.equal(principal.id),
@@ -36,8 +36,8 @@ export const recordPolicy = definePolicy(records, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal }) =>
-			policy.exists(researchPermits, ({ row: permit }) =>
-				query.and(
+			expr.exists(researchPermits, ({ row: permit }) =>
+				expr.and(
 					permit.programmeCode.equal("programme-linguistics"),
 					permit.archiveCode.equal(candidate.archiveCode),
 					permit.principalId.equal(principal.id),
@@ -48,15 +48,15 @@ export const recordPolicy = definePolicy(records, {
 	},
 	fields: {
 		create: () => ({
-			archiveCode: query.always(),
-			catalogueNumber: query.always(),
-			visibility: query.always(),
-			title: query.always(),
-			body: query.always(),
+			archiveCode: expr.always(),
+			catalogueNumber: expr.always(),
+			visibility: expr.always(),
+			title: expr.always(),
+			body: expr.always(),
 		}),
 		output: ({ row: record, principal }) => ({
-			body: policy.exists(researchPermits, ({ row: permit }) =>
-				query.and(
+			body: expr.exists(researchPermits, ({ row: permit }) =>
+				expr.and(
 					permit.programmeCode.equal("programme-linguistics"),
 					permit.archiveCode.equal(record.archiveCode),
 					permit.principalId.equal(principal.id),
@@ -73,8 +73,8 @@ export const provenancePolicy = definePolicy(provenance, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal }) =>
-			policy.exists(researchPermits, ({ row: permit }) =>
-				query.and(
+			expr.exists(researchPermits, ({ row: permit }) =>
+				expr.and(
 					permit.programmeCode.equal("programme-linguistics"),
 					permit.archiveCode.equal(row.archiveCode),
 					permit.principalId.equal(principal.id),
@@ -85,8 +85,8 @@ export const provenancePolicy = definePolicy(provenance, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal }) =>
-			policy.exists(researchPermits, ({ row: permit }) =>
-				query.and(
+			expr.exists(researchPermits, ({ row: permit }) =>
+				expr.and(
 					permit.programmeCode.equal("programme-linguistics"),
 					permit.archiveCode.equal(candidate.archiveCode),
 					permit.principalId.equal(principal.id),
@@ -96,11 +96,11 @@ export const provenancePolicy = definePolicy(provenance, {
 	},
 	fields: {
 		create: () => ({
-			archiveCode: query.always(),
-			catalogueNumber: query.always(),
-			sequence: query.always(),
-			kind: query.always(),
-			note: query.always(),
+			archiveCode: expr.always(),
+			catalogueNumber: expr.always(),
+			sequence: expr.always(),
+			kind: expr.always(),
+			note: expr.always(),
 		}),
 	},
 });
