@@ -33,15 +33,21 @@ function fieldsFor(
 		.sort();
 }
 
-function exactLane(
+function decodeExact(schema: Schema, values: ValueMap): void {
+	for (const name of Object.keys(values)) {
+		if (!schema[name]) throw new TypeError(`unknown Field: ${name}`);
+	}
+}
+
+function authorizeLane(
 	schema: Schema,
 	mode: WriteMode,
 	lane: Lane,
 	values: ValueMap,
 ): void {
 	for (const name of Object.keys(values)) {
-		const field = schema[name];
-		if (!field || !accepts(field, mode, lane)) {
+		const field = schema[name]!;
+		if (!accepts(field, mode, lane)) {
 			throw new TypeError(`unsupported ${lane} Field: ${name}`);
 		}
 	}
@@ -67,6 +73,8 @@ type UpdateOptions = Readonly<{
 function update(options: UpdateOptions): ValueMap {
 	const patch = options.patch ?? {};
 	const values = options.values ?? {};
+	decodeExact(options.schema, patch);
+	decodeExact(options.schema, values);
 	for (const name of Object.keys(patch)) {
 		if (Object.hasOwn(values, name)) {
 			throw new TypeError(`Field appears in patch and values: ${name}`);
@@ -75,8 +83,8 @@ function update(options: UpdateOptions): ValueMap {
 	if (Object.keys(patch).length === 0 && Object.keys(values).length === 0) {
 		throw new TypeError("empty update");
 	}
-	exactLane(options.schema, "update", "caller", patch);
-	exactLane(options.schema, "update", "values", values);
+	authorizeLane(options.schema, "update", "caller", patch);
+	authorizeLane(options.schema, "update", "values", values);
 	const candidate = Object.freeze({
 		...options.current,
 		...normalizeLane(options.schema, patch),
@@ -97,13 +105,15 @@ function create(
 ): ValueMap {
 	const input = options.input ?? {};
 	const values = options.values ?? {};
+	decodeExact(options.schema, input);
+	decodeExact(options.schema, values);
 	for (const name of Object.keys(input)) {
 		if (Object.hasOwn(values, name)) {
 			throw new TypeError(`Field appears in input and values: ${name}`);
 		}
 	}
-	exactLane(options.schema, "create", "caller", input);
-	exactLane(options.schema, "create", "values", values);
+	authorizeLane(options.schema, "create", "caller", input);
+	authorizeLane(options.schema, "create", "values", values);
 	const candidateDraft: Record<string, unknown> = {
 		...normalizeLane(options.schema, input),
 	};
@@ -216,6 +226,17 @@ throws(
 			policy: () => true,
 		}),
 	/Field appears in patch and values: summary/,
+);
+throws(
+	() =>
+		update({
+			schema: tickets,
+			current,
+			patch: { ghost: "caller" },
+			values: { ghost: "trusted" },
+			policy: () => true,
+		}),
+	/unknown Field: ghost/,
 );
 throws(
 	() =>
