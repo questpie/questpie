@@ -9,9 +9,17 @@
 > [ADR-0026](./0026-freeze-action-and-unify-checkpointed-work-in-job.md).
 > `defineWorkflow` and a separate Workflow projection are not current or
 > deferred public surface; their closed durable semantics belong to Job.
+>
+> The permanent separation implied by the `query` and Policy expression
+> namespaces is superseded by
+> [ADR-0029](./0029-unify-policy-expression-authoring.md). One
+> capability-branded `expr` vocabulary now serves Query and Policy;
+> Policy-only `expr.exists` retains boolean-only evidence semantics. The
+> Query-only `query` surface remains temporarily until the separate S7
+> migration.
 
-- Status: Accepted; Channel clauses superseded by ADR-0025 and Workflow clauses
-  superseded by ADR-0026
+- Status: Accepted; Channel clauses superseded by ADR-0025, Workflow clauses
+  superseded by ADR-0026, and expression-surface clauses superseded by ADR-0029
 - Date: 2026-08-13
 
 ## Context

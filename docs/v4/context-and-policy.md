@@ -6,7 +6,7 @@
 - Scope: Context Resolution, immutable root Execution facts, bounded bootstrap,
   Collection Policy, relational evidence, SQL row-scope lowering,
   nondisclosure, and execution-surface parity
-- Authority: ADR-0010 and proof head
+- Authority: ADR-0010, ADR-0029, and proof head
   `5fbd9058e1cfb3bfef56f11a1d0ec7b6e14e88fa`
 
 ## Boundary
@@ -119,7 +119,7 @@ resolved Context.
 ## Collection-bound Policy
 
 `definePolicy(collection, body)` gets its exact target row type from the
-Collection value. `policy.exists(collection, predicate)` gets each nested row
+Collection value. `expr.exists(collection, predicate)` gets each nested row
 type from its own Collection argument. Neither interface needs a whole-App
 generic, ambient registry, ORM type, manual generic, or handler-selected map.
 
@@ -164,24 +164,26 @@ replaced with `null`.
 ## Relational evidence and disclosure
 
 The accepted graph authorizes Message through Channel, Space, Company, and
-Membership. Correlated `policy.exists` is a boolean-only evidence expression:
+Membership. Correlated `expr.exists` is a boolean-only Policy Evidence Read:
 
 ```ts
+import { expr, policy } from "questpie";
+
 const readableMessageRows = policy.rows(
 	messages,
 	({ row: message, principal, tenant }) =>
-		policy.exists(channels, ({ row: channel }) =>
-			query.and(
+		expr.exists(channels, ({ row: channel }) =>
+			expr.and(
 				channel.id.equal(message.channelId),
-				policy.exists(spaces, ({ row: space }) =>
-					query.and(
+				expr.exists(spaces, ({ row: space }) =>
+					expr.and(
 						space.id.equal(channel.spaceId),
-						policy.exists(companies, ({ row: company }) =>
-							query.and(
+						expr.exists(companies, ({ row: company }) =>
+							expr.and(
 								company.id.equal(space.companyId),
 								company.id.equal(tenant.id),
-								policy.exists(memberships, ({ row: membership }) =>
-									query.and(
+								expr.exists(memberships, ({ row: membership }) =>
+									expr.and(
 										membership.companyId.equal(company.id),
 										membership.principalId.equal(principal.id),
 										membership.scopeKey.equal("company"),
@@ -209,6 +211,19 @@ correlations, and dependency paths. Membership create/delete and role, status,
 or scope changes are observable Policy dependencies. A role copied into
 resolved Context is convenient display or branching data, never current
 authorization evidence.
+
+`expr.and`, `expr.or`, `expr.not`, `expr.always`, and `expr.never` compose
+boolean expressions over one normalized relational AST. Field operands keep
+their typed comparison methods. `expr.exists` is capability-branded for Policy
+only; using it in a Query filter fails compilation with
+`QP-DATA-025 unsupportedExpressionCapability`. `policy.authenticated`,
+`policy.public`, and `policy.rows` remain Policy-specific constructors.
+
+Author-time composition uses ordinary TypeScript wherever possible. Named
+functions and TypeScript branching may return supported expressions, but a
+Policy callback cannot perform per-row JavaScript, I/O, database or Service
+calls, or raw SQL. The retained Query-only `query` namespace lowers to the same
+AST only until the separate S7 migration; it is not a permanent alias.
 
 ## SQL enforcement and paging
 

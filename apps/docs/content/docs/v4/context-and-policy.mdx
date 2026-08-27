@@ -249,7 +249,7 @@ instead of replacing its Context.
 Bind a closed Policy expression to its target Collection:
 
 ```ts title="src/features/messages-policy.ts"
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 import {
 	channels,
 	companies,
@@ -261,18 +261,18 @@ import {
 const readableMessageRows = policy.rows(
 	messages,
 	({ row: message, principal, tenant }) =>
-		policy.exists(channels, ({ row: channel }) =>
-			query.and(
+		expr.exists(channels, ({ row: channel }) =>
+			expr.and(
 				channel.id.equal(message.channelId),
-				policy.exists(spaces, ({ row: space }) =>
-					query.and(
+				expr.exists(spaces, ({ row: space }) =>
+					expr.and(
 						space.id.equal(channel.spaceId),
-						policy.exists(companies, ({ row: company }) =>
-							query.and(
+						expr.exists(companies, ({ row: company }) =>
+							expr.and(
 								company.id.equal(space.companyId),
 								company.id.equal(tenant.id),
-								policy.exists(memberships, ({ row: membership }) =>
-									query.and(
+								expr.exists(memberships, ({ row: membership }) =>
+									expr.and(
 										membership.companyId.equal(company.id),
 										membership.principalId.equal(principal.id),
 										membership.scopeKey.equal("company"),
@@ -296,16 +296,16 @@ export const messagePolicy = definePolicy(messages, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			policy.exists(channels, ({ row: channel }) =>
-				query.and(
+			expr.exists(channels, ({ row: channel }) =>
+				expr.and(
 					channel.id.equal(candidate.channelId),
-					policy.exists(spaces, ({ row: space }) =>
-						query.and(
+					expr.exists(spaces, ({ row: space }) =>
+						expr.and(
 							space.id.equal(channel.spaceId),
 							space.companyId.equal(candidate.companyId),
 							space.companyId.equal(tenant.id),
-							policy.exists(memberships, ({ row: membership }) =>
-								query.and(
+							expr.exists(memberships, ({ row: membership }) =>
+								expr.and(
 									membership.companyId.equal(space.companyId),
 									membership.principalId.equal(principal.id),
 									membership.scopeKey.equal("company"),
@@ -320,12 +320,12 @@ export const messagePolicy = definePolicy(messages, {
 	update: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.companyId.equal(tenant.id),
-				query.or(
+				expr.or(
 					current.authorId.equal(principal.id),
-					policy.exists(memberships, ({ row: membership }) =>
-						query.and(
+					expr.exists(memberships, ({ row: membership }) =>
+						expr.and(
 							membership.companyId.equal(current.companyId),
 							membership.principalId.equal(principal.id),
 							membership.scopeKey.equal("company"),
@@ -336,7 +336,7 @@ export const messagePolicy = definePolicy(messages, {
 				),
 			),
 		candidate: ({ current, candidate }) =>
-			query.and(
+			expr.and(
 				candidate.companyId.equal(current.companyId),
 				candidate.channelId.equal(current.channelId),
 				candidate.authorId.equal(current.authorId),
@@ -345,12 +345,12 @@ export const messagePolicy = definePolicy(messages, {
 	delete: {
 		admit: policy.authenticated(),
 		rows: ({ current, principal, tenant }) =>
-			query.and(
+			expr.and(
 				current.companyId.equal(tenant.id),
-				query.or(
+				expr.or(
 					current.authorId.equal(principal.id),
-					policy.exists(memberships, ({ row: membership }) =>
-						query.and(
+					expr.exists(memberships, ({ row: membership }) =>
+						expr.and(
 							membership.companyId.equal(current.companyId),
 							membership.principalId.equal(principal.id),
 							membership.scopeKey.equal("company"),
@@ -377,7 +377,7 @@ export const messagePolicy = definePolicy(messages, {
 ```
 
 The Collection argument supplies the exact `message`, `current`, `candidate`,
-and Field types. Each `policy.exists` Collection supplies its own exact nested
+and Field types. Each `expr.exists` Collection supplies its own exact nested
 row type. An unknown Field, incompatible comparison, or Policy attached to the
 wrong Collection fails TypeScript and the compiler.
 
@@ -389,7 +389,7 @@ The other Collection reads and writes in this guide use narrow default
 Policies:
 
 ```ts title="src/features/collaboration-policies.ts"
-import { definePolicy, policy, query } from "questpie";
+import { definePolicy, expr, policy } from "questpie";
 import {
 	channels,
 	companies,
@@ -425,7 +425,7 @@ export const channelPolicy = definePolicy(channels, {
 		admit: policy.authenticated(),
 		rows: ({ current, tenant }) => current.companyId.equal(tenant.id),
 		candidate: ({ current, candidate }) =>
-			query.and(
+			expr.and(
 				candidate.companyId.equal(current.companyId),
 				candidate.spaceId.equal(current.spaceId),
 			),
@@ -437,7 +437,7 @@ export const membershipPolicy = definePolicy(memberships, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			query.and(
+			expr.and(
 				row.companyId.equal(tenant.id),
 				row.principalId.equal(principal.id),
 			),
@@ -449,8 +449,8 @@ export const messageEventPolicy = definePolicy(messageEvents, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			policy.exists(messages, ({ row: message }) =>
-				query.and(
+			expr.exists(messages, ({ row: message }) =>
+				expr.and(
 					message.id.equal(candidate.messageId),
 					message.companyId.equal(tenant.id),
 					message.authorId.equal(principal.id),
@@ -471,6 +471,17 @@ authorization results.
 Policy callbacks build structural expressions. They cannot call a database,
 raw SQL, network, arbitrary Service, or per-row JavaScript. QUESTPIE stops the
 build when it cannot lower an expression without changing its meaning.
+
+Use `expr.and`, `expr.or`, `expr.not`, `expr.always`, and `expr.never` for
+boolean composition. Field operands provide typed comparisons such as
+`equal`, `in`, and `isNull`. Use ordinary TypeScript to compose named functions
+or choose which supported expression to return; the callback itself remains a
+closed compiler program rather than runtime per-row JavaScript.
+
+`policy.authenticated()` and `policy.public()` remain admission shortcuts.
+`policy.rows(collection, callback)` remains the constructor for a reusable
+Collection-bound row predicate. These are Policy concepts, while `expr`
+contains the shared boolean vocabulary.
 
 ## Apply every Policy phase
 
@@ -510,7 +521,7 @@ construct and persist that candidate.
 
 ## Separate evidence from disclosure
 
-`policy.exists` performs a boolean-only evidence read. It can correlate an
+`expr.exists` performs a boolean-only Policy Evidence Read. It can correlate an
 evidence row with outer rows and Execution facts, but it cannot return the row.
 It does not apply the evidence Collection's disclosure Policy recursively.
 This keeps permission to read a Message separate from permission to list its
@@ -526,6 +537,10 @@ QUESTPIE bounds evidence depth and rejects a Policy that exceeds it. A Context
 value such as `selectedRole` never replaces current relational evidence. Policy
 reads mutable evidence where the operation runs, including again after a
 row-lock wait.
+
+`expr.exists` is available only in a Policy program. A Query filter that uses
+it fails compilation with `QP-DATA-025 unsupportedExpressionCapability`; use the
+Query Relation and quantifier surface for disclosure-authorized filtering.
 
 ## Push row scope into SQL
 

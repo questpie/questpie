@@ -1,6 +1,12 @@
 # ADR 0010: Freeze trusted Context and relational Policy
 
-- Status: Accepted
+> The `policy.exists(...)` spelling is superseded by
+> [ADR-0029](./0029-unify-policy-expression-authoring.md). Policy evidence is
+> now authored as Policy-only `expr.exists(...)`; every evidence,
+> nondisclosure, dependency, SQL-ordering, and parity guarantee below remains
+> current.
+
+- Status: Accepted; `policy.exists` spelling superseded by ADR-0029
 - Date: 2026-08-13
 
 ## Context

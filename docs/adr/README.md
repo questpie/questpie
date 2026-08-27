@@ -34,6 +34,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 26. [Freeze Action and Unify Checkpointed Work in Job](./0026-freeze-action-and-unify-checkpointed-work-in-job.md)
 27. [Simplify V4 Delivery Around Runnable Tracers](./0027-simplify-v4-delivery-flow.md)
 28. [Freeze Action Effect Identity, Limits, and Operation Wire v3](./0028-freeze-action-effect-identity-limits-and-wire-v3.md)
+29. [Unify Policy expression authoring](./0029-unify-policy-expression-authoring.md)
 
 ## Open decisions
 
@@ -70,6 +71,11 @@ ADR-0028 freezes required caller `effectKey` material, Runtime-scoped ordinary
 Action Effect Identity, the exact semantic Action limits, additive Operation
 Wire v3, and honest non-retryable post-dispatch ambiguity while retaining Wire
 v1/v2 Query and Mutation compatibility.
+ADR-0029 replaces the split `policy.exists` plus `query.*` Policy spelling with
+one capability-branded `expr` vocabulary and Policy-only `expr.exists`. It
+preserves Policy ownership, evidence nondisclosure, dependency capture, SQL
+ordering, and the temporary Query-only `query` surface until the separate S7
+migration.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

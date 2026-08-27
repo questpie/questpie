@@ -12,7 +12,7 @@ and generated modules specialize executable code to one exact contract.
 | stored UUID                 | `field.uuid(...)`    | same scalar identity plus database capabilities  |
 | embedded JSONB UUID         | `value.uuid()`       | compatible restricted codec projection           |
 | disclosure read             | generated `ctx.data` | relational plan plus target Policy               |
-| Policy evidence             | `policy.exists(...)` | same plan, boolean-only projection               |
+| Policy evidence             | `expr.exists(...)`   | same AST, Policy-only boolean projection         |
 | explicit work               | `defineJob`          | durable run/attempt/lease kernel                 |
 | committed-fact work         | `defineReaction`     | same durable kernel plus causation/deduplication |
 | checkpointed work           | `defineJob`          | same durable kernel plus versioned closed `step` |
@@ -51,9 +51,15 @@ does not create another Resource.
 
 Use `"questpie"` for stable structural builders and grammars, including
 `codec`, `field`, `value`, `shape`, `constraint`, `relation`, `dataQuery`,
-`query`, `policy`, `operation`, `mutation`, `durable`, `defineCollection`,
+`query`, `expr`, `policy`, `operation`, `mutation`, `durable`, `defineCollection`,
 `defineContext`, `definePolicy`, `defineService`,
 `defineCredentialResolver`, `defineSearch`, and `file`.
+
+`expr` is the capability-branded boolean expression vocabulary shared by
+Query and Policy. `expr.exists` is available only in Policy programs and
+retains boolean-only evidence semantics. The Query-only `query` surface is a
+temporary projection over the same relational AST until the separately
+approved Query-authoring migration removes it; it is not a permanent alias.
 
 Use `"#questpie/app"` for application-specialized `defineQuery`,
 `defineMutation`, `defineAction`, `defineRoute`, `defineReaction`, `defineJob`,
