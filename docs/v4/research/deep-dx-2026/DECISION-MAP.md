@@ -10,8 +10,10 @@
 - Evidence:
   [current framework atlas](../framework-api-atlas/DECISION-MAP.md),
   [Support Desk DX evidence](../../implementation/team-support-desk/DX-EVIDENCE.md),
-  the three benchmark reports beside this map, and the
-  [Fable cross-model synthesis](./FABLE-SYNTHESIS.md)
+  the three benchmark reports beside this map, the
+  [Fable cross-model synthesis](./FABLE-SYNTHESIS.md), and the repaired
+  [approval packet #1 v2](./APPROVAL-PACKET-1.md) with its four recorded
+  adversarial review lanes
 
 Every ticket must compare materially different interfaces against one complete
 vertical. A convenience is not earned by one fixture: it needs a deep owner,
@@ -39,7 +41,10 @@ authority. The historical atlas explains how that baseline was selected;
 earlier redesign documents and the reports beside this map are research
 evidence only. This map governs sequencing of the new investigation but cannot
 supersede product authority. The exact supersession inventory and ADR-0008
-scope belong in approval packet 1.
+scope are now recorded in
+[approval packet #1 v2, section 20](./APPROVAL-PACKET-1.md); every ledger
+entry awaits individual human approval before any ADR, SPEC, CONTEXT, or
+public-documentation edit.
 
 ## #1: What is the one teachable application mental model?
 
@@ -56,12 +61,15 @@ and which should remain compiler/runtime machinery.
 
 ### Answer
 
-Open; this is the current frontier. Fixed constraints: stored data is not an
-endpoint declaration, Policy is transport-neutral authorization, semantic
-Operations own execution guarantees, Route owns explicit HTTP, Job owns durable
-work, and generated contracts are the exact application type source. Candidate
-naming must be demonstrated as a complete Support Desk slice, not a glossary in
-isolation.
+Candidate answer recorded in
+[approval packet #1 v2](./APPROVAL-PACKET-1.md) sections 2 and 3: seven
+beginner concepts (Collection, Query, Mutation, Action, Route, Job, Service)
+over one import map, demonstrated as a complete Support Desk vertical. Fixed
+constraints stand: stored data is not an endpoint declaration, Policy is
+transport-neutral authorization, semantic Operations own execution
+guarantees, Route owns explicit HTTP, Job owns durable work, and generated
+contracts are the exact application type source. The answer becomes direction
+only with packet approval.
 
 ## #2: How is an application composed and configured?
 
@@ -97,9 +105,17 @@ Test simple CRUD and a cross-Collection state transition.
 
 ### Answer
 
-Open. Internal CRUD and public network exposure are separate decisions. A
-Collection must not silently publish new caller input or output when a Field is
-added.
+Open for final spelling; direction recorded in
+[approval packet #1 v2](./APPROVAL-PACKET-1.md) sections 5 and 8. Internal
+CRUD and public network exposure remain separate decisions. The earlier
+statement that adding a Collection Field must change no public input or
+output surface was too strong and is corrected: every Operation explicitly
+chooses a derived or pinned surface. A derived surface (for example
+`select: true` or a provenance-derived caller input) intentionally evolves
+with its Collection; a pinned selection stays stable. The compiler emits the
+exact App Contract change and generated TypeScript directs consumers; a
+change is never hidden, and retained clients of a changed derived Operation
+receive the explicit compatibility outcome rather than silent drift.
 
 ## #4: What is the reusable read and predicate language?
 
@@ -200,5 +216,15 @@ shims and their deletion conditions before entering maintenance mode.
 
 ### Answer
 
-Open. Correctness gates remain mandatory; line deletion and fewer public
-concepts are adoption evidence, not substitutes for semantic parity.
+Open, with the first measurement instrument in place. Correctness gates
+remain mandatory; line deletion and fewer public concepts are adoption
+evidence, not substitutes for semantic parity. The first clean-room AI
+authoring audit ([ai-audit/AUTHORING-AUDIT.md](./ai-audit/AUTHORING-AUDIT.md),
+evaluated in [approval packet #1 v2](./APPROVAL-PACKET-1.md) section 21)
+authored a complete unfamiliar vertical from only the proposed beginner
+guide and API reference: zero wrong primitive choices, zero
+implementation-source lookups, seven hesitations that drove documentation
+repairs, two kernel refinements, and three named capability questions.
+Every implementation slice now carries the acceptance criterion that its
+golden path needs no Runtime, compiler, or generated implementation
+source.
