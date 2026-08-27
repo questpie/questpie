@@ -572,17 +572,41 @@ is reproduced without changing the existing v2 projector or client. The seam
 was subsequently carried through generated client/server transport at
 `a5c16251`; retained-client and ambiguity coverage are closed there.
 
+The first Deep-DX Query/Relations Product slice is integrated through
+`679f24eb1`, with release artifacts closed at `41ef89481`. Collection-owned
+`list` authoring now derives one handlerless named Query with bounded nullable
+list parameters, object selectors, exact input/output codecs and generated
+direct/network client bindings. Recursive to-one selection traverses up to the
+current measured four-hop bound through one compiler IR, one PostgreSQL
+lowering and one Runtime decoder; every reached target applies its own
+admission, row Policy and conditional Field disclosure. Relation-only
+observation, per-hop nondisclosure, disclosure-bound cursors, exact depth
+diagnostics with Origin, and optional nested Operation codecs are covered by
+hostiles. Team Support Desk deletes four combinatorial ticket-list Operations
+and uses one `tickets.queue` Query through the generated browser client.
+Focused Query/Relation verification passes 42 tests with 196 assertions. The
+PostgreSQL 17 plus Firefox tracer passes with 63 assertions. `quality:release`,
+architecture, all workspace typechecks, strict lint/Knip, package validation,
+19 performance manifests, documentation build, relocation goldens and release
+dry-run pass. The checked `questpie` tarball SHA-256 is
+`a7ca1526120055ff08303e21817a1d471ba3ce9321cf7017f0729cd3354e8fc8` and
+the declaration SHA-256 is
+`92e42caebb4527e7be99a1ccfae550b635b977abd5d4cafcaaa360b3aac3133e`.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Treat Team Support Desk through `5fdb5adac` as the current golden reference
-   consumer. Read its fixture-local `README.md` for the shortest module and
-   execution map, and keep every application browser call on the generated
-   client.
-3. Treat the reference application as closed with the independent Standards
-   and Spec PASS recorded above.
-4. Do not reopen this boundary by adding Cron, Collection triggers,
+2. Start the next approved Deep-DX Product slice at the Policy/expression
+   authoring boundary. Preserve Policy as the sole authorization owner while
+   consolidating the current `policy.exists` and Query expression vocabulary;
+   ordinary TypeScript remains preferred wherever no compiler program is
+   required.
+3. Keep Team Support Desk as the golden reference consumer and every
+   application browser call on the generated client. The Query/Relations slice
+   above is closed; do not recreate the deleted list variants or a second
+   relational execution kernel.
+4. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
 5. Do not push, tag or publish without explicit authority.
