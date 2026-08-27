@@ -2,6 +2,7 @@ import {
 	booleanExpression,
 	type BooleanExpression,
 	type PolicyBooleanExpression,
+	type PolicyEvidenceExpression,
 } from "./model";
 import type { PolicyCollection, PolicyRow, PolicyScope } from "./policy";
 
@@ -10,43 +11,52 @@ type EvidenceScope<Collection extends PolicyCollection> = PolicyScope &
 		row: PolicyRow<Collection["fields"]>;
 	}>;
 
-type EvidenceOf<Expression> =
-	Expression extends BooleanExpression<infer Evidence> ? Evidence : false;
-type CombinedEvidence<Items extends readonly PolicyBooleanExpression[]> =
-	true extends EvidenceOf<Items[number]> ? true : false;
+function and(
+	first: BooleanExpression,
+	second: BooleanExpression,
+	...rest: readonly BooleanExpression[]
+): BooleanExpression;
+function and(
+	first: PolicyBooleanExpression,
+	second: PolicyBooleanExpression,
+	...rest: readonly PolicyBooleanExpression[]
+): PolicyBooleanExpression;
+function and(
+	first: PolicyBooleanExpression,
+	second: PolicyBooleanExpression,
+	...rest: readonly PolicyBooleanExpression[]
+): PolicyBooleanExpression {
+	return booleanExpression("and", [first, second, ...rest]);
+}
 
-function combine<const Items extends readonly PolicyBooleanExpression[]>(
-	operator: "and" | "or",
-	items: Items,
-): BooleanExpression<CombinedEvidence<Items>> {
-	return booleanExpression(operator, items) as BooleanExpression<
-		CombinedEvidence<Items>
-	>;
+function or(
+	first: BooleanExpression,
+	second: BooleanExpression,
+	...rest: readonly BooleanExpression[]
+): BooleanExpression;
+function or(
+	first: PolicyBooleanExpression,
+	second: PolicyBooleanExpression,
+	...rest: readonly PolicyBooleanExpression[]
+): PolicyBooleanExpression;
+function or(
+	first: PolicyBooleanExpression,
+	second: PolicyBooleanExpression,
+	...rest: readonly PolicyBooleanExpression[]
+): PolicyBooleanExpression {
+	return booleanExpression("or", [first, second, ...rest]);
+}
+
+function not(expression: BooleanExpression): BooleanExpression;
+function not(expression: PolicyEvidenceExpression): PolicyEvidenceExpression;
+function not(expression: PolicyBooleanExpression): PolicyBooleanExpression {
+	return booleanExpression("not", [expression]);
 }
 
 export const expr = Object.freeze({
-	and: <
-		const Items extends readonly [
-			PolicyBooleanExpression,
-			PolicyBooleanExpression,
-			...PolicyBooleanExpression[],
-		],
-	>(
-		...items: Items
-	): BooleanExpression<CombinedEvidence<Items>> => combine("and", items),
-	or: <
-		const Items extends readonly [
-			PolicyBooleanExpression,
-			PolicyBooleanExpression,
-			...PolicyBooleanExpression[],
-		],
-	>(
-		...items: Items
-	): BooleanExpression<CombinedEvidence<Items>> => combine("or", items),
-	not: <Evidence extends boolean>(
-		expression: BooleanExpression<Evidence>,
-	): BooleanExpression<Evidence> =>
-		booleanExpression("not", [expression]) as BooleanExpression<Evidence>,
+	and,
+	or,
+	not,
 	always: (): BooleanExpression => booleanExpression("always"),
 	never: (): BooleanExpression =>
 		booleanExpression("not", [booleanExpression("always")]),
@@ -55,9 +65,9 @@ export const expr = Object.freeze({
 		predicate: (
 			scope: EvidenceScope<NoInfer<Collection>>,
 		) => PolicyBooleanExpression,
-	): BooleanExpression<true> =>
+	): PolicyEvidenceExpression =>
 		booleanExpression("exists", [
 			collection,
 			predicate,
-		]) as unknown as BooleanExpression<true>,
+		]) as unknown as PolicyEvidenceExpression,
 });
