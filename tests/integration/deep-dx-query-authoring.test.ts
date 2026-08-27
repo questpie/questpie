@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import {
+	cp,
+	mkdtemp,
+	readFile,
+	rm,
+	symlink,
+	writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -90,7 +97,7 @@ test("rejects Policy evidence from a structural Query before artifact emission",
 			queries,
 			source.replace(
 				/where: \(\{ row, parameters \}\) =>\n\s+expr\.and\(\n\s+row\.status\.in\(parameters\.statuses\),\n\s+row\.teamId\.in\(parameters\.teamIds\),\n\s+\),/,
-				'where: ({ row }) => expr.exists(tickets, ({ row: evidence }) => evidence.id.equal(row.id)),',
+				"where: ({ row }) => expr.exists(tickets, ({ row: evidence }) => evidence.id.equal(row.id)),",
 			),
 		);
 
@@ -99,6 +106,11 @@ test("rejects Policy evidence from a structural Query before artifact emission",
 		).rejects.toMatchObject({
 			code: "QP-DATA-025",
 			diagnosticClass: "unsupportedExpressionCapability",
+			message: expect.stringContaining("declared Relation quantifier"),
+			details: {
+				capability: "expr.exists",
+				alternative: "relation.some",
+			},
 		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });

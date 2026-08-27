@@ -1,9 +1,12 @@
 declare const booleanExpressionBrand: unique symbol;
 
-export interface BooleanExpression {
+export interface BooleanExpression<PolicyEvidence extends boolean = false> {
 	readonly kind: "booleanExpression";
 	readonly [booleanExpressionBrand]: true;
+	readonly __policyEvidence?: PolicyEvidence;
 }
+
+export type PolicyBooleanExpression = BooleanExpression<boolean>;
 
 export interface PolicyOperand<Value> {
 	equal(
@@ -43,10 +46,10 @@ export interface ExecutionOperands {
 export function booleanExpression(
 	operator: string,
 	operands: readonly unknown[] = [],
-): BooleanExpression {
+): BooleanExpression<false> {
 	return Object.freeze({
 		kind: "booleanExpression",
 		operator,
 		operands: Object.freeze([...operands]),
-	}) as unknown as BooleanExpression;
+	}) as unknown as BooleanExpression<false>;
 }

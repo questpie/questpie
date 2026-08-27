@@ -45,7 +45,7 @@ QUESTPIE exposes one capability-branded `expr` vocabulary from `"questpie"`.
   does not admit `query.*` inside newly authored Policy examples.
 - The compiler rejects `expr.exists` outside a Policy program before artifact
   emission. The diagnostic is `QP-DATA-025 unsupportedExpressionCapability` and
-  identifies the invalid Origin.
+  names the declared Relation quantifier alternative.
 
 This decision supersedes only the public `policy.exists(...)` spelling in
 ADR-0010 and the implication in ADR-0019 that separate `query` and Policy

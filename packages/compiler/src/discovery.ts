@@ -13,7 +13,10 @@ import {
 import ts from "typescript";
 
 import { compareAscii } from "./canonical";
-import { CompilerDiagnosticError } from "./diagnostic";
+import {
+	CompilerDiagnosticError,
+	controlledEvaluationFailure,
+} from "./diagnostic";
 import { mutationDiscoverySource } from "./mutation";
 import { relationalDiscoverySource } from "./relational";
 import type {
@@ -676,42 +679,8 @@ process.stdout.write(JSON.stringify(found));
 			stderr: "pipe",
 		});
 		if (child.exitCode !== 0) {
-			if (child.stderr.toString().includes("QP-COMPOSE-002"))
-				throw new CompilerDiagnosticError(
-					"QP-COMPOSE-002",
-					"duplicateResourceIdentity",
-					"controlled evaluation found a duplicate Resource identity",
-				);
-			if (child.stderr.toString().includes("QP-COMPOSE-010"))
-				throw new CompilerDiagnosticError(
-					"QP-COMPOSE-010",
-					"impureStructuralGraph",
-					"controlled child evaluation failed",
-				);
-			if (child.stderr.toString().includes("QP-DATA-005"))
-				throw new CompilerDiagnosticError(
-					"QP-DATA-005",
-					"invalidOperator",
-					"controlled relational evaluation found an unknown operator",
-				);
-			if (child.stderr.toString().includes("QP-DATA-022"))
-				throw new CompilerDiagnosticError(
-					"QP-DATA-022",
-					"relationDepthExceeded",
-					"controlled relational evaluation exceeded the measured Relation depth",
-				);
-			if (child.stderr.toString().includes("QP-DATA-025"))
-				throw new CompilerDiagnosticError(
-					"QP-DATA-025",
-					"unsupportedExpressionCapability",
-					"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
-					{ capability: "expr.exists", alternative: "relation.some" },
-				);
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-013",
-				"structuralTypeError",
-				"controlled child evaluation failed",
-			);
+			const stderr = child.stderr.toString();
+			throw controlledEvaluationFailure(stderr);
 		}
 		const evaluated = JSON.parse(child.stdout.toString()) as Array<{
 			logicalPath: string;

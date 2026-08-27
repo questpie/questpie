@@ -203,8 +203,15 @@ export const messagePage = dataQuery<MessageDescriptor>()({
 			})),
 		};
 	},
-	where: ({ fields, parameters }) =>
-		fields.channelId.equal(parameters.channelId),
+	where: ({ fields, parameters }) => {
+		const evidence = expr.exists(memberships, ({ row }) =>
+			row.companyId.equal("company-northwind"),
+		);
+		// @ts-expect-error Policy evidence cannot enter a Query expression.
+		const queryExpression: ReturnType<typeof fields.channelId.equal> = evidence;
+		void queryExpression;
+		return fields.channelId.equal(parameters.channelId);
+	},
 	orderBy: ({ fields }) => [
 		fields.createdAt.ascending({ nulls: "last" }),
 		fields.id.ascending({ nulls: "last" }),

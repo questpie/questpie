@@ -48,6 +48,47 @@ export type CompositionDiagnosticCode =
 	| "QP-SEED-012"
 	| "QP-SEED-014";
 
+export function controlledEvaluationFailure(
+	stderr: string,
+): CompilerDiagnosticError {
+	if (stderr.includes("QP-COMPOSE-002"))
+		return new CompilerDiagnosticError(
+			"QP-COMPOSE-002",
+			"duplicateResourceIdentity",
+			"controlled evaluation found a duplicate Resource identity",
+		);
+	if (stderr.includes("QP-COMPOSE-010"))
+		return new CompilerDiagnosticError(
+			"QP-COMPOSE-010",
+			"impureStructuralGraph",
+			"controlled child evaluation failed",
+		);
+	if (stderr.includes("QP-DATA-005"))
+		return new CompilerDiagnosticError(
+			"QP-DATA-005",
+			"invalidOperator",
+			"controlled relational evaluation found an unknown operator",
+		);
+	if (stderr.includes("QP-DATA-022"))
+		return new CompilerDiagnosticError(
+			"QP-DATA-022",
+			"relationDepthExceeded",
+			"controlled relational evaluation exceeded the measured Relation depth",
+		);
+	if (stderr.includes("QP-DATA-025"))
+		return new CompilerDiagnosticError(
+			"QP-DATA-025",
+			"unsupportedExpressionCapability",
+			"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
+			{ capability: "expr.exists", alternative: "relation.some" },
+		);
+	return new CompilerDiagnosticError(
+		"QP-COMPOSE-013",
+		"structuralTypeError",
+		"controlled child evaluation failed",
+	);
+}
+
 const diagnosticClassesByCode = {
 	"QP-COMPOSE-002": ["duplicateResourceIdentity"],
 	"QP-COMPOSE-003": ["invalidResourceName"],
