@@ -72,9 +72,16 @@ export function projectRelationalCompilation(
 				item.value["__questpie"] === undefined,
 		)
 		.map((item) => {
+			const origin: ProjectionOrigin = {
+				packageId: item.packageId,
+				path: item.logicalPath,
+				exportName: item.exportName,
+				span: item.span,
+			};
 			const template = normalizeDataQueryTemplate(
 				item.value.templateInput,
 				digests,
+				{ path: origin.path, exportName: origin.exportName },
 			);
 			if (!collections.has(template.from))
 				throw new CompilerDiagnosticError(
@@ -86,12 +93,6 @@ export function projectRelationalCompilation(
 				template.from,
 				policies.map(({ program }) => program),
 			);
-			const origin: ProjectionOrigin = {
-				packageId: item.packageId,
-				path: item.logicalPath,
-				exportName: item.exportName,
-				span: item.span,
-			};
 			return {
 				identity: null,
 				digest: digest("questpie-data-query-template-v1", template),
@@ -109,6 +110,10 @@ export function projectRelationalCompilation(
 			const template = normalizeDataQueryTemplate(
 				resource.contract.query,
 				digests,
+				{
+					path: resource.origin.logicalPath,
+					exportName: resource.origin.exportName,
+				},
 			);
 			if (!collections.has(template.from))
 				throw new CompilerDiagnosticError(

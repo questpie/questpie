@@ -505,7 +505,7 @@ export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	...definition,
 	...("query" in definition ? {
 		handler: (invocation: Readonly<{ input: unknown; ctx: QueryContext }>) =>
-			invocation.ctx.data.run(definition.query as never, invocation.input as never),
+			invocation.ctx.data.run(definition.query as never, invocation.input as never) as never,
 	} : {}),
 	kind: "query" as const,
 	identity: \`query:\${definition.name}\` as const,

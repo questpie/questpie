@@ -266,14 +266,31 @@ describe("BETA-04 relational normalization", () => {
 				],
 			},
 		];
-		expect(() =>
-			normalizeDataQueryTemplate(tooDeep, {
-				schemaProjectionDigest: "a".repeat(64),
-				dataContractProjectionDigest: "b".repeat(64),
-			}),
-		).toThrow(
-			"QP-DATA-022 relationDepthExceeded team.organization.region.country.continent",
-		);
+		let diagnostic: unknown;
+		try {
+			normalizeDataQueryTemplate(
+				tooDeep,
+				{
+					schemaProjectionDigest: "a".repeat(64),
+					dataContractProjectionDigest: "b".repeat(64),
+				},
+				{ path: "src/ticket-query.ts", exportName: "ticketQueue" },
+			);
+		} catch (error) {
+			diagnostic = error;
+		}
+		expect(diagnostic).toBeInstanceOf(CompilerDiagnosticError);
+		expect(diagnostic).toMatchObject({
+			code: "QP-DATA-022",
+			diagnosticClass: "relationDepthExceeded",
+			details: {
+				path: "team.organization.region.country.continent",
+				origin: {
+					path: "src/ticket-query.ts",
+					exportName: "ticketQueue",
+				},
+			},
+		});
 	});
 
 	test("selects one default Policy and reports zero or two deterministically", () => {

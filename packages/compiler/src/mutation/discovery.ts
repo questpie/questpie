@@ -66,7 +66,7 @@ function compileCollectionOperationSet(value) {
     if (member === "list") {
       if (definition.data?.kind !== "dataQuery")
         throw new Error("QP-COMPOSE-013 Collection Operation Set list requires dataQuery");
-      const templateInput = compileDataQuery(definition.data);
+      const { templateInput } = compileDataQuery(definition.data);
       if (templateInput.from !== target)
         throw new Error("QP-COMPOSE-013 Collection Operation Set list dataQuery targets " + templateInput.from);
       compiled.templateInput = templateInput;

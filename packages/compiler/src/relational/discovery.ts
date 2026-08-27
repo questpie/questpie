@@ -236,9 +236,24 @@ function compileDataQuery(value) {
         if (fieldIdentity(candidate, name) === identity) return field;
     throw new Error("QP-DATA unknown selected Field " + identity);
   };
-  const selectedCodec = (selected) => selected.kind === "toOne"
-    ? { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, selectedCodec(child)])) } }
-    : operationFieldCodec(fieldForIdentity(selected.field ?? selected.__queryField));
+  const conditionallySelected = (fieldIdentity) => {
+    const target = fieldIdentity.slice(0, fieldIdentity.indexOf("/field:"));
+    const field = fieldIdentity.slice(fieldIdentity.indexOf("/field:") + 7);
+    for (const record of records) for (const candidate of Object.values(record.exports)) {
+      if (candidate?.__questpie?.resourceKind !== "policy" || candidate.target !== target) continue;
+      const program = compilePolicy(candidate).program;
+      if (program.attachment?.kind !== "default") continue;
+      if (program.fields?.selectedOutput?.some((rule) => rule.path.length === 1 && rule.path[0] === field)) return true;
+    }
+    return false;
+  };
+  const selectedCodec = (selected, nested = false) => {
+    if (selected.kind === "toOne")
+      return { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, selectedCodec(child, true)])) } };
+    const field = selected.field ?? selected.__queryField;
+    const codec = operationFieldCodec(fieldForIdentity(field));
+    return nested && conditionallySelected(field) ? { kind: "optional", codec } : codec;
+  };
   return {
     templateInput,
     input: { kind: "object", properties: Object.fromEntries(Object.entries(template.parameters).map(([name, parameter]) => [name, parameterCodec(parameter)])) },

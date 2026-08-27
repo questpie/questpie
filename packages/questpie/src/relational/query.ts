@@ -519,17 +519,11 @@ function materializeObjectSelection(
 	selection: CodecRecord,
 	fields: CodecRecord,
 	relations: CodecRecord,
-	depth = 0,
-	path: readonly string[] = [],
 ): CodecRecord {
 	return Object.freeze(
 		Object.fromEntries(
 			Object.entries(selection).map(([key, selected]) => {
 				if (selected === true) return [key, fields[key]];
-				if (depth >= 4)
-					throw new TypeError(
-						`QP-DATA-022 relationDepthExceeded ${[...path, key].join(".")}`,
-					);
 				const relation = codecRecord(relations[key]);
 				const nested = codecRecord(codecRecord(selected).select);
 				return [
@@ -544,13 +538,7 @@ function materializeObjectSelection(
 							) => CodecRecord,
 						) => unknown
 					)((scope) =>
-						materializeObjectSelection(
-							nested,
-							scope.fields,
-							scope.relations,
-							depth + 1,
-							[...path, key],
-						),
+						materializeObjectSelection(nested, scope.fields, scope.relations),
 					),
 				];
 			}),

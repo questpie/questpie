@@ -1,4 +1,5 @@
 import { compareAscii } from "../canonical";
+import { CompilerDiagnosticError } from "../diagnostic";
 import {
 	array,
 	cloneJson,
@@ -80,6 +81,7 @@ function normalizeSelection(
 	value: unknown,
 	depth = 0,
 	path: readonly string[] = [],
+	origin?: Readonly<{ path: string; exportName: string }>,
 ): RootQuerySelectionV1 {
 	const selection = record(value, "Query selection");
 	if (selection.kind === "field") return cloneJson(selection) as never;
@@ -89,13 +91,21 @@ function normalizeSelection(
 		);
 	const key = string(selection.key, "selection key");
 	if (depth >= 4)
-		throw new TypeError(
-			`QP-DATA-022 relationDepthExceeded ${[...path, key].join(".")}`,
+		throw new CompilerDiagnosticError(
+			"QP-DATA-022",
+			"relationDepthExceeded",
+			`Relation selection exceeds the measured depth at ${[...path, key].join(".")}`,
+			{
+				path: [...path, key].join("."),
+				...(origin ? { origin } : {}),
+			},
 		);
 	return {
 		...selection,
 		select: array(selection.select, "toOne selection")
-			.map((child) => normalizeSelection(child, depth + 1, [...path, key]))
+			.map((child) =>
+				normalizeSelection(child, depth + 1, [...path, key], origin),
+			)
 			.sort((left, right) =>
 				compareAscii(
 					string(left.key, "selection key"),
@@ -136,13 +146,14 @@ export function normalizeDataQueryTemplate(
 		schemaProjectionDigest: string;
 		dataContractProjectionDigest: string;
 	}>,
+	origin?: Readonly<{ path: string; exportName: string }>,
 ): DataQueryTemplateV1 {
 	const input = record(value, "Data Query Template");
 	const parameters = array(input.parameters, "Query parameters")
 		.map(normalizeParameter)
 		.sort((left, right) => compareAscii(left.name, right.name));
 	const select = array(input.select, "Query selection")
-		.map((selection) => normalizeSelection(selection))
+		.map((selection) => normalizeSelection(selection, 0, [], origin))
 		.sort((left, right) => compareAscii(left.key, right.key));
 	return {
 		format: "questpie.data-query-template",
