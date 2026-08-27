@@ -49,6 +49,7 @@ function or(
 
 function not(expression: BooleanExpression): BooleanExpression;
 function not(expression: PolicyEvidenceExpression): PolicyEvidenceExpression;
+function not(expression: PolicyBooleanExpression): PolicyBooleanExpression;
 function not(expression: PolicyBooleanExpression): PolicyBooleanExpression {
 	return booleanExpression("not", [expression]);
 }

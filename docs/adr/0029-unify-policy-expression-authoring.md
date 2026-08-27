@@ -44,8 +44,9 @@ QUESTPIE exposes one capability-branded `expr` vocabulary from `"questpie"`.
   It lowers to the same AST. This decision makes no permanent alias promise and
   does not admit `query.*` inside newly authored Policy examples.
 - The compiler rejects `expr.exists` outside a Policy program before artifact
-  emission. The diagnostic is `QP-DATA-025 unsupportedExpressionCapability` and
-  names the declared Relation quantifier alternative.
+  emission. The diagnostic is `QP-DATA-025 unsupportedExpressionCapability`.
+  It states that existence evidence is unavailable in Query filters; it does
+  not promise a Relation quantifier before that separate API exists.
 
 This decision supersedes only the public `policy.exists(...)` spelling in
 ADR-0010 and the implication in ADR-0019 that separate `query` and Policy

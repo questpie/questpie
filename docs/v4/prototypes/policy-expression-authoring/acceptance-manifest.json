@@ -1,0 +1,90 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0029",
+	"proof": "Unify relational boolean authoring under one capability-branded expr vocabulary, keep existence evidence Policy-only, preserve Policy nondisclosure and normalized bytes, and reject evidence in Query programs before artifact emission with an actionable diagnostic.",
+	"diffBase": "ed1267bff4e0f6fa9c962960407bab328bd56174",
+	"reviewOutput": "docs/v4/prototypes/policy-expression-authoring/REVIEW.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "ed1267bff4e0f6fa9c962960407bab328bd56174"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "5122452cb43a788c4e67f0f459e0ff81623db354e8e7ca3273dcba1ec33b5c39"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "4f555830c83894d848d6c55959edd3b9a8fd1785ca6c4587029267aef179420b"
+		},
+		{
+			"name": "accepted trusted Context and relational Policy decision",
+			"path": "docs/adr/0010-freeze-trusted-context-and-relational-policy.md",
+			"sha256": "8926977b62a872b23d3071fa98e404d39dd7b43801c0330f9316714c63f546d0"
+		},
+		{
+			"name": "accepted semantic-kernel and public-surface decision",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "4413e7ed5ada104a85498e11cea2ac78dc6e2dffd6931c475f7b56afb4541610"
+		},
+		{
+			"name": "approved Deep-DX direction",
+			"path": "docs/v4/research/deep-dx-2026/APPROVAL-PACKET-1.md",
+			"sha256": "a09832773ca30b96ea3326e72e5c36cb73af14cc49a4afe2f1da088b79e3f36a"
+		},
+		{
+			"name": "candidate Policy expression authoring decision",
+			"path": "docs/adr/0029-unify-policy-expression-authoring.md",
+			"sha256": "be9f172345aa9a7ad6d321b69e65654737f836c3c79669048d3b434a034e66e9"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun run quality:full",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run quality:release",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=<disposable> PGUSER=postgres PGPASSWORD=<local-test> PGDATABASE=questpie QUESTPIE_POSTGRES_MAJOR=17 FIREFOX_BIN=/usr/bin/firefox bun test tests/integration/postgres/team-support-desk.test.ts",
+			"result": "PASS: PostgreSQL 17 and Firefox, 1 test and 63 assertions"
+		},
+		{
+			"command": "bun test tests/type/beta04-query-policy-authoring.test.ts tests/unit/beta04-relational-normalization.test.ts tests/integration/deep-dx-query-authoring.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run release -- --dry-run",
+			"result": "PASS: retry-stable package SHA-256 ba9251ee385a7fe4ceac5b8dd36dec46d072cbc90fea0eeb6ea46af444cdd54e and declaration SHA-256 12860486acc060bd32539da9f353e6b99d445ca84a74861fb8927f47437dda75"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"expr is the single public relational boolean vocabulary for and, or, not, always, never, and Policy-only exists authoring; ordinary TypeScript functions remain the reuse mechanism.",
+		"BooleanExpression and PolicyEvidenceExpression carry distinct required static capability brands. Query accepts only ordinary BooleanExpression while Policy accepts the closed union.",
+		"expr.exists can only produce nondisclosing boolean authorization evidence inside Policy. It does not disclose target row identity or count and does not recursively apply the target Collection Policy.",
+		"A Policy evidence expression encountered in a structural Query fails before artifact emission with QP-DATA-025 unsupportedExpressionCapability and does not advertise a recovery API that is not yet implemented.",
+		"Policy scope and candidate ordering, dependency extraction, SQL lowering, bind semantics, and current-versus-candidate authorization remain unchanged.",
+		"expr.never normalizes to the pre-existing not(always) program, preserving canonical Policy artifact semantics rather than creating a second false representation.",
+		"The former public policy.exists spelling is removed from current fixtures and authoring. The temporary query vocabulary remains only until the approved S7 Query-authoring replacement and is not a permanent alias contract.",
+		"The generated collaboration and Team Support Desk applications retain byte-stable semantic projections after the intentional public source/declaration digest refresh.",
+		"The production-like Team Support Desk crosses direct, generated client, durable Job, webhook, PostgreSQL 17, and Firefox seams without bypassing the compiled Policy program.",
+		"The change introduces no runtime plugin system, provider-specific authorization path, ambient registry, or caller-controlled evidence capability."
+	]
+}

@@ -87,8 +87,8 @@ export function unsupportedExpressionCapability(): CompilerDiagnosticError {
 	return new CompilerDiagnosticError(
 		"QP-DATA-025",
 		"unsupportedExpressionCapability",
-		"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
-		{ capability: "expr.exists", alternative: "relation.some" },
+		"expr.exists is Policy-only and cannot be used in Query filters",
+		{ capability: "expr.exists" },
 	);
 }
 
