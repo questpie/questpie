@@ -20,6 +20,10 @@ const fieldCodec = (field) => {
   if (field.scalar === "timestamp") return { kind: "timestamp", withTimezone: field.options?.withTimezone === true };
   return { kind: field.scalar };
 };
+const operationFieldCodec = (field) => {
+  const codec = field.scalar === "timestamp" ? { kind: "timestamp" } : { kind: field.scalar };
+  return field.nullable === true ? { kind: "nullable", codec } : codec;
+};
 const literalCodec = (value, fallback) => fallback ?? (typeof value === "boolean" ? "boolean" : typeof value === "number" ? "integer" : "text");
 
 function compilePolicy(value) {
@@ -154,8 +158,8 @@ function compileDataQuery(value) {
         __queryField: identity,
         kind: "field",
         equal: (right) => scalar("equal", right), notEqual: (right) => scalar("notEqual", right),
-        in: (values) => ({ kind: "in", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
-        notIn: (values) => ({ kind: "notIn", field: identity, set: { kind: "literal", codec: fieldCodec(field), values } }),
+        in: (values) => ({ kind: "in", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
+        notIn: (values) => ({ kind: "notIn", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
         isNull: () => ({ kind: "isNull", field: identity }), isNotNull: () => ({ kind: "isNotNull", field: identity }),
         lessThan: (right) => scalar("lessThan", right),
         ascending: (options) => ({ kind: "order", field: identity, direction: "asc", nulls: options.nulls }),
@@ -184,12 +188,13 @@ function compileDataQuery(value) {
   };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
+    if (parameter.parameterKind === "list") return { kind: "list", name, codec: { kind: parameter.itemKind }, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
     const codec = parameter.parameterKind === "integer"
       ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null }
       : parameter.parameterKind === "text"
         ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
         : { kind: parameter.parameterKind };
-    return { kind: "scalar", name, codec, nullable: false };
+    return { kind: "scalar", name, codec, nullable: parameter.nullable === true };
   });
   const selection = template.select({ fields, relations });
   const order = template.orderBy({ fields });
@@ -200,7 +205,7 @@ function compileDataQuery(value) {
     .find((constraint) => constraint.fields.every((field, index) => order[order.length - constraint.fields.length + index]?.field === fieldIdentity(collection, field)));
   if (!unique) throw new Error("QP-DATA no unique cursor constraint");
   const page = template.page({ parameters: template.parameters });
-  return {
+  const templateInput = {
     from: collectionIdentity(collection),
     parameters,
     select: Object.entries(selection).map(([key, selected]) => selected.kind === "toOne"
@@ -210,6 +215,31 @@ function compileDataQuery(value) {
     order: order.map(({ field, direction, nulls }) => ({ field, direction, nulls })),
     page: { kind: "forwardCursor", first: parameterOperand(page.first), after: parameterOperand(page.after), uniqueConstraint: collectionIdentity(collection) + "/constraint:" + unique.name },
   };
+  const parameterCodec = (parameter) => {
+    let codec = parameter.parameterKind === "list"
+      ? { kind: "array", items: { kind: parameter.itemKind }, maximum: parameter.maximumItems }
+      : parameter.parameterKind === "cursor"
+        ? { kind: "text" }
+        : { kind: parameter.parameterKind, ...(parameter.minimum === undefined ? {} : { minimum: parameter.minimum }), ...(parameter.maximum === undefined ? {} : { maximum: parameter.maximum }) };
+    return parameter.nullable === true ? { kind: "nullable", codec } : codec;
+  };
+  const fieldForIdentity = (identity) => {
+    for (const candidate of relationalCollections.values())
+      for (const [name, field] of Object.entries(candidate.fields))
+        if (fieldIdentity(candidate, name) === identity) return field;
+    throw new Error("QP-DATA unknown selected Field " + identity);
+  };
+  const selectedCodec = (selected) => selected.kind === "toOne"
+    ? { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, operationFieldCodec(fieldForIdentity(child.field))])) } }
+    : operationFieldCodec(fieldForIdentity(selected.__queryField));
+  return {
+    templateInput,
+    input: { kind: "object", properties: Object.fromEntries(Object.entries(template.parameters).map(([name, parameter]) => [name, parameterCodec(parameter)])) },
+    output: { kind: "object", properties: {
+      nodes: { kind: "array", items: { kind: "object", properties: Object.fromEntries(Object.entries(selection).map(([key, selected]) => [key, selectedCodec(selected)])) } },
+      pageInfo: { kind: "object", properties: { endCursor: { kind: "nullable", codec: { kind: "text" } }, hasNextPage: { kind: "boolean" } } },
+    } },
+  };
 }
 
 const projectRelationalValue = (value) => {
@@ -217,7 +247,14 @@ const projectRelationalValue = (value) => {
     const compiled = compilePolicy(value);
     return { __questpie: value.__questpie, kind: "policy", name: value.name, identity: value.identity, target: value.target, program: compiled.program, policyScopes: compiled.scopes };
   }
-  if (value?.kind === "dataQuery") return { kind: "dataQuery", templateInput: compileDataQuery(value) };
+  if (value?.kind === "dataQuery") {
+    const compiled = compileDataQuery(value);
+    return { kind: "dataQuery", templateInput: compiled.templateInput };
+  }
+  if (value?.__questpie?.resourceKind === "query" && value.query?.kind === "dataQuery") {
+    const compiled = compileDataQuery(value.query);
+    return { ...value, query: compiled.templateInput, input: compiled.input, output: compiled.output };
+  }
   return value;
 };
 `;

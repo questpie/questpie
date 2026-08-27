@@ -256,6 +256,7 @@ function operationContract(
 			);
 		policyContract = { kind: "authenticated" };
 	}
+	const planBacked = kind === "query" && value.query !== undefined;
 	return {
 		format: `questpie.${kind}-definition-contract`,
 		version: 1,
@@ -264,7 +265,8 @@ function operationContract(
 		output: codecContract(value.output),
 		...(kind === "mutation" ? { declaredErrors, policy: policyContract } : {}),
 		exposure: value.network === true ? "network" : "server",
-		executableSlots: ["handler"],
+		executableSlots: planBacked ? [] : ["handler"],
+		...(planBacked ? { query: record(value.query, "query.query") } : {}),
 	};
 }
 

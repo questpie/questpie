@@ -1,2 +1,2 @@
 export { definePolicy, policy } from "./policy";
-export { dataQuery, query } from "./query";
+export { dataQuery, query, query as expr } from "./query";

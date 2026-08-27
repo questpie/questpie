@@ -97,14 +97,14 @@ export type QueryParameterV1 =
 			name: string;
 			kind: "scalar";
 			codec: ScalarCodecV1;
-			nullable: false;
+			nullable: boolean;
 	  }>
 	| Readonly<{
 			name: string;
 			kind: "list";
 			codec: ScalarCodecV1;
 			maximumItems: number;
-			nullable: false;
+			nullable: boolean;
 			semantics: "set";
 	  }>
 	| Readonly<{ name: string; kind: "cursor"; nullable: true }>;

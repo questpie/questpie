@@ -115,7 +115,8 @@ export const codec = Object.freeze({
 	},
 	nullable: <const ValueCodec extends AnyCodec>(
 		value: ValueCodec,
-	): Codec<CodecValue<ValueCodec> | null, "nullable"> =>
+	): Codec<CodecValue<ValueCodec> | null, "nullable"> &
+		Readonly<{ codec: ValueCodec }> =>
 		Object.freeze({ kind: "nullable", codec: value }),
 	optional: <const ValueCodec extends AnyCodec>(
 		value: ValueCodec,

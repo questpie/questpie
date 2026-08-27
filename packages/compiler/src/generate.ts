@@ -300,6 +300,7 @@ export function renderAppContract(
 			})
 			.join(" ")} }`;
 	const queryRuns = relational.queries
+		.filter((query) => query.identity === null)
 		.map((query) => {
 			const definition = `(typeof import(${JSON.stringify(sourceModulePath(query.origin.path))}))[${JSON.stringify(query.origin.exportName)}]`;
 			const result = `Readonly<{ nodes: Array<${renderSelection(query.select)}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>`;
@@ -406,18 +407,21 @@ export interface ActionContext extends Omit<RootExecution, "services"> {
 	readonly mutations: GeneratedMutationOperations;
 }
 
-export type QueryDefinition<Name extends keyof GeneratedQueries> = Readonly<{
+type QueryDefinitionBase<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly kind: "query";
 	readonly identity: \`query:\${Name & string}\`;
 	readonly name: Name;
 	readonly network: boolean;
+}>;
+
+export type QueryDefinition<Name extends keyof GeneratedQueries> = QueryDefinitionBase<Name> & (Readonly<{
 	readonly input: Codec<GeneratedQueries[Name]["input"]>;
 	readonly output: Codec<GeneratedQueries[Name]["output"]>;
 	readonly handler: (input: Readonly<{
 		input: GeneratedQueries[Name]["input"];
 		ctx: QueryContext;
 	}>) => GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
-}>;
+}> | Readonly<{ readonly query: unknown }>);
 
 export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 	definition: Readonly<{
@@ -429,7 +433,7 @@ export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 			input: GeneratedQueries[Name]["input"];
 			ctx: QueryContext;
 		}>): GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
-	}>,
+	}> | Readonly<{ name: Name; network?: boolean; query: unknown }>,
 ) => QueryDefinition<Name>;
 
 type EmptyDefinitionFactory = (definition: never) => never;

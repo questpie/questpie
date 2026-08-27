@@ -1,4 +1,5 @@
 import type { CheckConstraintDefinition } from "./check-expression";
+import type { CollectionListAuthoring } from "./relational/query";
 import type { FieldNode } from "./shape";
 
 export type FieldReference = string | readonly [string, ...string[]];
@@ -108,4 +109,5 @@ export interface CollectionDefinition<
 	readonly relations: Relations;
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
+	readonly list: CollectionListAuthoring<Fields>;
 }

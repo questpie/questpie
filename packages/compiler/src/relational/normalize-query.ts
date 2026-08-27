@@ -105,14 +105,19 @@ function normalizeParameter(value: unknown): QueryParameterV1 {
 		return { kind: "cursor", name, nullable: true };
 	const codec = cloneJson(parameter.codec) as ScalarCodecV1;
 	if (parameter.kind === "scalar")
-		return { kind: "scalar", name, codec, nullable: false };
+		return {
+			kind: "scalar",
+			name,
+			codec,
+			nullable: parameter.nullable === true,
+		};
 	if (parameter.kind === "list")
 		return {
 			kind: "list",
 			name,
 			codec,
 			maximumItems: Number(parameter.maximumItems),
-			nullable: false,
+			nullable: parameter.nullable === true,
 			semantics: "set",
 		};
 	throw new TypeError(`unsupported Query parameter ${String(parameter.kind)}`);

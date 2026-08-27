@@ -17,6 +17,7 @@ import type {
 	FieldDefinition,
 	FieldScalar,
 } from "./field-contract";
+import { collectionList } from "./relational/query";
 import type {
 	PrimaryKeyReferences,
 	SeedInsertValues,
@@ -463,7 +464,7 @@ export function defineCollection<
 		postgres?: Readonly<{ name: string }>;
 	}>,
 ): CollectionDefinition<Name, Fields, Constraints, Indexes, Relations> {
-	return Object.freeze({
+	const collection = {
 		__questpie: Object.freeze({
 			category: "definition",
 			resourceKind: "collection",
@@ -475,7 +476,8 @@ export function defineCollection<
 		relations: input.relations ?? ({} as Relations),
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
-	});
+	} as const;
+	return Object.freeze({ ...collection, list: collectionList(collection) });
 }
 
 export interface SeedStepDefinition<
@@ -606,4 +608,4 @@ export function defineSeed<
 	}) as unknown as SeedDefinition<Name, Dependencies, Steps>;
 }
 
-export { dataQuery, definePolicy, policy, query } from "./relational";
+export { dataQuery, definePolicy, expr, policy, query } from "./relational";

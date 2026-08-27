@@ -25,6 +25,7 @@ export type RelationalGeneratedSelectionV1 =
 
 export interface RelationalGeneratedContractV1 {
 	readonly queries: readonly Readonly<{
+		identity: string | null;
 		origin: Readonly<{ path: string; exportName: string }>;
 		select: readonly RelationalGeneratedSelectionV1[];
 	}>[];
@@ -38,6 +39,7 @@ export function projectRelationalGeneratedContract(
 	input: Readonly<{
 		policies: readonly PolicyProgramV1[];
 		queries: readonly Readonly<{
+			identity: string | null;
 			policy: PolicyIdentity;
 			origin: Readonly<{ path: string; exportName: string }>;
 			select: readonly RootQuerySelectionV1[];
@@ -56,6 +58,7 @@ export function projectRelationalGeneratedContract(
 						?.fields?.selectedOutput.map((rule) => rule.path.join("/")) ?? [],
 				);
 				return Object.freeze({
+					identity: query.identity,
 					origin: Object.freeze({
 						path: query.origin.path,
 						exportName: query.origin.exportName,

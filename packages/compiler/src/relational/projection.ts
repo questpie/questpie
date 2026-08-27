@@ -65,7 +65,7 @@ export function projectRelationalCompilation(
 			input.data,
 		),
 	};
-	const queries = input.exports
+	const structuralQueries = input.exports
 		.filter(
 			(item) =>
 				item.value.kind === "dataQuery" &&
@@ -93,27 +93,64 @@ export function projectRelationalCompilation(
 				span: item.span,
 			};
 			return {
+				identity: null,
 				digest: digest("questpie-data-query-template-v1", template),
 				policy: selectedPolicy.identity,
 				template,
 				origin,
 			};
-		})
-		.sort((left, right) =>
+		});
+	const operationQueries = input.resources
+		.filter(
+			(resource) =>
+				resource.kind === "query" && resource.contract.query !== undefined,
+		)
+		.map((resource) => {
+			const template = normalizeDataQueryTemplate(
+				resource.contract.query,
+				digests,
+			);
+			if (!collections.has(template.from))
+				throw new CompilerDiagnosticError(
+					"QP-COMPOSE-013",
+					"structuralTypeError",
+					`${resource.identity} references unknown ${template.from}`,
+				);
+			const selectedPolicy = selectDefaultPolicy(
+				template.from,
+				policies.map(({ program }) => program),
+			);
+			return {
+				identity: resource.identity,
+				digest: digest("questpie-data-query-template-v1", template),
+				policy: selectedPolicy.identity,
+				template,
+				origin: {
+					packageId: resource.origin.packageId,
+					path: resource.origin.logicalPath,
+					exportName: resource.origin.exportName,
+					span: resource.origin.span,
+				} satisfies ProjectionOrigin,
+			};
+		});
+	const queries = [...structuralQueries, ...operationQueries].sort(
+		(left, right) =>
 			compareAscii(
 				`${left.origin.path}\0${left.origin.exportName}`,
 				`${right.origin.path}\0${right.origin.exportName}`,
 			),
-		);
+	);
 	const structuralOrigins = queries.map((query) => ({
 		kind: "dataQuery",
 		digest: query.digest,
+		...(query.identity === null ? {} : { owner: query.identity }),
 		establishedAt: { kind: "export", ...query.origin },
 	}));
 	return {
 		declarations: projectRelationalGeneratedContract({
 			policies: policies.map(({ program }) => program),
-			queries: queries.map(({ policy, origin, template }) => ({
+			queries: queries.map(({ identity, policy, origin, template }) => ({
+				identity,
 				policy,
 				origin,
 				select: template.select,
