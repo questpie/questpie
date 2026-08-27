@@ -2166,7 +2166,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 	private hasUnconditionalUpdateAuthority(
 		context: CRUDContext,
-		_data: Record<string, any>,
+		_data: Record<string, unknown>,
 	): boolean {
 		if (context.accessMode === "system") return true;
 		const rule = this.state.access?.update ?? this.app?.defaultAccess?.update;
@@ -2174,9 +2174,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	private async enforceUpdateAuthority(
-		records: any[],
+		records: OptimisticConcurrencyRecord[],
 		context: CRUDContext,
-		data: Record<string, any>,
+		data: Record<string, unknown>,
 	): Promise<void> {
 		for (const existing of records) {
 			const canUpdate = await this.enforceAccessControl(
