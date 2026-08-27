@@ -64,15 +64,20 @@ import { createClient } from "#questpie/client";
 import { useQuery, useLiveQuery, useMutation } from "questpie/react";
 
 // capability Packages keep their own namespaces
-import * as geo from "@questpie/postgis";
-import * as search from "@questpie/pg-search";
+import * as geo from "questpie-postgis";
+import * as search from "questpie-pg-search";
 ```
 
-The exact capability npm names remain provisional. The namespace boundary is
-not: core uses `field.*`, `codec.*`, `index.btree`, `constraint.*`, and
+Capability packages use `questpie-<capability>` names; for example
+`questpie-postgis`, `questpie-pg-search`, and `questpie-better-auth`. Core uses
+`field.*`, `codec.*`, `index.btree`, `constraint.*`, and
 `relation.*`; PostGIS uses `geo.field.*`, `geo.codec.*`, `geo.index.*`; and
 the Search Package uses `search.index.*`. Packages never mutate core
-namespaces through ambient module augmentation.
+namespaces through ambient module augmentation. Any ecosystem author may use
+the prefix; it does not mean official, trusted, reviewed, or maintained.
+QUESTPIE trusts only the identity, capabilities, Definitions, migrations, and
+integrity recorded by the compiled Package declaration. Official documentation
+labels maintained packages separately.
 
 ## 1. Declare a Collection
 

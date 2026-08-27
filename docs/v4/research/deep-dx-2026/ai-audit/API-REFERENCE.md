@@ -4,20 +4,24 @@
 
 ## Imports
 
-| Module                | Contents                                                                                                                                                                                                                                                                                                                               |
-| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `questpie`            | structural surface: `defineCollection`, `defineSearch`, `definePolicy`, `defineService`, `defineContext`, `defineCredentialResolver`, `field.*`, `codec.*`, `config.*`, `constraint.*`, `relation.*`, `relationRef`, `index.*`, `expr.*`, `policy.*`, `operation.error`, `durable.*`, `principal.*`, types `PolicyScope`, `RowOperand` |
-| `#questpie/app`       | generated executable factories: `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`, `defineJob`; generated app entry `createApp`, `loadAppConfig`; generated types (`AppData`, execution inputs)                                                                                                                           |
-| `#questpie/client`    | generated browser-safe `createClient` plus named per-Operation types `<Domain><Name>Input/Result/Error`                                                                                                                                                                                                                                |
-| `questpie/react`      | `useQuery`, `useLiveQuery`, `useMutation`                                                                                                                                                                                                                                                                                              |
-| `@questpie/postgis`   | namespace import `geo`: `geo.field.point`, `geo.codec.point`, `geo.index.spatial`                                                                                                                                                                                                                                                      |
-| `@questpie/pg-search` | namespace import `search`: `search.index.fullText`; semantic Search Resources still use core `defineSearch`                                                                                                                                                                                                                            |
+| Module               | Contents                                                                                                                                                                                                                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `questpie`           | structural surface: `defineCollection`, `defineSearch`, `definePolicy`, `defineService`, `defineContext`, `defineCredentialResolver`, `field.*`, `codec.*`, `config.*`, `constraint.*`, `relation.*`, `relationRef`, `index.*`, `expr.*`, `policy.*`, `operation.error`, `durable.*`, `principal.*`, types `PolicyScope`, `RowOperand` |
+| `#questpie/app`      | generated executable factories: `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`, `defineJob`; generated app entry `createApp`, `loadAppConfig`; generated types (`AppData`, execution inputs)                                                                                                                           |
+| `#questpie/client`   | generated browser-safe `createClient` plus named per-Operation types `<Domain><Name>Input/Result/Error`                                                                                                                                                                                                                                |
+| `questpie/react`     | `useQuery`, `useLiveQuery`, `useMutation`                                                                                                                                                                                                                                                                                              |
+| `questpie-postgis`   | namespace import `geo`: `geo.field.point`, `geo.codec.point`, `geo.index.spatial`                                                                                                                                                                                                                                                      |
+| `questpie-pg-search` | namespace import `search`: `search.index.fullText`; semantic Search Resources still use core `defineSearch`                                                                                                                                                                                                                            |
 
 Browser code must not import `questpie` or `#questpie/app`; server structural
 code must not import `#questpie/client`. Violations are compile diagnostics.
 Capability Packages are imported with `import * as geo` / `import * as
-search`; they never augment the core namespaces. Exact npm names remain
-provisional, but this namespace ownership is binding.
+search`; they never augment the core namespaces. Capability package names use
+the binding `questpie-<capability>` convention. Any author may publish one;
+the prefix grants no official or trusted status. The compiled Package
+declaration supplies identity, version, capabilities, Definitions, migrations,
+artifact integrity, and collision ownership. The compiler does not recognize
+packages by hardcoded npm names.
 
 ## Codecs (`codec.*`)
 
@@ -105,8 +109,8 @@ implementable without focused ratification.
 
 ```ts
 import { defineSearch } from "questpie";
-import * as search from "@questpie/pg-search";
-import * as geo from "@questpie/postgis";
+import * as search from "questpie-pg-search";
+import * as geo from "questpie-postgis";
 
 defineSearch({
   name,

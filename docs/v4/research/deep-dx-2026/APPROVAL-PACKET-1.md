@@ -169,17 +169,16 @@ import type { TicketsQueueInput, TicketsQueueResult } from "#questpie/client";
 // thin React adapter over the vanilla client observer core
 import { useQuery, useLiveQuery, useMutation } from "questpie/react";
 
-// capability Packages: one namespace import per Package, exact npm names
-// provisional, namespace structure binding
-import * as search from "@questpie/pg-search";
-import * as geo from "@questpie/postgis";
+// capability Packages: questpie-<capability>, one namespace per Package
+import * as search from "questpie-pg-search";
+import * as geo from "questpie-postgis";
 ```
 
 The lists above are the load-bearing names, not an exhaustive export
 inventory; `shape`, `value`, `seed`, `context`, `principal`, `operation`, and
 the other retained ADR-0019 names stay available unchanged.
 
-Ownership rules this map freezes (exact npm names stay open):
+Ownership rules this map freezes:
 
 - `questpie` owns structural grammar only; it can never execute application
   behavior. `defineSearch` lives here, not in a capability Package: it is the
@@ -194,6 +193,16 @@ Ownership rules this map freezes (exact npm names stay open):
   it adapts the neutral observer core to React's external-store hooks.
 - A Package exports structural Definitions and Augmentations under explicit
   activation in `questpie.json`; installation alone activates nothing.
+- Capability packages use the npm naming convention `questpie-<capability>`:
+  for example `questpie-postgis`, `questpie-pg-search`, and
+  `questpie-better-auth`. Any ecosystem author may publish a compatible
+  `questpie-*` package. The prefix does not mean official, trusted, reviewed,
+  or maintained, and compiler/runtime trust never derives from an npm name.
+  Package identity, version, capabilities, Definitions, migrations, artifact
+  integrity, and collision ownership come only from the compiled Package
+  declaration. The compiler must not hardcode known `questpie-*` names.
+  Official documentation may separately label maintained packages as
+  official.
 - A capability Package exports exactly **one namespace object** (`geo`,
   `search`), never scattered top-level names. Each namespace groups its
   constructors the same way core `questpie` groups `field`/`codec`/`index`:
@@ -1935,7 +1944,7 @@ human-approved in direction; section 24 records it.
   Definition categories and parameterizes **fixed, core-implemented** node
   kinds (declarations, config schemas, migrations, metadata); it never
   registers executable callbacks into the compiler, expression kernel, or
-  SQL lowering. A first-party capability Package may expose a focused named
+  SQL lowering. A compatible capability Package may expose a focused named
   Index constructor under its own namespace (`geo.index.spatial`,
   `search.index.fullText`). It does not mutate core `index`, which remains
   B-tree-only, and it does not create a general third-party index or operator
@@ -1959,7 +1968,7 @@ pg_search-backed Search projection. Scope honesty first:
   pgvector internally, and this packet does not claim pg_search eliminates
   pgvector;
 - the application-facing API speaks the QUESTPIE Search language only. The
-  provisional capability Package import may identify pg-search, but its
+  capability Package name may identify pg-search, but its
   provider query grammar, physical index vocabulary, and SQL never appear in
   ordinary application authoring;
 - embedding/vector storage remains an internal physical detail of Search; no
@@ -2037,7 +2046,7 @@ vertical against Support Desk, in the same rubric as section 4.
 ```ts
 // src/tickets/search.ts
 import { defineSearch } from "questpie";
-import * as search from "@questpie/pg-search";
+import * as search from "questpie-pg-search";
 
 import { tickets } from "../tickets";
 
@@ -2201,7 +2210,7 @@ The concrete stage vertical against Support Desk: an office location on
 ```ts
 // src/teams.ts
 import { defineCollection, field } from "questpie";
-import * as geo from "@questpie/postgis";
+import * as geo from "questpie-postgis";
 
 export const teams = defineCollection({
 	name: "teams",
@@ -2222,7 +2231,7 @@ export const teams = defineCollection({
 
 ```ts
 // src/teams/queries.ts
-import * as geo from "@questpie/postgis";
+import * as geo from "questpie-postgis";
 import { codec, policy } from "questpie";
 
 import { defineQuery } from "#questpie/app";

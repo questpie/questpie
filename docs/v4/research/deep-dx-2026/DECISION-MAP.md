@@ -230,7 +230,10 @@ constructors only through their namespaces (`search.index.fullText`,
 Index is explicitly named in the owning Resource's `indexes` map. Core
 `defineSearch` is the sole semantic Search Resource constructor. The packet
 ledgers the required bare-index, object-map, and non-B-tree capability
-supersessions; it does not edit their current authority.
+supersessions; it does not edit their current authority. Capability npm names
+follow `questpie-<capability>` (`questpie-postgis`, `questpie-pg-search`,
+`questpie-better-auth`). The prefix conveys no trust or official status;
+compiled Package declarations, not names, own identity and integrity.
 
 ## #8: What proves the redesign is simpler?
 
