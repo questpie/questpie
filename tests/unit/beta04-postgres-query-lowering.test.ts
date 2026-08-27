@@ -459,6 +459,33 @@ test("lowers one Policy-authorized Message page to one static PostgreSQL stateme
 		query,
 		policies,
 	});
+	const changedRelationPolicy: PolicyProgramV1 = {
+		...membershipPolicy,
+		operations: {
+			read: {
+				admission: { kind: "authenticated" },
+				rows: equal(
+					execution("authority", ["kind"], "authority"),
+					literal("service", "authority"),
+				),
+			},
+		},
+	};
+	const changedRelationPlan = lowerPostgresQueryPlan({
+		schema: schema(),
+		query,
+		policies: policies.map((entry) =>
+			entry.program.identity === membershipPolicy.identity
+				? { ...entry, program: changedRelationPolicy }
+				: entry,
+		),
+	});
+	expect(changedRelationPlan.policyProgramDigest).toBe(
+		plan.policyProgramDigest,
+	);
+	expect(changedRelationPlan.disclosureProgramDigest).not.toBe(
+		plan.disclosureProgramDigest,
+	);
 
 	expect(JSON.stringify(plan, null, 2)).toMatchSnapshot();
 	expect(
