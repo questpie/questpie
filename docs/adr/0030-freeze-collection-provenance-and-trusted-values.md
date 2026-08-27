@@ -63,17 +63,21 @@ rechecks it. No stale handler value is described as lock-owned evidence. This
 list describes allowed Mutation capabilities, not a claim that Runtime can
 inspect arbitrary TypeScript provenance.
 
-The lanes merge inside the owning Mutation transaction. Their exact order is:
-decode both exact objects; reject overlap; apply caller Field authority to the
-caller lane; apply the existing closed Field scalar normalization separately to
-each supplied lane; construct schema defaults; overlay normalized trusted
-values; validate the complete candidate; then apply full candidate Policy and
-PostgreSQL constraints. `values` bypasses only caller Field authority. Authored
-lifecycle `normalize` remains deferred and is not implied by this scalar step.
-Selection, output authority, receipt, and Change Ledger capture follow the
-existing ADR-0011 order. Policy never supplies or rewrites a value. A trusted
-assignment that forges Tenant, requester, ownership, or any other invariant is
-denied by the same candidate Policy as caller data.
+The lanes merge inside the owning Mutation transaction. Both modes first decode
+the exact objects, reject overlap, apply caller Field authority only to the
+caller lane, and apply existing closed Field scalar normalization separately to
+both supplied lanes. Create then starts from normalized caller input, fills only
+absent database defaults and nullable-without-default Fields as `NULL`, and
+overlays normalized trusted values. Update starts from the locked current row,
+overlays the normalized caller patch, then overlays normalized trusted values;
+it never reapplies create defaults. The complete candidate then passes
+validation, full candidate Policy, and PostgreSQL constraints. `values` bypasses
+only caller Field authority. Authored lifecycle `normalize` remains deferred
+and is not implied by this scalar step. Selection, output authority, receipt,
+and Change Ledger capture follow the existing ADR-0011 order. Policy never
+supplies or rewrites a value. A trusted assignment that forges Tenant,
+requester, ownership, or any other invariant is denied by the same candidate
+Policy as caller data.
 
 A write with an empty `patch` and non-empty `values` is real work. Empty
 `patch` and empty `values` retain the existing empty-update rejection. Required

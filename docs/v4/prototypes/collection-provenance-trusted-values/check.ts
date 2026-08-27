@@ -3,8 +3,9 @@ import { deepStrictEqual, strictEqual, throws } from "node:assert";
 type Provenance = Readonly<{
 	immutable?: true;
 	server?: true;
-	required?: true;
+	nullable?: true;
 	default?: unknown;
+	normalize?: (value: unknown) => unknown;
 }>;
 
 type Schema = Readonly<Record<string, Provenance>>;
@@ -46,6 +47,15 @@ function exactLane(
 	}
 }
 
+function normalizeLane(schema: Schema, values: ValueMap): ValueMap {
+	return Object.fromEntries(
+		Object.entries(values).map(([name, value]) => [
+			name,
+			schema[name]?.normalize?.(value) ?? value,
+		]),
+	);
+}
+
 type UpdateOptions = Readonly<{
 	schema: Schema;
 	current: ValueMap;
@@ -57,8 +67,6 @@ type UpdateOptions = Readonly<{
 function update(options: UpdateOptions): ValueMap {
 	const patch = options.patch ?? {};
 	const values = options.values ?? {};
-	exactLane(options.schema, "update", "caller", patch);
-	exactLane(options.schema, "update", "values", values);
 	for (const name of Object.keys(patch)) {
 		if (Object.hasOwn(values, name)) {
 			throw new TypeError(`Field appears in patch and values: ${name}`);
@@ -67,7 +75,13 @@ function update(options: UpdateOptions): ValueMap {
 	if (Object.keys(patch).length === 0 && Object.keys(values).length === 0) {
 		throw new TypeError("empty update");
 	}
-	const candidate = Object.freeze({ ...options.current, ...patch, ...values });
+	exactLane(options.schema, "update", "caller", patch);
+	exactLane(options.schema, "update", "values", values);
+	const candidate = Object.freeze({
+		...options.current,
+		...normalizeLane(options.schema, patch),
+		...normalizeLane(options.schema, values),
+	});
 	if (!options.policy(candidate))
 		throw new TypeError("candidate Policy denied");
 	return candidate;
@@ -83,21 +97,29 @@ function create(
 ): ValueMap {
 	const input = options.input ?? {};
 	const values = options.values ?? {};
-	exactLane(options.schema, "create", "caller", input);
-	exactLane(options.schema, "create", "values", values);
 	for (const name of Object.keys(input)) {
 		if (Object.hasOwn(values, name)) {
 			throw new TypeError(`Field appears in input and values: ${name}`);
 		}
 	}
-	const defaults = Object.fromEntries(
-		Object.entries(options.schema)
-			.filter(([, field]) => Object.hasOwn(field, "default"))
-			.map(([name, field]) => [name, field.default]),
-	);
-	const candidate = Object.freeze({ ...defaults, ...input, ...values });
+	exactLane(options.schema, "create", "caller", input);
+	exactLane(options.schema, "create", "values", values);
+	const candidateDraft: Record<string, unknown> = {
+		...normalizeLane(options.schema, input),
+	};
 	for (const [name, field] of Object.entries(options.schema)) {
-		if (field.required && !Object.hasOwn(candidate, name)) {
+		if (Object.hasOwn(candidateDraft, name)) continue;
+		if (Object.hasOwn(field, "default")) candidateDraft[name] = field.default;
+		else if (field.nullable) candidateDraft[name] = null;
+	}
+	Object.assign(candidateDraft, normalizeLane(options.schema, values));
+	const candidate = Object.freeze(candidateDraft);
+	for (const [name, field] of Object.entries(options.schema)) {
+		if (
+			!field.nullable &&
+			!Object.hasOwn(field, "default") &&
+			!Object.hasOwn(candidate, name)
+		) {
 			throw new TypeError(`missing required Field: ${name}`);
 		}
 	}
@@ -107,13 +129,19 @@ function create(
 }
 
 const tickets = Object.freeze({
-	id: { server: true, immutable: true, required: true },
-	organizationId: { server: true, immutable: true, required: true },
-	requesterId: { server: true, required: true },
-	reference: { immutable: true, required: true },
-	summary: { required: true },
-	status: { server: true, required: true, default: "open" },
-	closedAt: { server: true },
+	id: { server: true, immutable: true },
+	organizationId: { server: true, immutable: true },
+	requesterId: { server: true },
+	reference: { immutable: true },
+	summary: {
+		normalize: (value: unknown) => String(value).trim(),
+	},
+	status: {
+		server: true,
+		default: "open",
+		normalize: (value: unknown) => String(value).toLowerCase(),
+	},
+	closedAt: { server: true, nullable: true },
 } satisfies Schema);
 
 deepStrictEqual(fieldsFor(tickets, "create", "caller"), [
@@ -151,8 +179,10 @@ const closed = update({
 	schema: tickets,
 	current,
 	patch: {},
-	values: { status: "closed", closedAt: "2026-08-28T00:00:00.000Z" },
-	policy: (candidate) => candidate.organizationId === "organization-1",
+	values: { status: "CLOSED", closedAt: "2026-08-28T00:00:00.000Z" },
+	policy: (candidate) =>
+		candidate.organizationId === "organization-1" &&
+		candidate.status === "closed",
 });
 strictEqual(closed.status, "closed");
 
@@ -214,7 +244,7 @@ throws(
 
 const created = create({
 	schema: tickets,
-	input: { reference: "SUP-2", summary: "Cannot sign in" },
+	input: { reference: "SUP-2", summary: "  Cannot sign in  " },
 	values: {
 		id: "ticket-2",
 		organizationId: "organization-1",
@@ -224,6 +254,7 @@ const created = create({
 });
 deepStrictEqual(created, {
 	status: "open",
+	closedAt: null,
 	reference: "SUP-2",
 	summary: "Cannot sign in",
 	id: "ticket-2",
