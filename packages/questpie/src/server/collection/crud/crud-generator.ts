@@ -2233,6 +2233,31 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		}
 	}
 
+	private async runUpdateOutputHooks(
+		updatedRecords: any[],
+		records: any[],
+		context: CRUDContext,
+		db: any,
+	): Promise<void> {
+		for (const updated of updatedRecords) {
+			const original = records.find((record) => record.id === updated.id);
+
+			await this.runFieldOutputHooks(updated, "update", context, db, original);
+
+			await this.executeHooks(
+				this.state.hooks?.afterRead,
+				this.createHookContext({
+					data: updated,
+					original,
+					operation: "update",
+					context,
+					db,
+				}),
+			);
+			await this.filterFieldsForRead(updated, context);
+		}
+	}
+
 	/**
 	 * Shared core update handler for updateById and updateMany
 	 * Ensures consistency in access control, hooks, validation, and re-fetching.
@@ -2243,7 +2268,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 *   write transaction so a later conflict rolls their writes back.
 	 * - Legacy last-write-wins mutations retain intent-hook semantics:
 	 *   `beforeValidate`/`beforeChange` may run for rows that later lose the
-	 *   write-time claim check.
+	 *   write-time claim check. They run before the row lock but inside the
+	 *   write transaction so denied mutations roll their writes back.
 	 * - `afterChange`, versioning, and the return value are driven by the
 	 *   in-transaction re-fetch of claimed rows — they are *fact* hooks and
 	 *   fire for winners only.
@@ -2256,6 +2282,8 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		internal?: {
 			crdtRestore?: StagedCrdtOwnerActivation;
 			revisionPrelocked?: true;
+			legacyTransactionBound?: true;
+			returnBeforeOutputHooks?: true;
 		},
 	): Promise<any> {
 		if (
@@ -2278,6 +2306,28 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const db = this.getDb(normalized);
 		const isBatch = "where" in params;
 		const data = params.data;
+		if (!this.getOptimisticConcurrency() && !internal?.legacyTransactionBound) {
+			const deferred = await withTransaction(db, (tx) =>
+				this._executeUpdate(
+					params,
+					{ ...normalized, db: tx },
+					{
+						...internal,
+						legacyTransactionBound: true,
+						returnBeforeOutputHooks: true,
+					},
+				),
+			);
+			if (Array.isArray(deferred)) return deferred;
+			const output = deferred as { updatedRecords: any[]; records: any[] };
+			await this.runUpdateOutputHooks(
+				output.updatedRecords,
+				output.records,
+				normalized,
+				db,
+			);
+			return isBatch ? output.updatedRecords : output.updatedRecords[0];
+		}
 		if (this.getOptimisticConcurrency() && !internal?.revisionPrelocked) {
 			return withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
@@ -2360,7 +2410,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					.from(this.table)
 					.where(inArray(getColumn(this.table, "id")!, claimedIds))
 					.for("update");
-				await this.enforceUpdateAuthority(lockedRows, normalized, data);
+				await this.enforceUpdateAuthority(lockedRows, txContext, data);
 				if (isBatch) {
 					this.assertExpectedRevisions(
 						params as {
@@ -2810,30 +2860,12 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			throw error;
 		}
 
-		// 6. afterRead hooks and notifications
-		for (const updated of updatedRecords) {
-			const original = records.find((r) => r.id === updated.id);
-
-			await this.runFieldOutputHooks(
-				updated,
-				"update",
-				normalized,
-				db,
-				original,
-			);
-
-			await this.executeHooks(
-				this.state.hooks?.afterRead,
-				this.createHookContext({
-					data: updated,
-					original,
-					operation: "update",
-					context: normalized,
-					db,
-				}),
-			);
-			await this.filterFieldsForRead(updated, normalized);
+		if (internal?.returnBeforeOutputHooks) {
+			return { updatedRecords, records };
 		}
+
+		// 6. afterRead hooks and notifications
+		await this.runUpdateOutputHooks(updatedRecords, records, normalized, db);
 
 		return isBatch ? updatedRecords : updatedRecords[0];
 	}
@@ -2887,36 +2919,35 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				);
 			};
 
-			// Legacy collections retain intent-hook semantics: hooks run before
-			// the write-time claim and may observe a concurrent winner. Running
-			// these hooks under a row lock would deadlock hooks that deliberately
-			// exercise the TOCTOU window through the application database.
-			if (!optimisticConcurrency) {
-				const [preimage] = await db
-					.select()
-					.from(this.table)
-					.where(eq(getColumn(this.table, "id")!, id))
-					.limit(1);
-				if (
-					!preimage ||
-					(this.state.options.softDelete && preimage.deletedAt != null)
-				) {
-					if (await this.hasUnconditionalDeleteAuthority(normalized, params)) {
-						throw ApiError.notFound("Record", id);
-					}
-					this.throwNeutralWriteDenial("delete");
-				}
-				existing = preimage;
-				await this.enforceDeleteAuthority(preimage, normalized, params);
-				await runDeleteGuardsAndHooks(preimage, normalized, db);
-				stagedCrdtOwner = await this.stageCrdtOwner(preimage);
-			}
-
 			// Use transaction for delete + version
 			await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
 				let currentExisting: OptimisticConcurrencyRecord;
 				let crdtFallbackOwner: OptimisticConcurrencyRecord;
+
+				// Legacy collections retain intent-hook semantics: hooks run before
+				// the write-time claim and row lock, but share the write transaction
+				// so a later denial rolls their database effects back.
+				if (!optimisticConcurrency) {
+					const [preimage] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.limit(1);
+					if (
+						!preimage ||
+						(this.state.options.softDelete && preimage.deletedAt != null)
+					) {
+						if (await this.hasUnconditionalDeleteAuthority(txContext, params)) {
+							throw ApiError.notFound("Record", id);
+						}
+						this.throwNeutralWriteDenial("delete");
+					}
+					existing = preimage;
+					await this.enforceDeleteAuthority(preimage, txContext, params);
+					await runDeleteGuardsAndHooks(preimage, txContext, tx);
+					stagedCrdtOwner = await this.stageCrdtOwner(preimage);
+				}
 
 				if (optimisticConcurrency) {
 					const [lockedBeforeDelete] = await tx
@@ -3505,7 +3536,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					}
 					for (const row of locked) {
 						const update = params.updates.find((entry) => entry.id === row.id)!;
-						await this.enforceUpdateAuthority([row], normalized, update.data);
+						await this.enforceUpdateAuthority([row], txContext, update.data);
 					}
 					if (
 						locked.some(
@@ -3575,42 +3606,42 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				StagedCrdtOwnerActivation
 			>();
 
-			if (!optimisticConcurrency) {
-				const deleteBulkMeta = {
-					isBatch: true as const,
-					recordIds: records.map((record) => record.id),
-					records,
-					count: records.length,
-				};
-				for (const record of records) {
-					await this.enforceDeleteAuthority(record, normalized, params);
-					await this.executeCollectionHooksWithGlobal(
-						"beforeDelete",
-						this.state.hooks?.beforeDelete,
-						this.createHookContext({
-							data: record,
-							original: record,
-							operation: "delete",
-							context: normalized,
-							db,
-							bulk: deleteBulkMeta,
-						}),
-					);
-				}
-				await Promise.all(
-					records.map(async (record) => {
-						const staged = await this.stageCrdtOwner(record);
-						if (staged) stagedCrdtOwners.set(record.id, staged);
-					}),
-				);
-				expectedRevisions = this.assertExpectedRevisions(params, records);
-			}
-
 			// 3. Batched DELETE query
 			// Claim check inside the tx: only rows that STILL match the caller's
 			// where at delete time are deleted ("winners").
 			const winners = await withTransaction(db, async (tx) => {
 				const txContext = { ...normalized, db: tx };
+
+				if (!optimisticConcurrency) {
+					const deleteBulkMeta = {
+						isBatch: true as const,
+						recordIds: records.map((record) => record.id),
+						records,
+						count: records.length,
+					};
+					for (const record of records) {
+						await this.enforceDeleteAuthority(record, txContext, params);
+						await this.executeCollectionHooksWithGlobal(
+							"beforeDelete",
+							this.state.hooks?.beforeDelete,
+							this.createHookContext({
+								data: record,
+								original: record,
+								operation: "delete",
+								context: txContext,
+								db: tx,
+								bulk: deleteBulkMeta,
+							}),
+						);
+					}
+					await Promise.all(
+						records.map(async (record) => {
+							const staged = await this.stageCrdtOwner(record);
+							if (staged) stagedCrdtOwners.set(record.id, staged);
+						}),
+					);
+					expectedRevisions = this.assertExpectedRevisions(params, records);
+				}
 
 				let winnerIdList = await this.claimRecords({
 					tx,

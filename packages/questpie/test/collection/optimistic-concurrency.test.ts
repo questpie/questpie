@@ -131,6 +131,37 @@ const guardedDocuments = collection("guarded_documents")
 			`);
 		},
 	});
+const guardedLegacyDocuments = collection("guarded_legacy_documents")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.access({
+		update: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+		delete: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+	})
+	.hooks({
+		beforeChange: async ({ db, operation, original }) => {
+			if (operation !== "update" || guardedHookMode !== "update") return;
+			await db.execute(sql`
+				UPDATE guarded_legacy_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+		beforeDelete: async ({ db, original }) => {
+			if (guardedHookMode !== "delete") return;
+			await db.execute(sql`
+				UPDATE guarded_legacy_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+	});
 
 describe("generated CRUD optimistic concurrency", () => {
 	let setup: Awaited<ReturnType<typeof buildMockApp>>;
@@ -148,6 +179,7 @@ describe("generated CRUD optimistic concurrency", () => {
 		guardedHookTenantId = undefined;
 		setup = await buildMockApp({
 			collections: {
+				guardedLegacyDocuments,
 				optimisticTags,
 				optimisticGroups,
 				optimisticTagGroups,
@@ -343,6 +375,90 @@ describe("generated CRUD optimistic concurrency", () => {
 			context,
 		);
 		expect(unchanged).toMatchObject({ tenantId: ownerId, title: "Keep" });
+	});
+
+	it("rolls back legacy update hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Original" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "update";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.updateById(
+				{ id: guarded.id, data: { title: "Unauthorized" } },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Original" });
+	});
+
+	it("rolls back legacy deleteById hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Keep by id" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.deleteById(
+				{ id: guarded.id },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Keep by id" });
+	});
+
+	it("rolls back legacy deleteMany hook writes after final authority denial", async () => {
+		const ownerId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedLegacyDocuments.create(
+			{ tenantId: ownerId, title: "Keep in bulk" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = crypto.randomUUID();
+
+		await expect(
+			setup.app.collections.guardedLegacyDocuments.deleteMany(
+				{ where: { id: guarded.id } },
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		expect(
+			await setup.app.collections.guardedLegacyDocuments.findOne(
+				{ where: { id: guarded.id } },
+				context,
+			),
+		).toMatchObject({ tenantId: ownerId, title: "Keep in bulk" });
 	});
 
 	it("creates revision 1 and advances it once from the expected revision", async () => {
