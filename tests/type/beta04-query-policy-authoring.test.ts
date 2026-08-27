@@ -17,6 +17,7 @@ describe("BETA-04 relational Query and Policy authoring", () => {
 	dataQuery,
 	defineCollection,
 	definePolicy,
+	expr,
 	field,
 	policy,
 	query,
@@ -139,8 +140,8 @@ interface MessageDescriptor {
 const readableMessages = policy.rows(
 	messages,
 	({ row: message, principal, tenant }) =>
-		policy.exists(memberships, ({ row: membership }) =>
-			query.and(
+		expr.exists(memberships, ({ row: membership }) =>
+			expr.and(
 				message.companyId.equal(tenant.id),
 				membership.companyId.equal(message.companyId),
 				membership.principalId.equal(principal.id),
@@ -229,7 +230,10 @@ policy.rows(messages, ({ row }) => {
 });
 
 // @ts-expect-error Evidence reads return a boolean expression, never their row.
-policy.exists(memberships, ({ row }) => row);
+expr.exists(memberships, ({ row }) => row);
+
+const denyEveryField = expr.never();
+void denyEveryField;
 
 // @ts-expect-error Foundational structural Queries expose no aggregate count.
 void messagePage.count;
