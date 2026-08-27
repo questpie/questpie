@@ -60,7 +60,7 @@
 		},
 		{
 			"command": "PGHOST=127.0.0.1 PGPORT=<disposable> PGUSER=postgres PGPASSWORD=<local-test> PGDATABASE=questpie QUESTPIE_POSTGRES_MAJOR=17 FIREFOX_BIN=/usr/bin/firefox bun test tests/integration/postgres/team-support-desk.test.ts",
-			"result": "PASS: PostgreSQL 17 and Firefox, 1 test and 63 assertions"
+			"result": "PASS"
 		},
 		{
 			"command": "bun test tests/type/beta04-query-policy-authoring.test.ts tests/unit/beta04-relational-normalization.test.ts tests/integration/deep-dx-query-authoring.test.ts",
@@ -68,7 +68,7 @@
 		},
 		{
 			"command": "bun run release -- --dry-run",
-			"result": "PASS: retry-stable package SHA-256 ba9251ee385a7fe4ceac5b8dd36dec46d072cbc90fea0eeb6ea46af444cdd54e and declaration SHA-256 12860486acc060bd32539da9f353e6b99d445ca84a74861fb8927f47437dda75"
+			"result": "PASS"
 		},
 		{
 			"command": "git diff --check",
