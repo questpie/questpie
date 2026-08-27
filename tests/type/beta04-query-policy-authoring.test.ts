@@ -22,7 +22,7 @@ describe("BETA-04 relational Query and Policy authoring", () => {
 	policy,
 	query,
 } from "questpie";
-import type { DataFieldDescriptor } from "questpie";
+import type { DataFieldDescriptor, PolicyScope, RowOperand } from "questpie";
 
 type Equal<Left, Right> =
 	(<Value>() => Value extends Left ? 1 : 2) extends
@@ -62,6 +62,19 @@ const messages = defineCollection({
 		primary: constraint.primaryKey({ fields: ["id"] }),
 	},
 });
+
+const activeMembership = ({ principal, tenant }: PolicyScope) =>
+	expr.exists(memberships, ({ row }) =>
+		expr.and(
+			row.companyId.equal(tenant.id),
+			row.principalId.equal(principal.id),
+			row.status.equal("active"),
+		),
+	);
+
+type MessageRow = RowOperand<typeof messages>;
+const sameCompany = (message: MessageRow, { tenant }: PolicyScope) =>
+	message.companyId.equal(tenant.id);
 
 interface MessageDescriptor {
 	readonly name: "messages";
@@ -139,10 +152,11 @@ interface MessageDescriptor {
 
 const readableMessages = policy.rows(
 	messages,
-	({ row: message, principal, tenant }) =>
+	({ row: message, principal, tenant, authority }) =>
 		expr.exists(memberships, ({ row: membership }) =>
 			expr.and(
-				message.companyId.equal(tenant.id),
+				sameCompany(message, { principal, tenant, authority }),
+				activeMembership({ principal, tenant, authority }),
 				membership.companyId.equal(message.companyId),
 				membership.principalId.equal(principal.id),
 				membership.scopeKey.equal("company"),

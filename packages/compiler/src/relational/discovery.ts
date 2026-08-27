@@ -188,6 +188,7 @@ function compileDataQuery(value) {
     if (candidate.operator === "and" || candidate.operator === "or") return { kind: candidate.operator, expressions: candidate.operands.map(queryExpression) };
     if (candidate.operator === "not") return { kind: "not", expression: queryExpression(candidate.operands[0]) };
     if (candidate.operator === "always") return { kind: "constant", value: true };
+	if (candidate.operator === "exists") throw new Error("QP-DATA-025 unsupportedExpressionCapability expr.exists is Policy-only");
     throw new Error("QP-DATA-005 unknownOperator " + String(candidate.operator));
   };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {

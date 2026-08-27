@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -70,6 +70,36 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 			postgresPlans.plans.find((plan) => plan.queryDigest === queue?.digest)
 				?.sql,
 		).toContain("IS NULL) OR");
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+});
+
+test("rejects Policy evidence from a structural Query before artifact emission", async () => {
+	const temporary = await mkdtemp(join(tmpdir(), "questpie-deep-dx-query-"));
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		await rm(join(temporary, "node_modules"), { force: true, recursive: true });
+		await symlink(
+			resolve(fixtureRoot, "node_modules"),
+			join(temporary, "node_modules"),
+		);
+		const queries = join(temporary, "src/tickets/queries.ts");
+		const source = await readFile(queries, "utf8");
+		await writeFile(
+			queries,
+			source.replace(
+				/where: \(\{ row, parameters \}\) =>\n\s+expr\.and\(\n\s+row\.status\.in\(parameters\.statuses\),\n\s+row\.teamId\.in\(parameters\.teamIds\),\n\s+\),/,
+				'where: ({ row }) => expr.exists(tickets, ({ row: evidence }) => evidence.id.equal(row.id)),',
+			),
+		);
+
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-DATA-025",
+			diagnosticClass: "unsupportedExpressionCapability",
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

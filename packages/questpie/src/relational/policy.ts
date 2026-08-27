@@ -7,7 +7,7 @@ import {
 	type PolicyOperand,
 } from "./model";
 
-type PolicyCollection = Readonly<{
+export type PolicyCollection = Readonly<{
 	name: string;
 	fields: Readonly<Record<string, FieldNode>>;
 }>;
@@ -26,11 +26,17 @@ type PolicyField<Node> =
 			? PolicyRow<Fields>
 			: never;
 
-type PolicyRow<Fields> = {
+export type PolicyRow<Fields> = {
 	readonly [Key in keyof Fields]: PolicyField<Fields[Key]>;
 };
 
-type PolicyScope<Collection> = ExecutionOperands & {
+export type PolicyScope = ExecutionOperands;
+
+export type RowOperand<Collection extends PolicyCollection> = PolicyRow<
+	CollectionFields<Collection>
+>;
+
+type PolicyRowScope<Collection extends PolicyCollection> = PolicyScope & {
 	readonly row: PolicyRow<CollectionFields<Collection>>;
 };
 
@@ -65,11 +71,14 @@ type CollectionIdentity<Collection> =
 		? `collection:${Name}`
 		: never;
 
-type PolicyRowRule<Collection> =
-	| ((scope: PolicyScope<Collection>) => BooleanExpression)
+type PolicyRowRule<Collection extends PolicyCollection> =
+	| ((scope: PolicyRowScope<Collection>) => BooleanExpression)
 	| PolicyRowPredicate<CollectionIdentity<Collection>>;
 
-export interface PolicyBody<Collection, Name extends string> {
+export interface PolicyBody<
+	Collection extends PolicyCollection,
+	Name extends string,
+> {
 	readonly name: Name;
 	readonly read?: Readonly<{
 		admit: BooleanExpression;
@@ -89,7 +98,7 @@ export interface PolicyBody<Collection, Name extends string> {
 		rows: (scope: PolicyDeleteScope<Collection>) => BooleanExpression;
 	}>;
 	readonly fields?: Readonly<{
-		output?: (scope: PolicyScope<Collection>) => FieldDecisionMap<Collection>;
+		output?: (scope: PolicyRowScope<Collection>) => FieldDecisionMap<Collection>;
 		create?: (
 			scope: PolicyCreateScope<Collection>,
 		) => FieldDecisionMap<Collection>;
@@ -136,13 +145,9 @@ export function definePolicy<
 export const policy = Object.freeze({
 	authenticated: (): BooleanExpression => booleanExpression("authenticated"),
 	public: (): BooleanExpression => booleanExpression("public"),
-	exists: <const Collection extends PolicyCollection>(
-		collection: Collection,
-		predicate: (scope: PolicyScope<NoInfer<Collection>>) => BooleanExpression,
-	): BooleanExpression => booleanExpression("exists", [collection, predicate]),
 	rows: <const Collection extends PolicyCollection>(
 		collection: Collection,
-		predicate: (scope: PolicyScope<NoInfer<Collection>>) => BooleanExpression,
+		predicate: (scope: PolicyRowScope<NoInfer<Collection>>) => BooleanExpression,
 	): PolicyRowPredicate<CollectionIdentity<Collection>> =>
 		Object.freeze({
 			kind: "policyRows",

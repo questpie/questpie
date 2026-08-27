@@ -1,2 +1,9 @@
+export { expr } from "./expression";
 export { definePolicy, policy } from "./policy";
-export { dataQuery, query, query as expr } from "./query";
+export type {
+	PolicyCollection,
+	PolicyRow,
+	PolicyScope,
+	RowOperand,
+} from "./policy";
+export { dataQuery, query } from "./query";

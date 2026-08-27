@@ -700,6 +700,13 @@ process.stdout.write(JSON.stringify(found));
 					"relationDepthExceeded",
 					"controlled relational evaluation exceeded the measured Relation depth",
 				);
+			if (child.stderr.toString().includes("QP-DATA-025"))
+				throw new CompilerDiagnosticError(
+					"QP-DATA-025",
+					"unsupportedExpressionCapability",
+					"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
+					{ capability: "expr.exists", alternative: "relation.some" },
+				);
 			throw new CompilerDiagnosticError(
 				"QP-COMPOSE-013",
 				"structuralTypeError",

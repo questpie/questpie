@@ -46,6 +46,13 @@ function normalizeLiteralSet(value: unknown): unknown {
 function normalizeFilter(value: unknown, related: boolean): RootQueryFilterV1 {
 	const filter = record(value, "Query filter");
 	const kind = string(filter.kind, "Query filter kind");
+	if (kind === "exists")
+		throw new CompilerDiagnosticError(
+			"QP-DATA-025",
+			"unsupportedExpressionCapability",
+			"expr.exists is Policy-only; use a declared Relation quantifier in Query filters",
+			{ capability: "expr.exists", alternative: "relation.some" },
+		);
 	if (kind === "and" || kind === "or")
 		return {
 			kind,

@@ -635,3 +635,4 @@ export function defineSeed<
 }
 
 export { dataQuery, definePolicy, expr, policy, query } from "./relational";
+export type { PolicyScope, RowOperand } from "./relational";
