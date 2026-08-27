@@ -1,0 +1,82 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0030",
+	"proof": "Add exact Field provenance and a distinct trusted values lane to the existing generated Collection create/update kernel while preserving caller authority, candidate Policy, fixed Mutation ownership, and public-exposure boundaries.",
+	"diffBase": "ed1267bff4e0f6fa9c962960407bab328bd56174",
+	"reviewOutput": "docs/v4/prototypes/collection-provenance-trusted-values/REVIEW.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "ed1267bff4e0f6fa9c962960407bab328bd56174"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "5122452cb43a788c4e67f0f459e0ff81623db354e8e7ca3273dcba1ec33b5c39"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "4f555830c83894d848d6c55959edd3b9a8fd1785ca6c4587029267aef179420b"
+		},
+		{
+			"name": "accepted Query Mutation and lifecycle decision",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "accepted post-commit outcome decision",
+			"path": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"sha256": "47a26be509b42d8a8b82c0ef1bbde6b70667234b6b4c9c7d0a2d5ac3e439acdf"
+		},
+		{
+			"name": "approved Deep-DX direction",
+			"path": "docs/v4/research/deep-dx-2026/APPROVAL-PACKET-1.md",
+			"sha256": "a09832773ca30b96ea3326e72e5c36cb73af14cc49a4afe2f1da088b79e3f36a"
+		},
+		{
+			"name": "candidate Collection provenance decision",
+			"path": "docs/adr/0030-freeze-collection-provenance-and-trusted-values.md",
+			"sha256": "0883552e25370c24a06d70ab9a458710893cca26cc6b7f2aa446d1d1b2785525"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun docs/v4/prototypes/collection-provenance-trusted-values/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "oxfmt --check docs/adr/0030-freeze-collection-provenance-and-trusted-values.md docs/v4/prototypes/collection-provenance-trusted-values/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "oxlint --deny-warnings docs/v4/prototypes/collection-provenance-trusted-values/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"The existing generated Collection create/update kernel gains Field provenance and a separate trusted values lane without becoming an automatic public CRUD API.",
+		"Default, immutable, server, and server-plus-immutable Fields produce the exact create caller, update caller, create values, and update values authority matrix in ADR-0030.",
+		"Provenance-derived create input requires non-nullable caller Fields without defaults, makes defaulted and nullable Fields optional, and treats absent nullable Fields without defaults as SQL NULL; every update patch member is optional.",
+		"Caller input and trusted values are closed exact objects, cannot contain the same Field, and reject unknown or unauthorized Fields before PostgreSQL.",
+		"Both modes decode, reject overlap, apply caller authority, and scalar-normalize both lanes. Create starts from caller input, fills only absent defaults and nullable SQL NULLs, then overlays values; update starts from the locked row and overlays patch then values without replaying create defaults. Validation, candidate Policy, and constraints follow.",
+		"Trusted values bypass only caller Field authority. Candidate Policy sees the complete merged candidate and rejects forged Tenant, requester, ownership, or other invariants.",
+		"A Mutation obtains current state through an explicit Policy-aware locking kernel read in the owning transaction; the contract does not misdescribe stale handler data as lock-owned evidence.",
+		"An empty caller patch with non-empty trusted values is work, while both lanes empty preserve the existing empty-update rejection and a missing required create Field fails closed.",
+		"The decision does not supersede defineCollectionOperations, ctx.operationTime, authored lifecycle, database-owned onUpdate, unique-key lookup, typed constraint outcomes, or the complete CRUD replacement.",
+		"Named Mutations retain one transaction, no raw SQL or transaction handle, exact codecs, locks and rechecks, candidate Policy, constraints, receipts, Change Ledger capture, and direct/network post-commit semantics."
+	]
+}
