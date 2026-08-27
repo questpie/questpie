@@ -360,4 +360,25 @@ describe("BETA-04 relational normalization", () => {
 			});
 		}
 	});
+
+	test("rejects Policy-only evidence in a Query with QP-DATA-025", () => {
+		const input = queryInput() as unknown as Record<string, unknown>;
+		input.filter = {
+			kind: "exists",
+			collection: "collection:memberships",
+		};
+		try {
+			normalizeDataQueryTemplate(input, {
+				schemaProjectionDigest: "a".repeat(64),
+				dataContractProjectionDigest: "b".repeat(64),
+			});
+			expect.unreachable();
+		} catch (error) {
+			expect(error).toBeInstanceOf(CompilerDiagnosticError);
+			expect(error).toMatchObject({
+				code: "QP-DATA-025",
+				diagnosticClass: "unsupportedExpressionCapability",
+			});
+		}
+	});
 });
