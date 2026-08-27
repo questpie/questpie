@@ -153,14 +153,18 @@ interface MessageDescriptor {
 const readableMessages = policy.rows(
 	messages,
 	({ row: message, principal, tenant, authority }) =>
-		expr.exists(memberships, ({ row: membership }) =>
+		expr.not(
 			expr.and(
 				sameCompany(message, { principal, tenant, authority }),
-				activeMembership({ principal, tenant, authority }),
-				membership.companyId.equal(message.companyId),
-				membership.principalId.equal(principal.id),
-				membership.scopeKey.equal("company"),
-				membership.status.equal("active"),
+				expr.not(activeMembership({ principal, tenant, authority })),
+				expr.exists(memberships, ({ row: membership }) =>
+					expr.and(
+						membership.companyId.equal(message.companyId),
+						membership.principalId.equal(principal.id),
+						membership.scopeKey.equal("company"),
+						membership.status.equal("active"),
+					),
+				),
 			),
 		),
 );

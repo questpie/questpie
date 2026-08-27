@@ -106,10 +106,9 @@ test("rejects Policy evidence from a structural Query before artifact emission",
 		).rejects.toMatchObject({
 			code: "QP-DATA-025",
 			diagnosticClass: "unsupportedExpressionCapability",
-			message: expect.stringContaining("declared Relation quantifier"),
+			message: expect.stringContaining("cannot be used in Query filters"),
 			details: {
 				capability: "expr.exists",
-				alternative: "relation.some",
 			},
 		});
 	} finally {
