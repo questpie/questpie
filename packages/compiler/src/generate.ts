@@ -414,14 +414,16 @@ type QueryDefinitionBase<Name extends keyof GeneratedQueries> = Readonly<{
 	readonly network: boolean;
 }>;
 
+type QueryHandler<Name extends keyof GeneratedQueries> = (input: Readonly<{
+	input: GeneratedQueries[Name]["input"];
+	ctx: QueryContext;
+}>) => GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
+
 export type QueryDefinition<Name extends keyof GeneratedQueries> = QueryDefinitionBase<Name> & (Readonly<{
 	readonly input: Codec<GeneratedQueries[Name]["input"]>;
 	readonly output: Codec<GeneratedQueries[Name]["output"]>;
-	readonly handler: (input: Readonly<{
-		input: GeneratedQueries[Name]["input"];
-		ctx: QueryContext;
-	}>) => GeneratedQueries[Name]["handlerOutput"] | Promise<GeneratedQueries[Name]["handlerOutput"]>;
-}> | Readonly<{ readonly query: unknown }>);
+	readonly handler: QueryHandler<Name>;
+}> | Readonly<{ readonly query: unknown; readonly handler: QueryHandler<Name> }>);
 
 export type QueryFactory = <const Name extends keyof GeneratedQueries>(
 	definition: Readonly<{
@@ -501,6 +503,10 @@ ${renderDurableDeclarations()}
 
 export const defineQuery: QueryFactory = ((definition) => Object.freeze({
 	...definition,
+	...("query" in definition ? {
+		handler: (invocation: Readonly<{ input: unknown; ctx: QueryContext }>) =>
+			invocation.ctx.data.run(definition.query as never, invocation.input as never),
+	} : {}),
 	kind: "query" as const,
 	identity: \`query:\${definition.name}\` as const,
 	network: definition.network === true,

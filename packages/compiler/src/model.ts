@@ -265,7 +265,7 @@ function operationContract(
 		output: codecContract(value.output),
 		...(kind === "mutation" ? { declaredErrors, policy: policyContract } : {}),
 		exposure: value.network === true ? "network" : "server",
-		executableSlots: planBacked ? [] : ["handler"],
+		executableSlots: ["handler"],
 		...(planBacked ? { query: record(value.query, "query.query") } : {}),
 	};
 }

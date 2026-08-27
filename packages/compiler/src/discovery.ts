@@ -440,7 +440,13 @@ const make = (resourceKind) => (definition) => Object.freeze({
   ...definition,
   __questpie: Object.freeze({ category: "definition", resourceKind }),
 });
-export const defineQuery = make("query");
+export const defineQuery = (definition) => Object.freeze({
+  ...definition,
+  ...(definition.query === undefined || definition.handler !== undefined
+    ? {}
+    : { handler: ({ input, ctx }) => ctx.data.run(definition.query, input) }),
+  __questpie: Object.freeze({ category: "definition", resourceKind: "query" }),
+});
 export const defineMutation = make("mutation");
 export const defineAction = (definition) => {
   if (!definition || typeof definition !== "object" || Array.isArray(definition) || typeof definition.handler !== "function")

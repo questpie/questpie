@@ -72,6 +72,9 @@ export const ticketQueue = defineQuery({
 		expect(compilation.generatedFiles["app.ts"]).toContain(
 			"queries: GeneratedQueryOperations",
 		);
+		expect(compilation.generatedFiles["app.ts"]).toContain(
+			"invocation.ctx.data.run(definition.query as never, invocation.input as never)",
+		);
 		expect(compilation.generatedFiles["client.ts"]).toContain(
 			'"tickets.queue"',
 		);
