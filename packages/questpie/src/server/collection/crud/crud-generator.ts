@@ -1719,21 +1719,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				},
 				async () => {
 					// Enforce access control
-					const canCreate = await this.enforceAccessControl(
-						"create",
-						normalized,
-						null,
-						input,
-					);
-					if (canCreate === false) {
-						this.throwNeutralWriteDenial("create");
-					}
-					if (
-						typeof canCreate === "object" &&
-						!(await matchesStrictAccessConditions(canCreate, input))
-					) {
-						this.throwNeutralWriteDenial("create");
-					}
+					await this.enforceCreateAuthority(normalized, input);
 
 					await this.executeHooks(
 						this.state.hooks?.beforeOperation,
@@ -1841,6 +1827,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 									context,
 									tx,
 								));
+							await this.enforceCreateAuthority(
+								{ ...normalized, db: tx },
+								regularFields,
+							);
 
 							// Split localized vs non-localized fields
 							// Auto-detects { $i18n: value } wrappers in JSONB fields
@@ -2162,6 +2152,25 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			resource: this.state.name,
 			reason: "Access denied",
 		});
+	}
+
+	private async enforceCreateAuthority(
+		context: CRUDContext,
+		data: Record<string, unknown>,
+	): Promise<void> {
+		const canCreate = await this.enforceAccessControl(
+			"create",
+			context,
+			null,
+			data,
+		);
+		if (
+			canCreate === false ||
+			(typeof canCreate === "object" &&
+				!(await matchesStrictAccessConditions(canCreate, data)))
+		) {
+			this.throwNeutralWriteDenial("create");
+		}
 	}
 
 	private hasUnconditionalUpdateAuthority(
@@ -2575,13 +2584,18 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 
 				const winnerIds = new Set(recordIds);
 				const winners = records.filter((r: any) => winnerIds.has(r.id));
+				const lockedRecords = await tx
+					.select()
+					.from(this.table)
+					.where(inArray(getColumn(this.table, "id")!, recordIds))
+					.for("update");
+				await this.enforceUpdateAuthority(
+					lockedRecords,
+					txContext,
+					regularFields,
+				);
 				const optimisticConcurrency = this.getOptimisticConcurrency();
 				if (optimisticConcurrency) {
-					const lockedRecords = await tx
-						.select()
-						.from(this.table)
-						.where(inArray(getColumn(this.table, "id")!, recordIds))
-						.for("update");
 					if (expectedRevisions) {
 						if (
 							lockedRecords.length !== expectedRevisions.size ||
@@ -2956,7 +2970,16 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					if (claimed.length === 0 || !existing) {
 						throw ApiError.notFound("Record", id);
 					}
-					currentExisting = existing;
+					const [lockedExisting] = await tx
+						.select()
+						.from(this.table)
+						.where(eq(getColumn(this.table, "id")!, id))
+						.for("update");
+					if (!lockedExisting) {
+						throw ApiError.notFound("Record", id);
+					}
+					await this.enforceDeleteAuthority(lockedExisting, txContext, params);
+					currentExisting = lockedExisting;
 					crdtFallbackOwner = existing;
 				}
 				existing = currentExisting;
@@ -3630,10 +3653,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						return [];
 					}
 				}
+				for (const record of lockedBeforeDelete) {
+					await this.enforceDeleteAuthority(record, txContext, params);
+				}
 				if (optimisticConcurrency) {
-					for (const record of lockedBeforeDelete) {
-						await this.enforceDeleteAuthority(record, txContext, params);
-					}
 					expectedRevisions = this.assertExpectedRevisions(
 						params,
 						lockedBeforeDelete,
@@ -3702,6 +3725,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						throw ApiError.conflict(
 							"Canonical rows changed during delete hooks",
 						);
+					}
+					for (const record of lockedBeforeDelete) {
+						await this.enforceDeleteAuthority(record, txContext, params);
 					}
 				}
 				const lockedById = new Map(

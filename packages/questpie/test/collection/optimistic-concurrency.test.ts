@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 
+import { sql } from "drizzle-orm";
+
 import { collection } from "../../src/exports/index.js";
 import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { ApiError } from "../../src/server/errors/index.js";
@@ -14,6 +16,8 @@ let beforeTransitionFacts = 0;
 let observedDeleteRevision: number | undefined;
 let beforeOperationDeleteRuns = 0;
 let beforeDeleteRuns = 0;
+let guardedHookMode: "update" | "delete" | undefined;
+let guardedHookTenantId: string | undefined;
 
 const optimisticTags = collection("optimistic_tags")
 	.fields(({ f }) => ({
@@ -108,6 +112,24 @@ const guardedDocuments = collection("guarded_documents")
 		delete: ({ session }) => ({
 			tenantId: session?.user.id ?? "__anonymous__",
 		}),
+	})
+	.hooks({
+		beforeChange: async ({ db, operation, original }) => {
+			if (operation !== "update" || guardedHookMode !== "update") return;
+			await db.execute(sql`
+				UPDATE guarded_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
+		beforeDelete: async ({ db, original }) => {
+			if (guardedHookMode !== "delete") return;
+			await db.execute(sql`
+				UPDATE guarded_documents
+				SET "tenantId" = ${guardedHookTenantId}
+				WHERE id = ${original.id}
+			`);
+		},
 	});
 
 describe("generated CRUD optimistic concurrency", () => {
@@ -122,6 +144,8 @@ describe("generated CRUD optimistic concurrency", () => {
 		observedDeleteRevision = undefined;
 		beforeOperationDeleteRuns = 0;
 		beforeDeleteRuns = 0;
+		guardedHookMode = undefined;
+		guardedHookTenantId = undefined;
 		setup = await buildMockApp({
 			collections: {
 				optimisticTags,
@@ -254,6 +278,71 @@ describe("generated CRUD optimistic concurrency", () => {
 		).rejects.toThrow("Optimistic concurrency conflict");
 		expect(beforeOperationDeleteRuns).toBe(0);
 		expect(beforeDeleteRuns).toBe(0);
+	});
+
+	it("rechecks guarded updates after hooks mutate access fields", async () => {
+		const ownerId = crypto.randomUUID();
+		const foreignTenantId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedDocuments.create(
+			{ tenantId: ownerId, title: "Original" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "update";
+		guardedHookTenantId = foreignTenantId;
+
+		await expect(
+			setup.app.collections.guardedDocuments.updateById(
+				{
+					id: guarded.id,
+					expectedRevision: guarded.revision,
+					data: { title: "Unauthorized" },
+				},
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		const unchanged = await setup.app.collections.guardedDocuments.findOne(
+			{ where: { id: guarded.id } },
+			context,
+		);
+		expect(unchanged).toMatchObject({ tenantId: ownerId, title: "Original" });
+	});
+
+	it("rechecks guarded bulk deletes after hooks mutate access fields", async () => {
+		const ownerId = crypto.randomUUID();
+		const foreignTenantId = crypto.randomUUID();
+		const guarded = await setup.app.collections.guardedDocuments.create(
+			{ tenantId: ownerId, title: "Keep" },
+			context,
+		);
+		const owner = createTestContext({
+			accessMode: "user",
+			session: createMockSession({ id: ownerId }),
+		});
+		guardedHookMode = "delete";
+		guardedHookTenantId = foreignTenantId;
+
+		await expect(
+			setup.app.collections.guardedDocuments.deleteMany(
+				{
+					where: { id: guarded.id },
+					expectedRevisions: [
+						{ id: guarded.id, expectedRevision: guarded.revision },
+					],
+				},
+				owner,
+			),
+		).rejects.toThrow("Access denied");
+
+		const unchanged = await setup.app.collections.guardedDocuments.findOne(
+			{ where: { id: guarded.id } },
+			context,
+		);
+		expect(unchanged).toMatchObject({ tenantId: ownerId, title: "Keep" });
 	});
 
 	it("creates revision 1 and advances it once from the expected revision", async () => {
