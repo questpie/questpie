@@ -340,6 +340,18 @@ postgresTest(
 			const listEvidence = await app.execution(
 				agentInput,
 				async ({ queries }) => {
+					const queue = await queries.tickets.queue({
+						after: null,
+						first: 10,
+						statuses: ["open"],
+						teamIds: null,
+					});
+					const emptyQueue = await queries.tickets.queue({
+						after: null,
+						first: 10,
+						statuses: [],
+						teamIds: null,
+					});
 					const first = await queries.tickets.list({ after: null, first: 1 });
 					const open = await queries.tickets.listByStatus({
 						after: null,
@@ -363,9 +375,22 @@ postgresTest(
 					const detail = await queries.tickets.detail({
 						id: supportTracerIds.ticketOpen,
 					});
-					return { first, open, team, combined, searched, detail };
+					return {
+						queue,
+						emptyQueue,
+						first,
+						open,
+						team,
+						combined,
+						searched,
+						detail,
+					};
 				},
 			);
+			expect(
+				listEvidence.queue.nodes.every(({ status }) => status === "open"),
+			).toBe(true);
+			expect(listEvidence.emptyQueue.nodes).toEqual([]);
 			expect(listEvidence.first.nodes).toHaveLength(1);
 			expect(listEvidence.first.pageInfo.hasNextPage).toBe(true);
 			expect(

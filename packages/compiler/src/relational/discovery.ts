@@ -188,7 +188,12 @@ function compileDataQuery(value) {
   };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
-    if (parameter.parameterKind === "list") return { kind: "list", name, codec: { kind: parameter.itemKind }, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
+    if (parameter.parameterKind === "list") {
+      const codec = parameter.itemKind === "text"
+        ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
+        : { kind: parameter.itemKind };
+      return { kind: "list", name, codec, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
+    }
     const codec = parameter.parameterKind === "integer"
       ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null }
       : parameter.parameterKind === "text"

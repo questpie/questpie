@@ -33,6 +33,18 @@ function parameterCodec(
 	return parameter.codec;
 }
 
+function parameterNullable(
+	template: DataQueryTemplateV1,
+	name: string,
+): boolean {
+	const parameter = template.parameters.find(
+		(candidate) => candidate.name === name,
+	);
+	if (!parameter || parameter.kind === "cursor")
+		throw new TypeError(`unknown scalar Query parameter ${name}`);
+	return parameter.nullable;
+}
+
 export function queryParameter(
 	context: QuerySqlContext,
 	name: string,
@@ -76,7 +88,10 @@ function scalarFilterSql(
 			const set = filter.set;
 			if (set.kind === "parameter") {
 				const right = queryParameter(context, set.parameter, true);
-				return `(${left} ${negate ? "<> ALL" : "= ANY"}(${right}))`;
+				const predicate = `${left} ${negate ? "<> ALL" : "= ANY"}(${right})`;
+				return parameterNullable(context.template, set.parameter)
+					? `((${right} IS NULL) OR (${predicate}))`
+					: `(${predicate})`;
 			}
 			if (set.values.length === 0) return negate ? "TRUE" : "FALSE";
 			const values = set.values.map((value) =>

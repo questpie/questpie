@@ -471,10 +471,10 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		{
 			id: id1,
 			body: "visible",
-			createdAt: createdAt1,
+			createdAt: new Date(createdAt1),
 			author: { name: "Ada" },
 		},
-		{ id: id2, createdAt: createdAt2, author: null },
+		{ id: id2, createdAt: new Date(createdAt2), author: null },
 	]);
 	expect(
 		measurement.snapshot({ requireCompleteInventory: false }).operations[
@@ -657,10 +657,10 @@ test("binds one exact authorized page and decodes structural disclosure", async 
 		{
 			id: id1,
 			body: "visible",
-			createdAt: createdAt1,
+			createdAt: new Date(createdAt1),
 			author: { name: "Ada" },
 		},
-		{ id: id2, createdAt: createdAt2, author: null },
+		{ id: id2, createdAt: new Date(createdAt2), author: null },
 	]);
 	expect(page.pageInfo.hasNextPage).toBe(true);
 	const endCursor = page.pageInfo.endCursor;
@@ -802,11 +802,43 @@ test("normalizes PostgreSQL timestamp Dates before result and cursor validation"
 		database: fakeDatabaseFromRows(() => dateRows),
 	});
 
-	expect(page.nodes[0]?.createdAt).toBe(createdAt1);
+	expect(page.nodes[0]?.createdAt).toEqual(new Date(createdAt1));
 	const cursor = JSON.parse(
 		Buffer.from(page.pageInfo.endCursor!, "base64url").toString(),
 	);
 	expect(cursor.order[0].value).toBe(createdAt2);
+});
+
+test("binds null as an omitted nullable list filter and preserves an empty set", async () => {
+	const nullablePlan = {
+		...databasePlan,
+		binding: {
+			parameters: databasePlan.binding.parameters.map((parameter) =>
+				parameter.kind === "list"
+					? { ...parameter, nullable: true as const }
+					: parameter,
+			),
+		},
+	} as PostgresQueryPlanV1;
+	const observed: unknown[] = [];
+	const database = fakeDatabaseFromRows((_statement, parameters) => {
+		observed.push(parameters[2]);
+		return [];
+	});
+	for (const value of [null, []] as const)
+		await executePostgresDatabaseQuery({
+			linkedPlan: linkPostgresQueryPlan(nullablePlan),
+			binding: {
+				...binding,
+				values: binding.values.map((entry) =>
+					entry.parameter === "statuses" ? { ...entry, value } : entry,
+				),
+			},
+			executionFacts,
+			database,
+		});
+
+	expect(observed).toEqual([null, []]);
 });
 
 test("rejects exact binding failures before opening a transaction", async () => {

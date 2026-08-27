@@ -26,14 +26,14 @@ export type QueryParameterV1 =
 			name: string;
 			kind: "scalar";
 			codec: ScalarCodecV1;
-			nullable: false;
+			nullable: boolean;
 	  }>
 	| Readonly<{
 			name: string;
 			kind: "list";
 			codec: ScalarCodecV1;
 			maximumItems: number;
-			nullable: false;
+			nullable: boolean;
 			semantics: "set";
 	  }>
 	| Readonly<{ name: string; kind: "cursor"; nullable: true }>;
@@ -265,7 +265,8 @@ function bindError(code: DataQueryDiagnosticCode): never {
 function normalizeSet(
 	value: unknown,
 	parameter: Extract<QueryParameterV1, { kind: "list" }>,
-): readonly ScalarValue[] {
+): null | readonly ScalarValue[] {
+	if (value === null && parameter.nullable) return null;
 	if (!Array.isArray(value)) bindError("QP-DATA-006");
 	if (value.length > parameter.maximumItems) bindError("QP-DATA-006");
 	const unique = new Map<string, ScalarValue>();
@@ -318,6 +319,10 @@ function normalizeBinding(
 		}
 		if (parameter.kind === "list") {
 			normalized.set(parameter.name, normalizeSet(value, parameter));
+			continue;
+		}
+		if (value === null && parameter.nullable) {
+			normalized.set(parameter.name, null);
 			continue;
 		}
 		if (!isValidRelationalScalar(value, parameter.codec))
@@ -423,11 +428,14 @@ function positionalParameters(
 function decodeField(
 	row: PostgresQueryRow,
 	field: ResultFieldV1,
-): ScalarValue | null {
+	timestampResult: "canonical" | "date" = "date",
+): Date | ScalarValue | null {
 	const value = row[field.column];
 	if (value === null && field.nullable) return null;
 	try {
-		return decodeRelationalScalar(value, field.codec) as ScalarValue;
+		return decodeRelationalScalar(value, field.codec, timestampResult) as
+			| Date
+			| ScalarValue;
 	} catch {
 		throw new DataQueryExecutionError("QP-DATA-001", "execute");
 	}
@@ -518,7 +526,7 @@ function cursorValues(
 		);
 		if (!field || field.guardColumn !== undefined)
 			throw new TypeError("invalid compiled cursor result Field");
-		return decodeField(row, field);
+		return decodeField(row, field, "canonical") as CursorScalar;
 	});
 }
 

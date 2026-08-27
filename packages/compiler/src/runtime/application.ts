@@ -314,7 +314,7 @@ function applicationEntry(
 	const structuralEntries = structuralQueries
 		.map(
 			(query, index) =>
-				`[structuralQuery${index}, ${JSON.stringify(String(query.digest))}]`,
+				`[structuralQuery${index}${query.identity === null ? "" : ".query"}, ${JSON.stringify(String(query.digest))}]`,
 		)
 		.join(",\n");
 	const collectionDefinitions = input.resources

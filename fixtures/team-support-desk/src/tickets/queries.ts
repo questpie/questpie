@@ -1,7 +1,8 @@
-import { codec } from "questpie";
+import { codec, expr } from "questpie";
 
 import { defineQuery } from "#questpie/app";
 
+import { tickets } from "../tickets";
 import {
 	ticketDetailPlan,
 	ticketListByStatusAndTeamPlan,
@@ -56,6 +57,38 @@ const pageInputCodec = {
 function timestamp(value: Date | string): Date {
 	return value instanceof Date ? value : new Date(value);
 }
+
+export const ticketQueue = defineQuery({
+	name: "tickets.queue",
+	network: true,
+	query: tickets.list({
+		parameters: {
+			statuses: codec.nullable(codec.list(codec.text(), { maximum: 8 })),
+			teamIds: codec.nullable(codec.list(codec.uuid(), { maximum: 16 })),
+			first: codec.integer({ minimum: 1, maximum: 100 }),
+			after: codec.nullable(codec.cursor()),
+		},
+		where: ({ row, parameters }) =>
+			expr.and(
+				row.status.in(parameters.statuses),
+				row.teamId.in(parameters.teamIds),
+			),
+		orderBy: {
+			updatedAt: { direction: "desc", nulls: "last" },
+			id: "desc",
+		},
+		select: {
+			id: true,
+			status: true,
+			teamId: true,
+			updatedAt: true,
+		},
+		page: ({ parameters }) => ({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+	}),
+});
 
 export const listTickets = defineQuery({
 	name: "tickets.list",

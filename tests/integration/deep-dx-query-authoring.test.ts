@@ -1,11 +1,10 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
-const repositoryRoot = resolve(import.meta.dir, "../..");
 const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
@@ -20,48 +19,6 @@ test("compiles one Collection-owned handlerless Query into the generated app and
 			resolve(fixtureRoot, "node_modules"),
 			join(temporary, "node_modules"),
 		);
-		await writeFile(
-			join(temporary, "src/tickets/deep-dx-query.ts"),
-			`import { codec, expr } from "questpie";
-
-import { defineQuery } from "#questpie/app";
-
-import { tickets } from "../tickets";
-
-export const ticketQueue = defineQuery({
-	name: "tickets.queue",
-	network: true,
-	query: tickets.list({
-		parameters: {
-			statuses: codec.nullable(codec.list(codec.text(), { maximum: 8 })),
-			teamIds: codec.nullable(codec.list(codec.uuid(), { maximum: 16 })),
-			first: codec.integer({ minimum: 1, maximum: 100 }),
-			after: codec.nullable(codec.cursor()),
-		},
-		where: ({ row, parameters }) =>
-			expr.and(
-				row.status.in(parameters.statuses),
-				row.teamId.in(parameters.teamIds),
-			),
-		orderBy: {
-			updatedAt: { direction: "desc", nulls: "last" },
-			id: "desc",
-		},
-		select: {
-			id: true,
-			status: true,
-			teamId: true,
-			updatedAt: true,
-		},
-		page: ({ parameters }) => ({
-			first: parameters.first,
-			after: parameters.after,
-		}),
-	}),
-});
-`,
-		);
-
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
@@ -81,14 +38,22 @@ export const ticketQueue = defineQuery({
 		const queryProjection = JSON.parse(
 			compilation.generatedFiles["query-projection.json"] ?? "null",
 		) as Readonly<{ queries: readonly Readonly<Record<string, unknown>>[] }>;
-		expect(
-			queryProjection.queries.find(
-				(query) => query.identity === "query:tickets.queue",
-			),
-		).toMatchObject({
+		const queue = queryProjection.queries.find(
+			(query) => query.identity === "query:tickets.queue",
+		);
+		expect(queue).toMatchObject({
 			identity: "query:tickets.queue",
 			template: { from: "collection:tickets" },
 		});
+		const postgresPlans = JSON.parse(
+			compilation.generatedFiles["postgres-query-plans.json"] ?? "null",
+		) as Readonly<{
+			plans: readonly Readonly<{ queryDigest: string; sql: string }>[];
+		}>;
+		expect(
+			postgresPlans.plans.find((plan) => plan.queryDigest === queue?.digest)
+				?.sql,
+		).toContain("IS NULL) OR");
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
