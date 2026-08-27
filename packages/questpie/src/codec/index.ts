@@ -1,6 +1,7 @@
 export type CodecKind =
 	| "array"
 	| "boolean"
+	| "cursor"
 	| "integer"
 	| "nullable"
 	| "object"
@@ -45,9 +46,42 @@ type ObjectValue<Properties extends CodecMap> = Readonly<
 	}
 >;
 
+export interface IntegerCodecOptions {
+	readonly minimum?: number;
+	readonly maximum?: number;
+}
+
+export interface ListCodecOptions {
+	readonly maximum: number;
+}
+
+function safeInteger(value: number, name: string): number {
+	if (!Number.isSafeInteger(value))
+		throw new TypeError(`${name} must be a safe integer`);
+	return value;
+}
+
+function integerCodec(options?: IntegerCodecOptions) {
+	const minimum =
+		options?.minimum === undefined
+			? undefined
+			: safeInteger(options.minimum, "minimum");
+	const maximum =
+		options?.maximum === undefined
+			? undefined
+			: safeInteger(options.maximum, "maximum");
+	if (minimum !== undefined && maximum !== undefined && minimum > maximum)
+		throw new TypeError("minimum must not exceed maximum");
+	return Object.freeze({
+		kind: "integer" as const,
+		...(minimum === undefined ? {} : { minimum }),
+		...(maximum === undefined ? {} : { maximum }),
+	});
+}
+
 function scalar<
 	Value,
-	Kind extends "boolean" | "integer" | "text" | "timestamp" | "uuid",
+	Kind extends "boolean" | "cursor" | "integer" | "text" | "timestamp" | "uuid",
 >(kind: Kind): Codec<Value, Kind> {
 	return Object.freeze({ kind });
 }
@@ -56,7 +90,11 @@ export const codec = Object.freeze({
 	uuid: () => scalar<string, "uuid">("uuid"),
 	text: () => scalar<string, "text">("text"),
 	boolean: () => scalar<boolean, "boolean">("boolean"),
-	integer: () => scalar<number, "integer">("integer"),
+	integer: (
+		options?: IntegerCodecOptions,
+	): Codec<number, "integer"> & Readonly<IntegerCodecOptions> =>
+		integerCodec(options),
+	cursor: () => scalar<string, "cursor">("cursor"),
 	timestamp: () => scalar<Date, "timestamp">("timestamp"),
 	object: <const Properties extends CodecMap>(
 		properties: Properties,
@@ -66,6 +104,15 @@ export const codec = Object.freeze({
 		items: Item,
 	): Codec<readonly CodecValue<Item>[], "array"> =>
 		Object.freeze({ kind: "array", items }),
+	list: <const Item extends AnyCodec>(
+		items: Item,
+		options: ListCodecOptions,
+	): Codec<readonly CodecValue<Item>[], "array"> &
+		Readonly<{ items: Item; maximum: number }> => {
+		if (!Number.isSafeInteger(options.maximum) || options.maximum < 1)
+			throw new TypeError("maximum must be a positive safe integer");
+		return Object.freeze({ kind: "array", items, maximum: options.maximum });
+	},
 	nullable: <const ValueCodec extends AnyCodec>(
 		value: ValueCodec,
 	): Codec<CodecValue<ValueCodec> | null, "nullable"> =>

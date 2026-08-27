@@ -68,3 +68,43 @@ test("uses wrappers as the only nullable and optional representation", () => {
 		codec: { kind: "text" },
 	});
 });
+
+test("authors bounded integer, list, and opaque cursor codecs", () => {
+	const filters = codec.object({
+		first: codec.integer({ minimum: 1, maximum: 100 }),
+		statuses: codec.list(codec.text(), { maximum: 8 }),
+		after: codec.nullable(codec.cursor()),
+	});
+
+	expect(filters).toEqual({
+		kind: "object",
+		properties: {
+			first: { kind: "integer", minimum: 1, maximum: 100 },
+			statuses: {
+				kind: "array",
+				items: { kind: "text" },
+				maximum: 8,
+			},
+			after: { kind: "nullable", codec: { kind: "cursor" } },
+		},
+	});
+	expectTypeOf<CodecValue<typeof filters>>().toEqualTypeOf<
+		Readonly<{
+			first: number;
+			statuses: readonly string[];
+			after: string | null;
+		}>
+	>();
+});
+
+test("rejects invalid public codec bounds", () => {
+	expect(() => codec.integer({ minimum: 2, maximum: 1 })).toThrow(
+		"minimum must not exceed maximum",
+	);
+	expect(() => codec.integer({ minimum: 1.5 })).toThrow(
+		"minimum must be a safe integer",
+	);
+	expect(() => codec.list(codec.text(), { maximum: 0 })).toThrow(
+		"maximum must be a positive safe integer",
+	);
+});

@@ -1,6 +1,7 @@
 export type RuntimeCodec =
-	| Readonly<{ kind: "boolean" | "integer" | "text" | "timestamp" | "uuid" }>
-	| Readonly<{ kind: "array"; items: RuntimeCodec }>
+	| Readonly<{ kind: "boolean" | "cursor" | "text" | "timestamp" | "uuid" }>
+	| Readonly<{ kind: "integer"; minimum?: number; maximum?: number }>
+	| Readonly<{ kind: "array"; items: RuntimeCodec; maximum?: number }>
 	| Readonly<{ kind: "nullable"; codec: RuntimeCodec }>
 	| Readonly<{ kind: "optional"; codec: RuntimeCodec }>
 	| Readonly<{
@@ -50,6 +51,19 @@ function timestamp(value: unknown, path: string): Date {
 	return parsed;
 }
 
+function descriptorSafeInteger(
+	value: unknown,
+	path: string,
+	positive = false,
+): number {
+	if (!Number.isSafeInteger(value) || (positive && (value as number) < 1))
+		invalid(
+			path,
+			positive ? "must be a positive safe integer" : "must be a safe integer",
+		);
+	return value as number;
+}
+
 function transform(
 	codec: RuntimeCodec,
 	value: unknown,
@@ -73,6 +87,16 @@ function transform(
 			Object.is(value, -0)
 		)
 			invalid(path, "must be a safe integer");
+		if (codec.minimum !== undefined && value < codec.minimum)
+			invalid(path, `must be at least ${codec.minimum}`);
+		if (codec.maximum !== undefined && value > codec.maximum)
+			invalid(path, `must be at most ${codec.maximum}`);
+		return value;
+	}
+	if (codec.kind === "cursor") {
+		if (typeof value !== "string") invalid(path, "must be an opaque cursor");
+		if (value !== value.normalize("NFC"))
+			invalid(path, "must be an NFC cursor");
 		return value;
 	}
 	if (codec.kind === "text") {
@@ -98,6 +122,8 @@ function transform(
 	}
 	if (codec.kind === "array") {
 		if (!Array.isArray(value)) invalid(path, "must be an array");
+		if (codec.maximum !== undefined && value.length > codec.maximum)
+			invalid(path, `must contain at most ${codec.maximum} items`);
 		return Object.freeze(
 			value.map((item, index) =>
 				transform(codec.items, item, `${path}[${index}]`, direction),
@@ -159,13 +185,33 @@ function descriptor(
 		invalid(path, "must declare a codec kind");
 	if (
 		input.kind === "boolean" ||
-		input.kind === "integer" ||
+		input.kind === "cursor" ||
 		input.kind === "text" ||
 		input.kind === "timestamp" ||
 		input.kind === "uuid"
 	) {
 		exactKeys(input, ["kind"], path);
 		return Object.freeze({ kind: input.kind });
+	}
+	if (input.kind === "integer") {
+		const allowed = new Set(["kind", "minimum", "maximum"]);
+		if (Object.keys(input).some((key) => !allowed.has(key)))
+			invalid(path, "has invalid codec keys");
+		const minimum =
+			input.minimum === undefined
+				? undefined
+				: descriptorSafeInteger(input.minimum, `${path}.minimum`);
+		const maximum =
+			input.maximum === undefined
+				? undefined
+				: descriptorSafeInteger(input.maximum, `${path}.maximum`);
+		if (minimum !== undefined && maximum !== undefined && minimum > maximum)
+			invalid(path, "minimum must not exceed maximum");
+		return Object.freeze({
+			kind: "integer",
+			...(minimum === undefined ? {} : { minimum }),
+			...(maximum === undefined ? {} : { maximum }),
+		});
 	}
 	if (input.kind === "nullable" || input.kind === "optional") {
 		exactKeys(input, ["kind", "codec"], path);
@@ -177,10 +223,21 @@ function descriptor(
 		});
 	}
 	if (input.kind === "array") {
-		exactKeys(input, ["kind", "items"], path);
+		const allowed = new Set(["kind", "items", "maximum"]);
+		if (Object.keys(input).some((key) => !allowed.has(key)))
+			invalid(path, "has invalid codec keys");
 		return Object.freeze({
 			kind: "array",
 			items: descriptor(input.items, `${path}.items`, false),
+			...(input.maximum === undefined
+				? {}
+				: {
+						maximum: descriptorSafeInteger(
+							input.maximum,
+							`${path}.maximum`,
+							true,
+						),
+					}),
 		});
 	}
 	if (input.kind !== "object") invalid(path, "uses an unsupported codec");
