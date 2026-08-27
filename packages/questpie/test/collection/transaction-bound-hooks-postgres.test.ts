@@ -13,13 +13,14 @@ import { z } from "zod";
 
 import { channel } from "../../src/exports/channels.js";
 import { collection, withTransaction } from "../../src/exports/index.js";
+import { createFetchHandler } from "../../src/server/adapters/http.js";
 import { rowsOf } from "../../src/server/db/driver-result.js";
 import {
 	questpieChannelEventTable,
 	questpieRealtimeLogTable,
 } from "../../src/server/modules/core/integrated/realtime/collection.js";
 import { buildMockApp } from "../utils/mocks/mock-app-builder";
-import { createTestContext } from "../utils/test-context";
+import { createMockSession, createTestContext } from "../utils/test-context";
 import { runTestDbMigrations } from "../utils/test-db";
 
 const databaseUrl = process.env.QUESTPIE_TRANSACTION_LOCK_DATABASE_URL;
@@ -88,6 +89,54 @@ const postgresOptimisticAccessTargets = collection(
 		},
 	});
 
+const postgresNestedAccounts = collection("postgres_nested_accounts")
+	.fields(({ f }) => ({ name: f.text().required() }))
+	.access({ create: true });
+
+const postgresNestedAuthorityDocuments = collection(
+	"postgres_nested_authority_documents",
+)
+	.fields(({ f }) => ({
+		owner: f.relation("postgresNestedAccounts").required(),
+		title: f.text().required(),
+	}))
+	.options({ optimisticConcurrency: true })
+	.access({
+		update: ({ session, input }) => {
+			const nextOwner = (input as { owner?: unknown } | undefined)?.owner;
+			if (typeof nextOwner === "string" && nextOwner !== session?.user.id) {
+				return false;
+			}
+			return { owner: session?.user.id ?? "__anonymous__" };
+		},
+	});
+
+const postgresNestedFieldDocuments = collection(
+	"postgres_nested_field_documents",
+)
+	.fields(({ f }) => ({
+		owner: f
+			.relation("postgresNestedAccounts")
+			.required()
+			.access({ update: false }),
+		title: f.text().required(),
+	}))
+	.options({ optimisticConcurrency: true })
+	.access({ update: true });
+
+const postgresGuardedRestores = collection("postgres_guarded_restores")
+	.fields(({ f }) => ({
+		tenantId: f.text().required(),
+		title: f.text().required(),
+	}))
+	.options({ optimisticConcurrency: true, softDelete: true })
+	.access({
+		update: ({ session }) => ({
+			tenantId: session?.user.id ?? "__anonymous__",
+		}),
+		delete: true,
+	});
+
 describe.skipIf(!runPostgresContract)(
 	"transaction-bound hooks on PostgreSQL",
 	() => {
@@ -110,6 +159,10 @@ describe.skipIf(!runPostgresContract)(
 					collections: {
 						postgresEffectLogs,
 						postgresEffectTargets,
+						postgresGuardedRestores,
+						postgresNestedAccounts,
+						postgresNestedAuthorityDocuments,
+						postgresNestedFieldDocuments,
 						postgresOptimisticAccessTargets,
 					},
 				},
@@ -151,6 +204,125 @@ describe.skipIf(!runPostgresContract)(
 			expect(
 				new Set([...optimisticAccessTxids, ...optimisticHookTxids]).size,
 			).toBe(1);
+		});
+
+		it("rechecks materialized belongsTo authority and field access on PostgreSQL", async () => {
+			const owner = await setup.app.collections.postgresNestedAccounts.create(
+				{ name: "Owner" },
+				context,
+			);
+			const foreignOwner =
+				await setup.app.collections.postgresNestedAccounts.create(
+					{ name: "Foreign owner" },
+					context,
+				);
+			const authorityDocument =
+				await setup.app.collections.postgresNestedAuthorityDocuments.create(
+					{ owner: owner.id, title: "Authority guarded" },
+					context,
+				);
+			const ownerContext = createTestContext({
+				accessMode: "user",
+				session: createMockSession({ id: owner.id }),
+			});
+
+			await expect(
+				setup.app.collections.postgresNestedAuthorityDocuments.updateById(
+					{
+						id: authorityDocument.id,
+						expectedRevision: authorityDocument.revision,
+						data: { owner: { connect: { id: foreignOwner.id } } },
+					},
+					ownerContext,
+				),
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
+			await expect(
+				setup.app.collections.postgresNestedAuthorityDocuments.findOne(
+					{ where: { id: authorityDocument.id } },
+					context,
+				),
+			).resolves.toMatchObject({
+				owner: owner.id,
+				revision: authorityDocument.revision,
+			});
+
+			const fieldDocument =
+				await setup.app.collections.postgresNestedFieldDocuments.create(
+					{ owner: owner.id, title: "Field guarded" },
+					context,
+				);
+			const accountCount =
+				await setup.app.collections.postgresNestedAccounts.count({}, context);
+			await expect(
+				setup.app.collections.postgresNestedFieldDocuments.updateById(
+					{
+						id: fieldDocument.id,
+						expectedRevision: fieldDocument.revision,
+						data: { owner: { create: { name: "Must roll back" } } },
+					},
+					ownerContext,
+				),
+			).rejects.toMatchObject({ code: "FORBIDDEN" });
+			expect(
+				await setup.app.collections.postgresNestedAccounts.count({}, context),
+			).toBe(accountCount);
+			await expect(
+				setup.app.collections.postgresNestedFieldDocuments.findOne(
+					{ where: { id: fieldDocument.id } },
+					context,
+				),
+			).resolves.toMatchObject({
+				owner: owner.id,
+				revision: fieldDocument.revision,
+			});
+		});
+
+		it("returns a neutral restore denial through HTTP on PostgreSQL", async () => {
+			const ownerId = crypto.randomUUID();
+			const strangerId = crypto.randomUUID();
+			const guarded =
+				await setup.app.collections.postgresGuardedRestores.create(
+					{ tenantId: ownerId, title: "Private tombstone" },
+					context,
+				);
+			const deletion =
+				await setup.app.collections.postgresGuardedRestores.deleteById(
+					{ id: guarded.id, expectedRevision: guarded.revision },
+					context,
+				);
+			const handler = createFetchHandler(setup.app, {
+				getSession: async () => createMockSession({ id: strangerId }),
+			});
+			const restore = (id: string) =>
+				handler(
+					new Request(
+						`http://localhost/postgresGuardedRestores/${id}/restore`,
+						{
+							method: "POST",
+							headers: { "content-type": "application/json" },
+							body: JSON.stringify({
+								expectedRevision: deletion.data.revision,
+							}),
+						},
+					),
+				);
+
+			const foreign = await restore(guarded.id);
+			const absent = await restore(crypto.randomUUID());
+			expect(foreign.status).toBe(403);
+			expect(absent.status).toBe(foreign.status);
+			expect(await absent.json()).toEqual(await foreign.json());
+
+			const unchanged =
+				await setup.app.collections.postgresGuardedRestores.findOne(
+					{ where: { id: guarded.id }, includeDeleted: true },
+					context,
+				);
+			expect(unchanged).toMatchObject({
+				tenantId: ownerId,
+				revision: deletion.data.revision,
+			});
+			expect(unchanged?.deletedAt).toBeInstanceOf(Date);
 		});
 
 		it("keeps optimistic updateBatch authority on its locked transaction", async () => {

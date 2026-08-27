@@ -2687,7 +2687,6 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						txContext,
 						tx,
 					));
-
 				// Split localized vs non-localized fields
 				const { localized, nonLocalized, nestedLocalized } =
 					this.splitLocalizedFields(regularFields);
@@ -2701,6 +2700,21 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						originalRows: winners,
 					});
 				}
+				// Nested belongsTo operations materialize FK fields after the first
+				// access pass, so the final payload is the write-authority boundary.
+				for (const lockedRecord of lockedRecords) {
+					await this.validateFieldWriteAccess(
+						regularFields,
+						txContext,
+						"update",
+						lockedRecord,
+					);
+				}
+				await this.enforceUpdateAuthority(
+					lockedRecords,
+					txContext,
+					regularFields,
+				);
 
 				// Update main table
 				if (
@@ -3383,35 +3397,17 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 			const existing = existingRows[0];
 
 			if (!existing) {
-				throw ApiError.notFound("Record", id);
+				if (
+					this.hasUnconditionalUpdateAuthority(normalized, { deletedAt: null })
+				) {
+					throw ApiError.notFound("Record", id);
+				}
+				this.throwNeutralWriteDenial("update");
 			}
 
-			const canUpdate = await this.enforceAccessControl(
-				"update",
-				normalized,
-				existing,
-				{ deletedAt: null },
-			);
-			if (canUpdate === false) {
-				throw ApiError.forbidden({
-					operation: "update",
-					resource: this.state.name,
-					reason: "User does not have permission to restore this record",
-				});
-			}
-			if (typeof canUpdate === "object") {
-				const matchesConditions = await this.checkAccessConditions(
-					canUpdate,
-					existing,
-				);
-				if (!matchesConditions) {
-					throw ApiError.forbidden({
-						operation: "update",
-						resource: this.state.name,
-						reason: "Record does not match access control conditions",
-					});
-				}
-			}
+			await this.enforceUpdateAuthority([existing], normalized, {
+				deletedAt: null,
+			});
 
 			if (!existing.deletedAt) {
 				return withTransaction(db, async (tx) => {
@@ -3422,7 +3418,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						.for("update");
 
 					if (!locked) {
-						throw ApiError.notFound("Record", id);
+						if (
+							this.hasUnconditionalUpdateAuthority(normalized, {
+								deletedAt: null,
+							})
+						) {
+							throw ApiError.notFound("Record", id);
+						}
+						this.throwNeutralWriteDenial("update");
 					}
 					this.assertExpectedRevision(params, [locked]);
 
