@@ -1,6 +1,5 @@
 import type { Codec, CodecValue } from "../codec";
 import type {
-	CollectionDefinition,
 	FieldReference,
 	InverseRelationDefinition,
 	RelationDefinition,
