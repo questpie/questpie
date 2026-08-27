@@ -4,15 +4,20 @@
 
 ## Imports
 
-| Module             | Contents                                                                                                                                                                                                                                                                                                             |
-| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `questpie`         | structural surface: `defineCollection`, `definePolicy`, `defineService`, `defineContext`, `defineCredentialResolver`, `field.*`, `codec.*`, `config.*`, `constraint.*`, `relation.*`, `relationRef`, `index`, `expr.*`, `policy.*`, `operation.error`, `durable.*`, `principal.*`, types `PolicyScope`, `RowOperand` |
-| `#questpie/app`    | generated executable factories: `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`, `defineJob`; generated app entry `createApp`, `loadAppConfig`; generated types (`AppData`, execution inputs)                                                                                                         |
-| `#questpie/client` | generated browser-safe `createClient` plus named per-Operation types `<Domain><Name>Input/Result/Error`                                                                                                                                                                                                              |
-| `questpie/react`   | `useQuery`, `useLiveQuery`, `useMutation`                                                                                                                                                                                                                                                                            |
+| Module                | Contents                                                                                                                                                                                                                                                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `questpie`            | structural surface: `defineCollection`, `defineSearch`, `definePolicy`, `defineService`, `defineContext`, `defineCredentialResolver`, `field.*`, `codec.*`, `config.*`, `constraint.*`, `relation.*`, `relationRef`, `index.*`, `expr.*`, `policy.*`, `operation.error`, `durable.*`, `principal.*`, types `PolicyScope`, `RowOperand` |
+| `#questpie/app`       | generated executable factories: `defineQuery`, `defineMutation`, `defineAction`, `defineRoute`, `defineJob`; generated app entry `createApp`, `loadAppConfig`; generated types (`AppData`, execution inputs)                                                                                                                           |
+| `#questpie/client`    | generated browser-safe `createClient` plus named per-Operation types `<Domain><Name>Input/Result/Error`                                                                                                                                                                                                                                |
+| `questpie/react`      | `useQuery`, `useLiveQuery`, `useMutation`                                                                                                                                                                                                                                                                                              |
+| `@questpie/postgis`   | namespace import `geo`: `geo.field.point`, `geo.codec.point`, `geo.index.spatial`                                                                                                                                                                                                                                                      |
+| `@questpie/pg-search` | namespace import `search`: `search.index.fullText`; semantic Search Resources still use core `defineSearch`                                                                                                                                                                                                                            |
 
 Browser code must not import `questpie` or `#questpie/app`; server structural
 code must not import `#questpie/client`. Violations are compile diagnostics.
+Capability Packages are imported with `import * as geo` / `import * as
+search`; they never augment the core namespaces. Exact npm names remain
+provisional, but this namespace ownership is binding.
 
 ## Codecs (`codec.*`)
 
@@ -57,19 +62,75 @@ defineCollection({
     constraint.unique({ fields: FieldPicker }) | constraint.check(...) },
   relations: Record<string, Relation>,
   lifecycle?: { normalize?, validate?, check?, afterWrite? },
-  indexes?: Record<string, index({ fields: IndexFieldPicker })>,
+  indexes?: Record<string, index.btree({ fields: IndexFieldPicker }) |
+    <capability-Package named index constructor>>,
 })
 ```
 
 Constraints, Relations, and Index all take an object mapping instead of a
-positional array; no Accepted ADR fixes the array spelling, so this is
-ordinary authoring sugar over byte-identical artifacts.
+positional array. This is not formatting: it is a real, ledgered future
+supersession of today's array-based authoring API documented in
+`docs/v4/schema-lifecycle.md` (packet ledger S16), and `index.btree`
+replacing bare `index(...)` is a second, separate ledgered supersession
+(S15). Focused capability Index constructors are separately ledgered in S17.
+No clause of any Accepted ADR is edited here; none of these surfaces is
+implementable without focused ratification.
 
-- `FieldPicker` = `Record<fieldName, true>`. Authored key order is the
+- `FieldPicker` = `Record<fieldName, true | {}>`. Authored key order is the
   constraint's column order (`{ organizationId: true, reference: true }`).
-- `IndexFieldPicker` = `Record<fieldName, true | "asc" | "desc" |
-{ direction: "asc" | "desc", nulls: "first" | "last" }>`; `true` is a plain
-  ascending column, reusing the same value grammar `orderBy` uses.
+  `true` is documented shorthand; the canonical, expandable form of any
+  entry is an object, never a bare array element.
+- `IndexFieldPicker` = `Record<fieldName, true |
+{ order?: "asc" | "desc", nulls?: "first" | "last" }>`; `true` means the
+  constructor's documented defaults. The object value is the canonical
+  expandable form.
+
+### Indexes
+
+- `index.btree({ fields: IndexFieldPicker })` is the one core index
+  constructor. Core `index` stays B-tree-only (ADR-0019); a capability
+  Package may contribute its own named, non-B-tree index constructor (for
+  example `search.index.fullText`, `geo.index.spatial`) without changing
+  core `index`. That capability ownership is a real proposed supersession of
+  today's public B-tree-only Index surface (packet S17), while the core
+  namespace remains B-tree-only. Core and capability index kinds share one
+  identity, migration, readiness, drift, collision, and diagnostic model,
+  never two.
+- Every physical index is authored **explicitly** as its own entry in the
+  owning Resource's `indexes` map. Declaring a Field never creates an index
+  as a side effect, regardless of the Field's type; there is no generated,
+  inferred, or automatic index.
+
+### Capability-owned fields, codecs, and indexes
+
+```ts
+import { defineSearch } from "questpie";
+import * as search from "@questpie/pg-search";
+import * as geo from "@questpie/postgis";
+
+defineSearch({
+  name,
+  source: collection,
+  document: { fieldName: { weight?, highlight? } },
+  filterable: { fieldName: true },
+  indexes: {
+    primary: search.index.fullText({
+      fields: { fieldName: true },
+    }),
+  },
+})
+
+geo.field.point({ srid, nullable? })
+geo.codec.point({ srid })
+geo.index.spatial({ fields: { pointField: true } })
+```
+
+`defineSearch` is the sole semantic Search Resource constructor;
+`search.index.fullText` owns only its named physical index. A spatial Field
+likewise never implies `geo.index.spatial`. All capability indexes use the
+normal named-Index identity, migration, readiness, artifact, fingerprint,
+drift, collision, and diagnostic lifecycle. There is no ambient module
+augmentation or registry.
 
 ### Relations
 
@@ -128,8 +189,8 @@ collection.get({
   field, page that Collection instead and express membership with a
   quantifier.
 - `SelectionObject` entries: `field: true`; to-one
-  `relation: { select: SelectionObject }` (bounded hops — candidate value 4
-  in current examples, not yet ratified; see Budgets below); to-many
+  `relation: { select: SelectionObject }` (bounded hops; the exact ceiling is
+  a measurement input, not yet ratified); to-many
   `relation: { list: { where?, orderBy, first?, page?, select? } }`;
   computed `name: ({ row }) => row.relation.count()` (exactly one
   recognized aggregate call). Omitted nested `select` means the complete
@@ -143,15 +204,15 @@ collection.get({
   `expr.or` branch.
 - Budgets: pages max 100 rows (ratified). Relation depth and the maximum
   computed aggregate members per plan are also bounded, but their exact
-  ceilings (4 and 4 in current examples) are unratified implementation
-  candidates pending measurement against Support Desk and Autopilot, not
-  accepted constants. List parameters are bounded by their declared maximum.
-- Scope: `where` and nested callbacks receive `{ row, parameters }`. In a
-  plan-backed Query those are the only operands; a read scoped to the
-  caller (for example “rows of my membership”) is a handler Query, whose
-  inline kernel plans may compare Fields against plain runtime values
-  (`row.membershipId.equal(ctx.values.membershipId)`), bound as statement
-  parameters.
+  ceilings remain unratified measurements against Support Desk and
+  Autopilot. List parameters are bounded by their declared maximum.
+- Scope: `where` and nested callbacks receive `{ row, parameters, principal,
+tenant, values }`. `principal`, `tenant`, and declared Context `values` are
+  immutable read-only execution-fact operands, bound by Runtime rather than
+  supplied by callers. The compiler records every reached fact in the plan
+  dependency set and cursor scope. Ordinary caller-scoped structural reads
+  therefore remain plan-backed; use a handler only for behavior that cannot
+  be represented by one closed plan.
 
 ## Expressions (`expr.*` and operands)
 

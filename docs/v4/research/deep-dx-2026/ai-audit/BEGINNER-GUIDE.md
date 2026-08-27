@@ -34,6 +34,7 @@ Imports come from three places:
 // stable structural surface
 import {
 	defineCollection,
+	defineSearch,
 	definePolicy,
 	defineService,
 	codec,
@@ -61,7 +62,17 @@ import {
 // generated browser-safe client and named types
 import { createClient } from "#questpie/client";
 import { useQuery, useLiveQuery, useMutation } from "questpie/react";
+
+// capability Packages keep their own namespaces
+import * as geo from "@questpie/postgis";
+import * as search from "@questpie/pg-search";
 ```
+
+The exact capability npm names remain provisional. The namespace boundary is
+not: core uses `field.*`, `codec.*`, `index.btree`, `constraint.*`, and
+`relation.*`; PostGIS uses `geo.field.*`, `geo.codec.*`, `geo.index.*`; and
+the Search Package uses `search.index.*`. Packages never mutate core
+namespaces through ambient module augmentation.
 
 ## 1. Declare a Collection
 
@@ -146,27 +157,36 @@ export const tickets = defineCollection({
 		},
 	},
 	indexes: {
-		tenantUpdated: index({
+		tenantUpdated: index.btree({
 			fields: {
 				organizationId: true,
-				updatedAt: { direction: "desc", nulls: "last" },
-				id: { direction: "desc", nulls: "last" },
+				updatedAt: { order: "desc", nulls: "last" },
+				id: { order: "desc", nulls: "last" },
 			},
 		}),
 	},
 });
 ```
 
-Constraints, Relations, and Index all take the same object-mapping/picker
-shape `select` uses instead of positional arrays: `fields: { id: true }`
-picks a column set (authored key order is the column order); a Relation's
-`on: { localField: targetField }` maps join columns directly instead of two
-parallel `fields`/`references` arrays that must stay the same length and
-order; an Index's `fields` value is `true` for a plain ascending column or
-`{ direction, nulls }` for the same options `orderBy` already uses. No
-Accepted ADR fixes the old array spelling, so this is plain authoring sugar:
-either spelling compiles to byte-identical Schema Projection and migration
-bytes.
+Every physical index is an explicit entry in the owning Resource's own
+`indexes` map, named like this one (`tenantUpdated`); no Field ever creates
+one implicitly, no matter its type. `index.btree(...)` is the one core index
+constructor — core `index` stays B-tree-only (ADR-0019) — and it owns the
+same identity/migration/readiness/drift/collision machinery as every other
+named Index. Constraints, Relations, and Index all take the same
+object-mapping/picker shape `select` uses instead of positional arrays:
+`fields: { id: true }` picks a column set (authored key order is the column
+order; `true` is documented shorthand, the expandable canonical form is
+always an object); a Relation's `on: { localField: targetField }` maps join
+columns directly instead of two parallel `fields`/`references` arrays that
+must stay the same length and order. Both `index.btree` (replacing bare
+`index(...)`) and the map spelling replacing the array spelling are real,
+ledgered future supersessions of today's authoring API in
+`docs/v4/schema-lifecycle.md` — not a formatting choice — recorded in the
+packet's ledger (S15, S16).
+
+Focused non-B-tree constructors under capability namespaces are a third real
+supersession (S17), not an expansion of core `index`.
 
 ### Field provenance
 
@@ -290,9 +310,9 @@ composes into a larger selection.
 
 ### Relations in selections
 
-To-one relations nest `{ select }` and chain up to a bounded number of hops
-(candidate value 4 in current examples; the exact ceiling is an
-implementation measurement, not yet ratified — see the API reference):
+To-one relations nest `{ select }` and chain up to a bounded number of hops.
+The exact ceiling is an implementation measurement, not yet ratified (see
+the API reference):
 
 ```ts
 team: { select: { id: true, organization: { select: { name: true } } } },
@@ -366,51 +386,55 @@ Collection only; ordering by a related row's field is not supported.
 
 ### Reads scoped to the caller
 
-A handler Query composes kernel reads inside one consistent snapshot, and
-its inline plans may compare Fields against plain runtime values, which
-bind as statement parameters. That is how a read scopes itself to the
-caller without trusting client input:
+A structural plan may read the immutable execution facts `principal`,
+`tenant`, and declared Context `values`. They are typed operands, bound by
+the Runtime rather than trusted from caller input:
 
 ```ts
 export const myWatchedTickets = defineQuery({
 	name: "tickets.myWatched",
 	network: true,
 	policy: policy.authenticated(),
-	input: codec.object({
-		first: codec.integer({ minimum: 1, maximum: 100 }),
-		after: codec.nullable(codec.cursor()),
-	}),
-	handler: ({ input, ctx }) =>
-		ctx.data.tickets.list({
-			where: ({ row: ticket }) =>
-				ticket.watchers.some(({ row: watcher }) =>
-					watcher.membershipId.equal(ctx.values.membershipId),
-				),
-			orderBy: { updatedAt: "desc", id: "desc" },
-			select: {
-				id: true,
-				reference: true,
-				status: true,
-				summary: true,
-				updatedAt: true,
-				team: { select: { id: true, name: true } },
-				comments: {
-					list: {
-						where: ({ row: comment }) => comment.kind.equal("public"),
-						orderBy: { createdAt: "desc", id: "desc" },
-						first: 3,
-					},
+	query: tickets.list({
+		parameters: {
+			first: codec.integer({ minimum: 1, maximum: 100 }),
+			after: codec.nullable(codec.cursor()),
+		},
+		where: ({ row: ticket, values }) =>
+			ticket.watchers.some(({ row: watcher }) =>
+				watcher.membershipId.equal(values.membershipId),
+			),
+		orderBy: { updatedAt: "desc", id: "desc" },
+		select: {
+			id: true,
+			reference: true,
+			status: true,
+			summary: true,
+			updatedAt: true,
+			team: { select: { id: true, name: true } },
+			comments: {
+				list: {
+					where: ({ row: comment }) => comment.kind.equal("public"),
+					orderBy: { createdAt: "desc", id: "desc" },
+					first: 3,
 				},
 			},
-			page: () => ({ first: input.first, after: input.after }),
+		},
+		page: ({ parameters }) => ({
+			first: parameters.first,
+			after: parameters.after,
 		}),
+	}),
 });
 ```
 
-Plan-backed Queries (the `query:` member) declare parameters instead and
-cannot yet reference caller facts directly; when a read needs
-`ctx.values`, write it as a handler Query. Use an explicit `output` pin
-only when the handler transforms beyond typed kernel reads:
+The compiler records every reached fact — including the exact
+`values.membershipId` dependency — in the plan and cursor scope. A cursor
+created for one fact scope cannot be replayed under another. Reusable scoped
+predicates remain ordinary typed TypeScript functions. Use a handler Query
+only when the behavior cannot be represented as one closed plan, and use an
+explicit `output` pin only when its transformation cannot be inferred from
+typed kernel reads:
 
 ```ts
 export const queueOverview = defineQuery({
@@ -418,11 +442,17 @@ export const queueOverview = defineQuery({
 	network: true,
 	policy: policy.authenticated(),
 	handler: async ({ ctx }) => {
-		const open = await ctx.data.tickets.list({/* plan */});
-		const teams = await ctx.data.teams.list({/* plan */});
+		const open = await ctx.data.tickets.list({
+			/* plan */
+		});
+		const teams = await ctx.data.teams.list({
+			/* plan */
+		});
 		return { open: open.nodes.length, teams: teams.nodes };
 	},
-	output: codec.object({/* pinned when inference is not supported */}),
+	output: codec.object({
+		/* pinned when inference is not supported */
+	}),
 });
 ```
 

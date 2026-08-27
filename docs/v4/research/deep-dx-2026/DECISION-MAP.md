@@ -1,6 +1,7 @@
 # QUESTPIE v4 deep DX decision map
 
-- Status: research bootstrap; no public-interface authority
+- Status: directionally approved research; pending focused ADR/public-doc
+  ratification, with no public-interface authority yet
 - Goal: make a substantial application easy to author, understand, operate,
   and extend without weakening the accepted v4 guarantees
 - Consumer tracer: Team Support Desk first, then representative Autopilot
@@ -20,7 +21,9 @@
   constants, the questpie.json/per-Operation projection ledger entry, exact
   ADR-0023 HTTP preservation, a dedicated Better Auth provider schema,
   Search embedding composition over Job and Action, and collision-domain
-  terminology
+  terminology. A final naming/ownership repair then fixed core and capability
+  namespaces, explicit named Index ownership, Search/PostGIS authoring,
+  approved plan-scope facts, and honest Action Effect Identity limits.
 
 Every ticket must compare materially different interfaces against one complete
 vertical. A convenience is not earned by one fixture: it needs a deep owner,
@@ -49,9 +52,10 @@ earlier redesign documents and the reports beside this map are research
 evidence only. This map governs sequencing of the new investigation but cannot
 supersede product authority. The exact supersession inventory and ADR-0008
 scope are now recorded in
-[approval packet #1 v2, section 20](./APPROVAL-PACKET-1.md); every ledger
-entry awaits individual human approval before any ADR, SPEC, CONTEXT, or
-public-documentation edit.
+[approval packet #1 v2, section 20](./APPROVAL-PACKET-1.md). Its listed
+directions are human-approved where section 24 says so, but every actual ADR,
+SPEC, CONTEXT, or public-documentation change still awaits focused formal
+ratification.
 
 ## #1: What is the one teachable application mental model?
 
@@ -68,15 +72,17 @@ and which should remain compiler/runtime machinery.
 
 ### Answer
 
-Candidate answer recorded in
+Directionally approved answer recorded in
 [approval packet #1 v2](./APPROVAL-PACKET-1.md) sections 2 and 3: seven
 beginner concepts (Collection, Query, Mutation, Action, Route, Job, Service)
-over one import map, demonstrated as a complete Support Desk vertical. Fixed
+over one import map, demonstrated as a complete Support Desk vertical. Core
+category namespaces come from `questpie`; capability constructors stay under
+their own `geo.*` and `search.*` namespaces without ambient augmentation. Fixed
 constraints stand: stored data is not an endpoint declaration, Policy is
 transport-neutral authorization, semantic Operations own execution
 guarantees, Route owns explicit HTTP, Job owns durable work, and generated
-contracts are the exact application type source. The answer becomes direction
-only with packet approval.
+contracts are the exact application type source. This remains research
+direction, not an Accepted product contract.
 
 ## #2: How is an application composed and configured?
 
@@ -94,8 +100,12 @@ credential-resolver, and Route wiring without creating an Auth provider ABI.
 
 ### Answer
 
-Open. Preserve Principal/Context/Policy authority and the accepted rule that
-Auth is application or Package composition rather than framework policy.
+Direction approved, pending ratification. Preserve Principal/Context/Policy
+authority and the accepted rule that Auth is application or Package
+composition rather than framework policy. Application composition places
+Better Auth objects in a provider-owned PostgreSQL schema outside the
+application schema; a reusable Auth Package must join the one compiled
+schema/migration/fingerprint/drift lifecycle.
 
 ## #3: What does every Collection own internally?
 
@@ -112,7 +122,7 @@ Test simple CRUD and a cross-Collection state transition.
 
 ### Answer
 
-Open for final spelling; direction recorded in
+Direction and Field provenance spelling approved, pending ratification, as recorded in
 [approval packet #1 v2](./APPROVAL-PACKET-1.md) sections 5 and 8. Internal
 CRUD and public network exposure remain separate decisions. The earlier
 statement that adding a Collection Field must change no public input or
@@ -140,9 +150,13 @@ authorization semantics.
 
 ### Answer
 
-Open. `dataQuery`, `query.*`, and `policy.exists` are current evidence, not
-protected spelling. Boolean Policy evidence must remain nondisclosing and may
-not become an ordinary row read.
+Direction approved, pending ratification. Collection-noun `list`/`get`, the
+shared `expr` vocabulary, Policy-only nondisclosing `expr.exists`, object
+selectors/orderings, and bounded multi-hop Relations are the proposed
+surface. Plan-backed predicates may use read-only `principal`, `tenant`, and
+declared `values`; every reached fact enters the plan and cursor dependency
+scope. Exact Relation depth and aggregate ceilings remain measurement inputs,
+not accepted constants. See packet sections 6, 7, 19, 22, and 24.
 
 ## #5: How is one semantic Operation projected to callers?
 
@@ -160,11 +174,14 @@ imports without duplicating handlers or Policy.
 
 ### Answer
 
-Open. The single `/_questpie/operation` Wire endpoint remains a valid candidate
-for the first-party generated client; it must not be mistaken for the complete
-HTTP/OpenAPI story. Route remains the raw HTTP escape hatch unless an explicit
-Operation-to-HTTP projection is earned. Projection ownership and delegation to
-the same executor are already Accepted; only optional shape and DX are open.
+Direction approved, pending ratification. The single
+`/_questpie/operation` Wire endpoint remains the first-party generated-client
+RPC transport and is not the complete HTTP/OpenAPI story. Explicit
+per-Operation `http`/`mcp` projection is orthogonal to global artifact
+emission. Q63 uses exclusive per-pattern subtree ownership; raw Routes and
+HTTP projections share one global routing trie, while MCP uses one global tool
+namespace. The generated client uses nested kind/domain maps and one-object
+envelopes over the same callable descriptors.
 
 ## #6: What is the ordinary Job interface?
 
@@ -182,11 +199,12 @@ evidence, not a second payload/event abstraction.
 
 ### Answer
 
-Open. PostgreSQL durable identity, leases, fencing, retry, cancellation, and
-fresh Policy remain fixed. Generic browser Job control and a generic event bus
-remain absent unless a whole-product journey earns them. Collection-change
-triggers are a later sub-ticket blocked by #3 and must not delay ordinary Job
-ergonomics.
+Direction approved, pending ratification. PostgreSQL durable identity, leases,
+fencing, retry, cancellation, and fresh Policy remain fixed. Ordinary delay is
+acceptance with `notBefore`; `sleepUntil` is only an advanced bounded
+in-attempt wait. The Runtime owns routine heartbeat/cancellation propagation.
+Generic browser Job control and a generic event bus remain absent; triggers,
+service-principal run-as, and durable fan-out remain named later gaps.
 
 ## #7: How does a Package add a vertical capability?
 
@@ -204,8 +222,15 @@ plugin registry or privileged compiler ABI.
 
 ### Answer
 
-Open. Installation alone cannot activate a Package, and a Package cannot gain
-host-only authority through ambient imports.
+Direction approved, pending ratification. Installation alone cannot activate
+a Package, and a Package cannot gain host-only authority through ambient
+imports. Core remains `index.btree`; capability Packages expose focused named
+constructors only through their namespaces (`search.index.fullText`,
+`geo.field.point`, `geo.codec.point`, `geo.index.spatial`). Every physical
+Index is explicitly named in the owning Resource's `indexes` map. Core
+`defineSearch` is the sole semantic Search Resource constructor. The packet
+ledgers the required bare-index, object-map, and non-B-tree capability
+supersessions; it does not edit their current authority.
 
 ## #8: What proves the redesign is simpler?
 

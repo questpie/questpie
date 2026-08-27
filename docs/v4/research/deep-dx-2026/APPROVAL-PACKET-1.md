@@ -136,6 +136,7 @@ database snapshot or transaction as the data it protects_.
 // stable structural surface: schema, codecs, expressions, policy helpers
 import {
 	defineCollection,
+	defineSearch,
 	definePolicy,
 	defineService,
 	codec,
@@ -168,9 +169,10 @@ import type { TicketsQueueInput, TicketsQueueResult } from "#questpie/client";
 // thin React adapter over the vanilla client observer core
 import { useQuery, useLiveQuery, useMutation } from "questpie/react";
 
-// capability Packages: explicitly activated structural Definitions
-import { searchIndex } from "@questpie/pg-search";
-import { geo } from "@questpie/postgis";
+// capability Packages: one namespace import per Package, exact npm names
+// provisional, namespace structure binding
+import * as search from "@questpie/pg-search";
+import * as geo from "@questpie/postgis";
 ```
 
 The lists above are the load-bearing names, not an exhaustive export
@@ -180,7 +182,10 @@ the other retained ADR-0019 names stay available unchanged.
 Ownership rules this map freezes (exact npm names stay open):
 
 - `questpie` owns structural grammar only; it can never execute application
-  behavior.
+  behavior. `defineSearch` lives here, not in a capability Package: it is the
+  core, capability-parameterized Search Resource constructor (section 16),
+  exactly as `defineCollection` is core even though its Fields can carry
+  capability-scoped types.
 - `#questpie/app` owns executable factories and the generated server surface;
   it never appears in browser bundles.
 - `#questpie/client` owns the exact browser-safe contract; it exposes no
@@ -189,6 +194,18 @@ Ownership rules this map freezes (exact npm names stay open):
   it adapts the neutral observer core to React's external-store hooks.
 - A Package exports structural Definitions and Augmentations under explicit
   activation in `questpie.json`; installation alone activates nothing.
+- A capability Package exports exactly **one namespace object** (`geo`,
+  `search`), never scattered top-level names. Each namespace groups its
+  constructors the same way core `questpie` groups `field`/`codec`/`index`:
+  `geo.field.point` (a stored Field type), `geo.codec.point` (a Query
+  parameter/value codec), `geo.index.spatial` (a named physical Index, used
+  only inside a Resource's own `indexes` map); `search.index.fullText` (a
+  named physical Index, used only inside `defineSearch`'s `indexes` map).
+  There is no ambient augmentation of `field`/`codec`/`index`, no global
+  namespace mutation, no `customType` registry, and no arbitrary
+  operator/provider registry a Package writes into — every capability
+  constructor is reached only through its own namespace import, exactly as
+  section 16 already requires.
 
 Capability-negative imports are part of the contract: importing `#questpie/app`
 from browser code, or `#questpie/client` from structural code, is a compile
@@ -300,23 +317,28 @@ export const tickets = defineCollection({
 				throw errors.invalidCandidate("closed ticket requires closedAt");
 		},
 	},
-	indexes: {/* unchanged from the current fixture */},
+	indexes: {
+		/* unchanged from the current fixture */
+	},
 });
 ```
 
-Three authored-surface conveniences ride along. Two are ledger entries:
-`nullable` becomes optional with default `false` (S14), and `relation.toMany`
-inverse authoring (already implemented and retained by ADR-0019) becomes
-loadable by structural reads (S12/additive list). The third is not a ledger
-entry at all: `constraint.primaryKey`, `constraint.unique`, and
-`relation.toOne` replace today's parallel `fields`/`references` arrays with
-the same object-mapping/picker convention `select` already uses —
-`fields: { id: true }` for a constraint's column set (authored key order is
-the column order), `on: { localField: targetField }` for a relation's join
-columns. No Accepted ADR fixes the array spelling, so this is unconstrained
-authoring surface rather than a supersession; the compiler lowers either
-spelling to byte-identical Schema Projection, Constraint, and Relation
-artifacts.
+Three authored-surface conveniences ride along, and all three are ledger
+entries. `nullable` becomes optional with default `false` (S14);
+`relation.toMany` inverse authoring (already implemented and retained by
+ADR-0019) becomes loadable by structural reads (S12/additive list); and
+`constraint.primaryKey`, `constraint.unique`, and `relation.toOne` replace
+today's parallel `fields`/`references` arrays with the same
+object-mapping/picker convention `select` already uses — `fields: { id:
+true }` for a constraint's column set (authored key order is the column
+order, `true` is documented shorthand over the canonical object form), `on:
+{ localField: targetField }` for a relation's join columns. This last one is
+a real future supersession of the array-based authoring API
+`docs/v4/schema-lifecycle.md` section 2 currently documents (S16), not a
+formatting choice or a compatibility alias. Formal ratification must replace
+the array spelling while preserving the existing Schema Projection,
+Constraint, and Relation artifact semantics; this proposed surface does not
+accept both spellings.
 
 - **The author writes:** provenance as small Field modifiers. Nothing else
   changes at the Collection.
@@ -1376,18 +1398,17 @@ nullableFilterPosition`.
   Origin; a fragment referencing a Collection outside its declared scope
   fails at the use site with both Origins.
 - **Plan-backed and handler-backed.** A Query with a `query:` member and no
-  handler infers input and output from the plan. A handler Query composes
+  handler infers input and output from the plan. Its predicate callbacks may
+  read the immutable, Runtime-bound `principal`, `tenant`, and declared
+  `values` operands as well as `row` and `parameters`; the compiler records
+  every reached execution fact in the normalized plan, dependency set, and
+  cursor scope. This keeps ordinary caller-scoped structural reads
+  plan-backed without trusting caller input. A handler Query composes
   `ctx.data.<collection>.list/get` reads inside **one** bounded
   repeatable-read snapshot per Query root (this repairs the currently open
   multi-transaction gap) and pins `output` only where inference is
-  unsupported. Handler-inline plans may compare Fields against plain
-  runtime values (bound as statement parameters), which is how a read
-  scopes itself to `ctx.values` facts today; plan-backed predicates see
-  only `{ row, parameters }`. Giving plan predicates read-only
-  `principal`/`tenant`/`values` operands, so the common caller-scoped list
-  can stay plan-backed, is an approved additive extension (section 24): the
-  operands already exist in Policy programs and their reached facts already
-  enter the cursor policy scope.
+  unsupported. A handler is for behavior that cannot be represented by one
+  closed plan, not a workaround for ordinary scoped structural reads.
 - **Live Query.** `.watch` appears on the same callable generated Query when
   compilation proves watchability; the observed-dependency plan covers data,
   Policy, tenancy, Relation, quantifier, aggregate, and pagination reads.
@@ -1717,7 +1738,7 @@ failed(failure) | uncertain(callId, recover)`. `uncertain` is the honest
     (`docs/v4/schema-lifecycle.md` section 8), so a dedicated provider
     schema is automatically out of fingerprint scope by the existing rule,
     not by a newly authored per-table carve-out. What is new is purely a
-    reporting convenience: the application names the external schema so
+    reporting convenience: the application names the provider-owned schema so
     `questpie drift`/`questpie explain` positively **report its existence
     and provider ownership** instead of silently omitting it, while still
     making **no fingerprint or drift-safety claim over its contents**. This
@@ -1736,7 +1757,7 @@ failed(failure) | uncertain(callId, recover)`. `uncertain` is the honest
     lifecycle before it ships; ADR-0005 is explicit that a native Auth API
     does not permit a second hidden schema migrator, and
     `docs/v4/schema-lifecycle.md` rejects a Package-owned migrator outright.
-    Slice 5 lands the dedicated-schema declaration, repairs
+    Slice 5 lands the provider-owned-schema composition boundary, repairs
     `tracer/auth/migration-config.ts` to the generated loader, and adds the
     drift hostile: an object left inside the application schema without a
     matching Schema Projection member is still `unexpectedObject` drift,
@@ -1910,13 +1931,16 @@ human-approved in direction; section 24 records it.
   callbacks, raw code-generation hooks, a global `customType` registry,
   ambient host-only authority, install-time activation, last-wins or
   source-order composition.
-- The extension line is explicit: a Package parameterizes **fixed,
-  core-implemented** node kinds (declarations, config schemas, migrations,
-  metadata); it never registers executable callbacks into the compiler, the
-  expression kernel, or SQL lowering. No configuration-only mechanism for a
-  third party to add a new operator or index kind exists in this packet;
-  if one is ever wanted, it is its own superseding decision against
-  ADR-0007 and this section.
+- The extension line is explicit: a Package contributes known structural
+  Definition categories and parameterizes **fixed, core-implemented** node
+  kinds (declarations, config schemas, migrations, metadata); it never
+  registers executable callbacks into the compiler, expression kernel, or
+  SQL lowering. A first-party capability Package may expose a focused named
+  Index constructor under its own namespace (`geo.index.spatial`,
+  `search.index.fullText`). It does not mutate core `index`, which remains
+  B-tree-only, and it does not create a general third-party index or operator
+  registry. Any broader extension point would require its own superseding
+  decision against ADR-0007 and this section.
 - A Package may declare: required PostgreSQL extensions (with version
   bounds), config schema, runtime packages, migrations through the one
   migration/fingerprint lifecycle, generated server/client type
@@ -1934,9 +1958,10 @@ pg_search-backed Search projection. Scope honesty first:
   internal fact: current pg_search vector retrieval may still depend on
   pgvector internally, and this packet does not claim pg_search eliminates
   pgvector;
-- the application-facing API speaks the QUESTPIE Search language only; the
-  words pg_search, Tantivy, BM25, pgvector, HNSW, and provider SQL never
-  appear in application code;
+- the application-facing API speaks the QUESTPIE Search language only. The
+  provisional capability Package import may identify pg-search, but its
+  provider query grammar, physical index vocabulary, and SQL never appear in
+  ordinary application authoring;
 - embedding/vector storage remains an internal physical detail of Search; no
   public `field.vector()` or generic vector operators ship unless a real
   consumer needs vectors as ordinary Collection data outside Search.
@@ -1961,18 +1986,20 @@ as stage 1 does; the derived-projection worker still rereads the current row
 and updates the document deterministically; where a fresh or changed
 embedding is needed, that worker **accepts a Job**, and the Job handler uses
 the closed checkpoint `step` helper (ADR-0026) to call a **named generated
-Action** that performs the actual provider call. The checkpoint binds the
-Action's Effect Identity from the Job's run plus the ordered checkpoint name,
-so a retried attempt cannot double-call the provider, and Action's existing
-ambiguous-outcome contract — not a new one — governs what happens when the
-call's result is lost. The resulting vector is written back through the same
-idempotent per-document update stage 1 already uses. No third seam type is
-invented: an embedding failure or ambiguity is a Job retry with a normal
-Action outcome, and it affects freshness, never authority. If this
-composition does not hold up under proof, stage 2 stays explicitly deferred
-rather than shipping an invented seam; claiming hybrid retrieval before the
-ownership model is demonstrated would be dishonest about where the external
-call lives.
+Action** that performs the actual provider call. The Action receives the
+stable Effect Identity required by its admitted-call contract, derived from
+the Job run and ordered checkpoint. That identity does **not** coalesce
+calls, stop a provider from physically executing twice, create an
+exactly-once receipt ledger, or make an ambiguous provider outcome safe for
+ordinary automatic Job retry. If the provider supports idempotency keyed by
+that identity or authoritative receipt lookup, the Action adapter may use
+that provider capability. Otherwise the application must converge or
+reconcile an ambiguous outcome before retry, and the safe recipe remains an
+explicitly unresolved stage-2 proof obligation. A confirmed vector is
+written through the same idempotent per-document update stage 1 uses. No
+third Search-worker Effect seam is invented. If Job-plus-Action composition
+cannot prove this boundary, stage 2 stays deferred; hybrid retrieval must not
+ship on an assumption of exactly-once provider execution.
 
 Accepted Search authority preserved verbatim (ADR-0018): Search is a
 committed derived projection, not authorization; the index returns candidate
@@ -2009,18 +2036,29 @@ vertical against Support Desk, in the same rubric as section 4.
 
 ```ts
 // src/tickets/search.ts
-import { searchIndex } from "@questpie/pg-search";
+import { defineSearch } from "questpie";
+import * as search from "@questpie/pg-search";
 
 import { tickets } from "../tickets";
 
-export const ticketSearchIndex = searchIndex(tickets, {
-	name: "tickets.fullText",
-	fields: {
+export const ticketSearch = defineSearch({
+	name: "tickets.search",
+	source: tickets,
+	document: {
 		reference: { weight: "high" },
 		summary: { weight: "high", highlight: true },
-		description: { weight: "normal", highlight: true },
+		description: { highlight: true },
 	},
 	filterable: { status: true, teamId: true, priority: true },
+	indexes: {
+		primary: search.index.fullText({
+			fields: {
+				reference: true,
+				summary: true,
+				description: true,
+			},
+		}),
+	},
 });
 ```
 
@@ -2030,13 +2068,13 @@ import { codec, policy } from "questpie";
 
 import { defineQuery } from "#questpie/app";
 
-import { ticketSearchIndex } from "./search";
+import { ticketSearch } from "./search";
 
-export const ticketSearch = defineQuery({
+export const searchTickets = defineQuery({
 	name: "tickets.search",
 	network: true,
 	policy: policy.authenticated(),
-	query: ticketSearchIndex.search({
+	query: ticketSearch.list({
 		parameters: {
 			term: codec.text({ minLength: 1, maxLength: 200 }),
 			status: codec.nullable(codec.list(codec.text(), { maximum: 8 })),
@@ -2068,11 +2106,13 @@ const results = await desk.queries.tickets.search({
 // results.nodes[0].rank, results.pageInfo, all generated, none handwritten.
 ```
 
-- **The author writes:** an index Definition over the existing `tickets`
-  Collection value (never a raw SQL DDL string) naming which Fields are
-  ranked, highlighted, or filterable, plus one plan-backed Query built from
-  the index's own `search(...)` constructor. The words pg_search, Tantivy,
-  and BM25 never appear.
+- **The author writes:** one semantic Search Resource with `defineSearch`, a
+  document projection over `tickets`, and an explicit named physical index
+  in that Resource's `indexes` map. `search.index.fullText` owns only that
+  physical index; it is not a second Resource constructor. The author then
+  publishes one plan-backed Query through the Search Resource's typed
+  `list(...)` surface. No Field or Search Resource silently creates an index,
+  and provider implementation vocabulary never enters application code.
 - **TypeScript infers:** `TicketsSearchInput` = `{ term: string; status:
 string[] | null; first: number; after: string | null }`;
   `TicketsSearchResult` = `{ nodes: Array<{ id: string; reference: string;
@@ -2081,12 +2121,14 @@ description?: string[] }; rank: number }>; pageInfo: { endCursor: string |
 null; hasNextPage: boolean } }`. `highlights` and `rank` exist only because
   `highlight`/`term` were authored; an index with no `highlight` entries
   never emits a `highlights` member.
-- **The compiler generates:** a `requiredPostgres` entry for the `pg_search`
-  extension with its version bound; a Search Projection Definition in the
-  Compiled Manifest (index name, source Collection, field weights, the
-  `filterable` set, document schema version); one migration step that
-  creates or updates the BM25 index configuration inside the one Migration
-  Plan lifecycle (no second migrator); the query/wire/client types above.
+- **The compiler generates:** a `requiredPostgres` entry for the backing
+  extension with its version bound; a Search Resource and named Index entry
+  in the Compiled Manifest (Origins, source Collection, document schema and
+  version, index identity and fields); one deterministic migration step for
+  the named physical index inside the normal Migration Plan, fingerprint,
+  drift, rebuild, and cutover lifecycle; and the query/wire/client types
+  above. Artifact internals may name the provider; the application-facing
+  contract does not.
 - **Runtime owns:** rereading the committed row after Transactional Dispatch
   records its key (stage 1, no external effect), idempotently updating or
   removing the document, issuing the BM25 query, and the one bounded rejoin
@@ -2111,10 +2153,14 @@ null; hasNextPage: boolean } }`. `highlights` and `rank` exist only because
   sections 4.3 and 21 until this exact slice lands.
 - **Invalid examples:**
   - `where: ({ row: ticket, parameters }) =>
-ticket.description.equal(parameters.term)`: `description` is indexed for
-    ranking/highlighting but not declared `filterable`, so it cannot be used
-    as an exact-match predicate; proposed `QP-SEARCH-001 unfilterableField`
-    names the field and the declared `filterable` set.
+ticket.description.equal(parameters.term)`: `description` is projected for
+    ranking/highlighting but not declared `filter: true`, so it cannot be
+    used as an exact-match predicate; proposed `QP-SEARCH-001
+    unfilterableField` names the Field and the declared `filterable` map.
+  - omitting `indexes.primary` while using full-text ranking:
+    `QP-SEARCH-003 compatibleIndexRequired` points to `tickets.search`, names
+    the missing compatible index capability, and suggests an explicit named
+    `search.index.fullText(...)` entry. The compiler never invents it.
   - a `term` value built as the literal string `summary:<caller text> AND
 status:open` (an author hand-assembling what looks like provider query
     syntax instead of passing the caller's plain search text): raw Tantivy
@@ -2132,7 +2178,7 @@ status:open` (an author hand-assembling what looks like provider query
 PostGIS is the second, materially different extension proof: database
 scalar/value representation (geometry/geography, SRID, dimension), codecs and
 canonical bytes, extension readiness, migrations and fingerprints, spatial
-operators, spatial indexes (GiST/SP-GiST) as capability projections, Query
+operators, explicitly named spatial indexes as capability projections, Query
 and Policy lowering, generated client representation, and Package
 Origins/diagnostics. Its operators and index kinds are core-implemented node
 kinds that the capability parameterizes, per section 16's extension line.
@@ -2153,16 +2199,30 @@ The concrete stage vertical against Support Desk: an office location on
 `teams`, and a bounded-radius Query over it.
 
 ```ts
-// src/teams.ts (extended Field)
-import { geo } from "@questpie/postgis";
+// src/teams.ts
+import { defineCollection, field } from "questpie";
+import * as geo from "@questpie/postgis";
 
-// added to teams' existing `fields`:
-officeLocation: geo.point({ srid: 4326, nullable: true }),
+export const teams = defineCollection({
+	name: "teams",
+	fields: {
+		id: field.uuid({ default: "randomUuid", server: true, immutable: true }),
+		name: field.text({ maxLength: 160 }),
+		officeLocation: geo.field.point({ srid: 4326, nullable: true }),
+	},
+	indexes: {
+		byLocation: geo.index.spatial({
+			fields: {
+				officeLocation: true,
+			},
+		}),
+	},
+});
 ```
 
 ```ts
 // src/teams/queries.ts
-import { geo } from "@questpie/postgis";
+import * as geo from "@questpie/postgis";
 import { codec, policy } from "questpie";
 
 import { defineQuery } from "#questpie/app";
@@ -2175,7 +2235,7 @@ export const nearbyTeams = defineQuery({
 	policy: policy.authenticated(),
 	query: teams.list({
 		parameters: {
-			origin: geo.parameter({ srid: 4326 }),
+			origin: geo.codec.point({ srid: 4326 }),
 			radiusMeters: codec.integer({ minimum: 1, maximum: 50_000 }),
 			first: codec.integer({ minimum: 1, maximum: 50 }),
 			after: codec.nullable(codec.cursor()),
@@ -2210,12 +2270,13 @@ const nearby = await desk.queries.teams.nearby({
 // generated GeoPoint client type, nearby.pageInfo is ordinary paging.
 ```
 
-- **The author writes:** one geography Field via `geo.point(...)` beside
-  ordinary `field.*` members, and a spatial predicate via the field
-  operand's own `.within(origin, radiusMeters)` method — the same "method on
-  the field operand" shape as `.equal`/`.in`/`.isNull`, not a new freestanding
-  helper — inside an ordinary `where`. No raw `ST_*` call, no handwritten
-  migration, no SRID juggling.
+- **The author writes:** one point Field through
+  `geo.field.point(...)`, one explicitly named physical index through
+  `geo.index.spatial(...)` in the Collection's ordinary `indexes` map, one
+  typed parameter through `geo.codec.point(...)`, and a spatial predicate
+  via the Field operand's `.within(origin, radiusMeters)` method. The Field
+  never implies or generates the index. No provider SQL, handwritten
+  migration, or SRID conversion appears in application code.
 - **TypeScript infers:** `TeamsNearbyInput` = `{ origin: GeoPoint;
 radiusMeters: number; first: number; after: string | null }`;
   `TeamsNearbyResult` = `{ nodes: Array<{ id: string; name: string;
@@ -2226,9 +2287,9 @@ number }` — canonical bytes, never raw WKB/EWKB.
   its version bound; `officeLocation` lowers to a
   `geography(Point, 4326)` column through a capability-scoped codec/type
   projection (canonical bytes in the Schema Projection and Data Contract);
-  a capability-scoped GiST spatial index Definition that participates in the
-  one migration/fingerprint lifecycle exactly like a B-tree index; the
-  query/wire/client types above.
+  the explicitly authored `byLocation` Index Definition, with its Resource
+  identity and Origin, through the normal named-Index artifact contract and
+  one migration/fingerprint lifecycle; and the query/wire/client types above.
 - **Runtime owns:** lowering `.within(...)` to the core-implemented spatial
   operator node parameterized by the PostGIS capability (section 16 — the
   Package parameterizes a fixed node kind, it does not register a callback),
@@ -2254,6 +2315,14 @@ number }` — canonical bytes, never raw WKB/EWKB.
   call, or hand-maintained spatial migration appears anywhere in the
   vertical.
 - **Invalid examples:**
+  - declaring `geo.field.point(...)` without `indexes.byLocation` and then
+    authoring a plan that requires indexed spatial execution:
+    `QP-GEO-003 compatibleSpatialIndexRequired` names the Query and Field and
+    asks for an explicit `geo.index.spatial(...)` entry; it never generates
+    one.
+  - `geo.index.spatial({ fields: { name: true } })`:
+    `QP-GEO-004 incompatibleSpatialIndexField` names `name`, its text type,
+    and the spatial Field kinds accepted by this constructor.
   - `orderBy: { officeLocation: "asc" }`: a geometry/geography-typed Field
     has no natural total order, so it is excluded from `OrderObject`
     eligibility entirely, even though it is a declared Field; proposed
@@ -2289,16 +2358,19 @@ unsupportedExpressionCapability` (capability-branding violations get
   overload follow-up the first slice also closes), `QP-COMPOSE-025
 routeSubtreeCollision`, `QP-COMPOSE-026 httpProjectionInvalid`,
   `QP-COMPOSE-027 mcpToolCollision`, `QP-SEARCH-001 unfilterableField`,
-  `QP-SEARCH-002 rawQuerySyntaxRejected` (17.1), `QP-GEO-001
-unorderableGeometryField`, and `QP-GEO-002 sridMismatch` (18.1). Each
+  `QP-SEARCH-002 rawQuerySyntaxRejected`, `QP-SEARCH-003
+compatibleIndexRequired` (17.1), `QP-GEO-001 unorderableGeometryField`,
+  `QP-GEO-002 sridMismatch`, `QP-GEO-003
+compatibleSpatialIndexRequired`, and `QP-GEO-004
+incompatibleSpatialIndexField` (18.1). Each
   registry addition follows the accepted revision process; implementations
   cannot invent spellings;
 - hard budgets: the accepted 100-row pages, bounded list parameters,
   dependency counts, expression nodes, and declaration size stay ratified
-  constants. Three further ceilings are **proposed but unratified**: relation
-  depth (this packet's examples use four), the maximum aggregate members per
-  plan (this packet's examples use four), and the GET encoded
-  path-plus-query byte budget. Boundedness itself is approved for all three;
+  constants. Three further ceilings are bounded directions without proposed
+  public constants: Relation depth, the maximum aggregate members per plan,
+  and the GET encoded path-plus-query byte budget. Boundedness itself is
+  approved for all three;
   the exact numbers are implementation measurements slice 1 must prove
   against Support Desk and representative Autopilot slices before
   ratification, exactly like the TypeScript instantiation budget SPEC
@@ -2318,22 +2390,25 @@ unorderableGeometryField`, and `QP-GEO-002 sridMismatch` (18.1). Each
 Each entry names the exact clause and the change class. Additive extensions
 are listed separately and are not supersessions.
 
-| #   | ADR and clause                                                                                                                                                                                                                                                               | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| S1  | ADR-0011: “`defineCollectionOperations(collection, body)` is closed compile-time shorthand. Selected `list`, `get`, `create`, `update`, and `delete` members lower … to ordinary Query or Mutation Resources.”                                                               | **Superseded.** The always-generated internal CRUD kernel plus named Operations replace the shorthand. `defineCollectionOperations` is removed after the Collection+Mutation slice; existing fixtures migrate to named Operations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| S2  | ADR-0011: “The Context exposes a transaction-stable `operationTime` …”                                                                                                                                                                                                       | **Superseded (spelling).** The public name becomes `ctx.now`; semantics unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| S3  | ADR-0011: “`createdAt` and `updatedAt` remain ordinary Fields. Any server value or `updatedAt` change is an explicit Mutation-owned assignment.” and ADR-0008: “automatically advancing `updatedAt` belongs to the later transaction-owned Mutation contract.”               | **Superseded.** `onUpdate: "now"` makes `updatedAt` a database-owned invariant with compiler-owned migration, fingerprint, returned-value, and Change Ledger semantics; it also applies to explicitly supported managed writers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
-| S4  | ADR-0011: “Sparse caller Field authority runs before closed pure normalization. Schema defaults and closed server `values` then construct the complete candidate …”                                                                                                          | **Superseded (extended semantics).** The fixed order is retained, but the write model gains Field provenance and a named-Mutation trusted `values` lane: caller Field authority applies only to the caller patch over the provenance-derived surface; `values` assignments skip caller Field authority by definition and still pass normalization, validation, candidate Policy, and constraints.                                                                                                                                                                                                                                                                                                                                                                                                     |
-| S5  | ADR-0011: “Lifecycle jobs have explicit owners: closed Field normalization, closed server values, a named Mutation …, a transaction-owned typed dispatch intent …, and an Action … There is no general hook catalogue.” and the matching ADR-0016 lifecycle-mapping clauses. | **Superseded (narrow).** The four fixed Collection phases `normalize`/`validate`/`check`/`afterWrite` become authored executable slices with the capability bounds in section 8. Still no general hook catalogue, priorities, or ordering registry.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| S6  | ADR-0010: “`definePolicy(collection, body)` … `policy.exists(collection, predicate)` provides bounded, compiler-authored, boolean-only relational evidence …”                                                                                                                | **Superseded (spelling only).** The vocabulary becomes `expr.*` with `expr.exists` restricted to Policy programs; every evidence semantic clause of ADR-0010 is retained verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| S7  | ADR-0019: “Existing `shape`, `value`, `constraint`, `relation`, `relationRef`, `dataQuery`, `query`, `index`, `seed`, `mutation`, `context`, and `principal` jobs remain available.”                                                                                         | **Superseded (partial).** `dataQuery` and the `query.*` expression and parameter namespaces are replaced by Collection-noun plans, `expr.*`, and codec-kernel parameters (`codec.list`, `codec.cursor`); the remaining names stay.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| S8  | ADR-0022: “Direct client/App maps retain their accepted exact-key spelling.”                                                                                                                                                                                                 | **Superseded.** The generated client adopts nested kind/domain maps with the same QP-COMPOSE-023/024 collision rules; exact Resource Identity remains wire/artifact/tooling authority.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| S9  | ADR-0015: “Creation is lazy and coalesced.”                                                                                                                                                                                                                                  | **Superseded (extended).** Lazy remains the default; `eager: true` readiness Services (compiler-required for credential-resolver dependencies) and non-poisoning lazy failure retry are added; disposal and lifetime clauses unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| S10 | ADR-0019: “A source-controlled `questpie.json` `projections` object selects them; `questpie build` emits them …”                                                                                                                                                             | **Not superseded — additive and orthogonal.** Global artifact selection and per-Operation exposure answer different questions and both stay: `questpie.json`'s `projections` object continues to select whether the OpenAPI/MCP/skill build artifacts are emitted for the application at all (unchanged; skill projections are untouched by this packet); the new per-Operation `http`/`mcp` members select and configure which Operations participate in an emitted artifact and how. Neither replaces the other, and an Operation may carry `http`/`mcp` members while `questpie.json` leaves that artifact kind unemitted. No clause of ADR-0019 is contradicted, so this is reclassified out of the supersession count; it was misclassified as superseded in the prior repair pass (section 23). |
-| S11 | Deep-DX DECISION-MAP #3: “A Collection must not silently publish new caller input or output when a Field is added.” and FABLE-SYNTHESIS packet item 5.                                                                                                                       | **Corrected (research, not ADR).** Replaced by the derived-versus-pinned model in section 5, including the runtime compatibility story for retained clients, cursors, and Live Query.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
-| S12 | ADR-0008: “Structural Query v1 has exact selection, closed filters, explicit total ordering, forward cursor pagination, **one-hop Relations**, and declared dependencies.”                                                                                                   | **Superseded (direction only).** Bounded multi-hop to-one traversal replaces the fixed one-hop cap, with `QP-DATA-022` guarding whatever the ceiling is measured to be. The one-hop-to-bounded-multi-hop direction is approved; the specific depth (four, in this packet's examples) is an unratified implementation candidate, not part of this supersession, and must be measured against Support Desk and Autopilot before any exact number is accepted (section 19).                                                                                                                                                                                                                                                                                                                              |
-| S13 | ADR-0008 grammar: “Scalar and scalar-list parameters are non-null; cursor is the only nullable parameter.”                                                                                                                                                                   | **Superseded.** Nullable parameters become optional filters under the formal positive-conjunction rule (section 6) with `QP-DATA-020` guarding position.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| S14 | Foundational grammar: `field.*` options require `nullable`.                                                                                                                                                                                                                  | **Superseded (authored spelling only).** `nullable` defaults to `false`; equivalent declarations produce byte-identical Schema Projection, following the ADR-0008 revision precedent for authored-TypeScript-only changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| #   | ADR and clause                                                                                                                                                                                                                                                                                                                                 | Change                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| S1  | ADR-0011: “`defineCollectionOperations(collection, body)` is closed compile-time shorthand. Selected `list`, `get`, `create`, `update`, and `delete` members lower … to ordinary Query or Mutation Resources.”                                                                                                                                 | **Superseded.** The always-generated internal CRUD kernel plus named Operations replace the shorthand. `defineCollectionOperations` is removed after the Collection+Mutation slice; existing fixtures migrate to named Operations.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S2  | ADR-0011: “The Context exposes a transaction-stable `operationTime` …”                                                                                                                                                                                                                                                                         | **Superseded (spelling).** The public name becomes `ctx.now`; semantics unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S3  | ADR-0011: “`createdAt` and `updatedAt` remain ordinary Fields. Any server value or `updatedAt` change is an explicit Mutation-owned assignment.” and ADR-0008: “automatically advancing `updatedAt` belongs to the later transaction-owned Mutation contract.”                                                                                 | **Superseded.** `onUpdate: "now"` makes `updatedAt` a database-owned invariant with compiler-owned migration, fingerprint, returned-value, and Change Ledger semantics; it also applies to explicitly supported managed writers.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| S4  | ADR-0011: “Sparse caller Field authority runs before closed pure normalization. Schema defaults and closed server `values` then construct the complete candidate …”                                                                                                                                                                            | **Superseded (extended semantics).** The fixed order is retained, but the write model gains Field provenance and a named-Mutation trusted `values` lane: caller Field authority applies only to the caller patch over the provenance-derived surface; `values` assignments skip caller Field authority by definition and still pass normalization, validation, candidate Policy, and constraints.                                                                                                                                                                                                                                                                                                                                                                                                     |
+| S5  | ADR-0011: “Lifecycle jobs have explicit owners: closed Field normalization, closed server values, a named Mutation …, a transaction-owned typed dispatch intent …, and an Action … There is no general hook catalogue.” and the matching ADR-0016 lifecycle-mapping clauses.                                                                   | **Superseded (narrow).** The four fixed Collection phases `normalize`/`validate`/`check`/`afterWrite` become authored executable slices with the capability bounds in section 8. Still no general hook catalogue, priorities, or ordering registry.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| S6  | ADR-0010: “`definePolicy(collection, body)` … `policy.exists(collection, predicate)` provides bounded, compiler-authored, boolean-only relational evidence …”                                                                                                                                                                                  | **Superseded (spelling only).** The vocabulary becomes `expr.*` with `expr.exists` restricted to Policy programs; every evidence semantic clause of ADR-0010 is retained verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| S7  | ADR-0019: “Existing `shape`, `value`, `constraint`, `relation`, `relationRef`, `dataQuery`, `query`, `index`, `seed`, `mutation`, `context`, and `principal` jobs remain available.”                                                                                                                                                           | **Superseded (partial).** `dataQuery` and the `query.*` expression and parameter namespaces are replaced by Collection-noun plans, `expr.*`, and codec-kernel parameters (`codec.list`, `codec.cursor`); the remaining names stay, except `index`, whose call shape is separately superseded by S15.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| S8  | ADR-0022: “Direct client/App maps retain their accepted exact-key spelling.”                                                                                                                                                                                                                                                                   | **Superseded.** The generated client adopts nested kind/domain maps with the same QP-COMPOSE-023/024 collision rules; exact Resource Identity remains wire/artifact/tooling authority.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| S9  | ADR-0015: “Creation is lazy and coalesced.”                                                                                                                                                                                                                                                                                                    | **Superseded (extended).** Lazy remains the default; `eager: true` readiness Services (compiler-required for credential-resolver dependencies) and non-poisoning lazy failure retry are added; disposal and lifetime clauses unchanged.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| S10 | ADR-0019: “A source-controlled `questpie.json` `projections` object selects them; `questpie build` emits them …”                                                                                                                                                                                                                               | **Not superseded — additive and orthogonal.** Global artifact selection and per-Operation exposure answer different questions and both stay: `questpie.json`'s `projections` object continues to select whether the OpenAPI/MCP/skill build artifacts are emitted for the application at all (unchanged; skill projections are untouched by this packet); the new per-Operation `http`/`mcp` members select and configure which Operations participate in an emitted artifact and how. Neither replaces the other, and an Operation may carry `http`/`mcp` members while `questpie.json` leaves that artifact kind unemitted. No clause of ADR-0019 is contradicted, so this is reclassified out of the supersession count; it was misclassified as superseded in the prior repair pass (section 23). |
+| S11 | Deep-DX DECISION-MAP #3: “A Collection must not silently publish new caller input or output when a Field is added.” and FABLE-SYNTHESIS packet item 5.                                                                                                                                                                                         | **Corrected (research, not ADR).** Replaced by the derived-versus-pinned model in section 5, including the runtime compatibility story for retained clients, cursors, and Live Query.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| S12 | ADR-0008: “Structural Query v1 has exact selection, closed filters, explicit total ordering, forward cursor pagination, **one-hop Relations**, and declared dependencies.”                                                                                                                                                                     | **Superseded (direction only).** Bounded multi-hop to-one traversal replaces the fixed one-hop cap, with `QP-DATA-022` guarding the measured ceiling. The direction is approved, but no exact depth is proposed or ratified; Support Desk and Autopilot evidence must establish it before formal acceptance (section 19).                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| S13 | ADR-0008 grammar: “Scalar and scalar-list parameters are non-null; cursor is the only nullable parameter.”                                                                                                                                                                                                                                     | **Superseded.** Nullable parameters become optional filters under the formal positive-conjunction rule (section 6) with `QP-DATA-020` guarding position.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| S14 | Foundational grammar: `field.*` options require `nullable`.                                                                                                                                                                                                                                                                                    | **Superseded (authored spelling only).** `nullable` defaults to `false`; equivalent declarations produce byte-identical Schema Projection, following the ADR-0008 revision precedent for authored-TypeScript-only changes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| S15 | ADR-0019: “Existing `shape`, `value`, `constraint`, `relation`, `relationRef`, `dataQuery`, `query`, `index`, `seed`, `mutation`, `context`, and `principal` jobs remain available; `index` stays B-tree-only”; `docs/v4/schema-lifecycle.md` section 2 “Exact authoring API” documents bare `index(...)`.                                     | **Superseded (public call shape only).** Bare `index(...)` becomes `index.btree(...)`. Core `index` remains B-tree-only. This is not a compatibility alias: ratification replaces the authored spelling while preserving B-tree artifact semantics.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| S16 | `docs/v4/schema-lifecycle.md` section 2 “Exact authoring API” documents `constraint.primaryKey({ fields: ["id"] })`, `relation.toOne({ target, fields: [...], references: [...] })`, and `index({ fields: [...] })` as canonical authoring.                                                                                                    | **Superseded (public authoring structure).** Object mappings replace Field-name and parallel/positional arrays for Selections, Relations, Constraints, and Index fields. `on: { local: target }` owns Relation pairing; authored key order owns Constraint/Index column order; `true` is documented shorthand and an object value is the canonical expandable form. Arrays are not an interchangeable compatibility spelling. Section 4's normalized manifest arrays may remain compiler artifact representation; they are not public authoring and are not superseded by this row.                                                                                                                                                                                                                   |
+| S17 | ADR-0010's foundational public Index is “intentionally B-tree only”; ADR-0018 requires any real full-text physical Index to receive a focused decision compatible with the fixed B-tree-only public Index contract; ADR-0019 says “`index` stays B-tree-only”; `docs/v4/schema-lifecycle.md` section 2 says “V1 supports B-tree indexes only.” | **Superseded (capability ownership, not core widening).** Core `index` remains B-tree-only as `index.btree`. Explicitly activated capability Packages may contribute focused named non-B-tree constructors only under their own namespaces (`search.index.fullText`, `geo.index.spatial`). Every result is still an explicitly named Index in the owning Resource's `indexes` map and enters the one identity/migration/readiness/artifact/fingerprint/drift/collision/diagnostic lifecycle. No ambient augmentation, generic index registry, or implicit Field-created Index is introduced.                                                                                                                                                                                                          |
 
 Additive extensions that are **not** supersessions: to-many loading,
 quantifiers, and `count()` (the “projected `toMany`” and aggregates contracts
@@ -2342,16 +2417,19 @@ already implemented and retained by ADR-0019); Job acceptance object envelope
 and compiler-derived default identity (generated surface, not ADR-frozen);
 named client type aliases; `.observe`/`.key` descriptor members;
 `questpie/react`; Service `config`, `eager`, and `runtime.packages`; the
-dedicated-schema declaration for an application-composed provider (reports
-external ownership of a schema already outside fingerprint scope; fingerprints
-nothing new); per-Operation `http` and `mcp` members alongside the unchanged
-`questpie.json` `projections` build-level selection (S10 — see the ledger row
-below: global emission selection and per-Operation exposure are orthogonal,
-so nothing is superseded); the HTTP `Idempotency-Key` convention and the
+provider-owned PostgreSQL schema outside the application schema for an
+application-composed provider (reports that ownership without fingerprinting
+the provider schema); per-Operation `http` and `mcp` members alongside the unchanged
+`questpie.json` `projections` build-level selection (S10 above: global
+emission selection and per-Operation exposure are orthogonal, so nothing is
+superseded); the HTTP `Idempotency-Key` convention and the
 ADR-0023-compatible HTTP `500` body plus the additive MCP outcome mapping;
 the pg_search and PostGIS proofs (the “focused decision” ADR-0018 required),
 including their embedding-generation composition of existing Job and Action
-primitives (section 17).
+primitives (section 17). The capability-Package non-B-tree Index constructors
+are intentionally absent from this additive list: S17 records their real
+supersession of the current public B-tree-only Index surface while preserving
+the narrower guarantee that core `index` itself stays B-tree-only.
 
 Not touched: ADR-0013 Reaction, ADR-0023 post-commit outcome semantics,
 ADR-0026 Job checkpoint language, ADR-0028 Effect Identity/limits/Wire v3,
@@ -2424,7 +2502,7 @@ The seven hesitations, evaluated:
 
 | #   | Hesitation                                                                 | Class                                                     | Resolution                                                                                                                                                                                                       |
 | --- | -------------------------------------------------------------------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Caller-scoped plan predicate (`parameters.callerMembershipId` placeholder) | missing-docs, plus a real surface gap                     | Documented the handler-Query pattern with plain-value binding; plan-scope execution-fact operands are approved (section 24)                                                                                      |
+| 1   | Caller-scoped plan predicate (`parameters.callerMembershipId` placeholder) | missing-docs, plus a real surface gap                     | Repaired the guide/reference to use the approved read-only plan operands `principal`/`tenant`/declared `values`; every reached fact enters plan and cursor scope, so no handler workaround remains               |
 | 2   | Ordering by a to-one related field                                         | missing-docs (modeling guidance)                          | Documented “page the Collection you order by”; the watched-tickets read pages `tickets` with a `some(watchers)` quantifier; relation-nested `orderBy` explicitly does not exist                                  |
 | 3   | Non-primary unique lookup for unwatch                                      | missing-docs, resolved by a kernel refinement             | `key` now accepts any declared unique constraint's complete column set (section 8)                                                                                                                               |
 | 4   | Job `runAs` for a recipient who is not the caller                          | missing-capability (confirmed)                            | Documented caller-only run-as with the recipient-as-data pattern; service-principal recipe named as a deferred gap, not an approval question (section 24); the audit's invented `durable.system` was not adopted |
@@ -2442,8 +2520,9 @@ model was already sound (entries 1, 2, 5 and the guidance halves of 3, 6,
 7); the two kernel refinements (unique-constraint `key`,
 `ConstraintViolation`) generalize declared compiler facts rather than
 inventing new API for one consumer; and the genuine capability gaps
-(plan-scope caller facts, service-principal run-as, durable fan-out)
-became explicit approval questions instead of silent API growth.
+(service-principal run-as and durable fan-out) became explicit deferred gaps
+instead of silent API growth; plan-scope facts are approved direction and
+documented as the ordinary structural path.
 
 Standing acceptance criterion for every section 22 slice: its golden path
 must be authorable from the beginner guide and API reference alone, with
@@ -2464,9 +2543,10 @@ alone, with no Runtime, compiler, or generated implementation source open.
 
 1. **Query + Relations.** Tracer: `tickets.queue` + `tickets.detail` +
    `tickets.escalations` replacing the four list Queries in Support Desk,
-   through browser and Live Query, plus one caller-scoped handler Query
-   (the audit's watched-tickets shape); plan-scope execution-fact operands
-   are approved (section 24), so this slice lands and cursor-scopes them.
+   through browser and Live Query, plus the audit's caller-scoped
+   watched-tickets shape as a plan-backed Query using approved read-only
+   execution facts. This slice lands those operands and records every reached
+   fact in plan dependencies and cursor scope.
    Kernel claims: one snapshot per Query
    root; Policy-before-filter with quantifiers; cursor scope with nested
    pages; disclosure-authorized quantifier universe under `.watch`
@@ -2520,11 +2600,11 @@ alone, with no Runtime, compiler, or generated implementation source open.
    (section 13); integration-key second credential path; non-Auth provider
    Service used by Route and Action. Kernel claims: secrets absent from all
    artifacts; readiness failure taxonomy; lazy failure retry; drain
-   semantics; drift verification reporting the declared external schema as
+   semantics; drift verification reporting the provider-owned schema as
    externally owned. Hostiles: conflicting credentials precedence; provider
    outage vs absent credential; config secret in diagnostics; an
    undeclared object inside the application schema caught by the existing
-   `unexpectedObject` drift rule; the declared external schema's contents
+   `unexpectedObject` drift rule; the provider-owned schema's contents
    provably never inspected, so reported ownership is never mistaken for a
    drift-safety claim. Deletion: env reads, the ambient migration-config
    read, bundler workaround.
@@ -2533,23 +2613,27 @@ alone, with no Runtime, compiler, or generated implementation source open.
    OpenAPI document, and one MCP tool called through a real MCP client
    against Policy. Kernel claims: same executor; outcome fidelity including
    the ADR-0023 HTTP `500` post-commit body and its additive MCP mapping;
-   two collision domains.
+   one global HTTP routing trie shared by raw Routes and HTTP projections,
+   plus one global MCP tool namespace.
    Hostiles: ambiguous mappings; GET encoding budget; HTTP retry without
    the idempotency header; MCP metadata-as-authorization attempt. Owns the
    deferred multi-binding decision.
 7. **Package authoring + pg_search stage 1.** Tracer: ticket full-text
    search in Support Desk through an activated Package on the official
-   ParadeDB image. Kernel claims: candidate-keys-only; authorized universe
+   ParadeDB image, using core `defineSearch` plus an explicit named
+   `search.index.fullText` entry. Kernel claims: candidate-keys-only; authorized universe
    for totals/facets/cursors; rebuild/cutover; extension readiness;
    primary-only rejoin. Hostiles: stale/forged/foreign-tenant candidates;
    revocation between index and rejoin; revocation committed on primary
    not yet visible on a replica (topology rejection); missing extension.
 8. **pg_search stage 2 + PostGIS + seam decision.** Tracer: the
    embedding-generation ownership model as a Job-accepts-and-checkpoints-an-
-   Action composition (section 17), proved or explicitly deferred before any
-   hybrid/RRF retrieval claim; one geo Collection with spatial operators and
-   index through the same Package contract (section 18); then the seam
-   hypothesis evaluated with both proofs on the table.
+   Action composition (section 17), including provider-idempotency/receipt or
+   application-convergence evidence for ambiguous outcomes, proved or
+   explicitly deferred before any hybrid/RRF retrieval claim; one geo
+   Collection with `geo.field.point`, `geo.codec.point`, and an explicit named
+   `geo.index.spatial` entry through the same Index lifecycle (section 18);
+   then the seam hypothesis evaluated with both proofs on the table.
 9. **Representative Autopilot port + measured deletion.** Tracer: the
    sampled Route-to-Operation migration slices; the adoption scorecard of
    section 21 becomes claims instead of estimates.
@@ -2600,7 +2684,7 @@ Blockers repaired:
    this section had drifted into vaguer "reserved status" language; see the
    focused-repair record below).
 5. **Better Auth provider schema and the broken CLI config path** (lane 4).
-   Section 13 defines the external-schema declaration now and the ADR-0005
+   Section 13 defines the provider-owned schema boundary now and the ADR-0005
    Package obligation later; 4.10 shows the repaired
    `migration-config.ts` on the generated `loadAppConfig()`.
 6. **Q63 rule under-specified against its own motivating mount** (lane 4).
@@ -2659,7 +2743,8 @@ section 21 (complete record in
 hesitations drove the documentation repairs, the kernel `key` and
 `ConstraintViolation` refinements, the afterWrite fan-out bound, the
 implicit `Idempotency-Key` binding, and three new approval questions,
-while confirming every primitive choice and both idempotency rules
+subsequently resolved or classified in section 24, while confirming every
+primitive choice and both idempotency rules
 survived first contact with a model that had never seen the design.
 
 ### Focused repair-pass self-critique (2026-08-27)
@@ -2691,12 +2776,12 @@ each other, or that introduced a fresh error. It found and repaired:
    two prose mentions that named the old shape.
 4. **A self-contradiction in the Better Auth schema repair**, in both
    section 13 and section 22 slice 5. The repair correctly states that a
-   dedicated external schema's contents are never fingerprinted, then
+   provider-owned schema's contents are never fingerprinted, then
    separately claimed a hostile test proves "an object silently added to the
-   declared external schema" is "surfaced" — which only a fingerprint could
+   provider-owned schema" is "surfaced" — which only a fingerprint could
    detect. Corrected both to scope the drift hostile to the application
    schema (where `unexpectedObject` genuinely applies) and to state plainly
-   that the external schema's contents are provably never inspected, so
+   that the provider-owned schema's contents are provably never inspected, so
    reported ownership is never mistaken for a drift-safety claim.
 5. **An incomplete S10 repair.** The ledger row was corrected, but section
    15's own OpenAPI and MCP bullets never said that `questpie.json`
@@ -2719,6 +2804,22 @@ No finding reopened Q63, expression vocabulary, provenance spelling, client
 envelope shape, or any other already-approved direction; all seven are
 narrow consistency and correctness repairs of this pass's own edits. Every
 item above is fixed in place, not merely logged.
+
+### Final naming and ownership repair (2026-08-27)
+
+A final bounded pass applied the later binding decisions without reopening
+the architecture: core and capability category namespaces are now uniform;
+every physical Index is explicitly named in its owning Resource; `defineSearch`
+is the sole Search Resource constructor; Search and PostGIS examples use
+`search.index.fullText` and `geo.field`/`geo.codec`/`geo.index` consistently;
+plan-backed Queries use the approved read-only execution facts and cursor-scope
+every reached fact; and the embedding proof now states the limits of Action
+Effect Identity instead of implying exactly-once provider execution. S15-S17
+ledger the public call-shape, object-map, and capability-Index supersessions.
+The pass also removed the remaining unproved numeric candidates and stale
+Q63/provider-schema/ratification wording. Its hostile review was restricted to
+these named repairs; it did not run a new design swarm or change the audit
+transcript.
 
 ## 24. Human approval record and remaining ratification
 
@@ -2757,9 +2858,14 @@ numbered slices in section 22 remain the path to that evidence.
      selection and per-Operation `http`/`mcp` exposure are orthogonal, so
      nothing is superseded; the ledger row states this.
    - **S12** (bounded multi-hop Relations replacing the fixed one-hop cap)
-     is approved in direction only. No specific depth is ratified; this
-     packet's examples use 4 as an unratified implementation candidate, not
-     an accepted constant (see "Genuinely remaining" below).
+     is approved in direction only. No specific depth is proposed or
+     ratified; implementation evidence must measure it (see "Genuinely
+     remaining" below).
+8. **Namespace and Index ownership.** The `questpie` core category
+   namespaces, capability-owned `geo.*`/`search.*` namespaces, explicit named
+   Index entries, `defineSearch` as the sole Search Resource constructor, and
+   S15-S17's supersession direction are approved. Formal ADR/public-doc
+   ratification is still required before implementation.
 
 ### Rejected and repaired
 
