@@ -27,6 +27,19 @@ type TitleExpressionSQL = SQL | Column | null;
 type OptimisticConcurrencyRecord = Record<string, unknown> & {
 	id: string | number;
 };
+type DeferredUpdateOutput = {
+	updatedRecords: OptimisticConcurrencyRecord[];
+	records: OptimisticConcurrencyRecord[];
+};
+type UpdateExecutionInternal = {
+	crdtRestore?: StagedCrdtOwnerActivation;
+	revisionPrelocked?: true;
+	legacyTransactionBound?: true;
+	returnBeforeOutputHooks?: true;
+};
+type UpdateExecutionParams =
+	| UpdateParams<any, any, string | number>
+	| { where: Where; data: Record<string, any> };
 
 // Search/realtime integrations removed (Phase 3 — QUE-251).
 // Side effects now come from core module global hooks.
@@ -2234,10 +2247,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	}
 
 	private async runUpdateOutputHooks(
-		updatedRecords: any[],
-		records: any[],
+		updatedRecords: OptimisticConcurrencyRecord[],
+		records: OptimisticConcurrencyRecord[],
 		context: CRUDContext,
-		db: any,
+		db: ReturnType<typeof getDb>,
 	): Promise<void> {
 		for (const updated of updatedRecords) {
 			const original = records.find((record) => record.id === updated.id);
@@ -2274,17 +2287,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	 *   in-transaction re-fetch of claimed rows — they are *fact* hooks and
 	 *   fire for winners only.
 	 */
+	private _executeUpdate(
+		params: UpdateExecutionParams,
+		context: CRUDContext,
+		internal: UpdateExecutionInternal & { returnBeforeOutputHooks: true },
+	): Promise<DeferredUpdateOutput>;
+	private _executeUpdate(
+		params: UpdateExecutionParams,
+		context?: CRUDContext,
+		internal?: UpdateExecutionInternal,
+	): Promise<any>;
 	private async _executeUpdate(
-		params:
-			| UpdateParams<any, any, string | number>
-			| { where: Where; data: Record<string, any> },
+		params: UpdateExecutionParams,
 		context: CRUDContext = {},
-		internal?: {
-			crdtRestore?: StagedCrdtOwnerActivation;
-			revisionPrelocked?: true;
-			legacyTransactionBound?: true;
-			returnBeforeOutputHooks?: true;
-		},
+		internal?: UpdateExecutionInternal,
 	): Promise<any> {
 		if (
 			this.getCrdtManifest() &&
@@ -2319,14 +2335,13 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				),
 			);
 			if (Array.isArray(deferred)) return deferred;
-			const output = deferred as { updatedRecords: any[]; records: any[] };
 			await this.runUpdateOutputHooks(
-				output.updatedRecords,
-				output.records,
+				deferred.updatedRecords,
+				deferred.records,
 				normalized,
 				db,
 			);
-			return isBatch ? output.updatedRecords : output.updatedRecords[0];
+			return isBatch ? deferred.updatedRecords : deferred.updatedRecords[0];
 		}
 		if (this.getOptimisticConcurrency() && !internal?.revisionPrelocked) {
 			return withTransaction(db, async (tx) => {
