@@ -13,7 +13,7 @@ async function compileProvenanceFixture(
 ) {
 	await writeFile(
 		join(root, "src/provenance-records.ts"),
-		`import { constraint, defineCollection, field } from "questpie";
+		`import { constraint, defineCollection, definePolicy, field, policy } from "questpie";
 
 export const provenanceRecords = defineCollection({
 	name: "provenanceRecords",
@@ -23,7 +23,30 @@ export const provenanceRecords = defineCollection({
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
-`,
+
+export const provenanceRecordPolicy = definePolicy(provenanceRecords, {
+	name: "provenanceRecords.default",
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate }) => candidate.id.equal(candidate.id),
+	},
+	update: {
+		admit: policy.authenticated(),
+		rows: ({ current }) => current.id.equal(current.id),
+		candidate: ({ candidate, current }) => candidate.id.equal(current.id),
+	},
+	fields: {
+		create: ({ candidate }) => ({
+			id: candidate.id.equal(candidate.id),
+			label: candidate.label.equal(candidate.label),
+		}),
+		update: ({ current }) => ({
+			id: current.id.equal(current.id),
+			label: current.label.equal(current.label),
+		}),
+	},
+});
+	`,
 	);
 	return compileApplication({ applicationRoot: root });
 }
@@ -81,6 +104,101 @@ test("projects Field provenance into Data Contract without physical schema drift
 		expect(app).toContain(
 			'readonly insert: Readonly<{ readonly "label": string; }>; readonly update: Readonly<{ readonly "label"?: string; }>;',
 		);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 20_000);
+
+test("generates an internal create/update kernel without publishing Collection Resources", async () => {
+	const temporary = await mkdtemp(join(tmpdir(), "questpie-adr0030-kernel-"));
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const compilation = await compileProvenanceFixture(temporary, {
+			immutable: true,
+			server: true,
+		});
+
+		const programs = JSON.parse(
+			compilation.generatedFiles["collection-operation-programs.json"]!,
+		) as Readonly<{
+			operations: readonly Readonly<{
+				identity: string;
+				target: string;
+				member: string;
+			}>[];
+		}>;
+		const plans = JSON.parse(
+			compilation.generatedFiles["postgres-collection-operation-plans.json"]!,
+		) as Readonly<{
+			plans: readonly Readonly<{
+				identity: string;
+				target: string;
+				member: string;
+				lifecycle: readonly string[];
+			}>[];
+		}>;
+		const kernelPrograms = programs.operations.filter(
+			({ target }) => target === "collection:provenanceRecords",
+		);
+		const kernelPlans = plans.plans.filter(
+			({ target }) => target === "collection:provenanceRecords",
+		);
+
+		expect(kernelPrograms.map(({ member }) => member).sort()).toEqual([
+			"create",
+			"update",
+		]);
+		expect(kernelPlans.map(({ member }) => member).sort()).toEqual([
+			"create",
+			"update",
+		]);
+		for (const plan of kernelPlans)
+			expect(plan.lifecycle).toEqual(
+				expect.arrayContaining([
+					"completeCandidateValidation",
+					"candidatePolicy",
+				]),
+			);
+
+		const app = compilation.generatedFiles["app.ts"]!;
+		expect(app).toContain(
+			'readonly "provenanceRecords": Readonly<{ readonly create:',
+		);
+		expect(app).toContain("readonly update:");
+
+		const automaticIdentities = new Set(
+			kernelPrograms.map(({ identity }) => identity),
+		);
+		const manifest = JSON.parse(compilation.generatedFiles["manifest.json"]!);
+		const operationContracts = JSON.parse(
+			compilation.generatedFiles["operation-contracts.json"]!,
+		);
+		const wire = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
+		for (const resources of [
+			manifest.composition.resources,
+			operationContracts.operations,
+			wire.operations,
+		] as const)
+			expect(
+				resources.filter(({ identity }: { identity: string }) =>
+					automaticIdentities.has(identity),
+				),
+			).toEqual([]);
+		expect(compilation.generatedFiles["client.ts"]).not.toContain(
+			"provenanceRecords.create",
+		);
+		expect(compilation.generatedFiles["client.ts"]).not.toContain(
+			"provenanceRecords.update",
+		);
+		const sets = JSON.parse(
+			compilation.generatedFiles["collection-operation-set-projections.json"]!,
+		);
+		expect(
+			sets.sets.filter(
+				({ target }: { target: string }) =>
+					target === "collection:provenanceRecords",
+			),
+		).toEqual([]);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
