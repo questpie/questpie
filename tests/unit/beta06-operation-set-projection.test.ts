@@ -479,9 +479,7 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 		);
 		expect(commentCreatePlan).toBeDefined();
 		for (const check of commentCreatePlan?.fieldAuthority.checks ?? []) {
-			expect(check.sql).not.toContain(
-				'"qp_candidate"."author_membership_id"',
-			);
+			expect(check.sql).not.toContain('"qp_candidate"."author_membership_id"');
 		}
 		expect(
 			operationPrograms.operations.find(
