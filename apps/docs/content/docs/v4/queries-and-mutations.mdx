@@ -172,29 +172,58 @@ fresh Policy, resume/reset, and Change Ledger recovery.
 
 ## Derive caller input from a Collection
 
-A Collection can derive exact caller-input codecs from its Field provenance:
+A Collection can derive exact caller-input codecs from its Field provenance.
+The Barbershop schedules an appointment with a narrowed create input:
 
-```ts title="src/features/message-inputs.ts"
+```ts title="src/features/schedule-appointment.ts"
+import { defineMutation } from "#questpie/app";
 import type { CodecValue } from "questpie";
-import { codec } from "questpie";
-import { messages } from "../data/collaboration";
+import { policy } from "questpie";
 
-export const submitMessageInput = messages.createInput().pick({
-	channelId: true,
-	title: true,
-	body: true,
+import { appointments } from "../data/appointments";
+
+export const scheduleAppointmentInput = appointments.createInput().pick({
+	customerName: true,
+	startsAt: true,
+	endsAt: true,
 });
 
-export const editMessageInput = codec.object({
-	id: codec.uuid(),
-	...messages.updateInput().pick({ title: true, body: true }).properties,
+type ScheduleAppointmentInput = CodecValue<typeof scheduleAppointmentInput>;
+// Readonly<{ customerName: string; startsAt: Date; endsAt: Date }>
+
+export const scheduleAppointment = defineMutation({
+	name: "appointments.schedule",
+	input: scheduleAppointmentInput,
+	policy: policy.authenticated(),
+	errors: {},
+	handler: ({ input, ctx }) =>
+		ctx.data.appointments.create({
+			input,
+			values: {
+				tenantId: ctx.tenant.id,
+				createdAt: ctx.operationTime,
+				updatedAt: ctx.operationTime,
+			},
+		}),
+	network: true,
 });
+```
 
-type SubmitMessageInput = CodecValue<typeof submitMessageInput>;
-// Readonly<{ channelId: string; title: string; body: string }>
+The generated client infers both the call and its result:
 
-type EditMessageInput = CodecValue<typeof editMessageInput>;
-// Readonly<{ id: string; title?: string; body?: string }>
+```ts title="web/schedule-appointment.ts"
+import type { GeneratedClient } from "#questpie/client";
+
+export async function scheduleAppointment(client: GeneratedClient) {
+	const appointment = await client.mutations["appointments.schedule"]({
+		customerName: "Marek Novak",
+		startsAt: new Date("2026-09-01T09:00:00.000Z"),
+		endsAt: new Date("2026-09-01T09:30:00.000Z"),
+	});
+
+	appointment.status satisfies string;
+	return appointment;
+}
 ```
 
 `createInput()` includes caller-writable create Fields. `updateInput()` excludes
@@ -446,8 +475,9 @@ smuggled through the caller lane. Rejecting overlap also avoids an implicit
 last-writer-wins rule.
 
 The Channel call is a values-only update. An empty `patch` with non-empty
-`values` is real work; an update with both lanes empty is rejected. Update starts
-from the locked current row and never reapplies create defaults.
+`values` is real work. QUESTPIE rejects an update when both `patch` and `values`
+are empty. Update starts from the locked current row and never reapplies create
+defaults.
 
 Trusted values can use Mutation input, a row returned by a Policy-aware locking
 read, transaction-scoped Policy-aware Collection reads, `ctx.operationTime`,

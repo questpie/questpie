@@ -135,13 +135,13 @@ Provenance changes the Data Contract and generated application types, not the
 PostgreSQL column. Changing only `server` or `immutable` does not create a schema
 Migration.
 
-Requiredness is calculated after provenance removes server-owned Fields from
-the caller surface. A caller-writable, non-nullable create Field without a
-database default is required. A defaulted or nullable create Field is optional,
-and an absent nullable Field without a default becomes SQL `NULL`. Every update
-patch Field is optional. A non-nullable server-owned Field without a default
-must still be supplied through trusted `values`; otherwise QUESTPIE rejects the
-incomplete candidate before it writes.
+QUESTPIE calculates caller requiredness after provenance removes server-owned
+Fields from the caller surface. A caller-writable, non-nullable create Field
+without a database default is required. A defaulted or nullable create Field is
+optional, and an absent nullable Field without a default becomes SQL `NULL`.
+Every update patch Field is optional. A Mutation must supply a non-nullable
+server-owned Field without a default through trusted `values`; otherwise
+QUESTPIE rejects the incomplete candidate before it writes.
 
 Configure the Application Identity, PostgreSQL schema, and discovery root in
 the [`questpie.json` Application Root](./definition-composition#configure-one-application-root).
