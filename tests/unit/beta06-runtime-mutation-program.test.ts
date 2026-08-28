@@ -49,6 +49,7 @@ const operation = {
 	policy: "policy:messages.default",
 	keyFields: [],
 	callerInputFields: [["body"], ["title"]],
+	requiredCallerInputFields: [["title"]],
 	trustedValueFields: [["body"], ["id"], ["title"]],
 	requiredTrustedValueFields: [],
 	selectedFieldPaths: [["id"], ["title"]],
@@ -122,6 +123,7 @@ const listOperation = {
 	policy: "policy:messages.default",
 	keyFields: [],
 	callerInputFields: [["after"], ["first"]],
+	requiredCallerInputFields: [],
 	trustedValueFields: [],
 	requiredTrustedValueFields: [],
 	selectedFieldPaths: [["id"]],
@@ -255,6 +257,24 @@ test("rejects missing or malformed trusted-value Field authority", () => {
 	});
 	expect(() => linkCollectionMutationPrograms(requiredOnRead)).toThrow(
 		"requiredTrustedValueFields are invalid",
+	);
+});
+
+test("rejects malformed required caller Field authority", () => {
+	const outside = artifacts();
+	Object.assign(outside.collectionOperations.operations[0]!, {
+		requiredCallerInputFields: [["unknown"]],
+	});
+	expect(() => linkCollectionMutationPrograms(outside)).toThrow(
+		"requiredCallerInputFields are invalid",
+	);
+
+	const requiredOnRead = artifacts();
+	Object.assign(requiredOnRead.collectionOperations.operations[1]!, {
+		requiredCallerInputFields: [["first"]],
+	});
+	expect(() => linkCollectionMutationPrograms(requiredOnRead)).toThrow(
+		"requiredCallerInputFields are invalid",
 	);
 });
 

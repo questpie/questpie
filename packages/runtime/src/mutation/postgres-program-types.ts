@@ -30,7 +30,7 @@ export type PostgresParameterV1 =
 	| Readonly<{
 			position: number;
 			postgresType: "boolean";
-			kind: "patchPresent";
+			kind: "callerInputPresent" | "patchPresent";
 			path: FieldPath;
 			codec: "boolean";
 	  }>

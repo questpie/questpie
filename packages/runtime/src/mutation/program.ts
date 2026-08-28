@@ -49,6 +49,7 @@ export type CollectionOperationProgramV1 = Readonly<{
 	policy: string;
 	keyFields: readonly FieldPath[];
 	callerInputFields: readonly FieldPath[];
+	requiredCallerInputFields: readonly FieldPath[];
 	trustedValueFields: readonly FieldPath[];
 	requiredTrustedValueFields: readonly FieldPath[];
 	selectedFieldPaths: readonly FieldPath[];
@@ -288,6 +289,7 @@ function decodeOperation(
 			"policy",
 			"keyFields",
 			"callerInputFields",
+			"requiredCallerInputFields",
 			"trustedValueFields",
 			"requiredTrustedValueFields",
 			"selectedFieldPaths",
@@ -333,6 +335,20 @@ function decodeOperation(
 		source.callerInputFields,
 		`${label} callerInputFields`,
 	);
+	const requiredCallerInputFields = fieldPaths(
+		source.requiredCallerInputFields,
+		`${label} requiredCallerInputFields`,
+	);
+	const caller = new Set(
+		callerInputFields.map((field) => JSON.stringify(field)),
+	);
+	if (
+		(member !== "create" && requiredCallerInputFields.length > 0) ||
+		requiredCallerInputFields.some(
+			(field) => !caller.has(JSON.stringify(field)),
+		)
+	)
+		fail(`${label} requiredCallerInputFields are invalid`);
 	const trustedValueFields = fieldPaths(
 		source.trustedValueFields,
 		`${label} trustedValueFields`,
@@ -420,6 +436,7 @@ function decodeOperation(
 		policy,
 		keyFields,
 		callerInputFields,
+		requiredCallerInputFields,
 		trustedValueFields,
 		requiredTrustedValueFields,
 		selectedFieldPaths,

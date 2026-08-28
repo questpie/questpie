@@ -16,6 +16,7 @@ function operation(identity: string, member: "create" | "get") {
 		policy: "policy:records.default",
 		keyFields: member === "get" ? [["id"]] : [],
 		callerInputFields: member === "create" ? [["title"], ["body"]] : [],
+		requiredCallerInputFields: member === "create" ? [["title"]] : [],
 		trustedValueFields:
 			member === "create" ? [["body"], ["id"], ["title"]] : [],
 		requiredTrustedValueFields: [],
@@ -642,6 +643,30 @@ test("create checks sparse Field authority and leaves normalization/defaults to 
 	]);
 });
 
+test("create requires only artifact-owned caller Fields before PostgreSQL", async () => {
+	let calls = 0;
+	const data = dataFor([createPlan()], async (statement) => {
+		calls += 1;
+		if (statement.endsWith("AUTHORITY_SQL")) return [{ allowed: true }];
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: "Required",
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+
+	await expect(
+		data.records.create({ input: { body: "optional" } }),
+	).rejects.toThrow("Collection create input is missing required Fields");
+	expect(calls).toBe(0);
+	await expect(
+		data.records.create({ input: { title: "Required" } }),
+	).resolves.toMatchObject({ id, title: "Required" });
+	expect(calls).toBeGreaterThan(0);
+});
+
 test("missing and Policy-invisible keyed rows have the same nested get result", async () => {
 	const outcomes = await Promise.all(
 		[false, true].map(async (locked) => {
@@ -730,12 +755,12 @@ test("rejects widened requests, unknown caller Fields, and invalid caller scalar
 		data.records.create({
 			input: { title: "Title", body: "Body", ownerId: principalId },
 		}),
-	).rejects.toThrow("exactly the compiled Fields");
+	).rejects.toThrow("contains undeclared Fields");
 	await expect(
 		data.records.create({
 			input: { title: "Title", body: "Body", smuggled: {} },
 		}),
-	).rejects.toThrow("exactly the compiled Fields");
+	).rejects.toThrow("contains undeclared Fields");
 	await expect(
 		data.records.create({
 			input: { title: "Title", body: "Body", smuggled: new Map() },

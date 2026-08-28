@@ -129,6 +129,26 @@ export function requiredCreateTrustedValueFields(
 		.map(({ path: fieldPath }) => fieldPath);
 }
 
+export function requiredCreateCallerInputFields(
+	facts: readonly Readonly<{
+		path: readonly string[];
+		contract: RecordValue;
+	}>[],
+	callerInputFields: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+	const caller = new Set(
+		callerInputFields.map((fieldPath) => JSON.stringify(fieldPath)),
+	);
+	return facts
+		.filter(
+			({ path: fieldPath, contract }) =>
+				contract.nullable === false &&
+				contract.default === null &&
+				caller.has(JSON.stringify(fieldPath)),
+		)
+		.map(({ path: fieldPath }) => fieldPath);
+}
+
 function validateFieldPath(
 	collection: NormalizedResource,
 	fieldPath: readonly string[],
@@ -430,6 +450,13 @@ export function projectCollectionOperationSets(
 							trustedValueFields,
 						)
 					: [];
+			const requiredCallerInputFields =
+				member === "create"
+					? requiredCreateCallerInputFields(
+							collectionFieldFacts(collection),
+							callerInputFields,
+						)
+					: [];
 			const rawTemplate =
 				member === "list"
 					? normalizeDataQueryTemplate(memberContract.templateInput, {
@@ -466,6 +493,7 @@ export function projectCollectionOperationSets(
 				policy: policy as `policy:${string}`,
 				keyFields: member === "create" || member === "list" ? [] : keyFields,
 				callerInputFields,
+				requiredCallerInputFields,
 				trustedValueFields,
 				requiredTrustedValueFields,
 				selectedFieldPaths: (

@@ -100,6 +100,9 @@ const collectionPlan = {
 		member: "create",
 		keyFields: [["id"]],
 		callerInputFields: [["id"]],
+		requiredCallerInputFields: [["id"]],
+		trustedValueFields: [],
+		requiredTrustedValueFields: [],
 	},
 	candidate: {
 		fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],

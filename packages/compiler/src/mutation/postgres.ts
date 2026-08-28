@@ -16,6 +16,7 @@ import type {
 	PostgresUpdateOperationPlanV1,
 } from "./postgres-contract";
 import {
+	callerInputParameters,
 	executionParameter,
 	fieldByPath,
 	inputParameter,
@@ -213,12 +214,30 @@ function createPlan(
 	const parameters = policyParameters(checks.parameters);
 	const steps: Record<string, unknown>[] = [];
 	const expressions = new Map<string, string>();
+	const optionalCaller = new Map<
+		string,
+		Readonly<{ present: string; fallback: string }>
+	>();
+	const requiredCaller = new Set(
+		operation.requiredCallerInputFields.map((fieldPath) =>
+			canonicalBytes(fieldPath),
+		),
+	);
 	for (const callerPath of operation.callerInputFields) {
 		const field = fieldByPath(collection, callerPath);
-		expressions.set(
-			canonicalBytes(field.path),
-			inputParameter(parameters, "callerInput", field),
-		);
+		const key = canonicalBytes(field.path);
+		if (requiredCaller.has(key))
+			expressions.set(key, inputParameter(parameters, "callerInput", field));
+		else {
+			const bound = callerInputParameters(parameters, field);
+			const fallback = defaultExpression(parameters, field);
+			if (fallback === null)
+				throw new TypeError(
+					`${operation.identity} optional caller Field ${field.path.join(".")} has no fallback`,
+				);
+			expressions.set(key, bound.value);
+			optionalCaller.set(key, { present: bound.present, fallback });
+		}
 		steps.push({ phase: "callerInput", target: field.path });
 	}
 	for (const rawStep of normalizer
@@ -235,6 +254,17 @@ function createPlan(
 			throw new TypeError(`unsupported normalizer ${String(expression.kind)}`);
 		expressions.set(canonicalBytes(target), `btrim(${sourceSql})`);
 		steps.push({ phase: "normalizer", target, transform: expression.kind });
+	}
+	for (const [key, optional] of optionalCaller) {
+		const supplied = expressions.get(key);
+		if (!supplied)
+			throw new TypeError(
+				"optional caller Field lost its candidate expression",
+			);
+		expressions.set(
+			key,
+			`CASE WHEN ${optional.present} THEN ${supplied} ELSE ${optional.fallback} END`,
+		);
 	}
 	for (const field of collection.fields) {
 		if (expressions.has(canonicalBytes(field.path))) continue;

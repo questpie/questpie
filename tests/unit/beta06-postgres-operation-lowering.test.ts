@@ -27,12 +27,18 @@ const schema = {
 			identity: "collection:records",
 			postgresName: "records",
 			fields: [
-				field("collection:records", "body", "body", {
-					kind: "text",
-					minLength: 1,
-					maxLength: 8_192,
-					collation: "questpie.binary",
-				}),
+				field(
+					"collection:records",
+					"body",
+					"body",
+					{
+						kind: "text",
+						minLength: 1,
+						maxLength: 8_192,
+						collation: "questpie.binary",
+					},
+					{ kind: "literal", value: "fallback" },
+				),
 				field(
 					"collection:records",
 					"createdAt",
@@ -314,7 +320,9 @@ const operations = {
 			policy: "policy:records.default",
 			keyFields: [],
 			callerInputFields: [["title"], ["body"]],
+			requiredCallerInputFields: [["title"]],
 			trustedValueFields: [["id"]],
+			requiredTrustedValueFields: [],
 			selectedFieldPaths: [["id"], ["body"], ["title"], ["createdAt"]],
 			dataQuery: null,
 			dataQueryDigest: null,
@@ -343,7 +351,9 @@ const operations = {
 			policy: "policy:records.default",
 			keyFields: [["id"]],
 			callerInputFields: [],
+			requiredCallerInputFields: [],
 			trustedValueFields: [],
+			requiredTrustedValueFields: [],
 			selectedFieldPaths: [["id"], ["body"], ["title"]],
 			dataQuery: null,
 			dataQueryDigest: null,
@@ -444,6 +454,10 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 	expect(create.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ kind: "callerInput", path: ["title"] }),
+			expect.objectContaining({
+				kind: "callerInputPresent",
+				path: ["body"],
+			}),
 			expect.objectContaining({
 				kind: "executionFact",
 				source: "principal",
@@ -626,6 +640,7 @@ test("merges trusted update values after caller patches without replaying create
 			member: "update",
 			keyFields: [["id"]],
 			callerInputFields: [["body"]],
+			requiredCallerInputFields: [],
 			trustedValueFields: [["title"]],
 			selectedFieldPaths: [["id"], ["body"], ["title"]],
 			normalizerProgramDigest: null,

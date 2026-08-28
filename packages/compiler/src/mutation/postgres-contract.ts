@@ -12,7 +12,7 @@ export type PostgresOperationParameterV1 = Readonly<{
 				codec: ScalarCodecV1;
 		  }>
 		| Readonly<{
-				kind: "patchPresent" | "trustedValuePresent";
+				kind: "callerInputPresent" | "patchPresent" | "trustedValuePresent";
 				path: readonly string[];
 				codec: "boolean";
 		  }>

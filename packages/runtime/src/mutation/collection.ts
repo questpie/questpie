@@ -244,7 +244,10 @@ function bind(
 		if (parameter.kind === "literal") return parameter.value;
 		if (parameter.kind === "executionFact")
 			return executionFact(parameter, facts, operationTime);
-		if (parameter.kind === "patchPresent") {
+		if (
+			parameter.kind === "callerInputPresent" ||
+			parameter.kind === "patchPresent"
+		) {
 			if (!values.callerInput)
 				throw new TypeError("Compiled Collection patch has no value source");
 			return hasValueAt(values.callerInput, parameter.path);
@@ -263,10 +266,14 @@ function bind(
 		if (!source)
 			throw new TypeError("Compiled Collection parameter has no value source");
 		if (
-			(parameter.kind === "patchValue" || parameter.kind === "trustedValue") &&
+			(parameter.kind === "callerInput" ||
+				parameter.kind === "patchValue" ||
+				parameter.kind === "trustedValue") &&
 			!hasValueAt(source, parameter.path)
 		)
 			return null;
+		if (parameter.codec === "boolean")
+			throw new TypeError("Compiled Collection presence parameter is invalid");
 		return inputScalar(
 			valueAt(source, parameter.path),
 			parameter.codec,
@@ -412,13 +419,18 @@ function createCollectionMutationData(
 										request.input,
 										"Collection create input",
 									);
-									exactPaths(
-										inputPaths(callerInput, "Collection create input"),
+									const callerPaths = inputPaths(
+										callerInput,
+										"Collection create input",
+									);
+									allowedPaths(
+										callerPaths,
 										plan.operation.callerInputFields,
 										"Collection create input",
 									);
-									const callerPaths = inputPaths(
-										callerInput,
+									requirePaths(
+										callerPaths,
+										plan.operation.requiredCallerInputFields,
 										"Collection create input",
 									);
 									const trustedValues = Object.hasOwn(request, "values")
@@ -460,6 +472,12 @@ function createCollectionMutationData(
 										);
 									const values = { callerInput, trustedValues };
 									for (const check of plan.fieldAuthority.checks) {
+										if (
+											!callerPaths.some(
+												(path) => pathKey(path) === pathKey(check.path),
+											)
+										)
+											continue;
 										const rows = await execute(
 											plan,
 											started,

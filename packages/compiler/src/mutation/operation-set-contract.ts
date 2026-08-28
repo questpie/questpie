@@ -16,6 +16,7 @@ export interface CollectionOperationProgramV1 {
 	readonly policy: `policy:${string}`;
 	readonly keyFields: readonly (readonly string[])[];
 	readonly callerInputFields: readonly (readonly string[])[];
+	readonly requiredCallerInputFields: readonly (readonly string[])[];
 	readonly trustedValueFields: readonly (readonly string[])[];
 	readonly requiredTrustedValueFields: readonly (readonly string[])[];
 	readonly selectedFieldPaths: readonly (readonly string[])[];

@@ -242,6 +242,21 @@ export function patchParameters(
 	});
 }
 
+export function callerInputParameters(
+	parameters: Parameters,
+	field: PostgresMutationFieldV1,
+): Readonly<{ present: string; value: string }> {
+	return Object.freeze({
+		present: parameters.add({
+			kind: "callerInputPresent",
+			path: field.path,
+			codec: "boolean",
+			postgresType: "boolean",
+		}),
+		value: inputParameter(parameters, "callerInput", field),
+	});
+}
+
 export function trustedValueParameters(
 	parameters: Parameters,
 	field: PostgresMutationFieldV1,

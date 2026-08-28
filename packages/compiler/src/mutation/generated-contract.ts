@@ -66,6 +66,17 @@ function shape(
 	return render(root);
 }
 
+function hasRequiredPathAtOrBelow(
+	requiredPaths: readonly FieldPath[],
+	path: FieldPath,
+): boolean {
+	return requiredPaths.some(
+		(required) =>
+			required.length >= path.length &&
+			path.every((segment, index) => required[index] === segment),
+	);
+}
+
 function parameterType(
 	parameter: DataQueryTemplateV1["parameters"][number],
 ): string {
@@ -148,15 +159,14 @@ function method(
 	const callerInput = shape(
 		program.callerInputFields,
 		(path) => types.field(program.target, path),
-		() => program.member === "update",
+		(path) =>
+			!hasRequiredPathAtOrBelow(program.requiredCallerInputFields, path),
 	);
 	const trustedValues = shape(
 		program.trustedValueFields,
 		(path) => types.field(program.target, path),
 		(path) =>
-			!program.requiredTrustedValueFields.some(
-				(required) => required.join("/") === path.join("/"),
-			),
+			!hasRequiredPathAtOrBelow(program.requiredTrustedValueFields, path),
 	);
 	const valuesMember =
 		program.trustedValueFields.length === 0

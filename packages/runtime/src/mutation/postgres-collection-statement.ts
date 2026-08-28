@@ -211,6 +211,7 @@ export function decodePostgresCollectionParameters(
 			});
 		}
 		if (
+			source.kind === "callerInputPresent" ||
 			source.kind === "patchPresent" ||
 			source.kind === "trustedValuePresent"
 		) {
@@ -220,7 +221,7 @@ export function decodePostgresCollectionParameters(
 				`${label} parameter ${index}`,
 			);
 			if (postgresType !== "boolean" || source.codec !== "boolean")
-				fail(`${label} parameter ${position} patch presence is invalid`);
+				fail(`${label} parameter ${position} Field presence is invalid`);
 			return Object.freeze({
 				position,
 				postgresType: "boolean" as const,
