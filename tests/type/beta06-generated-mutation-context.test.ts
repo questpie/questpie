@@ -68,8 +68,8 @@ message.id satisfies string;
 message.body satisfies string | undefined;
 // @ts-expect-error conditional output denial omits body instead of encoding null
 const deniedBody: null = message.body;
-// @ts-expect-error output contains only the compiler-fixed selection
-message.authorMembershipId;
+// The internal Collection kernel returns its compiler-fixed selection.
+message.authorMembershipId satisfies string;
 // @ts-expect-error Membership has no compiled Mutation operation
 ctx.data.memberships;
 // @ts-expect-error Company has no compiled Mutation operation
@@ -90,7 +90,7 @@ ctx.data.channels.get({ key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", space
 ctx.data.messages.create({ input: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" } });
 // @ts-expect-error createdAt is assigned by the compiled server-value program
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello", createdAt: new Date() } });
-// @ts-expect-error static server-value targets are not dynamically assignable
+// Trusted kernel values may supply a schema-owned Field.
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { createdAt: new Date() } });
 // Both lanes expose shared Fields; supplying one in both is rejected at runtime.
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { body: "overlap" } });
