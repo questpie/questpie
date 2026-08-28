@@ -602,39 +602,60 @@ now explains that PostgreSQL owns `operationTime` through
 database-owned `onUpdate` remains a later schema capability. These docs-only
 repairs are integrated through `766ca5e69`.
 
-Two later Kernel candidates are intentionally isolated rather than integrated.
-`work/deep-dx-policy-expr` contains the implemented Policy/expression slice and
-passes deterministic full/release, PostgreSQL 17 plus Firefox, Standards and
-Spec gates. `work/deep-dx-crud-lifecycle` contains only the narrower proposed
-Collection provenance/trusted-values ADR and executable hostile proof; it does
-not change production. In both cases the pinned primary acceptance wrapper
-returned no transport result and wrote no review record. Neither candidate is
-Accepted or eligible to land until a fresh authority-compliant acceptance run
-produces and verifies PASS. Do not replace that review with another model or
-silently implement lifecycle semantics.
+The Deep-DX Policy/expression boundary and ADR-0030 Collection provenance and
+trusted-values boundary are now integrated. ADR-0030 is Accepted and its Product
+implementation is complete through generated create/update kernels and the
+current Operation Set compatibility adapter. Collection Fields derive exact
+create/update caller codecs; `server` and `immutable` provenance remains
+orthogonal to nullability and database defaults; object-map `pick`/`omit`
+preserves Field codecs. Caller `patch` and trusted `values` are independently
+decoded, normalized and authorized, must not overlap, and form one complete
+candidate inside the owning Mutation transaction. Update locks and rechecks the
+current row, preserves compare-and-set behavior, applies sparse caller Field
+authority before complete-candidate validation, then runs full candidate Policy
+before PostgreSQL write, receipt and Change Ledger capture. Mutable Fields may
+be supplied by either lane on different calls without granting caller authority
+to server-owned Fields.
+
+The generated Team Support Desk create/update Operations and the beta05
+PostgreSQL harness exercise the compiler-owned kernels through the same Runtime
+adapter used by named Mutations. The legacy Operation Set remains one temporary
+compatibility projection, not a second CRUD kernel. Generic Operation codec
+grammar and Collection Field codec projection each have one compiler owner;
+Runtime Mutation linking and execution are separated behind the Mutation domain
+seam. The complete focused post-repair lane passes 53 tests with 191 assertions,
+the full PostgreSQL 17 lane passes including both Firefox reference tracers, and
+`quality:release` passes. Two consecutive release dry-runs reproduce package
+SHA-256 `26543d907a1c58a3771bfad790a163d27cfe079a83ddfcec23c516426971414b`
+and declaration SHA-256
+`41f9fb9298284876a088894f911d69bc7ba52a3018b9f793c1b553a4020020cb`.
+
+The OpenTelemetry workbench at
+`docs/v4/research/observability-2026/WORKBENCH.md` is research only. It creates
+no accepted public or Runtime API. Authored `normalize`, `validate`, `check`,
+`afterWrite`, database-owned `onUpdate`, declared-unique `key` lookup, typed
+`ConstraintViolation`, and always-generated get/list/delete remain deferred
+exactly as ADR-0030 records.
 
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
-   status.
-2. Restore the pinned primary acceptance transport. Both prior invocations are
-   terminal `NO_RESULT`, so do not retry an already reviewed head or invent a
-   no-op commit. A replacement review requires explicit human authority and a
-   genuinely new committed candidate packet under the proof procedure. Land the
-   Policy/expression branch only after a verified PASS record.
-3. After Policy/expression lands, rebase the proposed provenance/trusted-values
-   proof onto the new canonical head, refresh authority hashes and run one new
-   acceptance review. Only then begin its production implementation test-first.
-4. Keep Team Support Desk as the golden reference consumer and every
+   status. ADR-0030 provenance/trusted values are closed; do not recreate their
+   proof or a parallel write kernel.
+2. Keep Team Support Desk as the golden reference consumer and every
    application browser call on the generated client. The Query/Relations slice
    above is closed; do not recreate the deleted list variants or a second
    relational execution kernel.
-5. The pure lifecycle packet still has an unresolved ownership seam:
+3. The next unresolved Deep-DX decision is the pure lifecycle boundary:
    Collection validation issues cannot borrow a named Mutation's declared error
    map, and arbitrary TypeScript purity cannot be claimed without a conservative
    analyzable executable subset. Resolve and ratify those contracts before
-   adding `normalize` or `validate` production APIs.
-6. Do not reopen the reference application by adding Cron, Collection triggers,
+   adding `normalize`, `validate`, `check`, `afterWrite` or `onUpdate`
+   production APIs.
+4. Treat OpenTelemetry as a separate docs-first decision. The research
+   workbench may inform a future tracer, but it is not authority for exports,
+   span names, attributes, sampling, exporters or persistence behavior.
+5. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-7. Do not push, tag or publish without explicit authority.
+6. Do not push, tag or publish without explicit authority.
