@@ -109,7 +109,7 @@ function collectionFieldFacts(
 	);
 }
 
-function requiredCreateFields(
+export function requiredCreateFields(
 	facts: readonly Readonly<{
 		path: readonly string[];
 		contract: RecordValue;
@@ -127,26 +127,6 @@ function requiredCreateFields(
 				eligible.has(JSON.stringify(fieldPath)),
 		)
 		.map(({ path: fieldPath }) => fieldPath);
-}
-
-export function requiredCreateTrustedValueFields(
-	facts: readonly Readonly<{
-		path: readonly string[];
-		contract: RecordValue;
-	}>[],
-	trustedValueFields: readonly (readonly string[])[],
-): readonly (readonly string[])[] {
-	return requiredCreateFields(facts, trustedValueFields);
-}
-
-export function requiredCreateCallerInputFields(
-	facts: readonly Readonly<{
-		path: readonly string[];
-		contract: RecordValue;
-	}>[],
-	callerInputFields: readonly (readonly string[])[],
-): readonly (readonly string[])[] {
-	return requiredCreateFields(facts, callerInputFields);
 }
 
 function validateFieldPath(
@@ -445,14 +425,14 @@ export function projectCollectionOperationSets(
 					: [];
 			const requiredTrustedValueFields =
 				member === "create"
-					? requiredCreateTrustedValueFields(
+					? requiredCreateFields(
 							collectionFieldFacts(collection),
 							trustedValueFields,
 						)
 					: [];
 			const requiredCallerInputFields =
 				member === "create"
-					? requiredCreateCallerInputFields(
+					? requiredCreateFields(
 							collectionFieldFacts(collection),
 							callerInputFields,
 						)

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { renderGeneratedMutationData } from "../../packages/compiler/src/mutation/generated-contract";
-import { requiredCreateTrustedValueFields } from "../../packages/compiler/src/mutation/operation-set";
+import { requiredCreateFields } from "../../packages/compiler/src/mutation/operation-set";
 
 const base = {
 	identity: "mutation:tickets.create",
@@ -90,7 +90,7 @@ test("derives required trusted create Fields after operation input filtering", (
 		contract,
 	});
 	expect(
-		requiredCreateTrustedValueFields(
+		requiredCreateFields(
 			[
 				field("requiredServer", {
 					server: true,
@@ -126,15 +126,13 @@ test("derives required trusted create Fields after operation input filtering", (
 	).toEqual([["requiredServer"], ["requiredImmutableServer"], ["caller"]]);
 });
 
-test("derives required caller create Fields after provenance filtering", async () => {
-	const { requiredCreateCallerInputFields } =
-		await import("../../packages/compiler/src/mutation/operation-set");
+test("derives required caller create Fields after provenance filtering", () => {
 	const field = (
 		name: string,
 		contract: Readonly<Record<string, unknown>>,
 	) => ({ path: [name], contract });
 	expect(
-		requiredCreateCallerInputFields(
+		requiredCreateFields(
 			[
 				field("required", { nullable: false, default: null }),
 				field("nullable", { nullable: true, default: null }),
