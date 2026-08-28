@@ -739,7 +739,15 @@ test("validates every untouched update candidate Field before Policy and write",
 						},
 					],
 				},
-				fieldAuthority: { checks: [] },
+				fieldAuthority: {
+					checks: [
+						{
+							path: ["title"],
+							sql: "TITLE_AUTHORITY_SQL",
+							parameters: [],
+						},
+					],
+				},
 				write: {
 					sql: "WRITE_SQL",
 					parameters: [],
@@ -750,6 +758,7 @@ test("validates every untouched update candidate Field before Policy and write",
 		async (statement) => {
 			calls.push(statement);
 			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "TITLE_AUTHORITY_SQL") return [{}];
 			if (statement === "CANDIDATE_VALIDATION_SQL")
 				return [
 					{
@@ -764,7 +773,11 @@ test("validates every untouched update candidate Field before Policy and write",
 	await expect(
 		data.records.update({ key: { id }, patch: { title: "after" } }),
 	).rejects.toThrow("$field.displayName");
-	expect(calls).toEqual(["LOCK_SQL", "CANDIDATE_VALIDATION_SQL"]);
+	expect(calls).toEqual([
+		"LOCK_SQL",
+		"TITLE_AUTHORITY_SQL",
+		"CANDIDATE_VALIDATION_SQL",
+	]);
 });
 
 test("create decodes trusted values exactly and binds them separately", async () => {

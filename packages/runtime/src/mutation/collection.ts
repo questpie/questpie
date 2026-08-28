@@ -620,6 +620,27 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection update lock returned multiple rows",
 										);
+									const supplied = new Set(suppliedPaths.map(pathKey));
+									for (const check of plan.fieldAuthority.checks) {
+										if (!supplied.has(pathKey(check.path))) continue;
+										const rows = await execute(
+											plan,
+											started,
+											check,
+											bind(
+												check.parameters,
+												values,
+												input.facts,
+												input.operationTime,
+												nullableByPath,
+											),
+										);
+										if (rows.length === 0) return null;
+										if (rows.length !== 1)
+											throw new TypeError(
+												"Collection update Field authority returned multiple rows",
+											);
+									}
 									const candidates = await execute(
 										plan,
 										started,
@@ -642,27 +663,6 @@ function createCollectionMutationData(
 										plan.candidateValidation.result,
 										input.resultValuesDecoded,
 									);
-									const supplied = new Set(suppliedPaths.map(pathKey));
-									for (const check of plan.fieldAuthority.checks) {
-										if (!supplied.has(pathKey(check.path))) continue;
-										const rows = await execute(
-											plan,
-											started,
-											check,
-											bind(
-												check.parameters,
-												values,
-												input.facts,
-												input.operationTime,
-												nullableByPath,
-											),
-										);
-										if (rows.length === 0) return null;
-										if (rows.length !== 1)
-											throw new TypeError(
-												"Collection update Field authority returned multiple rows",
-											);
-									}
 									const rows = await execute(
 										plan,
 										started,
