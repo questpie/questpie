@@ -130,12 +130,9 @@ function kernelProgram(
 				callerAuthority.has(canonicalBytes(path)),
 		)
 		.map(({ path }) => path);
-	const caller = new Set(callerInputFields.map((path) => canonicalBytes(path)));
 	const trustedValueFields = facts
 		.filter(
-			({ path, contract }) =>
-				(member === "create" || contract.immutable !== true) &&
-				(member === "create" || !caller.has(canonicalBytes(path))),
+			({ contract }) => member === "create" || contract.immutable !== true,
 		)
 		.map(({ path }) => path);
 	return Object.freeze({

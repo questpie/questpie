@@ -225,6 +225,38 @@ test("generates an internal create/update kernel without publishing Collection R
 	}
 }, 20_000);
 
+test("keeps default mutable update Fields available to caller and trusted lanes", async () => {
+	const temporary = await mkdtemp(
+		join(tmpdir(), "questpie-adr0030-update-lanes-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const compilation = await compileProvenanceFixture(temporary, {
+			immutable: true,
+			server: true,
+		});
+		const programs = JSON.parse(
+			compilation.generatedFiles["collection-operation-programs.json"]!,
+		) as Readonly<{
+			operations: readonly Readonly<{
+				identity: string;
+				callerInputFields: readonly (readonly string[])[];
+				trustedValueFields: readonly (readonly string[])[];
+			}>[];
+		}>;
+		const update = programs.operations.find(
+			({ identity }) =>
+				identity === "mutation:__collectionKernel.provenanceRecords.update",
+		);
+
+		expect(update).toBeDefined();
+		expect(update?.callerInputFields).toContainEqual(["label"]);
+		expect(update?.trustedValueFields).toContainEqual(["label"]);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 20_000);
+
 test("keeps ctx.data and its SQL kernel invariant when an Operation Set pins input and output", async () => {
 	const temporary = await mkdtemp(
 		join(tmpdir(), "questpie-adr0030-kernel-adapter-"),
