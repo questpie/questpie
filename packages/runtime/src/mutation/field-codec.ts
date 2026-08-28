@@ -8,12 +8,12 @@ import type {
 	PostgresJson,
 	PostgresJsonValue,
 	PostgresParameter,
-} from "../postgres/contract";
+} from "../postgres";
 import {
 	decodeRelationalScalar,
 	decodeRelationalScalarCodec,
 	type ScalarCodecV1,
-} from "../relational/scalar";
+} from "../relational";
 
 export type MutationFieldCodecV1 =
 	| ScalarCodecV1
