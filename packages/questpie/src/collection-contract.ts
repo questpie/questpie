@@ -1,4 +1,9 @@
 import type { CheckConstraintDefinition } from "./check-expression";
+import type {
+	CollectionInputCodec,
+	CreatePropertiesFor,
+	UpdatePropertiesFor,
+} from "./collection-input";
 import type { CollectionListAuthoring } from "./relational/query";
 import type { FieldNode } from "./shape";
 
@@ -113,4 +118,6 @@ export interface CollectionDefinition<
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
 	readonly list: CollectionListAuthoring<Fields, Relations>;
+	createInput(): CollectionInputCodec<CreatePropertiesFor<Fields>>;
+	updateInput(): CollectionInputCodec<UpdatePropertiesFor<Fields>>;
 }

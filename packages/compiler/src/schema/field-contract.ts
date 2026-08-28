@@ -234,7 +234,16 @@ export function fieldContract(
 	for (const segment of path) memberKey(segment, "Field path segment");
 	exactKeys(
 		value,
-		["default", "kind", "nullable", "options", "postgresName", "scalar"],
+		[
+			"default",
+			"immutable",
+			"kind",
+			"nullable",
+			"options",
+			"postgresName",
+			"scalar",
+			"server",
+		],
 		`field.${key}`,
 	);
 	if (value.kind !== "field") invalid(`field.${key}.kind`, "must be field");
@@ -323,6 +332,10 @@ export function fieldContract(
 		path,
 		type,
 		nullable: boolean(value.nullable, `field.${key}.nullable`),
+		...(boolean(value.immutable, `field.${key}.immutable`)
+			? { immutable: true }
+			: {}),
+		...(boolean(value.server, `field.${key}.server`) ? { server: true } : {}),
 		default: normalizedDefault,
 		postgresName:
 			value.postgresName === null

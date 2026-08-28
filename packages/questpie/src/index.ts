@@ -12,6 +12,10 @@ import type {
 	RelationDefinition,
 	RelationReference,
 } from "./collection-contract";
+import {
+	collectionCreateInput,
+	collectionUpdateInput,
+} from "./collection-input";
 import type {
 	FieldDefault,
 	FieldDefinition,
@@ -84,6 +88,7 @@ export type {
 	ValueProgramOperand,
 } from "./operation-set";
 export type { DataFieldDescriptor, FieldDefinition } from "./field-contract";
+export type { CollectionInputCodec } from "./collection-input";
 export type {
 	CollectionAugmentation,
 	CollectionDefinition,
@@ -98,6 +103,8 @@ export type {
 
 type FieldBaseOptions = Readonly<{
 	nullable: boolean;
+	immutable?: boolean;
+	server?: boolean;
 	postgres?: Readonly<{ name: string }>;
 }>;
 
@@ -137,11 +144,17 @@ function fieldDefinition<
 	Options extends { default: infer Default extends FieldDefault }
 		? Default
 		: null,
-	Scalar
+	Scalar,
+	Options extends { immutable: infer Immutable extends boolean }
+		? Immutable
+		: false,
+	Options extends { server: infer Server extends boolean } ? Server : false
 > {
 	const {
 		nullable,
 		default: defaultValue = null,
+		immutable = false,
+		server = false,
 		postgres,
 		...scalarOptions
 	} = options;
@@ -150,6 +163,8 @@ function fieldDefinition<
 		scalar,
 		nullable,
 		default: defaultValue,
+		immutable,
+		server,
 		postgresName: postgres?.name ?? null,
 		options: Object.freeze(scalarOptions),
 	}) as FieldDefinition<
@@ -158,7 +173,11 @@ function fieldDefinition<
 		Options extends { default: infer Default extends FieldDefault }
 			? Default
 			: null,
-		Scalar
+		Scalar,
+		Options extends { immutable: infer Immutable extends boolean }
+			? Immutable
+			: false,
+		Options extends { server: infer Server extends boolean } ? Server : false
 	>;
 }
 
@@ -503,7 +522,12 @@ export function defineCollection<
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
 	} as const;
-	return Object.freeze({ ...collection, list: collectionList(collection) });
+	return Object.freeze({
+		...collection,
+		list: collectionList(collection),
+		createInput: () => collectionCreateInput(collection.fields),
+		updateInput: () => collectionUpdateInput(collection.fields),
+	});
 }
 
 export interface SeedStepDefinition<

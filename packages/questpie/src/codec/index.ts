@@ -20,8 +20,16 @@ export interface Codec<
 	readonly value?: Value;
 }
 
+export declare const codecValueType: unique symbol;
+
 export type CodecValue<ValueCodec> =
-	ValueCodec extends Codec<infer Value> ? Value : never;
+	ValueCodec extends Readonly<{
+		[codecValueType]: infer Value;
+	}>
+		? Value
+		: ValueCodec extends Codec<infer Value>
+			? Value
+			: never;
 
 type AnyCodec = Codec<unknown, CodecKind, "required" | "optional">;
 type CodecMap = Readonly<Record<string, AnyCodec>>;
