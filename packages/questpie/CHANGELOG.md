@@ -1,5 +1,11 @@
 # questpie
 
+## 3.28.7
+
+### Patch Changes
+
+- [#338](https://github.com/questpie/questpie/pull/338) [`38fdcb5`](https://github.com/questpie/questpie/commit/38fdcb52ad27597b379d85bb4f43147d39de6b37) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Authorize generated collection writes before exposing target existence, revision conflicts, or domain hook failures, and use neutral access-denial responses.
+
 ## 3.28.6
 
 ### Patch Changes
