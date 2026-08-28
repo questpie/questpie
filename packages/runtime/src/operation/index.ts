@@ -119,6 +119,20 @@ export type RuntimeIssueMappings = Readonly<
 	Record<string, Readonly<Record<string, string>>>
 >;
 
+export function mapCollectionIssueToDeclaredError<View>(
+	operation: PreparedOperation<View>,
+	issueIdentity: string,
+): DeclaredOperationError {
+	const target = Object.values(operation.issueMappings ?? {})
+		.map((issues) => issues[issueIdentity])
+		.find((candidate) => candidate !== undefined);
+	const declared = operation.declaredErrors.find(
+		(error) => error.key === target && error.payload === null,
+	);
+	if (!declared) throw new OperationFailure("INTERNAL");
+	return new DeclaredOperationError(declared.code, declared.status);
+}
+
 export type RuntimeDeclaredErrorContract = Readonly<{
 	key: string;
 	code: string;

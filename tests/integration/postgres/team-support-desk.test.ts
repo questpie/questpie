@@ -457,7 +457,11 @@ postgresTest(
 						{ callId: `direct:invalid-create:${crypto.randomUUID()}` },
 					),
 				),
-			).rejects.toMatchObject({ code: "INVALID_TICKET", status: 422 });
+			).rejects.toMatchObject({
+				code: "INVALID_TICKET",
+				payload: null,
+				status: 422,
+			});
 			const edited = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.edit(
 					{
@@ -631,7 +635,11 @@ postgresTest(
 					},
 					{ callId: `browser:invalid-create:${crypto.randomUUID()}` },
 				),
-			).rejects.toMatchObject({ code: "INVALID_TICKET", status: 422 });
+			).rejects.toMatchObject({
+				code: "INVALID_TICKET",
+				payload: null,
+				status: 422,
+			});
 
 			const customerSignIn = await app.fetch(
 				new Request(`${authOrigin}/api/auth/sign-in/email`, {

@@ -12,6 +12,7 @@ import {
 	createOperationEngine,
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
+	mapCollectionIssueToDeclaredError,
 	OperationFailure,
 } from "../../packages/runtime/src/operation";
 
@@ -148,6 +149,33 @@ test("prepares normalized contracts and encodes only exact declared errors", asy
 			expect((caught as OperationFailure).code).toBe("INTERNAL");
 		}
 	}
+});
+
+test("maps only an Operation-owned Collection issue after rollback", () => {
+	const operation = {
+		declaredErrors: [
+			{
+				key: "invalidTicket",
+				code: "INVALID_TICKET",
+				status: 422,
+				payload: null,
+			},
+		],
+		issueMappings: {
+			"collection:tickets": {
+				"issue:tickets/invalidReference": "invalidTicket",
+			},
+		},
+	} as never;
+	expect(
+		mapCollectionIssueToDeclaredError(
+			operation,
+			"issue:tickets/invalidReference",
+		),
+	).toMatchObject({ code: "INVALID_TICKET", status: 422, payload: null });
+	expect(() =>
+		mapCollectionIssueToDeclaredError(operation, "issue:tickets/forged"),
+	).toThrow(new OperationFailure("INTERNAL"));
 });
 
 test("generated client verifies declared-error status and decodes its exact payload", async () => {

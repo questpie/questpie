@@ -12,10 +12,10 @@ import type {
 	LinkedPostgresMutationTransactionStatements,
 } from "../../packages/runtime/src/mutation";
 import { executeCollectionLifecyclePhase } from "../../packages/runtime/src/mutation/lifecycle";
+import { isCollectionLifecycleIssue } from "../../packages/runtime/src/mutation/lifecycle";
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
 	CommittedResultUnavailable,
-	DeclaredOperationError,
 	type PreparedOperation,
 } from "../../packages/runtime/src/operation";
 import {
@@ -299,7 +299,7 @@ const dispatchedOperation = {
 	},
 } as unknown as PreparedOperation<View>;
 
-test("maps a Collection issue only after its Mutation transaction rolls back", async () => {
+test("rolls back before returning a Collection issue to the Operation engine", async () => {
 	const linked = fixedStatements();
 	const events: string[] = [];
 	const lifecycle = {
@@ -374,14 +374,9 @@ test("maps a Collection issue only after its Mutation transaction rolls back", a
 
 	try {
 		await invoke(issueOperation, "mapped-lifecycle-issue");
-		throw new Error("expected mapped issue");
+		throw new Error("expected Collection issue");
 	} catch (error) {
-		expect(error).toBeInstanceOf(DeclaredOperationError);
-		expect(error).toMatchObject({
-			code: "INVALID_WIDGET",
-			status: 422,
-			payload: null,
-		});
+		expect(isCollectionLifecycleIssue(error)).toBe(true);
 	}
 	expect(events).toEqual(["issue", "rollback"]);
 });

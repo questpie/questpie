@@ -49,6 +49,10 @@ import {
 	type RuntimeExecutableBindings,
 } from "./bindings";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import {
+	isOperationAbort,
+	normalizeExecutedOperationError,
+} from "./operation-error";
 import type {
 	LiveQueryCoordinator,
 	RealtimeCarrierObservedPlan,
@@ -159,10 +163,6 @@ type RuntimeState = "closed" | "draining" | "ready" | "verifying";
 
 function principalIdentity(value: Principal): string {
 	return `${value.kind}:${value.id}`;
-}
-
-function isAbort(error: unknown): boolean {
-	return error instanceof DOMException && error.name === "AbortError";
 }
 
 export async function createRuntimeApplication<
@@ -394,8 +394,8 @@ export async function createRuntimeApplication<
 								},
 								eventFacts,
 							);
-							if (isAbort(error)) throw error;
-							throw normalizeOperationError(error);
+							if (isOperationAbort(error)) throw error;
+							throw normalizeExecutedOperationError(operation, error);
 						}
 					},
 				}),
@@ -691,7 +691,7 @@ export async function createRuntimeApplication<
 					500,
 				);
 			if (request.signal.aborted) throw request.signal.reason;
-			if (isAbort(error)) throw error;
+			if (isOperationAbort(error)) throw error;
 			let operationError: unknown = error;
 			if (error instanceof DeclaredOperationError) {
 				try {
