@@ -1,12 +1,16 @@
 import { expect, test } from "bun:test";
-import { resolve } from "node:path";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 test("binds Collection Operation Set writes as ordinary exact Operations", async () => {
-	const compilation = await compileApplication({ applicationRoot: fixtureRoot });
+	const compilation = await compileApplication({
+		applicationRoot: fixtureRoot,
+	});
 	const contracts = JSON.parse(
 		compilation.generatedFiles["operation-contracts.json"] ?? "null",
 	) as Readonly<{
@@ -51,7 +55,10 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 		output: {
 			kind: "object",
 			properties: {
-				body: { kind: "text", minLength: 1, maxLength: 8_192 },
+				body: {
+					kind: "optional",
+					codec: { kind: "text", minLength: 1, maxLength: 8_192 },
+				},
 				channelId: { kind: "uuid" },
 				createdAt: { kind: "timestamp", withTimezone: true },
 				id: { kind: "uuid" },
@@ -78,4 +85,38 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 	expect(application).toContain('"mutation:messages.create"');
 	expect(application).not.toContain("messageOperations.handler");
 	expect(client).not.toContain('"messages.create"');
+});
+
+test("publishes only explicitly networked generated writes", async () => {
+	const temporary = await mkdtemp(
+		join(tmpdir(), "questpie-operation-binding-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const sourcePath = join(temporary, "src/message-operations.ts");
+		const source = await readFile(sourcePath, "utf8");
+		await writeFile(
+			sourcePath,
+			source.replace(
+				'name: "messages",\n\tpolicy: messagePolicy,',
+				'name: "messages",\n\tpolicy: messagePolicy,\n\tnetwork: true,',
+			),
+		);
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
+		});
+		const wire = JSON.parse(
+			compilation.generatedFiles["wire-contract.json"] ?? "null",
+		) as Readonly<{ operations: readonly Readonly<{ identity: string }>[] }>;
+		expect(
+			wire.operations.some(
+				({ identity }) => identity === "mutation:messages.create",
+			),
+		).toBe(true);
+		expect(compilation.generatedFiles["client.ts"]).toContain(
+			'"messages.create"',
+		);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
 });

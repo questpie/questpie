@@ -274,13 +274,6 @@ export function linkCollectionOperationAdapters(
 				kernel.selectedFieldPaths,
 				`${label} selection`,
 			);
-			const expectedRequired = kernel.requiredCallerInputFields.filter((path) =>
-				callerInputFields.some(
-					(candidate) => pathKey(candidate) === pathKey(path),
-				),
-			);
-			if (!samePaths(requiredCallerInputFields, expectedRequired))
-				fail(`${label} required input Fields differ from its kernel`);
 			const normalizerDigest =
 				source.normalizerProgramDigest === null
 					? null
@@ -542,35 +535,63 @@ export function createCollectionOperationAdapterExecutor(
 	return async (identity: string, rawRequest: unknown): Promise<unknown> => {
 		const adapter = input.adapters.byIdentity.get(identity);
 		if (!adapter) fail(`unknown adapter ${identity}`);
-		const request = record(rawRequest, `${identity} request`);
-		if (adapter.member === "create")
-			exact(request, ["input"], `${identity} request`);
-		else exactWithOptional(request, ["key"], ["patch"], `${identity} request`);
-		const caller = validatePinnedInput(
-			adapter.member === "create"
-				? request.input
-				: Object.hasOwn(request, "patch")
-					? request.patch
-					: {},
-			adapter,
-		);
-		const normalized = normalizedInput(caller, adapter.normalizerProgram);
-		const values = trustedValues(
-			normalized,
-			adapter.serverValueProgram,
-			input.facts,
-		);
-		const kernelRequest =
-			adapter.member === "create"
-				? { input: normalized, ...(values ? { values } : {}) }
-				: {
-						key: request.key,
-						patch: normalized,
-						...(values ? { values } : {}),
-					};
-		return projectedResult(
-			await input.invokeKernel(adapter.kernelIdentity, kernelRequest),
-			adapter,
+		return executeCollectionOperationAdapter(
+			{
+				adapter,
+				facts: input.facts,
+				invokeKernel: input.invokeKernel,
+			},
+			rawRequest,
 		);
 	};
+}
+
+export async function executeCollectionOperationAdapter(
+	input: Readonly<{
+		adapter: LinkedCollectionOperationAdapterV1;
+		facts: CollectionOperationAdapterFacts;
+		invokeKernel: AdapterInvoker;
+	}>,
+	rawRequest: unknown,
+): Promise<unknown> {
+	const { adapter } = input;
+	const request = record(rawRequest, `${adapter.identity} request`);
+	if (adapter.member === "create")
+		exact(request, ["input"], `${adapter.identity} request`);
+	else
+		exactWithOptional(
+			request,
+			["key"],
+			["expected", "patch"],
+			`${adapter.identity} request`,
+		);
+	const caller = validatePinnedInput(
+		adapter.member === "create"
+			? request.input
+			: Object.hasOwn(request, "patch")
+				? request.patch
+				: {},
+		adapter,
+	);
+	const normalized = normalizedInput(caller, adapter.normalizerProgram);
+	const values = trustedValues(
+		normalized,
+		adapter.serverValueProgram,
+		input.facts,
+	);
+	const kernelRequest =
+		adapter.member === "create"
+			? { input: normalized, ...(values ? { values } : {}) }
+			: {
+					key: request.key,
+					...(Object.hasOwn(request, "expected")
+						? { expected: request.expected }
+						: {}),
+					patch: normalized,
+					...(values ? { values } : {}),
+				};
+	return projectedResult(
+		await input.invokeKernel(adapter.kernelIdentity, kernelRequest),
+		adapter,
+	);
 }

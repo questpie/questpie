@@ -2,6 +2,7 @@ import type { PreparedOperation } from "../operation";
 
 export {
 	createCollectionOperationAdapterExecutor,
+	executeCollectionOperationAdapter,
 	linkCollectionOperationAdapters,
 } from "./adapter";
 export type {

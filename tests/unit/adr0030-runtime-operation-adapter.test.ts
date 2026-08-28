@@ -254,6 +254,7 @@ test("preserves an omitted update patch separately from explicit null", async ()
 	await execute("mutation:records.update", { key: { id: "record-1" } });
 	await execute("mutation:records.update", {
 		key: { id: "record-1" },
+		expected: { body: "current" },
 		patch: { body: null },
 	});
 	expect(calls).toEqual([
@@ -269,6 +270,7 @@ test("preserves an omitted update patch separately from explicit null", async ()
 			kernelIdentity: updateKernel.identity,
 			request: {
 				key: { id: "record-1" },
+				expected: { body: "current" },
 				patch: { body: null },
 				values: { updatedAt: operationTime },
 			},

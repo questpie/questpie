@@ -7,6 +7,7 @@ import type {
 	PackageInventory,
 } from "../types";
 import { bundleApplicationEntry } from "./application-bundle";
+import { renderGeneratedCollectionOperationBindings } from "./application-collection-operations";
 import { renderDurableWorkerOwner } from "./application-durable";
 import {
 	renderDirectJobAcceptance,
@@ -81,6 +82,9 @@ function applicationEntry(
 ): string {
 	const definitions = new Map<string, number>();
 	const imports: string[] = [];
+	const generatedOperations = renderGeneratedCollectionOperationBindings(
+		input.resources,
+	);
 	const definitionName = (slot: RuntimeExecutableSlot): string => {
 		const key = `${slot.origin.packageId ?? "application"}\0${slot.origin.path}\0${slot.origin.exportName}`;
 		let index = definitions.get(key);
@@ -101,7 +105,8 @@ function applicationEntry(
 		kind === "reaction" ||
 		kind === "route";
 	const bindingEntries = input.slots.map((slot) => {
-		const definition = definitionName(slot);
+		const definition =
+			generatedOperations.definitionName(slot.identity) ?? definitionName(slot);
 		const handler = executable(slot.kind);
 		const implementation = handler
 			? `${definition}.handler`
@@ -109,7 +114,8 @@ function applicationEntry(
 		return `Object.freeze({ identity: ${JSON.stringify(slot.identity)}, kind: ${JSON.stringify(slot.kind)}, slot: ${JSON.stringify(slot.slot)}, runtimeGraphDigest: ${JSON.stringify(slot.runtimeGraphDigest)}, bundleExport: ${JSON.stringify(slot.bundleExport)}, definition: ${definition}${handler ? `, execute: ${implementation}` : ""} })`;
 	});
 	const serverEntries = input.slots.map((slot) => {
-		const definition = definitionName(slot);
+		const definition =
+			generatedOperations.definitionName(slot.identity) ?? definitionName(slot);
 		const implementation = executable(slot.kind)
 			? `${definition}.handler`
 			: `${definition}.${slot.slot}`;
@@ -379,6 +385,7 @@ const expectedMutationTransactionStatementsDigest = ${JSON.stringify(input.mutat
 const expectedCollectionOperationPlansDigest = ${JSON.stringify(input.collectionOperationPlansDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
 const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
+${generatedOperations.definitions}
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
 const slotBindings = Object.freeze([${bindingEntries.join(",\n")}]);
 
@@ -471,6 +478,7 @@ export async function createApplication(input) {
 		createPostgresJobAcceptanceTransaction,
 		${postgresRuntimeTemplates.renderPostgresRuntimeImports()},
 		createRuntimeApplication,
+		executeCollectionOperationAdapter,
 		createRuntimeActionExecutor,
 		createRuntimeRouteExecutor,
 		durablePrincipal,
@@ -558,6 +566,7 @@ export async function createApplication(input) {
 					...linkMutationArtifacts(runtimeModule, loaded.artifactFiles),
 					transactionStatements: mutationTransactionStatements,
 				});
+				${generatedOperations.linkHandlers}
 				const queryPlanBytes = loaded.artifactFiles["postgres-query-plans.json"];
 				if (queryPlanBytes !== undefined)
 					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryDigests);

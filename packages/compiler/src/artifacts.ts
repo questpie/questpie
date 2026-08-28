@@ -23,6 +23,7 @@ import {
 	projectCollectionKernelExecutionPrograms,
 	projectCollectionMutationKernels,
 	projectCollectionOperationAdapters,
+	projectCollectionOperationWriteResources,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
 	projectCollectionOperationResourceMetadata,
@@ -148,6 +149,18 @@ export async function createArtifacts(
 		programs: operationSets.programs,
 		origins: operationSets.origins,
 	});
+	const collectionOperationWriteResources =
+		projectCollectionOperationWriteResources({
+			sets: operationSets.sets,
+			origins: operationSets.origins,
+			programs: operationSets.programs,
+			resources: input.resources,
+			data: baseManifest.data,
+		});
+	const operationResources = Object.freeze([
+		...input.resources,
+		...collectionOperationWriteResources,
+	]);
 	const baseComposition = baseManifest.composition as Readonly<{
 		resources: readonly Readonly<Record<string, unknown>>[];
 	}>;
@@ -365,7 +378,7 @@ export async function createArtifacts(
 	};
 	const runtime = projectRuntimeContract({
 		configuration: input.configuration,
-		resources: input.resources,
+		resources: operationResources,
 		sourceGraph: [
 			...sourceGraph.map((file) => ({ ...file, packageId: null })),
 			...packageGraphs.flatMap(({ inventory, graph: packageGraph }) =>
@@ -381,7 +394,7 @@ export async function createArtifacts(
 		application: `application:${input.configuration.application.name}`,
 		clientContractDigest: runtime.clientContractDigest,
 		operationWireDigest: runtime.wireDigest,
-		resources: input.resources,
+		resources: operationResources,
 		watchableQueries: (
 			liveQuery.artifacts["query-watchability.json"]
 				.queries as readonly Readonly<{
@@ -396,14 +409,14 @@ export async function createArtifacts(
 	const committedMigrations = await projectCommittedMigrations(
 		input.applicationRoot,
 	);
-	const mutations = projectMutations(input.resources);
+	const mutations = projectMutations(operationResources);
 	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
 	const mutationTransactionStatements =
 		projectPostgresMutationTransactionStatements();
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
-			input.resources,
+			operationResources,
 			finalManifest.data,
 			schema,
 			input.configuration.source.root,
@@ -412,7 +425,7 @@ export async function createArtifacts(
 			realtimeEnabled,
 		),
 		"build-input.json": canonicalBytes(buildInput),
-		"client.ts": renderClientContract(input.resources, {
+		"client.ts": renderClientContract(operationResources, {
 			application: `application:${input.configuration.application.name}`,
 			clientContractDigest: runtime.clientContractDigest,
 			wireDigest: runtime.wireDigest,
@@ -539,7 +552,7 @@ export async function createArtifacts(
 		await renderApplicationBundle({
 			applicationRoot: input.applicationRoot,
 			configuration: input.configuration,
-			resources: input.resources,
+			resources: operationResources,
 			slots: runtime.executables.slots,
 			inventories: input.inventories,
 			queryProjection: relational.query,

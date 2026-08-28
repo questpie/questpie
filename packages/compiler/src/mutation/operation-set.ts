@@ -2,7 +2,11 @@ import { compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import { normalizeDataQueryTemplate } from "../relational";
 import type { EvaluatedExport, NormalizedResource } from "../types";
-import { collectionFieldFacts, requiredCreateLaneFields } from "./kernel";
+import {
+	collectionFieldFacts,
+	requiredCreateFields,
+	requiredCreateLaneFields,
+} from "./kernel";
 import type {
 	CollectionOperationMember,
 	CollectionOperationProgramsV1,
@@ -381,10 +385,9 @@ export function projectCollectionOperationSets(
 					: [];
 			const requiredCallerInputFields =
 				member === "create"
-					? requiredCreateLaneFields(
+					? requiredCreateFields(
 							collectionFieldFacts(collection),
 							callerInputFields,
-							trustedValueFields,
 						)
 					: [];
 			const rawTemplate =
