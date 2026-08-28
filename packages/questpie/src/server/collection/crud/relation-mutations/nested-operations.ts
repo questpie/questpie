@@ -306,9 +306,11 @@ export async function applyBelongsToRelations(
 ): Promise<{
 	regularFields: Record<string, any>;
 	nestedRelations: Record<string, any>;
+	materializedFields: Record<string, any>;
 }> {
 	const updatedFields = { ...regularFields };
 	const remainingRelations = { ...nestedRelations };
+	const materializedFields: Record<string, any> = {};
 
 	for (const [relationName, operations] of Object.entries(nestedRelations)) {
 		const relation = relations[relationName];
@@ -392,6 +394,7 @@ export async function applyBelongsToRelations(
 				(target as Record<string, unknown> | undefined)?.[referenceKey] ??
 				target?.id;
 		}
+		materializedFields[foreignKeyField] = updatedFields[foreignKeyField];
 
 		delete remainingRelations[relationName];
 	}
@@ -399,6 +402,7 @@ export async function applyBelongsToRelations(
 	return {
 		regularFields: updatedFields,
 		nestedRelations: remainingRelations,
+		materializedFields,
 	};
 }
 

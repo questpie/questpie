@@ -36,6 +36,7 @@ type UpdateExecutionInternal = {
 	revisionPrelocked?: true;
 	legacyTransactionBound?: true;
 	returnBeforeOutputHooks?: true;
+	callerData?: Record<string, any>;
 };
 type UpdateExecutionParams =
 	| UpdateParams<any, any, string | number>
@@ -1628,9 +1629,10 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 	): Promise<{
 		regularFields: Record<string, any>;
 		nestedRelations: Record<string, any>;
+		materializedFields: Record<string, any>;
 	}> {
 		if (!this.app || !this.state.relations) {
-			return { regularFields, nestedRelations };
+			return { regularFields, nestedRelations, materializedFields: {} };
 		}
 		return applyBelongsToRelations(
 			regularFields,
@@ -2322,6 +2324,9 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		const db = this.getDb(normalized);
 		const isBatch = "where" in params;
 		const data = params.data;
+		const callerData =
+			internal?.callerData ??
+			(normalized.accessMode === "system" ? data : structuredClone(data));
 		if (!this.getOptimisticConcurrency() && !internal?.legacyTransactionBound) {
 			const deferred = await withTransaction(db, (tx) =>
 				this._executeUpdate(
@@ -2329,6 +2334,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 					{ ...normalized, db: tx },
 					{
 						...internal,
+						callerData,
 						legacyTransactionBound: true,
 						returnBeforeOutputHooks: true,
 					},
@@ -2444,6 +2450,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 				return this._executeUpdate(params, txContext, {
 					...internal,
+					callerData,
 					revisionPrelocked: true,
 				});
 			});
@@ -2558,6 +2565,38 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				throw ApiError.badRequest(`Validation error: ${error.message}`);
 			}
 		}
+		const { nestedRelations: callerNestedRelations } =
+			this.separateNestedRelationsInternal(callerData);
+		const callerRelationInput = this.preApplyConnectOperations(
+			{},
+			callerNestedRelations,
+		);
+		const canonicalCallerFields =
+			normalized.accessMode === "system"
+				? regularFields
+				: structuredClone(regularFields);
+		const authorityFields = {
+			...canonicalCallerFields,
+			...callerRelationInput.regularFields,
+		};
+		const preMaterializedAuthorityInput = {
+			...authorityFields,
+			...callerRelationInput.nestedRelations,
+		};
+		const nestedFieldAccess = this.preApplyConnectOperations(
+			{},
+			nestedRelations,
+		);
+		const fieldAccessFields = {
+			...canonicalCallerFields,
+			...nestedFieldAccess.regularFields,
+			...nestedFieldAccess.nestedRelations,
+		};
+		await this.enforceUpdateAuthority(
+			records,
+			normalized,
+			preMaterializedAuthorityInput,
+		);
 
 		// 5. beforeChange hooks
 
@@ -2574,7 +2613,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 		for (const existing of records) {
 			// Validate field-level write access
 			await this.validateFieldWriteAccess(
-				regularFields,
+				fieldAccessFields,
 				normalized,
 				"update",
 				existing,
@@ -2657,7 +2696,7 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				await this.enforceUpdateAuthority(
 					lockedRecords,
 					txContext,
-					regularFields,
+					preMaterializedAuthorityInput,
 				);
 				const optimisticConcurrency = this.getOptimisticConcurrency();
 				if (optimisticConcurrency) {
@@ -2680,13 +2719,14 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 				}
 
 				// Apply belongsTo relations
-				({ regularFields, nestedRelations } =
-					await this.applyBelongsToRelationsInternal(
-						regularFields,
-						nestedRelations,
-						txContext,
-						tx,
-					));
+				const appliedBelongsTo = await this.applyBelongsToRelationsInternal(
+					regularFields,
+					nestedRelations,
+					txContext,
+					tx,
+				);
+				regularFields = appliedBelongsTo.regularFields;
+				nestedRelations = appliedBelongsTo.nestedRelations;
 				// Split localized vs non-localized fields
 				const { localized, nonLocalized, nestedLocalized } =
 					this.splitLocalizedFields(regularFields);
@@ -2700,21 +2740,20 @@ export class CRUDGenerator<TState extends CollectionBuilderState> {
 						originalRows: winners,
 					});
 				}
-				// Nested belongsTo operations materialize FK fields after the first
-				// access pass, so the final payload is the write-authority boundary.
+				// Nested belongsTo operations materialize caller-authored FK input after
+				// the first access pass. Hook-derived fields remain server-owned.
 				for (const lockedRecord of lockedRecords) {
 					await this.validateFieldWriteAccess(
-						regularFields,
+						appliedBelongsTo.materializedFields,
 						txContext,
 						"update",
 						lockedRecord,
 					);
 				}
-				await this.enforceUpdateAuthority(
-					lockedRecords,
-					txContext,
-					regularFields,
-				);
+				await this.enforceUpdateAuthority(lockedRecords, txContext, {
+					...authorityFields,
+					...appliedBelongsTo.materializedFields,
+				});
 
 				// Update main table
 				if (
