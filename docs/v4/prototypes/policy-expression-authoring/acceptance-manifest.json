@@ -2,10 +2,10 @@
 	"protocolVersion": 2,
 	"ticket": "ADR-0029",
 	"proof": "Unify relational boolean authoring under one capability-branded expr vocabulary, keep existence evidence Policy-only, preserve Policy nondisclosure and normalized bytes, and reject evidence in Query programs before artifact emission with an actionable diagnostic.",
-	"diffBase": "ed1267bff4e0f6fa9c962960407bab328bd56174",
-	"reviewOutput": "docs/v4/prototypes/policy-expression-authoring/REVIEW.json",
+	"diffBase": "1c420531bf5d4e4a97d57e4dff0afa2a8c94fba4",
+	"reviewOutput": "docs/v4/prototypes/policy-expression-authoring/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
-		"accepted feat/v4 base": "ed1267bff4e0f6fa9c962960407bab328bd56174"
+		"accepted feat/v4 base": "1c420531bf5d4e4a97d57e4dff0afa2a8c94fba4"
 	},
 	"authorityDocuments": [
 		{
