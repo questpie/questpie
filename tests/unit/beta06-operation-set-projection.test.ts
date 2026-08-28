@@ -238,13 +238,16 @@ export const messageOperations = defineCollectionOperations(messages, {
 			format: "questpie.collection-operation-programs",
 			version: 1,
 		});
-		expect(programs.operations[0].normalizerProgramDigest).toBe(
+		const setPrograms = programs.operations.filter(
+			(program: { target: string }) => program.target === "collection:messages",
+		);
+		expect(setPrograms[0].normalizerProgramDigest).toBe(
 			digest("questpie-field-normalizer-program-v1", normalizers.programs[0]),
 		);
-		expect(programs.operations[0].serverValueProgramDigest).toBe(
+		expect(setPrograms[0].serverValueProgramDigest).toBe(
 			digest("questpie-server-value-program-v1", values.programs[0]),
 		);
-		expect(programs.operations[0]).toMatchObject({
+		expect(setPrograms[0]).toMatchObject({
 			identity: "mutation:messages.create",
 			kind: "mutation",
 			mode: "writeTransaction",
@@ -272,11 +275,9 @@ export const messageOperations = defineCollectionOperations(messages, {
 			],
 			requiredTrustedValueFields: [],
 		});
-		expect(programs.operations).toHaveLength(5);
+		expect(setPrograms).toHaveLength(5);
 		expect(
-			programs.operations.map(
-				(program: { identity: string }) => program.identity,
-			),
+			setPrograms.map((program: { identity: string }) => program.identity),
 		).toEqual([
 			"mutation:messages.create",
 			"mutation:messages.delete",
@@ -284,7 +285,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			"query:messages.get",
 			"query:messages.list",
 		]);
-		expect(programs.operations.at(-1)).toMatchObject({
+		expect(setPrograms.at(-1)).toMatchObject({
 			identity: "query:messages.list",
 			dataQuery: {
 				format: "questpie.data-query-template",
@@ -293,7 +294,12 @@ export const messageOperations = defineCollectionOperations(messages, {
 			},
 			dataQueryDigest: expect.stringMatching(/^[0-9a-f]{64}$/),
 		});
-		expect(postgresPlans).toMatchObject({
+		expect({
+			...postgresPlans,
+			plans: postgresPlans.plans.filter(
+				(plan: { target: string }) => plan.target === "collection:messages",
+			),
+		}).toMatchObject({
 			format: "questpie.postgres-collection-operation-plans",
 			version: 1,
 			plans: [

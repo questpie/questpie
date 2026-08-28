@@ -2,6 +2,7 @@ import { compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import { normalizeDataQueryTemplate } from "../relational";
 import type { EvaluatedExport, NormalizedResource } from "../types";
+import { collectionFieldFacts, requiredCreateFields } from "./kernel";
 import type {
 	CollectionOperationMember,
 	CollectionOperationProgramsV1,
@@ -79,54 +80,6 @@ function fieldAt(
 		}
 	}
 	return node;
-}
-
-function collectionFieldFacts(
-	collection: NormalizedResource,
-): readonly Readonly<{ path: readonly string[]; contract: RecordValue }>[] {
-	const visit = (
-		fields: RecordValue,
-		prefix: readonly string[],
-	): Readonly<{ path: readonly string[]; contract: RecordValue }>[] =>
-		Object.entries(fields).flatMap(([name, candidate]) => {
-			const contract = record(
-				candidate,
-				`${collection.identity}/field:${[...prefix, name].join("/")}`,
-			);
-			const fieldPath = [...prefix, name];
-			return contract.kind === "inlineShape"
-				? visit(
-						record(contract.fields, `${collection.identity}.fields`),
-						fieldPath,
-					)
-				: [{ path: fieldPath, contract }];
-		});
-	return visit(
-		record(collection.value.fields, `${collection.identity}.fields`),
-		[],
-	).toSorted((left, right) =>
-		compareAscii(left.path.join("/"), right.path.join("/")),
-	);
-}
-
-export function requiredCreateFields(
-	facts: readonly Readonly<{
-		path: readonly string[];
-		contract: RecordValue;
-	}>[],
-	eligibleFields: readonly (readonly string[])[],
-): readonly (readonly string[])[] {
-	const eligible = new Set(
-		eligibleFields.map((fieldPath) => JSON.stringify(fieldPath)),
-	);
-	return facts
-		.filter(
-			({ path: fieldPath, contract }) =>
-				contract.nullable === false &&
-				contract.default === null &&
-				eligible.has(JSON.stringify(fieldPath)),
-		)
-		.map(({ path: fieldPath }) => fieldPath);
 }
 
 function validateFieldPath(

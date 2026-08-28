@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -113,6 +113,20 @@ test("generates an internal create/update kernel without publishing Collection R
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-adr0030-kernel-"));
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
+		const keptSources = new Set([
+			"channels.ts",
+			"companies.ts",
+			"execution.ts",
+			"memberships.ts",
+			"message-events.ts",
+			"message-page.ts",
+			"message-policy.ts",
+			"messages.ts",
+			"spaces.ts",
+		]);
+		for (const entry of await readdir(join(temporary, "src")))
+			if (!keptSources.has(entry))
+				await rm(join(temporary, "src", entry), { recursive: true });
 		const compilation = await compileProvenanceFixture(temporary, {
 			immutable: true,
 			server: true,
@@ -161,14 +175,27 @@ test("generates an internal create/update kernel without publishing Collection R
 			);
 
 		const app = compilation.generatedFiles["app.ts"]!;
-		expect(app).toContain(
-			'readonly "provenanceRecords": Readonly<{ readonly create:',
+		const mutationData = app.slice(
+			app.indexOf("export interface GeneratedMutationData"),
+			app.indexOf("export interface GeneratedQueries"),
 		);
-		expect(app).toContain("readonly update:");
+		expect(mutationData).toContain('readonly "provenanceRecords":');
+		expect(mutationData).toContain("readonly create:");
+		expect(mutationData).toContain("readonly update:");
+		const runtimeApplication =
+			compilation.generatedFiles["internal/application.js"]!;
+		expect(runtimeApplication).toContain(
+			'JSON.parse(artifactFiles["collection-operation-programs.json"])',
+		);
+		expect(runtimeApplication).toContain(
+			'JSON.parse(artifactFiles["postgres-collection-operation-plans.json"])',
+		);
 
-		const automaticIdentities = new Set(
-			kernelPrograms.map(({ identity }) => identity),
-		);
+		const automaticIdentities = new Set([
+			...kernelPrograms.map(({ identity }) => identity),
+			"mutation:provenanceRecords.create",
+			"mutation:provenanceRecords.update",
+		]);
 		const manifest = JSON.parse(compilation.generatedFiles["manifest.json"]!);
 		const operationContracts = JSON.parse(
 			compilation.generatedFiles["operation-contracts.json"]!,
@@ -190,15 +217,9 @@ test("generates an internal create/update kernel without publishing Collection R
 		expect(compilation.generatedFiles["client.ts"]).not.toContain(
 			"provenanceRecords.update",
 		);
-		const sets = JSON.parse(
-			compilation.generatedFiles["collection-operation-set-projections.json"]!,
-		);
 		expect(
-			sets.sets.filter(
-				({ target }: { target: string }) =>
-					target === "collection:provenanceRecords",
-			),
-		).toEqual([]);
+			compilation.generatedFiles["collection-operation-set-projections.json"],
+		).toBeUndefined();
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

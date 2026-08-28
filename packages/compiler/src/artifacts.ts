@@ -19,7 +19,9 @@ import {
 	projectLiveQueryCompilation,
 } from "./live-query";
 import {
+	adaptCollectionMutationKernels,
 	lowerPostgresCollectionOperationPlans,
+	projectCollectionMutationKernels,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
 	projectCollectionOperationResourceMetadata,
@@ -119,6 +121,13 @@ export async function createArtifacts(
 		schema: baseSchema,
 		data: baseManifest.data,
 	});
+	const collectionMutationKernels = projectCollectionMutationKernels(
+		input.resources,
+	);
+	const collectionOperationPrograms = adaptCollectionMutationKernels(
+		collectionMutationKernels,
+		operationSets.programs,
+	);
 	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
 		sets: operationSets.sets,
 		programs: operationSets.programs,
@@ -159,7 +168,7 @@ export async function createArtifacts(
 		schema,
 	});
 	const mutationDeclarations = projectMutationGeneratedContract(
-		operationSets.programs,
+		collectionOperationPrograms,
 		input.resources,
 	);
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
@@ -436,7 +445,7 @@ export async function createArtifacts(
 	}
 	const postgresCollectionOperationPlans =
 		lowerPostgresCollectionOperationPlans({
-			collectionOperations: operationSets.programs,
+			collectionOperations: collectionOperationPrograms,
 			schemaProjection: schema,
 			policyProjection: relational.policy,
 			normalizerPrograms: operationSets.normalizers,
@@ -446,6 +455,11 @@ export async function createArtifacts(
 		generated["collection-operation-set-projections.json"] = canonicalBytes(
 			operationSets.sets,
 		);
+		generated["collection-operation-explain.json"] = canonicalBytes(
+			operationResourceMetadata.explain,
+		);
+	}
+	if (collectionOperationPrograms.operations.length > 0) {
 		generated["field-normalizer-programs.json"] = canonicalBytes(
 			operationSets.normalizers,
 		);
@@ -453,15 +467,12 @@ export async function createArtifacts(
 			operationSets.serverValues,
 		);
 		generated["collection-operation-programs.json"] = canonicalBytes(
-			operationSets.programs,
+			collectionOperationPrograms,
 		);
 		if (postgresCollectionOperationPlans.plans.length > 0)
 			generated["postgres-collection-operation-plans.json"] = canonicalBytes(
 				postgresCollectionOperationPlans,
 			);
-		generated["collection-operation-explain.json"] = canonicalBytes(
-			operationResourceMetadata.explain,
-		);
 	}
 	let postgresQueryPlans: unknown = {
 		format: "questpie.postgres-query-plans",
@@ -518,7 +529,8 @@ export async function createArtifacts(
 			contextBootstrapPlansDigest: contextBootstrapPlans.digest,
 			mutationTransactionStatementsDigest: mutationTransactionStatements.digest,
 			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
-			collectionOperationArtifacts: operationSets.sets.sets.length > 0,
+			collectionOperationArtifacts:
+				collectionOperationPrograms.operations.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
 			jobArtifact: runtime.jobs.jobs.length > 0,
 			realtime: realtimeEnabled,

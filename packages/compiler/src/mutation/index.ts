@@ -3,6 +3,10 @@ import type { NormalizedResource } from "../types";
 
 export { mutationDiscoverySource } from "./discovery";
 export { projectCollectionOperationSets } from "./operation-set";
+export {
+	adaptCollectionMutationKernels,
+	projectCollectionMutationKernels,
+} from "./kernel";
 export { projectCollectionOperationResourceMetadata } from "./operation-resource";
 export type {
 	CollectionOperationProgramsV1,
