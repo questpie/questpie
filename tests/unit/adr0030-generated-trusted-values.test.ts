@@ -99,6 +99,32 @@ test("requires a create Field from one lane only when the alternate lane cannot 
 	).toEqual([["server"]]);
 });
 
+test("generated update exposes a sparse exact compare-and-set shape", () => {
+	const output = renderGeneratedMutationData(
+		{
+			operations: [
+				{
+					...base,
+					identity: "mutation:tickets.update",
+					member: "update",
+					keyFields: [["id"]],
+					outputCardinality: "optionalOne",
+					requiredCallerInputFields: [],
+					requiredTrustedValueFields: [],
+				},
+			],
+		},
+		{
+			field: (_target, path) =>
+				path.at(-1) === "closedAt" ? "Date | null" : "string",
+			fieldIdentity: () => "string",
+		},
+	);
+	expect(output).toContain(
+		'readonly expected?: Readonly<{ readonly "closedAt"?: Date | null; readonly "description"?: string; readonly "id"?: string; readonly "organizationId"?: string; readonly "priority"?: string; readonly "status"?: string; readonly "summary"?: string; }>;',
+	);
+});
+
 test("generated create requires every parent of a required nested Field", () => {
 	const output = renderGeneratedMutationData(
 		{

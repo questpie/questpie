@@ -52,6 +52,7 @@ export function updatePlan(
 	const lifecycle = [
 		"keyedRowLock",
 		"freshCurrentPolicy",
+		"compareAndSet",
 		"sparseCallerFieldAuthority",
 		"pureNormalization",
 		"serverValues",
@@ -232,6 +233,24 @@ export function updatePlan(
 		writeSql,
 		`${operation.identity} write`,
 	);
+	const expectedParameters = writeParameters.filter(
+		({ kind }) => kind === "expectedPresent" || kind === "expectedValue",
+	);
+	if (
+		expectedParameters.length !== fields.length * 2 ||
+		fields.some((field, index) => {
+			const present = expectedParameters[index * 2];
+			const value = expectedParameters[index * 2 + 1];
+			return (
+				present?.kind !== "expectedPresent" ||
+				value?.kind !== "expectedValue" ||
+				!same(present.path, field.path) ||
+				!same(value.path, field.path) ||
+				!same(value.codec, field.codec)
+			);
+		})
+	)
+		fail(`${operation.identity} compare-and-set parameters are invalid`);
 	const result = results(
 		write.result,
 		writeSql,

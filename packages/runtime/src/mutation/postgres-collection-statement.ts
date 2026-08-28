@@ -187,7 +187,8 @@ export function decodePostgresCollectionParameters(
 			source.kind === "callerInput" ||
 			source.kind === "key" ||
 			source.kind === "patchValue" ||
-			source.kind === "trustedValue"
+			source.kind === "trustedValue" ||
+			source.kind === "expectedValue"
 		) {
 			exact(
 				source,
@@ -213,7 +214,8 @@ export function decodePostgresCollectionParameters(
 		if (
 			source.kind === "callerInputPresent" ||
 			source.kind === "patchPresent" ||
-			source.kind === "trustedValuePresent"
+			source.kind === "trustedValuePresent" ||
+			source.kind === "expectedPresent"
 		) {
 			exact(
 				source,

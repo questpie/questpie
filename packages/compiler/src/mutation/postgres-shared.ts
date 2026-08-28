@@ -281,6 +281,26 @@ export function trustedValueParameters(
 	});
 }
 
+export function expectedParameters(
+	parameters: Parameters,
+	field: PostgresMutationFieldV1,
+): Readonly<{ present: string; value: string }> {
+	return Object.freeze({
+		present: parameters.add({
+			kind: "expectedPresent",
+			path: field.path,
+			codec: "boolean",
+			postgresType: "boolean",
+		}),
+		value: parameters.add({
+			kind: "expectedValue",
+			path: field.path,
+			codec: field.codec,
+			postgresType: postgresType(field.codec),
+		}),
+	});
+}
+
 export function executionParameter(
 	parameters: Parameters,
 	source: string,

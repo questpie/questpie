@@ -24,14 +24,19 @@ export type PostgresParameterV1 =
 	| Readonly<{
 			position: number;
 			postgresType: string;
-			kind: "callerInput" | "key" | "patchValue" | "trustedValue";
+			kind:
+				| "callerInput"
+				| "key"
+				| "patchValue"
+				| "trustedValue"
+				| "expectedValue";
 			path: FieldPath;
 			codec: MutationFieldCodecV1;
 	  }>
 	| Readonly<{
 			position: number;
 			postgresType: "boolean";
-			kind: "callerInputPresent" | "patchPresent";
+			kind: "callerInputPresent" | "patchPresent" | "expectedPresent";
 			path: FieldPath;
 			codec: "boolean";
 	  }>
@@ -174,6 +179,7 @@ export type LinkedPostgresUpdateOperationPlanV1 = Readonly<{
 	lifecycle: readonly [
 		"keyedRowLock",
 		"freshCurrentPolicy",
+		"compareAndSet",
 		"sparseCallerFieldAuthority",
 		"pureNormalization",
 		"serverValues",

@@ -7,12 +7,21 @@ export type PostgresOperationParameterV1 = Readonly<{
 }> &
 	(
 		| Readonly<{
-				kind: "callerInput" | "key" | "patchValue" | "trustedValue";
+				kind:
+					| "callerInput"
+					| "key"
+					| "patchValue"
+					| "trustedValue"
+					| "expectedValue";
 				path: readonly string[];
 				codec: PostgresMutationFieldCodecV1;
 		  }>
 		| Readonly<{
-				kind: "callerInputPresent" | "patchPresent" | "trustedValuePresent";
+				kind:
+					| "callerInputPresent"
+					| "patchPresent"
+					| "trustedValuePresent"
+					| "expectedPresent";
 				path: readonly string[];
 				codec: "boolean";
 		  }>
@@ -145,6 +154,7 @@ export interface PostgresUpdateOperationPlanV1 {
 	readonly lifecycle: readonly [
 		"keyedRowLock",
 		"freshCurrentPolicy",
+		"compareAndSet",
 		"sparseCallerFieldAuthority",
 		"pureNormalization",
 		"serverValues",

@@ -248,7 +248,12 @@ function executionFact(
 
 function bind(
 	parameters: readonly Parameter[],
-	values: Readonly<{ callerInput?: Row; trustedValues?: Row; key?: Row }>,
+	values: Readonly<{
+		callerInput?: Row;
+		trustedValues?: Row;
+		key?: Row;
+		expected?: Row;
+	}>,
 	facts: ExecutionFacts,
 	operationTime: Date,
 	nullableByPath: ReadonlyMap<string, boolean> = new Map(),
@@ -271,19 +276,31 @@ function bind(
 			return values.trustedValues
 				? hasValueAt(values.trustedValues, parameter.path)
 				: false;
+		if (parameter.kind === "expectedPresent")
+			return values.expected
+				? hasValueAt(values.expected, parameter.path)
+				: false;
 		const source =
 			parameter.kind === "key"
 				? values.key
-				: parameter.kind === "trustedValue"
-					? values.trustedValues
-					: values.callerInput;
-		if (parameter.kind === "trustedValue" && !source) return null;
+				: parameter.kind === "expectedValue"
+					? values.expected
+					: parameter.kind === "trustedValue"
+						? values.trustedValues
+						: values.callerInput;
+		if (
+			(parameter.kind === "trustedValue" ||
+				parameter.kind === "expectedValue") &&
+			!source
+		)
+			return null;
 		if (!source)
 			throw new TypeError("Compiled Collection parameter has no value source");
 		if (
 			(parameter.kind === "callerInput" ||
 				parameter.kind === "patchValue" ||
-				parameter.kind === "trustedValue") &&
+				parameter.kind === "trustedValue" ||
+				parameter.kind === "expectedValue") &&
 			!hasValueAt(source, parameter.path)
 		)
 			return null;
@@ -554,7 +571,7 @@ function createCollectionMutationData(
 									const request = exactRequestWithOptionalKeys(
 										rawRequest,
 										["key"],
-										["patch", "values"],
+										["patch", "values", "expected"],
 										"Collection update request",
 									);
 									const key = record(request.key, "Collection key");
@@ -581,6 +598,16 @@ function createCollectionMutationData(
 												plan.operation.trustedValueFields,
 											)
 										: [];
+									const expected = Object.hasOwn(request, "expected")
+										? record(request.expected, "Collection update expected")
+										: undefined;
+									const expectedPaths = expected
+										? inputPaths(
+												expected,
+												"Collection update expected",
+												plan.candidate.fields.map(({ path }) => path),
+											)
+										: [];
 									if (suppliedPaths.length === 0 && trustedPaths.length === 0)
 										throw new TypeError(
 											"Collection update patch and values must not both be empty",
@@ -600,6 +627,12 @@ function createCollectionMutationData(
 										trustedPaths,
 										"Collection update patch and values",
 									);
+									if (expected)
+										allowedPaths(
+											expectedPaths,
+											plan.candidate.fields.map(({ path }) => path),
+											"Collection update expected",
+										);
 									const nullableByPath = new Map(
 										plan.candidate.fields.map(
 											(field) => [pathKey(field.path), field.nullable] as const,
@@ -612,7 +645,18 @@ function createCollectionMutationData(
 											trustedPaths,
 											plan.candidate.fields,
 										);
-									const values = { key, callerInput: patch, trustedValues };
+									if (expected)
+										validateScalars(
+											expected,
+											expectedPaths,
+											plan.candidate.fields,
+										);
+									const values = {
+										key,
+										callerInput: patch,
+										trustedValues,
+										expected,
+									};
 									const locked = await execute(
 										plan,
 										started,

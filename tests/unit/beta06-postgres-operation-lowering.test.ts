@@ -677,11 +677,19 @@ test("merges trusted update values after caller patches without replaying create
 	expect(update.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({
+				kind: "expectedPresent",
+				path: ["body"],
+			}),
+			expect.objectContaining({ kind: "expectedValue", path: ["body"] }),
+			expect.objectContaining({
 				kind: "trustedValuePresent",
 				path: ["title"],
 			}),
 			expect.objectContaining({ kind: "trustedValue", path: ["title"] }),
 		]),
+	);
+	expect(update.write.sql).toMatch(
+		/CASE WHEN \$\d+::boolean THEN "qp_current"\."body" IS NOT DISTINCT FROM \$\d+::text ELSE TRUE END/,
 	);
 	expect(update.write.sql).toMatch(
 		/CASE WHEN \$\d+::boolean THEN \$\d+::text ELSE "qp_current"\."title" END AS "title"/,

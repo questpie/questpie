@@ -15,6 +15,7 @@ import type {
 import { lowerPostgresCreateOperationPlan } from "./postgres-create";
 import {
 	executionParameter,
+	expectedParameters,
 	fieldByPath,
 	inputParameter,
 	items,
@@ -217,6 +218,10 @@ function updatePlan(
 		const field = fieldByPath(collection, keyPath);
 		return `${quote("qp_target")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(parameters, "key", field)}`;
 	});
+	const expectedPredicates = collection.fields.map((field) => {
+		const bound = expectedParameters(parameters, field);
+		return `CASE WHEN ${bound.present} THEN ${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${bound.value} ELSE TRUE END`;
+	});
 	const expressions = new Map<string, string>(
 		collection.fields.map(
 			(field) =>
@@ -377,7 +382,7 @@ function updatePlan(
 		(field) =>
 			`${quote(field.column)} = ${quote("qp_candidate")}.${quote(field.column)}`,
 	);
-	const currentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...keyPredicates, currentCheck.sql].join(" AND ")} LIMIT 1)`;
+	const currentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...keyPredicates, currentCheck.sql, ...expectedPredicates].join(" AND ")} LIMIT 1)`;
 	const candidateCte = `${quote("qp_candidate")} AS (SELECT ${candidateColumns.join(", ")} FROM ${quote("qp_current")})`;
 	const updatedCte = `${quote("qp_updated")} AS (UPDATE ${collection.table} AS ${quote("qp_target")} SET ${assignments.join(", ")} FROM ${quote("qp_candidate")}, ${quote("qp_current")} WHERE ${[...targetPredicates, candidateCheck.sql].join(" AND ")} RETURNING ${quote("qp_target")}.*)`;
 	return Object.freeze({
@@ -389,6 +394,7 @@ function updatePlan(
 		lifecycle: Object.freeze([
 			"keyedRowLock",
 			"freshCurrentPolicy",
+			"compareAndSet",
 			"sparseCallerFieldAuthority",
 			"pureNormalization",
 			"serverValues",

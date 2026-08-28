@@ -508,6 +508,100 @@ test("allows a values-only update and binds trusted value presence separately", 
 	]);
 });
 
+test("validates and binds sparse compare-and-set expectations before the write", async () => {
+	const calls: Array<readonly [string, readonly unknown[]]> = [];
+	const textCodec = {
+		kind: "text",
+		minLength: 1,
+		maxLength: 120,
+		collation: "questpie.binary",
+	} as const;
+	const data = dataFor(
+		[
+			{
+				identity: "mutation:records.update",
+				member: "update",
+				target: "collection:records",
+				limits: { rows: 100, durationMilliseconds: 5_000 },
+				operation: {
+					keyFields: [["id"]],
+					callerInputFields: [["title"]],
+					trustedValueFields: [],
+					requiredTrustedValueFields: [],
+				},
+				candidate: {
+					fields: [{ path: ["title"], codec: textCodec, nullable: false }],
+				},
+				lock: {
+					sql: "LOCK_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "key",
+							path: ["id"],
+							codec: { kind: "uuid" },
+							postgresType: "uuid",
+						},
+					],
+				},
+				fieldAuthority: { checks: [] },
+				write: {
+					sql: "WRITE_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "expectedPresent",
+							path: ["title"],
+							codec: "boolean",
+							postgresType: "boolean",
+						},
+						{
+							position: 2,
+							kind: "expectedValue",
+							path: ["title"],
+							codec: textCodec,
+							postgresType: "text",
+						},
+					],
+					result: [],
+				},
+			},
+		],
+		async (statement, parameters = []) => {
+			calls.push([statement, parameters]);
+			return statement === "LOCK_SQL" ? [{}] : [];
+		},
+	);
+
+	await expect(
+		data.records.update({
+			key: { id },
+			expected: { title: "before" },
+			patch: { title: "after" },
+		}),
+	).resolves.toBeNull();
+	expect(calls).toEqual([
+		["LOCK_SQL", [id]],
+		["WRITE_SQL", [true, "before"]],
+	]);
+
+	await expect(
+		data.records.update({
+			key: { id },
+			expected: { unknown: "before" },
+			patch: { title: "after" },
+		}),
+	).rejects.toThrow("Collection update expected contains undeclared Fields");
+	await expect(
+		data.records.update({
+			key: { id },
+			expected: { title: "" },
+			patch: { title: "after" },
+		}),
+	).rejects.toThrow("invalid relational scalar");
+	expect(calls).toHaveLength(2);
+});
+
 test("create decodes trusted values exactly and binds them separately", async () => {
 	const calls: Array<readonly [string, readonly unknown[]]> = [];
 	const createdAt = new Date("2026-08-16T20:00:00.000Z");

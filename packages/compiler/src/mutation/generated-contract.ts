@@ -179,7 +179,25 @@ function method(
 		(path) => types.field(program.target, path),
 		() => false,
 	);
-	return `readonly update: (input: Readonly<{ readonly key: ${key}; readonly patch?: ${callerInput};${valuesMember} }>) => Promise<${result}>;`;
+	const expectedPaths = [
+		...program.keyFields,
+		...program.callerInputFields,
+		...program.trustedValueFields,
+		...program.selectedFieldPaths,
+	].filter(
+		(path, index, paths) =>
+			paths.findIndex(
+				(candidate) =>
+					candidate.length === path.length &&
+					candidate.every((segment, part) => segment === path[part]),
+			) === index,
+	);
+	const expected = shape(
+		expectedPaths,
+		(path) => types.field(program.target, path),
+		() => true,
+	);
+	return `readonly update: (input: Readonly<{ readonly key: ${key}; readonly expected?: ${expected}; readonly patch?: ${callerInput};${valuesMember} }>) => Promise<${result}>;`;
 }
 
 export function renderGeneratedMutationData(
