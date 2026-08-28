@@ -55,10 +55,10 @@ function authorizeLane(
 
 function normalizeLane(schema: Schema, values: ValueMap): ValueMap {
 	return Object.fromEntries(
-		Object.entries(values).map(([name, value]) => [
-			name,
-			schema[name]?.normalize?.(value) ?? value,
-		]),
+		Object.entries(values).map(([name, value]) => {
+			const normalize = schema[name]?.normalize;
+			return [name, normalize ? normalize(value) : value];
+		}),
 	);
 }
 
@@ -151,7 +151,11 @@ const tickets = Object.freeze({
 		default: "open",
 		normalize: (value: unknown) => String(value).toLowerCase(),
 	},
-	closedAt: { server: true, nullable: true },
+	closedAt: {
+		server: true,
+		nullable: true,
+		normalize: (value: unknown) => (value === "" ? null : value),
+	},
 } satisfies Schema);
 
 deepStrictEqual(fieldsFor(tickets, "create", "caller"), [
@@ -195,6 +199,15 @@ const closed = update({
 		candidate.status === "closed",
 });
 strictEqual(closed.status, "closed");
+
+const reopened = update({
+	schema: tickets,
+	current: closed,
+	values: { status: "OPEN", closedAt: "" },
+	policy: (candidate) =>
+		candidate.status === "open" && candidate.closedAt === null,
+});
+strictEqual(reopened.closedAt, null);
 
 throws(
 	() =>
@@ -261,6 +274,20 @@ throws(
 			policy: () => true,
 		}),
 	/missing required Field: id/,
+);
+throws(
+	() =>
+		create({
+			schema: tickets,
+			input: { reference: "SUP-2", summary: "Forged tenant" },
+			values: {
+				id: "ticket-2",
+				organizationId: "organization-2",
+				requesterId: "person-1",
+			},
+			policy: (candidate) => candidate.organizationId === "organization-1",
+		}),
+	/candidate Policy denied/,
 );
 
 const created = create({
