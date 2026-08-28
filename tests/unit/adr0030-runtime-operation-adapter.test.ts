@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import {
 	createCollectionOperationAdapterExecutor,
 	linkCollectionOperationAdapters,
-} from "../../packages/runtime/src/mutation/adapter";
+} from "../../packages/runtime/src/mutation";
 import { canonicalMutationBytes } from "../../packages/runtime/src/mutation/canonical";
 import { linkCollectionMutationPrograms } from "../../packages/runtime/src/mutation/program";
 

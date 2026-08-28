@@ -455,6 +455,44 @@ test("allows a values-only update and binds trusted value presence separately", 
 						},
 					],
 				},
+				candidateValidation: {
+					freshAfterRowLockWait: true,
+					sql: "CANDIDATE_VALIDATION_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "trustedValuePresent",
+							path: ["body"],
+							codec: "boolean",
+							postgresType: "boolean",
+						},
+						{
+							position: 2,
+							kind: "trustedValue",
+							path: ["body"],
+							codec: {
+								kind: "text",
+								minLength: 1,
+								maxLength: 8_192,
+								collation: "questpie.binary",
+							},
+							postgresType: "text",
+						},
+					],
+					result: [
+						{
+							path: ["body"],
+							column: "qp_candidate_0",
+							codec: {
+								kind: "text",
+								minLength: 1,
+								maxLength: 8_192,
+								collation: "questpie.binary",
+							},
+							nullable: false,
+						},
+					],
+				},
 				fieldAuthority: { checks: [] },
 				write: {
 					sql: "WRITE_SQL",
@@ -492,7 +530,10 @@ test("allows a values-only update and binds trusted value presence separately", 
 		],
 		async (statement, parameters = []) => {
 			calls.push([statement, parameters]);
-			return statement === "LOCK_SQL" ? [{}] : [{ qp_result_0: id }];
+			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "CANDIDATE_VALIDATION_SQL")
+				return [{ qp_candidate_0: "trusted" }];
+			return [{ qp_result_0: id }];
 		},
 	);
 
@@ -504,6 +545,7 @@ test("allows a values-only update and binds trusted value presence separately", 
 	).resolves.toEqual({ id });
 	expect(calls).toEqual([
 		["LOCK_SQL", [id]],
+		["CANDIDATE_VALIDATION_SQL", [true, "trusted"]],
 		["WRITE_SQL", [true, "trusted"]],
 	]);
 });
@@ -544,6 +586,34 @@ test("validates and binds sparse compare-and-set expectations before the write",
 						},
 					],
 				},
+				candidateValidation: {
+					freshAfterRowLockWait: true,
+					sql: "CANDIDATE_VALIDATION_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "expectedPresent",
+							path: ["title"],
+							codec: "boolean",
+							postgresType: "boolean",
+						},
+						{
+							position: 2,
+							kind: "expectedValue",
+							path: ["title"],
+							codec: textCodec,
+							postgresType: "text",
+						},
+					],
+					result: [
+						{
+							path: ["title"],
+							column: "qp_candidate_0",
+							codec: textCodec,
+							nullable: false,
+						},
+					],
+				},
 				fieldAuthority: { checks: [] },
 				write: {
 					sql: "WRITE_SQL",
@@ -569,7 +639,10 @@ test("validates and binds sparse compare-and-set expectations before the write",
 		],
 		async (statement, parameters = []) => {
 			calls.push([statement, parameters]);
-			return statement === "LOCK_SQL" ? [{}] : [];
+			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "CANDIDATE_VALIDATION_SQL")
+				return [{ qp_candidate_0: "after" }];
+			return [];
 		},
 	);
 
@@ -582,6 +655,7 @@ test("validates and binds sparse compare-and-set expectations before the write",
 	).resolves.toBeNull();
 	expect(calls).toEqual([
 		["LOCK_SQL", [id]],
+		["CANDIDATE_VALIDATION_SQL", [true, "before"]],
 		["WRITE_SQL", [true, "before"]],
 	]);
 
@@ -599,7 +673,98 @@ test("validates and binds sparse compare-and-set expectations before the write",
 			patch: { title: "after" },
 		}),
 	).rejects.toThrow("invalid relational scalar");
-	expect(calls).toHaveLength(2);
+	expect(calls).toHaveLength(3);
+});
+
+test("validates every untouched update candidate Field before Policy and write", async () => {
+	const calls: string[] = [];
+	const textCodec = {
+		kind: "text",
+		minLength: 1,
+		maxLength: 120,
+		collation: "questpie.binary",
+	} as const;
+	const profileCodec = {
+		kind: "object",
+		properties: {
+			displayName: { kind: "text", minLength: 1, maxLength: 120 },
+		},
+	} as const;
+	const data = dataFor(
+		[
+			{
+				identity: "mutation:records.update",
+				member: "update",
+				target: "collection:records",
+				limits: { rows: 100, durationMilliseconds: 5_000 },
+				operation: {
+					keyFields: [["id"]],
+					callerInputFields: [["title"]],
+					trustedValueFields: [],
+					requiredTrustedValueFields: [],
+				},
+				candidate: {
+					fields: [
+						{ path: ["title"], codec: textCodec, nullable: false },
+						{ path: ["profile"], codec: profileCodec, nullable: false },
+					],
+				},
+				lock: {
+					sql: "LOCK_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "key",
+							path: ["id"],
+							codec: { kind: "uuid" },
+							postgresType: "uuid",
+						},
+					],
+				},
+				candidateValidation: {
+					sql: "CANDIDATE_VALIDATION_SQL",
+					parameters: [],
+					result: [
+						{
+							path: ["title"],
+							column: "qp_candidate_0",
+							codec: textCodec,
+							nullable: false,
+						},
+						{
+							path: ["profile"],
+							column: "qp_candidate_1",
+							codec: profileCodec,
+							nullable: false,
+						},
+					],
+				},
+				fieldAuthority: { checks: [] },
+				write: {
+					sql: "WRITE_SQL",
+					parameters: [],
+					result: [],
+				},
+			},
+		],
+		async (statement) => {
+			calls.push(statement);
+			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "CANDIDATE_VALIDATION_SQL")
+				return [
+					{
+						qp_candidate_0: "after",
+						qp_candidate_1: { displayName: "" },
+					},
+				];
+			return [];
+		},
+	);
+
+	await expect(
+		data.records.update({ key: { id }, patch: { title: "after" } }),
+	).rejects.toThrow("$field.displayName");
+	expect(calls).toEqual(["LOCK_SQL", "CANDIDATE_VALIDATION_SQL"]);
 });
 
 test("create decodes trusted values exactly and binds them separately", async () => {

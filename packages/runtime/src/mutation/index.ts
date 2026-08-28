@@ -1,10 +1,10 @@
 import type { PreparedOperation } from "../operation";
 
+export { linkCollectionOperationAdapters } from "./adapter";
 export {
 	createCollectionOperationAdapterExecutor,
 	executeCollectionOperationAdapter,
-	linkCollectionOperationAdapters,
-} from "./adapter";
+} from "./adapter-execution";
 export type {
 	CollectionOperationAdapterFacts,
 	LinkedCollectionOperationAdaptersV1,

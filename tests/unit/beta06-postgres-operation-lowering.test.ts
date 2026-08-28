@@ -674,6 +674,18 @@ test("merges trusted update values after caller patches without replaying create
 	expect(update.fieldAuthority.checks.map(({ path }) => path)).toEqual([
 		["body"],
 	]);
+	expect(update.candidateValidation.freshAfterRowLockWait).toBe(true);
+	expect(update.candidateValidation.result.map(({ path }) => path)).toEqual(
+		schema.collections
+			.find(({ identity }) => identity === "collection:records")!
+			.fields.map(({ path }) => path),
+	);
+	expect(update.candidateValidation.sql).toContain(
+		'"qp_current"."owner_id" IS NOT DISTINCT FROM',
+	);
+	expect(update.candidateValidation.sql).not.toContain(
+		'"qp_candidate"."title" IS DISTINCT FROM "qp_current"."title"',
+	);
 	expect(update.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({

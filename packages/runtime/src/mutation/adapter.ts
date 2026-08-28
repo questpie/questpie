@@ -1,3 +1,4 @@
+import { mutationPathKey as pathKey } from "./field-path";
 import {
 	decodeFieldNormalizerPrograms,
 	decodeServerValuePrograms,
@@ -39,11 +40,6 @@ export type CollectionOperationAdapterFacts = Readonly<{
 	tenant: Readonly<{ id: string }>;
 }>;
 
-type AdapterInvoker = (
-	kernelIdentity: string,
-	request: Readonly<Record<string, unknown>>,
-) => Promise<unknown>;
-
 const digestPattern = /^[0-9a-f]{64}$/;
 
 function fail(message: string): never {
@@ -65,20 +61,6 @@ function exact(value: Row, keys: readonly string[], label: string): void {
 	if (
 		actual.length !== expected.length ||
 		expected.some((key, index) => key !== actual[index])
-	)
-		fail(`${label} has invalid keys`);
-}
-
-function exactWithOptional(
-	value: Row,
-	required: readonly string[],
-	optional: readonly string[],
-	label: string,
-): void {
-	const keys = Object.keys(value);
-	if (
-		required.some((key) => !Object.hasOwn(value, key)) ||
-		keys.some((key) => !required.includes(key) && !optional.includes(key))
 	)
 		fail(`${label} has invalid keys`);
 }
@@ -116,10 +98,6 @@ function fieldPaths(value: unknown, label: string): readonly FieldPath[] {
 	if (new Set(identities).size !== identities.length)
 		fail(`${label} must be unique`);
 	return Object.freeze(paths);
-}
-
-function pathKey(path: FieldPath): string {
-	return JSON.stringify(path);
 }
 
 function samePaths(left: readonly FieldPath[], right: readonly FieldPath[]) {
@@ -382,216 +360,4 @@ export function linkCollectionOperationAdapters(
 		adapters: Object.freeze(adapters),
 		byIdentity: new Map(adapters.map((adapter) => [adapter.identity, adapter])),
 	});
-}
-
-function hasValueAt(value: Row, path: FieldPath): boolean {
-	let current: unknown = value;
-	for (const part of path) {
-		if (!current || typeof current !== "object" || Array.isArray(current))
-			return false;
-		if (!Object.hasOwn(current, part)) return false;
-		current = (current as Row)[part];
-	}
-	return true;
-}
-
-function valueAt(value: Row, path: FieldPath): unknown {
-	let current: unknown = value;
-	for (const part of path) current = record(current, "adapter value")[part];
-	return current;
-}
-
-function setPath(
-	target: Record<string, unknown>,
-	path: FieldPath,
-	value: unknown,
-) {
-	let current = target;
-	for (const part of path.slice(0, -1)) {
-		const child = current[part];
-		if (!child || typeof child !== "object" || Array.isArray(child))
-			current[part] = {};
-		current = current[part] as Record<string, unknown>;
-	}
-	current[path.at(-1)!] = value;
-}
-
-function suppliedPaths(
-	value: unknown,
-	label: string,
-	physicalPaths: readonly FieldPath[],
-	prefix: string[] = [],
-): FieldPath[] {
-	const source = record(value, label);
-	if (
-		prefix.length > 0 &&
-		physicalPaths.some((path) => pathKey(path) === pathKey(prefix))
-	)
-		return [prefix];
-	const result: FieldPath[] = [];
-	for (const key of Object.keys(source).toSorted()) {
-		const path = [...prefix, key];
-		const child = source[key];
-		if (
-			child &&
-			typeof child === "object" &&
-			!Array.isArray(child) &&
-			!(child instanceof Date)
-		)
-			result.push(...suppliedPaths(child, label, physicalPaths, path));
-		else result.push(path);
-	}
-	return result;
-}
-
-function validatePinnedInput(
-	value: unknown,
-	adapter: LinkedCollectionOperationAdapterV1,
-) {
-	const input = record(value, "adapter input");
-	const supplied = suppliedPaths(
-		input,
-		"adapter input",
-		adapter.callerInputFields,
-	);
-	const allowed = new Set(adapter.callerInputFields.map(pathKey));
-	if (supplied.some((path) => !allowed.has(pathKey(path))))
-		fail("adapter input contains undeclared Fields");
-	const present = new Set(supplied.map(pathKey));
-	if (
-		adapter.requiredCallerInputFields.some(
-			(path) => !present.has(pathKey(path)),
-		)
-	)
-		fail("adapter input is missing required Fields");
-	return input;
-}
-
-function normalizedInput(
-	input: Row,
-	program: FieldNormalizerProgramV1 | null,
-): Row {
-	const output = structuredClone(input) as Record<string, unknown>;
-	for (const step of program?.steps ?? []) {
-		if (
-			step.expression.kind === "trimIfPresent" &&
-			!hasValueAt(input, step.expression.source)
-		)
-			continue;
-		const value = valueAt(input, step.expression.source);
-		if (typeof value !== "string") fail("normalizer source must be a string");
-		setPath(output, step.target, value.trim());
-	}
-	return Object.freeze(output);
-}
-
-function trustedValues(
-	input: Row,
-	program: ServerValueProgramV1 | null,
-	facts: CollectionOperationAdapterFacts,
-): Row | undefined {
-	if (!program) return undefined;
-	const values: Record<string, unknown> = {};
-	for (const assignment of program.assignments) {
-		const source = pathKey(assignment.source);
-		const value =
-			source === '["operationTime"]'
-				? facts.operationTime
-				: source === '["principal","id"]'
-					? facts.principal.id
-					: source === '["principal","kind"]'
-						? facts.principal.kind
-						: source === '["tenant","id"]'
-							? facts.tenant.id
-							: valueAt(input, assignment.source);
-		setPath(values, assignment.target, value);
-	}
-	return Object.freeze(values);
-}
-
-function projectedResult(
-	value: unknown,
-	adapter: LinkedCollectionOperationAdapterV1,
-): unknown {
-	if (value === null && adapter.outputCardinality === "optionalOne")
-		return null;
-	const source = record(value, "adapter kernel result");
-	const result: Record<string, unknown> = {};
-	for (const path of adapter.selectedFieldPaths) {
-		if (!hasValueAt(source, path))
-			fail("kernel result is missing a selected Field");
-		setPath(result, path, valueAt(source, path));
-	}
-	return Object.freeze(result);
-}
-
-export function createCollectionOperationAdapterExecutor(
-	input: Readonly<{
-		adapters: LinkedCollectionOperationAdaptersV1;
-		facts: CollectionOperationAdapterFacts;
-		invokeKernel: AdapterInvoker;
-	}>,
-) {
-	return async (identity: string, rawRequest: unknown): Promise<unknown> => {
-		const adapter = input.adapters.byIdentity.get(identity);
-		if (!adapter) fail(`unknown adapter ${identity}`);
-		return executeCollectionOperationAdapter(
-			{
-				adapter,
-				facts: input.facts,
-				invokeKernel: input.invokeKernel,
-			},
-			rawRequest,
-		);
-	};
-}
-
-export async function executeCollectionOperationAdapter(
-	input: Readonly<{
-		adapter: LinkedCollectionOperationAdapterV1;
-		facts: CollectionOperationAdapterFacts;
-		invokeKernel: AdapterInvoker;
-	}>,
-	rawRequest: unknown,
-): Promise<unknown> {
-	const { adapter } = input;
-	const request = record(rawRequest, `${adapter.identity} request`);
-	if (adapter.member === "create")
-		exact(request, ["input"], `${adapter.identity} request`);
-	else
-		exactWithOptional(
-			request,
-			["key"],
-			["expected", "patch"],
-			`${adapter.identity} request`,
-		);
-	const caller = validatePinnedInput(
-		adapter.member === "create"
-			? request.input
-			: Object.hasOwn(request, "patch")
-				? request.patch
-				: {},
-		adapter,
-	);
-	const normalized = normalizedInput(caller, adapter.normalizerProgram);
-	const values = trustedValues(
-		normalized,
-		adapter.serverValueProgram,
-		input.facts,
-	);
-	const kernelRequest =
-		adapter.member === "create"
-			? { input: normalized, ...(values ? { values } : {}) }
-			: {
-					key: request.key,
-					...(Object.hasOwn(request, "expected")
-						? { expected: request.expected }
-						: {}),
-					patch: normalized,
-					...(values ? { values } : {}),
-				};
-	return projectedResult(
-		await input.invokeKernel(adapter.kernelIdentity, kernelRequest),
-		adapter,
-	);
 }

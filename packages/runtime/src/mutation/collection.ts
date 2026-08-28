@@ -7,6 +7,14 @@ import {
 	decodeMutationFieldResult,
 	type MutationFieldCodecV1,
 } from "./field-codec";
+import {
+	hasMutationValueAt as hasValueAt,
+	mutationLeafPaths as inputPaths,
+	mutationPathKey as pathKey,
+	setMutationValueAt as setPath,
+	mutationValueAt as valueAt,
+	type MutationFieldPath,
+} from "./field-path";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
@@ -16,7 +24,7 @@ import type {
 } from "./postgres-program";
 
 type Row = Readonly<Record<string, unknown>>;
-type Path = readonly string[];
+type Path = MutationFieldPath;
 type Parameter = LinkedPostgresGetOperationPlanV1["lock"]["parameters"][number];
 type ExecutionFactParameter = Extract<Parameter, { kind: "executionFact" }>;
 type Result = LinkedPostgresGetOperationPlanV1["read"]["result"][number];
@@ -26,6 +34,7 @@ type CollectionLeaf =
 	| LinkedPostgresCreateOperationPlanV1["fieldAuthority"]["checks"][number]
 	| LinkedPostgresCreateOperationPlanV1["write"]
 	| LinkedPostgresUpdateOperationPlanV1["lock"]
+	| LinkedPostgresUpdateOperationPlanV1["candidateValidation"]
 	| LinkedPostgresUpdateOperationPlanV1["fieldAuthority"]["checks"][number]
 	| LinkedPostgresUpdateOperationPlanV1["write"];
 type ExecuteCollectionLeaf = (
@@ -79,61 +88,6 @@ function exactRequestWithOptionalKeys(
 	)
 		throw new TypeError(`${label} must have exactly the compiled keys`);
 	return request;
-}
-
-function pathKey(path: Path): string {
-	return JSON.stringify(path);
-}
-
-function valueAt(value: Row, path: Path): unknown {
-	let current: unknown = value;
-	for (const part of path) current = record(current, "Collection value")[part];
-	return current;
-}
-
-function hasValueAt(value: Row, path: Path): boolean {
-	let current: unknown = value;
-	for (const [index, part] of path.entries()) {
-		if (!current || typeof current !== "object" || Array.isArray(current))
-			return false;
-		if (!Object.hasOwn(current, part)) return false;
-		current = (current as Row)[part];
-		if (index < path.length - 1 && current === undefined) return false;
-	}
-	return true;
-}
-
-function inputPaths(
-	value: unknown,
-	label: string,
-	physicalPaths: readonly Path[],
-	prefix: string[] = [],
-): Path[] {
-	const source = record(value, label);
-	const prototype = Object.getPrototypeOf(source);
-	if (prototype !== null && prototype !== Object.prototype)
-		throw new TypeError(`${label} must have exactly the compiled Fields`);
-	if (
-		prefix.length > 0 &&
-		physicalPaths.some((fieldPath) => pathKey(fieldPath) === pathKey(prefix))
-	)
-		return [prefix];
-	const paths: Path[] = [];
-	const keys = Object.keys(source).sort();
-	if (keys.length === 0 && prefix.length > 0) return [prefix];
-	for (const key of keys) {
-		const next = [...prefix, key];
-		const child = source[key];
-		if (
-			child &&
-			typeof child === "object" &&
-			!Array.isArray(child) &&
-			!(child instanceof Date)
-		)
-			paths.push(...inputPaths(child, label, physicalPaths, next));
-		else paths.push(next);
-	}
-	return paths;
 }
 
 function exactPaths(
@@ -190,17 +144,6 @@ function inputField(
 	nullable: boolean,
 ): PostgresParameter {
 	return decodeMutationFieldInput(value, codec, nullable);
-}
-
-function setPath(target: Record<string, unknown>, path: Path, value: unknown) {
-	let current = target;
-	for (const part of path.slice(0, -1)) {
-		const child = current[part];
-		if (!child || typeof child !== "object" || Array.isArray(child))
-			current[part] = {};
-		current = current[part] as Record<string, unknown>;
-	}
-	current[path.at(-1)!] = value;
 }
 
 function decodeRow(
@@ -307,7 +250,7 @@ function bind(
 		if (parameter.codec === "boolean")
 			throw new TypeError("Compiled Collection presence parameter is invalid");
 		return inputField(
-			valueAt(source, parameter.path),
+			valueAt(source, parameter.path, "Collection value"),
 			parameter.codec,
 			nullableByPath.get(pathKey(parameter.path)) === true,
 		);
@@ -328,7 +271,11 @@ function validateScalars(
 		const field = byPath.get(pathKey(path));
 		if (!field)
 			throw new TypeError("Compiled Collection Field has no scalar definition");
-		inputField(valueAt(source, path), field.codec, field.nullable);
+		inputField(
+			valueAt(source, path, "Collection value"),
+			field.codec,
+			field.nullable,
+		);
 	}
 }
 
@@ -673,6 +620,28 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection update lock returned multiple rows",
 										);
+									const candidates = await execute(
+										plan,
+										started,
+										plan.candidateValidation,
+										bind(
+											plan.candidateValidation.parameters,
+											values,
+											input.facts,
+											input.operationTime,
+											nullableByPath,
+										),
+									);
+									if (candidates.length === 0) return null;
+									if (candidates.length !== 1)
+										throw new TypeError(
+											"Collection update candidate validation returned multiple rows",
+										);
+									decodeRow(
+										candidates[0]!,
+										plan.candidateValidation.result,
+										input.resultValuesDecoded,
+									);
 									const supplied = new Set(suppliedPaths.map(pathKey));
 									for (const check of plan.fieldAuthority.checks) {
 										if (!supplied.has(pathKey(check.path))) continue;

@@ -6,6 +6,7 @@ import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import {
 	array,
 	candidateFields,
+	candidateResults,
 	evidence,
 	exact,
 	fail,
@@ -39,6 +40,7 @@ export function updatePlan(
 			"serverValueProgram",
 			"candidate",
 			"lock",
+			"candidateValidation",
 			"fieldAuthority",
 			"currentPolicy",
 			"candidatePolicy",
@@ -220,6 +222,34 @@ export function updatePlan(
 		plan.candidatePolicy,
 		`${operation.identity} candidatePolicy`,
 	);
+	const validation = record(
+		plan.candidateValidation,
+		`${operation.identity} candidateValidation`,
+	);
+	exact(
+		validation,
+		["freshAfterRowLockWait", "sql", "parameters", "result"],
+		`${operation.identity} candidateValidation`,
+	);
+	if (validation.freshAfterRowLockWait !== true)
+		fail(`${operation.identity} candidate validation is not fresh`);
+	const validationSql = statement(
+		validation.sql,
+		`${operation.identity} candidateValidation SQL`,
+	);
+	if (!validationSql.includes(currentPolicy.sql))
+		fail(`${operation.identity} candidate validation omits current Policy`);
+	const validationParameters = decodePostgresCollectionParameters(
+		validation.parameters,
+		validationSql,
+		`${operation.identity} candidateValidation`,
+	);
+	const validationResult = candidateResults(
+		validation.result,
+		validationSql,
+		fields,
+		`${operation.identity} candidateValidation`,
+	);
 	const write = record(plan.write, `${operation.identity} write`);
 	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
 	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
@@ -298,6 +328,19 @@ export function updatePlan(
 				text: lockSql,
 				parameterCount: lockParameters.length,
 				booleanResult: true,
+			}),
+		}),
+		candidateValidation: Object.freeze({
+			freshAfterRowLockWait: true,
+			sql: validationSql,
+			parameters: validationParameters,
+			result: validationResult,
+			statement: bindPostgresCollectionStatement({
+				identity: operation.identity,
+				leaf: "candidate-validation",
+				text: validationSql,
+				parameterCount: validationParameters.length,
+				result: validationResult,
 			}),
 		}),
 		fieldAuthority: Object.freeze({

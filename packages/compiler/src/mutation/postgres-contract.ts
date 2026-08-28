@@ -170,6 +170,12 @@ export interface PostgresUpdateOperationPlanV1 {
 	readonly serverValueProgram: Readonly<Record<string, unknown>> | null;
 	readonly candidate: PostgresCreateOperationPlanV1["candidate"];
 	readonly lock: PostgresGetOperationPlanV1["lock"];
+	readonly candidateValidation: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresOperationParameterV1[];
+		result: readonly PostgresOperationResultV1[];
+	}>;
 	readonly fieldAuthority: PostgresCreateOperationPlanV1["fieldAuthority"];
 	readonly currentPolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
 	readonly candidatePolicy: PostgresCreateOperationPlanV1["candidatePolicy"];

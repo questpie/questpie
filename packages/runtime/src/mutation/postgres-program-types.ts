@@ -195,6 +195,13 @@ export type LinkedPostgresUpdateOperationPlanV1 = Readonly<{
 	serverValueProgram: ServerValueProgramV1 | null;
 	candidate: LinkedPostgresCreateOperationPlanV1["candidate"];
 	lock: LinkedPostgresGetOperationPlanV1["lock"];
+	candidateValidation: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresParameterV1[];
+		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
+	}>;
 	fieldAuthority: LinkedPostgresCreateOperationPlanV1["fieldAuthority"];
 	currentPolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
 	candidatePolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];

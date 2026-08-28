@@ -40,6 +40,107 @@ type OutputAuthorityEntry = Readonly<{
 	mutableEvidenceCollections: readonly `collection:${string}`[];
 }>;
 
+function updateCandidate(
+	operation: CollectionOperationProgramV1,
+	collection: PostgresMutationCollectionV1,
+	normalizer: RecordValue | null,
+	serverValues: RecordValue | null,
+	parameters: Parameters,
+) {
+	const expressions = new Map<string, string>(
+		collection.fields.map(
+			(field) =>
+				[
+					canonicalBytes(field.path),
+					`${quote("qp_current")}.${quote(field.column)}`,
+				] as const,
+		),
+	);
+	const patch = new Map<
+		string,
+		Readonly<{ present: string; value: string; current: string }>
+	>();
+	const steps: Record<string, unknown>[] = [];
+	for (const callerPath of operation.callerInputFields) {
+		const field = fieldByPath(collection, callerPath);
+		const bound = patchParameters(parameters, field);
+		const current = `${quote("qp_current")}.${quote(field.column)}`;
+		patch.set(canonicalBytes(field.path), { ...bound, current });
+		expressions.set(
+			canonicalBytes(field.path),
+			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
+		);
+		steps.push({ phase: "callerInput", target: field.path });
+	}
+	for (const rawStep of normalizer
+		? items(normalizer.steps, "normalizer steps")
+		: []) {
+		const step = record(rawStep, "normalizer step");
+		const target = path(step.target, "normalizer target");
+		const expression = record(step.expression, "normalizer expression");
+		const source = path(expression.source, "normalizer source");
+		const sourcePatch = patch.get(canonicalBytes(source));
+		if (!sourcePatch)
+			throw new TypeError("normalizer source is not update caller input");
+		if (expression.kind !== "trim" && expression.kind !== "trimIfPresent")
+			throw new TypeError(`unsupported normalizer ${String(expression.kind)}`);
+		expressions.set(
+			canonicalBytes(target),
+			`CASE WHEN ${sourcePatch.present} THEN btrim(${sourcePatch.value}) ELSE ${sourcePatch.current} END`,
+		);
+		steps.push({ phase: "normalizer", target, transform: expression.kind });
+	}
+	for (const rawAssignment of serverValues
+		? items(serverValues.assignments, "server value assignments")
+		: []) {
+		const assignment = record(rawAssignment, "server value assignment");
+		const target = path(assignment.target, "server value target");
+		const source = path(assignment.source, "server value source");
+		const field = fieldByPath(collection, target);
+		if (assignment.mode !== "overwrite")
+			throw new TypeError(
+				`unsupported server value mode ${String(assignment.mode)}`,
+			);
+		const [sourceRoot, ...sourcePath] = source;
+		if (
+			!sourceRoot ||
+			(sourceRoot !== "operationTime" && sourcePath.length === 0) ||
+			(sourceRoot === "operationTime" && sourcePath.length !== 0)
+		)
+			throw new TypeError(
+				"server value source must be a closed execution operand",
+			);
+		expressions.set(
+			canonicalBytes(target),
+			executionParameter(parameters, sourceRoot, sourcePath, field),
+		);
+		steps.push({ phase: "serverValue", target, mode: "overwrite", source });
+	}
+	for (const trustedPath of operation.trustedValueFields) {
+		const field = fieldByPath(collection, trustedPath);
+		const bound = trustedValueParameters(parameters, field);
+		const current = expressions.get(canonicalBytes(field.path));
+		if (!current)
+			throw new TypeError(
+				`${operation.identity} cannot construct current candidate Field ${field.path.join(".")}`,
+			);
+		expressions.set(
+			canonicalBytes(field.path),
+			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
+		);
+		steps.push({ phase: "trustedValue", target: field.path });
+	}
+	return Object.freeze({
+		columns: Object.freeze(
+			collection.fields.map(
+				(field) =>
+					`${expressions.get(canonicalBytes(field.path))!} AS ${quote(field.column)}`,
+			),
+		),
+		steps: Object.freeze(steps),
+	});
+}
+
 function getPlan(
 	operation: CollectionOperationProgramV1,
 	collection: PostgresMutationCollectionV1,
@@ -222,92 +323,12 @@ function updatePlan(
 		const bound = expectedParameters(parameters, field);
 		return `CASE WHEN ${bound.present} THEN ${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${bound.value} ELSE TRUE END`;
 	});
-	const expressions = new Map<string, string>(
-		collection.fields.map(
-			(field) =>
-				[
-					canonicalBytes(field.path),
-					`${quote("qp_current")}.${quote(field.column)}`,
-				] as const,
-		),
-	);
-	const patch = new Map<
-		string,
-		Readonly<{ present: string; value: string; current: string }>
-	>();
-	const steps: Record<string, unknown>[] = [];
-	for (const callerPath of operation.callerInputFields) {
-		const field = fieldByPath(collection, callerPath);
-		const bound = patchParameters(parameters, field);
-		const current = `${quote("qp_current")}.${quote(field.column)}`;
-		patch.set(canonicalBytes(field.path), { ...bound, current });
-		expressions.set(
-			canonicalBytes(field.path),
-			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
-		);
-		steps.push({ phase: "callerInput", target: field.path });
-	}
-	for (const rawStep of normalizer
-		? items(normalizer.steps, "normalizer steps")
-		: []) {
-		const step = record(rawStep, "normalizer step");
-		const target = path(step.target, "normalizer target");
-		const expression = record(step.expression, "normalizer expression");
-		const source = path(expression.source, "normalizer source");
-		const sourcePatch = patch.get(canonicalBytes(source));
-		if (!sourcePatch)
-			throw new TypeError("normalizer source is not update caller input");
-		if (expression.kind !== "trim" && expression.kind !== "trimIfPresent")
-			throw new TypeError(`unsupported normalizer ${String(expression.kind)}`);
-		expressions.set(
-			canonicalBytes(target),
-			`CASE WHEN ${sourcePatch.present} THEN btrim(${sourcePatch.value}) ELSE ${sourcePatch.current} END`,
-		);
-		steps.push({ phase: "normalizer", target, transform: expression.kind });
-	}
-	for (const rawAssignment of serverValues
-		? items(serverValues.assignments, "server value assignments")
-		: []) {
-		const assignment = record(rawAssignment, "server value assignment");
-		const target = path(assignment.target, "server value target");
-		const source = path(assignment.source, "server value source");
-		const field = fieldByPath(collection, target);
-		if (assignment.mode !== "overwrite")
-			throw new TypeError(
-				`unsupported server value mode ${String(assignment.mode)}`,
-			);
-		const [sourceRoot, ...sourcePath] = source;
-		if (
-			!sourceRoot ||
-			(sourceRoot !== "operationTime" && sourcePath.length === 0) ||
-			(sourceRoot === "operationTime" && sourcePath.length !== 0)
-		)
-			throw new TypeError(
-				"server value source must be a closed execution operand",
-			);
-		expressions.set(
-			canonicalBytes(target),
-			executionParameter(parameters, sourceRoot, sourcePath, field),
-		);
-		steps.push({ phase: "serverValue", target, mode: "overwrite", source });
-	}
-	for (const trustedPath of operation.trustedValueFields) {
-		const field = fieldByPath(collection, trustedPath);
-		const bound = trustedValueParameters(parameters, field);
-		const current = expressions.get(canonicalBytes(field.path));
-		if (!current)
-			throw new TypeError(
-				`${operation.identity} cannot construct current candidate Field ${field.path.join(".")}`,
-			);
-		expressions.set(
-			canonicalBytes(field.path),
-			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
-		);
-		steps.push({ phase: "trustedValue", target: field.path });
-	}
-	const candidateColumns = collection.fields.map(
-		(field) =>
-			`${expressions.get(canonicalBytes(field.path))!} AS ${quote(field.column)}`,
+	const candidate = updateCandidate(
+		operation,
+		collection,
+		normalizer,
+		serverValues,
+		parameters,
 	);
 	const updateRules = policy.fields?.callerInput.update ?? [];
 	const authorityChecks = operation.callerInputFields.map((callerPath) => {
@@ -383,8 +404,45 @@ function updatePlan(
 			`${quote(field.column)} = ${quote("qp_candidate")}.${quote(field.column)}`,
 	);
 	const currentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...keyPredicates, currentCheck.sql, ...expectedPredicates].join(" AND ")} LIMIT 1)`;
-	const candidateCte = `${quote("qp_candidate")} AS (SELECT ${candidateColumns.join(", ")} FROM ${quote("qp_current")})`;
+	const candidateCte = `${quote("qp_candidate")} AS (SELECT ${candidate.columns.join(", ")} FROM ${quote("qp_current")})`;
 	const updatedCte = `${quote("qp_updated")} AS (UPDATE ${collection.table} AS ${quote("qp_target")} SET ${assignments.join(", ")} FROM ${quote("qp_candidate")}, ${quote("qp_current")} WHERE ${[...targetPredicates, candidateCheck.sql].join(" AND ")} RETURNING ${quote("qp_target")}.*)`;
+	const validationPolicy = lowerPostgresMutationPolicyChecks({
+		schema,
+		checks: [
+			{ expression: update.current, aliases: { current: "qp_current" } },
+		],
+	});
+	const validationCheck = validationPolicy.checks[0]!;
+	const validationParameters = policyParameters(validationPolicy.parameters);
+	const validationKeyPredicates = operation.keyFields.map((keyPath) => {
+		const field = fieldByPath(collection, keyPath);
+		return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(validationParameters, "key", field)}`;
+	});
+	const validationExpectedPredicates = collection.fields.map((field) => {
+		const bound = expectedParameters(validationParameters, field);
+		return `CASE WHEN ${bound.present} THEN ${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${bound.value} ELSE TRUE END`;
+	});
+	const validationCandidate = updateCandidate(
+		operation,
+		collection,
+		normalizer,
+		serverValues,
+		validationParameters,
+	);
+	const validationResult = result(
+		collection,
+		collection.fields.map(({ path: fieldPath }) => fieldPath),
+	);
+	const validationSelected = validationResult.map((item) => {
+		const field = fieldByPath(collection, item.path);
+		const value =
+			field.codec.kind === "timestamp"
+				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_candidate")}.${quote(field.column)})`
+				: `${quote("qp_candidate")}.${quote(field.column)}`;
+		return `${value} AS ${quote(item.column)}`;
+	});
+	const validationCurrentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...validationKeyPredicates, validationCheck.sql, ...validationExpectedPredicates].join(" AND ")} LIMIT 1)`;
+	const validationCandidateCte = `${quote("qp_candidate")} AS (SELECT ${validationCandidate.columns.join(", ")} FROM ${quote("qp_current")})`;
 	return Object.freeze({
 		identity: operation.identity,
 		target: operation.target,
@@ -409,7 +467,7 @@ function updatePlan(
 		normalizerProgram: normalizer,
 		serverValueProgram: serverValues,
 		candidate: Object.freeze({
-			steps: Object.freeze(steps),
+			steps: candidate.steps,
 			fields: Object.freeze(
 				collection.fields.map((field) =>
 					Object.freeze({
@@ -425,6 +483,12 @@ function updatePlan(
 			sql: `SELECT TRUE AS ${quote("qp_locked")} FROM ${collection.table} AS ${quote("qp_lock_row")} WHERE ${lockPredicates.join(" AND ")} LIMIT 1 FOR UPDATE`,
 			parameters: lockParameters.values(),
 			outcome: "internalLockedOrAbsent" as const,
+		}),
+		candidateValidation: Object.freeze({
+			freshAfterRowLockWait: true as const,
+			sql: `WITH ${validationCurrentCte}, ${validationCandidateCte} SELECT ${validationSelected.join(", ")} FROM ${quote("qp_candidate")}`,
+			parameters: validationParameters.values(),
+			result: validationResult,
 		}),
 		fieldAuthority: Object.freeze({
 			suppliedPathsOnly: true,

@@ -116,10 +116,10 @@ export function evidence(value: unknown, label: string): readonly string[] {
 	return Object.freeze(result);
 }
 
-export function results(
+function decodeResults(
 	value: unknown,
 	statement: string,
-	operation: LinkedCollectionOperationProgramV1,
+	expectedPaths: readonly FieldPath[],
 	label: string,
 ): readonly PostgresResultV1[] {
 	const decoded = array(value, `${label} result`).map((raw, index) => {
@@ -161,14 +161,46 @@ export function results(
 		});
 	});
 	if (
-		decoded.length !== operation.selectedFieldPaths.length ||
-		decoded.some(
-			(item, index) => !same(item.path, operation.selectedFieldPaths[index]),
-		) ||
+		decoded.length !== expectedPaths.length ||
+		decoded.some((item, index) => !same(item.path, expectedPaths[index])) ||
 		new Set(decoded.map(({ column }) => column)).size !== decoded.length
 	)
 		fail(`${label} result does not match the Collection Operation selection`);
 	return Object.freeze(decoded);
+}
+
+export function results(
+	value: unknown,
+	statement: string,
+	operation: LinkedCollectionOperationProgramV1,
+	label: string,
+): readonly PostgresResultV1[] {
+	return decodeResults(value, statement, operation.selectedFieldPaths, label);
+}
+
+export function candidateResults(
+	value: unknown,
+	statement: string,
+	fields: LinkedPostgresCreateOperationPlanV1["candidate"]["fields"],
+	label: string,
+): readonly PostgresResultV1[] {
+	const decoded = decodeResults(
+		value,
+		statement,
+		fields.map(({ path: fieldPath }) => fieldPath),
+		label,
+	);
+	if (decoded.some(({ guardColumn }) => guardColumn !== undefined))
+		fail(`${label} candidate result must not be conditionally disclosed`);
+	if (
+		decoded.some(
+			(item, index) =>
+				item.nullable !== fields[index]?.nullable ||
+				!same(item.codec, fields[index]?.codec),
+		)
+	)
+		fail(`${label} candidate result does not match its Field codecs`);
+	return decoded;
 }
 
 export function outputAuthority(
