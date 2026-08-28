@@ -18,7 +18,12 @@ import {
 	createRuntimeApplication,
 	type ExecutionEventV1,
 } from "../../packages/runtime/src/application";
-import type { MutationInvoker } from "../../packages/runtime/src/mutation";
+import {
+	executeCollectionOperationAdapter,
+	linkCollectionMutationPrograms,
+	linkCollectionOperationAdapters,
+	type MutationInvoker,
+} from "../../packages/runtime/src/mutation";
 import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
@@ -52,7 +57,19 @@ type Definition = Readonly<{
 	create?: unknown;
 	dispose?: unknown;
 	handler?: unknown;
+	name?: string;
 	resolve?: unknown;
+}>;
+type GeneratedOperationContext = Readonly<{
+	data: Readonly<
+		Record<
+			string,
+			Readonly<Record<string, (input: unknown) => Promise<unknown>>>
+		>
+	>;
+	operationTime: Date;
+	principal: Readonly<{ id: string; kind: string }>;
+	tenant: Readonly<{ id: string }>;
 }>;
 
 let compilation: GeneratedCompilation;
@@ -377,11 +394,99 @@ function definitions(): ReadonlyMap<string, Definition> {
 	]);
 }
 
+function generatedCollectionOperationDefinitions(): ReadonlyMap<
+	string,
+	Definition
+> {
+	const fieldNormalizers = JSON.parse(
+		compilation.generatedFiles["field-normalizer-programs.json"]!,
+	);
+	const serverValues = JSON.parse(
+		compilation.generatedFiles["server-value-programs.json"]!,
+	);
+	const policyProjection = JSON.parse(
+		compilation.generatedFiles["policy-projection.json"]!,
+	) as Readonly<{
+		policies: readonly Readonly<{
+			program: Readonly<{ identity: string; target: string }>;
+		}>[];
+	}>;
+	const kernels = linkCollectionMutationPrograms({
+		collectionOperations: JSON.parse(
+			compilation.generatedFiles["collection-operation-programs.json"]!,
+		),
+		fieldNormalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		policies: policyProjection.policies.map(({ program }) => ({
+			identity: program.identity,
+			target: program.target,
+		})),
+	});
+	const adapters = linkCollectionOperationAdapters({
+		artifact: JSON.parse(
+			compilation.generatedFiles["collection-operation-adapters.json"]!,
+		),
+		fieldNormalizers,
+		serverValues,
+		kernels,
+	});
+
+	return new Map(
+		adapters.adapters.map((adapter) => {
+			const collectionName = adapter.target.slice("collection:".length);
+			const definition = Object.freeze({
+				name: adapter.identity.slice("mutation:".length),
+				handler: ({
+					input,
+					ctx,
+				}: Readonly<{
+					input: unknown;
+					ctx: GeneratedOperationContext;
+				}>) =>
+					executeCollectionOperationAdapter(
+						{
+							adapter,
+							facts: {
+								operationTime: ctx.operationTime,
+								principal: ctx.principal,
+								tenant: ctx.tenant,
+							},
+							invokeKernel: (identity, kernelInput) => {
+								if (identity !== adapter.kernelIdentity)
+									throw new TypeError(
+										"generated Collection Operation kernel does not match",
+									);
+								const invoke = ctx.data[collectionName]?.[adapter.member];
+								if (!invoke)
+									throw new TypeError(
+										"generated Collection Operation kernel is unavailable",
+									);
+								return invoke(kernelInput);
+							},
+						},
+						input,
+					),
+			});
+			return [adapter.identity, definition] as const;
+		}),
+	);
+}
+
 function executableBindings() {
 	const byIdentity = definitions();
+	const generatedByIdentity = generatedCollectionOperationDefinitions();
 	const serverExports: Record<string, unknown> = {};
 	const slots = runtimeExecutables.slots.map((slot) => {
-		const definition = byIdentity.get(slot.identity);
+		const definition =
+			byIdentity.get(slot.identity) ?? generatedByIdentity.get(slot.identity);
 		if (!definition) throw new Error(`missing Definition ${slot.identity}`);
 		const implementation =
 			slot.kind === "action" ||
