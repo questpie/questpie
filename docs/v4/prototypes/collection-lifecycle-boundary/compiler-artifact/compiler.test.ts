@@ -307,8 +307,8 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", async () =
 		),
 		{ id: "T-1", name: "amz", count: 1, prefix: "-1.4:,true,1,x" },
 	);
-	strictEqual(
-		await executePhase(
+	await rejects(
+		executePhase(
 			compileArtifact({
 				callbacks: {
 					...callbacks,
@@ -323,14 +323,14 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", async () =
 			{},
 			executionBudget(),
 		),
-		undefined,
+		/optional absence cannot escape/,
 	);
 	for (const source of [
 		`({ input }) => input?.name.trim()`,
 		`({ input }) => input?.name?.trim()`,
 	])
-		strictEqual(
-			await executePhase(
+		await rejects(
+			executePhase(
 				compileArtifact({
 					callbacks: { ...callbacks, normalize: source },
 					bindings,
@@ -342,7 +342,7 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", async () =
 				{},
 				executionBudget(),
 			),
-			undefined,
+			/optional absence cannot escape/,
 		);
 	for (const source of [
 		`({ input }) => input.name.trim("x")`,
@@ -366,7 +366,7 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", async () =
 			{},
 			executionBudget(),
 		),
-		/finite runtime domain/,
+		/closed runtime domain/,
 	);
 	await rejects(
 		executePhase(
@@ -385,6 +385,170 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", async () =
 			executionBudget(),
 		),
 		/string method argument/,
+	);
+});
+
+test("optional chains distinguish covered absence from ordinary missing members", async () => {
+	const run = async (expression: string, input: unknown) =>
+		executePhase(
+			compileArtifact({
+				callbacks: {
+					...callbacks,
+					normalize: `({ input }) => (${expression}) ?? "ABSENT"`,
+				},
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[input],
+			{},
+			executionBudget(),
+		);
+	deepStrictEqual(
+		await Promise.all([
+			run("input?.name.trim()", null),
+			run("input?.name.trim()", { name: " x " }),
+		]),
+		["ABSENT", "x"],
+	);
+	for (const value of [{}, { name: null }])
+		await rejects(run("input?.name.trim()", value), /string method target/);
+	deepStrictEqual(
+		await Promise.all([
+			run("input?.name?.trim()", null),
+			run("input?.name?.trim()", {}),
+			run("input?.name?.trim()", { name: null }),
+			run("input?.name?.trim()", { name: " x " }),
+		]),
+		["ABSENT", "ABSENT", "ABSENT", "x"],
+	);
+	await rejects(
+		run("input.name?.trim()", null),
+		/static member target is absent/,
+	);
+	deepStrictEqual(
+		await Promise.all([
+			run("input.name?.trim()", {}),
+			run("input.name?.trim()", { name: null }),
+			run("input.name?.trim()", { name: " x " }),
+		]),
+		["ABSENT", "ABSENT", "x"],
+	);
+	await rejects(run("(input?.name).trim()", null), /string method target/);
+	await rejects(
+		executePhase(
+			compileArtifact({
+				callbacks: {
+					...callbacks,
+					normalize: `({ input }) => input?.name?.trim()`,
+				},
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[null],
+			{},
+			executionBudget(),
+		),
+		/optional absence cannot escape/,
+	);
+});
+
+test("runtime values close timestamps, plain objects, bounded arrays, and hostile host values", async () => {
+	const oneBindings = clone(bindings) as Bindings;
+	(oneBindings.capabilities as any)["data.related.find"] = {
+		kind: "read",
+		identity: "operation:helpdesk/tickets/findRelated",
+		argumentKeys: ["id"],
+		cardinality: "one",
+		first: true,
+		maxRows: 1,
+	};
+	const artifact = compileArtifact({
+		callbacks: {
+			...callbacks,
+			check: `async ({ candidate, ctx }) => {
+				const value = await ctx.data.related.find({ id: candidate.id });
+				return value;
+			}`,
+			afterWrite: `async ({ row }) => row`,
+		},
+		bindings: oneBindings,
+		runtimeBuild,
+		reentryLimit: 8,
+	});
+	const fromCapability = (value: unknown) =>
+		executePhase(
+			artifact,
+			"check",
+			[{ id: "T-1" }, null, new Date("2026-08-28T10:00:00.000Z"), {}, {}],
+			{
+				"operation:helpdesk/tickets/findRelated": () => value,
+			},
+			executionBudget(),
+		);
+	const timestamp = new Date("2026-08-28T10:00:00.000Z");
+	strictEqual(await fromCapability(timestamp), timestamp);
+	class HostValue {
+		value = "x";
+	}
+	const cyclic: Record<string, unknown> = {};
+	cyclic.self = cyclic;
+	const arrayWithProperty = [null] as unknown[] & { extra?: string };
+	arrayWithProperty.extra = "x";
+	const timestampWithProperty = new Date("2026-08-28T10:00:00.000Z") as Date & {
+		extra?: string;
+	};
+	timestampWithProperty.extra = "x";
+	const hostiles: readonly unknown[] = [
+		new Map([["hidden", Symbol("stolen")]]),
+		new Set(["hidden"]),
+		new Date(Number.NaN),
+		timestampWithProperty,
+		new HostValue(),
+		Object.create(null),
+		new Proxy({ value: "x" }, {}),
+		() => "x",
+		Symbol("x"),
+		{ nested: undefined },
+		{ nested: Number.POSITIVE_INFINITY },
+		[Number.NaN],
+		arrayWithProperty,
+		Array.from({ length: 10_001 }, () => null),
+		cyclic,
+	];
+	for (const hostile of hostiles)
+		await rejects(fromCapability({ value: hostile }), /closed runtime domain/);
+	const normalize = (value: unknown) =>
+		executePhase(compile(), "normalize", [value], {}, executionBudget());
+	for (const hostile of hostiles)
+		await rejects(normalize(hostile), /closed runtime domain/);
+	const computed = (source: string, input: unknown) =>
+		executePhase(
+			compileArtifact({
+				callbacks: { ...callbacks, normalize: source },
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[input],
+			{},
+			executionBudget(),
+		);
+	await rejects(
+		computed(`({ input }) => [input.name]`, {}),
+		/closed runtime domain/,
+	);
+	await rejects(
+		computed(`({ input }) => ({ ...input, name: input.name?.trim() })`, {}),
+		/optional absence cannot escape/,
+	);
+	await rejects(
+		computed(`({ input }) => -input.count`, { count: 0 }),
+		/closed runtime domain/,
 	);
 });
 

@@ -18,15 +18,17 @@ authority and authorizes no production implementation.
 - `REVIEW-CODEX-EXCEPTION-BLOCKED.md` preserves the exact human-authorized
   GPT-5.6-sol high verdict for `c473f9129`.
 - `REVIEW-CODEX-EXCEPTION-REPLACEMENT-BLOCKED.md` preserves its exact
-  replacement verdict for `2236f3b24`. Both records remain non-authoritative;
-  the repairs in this candidate answer only their stated findings.
+  replacement verdict for `2236f3b24`.
+- `REVIEW-CODEX-EXCEPTION-SECOND-REPLACEMENT-BLOCKED.md` preserves the exact
+  verdict for `e646f9d03`. All records remain non-authoritative; the repairs in
+  this candidate answer only their stated findings.
 
 The pinned review attempted at `d28df9c2d` returned terminal
 `NO_RESULT: transport` and intentionally wrote no record. That exact head was
-not retried. The authorized substitute reviews of `c473f9129` and `2236f3b24`
-returned `BLOCKED`; this fresh candidate is the next finding-only repair. No
-live ADR index, specification, glossary, public guide, or handoff text projects
-ADR-0031 until a committed `PASS` record exists.
+not retried. The authorized substitute reviews of `c473f9129`, `2236f3b24`, and
+`e646f9d03` returned `BLOCKED`; this fresh candidate is the next finding-only
+repair. No live ADR index, specification, glossary, public guide, or handoff
+text projects ADR-0031 until a committed `PASS` record exists.
 
 After `PASS`, one separate authority-projection commit changes the ADR status
 to `Accepted`, projects the reviewed result into the ADR index, SPEC, CONTEXT,

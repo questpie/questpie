@@ -1,12 +1,18 @@
 import { createHash } from "node:crypto";
+import { types as nodeTypes } from "node:util";
 
 import ts from "typescript";
 
 export const FORMAT = "questpie.lifecycle-program.v1" as const;
 export const INTERPRETER = "questpie.lifecycle-interpreter.v1" as const;
 const DIGEST_DOMAIN = "questpie.collection-lifecycle-program.v1\0";
+const OPTIONAL_ABSENCE = Symbol("questpie.lifecycle.optional-absence");
+const VOID_RESULT = Symbol("questpie.lifecycle.void-result");
+const MAX_RUNTIME_ARRAY_LENGTH = 10_000;
 
 export type Phase = "normalize" | "validate" | "check" | "afterWrite";
+/** The sole non-scalar Lifecycle Program v1 timestamp representation. */
+export type LifecycleTimestamp = Date;
 export type Origin = Readonly<{ module: string; line: number; column: number }>;
 export type Identity =
 	`${"schema" | "collection" | "field" | "issue" | "operation" | "job"}:${string}`;
@@ -67,6 +73,7 @@ export type Expression =
 				| "callId";
 	  }>
 	| Readonly<{ op: "local"; slot: number }>
+	| Readonly<{ op: "optionalBoundary"; value: Expression }>
 	| Readonly<{
 			op: "member";
 			target: Expression;
@@ -372,8 +379,12 @@ function fieldIdentity(
 }
 
 function lowerExpression(node: ts.Expression, env: Environment): Expression {
-	if (ts.isParenthesizedExpression(node))
-		return lowerExpression(node.expression, env);
+	if (ts.isParenthesizedExpression(node)) {
+		const value = lowerExpression(node.expression, env);
+		return ts.isOptionalChain(node.expression)
+			? { op: "optionalBoundary", value }
+			: value;
+	}
 	if (node.kind === ts.SyntaxKind.NullKeyword)
 		return { op: "literal", value: null };
 	if (
@@ -557,11 +568,7 @@ function lowerExpression(node: ts.Expression, env: Environment): Expression {
 				arguments: node.arguments.map((argument) =>
 					lowerExpression(argument, env),
 				),
-				optional:
-					!!node.questionDotToken ||
-					!!node.expression.questionDotToken ||
-					ts.isOptionalChain(node) ||
-					ts.isOptionalChain(node.expression),
+				optional: !!node.questionDotToken || !!node.expression.questionDotToken,
 			};
 		}
 		let target: ts.Expression = node.expression;
@@ -1285,6 +1292,11 @@ function validateExpression(
 			throw new TypeError("local slot is invalid or not defined before use");
 		return;
 	}
+	if (expression.op === "optionalBoundary") {
+		exactKeys(expression, ["op", "value"], "optional boundary");
+		recurse(expression.value);
+		return;
+	}
 	if (expression.op === "member") {
 		exactKeys(expression, ["op", "target", "field", "optional"], "member");
 		recurse(expression.target);
@@ -1804,32 +1816,79 @@ export async function executePhase(
 		)
 			throw new TypeError("afterWrite requires immutable root callId");
 		const locals = new Map<number, unknown>();
-		const finiteDomain = (value: unknown, label: string): unknown => {
-			if (value === undefined || value === null || typeof value === "boolean")
-				return value;
+		const finiteDomain = (
+			value: unknown,
+			label: string,
+			seen = new WeakSet<object>(),
+		): unknown => {
+			if (value === OPTIONAL_ABSENCE)
+				throw new TypeError("optional absence cannot escape the interpreter");
+			if (value === VOID_RESULT)
+				throw new TypeError("void result cannot escape the interpreter");
+			if (value === null || typeof value === "boolean") return value;
 			if (typeof value === "string") return value;
 			if (typeof value === "number") {
 				if (!Number.isFinite(value) || Object.is(value, -0))
-					throw new TypeError(`${label} left the finite runtime domain`);
+					throw new TypeError(`${label} left the closed runtime domain`);
 				return value;
 			}
+			if (typeof value !== "object")
+				throw new TypeError(`${label} left the closed runtime domain`);
+			if (nodeTypes.isProxy(value))
+				throw new TypeError(`${label} left the closed runtime domain`);
+			if (value instanceof Date) {
+				if (
+					Object.getPrototypeOf(value) !== Date.prototype ||
+					!Number.isFinite(value.getTime()) ||
+					Reflect.ownKeys(value).length !== 0
+				)
+					throw new TypeError(`${label} left the closed runtime domain`);
+				return value;
+			}
+			if (seen.has(value))
+				throw new TypeError(`${label} left the closed runtime domain`);
+			seen.add(value);
 			if (Array.isArray(value)) {
-				for (const member of value) finiteDomain(member, label);
+				if (value.length > MAX_RUNTIME_ARRAY_LENGTH)
+					throw new TypeError(`${label} left the closed runtime domain`);
+				const keys = Reflect.ownKeys(value);
+				if (
+					keys.length !== value.length + 1 ||
+					keys.some(
+						(key, index) =>
+							key !== (index < value.length ? String(index) : "length"),
+					)
+				)
+					throw new TypeError(`${label} left the closed runtime domain`);
+				for (let index = 0; index < value.length; index++) {
+					if (!Object.hasOwn(value, index))
+						throw new TypeError(`${label} left the closed runtime domain`);
+					finiteDomain(value[index], label, seen);
+				}
+				seen.delete(value);
 				return value;
 			}
-			if (typeof value === "object") {
-				for (const member of Object.values(value)) finiteDomain(member, label);
-				return value;
+			if (Object.getPrototypeOf(value) !== Object.prototype)
+				throw new TypeError(`${label} left the closed runtime domain`);
+			for (const key of Reflect.ownKeys(value)) {
+				if (typeof key !== "string")
+					throw new TypeError(`${label} left the closed runtime domain`);
+				const descriptor = Object.getOwnPropertyDescriptor(value, key);
+				if (!descriptor || !("value" in descriptor) || !descriptor.enumerable)
+					throw new TypeError(`${label} left the closed runtime domain`);
+				finiteDomain(descriptor.value, label, seen);
 			}
-			throw new TypeError(`${label} left the closed runtime domain`);
+			seen.delete(value);
+			return value;
 		};
 		const member = (
 			target: unknown,
 			identity: Identity,
 			optional: boolean,
 		): unknown => {
+			if (target === OPTIONAL_ABSENCE) return OPTIONAL_ABSENCE;
 			if (target === null || target === undefined) {
-				if (optional) return undefined;
+				if (optional) return OPTIONAL_ABSENCE;
 				throw new TypeError("static member target is absent");
 			}
 			if (typeof target !== "object")
@@ -1844,9 +1903,18 @@ export async function executePhase(
 				case "literal":
 					return expression.value;
 				case "root":
-					return rootValues.get(expression.root);
+					return rootValues.get(expression.root) === undefined
+						? undefined
+						: finiteDomain(
+								rootValues.get(expression.root),
+								`${expression.root} root`,
+							);
 				case "local":
 					return locals.get(expression.slot);
+				case "optionalBoundary": {
+					const value = await evaluate(expression.value);
+					return value === OPTIONAL_ABSENCE ? undefined : value;
+				}
 				case "member":
 					return member(
 						await evaluate(expression.target),
@@ -1855,7 +1923,8 @@ export async function executePhase(
 					);
 				case "unary": {
 					const value = await evaluate(expression.value);
-					if (expression.operator === "!") return !value;
+					if (expression.operator === "!")
+						return value === OPTIONAL_ABSENCE ? true : !value;
 					if (typeof value !== "number")
 						throw new TypeError("unary numeric operand is not a number");
 					return finiteDomain(-value, "unary result");
@@ -1863,63 +1932,87 @@ export async function executePhase(
 				case "binary": {
 					const left = await evaluate(expression.left);
 					if (expression.operator === "&&")
-						return left && (await evaluate(expression.right));
+						return left === OPTIONAL_ABSENCE
+							? OPTIONAL_ABSENCE
+							: left && (await evaluate(expression.right));
 					if (expression.operator === "||")
-						return left || (await evaluate(expression.right));
+						return left === OPTIONAL_ABSENCE
+							? evaluate(expression.right)
+							: left || (await evaluate(expression.right));
 					if (expression.operator === "??")
-						return left ?? (await evaluate(expression.right));
+						return left === OPTIONAL_ABSENCE ||
+							left === undefined ||
+							left === null
+							? evaluate(expression.right)
+							: left;
 					const right = await evaluate(expression.right);
+					const ordinaryLeft = left === OPTIONAL_ABSENCE ? undefined : left;
+					const ordinaryRight = right === OPTIONAL_ABSENCE ? undefined : right;
 					switch (expression.operator) {
 						case "+": {
-							if (typeof left === "string" && typeof right === "string")
-								return left + right;
-							if (typeof left !== "number" || typeof right !== "number")
+							if (
+								typeof ordinaryLeft === "string" &&
+								typeof ordinaryRight === "string"
+							)
+								return ordinaryLeft + ordinaryRight;
+							if (
+								typeof ordinaryLeft !== "number" ||
+								typeof ordinaryRight !== "number"
+							)
 								throw new TypeError(
 									"addition operands have incompatible domains",
 								);
-							return finiteDomain(left + right, "addition result");
+							return finiteDomain(
+								ordinaryLeft + ordinaryRight,
+								"addition result",
+							);
 						}
 						case "-":
 						case "*":
 						case "/":
 						case "%": {
-							if (typeof left !== "number" || typeof right !== "number")
+							if (
+								typeof ordinaryLeft !== "number" ||
+								typeof ordinaryRight !== "number"
+							)
 								throw new TypeError("arithmetic operands are not numbers");
 							const value =
 								expression.operator === "-"
-									? left - right
+									? ordinaryLeft - ordinaryRight
 									: expression.operator === "*"
-										? left * right
+										? ordinaryLeft * ordinaryRight
 										: expression.operator === "/"
-											? left / right
-											: left % right;
+											? ordinaryLeft / ordinaryRight
+											: ordinaryLeft % ordinaryRight;
 							return finiteDomain(value, "arithmetic result");
 						}
 						case "===":
-							return left === right;
+							return ordinaryLeft === ordinaryRight;
 						case "!==":
-							return left !== right;
+							return ordinaryLeft !== ordinaryRight;
 						case "<":
-							return (left as number) < (right as number);
+							return (ordinaryLeft as number) < (ordinaryRight as number);
 						case "<=":
-							return (left as number) <= (right as number);
+							return (ordinaryLeft as number) <= (ordinaryRight as number);
 						case ">":
-							return (left as number) > (right as number);
+							return (ordinaryLeft as number) > (ordinaryRight as number);
 						case ">=":
-							return (left as number) >= (right as number);
+							return (ordinaryLeft as number) >= (ordinaryRight as number);
 						default:
 							throw new TypeError("unknown binary operator");
 					}
 				}
-				case "conditional":
-					return (await evaluate(expression.test))
+				case "conditional": {
+					const test = await evaluate(expression.test);
+					return test !== OPTIONAL_ABSENCE && test
 						? evaluate(expression.yes)
 						: evaluate(expression.no);
+				}
 				case "array": {
 					const result: unknown[] = [];
 					for (const value of expression.values)
 						result.push(await evaluate(value));
-					return result;
+					return finiteDomain(result, "computed array");
 				}
 				case "object": {
 					const result: Record<string, unknown> = {};
@@ -1936,23 +2029,32 @@ export async function executePhase(
 							}
 						}
 					}
-					return Object.freeze(result);
+					return finiteDomain(Object.freeze(result), "computed object");
 				}
 				case "template": {
 					let result = expression.head;
-					for (const span of expression.spans)
-						result += String(await evaluate(span.value)) + span.tail;
+					for (const span of expression.spans) {
+						const value = await evaluate(span.value);
+						if (value === OPTIONAL_ABSENCE || value === undefined)
+							throw new TypeError(
+								"template value left the closed runtime domain",
+							);
+						result += String(value) + span.tail;
+					}
 					return result;
 				}
 				case "stringMethod": {
 					const target = await evaluate(expression.target);
+					if (target === OPTIONAL_ABSENCE) return OPTIONAL_ABSENCE;
 					if ((target === null || target === undefined) && expression.optional)
-						return undefined;
+						return OPTIONAL_ABSENCE;
 					if (typeof target !== "string")
 						throw new TypeError("string method target is not a string");
 					const argumentValues: unknown[] = [];
 					for (const argument of expression.arguments)
-						argumentValues.push(await evaluate(argument));
+						argumentValues.push(
+							finiteDomain(await evaluate(argument), "string method argument"),
+						);
 					if (argumentValues.some((argument) => typeof argument !== "string"))
 						throw new TypeError("string method argument is not a string");
 					switch (expression.method) {
@@ -1983,7 +2085,9 @@ export async function executePhase(
 						throw new TypeError("statement budget exceeded");
 					const argumentValues: unknown[] = [];
 					for (const argument of expression.arguments)
-						argumentValues.push(await evaluate(argument));
+						argumentValues.push(
+							finiteDomain(await evaluate(argument), "capability argument"),
+						);
 					assertBudget();
 					const result = await invoke({
 						arguments: argumentValues,
@@ -2015,11 +2119,17 @@ export async function executePhase(
 						if (budget.rows > budget.maxRows)
 							throw new TypeError("row budget exceeded");
 					}
+					if (result === undefined && declaration.kind !== "read")
+						return VOID_RESULT;
 					return finiteDomain(result, "capability result");
 				}
 			}
 		};
-		type Control = Readonly<{ returned: boolean; value: unknown }>;
+		type Control = Readonly<{
+			returned: boolean;
+			hasValue: boolean;
+			value: unknown;
+		}>;
 		const run = async (statements: readonly Statement[]): Promise<Control> => {
 			for (const statement of statements) {
 				assertBudget();
@@ -2028,8 +2138,9 @@ export async function executePhase(
 					continue;
 				}
 				if (statement.op === "if") {
+					const test = await evaluate(statement.test);
 					const result = await run(
-						(await evaluate(statement.test))
+						test !== OPTIONAL_ABSENCE && test
 							? statement.consequent
 							: statement.otherwise,
 					);
@@ -2039,6 +2150,7 @@ export async function executePhase(
 				if (statement.op === "return")
 					return {
 						returned: true,
+						hasValue: statement.value !== null,
 						value:
 							statement.value === null
 								? undefined
@@ -2059,9 +2171,12 @@ export async function executePhase(
 					if (result.returned) return result;
 				}
 			}
-			return { returned: false, value: undefined };
+			return { returned: false, hasValue: false, value: undefined };
 		};
-		return (await run(artifact.phases[phase])).value;
+		const result = await run(artifact.phases[phase]);
+		return result.returned && result.hasValue
+			? finiteDomain(result.value, `${phase} result`)
+			: undefined;
 	} finally {
 		budget.artifactReentry -= 1;
 	}

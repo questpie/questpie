@@ -10,7 +10,8 @@
 		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c",
 		"terminal no-result candidate, not authority and not retried": "d28df9c2d00ae8c0e73af047ed99e0df05816783",
 		"human-authorized substitute blocked candidate, not authority": "c473f9129129aa94f40c2d08639ee3c20aa273cf",
-		"human-authorized replacement blocked candidate, not authority": "2236f3b2479151f22a903a8b5ce853a3b24b07ab"
+		"human-authorized replacement blocked candidate, not authority": "2236f3b2479151f22a903a8b5ce853a3b24b07ab",
+		"human-authorized second replacement blocked candidate, not authority": "e646f9d03443eb48be2152cce2c8d6952b5e3599"
 	},
 	"authorityDocuments": [
 		{
@@ -81,7 +82,7 @@
 		{
 			"name": "candidate staging declaration",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md",
-			"sha256": "7036bd8d8adff2967d1255d46dcc1bb11ba7aaa55bf2229c6d1ae73ef899d748"
+			"sha256": "f63f9728bf935a4ad0a6cac5c5fa3d5aabf2e360c9987a18f0693ddd8141d77e"
 		},
 		{
 			"name": "exact proposed authority and public documentation projection",
@@ -96,17 +97,22 @@
 		{
 			"name": "verbatim human-authorized replacement BLOCKED record",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-REPLACEMENT-BLOCKED.md",
-			"sha256": "e2ad3598020ed2b1540acba49ebb83acc56a4e59aa695c63645da8f55c028f0f"
+			"sha256": "8aa0cbffd2603ab322dbb9008733b548f3f37af2b8c2d2e967945e438dbe83af"
+		},
+		{
+			"name": "verbatim human-authorized second replacement BLOCKED record",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-SECOND-REPLACEMENT-BLOCKED.md",
+			"sha256": "86fabcdb69d1d008cfc7c6be20d692182584a2068d1e8a9efd8e3bed6cbe994a"
 		},
 		{
 			"name": "executable lifecycle TypeScript compiler and canonical artifact proof",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts",
-			"sha256": "d9c4a2662605c4741cee1400d3ab4333e03b5d87a0b18cfbe86ee420857bf501"
+			"sha256": "e5fcd3250f214ac8c26314cfc3399d3f27b5ae89d5c9078e52663f0c9d926597"
 		},
 		{
 			"name": "compiler artifact and hostile decoder tests",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts",
-			"sha256": "4864399f0ea2e8b11f631a7d60c198e31a382d7f88465c30aef433cc41d4a12a"
+			"sha256": "3084668bc25e7f4bd2e8a9732ff28067d6a61e96a454d4f56e3f6603ef42af3f"
 		},
 		{
 			"name": "PostgreSQL Operation transaction proof kernel",
@@ -161,7 +167,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check HANDOFF.md CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
+			"command": "bunx oxfmt --check HANDOFF.md CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-BLOCKED.md docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-REPLACEMENT-BLOCKED.md docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-SECOND-REPLACEMENT-BLOCKED.md docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
 			"result": "PASS"
 		},
 		{
@@ -170,6 +176,10 @@
 		},
 		{
 			"command": "bun run --cwd apps/docs build",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6..HEAD",
 			"result": "PASS"
 		},
 		{
