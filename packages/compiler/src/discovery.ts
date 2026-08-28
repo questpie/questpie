@@ -22,6 +22,7 @@ import { relationalDiscoverySource } from "./relational";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
+	LifecycleSource,
 	PackageResolution,
 	SourceSpan,
 } from "./types";
@@ -122,6 +123,7 @@ interface ExportMetadata {
 	readonly span: SourceSpan;
 	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
 	readonly acceptanceSpans: readonly (SourceSpan | null)[];
+	readonly lifecycleSources: Readonly<Record<string, LifecycleSource>>;
 }
 
 function propertyName(node: ts.PropertyName | undefined): string | null {
@@ -161,6 +163,7 @@ async function directExportMetadata(
 					continue;
 				const memberSpans: Record<string, SourceSpan> = {};
 				const acceptanceSpans: Array<SourceSpan | null> = [];
+				const lifecycleSources: Record<string, LifecycleSource> = {};
 				if (ts.isCallExpression(declaration.initializer)) {
 					const call = declaration.initializer;
 					const first = call.arguments[0];
@@ -197,6 +200,24 @@ async function directExportMetadata(
 								}
 							}
 							if (
+								section === "lifecycle" &&
+								ts.isObjectLiteralExpression(property.initializer)
+							)
+								for (const member of property.initializer.properties) {
+									if (!ts.isPropertyAssignment(member)) continue;
+									const phase = propertyName(member.name);
+									if (
+										phase &&
+										["normalize", "validate", "check", "afterWrite"].includes(
+											phase,
+										)
+									)
+										lifecycleSources[phase] = {
+											source: member.initializer.getText(source),
+											span: sourceSpan(source, member.initializer),
+										};
+								}
+							if (
 								section === "augmentations" &&
 								ts.isArrayLiteralExpression(property.initializer)
 							)
@@ -210,6 +231,7 @@ async function directExportMetadata(
 						span: sourceSpan(source, declaration.name),
 						memberSpans,
 						acceptanceSpans,
+						lifecycleSources,
 					},
 				);
 			}
@@ -694,6 +716,7 @@ process.stdout.write(JSON.stringify(found));
 				span: origin?.span ?? null,
 				memberSpans: origin?.memberSpans ?? {},
 				acceptanceSpans: origin?.acceptanceSpans ?? [],
+				lifecycleSources: origin?.lifecycleSources ?? {},
 				packageId: input.packageId ?? null,
 			};
 		});

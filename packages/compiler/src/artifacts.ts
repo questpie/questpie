@@ -15,6 +15,10 @@ import {
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
 import {
+	bindCollectionLifecyclePrograms,
+	projectCollectionLifecyclePrograms,
+} from "./lifecycle";
+import {
 	projectLiveQueryChangeCapture,
 	projectLiveQueryCompilation,
 } from "./live-query";
@@ -126,7 +130,7 @@ export async function createArtifacts(
 	const collectionMutationKernels = projectCollectionMutationKernels(
 		input.resources,
 	);
-	const collectionOperationPrograms = projectCollectionKernelExecutionPrograms(
+	let collectionOperationPrograms = projectCollectionKernelExecutionPrograms(
 		collectionMutationKernels,
 		operationSets.programs,
 	);
@@ -413,6 +417,22 @@ export async function createArtifacts(
 	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
 	const mutationTransactionStatements =
 		projectPostgresMutationTransactionStatements();
+	const compilerRuntimeBuild = digest("questpie-compiler-runtime-build-v1", {
+		version: "4.0.0-beta.1",
+		bunVersion: Bun.version,
+		buildInputDigest: contentDigest(canonicalBytes(buildInput)),
+		executableFormat: "bun-esm-bundle-v1",
+	});
+	const lifecyclePrograms = projectCollectionLifecyclePrograms({
+		applicationName: input.configuration.application.name,
+		runtimeBuild: compilerRuntimeBuild,
+		resources: operationResources,
+		evaluatedExports: input.evaluatedExports,
+	});
+	collectionOperationPrograms = bindCollectionLifecyclePrograms(
+		collectionOperationPrograms,
+		lifecyclePrograms,
+	);
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
@@ -454,6 +474,9 @@ export async function createArtifacts(
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
 	};
+	if (lifecyclePrograms.programs.length > 0)
+		generated["collection-lifecycle-programs.json"] =
+			canonicalBytes(lifecyclePrograms);
 	if (runtime.reactions.reactions.length > 0) {
 		generated["reaction-projection.json"] = canonicalBytes(runtime.reactions);
 	}

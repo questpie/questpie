@@ -3,6 +3,9 @@ import { codec } from "./codec";
 import type {
 	CollectionAugmentation,
 	CollectionDefinition,
+	CollectionIssueDeclarations,
+	CollectionIssueDefinition,
+	CollectionLifecycleDefinition,
 	ConstraintDefinition,
 	ConstraintMemberDefinition,
 	FieldReference,
@@ -92,6 +95,8 @@ export type { CollectionInputCodec } from "./collection-input";
 export type {
 	CollectionAugmentation,
 	CollectionDefinition,
+	CollectionIssueDefinition,
+	CollectionLifecycleDefinition,
 	ConstraintDefinition,
 	FieldReference,
 	IndexDefinition,
@@ -100,6 +105,11 @@ export type {
 	RelationDefinition,
 	RelationReference,
 } from "./collection-contract";
+
+export const collection = Object.freeze({
+	issue: (): CollectionIssueDefinition =>
+		Object.freeze({ kind: "collectionIssue" }) as CollectionIssueDefinition,
+});
 
 type FieldBaseOptions = Readonly<{
 	nullable: boolean;
@@ -507,6 +517,7 @@ export function defineCollection<
 	const Relations extends Readonly<
 		Record<string, RelationDefinition | InverseRelationDefinition>
 	>,
+	const Issues extends CollectionIssueDeclarations,
 >(
 	input: Readonly<{
 		name: Name;
@@ -514,10 +525,12 @@ export function defineCollection<
 		constraints: Constraints & ValidateFieldReferences<Fields, Constraints>;
 		indexes?: Indexes & ValidateFieldReferences<Fields, Indexes>;
 		relations?: Relations & ValidateRelationFieldReferences<Fields, Relations>;
+		issues?: Issues;
+		lifecycle?: CollectionLifecycleDefinition<Fields, Issues>;
 		augmentations?: readonly CollectionAugmentation[];
 		postgres?: Readonly<{ name: string }>;
 	}>,
-): CollectionDefinition<Name, Fields, Constraints, Indexes, Relations> {
+): CollectionDefinition<Name, Fields, Constraints, Indexes, Relations, Issues> {
 	const collection = {
 		__questpie: Object.freeze({
 			category: "definition",
@@ -528,6 +541,7 @@ export function defineCollection<
 		constraints: input.constraints,
 		indexes: input.indexes ?? ({} as Indexes),
 		relations: input.relations ?? ({} as Relations),
+		issues: input.issues ?? ({} as Issues),
 		augmentations: input.augmentations ?? [],
 		postgresName: input.postgres?.name ?? null,
 	} as const;

@@ -35,7 +35,17 @@ export interface EvaluatedExport {
 	readonly span: SourceSpan | null;
 	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
 	readonly acceptanceSpans: readonly (SourceSpan | null)[];
+	readonly lifecycleSources: Readonly<
+		Partial<
+			Record<"normalize" | "validate" | "check" | "afterWrite", LifecycleSource>
+		>
+	>;
 	readonly packageId: string | null;
+}
+
+export interface LifecycleSource {
+	readonly source: string;
+	readonly span: SourceSpan;
 }
 
 export interface SourceSpan {

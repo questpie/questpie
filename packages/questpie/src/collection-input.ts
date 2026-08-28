@@ -43,7 +43,7 @@ type EmbeddedOperationValue<Node> =
 								: Value)
 				| (Nullable extends true ? null : never)
 		: never;
-type FieldOperationValue<Node> =
+export type FieldOperationValue<Node> =
 	Node extends FieldDefinition<
 		infer Value,
 		boolean,
@@ -75,6 +75,14 @@ type FieldOperationValue<Node> =
 						: Value
 					: Value
 		: never;
+
+export type CollectionRowFor<Fields extends FieldMap> = Readonly<{
+	[Key in keyof Fields]: Fields[Key] extends InlineShapeDefinition<
+		infer Children
+	>
+		? CollectionRowFor<Children>
+		: FieldOperationValue<Fields[Key]>;
+}>;
 type FieldCodec<Node> =
 	Node extends FieldDefinition<
 		unknown,

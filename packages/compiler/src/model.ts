@@ -253,6 +253,42 @@ function operationContract(
 		kind,
 		codecContract,
 	);
+	const issueMappings =
+		kind === "mutation"
+			? Object.fromEntries(
+					Object.entries(
+						record(value.issueMappings ?? {}, "mutation.issueMappings"),
+					)
+						.sort(([left], [right]) => compareAscii(left, right))
+						.map(([collection, rawIssues]) => [
+							collection,
+							Object.fromEntries(
+								Object.entries(
+									record(rawIssues, `mutation.issueMappings.${collection}`),
+								)
+									.sort(([left], [right]) => compareAscii(left, right))
+									.map(([issue, target]) => {
+										if (typeof target !== "string")
+											throw new CompilerDiagnosticError(
+												"QP-COMPOSE-013",
+												"structuralTypeError",
+												`mutation.issueMappings.${collection}.${issue} must name a declared error`,
+											);
+										const error = declaredErrors[target] as
+											| Readonly<{ payload: unknown }>
+											| undefined;
+										if (!error || error.payload !== null)
+											throw new CompilerDiagnosticError(
+												"QP-COMPOSE-013",
+												"structuralTypeError",
+												`mutation.issueMappings.${collection}.${issue} must target a payloadless declared error`,
+											);
+										return [issue, target];
+									}),
+							),
+						]),
+				)
+			: undefined;
 	let policyContract: RecordValue | null = null;
 	if (kind === "mutation") {
 		const policy = record(value.policy, `${kind}.policy`);
@@ -276,7 +312,9 @@ function operationContract(
 		name: string(value.name, `${kind}.name`),
 		input: codecContract(value.input),
 		output: codecContract(value.output),
-		...(kind === "mutation" ? { declaredErrors, policy: policyContract } : {}),
+		...(kind === "mutation"
+			? { declaredErrors, issueMappings, policy: policyContract }
+			: {}),
 		exposure: value.network === true ? "network" : "server",
 		executableSlots: ["handler"],
 		...(planBacked ? { query: record(value.query, "query.query") } : {}),
@@ -324,6 +362,17 @@ function ownerCollectionContract(
 		postgresName:
 			typeof value.postgresName === "string" ? value.postgresName : null,
 		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
+		issues: Object.fromEntries(
+			entries(value.issues ?? {}).map(([key, issue]) => {
+				if (issue.kind !== "collectionIssue")
+					throw new CompilerDiagnosticError(
+						"QP-COMPOSE-013",
+						"structuralTypeError",
+						`collection.issues.${key} must be declared with collection.issue()`,
+					);
+				return [key, `issue:${string(value.name, "collection.name")}/${key}`];
+			}),
+		),
 		constraints: entries(value.constraints).map(([key, constraint]) => ({
 			key,
 			contract: constraintContract(constraint),

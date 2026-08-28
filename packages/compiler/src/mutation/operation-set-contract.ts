@@ -24,6 +24,7 @@ export interface CollectionOperationProgramV1 {
 	readonly dataQueryDigest: string | null;
 	readonly normalizerProgramDigest: string | null;
 	readonly serverValueProgramDigest: string | null;
+	readonly lifecycleProgramDigest?: string;
 	readonly outputCardinality: "many" | "one" | "optionalOne";
 	readonly limits:
 		| Readonly<{

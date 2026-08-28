@@ -1,5 +1,6 @@
 import type { CheckConstraintDefinition } from "./check-expression";
 import type {
+	CollectionRowFor,
 	CollectionInputCodec,
 	CreatePropertiesFor,
 	UpdatePropertiesFor,
@@ -72,6 +73,47 @@ interface DefinitionBrand {
 	readonly resourceKind: "collection" | "seed";
 }
 
+declare const collectionIssueDeclarationBrand: unique symbol;
+declare const collectionIssueValueBrand: unique symbol;
+
+export interface CollectionIssueDefinition {
+	readonly kind: "collectionIssue";
+	readonly [collectionIssueDeclarationBrand]: true;
+}
+
+export interface CollectionIssueValue {
+	readonly [collectionIssueValueBrand]: true;
+}
+
+export type CollectionIssueDeclarations = Readonly<
+	Record<string, CollectionIssueDefinition>
+>;
+
+export type CollectionIssueFactories<
+	Issues extends CollectionIssueDeclarations,
+> = Readonly<{
+	[Key in keyof Issues]: () => CollectionIssueValue;
+}>;
+
+export interface CollectionLifecycleDefinition<
+	Fields extends Readonly<Record<string, FieldNode>>,
+	Issues extends CollectionIssueDeclarations,
+> {
+	readonly normalize?: (
+		input: Readonly<{
+			input: Readonly<Partial<CollectionRowFor<Fields>>>;
+		}>,
+	) => Readonly<Partial<CollectionRowFor<Fields>>>;
+	readonly validate?: (
+		input: Readonly<{
+			candidate: CollectionRowFor<Fields>;
+			current: CollectionRowFor<Fields> | null;
+			now: Date;
+			issues: CollectionIssueFactories<Issues>;
+		}>,
+	) => void;
+}
+
 interface AugmentationBrand {
 	readonly category: "augmentation";
 	readonly resourceKind: "collection";
@@ -108,6 +150,7 @@ export interface CollectionDefinition<
 	Relations extends Readonly<
 		Record<string, RelationDefinition | InverseRelationDefinition>
 	> = Readonly<Record<never, never>>,
+	Issues extends CollectionIssueDeclarations = Readonly<Record<never, never>>,
 > {
 	readonly __questpie: DefinitionBrand;
 	readonly name: Name;
@@ -115,6 +158,7 @@ export interface CollectionDefinition<
 	readonly constraints: Constraints;
 	readonly indexes: Indexes;
 	readonly relations: Relations;
+	readonly issues: Issues;
 	readonly augmentations: readonly CollectionAugmentation[];
 	readonly postgresName: string | null;
 	readonly list: CollectionListAuthoring<Fields, Relations>;

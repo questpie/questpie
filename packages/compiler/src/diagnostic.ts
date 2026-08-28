@@ -15,6 +15,8 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-020"
 	| "QP-COMPOSE-023"
 	| "QP-COMPOSE-024"
+	| "QP-COMPOSE-026"
+	| "QP-COMPOSE-027"
 	| "QP-DATA-003"
 	| "QP-DATA-005"
 	| "QP-DATA-022"
@@ -109,6 +111,16 @@ const diagnosticClassesByCode = {
 	"QP-COMPOSE-020": ["duplicateContributionIdentity"],
 	"QP-COMPOSE-023": ["operationProjectionCollision"],
 	"QP-COMPOSE-024": ["operationProjectionUnsafeName"],
+	"QP-COMPOSE-026": [
+		"unsupportedLifecycleSyntax",
+		"lifecycleCapture",
+		"unsupportedLifecycleCapability",
+	],
+	"QP-COMPOSE-027": [
+		"invalidIssueDeclaration",
+		"invalidIssueMapping",
+		"missingIssueMapping",
+	],
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
 	"QP-DATA-022": ["relationDepthExceeded"],

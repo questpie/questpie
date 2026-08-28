@@ -6,13 +6,35 @@ function mutations(resources: readonly NormalizedResource[]) {
 	return resources.filter((resource) => resource.kind === "mutation");
 }
 
+function renderIssueMappings(resource: NormalizedResource): string {
+	const mappings = resource.contract.issueMappings as
+		| Readonly<Record<string, Readonly<Record<string, string>>>>
+		| undefined;
+	if (!mappings || Object.keys(mappings).length === 0) return "undefined";
+	return `Readonly<{ ${Object.entries(mappings)
+		.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+		.map(
+			([collection, issues]) =>
+				`readonly ${JSON.stringify(collection)}: Readonly<{ ${Object.entries(
+					issues,
+				)
+					.sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+					.map(
+						([issue, target]) =>
+							`readonly ${JSON.stringify(issue)}: ${JSON.stringify(target)};`,
+					)
+					.join(" ")} }>;`,
+		)
+		.join(" ")} }>`;
+}
+
 export function renderMutationDeclarations(
 	resources: readonly NormalizedResource[],
 ): string {
 	const definitions = mutations(resources)
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
+			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
 		})
 		.join("\n\t");
 	const operations = renderServerOperationType(
@@ -43,6 +65,7 @@ export type MutationDefinition<Name extends keyof GeneratedMutations, Errors ext
 	readonly input: Codec<GeneratedMutations[Name]["input"]>;
 	readonly output: Codec<GeneratedMutations[Name]["output"]>;
 	readonly errors: Errors;
+	readonly issueMappings?: GeneratedMutations[Name]["issueMappings"];
 	readonly handler: (input: Readonly<{
 		input: GeneratedMutations[Name]["input"];
 		ctx: MutationContext;
@@ -58,6 +81,7 @@ export type MutationFactory = <const Name extends keyof GeneratedMutations, cons
 		output: Codec<GeneratedMutations[Name]["output"]>;
 		policy: object;
 		errors: Errors;
+		issueMappings?: GeneratedMutations[Name]["issueMappings"];
 		handler(input: Readonly<{
 			input: GeneratedMutations[Name]["input"];
 			ctx: MutationContext;
