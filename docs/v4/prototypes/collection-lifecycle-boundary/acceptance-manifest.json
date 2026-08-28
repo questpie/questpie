@@ -1,0 +1,130 @@
+{
+	"protocolVersion": 2,
+	"ticket": "DEEP-DX-COLLECTION-LIFECYCLE-RATIFICATION",
+	"proof": "Ratify only the two remaining Collection lifecycle proof holes: a payloadless Collection-owned issue contract with explicit Operation-owned mapping, and a compiler-lowered ordinary-TypeScript lifecycle boundary whose purity and phase capabilities are truthful. Preserve the four approved phases, one Mutation transaction, one generated Collection kernel, Policy ownership, provenance, nondisclosure, direct/network parity, database-owned time, and the absence of external lifecycle effects.",
+	"diffBase": "a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6",
+	"reviewOutput": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW.json",
+	"authorityHeads": {
+		"clean feat/v4 continuation head": "a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6",
+		"accepted Collection provenance and trusted values decision": "6e28e05b58bc6dab06afb32a62a10b1ae41a5e93",
+		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "4b04fedffbc83eeff7ca5fd467c929b072b8fed348acc055457844c886a723a7"
+		},
+		{
+			"name": "canonical product language",
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"name": "accepted tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "accepted Query Mutation and explicit lifecycle ownership",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "accepted Collection provenance and trusted values",
+			"path": "docs/adr/0030-freeze-collection-provenance-and-trusted-values.md",
+			"sha256": "ee07668e17fcfceae0b8e92a3063a77b54cc087249dc76774dd97460b29cee21"
+		},
+		{
+			"name": "candidate focused lifecycle decision",
+			"path": "docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md",
+			"sha256": "b3552512eadabf43cff0df0a23ea35f630fc2393456f9a7d07d2088ca6bed409"
+		},
+		{
+			"name": "candidate lifecycle contract",
+			"path": "docs/v4/query-mutation-and-lifecycle.md",
+			"sha256": "031765c455d69e79df8814647445f101e1aae43a5db9751ab52e4289b1329ddb"
+		},
+		{
+			"name": "accepted lifecycle and durable Job ownership",
+			"path": "docs/v4/lifecycle-jobs-and-shared-durable-kernel.md",
+			"sha256": "7b130d81942a22ed783dc3867bbe06b838a285aa75b5b8fb02dd0e20fb9ba0ba"
+		},
+		{
+			"name": "candidate compiler binding clarification",
+			"path": "docs/v4/executable-definition-compiler.md",
+			"sha256": "e006a853c111bb309f1e9b327c2822bd6bcfbb58a5bb5d720b0c5e25df07470c"
+		},
+		{
+			"name": "candidate public lifecycle guide",
+			"path": "apps/docs/content/docs/v4/queries-and-mutations.mdx",
+			"sha256": "99cfb3acd87b54c3c648dc18b770262c030f585726ae567389a096d1db244de7"
+		},
+		{
+			"name": "Deep-DX approval packet",
+			"path": "docs/v4/research/deep-dx-2026/APPROVAL-PACKET-1.md",
+			"sha256": "a09832773ca30b96ea3326e72e5c36cb73af14cc49a4afe2f1da088b79e3f36a"
+		},
+		{
+			"name": "Deep-DX decision map",
+			"path": "docs/v4/research/deep-dx-2026/DECISION-MAP.md",
+			"sha256": "c5dc930fbeaecd441af315f83e9ce7c9864177e10c7dab92c16580735cbcd73a"
+		},
+		{
+			"name": "Deep-DX AI authoring audit",
+			"path": "docs/v4/research/deep-dx-2026/ai-audit/AUTHORING-AUDIT.md",
+			"sha256": "69698566a31d923c22d7a874104a69252782244875658ae60f8eb81e723f1a29"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun docs/v4/prototypes/collection-lifecycle-boundary/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/collection-lifecycle-boundary/check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs build",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"A Collection owns only payloadless named issue identities. Issues carry no public code, status, message, payload, transport meaning, row, candidate, protected Field, Policy evidence, PostgreSQL detail, or stack, and PostgreSQL constraints are never reclassified as Collection issues.",
+		"Only validate and check raise generated Collection issues. The first issue in deterministic program order immediately dooms the one owning Mutation transaction; application catch code cannot permit commit, and unknown, forged, malformed, or unmapped issues roll back and become sanitized non-retryable INTERNAL failures.",
+		"Every named Mutation structurally maps every transitively reachable Collection issue to one payloadless error in that Mutation's declared error map. Reachability includes nested lifecycle kernel calls, an incomplete map withholds the generated call capability, and QP-COMPOSE-027 reports the complete call path.",
+		"The shared Operation engine maps an issue only after rollback and before direct or wire adaptation. Direct calls and generated network clients expose byte-equivalent declared outcomes without revealing the internal issue identity or PostgreSQL details.",
+		"All four authored phases use ordinary TypeScript syntax parsed into one versioned canonical Lifecycle Program. Authored callback JavaScript is discarded and never invoked by Runtime; canonical bytes, domain-separated digest, identity bindings, Runtime Build integrity, exact decoding, and interpreter compatibility fail closed.",
+		"Lifecycle Program v1 is the exact conservative grammar and diagnostic table in ADR-0031. QP-COMPOSE-026 rejects unsupported syntax, captures, and phase capabilities with Origin and a supported rewrite; the design makes no claim that arbitrary TypeScript is compiler-proven pure.",
+		"normalize and validate are capability-free. check adds only awaited bounded Policy-aware kernel reads after candidate Policy. afterWrite adds only sequential bounded kernel reads and writes plus Job acceptance before commit. Services, Actions, Request, Route, filesystem, network, timers, raw SQL, raw transactions, Promise.all, and detached work are unrepresentable.",
+		"normalize runs separately over already-authorized caller and trusted lanes and may only replace present paths. Complete Field and Codec validation precedes authored validate; candidate Policy remains the sole authored authorization mechanism; PostgreSQL constraints and database-owned values precede afterWrite.",
+		"Nested lifecycle work uses the existing generated Collection kernel synchronously in authored order, shares the outer transaction and all semantic budgets, and has an artifact-bound finite re-entry depth. QP-DATA-024 dooms and rolls back a write that exceeds it; no parallel CRUD or lifecycle kernel is introduced.",
+		"ctx.now supersedes ctx.operationTime as the one PostgreSQL transaction_timestamp value. An onUpdate now Field is database-owned, accepts neither caller patch nor trusted values, advances on every supported managed update, and reports QP-DATA-023 when supplied.",
+		"No authored lifecycle work is automatically retried. A pre-commit issue, fault, cancellation, deadline, or limit rolls back; an explicit retry of an uncommitted exact call reruns work in a fresh transaction; replay of a committed receipt runs none; post-commit ambiguity remains ADR-0023 behavior.",
+		"The public guide explains simple Collection-backed CRUD composition, named Mutation issue mapping, the truthful normalize purity boundary, check versus Policy, afterWrite versus Job and Action, ctx.now and onUpdate, exact ordering, retry, cancellation, observability-safe failures, and the absence of public automatic CRUD, afterRead, or a general hook catalogue.",
+		"ADR-0031's explicit supersession ledger changes only ADR-0011's closed normalizer spelling, operationTime spelling, and explicit updatedAt ownership plus ADR-0030's lifecycle and onUpdate deferrals. It preserves all previously Accepted ownership, provenance, Policy, transaction, receipt, ledger, constraint, nondisclosure, and publication decisions."
+	]
+}

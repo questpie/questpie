@@ -6,16 +6,18 @@ durable runtime.
 
 ## Lifecycle mapping
 
-| V3 job           | V4 owner                                                                                                                           | Forbidden failure mode                                             |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `beforeValidate` | runtime codec plus closed pure normalization/validation; named Mutation validation for application logic                           | ambient I/O before the write transaction and ambiguous error order |
-| `beforeChange`   | closed server values for ordinary operations; named Mutation for reads, branches, cross-Collection invariants, and declared errors | stale pre-transaction reads or an overpowered callback             |
-| `afterChange`    | Mutation-joined audit/application writes plus exact committed durable dispatch                                                     | external effects in the transaction or crash-lossy in-memory work  |
-| `afterRead`      | selection/output codec, closed pure projection, or named Query in its snapshot                                                     | failure after a committed write that falsely resembles rollback    |
+| V3 job           | V4 owner                                                                                           | Forbidden failure mode                                             |
+| ---------------- | -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| `beforeValidate` | runtime codecs plus Collection `normalize` and `validate` Lifecycle Programs                       | ambient I/O before the write transaction and ambiguous error order |
+| `beforeChange`   | trusted values, candidate Policy, and Policy-aware transactional `check`                           | stale pre-transaction reads or an overpowered callback             |
+| `afterChange`    | pre-commit bounded `afterWrite`; Job acceptance or Action for durable/external work                | external effects in the transaction or crash-lossy in-memory work  |
+| `afterRead`      | selection/output codec, closed projection, or named Query; there is no `afterRead` lifecycle phase | failure after a committed write that falsely resembles rollback    |
 
 Reaction is therefore not a replacement name for every hook. Pure input work,
-transactional work, result projection, and durable post-commit work retain
-different owners.
+database-backed validation, bounded transactional work, result projection, and
+durable post-commit work retain different owners. Lifecycle TypeScript is
+compiled into a phase-capability-checked canonical program and never invoked as
+arbitrary callback JavaScript.
 
 ## One kernel, three meanings
 

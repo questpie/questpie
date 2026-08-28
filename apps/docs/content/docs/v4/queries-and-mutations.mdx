@@ -1,590 +1,314 @@
 ---
 title: Build Queries and Mutations
-description: Define exact semantic reads, transactional writes, and ordinary Collection operations.
+description: Define exact reads, transactional writes, Collection lifecycle programs, and public errors.
 kind: guide
 ---
 
 QUESTPIE compiles each Query and Mutation into one statically bound Operation.
-A Query reads from one consistent snapshot. A Mutation owns one PostgreSQL
-transaction. Both use the same generated types, Policy, errors, limits, and
-observation path for direct and network calls.
+A Query reads one consistent snapshot. A Mutation owns one PostgreSQL
+transaction. Direct calls and the generated network client enter the same
+Operation engine and therefore share Policy, declared errors, cancellation,
+limits, and transaction outcomes.
 
-The examples continue with the complete collaboration fixture from
-[Resolve Context and authorize with Policy](./context-and-policy). Its Message
-Collection supplies the Fields selected and written below.
+## Define a Query
 
-Define the reusable structural plan for the paged part of the view:
+Use the application-specialized factory from `#questpie/app`. Its generated
+Context exposes Policy-aware reads but no write, dispatch, raw SQL, transaction,
+or external-effect capability.
 
-```ts title="src/features/message-data.ts"
-import type { AppData } from "#questpie/app";
-import { dataQuery, query } from "questpie";
-
-export const channelMessagePage = dataQuery<
-	AppData["collections"]["messages"]
->()({
-	from: "messages",
-	parameters: {
-		channelId: query.parameter.uuid({ nullable: false }),
-		first: query.parameter.integer({
-			nullable: false,
-			minimum: 1,
-			maximum: 100,
-		}),
-		after: query.parameter.cursor({ nullable: true }),
-	},
-	select: ({ fields }) => ({
-		id: fields.id,
-		authorId: fields.authorId,
-		title: fields.title,
-		body: fields.body,
-		createdAt: fields.createdAt,
-	}),
-	where: ({ fields, parameters }) =>
-		fields.channelId.equal(parameters.channelId),
-	orderBy: ({ fields }) => [
-		fields.createdAt.ascending({ nulls: "last" }),
-		fields.id.ascending({ nulls: "last" }),
-	],
-	page: ({ parameters }) =>
-		query.forwardCursor({
-			first: parameters.first,
-			after: parameters.after,
-		}),
-});
-```
-
-## Define a read-only Query
-
-Import the application-specialized factory from the generated App Contract:
-
-```ts title="src/features/channel-overview.ts"
+```ts
 import { defineQuery } from "#questpie/app";
-import { operation, policy } from "questpie";
-import { channelMessagePage } from "./message-data";
+import { codec, operation, policy } from "questpie";
 
-export const channelOverview = defineQuery({
-	name: "channels.overview",
-	input: operation.input(channelMessagePage),
+export const ticketDetail = defineQuery({
+	name: "tickets.detail",
+	input: codec.object({ id: codec.uuid() }),
 	policy: policy.authenticated(),
 	errors: {
 		unavailable: operation.error({
-			code: "CHANNEL_UNAVAILABLE",
+			code: "TICKET_UNAVAILABLE",
 			status: 404,
 		}),
 	},
 	handler: async ({ input, ctx, errors }) => {
-		const company = await ctx.data.companies.get({
-			key: { id: ctx.tenant.id },
-			select: { id: true, name: true },
+		const ticket = await ctx.data.tickets.get({
+			key: { id: input.id },
+			select: { id: true, reference: true, summary: true, status: true },
 		});
-		const membership = await ctx.data.memberships.get({
-			key: {
-				companyId: ctx.tenant.id,
-				principalId: ctx.principal.id,
-				scopeKey: "company",
-			},
-			select: { role: true },
-		});
-		const channel = await ctx.data.channels.get({
-			key: { id: input.channelId },
-			select: { id: true, companyId: true, name: true },
-		});
-
-		if (
-			company === null ||
-			membership === null ||
-			channel === null ||
-			channel.companyId !== company.id
-		) {
-			throw errors.unavailable();
-		}
-
-		const messages = await ctx.data.run(channelMessagePage, input);
-		return {
-			company,
-			membership,
-			channel: { id: channel.id, name: channel.name },
-			messages,
-		};
+		if (ticket === null) throw errors.unavailable();
+		return ticket;
 	},
 	network: true,
 });
 ```
 
-The input reuses the exact parameters of the structural data plan. The handler
-return determines the output codec when the value uses supported scalars,
-exact objects, nullable values, and arrays.
+Missing and Policy-invisible rows both return `null`. Application code cannot
+use a read to distinguish them. `network: true` publishes this named Operation;
+defining a Collection never publishes CRUD.
 
-The Query Context contains Policy-aware reads and
-`ctx.data.run(plan, input)`, alongside immutable execution facts such as the
-Principal, Tenant, signal, and deadline. It cannot write, dispatch, open a raw
-transaction, run raw SQL, bypass Policy, or select System Authority. All
-handler reads share one bounded `REPEATABLE READ READ ONLY` snapshot.
+Use an explicit output codec when a contract must remain pinned or is recursive.
+Otherwise the compiler may infer a supported closed result and materialize its
+runtime codec from the same generated App Contract.
 
-For a named Query or Mutation, `policy: policy.authenticated()` is its
-Operation-level admission rule. It runs before the handler. A Collection
-Operation Set instead receives the Collection-bound relational Policy, such as
-`messagePolicy`, so every generated member uses the Collection's admission,
-row, candidate, and Field rules.
+## Derive exact caller input
 
-`network: true` exposes the Operation through the generated network client. If
-it is absent, the Operation remains available only from the generated server
-contract.
+Field provenance derives caller codecs without granting network exposure:
 
-Use an explicit output pin when the public result must remain stable or is
-recursive:
-
-```ts title="src/features/thread-preview.ts"
-import { defineQuery } from "#questpie/app";
-import { codec, policy } from "questpie";
-import type { Codec } from "questpie";
-
-interface ThreadNode {
-	readonly id: string;
-	readonly replies: ReadonlyArray<ThreadNode>;
-}
-
-const threadNode: Codec<ThreadNode> = codec.lazy(() =>
-	codec.object({
-		id: codec.uuid(),
-		replies: codec.array(threadNode),
-	}),
-);
-
-export const threadPreview = defineQuery({
-	name: "messages.threadPreview",
-	input: codec.object({ id: codec.uuid() }),
-	output: threadNode,
-	policy: policy.authenticated(),
-	errors: {},
-	handler: ({ input }) => ({ id: input.id, replies: [] }),
-	network: true,
+```ts
+export const createTicketInput = tickets.createInput().pick({
+	teamId: true,
+	reference: true,
+	summary: true,
+	description: true,
 });
 ```
 
-The pin applies the same validation and encoding contract described in
-[Define executable application behavior](./executable-definitions). Recursive
-output requires this explicit contract.
+Default Fields are caller-writable on create and update. `immutable: true`
+Fields are caller-writable only on create. `server: true` Fields are absent from
+both caller helpers and are available only to the trusted `values` lane.
+`onUpdate: "now"` Fields are database-owned and are available to neither lane.
 
-A supported Query also exposes `.watch` on the same generated method. See
-[Watch Queries in realtime](./realtime) for complete results, observed reads,
-fresh Policy, resume/reset, and Change Ledger recovery.
+`createInput()` applies create requiredness after provenance. `updateInput()` is
+sparse. `.pick({ field: true })` and `.omit({ field: true })` preserve exact
+Field codecs and reject unknown Fields. A derived helper intentionally evolves
+when its Collection changes; pin a smaller key set when an Operation must stay
+stable.
 
-## Derive caller input from a Collection
+## Give a Collection a fixed lifecycle
 
-A Collection can derive exact caller-input codecs from its Field provenance.
-The Barbershop schedules an appointment with a narrowed create input:
+Collections may own exactly four lifecycle phases and payloadless issues:
 
-```ts title="src/features/schedule-appointment.ts"
-import { defineMutation } from "#questpie/app";
-import type { CodecValue } from "questpie";
-import { policy } from "questpie";
+```ts
+import { collection, defineCollection, field } from "questpie";
 
-import { appointments } from "../data/appointments";
-
-export const scheduleAppointmentInput = appointments.createInput().pick({
-	customerName: true,
-	startsAt: true,
-	endsAt: true,
-});
-
-type ScheduleAppointmentInput = CodecValue<typeof scheduleAppointmentInput>;
-// Readonly<{ customerName: string; startsAt: Date; endsAt: Date }>
-
-export const scheduleAppointment = defineMutation({
-	name: "appointments.schedule",
-	input: scheduleAppointmentInput,
-	policy: policy.authenticated(),
-	errors: {},
-	handler: ({ input, ctx }) =>
-		ctx.data.appointments.create({
-			input,
-			values: {
-				tenantId: ctx.tenant.id,
-				createdAt: ctx.operationTime,
-				updatedAt: ctx.operationTime,
-			},
-		}),
-	network: true,
-});
-```
-
-The generated client infers both the call and its result:
-
-```ts title="web/schedule-appointment.ts"
-import type { GeneratedClient } from "#questpie/client";
-
-export async function scheduleAppointment(client: GeneratedClient) {
-	const appointment = await client.mutations["appointments.schedule"]({
-		customerName: "Marek Novak",
-		startsAt: new Date("2026-09-01T09:00:00.000Z"),
-		endsAt: new Date("2026-09-01T09:30:00.000Z"),
-	});
-
-	appointment.status satisfies string;
-	return appointment;
-}
-```
-
-`createInput()` includes caller-writable create Fields. `updateInput()` excludes
-server-owned and immutable Fields, and every remaining member is optional.
-`.pick({ field: true })` and `.omit({ field: true })` preserve each Field codec
-and reject an unknown Field in TypeScript and during compilation. The helper is
-a Codec value. It does not define or publish an Operation.
-
-A derived surface intentionally follows its Collection. Adding a new Field
-changes `createInput()` or `updateInput()` when that Field's provenance belongs
-to the helper, and the generated App Contract makes the change visible to
-TypeScript. Use `.pick()` or `.omit()` when an Operation must expose a smaller,
-pinned **key set**. A selected Field's own contract still follows the Field: a
-bound, nullability, scalar, or nested-codec change intentionally changes the
-derived Operation contract and its generated types.
-
-Required, nullable, defaulted, immutable, and server Fields remain distinct in
-the inferred type. On create, a non-nullable Field without a default is
-required; a nullable Field or a Field with a schema default is optional. A
-nullable timestamp, when present, is `Date | null`. An immutable caller Field
-appears on create and disappears from update. A server Field appears in neither
-caller helper. Embedded objects and arrays retain their nested codecs and
-bounds instead of widening to `unknown`.
-
-## Add ordinary Collection operations
-
-Define the common Collection surface once:
-
-```ts title="src/features/message-operations.ts"
-import { defineCollectionOperations, mutation, operation } from "questpie";
-import { messages } from "../data/collaboration";
-import { channelMessagePage } from "./message-data";
-import { messagePolicy } from "./messages-policy";
-
-export const messageOperations = defineCollectionOperations(messages, {
-	name: "messages",
-	policy: messagePolicy,
-	network: true,
-
-	list: { data: channelMessagePage },
-	get: {
-		select: {
-			id: true,
-			title: true,
-			body: true,
-			createdAt: true,
-			updatedAt: true,
-		},
+export const tickets = defineCollection({
+	name: "tickets",
+	fields: {
+		id: field.uuid({ default: "randomUuid", server: true, immutable: true }),
+		reference: field.text({ minLength: 1, maxLength: 32, immutable: true }),
+		summary: field.text({ minLength: 1, maxLength: 240 }),
+		status: field.text({ default: "open", server: true }),
+		closedAt: field.timestamp({ nullable: true, server: true }),
+		updatedAt: field.timestamp({ default: "now", onUpdate: "now" }),
 	},
-	create: {
-		input: ["channelId", "title", "body"],
+	constraints: {
+		/* primary key and unique constraints */
+	},
+	issues: {
+		closedWithoutTime: collection.issue(),
+		teamUnavailable: collection.issue(),
+	},
+	lifecycle: {
 		normalize: ({ input }) => ({
-			title: operation.text.trim(input.title),
+			...input,
+			reference: input.reference?.trim().toUpperCase(),
+			summary: input.summary?.trim(),
 		}),
-		values: ({ principal, tenant, operationTime }) => ({
-			companyId: mutation.overwrite(tenant.id),
-			authorId: mutation.overwrite(principal.id),
-			createdAt: mutation.overwrite(operationTime),
-			updatedAt: mutation.overwrite(operationTime),
-		}),
-		select: {
-			id: true,
-			channelId: true,
-			authorId: true,
-			title: true,
-			body: true,
-			createdAt: true,
-			updatedAt: true,
+		validate: ({ candidate, issues }) => {
+			if (candidate.status === "closed" && candidate.closedAt === null)
+				throw issues.closedWithoutTime();
 		},
 	},
-	update: {
-		input: ["title", "body"],
-		normalize: ({ input }) => ({
-			title: operation.text.trimIfPresent(input.title),
-		}),
-		values: ({ operationTime }) => ({
-			updatedAt: mutation.overwrite(operationTime),
-		}),
-		select: { id: true, title: true, body: true, updatedAt: true },
-	},
-	delete: { select: { id: true } },
 });
 ```
 
-The compiler lowers each selected member to an ordinary Resource:
+A Collection issue says which internal invariant failed. It carries no public
+code, status, message, payload, protected value, or transport behavior. The
+Operation decides what its caller may learn.
 
-| Member   | Resource                   | Consistency boundary  |
-| -------- | -------------------------- | --------------------- |
-| `list`   | Query `messages.list`      | read snapshot         |
-| `get`    | Query `messages.get`       | read snapshot         |
-| `create` | Mutation `messages.create` | one write transaction |
-| `update` | Mutation `messages.update` | one write transaction |
-| `delete` | Mutation `messages.delete` | one write transaction |
+Lifecycle callbacks use ordinary TypeScript syntax, but they are compiled
+definitions, not arbitrary JavaScript callbacks. The compiler lowers supported
+syntax to one canonical Lifecycle Program and Runtime interprets that program.
+Authored lifecycle JavaScript is never invoked.
 
-The generated names in the table use the ordinary Resource contract described
-in [Define executable application behavior](./executable-definitions).
+`normalize` and `validate` allow immutable locals, branches, exact object
+construction, static Field access, deterministic operators, and documented
+locale-free scalar methods. They reject imports and captures, ambient clocks,
+randomness, `fetch`, dynamic property access, constructors, mutation, arbitrary
+calls, async work, and unsupported built-ins with an Origin and a supported
+rewrite.
 
-The set is explicit Operation authoring and exposure shorthand. It is separate
-from the generated Collection create/update kernel used by named Mutations.
-Neither defining a Collection nor calling an input helper publishes CRUD.
+`normalize` runs separately over the already authorized caller and trusted
+lanes. It may replace supplied values but cannot add, remove, move, or overlap
+Field paths. `validate` sees the complete candidate and optional current row,
+uses the transaction-stable `now`, and can throw a declared Collection issue.
 
-The generated client accepts only the declared caller Fields:
+## Map a Collection issue to a public error
 
-```ts title="web/edit-message.ts"
-import type { GeneratedClient } from "#questpie/client";
+A named Mutation owns public errors and maps every reachable Collection issue
+explicitly:
 
-export async function editMessage(
-	client: GeneratedClient,
-	companyId: string,
-	channelId: string,
-) {
-	const company = client.withContext({ companyId });
-	const callId = crypto.randomUUID();
-
-	const created = await company.collections.messages.create(
-		{
-			input: {
-				channelId,
-				title: "Ready for review",
-				body: "Please check this message.",
-			},
-		},
-		{ callId },
-	);
-
-	const updated = await company.collections.messages.update({
-		key: { id: created.id },
-		patch: { title: "Approved" },
-	});
-
-	if (updated !== null) {
-		await company.collections.messages.delete({
-			key: { id: updated.id },
-		});
-	}
-}
-```
-
-The network call option accepts a stable bounded text `callId`; it is not
-UUID-only. A supplied value must be valid Unicode, already NFC, contain 1–256
-Unicode scalar values, exclude U+0000, and occupy at most 1,024 UTF-8 bytes.
-The Runtime rejects rather than normalizes it. The generated client mints a UUID
-when the caller omits the value. This example deliberately supplies that UUID
-because the application also chooses to use it as a UUID Message key.
-
-The caller cannot supply `companyId`, `authorId`, `createdAt`, or `updatedAt`.
-This Collection Operation Set's closed value programs own them. Those programs
-cannot read data, call a Service, perform I/O, dispatch work, obtain a clock, or
-target an undeclared Field.
-
-## Write several Collections in one Mutation
-
-Use a named Mutation for a cross-Collection invariant or application error:
-
-```ts title="src/features/submit-message.ts"
+```ts
 import { defineMutation } from "#questpie/app";
 import { operation, policy } from "questpie";
-import { messages } from "../data/collaboration";
 
-export const submitMessage = defineMutation({
-	name: "messages.submit",
-	input: messages.createInput().pick({
-		channelId: true,
-		title: true,
-		body: true,
-	}),
+const invalidTicket = operation.error({
+	code: "INVALID_TICKET",
+	status: 422,
+});
+
+export const createTicket = defineMutation({
+	name: "ticket.create",
+	input: tickets.createInput(),
 	policy: policy.authenticated(),
-	errors: {
-		channelUnavailable: operation.error({
-			code: "CHANNEL_UNAVAILABLE",
-			status: 404,
+	errors: { invalidTicket },
+	issueMappings: {
+		tickets: {
+			closedWithoutTime: "invalidTicket",
+			teamUnavailable: "invalidTicket",
+		},
+	},
+	handler: ({ input, ctx }) =>
+		ctx.data.tickets.create({
+			input,
+			values: { organizationId: ctx.tenant.id },
+			select: true,
 		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
-		ctx.signal.throwIfAborted();
-
-		const channel = await ctx.data.channels.get({
-			key: { id: input.channelId },
-			select: { id: true, companyId: true },
-		});
-		if (channel === null || channel.companyId !== ctx.tenant.id) {
-			throw errors.channelUnavailable();
-		}
-
-		const message = await ctx.data.messages.create({
-			input: {
-				channelId: channel.id,
-				title: input.title.trim(),
-				body: input.body,
-			},
-			values: {
-				companyId: ctx.tenant.id,
-				authorId: ctx.principal.id,
-				createdAt: ctx.operationTime,
-				updatedAt: ctx.operationTime,
-			},
-			select: {
-				id: true,
-				channelId: true,
-				authorId: true,
-				title: true,
-				body: true,
-				createdAt: true,
-				updatedAt: true,
-			},
-		});
-
-		await ctx.data.channels.update({
-			key: { id: channel.id },
-			values: {
-				lastMessageAt: ctx.operationTime,
-				updatedAt: ctx.operationTime,
-			},
-			select: { id: true },
-		});
-
-		await ctx.data.messageEvents.create({
-			input: {},
-			values: {
-				id: `event:${ctx.callId}`,
-				messageId: message.id,
-				kind: "submitted",
-				occurredAt: ctx.operationTime,
-			},
-			select: { id: true },
-		});
-
-		await ctx.dispatch.messageSubmitted({
-			messageId: message.id,
-			companyId: ctx.tenant.id,
-		});
-
-		return message;
-	},
 	network: true,
 });
 ```
 
-The Mutation owns one transaction. The Message, Channel update, Message Event,
-Change Ledger fact, result receipt, and durable dispatch intent commit together.
-Caller data enters the Collection kernel through `input` or `patch`. Values
-chosen by the named Mutation enter through the separate trusted `values` lane.
-Both lanes are exact objects, and one Field cannot appear in both. QUESTPIE
-rejects an unknown trusted Field or an overlap before it runs SQL.
+The mapping refers to a key in this Mutation's `errors` map. The target error
+must be payloadless. Another Mutation may map the same Collection issue to a
+different public error. A Collection never borrows the calling Mutation's error
+factories.
 
-The separate objects preserve who supplied each value. Caller Field Policy can
-therefore authorize only caller data, while server-owned values cannot be
-smuggled through the caller lane. Rejecting overlap also avoids an implicit
-last-writer-wins rule.
+The compiler computes transitive issue reachability. If `comments.afterWrite`
+writes `tickets`, the outer Mutation must map issues reachable through that
+nested call. A missing mapping is a compile error that shows the call path. The
+generated Mutation Context also withholds an issue-bearing kernel method when
+its mapping is incomplete.
 
-The Channel call is a values-only update. An empty `patch` with non-empty
-`values` is real work. QUESTPIE rejects an update when both `patch` and `values`
-are empty. Update starts from the locked current row and never reapplies create
-defaults.
+The first issue thrown in program order wins and immediately dooms the
+transaction. Catching it in application code cannot permit commit. After
+rollback, the shared Operation engine applies the mapping. An unmapped,
+malformed, or forged issue becomes a sanitized `INTERNAL` failure. Direct and
+network callers therefore see the same declared error and never receive a
+Collection identity, candidate row, protected Field, Policy evidence,
+PostgreSQL detail, or stack.
 
-Trusted values can use Mutation input, a row returned by a Policy-aware locking
-read, transaction-scoped Policy-aware Collection reads, `ctx.operationTime`,
-`ctx.callId`, and ordinary TypeScript expressions over those values. When a
-value depends on current state, read it through the locking Collection kernel in
-the same transaction. Runtime does not inspect arbitrary TypeScript and does not
-treat a stale handler value as lock-owned evidence.
+Unsupported syntax, a captured value, or a phase capability mismatch reports
+`QP-COMPOSE-026` at the lifecycle Origin. An invalid or incomplete issue map
+reports `QP-COMPOSE-027` with the complete nested Collection-call path. Supplying
+an `onUpdate` Field reports `QP-DATA-023 databaseOwnedField`; exceeding the
+compiled lifecycle re-entry bound reports `QP-DATA-024
+lifecycleRecursionExceeded` and rolls back.
 
-`operationTime` is stable for that transaction. `createdAt` and `updatedAt`
-remain ordinary Fields and change only through explicit assignments.
+## Use `check` for database-backed integrity
 
-Use `ctx.operationTime` when several writes describe the same business change.
-PostgreSQL fixes it once with `transaction_timestamp()` when it creates the
-Mutation owner, and the Runtime carries that trusted fact through the Mutation.
-A Message, its audit row, and its Channel update therefore receive one instant
-even when locks or SQL statements take different amounts of time. It is also
-independent of whichever application process happens to execute the call.
+Policy authorizes. `validate` checks one candidate without capabilities.
+`check` verifies an invariant that needs current database facts:
 
-An identical `callId` replay returns the stored result receipt. It does not run
-the handler again or choose a new `operationTime`, so redelivery cannot change
-the already committed business instant.
+```ts
+lifecycle: {
+	check: async ({ candidate, ctx, issues }) => {
+		const team = await ctx.data.teams.get({
+			key: { id: candidate.teamId },
+			select: { id: true },
+		});
+		if (team === null) throw issues.teamUnavailable();
+	},
+}
+```
 
-`new Date()` samples the process clock every time it runs. Two assignments in
-one Mutation can therefore disagree, and application code can accidentally mix
-wall-clock reads taken before and after a lock wait. It also makes the source of
-the value less obvious in tests and review. `operationTime` is an explicit
-trusted execution fact, not caller input and not Policy evidence.
+Candidate Policy runs before `check`; an unauthorized candidate cannot use it
+as an existence oracle. Every `check` read is Policy-aware and selection-
+authorized, remains inside the Mutation transaction, and counts against its
+statement, row, dependency, duration, and cancellation budgets. Missing and
+invisible are still indistinguishable.
 
-Database-owned `onUpdate` behavior is not part of this surface. Timestamp writes
-remain explicit and transaction-stable.
+## Use `afterWrite` only for bounded transactional work
 
-The generated Mutation Context also contains the stable `callId`, the
-`transactionId`, `ctx.signal`, and the immutable deadline. It exposes no raw
-transaction handle, Policy bypass, external-effect bag, or ordinary-call System
-elevation.
+`afterWrite` runs after PostgreSQL constraints and database-owned values have
+produced the written row, but before commit:
 
-`ctx.dispatch` contains one typed member for each dispatchable Reaction in the
-Current App Contract. The call above targets the app's `messageSubmitted`
-Reaction Definition. This Mutation only accepts its typed intent; it does not
-run the Reaction or any external work in the transaction. See
-[Run durable Jobs and Reactions](./durable-reactions) for attempts, leases,
-retry, current-Policy run-as, external effects, and retention.
+```ts
+lifecycle: {
+	afterWrite: async ({ row, previous, ctx }) => {
+		await ctx.data.ticketEvents.create({
+			values: {
+				ticketId: row.id,
+				kind: previous ? "updated" : "created",
+				occurredAt: ctx.now,
+			},
+			select: { id: true },
+		});
+		await ctx.jobs.ticket.reindex.accept({
+			input: { ticketId: row.id },
+			idempotencyKey: `ticket:${row.id}:${ctx.callId}`,
+		});
+	},
+}
+```
 
-## Follow the fixed lifecycle
+The compiler-recognized effect graph admits sequential bounded Collection
+reads/writes and Job acceptance only. A list requires an explicit `first`.
+Bounded `for...of` is legal only over a compiler-known bounded result.
+`Promise.all`, detached work, Services, Actions, Request, Route, filesystem,
+network, timers, raw SQL, and raw transactions are unrepresentable.
 
-QUESTPIE processes a Mutation in this order:
+Nested lifecycle writes execute synchronously in authored invocation order
+through the same Collection kernel. They share the outer transaction and its
+budgets. Exceeding the compiled re-entry-depth limit, any fault, or cancellation
+rolls back the root write, nested writes, Change Ledger facts, accepted Jobs,
+and result receipt.
 
-1. Decode the exact Operation input and reject unknown keys.
-2. Enforce Operation admission.
-3. Open the transaction and freeze `operationTime`.
-4. Decode the Collection caller `input` or `patch` and trusted `values`.
-5. Reject unknown Collection keys and any Field present in both write lanes.
-6. Apply row scope and acquire the required lock.
-7. Authorize only the Field paths the caller supplied.
-8. Apply closed Field scalar normalization separately to both lanes.
-9. For create, apply absent schema defaults and nullable SQL `NULL` values. For
-   update, start from the locked current row and do not reapply create defaults.
-10. Overlay normalized trusted `values`.
-11. Reject an incomplete required candidate.
-12. Validate every Field in the complete candidate against its framework Codec.
-13. Enforce candidate Policy over the complete merged row.
-14. Enforce PostgreSQL Constraints.
-15. Select and authorize the output.
-16. Validate the output codec.
-17. Commit once.
-18. Encode the result.
+`afterWrite` is for a small audit write or durable Job acceptance. An external
+effect belongs to an Action, normally called by an accepted Job after commit.
+There is no `afterRead` phase or general hook catalogue.
 
-The Policy phases use the rules in
-[Resolve Context and authorize with Policy](./context-and-policy). PostgreSQL
-Constraint details never enter the public error.
+## Follow the write order
 
-Each declared error keeps its exact literal code and payload type. An unknown
-thrown value becomes one sanitized `INTERNAL` error without a stack trace or
-database detail.
+For each generated Collection write, QUESTPIE:
 
-This candidate validation is framework Field and Codec validation, not an
-authored lifecycle callback. There is no general `before*` or `after*` hook
-catalogue. Use closed Field scalar normalization for the accepted Field codec,
-trusted `values` for server-owned Fields, a named Mutation for cross-Collection
-work and transactional audit, and typed dispatch for durable follow-up.
+1. Decodes exact Operation input and enforces Operation admission.
+2. Opens the Mutation transaction and freezes `ctx.now` from PostgreSQL
+   `transaction_timestamp()`.
+3. Decodes caller and trusted lanes, rejects unknown keys and overlap, scopes
+   and locks the current row, and authorizes caller Field paths.
+4. Runs scalar normalization and authored `normalize` separately per lane.
+5. Builds the complete candidate from the create base or locked current row,
+   trusted values, defaults, and nullable SQL `NULL` values.
+6. Runs complete Field/Codec validation and authored `validate`.
+7. Enforces candidate Policy, then runs Policy-aware `check`.
+8. Executes the PostgreSQL write, constraints, and database-owned
+   `onUpdate: "now"`, returning the final row.
+9. Runs pre-commit `afterWrite` and all bounded nested work.
+10. Applies output Field authority, validates the output and result receipt,
+    and commits once.
+11. Encodes the result.
 
-## Handle cancellation and response loss
+`values` bypasses only caller Field authority. The complete candidate still
+passes both validation layers, candidate Policy, and PostgreSQL constraints.
+Policy never supplies or rewrites a value.
 
-Every Operation receives `ctx.signal` and an immutable deadline. Collection
-reads, writes, locks, and dispatch observe both.
+## Understand time, retry, and cancellation
 
-Cancellation before commit rolls back all writes. Cancellation or response
-loss after commit cannot undo PostgreSQL state. QUESTPIE reports
-`COMMITTED_RESULT_UNAVAILABLE` with the stable call and transaction identity.
-On Wire v2 this is a framework transaction outcome, not an authored error. It
-uses HTTP `500`, `retryable: true`, the correlated frame `callId`, and canonical
-PostgreSQL transaction identity. Retryability permits exact same-ID recovery;
-the transport does not replay the Mutation automatically.
+`ctx.now` is one transaction-stable `Date` owned by PostgreSQL. Use it when
+several writes describe one business instant. A Field with `onUpdate: "now"`
+is stronger: PostgreSQL owns the value, no lane may provide it, and every
+kernel or explicitly supported managed-writer update returns and records the
+final database value.
 
-A Mutation call identity includes the application, Tenant, Operation,
-Principal, and `callId`. It also binds the canonical input digest. The result
-receipt commits with the business change. Retrying the same call returns the
-stored result without another write. Reusing the ID with different input
-fails with the declared `IDEMPOTENCY_CONFLICT` error.
+QUESTPIE does not automatically retry arbitrary Mutation or lifecycle code. A
+pre-commit issue, fault, deadline, limit, or cancellation rolls back. Retrying
+the exact same uncommitted call starts a fresh transaction and reruns lifecycle
+work. Replaying an already committed Call Identity returns the stored receipt
+without rerunning handlers or lifecycle phases.
 
-The Runtime mints a `callId` when a direct caller does not provide one. A caller
-that may retry supplies and preserves the same `callId`, as in the Collection
-create example.
+Cancellation or response loss after commit cannot undo state. QUESTPIE returns
+`COMMITTED_RESULT_UNAVAILABLE` with stable call and transaction identities.
+`retryable: true` permits exact same-call recovery; it does not authorize a
+transport-owned automatic replay.
 
-Direct and network calls enter the same Operation engine. Direct calls preserve
-typed runtime values such as `Date`. Network calls use the compiled codec to
-encode and restore them. Both paths return the same typed result, declared
-error, nondisclosing not-found result, and transaction outcome.
+## Keep the failure classes distinct
+
+| Result                        | Meaning                                        | Public behavior                                                 |
+| ----------------------------- | ---------------------------------------------- | --------------------------------------------------------------- |
+| `null` from keyed read/update | missing or Policy-invisible                    | intentionally indistinguishable                                 |
+| Collection Issue              | expected reusable `validate`/`check` invariant | mapped by the named Mutation after rollback                     |
+| PostgreSQL constraint failure | database race/constraint authority             | typed framework constraint result where declared; no raw detail |
+| unknown fault                 | bug, tampering, unsupported Runtime failure    | rollback plus sanitized `INTERNAL`                              |
+| post-commit ambiguity         | commit may have succeeded but result was lost  | stable `COMMITTED_RESULT_UNAVAILABLE` recovery identity         |
 
 Next, [watch Queries in realtime](./realtime).

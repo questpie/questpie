@@ -103,6 +103,13 @@ A value that reaches both graphs must satisfy the structural determinism rules.
 An impure or ambiguous shared capture fails with the Definition and captured
 declaration Origins.
 
+Collection lifecycle members are not additional executable slots. The compiler
+parses their inline ordinary-TypeScript subset into the canonical Lifecycle
+Program accepted by ADR-0031, then discards the authored callback. Runtime
+interprets only those program bytes. This keeps arbitrary application handlers
+in the Runtime graph while making lifecycle purity, phase capabilities, and
+transitive Collection-issue reachability structurally checkable.
+
 ## Output materialization
 
 Input comes from the local codec. Context comes from the current App Contract.
