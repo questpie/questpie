@@ -20,7 +20,11 @@ import { constraint, defineCollection, field } from "questpie";
 export const companies = defineCollection({
 	name: "companies",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			immutable: true,
+		}),
 		name: field.text({ nullable: false, maxLength: 160 }),
 	},
 	constraints: {
@@ -31,8 +35,12 @@ export const companies = defineCollection({
 export const spaces = defineCollection({
 	name: "spaces",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		companyId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			immutable: true,
+		}),
+		companyId: field.uuid({ nullable: false, server: true, immutable: true }),
 		name: field.text({ nullable: false, maxLength: 160 }),
 	},
 	constraints: {
@@ -43,15 +51,24 @@ export const spaces = defineCollection({
 export const channels = defineCollection({
 	name: "channels",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		companyId: field.uuid({ nullable: false }),
-		spaceId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			immutable: true,
+		}),
+		companyId: field.uuid({ nullable: false, server: true, immutable: true }),
+		spaceId: field.uuid({ nullable: false, immutable: true }),
 		name: field.text({ nullable: false, maxLength: 160 }),
-		lastMessageAt: field.timestamp({ nullable: true, withTimezone: true }),
+		lastMessageAt: field.timestamp({
+			nullable: true,
+			withTimezone: true,
+			server: true,
+		}),
 		updatedAt: field.timestamp({
 			nullable: false,
 			withTimezone: true,
 			default: "now",
+			server: true,
 		}),
 	},
 	constraints: {
@@ -79,10 +96,14 @@ export const memberships = defineCollection({
 export const messages = defineCollection({
 	name: "messages",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		companyId: field.uuid({ nullable: false }),
-		channelId: field.uuid({ nullable: false }),
-		authorId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			immutable: true,
+		}),
+		companyId: field.uuid({ nullable: false, server: true, immutable: true }),
+		channelId: field.uuid({ nullable: false, immutable: true }),
+		authorId: field.uuid({ nullable: false, server: true, immutable: true }),
 		title: field.text({ nullable: false, maxLength: 200 }),
 		body: field.text({ nullable: false, maxLength: 20_000 }),
 		moderationNote: field.text({ nullable: true, maxLength: 2_000 }),
@@ -90,11 +111,14 @@ export const messages = defineCollection({
 			nullable: false,
 			withTimezone: true,
 			default: "now",
+			server: true,
+			immutable: true,
 		}),
 		updatedAt: field.timestamp({
 			nullable: false,
 			withTimezone: true,
 			default: "now",
+			server: true,
 		}),
 	},
 	constraints: {
@@ -105,10 +129,25 @@ export const messages = defineCollection({
 export const messageEvents = defineCollection({
 	name: "messageEvents",
 	fields: {
-		id: field.text({ nullable: false, maxLength: 160 }),
-		messageId: field.uuid({ nullable: false }),
-		kind: field.text({ nullable: false, maxLength: 32 }),
-		occurredAt: field.timestamp({ nullable: false, withTimezone: true }),
+		id: field.text({
+			nullable: false,
+			maxLength: 160,
+			server: true,
+			immutable: true,
+		}),
+		messageId: field.uuid({ nullable: false, server: true, immutable: true }),
+		kind: field.text({
+			nullable: false,
+			maxLength: 32,
+			server: true,
+			immutable: true,
+		}),
+		occurredAt: field.timestamp({
+			nullable: false,
+			withTimezone: true,
+			server: true,
+			immutable: true,
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
@@ -516,8 +555,16 @@ update needs no supplied-Field check.
 
 Create Policy receives the complete `candidate`. Update receives `current` and
 `candidate`. Delete receives `current`. The Mutation contract defines how
-normalization, defaults, server values, validation, Constraints, and writes
+scalar normalization, defaults, trusted `values`, validation, Constraints, and writes
 construct and persist that candidate.
+
+Field provenance and Policy answer different questions. Provenance determines
+whether a Field can come from caller `input` or `patch`, trusted `values`, or
+both. `fields.create` and `fields.update` authorize only Fields supplied by the
+caller. Trusted `values` skip that caller-Field check because the caller did not
+supply them; they do not skip candidate Policy. QUESTPIE merges both lanes and
+checks the complete candidate, so a buggy Mutation cannot forge a Tenant,
+author, owner, or other protected invariant merely by using `values`.
 
 ## Separate evidence from disclosure
 

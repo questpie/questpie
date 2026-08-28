@@ -116,32 +116,70 @@ limits, observation path, Executable Slot, and exact generated alias. Runtime
 sees only ordinary statically bound Resources. There is no runtime CRUD
 dispatcher or separate Studio backend.
 
+## Field provenance and trusted values
+
+ADR-0030 adds Field provenance to the existing generated Collection
+create/update kernel:
+
+| Field declaration               | Caller create input | Caller update patch | Trusted `values` |
+| ------------------------------- | ------------------- | ------------------- | ---------------- |
+| default                         | allowed             | allowed             | allowed          |
+| `immutable: true`               | allowed             | forbidden           | create only      |
+| `server: true`                  | forbidden           | forbidden           | allowed          |
+| `server: true, immutable: true` | forbidden           | forbidden           | create only      |
+
+`collection.createInput()` and `collection.updateInput()` derive exact Codec
+objects from this matrix. Object-map `.pick({ field: true })` and
+`.omit({ field: true })` preserve the selected Field codecs and reject unknown
+Fields. A derived helper intentionally evolves when a new Field belongs to its
+provenance surface; a named Operation pins a smaller surface with `pick` or
+`omit`.
+
+Named Mutations compose the same kernel through typed `ctx.data`. Caller values
+use `input` or `patch`; Mutation-owned assignments use the distinct exact
+`values` object. The lanes cannot overlap. Trusted values bypass only caller
+Field authority. Scalar normalization runs independently on both lanes, and the
+complete merged candidate still passes validation, candidate Policy, and
+PostgreSQL Constraints. A values-only update is work; an update with both lanes
+empty rejects. Required Fields absent after input, values, defaults, and
+nullable SQL `NULL` construction fail before the write.
+
+The internal create/update kernel exists without public exposure. Neither a
+Collection nor an input helper publishes an Operation, and this extension does
+not add an automatic get/list/delete surface.
+
 ## Fixed write lifecycle
 
 The accepted order is:
 
-1. decode exact untrusted input;
+1. decode exact Operation input;
 2. enforce Operation admission;
 3. open the Mutation-owned transaction and freeze `operationTime`;
-4. apply existing/current row scope and lock;
-5. authorize only canonical caller-supplied Field paths;
-6. evaluate closed pure Field normalization;
-7. apply schema defaults;
-8. evaluate closed server Value Programs;
-9. validate the complete candidate;
-10. enforce candidate Policy;
-11. enforce PostgreSQL Constraints;
-12. select the result;
-13. apply output Field authority;
-14. validate and materialize the output codec;
-15. commit once;
-16. encode the result.
+4. decode exact Collection caller `input` or `patch` and trusted `values`;
+5. reject unknown Collection keys and lane overlap;
+6. apply existing/current row scope and lock;
+7. authorize only canonical caller-supplied Field paths;
+8. normalize supplied caller and trusted Field scalars separately;
+9. construct create defaults and nullable SQL `NULL`, or start update from the
+   locked current row without reapplying create defaults;
+10. overlay normalized trusted `values`;
+11. reject a missing required candidate Field;
+12. validate the complete candidate;
+13. enforce candidate Policy;
+14. enforce PostgreSQL Constraints;
+15. select the result;
+16. apply output Field authority;
+17. validate and materialize the output codec;
+18. commit once;
+19. encode the result.
 
-Policy decides authority before normalization can change a supplied path.
-Normalization and `values` are closed capability-free programs. They cannot
-read data, call Services, dispatch, obtain a clock, perform I/O, or target an
-undeclared Field. `createdAt` and `updatedAt` are ordinary Fields. Each server
-assignment and every `updatedAt` change is explicit and Mutation-owned.
+Policy decides caller Field authority before normalization can change a
+supplied path. A named Mutation may derive trusted values from its input,
+Policy-aware transaction reads and locking reads, `ctx.operationTime`,
+`ctx.callId`, and ordinary TypeScript expressions over those values. Runtime
+does not inspect arbitrary TypeScript provenance. `createdAt` and `updatedAt`
+are ordinary Fields. Each trusted assignment and every `updatedAt` change is
+explicit and Mutation-owned.
 
 Use an inline named Mutation when work spans Collections or owns an application
 error, cross-Collection invariant, transactional audit record, or typed

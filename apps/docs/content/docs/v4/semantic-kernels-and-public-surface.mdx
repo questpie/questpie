@@ -32,12 +32,25 @@ adds database-only behavior such as nullability, defaults, and column mapping.
 `value.*` retains the compatible embedded-JSONB vocabulary. Operation does not
 define a second `operation.uuid()` grammar.
 
+A Codec is executable product data, not only a TypeScript type. The compiler
+serializes its closed grammar into the App Contract and Operation Wire, derives
+generated types from it, and uses it to reject unknown keys, validate durable
+payloads, restore values such as `Date`, and calculate compatibility identities.
+The direct and network paths therefore use one semantic authority.
+
+General validation libraries such as Zod or TypeBox can validate values owned by
+application code, including form state. They do not replace the QUESTPIE Codec
+that the compiler and Runtime require for an Operation, Context input, or
+durable payload. Treating an arbitrary validator as that authority would leave
+the compiler unable to prove one closed portable grammar across generated code,
+runtime execution, durable storage, and the wire.
+
 ## Choose the owner of application work
 
 | Work                                           | Owner       | Boundary                                                               |
 | ---------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
 | Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle              |
-| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts              |
+| Supply a trusted server value                  | `values`    | Mutation-owned assignment checked by the complete candidate Policy     |
 | Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                         |
 | Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts |
 | Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance     |
@@ -46,6 +59,13 @@ define a second `operation.uuid()` grammar.
 
 Reaction is the committed-fact authoring meaning over the internal durable
 kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
+
+Collection Field provenance decides which write lanes may supply a Field.
+Mutation owns trusted `values` and the transaction that merges them with caller
+input. Policy remains the sole authored authorization owner and checks the
+complete candidate after that merge. Keeping these owners separate removes
+repeated Field fences without turning trusted application code into a Policy
+bypass or exposing a Collection on the network.
 
 ## Import executable factories from the current contract
 

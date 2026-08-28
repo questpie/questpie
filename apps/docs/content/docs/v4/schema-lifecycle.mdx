@@ -31,7 +31,11 @@ import { constraint, defineCollection, field } from "questpie";
 export const tenants = defineCollection({
 	name: "tenants",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			immutable: true,
+		}),
 		slug: field.text({ nullable: false, maxLength: 80 }),
 		name: field.text({ nullable: false, maxLength: 160 }),
 	},
@@ -51,8 +55,12 @@ import { constraint, defineCollection, field, index, relation } from "questpie";
 import { tenants } from "./tenants";
 
 const appointmentFields = {
-	id: field.uuid({ nullable: false, default: "randomUuid" }),
-	tenantId: field.uuid({ nullable: false }),
+	id: field.uuid({
+		nullable: false,
+		default: "randomUuid",
+		immutable: true,
+	}),
+	tenantId: field.uuid({ nullable: false, server: true, immutable: true }),
 	customerName: field.text({ nullable: false, maxLength: 160 }),
 	startsAt: field.timestamp({ nullable: false, withTimezone: true }),
 	endsAt: field.timestamp({ nullable: false, withTimezone: true }),
@@ -65,11 +73,14 @@ const appointmentFields = {
 		nullable: false,
 		withTimezone: true,
 		default: "now",
+		server: true,
+		immutable: true,
 	}),
 	updatedAt: field.timestamp({
 		nullable: false,
 		withTimezone: true,
 		default: "now",
+		server: true,
 	}),
 };
 
@@ -104,6 +115,33 @@ Declare the Fields object before the Collection and pass its type to
 compatibility exact. The compiler evaluates the callback once and stores only
 its closed expression tree, so the callback does not enter migration artifacts
 or deployment.
+
+Field provenance declares which write lane may supply a scalar Field. It is
+separate from nullability and database defaults:
+
+| Field declaration               | Caller create input | Caller update patch | Trusted `values` |
+| ------------------------------- | ------------------- | ------------------- | ---------------- |
+| default                         | allowed             | allowed             | allowed          |
+| `immutable: true`               | allowed             | forbidden           | create only      |
+| `server: true`                  | forbidden           | forbidden           | allowed          |
+| `server: true, immutable: true` | forbidden           | forbidden           | create only      |
+
+The Collection owns this boundary because the rule must be the same in every
+Mutation that writes the Field. A named Mutation can narrow the caller surface,
+but it cannot make an immutable Field writable or turn a server-owned Field
+into caller input.
+
+Provenance changes the Data Contract and generated application types, not the
+PostgreSQL column. Changing only `server` or `immutable` does not create a schema
+Migration.
+
+Requiredness is calculated after provenance removes server-owned Fields from
+the caller surface. A caller-writable, non-nullable create Field without a
+database default is required. A defaulted or nullable create Field is optional,
+and an absent nullable Field without a default becomes SQL `NULL`. Every update
+patch Field is optional. A non-nullable server-owned Field without a default
+must still be supplied through trusted `values`; otherwise QUESTPIE rejects the
+incomplete candidate before it writes.
 
 Configure the Application Identity, PostgreSQL schema, and discovery root in
 the [`questpie.json` Application Root](./definition-composition#configure-one-application-root).

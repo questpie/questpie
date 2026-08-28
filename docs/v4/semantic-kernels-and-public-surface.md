@@ -31,7 +31,7 @@ Route capability, never a Mutation or Policy capability.
 | Work                                           | Owner       | Boundary                                                                |
 | ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
 | Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle               |
-| Supply a trusted server value                  | `values`    | Closed assignment from input or immutable Execution facts               |
+| Supply a trusted server value                  | `values`    | Mutation-owned assignment checked by the complete candidate Policy      |
 | Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                          |
 | Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts  |
 | Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance      |
@@ -46,6 +46,19 @@ This map is the permanent v4 guide for work ownership. The v3 hook crosswalk is
 historical evidence, not a public lifecycle API. Reaction and Job remain
 distinct authoring meanings over one internal durable kernel; checkpointing
 does not create another Resource.
+
+Codec is the compiler and Runtime semantic authority rather than an arbitrary
+validation-library type. Its closed serializable grammar drives exact runtime
+validation, canonical compatibility bytes, generated types, direct/network
+value restoration, Context input, and durable payloads. Application code may
+use another validation library for values it owns, but that library does not
+replace the Codec recorded in the App Contract.
+
+Collection provenance, Mutation values, and Policy have separate owners.
+Provenance defines which lane may supply a Field, Mutation owns the transaction
+and trusted assignment, and Policy authorizes the fully merged candidate. This
+removes repeated Field fences without creating automatic network CRUD or a
+trusted-code authorization bypass.
 
 ## Imports
 

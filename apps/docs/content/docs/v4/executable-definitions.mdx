@@ -118,6 +118,11 @@ Resource with the same identity is a normal duplicate-identity error.
 The set does not exist at runtime. There is no separate CRUD dispatcher or
 Admin-only data engine.
 
+This explicit Operation surface is separate from the generated Collection
+create/update kernel available to named Mutations through typed `ctx.data`.
+Defining a Collection creates no client method. Only an Operation with explicit
+network exposure enters the generated network client.
+
 ## Keep Package handlers isolated
 
 A reusable Package imports its executable factories from its generated
