@@ -437,7 +437,13 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 			compilation.generatedFiles["postgres-collection-operation-plans.json"] ??
 				"null",
 		) as Readonly<{
-			plans: readonly Readonly<{ identity: string; member: string }>[];
+			plans: readonly Readonly<{
+				identity: string;
+				member: string;
+				fieldAuthority: Readonly<{
+					checks: readonly Readonly<{ sql: string }>[];
+				}>;
+			}>[];
 		}>;
 		const operationPrograms = JSON.parse(
 			compilation.generatedFiles["collection-operation-programs.json"] ??
@@ -459,6 +465,24 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 			identity: "mutation:tickets.update",
 			member: "update",
 		});
+		const ticketCreatePlan = postgresPlans.plans.find(
+			({ identity }) => identity === "mutation:tickets.create",
+		);
+		expect(ticketCreatePlan).toBeDefined();
+		for (const check of ticketCreatePlan?.fieldAuthority.checks ?? []) {
+			expect(check.sql).not.toContain(
+				'"qp_candidate"."requester_membership_id"',
+			);
+		}
+		const commentCreatePlan = postgresPlans.plans.find(
+			({ identity }) => identity === "mutation:comments.create",
+		);
+		expect(commentCreatePlan).toBeDefined();
+		for (const check of commentCreatePlan?.fieldAuthority.checks ?? []) {
+			expect(check.sql).not.toContain(
+				'"qp_candidate"."author_membership_id"',
+			);
+		}
 		expect(
 			operationPrograms.operations.find(
 				({ identity }) => identity === "mutation:tickets.create",

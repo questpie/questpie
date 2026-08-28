@@ -73,20 +73,19 @@ export const commentPolicy = definePolicy(comments, {
 			),
 	},
 	fields: {
-		create: ({ candidate, principal, tenant }) => {
-			const activeAuthor = expr.exists(memberships, ({ row: author }) =>
+		create: ({ principal, tenant }) => {
+			const activeActor = expr.exists(memberships, ({ row: actor }) =>
 				expr.and(
-					author.id.equal(candidate.authorMembershipId),
-					author.organizationId.equal(tenant.id),
-					author.principalId.equal(principal.id),
-					author.status.equal("active"),
+					actor.organizationId.equal(tenant.id),
+					actor.principalId.equal(principal.id),
+					actor.status.equal("active"),
 				),
 			);
 			return {
-				ticketId: activeAuthor,
-				authorMembershipId: activeAuthor,
-				body: activeAuthor,
-				kind: activeAuthor,
+				ticketId: activeActor,
+				authorMembershipId: activeActor,
+				body: activeActor,
+				kind: activeActor,
 			};
 		},
 	},

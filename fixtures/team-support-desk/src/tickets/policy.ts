@@ -187,24 +187,23 @@ export const ticketPolicy = definePolicy(tickets, {
 			),
 	},
 	fields: {
-		create: ({ candidate, principal, tenant }) => {
-			const activeRequester = expr.exists(memberships, ({ row: requester }) =>
+		create: ({ principal, tenant }) => {
+			const activeActor = expr.exists(memberships, ({ row: actor }) =>
 				expr.and(
-					requester.id.equal(candidate.requesterMembershipId),
-					requester.organizationId.equal(tenant.id),
-					requester.principalId.equal(principal.id),
-					requester.status.equal("active"),
+					actor.organizationId.equal(tenant.id),
+					actor.principalId.equal(principal.id),
+					actor.status.equal("active"),
 				),
 			);
 			return {
-				teamId: activeRequester,
-				requesterMembershipId: activeRequester,
-				assigneeMembershipId: activeRequester,
-				reference: activeRequester,
-				priority: activeRequester,
-				status: activeRequester,
-				summary: activeRequester,
-				description: activeRequester,
+				teamId: activeActor,
+				requesterMembershipId: activeActor,
+				assigneeMembershipId: activeActor,
+				reference: activeActor,
+				priority: activeActor,
+				status: activeActor,
+				summary: activeActor,
+				description: activeActor,
 			};
 		},
 		update: ({ current, principal, tenant }) => {
