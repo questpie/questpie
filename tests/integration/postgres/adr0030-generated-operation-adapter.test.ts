@@ -234,6 +234,9 @@ postgresTest(
 			]);
 		} finally {
 			await application?.close();
+			await database!.unsafe(
+				'DROP SCHEMA IF EXISTS "collaboration" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE;',
+			);
 			await rm(temporary, { force: true, recursive: true });
 		}
 	},
