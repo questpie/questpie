@@ -127,7 +127,7 @@ function digest(value: unknown, label: string): string {
 	return text(value, label, digestPattern);
 }
 
-function programDigest(domain: string, value: unknown): string {
+export function mutationProgramDigest(domain: string, value: unknown): string {
 	return createHash("sha256")
 		.update(`${domain}\0`)
 		.update(canonicalMutationBytes(value))
@@ -387,8 +387,10 @@ function decodeOperation(
 		(member === "list") !== (embeddedQuery !== null) ||
 		(embeddedQuery === null) !== (embeddedDigest === null) ||
 		(embeddedQuery !== null &&
-			(programDigest("questpie-data-query-template-v1", embeddedQuery) !==
-				embeddedDigest ||
+			(mutationProgramDigest(
+				"questpie-data-query-template-v1",
+				embeddedQuery,
+			) !== embeddedDigest ||
 				embeddedQuery.from !== target))
 	)
 		fail(`${label} dataQuery link is invalid`);
@@ -479,6 +481,32 @@ function decodeEnvelope(
 	return array(envelope[member], `${label} ${member}`);
 }
 
+export function decodeFieldNormalizerPrograms(
+	value: unknown,
+): readonly FieldNormalizerProgramV1[] {
+	return Object.freeze(
+		decodeEnvelope(
+			value,
+			"field-normalizer programs",
+			"questpie.field-normalizer-programs",
+			"programs",
+		).map(decodeNormalizer),
+	);
+}
+
+export function decodeServerValuePrograms(
+	value: unknown,
+): readonly ServerValueProgramV1[] {
+	return Object.freeze(
+		decodeEnvelope(
+			value,
+			"server-value programs",
+			"questpie.server-value-programs",
+			"programs",
+		).map(decodeServerValues),
+	);
+}
+
 function uniqueMap<T>(
 	values: readonly T[],
 	key: (value: T) => string,
@@ -520,26 +548,18 @@ export function linkCollectionMutationPrograms(
 		({ target, member }) => `${target}\0${member}`,
 		"operation owner",
 	);
-	const normalizers = decodeEnvelope(
-		input.fieldNormalizers,
-		"field-normalizer programs",
-		"questpie.field-normalizer-programs",
-		"programs",
-	).map(decodeNormalizer);
-	const serverValues = decodeEnvelope(
-		input.serverValues,
-		"server-value programs",
-		"questpie.server-value-programs",
-		"programs",
-	).map(decodeServerValues);
+	const normalizers = decodeFieldNormalizerPrograms(input.fieldNormalizers);
+	const serverValues = decodeServerValuePrograms(input.serverValues);
 	const normalizerByDigest = uniqueMap(
 		normalizers,
-		(program) => programDigest("questpie-field-normalizer-program-v1", program),
+		(program) =>
+			mutationProgramDigest("questpie-field-normalizer-program-v1", program),
 		"normalizer digest",
 	);
 	const serverValueByDigest = uniqueMap(
 		serverValues,
-		(program) => programDigest("questpie-server-value-program-v1", program),
+		(program) =>
+			mutationProgramDigest("questpie-server-value-program-v1", program),
 		"server-value digest",
 	);
 	uniqueMap(

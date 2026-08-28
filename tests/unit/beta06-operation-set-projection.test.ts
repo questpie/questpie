@@ -103,6 +103,10 @@ export const messageOperations = defineCollectionOperations(messages, {
 			compilation.generatedFiles["collection-operation-programs.json"] ??
 				"null",
 		);
+		const adapters = JSON.parse(
+			compilation.generatedFiles["collection-operation-adapters.json"] ??
+				"null",
+		);
 		const postgresPlans = JSON.parse(
 			compilation.generatedFiles["postgres-collection-operation-plans.json"] ??
 				"null",
@@ -238,54 +242,51 @@ export const messageOperations = defineCollectionOperations(messages, {
 			format: "questpie.collection-operation-programs",
 			version: 1,
 		});
-		const setPrograms = programs.operations.filter(
+		const collectionPrograms = programs.operations.filter(
 			(program: { target: string }) => program.target === "collection:messages",
 		);
-		expect(setPrograms[0].normalizerProgramDigest).toBe(
+		const createAdapter = adapters.adapters.find(
+			(adapter: { identity: string }) =>
+				adapter.identity === "mutation:messages.create",
+		);
+		expect(createAdapter.normalizerProgramDigest).toBe(
 			digest("questpie-field-normalizer-program-v1", normalizers.programs[0]),
 		);
-		expect(setPrograms[0].serverValueProgramDigest).toBe(
+		expect(createAdapter.serverValueProgramDigest).toBe(
 			digest("questpie-server-value-program-v1", values.programs[0]),
 		);
-		expect(setPrograms[0]).toMatchObject({
+		expect(createAdapter).toMatchObject({
 			identity: "mutation:messages.create",
-			kind: "mutation",
-			mode: "writeTransaction",
 			target: "collection:messages",
 			member: "create",
-			policy: "policy:messages.default",
+			kernelIdentity: "mutation:__collectionKernel.messages.create",
 			keyFields: [],
 			callerInputFields: [["body"]],
-			trustedValueFields: [["body"], ["id"]],
-			requiredTrustedValueFields: [],
 			selectedFieldPaths: [["id"], ["channelId"], ["body"], ["createdAt"]],
 			outputCardinality: "one",
 		});
 		expect(
-			programs.operations.find(
-				(program: { identity: string }) =>
-					program.identity === "mutation:messages.update",
+			adapters.adapters.find(
+				(adapter: { identity: string }) =>
+					adapter.identity === "mutation:messages.update",
 			),
 		).toMatchObject({
-			trustedValueFields: [
-				["authorMembershipId"],
-				["body"],
-				["channelId"],
-				["id"],
-			],
-			requiredTrustedValueFields: [],
+			kernelIdentity: "mutation:__collectionKernel.messages.update",
+			callerInputFields: [["body"]],
 		});
-		expect(setPrograms).toHaveLength(5);
+		expect(collectionPrograms).toHaveLength(5);
 		expect(
-			setPrograms.map((program: { identity: string }) => program.identity),
+			collectionPrograms.map(
+				(program: { identity: string }) => program.identity,
+			),
 		).toEqual([
-			"mutation:messages.create",
+			"mutation:__collectionKernel.messages.create",
+			"mutation:__collectionKernel.messages.update",
 			"mutation:messages.delete",
-			"mutation:messages.update",
 			"query:messages.get",
 			"query:messages.list",
 		]);
-		expect(setPrograms.at(-1)).toMatchObject({
+		expect(collectionPrograms.at(-1)).toMatchObject({
 			identity: "query:messages.list",
 			dataQuery: {
 				format: "questpie.data-query-template",
@@ -304,11 +305,11 @@ export const messageOperations = defineCollectionOperations(messages, {
 			version: 1,
 			plans: [
 				expect.objectContaining({
-					identity: "mutation:messages.create",
+					identity: "mutation:__collectionKernel.messages.create",
 					member: "create",
 				}),
 				expect.objectContaining({
-					identity: "mutation:messages.update",
+					identity: "mutation:__collectionKernel.messages.update",
 					member: "update",
 				}),
 				expect.objectContaining({
@@ -405,6 +406,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			runtimeBuild.inventory
 				.filter((entry: { path: string }) =>
 					[
+						"collection-operation-adapters.json",
 						"collection-operation-explain.json",
 						"collection-operation-programs.json",
 						"collection-operation-set-projections.json",
@@ -415,6 +417,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 				)
 				.map((entry: { path: string }) => entry.path),
 		).toEqual([
+			"collection-operation-adapters.json",
 			"collection-operation-explain.json",
 			"collection-operation-programs.json",
 			"collection-operation-set-projections.json",
@@ -465,14 +468,16 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 
 		expect(
 			postgresPlans.plans.find(
-				({ identity }) => identity === "mutation:tickets.update",
+				({ identity }) =>
+					identity === "mutation:__collectionKernel.tickets.update",
 			),
 		).toMatchObject({
-			identity: "mutation:tickets.update",
+			identity: "mutation:__collectionKernel.tickets.update",
 			member: "update",
 		});
 		const ticketCreatePlan = postgresPlans.plans.find(
-			({ identity }) => identity === "mutation:tickets.create",
+			({ identity }) =>
+				identity === "mutation:__collectionKernel.tickets.create",
 		);
 		expect(ticketCreatePlan).toBeDefined();
 		for (const check of ticketCreatePlan?.fieldAuthority.checks ?? []) {
@@ -481,7 +486,8 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 			);
 		}
 		const commentCreatePlan = postgresPlans.plans.find(
-			({ identity }) => identity === "mutation:comments.create",
+			({ identity }) =>
+				identity === "mutation:__collectionKernel.comments.create",
 		);
 		expect(commentCreatePlan).toBeDefined();
 		for (const check of commentCreatePlan?.fieldAuthority.checks ?? []) {
@@ -489,41 +495,50 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 		}
 		expect(
 			operationPrograms.operations.find(
-				({ identity }) => identity === "mutation:tickets.create",
+				({ identity }) =>
+					identity === "mutation:__collectionKernel.tickets.create",
 			),
 		).toMatchObject({
 			callerInputFields: [
-				["teamId"],
 				["assigneeMembershipId"],
-				["reference"],
-				["priority"],
-				["summary"],
 				["description"],
+				["priority"],
+				["reference"],
+				["summary"],
+				["teamId"],
 			],
 			trustedValueFields: [
 				["assigneeMembershipId"],
 				["closedAt"],
+				["createdAt"],
 				["description"],
 				["id"],
 				["lastSlaFollowUpAt"],
+				["organizationId"],
 				["priority"],
 				["reference"],
 				["requesterMembershipId"],
 				["status"],
 				["summary"],
 				["teamId"],
+				["updatedAt"],
 			],
-			requiredTrustedValueFields: [["requesterMembershipId"]],
+			requiredTrustedValueFields: [
+				["organizationId"],
+				["requesterMembershipId"],
+			],
 		});
 		expect(
 			operationPrograms.operations.find(
-				({ identity }) => identity === "mutation:comments.create",
+				({ identity }) =>
+					identity === "mutation:__collectionKernel.comments.create",
 			),
 		).toMatchObject({
-			callerInputFields: [["ticketId"], ["body"]],
+			callerInputFields: [["body"], ["ticketId"]],
 			trustedValueFields: [
 				["authorMembershipId"],
 				["body"],
+				["createdAt"],
 				["id"],
 				["kind"],
 				["ticketId"],

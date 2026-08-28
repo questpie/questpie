@@ -88,6 +88,7 @@ export const createTicket = defineMutation({
 				description: input.description,
 			},
 			values: {
+				organizationId: ctx.tenant.id,
 				requesterMembershipId: ctx.values.membershipId,
 				status: "open",
 			},

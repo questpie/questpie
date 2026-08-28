@@ -19,9 +19,10 @@ import {
 	projectLiveQueryCompilation,
 } from "./live-query";
 import {
-	adaptCollectionMutationKernels,
 	lowerPostgresCollectionOperationPlans,
+	projectCollectionKernelExecutionPrograms,
 	projectCollectionMutationKernels,
+	projectCollectionOperationAdapters,
 	projectCollectionOperationSets,
 	projectMutationGeneratedContract,
 	projectCollectionOperationResourceMetadata,
@@ -124,10 +125,24 @@ export async function createArtifacts(
 	const collectionMutationKernels = projectCollectionMutationKernels(
 		input.resources,
 	);
-	const collectionOperationPrograms = adaptCollectionMutationKernels(
+	const collectionOperationPrograms = projectCollectionKernelExecutionPrograms(
 		collectionMutationKernels,
 		operationSets.programs,
 	);
+	const collectionOperationAdapters = projectCollectionOperationAdapters(
+		collectionMutationKernels,
+		operationSets.programs,
+	);
+	const emptyFieldNormalizerPrograms = {
+		format: "questpie.field-normalizer-programs" as const,
+		version: 1 as const,
+		programs: [],
+	};
+	const emptyServerValuePrograms = {
+		format: "questpie.server-value-programs" as const,
+		version: 1 as const,
+		programs: [],
+	};
 	const operationResourceMetadata = projectCollectionOperationResourceMetadata({
 		sets: operationSets.sets,
 		programs: operationSets.programs,
@@ -448,8 +463,8 @@ export async function createArtifacts(
 			collectionOperations: collectionOperationPrograms,
 			schemaProjection: schema,
 			policyProjection: relational.policy,
-			normalizerPrograms: operationSets.normalizers,
-			serverValuePrograms: operationSets.serverValues,
+			normalizerPrograms: emptyFieldNormalizerPrograms,
+			serverValuePrograms: emptyServerValuePrograms,
 		});
 	if (operationSets.sets.sets.length > 0) {
 		generated["collection-operation-set-projections.json"] = canonicalBytes(
@@ -457,6 +472,9 @@ export async function createArtifacts(
 		);
 		generated["collection-operation-explain.json"] = canonicalBytes(
 			operationResourceMetadata.explain,
+		);
+		generated["collection-operation-adapters.json"] = canonicalBytes(
+			collectionOperationAdapters,
 		);
 	}
 	if (collectionOperationPrograms.operations.length > 0) {
@@ -531,6 +549,8 @@ export async function createArtifacts(
 			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
 			collectionOperationArtifacts:
 				collectionOperationPrograms.operations.length > 0,
+			collectionOperationAdapterArtifacts:
+				collectionOperationAdapters.adapters.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,
 			jobArtifact: runtime.jobs.jobs.length > 0,
 			realtime: realtimeEnabled,

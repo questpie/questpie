@@ -52,6 +52,7 @@ export const publishMessage = defineMutation({
 				messageId: message.id,
 				kind: "published",
 			},
+			values: { occurredAt: ctx.operationTime },
 		});
 		await ctx.dispatch.messagePublished({
 			channelId: channel.id,

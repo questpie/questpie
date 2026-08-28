@@ -52,6 +52,7 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 
 		expect(runtimeBuild.inventory.map(({ path }) => path)).toEqual(
 			expect.arrayContaining([
+				"collection-operation-adapters.json",
 				"collection-operation-programs.json",
 				"field-normalizer-programs.json",
 				"server-value-programs.json",
@@ -60,6 +61,7 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 			]),
 		);
 		expect(bundle).toContain("linkCollectionMutationPrograms");
+		expect(bundle).toContain("linkCollectionOperationAdapters");
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
 		expect(bundle).toContain("linkReactionProjection");
 		expect(linkedApplication).toContain(
@@ -107,6 +109,7 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		])
 			expect(bundle).toContain(`artifactFiles["${path}"]`);
 		for (const path of [
+			"collection-operation-adapters.json",
 			"collection-operation-programs.json",
 			"field-normalizer-programs.json",
 			"server-value-programs.json",

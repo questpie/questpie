@@ -6,6 +6,7 @@ import {
 } from "../relational";
 import type { NormalizedResource } from "../types";
 import type {
+	CollectionOperationAdaptersV1,
 	CollectionOperationProgramsV1,
 	CollectionOperationProgramV1,
 } from "./operation-set-contract";
@@ -197,52 +198,71 @@ export function projectCollectionMutationKernels(
 	});
 }
 
-export function adaptCollectionMutationKernels(
+export function projectCollectionKernelExecutionPrograms(
 	kernels: CollectionOperationProgramsV1,
-	adapters: CollectionOperationProgramsV1,
+	operationSetPrograms: CollectionOperationProgramsV1,
 ): CollectionOperationProgramsV1 {
-	const kernelsByOwner = new Map<string, CollectionOperationProgramV1>(
-		kernels.operations.map(
-			(program) => [`${program.target}\0${program.member}`, program] as const,
-		),
-	);
-	const adaptedOwners = new Set<string>();
-	const adapted = adapters.operations.map((adapter) => {
-		if (adapter.member !== "create" && adapter.member !== "update")
-			return adapter;
-		const owner = `${adapter.target}\0${adapter.member}`;
-		const kernel = kernelsByOwner.get(owner);
-		if (!kernel)
-			throw new TypeError(
-				`${adapter.identity} cannot adapt a missing Collection kernel`,
-			);
-		if (adapter.policy !== kernel.policy)
-			throw new TypeError(
-				`${adapter.identity} must adapt the default Collection Policy`,
-			);
-		adaptedOwners.add(owner);
-		return Object.freeze({
-			...kernel,
-			identity: adapter.identity,
-			callerInputFields: adapter.callerInputFields,
-			requiredCallerInputFields: adapter.requiredCallerInputFields,
-			trustedValueFields: adapter.trustedValueFields,
-			requiredTrustedValueFields: adapter.requiredTrustedValueFields,
-			selectedFieldPaths: adapter.selectedFieldPaths,
-			normalizerProgramDigest: adapter.normalizerProgramDigest,
-			serverValueProgramDigest: adapter.serverValueProgramDigest,
-			limits: adapter.limits,
-		});
-	});
 	const operations = [
-		...kernels.operations.filter(
-			({ target, member }) => !adaptedOwners.has(`${target}\0${member}`),
+		...kernels.operations,
+		...operationSetPrograms.operations.filter(
+			({ member }) => member !== "create" && member !== "update",
 		),
-		...adapted,
 	].toSorted((left, right) => compareAscii(left.identity, right.identity));
 	return Object.freeze({
 		format: "questpie.collection-operation-programs",
 		version: 1,
 		operations: Object.freeze(operations),
+	});
+}
+
+export function projectCollectionOperationAdapters(
+	kernels: CollectionOperationProgramsV1,
+	operationSetPrograms: CollectionOperationProgramsV1,
+): CollectionOperationAdaptersV1 {
+	const kernelsByOwner = new Map<string, CollectionOperationProgramV1>(
+		kernels.operations.map(
+			(program) => [`${program.target}\0${program.member}`, program] as const,
+		),
+	);
+	const adapters = operationSetPrograms.operations
+		.filter(
+			(
+				program,
+			): program is CollectionOperationProgramV1 & {
+				member: "create" | "update";
+				identity: `mutation:${string}`;
+			} => program.member === "create" || program.member === "update",
+		)
+		.map((program) => {
+			const kernel = kernelsByOwner.get(`${program.target}\0${program.member}`);
+			if (!kernel)
+				throw new TypeError(
+					`${program.identity} cannot adapt a missing Collection kernel`,
+				);
+			if (program.policy !== kernel.policy)
+				throw new TypeError(
+					`${program.identity} must adapt the default Collection Policy`,
+				);
+			return Object.freeze({
+				identity: program.identity,
+				target: program.target,
+				member: program.member,
+				kernelIdentity: kernel.identity as `mutation:${string}`,
+				keyFields: kernel.keyFields,
+				callerInputFields: program.callerInputFields,
+				requiredCallerInputFields: program.requiredCallerInputFields,
+				selectedFieldPaths: program.selectedFieldPaths,
+				normalizerProgramDigest: program.normalizerProgramDigest,
+				serverValueProgramDigest: program.serverValueProgramDigest,
+				outputCardinality: program.outputCardinality as "one" | "optionalOne",
+				limits:
+					program.limits as CollectionOperationAdaptersV1["adapters"][number]["limits"],
+			});
+		})
+		.toSorted((left, right) => compareAscii(left.identity, right.identity));
+	return Object.freeze({
+		format: "questpie.collection-operation-adapters",
+		version: 1,
+		adapters: Object.freeze(adapters),
 	});
 }

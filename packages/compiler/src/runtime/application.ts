@@ -73,6 +73,7 @@ function applicationEntry(
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
+		collectionOperationAdapterArtifacts: boolean;
 		reactionArtifact: boolean;
 		jobArtifact: boolean;
 		realtime: boolean;
@@ -353,6 +354,11 @@ function applicationEntry(
 			version: 1,
 			programs: [],
 		},
+		adapters: {
+			format: "questpie.collection-operation-adapters",
+			version: 1,
+			adapters: [],
+		},
 		plans: {
 			format: "questpie.postgres-collection-operation-plans",
 			version: 1,
@@ -396,13 +402,14 @@ async function loadRuntimeArtifacts() {
 }
 
 function linkMutationArtifacts(runtimeModule, artifactFiles) {
-	const { linkCollectionMutationPrograms, linkJobProjection, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
+	const { linkCollectionMutationPrograms, linkCollectionOperationAdapters, linkJobProjection, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
 	const raw = ${
 		input.collectionOperationArtifacts
 			? `{
 		programs: JSON.parse(artifactFiles["collection-operation-programs.json"]),
 		normalizers: JSON.parse(artifactFiles["field-normalizer-programs.json"]),
 		serverValues: JSON.parse(artifactFiles["server-value-programs.json"]),
+		adapters: ${input.collectionOperationAdapterArtifacts ? 'JSON.parse(artifactFiles["collection-operation-adapters.json"])' : emptyCollectionArtifacts + ".adapters"},
 		plans: JSON.parse(artifactFiles["postgres-collection-operation-plans.json"]),
 		policies: JSON.parse(artifactFiles["policy-projection.json"]).policies.map(({ program }) => ({
 			identity: program.identity,
@@ -413,11 +420,17 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 	};
 	const operations = linkCollectionMutationPrograms({
 		collectionOperations: raw.programs,
-		fieldNormalizers: raw.normalizers,
-		serverValues: raw.serverValues,
+		fieldNormalizers: ${emptyCollectionArtifacts}.normalizers,
+		serverValues: ${emptyCollectionArtifacts}.serverValues,
 		policies: raw.policies,
 	});
 	return Object.freeze({
+		collectionAdapters: linkCollectionOperationAdapters({
+			artifact: raw.adapters,
+			fieldNormalizers: raw.normalizers,
+			serverValues: raw.serverValues,
+			kernels: operations,
+		}),
 		collectionPlans: linkPostgresCollectionOperationPlans({
 			artifact: raw.plans,
 			operations,
@@ -727,6 +740,7 @@ export async function renderApplicationBundle(
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
+		collectionOperationAdapterArtifacts: boolean;
 		reactionArtifact: boolean;
 		jobArtifact: boolean;
 		realtime: boolean;

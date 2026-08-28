@@ -18,8 +18,10 @@ export {
 	linkPostgresQueryPlans,
 } from "./relational";
 export {
+	createCollectionOperationAdapterExecutor,
 	createPostgresDatabaseMutationInvoker,
 	createPostgresJobAcceptanceTransaction,
+	linkCollectionOperationAdapters,
 	linkCollectionMutationPrograms,
 	linkPostgresCollectionOperationPlans,
 	linkJobProjection,

@@ -4,11 +4,13 @@ import type { NormalizedResource } from "../types";
 export { mutationDiscoverySource } from "./discovery";
 export { projectCollectionOperationSets } from "./operation-set";
 export {
-	adaptCollectionMutationKernels,
+	projectCollectionKernelExecutionPrograms,
 	projectCollectionMutationKernels,
+	projectCollectionOperationAdapters,
 } from "./kernel";
 export { projectCollectionOperationResourceMetadata } from "./operation-resource";
 export type {
+	CollectionOperationAdaptersV1,
 	CollectionOperationProgramsV1,
 	CollectionOperationProgramV1,
 } from "./operation-set-contract";

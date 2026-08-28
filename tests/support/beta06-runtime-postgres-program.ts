@@ -33,12 +33,16 @@ export async function runtimePostgresProgramFixture() {
 				collectionOperations: JSON.parse(
 					generated["collection-operation-programs.json"] ?? "null",
 				),
-				fieldNormalizers: JSON.parse(
-					generated["field-normalizer-programs.json"] ?? "null",
-				),
-				serverValues: JSON.parse(
-					generated["server-value-programs.json"] ?? "null",
-				),
+				fieldNormalizers: {
+					format: "questpie.field-normalizer-programs",
+					version: 1,
+					programs: [],
+				},
+				serverValues: {
+					format: "questpie.server-value-programs",
+					version: 1,
+					programs: [],
+				},
 				policies: policyProjection.policies.map(({ program }) => ({
 					identity: program.identity,
 					target: program.target,

@@ -45,3 +45,29 @@ export interface CollectionOperationProgramsV1 {
 	readonly version: 1;
 	readonly operations: readonly CollectionOperationProgramV1[];
 }
+
+export interface CollectionOperationAdapterV1 {
+	readonly identity: `mutation:${string}`;
+	readonly target: `collection:${string}`;
+	readonly member: "create" | "update";
+	readonly kernelIdentity: `mutation:${string}`;
+	readonly keyFields: readonly (readonly string[])[];
+	readonly callerInputFields: readonly (readonly string[])[];
+	readonly requiredCallerInputFields: readonly (readonly string[])[];
+	readonly selectedFieldPaths: readonly (readonly string[])[];
+	readonly normalizerProgramDigest: string | null;
+	readonly serverValueProgramDigest: string | null;
+	readonly outputCardinality: "one" | "optionalOne";
+	readonly limits: Readonly<{
+		inputBytes: number;
+		resultBytes: number;
+		rowsWritten: number;
+		durationMilliseconds: number;
+	}>;
+}
+
+export interface CollectionOperationAdaptersV1 {
+	readonly format: "questpie.collection-operation-adapters";
+	readonly version: 1;
+	readonly adapters: readonly CollectionOperationAdapterV1[];
+}

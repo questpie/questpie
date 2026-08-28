@@ -1,6 +1,15 @@
 import type { PreparedOperation } from "../operation";
 
 export {
+	createCollectionOperationAdapterExecutor,
+	linkCollectionOperationAdapters,
+} from "./adapter";
+export type {
+	CollectionOperationAdapterFacts,
+	LinkedCollectionOperationAdaptersV1,
+	LinkedCollectionOperationAdapterV1,
+} from "./adapter";
+export {
 	CommittedResultUnavailable,
 	type CommittedResultUnavailablePayload,
 } from "../operation";

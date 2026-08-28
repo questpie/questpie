@@ -16,17 +16,21 @@ test("links compiler-owned PostgreSQL get/create plans to Collection Operations"
 	});
 
 	expect(linked.plans.map(({ identity }) => identity)).toEqual([
-		"mutation:messageEvents.create",
-		"mutation:messages.create",
+		"mutation:__collectionKernel.messageEvents.create",
+		"mutation:__collectionKernel.messages.create",
 		"query:channels.get",
 		"query:spaces.get",
 	]);
-	const create = linked.byIdentity.get("mutation:messages.create");
+	const create = linked.byIdentity.get(
+		"mutation:__collectionKernel.messages.create",
+	);
 	if (create?.member !== "create") throw new Error("missing create plan");
 	expect(create.operation.normalizerProgram).toEqual(create.normalizerProgram);
 	expect(create.operation.serverValueProgram).toEqual(
 		create.serverValueProgram,
 	);
+	expect(create.normalizerProgram).toBeNull();
+	expect(create.serverValueProgram).toBeNull();
 	expect(create.lifecycle).toContain("trustedValues");
 	expect(
 		create.candidate.steps

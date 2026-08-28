@@ -67,7 +67,8 @@ function linkPostgresCollectionOperationPlans(
 test("rejects extra executable-plan keys", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	plan(hostile, "mutation:messages.create").runtimePlanner = true;
+	plan(hostile, "mutation:__collectionKernel.messages.create").runtimePlanner =
+		true;
 	expect(() =>
 		linkPostgresCollectionOperationPlans({
 			artifact: hostile,
@@ -76,28 +77,25 @@ test("rejects extra executable-plan keys", async () => {
 	).toThrow("has invalid keys");
 });
 
-test("rejects embedded write-program digest drift", async () => {
+test("rejects an adapter write program smuggled into a kernel plan", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	const normalizer = record(
-		plan(hostile, "mutation:messages.create").normalizerProgram,
-	);
-	const steps = normalizer.steps;
-	if (!Array.isArray(steps))
-		throw new TypeError("fixture has no normalizer steps");
-	record(record(steps[0]).expression).kind = "trimIfPresent";
+	plan(
+		hostile,
+		"mutation:__collectionKernel.messages.create",
+	).normalizerProgram = {};
 	expect(() =>
 		linkPostgresCollectionOperationPlans({
 			artifact: hostile,
 			operations: fixture.operations,
 		}),
-	).toThrow("executable write-program digest link is invalid");
+	).toThrow(/normalizer|write-program/);
 });
 
 test("rejects an executable-plan identity redirect", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	plan(hostile, "mutation:messages.create").identity =
+	plan(hostile, "mutation:__collectionKernel.messages.create").identity =
 		"mutation:messages.redirected";
 	expect(() =>
 		linkPostgresCollectionOperationPlans({
@@ -125,7 +123,8 @@ test("rejects a conditional output whose guard link is missing", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
 	const output = record(
-		plan(hostile, "mutation:messages.create").outputAuthority,
+		plan(hostile, "mutation:__collectionKernel.messages.create")
+			.outputAuthority,
 	);
 	if (!Array.isArray(output.selectedPaths))
 		throw new TypeError("fixture has no selected output paths");
@@ -164,7 +163,7 @@ test.each([
 	async ({ codec }) => {
 		const fixture = await compilation;
 		const hostile = artifact(fixture.artifact);
-		const create = plan(hostile, "mutation:messages.create");
+		const create = plan(hostile, "mutation:__collectionKernel.messages.create");
 		const candidate = record(create.candidate);
 		if (!Array.isArray(candidate.fields))
 			throw new TypeError("fixture candidate has no fields");
@@ -181,7 +180,10 @@ test.each([
 test("rejects an execution fact whose source and path do not form a closed fact", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	const write = parameters(plan(hostile, "mutation:messages.create"), "write");
+	const write = parameters(
+		plan(hostile, "mutation:__collectionKernel.messages.create"),
+		"write",
+	);
 	const fact = write.find((parameter) => parameter.kind === "executionFact");
 	if (!fact) throw new TypeError("fixture write has no execution fact");
 	fact.path = ["unknown"];
@@ -196,7 +198,10 @@ test("rejects an execution fact whose source and path do not form a closed fact"
 test("rejects a literal whose value disagrees with its codec", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	const write = parameters(plan(hostile, "mutation:messages.create"), "write");
+	const write = parameters(
+		plan(hostile, "mutation:__collectionKernel.messages.create"),
+		"write",
+	);
 	const literal = write.find(
 		(parameter) => parameter.kind === "literal" && parameter.codec === "uuid",
 	);
@@ -213,7 +218,7 @@ test("rejects a literal whose value disagrees with its codec", async () => {
 test("rejects a literal whose PostgreSQL type disagrees with its codec", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	const create = plan(hostile, "mutation:messages.create");
+	const create = plan(hostile, "mutation:__collectionKernel.messages.create");
 	const write = record(create.write);
 	const literal = parameters(create, "write").find(
 		(parameter) => parameter.kind === "literal" && parameter.codec === "uuid",
@@ -310,7 +315,8 @@ test("does not count a placeholder inside a PostgreSQL string literal", async ()
 test("checks the independent digest before decoding a hostile plan", async () => {
 	const fixture = await compilation;
 	const hostile = artifact(fixture.artifact);
-	plan(hostile, "mutation:messages.create").runtimePlanner = true;
+	plan(hostile, "mutation:__collectionKernel.messages.create").runtimePlanner =
+		true;
 	expect(() =>
 		linkPlans({
 			artifact: hostile,
