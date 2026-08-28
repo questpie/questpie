@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 
+import {
+	createCollectionOperationAdapterExecutor,
+	linkCollectionMutationPrograms,
+	linkCollectionOperationAdapters,
+} from "../../packages/runtime/src/mutation";
+import { canonicalMutationBytes } from "../../packages/runtime/src/mutation/canonical";
 import {
 	createPostgresCollectionMutationData,
 	createPostgresDatabaseCollectionMutationData,
@@ -11,6 +18,13 @@ import {
 
 const id = "00000000-0000-4000-8000-000000000001";
 const principalId = "00000000-0000-4000-8000-000000000002";
+
+function digest(domain: string, value: unknown): string {
+	return createHash("sha256")
+		.update(`${domain}\0`)
+		.update(canonicalMutationBytes(value))
+		.digest("hex");
+}
 
 function operation(identity: string, member: "create" | "get") {
 	return {
@@ -348,6 +362,356 @@ function dataFor(
 		consumeRows,
 	});
 }
+
+test("Operation create normalization follows sparse caller Field authority", async () => {
+	const baseline = createPlan();
+	const kernelIdentity = "mutation:__collectionKernel.records.create";
+	const plan = {
+		...baseline,
+		identity: kernelIdentity,
+		operation: { ...baseline.operation, identity: kernelIdentity },
+	};
+	const normalizer = {
+		artifact: "questpie.field-normalizer-program",
+		version: 1,
+		target: "collection:records",
+		operation: "create",
+		steps: [
+			{
+				target: ["title"],
+				expression: { kind: "trim", source: ["title"] },
+			},
+		],
+		capabilities: [],
+	} as const;
+	const normalizerDigest = digest(
+		"questpie-field-normalizer-program-v1",
+		normalizer,
+	);
+	const {
+		normalizerProgram: _normalizerProgram,
+		serverValueProgram: _serverValueProgram,
+		...kernelOperation
+	} = plan.operation;
+	const kernel = {
+		...kernelOperation,
+		normalizerProgramDigest: normalizerDigest,
+	};
+	const kernels = linkCollectionMutationPrograms({
+		collectionOperations: {
+			format: "questpie.collection-operation-programs",
+			version: 1,
+			operations: [kernel],
+		},
+		fieldNormalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		policies: [
+			{ identity: "policy:records.default", target: "collection:records" },
+		],
+	});
+	const adapters = linkCollectionOperationAdapters({
+		artifact: {
+			format: "questpie.collection-operation-adapters",
+			version: 1,
+			adapters: [
+				{
+					identity: "mutation:records.normalized.create",
+					target: "collection:records",
+					member: "create",
+					kernelIdentity: kernel.identity,
+					keyFields: [],
+					callerInputFields: [["title"]],
+					requiredCallerInputFields: [["title"]],
+					selectedFieldPaths: [["id"], ["title"]],
+					normalizerProgramDigest: normalizerDigest,
+					serverValueProgramDigest: null,
+					outputCardinality: "one",
+					limits: kernel.limits,
+				},
+			],
+		},
+		fieldNormalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		kernels,
+	});
+	const calls: Array<readonly [string, readonly unknown[]]> = [];
+	const data = dataFor([plan], async (statement, parameters = []) => {
+		calls.push([statement, parameters]);
+		if (statement === "TITLE_AUTHORITY_SQL")
+			return parameters[0] === "  allowed  " ? [{ allowed: true }] : [];
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: "allowed",
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+	const execute = createCollectionOperationAdapterExecutor({
+		adapters,
+		facts: {
+			operationTime: new Date("2026-08-16T20:00:00.000Z"),
+			principal: { id: principalId, kind: "user" },
+			tenant: { id: "tenant-1" },
+		},
+		invokeKernel: async (identity, request) => {
+			expect(identity).toBe(plan.identity);
+			return data.records.create(request);
+		},
+	});
+
+	await expect(
+		execute("mutation:records.normalized.create", {
+			input: { title: "  allowed  " },
+		}),
+	).resolves.toEqual({ id, title: "allowed" });
+	expect(calls).toEqual([
+		["TITLE_AUTHORITY_SQL", ["  allowed  "]],
+		[
+			"WRITE_WITH_btrim_gen_random_uuid_SQL",
+			["allowed", false, null, new Date("2026-08-16T20:00:00.000Z")],
+		],
+	]);
+});
+
+test("Operation update normalization follows sparse caller Field authority", async () => {
+	const textCodec = {
+		kind: "text",
+		minLength: 1,
+		maxLength: 120,
+		collation: "questpie.binary",
+	} as const;
+	const kernelIdentity = "mutation:__collectionKernel.records.update";
+	const normalizer = {
+		artifact: "questpie.field-normalizer-program",
+		version: 1,
+		target: "collection:records",
+		operation: "update",
+		steps: [
+			{
+				target: ["title"],
+				expression: { kind: "trim", source: ["title"] },
+			},
+		],
+		capabilities: [],
+	} as const;
+	const normalizerDigest = digest(
+		"questpie-field-normalizer-program-v1",
+		normalizer,
+	);
+	const kernel = {
+		identity: kernelIdentity,
+		kind: "mutation",
+		mode: "writeTransaction",
+		target: "collection:records",
+		member: "update",
+		policy: "policy:records.default",
+		keyFields: [["id"]],
+		callerInputFields: [["title"]],
+		requiredCallerInputFields: [],
+		trustedValueFields: [],
+		requiredTrustedValueFields: [],
+		selectedFieldPaths: [["id"], ["title"]],
+		dataQuery: null,
+		dataQueryDigest: null,
+		normalizerProgramDigest: normalizerDigest,
+		serverValueProgramDigest: null,
+		outputCardinality: "optionalOne",
+		limits: {
+			inputBytes: 65_536,
+			resultBytes: 1_048_576,
+			rowsWritten: 100,
+			durationMilliseconds: 5_000,
+		},
+	} as const;
+	const plan = {
+		...kernel,
+		operation: kernel,
+		candidate: {
+			fields: [{ path: ["title"], codec: textCodec, nullable: false }],
+		},
+		lock: {
+			sql: "LOCK_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "key",
+					path: ["id"],
+					codec: { kind: "uuid" },
+					postgresType: "uuid",
+				},
+			],
+		},
+		fieldAuthority: {
+			checks: [
+				{
+					path: ["title"],
+					sql: "TITLE_AUTHORITY_SQL",
+					parameters: [
+						{
+							position: 1,
+							kind: "patchValue",
+							path: ["title"],
+							codec: textCodec,
+							postgresType: "text",
+						},
+					],
+				},
+			],
+		},
+		candidateValidation: {
+			sql: "CANDIDATE_VALIDATION_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "patchValue",
+					path: ["title"],
+					codec: textCodec,
+					postgresType: "text",
+				},
+			],
+			result: [
+				{
+					path: ["title"],
+					column: "qp_candidate_0",
+					codec: textCodec,
+					nullable: false,
+				},
+			],
+		},
+		write: {
+			sql: "WRITE_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "patchValue",
+					path: ["title"],
+					codec: textCodec,
+					postgresType: "text",
+				},
+			],
+			result: [
+				{
+					path: ["id"],
+					column: "qp_result_0",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+				{
+					path: ["title"],
+					column: "qp_result_1",
+					codec: textCodec,
+					nullable: false,
+				},
+			],
+		},
+		limits: { rows: 100, durationMilliseconds: 5_000 },
+	} as const;
+	const kernels = linkCollectionMutationPrograms({
+		collectionOperations: {
+			format: "questpie.collection-operation-programs",
+			version: 1,
+			operations: [kernel],
+		},
+		fieldNormalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		policies: [
+			{ identity: "policy:records.default", target: "collection:records" },
+		],
+	});
+	const adapters = linkCollectionOperationAdapters({
+		artifact: {
+			format: "questpie.collection-operation-adapters",
+			version: 1,
+			adapters: [
+				{
+					identity: "mutation:records.normalized.update",
+					target: "collection:records",
+					member: "update",
+					kernelIdentity,
+					keyFields: [["id"]],
+					callerInputFields: [["title"]],
+					requiredCallerInputFields: [],
+					selectedFieldPaths: [["id"], ["title"]],
+					normalizerProgramDigest: normalizerDigest,
+					serverValueProgramDigest: null,
+					outputCardinality: "optionalOne",
+					limits: kernel.limits,
+				},
+			],
+		},
+		fieldNormalizers: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValues: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+		kernels,
+	});
+	const calls: Array<readonly [string, readonly unknown[]]> = [];
+	const data = dataFor([plan], async (statement, parameters = []) => {
+		calls.push([statement, parameters]);
+		if (statement === "LOCK_SQL") return [{}];
+		if (statement === "TITLE_AUTHORITY_SQL")
+			return parameters[0] === "  allowed  " ? [{}] : [];
+		if (statement === "CANDIDATE_VALIDATION_SQL")
+			return [{ qp_candidate_0: "allowed" }];
+		return [{ qp_result_0: id, qp_result_1: "allowed" }];
+	});
+	const execute = createCollectionOperationAdapterExecutor({
+		adapters,
+		facts: {
+			operationTime: new Date("2026-08-16T20:00:00.000Z"),
+			principal: { id: principalId, kind: "user" },
+			tenant: { id: "tenant-1" },
+		},
+		invokeKernel: async (identity, request) => {
+			expect(identity).toBe(kernelIdentity);
+			return data.records.update(request);
+		},
+	});
+
+	await expect(
+		execute("mutation:records.normalized.update", {
+			key: { id },
+			patch: { title: "  allowed  " },
+		}),
+	).resolves.toEqual({ id, title: "allowed" });
+	expect(calls).toEqual([
+		["LOCK_SQL", [id]],
+		["TITLE_AUTHORITY_SQL", ["  allowed  "]],
+		["CANDIDATE_VALIDATION_SQL", ["allowed"]],
+		["WRITE_SQL", ["allowed"]],
+	]);
+});
 
 test("rejects an empty update patch before PostgreSQL", async () => {
 	let calls = 0;

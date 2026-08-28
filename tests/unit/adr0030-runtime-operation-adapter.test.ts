@@ -202,7 +202,7 @@ test("validates and projects an Operation Set write around one kernel delegation
 		{
 			kernelIdentity: kernel.identity,
 			request: {
-				input: { body: "hello" },
+				input: { body: "  hello  " },
 				values: { createdAt: operationTime },
 			},
 		},

@@ -11,6 +11,7 @@ import {
 	setMutationValueAt,
 	type MutationRow,
 } from "./field-path";
+import { carryNormalizedCallerInput } from "./normalized-caller-input";
 import type { FieldNormalizerProgramV1, ServerValueProgramV1 } from "./program";
 
 type AdapterInvoker = (
@@ -202,17 +203,20 @@ export async function executeCollectionOperationAdapter(
 		adapter.serverValueProgram,
 		input.facts,
 	);
-	const kernelRequest =
+	const kernelRequest = carryNormalizedCallerInput(
 		adapter.member === "create"
-			? { input: normalized, ...(values ? { values } : {}) }
+			? { input: caller, ...(values ? { values } : {}) }
 			: {
 					key: request.key,
 					...(Object.hasOwn(request, "expected")
 						? { expected: request.expected }
 						: {}),
-					patch: normalized,
+					patch: caller,
 					...(values ? { values } : {}),
-				};
+				},
+		caller,
+		normalized,
+	);
 	return projectedResult(
 		await input.invokeKernel(adapter.kernelIdentity, kernelRequest),
 		adapter,

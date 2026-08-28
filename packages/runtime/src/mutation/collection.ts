@@ -15,6 +15,7 @@ import {
 	mutationValueAt as valueAt,
 	type MutationFieldPath,
 } from "./field-path";
+import { normalizedCallerInput } from "./normalized-caller-input";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
@@ -405,6 +406,10 @@ function createCollectionMutationData(
 										request.input,
 										"Collection create input",
 									);
+									const candidateInput = normalizedCallerInput(
+										request,
+										callerInput,
+									);
 									const callerPaths = inputPaths(
 										callerInput,
 										"Collection create input",
@@ -458,7 +463,11 @@ function createCollectionMutationData(
 											trustedPaths,
 											plan.candidate.fields,
 										);
-									const values = { callerInput, trustedValues };
+									const authorityValues = { callerInput, trustedValues };
+									const candidateValues = {
+										callerInput: candidateInput,
+										trustedValues,
+									};
 									for (const check of plan.fieldAuthority.checks) {
 										if (
 											!callerPaths.some(
@@ -472,7 +481,7 @@ function createCollectionMutationData(
 											check,
 											bind(
 												check.parameters,
-												values,
+												authorityValues,
 												input.facts,
 												input.operationTime,
 												nullableByPath,
@@ -490,7 +499,7 @@ function createCollectionMutationData(
 										plan.write,
 										bind(
 											plan.write.parameters,
-											values,
+											candidateValues,
 											input.facts,
 											input.operationTime,
 											nullableByPath,
@@ -525,6 +534,7 @@ function createCollectionMutationData(
 									const patch = Object.hasOwn(request, "patch")
 										? record(request.patch, "Collection update patch")
 										: Object.freeze({});
+									const candidatePatch = normalizedCallerInput(request, patch);
 									exactPaths(
 										inputPaths(key, "Collection key", plan.operation.keyFields),
 										plan.operation.keyFields,
@@ -598,11 +608,15 @@ function createCollectionMutationData(
 											expectedPaths,
 											plan.candidate.fields,
 										);
-									const values = {
+									const authorityValues = {
 										key,
 										callerInput: patch,
 										trustedValues,
 										expected,
+									};
+									const candidateValues = {
+										...authorityValues,
+										callerInput: candidatePatch,
 									};
 									const locked = await execute(
 										plan,
@@ -610,7 +624,7 @@ function createCollectionMutationData(
 										plan.lock,
 										bind(
 											plan.lock.parameters,
-											values,
+											authorityValues,
 											input.facts,
 											input.operationTime,
 										),
@@ -629,7 +643,7 @@ function createCollectionMutationData(
 											check,
 											bind(
 												check.parameters,
-												values,
+												authorityValues,
 												input.facts,
 												input.operationTime,
 												nullableByPath,
@@ -647,7 +661,7 @@ function createCollectionMutationData(
 										plan.candidateValidation,
 										bind(
 											plan.candidateValidation.parameters,
-											values,
+											candidateValues,
 											input.facts,
 											input.operationTime,
 											nullableByPath,
@@ -669,7 +683,7 @@ function createCollectionMutationData(
 										plan.write,
 										bind(
 											plan.write.parameters,
-											values,
+											candidateValues,
 											input.facts,
 											input.operationTime,
 											nullableByPath,
