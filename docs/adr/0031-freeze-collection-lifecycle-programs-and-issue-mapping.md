@@ -1,6 +1,6 @@
 # ADR 0031: Freeze Collection lifecycle programs and issue mapping
 
-- Status: Accepted
+- Status: Proposed
 - Date: 2026-08-28
 
 ## Context

@@ -620,18 +620,6 @@ ADR-0022 freezes the generated authoring ergonomics and Operation projection.
 ADR-0023 supersedes ADR-0014's incomplete post-commit Mutation outcome with
 Operation Wire v2 while retaining v1 Query compatibility.
 
-ADR-0030 and ADR-0031 deepen the existing generated Collection write kernel.
-Field provenance derives exact caller input; a disjoint trusted `values` lane
-bypasses only caller Field authority; the complete candidate still passes
-validation and candidate Policy. Exactly four Collection lifecycle phases are
-authored as ordinary TypeScript syntax compiled into one canonical lifecycle
-program: capability-free `normalize` and `validate`, Policy-aware transactional
-`check`, and pre-commit bounded `afterWrite`. Collections raise payloadless
-issues; each named Mutation explicitly maps every transitively reachable issue
-to its own declared error. `ctx.now` is the transaction-stable clock, and
-`onUpdate: "now"` is database-owned. No Collection becomes public merely by
-existing, and no second CRUD or lifecycle kernel exists.
-
 ## 17. Current delivery sequence and historical grilling order
 
 ADR-0027 makes this the current sequence:

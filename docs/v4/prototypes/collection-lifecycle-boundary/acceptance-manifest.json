@@ -1,13 +1,14 @@
 {
 	"protocolVersion": 2,
 	"ticket": "DEEP-DX-COLLECTION-LIFECYCLE-RATIFICATION",
-	"proof": "Ratify only the two remaining Collection lifecycle proof holes: a payloadless Collection-owned issue contract with explicit Operation-owned mapping, and a compiler-lowered ordinary-TypeScript lifecycle boundary whose purity and phase capabilities are truthful. Preserve the four approved phases, one Mutation transaction, one generated Collection kernel, Policy ownership, provenance, nondisclosure, direct/network parity, database-owned time, and the absence of external lifecycle effects.",
+	"proof": "Propose resolution of only the two remaining Collection lifecycle proof holes: a payloadless Collection-owned issue contract with explicit Operation-owned mapping, and a compiler-lowered ordinary-TypeScript lifecycle boundary whose purity and phase capabilities are truthful. Keep ADR-0031 and every authority projection non-authoritative until a committed protocol-v2 PASS record exists. Preserve the four approved phases, one Mutation transaction, one generated Collection kernel, Policy ownership, provenance, nondisclosure, direct/network parity, database-owned time, and the absence of external lifecycle effects.",
 	"diffBase": "a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6",
 	"reviewOutput": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW.json",
 	"authorityHeads": {
 		"clean feat/v4 continuation head": "a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6",
 		"accepted Collection provenance and trusted values decision": "6e28e05b58bc6dab06afb32a62a10b1ae41a5e93",
-		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c"
+		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c",
+		"terminal no-result candidate, not authority and not retried": "d28df9c2d00ae8c0e73af047ed99e0df05816783"
 	},
 	"authorityDocuments": [
 		{
@@ -23,12 +24,17 @@
 		{
 			"name": "canonical product specification",
 			"path": "SPEC.md",
-			"sha256": "4b04fedffbc83eeff7ca5fd467c929b072b8fed348acc055457844c886a723a7"
+			"sha256": "5122452cb43a788c4e67f0f459e0ff81623db354e8e7ca3273dcba1ec33b5c39"
 		},
 		{
 			"name": "canonical product language",
 			"path": "CONTEXT.md",
-			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+			"sha256": "4f555830c83894d848d6c55959edd3b9a8fd1785ca6c4587029267aef179420b"
+		},
+		{
+			"name": "canonical handoff with lifecycle still unresolved",
+			"path": "HANDOFF.md",
+			"sha256": "0638841203cd7066c37f6be86fc0264031b456831b0070d5978f3c40dd78058e"
 		},
 		{
 			"name": "accepted tracer-led delivery flow",
@@ -46,29 +52,39 @@
 			"sha256": "ee07668e17fcfceae0b8e92a3063a77b54cc087249dc76774dd97460b29cee21"
 		},
 		{
-			"name": "candidate focused lifecycle decision",
+			"name": "proposed focused lifecycle decision",
 			"path": "docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md",
-			"sha256": "b3552512eadabf43cff0df0a23ea35f630fc2393456f9a7d07d2088ca6bed409"
+			"sha256": "237d29da1169eaf86165102285e388a475c9026edf07233e2f2c834030df73ff"
 		},
 		{
-			"name": "candidate lifecycle contract",
+			"name": "current accepted lifecycle contract before projection",
 			"path": "docs/v4/query-mutation-and-lifecycle.md",
-			"sha256": "031765c455d69e79df8814647445f101e1aae43a5db9751ab52e4289b1329ddb"
+			"sha256": "ef1013cc1073dd10515478a9f0ab3b17a4faeeb13a68d31fcedea938fcf6244b"
 		},
 		{
 			"name": "accepted lifecycle and durable Job ownership",
 			"path": "docs/v4/lifecycle-jobs-and-shared-durable-kernel.md",
-			"sha256": "7b130d81942a22ed783dc3867bbe06b838a285aa75b5b8fb02dd0e20fb9ba0ba"
+			"sha256": "fab3e6c2307a5728ba3695e98888e1aae2a9730c7d12aa7da7bf338d706b415d"
 		},
 		{
-			"name": "candidate compiler binding clarification",
+			"name": "accepted compiler binding contract before projection",
 			"path": "docs/v4/executable-definition-compiler.md",
-			"sha256": "e006a853c111bb309f1e9b327c2822bd6bcfbb58a5bb5d720b0c5e25df07470c"
+			"sha256": "65d53951005b5c03f42c8ccfb4a7a10e82651a88a8b5dd3d25bc2c5c65bc5981"
 		},
 		{
-			"name": "candidate public lifecycle guide",
+			"name": "current public Mutation guide before projection",
 			"path": "apps/docs/content/docs/v4/queries-and-mutations.mdx",
-			"sha256": "99cfb3acd87b54c3c648dc18b770262c030f585726ae567389a096d1db244de7"
+			"sha256": "123a2958a64afbd2425e79e65052d976a641103fd22642bee6855925817982f9"
+		},
+		{
+			"name": "candidate staging declaration",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md",
+			"sha256": "d95bead5c29f0431c930271364a92f3c51b955fff3094cbbaf630456ccb1415c"
+		},
+		{
+			"name": "exact proposed authority and public documentation projection",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json",
+			"sha256": "6f30d18162ac6da320efcaa0728095af9b1cf902462cfba600dd832eaa1b0bad"
 		},
 		{
 			"name": "Deep-DX approval packet",
@@ -92,11 +108,15 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/collection-lifecycle-boundary/check.ts",
+			"command": "bun docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary",
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/collection-lifecycle-boundary/check.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check HANDOFF.md CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json docs/v4/prototypes/collection-lifecycle-boundary/check.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
 			"result": "PASS"
 		},
 		{
@@ -113,6 +133,7 @@
 		}
 	],
 	"acceptanceCriteria": [
+		"ADR-0031 remains Proposed and no live ADR index, SPEC, CONTEXT, public documentation, or HANDOFF text projects it as Accepted before a committed PASS record. The exact d28df9c2d authority/public-doc draft remains reviewable only as candidate evidence; post-PASS status and HANDOFF projection belong to a separate authority commit.",
 		"A Collection owns only payloadless named issue identities. Issues carry no public code, status, message, payload, transport meaning, row, candidate, protected Field, Policy evidence, PostgreSQL detail, or stack, and PostgreSQL constraints are never reclassified as Collection issues.",
 		"Only validate and check raise generated Collection issues. The first issue in deterministic program order immediately dooms the one owning Mutation transaction; application catch code cannot permit commit, and unknown, forged, malformed, or unmapped issues roll back and become sanitized non-retryable INTERNAL failures.",
 		"Every named Mutation structurally maps every transitively reachable Collection issue to one payloadless error in that Mutation's declared error map. Reachability includes nested lifecycle kernel calls, an incomplete map withholds the generated call capability, and QP-COMPOSE-027 reports the complete call path.",
