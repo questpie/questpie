@@ -224,3 +224,91 @@ test("generates an internal create/update kernel without publishing Collection R
 		await rm(temporary, { force: true, recursive: true });
 	}
 }, 20_000);
+
+test("keeps ctx.data and its SQL kernel invariant when an Operation Set pins input and output", async () => {
+	const temporary = await mkdtemp(
+		join(tmpdir(), "questpie-adr0030-kernel-adapter-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const keptSources = new Set([
+			"channels.ts",
+			"companies.ts",
+			"execution.ts",
+			"memberships.ts",
+			"message-events.ts",
+			"message-page.ts",
+			"message-policy.ts",
+			"messages.ts",
+			"spaces.ts",
+		]);
+		for (const entry of await readdir(join(temporary, "src")))
+			if (!keptSources.has(entry))
+				await rm(join(temporary, "src", entry), { recursive: true });
+
+		const withoutSet = await compileProvenanceFixture(temporary, {
+			immutable: true,
+			server: true,
+		});
+		await writeFile(
+			join(temporary, "src/provenance-operations.ts"),
+			`import { defineCollectionOperations } from "questpie";
+
+import { provenanceRecordPolicy, provenanceRecords } from "./provenance-records";
+
+export const provenanceRecordOperations = defineCollectionOperations(
+	provenanceRecords,
+	{
+		name: "provenanceRecords",
+		policy: provenanceRecordPolicy,
+		create: { input: [], select: { id: true } },
+		update: { input: [], select: { id: true } },
+	},
+);
+`,
+		);
+		const withSet = await compileApplication({ applicationRoot: temporary });
+
+		const targetMembers = (bytes: string, member: "operations" | "plans") =>
+			JSON.parse(bytes)[member].filter(
+				({ target }: { target: string }) =>
+					target === "collection:provenanceRecords",
+			);
+		const mutationData = (app: string) =>
+			app
+				.slice(
+					app.indexOf("export interface GeneratedMutationData"),
+					app.indexOf("export interface GeneratedQueries"),
+				)
+				.split("\n")
+				.find((line) => line.includes('readonly "provenanceRecords":'));
+
+		expect(
+			targetMembers(
+				withSet.generatedFiles["collection-operation-programs.json"]!,
+				"operations",
+			),
+		).toEqual(
+			targetMembers(
+				withoutSet.generatedFiles["collection-operation-programs.json"]!,
+				"operations",
+			),
+		);
+		expect(
+			targetMembers(
+				withSet.generatedFiles["postgres-collection-operation-plans.json"]!,
+				"plans",
+			),
+		).toEqual(
+			targetMembers(
+				withoutSet.generatedFiles["postgres-collection-operation-plans.json"]!,
+				"plans",
+			),
+		);
+		expect(mutationData(withSet.generatedFiles["app.ts"]!)).toBe(
+			mutationData(withoutSet.generatedFiles["app.ts"]!),
+		);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 20_000);
