@@ -1,16 +1,24 @@
 ---
-title: Run a durable Reaction after commit
-description: Commit typed follow-up with a Mutation, retry safely, and recover work after a crash.
+title: Run durable Jobs and Reactions
+description: Accept durable work, retry safely, and recover it after a crash.
 kind: guide
 ---
 
-A Reaction runs durable follow-up after an application Mutation commits. The
-Mutation accepts typed dispatch intent in its PostgreSQL transaction. A worker
-later runs the Reaction with a fresh authorized Context.
+Use a Job for new application-owned durable work. A server Execution can accept
+it directly, and a Mutation can accept it in the same PostgreSQL transaction as
+its business writes. Use `notBefore` when it must not start until an absolute
+time.
 
-You do not define an outbox Collection, Queue module, broker topic, or
-post-commit hook. QUESTPIE owns the durable dispatch, attempt, lease, retry,
-cancellation, and retention state.
+Reaction remains the committed-fact projection of the same durable kernel. A
+Mutation dispatches its typed intent in the owning PostgreSQL transaction, and
+a worker later runs it with a fresh authorized Context. Existing applications
+can keep using Reaction; new code does not need one merely to run work after a
+Mutation, because Mutation-owned Job acceptance is already atomic.
+
+Neither form needs an outbox Collection, Queue module, broker topic, or
+post-commit hook. QUESTPIE owns durable acceptance, attempts, leases, retries,
+cancellation, and retention. Start with [Accept an ordinary Job](#accept-an-ordinary-job)
+unless you specifically need the retained Reaction projection.
 
 ## Define the Reaction beside its event
 
