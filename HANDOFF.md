@@ -652,6 +652,17 @@ exactly as ADR-0030 records.
    analyzable executable subset. Resolve and ratify those contracts before
    adding `normalize`, `validate`, `check`, `afterWrite` or `onUpdate`
    production APIs.
+   This is a delta-only ratification pass, not a new lifecycle design or broad
+   grilling session. ADR-0011 already fixes the write order and ownership.
+   ADR-0030 already fixes Field provenance, the separate caller/trusted lanes,
+   and full candidate Policy. The human-reviewed Deep-DX packet already
+   directionally approves exactly four authored phases (`normalize`,
+   `validate`, `check`, `afterWrite`), database-owned `onUpdate: "now"`, no
+   `afterRead`, transaction-owned bounded `check`/`afterWrite`, no external
+   effects in `afterWrite`, and bounded re-entrant work. Do not ask the human to
+   decide those again. Reconcile only the two named proof holes above, preserve
+   the approved direction unless evidence makes it impossible, and record any
+   unavoidable deviation explicitly before seeking approval.
 4. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
