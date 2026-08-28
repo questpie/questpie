@@ -29,8 +29,7 @@ export function renderCodecType(
 		descriptor.kind === "date"
 	)
 		return "string";
-	if (descriptor.kind === "json")
-		return 'Readonly<{ readonly kind: "json"; readonly value: unknown }>';
+	if (descriptor.kind === "json") return "TaggedJsonValue";
 	if (descriptor.kind === "boolean") return "boolean";
 	if (descriptor.kind === "integer") return "number";
 	if (descriptor.kind === "timestamp") return timestampType;
@@ -124,6 +123,12 @@ export function renderClientContract(
 			resource.contract.output,
 		]),
 	);
+	const inputCodecs = Object.fromEntries(
+		[...queries, ...mutations, ...actions].map((resource) => [
+			resource.identity,
+			resource.contract.input,
+		]),
+	);
 	const declaredErrorContracts = Object.fromEntries(
 		[...queries, ...mutations, ...actions].map((resource) => [
 			resource.identity,
@@ -148,6 +153,19 @@ export function renderClientContract(
 		realtime: input.realtime,
 	});
 	return `import type { AppContextInput } from "./app";
+
+export type JsonValue =
+	| null
+	| boolean
+	| number
+	| string
+	| readonly JsonValue[]
+	| { readonly [key: string]: JsonValue };
+
+export interface TaggedJsonValue {
+	readonly kind: "json";
+	readonly value: JsonValue;
+}
 
 export interface CallOptions {
 	readonly callId?: string;
@@ -203,6 +221,7 @@ export class ActionOutcomeAmbiguous extends Error {
 
 type WireRecord = Readonly<Record<string, unknown>>;
 ${realtimeTypes}
+const inputCodecs: WireRecord = ${canonicalBytes(inputCodecs).trim()};
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
 const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
@@ -362,6 +381,93 @@ function decode(codecValue: unknown, value: unknown): unknown {
 	}
 	return protocolFailure();
 }
+function encode(codecValue: unknown, value: unknown): unknown {
+	const descriptor = wireRecord(codecValue);
+	if (descriptor.kind === "nullable")
+		return value === null ? null : encode(descriptor.codec, value);
+	if (descriptor.kind === "optional") return protocolFailure();
+	if (descriptor.kind === "array") {
+		if (!Array.isArray(value)) return protocolFailure();
+		if (descriptor.maximum !== undefined && (!Number.isSafeInteger(descriptor.maximum) || Number(descriptor.maximum) < 1 || value.length > Number(descriptor.maximum))) return protocolFailure();
+		return Object.freeze(value.map((item) => encode(descriptor.items, item)));
+	}
+	if (descriptor.kind === "boolean") {
+		if (typeof value !== "boolean") return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "integer") {
+		if (typeof value !== "number" || !Number.isSafeInteger(value) || Object.is(value, -0)) return protocolFailure();
+		if (descriptor.minimum !== undefined && value < Number(descriptor.minimum)) return protocolFailure();
+		if (descriptor.maximum !== undefined && value > Number(descriptor.maximum)) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "bigint") {
+		if (typeof value !== "string" || !/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return protocolFailure();
+		const parsed = BigInt(value);
+		if (parsed < -9223372036854775808n || parsed > 9223372036854775807n) return protocolFailure();
+		if (descriptor.minimum !== undefined && parsed < BigInt(String(descriptor.minimum))) return protocolFailure();
+		if (descriptor.maximum !== undefined && parsed > BigInt(String(descriptor.maximum))) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "numeric") {
+		const precision = Number(descriptor.precision);
+		const scale = Number(descriptor.scale);
+		if (!Number.isSafeInteger(precision) || precision < 1 || precision > 1000 || !Number.isSafeInteger(scale) || scale < 0 || scale > precision) return protocolFailure();
+		const pattern = scale === 0 ? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/ : new RegExp("^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\\\.[0-9]{" + scale + "}$");
+		if (typeof value !== "string" || !pattern.test(value) || value.replace(/[-.]/g, "").length > precision) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "cursor") {
+		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "text") {
+		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
+		const length = [...value].length;
+		if (descriptor.minLength !== undefined && length < Number(descriptor.minLength)) return protocolFailure();
+		if (descriptor.maxLength !== undefined && length > Number(descriptor.maxLength)) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "timestamp") {
+		if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return protocolFailure();
+		const encoded = value.toISOString();
+		return descriptor.withTimezone === false ? encoded.slice(0, -1) : encoded;
+	}
+	if (descriptor.kind === "date") {
+		if (typeof value !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return protocolFailure();
+		try { if (new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) !== value) return protocolFailure(); }
+		catch { return protocolFailure(); }
+		return value;
+	}
+	if (descriptor.kind === "json") {
+		const tagged = wireRecord(value);
+		exactKeys(tagged, ["kind", "value"]);
+		if (tagged.kind !== "json") return protocolFailure();
+		return Object.freeze({ kind: "json", value: decodeJson(tagged.value) });
+	}
+	if (descriptor.kind === "uuid") {
+		if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "object") {
+		const source = wireRecord(value);
+		const properties = wireRecord(descriptor.properties);
+		const optional = new Set(Object.keys(properties).filter((key) => wireRecord(properties[key]).kind === "optional"));
+		if (Object.keys(source).some((key) => !Object.hasOwn(properties, key))) return protocolFailure();
+		if (Object.keys(properties).some((key) => !optional.has(key) && !Object.hasOwn(source, key))) return protocolFailure();
+		const output: Record<string, unknown> = Object.create(null);
+		for (const key of Object.keys(properties).sort()) {
+			const child = wireRecord(properties[key]);
+			if (child.kind === "optional") {
+				if (Object.hasOwn(source, key)) output[key] = encode(child.codec, source[key]);
+				continue;
+			}
+			output[key] = encode(child, source[key]);
+		}
+		return Object.freeze(output);
+	}
+	return protocolFailure();
+}
 function verifyCorrelation(frame: WireRecord, operation: string, callId: string): void {
 	const protocol = wireRecord(frame.protocol);
 	exactKeys(protocol, ["name", "version"]);
@@ -396,12 +502,13 @@ export function createClient(input: Readonly<{
 			if (options.timeoutMilliseconds !== undefined && (!Number.isSafeInteger(options.timeoutMilliseconds) || options.timeoutMilliseconds <= 0)) protocolFailure();
 		}
 		if (options.signal?.aborted) throw options.signal.reason;
+		const encodedInput = encode(inputCodecs[operation], operationInput);
 		let request: Request;
 		try {
 			request = new Request(new URL(${JSON.stringify(input.path)}, input.baseUrl), {
 				method: "POST",
 				headers: { "content-type": ${JSON.stringify(input.mediaType)} },
-				body: JSON.stringify({ protocol: { name: "questpie.operation", version: 1 }, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, wireDigest: ${JSON.stringify(input.wireDigest)}, operation, callId, context, input: operationInput, timeoutMilliseconds: action ? options.timeoutMilliseconds ?? null : options.timeoutMilliseconds ?? 5_000, ...(action ? { effectKey: (options as ActionCallOptions).effectKey } : {}) }),
+				body: JSON.stringify({ protocol: { name: "questpie.operation", version: 1 }, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, wireDigest: ${JSON.stringify(input.wireDigest)}, operation, callId, context, input: encodedInput, timeoutMilliseconds: action ? options.timeoutMilliseconds ?? null : options.timeoutMilliseconds ?? 5_000, ...(action ? { effectKey: (options as ActionCallOptions).effectKey } : {}) }),
 				...(options.signal === undefined ? {} : { signal: options.signal }),
 			});
 		} catch {
