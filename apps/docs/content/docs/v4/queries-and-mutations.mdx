@@ -382,6 +382,28 @@ Change Ledger fact, result receipt, and durable dispatch intent commit together.
 `operationTime` is stable for that transaction. `createdAt` and `updatedAt`
 remain ordinary Fields and change only through explicit assignments.
 
+Use `ctx.operationTime` when several writes describe the same business change.
+PostgreSQL fixes it once with `transaction_timestamp()` when it creates the
+Mutation owner, and the Runtime carries that trusted fact through the Mutation.
+A Message, its audit row, and its Channel update therefore receive one instant
+even when locks or SQL statements take different amounts of time. It is also
+independent of whichever application process happens to execute the call.
+
+An identical `callId` replay returns the stored result receipt. It does not run
+the handler again or choose a new `operationTime`, so redelivery cannot change
+the already committed business instant.
+
+`new Date()` samples the process clock every time it runs. Two assignments in
+one Mutation can therefore disagree, and application code can accidentally mix
+wall-clock reads taken before and after a lock wait. It also makes the source of
+the value less obvious in tests and review. `operationTime` is an explicit
+trusted execution fact, not caller input and not Policy evidence.
+
+This does not claim that application assignment is the final timestamp API.
+Database-owned `onUpdate` behavior for conventional `updatedAt` Fields is a
+separate schema and migration capability. Until that capability is accepted and
+implemented, current v4 keeps timestamp writes explicit and transaction-stable.
+
 The generated Mutation Context also contains the stable `callId`, the
 `transactionId`, `ctx.signal`, and the immutable deadline. It exposes no raw
 transaction handle, Policy bypass, external-effect bag, or ordinary-call System
@@ -391,7 +413,7 @@ elevation.
 Current App Contract. The call above targets the app's `messageSubmitted`
 Reaction Definition. This Mutation only accepts its typed intent; it does not
 run the Reaction or any external work in the transaction. See
-[Run a durable Reaction after commit](./durable-reactions) for attempts, leases,
+[Run durable Jobs and Reactions](./durable-reactions) for attempts, leases,
 retry, current-Policy run-as, external effects, and retention.
 
 ## Follow the fixed lifecycle
