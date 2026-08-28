@@ -76,6 +76,11 @@ one capability-branded `expr` vocabulary and Policy-only `expr.exists`. It
 preserves Policy ownership, evidence nondisclosure, dependency capture, SQL
 ordering, and the temporary Query-only `query` surface until the separate S7
 migration.
+ADR-0030 adds exact Field provenance and a distinct trusted `values` lane to the
+existing internal Collection create/update kernel. Trusted values bypass only
+caller Field authority; the fully merged candidate still passes the same
+Policy, validation, constraint, receipt and transaction boundaries. It does not
+publish automatic network CRUD or accept the deferred lifecycle redesign.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

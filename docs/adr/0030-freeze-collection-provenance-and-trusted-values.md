@@ -1,6 +1,6 @@
 # ADR 0030: Freeze Collection provenance and trusted values
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-28
 
 ## Context
