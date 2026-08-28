@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
-import { linkLiveQueryProgram } from "../../packages/runtime/src/live-query";
+import { linkLiveQueryProgram } from "../../packages/runtime/src/live-query/program";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const temporaryRoots: string[] = [];
