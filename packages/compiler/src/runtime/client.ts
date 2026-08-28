@@ -303,15 +303,19 @@ function decodeJson(value: unknown, active = new Set<object>()): unknown {
 		return Object.freeze(output);
 	} finally { active.delete(value); }
 }
-function decode(codecValue: unknown, value: unknown): unknown {
+function transform(codecValue: unknown, value: unknown, direction: "decode" | "encode"): unknown {
 	const descriptor = wireRecord(codecValue);
 	if (descriptor.kind === "nullable")
-		return value === null ? null : decode(descriptor.codec, value);
-	if (descriptor.kind === "optional") return decode(descriptor.codec, value);
+		return value === null ? null : transform(descriptor.codec, value, direction);
+	if (descriptor.kind === "optional")
+		return direction === "decode"
+			? transform(descriptor.codec, value, direction)
+			: protocolFailure();
 	if (descriptor.kind === "array") {
 		if (!Array.isArray(value)) return protocolFailure();
 		if (descriptor.maximum !== undefined && (!Number.isSafeInteger(descriptor.maximum) || Number(descriptor.maximum) < 1 || value.length > Number(descriptor.maximum))) return protocolFailure();
-		return value.map((item) => decode(descriptor.items, item));
+		const result = value.map((item) => transform(descriptor.items, item, direction));
+		return direction === "encode" ? Object.freeze(result) : result;
 	}
 	if (descriptor.kind === "boolean") {
 		if (typeof value !== "boolean") return protocolFailure();
@@ -339,6 +343,16 @@ function decode(codecValue: unknown, value: unknown): unknown {
 		if (typeof value !== "string" || !pattern.test(value) || value.replace(/[-.]/g, "").length > precision) return protocolFailure();
 		return value;
 	}
+	if (descriptor.kind === "cursor") {
+		if (
+			direction === "decode" ||
+			typeof value !== "string" ||
+			hasLoneSurrogate(value) ||
+			value !== value.normalize("NFC")
+		)
+			return protocolFailure();
+		return value;
+	}
 	if (descriptor.kind === "text") {
 		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
 		const length = [...value].length;
@@ -347,6 +361,14 @@ function decode(codecValue: unknown, value: unknown): unknown {
 		return value;
 	}
 	if (descriptor.kind === "timestamp") {
+		if (direction === "encode") {
+			if (!(value instanceof Date) || !Number.isFinite(value.getTime()))
+				return protocolFailure();
+			const encoded = value.toISOString();
+			return descriptor.withTimezone === false
+				? encoded.slice(0, -1)
+				: encoded;
+		}
 		const withTimezone = descriptor.withTimezone !== false;
 		const pattern = withTimezone ? /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$/ : /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$/;
 		if (typeof value !== "string" || !pattern.test(value)) return protocolFailure();
@@ -377,96 +399,36 @@ function decode(codecValue: unknown, value: unknown): unknown {
 		const optional = new Set(Object.keys(properties).filter((key) => wireRecord(properties[key]).kind === "optional"));
 		if (Object.keys(source).some((key) => !Object.hasOwn(properties, key))) return protocolFailure();
 		if (Object.keys(properties).some((key) => !optional.has(key) && !Object.hasOwn(source, key))) return protocolFailure();
-		return Object.freeze(Object.fromEntries(Object.keys(source).sort().map((key) => [key, decode(properties[key], source[key])])));
-	}
-	return protocolFailure();
-}
-function encode(codecValue: unknown, value: unknown): unknown {
-	const descriptor = wireRecord(codecValue);
-	if (descriptor.kind === "nullable")
-		return value === null ? null : encode(descriptor.codec, value);
-	if (descriptor.kind === "optional") return protocolFailure();
-	if (descriptor.kind === "array") {
-		if (!Array.isArray(value)) return protocolFailure();
-		if (descriptor.maximum !== undefined && (!Number.isSafeInteger(descriptor.maximum) || Number(descriptor.maximum) < 1 || value.length > Number(descriptor.maximum))) return protocolFailure();
-		return Object.freeze(value.map((item) => encode(descriptor.items, item)));
-	}
-	if (descriptor.kind === "boolean") {
-		if (typeof value !== "boolean") return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "integer") {
-		if (typeof value !== "number" || !Number.isSafeInteger(value) || Object.is(value, -0)) return protocolFailure();
-		if (descriptor.minimum !== undefined && value < Number(descriptor.minimum)) return protocolFailure();
-		if (descriptor.maximum !== undefined && value > Number(descriptor.maximum)) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "bigint") {
-		if (typeof value !== "string" || !/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return protocolFailure();
-		const parsed = BigInt(value);
-		if (parsed < -9223372036854775808n || parsed > 9223372036854775807n) return protocolFailure();
-		if (descriptor.minimum !== undefined && parsed < BigInt(String(descriptor.minimum))) return protocolFailure();
-		if (descriptor.maximum !== undefined && parsed > BigInt(String(descriptor.maximum))) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "numeric") {
-		const precision = Number(descriptor.precision);
-		const scale = Number(descriptor.scale);
-		if (!Number.isSafeInteger(precision) || precision < 1 || precision > 1000 || !Number.isSafeInteger(scale) || scale < 0 || scale > precision) return protocolFailure();
-		const pattern = scale === 0 ? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/ : new RegExp("^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\\\.[0-9]{" + scale + "}$");
-		if (typeof value !== "string" || !pattern.test(value) || value.replace(/[-.]/g, "").length > precision) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "cursor") {
-		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "text") {
-		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
-		const length = [...value].length;
-		if (descriptor.minLength !== undefined && length < Number(descriptor.minLength)) return protocolFailure();
-		if (descriptor.maxLength !== undefined && length > Number(descriptor.maxLength)) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "timestamp") {
-		if (!(value instanceof Date) || !Number.isFinite(value.getTime())) return protocolFailure();
-		const encoded = value.toISOString();
-		return descriptor.withTimezone === false ? encoded.slice(0, -1) : encoded;
-	}
-	if (descriptor.kind === "date") {
-		if (typeof value !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return protocolFailure();
-		try { if (new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) !== value) return protocolFailure(); }
-		catch { return protocolFailure(); }
-		return value;
-	}
-	if (descriptor.kind === "json") {
-		const tagged = wireRecord(value);
-		exactKeys(tagged, ["kind", "value"]);
-		if (tagged.kind !== "json") return protocolFailure();
-		return Object.freeze({ kind: "json", value: decodeJson(tagged.value) });
-	}
-	if (descriptor.kind === "uuid") {
-		if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) return protocolFailure();
-		return value;
-	}
-	if (descriptor.kind === "object") {
-		const source = wireRecord(value);
-		const properties = wireRecord(descriptor.properties);
-		const optional = new Set(Object.keys(properties).filter((key) => wireRecord(properties[key]).kind === "optional"));
-		if (Object.keys(source).some((key) => !Object.hasOwn(properties, key))) return protocolFailure();
-		if (Object.keys(properties).some((key) => !optional.has(key) && !Object.hasOwn(source, key))) return protocolFailure();
+		if (direction === "decode")
+			return Object.freeze(
+				Object.fromEntries(
+					Object.keys(source)
+						.sort()
+						.map((key) => [
+							key,
+							transform(properties[key], source[key], direction),
+						]),
+				),
+			);
 		const output: Record<string, unknown> = Object.create(null);
 		for (const key of Object.keys(properties).sort()) {
 			const child = wireRecord(properties[key]);
 			if (child.kind === "optional") {
-				if (Object.hasOwn(source, key)) output[key] = encode(child.codec, source[key]);
+				if (Object.hasOwn(source, key))
+					output[key] = transform(child.codec, source[key], direction);
 				continue;
 			}
-			output[key] = encode(child, source[key]);
+			output[key] = transform(child, source[key], direction);
 		}
 		return Object.freeze(output);
 	}
 	return protocolFailure();
+}
+function decode(codecValue: unknown, value: unknown): unknown {
+	return transform(codecValue, value, "decode");
+}
+function encode(codecValue: unknown, value: unknown): unknown {
+	return transform(codecValue, value, "encode");
 }
 function verifyCorrelation(frame: WireRecord, operation: string, callId: string): void {
 	const protocol = wireRecord(frame.protocol);

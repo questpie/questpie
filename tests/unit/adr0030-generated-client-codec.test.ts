@@ -231,6 +231,128 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 	}
 });
 
+test("generated transform preserves optional, array, cursor, and object direction", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "questpie-adr0030-client-"));
+	try {
+		await writeFile(
+			join(directory, "app.ts"),
+			"export type AppContextInput = Readonly<Record<string, never>>;\n",
+		);
+		await writeFile(
+			join(directory, "client.ts"),
+			renderClientContract(
+				[
+					{
+						identity: "query:reports.list",
+						kind: "query",
+						name: "reports.list",
+						contract: {
+							exposure: "network",
+							input: {
+								kind: "object",
+								properties: {
+									zonedAt: { kind: "timestamp", withTimezone: true },
+									note: {
+										kind: "optional",
+										codec: { kind: "text" },
+									},
+									items: {
+										kind: "array",
+										maximum: 2,
+										items: { kind: "timestamp", withTimezone: false },
+									},
+									cursor: { kind: "cursor" },
+								},
+							},
+							output: {
+								kind: "object",
+								properties: {
+									items: {
+										kind: "array",
+										items: { kind: "timestamp", withTimezone: true },
+									},
+								},
+							},
+							declaredErrors: {},
+						},
+					},
+				] as never,
+				{
+					application: "application:test",
+					clientContractDigest: "1".repeat(64),
+					wireDigest: "2".repeat(64),
+					path: "/_questpie/operation",
+					mediaType: "application/vnd.questpie.operation+json;version=1",
+				},
+			),
+		);
+		const generated = (await import(
+			`${pathToFileURL(join(directory, "client.ts")).href}?${crypto.randomUUID()}`
+		)) as {
+			createClient(input: {
+				baseUrl: string;
+				fetch(request: Request): Promise<Response>;
+			}): {
+				withContext(input: {}): {
+					queries: Record<string, (input: unknown) => Promise<unknown>>;
+				};
+			};
+		};
+		let calls = 0;
+		const call = generated
+			.createClient({
+				baseUrl: "http://runtime.test",
+				fetch: async (request) => {
+					calls += 1;
+					const frame = (await request.json()) as {
+						callId: string;
+						input: Record<string, unknown>;
+					};
+					expect(Object.keys(frame.input)).toEqual([
+						"cursor",
+						"items",
+						"zonedAt",
+					]);
+					expect(frame.input.items).toEqual(["2026-08-28T10:20:30.000"]);
+					return new Response(
+						JSON.stringify({
+							protocol: { name: "questpie.operation", version: 1 },
+							kind: "result",
+							operation: "query:reports.list",
+							callId: frame.callId,
+							payload: { items: ["2026-08-28T10:20:30.000Z"] },
+						}),
+						{
+							headers: {
+								"content-type":
+									"application/vnd.questpie.operation+json;version=1",
+							},
+						},
+					);
+				},
+			})
+			.withContext({}).queries["reports.list"]!;
+		const result = (await call({
+			cursor: "next",
+			items: [new Date("2026-08-28T10:20:30.000Z")],
+			zonedAt: new Date("2026-08-28T10:20:30.000Z"),
+		})) as { items: Date[] };
+		expect(result.items).toEqual([new Date("2026-08-28T10:20:30.000Z")]);
+		expect(Object.isFrozen(result.items)).toBe(false);
+		await expect(
+			call({
+				cursor: "next",
+				items: [],
+				unknown: true,
+				zonedAt: new Date("2026-08-28T10:20:30.000Z"),
+			}),
+		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
+		expect(calls).toBe(1);
+	} finally {
+		await rm(directory, { force: true, recursive: true });
+	}
+});
+
 test("generated JSON declarations preserve the exact recursive value grammar", async () => {
 	const directory = await mkdtemp(
 		join(tmpdir(), "questpie-adr0030-client-types-"),
