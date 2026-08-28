@@ -68,6 +68,7 @@ function createPlan(
 		"pureNormalization",
 		"schemaDefaults",
 		"serverValues",
+		"trustedValues",
 		"completeCandidateValidation",
 		"candidatePolicy",
 		"postgresConstraints",
@@ -91,6 +92,7 @@ function createPlan(
 		"normalizer",
 		"schemaDefault",
 		"serverValue",
+		"trustedValue",
 	];
 	let lastPhase = -1;
 	const steps = array(
@@ -113,7 +115,9 @@ function createPlan(
 					? ["phase", "target", "transform"]
 					: phase === "schemaDefault"
 						? ["phase", "target", "value"]
-						: ["phase", "target", "mode", "source"];
+						: phase === "serverValue"
+							? ["phase", "target", "mode", "source"]
+							: ["phase", "target"];
 		exact(step, keys, `${operation.identity} candidate step ${index}`);
 		path(step.target, `${operation.identity} candidate step ${index} target`);
 		if (
@@ -145,6 +149,15 @@ function createPlan(
 			)
 		)
 			fail(`${operation.identity} candidate omits caller input`);
+	if (
+		!same(
+			steps
+				.filter((step) => step.phase === "trustedValue")
+				.map((step) => step.target),
+			operation.trustedValueFields,
+		)
+	)
+		fail(`${operation.identity} candidate trusted values are invalid`);
 	const authority = record(
 		plan.fieldAuthority,
 		`${operation.identity} fieldAuthority`,

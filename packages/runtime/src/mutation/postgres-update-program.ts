@@ -55,6 +55,7 @@ export function updatePlan(
 		"sparseCallerFieldAuthority",
 		"pureNormalization",
 		"serverValues",
+		"trustedValues",
 		"completeCandidateValidation",
 		"candidatePolicy",
 		"postgresConstraints",
@@ -73,20 +74,52 @@ export function updatePlan(
 		);
 	const candidate = record(plan.candidate, `${operation.identity} candidate`);
 	exact(candidate, ["steps", "fields"], `${operation.identity} candidate`);
+	const phaseOrder = [
+		"callerInput",
+		"normalizer",
+		"serverValue",
+		"trustedValue",
+	];
+	let lastPhase = -1;
 	const steps = array(
 		candidate.steps,
 		`${operation.identity} candidate steps`,
 	).map((raw, index) => {
 		const step = record(raw, `${operation.identity} candidate step ${index}`);
-		if (
-			step.phase !== "callerInput" &&
-			step.phase !== "normalizer" &&
-			step.phase !== "serverValue"
-		)
-			fail(`${operation.identity} candidate step ${index} is invalid`);
+		const phase = phaseOrder.indexOf(String(step.phase));
+		if (phase < lastPhase || phase < 0)
+			fail(`${operation.identity} candidate step order is invalid`);
+		lastPhase = phase;
+		const keys =
+			step.phase === "callerInput" || step.phase === "trustedValue"
+				? ["phase", "target"]
+				: step.phase === "normalizer"
+					? ["phase", "target", "transform"]
+					: ["phase", "target", "mode", "source"];
+		exact(step, keys, `${operation.identity} candidate step ${index}`);
 		path(step.target, `${operation.identity} candidate step ${index} target`);
+		if (
+			step.phase === "normalizer" &&
+			step.transform !== "trim" &&
+			step.transform !== "trimIfPresent"
+		)
+			fail(`${operation.identity} normalizer step is invalid`);
+		if (step.phase === "serverValue") {
+			if (step.mode !== "overwrite")
+				fail(`${operation.identity} server-value step is invalid`);
+			path(step.source, `${operation.identity} server-value source`);
+		}
 		return Object.freeze({ ...step });
 	});
+	if (
+		!same(
+			steps
+				.filter((step) => step.phase === "trustedValue")
+				.map((step) => step.target),
+			operation.trustedValueFields,
+		)
+	)
+		fail(`${operation.identity} candidate trusted values are invalid`);
 	const fields = candidateFields(candidate.fields, operation.identity);
 	const lock = record(plan.lock, `${operation.identity} lock`);
 	exact(lock, ["sql", "parameters", "outcome"], `${operation.identity} lock`);

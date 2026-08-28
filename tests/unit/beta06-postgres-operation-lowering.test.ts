@@ -393,6 +393,7 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 			"pureNormalization",
 			"schemaDefaults",
 			"serverValues",
+			"trustedValues",
 			"completeCandidateValidation",
 			"candidatePolicy",
 			"postgresConstraints",

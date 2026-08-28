@@ -27,6 +27,12 @@ test("links compiler-owned PostgreSQL get/create plans to Collection Operations"
 	expect(create.operation.serverValueProgram).toEqual(
 		create.serverValueProgram,
 	);
+	expect(create.lifecycle).toContain("trustedValues");
+	expect(
+		create.candidate.steps
+			.filter((step) => step.phase === "trustedValue")
+			.map((step) => step.target),
+	).toEqual(create.operation.trustedValueFields);
 	expect(create.candidatePolicy.freshAfterRowLockWait).toBe(true);
 	expect(create.limits).toEqual({
 		rows: 100,
