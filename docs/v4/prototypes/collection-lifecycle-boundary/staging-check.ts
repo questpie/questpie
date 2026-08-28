@@ -1,6 +1,8 @@
 import { deepStrictEqual, doesNotMatch, match, strictEqual } from "node:assert";
-import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { createHash, randomUUID } from "node:crypto";
+import { existsSync, readFileSync, unlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const repositoryFiles = Object.freeze({
 	"SPEC.md": "5122452cb43a788c4e67f0f459e0ff81623db354e8e7ca3273dcba1ec33b5c39",
@@ -44,6 +46,7 @@ const manifest = JSON.parse(
 		"utf8",
 	),
 ) as Readonly<{
+	diffBase: string;
 	authorityDocuments: ReadonlyArray<Readonly<{ path: string; sha256: string }>>;
 }>;
 for (const document of manifest.authorityDocuments)
@@ -52,5 +55,37 @@ for (const document of manifest.authorityDocuments)
 		document.sha256,
 		`stale authority hash: ${document.path}`,
 	);
+
+const projection = JSON.parse(
+	readFileSync(
+		"docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json",
+		"utf8",
+	),
+) as Readonly<{ base: string; lines: readonly string[] }>;
+strictEqual(projection.base, manifest.diffBase);
+const temporaryIndex = join(
+	tmpdir(),
+	`questpie-lifecycle-projection-${randomUUID()}.index`,
+);
+const gitEnvironment = { ...Bun.env, GIT_INDEX_FILE: temporaryIndex };
+try {
+	const readTree = Bun.spawnSync(["git", "read-tree", manifest.diffBase], {
+		env: gitEnvironment,
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	strictEqual(readTree.exitCode, 0, readTree.stderr.toString());
+	const apply = Bun.spawn(["git", "apply", "--cached", "--check", "-"], {
+		env: gitEnvironment,
+		stdin: "pipe",
+		stdout: "pipe",
+		stderr: "pipe",
+	});
+	apply.stdin.write(`${projection.lines.join("\n")}\n`);
+	apply.stdin.end();
+	strictEqual(await apply.exited, 0, await new Response(apply.stderr).text());
+} finally {
+	if (existsSync(temporaryIndex)) unlinkSync(temporaryIndex);
+}
 
 console.log("collection lifecycle acceptance staging: PASS");

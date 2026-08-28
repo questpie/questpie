@@ -8,7 +8,8 @@
 		"clean feat/v4 continuation head": "a2ea015d081d2abb95985f1c3db9cbe2a59a3cd6",
 		"accepted Collection provenance and trusted values decision": "6e28e05b58bc6dab06afb32a62a10b1ae41a5e93",
 		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c",
-		"terminal no-result candidate, not authority and not retried": "d28df9c2d00ae8c0e73af047ed99e0df05816783"
+		"terminal no-result candidate, not authority and not retried": "d28df9c2d00ae8c0e73af047ed99e0df05816783",
+		"human-authorized substitute blocked candidate, not authority": "c473f9129129aa94f40c2d08639ee3c20aa273cf"
 	},
 	"authorityDocuments": [
 		{
@@ -79,12 +80,42 @@
 		{
 			"name": "candidate staging declaration",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md",
-			"sha256": "d95bead5c29f0431c930271364a92f3c51b955fff3094cbbaf630456ccb1415c"
+			"sha256": "33a675eb3fadc0af2cff9e90e1d6bbec470d19dc81a794b5fc9aed31a261537b"
 		},
 		{
 			"name": "exact proposed authority and public documentation projection",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json",
-			"sha256": "6f30d18162ac6da320efcaa0728095af9b1cf902462cfba600dd832eaa1b0bad"
+			"sha256": "98a3833bd75592dcf28f2dd3cd8c1c499f9f0aff51b2f3ddff3757bfc9e3f04b"
+		},
+		{
+			"name": "verbatim human-authorized substitute BLOCKED record",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-BLOCKED.md",
+			"sha256": "861bd204c78c1ff71fbcbe18f30011cecac5c5ced668220be9cb74127f1be821"
+		},
+		{
+			"name": "executable lifecycle TypeScript compiler and canonical artifact proof",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts",
+			"sha256": "ccb53140d7117a7988c2e30d85e07a5328ea21d525023766d9413b5d721c2122"
+		},
+		{
+			"name": "compiler artifact and hostile decoder tests",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts",
+			"sha256": "b1567733499c7a67233f88665c7628667ab433fbbf63b737db40a9b42014c370"
+		},
+		{
+			"name": "PostgreSQL Operation transaction proof kernel",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts",
+			"sha256": "dd045fd8885d332e222a3cbeb8d6222887eed972014539517fd657e0133bbf36"
+		},
+		{
+			"name": "PostgreSQL issue mapping and lifecycle order tests",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+			"sha256": "e996d9bc355069ae7d3b58bc6172fc42a07c62173fc649c35ccd3c68967f9204"
+		},
+		{
+			"name": "Proposed-status, authority-hash, and exact projection staging gate",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
+			"sha256": "ecd265216449c1be3af10b486070e139f5f12b586ce39e0c022250175955f200"
 		},
 		{
 			"name": "Deep-DX approval packet",
@@ -104,7 +135,11 @@
 	],
 	"verification": [
 		{
-			"command": "bun docs/v4/prototypes/collection-lifecycle-boundary/check.ts",
+			"command": "bun test docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=<allocated-trust-auth-postgresql-17-port> PGDATABASE=postgres PGUSER=postgres bun test docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts",
 			"result": "PASS"
 		},
 		{
@@ -112,11 +147,15 @@
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/collection-lifecycle-boundary/check.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
 			"result": "PASS"
 		},
 		{
-			"command": "bunx oxfmt --check HANDOFF.md CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json docs/v4/prototypes/collection-lifecycle-boundary/check.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
+			"command": "bunx tsc --noEmit --strict --skipLibCheck --target ES2024 --module preserve --moduleResolution bundler --types bun docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check HANDOFF.md CONTEXT.md SPEC.md apps/docs/content/docs/v4/queries-and-mutations.mdx docs/adr/README.md docs/adr/0031-freeze-collection-lifecycle-programs-and-issue-mapping.md docs/v4/executable-definition-compiler.md docs/v4/lifecycle-jobs-and-shared-durable-kernel.md docs/v4/query-mutation-and-lifecycle.md docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts docs/v4/prototypes/collection-lifecycle-boundary/staging-check.ts",
 			"result": "PASS"
 		},
 		{
@@ -140,7 +179,7 @@
 		"The shared Operation engine maps an issue only after rollback and before direct or wire adaptation. Direct calls and generated network clients expose byte-equivalent declared outcomes without revealing the internal issue identity or PostgreSQL details.",
 		"All four authored phases use ordinary TypeScript syntax parsed into one versioned canonical Lifecycle Program. Authored callback JavaScript is discarded and never invoked by Runtime; canonical bytes, domain-separated digest, identity bindings, Runtime Build integrity, exact decoding, and interpreter compatibility fail closed.",
 		"Lifecycle Program v1 is the exact conservative grammar and diagnostic table in ADR-0031. QP-COMPOSE-026 rejects unsupported syntax, captures, and phase capabilities with Origin and a supported rewrite; the design makes no claim that arbitrary TypeScript is compiler-proven pure.",
-		"normalize and validate are capability-free. check adds only awaited bounded Policy-aware kernel reads after candidate Policy. afterWrite adds only sequential bounded kernel reads and writes plus Job acceptance before commit. Services, Actions, Request, Route, filesystem, network, timers, raw SQL, raw transactions, Promise.all, and detached work are unrepresentable.",
+		"normalize and validate are effect-free and receive no generated effect capability. check adds only awaited bounded Policy-aware kernel reads after candidate Policy. afterWrite adds only sequential bounded kernel reads and writes plus Job acceptance before commit. Services, Actions, Request, Route, filesystem, network, timers, raw SQL, raw transactions, Promise.all, and detached work are unrepresentable.",
 		"normalize runs separately over already-authorized caller and trusted lanes and may only replace present paths. Complete Field and Codec validation precedes authored validate; candidate Policy remains the sole authored authorization mechanism; PostgreSQL constraints and database-owned values precede afterWrite.",
 		"Nested lifecycle work uses the existing generated Collection kernel synchronously in authored order, shares the outer transaction and all semantic budgets, and has an artifact-bound finite re-entry depth. QP-DATA-024 dooms and rolls back a write that exceeds it; no parallel CRUD or lifecycle kernel is introduced.",
 		"ctx.now supersedes ctx.operationTime as the one PostgreSQL transaction_timestamp value. An onUpdate now Field is database-owned, accepts neither caller patch nor trusted values, advances on every supported managed update, and reports QP-DATA-023 when supplied.",
