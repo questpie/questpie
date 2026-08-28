@@ -6,6 +6,7 @@
   projection through the reference consumers
 - Primary tracer: `fixtures/team-support-desk`
 - Hostile consumer: `fixtures/collaboration`
+- Wayfinder map: `questpie/questpie#342`
 
 ## Authority
 
@@ -84,6 +85,8 @@ retry is fresh; committed Call Identity replay executes no lifecycle work.
 
 ### LIFE-01 — Compile and execute normalize/validate with one mapped issue
 
+Ticket: `questpie/questpie#343`.
+
 Blocked by: none.
 
 Drive one Team Support Desk ticket create from ordinary TypeScript authoring to
@@ -95,6 +98,8 @@ diagnostics, and the first red-green production path without adding `check`,
 
 ### LIFE-02 — Close transitive issue reachability and nondisclosure
 
+Ticket: `questpie/questpie#344`.
+
 Blocked by: LIFE-01.
 
 Add compile-time Operation-owned mappings for every transitively reachable
@@ -103,6 +108,8 @@ mappings, first-issue order, transaction doom after catch, PostgreSQL constraint
 separation, and byte-identical direct/wire/generated-client outcomes.
 
 ### LIFE-03 — Execute Policy-aware `check` under the outer budget
+
+Ticket: `questpie/questpie#345`.
 
 Blocked by: LIFE-01 and LIFE-02.
 
@@ -114,6 +121,8 @@ limits roll back without leaking evidence.
 
 ### LIFE-04 — Project `ctx.now` and database-owned `onUpdate`
 
+Ticket: `questpie/questpie#346`.
+
 Blocked by: LIFE-01.
 
 Generate exact `ctx.now` types and bind one PostgreSQL
@@ -124,6 +133,8 @@ Team Support Desk browser evidence for `onUpdate: "now"`. Reject either lane,
 
 ### LIFE-05 — Run bounded `afterWrite` and Job acceptance atomically
 
+Ticket: `questpie/questpie#347`.
+
 Blocked by: LIFE-02, LIFE-03, and LIFE-04.
 
 Add sequential Policy-aware reads, nested Collection writes, and Job acceptance
@@ -133,6 +144,8 @@ committed replay, and absence of Service, Action, Request, Route, raw SQL,
 transaction, timer, parallel, detached, or external-effect capabilities.
 
 ### LIFE-06 — Migrate consumers, delete superseded syntax, and close release
+
+Ticket: `questpie/questpie#348`.
 
 Blocked by: LIFE-01 through LIFE-05.
 
