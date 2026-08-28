@@ -1,4 +1,5 @@
 import { canonicalBytes, compareAscii, digest } from "../canonical";
+import { normalizeCodecContract, type CodecContractProblem } from "../codec";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -115,129 +116,26 @@ function text(value: unknown, label: string): string {
 	return value;
 }
 
+function wireCodecProblem(problem: CodecContractProblem): never {
+	const label = problem.path.join(".");
+	if (problem.kind === "notObject") fail(`${label} must be an object`);
+	if (problem.kind === "unexpectedMember" || problem.kind === "missingMember")
+		fail(`${label} keys are not exact`);
+	if (problem.kind === "optionalPosition")
+		fail(`${label} uses optional outside an object property`);
+	if (problem.kind === "invalidRange")
+		fail(`${label} ${problem.codecKind} bounds are invalid`);
+	if (problem.kind === "unsupportedKind" || problem.kind === "invalidKindType")
+		fail(`${label} uses an unsupported codec`);
+	fail(`${label}.${problem.member ?? "kind"} is invalid`);
+}
+
 function codec(value: unknown, label: string, allowOptional = false): void {
-	const candidate = record(value, label);
-	const kind = candidate.kind;
-	const safeInteger = (
-		raw: unknown,
-		field: string,
-		minimum: number,
-		maximum = Number.MAX_SAFE_INTEGER,
-	): number => {
-		if (
-			typeof raw !== "number" ||
-			!Number.isSafeInteger(raw) ||
-			raw < minimum ||
-			raw > maximum
-		)
-			fail(`${label}.${field} is invalid`);
-		return raw as number;
-	};
-	if (
-		kind === "boolean" ||
-		kind === "cursor" ||
-		kind === "date" ||
-		kind === "json" ||
-		kind === "uuid"
-	) {
-		exactKeys(candidate, ["kind"], label);
-		return;
-	}
-	if (kind === "text") {
-		const allowed = new Set(["kind", "minLength", "maxLength"]);
-		if (Object.keys(candidate).some((key) => !allowed.has(key)))
-			fail(`${label} keys are not exact`);
-		const minimum =
-			candidate.minLength === undefined
-				? undefined
-				: safeInteger(candidate.minLength, "minLength", 0);
-		const maximum =
-			candidate.maxLength === undefined
-				? undefined
-				: safeInteger(candidate.maxLength, "maxLength", 0);
-		if (minimum !== undefined && maximum !== undefined && minimum > maximum)
-			fail(`${label} text bounds are invalid`);
-		return;
-	}
-	if (kind === "integer") {
-		const allowed = new Set(["kind", "minimum", "maximum"]);
-		if (Object.keys(candidate).some((key) => !allowed.has(key)))
-			fail(`${label} keys are not exact`);
-		const minimum =
-			candidate.minimum === undefined
-				? undefined
-				: safeInteger(candidate.minimum, "minimum", Number.MIN_SAFE_INTEGER);
-		const maximum =
-			candidate.maximum === undefined
-				? undefined
-				: safeInteger(candidate.maximum, "maximum", Number.MIN_SAFE_INTEGER);
-		if (minimum !== undefined && maximum !== undefined && minimum > maximum)
-			fail(`${label} integer bounds are invalid`);
-		return;
-	}
-	if (kind === "bigint") {
-		const allowed = new Set(["kind", "minimum", "maximum"]);
-		if (Object.keys(candidate).some((key) => !allowed.has(key)))
-			fail(`${label} keys are not exact`);
-		const bound = (raw: unknown, field: string): bigint | undefined => {
-			if (raw === undefined) return undefined;
-			if (
-				typeof raw !== "string" ||
-				!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/u.test(raw)
-			)
-				fail(`${label}.${field} is invalid`);
-			const parsed = BigInt(raw as string);
-			if (
-				parsed < -9_223_372_036_854_775_808n ||
-				parsed > 9_223_372_036_854_775_807n
-			)
-				fail(`${label}.${field} is invalid`);
-			return parsed;
-		};
-		const minimum = bound(candidate.minimum, "minimum");
-		const maximum = bound(candidate.maximum, "maximum");
-		if (minimum !== undefined && maximum !== undefined && minimum > maximum)
-			fail(`${label} bigint bounds are invalid`);
-		return;
-	}
-	if (kind === "numeric") {
-		exactKeys(candidate, ["kind", "precision", "scale"], label);
-		const precision = safeInteger(candidate.precision, "precision", 1, 1_000);
-		safeInteger(candidate.scale, "scale", 0, precision);
-		return;
-	}
-	if (kind === "timestamp") {
-		const allowed = new Set(["kind", "withTimezone"]);
-		if (Object.keys(candidate).some((key) => !allowed.has(key)))
-			fail(`${label} keys are not exact`);
-		if (
-			candidate.withTimezone !== undefined &&
-			typeof candidate.withTimezone !== "boolean"
-		)
-			fail(`${label}.withTimezone is invalid`);
-		return;
-	}
-	if (kind === "nullable" || kind === "optional") {
-		exactKeys(candidate, ["codec", "kind"], label);
-		if (kind === "optional" && !allowOptional)
-			fail(`${label} uses optional outside an object property`);
-		codec(candidate.codec, `${label}.codec`);
-		return;
-	}
-	if (kind === "array") {
-		const allowed = new Set(["items", "kind", "maximum"]);
-		if (Object.keys(candidate).some((key) => !allowed.has(key)))
-			fail(`${label} keys are not exact`);
-		if (candidate.maximum !== undefined)
-			safeInteger(candidate.maximum, "maximum", 1);
-		codec(candidate.items, `${label}.items`);
-		return;
-	}
-	if (kind !== "object") fail(`${label} uses an unsupported codec`);
-	exactKeys(candidate, ["kind", "properties"], label);
-	const properties = record(candidate.properties, `${label}.properties`);
-	for (const key of Object.keys(properties))
-		codec(properties[key], `${label}.properties.${key}`, true);
+	normalizeCodecContract(
+		value,
+		{ requireExactMembers: true, invalid: wireCodecProblem },
+		{ optionalAllowed: allowOptional, path: [label] },
+	);
 }
 
 function declaredErrors(value: unknown, label: string): void {
