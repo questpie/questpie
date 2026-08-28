@@ -2,6 +2,8 @@ import { codec, operation, policy } from "questpie";
 
 import { defineMutation } from "#questpie/app";
 
+import { tickets } from "./tickets";
+
 const ticketResultCodec = codec.object({
 	id: codec.uuid(),
 	organizationId: codec.uuid(),
@@ -65,12 +67,12 @@ function ticketResult(
 export const createTicket = defineMutation({
 	name: "ticket.create",
 	network: true,
-	input: codec.object({
-		teamId: codec.uuid(),
-		reference: codec.text(),
-		priority: codec.text(),
-		summary: codec.text(),
-		description: codec.text(),
+	input: tickets.createInput().pick({
+		teamId: true,
+		reference: true,
+		priority: true,
+		summary: true,
+		description: true,
 	}),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
@@ -81,7 +83,7 @@ export const createTicket = defineMutation({
 				teamId: input.teamId,
 				assigneeMembershipId: null,
 				reference: input.reference,
-				priority: input.priority,
+				...(input.priority === undefined ? {} : { priority: input.priority }),
 				summary: input.summary,
 				description: input.description,
 			},

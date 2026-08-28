@@ -593,6 +593,19 @@ postgresTest(
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);
+			const browserCreated = await browserClient.mutations["ticket.create"](
+				{
+					description: "Created through the derived Collection input codec.",
+					reference: `WEB-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+					summary: "Defaulted priority remains optional over Wire v3",
+					teamId: supportTracerIds.teamPlatform,
+				},
+				{ callId: `browser:derived-create:${crypto.randomUUID()}` },
+			);
+			expect(browserCreated).toMatchObject({
+				priority: "normal",
+				requesterMembershipId: supportTracerIds.membershipAgent,
+			});
 
 			const customerSignIn = await app.fetch(
 				new Request(`${authOrigin}/api/auth/sign-in/email`, {
