@@ -106,13 +106,19 @@ function operation(
 				});
 				await ctx.data.messageEvents.create({
 					input: { messageId: message.id, kind: "published" },
+					values: { occurredAt: ctx.operationTime },
 				});
 				await ctx.dispatch.messagePublished({
 					channelId: beta05Ids.channel,
 					companyId: beta05Ids.company,
 					messageId: message.id,
 				});
-				return message;
+				return {
+					id: message.id,
+					channelId: message.channelId,
+					body: message.body,
+					createdAt: message.createdAt,
+				};
 			},
 			definition: {
 				name: "message.publish.database",
@@ -168,8 +174,6 @@ postgres(
 			"policy-projection.json",
 			"runtime-build.json",
 			"collection-operation-programs.json",
-			"field-normalizer-programs.json",
-			"server-value-programs.json",
 			"reaction-projection.json",
 			"job-projection.json",
 		]);
@@ -196,10 +200,16 @@ postgres(
 			collectionOperations: JSON.parse(
 				generated["collection-operation-programs.json"]!,
 			),
-			fieldNormalizers: JSON.parse(
-				generated["field-normalizer-programs.json"]!,
-			),
-			serverValues: JSON.parse(generated["server-value-programs.json"]!),
+			fieldNormalizers: {
+				format: "questpie.field-normalizer-programs",
+				version: 1,
+				programs: [],
+			},
+			serverValues: {
+				format: "questpie.server-value-programs",
+				version: 1,
+				programs: [],
+			},
 			policies: policyProjection.policies.map(({ program }) => ({
 				identity: program.identity,
 				target: program.target,
