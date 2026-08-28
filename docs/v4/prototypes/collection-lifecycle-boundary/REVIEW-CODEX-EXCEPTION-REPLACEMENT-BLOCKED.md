@@ -17,8 +17,10 @@ ADR-0031.
 
 VERDICT: BLOCKED
 
-Reviewed head: `2236f3b2479151f22a903a8b5ce853a3b24b07ab`  
-Packet digest: `4f9ca0d63a85f632c26b6c429076a2003b951d349b70551f13f028d3294787d3`  
+Reviewed head: `2236f3b2479151f22a903a8b5ce853a3b24b07ab`
+
+Packet digest: `4f9ca0d63a85f632c26b6c429076a2003b951d349b70551f13f028d3294787d3`
+
 Reviewer: GPT-5.6-sol high
 
 Blocking findings:
