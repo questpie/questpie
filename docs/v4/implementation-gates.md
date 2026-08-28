@@ -46,6 +46,10 @@ the connected tracer; their assertions remain mandatory regressions below.
 - Inline and imported handlers slice into one static Executable Slot without a
   handler registry, required paired file, repeated Resource name, or
   per-operation capability map.
+- Collection lifecycle authoring lowers from the ADR-0031 ordinary-TypeScript
+  subset to one canonical Lifecycle Program. Runtime never invokes authored
+  lifecycle callbacks, and unsupported syntax, capture, capability, identity,
+  compatibility, or artifact bytes fail closed at their Origin.
 - `questpie check` and build construct the Current App Contract. They cannot use
   stale disk output as current-build authority.
 - Runtime Build pairing refuses missing, duplicate, stale, wrong-kind, or
@@ -70,6 +74,10 @@ the connected tracer; their assertions remain mandatory regressions below.
 - Generated Collection contracts expose exact Field identities, segment-array
   paths, one primary key, codecs, and resolved Relations. Embedded `value.*`
   members never masquerade as independently addressable Fields.
+- Generated lifecycle contracts expose exactly `normalize`, `validate`,
+  `check`, and `afterWrite`; payloadless Collection Issues; immutable phase
+  inputs; and only the capabilities admitted for that phase. Operation types
+  require a payloadless mapping for every transitively reachable Issue.
 - TypeScript instantiations stay inside the committed tracer budget.
 - Recursive executable output components require an explicit output pin. They
   cannot widen or use a previous generated contract.
@@ -85,9 +93,10 @@ the connected tracer; their assertions remain mandatory regressions below.
 
 - Compiled Manifest, Committed Migration chain, and actual Schema Fingerprint
   remain distinct.
-- Every regular Collection has exactly one named primary-key Constraint. `id`,
-  `createdAt`, and `updatedAt` are ordinary Fields; schema defaults initialize
-  values but do not implement Mutation-owned update behavior.
+- Every regular Collection has exactly one named primary-key Constraint. `id`
+  and `createdAt` are ordinary Fields. A timestamp Field may declare
+  database-owned `onUpdate: "now"`; neither caller nor trusted lane may supply
+  it, and every supported managed writer returns and records the final value.
 - Inline Shapes compile to ordinary leaf columns with canonical segment-array
   paths. Typed `field.object` and `field.array` values compile to one JSONB
   column with a bounded `value.*` codec. Open `field.json` stays tagged and
@@ -140,13 +149,24 @@ the connected tracer; their assertions remain mandatory regressions below.
 - A closed Collection Operation Set lowers before Manifest emission to ordinary
   `list/get/create/update/delete` Query or Mutation Resources. There is no
   runtime CRUD dispatcher or private Studio data path.
-- Mutation ordering is decode, admission, consistency boundary, row scope and
-  lock, sparse caller Field authority, pure normalization, schema defaults,
-  closed server values, complete candidate validation, candidate Policy,
-  PostgreSQL Constraints, selection, output authority, output validation,
-  commit, and encoding.
-- `createdAt` and `updatedAt` remain ordinary Fields. Server values and every
-  `updatedAt` change require explicit Mutation-owned assignments.
+- Mutation ordering is decode, admission, one transaction and `ctx.now`, exact
+  caller/trusted lanes, row scope and lock, caller Field authority, separate
+  scalar and authored normalization, complete candidate construction and Field
+  validation, authored `validate`, candidate Policy, Policy-aware `check`,
+  PostgreSQL Constraints/DML/database-owned values, pre-commit `afterWrite`,
+  selection, output authority and validation, receipt, commit, and encoding.
+- Payloadless Collection Issues originate only from `validate` or `check`, doom
+  the owning transaction, and map after rollback through the owning Operation's
+  declared payloadless errors. Unknown, forged, malformed, and unmapped values
+  sanitize to `INTERNAL`; PostgreSQL failures remain a distinct class.
+- Lifecycle work uses the outer statement, row, dependency, duration,
+  cancellation, and artifact-re-entry budgets. `check` has bounded Policy-aware
+  reads. `afterWrite` has sequential bounded kernel reads/writes and Job
+  acceptance, but no Services, Actions, Request, Route, external effect, raw
+  SQL, raw transaction, timer, parallel, or detached work.
+- `ctx.now` is the public transaction-stable clock. The temporary
+  `defineCollectionOperations` adapter may retain `operationTime` spelling only
+  until its current consumers migrate; it gains no parallel lifecycle API.
 - Inferred output is accepted only when the compiler materializes a supported
   closed codec at its Origin. An explicit or recursive output pin validates and
   encodes; it cannot cast an unsupported value.
