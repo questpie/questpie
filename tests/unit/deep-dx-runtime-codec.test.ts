@@ -179,6 +179,7 @@ test("decodes recursive closed values and exact tagged open JSON", () => {
 	for (const hostile of [
 		{ kind: "json", value: Number.NaN },
 		{ kind: "json", value: -0 },
+		// eslint-disable-next-line no-sparse-arrays -- Sparse JSON arrays are the hostile input under test.
 		{ kind: "json", value: [, "sparse"] },
 	] as const)
 		expect(() =>
