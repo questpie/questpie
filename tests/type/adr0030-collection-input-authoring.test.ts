@@ -11,7 +11,7 @@ test("Collection input helpers infer exact provenance-derived codecs", async () 
 		const fixture = join(temporary, "authoring.ts");
 		await writeFile(
 			fixture,
-			`import { codec, constraint, defineCollection, field, value } from "questpie";
+			`import { codec, constraint, defineCollection, field, shape, value } from "questpie";
 import type { CodecValue, TaggedJsonValue } from "questpie";
 
 type Equal<Left, Right> = [Left] extends [Right]
@@ -124,7 +124,49 @@ declare const allKindsCreate: AllKindsCreate;
 const expectedAllKindsCreate: ExpectedAllKindsCreate = allKindsCreate;
 const allKindsCreateRoundTrip: AllKindsCreate = {} as ExpectedAllKindsCreate;
 
-void [expectedCreate, createRoundTrip, expectedUpdate, updateRoundTrip, expectedPicked, pickedRoundTrip, expectedOmitted, omittedRoundTrip, expectedAllKindsCreate, allKindsCreateRoundTrip];
+const inlineShapes = defineCollection({
+	name: "inlineShapes",
+	fields: {
+		id: field.uuid({ nullable: false, server: true, immutable: true }),
+		profile: shape.inline({
+			fields: {
+				name: field.text({ nullable: false }),
+				locale: field.text({ nullable: false, default: "en" }),
+				audit: shape.inline({
+					fields: {
+						createdBy: field.uuid({ nullable: false, server: true, immutable: true }),
+						label: field.text({ nullable: true }),
+					},
+				}),
+			},
+		}),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+type InlineCreate = CodecValue<ReturnType<typeof inlineShapes.createInput>>;
+type ExpectedInlineCreate = Readonly<{
+	profile: Readonly<{
+		name: string;
+		locale?: string;
+		audit?: Readonly<{ label?: string | null }>;
+	}>;
+}>;
+type InlineUpdate = CodecValue<ReturnType<typeof inlineShapes.updateInput>>;
+type ExpectedInlineUpdate = Readonly<{
+	profile?: Readonly<{
+		name?: string;
+		locale?: string;
+		audit?: Readonly<{ label?: string | null }>;
+	}>;
+}>;
+declare const inlineCreate: InlineCreate;
+declare const inlineUpdate: InlineUpdate;
+const expectedInlineCreate: ExpectedInlineCreate = inlineCreate;
+const inlineCreateRoundTrip: InlineCreate = {} as ExpectedInlineCreate;
+const expectedInlineUpdate: ExpectedInlineUpdate = inlineUpdate;
+const inlineUpdateRoundTrip: InlineUpdate = {} as ExpectedInlineUpdate;
+
+void [expectedCreate, createRoundTrip, expectedUpdate, updateRoundTrip, expectedPicked, pickedRoundTrip, expectedOmitted, omittedRoundTrip, expectedAllKindsCreate, allKindsCreateRoundTrip, expectedInlineCreate, inlineCreateRoundTrip, expectedInlineUpdate, inlineUpdateRoundTrip];
 
 codec.object({ ticketId: codec.uuid(), ...picked.properties });
 // @ts-expect-error Input helpers are codecs, not Resources or Operations.

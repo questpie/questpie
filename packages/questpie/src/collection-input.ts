@@ -1,7 +1,7 @@
 import { codec } from "./codec";
 import type { codecValueType, Codec, CodecKind, CodecValue } from "./codec";
 import type { FieldDefinition } from "./field-contract";
-import type { FieldNode } from "./shape";
+import type { FieldNode, InlineShapeDefinition } from "./shape";
 import type { ValueDefinition } from "./value";
 
 type FieldMap = Readonly<Record<string, FieldNode>>;
@@ -86,53 +86,11 @@ type FieldCodec<Node> =
 			? TypedCodec<FieldOperationValue<Node> | null, "nullable">
 			: TypedCodec<FieldOperationValue<Node>, Scalar>
 		: never;
-type CreateKey<F extends FieldMap> = {
-	[K in keyof F]: F[K] extends FieldDefinition<
-		unknown,
-		boolean,
-		FieldDefinition["default"],
-		FieldDefinition["scalar"],
-		boolean,
-		infer S
-	>
-		? S extends true
-			? never
-			: K
-		: never;
-}[keyof F];
-type UpdateKey<F extends FieldMap> = {
-	[K in keyof F]: F[K] extends FieldDefinition<
-		unknown,
-		boolean,
-		FieldDefinition["default"],
-		FieldDefinition["scalar"],
-		infer I,
-		infer S
-	>
-		? S extends true
-			? never
-			: I extends true
-				? never
-				: K
-		: never;
-}[keyof F];
 type Optional<C extends AnyCodec> = TypedCodec<
 	CodecValue<C>,
 	"optional",
 	"optional"
 >;
-export type CreatePropertiesFor<F extends FieldMap> = Readonly<{
-	[K in CreateKey<F>]: F[K] extends FieldDefinition<unknown, infer N, infer D>
-		? N extends true
-			? Optional<FieldCodec<F[K]>>
-			: D extends null
-				? FieldCodec<F[K]>
-				: Optional<FieldCodec<F[K]>>
-		: never;
-}>;
-export type UpdatePropertiesFor<F extends FieldMap> = Readonly<{
-	[K in UpdateKey<F>]: Optional<FieldCodec<F[K]>>;
-}>;
 type Selected<P extends CodecMap, S extends Partial<Record<keyof P, true>>> = {
 	[K in keyof P]: S[K] extends true ? K : never;
 }[keyof P];
@@ -147,6 +105,103 @@ type ObjectMembers<P extends CodecMap> = {
 };
 type ObjectValue<P extends CodecMap> = Readonly<{
 	[K in keyof ObjectMembers<P>]: ObjectMembers<P>[K];
+}>;
+
+type InlineDepth = readonly [1, 1, 1, 1, 1, 1, 1, 1];
+type Descend<Depth extends readonly unknown[]> = Depth extends readonly [
+	unknown,
+	...infer Rest,
+]
+	? Rest
+	: readonly [];
+
+type CreateInlineCodec<
+	Fields extends FieldMap,
+	Depth extends readonly unknown[],
+	Properties extends CodecMap = CreatePropertiesFor<Fields, Depth>,
+> = keyof Properties extends never
+	? never
+	: HasRequiredMember<Properties> extends true
+		? TypedCodec<ObjectValue<Properties>, "object">
+		: Optional<TypedCodec<ObjectValue<Properties>, "object">>;
+
+type CreateNodeCodec<Node, Depth extends readonly unknown[]> =
+	Node extends FieldDefinition<
+		unknown,
+		infer Nullable,
+		infer Default,
+		FieldDefinition["scalar"],
+		boolean,
+		infer Server
+	>
+		? Server extends true
+			? never
+			: Nullable extends true
+				? Optional<FieldCodec<Node>>
+				: Default extends null
+					? FieldCodec<Node>
+					: Optional<FieldCodec<Node>>
+		: Node extends InlineShapeDefinition<infer Fields>
+			? Depth extends readonly []
+				? never
+				: CreateInlineCodec<Fields, Descend<Depth>>
+			: never;
+
+type UpdateInlineCodec<
+	Fields extends FieldMap,
+	Depth extends readonly unknown[],
+	Properties extends CodecMap = UpdatePropertiesFor<Fields, Depth>,
+> = keyof Properties extends never
+	? never
+	: Optional<TypedCodec<ObjectValue<Properties>, "object">>;
+
+type UpdateNodeCodec<Node, Depth extends readonly unknown[]> =
+	Node extends FieldDefinition<
+		unknown,
+		boolean,
+		FieldDefinition["default"],
+		FieldDefinition["scalar"],
+		infer Immutable,
+		infer Server
+	>
+		? Server extends true
+			? never
+			: Immutable extends true
+				? never
+				: Optional<FieldCodec<Node>>
+		: Node extends InlineShapeDefinition<infer Fields>
+			? Depth extends readonly []
+				? never
+				: UpdateInlineCodec<Fields, Descend<Depth>>
+			: never;
+
+type HasRequiredMember<Properties extends CodecMap> = {
+	[Key in keyof Properties]: Properties[Key] extends Codec<
+		unknown,
+		CodecKind,
+		"optional"
+	>
+		? false
+		: true;
+}[keyof Properties] extends false
+	? false
+	: true;
+
+export type CreatePropertiesFor<
+	F extends FieldMap,
+	Depth extends readonly unknown[] = InlineDepth,
+> = Readonly<{
+	[K in keyof F as CreateNodeCodec<F[K], Depth> extends never
+		? never
+		: K]: CreateNodeCodec<F[K], Depth>;
+}>;
+export type UpdatePropertiesFor<
+	F extends FieldMap,
+	Depth extends readonly unknown[] = InlineDepth,
+> = Readonly<{
+	[K in keyof F as UpdateNodeCodec<F[K], Depth> extends never
+		? never
+		: K]: UpdateNodeCodec<F[K], Depth>;
 }>;
 
 export interface CollectionInputCodec<P extends CodecMap> extends Codec<
@@ -276,36 +331,46 @@ function embeddedDescriptor(definition: ValueDefinition): AnyCodec {
 	return definition.nullable ? codec.nullable(value) : value;
 }
 
+function nodeDescriptor(
+	node: FieldNode,
+	mode: "create" | "update",
+): AnyCodec | null {
+	if (node.kind === "inlineShape") {
+		const nested = properties(node.fields, mode);
+		if (Object.keys(nested).length === 0) return null;
+		const object = Object.freeze({
+			kind: "object",
+			properties: nested,
+		}) as AnyCodec;
+		const hasRequiredMember = Object.values(nested).some(
+			(member) => member.kind !== "optional",
+		);
+		return mode === "update" || !hasRequiredMember
+			? codec.optional(object)
+			: object;
+	}
+	if (node.server || (mode === "update" && node.immutable)) return null;
+	const scalar = descriptor(node.scalar, node.options);
+	const value = node.nullable ? codec.nullable(scalar) : scalar;
+	return mode === "update" || node.nullable || node.default !== null
+		? codec.optional(value)
+		: value;
+}
+
 function properties(fields: FieldMap, mode: "create" | "update"): CodecMap {
-	return Object.freeze(
-		Object.fromEntries(
-			Object.entries(fields).flatMap(([name, field]) => {
-				if (
-					field.kind !== "field" ||
-					field.server ||
-					(mode === "update" && field.immutable)
-				)
-					return [];
-				const scalar = descriptor(field.scalar, field.options);
-				const value = field.nullable ? codec.nullable(scalar) : scalar;
-				return [
-					[
-						name,
-						mode === "update" || field.nullable || field.default !== null
-							? codec.optional(value)
-							: value,
-					],
-				];
-			}),
-		),
+	return frozenProperties(
+		Object.entries(fields).flatMap(([name, node]) => {
+			const member = nodeDescriptor(node, mode);
+			return member === null ? [] : [[name, member] as const];
+		}),
 	);
 }
 
 export const collectionCreateInput = <F extends FieldMap>(fields: F) =>
-	inputCodec(properties(fields, "create")) as CollectionInputCodec<
+	inputCodec(properties(fields, "create")) as unknown as CollectionInputCodec<
 		CreatePropertiesFor<F>
 	>;
 export const collectionUpdateInput = <F extends FieldMap>(fields: F) =>
-	inputCodec(properties(fields, "update")) as CollectionInputCodec<
+	inputCodec(properties(fields, "update")) as unknown as CollectionInputCodec<
 		UpdatePropertiesFor<F>
 	>;

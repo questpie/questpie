@@ -4,6 +4,7 @@ import {
 	constraint,
 	defineCollection,
 	field,
+	shape,
 	value,
 } from "../../packages/questpie/src";
 
@@ -198,4 +199,99 @@ test("Collection input selectors use own Field keys only", () => {
 	expect(() => records.createInput().pick({ toString: true } as never)).toThrow(
 		"Collection input selector has unknown Field: toString",
 	);
+});
+
+test("Collection input helpers preserve inline Shape provenance recursively", () => {
+	const customers = defineCollection({
+		name: "customers",
+		fields: {
+			id: field.uuid({ nullable: false, server: true, immutable: true }),
+			profile: shape.inline({
+				fields: {
+					name: field.text({ nullable: false, minLength: 2 }),
+					locale: field.text({ nullable: false, default: "en" }),
+					audit: shape.inline({
+						fields: {
+							createdBy: field.uuid({
+								nullable: false,
+								server: true,
+								immutable: true,
+							}),
+							label: field.text({ nullable: true }),
+						},
+					}),
+				},
+			}),
+		},
+		constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+	});
+
+	expect(customers.createInput().properties).toEqual({
+		profile: {
+			kind: "object",
+			properties: {
+				name: { kind: "text", minLength: 2 },
+				locale: {
+					kind: "optional",
+					presence: "optional",
+					codec: { kind: "text" },
+				},
+				audit: {
+					kind: "optional",
+					presence: "optional",
+					codec: {
+						kind: "object",
+						properties: {
+							label: {
+								kind: "optional",
+								presence: "optional",
+								codec: {
+									kind: "nullable",
+									codec: { kind: "text" },
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	});
+	expect(customers.updateInput().properties).toEqual({
+		profile: {
+			kind: "optional",
+			presence: "optional",
+			codec: {
+				kind: "object",
+				properties: {
+					name: {
+						kind: "optional",
+						presence: "optional",
+						codec: { kind: "text", minLength: 2 },
+					},
+					locale: {
+						kind: "optional",
+						presence: "optional",
+						codec: { kind: "text" },
+					},
+					audit: {
+						kind: "optional",
+						presence: "optional",
+						codec: {
+							kind: "object",
+							properties: {
+								label: {
+									kind: "optional",
+									presence: "optional",
+									codec: {
+										kind: "nullable",
+										codec: { kind: "text" },
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	});
 });
