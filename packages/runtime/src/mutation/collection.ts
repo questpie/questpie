@@ -203,7 +203,11 @@ function setPath(target: Record<string, unknown>, path: Path, value: unknown) {
 	current[path.at(-1)!] = value;
 }
 
-function decodeRow(row: Row, result: readonly Result[]) {
+function decodeRow(
+	row: Row,
+	result: readonly Result[],
+	resultValuesDecoded: boolean,
+) {
 	const output: Record<string, unknown> = {};
 	for (const field of result) {
 		if (field.guardColumn !== undefined) {
@@ -218,7 +222,9 @@ function decodeRow(row: Row, result: readonly Result[]) {
 			field.path,
 			value === null && field.nullable
 				? null
-				: decodeMutationFieldResult(value, field.codec),
+				: resultValuesDecoded
+					? value
+					: decodeMutationFieldResult(value, field.codec),
 		);
 	}
 	return Object.freeze(output);
@@ -325,6 +331,7 @@ function createCollectionMutationData(
 		facts: ExecutionFacts;
 		operationTime: Date;
 		consumeRows(count: number): void;
+		resultValuesDecoded: boolean;
 	}>,
 ) {
 	const execute = async (
@@ -409,7 +416,13 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection get exceeded its row limit",
 										);
-									return rows[0] ? decodeRow(rows[0], plan.read.result) : null;
+									return rows[0]
+										? decodeRow(
+												rows[0],
+												plan.read.result,
+												input.resultValuesDecoded,
+											)
+										: null;
 								},
 							}
 						: {}),
@@ -528,7 +541,11 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection create exceeded its row limit",
 										);
-									return decodeRow(rows[0]!, plan.write.result);
+									return decodeRow(
+										rows[0]!,
+										plan.write.result,
+										input.resultValuesDecoded,
+									);
 								},
 							}
 						: {}),
@@ -654,7 +671,11 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection update exceeded its row limit",
 										);
-									return decodeRow(rows[0]!, plan.write.result);
+									return decodeRow(
+										rows[0]!,
+										plan.write.result,
+										input.resultValuesDecoded,
+									);
 								},
 							}
 						: {}),
@@ -675,6 +696,7 @@ export function createPostgresCollectionMutationData(
 ) {
 	return createCollectionMutationData({
 		...input,
+		resultValuesDecoded: false,
 		executeLeaf: (leaf, parameters) => input.query(leaf.sql, parameters),
 	});
 }
@@ -690,6 +712,7 @@ export function createPostgresDatabaseCollectionMutationData(
 ) {
 	return createCollectionMutationData({
 		...input,
+		resultValuesDecoded: true,
 		executeLeaf: (leaf, parameters) =>
 			input.transaction.execute(leaf.statement, parameters),
 	});

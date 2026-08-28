@@ -1,6 +1,9 @@
 import { expect, test } from "bun:test";
 
-import { createPostgresCollectionMutationData } from "../../packages/runtime/src/mutation";
+import {
+	createPostgresCollectionMutationData,
+	createPostgresDatabaseCollectionMutationData,
+} from "../../packages/runtime/src/mutation/collection";
 import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
@@ -834,6 +837,33 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 		items: { kind: "text", minLength: 1, maxLength: 20 },
 	} as const;
 	const jsonCodec = { kind: "json" } as const;
+	const writeResult = [
+		{
+			path: ["profile"],
+			column: "qp_result_0",
+			codec: profileCodec,
+			nullable: false,
+		},
+		{
+			path: ["tags"],
+			column: "qp_result_1",
+			codec: tagsCodec,
+			nullable: false,
+		},
+		{
+			path: ["metadata"],
+			column: "qp_result_2",
+			codec: jsonCodec,
+			nullable: false,
+		},
+	] as const;
+	const writeStatement = bindPostgresCollectionStatement({
+		identity: "mutation:records.create",
+		leaf: "write",
+		text: 'SELECT $1::jsonb AS "qp_result_0", $2::jsonb AS "qp_result_1", $3::jsonb AS "qp_result_2"',
+		parameterCount: 3,
+		result: writeResult,
+	});
 	const baseline = createPlan();
 	const complexPlan = {
 		...baseline,
@@ -879,26 +909,8 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 					codec: jsonCodec,
 				},
 			],
-			result: [
-				{
-					path: ["profile"],
-					column: "qp_result_0",
-					codec: profileCodec,
-					nullable: false,
-				},
-				{
-					path: ["tags"],
-					column: "qp_result_1",
-					codec: tagsCodec,
-					nullable: false,
-				},
-				{
-					path: ["metadata"],
-					column: "qp_result_2",
-					codec: jsonCodec,
-					nullable: false,
-				},
-			],
+			result: writeResult,
+			statement: writeStatement,
 		},
 	} as const;
 	const calls: unknown[][] = [];
@@ -923,7 +935,7 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 						verifiedAt: "2026-08-28T09:00:00.000Z",
 					},
 					qp_result_1: ["owner"],
-					qp_result_2: { audit: true },
+					qp_result_2: { kind: "json", value: { audit: true } },
 				},
 			];
 		},
@@ -958,8 +970,54 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 			verifiedAt: new Date("2026-08-28T09:00:00.000Z"),
 		},
 		tags: ["owner"],
-		metadata: { kind: "json", value: { audit: true } },
+		metadata: {
+			kind: "json",
+			value: { kind: "json", value: { audit: true } },
+		},
 	});
+	const databaseData = createPostgresDatabaseCollectionMutationData({
+		plans: {
+			plans: [complexPlan],
+			byIdentity: new Map([[complexPlan.identity, complexPlan]]),
+		} as any,
+		facts: {
+			principal: { id: principalId, kind: "user" },
+			authority: { kind: "ordinary" },
+			tenant: { id },
+		},
+		operationTime: new Date("2026-08-28T10:00:00.000Z"),
+		consumeRows() {},
+		transaction: {
+			async execute(statement: typeof writeStatement) {
+				return statement.decode({
+					command: "SELECT",
+					rowCount: 1,
+					rows: [
+						[
+							{
+								displayName: "Ada",
+								verifiedAt: "2026-08-28T09:00:00.000Z",
+							},
+							["owner"],
+							{ kind: "json", value: { audit: true } },
+						],
+					],
+				});
+			},
+		} as any,
+	});
+	expect(
+		await (databaseData as any).records.create({
+			input: {
+				profile: {
+					displayName: "Ada",
+					verifiedAt: new Date("2026-08-28T09:00:00.000Z"),
+				},
+				tags: ["owner"],
+			},
+			values: { metadata: { kind: "json", value: { audit: true } } },
+		}),
+	).toEqual(result);
 
 	for (const invalid of [
 		{
@@ -1083,7 +1141,10 @@ test("links only jsonb PostgreSQL types to recursive Collection Field codecs", (
 			command: "SELECT",
 			rowCount: 1,
 			rows: [
-				[{ name: "Ada", seenAt: "2026-08-28T09:00:00.000Z" }, { audit: true }],
+				[
+					{ name: "Ada", seenAt: "2026-08-28T09:00:00.000Z" },
+					{ kind: "json", value: { audit: true } },
+				],
 			],
 		}),
 	).toEqual([
@@ -1092,7 +1153,10 @@ test("links only jsonb PostgreSQL types to recursive Collection Field codecs", (
 				name: "Ada",
 				seenAt: new Date("2026-08-28T09:00:00.000Z"),
 			},
-			qp_result_1: { kind: "json", value: { audit: true } },
+			qp_result_1: {
+				kind: "json",
+				value: { kind: "json", value: { audit: true } },
+			},
 		},
 	]);
 });

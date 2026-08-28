@@ -96,13 +96,7 @@ export function decodeMutationFieldResult(
 		return decodeRelationalScalar(value, codec, "date");
 	return decodeRuntimeCodec(
 		codec,
-		codec.kind === "json" &&
-			(!value ||
-				typeof value !== "object" ||
-				Array.isArray(value) ||
-				(value as Readonly<Record<string, unknown>>).kind !== "json")
-			? { kind: "json", value }
-			: value,
+		codec.kind === "json" ? { kind: "json", value } : value,
 		"$field",
 	);
 }
