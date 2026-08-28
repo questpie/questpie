@@ -375,6 +375,17 @@ export function projectCollectionOperationSets(
 			const callerInputFields = (
 				(memberContract.inputPaths ?? []) as readonly unknown[]
 			).map((field) => path(field, `${identity} caller input`));
+			for (const callerInputField of callerInputFields) {
+				const contract = fieldAt(collection, callerInputField)!;
+				if (contract.server === true)
+					invalid(
+						`${identity} cannot expose server Field ${callerInputField.join(".")} as caller input`,
+					);
+				if (member === "update" && contract.immutable === true)
+					invalid(
+						`${identity} cannot expose immutable Field ${callerInputField.join(".")} as update caller input`,
+					);
+			}
 			const staticServerValueTargets = new Set(
 				serverValue === null
 					? []

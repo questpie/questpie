@@ -456,6 +456,38 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 test("rejects unbound Fields, open values, and ordinary Resource collisions", async () => {
 	const hostiles = [
 		{
+			name: "server-caller-input",
+			source: `import { defineCollectionOperations } from "questpie";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+export const hostile = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	create: { input: ["body"], select: { id: true } },
+});`,
+			fieldPatch: [
+				"body: field.text({ nullable: false, minLength: 1, maxLength: 8_192 })",
+				"body: field.text({ nullable: false, minLength: 1, maxLength: 8_192, server: true })",
+			],
+			diagnostic: /cannot expose server Field body as caller input/,
+		},
+		{
+			name: "immutable-update-input",
+			source: `import { defineCollectionOperations } from "questpie";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+export const hostile = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	update: { input: ["body"], select: { id: true } },
+});`,
+			fieldPatch: [
+				"body: field.text({ nullable: false, minLength: 1, maxLength: 8_192 })",
+				"body: field.text({ nullable: false, minLength: 1, maxLength: 8_192, immutable: true })",
+			],
+			diagnostic: /cannot expose immutable Field body as update caller input/,
+		},
+		{
 			name: "static-overlap",
 			source: `import { defineCollectionOperations, mutation } from "questpie";
 import { messagePolicy } from "./message-policy";
@@ -527,6 +559,14 @@ export const collision = defineMutation({
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
+			if ("fieldPatch" in hostile) {
+				const messagesPath = join(temporary, "src/messages.ts");
+				const source = await readFile(messagesPath, "utf8");
+				await writeFile(
+					messagesPath,
+					source.replace(hostile.fieldPatch[0], hostile.fieldPatch[1]),
+				);
+			}
 			await writeFile(
 				join(temporary, "src/hostile-operations.ts"),
 				hostile.source,
