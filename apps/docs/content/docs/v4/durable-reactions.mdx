@@ -63,7 +63,9 @@ export const messageSubmitted = defineReaction({
 			providerMessageId: delivery.providerMessageId,
 		});
 
-		await attempt.heartbeat({ completed: "delivery" });
+		// Optional: force an immediate ownership/cancellation observation after
+		// this long external step. The worker already heartbeats automatically.
+		await attempt.heartbeat();
 
 		return {
 			kind: "delivered" as const,
@@ -228,10 +230,10 @@ the provider from a Mutation or lease-claim transaction.
 ## Understand leases, retry, and cancellation
 
 A worker claims ready work in a short PostgreSQL transaction, creates a new
-attempt and 30-second lease, then commits before it invokes the handler. A long
-handler heartbeats every 10 seconds. Each attempt has a five-minute deadline.
-The optional heartbeat object stores one bounded progress label; it grants no
-authority and does not change the handler result.
+attempt and, by default, a 30-second lease, then commits before it invokes the
+handler. The worker heartbeats every 10 seconds by default. Each attempt has a
+five-minute default deadline. The current public heartbeat carries no progress
+or checkpoint payload.
 
 Heartbeat, timeout, retry, cancellation, success, and terminal failure compare
 both Physical Attempt identity and Lease Token. When a lease expires, another
@@ -248,6 +250,78 @@ Cancellation is cooperative. Before claim, it prevents the handler from
 starting. During an attempt, heartbeat and `ctx.signal` observe it. Success and
 cancellation have one fenced winner. Cancellation cannot recall provider work
 that already happened.
+
+### Usually let the worker heartbeat for you
+
+The worker renews the lease automatically every 10 seconds while an attempt is
+running. Application code does not need to call `heartbeat()` before and after
+ordinary database calls, Actions, or awaited provider SDK calls. Automatic
+heartbeat stops at the attempt deadline; it cannot keep an expired attempt
+alive.
+
+Call `attempt.heartbeat()` in a Reaction, or `ctx.attempt.heartbeat()` in a Job,
+only when you need an immediate ownership and cancellation observation between
+long chunks of work. The call checks the current Physical Attempt and Lease
+Token. If another worker already superseded the attempt, the stale handler is
+aborted and cannot publish a terminal result. The current public heartbeat
+carries no progress or checkpoint payload.
+
+Manual heartbeat does not extend the attempt deadline, make provider work
+exactly once, or make a blocking CPU loop cooperative. A CPU-heavy handler must
+split work into bounded chunks, yield to the event loop, and observe ownership
+between chunks. Move genuinely heavy CPU work to a separate process, worker, or
+service. An Action owns an external invocation and its ambiguity; calling an
+Action does not by itself isolate CPU work from the Runtime event loop.
+
+### Treat `ctx.signal` as the stop request
+
+`ctx.signal` aborts after the worker observes cancellation, attempt-deadline
+expiry, or lease loss through its automatic heartbeat or an explicit manual
+heartbeat. Cancellation is not pushed directly into the process, so automatic
+observation normally has up to one heartbeat interval of delay. Framework-owned
+calls use the same signal. Pass it to cooperative external APIs that accept an
+`AbortSignal`:
+
+```ts
+const response = await fetch(url, { signal: ctx.signal });
+```
+
+For synchronous or chunked application work, place
+`ctx.signal.throwIfAborted()` before the next irreversible chunk. It only checks
+the current signal and throws when already aborted; it cannot interrupt code,
+undo a committed database transaction, or recall a provider request that was
+already accepted.
+
+```ts
+for (const batch of batches) {
+	ctx.signal.throwIfAborted();
+	await processBatch(batch, { signal: ctx.signal });
+	await ctx.attempt.heartbeat();
+}
+```
+
+This loop is a Job example. A Reaction receives the equivalent `attempt`
+argument directly.
+
+### Schedule durable waiting before an attempt
+
+When work should not begin before a known absolute time, accept the Job with
+`notBefore`. No worker, lease, heartbeat, or attempt is consumed while it waits:
+
+```ts
+await ctx.jobs.reports.companyDigest.accept(
+	{ companyId: ctx.tenant.id },
+	{
+		idempotencyKey: `digest:${ctx.callId}`,
+		notBefore: dueAt,
+	},
+);
+```
+
+The current public Job context has no durable `sleep` or `sleepUntil` method.
+Do not keep an attempt alive with a long timer when delayed acceptance expresses
+the same intent. A process-local timer can disappear in a crash and still
+occupies an active attempt and lease while it waits.
 
 ## Stay within durable limits
 
