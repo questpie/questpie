@@ -593,20 +593,48 @@ dry-run pass. The checked `questpie` tarball SHA-256 is
 the declaration SHA-256 is
 `92e42caebb4527e7be99a1ccfae550b635b977abd5d4cafcaaa360b3aac3133e`.
 
+The current public durable-work guide is Job-first. It explains worker-owned
+automatic heartbeat, the narrow reason to call manual heartbeat, cooperative
+and observation-delayed `ctx.signal`, CPU isolation, and absolute `notBefore`
+without claiming a public `sleepUntil` or progress payload. The Mutation guide
+now explains that PostgreSQL owns `operationTime` through
+`transaction_timestamp()`, exact-call replay reuses its stored receipt, and
+database-owned `onUpdate` remains a later schema capability. These docs-only
+repairs are integrated through `766ca5e69`.
+
+Two later Kernel candidates are intentionally isolated rather than integrated.
+`work/deep-dx-policy-expr` contains the implemented Policy/expression slice and
+passes deterministic full/release, PostgreSQL 17 plus Firefox, Standards and
+Spec gates. `work/deep-dx-crud-lifecycle` contains only the narrower proposed
+Collection provenance/trusted-values ADR and executable hostile proof; it does
+not change production. In both cases the pinned primary acceptance wrapper
+returned no transport result and wrote no review record. Neither candidate is
+Accepted or eligible to land until a fresh authority-compliant acceptance run
+produces and verifies PASS. Do not replace that review with another model or
+silently implement lifecycle semantics.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
    status.
-2. Start the next approved Deep-DX Product slice at the Policy/expression
-   authoring boundary. Preserve Policy as the sole authorization owner while
-   consolidating the current `policy.exists` and Query expression vocabulary;
-   ordinary TypeScript remains preferred wherever no compiler program is
-   required.
-3. Keep Team Support Desk as the golden reference consumer and every
+2. Restore the pinned primary acceptance transport. Both prior invocations are
+   terminal `NO_RESULT`, so do not retry an already reviewed head or invent a
+   no-op commit. A replacement review requires explicit human authority and a
+   genuinely new committed candidate packet under the proof procedure. Land the
+   Policy/expression branch only after a verified PASS record.
+3. After Policy/expression lands, rebase the proposed provenance/trusted-values
+   proof onto the new canonical head, refresh authority hashes and run one new
+   acceptance review. Only then begin its production implementation test-first.
+4. Keep Team Support Desk as the golden reference consumer and every
    application browser call on the generated client. The Query/Relations slice
    above is closed; do not recreate the deleted list variants or a second
    relational execution kernel.
-4. Do not reopen the reference application by adding Cron, Collection triggers,
+5. The pure lifecycle packet still has an unresolved ownership seam:
+   Collection validation issues cannot borrow a named Mutation's declared error
+   map, and arbitrary TypeScript purity cannot be claimed without a conservative
+   analyzable executable subset. Resolve and ratify those contracts before
+   adding `normalize` or `validate` production APIs.
+6. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-5. Do not push, tag or publish without explicit authority.
+7. Do not push, tag or publish without explicit authority.
