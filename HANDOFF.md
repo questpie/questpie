@@ -626,7 +626,7 @@ Runtime Mutation linking and execution are separated behind the Mutation domain
 seam. The complete focused post-repair lane passes 53 tests with 191 assertions,
 the full PostgreSQL 17 lane passes including both Firefox reference tracers, and
 `quality:release` passes. Two consecutive release dry-runs reproduce package
-SHA-256 `e3a9118f9bde1f563a53b6e50e413a06ae4d987be7f7414a9ca5957a4adabd41`
+SHA-256 `bee891d02adc2fffe3f8151840a7337def2ebf7a2a1a9c9583a589c4dbf01573`
 and declaration SHA-256
 `41f9fb9298284876a088894f911d69bc7ba52a3018b9f793c1b553a4020020cb`.
 
