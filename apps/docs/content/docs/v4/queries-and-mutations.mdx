@@ -207,8 +207,17 @@ A derived surface intentionally follows its Collection. Adding a new Field
 changes `createInput()` or `updateInput()` when that Field's provenance belongs
 to the helper, and the generated App Contract makes the change visible to
 TypeScript. Use `.pick()` or `.omit()` when an Operation must expose a smaller,
-pinned surface. This keeps the default path concise without hiding contract
-evolution.
+pinned **key set**. A selected Field's own contract still follows the Field: a
+bound, nullability, scalar, or nested-codec change intentionally changes the
+derived Operation contract and its generated types.
+
+Required, nullable, defaulted, immutable, and server Fields remain distinct in
+the inferred type. On create, a non-nullable Field without a default is
+required; a nullable Field or a Field with a schema default is optional. A
+nullable timestamp, when present, is `Date | null`. An immutable caller Field
+appears on create and disappears from update. A server Field appears in neither
+caller helper. Embedded objects and arrays retain their nested codecs and
+bounds instead of widening to `unknown`.
 
 ## Add ordinary Collection operations
 
@@ -498,7 +507,7 @@ QUESTPIE processes a Mutation in this order:
    update, start from the locked current row and do not reapply create defaults.
 10. Overlay normalized trusted `values`.
 11. Reject an incomplete required candidate.
-12. Validate the complete candidate.
+12. Validate every Field in the complete candidate against its framework Codec.
 13. Enforce candidate Policy over the complete merged row.
 14. Enforce PostgreSQL Constraints.
 15. Select and authorize the output.
@@ -514,10 +523,11 @@ Each declared error keeps its exact literal code and payload type. An unknown
 thrown value becomes one sanitized `INTERNAL` error without a stack trace or
 database detail.
 
-There is no general `before*` or `after*` hook catalogue. Use closed Field
-scalar normalization for the accepted Field codec, trusted `values` for
-server-owned Fields, a named Mutation for cross-Collection work and transactional audit, and
-typed dispatch for durable follow-up.
+This candidate validation is framework Field and Codec validation, not an
+authored lifecycle callback. There is no general `before*` or `after*` hook
+catalogue. Use closed Field scalar normalization for the accepted Field codec,
+trusted `values` for server-owned Fields, a named Mutation for cross-Collection
+work and transactional audit, and typed dispatch for durable follow-up.
 
 ## Handle cancellation and response loss
 

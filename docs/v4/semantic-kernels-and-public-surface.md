@@ -28,19 +28,19 @@ Route capability, never a Mutation or Policy capability.
 
 ## Choose the owner of application work
 
-| Work                                           | Owner       | Boundary                                                                |
-| ---------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle               |
-| Supply a trusted server value                  | `values`    | Mutation-owned assignment checked by the complete candidate Policy      |
-| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                          |
-| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts  |
-| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance      |
-| Call an external or nondeterministic provider  | Action      | Explicit effect outside transaction retry                               |
-| Adapt an HTTP request and response             | Route       | Transport boundary that delegates state and effects to Operations       |
-| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer           |
-| Accept explicitly requested background work    | Job         | Durable dispatch with scoped idempotency and optional delay or schedule |
-| Coordinate checkpointed multi-step work        | Job         | Durable named Mutation/Action steps, timers, and typed signals          |
-| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation              |
+| Work                                                    | Owner                 | Boundary                                                                                                  |
+| ------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------- |
+| Canonicalize a generated Collection Operation Set input | its closed normalizer | Pure compiler-owned program; named Mutations use ordinary TypeScript before calling the Collection kernel |
+| Supply a trusted server value                           | `values`              | Mutation-owned assignment checked by the complete candidate Policy                                        |
+| Read or derive an authorized result                     | Query                 | One Policy-aware read snapshot                                                                            |
+| Decide whether a principal may perform work             | Policy                | Pure authorization decision over explicit subject, resource, and facts                                    |
+| Validate application state or write atomically          | Mutation              | One PostgreSQL transaction, including audit and durable acceptance                                        |
+| Call an external or nondeterministic provider           | Action                | Explicit effect outside transaction retry                                                                 |
+| Adapt an HTTP request and response                      | Route                 | Transport boundary that delegates state and effects to Operations                                         |
+| React to one exact committed fact                       | Reaction              | Durable committed-fact causation with no independent producer                                             |
+| Accept explicitly requested background work             | Job                   | Durable dispatch with scoped idempotency and optional delay or schedule                                   |
+| Coordinate checkpointed multi-step work                 | Job                   | Durable named Mutation/Action steps, timers, and typed signals                                            |
+| Observe a changing authorized read                      | Live Query            | Re-evaluated Query result driven by committed invalidation                                                |
 
 This map is the permanent v4 guide for work ownership. The v3 hook crosswalk is
 historical evidence, not a public lifecycle API. Reaction and Job remain
@@ -48,11 +48,18 @@ distinct authoring meanings over one internal durable kernel; checkpointing
 does not create another Resource.
 
 Codec is the compiler and Runtime semantic authority rather than an arbitrary
-validation-library type. Its closed serializable grammar drives exact runtime
-validation, canonical compatibility bytes, generated types, direct/network
-value restoration, Context input, and durable payloads. Application code may
-use another validation library for values it owns, but that library does not
-replace the Codec recorded in the App Contract.
+validation-library type. TypeScript derives exact application values from it;
+the compiler validates and canonicalizes its closed descriptor; Runtime
+validates direct input, handler output, Context and durable payloads; and the
+generated client independently validates network results and restores values
+such as `Date`. The same descriptor drives compatibility bytes and preserves
+Field bounds and nested semantics recursively.
+
+Application code may use another validation library for values it owns. When it
+permits arbitrary refinements or transforms, those extensions are executable
+JavaScript, so the compiler cannot deterministically serialize, hash, lower,
+reproduce, or enforce them across durable and wire boundaries. Such a library
+therefore does not replace the Codec recorded in the App Contract.
 
 Collection provenance, Mutation values, and Policy have separate owners.
 Provenance defines which lane may supply a Field, Mutation owns the transaction

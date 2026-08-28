@@ -132,8 +132,10 @@ create/update kernel:
 objects from this matrix. Object-map `.pick({ field: true })` and
 `.omit({ field: true })` preserve the selected Field codecs and reject unknown
 Fields. A derived helper intentionally evolves when a new Field belongs to its
-provenance surface; a named Operation pins a smaller surface with `pick` or
-`omit`.
+provenance surface; a named Operation pins a smaller key set with `pick` or
+`omit`. The selected Fields' own scalar, bounds, nullability, and nested Codec
+semantics continue to follow the Collection and intentionally evolve the
+Operation contract.
 
 Named Mutations compose the same kernel through typed `ctx.data`. Caller values
 use `input` or `patch`; Mutation-owned assignments use the distinct exact
@@ -164,7 +166,7 @@ The accepted order is:
    locked current row without reapplying create defaults;
 10. overlay normalized trusted `values`;
 11. reject a missing required candidate Field;
-12. validate the complete candidate;
+12. validate every Field in the complete candidate against its framework Codec;
 13. enforce candidate Policy;
 14. enforce PostgreSQL Constraints;
 15. select the result;
@@ -173,8 +175,9 @@ The accepted order is:
 18. commit once;
 19. encode the result.
 
-Policy decides caller Field authority before normalization can change a
-supplied path. A named Mutation may derive trusted values from its input,
+This candidate validation is framework Field and Codec validation, not an
+authored lifecycle callback. Policy decides caller Field authority before
+normalization can change a supplied path. A named Mutation may derive trusted values from its input,
 Policy-aware transaction reads and locking reads, `ctx.operationTime`,
 `ctx.callId`, and ordinary TypeScript expressions over those values. Runtime
 does not inspect arbitrary TypeScript provenance. `createdAt` and `updatedAt`

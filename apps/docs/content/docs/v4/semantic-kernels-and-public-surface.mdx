@@ -21,8 +21,8 @@ const messageId = codec.uuid();
 export const messages = defineCollection({
 	name: "messages",
 	fields: {
-		id: field.uuid({ default: "randomUuid" }),
-		body: field.text(),
+		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		body: field.text({ nullable: false }),
 	},
 });
 ```
@@ -32,30 +32,41 @@ adds database-only behavior such as nullability, defaults, and column mapping.
 `value.*` retains the compatible embedded-JSONB vocabulary. Operation does not
 define a second `operation.uuid()` grammar.
 
-A Codec is executable product data, not only a TypeScript type. The compiler
-serializes its closed grammar into the App Contract and Operation Wire, derives
-generated types from it, and uses it to reject unknown keys, validate durable
-payloads, restore values such as `Date`, and calculate compatibility identities.
-The direct and network paths therefore use one semantic authority.
+A Codec is executable product data, not only a TypeScript type. Each layer uses
+the same closed description for a different proof:
+
+| Layer            | What the Codec proves                                                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| TypeScript       | Infers exact keys, optional and nullable members, scalar values, and provenance-derived Collection input types.                                                             |
+| Compiler         | Validates and canonicalizes the descriptor, preserves its bounds and nested options, and records it in the App Contract and Operation Wire.                                 |
+| Runtime          | Validates direct inputs, handler outputs, Context and durable payloads; it rejects unknown keys and invalid bounds or value forms.                                          |
+| Generated client | Validates network results independently and restores runtime values such as `Date`; an invalid server result is a framework protocol failure, not trusted application data. |
+
+That shared authority keeps direct calls, network calls, stored durable values,
+generated declarations, and compatibility identities aligned. Field-derived
+Codecs preserve the Field's complete scalar contract recursively: text and
+integer bounds, numeric precision and scale, timestamp timezone semantics,
+embedded object properties, array limits, and tagged canonical JSON.
 
 General validation libraries such as Zod or TypeBox can validate values owned by
-application code, including form state. They do not replace the QUESTPIE Codec
-that the compiler and Runtime require for an Operation, Context input, or
-durable payload. Treating an arbitrary validator as that authority would leave
-the compiler unable to prove one closed portable grammar across generated code,
-runtime execution, durable storage, and the wire.
+application code, including form state. When a validation library permits
+arbitrary refinements or transforms, those extensions are executable
+JavaScript: QUESTPIE cannot deterministically serialize, hash, lower, reproduce
+in a generated client, or enforce that code after a durable or network
+boundary. Such a library therefore does not replace the QUESTPIE Codec required
+for an Operation, Context input, or durable payload.
 
 ## Choose the owner of application work
 
-| Work                                           | Owner       | Boundary                                                               |
-| ---------------------------------------------- | ----------- | ---------------------------------------------------------------------- |
-| Canonicalize caller input without I/O          | `normalize` | Closed pure program inside the owning Operation lifecycle              |
-| Supply a trusted server value                  | `values`    | Mutation-owned assignment checked by the complete candidate Policy     |
-| Read or derive an authorized result            | Query       | One Policy-aware read snapshot                                         |
-| Decide whether a principal may perform work    | Policy      | Pure authorization decision over explicit subject, resource, and facts |
-| Validate application state or write atomically | Mutation    | One PostgreSQL transaction, including audit and durable acceptance     |
-| React to one exact committed fact              | Reaction    | Durable committed-fact causation with no independent producer          |
-| Observe a changing authorized read             | Live Query  | Re-evaluated Query result driven by committed invalidation             |
+| Work                                                    | Owner                 | Boundary                                                                                                  |
+| ------------------------------------------------------- | --------------------- | --------------------------------------------------------------------------------------------------------- |
+| Canonicalize a generated Collection Operation Set input | its closed normalizer | Pure compiler-owned program; named Mutations use ordinary TypeScript before calling the Collection kernel |
+| Supply a trusted server value                           | `values`              | Mutation-owned assignment checked by the complete candidate Policy                                        |
+| Read or derive an authorized result                     | Query                 | One Policy-aware read snapshot                                                                            |
+| Decide whether a principal may perform work             | Policy                | Pure authorization decision over explicit subject, resource, and facts                                    |
+| Validate application state or write atomically          | Mutation              | One PostgreSQL transaction, including audit and durable acceptance                                        |
+| React to one exact committed fact                       | Reaction              | Durable committed-fact causation with no independent producer                                             |
+| Observe a changing authorized read                      | Live Query            | Re-evaluated Query result driven by committed invalidation                                                |
 
 Reaction is the committed-fact authoring meaning over the internal durable
 kernel. QUESTPIE does not expose a general lifecycle hook catalogue.
