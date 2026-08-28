@@ -43,8 +43,9 @@ export const publishMessage = defineMutation({
 			input: {
 				channelId: channel.id,
 				authorMembershipId: ctx.values.selectedMembershipId,
-				body: input.body,
+				body: input.body.trim(),
 			},
+			values: { createdAt: ctx.operationTime },
 		});
 		if (message.body === undefined) throw errors.channelUnavailable();
 		await ctx.data.messageEvents.create({
