@@ -4,13 +4,13 @@ import {
 	type PostgresParameter,
 } from "../postgres/contract";
 import {
-	decodeRelationalScalar,
-	decodeRelationalScalarCodec,
-} from "../relational/scalar";
+	decodeMutationFieldCodec,
+	decodeMutationFieldResult,
+	postgresTypeForMutationFieldCodec,
+} from "./field-codec";
 import {
 	decodePostgresExecutionFact,
 	decodePostgresLiteralCodec,
-	postgresTypeForScalarCodec,
 } from "./postgres-program-codec";
 import type {
 	PostgresCollectionStatement,
@@ -194,11 +194,11 @@ export function decodePostgresCollectionParameters(
 				["position", "postgresType", "kind", "path", "codec"],
 				`${label} parameter ${index}`,
 			);
-			const decodedCodec = decodeRelationalScalarCodec(
+			const decodedCodec = decodeMutationFieldCodec(
 				source.codec,
 				`${label} parameter ${index} codec`,
 			);
-			if (postgresType !== postgresTypeForScalarCodec(decodedCodec))
+			if (postgresType !== postgresTypeForMutationFieldCodec(decodedCodec))
 				fail(
 					`${label} parameter ${position} PostgreSQL type disagrees with its codec`,
 				);
@@ -381,7 +381,7 @@ export function bindPostgresCollectionStatement(
 						}
 						entries.push([
 							item.column,
-							decodeRelationalScalar(rawValue, item.codec, "date"),
+							decodeMutationFieldResult(rawValue, item.codec),
 						]);
 					}
 					return Object.freeze(Object.fromEntries(entries));

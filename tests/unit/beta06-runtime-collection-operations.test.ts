@@ -1,7 +1,10 @@
 import { expect, test } from "bun:test";
 
 import { createPostgresCollectionMutationData } from "../../packages/runtime/src/mutation";
-import { decodePostgresCollectionParameters } from "../../packages/runtime/src/mutation/postgres-collection-statement";
+import {
+	bindPostgresCollectionStatement,
+	decodePostgresCollectionParameters,
+} from "../../packages/runtime/src/mutation/postgres-collection-statement";
 
 const id = "00000000-0000-4000-8000-000000000001";
 const principalId = "00000000-0000-4000-8000-000000000002";
@@ -812,4 +815,284 @@ test("rejects widened requests, unknown caller Fields, and invalid caller scalar
 		data.records.create({ input: { title: "", body: "Body" } }),
 	).rejects.toThrow("invalid relational scalar");
 	expect(calls).toBe(0);
+});
+
+test("treats object, array, and json Fields as atomic normalized jsonb values", async () => {
+	const profileCodec = {
+		kind: "object",
+		properties: {
+			displayName: { kind: "text", minLength: 1, maxLength: 120 },
+			verifiedAt: {
+				kind: "nullable",
+				codec: { kind: "timestamp", withTimezone: true },
+			},
+		},
+	} as const;
+	const tagsCodec = {
+		kind: "array",
+		maximum: 2,
+		items: { kind: "text", minLength: 1, maxLength: 20 },
+	} as const;
+	const jsonCodec = { kind: "json" } as const;
+	const baseline = createPlan();
+	const complexPlan = {
+		...baseline,
+		operation: {
+			...baseline.operation,
+			callerInputFields: [["profile"], ["tags"]],
+			requiredCallerInputFields: [["profile"], ["tags"]],
+			trustedValueFields: [["metadata"]],
+			requiredTrustedValueFields: [["metadata"]],
+			selectedFieldPaths: [["profile"], ["tags"], ["metadata"]],
+		},
+		candidate: {
+			steps: [],
+			fields: [
+				{ path: ["profile"], codec: profileCodec, nullable: false },
+				{ path: ["tags"], codec: tagsCodec, nullable: false },
+				{ path: ["metadata"], codec: jsonCodec, nullable: false },
+			],
+		},
+		fieldAuthority: { suppliedPathsOnly: true, checks: [] },
+		write: {
+			sql: "WRITE_JSONB_SQL",
+			parameters: [
+				{
+					position: 1,
+					postgresType: "jsonb",
+					kind: "callerInput",
+					path: ["profile"],
+					codec: profileCodec,
+				},
+				{
+					position: 2,
+					postgresType: "jsonb",
+					kind: "callerInput",
+					path: ["tags"],
+					codec: tagsCodec,
+				},
+				{
+					position: 3,
+					postgresType: "jsonb",
+					kind: "trustedValue",
+					path: ["metadata"],
+					codec: jsonCodec,
+				},
+			],
+			result: [
+				{
+					path: ["profile"],
+					column: "qp_result_0",
+					codec: profileCodec,
+					nullable: false,
+				},
+				{
+					path: ["tags"],
+					column: "qp_result_1",
+					codec: tagsCodec,
+					nullable: false,
+				},
+				{
+					path: ["metadata"],
+					column: "qp_result_2",
+					codec: jsonCodec,
+					nullable: false,
+				},
+			],
+		},
+	} as const;
+	const calls: unknown[][] = [];
+	const data = createPostgresCollectionMutationData({
+		plans: {
+			plans: [complexPlan],
+			byIdentity: new Map([[complexPlan.identity, complexPlan]]),
+		} as any,
+		facts: {
+			principal: { id: principalId, kind: "user" },
+			authority: { kind: "ordinary" },
+			tenant: { id },
+		},
+		operationTime: new Date("2026-08-28T10:00:00.000Z"),
+		consumeRows() {},
+		async query(_sql, parameters = []) {
+			calls.push([...parameters]);
+			return [
+				{
+					qp_result_0: {
+						displayName: "Ada",
+						verifiedAt: "2026-08-28T09:00:00.000Z",
+					},
+					qp_result_1: ["owner"],
+					qp_result_2: { audit: true },
+				},
+			];
+		},
+	});
+
+	const result = await (data as any).records.create({
+		input: {
+			profile: {
+				displayName: "Ada",
+				verifiedAt: new Date("2026-08-28T09:00:00.000Z"),
+			},
+			tags: ["owner"],
+		},
+		values: { metadata: { kind: "json", value: { audit: true } } },
+	});
+	expect(calls).toEqual([
+		[
+			{
+				kind: "json",
+				value: {
+					displayName: "Ada",
+					verifiedAt: "2026-08-28T09:00:00.000Z",
+				},
+			},
+			{ kind: "json", value: ["owner"] },
+			{ kind: "json", value: { audit: true } },
+		],
+	]);
+	expect(result).toEqual({
+		profile: {
+			displayName: "Ada",
+			verifiedAt: new Date("2026-08-28T09:00:00.000Z"),
+		},
+		tags: ["owner"],
+		metadata: { kind: "json", value: { audit: true } },
+	});
+
+	for (const invalid of [
+		{
+			profile: { displayName: "Ada", verifiedAt: null, extra: true },
+			tags: ["owner"],
+		},
+		{
+			profile: { displayName: "Ada", verifiedAt: null },
+			tags: ["one", "two", "three"],
+		},
+	] as const) {
+		await expect(
+			(data as any).records.create({
+				input: invalid,
+				values: { metadata: { kind: "json", value: { audit: true } } },
+			}),
+		).rejects.toThrow();
+	}
+	const validInput = {
+		profile: { displayName: "Ada", verifiedAt: null },
+		tags: ["owner"],
+	};
+	const sparseTags: string[] = [];
+	sparseTags.length = 1;
+	for (const request of [
+		{
+			input: { ...validInput, tags: sparseTags },
+			values: { metadata: { kind: "json", value: true } },
+		},
+		{ input: validInput, values: { metadata: { audit: true } } },
+		{
+			input: validInput,
+			values: { metadata: { kind: "json", value: Number.NaN } },
+		},
+		{ input: validInput, values: { metadata: { kind: "json", value: -0 } } },
+		{
+			input: validInput,
+			values: { metadata: { kind: "json", value: "e\u0301" } },
+		},
+	] as const) {
+		await expect((data as any).records.create(request)).rejects.toThrow();
+	}
+	const cyclic: Record<string, unknown> = {};
+	cyclic.self = cyclic;
+	await expect(
+		(data as any).records.create({
+			input: validInput,
+			values: { metadata: { kind: "json", value: cyclic } },
+		}),
+	).rejects.toThrow();
+	expect(calls).toHaveLength(1);
+});
+
+test("links only jsonb PostgreSQL types to recursive Collection Field codecs", () => {
+	const profileCodec = {
+		kind: "object",
+		properties: {
+			name: { kind: "text" },
+			seenAt: {
+				kind: "nullable",
+				codec: { kind: "timestamp", withTimezone: true },
+			},
+		},
+	} as const;
+	expect(
+		decodePostgresCollectionParameters(
+			[
+				{
+					position: 1,
+					postgresType: "jsonb",
+					kind: "callerInput",
+					path: ["profile"],
+					codec: profileCodec,
+				},
+			],
+			"SELECT $1::jsonb",
+			"jsonb",
+		),
+	).toHaveLength(1);
+	expect(() =>
+		decodePostgresCollectionParameters(
+			[
+				{
+					position: 1,
+					postgresType: "text",
+					kind: "callerInput",
+					path: ["profile"],
+					codec: {
+						kind: "object",
+						properties: { name: { kind: "text" } },
+					},
+				},
+			],
+			"SELECT $1::text",
+			"jsonb",
+		),
+	).toThrow("PostgreSQL type disagrees");
+
+	const bound = bindPostgresCollectionStatement({
+		identity: "mutation:records.create",
+		leaf: "write",
+		text: 'SELECT "profile" AS "qp_result_0", "metadata" AS "qp_result_1"',
+		parameterCount: 0,
+		result: [
+			{
+				path: ["profile"],
+				column: "qp_result_0",
+				codec: profileCodec,
+				nullable: false,
+			},
+			{
+				path: ["metadata"],
+				column: "qp_result_1",
+				codec: { kind: "json" },
+				nullable: false,
+			},
+		],
+	});
+	expect(
+		bound.decode({
+			command: "SELECT",
+			rowCount: 1,
+			rows: [
+				[{ name: "Ada", seenAt: "2026-08-28T09:00:00.000Z" }, { audit: true }],
+			],
+		}),
+	).toEqual([
+		{
+			qp_result_0: {
+				name: "Ada",
+				seenAt: new Date("2026-08-28T09:00:00.000Z"),
+			},
+			qp_result_1: { kind: "json", value: { audit: true } },
+		},
+	]);
 });

@@ -2,7 +2,11 @@ import type {
 	PostgresParameter,
 	PostgresTransaction,
 } from "../postgres/contract";
-import { decodeRelationalScalar, type ScalarCodecV1 } from "../relational";
+import {
+	decodeMutationFieldInput,
+	decodeMutationFieldResult,
+	type MutationFieldCodecV1,
+} from "./field-codec";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
 	LinkedPostgresCollectionOperationPlansV1,
@@ -102,12 +106,18 @@ function hasValueAt(value: Row, path: Path): boolean {
 function inputPaths(
 	value: unknown,
 	label: string,
+	physicalPaths: readonly Path[],
 	prefix: string[] = [],
 ): Path[] {
 	const source = record(value, label);
 	const prototype = Object.getPrototypeOf(source);
 	if (prototype !== null && prototype !== Object.prototype)
 		throw new TypeError(`${label} must have exactly the compiled Fields`);
+	if (
+		prefix.length > 0 &&
+		physicalPaths.some((fieldPath) => pathKey(fieldPath) === pathKey(prefix))
+	)
+		return [prefix];
 	const paths: Path[] = [];
 	const keys = Object.keys(source).sort();
 	if (keys.length === 0 && prefix.length > 0) return [prefix];
@@ -120,7 +130,7 @@ function inputPaths(
 			!Array.isArray(child) &&
 			!(child instanceof Date)
 		)
-			paths.push(...inputPaths(child, label, next));
+			paths.push(...inputPaths(child, label, physicalPaths, next));
 		else paths.push(next);
 	}
 	return paths;
@@ -174,13 +184,12 @@ function requirePaths(
 		throw new TypeError(`${label} is missing required Fields`);
 }
 
-function inputScalar(
+function inputField(
 	value: unknown,
-	codec: ScalarCodecV1,
+	codec: MutationFieldCodecV1,
 	nullable: boolean,
 ): PostgresParameter {
-	if (value === null && nullable) return null;
-	return decodeRelationalScalar(value, codec, "date") as PostgresParameter;
+	return decodeMutationFieldInput(value, codec, nullable);
 }
 
 function setPath(target: Record<string, unknown>, path: Path, value: unknown) {
@@ -209,7 +218,7 @@ function decodeRow(row: Row, result: readonly Result[]) {
 			field.path,
 			value === null && field.nullable
 				? null
-				: decodeRelationalScalar(value, field.codec, "date"),
+				: decodeMutationFieldResult(value, field.codec),
 		);
 	}
 	return Object.freeze(output);
@@ -274,7 +283,7 @@ function bind(
 			return null;
 		if (parameter.codec === "boolean")
 			throw new TypeError("Compiled Collection presence parameter is invalid");
-		return inputScalar(
+		return inputField(
 			valueAt(source, parameter.path),
 			parameter.codec,
 			nullableByPath.get(pathKey(parameter.path)) === true,
@@ -287,7 +296,7 @@ function validateScalars(
 	paths: readonly Path[],
 	fields: readonly Readonly<{
 		path: Path;
-		codec: ScalarCodecV1;
+		codec: MutationFieldCodecV1;
 		nullable: boolean;
 	}>[],
 ) {
@@ -296,7 +305,7 @@ function validateScalars(
 		const field = byPath.get(pathKey(path));
 		if (!field)
 			throw new TypeError("Compiled Collection Field has no scalar definition");
-		inputScalar(valueAt(source, path), field.codec, field.nullable);
+		inputField(valueAt(source, path), field.codec, field.nullable);
 	}
 }
 
@@ -364,7 +373,7 @@ function createCollectionMutationData(
 									);
 									const key = record(request.key, "Collection key");
 									exactPaths(
-										inputPaths(key, "Collection key"),
+										inputPaths(key, "Collection key", plan.operation.keyFields),
 										plan.operation.keyFields,
 										"Collection key",
 									);
@@ -422,6 +431,7 @@ function createCollectionMutationData(
 									const callerPaths = inputPaths(
 										callerInput,
 										"Collection create input",
+										plan.operation.callerInputFields,
 									);
 									allowedPaths(
 										callerPaths,
@@ -437,7 +447,11 @@ function createCollectionMutationData(
 										? record(request.values, "Collection create values")
 										: undefined;
 									const trustedPaths = trustedValues
-										? inputPaths(trustedValues, "Collection create values")
+										? inputPaths(
+												trustedValues,
+												"Collection create values",
+												plan.operation.trustedValueFields,
+											)
 										: [];
 									allowedPaths(
 										trustedPaths,
@@ -534,19 +548,24 @@ function createCollectionMutationData(
 										? record(request.patch, "Collection update patch")
 										: Object.freeze({});
 									exactPaths(
-										inputPaths(key, "Collection key"),
+										inputPaths(key, "Collection key", plan.operation.keyFields),
 										plan.operation.keyFields,
 										"Collection key",
 									);
 									const suppliedPaths = inputPaths(
 										patch,
 										"Collection update patch",
+										plan.operation.callerInputFields,
 									);
 									const trustedValues = Object.hasOwn(request, "values")
 										? record(request.values, "Collection update values")
 										: undefined;
 									const trustedPaths = trustedValues
-										? inputPaths(trustedValues, "Collection update values")
+										? inputPaths(
+												trustedValues,
+												"Collection update values",
+												plan.operation.trustedValueFields,
+											)
 										: [];
 									if (suppliedPaths.length === 0 && trustedPaths.length === 0)
 										throw new TypeError(

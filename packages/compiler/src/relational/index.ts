@@ -25,6 +25,8 @@ export {
 } from "./postgres-mutation-seam";
 export type {
 	PostgresMutationCollectionV1,
+	PostgresMutationFieldCodecV1,
+	PostgresMutationEmbeddedCodecV1,
 	PostgresMutationFieldV1,
 } from "./postgres-mutation-seam";
 

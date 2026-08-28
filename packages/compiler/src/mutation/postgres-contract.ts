@@ -1,4 +1,4 @@
-import type { ScalarCodecV1 } from "../relational";
+import type { PostgresMutationFieldCodecV1 } from "../relational";
 import type { CollectionOperationProgramV1 } from "./operation-set-contract";
 
 export type PostgresOperationParameterV1 = Readonly<{
@@ -9,7 +9,7 @@ export type PostgresOperationParameterV1 = Readonly<{
 		| Readonly<{
 				kind: "callerInput" | "key" | "patchValue" | "trustedValue";
 				path: readonly string[];
-				codec: ScalarCodecV1;
+				codec: PostgresMutationFieldCodecV1;
 		  }>
 		| Readonly<{
 				kind: "callerInputPresent" | "patchPresent" | "trustedValuePresent";
@@ -32,7 +32,7 @@ export type PostgresOperationParameterV1 = Readonly<{
 export interface PostgresOperationResultV1 {
 	readonly path: readonly string[];
 	readonly column: string;
-	readonly codec: ScalarCodecV1;
+	readonly codec: PostgresMutationFieldCodecV1;
 	readonly nullable: boolean;
 	readonly guardColumn?: string;
 }
@@ -101,7 +101,7 @@ export interface PostgresCreateOperationPlanV1 {
 		steps: readonly Readonly<Record<string, unknown>>[];
 		fields: readonly Readonly<{
 			path: readonly string[];
-			codec: ScalarCodecV1;
+			codec: PostgresMutationFieldCodecV1;
 			nullable: boolean;
 		}>[];
 	}>;

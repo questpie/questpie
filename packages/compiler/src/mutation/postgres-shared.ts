@@ -2,8 +2,8 @@ import { canonicalBytes, digest } from "../canonical";
 import type {
 	PolicyProgramV1,
 	PostgresMutationCollectionV1,
+	PostgresMutationFieldCodecV1,
 	PostgresMutationFieldV1,
-	ScalarCodecV1,
 } from "../relational";
 import type { CollectionOperationProgramV1 } from "./operation-set-contract";
 import type {
@@ -38,7 +38,7 @@ export function quote(value: string): string {
 	return `"${value.replaceAll('"', '""')}"`;
 }
 
-export function postgresType(codec: ScalarCodecV1): string {
+export function postgresType(codec: PostgresMutationFieldCodecV1): string {
 	switch (codec.kind) {
 		case "uuid":
 			return "uuid";
@@ -56,6 +56,10 @@ export function postgresType(codec: ScalarCodecV1): string {
 			return "date";
 		case "text":
 			return "text";
+		case "object":
+		case "array":
+		case "json":
+			return "jsonb";
 	}
 	throw new TypeError("unsupported PostgreSQL codec");
 }
@@ -283,6 +287,12 @@ export function executionParameter(
 	sourcePath: readonly string[],
 	field: PostgresMutationFieldV1,
 ): string {
+	if (
+		field.codec.kind === "object" ||
+		field.codec.kind === "array" ||
+		field.codec.kind === "json"
+	)
+		throw new TypeError("execution facts cannot populate JSON-backed Fields");
 	return parameters.add({
 		kind: "executionFact",
 		source,

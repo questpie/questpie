@@ -1,5 +1,5 @@
-import { decodeRelationalScalarCodec } from "../relational";
 import { canonicalMutationBytes } from "./canonical";
+import { decodeMutationFieldCodec } from "./field-codec";
 import type {
 	FieldPath,
 	LinkedPostgresCreateOperationPlanV1,
@@ -74,7 +74,7 @@ export function candidateFields(
 				fail(`${identity} candidate field ${index} nullable is invalid`);
 			return Object.freeze({
 				path: path(field.path, `${identity} candidate field ${index} path`),
-				codec: decodeRelationalScalarCodec(
+				codec: decodeMutationFieldCodec(
 					field.codec,
 					`${identity} candidate field ${index} codec`,
 				),
@@ -149,7 +149,7 @@ export function results(
 		return Object.freeze({
 			path: path(source.path, `${label} result ${index} path`),
 			column,
-			codec: decodeRelationalScalarCodec(
+			codec: decodeMutationFieldCodec(
 				source.codec,
 				`${label} result ${index} codec`,
 			),

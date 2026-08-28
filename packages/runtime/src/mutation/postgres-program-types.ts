@@ -3,6 +3,7 @@ import type {
 	PostgresStatement,
 } from "../postgres/contract";
 import type { ScalarCodecV1 } from "../relational/scalar";
+import type { MutationFieldCodecV1 } from "./field-codec";
 import type {
 	FieldNormalizerProgramV1,
 	LinkedCollectionOperationProgramV1,
@@ -25,7 +26,7 @@ export type PostgresParameterV1 =
 			postgresType: string;
 			kind: "callerInput" | "key" | "patchValue" | "trustedValue";
 			path: FieldPath;
-			codec: ScalarCodecV1;
+			codec: MutationFieldCodecV1;
 	  }>
 	| Readonly<{
 			position: number;
@@ -60,7 +61,7 @@ export type PostgresParameterV1 =
 export type PostgresResultV1 = Readonly<{
 	path: FieldPath;
 	column: string;
-	codec: ScalarCodecV1;
+	codec: MutationFieldCodecV1;
 	nullable: boolean;
 	guardColumn?: string;
 }>;
@@ -134,7 +135,7 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 		steps: readonly RecordValue[];
 		fields: readonly Readonly<{
 			path: FieldPath;
-			codec: ScalarCodecV1;
+			codec: MutationFieldCodecV1;
 			nullable: boolean;
 		}>[];
 	}>;

@@ -267,6 +267,8 @@ function transform(
 	}
 	if (codec.kind === "array") {
 		if (!Array.isArray(value)) invalid(path, "must be an array");
+		for (let index = 0; index < value.length; index += 1)
+			if (!(index in value)) invalid(path, "must not contain sparse arrays");
 		if (codec.maximum !== undefined && value.length > codec.maximum)
 			invalid(path, `must contain at most ${codec.maximum} items`);
 		return Object.freeze(

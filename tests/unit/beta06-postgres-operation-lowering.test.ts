@@ -692,3 +692,118 @@ test("merges trusted update values after caller patches without replaying create
 	expect(update.write.sql).not.toContain("pg_catalog.gen_random_uuid()");
 	expect(update.write.sql).not.toContain("pg_catalog.now()");
 });
+
+test("lowers object, array, and json Collection Fields as exact jsonb values", () => {
+	const jsonSchema = structuredClone(schema) as any;
+	const records = jsonSchema.collections.find(
+		(collection: any) => collection.identity === "collection:records",
+	);
+	records.fields.push(
+		field("collection:records", "profile", "profile", {
+			kind: "object",
+			properties: [
+				{
+					key: "displayName",
+					codec: {
+						kind: "text",
+						minLength: 1,
+						maxLength: 120,
+						collation: "questpie.binary",
+						nullable: false,
+					},
+				},
+				{
+					key: "verifiedAt",
+					codec: { kind: "timestamp", withTimezone: true, nullable: true },
+				},
+			],
+		}),
+		field("collection:records", "tags", "tags", {
+			kind: "array",
+			maximumItems: 4,
+			items: { kind: "text", minLength: 1, maxLength: 20, nullable: false },
+		}),
+		field("collection:records", "metadata", "metadata", { kind: "json" }),
+	);
+
+	const jsonPolicy = structuredClone(policyProjection) as any;
+	jsonPolicy.policies[0].program.fields.callerInput.create.push(
+		{ path: ["profile"], when: { kind: "constant", value: true } },
+		{ path: ["tags"], when: { kind: "constant", value: true } },
+	);
+	const jsonOperations = structuredClone(operations) as any;
+	const createOperation = jsonOperations.operations[0];
+	createOperation.callerInputFields.push(["profile"], ["tags"]);
+	createOperation.requiredCallerInputFields.push(["profile"], ["tags"]);
+	createOperation.trustedValueFields.push(["metadata"]);
+	createOperation.selectedFieldPaths.push(["profile"], ["tags"], ["metadata"]);
+
+	const lowered = lowerPostgresCollectionOperationPlans({
+		collectionOperations: jsonOperations,
+		schemaProjection: jsonSchema,
+		policyProjection: jsonPolicy,
+		normalizerPrograms: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValuePrograms: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [serverValues],
+		},
+	});
+	const create = lowered.plans[0]!;
+	if (create.member !== "create") throw new Error("expected create plan");
+
+	expect(create.candidate.fields).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				path: ["profile"],
+				codec: {
+					kind: "object",
+					properties: {
+						displayName: { kind: "text", minLength: 1, maxLength: 120 },
+						verifiedAt: {
+							kind: "nullable",
+							codec: { kind: "timestamp", withTimezone: true },
+						},
+					},
+				},
+			}),
+			expect.objectContaining({
+				path: ["tags"],
+				codec: {
+					kind: "array",
+					maximum: 4,
+					items: { kind: "text", minLength: 1, maxLength: 20 },
+				},
+			}),
+			expect.objectContaining({ path: ["metadata"], codec: { kind: "json" } }),
+		]),
+	);
+	for (const fieldPath of [["profile"], ["tags"], ["metadata"]] as const) {
+		const parameters = create.write.parameters.filter(
+			(parameter) =>
+				"path" in parameter &&
+				JSON.stringify(parameter.path) === JSON.stringify(fieldPath),
+		);
+		expect(
+			parameters.some((parameter) => parameter.postgresType === "jsonb"),
+		).toBe(true);
+	}
+	expect(create.write.sql).toContain("::jsonb");
+	expect(create.write.result).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				path: ["profile"],
+				codec: expect.objectContaining({ kind: "object" }),
+			}),
+			expect.objectContaining({
+				path: ["tags"],
+				codec: expect.objectContaining({ kind: "array" }),
+			}),
+			expect.objectContaining({ path: ["metadata"], codec: { kind: "json" } }),
+		]),
+	);
+});
