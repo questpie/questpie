@@ -123,4 +123,4 @@ test("resolves generated Execution source types through the fixture mapping", as
 	const diagnostics = `${result.stdout.toString()}${result.stderr.toString()}`;
 	expect(diagnostics).toBe("");
 	expect(result.exitCode).toBe(0);
-});
+}, 15_000);

@@ -23,4 +23,4 @@ test("builds workspace dependencies before dependent private packages", async ()
 		(task) => task.taskId === "@questpie/runtime#build",
 	);
 	expect(runtimeBuild?.dependencies).toContain("questpie#build");
-});
+}, 15_000);

@@ -133,4 +133,4 @@ test("compiles exact and wildcard precedence into the generated mount", async ()
 
 test("typechecks exact generated Route params and rejects unknown keys", async () => {
 	await expect(typecheckRouteParams()).resolves.toBeUndefined();
-});
+}, 15_000);

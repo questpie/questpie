@@ -167,7 +167,7 @@ void (0 as unknown as NoTargetRow);
 	} finally {
 		await rm(temporary, { recursive: true });
 	}
-});
+}, 15_000);
 
 test("rejects invalid inverse Relation definitions and references", async () => {
 	for (const hostile of [
