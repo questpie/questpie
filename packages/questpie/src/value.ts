@@ -27,10 +27,13 @@ export interface ValueDefinition<
 	Value = unknown,
 	Nullable extends boolean = boolean,
 	Kind extends EmbeddedValueKind = EmbeddedValueKind,
+	Options extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
 > {
 	readonly kind: Kind;
 	readonly nullable: Nullable;
-	readonly options: Readonly<Record<string, unknown>>;
+	readonly options: Options;
 	readonly value?: Value | (Nullable extends true ? null : never);
 }
 
@@ -50,13 +53,23 @@ function valueDefinition<
 >(
 	kind: Kind,
 	options: Options,
-): ValueDefinition<Value, Options["nullable"], Kind> {
+): ValueDefinition<
+	Value,
+	Options["nullable"],
+	Kind,
+	Readonly<Omit<Options, "nullable">>
+> {
 	const { nullable, ...rest } = options;
 	return Object.freeze({
 		kind,
 		nullable,
 		options: Object.freeze(rest),
-	}) as ValueDefinition<Value, Options["nullable"], Kind>;
+	}) as ValueDefinition<
+		Value,
+		Options["nullable"],
+		Kind,
+		Readonly<Omit<Options, "nullable">>
+	>;
 }
 
 export const value = Object.freeze({

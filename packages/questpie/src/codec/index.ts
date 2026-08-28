@@ -1,9 +1,13 @@
 export type CodecKind =
 	| "array"
+	| "bigint"
 	| "boolean"
 	| "cursor"
+	| "date"
 	| "integer"
+	| "json"
 	| "nullable"
+	| "numeric"
 	| "object"
 	| "optional"
 	| "text"

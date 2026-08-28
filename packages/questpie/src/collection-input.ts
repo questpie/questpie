@@ -2,6 +2,7 @@ import { codec } from "./codec";
 import type { codecValueType, Codec, CodecKind, CodecValue } from "./codec";
 import type { FieldDefinition } from "./field-contract";
 import type { FieldNode } from "./shape";
+import type { ValueDefinition } from "./value";
 
 type FieldMap = Readonly<Record<string, FieldNode>>;
 type AnyCodec = Codec<unknown, CodecKind, "required" | "optional">;
@@ -11,11 +12,79 @@ type TypedCodec<
 	Kind extends CodecKind = CodecKind,
 	Presence extends "required" | "optional" = "required",
 > = Codec<Value, Kind, Presence> & Readonly<{ [codecValueType]: Value }>;
+type EmbeddedOperationValue<Node> =
+	Node extends ValueDefinition<
+		infer Value,
+		infer Nullable,
+		infer Kind,
+		infer Options
+	>
+		?
+				| (Kind extends "timestamp"
+						? Date
+						: Kind extends "object"
+							? Options extends Readonly<{
+									properties: infer Properties extends Readonly<
+										Record<string, ValueDefinition>
+									>;
+								}>
+								? Readonly<{
+										[Key in keyof Properties]: EmbeddedOperationValue<
+											Properties[Key]
+										>;
+									}>
+								: Value
+							: Kind extends "array"
+								? Options extends Readonly<{
+										items: infer Item extends ValueDefinition;
+									}>
+									? readonly EmbeddedOperationValue<Item>[]
+									: Value
+								: Value)
+				| (Nullable extends true ? null : never)
+		: never;
+type FieldOperationValue<Node> =
+	Node extends FieldDefinition<
+		infer Value,
+		boolean,
+		FieldDefinition["default"],
+		infer Scalar,
+		boolean,
+		boolean,
+		infer Options
+	>
+		? Scalar extends "timestamp"
+			? Date
+			: Scalar extends "object"
+				? Options extends Readonly<{
+						properties: infer Properties extends Readonly<
+							Record<string, ValueDefinition>
+						>;
+					}>
+					? Readonly<{
+							[Key in keyof Properties]: EmbeddedOperationValue<
+								Properties[Key]
+							>;
+						}>
+					: Value
+				: Scalar extends "array"
+					? Options extends Readonly<{
+							items: infer Item extends ValueDefinition;
+						}>
+						? readonly EmbeddedOperationValue<Item>[]
+						: Value
+					: Value
+		: never;
 type FieldCodec<Node> =
-	Node extends FieldDefinition<infer Value, infer Nullable>
+	Node extends FieldDefinition<
+		unknown,
+		infer Nullable,
+		FieldDefinition["default"],
+		infer Scalar
+	>
 		? Nullable extends true
-			? TypedCodec<Value | null, "nullable">
-			: TypedCodec<Value>
+			? TypedCodec<FieldOperationValue<Node> | null, "nullable">
+			: TypedCodec<FieldOperationValue<Node>, Scalar>
 		: never;
 type CreateKey<F extends FieldMap> = {
 	[K in keyof F]: F[K] extends FieldDefinition<
@@ -106,12 +175,11 @@ function inputCodec<P extends CodecMap>(
 					throw new TypeError(
 						`Collection input selector must select ${key} with true`,
 					);
-				const property = properties[key];
-				if (!property)
+				if (!Object.hasOwn(properties, key))
 					throw new TypeError(
 						`Collection input selector has unknown Field: ${key}`,
 					);
-				return [key, property];
+				return [key, properties[key]!];
 			}),
 		);
 	return Object.freeze({
@@ -123,11 +191,89 @@ function inputCodec<P extends CodecMap>(
 			selected(selection);
 			return build(
 				Object.fromEntries(
-					Object.entries(properties).filter(([key]) => !(key in selection)),
+					Object.entries(properties).filter(
+						([key]) => !Object.hasOwn(selection, key),
+					),
 				),
 			);
 		},
 	}) as unknown as CollectionInputCodec<P>;
+}
+
+type DefinitionOptions = Readonly<Record<string, unknown>>;
+
+function frozenProperties(
+	entries: readonly (readonly [string, AnyCodec])[],
+): CodecMap {
+	const result: Record<string, AnyCodec> = Object.create(null);
+	for (const [key, descriptor] of entries) result[key] = descriptor;
+	return Object.freeze(result);
+}
+
+function boundedMembers(
+	options: DefinitionOptions,
+	minimum: "minLength" | "minimum",
+	maximum: "maxLength" | "maximum",
+): DefinitionOptions {
+	return {
+		...(options[minimum] === undefined ? {} : { [minimum]: options[minimum] }),
+		...(options[maximum] === undefined ? {} : { [maximum]: options[maximum] }),
+	};
+}
+
+function descriptor(kind: string, options: DefinitionOptions): AnyCodec {
+	if (kind === "text")
+		return Object.freeze({
+			kind,
+			...boundedMembers(options, "minLength", "maxLength"),
+		}) as AnyCodec;
+	if (kind === "integer")
+		return Object.freeze({
+			kind,
+			...boundedMembers(options, "minimum", "maximum"),
+		}) as AnyCodec;
+	if (kind === "bigint")
+		return Object.freeze({
+			kind,
+			...boundedMembers(options, "minimum", "maximum"),
+		}) as AnyCodec;
+	if (kind === "numeric")
+		return Object.freeze({
+			kind,
+			precision: options.precision,
+			scale: options.scale,
+		}) as AnyCodec;
+	if (kind === "timestamp")
+		return Object.freeze({
+			kind,
+			withTimezone: options.withTimezone ?? false,
+		}) as AnyCodec;
+	if (kind === "object") {
+		const properties = options.properties as Readonly<
+			Record<string, ValueDefinition>
+		>;
+		return Object.freeze({
+			kind,
+			properties: frozenProperties(
+				Object.entries(properties).map(([key, definition]) => [
+					key,
+					embeddedDescriptor(definition),
+				]),
+			),
+		}) as AnyCodec;
+	}
+	if (kind === "array")
+		return Object.freeze({
+			kind,
+			items: embeddedDescriptor(options.items as ValueDefinition),
+			maximum: options.maximumItems,
+		}) as AnyCodec;
+	return Object.freeze({ kind }) as AnyCodec;
+}
+
+function embeddedDescriptor(definition: ValueDefinition): AnyCodec {
+	const value = descriptor(definition.kind, definition.options);
+	return definition.nullable ? codec.nullable(value) : value;
 }
 
 function properties(fields: FieldMap, mode: "create" | "update"): CodecMap {
@@ -140,7 +286,7 @@ function properties(fields: FieldMap, mode: "create" | "update"): CodecMap {
 					(mode === "update" && field.immutable)
 				)
 					return [];
-				const scalar = Object.freeze({ kind: field.scalar }) as AnyCodec;
+				const scalar = descriptor(field.scalar, field.options);
 				const value = field.nullable ? codec.nullable(scalar) : scalar;
 				return [
 					[

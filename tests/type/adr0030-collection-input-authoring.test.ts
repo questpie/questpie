@@ -11,8 +11,8 @@ test("Collection input helpers infer exact provenance-derived codecs", async () 
 		const fixture = join(temporary, "authoring.ts");
 		await writeFile(
 			fixture,
-			`import { codec, constraint, defineCollection, field } from "questpie";
-import type { CodecValue } from "questpie";
+			`import { codec, constraint, defineCollection, field, value } from "questpie";
+import type { CodecValue, TaggedJsonValue } from "questpie";
 
 type Equal<Left, Right> = [Left] extends [Right]
 	? [Right] extends [Left]
@@ -71,7 +71,60 @@ type ExpectedOmitted = Readonly<{
 const expectedOmitted: ExpectedOmitted = {} as CodecValue<typeof omitted>;
 const omittedRoundTrip: CodecValue<typeof omitted> = {} as ExpectedOmitted;
 
-void [expectedCreate, createRoundTrip, expectedUpdate, updateRoundTrip, expectedPicked, pickedRoundTrip, expectedOmitted, omittedRoundTrip];
+const allKinds = defineCollection({
+	name: "allKinds",
+	fields: {
+		id: field.uuid({ nullable: false, server: true, immutable: true }),
+		title: field.text({ nullable: false, minLength: 2, maxLength: 40 }),
+		active: field.boolean({ nullable: false }),
+		rank: field.integer({ nullable: false, minimum: -4, maximum: 12 }),
+		sequence: field.bigint({ nullable: false, minimum: "-9", maximum: "99" }),
+		amount: field.numeric({ nullable: false, precision: 12, scale: 3 }),
+		occurredAt: field.timestamp({ nullable: false, withTimezone: true }),
+		businessDate: field.date({ nullable: false }),
+		profile: field.object({
+			nullable: false,
+			properties: {
+				label: value.text({ nullable: false, maxLength: 24 }),
+				seenAt: value.timestamp({ nullable: true, withTimezone: true }),
+				moments: value.array({
+					nullable: false,
+					items: value.timestamp({ nullable: false, withTimezone: true }),
+					maximumItems: 3,
+				}),
+			},
+		}),
+		tags: field.array({
+			nullable: false,
+			items: value.uuid({ nullable: false }),
+			maximumItems: 5,
+		}),
+		metadata: field.json({ nullable: false }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["title"] }) },
+});
+type AllKindsCreate = CodecValue<ReturnType<typeof allKinds.createInput>>;
+type ExpectedAllKindsCreate = Readonly<{
+	title: string;
+	active: boolean;
+	rank: number;
+	sequence: string;
+	amount: string;
+	occurredAt: Date;
+	businessDate: string;
+	profile: Readonly<{
+		label: string;
+		seenAt: Date | null;
+		moments: readonly Date[];
+	}>;
+	tags: readonly string[];
+	metadata: TaggedJsonValue;
+}>;
+declare const allKindsCreate: AllKindsCreate;
+const expectedAllKindsCreate: ExpectedAllKindsCreate = allKindsCreate;
+const allKindsCreateRoundTrip: AllKindsCreate = {} as ExpectedAllKindsCreate;
+
+void [expectedCreate, createRoundTrip, expectedUpdate, updateRoundTrip, expectedPicked, pickedRoundTrip, expectedOmitted, omittedRoundTrip, expectedAllKindsCreate, allKindsCreateRoundTrip];
 
 codec.object({ ticketId: codec.uuid(), ...picked.properties });
 // @ts-expect-error Input helpers are codecs, not Resources or Operations.

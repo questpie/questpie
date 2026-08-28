@@ -42,6 +42,9 @@ export interface FieldDefinition<
 	Scalar extends FieldScalar = FieldScalar,
 	Immutable extends boolean = boolean,
 	Server extends boolean = boolean,
+	Options extends Readonly<Record<string, unknown>> = Readonly<
+		Record<string, unknown>
+	>,
 > {
 	readonly kind: "field";
 	readonly scalar: Scalar;
@@ -50,6 +53,6 @@ export interface FieldDefinition<
 	readonly immutable: Immutable;
 	readonly server: Server;
 	readonly postgresName: string | null;
-	readonly options: Readonly<Record<string, unknown>>;
+	readonly options: Options;
 	readonly value?: Value;
 }

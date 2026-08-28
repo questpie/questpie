@@ -148,7 +148,10 @@ function fieldDefinition<
 	Options extends { immutable: infer Immutable extends boolean }
 		? Immutable
 		: false,
-	Options extends { server: infer Server extends boolean } ? Server : false
+	Options extends { server: infer Server extends boolean } ? Server : false,
+	Readonly<
+		Omit<Options, "nullable" | "default" | "immutable" | "server" | "postgres">
+	>
 > {
 	const {
 		nullable,
@@ -177,7 +180,13 @@ function fieldDefinition<
 		Options extends { immutable: infer Immutable extends boolean }
 			? Immutable
 			: false,
-		Options extends { server: infer Server extends boolean } ? Server : false
+		Options extends { server: infer Server extends boolean } ? Server : false,
+		Readonly<
+			Omit<
+				Options,
+				"nullable" | "default" | "immutable" | "server" | "postgres"
+			>
+		>
 	>;
 }
 
