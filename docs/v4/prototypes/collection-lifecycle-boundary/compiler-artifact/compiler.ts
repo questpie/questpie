@@ -57,7 +57,14 @@ export type Expression =
 	| Readonly<{ op: "literal"; value: Scalar }>
 	| Readonly<{
 			op: "root";
-			root: "input" | "candidate" | "current" | "written" | "previous" | "now";
+			root:
+				| "input"
+				| "candidate"
+				| "current"
+				| "written"
+				| "previous"
+				| "now"
+				| "callId";
 	  }>
 	| Readonly<{ op: "local"; slot: number }>
 	| Readonly<{
@@ -91,6 +98,7 @@ export type Expression =
 			method: StringMethod;
 			target: Expression;
 			arguments: readonly Expression[];
+			optional: boolean;
 	  }>
 	| Readonly<{
 			op: "capability";
@@ -101,6 +109,7 @@ export type Expression =
 
 export type ObjectEntry =
 	| Readonly<{ kind: "field"; field: Identity; value: Expression }>
+	| Readonly<{ kind: "argument"; key: string; value: Expression }>
 	| Readonly<{ kind: "spreadInput" }>;
 
 export type Statement =
@@ -129,12 +138,118 @@ export type Bindings = Readonly<{
 	capabilities: Readonly<
 		Record<
 			string,
-			Readonly<{ kind: "read" | "write" | "acceptJob"; identity: Identity }>
+			| Readonly<{
+					kind: "read";
+					identity: Identity;
+					argumentKeys: readonly string[];
+					cardinality: "one" | "many";
+					first: boolean;
+					maxRows: number;
+			  }>
+			| Readonly<{
+					kind: "write" | "acceptJob";
+					identity: Identity;
+					argumentKeys: readonly string[];
+			  }>
 		>
 	>;
 	operations: readonly Identity[];
 	jobs: readonly Identity[];
 }>;
+
+export type ExpectedArtifactContract = Readonly<{
+	runtimeBuild: string;
+	interpreter?: string;
+	bindings: Bindings;
+}>;
+
+export type ExecutionBudget = {
+	readonly signal: AbortSignal;
+	readonly deadline: number;
+	readonly maxStatements: number;
+	readonly maxRows: number;
+	readonly maxDependencies: number;
+	readonly maxDurationMilliseconds: number;
+	readonly maxArtifactReentry: number;
+	readonly clock: () => number;
+	readonly startedAt: number;
+	statements: number;
+	rows: number;
+	dependencies: number;
+	artifactReentry: number;
+};
+
+export type CapabilityInvocation = Readonly<{
+	arguments: readonly unknown[];
+	budget: ExecutionBudget;
+	artifact: Artifact;
+}>;
+
+export type OperationAdapter = Readonly<
+	Record<
+		string,
+		(invocation: CapabilityInvocation) => unknown | Promise<unknown>
+	>
+>;
+
+export function createExecutionBudget(
+	options: Readonly<{
+		signal?: AbortSignal;
+		deadline: number;
+		maxStatements: number;
+		maxRows: number;
+		maxDependencies: number;
+		maxDurationMilliseconds: number;
+		maxArtifactReentry: number;
+		clock?: () => number;
+	}>,
+): ExecutionBudget {
+	const clock = options.clock ?? Date.now;
+	for (const [name, value] of Object.entries({
+		maxStatements: options.maxStatements,
+		maxRows: options.maxRows,
+		maxDependencies: options.maxDependencies,
+		maxDurationMilliseconds: options.maxDurationMilliseconds,
+		maxArtifactReentry: options.maxArtifactReentry,
+	}))
+		if (!Number.isSafeInteger(value) || value < 1)
+			throw new TypeError(`${name} must be a positive safe integer`);
+	if (!Number.isFinite(options.deadline))
+		throw new TypeError("deadline must be finite");
+	const budget: ExecutionBudget = {
+		signal: options.signal ?? new AbortController().signal,
+		deadline: options.deadline,
+		maxStatements: options.maxStatements,
+		maxRows: options.maxRows,
+		maxDependencies: options.maxDependencies,
+		maxDurationMilliseconds: options.maxDurationMilliseconds,
+		maxArtifactReentry: options.maxArtifactReentry,
+		clock,
+		startedAt: clock(),
+		statements: 0,
+		rows: 0,
+		dependencies: 0,
+		artifactReentry: 0,
+	};
+	for (const name of [
+		"signal",
+		"deadline",
+		"maxStatements",
+		"maxRows",
+		"maxDependencies",
+		"maxDurationMilliseconds",
+		"maxArtifactReentry",
+		"clock",
+		"startedAt",
+	] as const)
+		Object.defineProperty(budget, name, {
+			value: budget[name],
+			enumerable: true,
+			configurable: false,
+			writable: false,
+		});
+	return Object.seal(budget);
+}
 
 export type Artifact = Readonly<{
 	format: typeof FORMAT;
@@ -205,7 +320,7 @@ const phaseRoots: Record<Phase, ReadonlySet<string>> = {
 	normalize: new Set(["input"]),
 	validate: new Set(["candidate", "current", "now"]),
 	check: new Set(["candidate", "current", "now"]),
-	afterWrite: new Set(["written", "previous", "now"]),
+	afterWrite: new Set(["written", "previous", "now", "callId"]),
 };
 
 type Environment = {
@@ -299,9 +414,10 @@ function lowerExpression(node: ts.Expression, env: Environment): Expression {
 		if (
 			ts.isIdentifier(node.expression) &&
 			env.parameters.get(node.expression.text) === "capabilities" &&
-			node.name.text === "now"
+			(node.name.text === "now" ||
+				(env.phase === "afterWrite" && node.name.text === "callId"))
 		)
-			return { op: "root", root: "now" };
+			return { op: "root", root: node.name.text as "now" | "callId" };
 		return {
 			op: "member",
 			target: lowerExpression(node.expression, env),
@@ -420,15 +536,34 @@ function lowerExpression(node: ts.Expression, env: Environment): Expression {
 		if (
 			ts.isPropertyAccessExpression(node.expression) &&
 			stringMethods.has(node.expression.name.text)
-		)
+		) {
+			const method = node.expression.name.text as StringMethod;
+			const requiredArity = ["trim", "toUpperCase", "toLowerCase"].includes(
+				method,
+			)
+				? 0
+				: 1;
+			if (node.arguments.length !== requiredArity)
+				return reject(
+					env,
+					node,
+					"unsupportedLifecycleSyntax",
+					`use ${method} with exactly ${requiredArity} argument${requiredArity === 1 ? "" : "s"}`,
+				);
 			return {
 				op: "stringMethod",
-				method: node.expression.name.text as StringMethod,
+				method,
 				target: lowerExpression(node.expression.expression, env),
 				arguments: node.arguments.map((argument) =>
 					lowerExpression(argument, env),
 				),
+				optional:
+					!!node.questionDotToken ||
+					!!node.expression.questionDotToken ||
+					ts.isOptionalChain(node) ||
+					ts.isOptionalChain(node.expression),
 			};
+		}
 		let target: ts.Expression = node.expression;
 		while (ts.isPropertyAccessExpression(target)) target = target.expression;
 		if (
@@ -467,6 +602,68 @@ function lowerExpression(node: ts.Expression, env: Environment): Expression {
 		"unsupportedLifecycleSyntax",
 		"rewrite with Lifecycle Program v1 forms",
 	);
+}
+
+function lowerCapabilityArgument(
+	node: ts.Expression,
+	env: Environment,
+	argumentKeys: readonly string[],
+	prefix = "",
+): Expression {
+	if (!ts.isObjectLiteralExpression(node)) return lowerExpression(node, env);
+	const entries: ObjectEntry[] = [];
+	const admittedAtLevel = [
+		...new Set(
+			argumentKeys
+				.filter((key) => key.startsWith(prefix))
+				.map((key) => key.slice(prefix.length).split(".")[0]!),
+		),
+	];
+	const seen = new Set<string>();
+	for (const member of node.properties) {
+		if (!ts.isPropertyAssignment(member) || !ts.isIdentifier(member.name))
+			reject(
+				env,
+				member,
+				"unsupportedLifecycleSyntax",
+				"use exact generated Operation or Job argument properties",
+			);
+		const key = member.name.text;
+		if (!admittedAtLevel.includes(key) || seen.has(key))
+			reject(
+				env,
+				member.name,
+				"unsupportedLifecycleSyntax",
+				"use each generated Operation or Job argument property exactly once",
+			);
+		seen.add(key);
+		entries.push({
+			kind: "argument",
+			key,
+			value: lowerCapabilityArgument(
+				member.initializer,
+				env,
+				argumentKeys,
+				`${prefix}${key}.`,
+			),
+		});
+	}
+	if (seen.size !== admittedAtLevel.length)
+		reject(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			"provide every generated Operation or Job argument property",
+		);
+	return {
+		op: "object",
+		entries: admittedAtLevel.map(
+			(key) =>
+				entries.find(
+					(entry) => entry.kind === "argument" && entry.key === key,
+				)!,
+		),
+	};
 }
 
 function lowerCapability(
@@ -511,11 +708,23 @@ function lowerCapability(
 			"unsupportedLifecycleCapability",
 			`use only ${[...phaseCapabilities[env.phase]].join(", ") || "no capabilities"} in ${env.phase}`,
 		);
+	if (
+		node.arguments.length !== 1 ||
+		!ts.isObjectLiteralExpression(node.arguments[0]!)
+	)
+		return reject(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			"pass one exact generated Operation or Job argument object",
+		);
 	return {
 		op: "capability",
 		capability: declared.kind,
 		identity: declared.identity,
-		arguments: node.arguments.map((argument) => lowerExpression(argument, env)),
+		arguments: node.arguments.map((argument) =>
+			lowerCapabilityArgument(argument, env, declared.argumentKeys),
+		),
 	};
 }
 
@@ -553,8 +762,14 @@ function lowerStatements(
 					)
 				: lowerExpression(declaration.initializer, env);
 			env.locals.set(declaration.name.text, slot);
-			if (value.op === "capability" && value.capability === "read")
-				env.bounded.add(slot);
+			if (value.op === "capability" && value.capability === "read") {
+				const binding = Object.values(env.bindings.capabilities).find(
+					(candidate) =>
+						candidate.kind === "read" && candidate.identity === value.identity,
+				);
+				if (binding?.kind === "read" && binding.cardinality === "many")
+					env.bounded.add(slot);
+			}
 			output.push({ op: "const", slot, value });
 			continue;
 		}
@@ -927,14 +1142,16 @@ export function compileArtifact(
 			lowerPhase(phase, options.callbacks[phase], options.bindings),
 		]),
 	) as Record<Phase, readonly Statement[]>;
-	return deepFreeze({
+	const artifact = {
 		format: FORMAT,
 		interpreter: INTERPRETER,
 		runtimeBuild: options.runtimeBuild,
 		reentryLimit: options.reentryLimit,
 		bindings: options.bindings,
 		phases: lowered,
-	});
+	} as const;
+	validateArtifact(artifact);
+	return deepFreeze(artifact);
 }
 
 function deepFreeze<T>(value: T): T {
@@ -992,6 +1209,19 @@ function exactKeys(
 		throw new TypeError(`${label} has unknown or missing members`);
 }
 
+function requirePlainMap(
+	value: unknown,
+	label: string,
+): asserts value is object {
+	if (
+		!value ||
+		typeof value !== "object" ||
+		Array.isArray(value) ||
+		Object.getPrototypeOf(value) !== Object.prototype
+	)
+		throw new TypeError(`${label} must be an exact plain binding map`);
+}
+
 function unique(values: readonly unknown[], label: string): void {
 	if (new Set(values).size !== values.length)
 		throw new TypeError(`${label} identities must be unique`);
@@ -1015,6 +1245,7 @@ function validateExpression(
 	phase: Phase,
 	definedSlots: ReadonlySet<number>,
 	capabilityAtRoot = false,
+	structuralArgument = false,
 ): asserts value is Expression {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError("invalid expression");
@@ -1102,7 +1333,26 @@ function validateExpression(
 				throw new TypeError("invalid object entry");
 			const item = entry as Record<string, unknown>;
 			if (item.kind === "spreadInput") exactKeys(item, ["kind"], "spread");
-			else {
+			else if (item.kind === "argument") {
+				if (!structuralArgument)
+					throw new TypeError(
+						"structural argument entry is only admitted inside a capability",
+					);
+				exactKeys(item, ["kind", "key", "value"], "argument entry");
+				if (
+					typeof item.key !== "string" ||
+					!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(item.key)
+				)
+					throw new TypeError("invalid structural argument key");
+				validateExpression(
+					item.value,
+					bindings,
+					phase,
+					definedSlots,
+					false,
+					true,
+				);
+			} else {
 				exactKeys(item, ["kind", "field", "value"], "field entry");
 				if (item.kind !== "field")
 					throw new TypeError("invalid object entry kind");
@@ -1127,12 +1377,24 @@ function validateExpression(
 		return;
 	}
 	if (expression.op === "stringMethod") {
-		exactKeys(expression, ["op", "method", "target", "arguments"], "method");
+		exactKeys(
+			expression,
+			["op", "method", "target", "arguments", "optional"],
+			"method",
+		);
 		if (
 			!stringMethods.has(String(expression.method)) ||
-			!Array.isArray(expression.arguments)
+			!Array.isArray(expression.arguments) ||
+			typeof expression.optional !== "boolean"
 		)
 			throw new TypeError("invalid string method");
+		const arity = ["trim", "toUpperCase", "toLowerCase"].includes(
+			String(expression.method),
+		)
+			? 0
+			: 1;
+		if (expression.arguments.length !== arity)
+			throw new TypeError("invalid string method arity");
 		recurse(expression.target);
 		expression.arguments.forEach(recurse);
 		return;
@@ -1163,7 +1425,41 @@ function validateExpression(
 				: bindings.operations;
 		if (!allowed.includes(expression.identity as Identity))
 			throw new TypeError("unbound capability identity");
-		expression.arguments.forEach(recurse);
+		for (const argument of expression.arguments)
+			validateExpression(argument, bindings, phase, definedSlots, false, true);
+		const declaration = Object.values(bindings.capabilities).find(
+			(binding) =>
+				binding.kind === expression.capability &&
+				binding.identity === expression.identity,
+		);
+		if (!declaration) throw new TypeError("unbound capability declaration");
+		if (
+			expression.arguments.length !== 1 ||
+			expression.arguments[0]?.op !== "object"
+		)
+			throw new TypeError("capability requires one structural argument object");
+		const structuralKeys = (
+			expression: Expression,
+			prefix = "",
+		): readonly string[] => {
+			if (expression.op !== "object") return [prefix.slice(0, -1)];
+			const output: string[] = [];
+			for (const entry of expression.entries) {
+				if (entry.kind !== "argument")
+					throw new TypeError("capability argument is not structural");
+				output.push(...structuralKeys(entry.value, `${prefix}${entry.key}.`));
+			}
+			return output;
+		};
+		for (const argument of expression.arguments as readonly Expression[]) {
+			if (argument.op !== "object") continue;
+			const keys = structuralKeys(argument);
+			if (
+				keys.length !== declaration.argumentKeys.length ||
+				keys.some((key, index) => key !== declaration.argumentKeys[index])
+			)
+				throw new TypeError("capability argument keys do not match binding");
+		}
 		return;
 	}
 	throw new TypeError("unknown expression opcode");
@@ -1195,8 +1491,19 @@ function validateStatements(
 				(statement.value as Expression).op === "capability" &&
 				(statement.value as Extract<Expression, { op: "capability" }>)
 					.capability === "read"
-			)
-				boundedReadSlots.add(statement.slot as number);
+			) {
+				const capability = statement.value as Extract<
+					Expression,
+					{ op: "capability" }
+				>;
+				const binding = Object.values(bindings.capabilities).find(
+					(candidate) =>
+						candidate.kind === "read" &&
+						candidate.identity === capability.identity,
+				);
+				if (binding?.kind === "read" && binding.cardinality === "many")
+					boundedReadSlots.add(statement.slot as number);
+			}
 			continue;
 		}
 		if (statement.op === "if") {
@@ -1318,6 +1625,9 @@ export function validateArtifact(value: unknown): asserts value is Artifact {
 	);
 	validateIdentity(bindings.schema, "schema");
 	validateIdentity(bindings.collection, "collection");
+	requirePlainMap(bindings.fields, "Field bindings");
+	requirePlainMap(bindings.issues, "issue bindings");
+	requirePlainMap(bindings.capabilities, "capability bindings");
 	for (const identity of Object.values(bindings.fields))
 		validateIdentity(identity, "field");
 	for (const identity of Object.values(bindings.issues))
@@ -1335,9 +1645,52 @@ export function validateArtifact(value: unknown): asserts value is Artifact {
 	for (const [name, capability] of Object.entries(bindings.capabilities)) {
 		if (!name || !capability || typeof capability !== "object")
 			throw new TypeError("invalid capability binding");
-		exactKeys(capability, ["kind", "identity"], "capability binding");
+		if (Object.getPrototypeOf(capability) !== Object.prototype)
+			throw new TypeError("capability binding must be a plain object");
 		if (!["read", "write", "acceptJob"].includes(capability.kind))
 			throw new TypeError("invalid capability kind");
+		if (capability.kind === "read") {
+			exactKeys(
+				capability,
+				["kind", "identity", "argumentKeys", "cardinality", "first", "maxRows"],
+				"read capability binding",
+			);
+			if (
+				!Array.isArray(capability.argumentKeys) ||
+				!capability.argumentKeys.every(
+					(key) =>
+						typeof key === "string" &&
+						/^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(key),
+				) ||
+				new Set(capability.argumentKeys).size !==
+					capability.argumentKeys.length ||
+				!["one", "many"].includes(capability.cardinality) ||
+				typeof capability.first !== "boolean" ||
+				!Number.isSafeInteger(capability.maxRows) ||
+				capability.maxRows < 1 ||
+				capability.maxRows > 10_000 ||
+				(capability.cardinality === "one" &&
+					(!capability.first || capability.maxRows !== 1)) ||
+				(capability.cardinality === "many" && capability.first)
+			)
+				throw new TypeError("invalid bounded read capability binding");
+		} else {
+			exactKeys(
+				capability,
+				["kind", "identity", "argumentKeys"],
+				"effect capability binding",
+			);
+			if (
+				!Array.isArray(capability.argumentKeys) ||
+				!capability.argumentKeys.every(
+					(key) =>
+						typeof key === "string" &&
+						/^[A-Za-z_$][A-Za-z0-9_$]*(\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(key),
+				) ||
+				new Set(capability.argumentKeys).size !== capability.argumentKeys.length
+			)
+				throw new TypeError("invalid capability argument binding");
+		}
 		validateIdentity(
 			capability.identity,
 			capability.kind === "acceptJob" ? "job" : "operation",
@@ -1364,12 +1717,7 @@ export function validateArtifact(value: unknown): asserts value is Artifact {
 
 export function decodeArtifact(
 	bytes: Uint8Array,
-	expected: Readonly<{
-		runtimeBuild: string;
-		schema: Identity;
-		collection: Identity;
-		interpreter?: string;
-	}>,
+	expected: ExpectedArtifactContract,
 ): Artifact {
 	let parsed: unknown;
 	try {
@@ -1383,8 +1731,7 @@ export function decodeArtifact(
 	if (
 		parsed.interpreter !== (expected.interpreter ?? INTERPRETER) ||
 		parsed.runtimeBuild !== expected.runtimeBuild ||
-		parsed.bindings.schema !== expected.schema ||
-		parsed.bindings.collection !== expected.collection
+		canonical(parsed.bindings) !== canonical(expected.bindings)
 	)
 		throw new TypeError("artifact compatibility binding mismatch");
 	const exact = encodeArtifact(parsed);
@@ -1413,197 +1760,309 @@ export async function executePhase(
 	artifact: Artifact,
 	phase: Phase,
 	inputs: readonly unknown[],
-	capabilities: Readonly<
-		Record<
-			string,
-			(...argumentValues: readonly unknown[]) => unknown | Promise<unknown>
-		>
-	> = {},
+	capabilities: OperationAdapter,
+	budget: ExecutionBudget,
 ): Promise<unknown> {
 	validateArtifact(artifact);
-	const fields = new Map(
-		Object.entries(artifact.bindings.fields).map(([name, identity]) => [
-			identity,
-			name,
-		]),
-	);
-	const runtimeRootOrder: Record<Phase, readonly string[]> = {
-		normalize: ["input"],
-		validate: ["candidate", "current", "now", "issues"],
-		check: ["candidate", "current", "now", "issues", "capabilities"],
-		afterWrite: ["written", "previous", "now", "capabilities"],
+	const assertBudget = (): void => {
+		if (budget.signal.aborted) throw new DOMException("Aborted", "AbortError");
+		const now = budget.clock();
+		if (now > budget.deadline)
+			throw new TypeError("execution deadline exceeded");
+		if (now - budget.startedAt > budget.maxDurationMilliseconds)
+			throw new TypeError("execution duration budget exceeded");
 	};
-	const rootValues = new Map(
-		runtimeRootOrder[phase].map((role, index) => [role, inputs[index]]),
-	);
-	const locals = new Map<number, unknown>();
-	const member = (
-		target: unknown,
-		identity: Identity,
-		optional: boolean,
-	): unknown => {
-		if (target === null || target === undefined) {
-			if (optional) return undefined;
-			throw new TypeError("static member target is absent");
-		}
-		if (typeof target !== "object")
-			throw new TypeError("static member target is not an object");
-		const name = fields.get(identity);
-		if (!name) throw new TypeError("unbound interpreted Field");
-		return (target as Record<string, unknown>)[name];
-	};
-	const evaluate = async (expression: Expression): Promise<unknown> => {
-		switch (expression.op) {
-			case "literal":
-				return expression.value;
-			case "root":
-				return rootValues.get(expression.root);
-			case "local":
-				return locals.get(expression.slot);
-			case "member":
-				return member(
-					await evaluate(expression.target),
-					expression.field,
-					expression.optional,
-				);
-			case "unary": {
-				const value = await evaluate(expression.value);
-				return expression.operator === "!" ? !value : -(value as number);
+	assertBudget();
+	budget.artifactReentry += 1;
+	if (
+		budget.artifactReentry > budget.maxArtifactReentry ||
+		budget.artifactReentry > artifact.reentryLimit
+	) {
+		budget.artifactReentry -= 1;
+		throw new TypeError("artifact re-entry budget exceeded");
+	}
+	try {
+		const fields = new Map(
+			Object.entries(artifact.bindings.fields).map(([name, identity]) => [
+				identity,
+				name,
+			]),
+		);
+		const runtimeRootOrder: Record<Phase, readonly string[]> = {
+			normalize: ["input"],
+			validate: ["candidate", "current", "now", "issues"],
+			check: ["candidate", "current", "now", "issues", "capabilities"],
+			afterWrite: ["written", "previous", "now", "capabilities", "callId"],
+		};
+		const rootValues = new Map(
+			runtimeRootOrder[phase].map((role, index) => [role, inputs[index]]),
+		);
+		if (
+			phase === "afterWrite" &&
+			(typeof rootValues.get("callId") !== "string" ||
+				(rootValues.get("callId") as string).length === 0)
+		)
+			throw new TypeError("afterWrite requires immutable root callId");
+		const locals = new Map<number, unknown>();
+		const finiteDomain = (value: unknown, label: string): unknown => {
+			if (value === undefined || value === null || typeof value === "boolean")
+				return value;
+			if (typeof value === "string") return value;
+			if (typeof value === "number") {
+				if (!Number.isFinite(value) || Object.is(value, -0))
+					throw new TypeError(`${label} left the finite runtime domain`);
+				return value;
 			}
-			case "binary": {
-				const left = await evaluate(expression.left);
-				if (expression.operator === "&&")
-					return left && (await evaluate(expression.right));
-				if (expression.operator === "||")
-					return left || (await evaluate(expression.right));
-				if (expression.operator === "??")
-					return left ?? (await evaluate(expression.right));
-				const right = await evaluate(expression.right);
-				switch (expression.operator) {
-					case "+":
-						return (left as number) + (right as number);
-					case "-":
-						return (left as number) - (right as number);
-					case "*":
-						return (left as number) * (right as number);
-					case "/":
-						return (left as number) / (right as number);
-					case "%":
-						return (left as number) % (right as number);
-					case "===":
-						return left === right;
-					case "!==":
-						return left !== right;
-					case "<":
-						return (left as number) < (right as number);
-					case "<=":
-						return (left as number) <= (right as number);
-					case ">":
-						return (left as number) > (right as number);
-					case ">=":
-						return (left as number) >= (right as number);
-					default:
-						throw new TypeError("unknown binary operator");
+			if (Array.isArray(value)) {
+				for (const member of value) finiteDomain(member, label);
+				return value;
+			}
+			if (typeof value === "object") {
+				for (const member of Object.values(value)) finiteDomain(member, label);
+				return value;
+			}
+			throw new TypeError(`${label} left the closed runtime domain`);
+		};
+		const member = (
+			target: unknown,
+			identity: Identity,
+			optional: boolean,
+		): unknown => {
+			if (target === null || target === undefined) {
+				if (optional) return undefined;
+				throw new TypeError("static member target is absent");
+			}
+			if (typeof target !== "object")
+				throw new TypeError("static member target is not an object");
+			const name = fields.get(identity);
+			if (!name) throw new TypeError("unbound interpreted Field");
+			return (target as Record<string, unknown>)[name];
+		};
+		const evaluate = async (expression: Expression): Promise<unknown> => {
+			assertBudget();
+			switch (expression.op) {
+				case "literal":
+					return expression.value;
+				case "root":
+					return rootValues.get(expression.root);
+				case "local":
+					return locals.get(expression.slot);
+				case "member":
+					return member(
+						await evaluate(expression.target),
+						expression.field,
+						expression.optional,
+					);
+				case "unary": {
+					const value = await evaluate(expression.value);
+					if (expression.operator === "!") return !value;
+					if (typeof value !== "number")
+						throw new TypeError("unary numeric operand is not a number");
+					return finiteDomain(-value, "unary result");
 				}
-			}
-			case "conditional":
-				return (await evaluate(expression.test))
-					? evaluate(expression.yes)
-					: evaluate(expression.no);
-			case "array":
-				return Promise.all(expression.values.map(evaluate));
-			case "object": {
-				const result: Record<string, unknown> = {};
-				for (const entry of expression.entries) {
-					if (entry.kind === "spreadInput")
-						Object.assign(result, rootValues.get("input"));
-					else {
-						const name = fields.get(entry.field);
-						if (!name) throw new TypeError("unbound object Field");
-						result[name] = await evaluate(entry.value);
+				case "binary": {
+					const left = await evaluate(expression.left);
+					if (expression.operator === "&&")
+						return left && (await evaluate(expression.right));
+					if (expression.operator === "||")
+						return left || (await evaluate(expression.right));
+					if (expression.operator === "??")
+						return left ?? (await evaluate(expression.right));
+					const right = await evaluate(expression.right);
+					switch (expression.operator) {
+						case "+": {
+							if (typeof left === "string" && typeof right === "string")
+								return left + right;
+							if (typeof left !== "number" || typeof right !== "number")
+								throw new TypeError(
+									"addition operands have incompatible domains",
+								);
+							return finiteDomain(left + right, "addition result");
+						}
+						case "-":
+						case "*":
+						case "/":
+						case "%": {
+							if (typeof left !== "number" || typeof right !== "number")
+								throw new TypeError("arithmetic operands are not numbers");
+							const value =
+								expression.operator === "-"
+									? left - right
+									: expression.operator === "*"
+										? left * right
+										: expression.operator === "/"
+											? left / right
+											: left % right;
+							return finiteDomain(value, "arithmetic result");
+						}
+						case "===":
+							return left === right;
+						case "!==":
+							return left !== right;
+						case "<":
+							return (left as number) < (right as number);
+						case "<=":
+							return (left as number) <= (right as number);
+						case ">":
+							return (left as number) > (right as number);
+						case ">=":
+							return (left as number) >= (right as number);
+						default:
+							throw new TypeError("unknown binary operator");
 					}
 				}
-				return Object.freeze(result);
-			}
-			case "template": {
-				let result = expression.head;
-				for (const span of expression.spans)
-					result += String(await evaluate(span.value)) + span.tail;
-				return result;
-			}
-			case "stringMethod": {
-				const target = await evaluate(expression.target);
-				if (typeof target !== "string")
-					throw new TypeError("string method target is not a string");
-				const argumentValues = await Promise.all(
-					expression.arguments.map(evaluate),
-				);
-				switch (expression.method) {
-					case "trim":
-						return target.trim();
-					case "toUpperCase":
-						return target.toUpperCase();
-					case "toLowerCase":
-						return target.toLowerCase();
-					case "startsWith":
-						return target.startsWith(String(argumentValues[0]));
-					case "endsWith":
-						return target.endsWith(String(argumentValues[0]));
-					case "includes":
-						return target.includes(String(argumentValues[0]));
-					default:
-						throw new TypeError("unknown string method");
+				case "conditional":
+					return (await evaluate(expression.test))
+						? evaluate(expression.yes)
+						: evaluate(expression.no);
+				case "array": {
+					const result: unknown[] = [];
+					for (const value of expression.values)
+						result.push(await evaluate(value));
+					return result;
+				}
+				case "object": {
+					const result: Record<string, unknown> = {};
+					for (const entry of expression.entries) {
+						if (entry.kind === "spreadInput")
+							Object.assign(result, rootValues.get("input"));
+						else {
+							if (entry.kind === "argument")
+								result[entry.key] = await evaluate(entry.value);
+							else {
+								const name = fields.get(entry.field);
+								if (!name) throw new TypeError("unbound object Field");
+								result[name] = await evaluate(entry.value);
+							}
+						}
+					}
+					return Object.freeze(result);
+				}
+				case "template": {
+					let result = expression.head;
+					for (const span of expression.spans)
+						result += String(await evaluate(span.value)) + span.tail;
+					return result;
+				}
+				case "stringMethod": {
+					const target = await evaluate(expression.target);
+					if ((target === null || target === undefined) && expression.optional)
+						return undefined;
+					if (typeof target !== "string")
+						throw new TypeError("string method target is not a string");
+					const argumentValues: unknown[] = [];
+					for (const argument of expression.arguments)
+						argumentValues.push(await evaluate(argument));
+					if (argumentValues.some((argument) => typeof argument !== "string"))
+						throw new TypeError("string method argument is not a string");
+					switch (expression.method) {
+						case "trim":
+							return target.trim();
+						case "toUpperCase":
+							return target.toUpperCase();
+						case "toLowerCase":
+							return target.toLowerCase();
+						case "startsWith":
+							return target.startsWith(String(argumentValues[0]));
+						case "endsWith":
+							return target.endsWith(String(argumentValues[0]));
+						case "includes":
+							return target.includes(String(argumentValues[0]));
+						default:
+							throw new TypeError("unknown string method");
+					}
+				}
+				case "capability": {
+					const invoke = capabilities[expression.identity];
+					if (!invoke) throw new TypeError("withheld capability");
+					budget.dependencies += 1;
+					if (budget.dependencies > budget.maxDependencies)
+						throw new TypeError("dependency budget exceeded");
+					budget.statements += 1;
+					if (budget.statements > budget.maxStatements)
+						throw new TypeError("statement budget exceeded");
+					const argumentValues: unknown[] = [];
+					for (const argument of expression.arguments)
+						argumentValues.push(await evaluate(argument));
+					assertBudget();
+					const result = await invoke({
+						arguments: argumentValues,
+						budget,
+						artifact,
+					});
+					assertBudget();
+					const declaration = Object.values(
+						artifact.bindings.capabilities,
+					).find(
+						(binding) =>
+							binding.kind === expression.capability &&
+							binding.identity === expression.identity,
+					);
+					if (!declaration) throw new TypeError("unbound runtime capability");
+					if (declaration.kind === "read") {
+						const count = Array.isArray(result)
+							? result.length
+							: result == null
+								? 0
+								: 1;
+						if (
+							(declaration.cardinality === "one" && Array.isArray(result)) ||
+							(declaration.cardinality === "many" && !Array.isArray(result)) ||
+							count > declaration.maxRows
+						)
+							throw new TypeError("read cardinality binding violated");
+						budget.rows += count;
+						if (budget.rows > budget.maxRows)
+							throw new TypeError("row budget exceeded");
+					}
+					return finiteDomain(result, "capability result");
 				}
 			}
-			case "capability": {
-				const invoke = capabilities[expression.identity];
-				if (!invoke) throw new TypeError("withheld capability");
-				return invoke(
-					...(await Promise.all(expression.arguments.map(evaluate))),
-				);
+		};
+		type Control = Readonly<{ returned: boolean; value: unknown }>;
+		const run = async (statements: readonly Statement[]): Promise<Control> => {
+			for (const statement of statements) {
+				assertBudget();
+				if (statement.op === "const") {
+					locals.set(statement.slot, await evaluate(statement.value));
+					continue;
+				}
+				if (statement.op === "if") {
+					const result = await run(
+						(await evaluate(statement.test))
+							? statement.consequent
+							: statement.otherwise,
+					);
+					if (result.returned) return result;
+					continue;
+				}
+				if (statement.op === "return")
+					return {
+						returned: true,
+						value:
+							statement.value === null
+								? undefined
+								: await evaluate(statement.value),
+					};
+				if (statement.op === "throwIssue")
+					throw new InterpretedIssue(statement.issue);
+				if (statement.op === "effect") {
+					await evaluate(statement.value);
+					continue;
+				}
+				const source = locals.get(statement.sourceSlot);
+				if (!Array.isArray(source))
+					throw new TypeError("bounded result is not an array");
+				for (const item of source) {
+					locals.set(statement.slot, item);
+					const result = await run(statement.body);
+					if (result.returned) return result;
+				}
 			}
-		}
-	};
-	type Control = Readonly<{ returned: boolean; value: unknown }>;
-	const run = async (statements: readonly Statement[]): Promise<Control> => {
-		for (const statement of statements) {
-			if (statement.op === "const") {
-				locals.set(statement.slot, await evaluate(statement.value));
-				continue;
-			}
-			if (statement.op === "if") {
-				const result = await run(
-					(await evaluate(statement.test))
-						? statement.consequent
-						: statement.otherwise,
-				);
-				if (result.returned) return result;
-				continue;
-			}
-			if (statement.op === "return")
-				return {
-					returned: true,
-					value:
-						statement.value === null
-							? undefined
-							: await evaluate(statement.value),
-				};
-			if (statement.op === "throwIssue")
-				throw new InterpretedIssue(statement.issue);
-			if (statement.op === "effect") {
-				await evaluate(statement.value);
-				continue;
-			}
-			const source = locals.get(statement.sourceSlot);
-			if (!Array.isArray(source))
-				throw new TypeError("bounded result is not an array");
-			for (const item of source) {
-				locals.set(statement.slot, item);
-				const result = await run(statement.body);
-				if (result.returned) return result;
-			}
-		}
-		return { returned: false, value: undefined };
-	};
-	return (await run(artifact.phases[phase])).value;
+			return { returned: false, value: undefined };
+		};
+		return (await run(artifact.phases[phase])).value;
+	} finally {
+		budget.artifactReentry -= 1;
+	}
 }

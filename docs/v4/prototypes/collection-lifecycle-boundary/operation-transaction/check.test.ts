@@ -10,6 +10,8 @@ import {
 	ticketIssues,
 	wireFailureBytes,
 	type IssueIdentity,
+	type AdmittedOperationCall,
+	type DeclaredErrorMetadata,
 	type ProofOutcome,
 	type ProofTrace,
 	type ReachabilityNode,
@@ -40,13 +42,41 @@ function mapped() {
 	] as const);
 }
 
+const declaredErrors = Object.freeze([
+	{ code: "EMPTY_TITLE", payload: "none" },
+	{ code: "FORBIDDEN_TITLE", payload: "none" },
+	{ code: "WITH_DETAILS", payload: "required" },
+] satisfies readonly DeclaredErrorMetadata[]);
+
+function admittedCall(): AdmittedOperationCall {
+	const root = "collection:tickets/update";
+	const compiled = compileIssueCapability({
+		operation: "mutation:tickets.update",
+		root,
+		nodes: new Map([
+			[
+				root,
+				{
+					identity: root,
+					issues: [ticketIssues.emptyTitle, ticketIssues.forbiddenTitle],
+					calls: [],
+				},
+			],
+		]),
+		mappings: mapped(),
+		declaredErrors,
+	});
+	if (!compiled.ok) throw new Error("expected admitted proof call");
+	return compiled.call;
+}
+
 function baseInput(suffix: string) {
 	return {
 		callId: `call-${suffix}`,
 		ticketId,
-		caller: { title: "  Ready  ", status: "open" },
-		trusted: { secret: "  protected  " },
-		issueMappings: mapped(),
+		caller: { title: "Ready", status: "open" },
+		trusted: { secret: "protected" },
+		call: admittedCall(),
 	};
 }
 
@@ -92,7 +122,16 @@ beforeAll(async () => {
 			result jsonb NOT NULL,
 			transaction_id text NOT NULL,
 			now timestamptz NOT NULL
-		)
+		);
+		CREATE TABLE ${schema}.forbidden_titles (
+			title text PRIMARY KEY,
+			visible_to_caller boolean NOT NULL,
+			protected_reason text NOT NULL
+		);
+		INSERT INTO ${schema}.forbidden_titles (title, visible_to_caller, protected_reason)
+		VALUES
+			('database-forbidden', true, 'visible rule detail'),
+			('private-forbidden', false, 'must never disclose')
 	`);
 	proof = new OperationTransactionProof(pool, schema);
 });
@@ -157,6 +196,17 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 		);
 		expect(check.error.code).toBe("FORBIDDEN_TITLE");
 		expect(checkTrace.events).toContain("check");
+		expect(checkTrace.events).toContain("check-policy-read");
+
+		const hidden = await proof.execute(
+			{
+				...baseInput("selection-hidden"),
+				caller: { title: "private-forbidden", status: "open" },
+			},
+			trace(),
+		);
+		if (!hidden.ok) throw new Error("selection must withhold the hidden row");
+		expect(hidden.result).not.toHaveProperty("protected_reason");
 	});
 
 	test("unknown, forged, malformed, and unmapped values sanitize without disclosure", async () => {
@@ -241,7 +291,7 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 			root: "collection:tickets/update",
 			nodes,
 			mappings: new Map(),
-			declaredErrors: ["EMPTY_TITLE", "FORBIDDEN_TITLE"],
+			declaredErrors,
 		});
 		expect(blocked).toEqual({
 			ok: false,
@@ -262,12 +312,16 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 			root: "collection:tickets/update",
 			nodes,
 			mappings: new Map([[ticketIssues.forbiddenTitle, "FORBIDDEN_TITLE"]]),
-			declaredErrors: ["EMPTY_TITLE", "FORBIDDEN_TITLE"],
+			declaredErrors,
 		});
-		expect(admitted).toEqual({
+		expect(admitted).toMatchObject({
 			ok: true,
 			call: { identity: "mutation:tickets.close" },
 		});
+		if (!admitted.ok) throw new Error("expected admitted mapping");
+		expect(admitted.call.mapIssue(ticketIssues.forbiddenTitle)).toBe(
+			"FORBIDDEN_TITLE",
+		);
 
 		const cyclicNodes = new Map(nodes);
 		cyclicNodes.set("collection:limits/check", {
@@ -281,9 +335,9 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 				root: "collection:tickets/update",
 				nodes: cyclicNodes,
 				mappings: new Map([[ticketIssues.forbiddenTitle, "FORBIDDEN_TITLE"]]),
-				declaredErrors: ["EMPTY_TITLE", "FORBIDDEN_TITLE"],
+				declaredErrors,
 			}),
-		).toEqual({
+		).toMatchObject({
 			ok: true,
 			call: { identity: "mutation:tickets.close" },
 		});
@@ -295,7 +349,7 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 			mappings: new Map([
 				[ticketIssues.forbiddenTitle, "BORROWED_FROM_ANOTHER_MUTATION"],
 			]),
-			declaredErrors: ["EMPTY_TITLE", "FORBIDDEN_TITLE"],
+			declaredErrors,
 		});
 		expect(invalidMapping).toMatchObject({
 			ok: false,
@@ -320,7 +374,7 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 				],
 			]),
 			mappings: new Map(),
-			declaredErrors: ["INVALID"],
+			declaredErrors: [{ code: "INVALID", payload: "none" }],
 		});
 		expect(invalidDeclaration).toMatchObject({
 			ok: false,
@@ -329,6 +383,72 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 			issue: "collection:../issue:bad",
 		});
 		expect(invalidDeclaration.call).toBeUndefined();
+	});
+
+	test("rejects payload-bearing targets and never lends another Operation's error", async () => {
+		const root = "collection:tickets/update";
+		const nodes = new Map<string, ReachabilityNode>([
+			[
+				root,
+				{
+					identity: root,
+					issues: [ticketIssues.emptyTitle],
+					calls: [],
+				},
+			],
+		]);
+		for (const mappedError of ["WITH_DETAILS", "OTHER_OPERATION_ONLY"])
+			expect(
+				compileIssueCapability({
+					operation: "mutation:tickets.update",
+					root,
+					nodes,
+					mappings: new Map([[ticketIssues.emptyTitle, mappedError]]),
+					declaredErrors,
+				}),
+			).toMatchObject({
+				ok: false,
+				code: "QP-COMPOSE-027",
+				reason: "invalidIssueMapping",
+				mappedError,
+			});
+		expect(
+			compileIssueCapability({
+				operation: "mutation:tickets.update",
+				root,
+				nodes,
+				mappings: new Map([[ticketIssues.emptyTitle, "EMPTY_TITLE"]]),
+				declaredErrors: [
+					...declaredErrors,
+					{ code: "EMPTY_TITLE", payload: "required" },
+				],
+			}),
+		).toMatchObject({
+			ok: false,
+			code: "QP-COMPOSE-027",
+			reason: "invalidIssueMapping",
+			mappedError: "EMPTY_TITLE",
+		});
+
+		const forged = failure(
+			await proof.execute(
+				{
+					...baseInput("forged-call-capability"),
+					caller: { title: "", status: "open" },
+					call: {
+						identity: "mutation:tickets.update",
+						mapIssue: () => "WITH_DETAILS",
+					} as unknown as AdmittedOperationCall,
+				},
+				trace(),
+			),
+		);
+		expect(forged.error).toEqual({
+			kind: "framework",
+			code: "INTERNAL",
+			retryable: false,
+		});
+		expect(new TextDecoder().decode(forged.bytes)).not.toContain("payload");
 	});
 
 	test("direct and wire adapters emit identical minimal declared-error bytes", async () => {
@@ -345,6 +465,9 @@ describe("finding 3: issue ownership and Operation transaction", () => {
 		expect(new TextDecoder().decode(outcome.bytes)).toBe(
 			'{"ok":false,"error":{"kind":"declared","code":"EMPTY_TITLE","retryable":false}}',
 		);
+		expect(
+			JSON.parse(new TextDecoder().decode(outcome.bytes)),
+		).not.toHaveProperty("error.payload");
 	});
 });
 
@@ -361,6 +484,7 @@ describe("finding 4: lifecycle order, atomic work, budgets, time, and replay", (
 			"validate",
 			"candidate-policy",
 			"check",
+			"check-policy-read",
 			"constraint-and-database-values",
 			"afterWrite",
 			"nested-write:0",
@@ -460,6 +584,23 @@ describe("finding 4: lifecycle order, atomic work, budgets, time, and replay", (
 			expect(outcome.classification).toBe("limit");
 			expect(outcome.error.code).toBe("INTERNAL");
 			expect(await count("audit")).toBe(before);
+			expect(await count("jobs")).toBe(jobsBefore);
+		}
+	});
+
+	test("row, dependency, and loop cancellation budgets share the outer transaction", async () => {
+		for (const [suffix, limits, classification] of [
+			["row-budget", { nestedDepth: 2, maxRows: 1 }, "limit"],
+			["dependency-budget", { nestedDepth: 2, maxDependencies: 2 }, "limit"],
+			["loop-cancel", { nestedDepth: 2, cancelAtOrdinal: 1 }, "cancelled"],
+		] as const) {
+			const auditBefore = await count("audit");
+			const jobsBefore = await count("jobs");
+			const outcome = failure(
+				await proof.execute({ ...baseInput(suffix), ...limits }, trace()),
+			);
+			expect(outcome.classification).toBe(classification);
+			expect(await count("audit")).toBe(auditBefore);
 			expect(await count("jobs")).toBe(jobsBefore);
 		}
 	});

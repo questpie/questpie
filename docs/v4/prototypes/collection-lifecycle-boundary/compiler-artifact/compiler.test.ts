@@ -15,6 +15,7 @@ import {
 	LifecycleDiagnostic,
 	artifactDigest,
 	compileArtifact,
+	createExecutionBudget,
 	decodeArtifact,
 	encodeArtifact,
 	executePhase,
@@ -43,14 +44,20 @@ const bindings = Object.freeze({
 		"data.related.find": Object.freeze({
 			kind: "read",
 			identity: "operation:helpdesk/tickets/findRelated",
+			argumentKeys: Object.freeze(["id"]),
+			cardinality: "many",
+			first: false,
+			maxRows: 2,
 		}),
 		"data.related.update": Object.freeze({
 			kind: "write",
 			identity: "operation:helpdesk/tickets/updateRelated",
+			argumentKeys: Object.freeze(["id", "status"]),
 		}),
 		"jobs.ticket.notify.accept": Object.freeze({
 			kind: "acceptJob",
 			identity: "job:helpdesk/tickets/notify",
+			argumentKeys: Object.freeze(["id", "occurredAt", "idempotencyKey"]),
 		}),
 	}),
 	operations: Object.freeze([
@@ -82,7 +89,7 @@ const callbacks = Object.freeze({
 		for (const row of rows) {
 			await ctx.data.related.update({ id: row.id, status: previous?.status ?? "new" });
 		}
-		await ctx.jobs.ticket.notify.accept({ id: row.id, occurredAt: ctx.now });
+		await ctx.jobs.ticket.notify.accept({ id: row.id, occurredAt: ctx.now, idempotencyKey: ctx.callId });
 		return row;
 	}`,
 } satisfies Readonly<Record<Phase, string>>);
@@ -99,6 +106,22 @@ function compile(modulePrefix = "/checkout/a/src"): Artifact {
 function clone(value: unknown): any {
 	return JSON.parse(JSON.stringify(value));
 }
+
+function executionBudget(
+	overrides: Partial<Parameters<typeof createExecutionBudget>[0]> = {},
+) {
+	return createExecutionBudget({
+		deadline: Number.MAX_SAFE_INTEGER,
+		maxStatements: 100,
+		maxRows: 100,
+		maxDependencies: 100,
+		maxDurationMilliseconds: 60_000,
+		maxArtifactReentry: 8,
+		...overrides,
+	});
+}
+
+const expectedContract = Object.freeze({ runtimeBuild, bindings });
 
 function canonicalHostile(value: unknown): string {
 	if (value === null || typeof value === "boolean" || typeof value === "number")
@@ -170,18 +193,28 @@ test("ordinary TypeScript lowers all four phases and the interpreter never invok
 	strictEqual(JSON.stringify(artifact).includes("function"), false);
 
 	deepStrictEqual(
-		await executePhase(artifact, "normalize", [
-			{ id: "T-1", name: "  HELLO  ", status: "open", count: 1 },
-		]),
+		await executePhase(
+			artifact,
+			"normalize",
+			[{ id: "T-1", name: "  HELLO  ", status: "open", count: 1 }],
+			{},
+			executionBudget(),
+		),
 		{ id: "T-1", name: "HELLO", status: "open", count: 1 },
 	);
 	deepStrictEqual(
-		await executePhase(artifact, "validate", [
-			{ id: "T-1", name: "ok", status: "open", count: 1 },
-			null,
-			"2026-08-28T10:00:00.000Z",
+		await executePhase(
+			artifact,
+			"validate",
+			[
+				{ id: "T-1", name: "ok", status: "open", count: 1 },
+				null,
+				"2026-08-28T10:00:00.000Z",
+				{},
+			],
 			{},
-		]),
+			executionBudget(),
+		),
 		{ id: "T-1", name: "ok", status: "open", count: 1 },
 	);
 	await executePhase(
@@ -197,6 +230,7 @@ test("ordinary TypeScript lowers all four phases and the interpreter never invok
 		{
 			"operation:helpdesk/tickets/findRelated": () => [],
 		},
+		executionBudget(),
 	);
 	const effects: string[] = [];
 	await executePhase(
@@ -207,23 +241,25 @@ test("ordinary TypeScript lowers all four phases and the interpreter never invok
 			null,
 			"2026-08-28T10:00:00.000Z",
 			{},
+			"call:T-1",
 		],
 		{
 			"operation:helpdesk/tickets/findRelated": () => [
 				{ id: "T-2" },
 				{ id: "T-3" },
 			],
-			"operation:helpdesk/tickets/updateRelated": (input) =>
+			"operation:helpdesk/tickets/updateRelated": ({ arguments: [input] }) =>
 				effects.push(`write:${(input as any).id}`),
-			"job:helpdesk/tickets/notify": (input) =>
+			"job:helpdesk/tickets/notify": ({ arguments: [input] }) =>
 				effects.push(`job:${(input as any).id}`),
 		},
+		executionBudget(),
 	);
 	deepStrictEqual(effects, ["write:T-2", "write:T-3", "job:T-1"]);
 	strictEqual(invocations, 0);
 });
 
-test("Lifecycle Program v1 accepted grammar has executable coverage", () => {
+test("Lifecycle Program v1 accepted grammar has executable coverage", async () => {
 	const program = lowerPhase(
 		"normalize",
 		`({ input }) => {
@@ -242,6 +278,114 @@ test("Lifecycle Program v1 accepted grammar has executable coverage", () => {
 	);
 	strictEqual(program.length, 8);
 	strictEqual(JSON.stringify(program).includes('"optional":true'), true);
+	const artifact = compileArtifact({
+		callbacks: {
+			...callbacks,
+			normalize: `({ input }) => {
+				const a = !false;
+				const b = -1 + 2 - 3 * 4 / 5 % 6;
+				const c = input.name?.trim().toUpperCase().toLowerCase();
+				const d = c.startsWith("a") && c.endsWith("z") || c.includes("m");
+				const e = input.count === 1 && input.count !== 2 && input.count < 3 && input.count <= 3 && input.count > 0 && input.count >= 0;
+				const f = input.name ?? "none";
+				const g = d ? [null, true, 1, "x"] : [];
+				if (a && e) return { ...input, name: f, prefix: \`${"${b}"}:${"${g}"}\` };
+				else return input;
+			}`,
+		},
+		bindings,
+		runtimeBuild,
+		reentryLimit: 8,
+	});
+	deepStrictEqual(
+		await executePhase(
+			artifact,
+			"normalize",
+			[{ id: "T-1", name: "amz", count: 1 }],
+			{},
+			executionBudget(),
+		),
+		{ id: "T-1", name: "amz", count: 1, prefix: "-1.4:,true,1,x" },
+	);
+	strictEqual(
+		await executePhase(
+			compileArtifact({
+				callbacks: {
+					...callbacks,
+					normalize: `({ input }) => input.name?.trim().toLowerCase()`,
+				},
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[{}],
+			{},
+			executionBudget(),
+		),
+		undefined,
+	);
+	for (const source of [
+		`({ input }) => input?.name.trim()`,
+		`({ input }) => input?.name?.trim()`,
+	])
+		strictEqual(
+			await executePhase(
+				compileArtifact({
+					callbacks: { ...callbacks, normalize: source },
+					bindings,
+					runtimeBuild,
+					reentryLimit: 8,
+				}),
+				"normalize",
+				[null],
+				{},
+				executionBudget(),
+			),
+			undefined,
+		);
+	for (const source of [
+		`({ input }) => input.name.trim("x")`,
+		`({ input }) => input.name.includes()`,
+		`({ input }) => input.name.startsWith("x", "y")`,
+	])
+		expectDiagnostic(source, "normalize", "unsupportedLifecycleSyntax");
+	await rejects(
+		executePhase(
+			compileArtifact({
+				callbacks: {
+					...callbacks,
+					normalize: `({ input }) => input.count / 0`,
+				},
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[{ count: 1 }],
+			{},
+			executionBudget(),
+		),
+		/finite runtime domain/,
+	);
+	await rejects(
+		executePhase(
+			compileArtifact({
+				callbacks: {
+					...callbacks,
+					normalize: `({ input }) => input.name.includes(input.count)`,
+				},
+				bindings,
+				runtimeBuild,
+				reentryLimit: 8,
+			}),
+			"normalize",
+			[{ name: "x", count: 1 }],
+			{},
+			executionBudget(),
+		),
+		/string method argument/,
+	);
 });
 
 test("QP-COMPOSE-026 is Origin-bound and closes unsupported syntax and captures", () => {
@@ -396,13 +540,9 @@ test("canonical artifact round-trips exactly with every required identity and co
 	const digest = artifactDigest(bytes);
 	strictEqual(
 		digest,
-		"118bf6ab161c7e01c5cbc0688bf4f1d83d16b38ee07dc198711f46042ca4d7fb",
+		"b5f397e272ce2830948943f745e377d602f32df651d8fee65fc3f31036f7c58f",
 	);
-	const expected = {
-		runtimeBuild,
-		schema: bindings.schema,
-		collection: bindings.collection,
-	} as const;
+	const expected = expectedContract;
 	deepStrictEqual(loadArtifact(bytes, digest, expected), artifact);
 	strictEqual(
 		encodeArtifact(decodeArtifact(bytes, expected)).toString(),
@@ -460,12 +600,227 @@ test("canonical encoding rejects ambiguous and open operands", () => {
 	throws(() => encodeArtifact(duplicateField), /identities must be unique/);
 });
 
-test("recomputed digests cannot bypass phase, sequential-effect, issue, or slot closure", () => {
-	const expected = {
+test("independent expected contract rejects every recomputed binding substitution and non-map binding", () => {
+	const rejectRecomputed = (
+		mutate: (artifact: any) => void,
+		expectedError: RegExp = /compatibility binding mismatch/,
+	) => {
+		const hostile = clone(compile());
+		mutate(hostile);
+		const bytes = hostileBytes(hostile);
+		throws(
+			() => loadArtifact(bytes, artifactDigest(bytes), expectedContract),
+			expectedError,
+		);
+	};
+	rejectRecomputed((artifact) => {
+		const old = artifact.bindings.fields.name;
+		artifact.bindings.fields.name = "field:other/tickets/stolen";
+		const rewrite = (value: unknown): void => {
+			if (!value || typeof value !== "object") return;
+			for (const [key, member] of Object.entries(value)) {
+				if (member === old) (value as any)[key] = artifact.bindings.fields.name;
+				else rewrite(member);
+			}
+		};
+		rewrite(artifact.phases);
+	});
+	rejectRecomputed((artifact) => {
+		const old = artifact.bindings.issues.invalidName;
+		artifact.bindings.issues.invalidName = "issue:other/stolen";
+		const rewrite = (value: unknown): void => {
+			if (!value || typeof value !== "object") return;
+			for (const [key, member] of Object.entries(value)) {
+				if (member === old)
+					(value as any)[key] = artifact.bindings.issues.invalidName;
+				else rewrite(member);
+			}
+		};
+		rewrite(artifact.phases);
+	});
+	rejectRecomputed((artifact) => {
+		const old = artifact.bindings.operations[0];
+		artifact.bindings.operations[0] = "operation:other/stolen";
+		artifact.bindings.capabilities["data.related.find"].identity =
+			artifact.bindings.operations[0];
+		const rewrite = (value: unknown): void => {
+			if (!value || typeof value !== "object") return;
+			for (const [key, member] of Object.entries(value)) {
+				if (member === old)
+					(value as any)[key] = artifact.bindings.operations[0];
+				else rewrite(member);
+			}
+		};
+		rewrite(artifact.phases);
+	});
+	rejectRecomputed((artifact) => {
+		const old = artifact.bindings.jobs[0];
+		artifact.bindings.jobs[0] = "job:other/stolen";
+		artifact.bindings.capabilities["jobs.ticket.notify.accept"].identity =
+			artifact.bindings.jobs[0];
+		const rewrite = (value: unknown): void => {
+			if (!value || typeof value !== "object") return;
+			for (const [key, member] of Object.entries(value)) {
+				if (member === old) (value as any)[key] = artifact.bindings.jobs[0];
+				else rewrite(member);
+			}
+		};
+		rewrite(artifact.phases);
+	});
+	for (const name of ["fields", "issues", "capabilities"])
+		rejectRecomputed((artifact) => {
+			artifact.bindings[name] = [];
+		}, /exact plain binding map/);
+	const malformed = clone(compile());
+	malformed.bindings.capabilities["data.related.find"].maxRows = 0;
+	const malformedBytes = hostileBytes(malformed);
+	throws(
+		() =>
+			loadArtifact(
+				malformedBytes,
+				artifactDigest(malformedBytes),
+				expectedContract,
+			),
+		/invalid bounded read capability binding/,
+	);
+});
+
+test("generated structural Operation and Job arguments execute without becoming Collection Fields", async () => {
+	const publicBindings = clone(bindings) as Bindings;
+	(publicBindings.fields as any).summary = "field:helpdesk/tickets/summary";
+	(publicBindings.fields as any).teamId = "field:helpdesk/tickets/teamId";
+	(publicBindings.operations as any) = [
+		"operation:helpdesk/teams/get",
+		"operation:helpdesk/ticketEvents/create",
+	];
+	(publicBindings.jobs as any) = ["job:helpdesk/tickets/reindex"];
+	(publicBindings.capabilities as any) = {
+		"data.teams.get": {
+			kind: "read",
+			identity: "operation:helpdesk/teams/get",
+			argumentKeys: ["key.id", "select.id"],
+			cardinality: "one",
+			first: true,
+			maxRows: 1,
+		},
+		"data.ticketEvents.create": {
+			kind: "write",
+			identity: "operation:helpdesk/ticketEvents/create",
+			argumentKeys: [
+				"values.ticketId",
+				"values.kind",
+				"values.occurredAt",
+				"select.id",
+			],
+		},
+		"jobs.ticket.reindex.accept": {
+			kind: "acceptJob",
+			identity: "job:helpdesk/tickets/reindex",
+			argumentKeys: ["input.ticketId", "idempotencyKey"],
+		},
+	};
+	const artifact = compileArtifact({
+		callbacks: {
+			...callbacks,
+			normalize: `({ input }) =>
+				input.summary?.includes("")
+					? { ...input, summary: input.summary.trim() }
+					: input`,
+			check: `async ({ candidate, ctx, issues }) => {
+				const team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { id: true } });
+				if (team === null) throw issues.invalidName();
+			}`,
+			afterWrite: `async ({ row, previous, ctx }) => {
+				await ctx.data.ticketEvents.create({
+					values: { ticketId: row.id, kind: previous ? "updated" : "created", occurredAt: ctx.now },
+					select: { id: true },
+				});
+				await ctx.jobs.ticket.reindex.accept({ input: { ticketId: row.id }, idempotencyKey: \`ticket:${"${row.id}"}:${"${ctx.callId}"}\` });
+			}`,
+		},
+		bindings: publicBindings,
 		runtimeBuild,
-		schema: bindings.schema,
-		collection: bindings.collection,
-	} as const;
+		reentryLimit: 8,
+	});
+	const observed: unknown[] = [];
+	const sparse = { id: "T-1", teamId: "TEAM-1" };
+	strictEqual(
+		await executePhase(artifact, "normalize", [sparse], {}, executionBudget()),
+		sparse,
+	);
+	deepStrictEqual(
+		await executePhase(
+			artifact,
+			"normalize",
+			[{ ...sparse, summary: " hello " }],
+			{},
+			executionBudget(),
+		),
+		{ ...sparse, summary: "hello" },
+	);
+	await executePhase(
+		artifact,
+		"check",
+		[{ id: "T-1", teamId: "TEAM-1" }, null, "2026-08-28T10:00:00.000Z", {}, {}],
+		{
+			"operation:helpdesk/teams/get": ({ arguments: values }) => {
+				observed.push(values[0]);
+				return { id: "TEAM-1" };
+			},
+		},
+		executionBudget(),
+	);
+	await executePhase(
+		artifact,
+		"afterWrite",
+		[{ id: "T-1" }, null, "2026-08-28T10:00:00.000Z", {}, "call-1"],
+		{
+			"operation:helpdesk/ticketEvents/create": ({ arguments: values }) => {
+				observed.push(values[0]);
+			},
+			"job:helpdesk/tickets/reindex": ({ arguments: values }) => {
+				observed.push(values[0]);
+			},
+		},
+		executionBudget(),
+	);
+	deepStrictEqual(observed, [
+		{ key: { id: "TEAM-1" }, select: { id: true } },
+		{
+			values: {
+				ticketId: "T-1",
+				kind: "created",
+				occurredAt: "2026-08-28T10:00:00.000Z",
+			},
+			select: { id: true },
+		},
+		{ input: { ticketId: "T-1" }, idempotencyKey: "ticket:T-1:call-1" },
+	]);
+	expectDiagnostic(
+		`async ({ candidate, ctx }) => { await ctx.data.related.find({ dynamic: candidate.id }); }`,
+		"check",
+		"unsupportedLifecycleSyntax",
+	);
+	throws(
+		() =>
+			lowerPhase(
+				"afterWrite",
+				`async ({ row, ctx }) => {
+					const one = await ctx.data.teams.get({ key: { id: row.teamId }, select: { id: true } });
+					for (const item of one) return item;
+				}`,
+				publicBindings,
+				"public-example.ts",
+			),
+		(error: unknown) =>
+			error instanceof LifecycleDiagnostic &&
+			error.reason === "unsupportedLifecycleSyntax" &&
+			/iterate only/.test(error.rewrite),
+	);
+});
+
+test("recomputed digests cannot bypass phase, sequential-effect, issue, or slot closure", () => {
+	const expected = expectedContract;
 	const rejectHostile = (
 		mutate: (artifact: any) => void,
 		expectedError: RegExp,
@@ -528,6 +883,21 @@ test("recomputed digests cannot bypass phase, sequential-effect, issue, or slot 
 			value: { op: "literal", value: null },
 		});
 	}, /already defined/);
+	rejectHostile((artifact) => {
+		artifact.phases.normalize.push({
+			op: "return",
+			value: {
+				op: "object",
+				entries: [
+					{
+						kind: "argument",
+						key: "stolen",
+						value: { op: "literal", value: true },
+					},
+				],
+			},
+		});
+	}, /only admitted inside a capability/);
 });
 
 test("domain separation, relocation stability, tampering, and cross-build hostiles fail closed", () => {
@@ -557,20 +927,14 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 	const tampered = bytes.slice();
 	tampered[tampered.length - 2] ^= 1;
 	throws(
-		() =>
-			loadArtifact(tampered, digest, {
-				runtimeBuild,
-				schema: bindings.schema,
-				collection: bindings.collection,
-			}),
+		() => loadArtifact(tampered, digest, expectedContract),
 		/digest mismatch/,
 	);
 	throws(
 		() =>
 			loadArtifact(bytes, digest, {
 				runtimeBuild: "c".repeat(64),
-				schema: bindings.schema,
-				collection: bindings.collection,
+				bindings,
 			}),
 		/compatibility binding mismatch/,
 	);
@@ -578,8 +942,7 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 		() =>
 			loadArtifact(bytes, digest, {
 				runtimeBuild,
-				schema: "schema:other",
-				collection: bindings.collection,
+				bindings: { ...bindings, schema: "schema:other" },
 			}),
 		/compatibility binding mismatch/,
 	);
@@ -587,8 +950,7 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 		() =>
 			loadArtifact(bytes, digest, {
 				runtimeBuild,
-				schema: bindings.schema,
-				collection: "collection:other/tickets",
+				bindings: { ...bindings, collection: "collection:other/tickets" },
 			}),
 		/compatibility binding mismatch/,
 	);
@@ -596,8 +958,7 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 		() =>
 			decodeArtifact(bytes, {
 				runtimeBuild,
-				schema: bindings.schema,
-				collection: bindings.collection,
+				bindings,
 				interpreter: "questpie.lifecycle-interpreter.v2",
 			}),
 		/compatibility binding mismatch/,
@@ -607,12 +968,7 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 		JSON.stringify(artifact, null, 2),
 	);
 	throws(
-		() =>
-			decodeArtifact(nonCanonical, {
-				runtimeBuild,
-				schema: bindings.schema,
-				collection: bindings.collection,
-			}),
+		() => decodeArtifact(nonCanonical, expectedContract),
 		/not canonically encoded/,
 	);
 	const crossBuild = clone(artifact);
@@ -620,11 +976,11 @@ test("domain separation, relocation stability, tampering, and cross-build hostil
 	const crossBuildBytes = encodeArtifact(crossBuild);
 	throws(
 		() =>
-			loadArtifact(crossBuildBytes, artifactDigest(crossBuildBytes), {
-				runtimeBuild,
-				schema: bindings.schema,
-				collection: bindings.collection,
-			}),
+			loadArtifact(
+				crossBuildBytes,
+				artifactDigest(crossBuildBytes),
+				expectedContract,
+			),
 		/compatibility binding mismatch/,
 	);
 });
@@ -633,12 +989,18 @@ test("interpreter raises only bound issue identity and withholds absent capabili
 	const artifact = compile();
 	let error: unknown;
 	try {
-		await executePhase(artifact, "validate", [
-			{ id: "T-1", name: "", status: "open", count: 1 },
-			null,
-			"2026-08-28T10:00:00.000Z",
+		await executePhase(
+			artifact,
+			"validate",
+			[
+				{ id: "T-1", name: "", status: "open", count: 1 },
+				null,
+				"2026-08-28T10:00:00.000Z",
+				{},
+			],
 			{},
-		]);
+			executionBudget(),
+		);
 	} catch (caught) {
 		error = caught;
 	}
@@ -648,13 +1010,143 @@ test("interpreter raises only bound issue identity and withholds absent capabili
 		bindings.issues.invalidName,
 	);
 	await rejects(
-		executePhase(artifact, "check", [
-			{ id: "T-1", name: "ok", status: "open", count: 1 },
-			null,
-			"2026-08-28T10:00:00.000Z",
+		executePhase(
+			artifact,
+			"check",
+			[
+				{ id: "T-1", name: "ok", status: "open", count: 1 },
+				null,
+				"2026-08-28T10:00:00.000Z",
+				{},
+				{},
+			],
 			{},
-			{},
-		]),
+			executionBudget(),
+		),
 		/withheld capability/,
+	);
+});
+
+test("one outer execution budget owns statements, rows, dependencies, duration, cancellation, and artifact re-entry", async () => {
+	const artifact = compile();
+	const afterInputs = [
+		{ id: "T-1", status: "closed" },
+		null,
+		"2026-08-28T10:00:00.000Z",
+		{},
+		"call-1",
+	] as const;
+	const adapter = {
+		"operation:helpdesk/tickets/findRelated": () => [
+			{ id: "T-2" },
+			{ id: "T-3" },
+		],
+		"operation:helpdesk/tickets/updateRelated": () => undefined,
+		"job:helpdesk/tickets/notify": () => undefined,
+	};
+	await rejects(
+		executePhase(
+			artifact,
+			"afterWrite",
+			afterInputs,
+			adapter,
+			executionBudget({ maxStatements: 1 }),
+		),
+		/statement budget exceeded/,
+	);
+	await rejects(
+		executePhase(
+			artifact,
+			"afterWrite",
+			afterInputs,
+			adapter,
+			executionBudget({ maxDependencies: 1 }),
+		),
+		/dependency budget exceeded/,
+	);
+	await rejects(
+		executePhase(
+			artifact,
+			"afterWrite",
+			afterInputs,
+			adapter,
+			executionBudget({ maxRows: 1 }),
+		),
+		/row budget exceeded/,
+	);
+	await rejects(
+		executePhase(
+			artifact,
+			"afterWrite",
+			afterInputs,
+			{
+				...adapter,
+				"operation:helpdesk/tickets/findRelated": () => [
+					{ id: "T-2" },
+					{ id: "T-3" },
+					{ id: "T-4" },
+				],
+			},
+			executionBudget(),
+		),
+		/read cardinality binding violated/,
+	);
+	const controller = new AbortController();
+	let writes = 0;
+	await rejects(
+		executePhase(
+			artifact,
+			"afterWrite",
+			afterInputs,
+			{
+				...adapter,
+				"operation:helpdesk/tickets/updateRelated": () => {
+					writes += 1;
+					controller.abort();
+				},
+			},
+			executionBudget({ signal: controller.signal }),
+		),
+		(error: unknown) =>
+			error instanceof DOMException && error.name === "AbortError",
+	);
+	strictEqual(writes, 1);
+	const nestedBudget = executionBudget({ maxArtifactReentry: 2 });
+	const nestedAdapter: any = {
+		"operation:helpdesk/tickets/findRelated": ({ budget }: any) =>
+			executePhase(
+				artifact,
+				"check",
+				[{ id: "T-1" }, null, "2026-08-28T10:00:00.000Z", {}, {}],
+				nestedAdapter,
+				budget,
+			),
+	};
+	await rejects(
+		executePhase(
+			artifact,
+			"check",
+			[{ id: "T-1" }, null, "2026-08-28T10:00:00.000Z", {}, {}],
+			nestedAdapter,
+			nestedBudget,
+		),
+		/artifact re-entry budget exceeded/,
+	);
+	strictEqual(nestedBudget.artifactReentry, 0);
+	let now = 0;
+	const duration = executionBudget({
+		deadline: 100,
+		maxDurationMilliseconds: 1,
+		clock: () => now,
+	});
+	now = 2;
+	await rejects(
+		executePhase(artifact, "normalize", [{ name: "x", id: "1" }], {}, duration),
+		/duration budget exceeded/,
+	);
+	const deadline = executionBudget({ deadline: 1, clock: () => now });
+	await rejects(
+		executePhase(artifact, "normalize", [{ name: "x", id: "1" }], {}, deadline),
+		/deadline exceeded/,
 	);
 });

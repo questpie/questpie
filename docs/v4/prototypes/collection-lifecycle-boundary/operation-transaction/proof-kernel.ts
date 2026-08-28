@@ -1,8 +1,34 @@
 import type { Pool, PoolClient } from "pg";
 
+import {
+	InterpretedIssue,
+	artifactDigest,
+	compileArtifact,
+	createExecutionBudget,
+	encodeArtifact,
+	executePhase,
+	loadArtifact,
+	type Artifact,
+	type Bindings,
+	type Identity,
+	type OperationAdapter,
+} from "../compiler-artifact/compiler";
+
 const issueBrand = Symbol("collection-lifecycle-issue");
+const admittedCallBrand = Symbol("compiler-admitted-operation-call");
 
 export type IssueIdentity = `collection:${string}/issue:${string}`;
+
+export type DeclaredErrorMetadata = Readonly<{
+	code: string;
+	payload: "none" | "required";
+}>;
+
+export type AdmittedOperationCall = Readonly<{
+	identity: string;
+	[admittedCallBrand]: true;
+	mapIssue: (identity: IssueIdentity) => string | undefined;
+}>;
 
 export type PublicFailure = Readonly<{
 	kind: "declared" | "framework";
@@ -42,7 +68,7 @@ export type ExecuteInput = Readonly<{
 	ticketId: string;
 	caller: Readonly<Record<string, unknown>>;
 	trusted: Readonly<Record<string, unknown>>;
-	issueMappings?: ReadonlyMap<IssueIdentity, string>;
+	call: AdmittedOperationCall;
 	catchIssue?: boolean;
 	fault?:
 		| "unknown"
@@ -52,8 +78,11 @@ export type ExecuteInput = Readonly<{
 		| "cancel"
 		| "deadline";
 	maxStatements?: number;
+	maxRows?: number;
+	maxDependencies?: number;
 	nestedDepth?: number;
 	maxReentry?: number;
+	cancelAtOrdinal?: number;
 }>;
 
 type InternalFailure = Error & {
@@ -91,25 +120,6 @@ function publicBytes(error: PublicFailure): Uint8Array {
 	return new TextEncoder().encode(JSON.stringify({ ok: false, error }));
 }
 
-function normalizeLane(
-	laneName: "caller" | "trusted",
-	lane: Readonly<Record<string, unknown>>,
-	trace: ProofTrace,
-): Readonly<Record<string, unknown>> {
-	trace.events.push(`normalize:${laneName}`);
-	const before = Object.keys(lane).toSorted();
-	const normalized = Object.fromEntries(
-		Object.entries(lane).map(([path, value]) => [
-			path,
-			typeof value === "string" ? value.trim() : value,
-		]),
-	);
-	const after = Object.keys(normalized).toSorted();
-	if (JSON.stringify(before) !== JSON.stringify(after))
-		throw internalFailure("internal");
-	return Object.freeze(normalized);
-}
-
 function codec(
 	candidate: Readonly<Record<string, unknown>>,
 	trace: ProofTrace,
@@ -133,6 +143,98 @@ export const ticketIssues = Object.freeze({
 	unmappedIssue,
 });
 
+const artifactIssueIdentities = Object.freeze({
+	emptyTitle: "issue:tickets/emptyTitle",
+	forbiddenTitle: "issue:tickets/forbiddenTitle",
+} satisfies Readonly<Record<string, Identity>>);
+
+const artifactBindings = Object.freeze({
+	schema: "schema:lifecycle-proof",
+	collection: "collection:lifecycle-proof/tickets",
+	fields: Object.freeze({
+		id: "field:lifecycle-proof/tickets/id",
+		title: "field:lifecycle-proof/tickets/title",
+		status: "field:lifecycle-proof/tickets/status",
+		secret: "field:lifecycle-proof/tickets/secret",
+		nestedDepth: "field:lifecycle-proof/tickets/nestedDepth",
+		ticketId: "field:lifecycle-proof/tickets/ticketId",
+		ordinal: "field:lifecycle-proof/tickets/ordinal",
+	}),
+	issues: artifactIssueIdentities,
+	capabilities: Object.freeze({
+		"data.forbidden.first": Object.freeze({
+			kind: "read",
+			identity: "operation:lifecycle-proof/forbidden/first",
+			argumentKeys: ["title"],
+			cardinality: "one",
+			first: true,
+			maxRows: 1,
+		}),
+		"data.audit.plan": Object.freeze({
+			kind: "read",
+			identity: "operation:lifecycle-proof/audit/plan",
+			argumentKeys: ["ticketId", "nestedDepth"],
+			cardinality: "many",
+			first: false,
+			maxRows: 8,
+		}),
+		"data.audit.create": Object.freeze({
+			kind: "write",
+			identity: "operation:lifecycle-proof/audit/create",
+			argumentKeys: ["ticketId", "ordinal"],
+		}),
+		"jobs.ticket.notify.accept": Object.freeze({
+			kind: "acceptJob",
+			identity: "job:lifecycle-proof/ticket/notify",
+			argumentKeys: ["ticketId", "callId"],
+		}),
+	}),
+	operations: Object.freeze([
+		"operation:lifecycle-proof/forbidden/first",
+		"operation:lifecycle-proof/audit/plan",
+		"operation:lifecycle-proof/audit/create",
+	]),
+	jobs: Object.freeze(["job:lifecycle-proof/ticket/notify"]),
+} satisfies Bindings);
+
+const runtimeBuild = "7".repeat(64);
+
+function compileAndLoadLifecycleArtifact(): Artifact {
+	const compiled = compileArtifact({
+		bindings: artifactBindings,
+		runtimeBuild,
+		reentryLimit: 4,
+		callbacks: {
+			normalize: `({ input }) => input`,
+			validate: `({ candidate, issues }) => {
+				if (candidate.title === "") throw issues.emptyTitle();
+				if (candidate.title === "forbidden" || candidate.status === "also-invalid") throw issues.forbiddenTitle();
+				return candidate;
+			}`,
+			check: `async ({ candidate, ctx, issues }) => {
+				const forbidden = await ctx.data.forbidden.first({ title: candidate.title });
+				if (forbidden !== null) throw issues.forbiddenTitle();
+				return candidate;
+			}`,
+			afterWrite: `async ({ row, ctx }) => {
+				const planned = await ctx.data.audit.plan({ ticketId: row.id, nestedDepth: row.nestedDepth });
+				for (const item of planned) {
+					await ctx.data.audit.create({ ticketId: item.ticketId, ordinal: item.ordinal });
+				}
+				await ctx.jobs.ticket.notify.accept({ ticketId: row.id, callId: ctx.callId });
+				return row;
+			}`,
+		},
+	});
+	const bytes = encodeArtifact(compiled);
+	return loadArtifact(bytes, artifactDigest(bytes), {
+		runtimeBuild,
+		bindings: artifactBindings,
+	});
+}
+
+const lifecycleArtifact = compileAndLoadLifecycleArtifact();
+
 function raise(identity: IssueIdentity, doom: () => void): never {
 	doom();
 	throw new CollectionIssue(identity);
@@ -153,6 +255,11 @@ export class OperationTransactionProof {
 	}
 
 	async execute(input: ExecuteInput, trace: ProofTrace): Promise<ProofOutcome> {
+		if (
+			input.call[admittedCallBrand] !== true ||
+			input.call.identity !== "mutation:tickets.update"
+		)
+			return this.frameworkFailure("INTERNAL", "internal");
 		if ("updatedAt" in input.caller || "updatedAt" in input.trusted)
 			return this.frameworkFailure("QP-DATA-023", "internal");
 
@@ -180,15 +287,66 @@ export class OperationTransactionProof {
 		let doomedByIssue: IssueIdentity | null = null;
 		let doomed = false;
 		let began = false;
-		let statements = 0;
+		const cancellation = new AbortController();
+		const budget = createExecutionBudget({
+			signal: cancellation.signal,
+			deadline:
+				input.fault === "deadline" ? Date.now() - 1 : Date.now() + 30_000,
+			maxStatements: input.maxStatements ?? 20,
+			maxRows: input.maxRows ?? 32,
+			maxDependencies: input.maxDependencies ?? 20,
+			maxDurationMilliseconds: 30_000,
+			maxArtifactReentry: input.maxReentry ?? lifecycleArtifact.reentryLimit,
+		});
 		const doom = () => {
 			doomed = true;
 		};
 		const spend = () => {
-			statements += 1;
-			if (statements > (input.maxStatements ?? 20)) {
+			budget.statements += 1;
+			if (budget.statements > budget.maxStatements) {
 				doom();
 				throw internalFailure("limit");
+			}
+		};
+		const raiseFirst = (identity: IssueIdentity): never =>
+			raise(identity, () => {
+				doomedByIssue ??= identity;
+				doom();
+			});
+		const runPhase = async (
+			phase: "normalize" | "validate" | "check" | "afterWrite",
+			inputs: readonly unknown[],
+			capabilities: OperationAdapter = {},
+		): Promise<unknown> => {
+			try {
+				return await executePhase(
+					lifecycleArtifact,
+					phase,
+					inputs,
+					capabilities,
+					budget,
+				);
+			} catch (error) {
+				if (error instanceof InterpretedIssue) {
+					if (error.identity === artifactIssueIdentities.emptyTitle)
+						raiseFirst(emptyTitle);
+					if (error.identity === artifactIssueIdentities.forbiddenTitle)
+						raiseFirst(forbiddenTitle);
+				}
+				if (error instanceof DOMException && error.name === "AbortError") {
+					doom();
+					throw internalFailure("cancelled");
+				}
+				if (
+					error instanceof Error &&
+					/budget|deadline|duration/.test(error.message)
+				) {
+					doom();
+					throw internalFailure(
+						error.message.includes("deadline") ? "deadline" : "limit",
+					);
+				}
+				throw error;
 			}
 		};
 
@@ -204,48 +362,79 @@ export class OperationTransactionProof {
 			trace.transactionIds.push(transactionId);
 			trace.lifecycleRuns += 1;
 
-			const caller = normalizeLane("caller", input.caller, trace);
-			const trusted = normalizeLane("trusted", input.trusted, trace);
+			trace.events.push("normalize:caller");
+			const caller = (await runPhase("normalize", [input.caller])) as Readonly<
+				Record<string, unknown>
+			>;
+			trace.events.push("normalize:trusted");
+			const trusted = (await runPhase("normalize", [
+				input.trusted,
+			])) as Readonly<Record<string, unknown>>;
+			if (
+				JSON.stringify(Object.keys(caller).toSorted()) !==
+					JSON.stringify(Object.keys(input.caller).toSorted()) ||
+				JSON.stringify(Object.keys(trusted).toSorted()) !==
+					JSON.stringify(Object.keys(input.trusted).toSorted())
+			)
+				throw internalFailure("internal");
 			const overlap = Object.keys(caller).find((path) => path in trusted);
 			if (overlap) throw internalFailure("internal");
 			const candidate = Object.freeze({ ...caller, ...trusted });
 			codec(candidate, trace);
 
 			trace.events.push("validate");
-			const raiseFirst = (identity: IssueIdentity): never =>
-				raise(identity, () => {
-					doomedByIssue ??= identity;
-					doom();
-				});
-			const validate = () => {
-				if (candidate.title === "") raiseFirst(emptyTitle);
-				if (
-					candidate.title === "forbidden" ||
-					candidate.status === "also-invalid"
-				)
-					raiseFirst(forbiddenTitle);
+			const validate = async () => {
 				if (input.fault === "unknown") throw new Error("secret unknown detail");
 				if (input.fault === "forged")
 					throw { identity: emptyTitle, stack: "secret forged stack" };
 				if (input.fault === "malformed")
 					throw new CollectionIssue("collection:../issue:bad" as IssueIdentity);
 				if (input.fault === "unmapped") raiseFirst(unmappedIssue);
+				await runPhase("validate", [candidate, null, now, {}]);
 			};
 			if (input.catchIssue) {
 				try {
-					validate();
+					await validate();
 				} catch (error) {
 					trace.events.push("application-catch");
 					if (!isCollectionIssue(error)) throw error;
 				}
-			} else validate();
+			} else await validate();
 			if (doomedByIssue) throw new CollectionIssue(doomedByIssue);
 
 			trace.events.push("candidate-policy");
 			if (candidate.secret === "policy-denied")
 				throw internalFailure("internal");
 			trace.events.push("check");
-			if (candidate.title === "database-forbidden") raiseFirst(forbiddenTitle);
+			const checkCapabilities: OperationAdapter = {
+				"operation:lifecycle-proof/forbidden/first": async ({
+					arguments: values,
+				}) => {
+					const argument = values[0] as Readonly<{ title: unknown }>;
+					const selected = await client.query<{
+						title: string;
+						transaction_id: string;
+					}>(
+						`SELECT title, pg_current_xact_id()::text AS transaction_id
+						 FROM ${this.schema}.forbidden_titles
+						 WHERE title = $1 AND visible_to_caller
+						 LIMIT 1`,
+						[argument.title],
+					);
+					const selectedRow = selected.rows[0];
+					if (selectedRow && selectedRow.transaction_id !== transactionId)
+						throw internalFailure("internal");
+					trace.events.push("check-policy-read");
+					return selectedRow
+						? Object.freeze({ title: selectedRow.title })
+						: null;
+				},
+			};
+			await runPhase(
+				"check",
+				[candidate, null, now, {}, {}],
+				checkCapabilities,
+			);
 			trace.events.push("constraint-and-database-values");
 			const written = await client.query<{
 				id: string;
@@ -264,35 +453,67 @@ export class OperationTransactionProof {
 			const row = written.rows[0]!;
 			if (input.fault === "cancel") {
 				doom();
-				throw internalFailure("cancelled");
-			}
-			if (input.fault === "deadline") {
-				doom();
-				throw internalFailure("deadline");
+				cancellation.abort();
 			}
 			trace.events.push("afterWrite");
-
-			const nested = async (depth: number): Promise<void> => {
-				if (depth > (input.maxReentry ?? 3)) {
-					doom();
-					throw internalFailure("limit");
-				}
-				trace.events.push(`nested-write:${depth}`);
-				await client.query(
-					`INSERT INTO ${this.schema}.audit (ticket_id, ordinal, transaction_id)
-					 VALUES ($1, $2, pg_current_xact_id()::text)`,
-					[input.ticketId, depth],
-				);
-				spend();
-				if (depth < (input.nestedDepth ?? 0)) await nested(depth + 1);
+			const afterWriteCapabilities: OperationAdapter = {
+				"operation:lifecycle-proof/audit/plan": async ({
+					arguments: values,
+				}) => {
+					const argument = values[0] as Readonly<{
+						ticketId: unknown;
+						nestedDepth: unknown;
+					}>;
+					const planned = await client.query<{
+						ticketId: string;
+						ordinal: number;
+					}>(
+						`SELECT $1::text AS "ticketId", ordinal
+						 FROM generate_series(0, $2::integer) AS ordinal`,
+						[argument.ticketId, argument.nestedDepth],
+					);
+					return planned.rows;
+				},
+				"operation:lifecycle-proof/audit/create": async ({
+					arguments: values,
+				}) => {
+					const argument = values[0] as Readonly<{
+						ticketId: unknown;
+						ordinal: unknown;
+					}>;
+					if (argument.ordinal === input.cancelAtOrdinal) cancellation.abort();
+					await runPhase("normalize", [argument]);
+					trace.events.push(`nested-write:${String(argument.ordinal)}`);
+					await client.query(
+						`INSERT INTO ${this.schema}.audit (ticket_id, ordinal, transaction_id)
+						 VALUES ($1, $2, pg_current_xact_id()::text)`,
+						[argument.ticketId, argument.ordinal],
+					);
+				},
+				"job:lifecycle-proof/ticket/notify": async ({ arguments: values }) => {
+					const argument = values[0] as Readonly<{
+						ticketId: unknown;
+						callId: unknown;
+					}>;
+					trace.events.push("job-accept");
+					await client.query(
+						`INSERT INTO ${this.schema}.jobs (id, ticket_id, transaction_id)
+						 VALUES ($1, $2, pg_current_xact_id()::text)`,
+						[`${String(argument.callId)}:job`, argument.ticketId],
+					);
+				},
 			};
-			await nested(0);
-			trace.events.push("job-accept");
-			await client.query(
-				`INSERT INTO ${this.schema}.jobs (id, ticket_id, transaction_id) VALUES ($1, $2, pg_current_xact_id()::text)`,
-				[`${input.callId}:job`, input.ticketId],
+			await runPhase(
+				"afterWrite",
+				[
+					{ ...row, id: row.id, nestedDepth: input.nestedDepth ?? 0 },
+					null,
+					now,
+					{},
+					input.callId,
+				],
+				afterWriteCapabilities,
 			);
-			spend();
 			if (doomed) throw internalFailure("internal");
 
 			const stableClock = await client.query<{ stable: boolean }>(
@@ -321,7 +542,7 @@ export class OperationTransactionProof {
 			if (began) await rollback(client, trace);
 			trace.events.push("map");
 			if (isCollectionIssue(error)) {
-				const code = input.issueMappings?.get(error.identity);
+				const code = input.call.mapIssue(error.identity);
 				if (code) return this.declaredFailure(code, "collectionIssue");
 			}
 			const databaseError = error as { code?: unknown };
@@ -377,10 +598,10 @@ export function compileIssueCapability(
 		root: string;
 		nodes: ReadonlyMap<string, ReachabilityNode>;
 		mappings: ReadonlyMap<IssueIdentity, string>;
-		declaredErrors: readonly string[];
+		declaredErrors: readonly DeclaredErrorMetadata[];
 	}>,
 ):
-	| Readonly<{ ok: true; call: Readonly<{ identity: string }> }>
+	| Readonly<{ ok: true; call: AdmittedOperationCall }>
 	| Readonly<{
 			ok: false;
 			code: "QP-COMPOSE-027";
@@ -427,7 +648,14 @@ export function compileIssueCapability(
 	);
 	if (traversalFailure) return traversalFailure;
 	for (const [issue, mappedError] of input.mappings) {
-		if (!reachable.has(issue) || !input.declaredErrors.includes(mappedError))
+		const declarations = input.declaredErrors.filter(
+			(error) => error.code === mappedError,
+		);
+		if (
+			!reachable.has(issue) ||
+			declarations.length !== 1 ||
+			declarations[0]!.payload !== "none"
+		)
 			return {
 				ok: false,
 				code: "QP-COMPOSE-027",
@@ -446,9 +674,14 @@ export function compileIssueCapability(
 				path,
 				issue,
 			};
+	const admittedMappings = new Map(input.mappings);
 	return {
 		ok: true,
-		call: Object.freeze({ identity: input.operation }),
+		call: Object.freeze({
+			identity: input.operation,
+			[admittedCallBrand]: true as const,
+			mapIssue: (identity: IssueIdentity) => admittedMappings.get(identity),
+		}),
 	};
 }
 

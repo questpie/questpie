@@ -16,15 +16,17 @@ authority and authorizes no production implementation.
 - `acceptance-manifest.json` binds the fresh candidate head, authority inputs,
   deterministic gates, and acceptance criteria.
 - `REVIEW-CODEX-EXCEPTION-BLOCKED.md` preserves the exact human-authorized
-  GPT-5.6-sol high verdict for `c473f9129`; it remains non-authoritative. The
-  repairs in this candidate answer only those findings.
+  GPT-5.6-sol high verdict for `c473f9129`.
+- `REVIEW-CODEX-EXCEPTION-REPLACEMENT-BLOCKED.md` preserves its exact
+  replacement verdict for `2236f3b24`. Both records remain non-authoritative;
+  the repairs in this candidate answer only their stated findings.
 
 The pinned review attempted at `d28df9c2d` returned terminal
 `NO_RESULT: transport` and intentionally wrote no record. That exact head was
-not retried. The first authorized substitute review of `c473f9129` returned
-`BLOCKED`; this fresh replacement is its single permitted finding-only repair.
-No live ADR index, specification, glossary, public guide, or handoff text
-projects ADR-0031 until a committed `PASS` record exists.
+not retried. The authorized substitute reviews of `c473f9129` and `2236f3b24`
+returned `BLOCKED`; this fresh candidate is the next finding-only repair. No
+live ADR index, specification, glossary, public guide, or handoff text projects
+ADR-0031 until a committed `PASS` record exists.
 
 After `PASS`, one separate authority-projection commit changes the ADR status
 to `Accepted`, projects the reviewed result into the ADR index, SPEC, CONTEXT,

@@ -9,7 +9,8 @@
 		"accepted Collection provenance and trusted values decision": "6e28e05b58bc6dab06afb32a62a10b1ae41a5e93",
 		"Deep-DX research packet worktree": "75a72b6515e87d78a559145f65b21a386ea4de3c",
 		"terminal no-result candidate, not authority and not retried": "d28df9c2d00ae8c0e73af047ed99e0df05816783",
-		"human-authorized substitute blocked candidate, not authority": "c473f9129129aa94f40c2d08639ee3c20aa273cf"
+		"human-authorized substitute blocked candidate, not authority": "c473f9129129aa94f40c2d08639ee3c20aa273cf",
+		"human-authorized replacement blocked candidate, not authority": "2236f3b2479151f22a903a8b5ce853a3b24b07ab"
 	},
 	"authorityDocuments": [
 		{
@@ -80,12 +81,12 @@
 		{
 			"name": "candidate staging declaration",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/CANDIDATE.md",
-			"sha256": "33a675eb3fadc0af2cff9e90e1d6bbec470d19dc81a794b5fc9aed31a261537b"
+			"sha256": "7036bd8d8adff2967d1255d46dcc1bb11ba7aaa55bf2229c6d1ae73ef899d748"
 		},
 		{
 			"name": "exact proposed authority and public documentation projection",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/authority-projection.json",
-			"sha256": "98a3833bd75592dcf28f2dd3cd8c1c499f9f0aff51b2f3ddff3757bfc9e3f04b"
+			"sha256": "95beb8a1a45a1b4a5f3241219a8596cdec4977e22839d84dd04f3ad7cfca48d7"
 		},
 		{
 			"name": "verbatim human-authorized substitute BLOCKED record",
@@ -93,24 +94,29 @@
 			"sha256": "861bd204c78c1ff71fbcbe18f30011cecac5c5ced668220be9cb74127f1be821"
 		},
 		{
+			"name": "verbatim human-authorized replacement BLOCKED record",
+			"path": "docs/v4/prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-REPLACEMENT-BLOCKED.md",
+			"sha256": "e2ad3598020ed2b1540acba49ebb83acc56a4e59aa695c63645da8f55c028f0f"
+		},
+		{
 			"name": "executable lifecycle TypeScript compiler and canonical artifact proof",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.ts",
-			"sha256": "ccb53140d7117a7988c2e30d85e07a5328ea21d525023766d9413b5d721c2122"
+			"sha256": "d9c4a2662605c4741cee1400d3ab4333e03b5d87a0b18cfbe86ee420857bf501"
 		},
 		{
 			"name": "compiler artifact and hostile decoder tests",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/compiler-artifact/compiler.test.ts",
-			"sha256": "b1567733499c7a67233f88665c7628667ab433fbbf63b737db40a9b42014c370"
+			"sha256": "4864399f0ea2e8b11f631a7d60c198e31a382d7f88465c30aef433cc41d4a12a"
 		},
 		{
 			"name": "PostgreSQL Operation transaction proof kernel",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/proof-kernel.ts",
-			"sha256": "dd045fd8885d332e222a3cbeb8d6222887eed972014539517fd657e0133bbf36"
+			"sha256": "40ba4b4a4fa12519311e7c7332199c0771da527c72ec3dad4b479a26332b4737"
 		},
 		{
 			"name": "PostgreSQL issue mapping and lifecycle order tests",
 			"path": "docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts",
-			"sha256": "e996d9bc355069ae7d3b58bc6172fc42a07c62173fc649c35ccd3c68967f9204"
+			"sha256": "f098407db68cc2ad24fe350a87953fb222a1f63c0d0e865ba8360cdb39bc8946"
 		},
 		{
 			"name": "Proposed-status, authority-hash, and exact projection staging gate",
