@@ -35,12 +35,12 @@ define a second `operation.uuid()` grammar.
 A Codec is executable product data, not only a TypeScript type. Each layer uses
 the same closed description for a different proof:
 
-| Layer            | What the Codec proves                                                                                                                                                       |
-| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| TypeScript       | Infers exact keys, optional and nullable members, scalar values, and provenance-derived Collection input types.                                                             |
-| Compiler         | Validates and canonicalizes the descriptor, preserves its bounds and nested options, and records it in the App Contract and Operation Wire.                                 |
-| Runtime          | Validates direct inputs, handler outputs, Context and durable payloads; it rejects unknown keys and invalid bounds or value forms.                                          |
-| Generated client | Validates network results independently and restores runtime values such as `Date`; an invalid server result is a framework protocol failure, not trusted application data. |
+| Layer            | What the Codec proves                                                                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| TypeScript       | Infers exact keys, optional and nullable members, scalar values, and provenance-derived Collection input types.                                                                                                                      |
+| Compiler         | Validates and canonicalizes the descriptor, preserves its bounds and nested options, and records it in the App Contract and Operation Wire.                                                                                          |
+| Runtime          | Validates direct inputs, handler outputs, Context and durable payloads; it rejects unknown keys and invalid bounds or value forms.                                                                                                   |
+| Generated client | Validates and encodes inputs before transport, independently validates results, and restores runtime values such as `Date`; invalid local input performs no request, while an invalid server result is a framework protocol failure. |
 
 That shared authority keeps direct calls, network calls, stored durable values,
 generated declarations, and compatibility identities aligned. Field-derived
@@ -55,6 +55,13 @@ JavaScript: QUESTPIE cannot deterministically serialize, hash, lower, reproduce
 in a generated client, or enforce that code after a durable or network
 boundary. Such a library therefore does not replace the QUESTPIE Codec required
 for an Operation, Context input, or durable payload.
+
+This is also why QUESTPIE does not infer a boundary contract from a TypeScript
+type alone. TypeScript types disappear at runtime. A Codec remains available to
+the compiler, generated client, Runtime, durable worker, and compatibility
+checker, so all of them can enforce the same contract without shipping an
+application callback across the boundary. A projection package may expose a
+Codec to a form library, but that projection does not become contract authority.
 
 ## Choose the owner of application work
 

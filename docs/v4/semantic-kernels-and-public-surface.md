@@ -51,15 +51,22 @@ Codec is the compiler and Runtime semantic authority rather than an arbitrary
 validation-library type. TypeScript derives exact application values from it;
 the compiler validates and canonicalizes its closed descriptor; Runtime
 validates direct input, handler output, Context and durable payloads; and the
-generated client independently validates network results and restores values
-such as `Date`. The same descriptor drives compatibility bytes and preserves
-Field bounds and nested semantics recursively.
+generated client validates and encodes inputs before transport, independently
+validates network results, and restores values such as `Date`. Invalid local
+input performs no request. The same descriptor drives compatibility bytes and
+preserves Field bounds and nested semantics recursively.
 
 Application code may use another validation library for values it owns. When it
 permits arbitrary refinements or transforms, those extensions are executable
 JavaScript, so the compiler cannot deterministically serialize, hash, lower,
 reproduce, or enforce them across durable and wire boundaries. Such a library
 therefore does not replace the Codec recorded in the App Contract.
+
+TypeScript types alone cannot own this boundary because they disappear at
+runtime. The Codec remains executable data for the compiler, generated client,
+Runtime, durable worker, and compatibility checker. A projection package may
+translate that contract for a form library, but the projection does not become
+contract authority.
 
 Collection provenance, Mutation values, and Policy have separate owners.
 Provenance defines which lane may supply a Field, Mutation owns the transaction
