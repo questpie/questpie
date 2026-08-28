@@ -109,6 +109,26 @@ function collectionFieldFacts(
 	);
 }
 
+function requiredCreateFields(
+	facts: readonly Readonly<{
+		path: readonly string[];
+		contract: RecordValue;
+	}>[],
+	eligibleFields: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+	const eligible = new Set(
+		eligibleFields.map((fieldPath) => JSON.stringify(fieldPath)),
+	);
+	return facts
+		.filter(
+			({ path: fieldPath, contract }) =>
+				contract.nullable === false &&
+				contract.default === null &&
+				eligible.has(JSON.stringify(fieldPath)),
+		)
+		.map(({ path: fieldPath }) => fieldPath);
+}
+
 export function requiredCreateTrustedValueFields(
 	facts: readonly Readonly<{
 		path: readonly string[];
@@ -116,17 +136,7 @@ export function requiredCreateTrustedValueFields(
 	}>[],
 	trustedValueFields: readonly (readonly string[])[],
 ): readonly (readonly string[])[] {
-	const trusted = new Set(
-		trustedValueFields.map((fieldPath) => JSON.stringify(fieldPath)),
-	);
-	return facts
-		.filter(
-			({ path: fieldPath, contract }) =>
-				contract.nullable === false &&
-				contract.default === null &&
-				trusted.has(JSON.stringify(fieldPath)),
-		)
-		.map(({ path: fieldPath }) => fieldPath);
+	return requiredCreateFields(facts, trustedValueFields);
 }
 
 export function requiredCreateCallerInputFields(
@@ -136,17 +146,7 @@ export function requiredCreateCallerInputFields(
 	}>[],
 	callerInputFields: readonly (readonly string[])[],
 ): readonly (readonly string[])[] {
-	const caller = new Set(
-		callerInputFields.map((fieldPath) => JSON.stringify(fieldPath)),
-	);
-	return facts
-		.filter(
-			({ path: fieldPath, contract }) =>
-				contract.nullable === false &&
-				contract.default === null &&
-				caller.has(JSON.stringify(fieldPath)),
-		)
-		.map(({ path: fieldPath }) => fieldPath);
+	return requiredCreateFields(facts, callerInputFields);
 }
 
 function validateFieldPath(
