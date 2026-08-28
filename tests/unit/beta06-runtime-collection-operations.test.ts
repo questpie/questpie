@@ -122,6 +122,13 @@ function createPlan() {
 				},
 				{
 					position: 2,
+					kind: "callerInputPresent",
+					path: ["body"],
+					codec: "boolean",
+					postgresType: "boolean",
+				},
+				{
+					position: 3,
 					kind: "callerInput",
 					path: ["body"],
 					codec: {
@@ -133,7 +140,7 @@ function createPlan() {
 					postgresType: "text",
 				},
 				{
-					position: 3,
+					position: 4,
 					kind: "executionFact",
 					source: "operationTime",
 					path: [],
@@ -201,7 +208,10 @@ function trustedCreatePlan() {
 					},
 					postgresType: "text",
 				},
-				baseline.write.parameters[2]!,
+				{
+					...baseline.write.parameters[3]!,
+					position: 3,
+				},
 			],
 		},
 	} as const;
@@ -638,8 +648,40 @@ test("create checks sparse Field authority and leaves normalization/defaults to 
 		["BODY_AUTHORITY_SQL", []],
 		[
 			"WRITE_WITH_btrim_gen_random_uuid_SQL",
-			["  A title  ", "Body", new Date("2026-08-16T20:00:00.000Z")],
+			["  A title  ", true, "Body", new Date("2026-08-16T20:00:00.000Z")],
 		],
+	]);
+});
+
+test("create distinguishes an omitted nullable caller Field from explicit null", async () => {
+	const baseline = createPlan();
+	const plan = {
+		...baseline,
+		candidate: {
+			...baseline.candidate,
+			fields: baseline.candidate.fields.map((field) =>
+				field.path[0] === "body" ? { ...field, nullable: true } : field,
+			),
+		},
+	};
+	const writes: unknown[][] = [];
+	const data = dataFor([plan], async (statement, parameters = []) => {
+		if (statement.endsWith("AUTHORITY_SQL")) return [{ allowed: true }];
+		writes.push([...parameters]);
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: "Required",
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+
+	await data.records.create({ input: { title: "Required" } });
+	await data.records.create({ input: { title: "Required", body: null } });
+	expect(writes).toEqual([
+		["Required", false, null, new Date("2026-08-16T20:00:00.000Z")],
+		["Required", true, null, new Date("2026-08-16T20:00:00.000Z")],
 	]);
 });
 
