@@ -373,6 +373,16 @@ function applicationEntry(
 		},
 		policies: [],
 	});
+	const emptyFieldNormalizerPrograms = JSON.stringify({
+		format: "questpie.field-normalizer-programs",
+		version: 1,
+		programs: [],
+	});
+	const emptyServerValuePrograms = JSON.stringify({
+		format: "questpie.server-value-programs",
+		version: 1,
+		programs: [],
+	});
 	return `import { principal } from "questpie";
 import { bindIngressPrincipal } from "questpie:runtime-ingress";
 import { verifyPostgresDatabaseRuntimeReadiness } from "questpie:runtime-readiness";
@@ -427,8 +437,8 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 	};
 	const operations = linkCollectionMutationPrograms({
 		collectionOperations: raw.programs,
-		fieldNormalizers: ${emptyCollectionArtifacts}.normalizers,
-		serverValues: ${emptyCollectionArtifacts}.serverValues,
+		fieldNormalizers: ${emptyFieldNormalizerPrograms},
+		serverValues: ${emptyServerValuePrograms},
 		policies: raw.policies,
 	});
 	return Object.freeze({
