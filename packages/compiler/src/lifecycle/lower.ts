@@ -49,6 +49,7 @@ const stringMethods = new Set([
 	"endsWith",
 	"includes",
 ]);
+const sourcePrefix = "const __phase = ";
 
 interface Environment {
 	readonly phase: "normalize" | "validate";
@@ -73,7 +74,7 @@ function fail(
 	const line = env.base.start.line + point.line;
 	const column =
 		point.line === 0
-			? env.base.start.column + point.character
+			? env.base.start.column + point.character - sourcePrefix.length
 			: point.character + 1;
 	throw new CompilerDiagnosticError(
 		"QP-COMPOSE-026",
@@ -419,7 +420,7 @@ export function lowerLifecyclePhase(
 		throw new TypeError(`${phase} is not implemented by LIFE-01`);
 	const source = ts.createSourceFile(
 		module,
-		`const __phase = ${authoredSource}`,
+		`${sourcePrefix}${authoredSource}`,
 		ts.ScriptTarget.ESNext,
 		true,
 		ts.ScriptKind.TS,

@@ -1,8 +1,11 @@
 import { expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
-import { compileApplication } from "@questpie/compiler";
+import {
+	compileApplication,
+	CompilerDiagnosticError,
+} from "@questpie/compiler";
 
 const fixtureRoot = resolve(
 	import.meta.dir,
@@ -153,4 +156,73 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 	expect(app).toContain(
 		'issueMappings?: GeneratedMutations[Name]["issueMappings"]',
 	);
+}, 30_000);
+
+test("reports unsupported lifecycle capture at its authored Origin", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-origin-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const path = join(temporary, "src/tickets.ts");
+		const source = await readFile(path, "utf8");
+		await writeFile(
+			path,
+			source.replace(
+				/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
+				"\t\tnormalize: ({ input }) => crypto.randomUUID(),",
+			),
+		);
+
+		try {
+			await compileApplication({ applicationRoot: temporary });
+			throw new Error("expected lifecycle capture diagnostic");
+		} catch (error) {
+			expect(error).toBeInstanceOf(CompilerDiagnosticError);
+			expect(error).toMatchObject({
+				code: "QP-COMPOSE-026",
+				diagnosticClass: "lifecycleCapture",
+				details: {
+					origin: { module: "src/tickets.ts", line: 83, column: 29 },
+					phase: "normalize",
+				},
+			});
+		}
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects unsupported lifecycle syntax and capability at compilation", async () => {
+	for (const [authored, diagnosticClass] of [
+		[
+			"\t\tnormalize: async ({ input }) => input,",
+			"unsupportedLifecycleSyntax",
+		],
+		[
+			"\t\tnormalize: ({ input }) => { throw input; },",
+			"unsupportedLifecycleCapability",
+		],
+	] as const) {
+		const temporary = await mkdtemp(
+			join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-hostile-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const path = join(temporary, "src/tickets.ts");
+			const source = await readFile(path, "utf8");
+			await writeFile(
+				path,
+				source.replace(
+					/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
+					authored,
+				),
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({ code: "QP-COMPOSE-026", diagnosticClass });
+		} finally {
+			await rm(temporary, { force: true, recursive: true });
+		}
+	}
 }, 30_000);

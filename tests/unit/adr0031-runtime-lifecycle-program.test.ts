@@ -211,12 +211,18 @@ test("normalizes a sparse lane with ordinary optional-chain semantics", async ()
 			input: { summary: "trusted lane without reference" },
 		}),
 	).resolves.toEqual({ summary: "trusted lane without reference" });
+	await expect(
+		executeCollectionLifecyclePhase(lifecycle as never, "normalize", {
+			input: { reference: new Map(), summary: "open runtime value" },
+		}),
+	).rejects.toThrow("not closed");
 });
 
 test("rejects lifecycle digest and Runtime Build drift", () => {
 	for (const hostile of [
 		{ ...lifecycle, digest: "0".repeat(64) },
 		{ ...lifecycle, runtimeBuild: "0".repeat(64) },
+		{ ...lifecycle, callback: () => undefined },
 	])
 		expect(() =>
 			linkCollectionMutationPrograms({
