@@ -30,6 +30,7 @@ import {
 	quote,
 	record,
 	result,
+	trustedValueParameters,
 	Parameters,
 	type RecordValue,
 } from "./postgres-shared";
@@ -280,6 +281,18 @@ function createPlan(
 			mode: "overwrite",
 			source,
 		});
+	}
+	for (const trustedPath of operation.trustedValueFields) {
+		const field = fieldByPath(collection, trustedPath);
+		const bound = trustedValueParameters(parameters, field);
+		const fallback =
+			expressions.get(canonicalBytes(field.path)) ??
+			`NULL::${postgresType(field.codec)}`;
+		expressions.set(
+			canonicalBytes(field.path),
+			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${fallback} END`,
+		);
+		steps.push({ phase: "trustedValue", target: field.path });
 	}
 	for (const field of collection.fields)
 		if (!expressions.has(canonicalBytes(field.path)))
@@ -560,6 +573,20 @@ function updatePlan(
 			executionParameter(parameters, sourceRoot, sourcePath, field),
 		);
 		steps.push({ phase: "serverValue", target, mode: "overwrite", source });
+	}
+	for (const trustedPath of operation.trustedValueFields) {
+		const field = fieldByPath(collection, trustedPath);
+		const bound = trustedValueParameters(parameters, field);
+		const current = expressions.get(canonicalBytes(field.path));
+		if (!current)
+			throw new TypeError(
+				`${operation.identity} cannot construct current candidate Field ${field.path.join(".")}`,
+			);
+		expressions.set(
+			canonicalBytes(field.path),
+			`CASE WHEN ${bound.present} THEN ${bound.value} ELSE ${current} END`,
+		);
+		steps.push({ phase: "trustedValue", target: field.path });
 	}
 	const candidateColumns = collection.fields.map(
 		(field) =>

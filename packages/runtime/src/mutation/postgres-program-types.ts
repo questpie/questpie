@@ -23,7 +23,7 @@ export type PostgresParameterV1 =
 	| Readonly<{
 			position: number;
 			postgresType: string;
-			kind: "callerInput" | "key" | "patchValue";
+			kind: "callerInput" | "key" | "patchValue" | "trustedValue";
 			path: FieldPath;
 			codec: ScalarCodecV1;
 	  }>
@@ -31,6 +31,13 @@ export type PostgresParameterV1 =
 			position: number;
 			postgresType: "boolean";
 			kind: "patchPresent";
+			path: FieldPath;
+			codec: "boolean";
+	  }>
+	| Readonly<{
+			position: number;
+			postgresType: "boolean";
+			kind: "trustedValuePresent";
 			path: FieldPath;
 			codec: "boolean";
 	  }>

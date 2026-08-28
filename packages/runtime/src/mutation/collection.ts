@@ -61,6 +61,22 @@ function exactRequest(
 	return request;
 }
 
+function exactRequestWithOptionalKeys(
+	value: unknown,
+	required: readonly string[],
+	optional: readonly string[],
+	label: string,
+): Row {
+	const request = record(value, label);
+	const keys = Object.keys(request);
+	if (
+		required.some((key) => !Object.hasOwn(request, key)) ||
+		keys.some((key) => !required.includes(key) && !optional.includes(key))
+	)
+		throw new TypeError(`${label} must have exactly the compiled keys`);
+	return request;
+}
+
 function pathKey(path: Path): string {
 	return JSON.stringify(path);
 }
@@ -138,6 +154,26 @@ function allowedPaths(
 		throw new TypeError(`${label} contains undeclared Fields`);
 }
 
+function rejectOverlap(
+	callerPaths: readonly Path[],
+	trustedPaths: readonly Path[],
+	label: string,
+) {
+	const caller = new Set(callerPaths.map(pathKey));
+	if (trustedPaths.some((path) => caller.has(pathKey(path))))
+		throw new TypeError(`${label} must not overlap`);
+}
+
+function requirePaths(
+	supplied: readonly Path[],
+	required: readonly Path[],
+	label: string,
+) {
+	const present = new Set(supplied.map(pathKey));
+	if (required.some((path) => !present.has(pathKey(path))))
+		throw new TypeError(`${label} is missing required Fields`);
+}
+
 function inputScalar(
 	value: unknown,
 	codec: ScalarCodecV1,
@@ -197,7 +233,7 @@ function executionFact(
 
 function bind(
 	parameters: readonly Parameter[],
-	values: Readonly<{ callerInput?: Row; key?: Row }>,
+	values: Readonly<{ callerInput?: Row; trustedValues?: Row; key?: Row }>,
 	facts: ExecutionFacts,
 	operationTime: Date,
 	nullableByPath: ReadonlyMap<string, boolean> = new Map(),
@@ -213,10 +249,23 @@ function bind(
 				throw new TypeError("Compiled Collection patch has no value source");
 			return hasValueAt(values.callerInput, parameter.path);
 		}
-		const source = parameter.kind === "key" ? values.key : values.callerInput;
+		if (parameter.kind === "trustedValuePresent")
+			return values.trustedValues
+				? hasValueAt(values.trustedValues, parameter.path)
+				: false;
+		const source =
+			parameter.kind === "key"
+				? values.key
+				: parameter.kind === "trustedValue"
+					? values.trustedValues
+					: values.callerInput;
+		if (parameter.kind === "trustedValue" && !source) return null;
 		if (!source)
 			throw new TypeError("Compiled Collection parameter has no value source");
-		if (parameter.kind === "patchValue" && !hasValueAt(source, parameter.path))
+		if (
+			(parameter.kind === "patchValue" || parameter.kind === "trustedValue") &&
+			!hasValueAt(source, parameter.path)
+		)
 			return null;
 		return inputScalar(
 			valueAt(source, parameter.path),
@@ -224,6 +273,24 @@ function bind(
 			nullableByPath.get(pathKey(parameter.path)) === true,
 		);
 	});
+}
+
+function validateScalars(
+	source: Row,
+	paths: readonly Path[],
+	fields: readonly Readonly<{
+		path: Path;
+		codec: ScalarCodecV1;
+		nullable: boolean;
+	}>[],
+) {
+	const byPath = new Map(fields.map((field) => [pathKey(field.path), field]));
+	for (const path of paths) {
+		const field = byPath.get(pathKey(path));
+		if (!field)
+			throw new TypeError("Compiled Collection Field has no scalar definition");
+		inputScalar(valueAt(source, path), field.codec, field.nullable);
+	}
 }
 
 function collectionMember(target: string): string {
@@ -335,9 +402,10 @@ function createCollectionMutationData(
 								create: async (rawRequest: unknown) => {
 									const plan = plans.create!;
 									const started = performance.now();
-									const request = exactRequest(
+									const request = exactRequestWithOptionalKeys(
 										rawRequest,
-										"input",
+										["input"],
+										["values"],
 										"Collection create request",
 									);
 									const callerInput = record(
@@ -349,12 +417,48 @@ function createCollectionMutationData(
 										plan.operation.callerInputFields,
 										"Collection create input",
 									);
+									const callerPaths = inputPaths(
+										callerInput,
+										"Collection create input",
+									);
+									const trustedValues = Object.hasOwn(request, "values")
+										? record(request.values, "Collection create values")
+										: undefined;
+									const trustedPaths = trustedValues
+										? inputPaths(trustedValues, "Collection create values")
+										: [];
+									allowedPaths(
+										trustedPaths,
+										plan.operation.trustedValueFields,
+										"Collection create values",
+									);
+									rejectOverlap(
+										callerPaths,
+										trustedPaths,
+										"Collection create input and values",
+									);
+									requirePaths(
+										trustedPaths,
+										plan.operation.requiredTrustedValueFields,
+										"Collection create values",
+									);
 									const nullableByPath = new Map(
 										plan.candidate.fields.map(
 											(field) => [pathKey(field.path), field.nullable] as const,
 										),
 									);
-									const values = { callerInput };
+									validateScalars(
+										callerInput,
+										callerPaths,
+										plan.candidate.fields,
+									);
+									if (trustedValues)
+										validateScalars(
+											trustedValues,
+											trustedPaths,
+											plan.candidate.fields,
+										);
+									const values = { callerInput, trustedValues };
 									for (const check of plan.fieldAuthority.checks) {
 										const rows = await execute(
 											plan,
@@ -401,22 +505,16 @@ function createCollectionMutationData(
 								update: async (rawRequest: unknown) => {
 									const plan = plans.update!;
 									const started = performance.now();
-									const request = record(
+									const request = exactRequestWithOptionalKeys(
 										rawRequest,
-										"Collection update request",
-									);
-									exactPaths(
-										Object.keys(request)
-											.sort()
-											.map((key) => [key]),
-										[["key"], ["patch"]],
+										["key"],
+										["patch", "values"],
 										"Collection update request",
 									);
 									const key = record(request.key, "Collection key");
-									const patch = record(
-										request.patch,
-										"Collection update patch",
-									);
+									const patch = Object.hasOwn(request, "patch")
+										? record(request.patch, "Collection update patch")
+										: Object.freeze({});
 									exactPaths(
 										inputPaths(key, "Collection key"),
 										plan.operation.keyFields,
@@ -426,21 +524,44 @@ function createCollectionMutationData(
 										patch,
 										"Collection update patch",
 									);
-									if (suppliedPaths.length === 0)
+									const trustedValues = Object.hasOwn(request, "values")
+										? record(request.values, "Collection update values")
+										: undefined;
+									const trustedPaths = trustedValues
+										? inputPaths(trustedValues, "Collection update values")
+										: [];
+									if (suppliedPaths.length === 0 && trustedPaths.length === 0)
 										throw new TypeError(
-											"Collection update patch must not be empty",
+											"Collection update patch and values must not both be empty",
 										);
 									allowedPaths(
 										suppliedPaths,
 										plan.operation.callerInputFields,
 										"Collection update patch",
 									);
+									allowedPaths(
+										trustedPaths,
+										plan.operation.trustedValueFields,
+										"Collection update values",
+									);
+									rejectOverlap(
+										suppliedPaths,
+										trustedPaths,
+										"Collection update patch and values",
+									);
 									const nullableByPath = new Map(
 										plan.candidate.fields.map(
 											(field) => [pathKey(field.path), field.nullable] as const,
 										),
 									);
-									const values = { key, callerInput: patch };
+									validateScalars(patch, suppliedPaths, plan.candidate.fields);
+									if (trustedValues)
+										validateScalars(
+											trustedValues,
+											trustedPaths,
+											plan.candidate.fields,
+										);
+									const values = { key, callerInput: patch, trustedValues };
 									const locked = await execute(
 										plan,
 										started,

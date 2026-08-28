@@ -50,6 +50,7 @@ export type CollectionOperationProgramV1 = Readonly<{
 	keyFields: readonly FieldPath[];
 	callerInputFields: readonly FieldPath[];
 	trustedValueFields: readonly FieldPath[];
+	requiredTrustedValueFields: readonly FieldPath[];
 	selectedFieldPaths: readonly FieldPath[];
 	dataQuery: RecordValue | null;
 	dataQueryDigest: string | null;
@@ -288,6 +289,7 @@ function decodeOperation(
 			"keyFields",
 			"callerInputFields",
 			"trustedValueFields",
+			"requiredTrustedValueFields",
 			"selectedFieldPaths",
 			"dataQuery",
 			"dataQueryDigest",
@@ -335,6 +337,20 @@ function decodeOperation(
 		source.trustedValueFields,
 		`${label} trustedValueFields`,
 	);
+	const requiredTrustedValueFields = fieldPaths(
+		source.requiredTrustedValueFields,
+		`${label} requiredTrustedValueFields`,
+	);
+	const trusted = new Set(
+		trustedValueFields.map((field) => JSON.stringify(field)),
+	);
+	if (
+		(member !== "create" && requiredTrustedValueFields.length > 0) ||
+		requiredTrustedValueFields.some(
+			(field) => !trusted.has(JSON.stringify(field)),
+		)
+	)
+		fail(`${label} requiredTrustedValueFields are invalid`);
 	const selectedFieldPaths = fieldPaths(
 		source.selectedFieldPaths,
 		`${label} selectedFieldPaths`,
@@ -405,6 +421,7 @@ function decodeOperation(
 		keyFields,
 		callerInputFields,
 		trustedValueFields,
+		requiredTrustedValueFields,
 		selectedFieldPaths,
 		dataQuery: embeddedQuery,
 		dataQueryDigest: embeddedDigest,

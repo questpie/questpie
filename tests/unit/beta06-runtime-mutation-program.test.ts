@@ -50,6 +50,7 @@ const operation = {
 	keyFields: [],
 	callerInputFields: [["body"], ["title"]],
 	trustedValueFields: [["body"], ["id"], ["title"]],
+	requiredTrustedValueFields: [],
 	selectedFieldPaths: [["id"], ["title"]],
 	dataQuery: null,
 	dataQueryDigest: null,
@@ -122,6 +123,7 @@ const listOperation = {
 	keyFields: [],
 	callerInputFields: [["after"], ["first"]],
 	trustedValueFields: [],
+	requiredTrustedValueFields: [],
 	selectedFieldPaths: [["id"]],
 	dataQuery: listQuery,
 	dataQueryDigest: digest("questpie-data-query-template-v1", listQuery),
@@ -237,6 +239,22 @@ test("rejects missing or malformed trusted-value Field authority", () => {
 	]);
 	expect(() => linkCollectionMutationPrograms(duplicate)).toThrow(
 		"trustedValueFields must be unique",
+	);
+
+	const requiredOutsideAuthority = artifacts();
+	Object.assign(requiredOutsideAuthority.collectionOperations.operations[0]!, {
+		requiredTrustedValueFields: [["tenantId"]],
+	});
+	expect(() =>
+		linkCollectionMutationPrograms(requiredOutsideAuthority),
+	).toThrow("requiredTrustedValueFields are invalid");
+
+	const requiredOnRead = artifacts();
+	Object.assign(requiredOnRead.collectionOperations.operations[1]!, {
+		requiredTrustedValueFields: [["id"]],
+	});
+	expect(() => linkCollectionMutationPrograms(requiredOnRead)).toThrow(
+		"requiredTrustedValueFields are invalid",
 	);
 });
 

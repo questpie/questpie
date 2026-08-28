@@ -314,7 +314,7 @@ const operations = {
 			policy: "policy:records.default",
 			keyFields: [],
 			callerInputFields: [["title"], ["body"]],
-			trustedValueFields: [["body"], ["id"], ["title"]],
+			trustedValueFields: [["id"]],
 			selectedFieldPaths: [["id"], ["body"], ["title"], ["createdAt"]],
 			dataQuery: null,
 			dataQueryDigest: null,
@@ -415,6 +415,7 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 					mode: "overwrite",
 					source: ["principal", "id"],
 				},
+				{ phase: "trustedValue", target: ["id"] },
 			],
 		},
 		fieldAuthority: { suppliedPathsOnly: true },
@@ -448,7 +449,12 @@ test("lowers plan-backed get/create without Runtime planning", () => {
 				path: ["id"],
 			}),
 			expect.objectContaining({ kind: "literal", value: "classified" }),
+			expect.objectContaining({ kind: "trustedValuePresent", path: ["id"] }),
+			expect.objectContaining({ kind: "trustedValue", path: ["id"] }),
 		]),
+	);
+	expect(create.write.sql).toMatch(
+		/CASE WHEN \$\d+::boolean THEN \$\d+::uuid ELSE pg_catalog\.gen_random_uuid\(\) END AS "id"/,
 	);
 	expect(create.write.result).toEqual([
 		expect.objectContaining({
@@ -552,4 +558,121 @@ test("rejects digest-only or mismatched executable programs", () => {
 			},
 		}),
 	).toThrow(/normalizer program digest/i);
+});
+
+test("merges trusted update values after caller patches without replaying create defaults", () => {
+	const updatePolicyProjection = structuredClone(policyProjection) as any;
+	const program = updatePolicyProjection.policies[0].program;
+	program.operations.update = {
+		admission: { kind: "authenticated" },
+		current: {
+			kind: "equal",
+			left: fieldOperand("current", "collection:records", "ownerId", "uuid"),
+			right: executionOperand("principal", "id", "uuid"),
+		},
+		candidate: {
+			kind: "and",
+			items: [
+				{
+					kind: "equal",
+					left: fieldOperand(
+						"candidate",
+						"collection:records",
+						"ownerId",
+						"uuid",
+					),
+					right: fieldOperand(
+						"current",
+						"collection:records",
+						"ownerId",
+						"uuid",
+					),
+				},
+				{
+					kind: "notEqual",
+					left: fieldOperand(
+						"candidate",
+						"collection:records",
+						"title",
+						"text",
+					),
+					right: fieldOperand("current", "collection:records", "title", "text"),
+				},
+			],
+		},
+	};
+	program.fields.callerInput.update = [
+		{ path: ["body"], when: { kind: "constant", value: true } },
+	];
+	updatePolicyProjection.policies[0].scopeBindings.push(
+		{
+			scope: "current",
+			collection: "collection:records",
+			parentScope: null,
+		},
+		{
+			scope: "candidate",
+			collection: "collection:records",
+			parentScope: null,
+		},
+	);
+
+	const updateOperations = structuredClone(operations) as any;
+	updateOperations.operations = [
+		{
+			...updateOperations.operations[0],
+			identity: "mutation:records.update",
+			member: "update",
+			keyFields: [["id"]],
+			callerInputFields: [["body"]],
+			trustedValueFields: [["title"]],
+			selectedFieldPaths: [["id"], ["body"], ["title"]],
+			normalizerProgramDigest: null,
+			serverValueProgramDigest: null,
+			outputCardinality: "optionalOne",
+		},
+	];
+
+	const lowered = lowerPostgresCollectionOperationPlans({
+		collectionOperations: updateOperations,
+		schemaProjection: schema,
+		policyProjection: updatePolicyProjection,
+		normalizerPrograms: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [],
+		},
+		serverValuePrograms: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [],
+		},
+	});
+	const update = lowered.plans[0]!;
+	if (update.member !== "update") throw new Error("expected update plan");
+
+	expect(update.candidate.steps).toEqual([
+		{ phase: "callerInput", target: ["body"] },
+		{ phase: "trustedValue", target: ["title"] },
+	]);
+	expect(update.fieldAuthority.checks.map(({ path }) => path)).toEqual([
+		["body"],
+	]);
+	expect(update.write.parameters).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				kind: "trustedValuePresent",
+				path: ["title"],
+			}),
+			expect.objectContaining({ kind: "trustedValue", path: ["title"] }),
+		]),
+	);
+	expect(update.write.sql).toMatch(
+		/CASE WHEN \$\d+::boolean THEN \$\d+::text ELSE "qp_current"\."title" END AS "title"/,
+	);
+	expect(update.write.sql).toContain(
+		'"qp_candidate"."title" IS DISTINCT FROM "qp_current"."title"',
+	);
+	expect(update.write.sql).not.toContain("pg_catalog.gen_random_uuid()");
+	expect(update.write.sql).not.toContain("pg_catalog.now()");
 });

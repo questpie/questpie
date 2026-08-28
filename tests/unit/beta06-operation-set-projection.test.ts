@@ -254,6 +254,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			keyFields: [],
 			callerInputFields: [["body"]],
 			trustedValueFields: [["id"]],
+			requiredTrustedValueFields: [],
 			selectedFieldPaths: [["id"], ["channelId"], ["body"], ["createdAt"]],
 			outputCardinality: "one",
 		});
@@ -269,6 +270,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 				["channelId"],
 				["id"],
 			],
+			requiredTrustedValueFields: [],
 		});
 		expect(programs.operations).toHaveLength(5);
 		expect(

@@ -109,6 +109,26 @@ function collectionFieldFacts(
 	);
 }
 
+export function requiredCreateTrustedValueFields(
+	facts: readonly Readonly<{
+		path: readonly string[];
+		contract: RecordValue;
+	}>[],
+	trustedValueFields: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+	const trusted = new Set(
+		trustedValueFields.map((fieldPath) => JSON.stringify(fieldPath)),
+	);
+	return facts
+		.filter(
+			({ path: fieldPath, contract }) =>
+				contract.nullable === false &&
+				contract.default === null &&
+				trusted.has(JSON.stringify(fieldPath)),
+		)
+		.map(({ path: fieldPath }) => fieldPath);
+}
+
 function validateFieldPath(
 	collection: NormalizedResource,
 	fieldPath: readonly string[],
@@ -392,6 +412,13 @@ export function projectCollectionOperationSets(
 							)
 							.map(({ path: fieldPath }) => fieldPath)
 					: [];
+			const requiredTrustedValueFields =
+				member === "create"
+					? requiredCreateTrustedValueFields(
+							collectionFieldFacts(collection),
+							trustedValueFields,
+						)
+					: [];
 			const rawTemplate =
 				member === "list"
 					? normalizeDataQueryTemplate(memberContract.templateInput, {
@@ -429,6 +456,7 @@ export function projectCollectionOperationSets(
 				keyFields: member === "create" || member === "list" ? [] : keyFields,
 				callerInputFields,
 				trustedValueFields,
+				requiredTrustedValueFields,
 				selectedFieldPaths: (
 					(memberContract.selectionPaths ?? []) as readonly unknown[]
 				).map((field) => path(field, `${identity} selection`)),

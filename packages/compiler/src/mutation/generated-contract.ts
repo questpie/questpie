@@ -153,12 +153,15 @@ function method(
 	const trustedValues = shape(
 		program.trustedValueFields,
 		(path) => types.field(program.target, path),
-		() => true,
+		(path) =>
+			!program.requiredTrustedValueFields.some(
+				(required) => required.join("/") === path.join("/"),
+			),
 	);
 	const valuesMember =
 		program.trustedValueFields.length === 0
 			? ""
-			: ` readonly values?: ${trustedValues};`;
+			: ` readonly values${program.requiredTrustedValueFields.length === 0 ? "?" : ""}: ${trustedValues};`;
 	if (program.member === "create")
 		return `readonly create: (input: Readonly<{ readonly input: ${callerInput};${valuesMember} }>) => Promise<${result}>;`;
 	const key = shape(

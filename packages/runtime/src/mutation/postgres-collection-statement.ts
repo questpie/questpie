@@ -186,7 +186,8 @@ export function decodePostgresCollectionParameters(
 		if (
 			source.kind === "callerInput" ||
 			source.kind === "key" ||
-			source.kind === "patchValue"
+			source.kind === "patchValue" ||
+			source.kind === "trustedValue"
 		) {
 			exact(
 				source,
@@ -209,7 +210,10 @@ export function decodePostgresCollectionParameters(
 				codec: decodedCodec,
 			});
 		}
-		if (source.kind === "patchPresent") {
+		if (
+			source.kind === "patchPresent" ||
+			source.kind === "trustedValuePresent"
+		) {
 			exact(
 				source,
 				["position", "postgresType", "kind", "path", "codec"],
@@ -220,7 +224,7 @@ export function decodePostgresCollectionParameters(
 			return Object.freeze({
 				position,
 				postgresType: "boolean" as const,
-				kind: "patchPresent" as const,
+				kind: source.kind,
 				path: path(source.path, `${label} parameter ${index} path`),
 				codec: "boolean" as const,
 			});
