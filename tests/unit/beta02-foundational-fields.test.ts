@@ -123,6 +123,8 @@ export const measurements = defineCollection({
 						codec: field.type,
 						nullable: field.nullable,
 						hasDefault: field.default !== null,
+						immutable: false,
+						server: false,
 					}),
 				),
 			);

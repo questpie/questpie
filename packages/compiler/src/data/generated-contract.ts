@@ -91,6 +91,19 @@ function insertOptional(node: DataTypeNode): boolean {
 	return [...node.children.values()].every(insertOptional);
 }
 
+function included(
+	node: DataTypeNode,
+	mode: "fields" | "insert" | "row" | "update",
+): boolean {
+	if (node.field) {
+		if (mode === "insert") return node.field.server !== true;
+		if (mode === "update")
+			return node.field.server !== true && node.field.immutable !== true;
+		return true;
+	}
+	return [...node.children.values()].some((child) => included(child, mode));
+}
+
 function renderDataTree(
 	node: DataTypeNode,
 	mode: "fields" | "insert" | "row" | "update",
@@ -98,10 +111,11 @@ function renderDataTree(
 	if (node.field) {
 		const value = dataCodecType(node.field.codec);
 		if (mode === "fields")
-			return `DataFieldDescriptor<${JSON.stringify(node.field.identity)}, ${literalType(node.field.codec)}, ${value}, ${String(node.field.nullable === true)}, ${String(node.field.hasDefault === true)}>`;
+			return `DataFieldDescriptor<${JSON.stringify(node.field.identity)}, ${literalType(node.field.codec)}, ${value}, ${String(node.field.nullable === true)}, ${String(node.field.hasDefault === true)}, ${String(node.field.immutable === true)}, ${String(node.field.server === true)}>`;
 		return node.field.nullable === true ? `${value} | null` : value;
 	}
 	return `Readonly<{ ${[...node.children.entries()]
+		.filter(([, child]) => included(child, mode))
 		.sort(([left], [right]) => compareAscii(left, right))
 		.map(([key, child]) => {
 			const optional =

@@ -6,11 +6,15 @@ export interface DataFieldDescriptor<
 	Value,
 	Nullable extends boolean,
 	HasDefault extends boolean,
+	Immutable extends boolean = false,
+	Server extends boolean = false,
 > {
 	readonly identity: Identity;
 	readonly codec: FieldCodec;
 	readonly nullable: Nullable;
 	readonly hasDefault: HasDefault;
+	readonly immutable: Immutable;
+	readonly server: Server;
 	readonly value?: Value;
 }
 

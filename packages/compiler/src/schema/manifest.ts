@@ -506,6 +506,20 @@ export function projectManifest(
 		collections: schemaCollections,
 	};
 	const dataRelations = projectDataRelations(collections, schemaCollections);
+	const fieldProvenance = new Map(
+		collections.flatMap((resource) =>
+			resolvedFields(resource).map(
+				({ path, contract }) =>
+					[
+						fieldSemanticIdentity(resource.identity, path),
+						{
+							immutable: contract.immutable === true,
+							server: contract.server === true,
+						},
+					] as const,
+			),
+		),
+	);
 	const data = {
 		format: "questpie.data-contract-projection",
 		version: 1,
@@ -520,13 +534,21 @@ export function projectManifest(
 					identity: primary?.identity,
 					fields: primary?.fields,
 				},
-				fields: collection.fields.map((field) => ({
-					identity: field.identity,
-					path: field.path,
-					codec: field.type,
-					nullable: field.nullable,
-					hasDefault: field.default !== null,
-				})),
+				fields: collection.fields.map((field) => {
+					const provenance = fieldProvenance.get(field.identity);
+					if (!provenance)
+						throw new TypeError(
+							`missing Data Field provenance for ${field.identity}`,
+						);
+					return {
+						identity: field.identity,
+						path: field.path,
+						codec: field.type,
+						nullable: field.nullable,
+						hasDefault: field.default !== null,
+						...provenance,
+					};
+				}),
 				relations: dataRelations.get(collection.identity) ?? [],
 			};
 		}),
