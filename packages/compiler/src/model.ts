@@ -194,7 +194,39 @@ export function createPackageInventory(
 
 function codecContract(value: unknown, optionalAllowed = false): unknown {
 	const codec = record(value, "codec");
+	const invalid = (message: string): never => {
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			message,
+		);
+	};
+	const exactCodecKeys = (allowed: readonly string[]): void => {
+		const unexpected = Object.keys(codec).filter(
+			(key) => !allowed.includes(key),
+		);
+		if (unexpected.length > 0)
+			invalid(
+				`codec has unsupported member ${unexpected.sort(compareAscii)[0]}`,
+			);
+	};
+	const safeInteger = (
+		raw: unknown,
+		name: string,
+		minimum: number,
+		maximum = Number.MAX_SAFE_INTEGER,
+	): number => {
+		if (
+			typeof raw !== "number" ||
+			!Number.isSafeInteger(raw) ||
+			raw < minimum ||
+			raw > maximum
+		)
+			invalid(`codec.${name} is invalid`);
+		return raw as number;
+	};
 	if (codec.kind === "object") {
+		exactCodecKeys(["kind", "properties"]);
 		return {
 			kind: "object",
 			properties: Object.fromEntries(
@@ -205,30 +237,127 @@ function codecContract(value: unknown, optionalAllowed = false): unknown {
 		};
 	}
 	if (codec.kind === "array") {
+		exactCodecKeys(["kind", "items", "maximum"]);
+		const maximum =
+			codec.maximum === undefined
+				? undefined
+				: safeInteger(codec.maximum, "maximum", 1);
 		return {
 			kind: "array",
 			items: codecContract(codec.items),
+			...(maximum === undefined ? {} : { maximum }),
 		};
 	}
-	if (codec.kind === "nullable")
+	if (codec.kind === "nullable") {
+		exactCodecKeys(["kind", "codec"]);
 		return { kind: "nullable", codec: codecContract(codec.codec) };
+	}
 	if (codec.kind === "optional") {
+		exactCodecKeys(["kind", "presence", "codec"]);
+		if (codec.presence !== undefined && codec.presence !== "optional")
+			invalid("codec.optional presence is invalid");
 		if (!optionalAllowed)
-			throw new CompilerDiagnosticError(
-				"QP-COMPOSE-013",
-				"structuralTypeError",
-				"codec.optional is valid only for an object property",
-			);
+			invalid("codec.optional is valid only for an object property");
 		return { kind: "optional", codec: codecContract(codec.codec) };
 	}
 	const kind = string(codec.kind, "codec kind");
-	if (!["boolean", "integer", "text", "timestamp", "uuid"].includes(kind))
-		throw new CompilerDiagnosticError(
-			"QP-COMPOSE-013",
-			"structuralTypeError",
-			`unsupported codec kind ${kind}`,
-		);
-	return { kind };
+	if (["boolean", "cursor", "date", "json", "uuid"].includes(kind)) {
+		exactCodecKeys(["kind"]);
+		return { kind };
+	}
+	if (kind === "text") {
+		exactCodecKeys(["kind", "minLength", "maxLength"]);
+		const minLength =
+			codec.minLength === undefined
+				? undefined
+				: safeInteger(codec.minLength, "minLength", 0);
+		const maxLength =
+			codec.maxLength === undefined
+				? undefined
+				: safeInteger(codec.maxLength, "maxLength", 0);
+		if (
+			minLength !== undefined &&
+			maxLength !== undefined &&
+			minLength > maxLength
+		)
+			invalid("codec minLength must not exceed maxLength");
+		return {
+			kind,
+			...(minLength === undefined ? {} : { minLength }),
+			...(maxLength === undefined ? {} : { maxLength }),
+		};
+	}
+	if (kind === "integer") {
+		exactCodecKeys(["kind", "minimum", "maximum"]);
+		const minimum =
+			codec.minimum === undefined
+				? undefined
+				: safeInteger(codec.minimum, "minimum", Number.MIN_SAFE_INTEGER);
+		const maximum =
+			codec.maximum === undefined
+				? undefined
+				: safeInteger(codec.maximum, "maximum", Number.MIN_SAFE_INTEGER);
+		if (minimum !== undefined && maximum !== undefined && minimum > maximum)
+			invalid("codec minimum must not exceed maximum");
+		return {
+			kind,
+			...(minimum === undefined ? {} : { minimum }),
+			...(maximum === undefined ? {} : { maximum }),
+		};
+	}
+	if (kind === "bigint") {
+		exactCodecKeys(["kind", "minimum", "maximum"]);
+		const bound = (raw: unknown, name: string): string | undefined => {
+			if (raw === undefined) return undefined;
+			if (
+				typeof raw !== "string" ||
+				!/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/u.test(raw)
+			)
+				invalid(`codec.${name} must be canonical bigint text`);
+			const canonical = raw as string;
+			const parsed = BigInt(canonical);
+			if (
+				parsed < -9_223_372_036_854_775_808n ||
+				parsed > 9_223_372_036_854_775_807n
+			)
+				invalid(`codec.${name} is outside PostgreSQL bigint`);
+			return canonical;
+		};
+		const minimum = bound(codec.minimum, "minimum");
+		const maximum = bound(codec.maximum, "maximum");
+		if (
+			minimum !== undefined &&
+			maximum !== undefined &&
+			BigInt(minimum) > BigInt(maximum)
+		)
+			invalid("codec minimum must not exceed maximum");
+		return {
+			kind,
+			...(minimum === undefined ? {} : { minimum }),
+			...(maximum === undefined ? {} : { maximum }),
+		};
+	}
+	if (kind === "numeric") {
+		exactCodecKeys(["kind", "precision", "scale"]);
+		const precision = safeInteger(codec.precision, "precision", 1, 1_000);
+		const scale = safeInteger(codec.scale, "scale", 0, precision);
+		return { kind, precision, scale };
+	}
+	if (kind === "timestamp") {
+		exactCodecKeys(["kind", "withTimezone"]);
+		if (
+			codec.withTimezone !== undefined &&
+			typeof codec.withTimezone !== "boolean"
+		)
+			invalid("codec.withTimezone must be a boolean");
+		return {
+			kind,
+			...(codec.withTimezone === undefined
+				? {}
+				: { withTimezone: codec.withTimezone }),
+		};
+	}
+	invalid(`unsupported codec kind ${kind}`);
 }
 
 function operationContract(

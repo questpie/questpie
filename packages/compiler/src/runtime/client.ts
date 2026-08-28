@@ -23,6 +23,14 @@ export function renderCodecType(
 	if (descriptor.kind === "array")
 		return `ReadonlyArray<${renderCodecType(descriptor.items, timestampType)}>`;
 	if (descriptor.kind === "uuid" || descriptor.kind === "text") return "string";
+	if (
+		descriptor.kind === "bigint" ||
+		descriptor.kind === "numeric" ||
+		descriptor.kind === "date"
+	)
+		return "string";
+	if (descriptor.kind === "json")
+		return 'Readonly<{ readonly kind: "json"; readonly value: unknown }>';
 	if (descriptor.kind === "boolean") return "boolean";
 	if (descriptor.kind === "integer") return "number";
 	if (descriptor.kind === "timestamp") return timestampType;
@@ -237,6 +245,45 @@ function isCallIdentity(value: unknown): value is string {
 function isTransactionIdentity(value: unknown): value is string {
 	return typeof value === "string" && /^[1-9][0-9]{0,19}$/.test(value) && BigInt(value) <= 18446744073709551615n;
 }
+function hasLoneSurrogate(value: string): boolean {
+	for (let index = 0; index < value.length; index += 1) {
+		const unit = value.charCodeAt(index);
+		if (unit >= 0xd800 && unit <= 0xdbff) {
+			const next = value.charCodeAt(index + 1);
+			if (!(next >= 0xdc00 && next <= 0xdfff)) return true;
+			index += 1;
+		} else if (unit >= 0xdc00 && unit <= 0xdfff) return true;
+	}
+	return false;
+}
+function decodeJson(value: unknown, active = new Set<object>()): unknown {
+	if (value === null || typeof value === "boolean") return value;
+	if (typeof value === "number") {
+		if (!Number.isFinite(value) || Object.is(value, -0)) return protocolFailure();
+		return value;
+	}
+	if (typeof value === "string") {
+		if (hasLoneSurrogate(value) || value.normalize("NFC") !== value) return protocolFailure();
+		return value;
+	}
+	if (!value || typeof value !== "object" || active.has(value)) return protocolFailure();
+	active.add(value);
+	try {
+		if (Array.isArray(value)) {
+			for (let index = 0; index < value.length; index += 1) if (!(index in value)) return protocolFailure();
+			return Object.freeze(value.map((item) => decodeJson(item, active)));
+		}
+		const prototype = Object.getPrototypeOf(value);
+		if (prototype !== Object.prototype && prototype !== null) return protocolFailure();
+		const source = value as WireRecord;
+		const output: Record<string, unknown> = Object.create(null);
+		for (const key of Object.keys(source).sort()) {
+			if (hasLoneSurrogate(key) || key.normalize("NFC") !== key) return protocolFailure();
+			output[key] = decodeJson(source[key], active);
+		}
+		return Object.freeze(output);
+	} finally { active.delete(value); }
+}
 function decode(codecValue: unknown, value: unknown): unknown {
 	const descriptor = wireRecord(codecValue);
 	if (descriptor.kind === "nullable")
@@ -244,6 +291,7 @@ function decode(codecValue: unknown, value: unknown): unknown {
 	if (descriptor.kind === "optional") return decode(descriptor.codec, value);
 	if (descriptor.kind === "array") {
 		if (!Array.isArray(value)) return protocolFailure();
+		if (descriptor.maximum !== undefined && (!Number.isSafeInteger(descriptor.maximum) || Number(descriptor.maximum) < 1 || value.length > Number(descriptor.maximum))) return protocolFailure();
 		return value.map((item) => decode(descriptor.items, item));
 	}
 	if (descriptor.kind === "boolean") {
@@ -251,18 +299,54 @@ function decode(codecValue: unknown, value: unknown): unknown {
 		return value;
 	}
 	if (descriptor.kind === "integer") {
-		if (typeof value !== "number" || !Number.isSafeInteger(value)) return protocolFailure();
+		if (typeof value !== "number" || !Number.isSafeInteger(value) || Object.is(value, -0)) return protocolFailure();
+		if (descriptor.minimum !== undefined && value < Number(descriptor.minimum)) return protocolFailure();
+		if (descriptor.maximum !== undefined && value > Number(descriptor.maximum)) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "bigint") {
+		if (typeof value !== "string" || !/^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/.test(value)) return protocolFailure();
+		const parsed = BigInt(value);
+		if (parsed < -9223372036854775808n || parsed > 9223372036854775807n) return protocolFailure();
+		if (descriptor.minimum !== undefined && parsed < BigInt(String(descriptor.minimum))) return protocolFailure();
+		if (descriptor.maximum !== undefined && parsed > BigInt(String(descriptor.maximum))) return protocolFailure();
+		return value;
+	}
+	if (descriptor.kind === "numeric") {
+		const precision = Number(descriptor.precision);
+		const scale = Number(descriptor.scale);
+		if (!Number.isSafeInteger(precision) || precision < 1 || precision > 1000 || !Number.isSafeInteger(scale) || scale < 0 || scale > precision) return protocolFailure();
+		const pattern = scale === 0 ? /^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$/ : new RegExp("^(?:0|-[1-9][0-9]*|[1-9][0-9]*)\\\\.[0-9]{" + scale + "}$");
+		if (typeof value !== "string" || !pattern.test(value) || value.replace(/[-.]/g, "").length > precision) return protocolFailure();
 		return value;
 	}
 	if (descriptor.kind === "text") {
-		if (typeof value !== "string" || value !== value.normalize("NFC")) return protocolFailure();
+		if (typeof value !== "string" || hasLoneSurrogate(value) || value !== value.normalize("NFC")) return protocolFailure();
+		const length = [...value].length;
+		if (descriptor.minLength !== undefined && length < Number(descriptor.minLength)) return protocolFailure();
+		if (descriptor.maxLength !== undefined && length > Number(descriptor.maxLength)) return protocolFailure();
 		return value;
 	}
 	if (descriptor.kind === "timestamp") {
-		if (typeof value !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$/.test(value)) return protocolFailure();
-		try { if (new Date(value).toISOString() !== value) return protocolFailure(); }
+		const withTimezone = descriptor.withTimezone !== false;
+		const pattern = withTimezone ? /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$/ : /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$/;
+		if (typeof value !== "string" || !pattern.test(value)) return protocolFailure();
+		const comparable = withTimezone ? value : value + "Z";
+		try { if (new Date(comparable).toISOString() !== comparable) return protocolFailure(); }
 		catch { return protocolFailure(); }
-		return new Date(value);
+		return new Date(comparable);
+	}
+	if (descriptor.kind === "date") {
+		if (typeof value !== "string" || !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(value)) return protocolFailure();
+		try { if (new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) !== value) return protocolFailure(); }
+		catch { return protocolFailure(); }
+		return value;
+	}
+	if (descriptor.kind === "json") {
+		const tagged = wireRecord(value);
+		exactKeys(tagged, ["kind", "value"]);
+		if (tagged.kind !== "json") return protocolFailure();
+		return Object.freeze({ kind: "json", value: decodeJson(tagged.value) });
 	}
 	if (descriptor.kind === "uuid") {
 		if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value)) return protocolFailure();

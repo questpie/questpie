@@ -171,6 +171,73 @@ test("projects and validates a canonical multi-Action inventory without changing
 	).toThrow(/duplicated/);
 });
 
+test("Wire v3 preserves lossless codec options and rejects independently re-signed tampering", () => {
+	const advancedAction = {
+		...actionOperation,
+		input: {
+			kind: "object",
+			properties: {
+				amount: { kind: "numeric", precision: 8, scale: 2 },
+				at: { kind: "timestamp", withTimezone: false },
+				count: { kind: "bigint", minimum: "0", maximum: "99" },
+				day: { kind: "date" },
+				label: { kind: "text", minLength: 1, maxLength: 32 },
+				metadata: { kind: "json" },
+				tags: { kind: "array", maximum: 4, items: { kind: "text" } },
+			},
+		},
+	};
+	const wire = projectOperationWireV3({
+		retainedWireV2,
+		actionOperation: advancedAction,
+	});
+	expect(
+		(wire.operations as readonly { identity: string; input: unknown }[]).find(
+			({ identity }) => identity === actionOperation.identity,
+		)?.input,
+	).toEqual(advancedAction.input);
+	expect(
+		validateOperationWireV3({
+			wire,
+			retainedWireV2,
+			actionOperation: advancedAction,
+		}).digest,
+	).toBe(wire.digest);
+
+	const operations = (
+		wire.operations as readonly Readonly<Record<string, unknown>>[]
+	).map((operation) =>
+		operation.identity === actionOperation.identity
+			? {
+					...operation,
+					input: {
+						...advancedAction.input,
+						properties: {
+							...advancedAction.input.properties,
+							label: { kind: "text", minLength: 1, maxLength: 31 },
+						},
+					},
+				}
+			: operation,
+	);
+	expect(() =>
+		validateOperationWireV3({
+			wire: signed({ ...wire, operations }),
+			retainedWireV2,
+			actionOperation: advancedAction,
+		}),
+	).toThrow(/projection/);
+	expect(() =>
+		projectOperationWireV3({
+			retainedWireV2,
+			actionOperation: {
+				...advancedAction,
+				input: { kind: "numeric", precision: 2, scale: 3 },
+			},
+		}),
+	).toThrow(/codec/);
+});
+
 test("private projector rejects invalid retained pairs, grammar, and ordering", () => {
 	for (const retained of [
 		{ ...retainedWireV2, digest: "0".repeat(64) },
