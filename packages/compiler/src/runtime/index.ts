@@ -82,6 +82,51 @@ function mutationAdmission(
 	return admission as "authenticated" | "public" | "system";
 }
 
+function mutationIssueMappings(
+	resource: NormalizedResource,
+	resources: readonly NormalizedResource[],
+) {
+	const authoredMappings = Object.entries(
+		(resource.contract.issueMappings ?? {}) as Readonly<
+			Record<string, Readonly<Record<string, string>>>
+		>,
+	);
+	if (authoredMappings.length === 0) return undefined;
+	return Object.fromEntries(
+		authoredMappings
+			.sort(([left], [right]) => compareAscii(left, right))
+			.map(([collectionName, issues]) => {
+				const collection = resources.find(
+					(candidate) =>
+						candidate.kind === "collection" &&
+						candidate.name === collectionName,
+				);
+				if (!collection)
+					throw new TypeError(
+						`Mutation issue mapping names unknown Collection ${collectionName}`,
+					);
+				const identities = (collection.contract.issues ?? {}) as Readonly<
+					Record<string, string>
+				>;
+				return [
+					collection.identity,
+					Object.fromEntries(
+						Object.entries(issues)
+							.sort(([left], [right]) => compareAscii(left, right))
+							.map(([issueName, error]) => {
+								const issue = identities[issueName];
+								if (!issue)
+									throw new TypeError(
+										`Mutation issue mapping names unknown Issue ${collectionName}.${issueName}`,
+									);
+								return [issue, error];
+							}),
+					),
+				];
+			}),
+	);
+}
+
 function operationContracts(
 	resources: readonly NormalizedResource[],
 	exposure: "direct" | "network",
@@ -95,58 +140,29 @@ function operationContracts(
 					(exposure === "direct" && resource.kind === "action")) &&
 				(exposure === "direct" || resource.contract.exposure === "network"),
 		)
-		.map((resource) => ({
-			identity: resource.identity,
-			input: resource.contract.input,
-			output: resource.contract.output,
-			declaredErrors: resource.contract.declaredErrors ?? {},
-			...(includeAdmission && resource.kind === "mutation"
-				? {
-						admission: mutationAdmission(resource),
-						issueMappings: Object.fromEntries(
-							Object.entries(
-								(resource.contract.issueMappings ?? {}) as Readonly<
-									Record<string, Readonly<Record<string, string>>>
-								>,
-							)
-								.sort(([left], [right]) => compareAscii(left, right))
-								.map(([collectionName, issues]) => {
-									const collection = resources.find(
-										(candidate) =>
-											candidate.kind === "collection" &&
-											candidate.name === collectionName,
-									);
-									if (!collection)
-										throw new TypeError(
-											`Mutation issue mapping names unknown Collection ${collectionName}`,
-										);
-									const identities = (collection.contract.issues ??
-										{}) as Readonly<Record<string, string>>;
-									return [
-										collection.identity,
-										Object.fromEntries(
-											Object.entries(issues)
-												.sort(([left], [right]) => compareAscii(left, right))
-												.map(([issueName, error]) => {
-													const issue = identities[issueName];
-													if (!issue)
-														throw new TypeError(
-															`Mutation issue mapping names unknown Issue ${collectionName}.${issueName}`,
-														);
-													return [issue, error];
-												}),
-										),
-									];
-								}),
-						),
-					}
-				: includeAdmission && resource.kind === "action"
+		.map((resource) => {
+			const issueMappings =
+				includeAdmission && resource.kind === "mutation"
+					? mutationIssueMappings(resource, resources)
+					: undefined;
+			return {
+				identity: resource.identity,
+				input: resource.contract.input,
+				output: resource.contract.output,
+				declaredErrors: resource.contract.declaredErrors ?? {},
+				...(includeAdmission && resource.kind === "mutation"
 					? {
-							admission: resource.contract.admission,
-							limits: resource.contract.limits,
+							admission: mutationAdmission(resource),
+							...(issueMappings ? { issueMappings } : {}),
 						}
-					: {}),
-		}))
+					: includeAdmission && resource.kind === "action"
+						? {
+								admission: resource.contract.admission,
+								limits: resource.contract.limits,
+							}
+						: {}),
+			};
+		})
 		.sort((left, right) => compareAscii(left.identity, right.identity));
 }
 

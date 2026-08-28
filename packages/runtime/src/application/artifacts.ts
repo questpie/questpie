@@ -147,10 +147,6 @@ export type RuntimeArtifactsV1 = Readonly<{
 	wireContract: OperationWireContract;
 }>;
 
-/**
- * Every directly invocable Operation carries its codecs here, including the
- * server-only ones the network wire never exposes.
- */
 function decodeOperationContracts(value: unknown): OperationContractsV1 {
 	const artifact = record(value, "operation contracts");
 	exact(artifact, ["format", "version", "operations"], "operation contracts");
@@ -192,7 +188,10 @@ function decodeOperationWireContract(
 		direct &&
 		(identity.startsWith("mutation:") || identity.startsWith("action:"));
 	const carriesLimits = direct && identity.startsWith("action:");
-	const carriesIssueMappings = direct && identity.startsWith("mutation:");
+	const carriesIssueMappings =
+		direct &&
+		identity.startsWith("mutation:") &&
+		Object.hasOwn(operation, "issueMappings");
 	exact(
 		operation,
 		[
