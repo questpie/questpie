@@ -1,6 +1,6 @@
 {
 	"name": "@questpie/testing",
-	"version": "3.28.7",
+	"version": "3.28.8",
 	"description": "Typed application and production-scenario testing tools for QUESTPIE",
 	"repository": {
 		"type": "git",
