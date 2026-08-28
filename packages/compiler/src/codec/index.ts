@@ -1,5 +1,11 @@
 import { compareAscii } from "../canonical";
 
+export {
+	projectCollectionFieldCodec,
+	type CollectionFieldCodecProjection,
+	type CollectionFieldCodecSource,
+} from "./collection-field";
+
 type CodecContract = Readonly<Record<string, unknown>>;
 
 export type CodecContractProblem = Readonly<{

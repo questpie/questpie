@@ -1,10 +1,14 @@
 import { compareAscii } from "../canonical";
+import {
+	projectCollectionFieldCodec,
+	type CollectionFieldCodecProjection,
+} from "../codec";
 import { normalizeBoundPolicy } from "../relational";
 import type { NormalizedResource } from "../types";
 import type { CollectionOperationProgramsV1 } from "./operation-set-contract";
 
 type RecordValue = Readonly<Record<string, unknown>>;
-type CodecValue = Readonly<Record<string, unknown>>;
+type CodecValue = CollectionFieldCodecProjection;
 type FieldFact = Readonly<{
 	path: readonly string[];
 	codec: CodecValue;
@@ -15,68 +19,6 @@ function record(value: unknown, label: string): RecordValue {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError(`${label} must be an object`);
 	return value as RecordValue;
-}
-
-function codec(value: unknown): CodecValue {
-	const source = record(value, "Collection Field codec");
-	const kind = String(source.kind);
-	if (["boolean", "cursor", "date", "json", "uuid"].includes(kind))
-		return Object.freeze({ kind });
-	if (kind === "text")
-		return Object.freeze({
-			kind,
-			...(source.minLength === undefined || source.minLength === null
-				? {}
-				: { minLength: source.minLength }),
-			...(source.maxLength === undefined || source.maxLength === null
-				? {}
-				: { maxLength: source.maxLength }),
-		});
-	if (kind === "integer" || kind === "bigint")
-		return Object.freeze({
-			kind,
-			...(source.minimum === undefined || source.minimum === null
-				? {}
-				: { minimum: source.minimum }),
-			...(source.maximum === undefined || source.maximum === null
-				? {}
-				: { maximum: source.maximum }),
-		});
-	if (kind === "numeric")
-		return Object.freeze({
-			kind,
-			precision: source.precision,
-			scale: source.scale,
-		});
-	if (kind === "timestamp")
-		return Object.freeze({ kind, withTimezone: source.withTimezone === true });
-	if (kind === "nullable" || kind === "optional")
-		return Object.freeze({ kind, codec: codec(source.codec) });
-	if (kind === "array")
-		return Object.freeze({
-			kind,
-			items: codec(source.items),
-			...(source.maximum === undefined && source.maximumItems === undefined
-				? {}
-				: { maximum: source.maximum ?? source.maximumItems }),
-		});
-	if (kind === "object") {
-		const raw = source.properties;
-		const properties = Array.isArray(raw)
-			? Object.fromEntries(
-					raw.map((candidate) => {
-						const property = record(candidate, "embedded object property");
-						return [String(property.key), codec(property.codec)];
-					}),
-				)
-			: Object.fromEntries(
-					Object.entries(record(raw, "object properties")).map(
-						([key, child]) => [key, codec(child)],
-					),
-				);
-		return Object.freeze({ kind, properties: Object.freeze(properties) });
-	}
-	throw new TypeError(`unsupported Collection Operation codec ${kind}`);
 }
 
 function fieldFacts(data: unknown, target: string): readonly FieldFact[] {
@@ -94,7 +36,7 @@ function fieldFacts(data: unknown, target: string): readonly FieldFact[] {
 			throw new TypeError(`${target} Field path is invalid`);
 		return Object.freeze({
 			path: field.path as readonly string[],
-			codec: codec(field.codec),
+			codec: projectCollectionFieldCodec(field.codec, "dataContract"),
 			nullable: field.nullable === true,
 		});
 	});
