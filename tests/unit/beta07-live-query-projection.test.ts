@@ -406,7 +406,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			contractDigest:
 				"0c372ac93ba55280f20ec7646d408fdd0edf5c4f5717b92201432693da2ad94f",
 			possibleObservationSlotsDigest:
-				"6e3eb85ad01d30b2f10d12b7ba4f2f3e82800b6e61949f9b7f17eeb65d75c219",
+				"92e7dda3cba55ad8f2d821bdf9c18baeb91e73c776551325fa406ff5fba49408",
 		});
 		expect(
 			Object.fromEntries(
@@ -427,7 +427,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			),
 		).toEqual({
 			"query-watchability.json":
-				"5e4868f7a744f7692901f49cda961dae42543d11848436e1fba525e83de243f5",
+				"ec9952f1fd32559456fd8a5c2265a383d8a3138a6e982f4e36603ca2b8ba593e",
 			"change-ledger.json":
 				"e6f31477481424bdf9ddf9e9ae1816fe1ef816843193bd0a37dba97eaa840373",
 			"live-query-dependency-algebra.json":

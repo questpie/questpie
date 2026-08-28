@@ -75,7 +75,7 @@ describe("BETA-07 compiler to Runtime Live Query contract", () => {
 		expect(message?.structuralQueries).toEqual(
 			new Map([
 				[
-					"f8a8863315d764beca14f8bf1fcb9fde233cc12e2325935213a027b91bbc596b",
+					"d6d901c38dd4e42de880724f84376416a712d2567013193fba3d47b0c23e8c81",
 					expect.objectContaining({
 						policy: "policy:messages.default",
 						collections: [
