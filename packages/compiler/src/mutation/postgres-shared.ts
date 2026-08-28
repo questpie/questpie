@@ -226,6 +226,18 @@ export function inputParameter(
 	});
 }
 
+export function candidateValueParameter(
+	parameters: Parameters,
+	field: PostgresMutationFieldV1,
+): string {
+	return parameters.add({
+		kind: "candidateValue",
+		path: field.path,
+		codec: field.codec,
+		postgresType: postgresType(field.codec),
+	});
+}
+
 export function patchParameters(
 	parameters: Parameters,
 	field: PostgresMutationFieldV1,

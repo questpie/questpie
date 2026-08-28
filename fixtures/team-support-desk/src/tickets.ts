@@ -1,4 +1,11 @@
-import { constraint, defineCollection, field, index, relation } from "questpie";
+import {
+	collection,
+	constraint,
+	defineCollection,
+	field,
+	index,
+	relation,
+} from "questpie";
 
 import { memberships } from "./memberships";
 import { organizations } from "./organizations";
@@ -68,6 +75,22 @@ export const tickets = defineCollection({
 			withTimezone: true,
 			server: true,
 		}),
+	},
+	issues: {
+		invalidReference: collection.issue(),
+	},
+	lifecycle: {
+		normalize: ({ input }) =>
+			input.reference?.includes("")
+				? { ...input, reference: input.reference.trim() }
+				: input,
+		validate: ({ candidate, issues }) => {
+			if (
+				!candidate.reference.startsWith("SUP-") &&
+				!candidate.reference.startsWith("WEB-")
+			)
+				throw issues.invalidReference();
+		},
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),

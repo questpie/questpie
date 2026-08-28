@@ -111,8 +111,13 @@ export type PreparedOperation<View> = Readonly<{
 	inputCodec: RuntimeCodec;
 	output: RuntimeCodec;
 	declaredErrors: readonly RuntimeDeclaredErrorContract[];
+	issueMappings?: RuntimeIssueMappings;
 	input: unknown;
 }>;
+
+export type RuntimeIssueMappings = Readonly<
+	Record<string, Readonly<Record<string, string>>>
+>;
 
 export type RuntimeDeclaredErrorContract = Readonly<{
 	key: string;
@@ -132,6 +137,7 @@ export type RuntimeOperationContract = Readonly<{
 	input: RuntimeCodec;
 	output: RuntimeCodec;
 	declaredErrors: readonly RuntimeDeclaredErrorContract[];
+	issueMappings?: RuntimeIssueMappings;
 }>;
 
 export function encodeDeclaredOperationError<View>(
@@ -208,6 +214,9 @@ export function createOperationEngine<View>(
 				inputCodec: contract.input,
 				output: contract.output,
 				declaredErrors: contract.declaredErrors,
+				...(contract.issueMappings
+					? { issueMappings: contract.issueMappings }
+					: {}),
 				input: decode(contract.input, input),
 			});
 		},

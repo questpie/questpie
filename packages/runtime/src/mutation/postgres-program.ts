@@ -7,6 +7,7 @@ import { decodePostgresStatement as statement } from "./postgres-program-codec";
 import {
 	array,
 	candidateFields,
+	candidateResults,
 	evidence,
 	exact,
 	fail,
@@ -55,6 +56,7 @@ function createPlan(
 			"serverValueProgram",
 			"candidate",
 			"fieldAuthority",
+			...(operation.lifecycleProgram ? ["candidateValidation"] : []),
 			"candidatePolicy",
 			"outputAuthority",
 			"write",
@@ -210,6 +212,49 @@ function createPlan(
 		)
 	)
 		fail(`${operation.identity} Field checks do not match caller input`);
+	const candidateValidation = operation.lifecycleProgram
+		? (() => {
+				const validation = record(
+					plan.candidateValidation,
+					`${operation.identity} candidateValidation`,
+				);
+				exact(
+					validation,
+					["freshAfterRowLockWait", "sql", "parameters", "result"],
+					`${operation.identity} candidateValidation`,
+				);
+				if (validation.freshAfterRowLockWait !== true)
+					fail(`${operation.identity} candidate validation is not fresh`);
+				const sql = statement(
+					validation.sql,
+					`${operation.identity} candidateValidation SQL`,
+				);
+				const parameters = decodePostgresCollectionParameters(
+					validation.parameters,
+					sql,
+					`${operation.identity} candidateValidation`,
+				);
+				const result = candidateResults(
+					validation.result,
+					sql,
+					fields,
+					`${operation.identity} candidateValidation`,
+				);
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql,
+					parameters,
+					result,
+					statement: bindPostgresCollectionStatement({
+						identity: operation.identity,
+						leaf: "candidate-validation",
+						text: sql,
+						parameterCount: parameters.length,
+						result,
+					}),
+				});
+			})()
+		: undefined;
 	const candidatePolicy = record(
 		plan.candidatePolicy,
 		`${operation.identity} candidatePolicy`,
@@ -276,6 +321,7 @@ function createPlan(
 			suppliedPathsOnly: true,
 			checks: Object.freeze(checks),
 		}),
+		...(candidateValidation ? { candidateValidation } : {}),
 		candidatePolicy: Object.freeze({
 			freshAfterRowLockWait: true,
 			mutableEvidenceCollections: evidence(

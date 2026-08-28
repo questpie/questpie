@@ -74,6 +74,7 @@ function applicationEntry(
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
+		collectionLifecycleArtifacts: boolean;
 		collectionOperationAdapterArtifacts: boolean;
 		reactionArtifact: boolean;
 		jobArtifact: boolean;
@@ -418,7 +419,7 @@ async function loadRuntimeArtifacts() {
 	};
 }
 
-function linkMutationArtifacts(runtimeModule, artifactFiles) {
+function linkMutationArtifacts(runtimeModule, artifactFiles, compilerRuntimeBuildDigest) {
 	const { linkCollectionMutationPrograms, linkCollectionOperationAdapters, linkJobProjection, linkPostgresCollectionOperationPlans, linkReactionProjection } = runtimeModule;
 	const raw = ${
 		input.collectionOperationArtifacts
@@ -426,6 +427,7 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 		programs: JSON.parse(artifactFiles["collection-operation-programs.json"]),
 		normalizers: JSON.parse(artifactFiles["field-normalizer-programs.json"]),
 		serverValues: JSON.parse(artifactFiles["server-value-programs.json"]),
+		lifecycle: ${input.collectionLifecycleArtifacts ? 'JSON.parse(artifactFiles["collection-lifecycle-programs.json"])' : "null"},
 		adapters: ${input.collectionOperationAdapterArtifacts ? 'JSON.parse(artifactFiles["collection-operation-adapters.json"])' : emptyCollectionArtifacts + ".adapters"},
 		plans: JSON.parse(artifactFiles["postgres-collection-operation-plans.json"]),
 		policies: JSON.parse(artifactFiles["policy-projection.json"]).policies.map(({ program }) => ({
@@ -439,6 +441,8 @@ function linkMutationArtifacts(runtimeModule, artifactFiles) {
 		collectionOperations: raw.programs,
 		fieldNormalizers: ${emptyFieldNormalizerPrograms},
 		serverValues: ${emptyServerValuePrograms},
+		lifecyclePrograms: raw.lifecycle,
+		compilerRuntimeBuildDigest,
 		policies: raw.policies,
 	});
 	return Object.freeze({
@@ -573,7 +577,7 @@ export async function createApplication(input) {
 					expectedDigest: expectedMutationTransactionStatementsDigest,
 				});
 				mutationArtifacts = Object.freeze({
-					...linkMutationArtifacts(runtimeModule, loaded.artifactFiles),
+					...linkMutationArtifacts(runtimeModule, loaded.artifactFiles, loaded.artifacts.runtimeBuild.compilerRuntimeBuildDigest),
 					transactionStatements: mutationTransactionStatements,
 				});
 				${generatedOperations.linkHandlers}
@@ -759,6 +763,7 @@ export async function renderApplicationBundle(
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
 		collectionOperationArtifacts: boolean;
+		collectionLifecycleArtifacts: boolean;
 		collectionOperationAdapterArtifacts: boolean;
 		reactionArtifact: boolean;
 		jobArtifact: boolean;

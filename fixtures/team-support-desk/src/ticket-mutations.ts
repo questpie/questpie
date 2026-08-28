@@ -25,6 +25,11 @@ const ticketUnavailable = operation.error({
 	status: 404,
 });
 
+const invalidTicket = operation.error({
+	code: "INVALID_TICKET",
+	status: 422,
+});
+
 const transitionRejected = operation.error({
 	code: "TICKET_TRANSITION_REJECTED",
 	status: 409,
@@ -76,7 +81,10 @@ export const createTicket = defineMutation({
 	}),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
-	errors: { ticketUnavailable },
+	errors: { invalidTicket, ticketUnavailable },
+	issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},
 	handler: async ({ input, ctx }) => {
 		const ticket = await ctx.data.tickets.create({
 			input: {

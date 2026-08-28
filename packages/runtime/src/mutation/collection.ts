@@ -15,6 +15,7 @@ import {
 	mutationValueAt as valueAt,
 	type MutationFieldPath,
 } from "./field-path";
+import * as lifecycleRuntime from "./lifecycle";
 import { normalizedCallerInput } from "./normalized-caller-input";
 import type {
 	LinkedPostgresCollectionOperationPlanV1,
@@ -33,6 +34,7 @@ type CollectionLeaf =
 	| LinkedPostgresGetOperationPlanV1["lock"]
 	| LinkedPostgresGetOperationPlanV1["read"]
 	| LinkedPostgresCreateOperationPlanV1["fieldAuthority"]["checks"][number]
+	| NonNullable<LinkedPostgresCreateOperationPlanV1["candidateValidation"]>
 	| LinkedPostgresCreateOperationPlanV1["write"]
 	| LinkedPostgresUpdateOperationPlanV1["lock"]
 	| LinkedPostgresUpdateOperationPlanV1["candidateValidation"]
@@ -197,6 +199,7 @@ function bind(
 		trustedValues?: Row;
 		key?: Row;
 		expected?: Row;
+		candidate?: Row;
 	}>,
 	facts: ExecutionFacts,
 	operationTime: Date,
@@ -227,11 +230,13 @@ function bind(
 		const source =
 			parameter.kind === "key"
 				? values.key
-				: parameter.kind === "expectedValue"
-					? values.expected
-					: parameter.kind === "trustedValue"
-						? values.trustedValues
-						: values.callerInput;
+				: parameter.kind === "candidateValue"
+					? values.candidate
+					: parameter.kind === "expectedValue"
+						? values.expected
+						: parameter.kind === "trustedValue"
+							? values.trustedValues
+							: values.callerInput;
 		if (
 			(parameter.kind === "trustedValue" ||
 				parameter.kind === "expectedValue") &&
@@ -464,10 +469,6 @@ function createCollectionMutationData(
 											plan.candidate.fields,
 										);
 									const authorityValues = { callerInput, trustedValues };
-									const candidateValues = {
-										callerInput: candidateInput,
-										trustedValues,
-									};
 									for (const check of plan.fieldAuthority.checks) {
 										if (
 											!callerPaths.some(
@@ -493,13 +494,68 @@ function createCollectionMutationData(
 												"Collection Field authority returned multiple rows",
 											);
 									}
+									const lifecycle = plan.operation.lifecycleProgram;
+									const normalized = lifecycle
+										? await lifecycleRuntime.normalizeCollectionLifecycleLanes(
+												lifecycle,
+												candidateInput,
+												trustedValues,
+											)
+										: { callerInput: candidateInput, trustedValues };
+									const normalizedCaller = normalized.callerInput;
+									const normalizedTrusted = normalized.trustedValues;
+									validateScalars(
+										normalizedCaller,
+										callerPaths,
+										plan.candidate.fields,
+									);
+									if (normalizedTrusted)
+										validateScalars(
+											normalizedTrusted,
+											trustedPaths,
+											plan.candidate.fields,
+										);
+									const candidateValues = {
+										callerInput: normalizedCaller,
+										trustedValues: normalizedTrusted,
+									};
+									let candidate: Row | undefined;
+									if (lifecycle) {
+										const validation = plan.candidateValidation;
+										if (!validation)
+											throw new TypeError("Lifecycle create is incomplete");
+										const candidates = await execute(
+											plan,
+											started,
+											validation,
+											bind(
+												validation.parameters,
+												candidateValues,
+												input.facts,
+												input.operationTime,
+												nullableByPath,
+											),
+										);
+										if (candidates.length !== 1)
+											throw new TypeError("Invalid lifecycle candidate count");
+										candidate = decodeRow(
+											candidates[0]!,
+											validation.result,
+											input.resultValuesDecoded,
+										);
+										await lifecycleRuntime.validateCollectionCreateCandidate(
+											lifecycle,
+											candidate,
+											input.operationTime,
+										);
+									}
 									const rows = await execute(
 										plan,
 										started,
 										plan.write,
 										bind(
 											plan.write.parameters,
-											candidateValues,
+											{ ...candidateValues, candidate },
 											input.facts,
 											input.operationTime,
 											nullableByPath,

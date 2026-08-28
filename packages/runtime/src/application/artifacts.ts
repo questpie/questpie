@@ -15,6 +15,7 @@ import {
 	decodeRuntimeExecutables,
 	type RuntimeExecutablesV1,
 } from "./executable-artifact";
+import { decodeRuntimeIssueMappings } from "./issue-mappings";
 import { validateOperationWireV2 } from "./wire-v2-artifact";
 import {
 	operationWireV3ExtensionKeys,
@@ -191,6 +192,7 @@ function decodeOperationWireContract(
 		direct &&
 		(identity.startsWith("mutation:") || identity.startsWith("action:"));
 	const carriesLimits = direct && identity.startsWith("action:");
+	const carriesIssueMappings = direct && identity.startsWith("mutation:");
 	exact(
 		operation,
 		[
@@ -200,6 +202,7 @@ function decodeOperationWireContract(
 			"declaredErrors",
 			...(carriesAdmission ? ["admission"] : []),
 			...(carriesLimits ? ["limits"] : []),
+			...(carriesIssueMappings ? ["issueMappings"] : []),
 		],
 		`wire operation ${index}`,
 	);
@@ -279,6 +282,13 @@ function decodeOperationWireContract(
 		declaredErrors.length
 	)
 		fail(`wire operation ${index} declared error codes must be unique`);
+	const issueMappings = carriesIssueMappings
+		? decodeRuntimeIssueMappings(
+				operation.issueMappings,
+				declaredErrors,
+				`wire operation ${index} issue mapping`,
+			)
+		: undefined;
 	return Object.freeze({
 		...(carriesAdmission
 			? { admission: admission as "authenticated" | "public" | "system" }
@@ -294,6 +304,7 @@ function decodeOperationWireContract(
 			`$wire.operations[${index}].output`,
 		),
 		declaredErrors: Object.freeze(declaredErrors),
+		...(issueMappings ? { issueMappings } : {}),
 	});
 }
 

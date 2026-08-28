@@ -24,6 +24,10 @@ import {
 import { createPostgresDatabaseCollectionMutationData } from "./collection";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
+import {
+	collectionLifecycleIssueIdentity,
+	isCollectionLifecycleIssue,
+} from "./lifecycle";
 import { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 import type {
@@ -124,6 +128,21 @@ function transactionIdentity(value: unknown): string {
 	if (!isPostgresTransactionId(value))
 		throw new TypeError("transaction id must be a PostgreSQL xid8");
 	return value;
+}
+
+function mappedCollectionIssue<View>(
+	operation: PreparedOperation<View>,
+	issueIdentity: string,
+): DeclaredOperationError {
+	const target = Object.values(operation.issueMappings ?? {})
+		.map((issues) => issues[issueIdentity])
+		.find((candidate) => candidate !== undefined);
+	const declared = operation.declaredErrors.find(
+		(error) => error.key === target && error.payload === null,
+	);
+	if (!declared)
+		throw new TypeError("Collection lifecycle issue mapping is unavailable");
+	return new DeclaredOperationError(declared.code, declared.status);
 }
 
 function inputScopeBytes(
@@ -419,6 +438,11 @@ export function createPostgresDatabaseMutationInvoker<View>(
 				},
 			});
 		} catch (error) {
+			if (isCollectionLifecycleIssue(error))
+				throw mappedCollectionIssue(
+					operation,
+					collectionLifecycleIssueIdentity(error)!,
+				);
 			if (
 				error instanceof QuestpiePostgresError &&
 				error.code === "commitOutcomeUnknown" &&

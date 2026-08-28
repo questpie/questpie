@@ -34,7 +34,6 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 			"description",
 		],
 		normalize: ({ input }) => ({
-			reference: operation.text.trim(input.reference),
 			summary: operation.text.trim(input.summary),
 			description: operation.text.trim(input.description),
 		}),

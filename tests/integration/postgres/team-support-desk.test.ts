@@ -436,13 +436,28 @@ postgresTest(
 					{
 						description: "Created through the exact generated direct Mutation.",
 						priority: "high",
-						reference: `SUP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+						reference: `  SUP-${crypto.randomUUID().slice(0, 8).toUpperCase()}  `,
 						summary: "Production login intermittently fails",
 						teamId: supportTracerIds.teamPlatform,
 					},
 					{ callId: `direct:create:${crypto.randomUUID()}` },
 				),
 			);
+			expect(created.reference).toMatch(/^SUP-/);
+			expect(created.reference).not.toMatch(/^\s|\s$/);
+			await expect(
+				app.execution(agentInput, ({ mutations }) =>
+					mutations.ticket.create(
+						{
+							description: "Rejected by Collection validation.",
+							reference: "INVALID-REFERENCE",
+							summary: "Invalid lifecycle reference",
+							teamId: supportTracerIds.teamPlatform,
+						},
+						{ callId: `direct:invalid-create:${crypto.randomUUID()}` },
+					),
+				),
+			).rejects.toMatchObject({ code: "INVALID_TICKET", status: 422 });
 			const edited = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.edit(
 					{
@@ -606,6 +621,17 @@ postgresTest(
 				priority: "normal",
 				requesterMembershipId: supportTracerIds.membershipAgent,
 			});
+			await expect(
+				browserClient.mutations["ticket.create"](
+					{
+						description: "Rejected over the generated client.",
+						reference: "INVALID-REFERENCE",
+						summary: "Invalid network lifecycle reference",
+						teamId: supportTracerIds.teamPlatform,
+					},
+					{ callId: `browser:invalid-create:${crypto.randomUUID()}` },
+				),
+			).rejects.toMatchObject({ code: "INVALID_TICKET", status: 422 });
 
 			const customerSignIn = await app.fetch(
 				new Request(`${authOrigin}/api/auth/sign-in/email`, {
@@ -901,6 +927,7 @@ postgresTest(
 			).toMatchObject({
 				authProvider: "better-auth",
 				commentBody: firefoxComment,
+				lifecycleError: { code: "INVALID_TICKET", status: 422 },
 				phase: "firefox-complete",
 				reference: supportTracerIds.referenceOpen,
 				role: "agent",

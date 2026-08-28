@@ -585,6 +585,7 @@ export async function createArtifacts(
 			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
 			collectionOperationArtifacts:
 				collectionOperationPrograms.operations.length > 0,
+			collectionLifecycleArtifacts: lifecyclePrograms.programs.length > 0,
 			collectionOperationAdapterArtifacts:
 				collectionOperationAdapters.adapters.length > 0,
 			reactionArtifact: runtime.reactions.reactions.length > 0,

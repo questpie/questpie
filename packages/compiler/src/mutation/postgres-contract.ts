@@ -12,7 +12,8 @@ export type PostgresOperationParameterV1 = Readonly<{
 					| "key"
 					| "patchValue"
 					| "trustedValue"
-					| "expectedValue";
+					| "expectedValue"
+					| "candidateValue";
 				path: readonly string[];
 				codec: PostgresMutationFieldCodecV1;
 		  }>
@@ -122,6 +123,12 @@ export interface PostgresCreateOperationPlanV1 {
 			sql: string;
 			parameters: readonly PostgresOperationParameterV1[];
 		}>[];
+	}>;
+	readonly candidateValidation?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresOperationParameterV1[];
+		result: readonly PostgresOperationResultV1[];
 	}>;
 	readonly candidatePolicy: Readonly<{
 		freshAfterRowLockWait: true;

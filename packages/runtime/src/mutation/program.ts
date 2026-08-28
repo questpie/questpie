@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { canonicalMutationBytes } from "./canonical";
+import {
+	decodeCollectionLifecyclePrograms,
+	type LinkedCollectionLifecycleProgramV1,
+} from "./lifecycle";
 import { decodeMutationDataQueryTemplate } from "./query-template";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -57,6 +61,7 @@ export type CollectionOperationProgramV1 = Readonly<{
 	dataQueryDigest: string | null;
 	normalizerProgramDigest: string | null;
 	serverValueProgramDigest: string | null;
+	lifecycleProgramDigest?: string;
 	outputCardinality: "many" | "one" | "optionalOne";
 	limits: Readonly<{
 		inputBytes: 65_536;
@@ -71,6 +76,7 @@ export type LinkedCollectionOperationProgramV1 = CollectionOperationProgramV1 &
 	Readonly<{
 		normalizerProgram: FieldNormalizerProgramV1 | null;
 		serverValueProgram: ServerValueProgramV1 | null;
+		lifecycleProgram: LinkedCollectionLifecycleProgramV1 | null;
 	}>;
 
 export type LinkedCollectionMutationProgramsV1 = Readonly<{
@@ -297,6 +303,9 @@ function decodeOperation(
 			"dataQueryDigest",
 			"normalizerProgramDigest",
 			"serverValueProgramDigest",
+			...(Object.hasOwn(source, "lifecycleProgramDigest")
+				? ["lifecycleProgramDigest"]
+				: []),
 			"outputCardinality",
 			"limits",
 		],
@@ -408,6 +417,9 @@ function decodeOperation(
 					source.serverValueProgramDigest,
 					`${label} serverValueProgramDigest`,
 				);
+	const lifecycleProgramDigest = Object.hasOwn(source, "lifecycleProgramDigest")
+		? digest(source.lifecycleProgramDigest, `${label} lifecycleProgramDigest`)
+		: undefined;
 	if (
 		!(["create", "update"] as readonly string[]).includes(member) &&
 		(normalizerProgramDigest !== null || serverValueProgramDigest !== null)
@@ -446,6 +458,7 @@ function decodeOperation(
 		dataQueryDigest: embeddedDigest,
 		normalizerProgramDigest,
 		serverValueProgramDigest,
+		...(lifecycleProgramDigest ? { lifecycleProgramDigest } : {}),
 		outputCardinality: source.outputCardinality as
 			| "many"
 			| "one"
@@ -526,6 +539,8 @@ export function linkCollectionMutationPrograms(
 		collectionOperations: unknown;
 		fieldNormalizers: unknown;
 		serverValues: unknown;
+		lifecyclePrograms?: unknown;
+		compilerRuntimeBuildDigest?: string;
 		policies: readonly MutationPolicyLinkV1[];
 	}>,
 ): LinkedCollectionMutationProgramsV1 {
@@ -550,6 +565,12 @@ export function linkCollectionMutationPrograms(
 	);
 	const normalizers = decodeFieldNormalizerPrograms(input.fieldNormalizers);
 	const serverValues = decodeServerValuePrograms(input.serverValues);
+	const lifecyclePrograms = input.lifecyclePrograms
+		? decodeCollectionLifecyclePrograms(
+				input.lifecyclePrograms,
+				input.compilerRuntimeBuildDigest ?? "",
+			)
+		: [];
 	const normalizerByDigest = uniqueMap(
 		normalizers,
 		(program) =>
@@ -561,6 +582,11 @@ export function linkCollectionMutationPrograms(
 		(program) =>
 			mutationProgramDigest("questpie-server-value-program-v1", program),
 		"server-value digest",
+	);
+	const lifecycleByDigest = uniqueMap(
+		lifecyclePrograms,
+		(program) => program.digest,
+		"lifecycle digest",
 	);
 	uniqueMap(
 		normalizers,
@@ -593,6 +619,7 @@ export function linkCollectionMutationPrograms(
 	);
 	const usedNormalizerDigests = new Set<string>();
 	const usedServerValueDigests = new Set<string>();
+	const usedLifecycleDigests = new Set<string>();
 	const linked = operations.map((operation) => {
 		const policy = policies.get(operation.policy);
 		if (!policy || policy.target !== operation.target)
@@ -605,6 +632,15 @@ export function linkCollectionMutationPrograms(
 			operation.serverValueProgramDigest === null
 				? null
 				: serverValueByDigest.get(operation.serverValueProgramDigest);
+		const lifecycle = operation.lifecycleProgramDigest
+			? (lifecycleByDigest.get(operation.lifecycleProgramDigest) ?? null)
+			: null;
+		if (
+			operation.lifecycleProgramDigest &&
+			(!lifecycle || lifecycle.bindings.collection !== operation.target)
+		)
+			fail(`operation ${operation.identity} has an invalid lifecycle link`);
+		if (lifecycle) usedLifecycleDigests.add(lifecycle.digest);
 		for (const [program, digestValue, kind] of [
 			[normalizer, operation.normalizerProgramDigest, "normalizer"],
 			[values, operation.serverValueProgramDigest, "server-value"],
@@ -650,11 +686,13 @@ export function linkCollectionMutationPrograms(
 			...operation,
 			normalizerProgram: normalizer ?? null,
 			serverValueProgram: values ?? null,
+			lifecycleProgram: lifecycle,
 		});
 	});
 	if (
 		usedNormalizerDigests.size !== normalizerByDigest.size ||
-		usedServerValueDigests.size !== serverValueByDigest.size
+		usedServerValueDigests.size !== serverValueByDigest.size ||
+		usedLifecycleDigests.size !== lifecycleByDigest.size
 	)
 		fail("write program must be referenced exactly once");
 	const byTarget = new Map<

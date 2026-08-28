@@ -188,7 +188,8 @@ export function decodePostgresCollectionParameters(
 			source.kind === "key" ||
 			source.kind === "patchValue" ||
 			source.kind === "trustedValue" ||
-			source.kind === "expectedValue"
+			source.kind === "expectedValue" ||
+			source.kind === "candidateValue"
 		) {
 			exact(
 				source,

@@ -20,6 +20,13 @@ export type { LinkedReactionProjection } from "../durable";
 export { createPostgresDatabaseMutationInvoker } from "./postgres-database";
 export { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 export { linkCollectionMutationPrograms } from "./program";
+export {
+	collectionLifecycleIssueIdentity,
+	decodeCollectionLifecyclePrograms,
+	executeCollectionLifecyclePhase,
+	isCollectionLifecycleIssue,
+} from "./lifecycle";
+export type { LinkedCollectionLifecycleProgramV1 } from "./lifecycle";
 export { linkPostgresCollectionOperationPlans } from "./postgres-program";
 export { linkPostgresMutationTransactionStatements } from "./postgres-transaction-statements";
 export type {

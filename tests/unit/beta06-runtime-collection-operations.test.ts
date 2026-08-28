@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 
 import {
 	createCollectionOperationAdapterExecutor,
+	isCollectionLifecycleIssue,
 	linkCollectionMutationPrograms,
 	linkCollectionOperationAdapters,
 } from "../../packages/runtime/src/mutation";
@@ -362,6 +363,165 @@ function dataFor(
 		consumeRows,
 	});
 }
+
+test("Collection create runs normalize and validate around one materialized candidate", async () => {
+	const baseline = createPlan();
+	const lifecycleProgram = {
+		format: "questpie.lifecycle-program.v1",
+		interpreter: "questpie.lifecycle-interpreter.v1",
+		runtimeBuild: "b".repeat(64),
+		reentryLimit: 8,
+		bindings: {
+			collection: "collection:records",
+			fields: {
+				title: "collection:records/field:title",
+				body: "collection:records/field:body",
+			},
+			issues: { blocked: "issue:records/blocked" },
+			operations: ["mutation:records.create"],
+		},
+		phases: {
+			normalize: [
+				{
+					op: "return",
+					value: {
+						op: "object",
+						entries: [
+							{ kind: "spreadInput" },
+							{
+								kind: "field",
+								field: "collection:records/field:title",
+								value: {
+									op: "stringMethod",
+									method: "trim",
+									target: {
+										op: "member",
+										target: { op: "root", root: "input" },
+										field: "collection:records/field:title",
+										optional: false,
+									},
+									arguments: [],
+									optional: false,
+								},
+							},
+						],
+					},
+				},
+			],
+			validate: [
+				{
+					op: "if",
+					test: {
+						op: "stringMethod",
+						method: "startsWith",
+						target: {
+							op: "member",
+							target: { op: "root", root: "candidate" },
+							field: "collection:records/field:title",
+							optional: false,
+						},
+						arguments: [{ op: "literal", value: "BLOCKED" }],
+						optional: false,
+					},
+					consequent: [{ op: "throwIssue", issue: "issue:records/blocked" }],
+					otherwise: [],
+				},
+			],
+			check: [],
+			afterWrite: [],
+		},
+		digest: "c".repeat(64),
+	} as const;
+	const plan = {
+		...baseline,
+		operation: { ...baseline.operation, lifecycleProgram },
+		candidateValidation: {
+			freshAfterRowLockWait: true,
+			sql: "MATERIALIZE_CANDIDATE_SQL",
+			parameters: baseline.write.parameters.slice(0, 3),
+			result: [
+				{
+					path: ["title"],
+					column: "qp_candidate_0",
+					codec: baseline.candidate.fields[0]!.codec,
+					nullable: false,
+				},
+				{
+					path: ["body"],
+					column: "qp_candidate_1",
+					codec: baseline.candidate.fields[1]!.codec,
+					nullable: false,
+				},
+			],
+		},
+		write: {
+			...baseline.write,
+			parameters: [
+				{
+					position: 1,
+					kind: "candidateValue",
+					path: ["title"],
+					codec: baseline.candidate.fields[0]!.codec,
+					postgresType: "text",
+				},
+				{
+					position: 2,
+					kind: "candidateValue",
+					path: ["body"],
+					codec: baseline.candidate.fields[1]!.codec,
+					postgresType: "text",
+				},
+			],
+		},
+	} as const;
+	const calls: string[] = [];
+	const data = dataFor([plan], async (statement, parameters = []) => {
+		calls.push(statement);
+		if (statement === "TITLE_AUTHORITY_SQL") {
+			expect(parameters[0]).toBe("  allowed  ");
+			return [{ allowed: true }];
+		}
+		if (statement === "MATERIALIZE_CANDIDATE_SQL")
+			return [
+				{
+					qp_candidate_0: parameters[0],
+					qp_candidate_1: "default body",
+				},
+			];
+		expect(parameters).toEqual(["allowed", "default body"]);
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: parameters[0],
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+	await expect(
+		data.records.create({ input: { title: "  allowed  " } }),
+	).resolves.toEqual(expect.objectContaining({ title: "allowed" }));
+	expect(calls).toEqual([
+		"TITLE_AUTHORITY_SQL",
+		"MATERIALIZE_CANDIDATE_SQL",
+		"WRITE_WITH_btrim_gen_random_uuid_SQL",
+	]);
+
+	const rejected = dataFor([plan], async (statement) => {
+		if (statement === "TITLE_AUTHORITY_SQL") return [{ allowed: true }];
+		if (statement === "MATERIALIZE_CANDIDATE_SQL")
+			return [
+				{ qp_candidate_0: "BLOCKED ticket", qp_candidate_1: "default body" },
+			];
+		throw new Error("write must not execute after validate");
+	});
+	let caught: unknown;
+	try {
+		await rejected.records.create({ input: { title: "BLOCKED ticket" } });
+	} catch (error) {
+		caught = error;
+	}
+	expect(isCollectionLifecycleIssue(caught)).toBe(true);
+});
 
 test("Operation create normalization follows sparse caller Field authority", async () => {
 	const baseline = createPlan();

@@ -29,7 +29,8 @@ export type PostgresParameterV1 =
 				| "key"
 				| "patchValue"
 				| "trustedValue"
-				| "expectedValue";
+				| "expectedValue"
+				| "candidateValue";
 			path: FieldPath;
 			codec: MutationFieldCodecV1;
 	  }>
@@ -153,6 +154,13 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 			parameters: readonly PostgresParameterV1[];
 			statement: PostgresCollectionStatement;
 		}>[];
+	}>;
+	candidateValidation?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresParameterV1[];
+		result: readonly PostgresResultV1[];
+		statement: PostgresCollectionStatement;
 	}>;
 	candidatePolicy: Readonly<{
 		freshAfterRowLockWait: true;

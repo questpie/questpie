@@ -101,7 +101,45 @@ function operationContracts(
 			output: resource.contract.output,
 			declaredErrors: resource.contract.declaredErrors ?? {},
 			...(includeAdmission && resource.kind === "mutation"
-				? { admission: mutationAdmission(resource) }
+				? {
+						admission: mutationAdmission(resource),
+						issueMappings: Object.fromEntries(
+							Object.entries(
+								(resource.contract.issueMappings ?? {}) as Readonly<
+									Record<string, Readonly<Record<string, string>>>
+								>,
+							)
+								.sort(([left], [right]) => compareAscii(left, right))
+								.map(([collectionName, issues]) => {
+									const collection = resources.find(
+										(candidate) =>
+											candidate.kind === "collection" &&
+											candidate.name === collectionName,
+									);
+									if (!collection)
+										throw new TypeError(
+											`Mutation issue mapping names unknown Collection ${collectionName}`,
+										);
+									const identities = (collection.contract.issues ??
+										{}) as Readonly<Record<string, string>>;
+									return [
+										collection.identity,
+										Object.fromEntries(
+											Object.entries(issues)
+												.sort(([left], [right]) => compareAscii(left, right))
+												.map(([issueName, error]) => {
+													const issue = identities[issueName];
+													if (!issue)
+														throw new TypeError(
+															`Mutation issue mapping names unknown Issue ${collectionName}.${issueName}`,
+														);
+													return [issue, error];
+												}),
+										),
+									];
+								}),
+						),
+					}
 				: includeAdmission && resource.kind === "action"
 					? {
 							admission: resource.contract.admission,

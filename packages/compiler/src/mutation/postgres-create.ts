@@ -10,6 +10,7 @@ import type { CollectionOperationProgramV1 } from "./operation-set-contract";
 import type { PostgresCreateOperationPlanV1 } from "./postgres-contract";
 import {
 	callerInputParameters,
+	candidateValueParameter,
 	executionParameter,
 	fieldByPath,
 	inputParameter,
@@ -84,7 +85,9 @@ export function lowerPostgresCreateOperationPlan(input: {
 	});
 	const candidateCheck = checks.checks[0]!;
 	const guardChecks = checks.checks.slice(1);
-	const parameters = policyParameters(checks.parameters);
+	const candidateParameters = operation.lifecycleProgramDigest
+		? new Parameters()
+		: policyParameters(checks.parameters);
 	const steps: Record<string, unknown>[] = [];
 	const expressions = new Map<string, string>();
 	const optionalCaller = new Map<
@@ -100,11 +103,14 @@ export function lowerPostgresCreateOperationPlan(input: {
 		const field = fieldByPath(collection, callerPath);
 		const key = canonicalBytes(field.path);
 		if (requiredCaller.has(key))
-			expressions.set(key, inputParameter(parameters, "callerInput", field));
+			expressions.set(
+				key,
+				inputParameter(candidateParameters, "callerInput", field),
+			);
 		else {
-			const bound = callerInputParameters(parameters, field);
+			const bound = callerInputParameters(candidateParameters, field);
 			const fallback =
-				defaultExpression(parameters, field) ??
+				defaultExpression(candidateParameters, field) ??
 				(operation.trustedValueFields.some(
 					(trustedPath) => canonicalBytes(trustedPath) === key,
 				)
@@ -147,7 +153,7 @@ export function lowerPostgresCreateOperationPlan(input: {
 	}
 	for (const field of collection.fields) {
 		if (expressions.has(canonicalBytes(field.path))) continue;
-		const expression = defaultExpression(parameters, field);
+		const expression = defaultExpression(candidateParameters, field);
 		if (expression === null) continue;
 		expressions.set(canonicalBytes(field.path), expression);
 		if (field.defaultValue)
@@ -182,7 +188,7 @@ export function lowerPostgresCreateOperationPlan(input: {
 			);
 		expressions.set(
 			canonicalBytes(target),
-			executionParameter(parameters, sourceRoot, sourcePath, field),
+			executionParameter(candidateParameters, sourceRoot, sourcePath, field),
 		);
 		steps.push({
 			phase: "serverValue",
@@ -193,7 +199,7 @@ export function lowerPostgresCreateOperationPlan(input: {
 	}
 	for (const trustedPath of operation.trustedValueFields) {
 		const field = fieldByPath(collection, trustedPath);
-		const bound = trustedValueParameters(parameters, field);
+		const bound = trustedValueParameters(candidateParameters, field);
 		const fallback =
 			expressions.get(canonicalBytes(field.path)) ??
 			`NULL::${postgresType(field.codec)}`;
@@ -213,6 +219,18 @@ export function lowerPostgresCreateOperationPlan(input: {
 			`${expressions.get(canonicalBytes(field.path))!} AS ${quote(field.column)}`,
 	);
 	const candidateCte = `${quote("qp_candidate")} AS (SELECT ${candidateColumns.join(", ")})`;
+	const candidateResult = result(
+		collection,
+		collection.fields.map(({ path: fieldPath }) => fieldPath),
+	);
+	const candidateSelected = candidateResult.map((item) => {
+		const field = fieldByPath(collection, item.path);
+		const value =
+			field.codec.kind === "timestamp"
+				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_candidate")}.${quote(field.column)})`
+				: `${quote("qp_candidate")}.${quote(field.column)}`;
+		return `${value} AS ${quote(item.column)}`;
+	});
 	const rules = policy.fields?.callerInput.create ?? [];
 	const authorityChecks = operation.callerInputFields.map((callerPath) => {
 		const rule = rules.find(
@@ -252,6 +270,18 @@ export function lowerPostgresCreateOperationPlan(input: {
 		});
 	});
 	const baseOutput = result(collection, operation.selectedFieldPaths);
+	const writeParameters = operation.lifecycleProgramDigest
+		? policyParameters(checks.parameters)
+		: candidateParameters;
+	const writeCandidateColumns = operation.lifecycleProgramDigest
+		? collection.fields.map(
+				(field) =>
+					`${candidateValueParameter(writeParameters, field)} AS ${quote(field.column)}`,
+			)
+		: [];
+	const writeCandidateCte = operation.lifecycleProgramDigest
+		? `${quote("qp_candidate")} AS (SELECT ${writeCandidateColumns.join(", ")})`
+		: candidateCte;
 	const insertColumns = collection.fields.map((field) => quote(field.column));
 	const selection = collection.fields.map(
 		(field) => `${quote("qp_candidate")}.${quote(field.column)}`,
@@ -341,6 +371,16 @@ export function lowerPostgresCreateOperationPlan(input: {
 			suppliedPathsOnly: true,
 			checks: Object.freeze(authorityChecks),
 		}),
+		...(operation.lifecycleProgramDigest
+			? {
+					candidateValidation: Object.freeze({
+						freshAfterRowLockWait: true as const,
+						sql: `WITH ${candidateCte} SELECT ${candidateSelected.join(", ")} FROM ${quote("qp_candidate")}`,
+						parameters: candidateParameters.values(),
+						result: candidateResult,
+					}),
+				}
+			: {}),
 		candidatePolicy: Object.freeze({
 			freshAfterRowLockWait: true,
 			mutableEvidenceCollections: candidateCheck.mutableEvidenceCollections,
@@ -351,8 +391,8 @@ export function lowerPostgresCreateOperationPlan(input: {
 			selectedPaths: Object.freeze(outputAuthority),
 		}),
 		write: Object.freeze({
-			sql: `WITH ${candidateCte}, ${quote("qp_inserted")} AS (INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${candidateCheck.sql} RETURNING *) SELECT ${selected.join(", ")} FROM ${quote("qp_inserted")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
-			parameters: parameters.values(),
+			sql: `WITH ${writeCandidateCte}, ${quote("qp_inserted")} AS (INSERT INTO ${collection.table} (${insertColumns.join(", ")}) SELECT ${selection.join(", ")} FROM ${quote("qp_candidate")} WHERE ${candidateCheck.sql} RETURNING *) SELECT ${selected.join(", ")} FROM ${quote("qp_inserted")} AS ${quote("qp_row")}${joins.length > 0 ? ` ${joins.join(" ")}` : ""}`,
+			parameters: writeParameters.values(),
 			result: output,
 		}),
 		limits: Object.freeze({

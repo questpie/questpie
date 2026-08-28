@@ -11,9 +11,11 @@ import type {
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresMutationTransactionStatements,
 } from "../../packages/runtime/src/mutation";
+import { executeCollectionLifecyclePhase } from "../../packages/runtime/src/mutation/lifecycle";
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
 	CommittedResultUnavailable,
+	DeclaredOperationError,
 	type PreparedOperation,
 } from "../../packages/runtime/src/operation";
 import {
@@ -296,6 +298,93 @@ const dispatchedOperation = {
 		},
 	},
 } as unknown as PreparedOperation<View>;
+
+test("maps a Collection issue only after its Mutation transaction rolls back", async () => {
+	const linked = fixedStatements();
+	const events: string[] = [];
+	const lifecycle = {
+		format: "questpie.lifecycle-program.v1",
+		interpreter: "questpie.lifecycle-interpreter.v1",
+		runtimeBuild: "d".repeat(64),
+		reentryLimit: 8,
+		bindings: {
+			collection: "collection:widgets",
+			fields: {},
+			issues: { invalid: "issue:widgets/invalid" },
+			operations: ["mutation:widgets.publish"],
+		},
+		phases: {
+			normalize: [],
+			validate: [{ op: "throwIssue", issue: "issue:widgets/invalid" }],
+			check: [],
+			afterWrite: [],
+		},
+		digest: "e".repeat(64),
+	} as const;
+	const issueOperation = {
+		...operation,
+		declaredErrors: [
+			{
+				key: "invalidWidget",
+				code: "INVALID_WIDGET",
+				status: 422,
+				payload: null,
+			},
+		],
+		issueMappings: {
+			"collection:widgets": {
+				"issue:widgets/invalid": "invalidWidget",
+			},
+		},
+		binding: {
+			...operation.binding,
+			execute: async () => {
+				events.push("issue");
+				await executeCollectionLifecyclePhase(lifecycle, "validate", {});
+				throw new Error("unreachable");
+			},
+		},
+	} as unknown as PreparedOperation<View>;
+	const database: PostgresTransactionRunner = {
+		async transaction(input) {
+			try {
+				return await input.use({
+					[transactionBrand]: true,
+					execute: async (candidate) =>
+						(candidate === linked.get("mutation.receipt.claim")?.statement
+							? [{ transactionId: "901", operationTime }]
+							: []) as never,
+				});
+			} catch (error) {
+				events.push("rollback");
+				throw error;
+			}
+		},
+	};
+	const invoke = createPostgresDatabaseMutationInvoker<View>({
+		database,
+		application: "application:generic",
+		transactionStatements: linked,
+		collectionPlans,
+		reactions: emptyReactions,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+
+	try {
+		await invoke(issueOperation, "mapped-lifecycle-issue");
+		throw new Error("expected mapped issue");
+	} catch (error) {
+		expect(error).toBeInstanceOf(DeclaredOperationError);
+		expect(error).toMatchObject({
+			code: "INVALID_WIDGET",
+			status: 422,
+			payload: null,
+		});
+	}
+	expect(events).toEqual(["issue", "rollback"]);
+});
 
 test("executes a fresh Mutation through one static read-committed database transaction", async () => {
 	const linked = fixedStatements();

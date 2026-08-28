@@ -24,6 +24,8 @@ export {
 	createPostgresJobAcceptanceTransaction,
 	linkCollectionOperationAdapters,
 	linkCollectionMutationPrograms,
+	executeCollectionLifecyclePhase,
+	collectionLifecycleIssueIdentity,
 	linkPostgresCollectionOperationPlans,
 	linkJobProjection,
 	linkReactionProjection,
