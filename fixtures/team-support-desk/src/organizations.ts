@@ -3,17 +3,25 @@ import { constraint, defineCollection, field, index } from "questpie";
 export const organizations = defineCollection({
 	name: "organizations",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			server: true,
+			immutable: true,
+		}),
 		name: field.text({ nullable: false, minLength: 1, maxLength: 120 }),
 		createdAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
+			immutable: true,
 		}),
 		updatedAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
 		}),
 	},
 	constraints: {

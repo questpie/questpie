@@ -439,6 +439,17 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 		) as Readonly<{
 			plans: readonly Readonly<{ identity: string; member: string }>[];
 		}>;
+		const operationPrograms = JSON.parse(
+			compilation.generatedFiles["collection-operation-programs.json"] ??
+				"null",
+		) as Readonly<{
+			operations: readonly Readonly<{
+				identity: string;
+				callerInputFields: readonly (readonly string[])[];
+				trustedValueFields: readonly (readonly string[])[];
+				requiredTrustedValueFields: readonly (readonly string[])[];
+			}>[];
+		}>;
 
 		expect(
 			postgresPlans.plans.find(
@@ -447,6 +458,37 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 		).toMatchObject({
 			identity: "mutation:tickets.update",
 			member: "update",
+		});
+		expect(
+			operationPrograms.operations.find(
+				({ identity }) => identity === "mutation:tickets.create",
+			),
+		).toMatchObject({
+			callerInputFields: [
+				["teamId"],
+				["assigneeMembershipId"],
+				["reference"],
+				["priority"],
+				["summary"],
+				["description"],
+			],
+			trustedValueFields: [
+				["closedAt"],
+				["id"],
+				["lastSlaFollowUpAt"],
+				["requesterMembershipId"],
+				["status"],
+			],
+			requiredTrustedValueFields: [["requesterMembershipId"]],
+		});
+		expect(
+			operationPrograms.operations.find(
+				({ identity }) => identity === "mutation:comments.create",
+			),
+		).toMatchObject({
+			callerInputFields: [["ticketId"], ["body"]],
+			trustedValueFields: [["authorMembershipId"], ["id"], ["kind"]],
+			requiredTrustedValueFields: [["authorMembershipId"]],
 		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });

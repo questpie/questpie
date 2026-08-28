@@ -7,10 +7,23 @@ import { teams } from "./teams";
 export const tickets = defineCollection({
 	name: "tickets",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		organizationId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			server: true,
+			immutable: true,
+		}),
+		organizationId: field.uuid({
+			nullable: false,
+			server: true,
+			immutable: true,
+		}),
 		teamId: field.uuid({ nullable: false }),
-		requesterMembershipId: field.uuid({ nullable: false }),
+		requesterMembershipId: field.uuid({
+			nullable: false,
+			server: true,
+			immutable: true,
+		}),
 		assigneeMembershipId: field.uuid({ nullable: true }),
 		reference: field.text({ nullable: false, minLength: 1, maxLength: 32 }),
 		priority: field.text({
@@ -24,6 +37,7 @@ export const tickets = defineCollection({
 			minLength: 1,
 			maxLength: 16,
 			default: "open",
+			server: true,
 		}),
 		summary: field.text({ nullable: false, minLength: 1, maxLength: 240 }),
 		description: field.text({
@@ -35,14 +49,25 @@ export const tickets = defineCollection({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
+			immutable: true,
 		}),
 		updatedAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
 		}),
-		closedAt: field.timestamp({ nullable: true, withTimezone: true }),
-		lastSlaFollowUpAt: field.timestamp({ nullable: true, withTimezone: true }),
+		closedAt: field.timestamp({
+			nullable: true,
+			withTimezone: true,
+			server: true,
+		}),
+		lastSlaFollowUpAt: field.timestamp({
+			nullable: true,
+			withTimezone: true,
+			server: true,
+		}),
 	},
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),

@@ -6,20 +6,33 @@ import { tickets } from "./tickets";
 export const comments = defineCollection({
 	name: "comments",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		ticketId: field.uuid({ nullable: false }),
-		authorMembershipId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			server: true,
+			immutable: true,
+		}),
+		ticketId: field.uuid({ nullable: false, immutable: true }),
+		authorMembershipId: field.uuid({
+			nullable: false,
+			server: true,
+			immutable: true,
+		}),
 		body: field.text({ nullable: false, minLength: 1, maxLength: 8_192 }),
 		kind: field.text({
 			nullable: false,
 			minLength: 1,
 			maxLength: 16,
 			default: "public",
+			server: true,
+			immutable: true,
 		}),
 		createdAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
+			immutable: true,
 		}),
 	},
 	constraints: {

@@ -79,13 +79,15 @@ export const createTicket = defineMutation({
 		const ticket = await ctx.data.tickets.create({
 			input: {
 				teamId: input.teamId,
-				requesterMembershipId: ctx.values.membershipId,
 				assigneeMembershipId: null,
 				reference: input.reference,
 				priority: input.priority,
-				status: "open",
 				summary: input.summary,
 				description: input.description,
+			},
+			values: {
+				requesterMembershipId: ctx.values.membershipId,
+				status: "open",
 			},
 		});
 		return ticketResult(ticket);
@@ -160,7 +162,7 @@ export const closeTicket = defineMutation({
 		// and candidate state. A concurrent loser cannot overwrite the winner.
 		const updated = await ctx.data.tickets.update({
 			key: { id: input.ticketId },
-			patch: { status: "closed", closedAt: ctx.operationTime },
+			values: { status: "closed", closedAt: ctx.operationTime },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
 		return ticketResult(updated);
@@ -180,7 +182,7 @@ export const reopenTicket = defineMutation({
 		if (current.status !== "closed") throw errors.transitionRejected();
 		const updated = await ctx.data.tickets.update({
 			key: { id: input.ticketId },
-			patch: { status: "open", closedAt: null },
+			values: { status: "open", closedAt: null },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
 		return ticketResult(updated);
@@ -210,8 +212,10 @@ export const addTicketComment = defineMutation({
 		const comment = await ctx.data.comments.create({
 			input: {
 				ticketId: current.id,
-				authorMembershipId: ctx.values.membershipId,
 				body: input.body,
+			},
+			values: {
+				authorMembershipId: ctx.values.membershipId,
 				kind: "public",
 			},
 		});

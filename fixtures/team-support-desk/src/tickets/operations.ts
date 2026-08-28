@@ -27,11 +27,9 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 	create: {
 		input: [
 			"teamId",
-			"requesterMembershipId",
 			"assigneeMembershipId",
 			"reference",
 			"priority",
-			"status",
 			"summary",
 			"description",
 		],
@@ -66,11 +64,8 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 			"teamId",
 			"assigneeMembershipId",
 			"priority",
-			"status",
 			"summary",
 			"description",
-			"closedAt",
-			"lastSlaFollowUpAt",
 		],
 		normalize: ({ input }) => ({
 			summary: operation.text.trimIfPresent(input.summary),

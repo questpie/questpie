@@ -6,15 +6,26 @@ import { tickets } from "./tickets";
 export const labels = defineCollection({
 	name: "labels",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		organizationId: field.uuid({ nullable: false }),
-		ticketId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			server: true,
+			immutable: true,
+		}),
+		organizationId: field.uuid({
+			nullable: false,
+			server: true,
+			immutable: true,
+		}),
+		ticketId: field.uuid({ nullable: false, immutable: true }),
 		name: field.text({ nullable: false, minLength: 1, maxLength: 48 }),
 		color: field.text({ nullable: false, minLength: 4, maxLength: 16 }),
 		createdAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
+			immutable: true,
 		}),
 	},
 	constraints: {

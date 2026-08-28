@@ -5,9 +5,18 @@ import { organizations } from "./organizations";
 export const memberships = defineCollection({
 	name: "memberships",
 	fields: {
-		id: field.uuid({ nullable: false, default: "randomUuid" }),
-		organizationId: field.uuid({ nullable: false }),
-		principalId: field.uuid({ nullable: false }),
+		id: field.uuid({
+			nullable: false,
+			default: "randomUuid",
+			server: true,
+			immutable: true,
+		}),
+		organizationId: field.uuid({
+			nullable: false,
+			server: true,
+			immutable: true,
+		}),
+		principalId: field.uuid({ nullable: false, immutable: true }),
 		role: field.text({
 			nullable: false,
 			minLength: 1,
@@ -24,11 +33,14 @@ export const memberships = defineCollection({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
+			immutable: true,
 		}),
 		updatedAt: field.timestamp({
 			nullable: false,
 			default: "now",
 			withTimezone: true,
+			server: true,
 		}),
 	},
 	constraints: {

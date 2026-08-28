@@ -7,7 +7,7 @@ export const commentOperations = defineCollectionOperations(comments, {
 	name: "comments",
 	policy: commentPolicy,
 	create: {
-		input: ["ticketId", "authorMembershipId", "body", "kind"],
+		input: ["ticketId", "body"],
 		normalize: ({ input }) => ({ body: operation.text.trim(input.body) }),
 		values: ({ operationTime }) => ({
 			createdAt: mutation.overwrite(operationTime),
