@@ -48,6 +48,16 @@ const message = await ctx.data.messages.create({
 		body: "hello",
 	},
 });
+await ctx.data.messages.create({
+	input: {
+		channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
+		authorMembershipId: ctx.values.selectedMembershipId,
+		body: "hello",
+	},
+	values: {
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
+	},
+});
 message satisfies Readonly<{
 	id: string;
 	channelId: string;
@@ -80,6 +90,10 @@ ctx.data.channels.get({ key: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", space
 ctx.data.messages.create({ input: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" } });
 // @ts-expect-error createdAt is assigned by the compiled server-value program
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello", createdAt: new Date() } });
+// @ts-expect-error static server-value targets are not dynamically assignable
+ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { createdAt: new Date() } });
+// @ts-expect-error required caller create Fields are not duplicated in values
+ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { body: "overlap" } });
 // @ts-expect-error caller input is exact and requires every authored create Field
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", body: "hello" } });
 // @ts-expect-error selection is fixed by the compiler plan

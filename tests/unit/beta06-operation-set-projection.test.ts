@@ -51,7 +51,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 	list: { data: channelMessagePage },
 	get: { select: { id: true, body: true, createdAt: true } },
 	create: {
-		input: ["channelId", "body"],
+		input: ["body"],
 		normalize: ({ input }) => ({
 			body: {
 				kind: "normalizedValue",
@@ -252,9 +252,23 @@ export const messageOperations = defineCollectionOperations(messages, {
 			member: "create",
 			policy: "policy:messages.default",
 			keyFields: [],
-			callerInputFields: [["channelId"], ["body"]],
+			callerInputFields: [["body"]],
+			trustedValueFields: [["id"]],
 			selectedFieldPaths: [["id"], ["channelId"], ["body"], ["createdAt"]],
 			outputCardinality: "one",
+		});
+		expect(
+			programs.operations.find(
+				(program: { identity: string }) =>
+					program.identity === "mutation:messages.update",
+			),
+		).toMatchObject({
+			trustedValueFields: [
+				["authorMembershipId"],
+				["body"],
+				["channelId"],
+				["id"],
+			],
 		});
 		expect(programs.operations).toHaveLength(5);
 		expect(
@@ -439,6 +453,23 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 
 test("rejects unbound Fields, open values, and ordinary Resource collisions", async () => {
 	const hostiles = [
+		{
+			name: "static-overlap",
+			source: `import { defineCollectionOperations, mutation } from "questpie";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+export const hostile = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	create: {
+		input: ["body"],
+		values: ({ principal }) => ({ body: mutation.overwrite(principal.id) }),
+		select: { id: true },
+	},
+});`,
+			diagnostic:
+				/cannot assign one Field through caller input and static server values/,
+		},
 		{
 			name: "unknown-field",
 			source: `import { defineCollectionOperations } from "questpie";

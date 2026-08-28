@@ -150,14 +150,23 @@ function method(
 		(path) => types.field(program.target, path),
 		() => program.member === "update",
 	);
+	const trustedValues = shape(
+		program.trustedValueFields,
+		(path) => types.field(program.target, path),
+		() => true,
+	);
+	const valuesMember =
+		program.trustedValueFields.length === 0
+			? ""
+			: ` readonly values?: ${trustedValues};`;
 	if (program.member === "create")
-		return `readonly create: (input: Readonly<{ readonly input: ${callerInput}; }>) => Promise<${result}>;`;
+		return `readonly create: (input: Readonly<{ readonly input: ${callerInput};${valuesMember} }>) => Promise<${result}>;`;
 	const key = shape(
 		program.keyFields,
 		(path) => types.field(program.target, path),
 		() => false,
 	);
-	return `readonly update: (input: Readonly<{ readonly key: ${key}; readonly patch: ${callerInput}; }>) => Promise<${result}>;`;
+	return `readonly update: (input: Readonly<{ readonly key: ${key}; readonly patch?: ${callerInput};${valuesMember} }>) => Promise<${result}>;`;
 }
 
 export function renderGeneratedMutationData(

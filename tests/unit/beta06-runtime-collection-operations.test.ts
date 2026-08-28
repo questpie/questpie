@@ -15,6 +15,8 @@ function operation(identity: string, member: "create" | "get") {
 		policy: "policy:records.default",
 		keyFields: member === "get" ? [["id"]] : [],
 		callerInputFields: member === "create" ? [["title"], ["body"]] : [],
+		trustedValueFields:
+			member === "create" ? [["body"], ["id"], ["title"]] : [],
 		selectedFieldPaths:
 			member === "create"
 				? [["id"], ["title"], ["createdAt"]]

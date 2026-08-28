@@ -81,6 +81,34 @@ function fieldAt(
 	return node;
 }
 
+function collectionFieldFacts(
+	collection: NormalizedResource,
+): readonly Readonly<{ path: readonly string[]; contract: RecordValue }>[] {
+	const visit = (
+		fields: RecordValue,
+		prefix: readonly string[],
+	): Readonly<{ path: readonly string[]; contract: RecordValue }>[] =>
+		Object.entries(fields).flatMap(([name, candidate]) => {
+			const contract = record(
+				candidate,
+				`${collection.identity}/field:${[...prefix, name].join("/")}`,
+			);
+			const fieldPath = [...prefix, name];
+			return contract.kind === "inlineShape"
+				? visit(
+						record(contract.fields, `${collection.identity}.fields`),
+						fieldPath,
+					)
+				: [{ path: fieldPath, contract }];
+		});
+	return visit(
+		record(collection.value.fields, `${collection.identity}.fields`),
+		[],
+	).toSorted((left, right) =>
+		compareAscii(left.path.join("/"), right.path.join("/")),
+	);
+}
+
 function validateFieldPath(
 	collection: NormalizedResource,
 	fieldPath: readonly string[],
@@ -324,6 +352,46 @@ export function projectCollectionOperationSets(
 			});
 			const normalizer = normalizerByOperation.get(member) ?? null;
 			const serverValue = serverValueByOperation.get(member) ?? null;
+			const callerInputFields = (
+				(memberContract.inputPaths ?? []) as readonly unknown[]
+			).map((field) => path(field, `${identity} caller input`));
+			const staticServerValueTargets = new Set(
+				serverValue === null
+					? []
+					: (serverValue.assignments as readonly unknown[]).map((candidate) =>
+							JSON.stringify(
+								path(
+									record(candidate, `${identity} server-value assignment`)
+										.target,
+									`${identity} server-value target`,
+								),
+							),
+						),
+			);
+			const callerInputTargets = new Set(
+				callerInputFields.map((field) => JSON.stringify(field)),
+			);
+			if (
+				member === "create" &&
+				callerInputFields.some((field) =>
+					staticServerValueTargets.has(JSON.stringify(field)),
+				)
+			)
+				invalid(
+					`${identity} cannot assign one Field through caller input and static server values`,
+				);
+			const trustedValueFields =
+				member === "create" || member === "update"
+					? collectionFieldFacts(collection)
+							.filter(
+								({ path: fieldPath, contract }) =>
+									(member === "create" || contract.immutable !== true) &&
+									(member !== "create" ||
+										!callerInputTargets.has(JSON.stringify(fieldPath))) &&
+									!staticServerValueTargets.has(JSON.stringify(fieldPath)),
+							)
+							.map(({ path: fieldPath }) => fieldPath)
+					: [];
 			const rawTemplate =
 				member === "list"
 					? normalizeDataQueryTemplate(memberContract.templateInput, {
@@ -359,9 +427,8 @@ export function projectCollectionOperationSets(
 				member,
 				policy: policy as `policy:${string}`,
 				keyFields: member === "create" || member === "list" ? [] : keyFields,
-				callerInputFields: (
-					(memberContract.inputPaths ?? []) as readonly unknown[]
-				).map((field) => path(field, `${identity} caller input`)),
+				callerInputFields,
+				trustedValueFields,
 				selectedFieldPaths: (
 					(memberContract.selectionPaths ?? []) as readonly unknown[]
 				).map((field) => path(field, `${identity} selection`)),

@@ -49,6 +49,7 @@ export type CollectionOperationProgramV1 = Readonly<{
 	policy: string;
 	keyFields: readonly FieldPath[];
 	callerInputFields: readonly FieldPath[];
+	trustedValueFields: readonly FieldPath[];
 	selectedFieldPaths: readonly FieldPath[];
 	dataQuery: RecordValue | null;
 	dataQueryDigest: string | null;
@@ -286,6 +287,7 @@ function decodeOperation(
 			"policy",
 			"keyFields",
 			"callerInputFields",
+			"trustedValueFields",
 			"selectedFieldPaths",
 			"dataQuery",
 			"dataQueryDigest",
@@ -328,6 +330,10 @@ function decodeOperation(
 	const callerInputFields = fieldPaths(
 		source.callerInputFields,
 		`${label} callerInputFields`,
+	);
+	const trustedValueFields = fieldPaths(
+		source.trustedValueFields,
+		`${label} trustedValueFields`,
 	);
 	const selectedFieldPaths = fieldPaths(
 		source.selectedFieldPaths,
@@ -398,6 +404,7 @@ function decodeOperation(
 		policy,
 		keyFields,
 		callerInputFields,
+		trustedValueFields,
 		selectedFieldPaths,
 		dataQuery: embeddedQuery,
 		dataQueryDigest: embeddedDigest,

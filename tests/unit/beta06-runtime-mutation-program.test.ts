@@ -49,6 +49,7 @@ const operation = {
 	policy: "policy:messages.default",
 	keyFields: [],
 	callerInputFields: [["body"], ["title"]],
+	trustedValueFields: [["body"], ["id"], ["title"]],
 	selectedFieldPaths: [["id"], ["title"]],
 	dataQuery: null,
 	dataQueryDigest: null,
@@ -120,6 +121,7 @@ const listOperation = {
 	policy: "policy:messages.default",
 	keyFields: [],
 	callerInputFields: [["after"], ["first"]],
+	trustedValueFields: [],
 	selectedFieldPaths: [["id"]],
 	dataQuery: listQuery,
 	dataQueryDigest: digest("questpie-data-query-template-v1", listQuery),
@@ -218,6 +220,23 @@ test("rejects an unknown envelope member", () => {
 	Object.assign(input.collectionOperations, { collections: [] });
 	expect(() => linkCollectionMutationPrograms(input)).toThrow(
 		"collection-operation programs has invalid keys",
+	);
+});
+
+test("rejects missing or malformed trusted-value Field authority", () => {
+	const missing = artifacts();
+	delete (missing.collectionOperations.operations[0] as Record<string, unknown>)
+		.trustedValueFields;
+	expect(() => linkCollectionMutationPrograms(missing)).toThrow(
+		"collection operation 0 has invalid keys",
+	);
+
+	const duplicate = artifacts();
+	duplicate.collectionOperations.operations[0]!.trustedValueFields.push([
+		"body",
+	]);
+	expect(() => linkCollectionMutationPrograms(duplicate)).toThrow(
+		"trustedValueFields must be unique",
 	);
 });
 
