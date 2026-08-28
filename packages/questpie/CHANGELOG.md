@@ -1,5 +1,11 @@
 # questpie
 
+## 3.28.8
+
+### Patch Changes
+
+- [#340](https://github.com/questpie/questpie/pull/340) [`8b951e3`](https://github.com/questpie/questpie/commit/8b951e3a12986d95a8c4b50bc0498780de553fe7) Thanks [@drepkovsky](https://github.com/drepkovsky)! - Preserve server-derived update fields while rechecking caller-authored nested relationship authority.
+
 ## 3.28.7
 
 ### Patch Changes
