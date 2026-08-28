@@ -427,6 +427,34 @@ Query.
 A semantic Operation that owns one PostgreSQL transaction and its atomic
 Transactional Dispatch boundary.
 
+### Collection Issue
+
+A payloadless, Collection-owned identity for an expected `validate` or `check`
+invariant failure. It has no public code, status, message, payload, or transport
+meaning. A named Mutation explicitly maps every reachable Collection Issue to
+one of its own declared Operation errors. Unmapped or forged issues roll back
+and sanitize to `INTERNAL`.
+
+Do not use: validation error, database error, Operation error.
+
+### Lifecycle Program
+
+The versioned canonical program compiled from a Collection's `normalize`,
+`validate`, `check`, and `afterWrite` TypeScript syntax. Runtime interprets the
+program and never invokes the authored callbacks as JavaScript. Phase-specific
+grammar makes purity, capability closure, ordering, and artifact integrity
+executable guarantees.
+
+Do not use: hook, callback runtime, lifecycle plugin.
+
+### Operation Error
+
+A named, typed failure declared by one Operation and exposed consistently by
+direct and wire calls. Operation-owned issue mapping may translate a
+payloadless Collection Issue only after the owning transaction rolls back.
+
+Do not use: Collection Issue, PostgreSQL error.
+
 ### Operation Result Receipt
 
 The transaction-owned record of one committed Mutation call and its exact

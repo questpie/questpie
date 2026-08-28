@@ -1,6 +1,6 @@
 # ADR 0031: Freeze Collection lifecycle programs and issue mapping
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-28
 
 ## Context
@@ -137,6 +137,20 @@ The public transaction-stable clock is `ctx.now`; it supersedes
 lane may supply it. PostgreSQL advances it for every kernel update and every
 explicitly supported managed-writer update, and the returned row and Change
 Ledger observe the final database value. It cannot also be `server: true`.
+
+## Acceptance evidence
+
+Candidate `ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1` binds the complete authority,
+canonical compiler/interpreter artifact, PostgreSQL 17 transaction proof, and
+deterministic gates through
+`docs/v4/prototypes/collection-lifecycle-boundary/acceptance-manifest.json`.
+The project owner authorized GPT-5.6-sol high as the independent replacement
+reviewer while the pinned provider transport was unavailable. The committed
+exception record at `1437338c9a605c171819adee184b1ac00ffc1d3c` reproduces
+packet digest
+`9732b0cd31f73e0cd422082fe1d4e527c746e2ddd77c3bce4b4d76b8a214e2c3` and
+reports `PASS` with no blocking finding. It is explicitly not represented as an
+Opus v2 review artifact.
 
 ## Consequences
 

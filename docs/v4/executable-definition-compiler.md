@@ -6,8 +6,10 @@
 - Scope: executable Definition binding, current App Contract, source slicing,
   output materialization, Collection Operation Set expansion, compiler
   ownership facts, Runtime Build pairing, and compiler budgets
-- Authority: ADR-0009 and proof head
+- Authority: ADR-0009, ADR-0031, and foundational proof head
   `713485a64bcc4795d960d576fea51da56bc4dcdd`
+- Lifecycle delta evidence: `prototypes/collection-lifecycle-boundary/acceptance-manifest.json`
+  and `prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-THIRD-REPLACEMENT-PASS.md`
 
 ## Boundary
 
@@ -102,6 +104,13 @@ The compiler creates two private graphs:
 A value that reaches both graphs must satisfy the structural determinism rules.
 An impure or ambiguous shared capture fails with the Definition and captured
 declaration Origins.
+
+Collection lifecycle members are not additional executable slots. The compiler
+parses their inline ordinary-TypeScript subset into the canonical Lifecycle
+Program accepted by ADR-0031, then discards the authored callback. Runtime
+interprets only those program bytes. This keeps arbitrary application handlers
+in the Runtime graph while making lifecycle purity, phase capabilities, and
+transitive Collection-issue reachability structurally checkable.
 
 ## Output materialization
 
@@ -202,9 +211,12 @@ semantic and Runtime contract bytes but changes Origin and Build Input.
 
 ## Accepted proof and budgets
 
-The focused proof head is
+The foundational compiler proof head is
 `713485a64bcc4795d960d576fea51da56bc4dcdd`. One fresh Claude Opus review at
-medium effort independently ran the proof and returned `PASS`.
+medium effort independently ran that proof and returned `PASS`. ADR-0031 adds
+the manifest-bound lifecycle compiler/interpreter delta reviewed at
+`ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1`; the committed human-authorized
+GPT-5.6-sol high replacement record reports `PASS` with no blockers.
 
 The final proof measured on Linux x64, AMD Ryzen 5 5600G, Bun 1.3.14, and
 TypeScript 5.9.2:

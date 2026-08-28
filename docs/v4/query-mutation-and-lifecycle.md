@@ -9,8 +9,10 @@
 - Scope: semantic Query, transactional Mutation, Collection Operation Sets,
   exact generated contracts, call identity, errors, cancellation, and explicit
   lifecycle ownership
-- Authority: ADR-0011 and proof head
+- Authority: ADR-0011, ADR-0030, ADR-0031, and foundational P3 proof head
   `a09bf55f0e22f65e059cda9f3eda914520dd4f9d`
+- Lifecycle delta evidence: `prototypes/collection-lifecycle-boundary/acceptance-manifest.json`
+  and `prototypes/collection-lifecycle-boundary/REVIEW-CODEX-EXCEPTION-THIRD-REPLACEMENT-PASS.md`
 
 ## Boundary
 
@@ -48,7 +50,7 @@ transaction, Policy-bypass, external-Action, or ordinary System capability.
 Every Query owns one bounded consistent read snapshot. The accepted PostgreSQL
 choice for a multi-statement semantic Query is `REPEATABLE READ READ ONLY`.
 
-Mutation Context adds exact Policy-aware writes, `ctx.operationTime`,
+Mutation Context adds exact Policy-aware writes, `ctx.now`,
 `ctx.callId`, `ctx.transactionId`, and typed `ctx.dispatch`. One Mutation owns
 exactly one PostgreSQL transaction. Every generated read and write, complete
 candidate check, PostgreSQL Constraint, audit write, result receipt, and
@@ -101,6 +103,10 @@ export const messageOperations = defineCollectionOperations(messages, {
 });
 ```
 
+This retained Collection Operation Set block is temporary compatibility
+authoring. Its `operationTime` spelling remains only until that adapter is
+migrated; named Mutation and lifecycle Context use `ctx.now`.
+
 The compiler lowers each selected member before Manifest emission:
 
 | Member   | Ordinary Resource          | Consistency owner     |
@@ -150,44 +156,71 @@ The internal create/update kernel exists without public exposure. Neither a
 Collection nor an input helper publishes an Operation, and this extension does
 not add an automatic get/list/delete surface.
 
+## Collection lifecycle programs and issues
+
+A Collection may declare payloadless issues and exactly four lifecycle phases.
+The callbacks use ordinary TypeScript syntax, but the compiler lowers supported
+syntax into one canonical Lifecycle Program; Runtime never calls authored
+lifecycle JavaScript. `normalize` and `validate` are effect-free and receive no
+generated effect capability. `check` adds bounded Policy-aware reads.
+`afterWrite` adds sequential bounded kernel reads/writes plus Job acceptance and
+remains pre-commit. No phase can reach an ambient global, import, Service,
+Action, Request, Route, raw SQL, or raw transaction.
+
+`validate` and `check` throw generated Collection Issues. Issues carry no public
+code, status, message, or payload. Each named Mutation structurally maps all
+transitively reachable issues to its own payloadless declared Operation errors.
+The first issue raised in program order dooms the transaction and wins. Mapping
+runs after rollback in the shared Operation engine; an absent or forged mapping
+becomes sanitized `INTERNAL`. Missing and Policy-invisible rows remain
+indistinguishable, and PostgreSQL failures never become Collection Issues.
+
 ## Fixed write lifecycle
 
 The accepted order is:
 
 1. decode exact Operation input;
 2. enforce Operation admission;
-3. open the Mutation-owned transaction and freeze `operationTime`;
+3. open the Mutation-owned transaction and freeze `now`;
 4. decode exact Collection caller `input` or `patch` and trusted `values`;
 5. reject unknown Collection keys and lane overlap;
 6. apply existing/current row scope and lock;
 7. authorize only canonical caller-supplied Field paths;
-8. normalize supplied caller and trusted Field scalars separately;
+8. normalize supplied caller and trusted Field scalars separately, then run the
+   authored `normalize` program over each lane without changing its paths;
 9. construct create defaults and nullable SQL `NULL`, or start update from the
    locked current row without reapplying create defaults;
 10. overlay normalized trusted `values`;
 11. reject a missing required candidate Field;
 12. validate every Field in the complete candidate against its framework Codec;
-13. enforce candidate Policy;
-14. enforce PostgreSQL Constraints;
-15. select the result;
-16. apply output Field authority;
-17. validate and materialize the output codec;
-18. commit once;
-19. encode the result.
+13. run authored `validate`;
+14. enforce candidate Policy;
+15. run authored Policy-aware `check`;
+16. enforce PostgreSQL Constraints, materialize database-owned `onUpdate`
+    values, and return the written row;
+17. run pre-commit `afterWrite`, including bounded nested kernel work and Job
+    acceptance in authored order;
+18. select the result and apply output Field authority;
+19. validate and materialize the output codec;
+20. write the result receipt and commit once;
+21. encode the result.
 
 This candidate validation is framework Field and Codec validation, not an
 authored lifecycle callback. Policy decides caller Field authority before
 normalization can change a supplied path. A named Mutation may derive trusted values from its input,
-Policy-aware transaction reads and locking reads, `ctx.operationTime`,
+Policy-aware transaction reads and locking reads, `ctx.now`,
 `ctx.callId`, and ordinary TypeScript expressions over those values. Runtime
-does not inspect arbitrary TypeScript provenance. `createdAt` and `updatedAt`
-are ordinary Fields. Each trusted assignment and every `updatedAt` change is
-explicit and Mutation-owned.
+does not inspect arbitrary Mutation-handler TypeScript provenance. `createdAt`
+remains an ordinary Field. An `updatedAt` Field may instead declare
+`onUpdate: "now"`; then PostgreSQL owns it and neither caller nor trusted lane
+may supply it.
 
-Use an inline named Mutation when work spans Collections or owns an application
-error, cross-Collection invariant, transactional audit record, or typed
-dispatch intent. External effects belong to a later Action after commit. There
-is no `before*`, `after*`, or general hooks catalogue.
+Use an inline named Mutation when work spans Collections or owns a public
+application error. Reusable row-local invariants belong to `validate`;
+database-backed invariants belong to `check`; bounded transactional audit and
+Job acceptance may belong to `afterWrite`. External effects belong to an Action
+or accepted Job attempt, never `afterWrite`. There is no `afterRead`, priority
+registry, or general hook catalogue.
 
 ## Errors, cancellation, and stable call identity
 
@@ -229,8 +262,13 @@ recovery; it never enables transport-owned automatic Mutation retry.
 
 ## Accepted proof
 
-Proof head `a09bf55f0e22f65e059cda9f3eda914520dd4f9d` passed one final fresh
-focused Opus-medium acceptance review. The proof includes:
+The foundational P3 proof head
+`a09bf55f0e22f65e059cda9f3eda914520dd4f9d` passed one final fresh focused
+Opus-medium acceptance review. ADR-0031 adds the manifest-bound lifecycle and
+issue-mapping delta reviewed at
+`ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1`; the committed human-authorized
+GPT-5.6-sol high replacement record reports `PASS` with no blockers. The
+foundational P3 proof includes:
 
 - a real four-Collection `REPEATABLE READ READ ONLY` snapshot across a
   concurrent committed update;

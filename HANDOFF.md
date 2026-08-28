@@ -632,37 +632,36 @@ and declaration SHA-256
 
 The OpenTelemetry workbench at
 `docs/v4/research/observability-2026/WORKBENCH.md` is research only. It creates
-no accepted public or Runtime API. Authored `normalize`, `validate`, `check`,
-`afterWrite`, database-owned `onUpdate`, declared-unique `key` lookup, typed
-`ConstraintViolation`, and always-generated get/list/delete remain deferred
-exactly as ADR-0030 records.
+no accepted public or Runtime API.
+
+ADR-0031 is Accepted after the manifest-bound lifecycle candidate
+`ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1` received the committed
+human-authorized GPT-5.6-sol high replacement `PASS` at
+`1437338c9a605c171819adee184b1ac00ffc1d3c`. Exactly `normalize`, `validate`,
+`check`, and `afterWrite`, payloadless Collection Issues with explicit
+Operation-owned mapping, `ctx.now`, and database-owned `onUpdate: "now"` are
+closed for implementation. The acceptance is recorded honestly as an explicit
+provider exception, not as an Opus v2 artifact. Declared-unique `key` lookup,
+typed `ConstraintViolation`, and always-generated get/list/delete remain
+deferred.
 
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
-   status. ADR-0030 provenance/trusted values are closed; do not recreate their
-   proof or a parallel write kernel.
+   status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue
+   mapping are closed; do not recreate their proof, re-grill settled lifecycle
+   direction, or create a parallel write kernel.
 2. Keep Team Support Desk as the golden reference consumer and every
    application browser call on the generated client. The Query/Relations slice
    above is closed; do not recreate the deleted list variants or a second
    relational execution kernel.
-3. The next unresolved Deep-DX decision is the pure lifecycle boundary:
-   Collection validation issues cannot borrow a named Mutation's declared error
-   map, and arbitrary TypeScript purity cannot be claimed without a conservative
-   analyzable executable subset. Resolve and ratify those contracts before
-   adding `normalize`, `validate`, `check`, `afterWrite` or `onUpdate`
-   production APIs.
-   This is a delta-only ratification pass, not a new lifecycle design or broad
-   grilling session. ADR-0011 already fixes the write order and ownership.
-   ADR-0030 already fixes Field provenance, the separate caller/trusted lanes,
-   and full candidate Policy. The human-reviewed Deep-DX packet already
-   directionally approves exactly four authored phases (`normalize`,
-   `validate`, `check`, `afterWrite`), database-owned `onUpdate: "now"`, no
-   `afterRead`, transaction-owned bounded `check`/`afterWrite`, no external
-   effects in `afterWrite`, and bounded re-entrant work. Do not ask the human to
-   decide those again. Reconcile only the two named proof holes above, preserve
-   the approved direction unless evidence makes it impossible, and record any
-   unavoidable deviation explicitly before seeking approval.
+3. Convert ADR-0031 through the repository spec/ticket flow before production
+   implementation. Implement blockers-first and test-first in tracer-bullet
+   slices: compiler diagnostics and canonical artifacts, generated App Contract
+   types, Runtime/PostgreSQL execution, direct/network parity, progressive Team
+   Support Desk and hostile Collaboration migration, public docs, and final
+   browser/PostgreSQL/release evidence. Delete superseded syntax when no current
+   consumer needs it; maintain one generated Collection write/lifecycle kernel.
 4. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
