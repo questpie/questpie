@@ -2,7 +2,7 @@ import { compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import { normalizeDataQueryTemplate } from "../relational";
 import type { EvaluatedExport, NormalizedResource } from "../types";
-import { collectionFieldFacts, requiredCreateFields } from "./kernel";
+import { collectionFieldFacts, requiredCreateLaneFields } from "./kernel";
 import type {
 	CollectionOperationMember,
 	CollectionOperationProgramsV1,
@@ -352,9 +352,6 @@ export function projectCollectionOperationSets(
 							),
 						),
 			);
-			const callerInputTargets = new Set(
-				callerInputFields.map((field) => JSON.stringify(field)),
-			);
 			if (
 				member === "create" &&
 				callerInputFields.some((field) =>
@@ -370,24 +367,24 @@ export function projectCollectionOperationSets(
 							.filter(
 								({ path: fieldPath, contract }) =>
 									(member === "create" || contract.immutable !== true) &&
-									(member !== "create" ||
-										!callerInputTargets.has(JSON.stringify(fieldPath))) &&
 									!staticServerValueTargets.has(JSON.stringify(fieldPath)),
 							)
 							.map(({ path: fieldPath }) => fieldPath)
 					: [];
 			const requiredTrustedValueFields =
 				member === "create"
-					? requiredCreateFields(
+					? requiredCreateLaneFields(
 							collectionFieldFacts(collection),
 							trustedValueFields,
+							callerInputFields,
 						)
 					: [];
 			const requiredCallerInputFields =
 				member === "create"
-					? requiredCreateFields(
+					? requiredCreateLaneFields(
 							collectionFieldFacts(collection),
 							callerInputFields,
+							trustedValueFields,
 						)
 					: [];
 			const rawTemplate =

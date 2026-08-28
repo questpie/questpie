@@ -64,6 +64,19 @@ export function requiredCreateFields(
 		.map(({ path }) => path);
 }
 
+export function requiredCreateLaneFields(
+	facts: readonly FieldFact[],
+	eligibleFields: readonly (readonly string[])[],
+	alternateFields: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+	const alternate = new Set(
+		alternateFields.map((fieldPath) => canonicalBytes(fieldPath)),
+	);
+	return requiredCreateFields(facts, eligibleFields).filter(
+		(fieldPath) => !alternate.has(canonicalBytes(fieldPath)),
+	);
+}
+
 function primaryKeyFields(
 	collection: NormalizedResource,
 ): readonly (readonly string[])[] {
@@ -121,7 +134,7 @@ function kernelProgram(
 		.filter(
 			({ path, contract }) =>
 				(member === "create" || contract.immutable !== true) &&
-				!caller.has(canonicalBytes(path)),
+				(member === "create" || !caller.has(canonicalBytes(path))),
 		)
 		.map(({ path }) => path);
 	return Object.freeze({
@@ -135,11 +148,13 @@ function kernelProgram(
 		keyFields: member === "create" ? [] : primaryKeyFields(collection),
 		callerInputFields,
 		requiredCallerInputFields:
-			member === "create" ? requiredCreateFields(facts, callerInputFields) : [],
+			member === "create"
+				? requiredCreateLaneFields(facts, callerInputFields, trustedValueFields)
+				: [],
 		trustedValueFields,
 		requiredTrustedValueFields:
 			member === "create"
-				? requiredCreateFields(facts, trustedValueFields)
+				? requiredCreateLaneFields(facts, trustedValueFields, callerInputFields)
 				: [],
 		selectedFieldPaths: facts.map(({ path }) => path),
 		dataQuery: null,

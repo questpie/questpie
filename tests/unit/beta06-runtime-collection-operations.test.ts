@@ -70,6 +70,7 @@ function createPlan() {
 						collation: "questpie.binary",
 					},
 					nullable: false,
+					requiredInput: true,
 				},
 				{
 					path: ["body"],
@@ -80,6 +81,7 @@ function createPlan() {
 						collation: "questpie.binary",
 					},
 					nullable: false,
+					requiredInput: false,
 				},
 			],
 		},
@@ -197,6 +199,13 @@ function trustedCreatePlan() {
 		fieldAuthority: {
 			...baseline.fieldAuthority,
 			checks: [baseline.fieldAuthority.checks[0]!],
+		},
+		candidate: {
+			...baseline.candidate,
+			fields: baseline.candidate.fields.map((field) => ({
+				...field,
+				requiredInput: true,
+			})),
 		},
 		write: {
 			...baseline.write,
@@ -430,6 +439,7 @@ test("allows a values-only update and binds trusted value presence separately", 
 								collation: "questpie.binary",
 							},
 							nullable: false,
+							requiredInput: false,
 						},
 					],
 				},
@@ -566,8 +576,54 @@ test("create rejects missing required trusted values before PostgreSQL", async (
 
 	await expect(
 		data.records.create({ input: { title: "A title" } }),
-	).rejects.toThrow("Collection create values is missing required Fields");
+	).rejects.toThrow("Collection create candidate is missing required Fields");
 	expect(calls).toBe(0);
+});
+
+test("create accepts a required Field from either lane and checks the merged candidate", async () => {
+	const baseline = trustedCreatePlan();
+	const plan = {
+		...baseline,
+		operation: {
+			...baseline.operation,
+			callerInputFields: [["title"], ["body"]],
+			requiredCallerInputFields: [],
+			trustedValueFields: [["title"], ["body"]],
+			requiredTrustedValueFields: [],
+		},
+		write: {
+			...baseline.write,
+			parameters: [],
+		},
+	} as const;
+	let calls = 0;
+	const data = dataFor([plan], async () => {
+		calls += 1;
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: "title",
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+
+	await expect(
+		data.records.create({ input: {}, values: { title: "T", body: "B" } }),
+	).resolves.toBeDefined();
+	await expect(
+		data.records.create({ input: { title: "T", body: "B" } }),
+	).resolves.toBeDefined();
+	await expect(
+		data.records.create({
+			input: { title: "caller", body: "B" },
+			values: { title: "trusted" },
+		}),
+	).rejects.toThrow("must not overlap");
+	await expect(data.records.create({ input: { body: "B" } })).rejects.toThrow(
+		"missing required Fields",
+	);
+	expect(calls).toBe(3);
 });
 
 test("decodes distinct trusted-value PostgreSQL parameter kinds", () => {
@@ -707,7 +763,7 @@ test("create requires only artifact-owned caller Fields before PostgreSQL", asyn
 
 	await expect(
 		data.records.create({ input: { body: "optional" } }),
-	).rejects.toThrow("Collection create input is missing required Fields");
+	).rejects.toThrow("Collection create candidate is missing required Fields");
 	expect(calls).toBe(0);
 	await expect(
 		data.records.create({ input: { title: "Required" } }),
@@ -878,9 +934,24 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 		candidate: {
 			steps: [],
 			fields: [
-				{ path: ["profile"], codec: profileCodec, nullable: false },
-				{ path: ["tags"], codec: tagsCodec, nullable: false },
-				{ path: ["metadata"], codec: jsonCodec, nullable: false },
+				{
+					path: ["profile"],
+					codec: profileCodec,
+					nullable: false,
+					requiredInput: true,
+				},
+				{
+					path: ["tags"],
+					codec: tagsCodec,
+					nullable: false,
+					requiredInput: true,
+				},
+				{
+					path: ["metadata"],
+					codec: jsonCodec,
+					nullable: false,
+					requiredInput: true,
+				},
 			],
 		},
 		fieldAuthority: { suppliedPathsOnly: true, checks: [] },

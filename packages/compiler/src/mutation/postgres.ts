@@ -410,6 +410,7 @@ function updatePlan(
 						path: field.path,
 						codec: field.codec,
 						nullable: field.nullable,
+						requiredInput: false,
 					}),
 				),
 			),

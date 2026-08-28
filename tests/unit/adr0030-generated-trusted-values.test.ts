@@ -1,7 +1,8 @@
 import { expect, test } from "bun:test";
 
 import { renderGeneratedMutationData } from "../../packages/compiler/src/mutation/generated-contract";
-import { requiredCreateFields } from "../../packages/compiler/src/mutation/operation-set";
+import { requiredCreateLaneFields } from "../../packages/compiler/src/mutation/kernel";
+import { requiredCreateFields } from "../../packages/compiler/src/mutation/kernel";
 
 const base = {
 	identity: "mutation:tickets.create",
@@ -53,6 +54,49 @@ test("generated create keeps the values envelope optional without required trust
 		{ field: () => "string", fieldIdentity: () => "string" },
 	);
 	expect(output).toContain("readonly values?:");
+});
+
+test("generated create represents shared required Fields without an XOR union", () => {
+	const shared = {
+		...base,
+		callerInputFields: [["summary"], ["description"]],
+		requiredCallerInputFields: [],
+		trustedValueFields: [["summary"], ["description"], ["id"]],
+		requiredTrustedValueFields: [["id"]],
+	} as const;
+	const output = renderGeneratedMutationData(
+		{ operations: [shared] },
+		{ field: () => "string", fieldIdentity: () => "string" },
+	);
+	expect(output).toContain(
+		'readonly input: Readonly<{ readonly "description"?: string; readonly "summary"?: string; }>',
+	);
+	expect(output).toContain(
+		'readonly values: Readonly<{ readonly "description"?: string; readonly "id": string; readonly "summary"?: string; }>',
+	);
+	expect(output).not.toContain(" | ");
+});
+
+test("requires a create Field from one lane only when the alternate lane cannot supply it", () => {
+	const facts = [
+		{ path: ["shared"], contract: { nullable: false, default: null } },
+		{ path: ["server"], contract: { nullable: false, default: null } },
+		{ path: ["nullable"], contract: { nullable: true, default: null } },
+	] as const;
+	expect(
+		requiredCreateLaneFields(
+			facts,
+			[["shared"]],
+			[["shared"], ["server"], ["nullable"]],
+		),
+	).toEqual([]);
+	expect(
+		requiredCreateLaneFields(
+			facts,
+			[["shared"], ["server"], ["nullable"]],
+			[["shared"]],
+		),
+	).toEqual([["server"]]);
 });
 
 test("generated create requires every parent of a required nested Field", () => {

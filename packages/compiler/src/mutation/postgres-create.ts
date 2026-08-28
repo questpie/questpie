@@ -103,7 +103,13 @@ export function lowerPostgresCreateOperationPlan(input: {
 			expressions.set(key, inputParameter(parameters, "callerInput", field));
 		else {
 			const bound = callerInputParameters(parameters, field);
-			const fallback = defaultExpression(parameters, field);
+			const fallback =
+				defaultExpression(parameters, field) ??
+				(operation.trustedValueFields.some(
+					(trustedPath) => canonicalBytes(trustedPath) === key,
+				)
+					? `NULL::${postgresType(field.codec)}`
+					: null);
 			if (fallback === null)
 				throw new TypeError(
 					`${operation.identity} optional caller Field ${field.path.join(".")} has no fallback`,
@@ -319,6 +325,14 @@ export function lowerPostgresCreateOperationPlan(input: {
 						path: field.path,
 						codec: field.codec,
 						nullable: field.nullable,
+						requiredInput:
+							!field.nullable &&
+							field.defaultValue === null &&
+							!steps.some(
+								(step) =>
+									step.phase === "serverValue" &&
+									canonicalBytes(step.target) === canonicalBytes(field.path),
+							),
 					}),
 				),
 			),

@@ -67,11 +67,13 @@ export function candidateFields(
 			const field = record(raw, `${identity} candidate field ${index}`);
 			exact(
 				field,
-				["path", "codec", "nullable"],
+				["path", "codec", "nullable", "requiredInput"],
 				`${identity} candidate field ${index}`,
 			);
 			if (typeof field.nullable !== "boolean")
 				fail(`${identity} candidate field ${index} nullable is invalid`);
+			if (typeof field.requiredInput !== "boolean")
+				fail(`${identity} candidate field ${index} requiredInput is invalid`);
 			return Object.freeze({
 				path: path(field.path, `${identity} candidate field ${index} path`),
 				codec: decodeMutationFieldCodec(
@@ -79,6 +81,7 @@ export function candidateFields(
 					`${identity} candidate field ${index} codec`,
 				),
 				nullable: field.nullable,
+				requiredInput: field.requiredInput,
 			});
 		},
 	);

@@ -105,7 +105,14 @@ const collectionPlan = {
 		requiredTrustedValueFields: [],
 	},
 	candidate: {
-		fields: [{ path: ["id"], codec: { kind: "uuid" }, nullable: false }],
+		fields: [
+			{
+				path: ["id"],
+				codec: { kind: "uuid" },
+				nullable: false,
+				requiredInput: true,
+			},
+		],
 	},
 	fieldAuthority: {
 		checks: [

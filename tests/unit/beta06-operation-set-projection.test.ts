@@ -256,7 +256,7 @@ export const messageOperations = defineCollectionOperations(messages, {
 			policy: "policy:messages.default",
 			keyFields: [],
 			callerInputFields: [["body"]],
-			trustedValueFields: [["id"]],
+			trustedValueFields: [["body"], ["id"]],
 			requiredTrustedValueFields: [],
 			selectedFieldPaths: [["id"], ["channelId"], ["body"], ["createdAt"]],
 			outputCardinality: "one",
@@ -501,11 +501,17 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 				["description"],
 			],
 			trustedValueFields: [
+				["assigneeMembershipId"],
 				["closedAt"],
+				["description"],
 				["id"],
 				["lastSlaFollowUpAt"],
+				["priority"],
+				["reference"],
 				["requesterMembershipId"],
 				["status"],
+				["summary"],
+				["teamId"],
 			],
 			requiredTrustedValueFields: [["requesterMembershipId"]],
 		});
@@ -515,7 +521,13 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 			),
 		).toMatchObject({
 			callerInputFields: [["ticketId"], ["body"]],
-			trustedValueFields: [["authorMembershipId"], ["id"], ["kind"]],
+			trustedValueFields: [
+				["authorMembershipId"],
+				["body"],
+				["id"],
+				["kind"],
+				["ticketId"],
+			],
 			requiredTrustedValueFields: [["authorMembershipId"]],
 		});
 	} finally {

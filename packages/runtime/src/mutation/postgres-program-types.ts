@@ -137,6 +137,7 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 			path: FieldPath;
 			codec: MutationFieldCodecV1;
 			nullable: boolean;
+			requiredInput: boolean;
 		}>[];
 	}>;
 	fieldAuthority: Readonly<{

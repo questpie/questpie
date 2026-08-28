@@ -451,11 +451,6 @@ function createCollectionMutationData(
 										plan.operation.callerInputFields,
 										"Collection create input",
 									);
-									requirePaths(
-										callerPaths,
-										plan.operation.requiredCallerInputFields,
-										"Collection create input",
-									);
 									const trustedValues = Object.hasOwn(request, "values")
 										? record(request.values, "Collection create values")
 										: undefined;
@@ -477,9 +472,11 @@ function createCollectionMutationData(
 										"Collection create input and values",
 									);
 									requirePaths(
-										trustedPaths,
-										plan.operation.requiredTrustedValueFields,
-										"Collection create values",
+										[...callerPaths, ...trustedPaths],
+										plan.candidate.fields
+											.filter(({ requiredInput }) => requiredInput)
+											.map(({ path }) => path),
+										"Collection create candidate",
 									);
 									const nullableByPath = new Map(
 										plan.candidate.fields.map(

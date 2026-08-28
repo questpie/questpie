@@ -92,10 +92,10 @@ ctx.data.messages.create({ input: { id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", 
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello", createdAt: new Date() } });
 // @ts-expect-error static server-value targets are not dynamically assignable
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { createdAt: new Date() } });
-// @ts-expect-error required caller create Fields are not duplicated in values
+// Both lanes expose shared Fields; supplying one in both is rejected at runtime.
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, values: { body: "overlap" } });
-// @ts-expect-error caller input is exact and requires every authored create Field
-ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", body: "hello" } });
+// A shared required Field may be supplied exclusively by trusted values.
+ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", body: "hello" }, values: { authorMembershipId: ctx.values.selectedMembershipId } });
 // @ts-expect-error selection is fixed by the compiler plan
 ctx.data.messages.create({ input: { channelId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2", authorMembershipId: ctx.values.selectedMembershipId, body: "hello" }, select: { id: true } });
 `,

@@ -103,6 +103,7 @@ export interface PostgresCreateOperationPlanV1 {
 			path: readonly string[];
 			codec: PostgresMutationFieldCodecV1;
 			nullable: boolean;
+			requiredInput: boolean;
 		}>[];
 	}>;
 	readonly fieldAuthority: Readonly<{

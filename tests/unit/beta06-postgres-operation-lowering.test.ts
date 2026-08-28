@@ -807,3 +807,46 @@ test("lowers object, array, and json Collection Fields as exact jsonb values", (
 		]),
 	);
 });
+
+test("lowers one create Field through either caller or trusted values", () => {
+	const mergedOperations = structuredClone(operations) as any;
+	const createOperation = mergedOperations.operations[0];
+	createOperation.requiredCallerInputFields = [];
+	createOperation.trustedValueFields = [["title"], ["body"], ["id"]];
+	createOperation.requiredTrustedValueFields = [];
+
+	const lowered = lowerPostgresCollectionOperationPlans({
+		collectionOperations: mergedOperations,
+		schemaProjection: schema,
+		policyProjection,
+		normalizerPrograms: {
+			format: "questpie.field-normalizer-programs",
+			version: 1,
+			programs: [normalizer],
+		},
+		serverValuePrograms: {
+			format: "questpie.server-value-programs",
+			version: 1,
+			programs: [serverValues],
+		},
+	});
+	const create = lowered.plans[0]!;
+	if (create.member !== "create") throw new Error("expected create plan");
+	for (const fieldPath of [["title"], ["body"]] as const) {
+		expect(create.write.parameters).toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					kind: "callerInputPresent",
+					path: fieldPath,
+				}),
+				expect.objectContaining({
+					kind: "trustedValuePresent",
+					path: fieldPath,
+				}),
+			]),
+		);
+	}
+	expect(create.write.sql).toMatch(
+		/CASE WHEN \$\d+::boolean THEN \$\d+::text ELSE CASE WHEN \$\d+::boolean THEN btrim\(\$\d+::text\) ELSE NULL::text END END AS "title"/,
+	);
+});
