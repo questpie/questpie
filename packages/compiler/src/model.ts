@@ -270,18 +270,9 @@ function operationContract(
 									.map(([issue, target]) => {
 										if (typeof target !== "string")
 											throw new CompilerDiagnosticError(
-												"QP-COMPOSE-013",
-												"structuralTypeError",
+												"QP-COMPOSE-027",
+												"invalidIssueMapping",
 												`mutation.issueMappings.${collection}.${issue} must name a declared error`,
-											);
-										const error = declaredErrors[target] as
-											| Readonly<{ payload: unknown }>
-											| undefined;
-										if (!error || error.payload !== null)
-											throw new CompilerDiagnosticError(
-												"QP-COMPOSE-013",
-												"structuralTypeError",
-												`mutation.issueMappings.${collection}.${issue} must target a payloadless declared error`,
 											);
 										return [issue, target];
 									}),
@@ -366,8 +357,8 @@ function ownerCollectionContract(
 			entries(value.issues ?? {}).map(([key, issue]) => {
 				if (issue.kind !== "collectionIssue")
 					throw new CompilerDiagnosticError(
-						"QP-COMPOSE-013",
-						"structuralTypeError",
+						"QP-COMPOSE-027",
+						"invalidIssueDeclaration",
 						`collection.issues.${key} must be declared with collection.issue()`,
 					);
 				return [key, `issue:${string(value.name, "collection.name")}/${key}`];

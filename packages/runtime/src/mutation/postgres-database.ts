@@ -24,6 +24,7 @@ import {
 import { createPostgresDatabaseCollectionMutationData } from "./collection";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
+import { createCollectionLifecycleDoom } from "./lifecycle";
 import { createPostgresJobAcceptanceTransaction } from "./postgres-job-acceptance";
 import type { LinkedPostgresCollectionOperationPlansV1 } from "./postgres-program";
 import type {
@@ -232,11 +233,13 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							"operation time must be a PostgreSQL timestamp",
 						);
 					let businessRows = 0;
+					const lifecycleDoom = createCollectionLifecycleDoom();
 					const data = createPostgresDatabaseCollectionMutationData({
 						plans: input.collectionPlans,
 						transaction,
 						facts,
 						operationTime: owner.operationTime,
+						lifecycleDoom,
 						consumeRows(count) {
 							businessRows += count;
 							if (businessRows > 100)
@@ -301,6 +304,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						ctx: ctx as View,
 						errors: errorFactories(operation.binding.definition),
 					} as never);
+					lifecycleDoom.throwIfDoomed();
 					const validated = decodeRuntimeCodec(
 						operation.output,
 						result,

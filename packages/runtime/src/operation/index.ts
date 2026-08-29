@@ -123,8 +123,17 @@ export function mapCollectionIssueToDeclaredError<View>(
 	operation: PreparedOperation<View>,
 	issueIdentity: string,
 ): DeclaredOperationError {
-	const target = Object.values(operation.issueMappings ?? {})
-		.map((issues) => issues[issueIdentity])
+	const target = Object.entries(operation.issueMappings ?? {})
+		.filter(([collection]) => {
+			const collectionName = collection.startsWith("collection:")
+				? collection.slice("collection:".length)
+				: "";
+			return (
+				collectionName.length > 0 &&
+				issueIdentity.startsWith(`issue:${collectionName}/`)
+			);
+		})
+		.map(([, issues]) => issues[issueIdentity])
 		.find((candidate) => candidate !== undefined);
 	const declared = operation.declaredErrors.find(
 		(error) => error.key === target && error.payload === null,

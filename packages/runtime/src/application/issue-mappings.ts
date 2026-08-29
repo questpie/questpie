@@ -39,6 +39,17 @@ export function decodeRuntimeIssueMappings(
 									left < right ? -1 : left > right ? 1 : 0,
 								)
 								.map(([issue, target]) => {
+									const issueIdentity = identity(
+										issue,
+										`${label} Issue identity`,
+										"issue",
+									);
+									if (
+										!issueIdentity.startsWith(
+											`issue:${collection.slice("collection:".length)}/`,
+										)
+									)
+										fail(`${label} Issue does not belong to its Collection`);
 									const targetKey = string(target, `${label} target`);
 									if (
 										!declaredErrors.some(
@@ -47,10 +58,7 @@ export function decodeRuntimeIssueMappings(
 										)
 									)
 										fail(`${label} target is invalid`);
-									return [
-										identity(issue, `${label} Issue identity`, "issue"),
-										targetKey,
-									];
+									return [issueIdentity, targetKey];
 								}),
 						),
 					),

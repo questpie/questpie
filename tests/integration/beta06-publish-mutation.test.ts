@@ -86,6 +86,10 @@ test("projects the authored message.publish Mutation into the executable applica
 					code: "IDEMPOTENCY_CONFLICT",
 					status: 409,
 				}),
+				publicationRejected: expect.objectContaining({
+					code: "PUBLICATION_REJECTED",
+					status: 422,
+				}),
 			},
 		}),
 	);

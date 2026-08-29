@@ -125,6 +125,10 @@ interface ExportMetadata {
 	readonly acceptanceSpans: readonly (SourceSpan | null)[];
 	readonly lifecycleSources: Readonly<Record<string, LifecycleSource>>;
 }
+const directMemberSections = new Set(
+	"list get create update delete issueMappings".split(" "),
+);
+const nestedMemberSections = "|fields|issues|constraints|indexes|relations|";
 
 function propertyName(node: ts.PropertyName | undefined): string | null {
 	if (!node) return null;
@@ -178,25 +182,28 @@ async function directExportMetadata(
 						for (const property of definition.properties) {
 							if (!ts.isPropertyAssignment(property)) continue;
 							const section = propertyName(property.name);
-							if (
-								section &&
-								["list", "get", "create", "update", "delete"].includes(section)
-							)
+							if (section && directMemberSections.has(section))
 								memberSpans[section] = sourceSpan(source, property);
+							const nestedKind =
+								section && nestedMemberSections.includes(`|${section}|`)
+									? section === "indexes"
+										? "index"
+										: section === "issues"
+											? "issue"
+											: section.slice(0, -1)
+									: undefined;
 							if (
-								section &&
-								["fields", "constraints", "indexes", "relations"].includes(
-									section,
-								) &&
+								nestedKind &&
 								ts.isObjectLiteralExpression(property.initializer)
 							) {
-								const kind =
-									section === "indexes" ? "index" : section.slice(0, -1);
 								for (const member of property.initializer.properties) {
 									if (!ts.isPropertyAssignment(member)) continue;
 									const name = propertyName(member.name);
 									if (name)
-										memberSpans[`${kind}:${name}`] = sourceSpan(source, member);
+										memberSpans[`${nestedKind}:${name}`] = sourceSpan(
+											source,
+											member,
+										);
 								}
 							}
 							if (

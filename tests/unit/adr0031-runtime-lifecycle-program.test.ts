@@ -239,6 +239,19 @@ test("normalizes a sparse lane with ordinary optional-chain semantics", async ()
 	).rejects.toThrow("not closed");
 });
 
+test("treats an omitted normalize phase as the identity program", async () => {
+	await expect(
+		executeCollectionLifecyclePhase(
+			{
+				...lifecycle,
+				phases: { ...lifecycle.phases, normalize: [] },
+			} as never,
+			"normalize",
+			{ input: { reference: "SUP-123", summary: "Help" } },
+		),
+	).resolves.toEqual({ reference: "SUP-123", summary: "Help" });
+});
+
 test("rejects lifecycle digest and Runtime Build drift", () => {
 	for (const hostile of [
 		{ ...lifecycle, digest: "0".repeat(64) },

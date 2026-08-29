@@ -117,7 +117,10 @@ export const editTicket = defineMutation({
 	}),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
-	errors: { ticketUnavailable },
+	errors: { invalidTicket, ticketUnavailable },
+	issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},
 	handler: async ({ input, ctx, errors }) => {
 		const current = await ctx.data.tickets.get({ key: { id: input.ticketId } });
 		if (current === null) throw errors.ticketUnavailable();
@@ -146,7 +149,10 @@ export const assignTicket = defineMutation({
 	}),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
-	errors: { ticketUnavailable },
+	errors: { invalidTicket, ticketUnavailable },
+	issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},
 	handler: async ({ input, ctx, errors }) => {
 		const updated = await ctx.data.tickets.update({
 			key: { id: input.ticketId },
@@ -163,7 +169,10 @@ export const closeTicket = defineMutation({
 	input: codec.object({ ticketId: codec.uuid() }),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
-	errors: { ticketUnavailable, transitionRejected },
+	errors: { invalidTicket, ticketUnavailable, transitionRejected },
+	issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},
 	handler: async ({ input, ctx, errors }) => {
 		const current = await ctx.data.tickets.get({ key: { id: input.ticketId } });
 		if (current === null) throw errors.ticketUnavailable();
@@ -186,7 +195,10 @@ export const reopenTicket = defineMutation({
 	input: codec.object({ ticketId: codec.uuid() }),
 	output: ticketResultCodec,
 	policy: policy.authenticated(),
-	errors: { ticketUnavailable, transitionRejected },
+	errors: { invalidTicket, ticketUnavailable, transitionRejected },
+	issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},
 	handler: async ({ input, ctx, errors }) => {
 		const current = await ctx.data.tickets.get({ key: { id: input.ticketId } });
 		if (current === null) throw errors.ticketUnavailable();

@@ -9,6 +9,7 @@ import { renderCoreDataContract } from "./data";
 import { renderJobDeclarations } from "./job";
 import {
 	renderGeneratedMutationData,
+	renderGeneratedMutationDataByName,
 	renderMutationDeclarations,
 	renderMutationFactory,
 	type MutationGeneratedContractV1,
@@ -312,6 +313,14 @@ export function renderAppContract(
 			fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
 		fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),
 	});
+	const mutationDataByName = renderGeneratedMutationDataByName(
+		mutationContract,
+		{
+			field: (target, path) =>
+				fieldType(fieldByIdentity(`${target}/field:${path.join("/")}`), "Date"),
+			fieldIdentity: (identity) => fieldType(fieldByIdentity(identity), "Date"),
+		},
+	);
 	const routes = resources
 		.filter((resource) => resource.kind === "route")
 		.sort((left, right) => compareAscii(left.name, right.name));
@@ -342,6 +351,10 @@ export interface GeneratedMutationData {
 	${mutationData}
 }
 
+export interface GeneratedMutationDataByName {
+	${mutationDataByName}
+}
+
 export interface GeneratedQueries {
 	${renderQueries(resources)}
 }
@@ -357,8 +370,8 @@ export interface QueryContext {
 	readonly signal: AbortSignal;
 }
 
-export interface MutationContext extends Omit<RootExecution, "services"> {
-	readonly data: Readonly<GeneratedMutationData>;
+export interface MutationContext<Name extends keyof GeneratedMutations & keyof GeneratedMutationDataByName> extends Omit<RootExecution, "services"> {
+	readonly data: Readonly<GeneratedMutationDataByName[Name]>;
 	readonly operationTime: Date;
 	readonly callId: string;
 	readonly transactionId: string;

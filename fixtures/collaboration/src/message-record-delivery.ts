@@ -13,6 +13,9 @@ export const recordMessageDelivery = defineMutation({
 			status: 404,
 		}),
 	},
+	issueMappings: {
+		messageEvents: { invalidKind: "deliveryUnavailable" },
+	},
 	handler: async ({ input, ctx, errors }) => {
 		const event = await ctx.data.messageEvents.create({
 			input: { messageId: input.messageId, kind: "delivered" },

@@ -34,7 +34,18 @@ test("emits only plan-backed Mutation Collection capabilities", async () => {
 			join(temporary, "mutation-context-consumer.ts"),
 			`import type { MutationContext } from "#questpie/app";
 
-declare const ctx: MutationContext;
+declare const ctx: MutationContext<"message.publish">;
+declare const mapped: MutationContext<"message.publish">;
+declare const unmapped: MutationContext<"message.requestDigest">;
+await mapped.data.messageEvents.create({
+	input: {
+		messageId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",
+		kind: "published",
+	},
+	values: { occurredAt: new Date() },
+});
+// @ts-expect-error issue-bearing create is withheld without a complete mapping
+unmapped.data.messageEvents.create;
 // @ts-expect-error BETA-06 Mutation Context exposes no Service capability
 ctx.services;
 const channel = await ctx.data.channels.get({

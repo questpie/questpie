@@ -57,6 +57,36 @@ export function collectionLifecycleIssueIdentity(
 		: null;
 }
 
+export interface CollectionLifecycleDoom {
+	capture(error: unknown): void;
+	throwIfDoomed(): void;
+}
+
+export function createCollectionLifecycleDoom(): CollectionLifecycleDoom {
+	let firstIssue: unknown;
+	return Object.freeze({
+		capture(error: unknown) {
+			if (firstIssue === undefined && isCollectionLifecycleIssue(error))
+				firstIssue = error;
+		},
+		throwIfDoomed() {
+			if (firstIssue !== undefined) throw firstIssue;
+		},
+	});
+}
+
+export async function captureCollectionLifecycleIssue<T>(
+	doom: CollectionLifecycleDoom | undefined,
+	use: () => Promise<T>,
+): Promise<T> {
+	try {
+		return await use();
+	} catch (error) {
+		doom?.capture(error);
+		throw error;
+	}
+}
+
 function fail(message: string): never {
 	throw new TypeError(`Invalid Collection lifecycle program: ${message}`);
 }
@@ -479,6 +509,8 @@ export async function executeCollectionLifecyclePhase(
 	);
 	const locals = new Map<number, unknown>();
 	const safeRoots = closed(roots) as RecordValue;
+	if (phase === "normalize" && program.phases.normalize.length === 0)
+		return safeRoots.input;
 	const evaluate = (raw: unknown): unknown => {
 		const expression = raw as RecordValue;
 		if (expression.op === "literal") return expression.value;

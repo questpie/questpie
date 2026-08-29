@@ -461,18 +461,94 @@ postgresTest(
 					receipt: `delivery:${effectId}`,
 				});
 				let transportCalls = 0;
+				let lifecycleWireErrorBytes: string | undefined;
 				const networkClient = createClient({
 					baseUrl: "https://app.test",
-					fetch: (request) => {
+					fetch: async (request) => {
 						transportCalls += 1;
 						const headers = new Headers(request.headers);
 						headers.set(
 							"cookie",
 							"questpie_tracer_session=f18f8b8e0e1446079dc6e6d4755505f9",
 						);
-						return routeApplication.fetch(new Request(request, { headers }));
+						const response = await routeApplication.fetch(
+							new Request(request, { headers }),
+						);
+						if (response.status === 422) {
+							const frame = (await response.clone().json()) as Readonly<{
+								kind?: unknown;
+								error?: unknown;
+							}>;
+							if (frame.kind === "declaredError")
+								lifecycleWireErrorBytes = JSON.stringify(frame.error);
+						}
+						return response;
 					},
 				}).withContext({ companyId: tracerIds.company });
+				const hostileBody = "__questpie_hostile_invalid_event__";
+				let directLifecycleError: unknown;
+				try {
+					await routeApplication.execution(executionInput, ({ mutations }) =>
+						mutations.message.publish(
+							{ body: hostileBody, channelId: tracerIds.channel },
+							{ callId: `direct:lifecycle:${crypto.randomUUID()}` },
+						),
+					);
+				} catch (error) {
+					directLifecycleError = error;
+				}
+				expect(directLifecycleError).toMatchObject({
+					code: "PUBLICATION_REJECTED",
+					payload: null,
+					status: 422,
+				});
+				const directLifecycleErrorBytes = JSON.stringify({
+					code: (directLifecycleError as { code: unknown }).code,
+					status: (directLifecycleError as { status: unknown }).status,
+					payload: (directLifecycleError as { payload: unknown }).payload,
+				});
+				let clientLifecycleError: unknown;
+				try {
+					await networkClient.mutations["message.publish"](
+						{ body: hostileBody, channelId: tracerIds.channel },
+						{ callId: `network:lifecycle:${crypto.randomUUID()}` },
+					);
+				} catch (error) {
+					clientLifecycleError = error;
+				}
+				expect(clientLifecycleError).toMatchObject({
+					code: "PUBLICATION_REJECTED",
+					payload: null,
+					status: 422,
+				});
+				const clientLifecycleErrorBytes = JSON.stringify({
+					code: (clientLifecycleError as { code: unknown }).code,
+					status: (clientLifecycleError as { status: unknown }).status,
+					payload: (clientLifecycleError as { payload: unknown }).payload,
+				});
+				expect(clientLifecycleErrorBytes).toBe(directLifecycleErrorBytes);
+				expect(lifecycleWireErrorBytes).toBe(directLifecycleErrorBytes);
+				for (const secret of [
+					"collection:messageEvents",
+					"issue:messageEvents/invalidKind",
+					"candidate",
+					"Policy",
+					"PostgreSQL",
+					"stack",
+				])
+					expect(clientLifecycleErrorBytes).not.toContain(secret);
+				const afterRejectedLifecycle = await routeApplication.execution(
+					executionInput,
+					({ queries }) =>
+						queries.messages.page({
+							after: null,
+							channelId: tracerIds.channel,
+							first: 100,
+						}),
+				);
+				expect(
+					afterRejectedLifecycle.nodes.some(({ body }) => body === hostileBody),
+				).toBe(false);
 				const networkDelivery = await networkClient.actions["delivery.publish"](
 					{ effectKey: "domain-network", message: "delivery-network" },
 					{
@@ -486,7 +562,7 @@ postgresTest(
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
-				expect(transportCalls).toBe(1);
+				expect(transportCalls).toBe(2);
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
 					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
@@ -509,7 +585,7 @@ postgresTest(
 				expect(networkMaximumTimeout.receipt).toBe(
 					directMaximumTimeout.receipt,
 				);
-				expect(transportCalls).toBe(2);
+				expect(transportCalls).toBe(3);
 				await expect(
 					networkClient.actions["delivery.publish"](
 						{
@@ -539,7 +615,7 @@ postgresTest(
 						},
 					),
 				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
-				expect(transportCalls).toBe(4);
+				expect(transportCalls).toBe(5);
 
 				await expect(
 					invokeDelivery(

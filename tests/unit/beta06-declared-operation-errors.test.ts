@@ -8,6 +8,7 @@ import { compileApplication } from "@questpie/compiler";
 
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
 import { decodeRuntimeArtifacts } from "../../packages/runtime/src/application/artifacts";
+import { decodeRuntimeIssueMappings } from "../../packages/runtime/src/application/issue-mappings";
 import {
 	createOperationEngine,
 	DeclaredOperationError,
@@ -68,6 +69,12 @@ test("decodes exact declared-error contracts from the complete Runtime artifacts
 					callId: { kind: "text" },
 				},
 			},
+		},
+		{
+			key: "publicationRejected",
+			code: "PUBLICATION_REJECTED",
+			status: 422,
+			payload: null,
 		},
 	]);
 
@@ -176,6 +183,35 @@ test("maps only an Operation-owned Collection issue after rollback", async () =>
 	expect(() =>
 		mapCollectionIssueToDeclaredError(operation, "issue:tickets/forged"),
 	).toThrow(new OperationFailure("INTERNAL"));
+	expect(() =>
+		mapCollectionIssueToDeclaredError(
+			{
+				...operation,
+				issueMappings: {
+					"collection:comments": {
+						"issue:tickets/invalidReference": "invalidTicket",
+					},
+				},
+			} as never,
+			"issue:tickets/invalidReference",
+		),
+	).toThrow(new OperationFailure("INTERNAL"));
+	expect(() =>
+		mapCollectionIssueToDeclaredError(
+			{
+				...operation,
+				declaredErrors: [
+					{
+						key: "invalidTicket",
+						code: "INVALID_TICKET",
+						status: 422,
+						payload: { kind: "text" },
+					},
+				],
+			} as never,
+			"issue:tickets/invalidReference",
+		),
+	).toThrow(new OperationFailure("INTERNAL"));
 
 	const forgedIssue = Object.assign(new Error("Collection lifecycle issue"), {
 		[Symbol.for("questpie.runtime.collection-lifecycle-issue.v1")]: true,
@@ -187,6 +223,27 @@ test("maps only an Operation-owned Collection issue after rollback", async () =>
 	expect(normalizeExecutedOperationError(operation, forgedIssue)).toEqual(
 		new OperationFailure("INTERNAL"),
 	);
+});
+
+test("rejects a lifecycle Issue borrowed across Collection artifact bindings", () => {
+	expect(() =>
+		decodeRuntimeIssueMappings(
+			{
+				"collection:comments": {
+					"issue:tickets/invalidReference": "invalidTicket",
+				},
+			},
+			[
+				{
+					key: "invalidTicket",
+					code: "INVALID_TICKET",
+					status: 422,
+					payload: null,
+				},
+			],
+			"operation issueMappings",
+		),
+	).toThrow("Issue does not belong to its Collection");
 });
 
 test("generated client verifies declared-error status and decodes its exact payload", async () => {

@@ -18,6 +18,7 @@ export type {
 export {
 	projectMutationGeneratedContract,
 	renderGeneratedMutationData,
+	renderGeneratedMutationDataByName,
 } from "./generated-contract";
 export type { MutationGeneratedContractV1 } from "./generated-contract";
 export { lowerPostgresCollectionOperationPlans } from "./postgres";

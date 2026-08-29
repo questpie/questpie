@@ -1,4 +1,6 @@
 import { compareAscii } from "../canonical";
+import type { CollectionLifecycleProgramsV1 } from "../lifecycle/contract";
+import { issueBearingCollectionIdentities } from "../lifecycle/reachability";
 import {
 	normalizeBoundPolicy,
 	type DataQueryTemplateV1,
@@ -24,6 +26,10 @@ export interface MutationGeneratedContractV1 {
 			optionalSelectedFieldPaths: readonly FieldPath[];
 		}
 	>[];
+	readonly issueBearingTargets: readonly string[];
+	readonly admittedIssueBearingTargets: Readonly<
+		Record<string, readonly string[]>
+	>;
 }
 
 interface MutationDataTypeRenderer {
@@ -203,7 +209,14 @@ function method(
 export function renderGeneratedMutationData(
 	contract: MutationGeneratedContractV1,
 	types: MutationDataTypeRenderer,
+	mutationName?: string,
 ): string {
+	const issueBearingTargets = new Set(contract.issueBearingTargets);
+	const admittedTargets = new Set(
+		mutationName === undefined
+			? contract.issueBearingTargets
+			: (contract.admittedIssueBearingTargets[mutationName] ?? []),
+	);
 	const collections = new Map<
 		string,
 		Map<
@@ -212,6 +225,13 @@ export function renderGeneratedMutationData(
 		>
 	>();
 	for (const program of contract.operations) {
+		if (
+			mutationName !== undefined &&
+			(program.member === "create" || program.member === "update") &&
+			issueBearingTargets.has(program.target) &&
+			!admittedTargets.has(program.target)
+		)
+			continue;
 		const collectionName = program.target.slice("collection:".length);
 		const members = collections.get(collectionName) ?? new Map();
 		if (members.has(program.member))
@@ -235,9 +255,23 @@ export function renderGeneratedMutationData(
 		.join("\n\t");
 }
 
+export function renderGeneratedMutationDataByName(
+	contract: MutationGeneratedContractV1,
+	types: MutationDataTypeRenderer,
+): string {
+	return Object.keys(contract.admittedIssueBearingTargets)
+		.sort(compareAscii)
+		.map(
+			(name) =>
+				`readonly ${JSON.stringify(name)}: Readonly<{ ${renderGeneratedMutationData(contract, types, name)} }>;`,
+		)
+		.join("\n\t");
+}
+
 export function projectMutationGeneratedContract(
 	programs: CollectionOperationProgramsV1,
 	resources: readonly NormalizedResource[],
+	lifecycle: CollectionLifecycleProgramsV1,
 ): MutationGeneratedContractV1 {
 	const policies = new Map<
 		string,
@@ -248,7 +282,34 @@ export function projectMutationGeneratedContract(
 			const program = normalizeBoundPolicy(resource.value).program;
 			policies.set(program.identity, program);
 		}
+	const issueBearingTargets = issueBearingCollectionIdentities(lifecycle);
+	const collectionIdentityByName = new Map(
+		resources
+			.filter((resource) => resource.kind === "collection")
+			.map((resource) => [resource.name, resource.identity]),
+	);
+	const admittedIssueBearingTargets = Object.fromEntries(
+		resources
+			.filter((resource) => resource.kind === "mutation")
+			.sort((left, right) => compareAscii(left.name, right.name))
+			.map((resource) => [
+				resource.name,
+				Object.keys(
+					(resource.contract.issueMappings ?? {}) as Readonly<
+						Record<string, unknown>
+					>,
+				)
+					.map((name) => collectionIdentityByName.get(name))
+					.filter(
+						(identity): identity is string =>
+							identity !== undefined && issueBearingTargets.includes(identity),
+					)
+					.sort(compareAscii),
+			]),
+	);
 	return Object.freeze({
+		issueBearingTargets: Object.freeze(issueBearingTargets),
+		admittedIssueBearingTargets: Object.freeze(admittedIssueBearingTargets),
 		operations: Object.freeze(
 			programs.operations.map((operation) => {
 				const policy = policies.get(operation.policy);

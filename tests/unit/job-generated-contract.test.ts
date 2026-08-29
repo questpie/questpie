@@ -67,7 +67,11 @@ test("keeps Job acceptance on the Mutation Job map and out of shared contexts", 
 		{ collections: [] },
 		"src",
 		{ queries: [] },
-		{ operations: [] },
+		{
+			operations: [],
+			issueBearingTargets: [],
+			admittedIssueBearingTargets: {},
+		},
 		false,
 	);
 

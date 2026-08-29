@@ -15,7 +15,7 @@ test("types Mutation dispatch from the authored Reaction input", async () => {
 			join(temporary, "src/reaction-contract-consumer.ts"),
 			`import type { MutationContext, ReactionDefinition } from "#questpie/app";
 
-declare const ctx: MutationContext;
+declare const ctx: MutationContext<"message.publish">;
 declare const reaction: ReactionDefinition<"messagePublished", Record<never, never>>;
 
 async function exerciseDispatch() {

@@ -44,28 +44,23 @@ type ExecuteCollectionLeaf = (
 	leaf: CollectionLeaf,
 	parameters: readonly PostgresParameter[],
 ) => Promise<readonly Row[]>;
-
 export type TransactionQuery = (
 	statement: string,
 	parameters?: readonly unknown[],
 ) => Promise<readonly Row[]>;
-
 type ExecutionFacts = Readonly<{
 	principal: Readonly<{ id: string; kind: string }>;
 	authority: Readonly<{ kind: string }>;
 	tenant: Readonly<{ id: string }>;
 }>;
-
 function unavailable(): never {
 	throw new TypeError("Collection operation is unavailable");
 }
-
 function record(value: unknown, label: string): Row {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError(`${label} must be an object`);
 	return value as Row;
 }
-
 function exactRequest(
 	value: unknown,
 	key: "input" | "key",
@@ -76,7 +71,6 @@ function exactRequest(
 		throw new TypeError(`${label} must have exactly the compiled keys`);
 	return request;
 }
-
 function exactRequestWithOptionalKeys(
 	value: unknown,
 	required: readonly string[],
@@ -302,6 +296,7 @@ function createCollectionMutationData(
 		operationTime: Date;
 		consumeRows(count: number): void;
 		resultValuesDecoded: boolean;
+		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
 	}>,
 ) {
 	const execute = async (
@@ -310,6 +305,7 @@ function createCollectionMutationData(
 		leaf: CollectionLeaf,
 		parameters: readonly PostgresParameter[],
 	) => {
+		input.lifecycleDoom?.throwIfDoomed();
 		if (performance.now() - started > plan.limits.durationMilliseconds)
 			throw new TypeError("Collection operation exceeded its duration limit");
 		const rows = await input.executeLeaf(leaf, parameters);
@@ -543,10 +539,14 @@ function createCollectionMutationData(
 											validation.result,
 											input.resultValuesDecoded,
 										);
-										await lifecycleRuntime.validateCollectionCreateCandidate(
-											lifecycle,
-											candidate,
-											input.operationTime,
+										await lifecycleRuntime.captureCollectionLifecycleIssue(
+											input.lifecycleDoom,
+											() =>
+												lifecycleRuntime.validateCollectionCreateCandidate(
+													lifecycle,
+													candidate!,
+													input.operationTime,
+												),
 										);
 									}
 									const rows = await execute(
@@ -788,6 +788,7 @@ export function createPostgresDatabaseCollectionMutationData(
 		facts: ExecutionFacts;
 		operationTime: Date;
 		consumeRows(count: number): void;
+		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
 	}>,
 ) {
 	return createCollectionMutationData({

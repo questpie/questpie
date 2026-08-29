@@ -10,6 +10,7 @@ import {
 	type LifecyclePhase,
 } from "./contract";
 import { lowerLifecyclePhase } from "./lower";
+import { validateIssueMappings } from "./reachability";
 
 export type {
 	CollectionLifecycleProgramsV1,
@@ -125,11 +126,13 @@ export function projectCollectionLifecyclePrograms(
 		.sort((left, right) =>
 			compareAscii(left.bindings.collection, right.bindings.collection),
 		);
-	return Object.freeze({
+	const projection = Object.freeze({
 		format: "questpie.collection-lifecycle-programs",
 		version: 1,
 		programs: Object.freeze(programs),
 	});
+	validateIssueMappings(input.resources, projection, input.evaluatedExports);
+	return projection;
 }
 
 export function bindCollectionLifecyclePrograms(

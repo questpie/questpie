@@ -4,7 +4,10 @@ import { join, resolve } from "node:path";
 
 import { compileApplication } from "@questpie/compiler";
 
-import { linkCollectionMutationPrograms } from "../../packages/runtime/src/mutation/program";
+import {
+	linkCollectionMutationPrograms,
+	mutationProgramDigest,
+} from "../../packages/runtime/src/mutation/program";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
@@ -25,6 +28,12 @@ export async function runtimePostgresProgramFixture() {
 				program: Readonly<{ identity: string; target: string }>;
 			}[];
 		};
+		const lifecyclePrograms = JSON.parse(
+			generated["collection-lifecycle-programs.json"] ?? "null",
+		);
+		const runtimeBuild = JSON.parse(
+			generated["runtime-build.json"] ?? "null",
+		) as { compilerRuntimeBuildDigest: string };
 		return {
 			artifact: JSON.parse(
 				generated["postgres-collection-operation-plans.json"] ?? "null",
@@ -47,6 +56,12 @@ export async function runtimePostgresProgramFixture() {
 					identity: program.identity,
 					target: program.target,
 				})),
+				lifecyclePrograms,
+				expectedLifecycleProgramsDigest: mutationProgramDigest(
+					"questpie.collection-lifecycle-programs-v1",
+					lifecyclePrograms,
+				),
+				compilerRuntimeBuildDigest: runtimeBuild.compilerRuntimeBuildDigest,
 			}),
 		};
 	} finally {

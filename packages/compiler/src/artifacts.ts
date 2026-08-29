@@ -200,10 +200,6 @@ export async function createArtifacts(
 		...manifest,
 		schema,
 	});
-	const mutationDeclarations = projectMutationGeneratedContract(
-		collectionOperationPrograms,
-		input.resources,
-	);
 	const sourceGraph = await graph(input.applicationRoot, input.sourceFiles);
 	const frameworkGraph = await graph(input.frameworkRoot, input.frameworkFiles);
 	const packageGraphs = await Promise.all(
@@ -381,6 +377,15 @@ export async function createArtifacts(
 			entries: inventory.entries,
 		})),
 	};
+	const compilerRuntimeBuild = projectCompilerRuntimeBuild(
+		contentDigest(canonicalBytes(buildInput)),
+	).digest;
+	const lifecyclePrograms = projectCollectionLifecyclePrograms({
+		applicationName: input.configuration.application.name,
+		runtimeBuild: compilerRuntimeBuild,
+		resources: operationResources,
+		evaluatedExports: input.evaluatedExports,
+	});
 	const runtime = projectRuntimeContract({
 		configuration: input.configuration,
 		resources: operationResources,
@@ -418,21 +423,17 @@ export async function createArtifacts(
 	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
 	const mutationTransactionStatements =
 		projectPostgresMutationTransactionStatements();
-	const compilerRuntimeBuild = projectCompilerRuntimeBuild(
-		contentDigest(canonicalBytes(buildInput)),
-	).digest;
-	const lifecyclePrograms = projectCollectionLifecyclePrograms({
-		applicationName: input.configuration.application.name,
-		runtimeBuild: compilerRuntimeBuild,
-		resources: operationResources,
-		evaluatedExports: input.evaluatedExports,
-	});
 	const collectionLifecycleProgramsDigest =
 		lifecyclePrograms.programs.length > 0
 			? digest("questpie.collection-lifecycle-programs-v1", lifecyclePrograms)
 			: null;
 	collectionOperationPrograms = bindCollectionLifecyclePrograms(
 		collectionOperationPrograms,
+		lifecyclePrograms,
+	);
+	const mutationDeclarations = projectMutationGeneratedContract(
+		collectionOperationPrograms,
+		input.resources,
 		lifecyclePrograms,
 	);
 	const generated: Record<string, string> = {

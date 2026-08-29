@@ -57,7 +57,7 @@ export interface OperationCallOptions {
 
 export type GeneratedMutationOperations = ${operations};
 
-export type MutationDefinition<Name extends keyof GeneratedMutations, Errors extends OperationErrorMap> = Readonly<{
+export type MutationDefinition<Name extends keyof GeneratedMutations & keyof GeneratedMutationDataByName, Errors extends OperationErrorMap> = Readonly<{
 	readonly kind: "mutation";
 	readonly identity: \`mutation:\${Name & string}\`;
 	readonly name: Name;
@@ -68,12 +68,12 @@ export type MutationDefinition<Name extends keyof GeneratedMutations, Errors ext
 	readonly issueMappings?: GeneratedMutations[Name]["issueMappings"];
 	readonly handler: (input: Readonly<{
 		input: GeneratedMutations[Name]["input"];
-		ctx: MutationContext;
+		ctx: MutationContext<Name>;
 		errors: OperationErrorFactories<Errors>;
 	}>) => GeneratedMutations[Name]["handlerOutput"] | Promise<GeneratedMutations[Name]["handlerOutput"]>;
 }>;
 
-export type MutationFactory = <const Name extends keyof GeneratedMutations, const Errors extends OperationErrorMap>(
+export type MutationFactory = <const Name extends keyof GeneratedMutations & keyof GeneratedMutationDataByName, const Errors extends OperationErrorMap>(
 	definition: Readonly<{
 		name: Name;
 		network?: boolean;
@@ -84,7 +84,7 @@ export type MutationFactory = <const Name extends keyof GeneratedMutations, cons
 		issueMappings?: GeneratedMutations[Name]["issueMappings"];
 		handler(input: Readonly<{
 			input: GeneratedMutations[Name]["input"];
-			ctx: MutationContext;
+			ctx: MutationContext<Name>;
 			errors: OperationErrorFactories<Errors>;
 		}>): GeneratedMutations[Name]["handlerOutput"] | Promise<GeneratedMutations[Name]["handlerOutput"]>;
 	}>,

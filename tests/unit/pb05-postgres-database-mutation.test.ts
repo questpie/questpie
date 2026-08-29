@@ -11,7 +11,6 @@ import type {
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresMutationTransactionStatements,
 } from "../../packages/runtime/src/mutation";
-import { executeCollectionLifecyclePhase } from "../../packages/runtime/src/mutation/lifecycle";
 import { isCollectionLifecycleIssue } from "../../packages/runtime/src/mutation/lifecycle";
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
@@ -302,6 +301,12 @@ const dispatchedOperation = {
 test("rolls back before returning a Collection issue to the Operation engine", async () => {
 	const linked = fixedStatements();
 	const events: string[] = [];
+	let firstCaught: unknown;
+	let secondCaught: unknown;
+	const candidateStatement = statement(
+		"collection.widgets.create.candidate",
+		1,
+	);
 	const lifecycle = {
 		format: "questpie.lifecycle-program.v1",
 		interpreter: "questpie.lifecycle-interpreter.v1",
@@ -309,18 +314,32 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 		reentryLimit: 8,
 		bindings: {
 			collection: "collection:widgets",
-			fields: {},
+			fields: { id: "collection:widgets/field:id" },
 			issues: { invalid: "issue:widgets/invalid" },
 			operations: ["mutation:widgets.publish"],
 		},
 		phases: {
-			normalize: [],
+			normalize: [{ op: "return", value: { op: "root", root: "input" } }],
 			validate: [{ op: "throwIssue", issue: "issue:widgets/invalid" }],
 			check: [],
 			afterWrite: [],
 		},
 		digest: "e".repeat(64),
 	} as const;
+	const issueCollectionPlan = {
+		...collectionPlan,
+		operation: { ...collectionPlan.operation, lifecycleProgram: lifecycle },
+		candidateValidation: {
+			sql: "SELECT CANDIDATE",
+			parameters: collectionPlan.write.parameters,
+			result: collectionPlan.write.result,
+			statement: candidateStatement,
+		},
+	};
+	const issueCollectionPlans = {
+		plans: [issueCollectionPlan],
+		byIdentity: new Map([[issueCollectionPlan.identity, issueCollectionPlan]]),
+	} as unknown as LinkedPostgresCollectionOperationPlansV1;
 	const issueOperation = {
 		...operation,
 		declaredErrors: [
@@ -338,10 +357,20 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 		},
 		binding: {
 			...operation.binding,
-			execute: async () => {
-				events.push("issue");
-				await executeCollectionLifecyclePhase(lifecycle, "validate", {});
-				throw new Error("unreachable");
+			execute: async ({ ctx }: Readonly<{ ctx: View }>) => {
+				try {
+					await ctx.data.widgets.create({ input: { id: widgetId } });
+				} catch (error) {
+					firstCaught = error;
+					events.push("caught");
+				}
+				try {
+					await ctx.data.widgets.create({ input: { id: widgetId } });
+				} catch (error) {
+					secondCaught = error;
+					events.push("caught-again");
+				}
+				return { id: widgetId };
 			},
 		},
 	} as unknown as PreparedOperation<View>;
@@ -350,10 +379,19 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 			try {
 				return await input.use({
 					[transactionBrand]: true,
-					execute: async (candidate) =>
-						(candidate === linked.get("mutation.receipt.claim")?.statement
-							? [{ transactionId: "901", operationTime }]
-							: []) as never,
+					execute: async (candidate) => {
+						if (candidate === linked.get("mutation.receipt.claim")?.statement)
+							return [{ transactionId: "901", operationTime }] as never;
+						if (candidate === authorityStatement) return [{}] as never;
+						if (candidate === candidateStatement) {
+							events.push("candidate");
+							return [{ qp_result_0: widgetId }] as never;
+						}
+						if (candidate === writeStatement) events.push("write");
+						if (candidate === linked.get("mutation.receipt.commit")?.statement)
+							events.push("receipt");
+						return [] as never;
+					},
 				});
 			} catch (error) {
 				events.push("rollback");
@@ -365,7 +403,7 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 		database,
 		application: "application:generic",
 		transactionStatements: linked,
-		collectionPlans,
+		collectionPlans: issueCollectionPlans,
 		reactions: emptyReactions,
 		contextInputCodec: { kind: "object", properties: {} },
 		runtimeBuildDigest: "d".repeat(64),
@@ -377,8 +415,10 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 		throw new Error("expected Collection issue");
 	} catch (error) {
 		expect(isCollectionLifecycleIssue(error)).toBe(true);
+		expect(error).toBe(firstCaught);
+		expect(secondCaught).toBe(firstCaught);
 	}
-	expect(events).toEqual(["issue", "rollback"]);
+	expect(events).toEqual(["candidate", "caught", "caught-again", "rollback"]);
 });
 
 test("executes a fresh Mutation through one static read-committed database transaction", async () => {

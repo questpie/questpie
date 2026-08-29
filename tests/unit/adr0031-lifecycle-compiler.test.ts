@@ -8,10 +8,61 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
+import { traceIssueReachability } from "../../packages/compiler/src/lifecycle/reachability";
+
 const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
 );
+
+test("traces nested Collection calls deterministically without looping on re-entry", () => {
+	const origin = { module: "src/messages.ts", line: 1, column: 1 };
+	const nodes = new Map([
+		[
+			"collection:messages/create",
+			{
+				identity: "collection:messages/create",
+				issues: [],
+				calls: ["collection:messageEvents/create"],
+			},
+		],
+		[
+			"collection:messageEvents/create",
+			{
+				identity: "collection:messageEvents/create",
+				issues: [],
+				calls: ["collection:limits/create"],
+			},
+		],
+		[
+			"collection:limits/create",
+			{
+				identity: "collection:limits/create",
+				issues: [
+					{
+						issue: "issue:limits/exceeded" as const,
+						phase: "validate" as const,
+						origin,
+					},
+				],
+				calls: ["collection:messages/create"],
+			},
+		],
+	] as const);
+	expect(
+		traceIssueReachability("collection:messages/create", nodes).get(
+			"issue:limits/exceeded",
+		),
+	).toMatchObject({
+		path: [
+			"collection:messages/create",
+			"collection:messageEvents/create",
+			"collection:limits/create",
+		],
+		phase: "validate",
+		origin,
+	});
+});
 
 test("compiles Team Support Desk lifecycle authoring without retaining callbacks", async () => {
 	const compilation = await compileApplication({
@@ -198,6 +249,125 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 		}
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects an incomplete issue mapping with the complete Collection-call path", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-reachability-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const collectionPath = join(temporary, "src/tickets.ts");
+		const collectionSource = await readFile(collectionPath, "utf8");
+		await writeFile(
+			collectionPath,
+			collectionSource
+				.replace(
+					"\t\tinvalidReference: collection.issue(),",
+					"\t\tinvalidReference: collection.issue(),\n\t\temptySummary: collection.issue(),",
+				)
+				.replace(
+					"\t\t\t\tthrow issues.invalidReference();",
+					'\t\t\t\tthrow issues.invalidReference();\n\t\t\tif (candidate.summary === "") throw issues.emptySummary();',
+				),
+		);
+		const mutationPath = join(temporary, "src/ticket-mutations.ts");
+		const mutationSource = await readFile(mutationPath, "utf8");
+		let mappingIndex = 0;
+		await writeFile(
+			mutationPath,
+			mutationSource.replace(
+				/tickets: \{ invalidReference: "invalidTicket" \},/g,
+				(match) =>
+					mappingIndex++ === 0
+						? match
+						: 'tickets: { invalidReference: "invalidTicket", emptySummary: "invalidTicket" },',
+			),
+		);
+
+		try {
+			await compileApplication({ applicationRoot: temporary });
+			throw new Error("expected missing issue mapping diagnostic");
+		} catch (error) {
+			expect(error).toBeInstanceOf(CompilerDiagnosticError);
+			expect(error).toMatchObject({
+				code: "QP-COMPOSE-027",
+				diagnosticClass: "missingIssueMapping",
+				details: {
+					phase: "validate",
+					operation: "mutation:ticket.create",
+					path: ["mutation:ticket.create", "collection:tickets/create"],
+					issue: "issue:tickets/emptySummary",
+				},
+			});
+			expect((error as CompilerDiagnosticError).details.rewrite).toContain(
+				'emptySummary: "declaredError"',
+			);
+		}
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects unknown, borrowed, and payload-bearing issue mappings", async () => {
+	for (const [label, rewrite] of [
+		[
+			"unknown issue",
+			(source: string) =>
+				source.replace(
+					'tickets: { invalidReference: "invalidTicket" },',
+					'tickets: { unknownIssue: "invalidTicket" },',
+				),
+		],
+		[
+			"borrowed error",
+			(source: string) =>
+				source.replace(
+					'tickets: { invalidReference: "invalidTicket" },',
+					'tickets: { invalidReference: "notDeclaredHere" },',
+				),
+		],
+		[
+			"payload-bearing error",
+			(source: string) =>
+				source
+					.replace(
+						"const transitionRejected = operation.error({",
+						`const invalidWithPayload = operation.error({
+	code: "INVALID_WITH_PAYLOAD",
+	status: 422,
+	payload: codec.object({ detail: codec.text() }),
+});
+
+const transitionRejected = operation.error({`,
+					)
+					.replace(
+						"errors: { invalidTicket, ticketUnavailable },",
+						"errors: { invalidTicket, invalidWithPayload, ticketUnavailable },",
+					)
+					.replace(
+						'invalidReference: "invalidTicket"',
+						'invalidReference: "invalidWithPayload"',
+					),
+		],
+	] as const) {
+		const temporary = await mkdtemp(
+			join(resolve(import.meta.dir, "../.."), `.tmp-adr0031-${label}-`),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const path = join(temporary, "src/ticket-mutations.ts");
+			await writeFile(path, rewrite(await readFile(path, "utf8")));
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-027",
+				diagnosticClass: "invalidIssueMapping",
+			});
+		} finally {
+			await rm(temporary, { force: true, recursive: true });
+		}
 	}
 }, 30_000);
 

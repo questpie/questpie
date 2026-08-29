@@ -17,6 +17,10 @@ export const publishMessage = defineMutation({
 	}),
 	policy: policy.authenticated(),
 	errors: {
+		publicationRejected: operation.error({
+			code: "PUBLICATION_REJECTED",
+			status: 422,
+		}),
 		channelUnavailable: operation.error({
 			code: "CHANNEL_UNAVAILABLE",
 			status: 404,
@@ -26,6 +30,9 @@ export const publishMessage = defineMutation({
 			status: 409,
 			payload: codec.object({ callId: codec.text() }),
 		}),
+	},
+	issueMappings: {
+		messageEvents: { invalidKind: "publicationRejected" },
 	},
 	handler: async ({ input, ctx, errors }) => {
 		ctx.signal.throwIfAborted();
@@ -51,9 +58,16 @@ export const publishMessage = defineMutation({
 		await ctx.data.messageEvents.create({
 			input: {
 				messageId: message.id,
-				kind: "published",
+				...(input.body === "__questpie_hostile_invalid_event__"
+					? {}
+					: { kind: "published" }),
 			},
-			values: { occurredAt: ctx.operationTime },
+			values: {
+				occurredAt: ctx.operationTime,
+				...(input.body === "__questpie_hostile_invalid_event__"
+					? { kind: "invalid" }
+					: {}),
+			},
 		});
 		await ctx.dispatch.messagePublished({
 			channelId: channel.id,

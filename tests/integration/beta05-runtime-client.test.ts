@@ -24,6 +24,7 @@ import {
 	linkCollectionOperationAdapters,
 	type MutationInvoker,
 } from "../../packages/runtime/src/mutation";
+import { mutationProgramDigest } from "../../packages/runtime/src/mutation/program";
 import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
@@ -411,6 +412,9 @@ function generatedCollectionOperationDefinitions(): ReadonlyMap<
 			program: Readonly<{ identity: string; target: string }>;
 		}>[];
 	}>;
+	const lifecyclePrograms = JSON.parse(
+		compilation.generatedFiles["collection-lifecycle-programs.json"]!,
+	);
 	const kernels = linkCollectionMutationPrograms({
 		collectionOperations: JSON.parse(
 			compilation.generatedFiles["collection-operation-programs.json"]!,
@@ -429,6 +433,12 @@ function generatedCollectionOperationDefinitions(): ReadonlyMap<
 			identity: program.identity,
 			target: program.target,
 		})),
+		lifecyclePrograms,
+		expectedLifecycleProgramsDigest: mutationProgramDigest(
+			"questpie.collection-lifecycle-programs-v1",
+			lifecyclePrograms,
+		),
+		compilerRuntimeBuildDigest: String(runtimeBuild.compilerRuntimeBuildDigest),
 	});
 	const adapters = linkCollectionOperationAdapters({
 		artifact: JSON.parse(
