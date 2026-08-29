@@ -67,7 +67,7 @@ export function candidateFields(
 			const field = record(raw, `${identity} candidate field ${index}`);
 			exact(
 				field,
-				["path", "codec", "nullable", "requiredInput"],
+				["path", "column", "codec", "nullable", "requiredInput"],
 				`${identity} candidate field ${index}`,
 			);
 			if (typeof field.nullable !== "boolean")
@@ -76,6 +76,10 @@ export function candidateFields(
 				fail(`${identity} candidate field ${index} requiredInput is invalid`);
 			return Object.freeze({
 				path: path(field.path, `${identity} candidate field ${index} path`),
+				column: text(
+					field.column,
+					`${identity} candidate field ${index} column`,
+				),
 				codec: decodeMutationFieldCodec(
 					field.codec,
 					`${identity} candidate field ${index} codec`,
@@ -87,9 +91,10 @@ export function candidateFields(
 	);
 	if (
 		new Set(fields.map(({ path: fieldPath }) => JSON.stringify(fieldPath)))
-			.size !== fields.length
+			.size !== fields.length ||
+		new Set(fields.map(({ column }) => column)).size !== fields.length
 	)
-		fail(`${identity} candidate fields must be unique`);
+		fail(`${identity} candidate fields and columns must be unique`);
 	return Object.freeze(fields);
 }
 

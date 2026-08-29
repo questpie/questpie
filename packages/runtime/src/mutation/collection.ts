@@ -3,10 +3,13 @@ import type {
 	PostgresParameter,
 	PostgresTransaction,
 } from "../postgres/contract";
+import { createCollectionGetExecutor } from "./collection-get";
+import { createCollectionLifecycleCheckExecutor } from "./collection-lifecycle-check";
 import {
 	decodeMutationFieldInput,
 	decodeMutationFieldResult,
 	type MutationFieldCodecV1,
+	validateMutationFieldScalars as validateScalars,
 } from "./field-codec";
 import {
 	hasMutationValueAt as hasValueAt,
@@ -36,9 +39,11 @@ type CollectionLeaf =
 	| LinkedPostgresGetOperationPlanV1["read"]
 	| LinkedPostgresCreateOperationPlanV1["fieldAuthority"]["checks"][number]
 	| NonNullable<LinkedPostgresCreateOperationPlanV1["candidateValidation"]>
+	| NonNullable<LinkedPostgresCreateOperationPlanV1["candidatePolicyCheck"]>
 	| LinkedPostgresCreateOperationPlanV1["write"]
 	| LinkedPostgresUpdateOperationPlanV1["lock"]
 	| LinkedPostgresUpdateOperationPlanV1["candidateValidation"]
+	| NonNullable<LinkedPostgresUpdateOperationPlanV1["candidatePolicyCheck"]>
 	| LinkedPostgresUpdateOperationPlanV1["fieldAuthority"]["checks"][number]
 	| LinkedPostgresUpdateOperationPlanV1["write"];
 type ExecuteCollectionLeaf = (
@@ -61,16 +66,6 @@ function record(value: unknown, label: string): Row {
 	if (!value || typeof value !== "object" || Array.isArray(value))
 		throw new TypeError(`${label} must be an object`);
 	return value as Row;
-}
-function exactRequest(
-	value: unknown,
-	key: "input" | "key",
-	label: string,
-): Row {
-	const request = record(value, label);
-	if (Object.keys(request).length !== 1 || !Object.hasOwn(request, key))
-		throw new TypeError(`${label} must have exactly the compiled keys`);
-	return request;
 }
 function exactRequestWithOptionalKeys(
 	value: unknown,
@@ -258,28 +253,6 @@ function bind(
 	});
 }
 
-function validateScalars(
-	source: Row,
-	paths: readonly Path[],
-	fields: readonly Readonly<{
-		path: Path;
-		codec: MutationFieldCodecV1;
-		nullable: boolean;
-	}>[],
-) {
-	const byPath = new Map(fields.map((field) => [pathKey(field.path), field]));
-	for (const path of paths) {
-		const field = byPath.get(pathKey(path));
-		if (!field)
-			throw new TypeError("Compiled Collection Field has no scalar definition");
-		inputField(
-			valueAt(source, path, "Collection value"),
-			field.codec,
-			field.nullable,
-		);
-	}
-}
-
 function createCollectionMutationData(
 	input: Readonly<{
 		plans: LinkedPostgresCollectionOperationPlansV1;
@@ -306,6 +279,36 @@ function createCollectionMutationData(
 			throw new TypeError("Collection operation exceeded its duration limit");
 		return rows;
 	};
+	const executeGet = createCollectionGetExecutor({
+		execute,
+		bind: (parameters, key) =>
+			bind(parameters, { key }, input.facts, input.operationTime),
+		decode: (row, result) => decodeRow(row, result, input.resultValuesDecoded),
+		consumeRows: input.consumeRows,
+	});
+	const lifecycleCheck = createCollectionLifecycleCheckExecutor({
+		plans: input.plans,
+		operationTime: input.operationTime,
+		doom: input.lifecycleDoom,
+		executeGet,
+		executePolicy: (plan, check, values, started) =>
+			execute(
+				plan,
+				started,
+				check,
+				bind(
+					check.parameters,
+					values,
+					input.facts,
+					input.operationTime,
+					new Map(
+						plan.candidate.fields.map(
+							(field) => [pathKey(field.path), field.nullable] as const,
+						),
+					),
+				),
+			),
+	});
 	const collections = new Map<
 		string,
 		{
@@ -333,60 +336,8 @@ function createCollectionMutationData(
 				Object.freeze({
 					...(plans.get
 						? {
-								get: async (rawRequest: unknown) => {
-									const plan = plans.get!;
-									const started = performance.now();
-									const request = exactRequest(
-										rawRequest,
-										"key",
-										"Collection get request",
-									);
-									const key = record(request.key, "Collection key");
-									exactPaths(
-										inputPaths(key, "Collection key", plan.operation.keyFields),
-										plan.operation.keyFields,
-										"Collection key",
-									);
-									const values = { key };
-									const locked = await execute(
-										plan,
-										started,
-										plan.lock,
-										bind(
-											plan.lock.parameters,
-											values,
-											input.facts,
-											input.operationTime,
-										),
-									);
-									if (locked.length > 1)
-										throw new TypeError(
-											"Collection lock returned multiple rows",
-										);
-									const rows = await execute(
-										plan,
-										started,
-										plan.read,
-										bind(
-											plan.read.parameters,
-											values,
-											input.facts,
-											input.operationTime,
-										),
-									);
-									input.consumeRows(rows.length);
-									if (rows.length > plan.limits.rows)
-										throw new TypeError(
-											"Collection get exceeded its row limit",
-										);
-									return rows[0]
-										? decodeRow(
-												rows[0],
-												plan.read.result,
-												input.resultValuesDecoded,
-											)
-										: null;
-								},
+								get: async (rawRequest: unknown) =>
+									executeGet(plans.get!, rawRequest, performance.now()),
 							}
 						: {}),
 					...(plans.create
@@ -536,15 +487,16 @@ function createCollectionMutationData(
 											validation.result,
 											input.resultValuesDecoded,
 										);
-										await lifecycleRuntime.captureCollectionLifecycleIssue(
-											input.lifecycleDoom,
-											() =>
-												lifecycleRuntime.validateCollectionCreateCandidate(
-													lifecycle,
-													candidate!,
-													input.operationTime,
-												),
-										);
+										if (
+											!(await lifecycleCheck.execute(
+												plan,
+												candidate,
+												null,
+												undefined,
+												started,
+											))
+										)
+											unavailable();
 									}
 									const rows = await execute(
 										plan,
@@ -667,10 +619,6 @@ function createCollectionMutationData(
 										trustedValues,
 										expected,
 									};
-									const candidateValues = {
-										...authorityValues,
-										callerInput: candidatePatch,
-									};
 									const locked = await execute(
 										plan,
 										started,
@@ -708,6 +656,30 @@ function createCollectionMutationData(
 												"Collection update Field authority returned multiple rows",
 											);
 									}
+									const lifecycle = plan.operation.lifecycleProgram;
+									const normalized = lifecycle
+										? await lifecycleRuntime.normalizeCollectionLifecycleLanes(
+												lifecycle,
+												candidatePatch,
+												trustedValues,
+											)
+										: { callerInput: candidatePatch, trustedValues };
+									validateScalars(
+										normalized.callerInput,
+										suppliedPaths,
+										plan.candidate.fields,
+									);
+									if (normalized.trustedValues)
+										validateScalars(
+											normalized.trustedValues,
+											trustedPaths,
+											plan.candidate.fields,
+										);
+									const candidateValues = {
+										...authorityValues,
+										callerInput: normalized.callerInput,
+										trustedValues: normalized.trustedValues,
+									};
 									const candidates = await execute(
 										plan,
 										started,
@@ -725,11 +697,34 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection update candidate validation returned multiple rows",
 										);
-									decodeRow(
+									const candidate = decodeRow(
 										candidates[0]!,
 										plan.candidateValidation.result,
 										input.resultValuesDecoded,
 									);
+									if (lifecycle) {
+										const currentResult =
+											plan.candidateValidation.currentResult;
+										if (!currentResult)
+											throw new TypeError(
+												"Lifecycle update current candidate is incomplete",
+											);
+										const current = decodeRow(
+											candidates[0]!,
+											currentResult,
+											input.resultValuesDecoded,
+										);
+										if (
+											!(await lifecycleCheck.execute(
+												plan,
+												candidate,
+												current,
+												key,
+												started,
+											))
+										)
+											return null;
+									}
 									const rows = await execute(
 										plan,
 										started,

@@ -141,6 +141,7 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 		steps: readonly RecordValue[];
 		fields: readonly Readonly<{
 			path: FieldPath;
+			column: string;
 			codec: MutationFieldCodecV1;
 			nullable: boolean;
 			requiredInput: boolean;
@@ -166,6 +167,13 @@ export type LinkedPostgresCreateOperationPlanV1 = Readonly<{
 		freshAfterRowLockWait: true;
 		mutableEvidenceCollections: readonly string[];
 		sql: string;
+	}>;
+	candidatePolicyCheck?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresParameterV1[];
+		outcome: "authorizedOrUnavailable";
+		statement: PostgresCollectionStatement;
 	}>;
 	outputAuthority: OutputAuthorityV1;
 	write: Readonly<{
@@ -208,11 +216,15 @@ export type LinkedPostgresUpdateOperationPlanV1 = Readonly<{
 		sql: string;
 		parameters: readonly PostgresParameterV1[];
 		result: readonly PostgresResultV1[];
+		currentResult?: readonly PostgresResultV1[];
 		statement: PostgresCollectionStatement;
 	}>;
 	fieldAuthority: LinkedPostgresCreateOperationPlanV1["fieldAuthority"];
 	currentPolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
 	candidatePolicy: LinkedPostgresCreateOperationPlanV1["candidatePolicy"];
+	candidatePolicyCheck?: NonNullable<
+		LinkedPostgresCreateOperationPlanV1["candidatePolicyCheck"]
+	>;
 	outputAuthority: OutputAuthorityV1;
 	write: LinkedPostgresCreateOperationPlanV1["write"];
 	limits: Readonly<{ rows: 100; durationMilliseconds: 5_000 }>;

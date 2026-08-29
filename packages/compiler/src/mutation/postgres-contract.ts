@@ -111,6 +111,7 @@ export interface PostgresCreateOperationPlanV1 {
 		steps: readonly Readonly<Record<string, unknown>>[];
 		fields: readonly Readonly<{
 			path: readonly string[];
+			column: string;
 			codec: PostgresMutationFieldCodecV1;
 			nullable: boolean;
 			requiredInput: boolean;
@@ -134,6 +135,12 @@ export interface PostgresCreateOperationPlanV1 {
 		freshAfterRowLockWait: true;
 		mutableEvidenceCollections: readonly `collection:${string}`[];
 		sql: string;
+	}>;
+	readonly candidatePolicyCheck?: Readonly<{
+		freshAfterRowLockWait: true;
+		sql: string;
+		parameters: readonly PostgresOperationParameterV1[];
+		outcome: "authorizedOrUnavailable";
 	}>;
 	readonly outputAuthority: Readonly<{
 		freshAfterRowLockWait: true;
@@ -182,10 +189,14 @@ export interface PostgresUpdateOperationPlanV1 {
 		sql: string;
 		parameters: readonly PostgresOperationParameterV1[];
 		result: readonly PostgresOperationResultV1[];
+		currentResult?: readonly PostgresOperationResultV1[];
 	}>;
 	readonly fieldAuthority: PostgresCreateOperationPlanV1["fieldAuthority"];
 	readonly currentPolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
 	readonly candidatePolicy: PostgresCreateOperationPlanV1["candidatePolicy"];
+	readonly candidatePolicyCheck?: NonNullable<
+		PostgresCreateOperationPlanV1["candidatePolicyCheck"]
+	>;
 	readonly outputAuthority: PostgresCreateOperationPlanV1["outputAuthority"];
 	readonly write: PostgresCreateOperationPlanV1["write"];
 	readonly limits: Readonly<{ rows: number; durationMilliseconds: number }>;

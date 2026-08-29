@@ -14,6 +14,11 @@ import {
 	decodeRelationalScalarCodec,
 	type ScalarCodecV1,
 } from "../relational";
+import {
+	mutationPathKey as pathKey,
+	mutationValueAt as valueAt,
+	type MutationFieldPath,
+} from "./field-path";
 
 export type MutationFieldCodecV1 =
 	| ScalarCodecV1
@@ -99,4 +104,26 @@ export function decodeMutationFieldResult(
 		codec.kind === "json" ? { kind: "json", value } : value,
 		"$field",
 	);
+}
+
+export function validateMutationFieldScalars(
+	source: Readonly<Record<string, unknown>>,
+	paths: readonly MutationFieldPath[],
+	fields: readonly Readonly<{
+		path: MutationFieldPath;
+		codec: MutationFieldCodecV1;
+		nullable: boolean;
+	}>[],
+) {
+	const byPath = new Map(fields.map((field) => [pathKey(field.path), field]));
+	for (const path of paths) {
+		const field = byPath.get(pathKey(path));
+		if (!field)
+			throw new TypeError("Compiled Collection Field has no scalar definition");
+		decodeMutationFieldInput(
+			valueAt(source, path, "Collection value"),
+			field.codec,
+			field.nullable,
+		);
+	}
 }

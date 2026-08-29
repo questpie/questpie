@@ -562,6 +562,15 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 			member: string;
 			candidateValidation?: Readonly<{
 				parameters: readonly Readonly<{ kind: string }>[];
+				currentResult?: readonly Readonly<{
+					path: readonly string[];
+					column: string;
+				}>[];
+			}>;
+			candidatePolicyCheck?: Readonly<{
+				sql: string;
+				parameters: readonly Readonly<{ kind: string }>[];
+				outcome: string;
 			}>;
 			write: Readonly<{
 				parameters: readonly Readonly<{ kind: string }>[];
@@ -572,7 +581,37 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 		({ target, member }) =>
 			target === "collection:tickets" && member === "create",
 	)!;
+	const updatePlan = postgresPlans.plans.find(
+		({ target, member }) =>
+			target === "collection:tickets" && member === "update",
+	)!;
 	expect(createPlan.candidateValidation).toBeDefined();
+	expect(createPlan.candidatePolicyCheck).toMatchObject({
+		outcome: "authorizedOrUnavailable",
+	});
+	expect(createPlan.candidatePolicyCheck?.sql).toContain("SELECT TRUE");
+	expect(createPlan.candidatePolicyCheck?.parameters).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ kind: "candidateValue" }),
+		]),
+	);
+	expect(updatePlan.candidatePolicyCheck).toMatchObject({
+		outcome: "authorizedOrUnavailable",
+	});
+	expect(updatePlan.candidatePolicyCheck?.parameters).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({ kind: "key" }),
+			expect.objectContaining({ kind: "candidateValue" }),
+		]),
+	);
+	expect(updatePlan.candidateValidation?.currentResult).toEqual(
+		expect.arrayContaining([
+			expect.objectContaining({
+				path: ["id"],
+				column: expect.stringMatching(/^qp_current_\d+$/),
+			}),
+		]),
+	);
 	expect(createPlan.write.parameters).toEqual(
 		expect.arrayContaining([
 			expect.objectContaining({ kind: "candidateValue" }),

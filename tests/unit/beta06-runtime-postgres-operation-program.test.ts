@@ -179,3 +179,134 @@ test("links compiler-owned PostgreSQL get/create plans to Collection Operations"
 		expect(() => create.write.statement.decode(output)).toThrow(message);
 	}
 });
+
+test("rejects a re-signed candidate Policy check widened after the exact Policy", async () => {
+	const { artifact, operations } = await compilation;
+	const { linkPostgresCollectionOperationPlans } =
+		await import("../../packages/runtime/src/mutation/postgres-program");
+	const { runtimeArtifactDigest } =
+		await import("../../packages/runtime/src/application/artifact-protocol");
+	const forged = structuredClone(artifact) as {
+		format: string;
+		version: number;
+		plans: Array<{
+			candidatePolicyCheck?: { sql: string };
+		}>;
+		digest: string;
+	};
+	const plan = forged.plans.find(({ candidatePolicyCheck }) =>
+		Boolean(candidatePolicyCheck),
+	);
+	if (!plan?.candidatePolicyCheck)
+		throw new Error("missing lifecycle candidate Policy check");
+	plan.candidatePolicyCheck.sql = plan.candidatePolicyCheck.sql.replace(
+		/ LIMIT 1$/,
+		" OR TRUE LIMIT 1",
+	);
+	const { digest: _digest, ...unsigned } = forged;
+	forged.digest = runtimeArtifactDigest(
+		"questpie-postgres-collection-operation-plans-v1",
+		unsigned,
+	);
+
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: forged,
+			operations,
+			expectedDigest: forged.digest,
+		}),
+	).toThrow("candidate Policy check omits Policy");
+});
+
+test("rejects a re-signed candidate Policy check widened before the exact Policy", async () => {
+	const { artifact, operations } = await compilation;
+	const { linkPostgresCollectionOperationPlans } =
+		await import("../../packages/runtime/src/mutation/postgres-program");
+	const { runtimeArtifactDigest } =
+		await import("../../packages/runtime/src/application/artifact-protocol");
+	const forged = structuredClone(artifact) as {
+		format: string;
+		version: number;
+		plans: Array<{
+			candidatePolicyCheck?: { sql: string };
+		}>;
+		digest: string;
+	};
+	const plan = forged.plans.find(({ candidatePolicyCheck }) =>
+		Boolean(candidatePolicyCheck),
+	);
+	if (!plan?.candidatePolicyCheck)
+		throw new Error("missing lifecycle candidate Policy check");
+	plan.candidatePolicyCheck.sql = plan.candidatePolicyCheck.sql.replace(
+		' SELECT TRUE FROM "qp_candidate" WHERE',
+		' SELECT TRUE FROM "qp_candidate" WHERE TRUE UNION SELECT TRUE FROM "qp_candidate" WHERE',
+	);
+	const { digest: _digest, ...unsigned } = forged;
+	forged.digest = runtimeArtifactDigest(
+		"questpie-postgres-collection-operation-plans-v1",
+		unsigned,
+	);
+
+	expect(() =>
+		linkPostgresCollectionOperationPlans({
+			artifact: forged,
+			operations,
+			expectedDigest: forged.digest,
+		}),
+	).toThrow("candidate Policy check omits Policy");
+});
+
+test("reconstructs the complete update candidate Policy statement", async () => {
+	const { validateUpdateCandidatePolicySql } =
+		await import("../../packages/runtime/src/mutation/postgres-candidate-policy");
+	const parameters = [
+		{
+			position: 1,
+			postgresType: "uuid",
+			kind: "key",
+			path: ["id"],
+			codec: { kind: "uuid" },
+		},
+		{
+			position: 2,
+			postgresType: "uuid",
+			kind: "candidateValue",
+			path: ["id"],
+			codec: { kind: "uuid" },
+		},
+		{
+			position: 3,
+			postgresType: "text",
+			kind: "candidateValue",
+			path: ["status"],
+			codec: { kind: "text", minLength: 1, maxLength: 16 },
+		},
+	] as const;
+	const fields = [
+		{ path: ["id"], column: "ticket_id" },
+		{ path: ["status"], column: "routing_status" },
+	] as const;
+	const policySql = '"qp_candidate"."routing_status" IS NOT NULL';
+	const sql =
+		'WITH "qp_current" AS (SELECT * FROM "support"."tickets" AS "qp_current" WHERE "qp_current"."ticket_id" IS NOT DISTINCT FROM $1::uuid LIMIT 1), "qp_candidate" AS (SELECT $2::uuid AS "ticket_id", $3::text AS "routing_status") SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE "qp_candidate"."routing_status" IS NOT NULL LIMIT 1';
+	const input = {
+		sql,
+		policySql,
+		parameters,
+		fields,
+		keyFields: [["id"]] as const,
+		lockSql:
+			'SELECT TRUE AS "qp_locked" FROM "support"."tickets" AS "qp_lock_row" WHERE "qp_lock_row"."ticket_id" IS NOT DISTINCT FROM $1::uuid LIMIT 1 FOR UPDATE',
+		label: "update candidate Policy check",
+	};
+	expect(() => validateUpdateCandidatePolicySql(input)).not.toThrow();
+	expect(() =>
+		validateUpdateCandidatePolicySql({
+			...input,
+			sql: sql.replace(
+				' SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE',
+				' SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE TRUE UNION SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE',
+			),
+		}),
+	).toThrow("candidate Policy check omits Policy");
+});

@@ -1,4 +1,5 @@
 import { runtimeArtifactDigest } from "../application/artifact-protocol";
+import { validateCreateCandidatePolicySql } from "./postgres-candidate-policy";
 import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
@@ -58,6 +59,7 @@ function createPlan(
 			"fieldAuthority",
 			...(operation.lifecycleProgram ? ["candidateValidation"] : []),
 			"candidatePolicy",
+			...(operation.lifecycleProgram ? ["candidatePolicyCheck"] : []),
 			"outputAuthority",
 			"write",
 			"limits",
@@ -270,6 +272,53 @@ function createPlan(
 		candidatePolicy.sql,
 		`${operation.identity} candidate Policy SQL`,
 	);
+	const candidatePolicyCheck = operation.lifecycleProgram
+		? (() => {
+				const check = record(
+					plan.candidatePolicyCheck,
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				exact(
+					check,
+					["freshAfterRowLockWait", "sql", "parameters", "outcome"],
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				if (
+					check.freshAfterRowLockWait !== true ||
+					check.outcome !== "authorizedOrUnavailable"
+				)
+					fail(`${operation.identity} candidate Policy check is invalid`);
+				const sql = statement(
+					check.sql,
+					`${operation.identity} candidatePolicyCheck SQL`,
+				);
+				const parameters = decodePostgresCollectionParameters(
+					check.parameters,
+					sql,
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				validateCreateCandidatePolicySql({
+					sql,
+					policySql: candidatePolicySql,
+					parameters,
+					fields,
+					label: `${operation.identity} candidate Policy check`,
+				});
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql,
+					parameters,
+					outcome: "authorizedOrUnavailable" as const,
+					statement: bindPostgresCollectionStatement({
+						identity: operation.identity,
+						leaf: "candidate-policy",
+						text: sql,
+						parameterCount: parameters.length,
+						booleanResult: true,
+					}),
+				});
+			})()
+		: undefined;
 	const write = record(plan.write, `${operation.identity} write`);
 	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
 	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
@@ -330,6 +379,7 @@ function createPlan(
 			),
 			sql: candidatePolicySql,
 		}),
+		...(candidatePolicyCheck ? { candidatePolicyCheck } : {}),
 		outputAuthority: output,
 		write: Object.freeze({
 			sql: writeSql,

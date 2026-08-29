@@ -366,7 +366,116 @@ function dataFor(
 	});
 }
 
-test("Collection create runs normalize and validate around one materialized candidate", async () => {
+function oneGetCheckLifecycle(operationIdentity: string) {
+	return {
+		format: "questpie.lifecycle-program.v1",
+		interpreter: "questpie.lifecycle-interpreter.v1",
+		runtimeBuild: "b".repeat(64),
+		reentryLimit: 8,
+		bindings: {
+			schema: "schema:test",
+			collection: "collection:records",
+			fields: {
+				id: "collection:records/field:id",
+				body: "collection:records/field:body",
+			},
+			issues: { invalidCurrent: "issue:records/invalidCurrent" },
+			capabilities: {
+				getRecord: {
+					kind: "read",
+					identity: "query:records.get",
+					argumentKeys: ["key.id", "select.body", "select.id"],
+					cardinality: "one",
+					first: true,
+					maxRows: 1,
+				},
+			},
+			operations: [operationIdentity, "query:records.get"],
+			jobs: [],
+		},
+		phases: {
+			normalize: [],
+			validate: [
+				{
+					op: "if",
+					test: {
+						op: "binary",
+						operator: "!==",
+						left: {
+							op: "member",
+							target: { op: "root", root: "current" },
+							field: "collection:records/field:body",
+							optional: false,
+						},
+						right: { op: "literal", value: "before" },
+					},
+					consequent: [
+						{
+							op: "throwIssue",
+							issue: "issue:records/invalidCurrent",
+						},
+					],
+					otherwise: [],
+				},
+			],
+			check: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:records.get",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "key",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: id },
+												},
+											],
+										},
+									},
+									{
+										kind: "argument",
+										key: "select",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: true },
+												},
+												{
+													kind: "argument",
+													key: "body",
+													value: { op: "literal", value: true },
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			],
+			afterWrite: [],
+		},
+		digest: "c".repeat(64),
+	} as const;
+}
+
+test("Collection create enforces candidate Policy before one bound lifecycle check read", async () => {
 	const baseline = createPlan();
 	const lifecycleProgram = {
 		format: "questpie.lifecycle-program.v1",
@@ -374,13 +483,25 @@ test("Collection create runs normalize and validate around one materialized cand
 		runtimeBuild: "b".repeat(64),
 		reentryLimit: 8,
 		bindings: {
+			schema: "schema:test",
 			collection: "collection:records",
 			fields: {
 				title: "collection:records/field:title",
 				body: "collection:records/field:body",
 			},
 			issues: { blocked: "issue:records/blocked" },
-			operations: ["mutation:records.create"],
+			capabilities: {
+				getRecord: {
+					kind: "read",
+					identity: "query:records.get",
+					argumentKeys: ["key.id", "select.body", "select.id"],
+					cardinality: "one",
+					first: true,
+					maxRows: 1,
+				},
+			},
+			operations: ["mutation:records.create", "query:records.get"],
+			jobs: [],
 		},
 		phases: {
 			normalize: [
@@ -429,7 +550,57 @@ test("Collection create runs normalize and validate around one materialized cand
 					otherwise: [],
 				},
 			],
-			check: [],
+			check: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:records.get",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "key",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: id },
+												},
+											],
+										},
+									},
+									{
+										kind: "argument",
+										key: "select",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: true },
+												},
+												{
+													kind: "argument",
+													key: "body",
+													value: { op: "literal", value: true },
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			],
 			afterWrite: [],
 		},
 		digest: "c".repeat(64),
@@ -456,6 +627,20 @@ test("Collection create runs normalize and validate around one materialized cand
 				},
 			],
 		},
+		candidatePolicyCheck: {
+			freshAfterRowLockWait: true,
+			sql: "CANDIDATE_POLICY_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "candidateValue",
+					path: ["title"],
+					codec: baseline.candidate.fields[0]!.codec,
+					postgresType: "text",
+				},
+			],
+			outcome: "authorizedOrUnavailable",
+		},
 		write: {
 			...baseline.write,
 			parameters: [
@@ -481,7 +666,7 @@ test("Collection create runs normalize and validate around one materialized cand
 		"collection:records": { "issue:records/blocked": "invalidRecord" },
 	};
 	const data = dataFor(
-		[plan],
+		[plan, getPlan()],
 		async (statement, parameters = []) => {
 			calls.push(statement);
 			if (statement === "TITLE_AUTHORITY_SQL") {
@@ -493,6 +678,19 @@ test("Collection create runs normalize and validate around one materialized cand
 					{
 						qp_candidate_0: parameters[0],
 						qp_candidate_1: "default body",
+					},
+				];
+			if (statement === "CANDIDATE_POLICY_SQL") {
+				expect(parameters).toEqual(["allowed"]);
+				return [{}];
+			}
+			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "FRESH_POLICY_READ_SQL")
+				return [
+					{
+						qp_result_0: id,
+						qp_result_1: "visible",
+						qp_result_1_allowed: true,
 					},
 				];
 			expect(parameters).toEqual(["allowed", "default body"]);
@@ -507,13 +705,40 @@ test("Collection create runs normalize and validate around one materialized cand
 		undefined,
 		issueMappings,
 	);
-	await expect(
-		data.records.create({ input: { title: "  allowed  " } }),
-	).resolves.toEqual(expect.objectContaining({ title: "allowed" }));
+	const created = await data.records.create({
+		input: { title: "  allowed  " },
+	});
+	expect(created).toEqual(expect.objectContaining({ title: "allowed" }));
 	expect(calls).toEqual([
 		"TITLE_AUTHORITY_SQL",
 		"MATERIALIZE_CANDIDATE_SQL",
+		"CANDIDATE_POLICY_SQL",
+		"LOCK_SQL",
+		"FRESH_POLICY_READ_SQL",
 		"WRITE_WITH_btrim_gen_random_uuid_SQL",
+	]);
+
+	const deniedCalls: string[] = [];
+	const denied = dataFor(
+		[plan, getPlan()],
+		async (statement) => {
+			deniedCalls.push(statement);
+			if (statement === "TITLE_AUTHORITY_SQL") return [{}];
+			if (statement === "MATERIALIZE_CANDIDATE_SQL")
+				return [{ qp_candidate_0: "allowed", qp_candidate_1: "default body" }];
+			if (statement === "CANDIDATE_POLICY_SQL") return [];
+			throw new Error("check read or write ran after candidate Policy denial");
+		},
+		undefined,
+		issueMappings,
+	);
+	await expect(
+		denied.records.create({ input: { title: "allowed" } }),
+	).rejects.toThrow("Collection operation is unavailable");
+	expect(deniedCalls).toEqual([
+		"TITLE_AUTHORITY_SQL",
+		"MATERIALIZE_CANDIDATE_SQL",
+		"CANDIDATE_POLICY_SQL",
 	]);
 
 	const rejected = dataFor(
@@ -540,6 +765,202 @@ test("Collection create runs normalize and validate around one materialized cand
 		throw new Error("withheld lifecycle capability reached SQL");
 	});
 	expect(withheld.records.create).toBeUndefined();
+});
+
+test("Collection update preserves current and enforces candidate Policy before check", async () => {
+	const textCodec = {
+		kind: "text",
+		minLength: 1,
+		maxLength: 8_192,
+		collation: "questpie.binary",
+	} as const;
+	const operation = {
+		identity: "mutation:records.update",
+		kind: "mutation",
+		mode: "writeTransaction",
+		target: "collection:records",
+		member: "update",
+		policy: "policy:records.default",
+		keyFields: [["id"]],
+		callerInputFields: [["body"]],
+		requiredCallerInputFields: [],
+		trustedValueFields: [],
+		requiredTrustedValueFields: [],
+		selectedFieldPaths: [["id"], ["body"]],
+		dataQuery: null,
+		dataQueryDigest: null,
+		normalizerProgramDigest: null,
+		serverValueProgramDigest: null,
+		outputCardinality: "optionalOne",
+		limits: {
+			inputBytes: 65_536,
+			resultBytes: 1_048_576,
+			rowsWritten: 100,
+			durationMilliseconds: 5_000,
+		},
+		lifecycleProgram: oneGetCheckLifecycle("mutation:records.update"),
+	} as const;
+	const plan = {
+		...operation,
+		operation,
+		candidate: {
+			fields: [
+				{ path: ["id"], codec: { kind: "uuid" }, nullable: false },
+				{ path: ["body"], codec: textCodec, nullable: false },
+			],
+		},
+		lock: {
+			sql: "UPDATE_LOCK_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "key",
+					path: ["id"],
+					codec: { kind: "uuid" },
+					postgresType: "uuid",
+				},
+			],
+		},
+		fieldAuthority: { checks: [] },
+		candidateValidation: {
+			freshAfterRowLockWait: true,
+			sql: "UPDATE_CANDIDATE_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "patchValue",
+					path: ["body"],
+					codec: textCodec,
+					postgresType: "text",
+				},
+			],
+			result: [
+				{
+					path: ["id"],
+					column: "qp_candidate_0",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+				{
+					path: ["body"],
+					column: "qp_candidate_1",
+					codec: textCodec,
+					nullable: false,
+				},
+			],
+			currentResult: [
+				{
+					path: ["id"],
+					column: "qp_current_0",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+				{
+					path: ["body"],
+					column: "qp_current_1",
+					codec: textCodec,
+					nullable: false,
+				},
+			],
+		},
+		candidatePolicyCheck: {
+			freshAfterRowLockWait: true,
+			sql: "UPDATE_CANDIDATE_POLICY_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "key",
+					path: ["id"],
+					codec: { kind: "uuid" },
+					postgresType: "uuid",
+				},
+				{
+					position: 2,
+					kind: "candidateValue",
+					path: ["body"],
+					codec: textCodec,
+					postgresType: "text",
+				},
+			],
+			outcome: "authorizedOrUnavailable",
+		},
+		write: {
+			sql: "UPDATE_WRITE_SQL",
+			parameters: [
+				{
+					position: 1,
+					kind: "patchValue",
+					path: ["body"],
+					codec: textCodec,
+					postgresType: "text",
+				},
+			],
+			result: [
+				{
+					path: ["id"],
+					column: "qp_result_0",
+					codec: { kind: "uuid" },
+					nullable: false,
+				},
+				{
+					path: ["body"],
+					column: "qp_result_1",
+					codec: textCodec,
+					nullable: false,
+				},
+			],
+		},
+		limits: { rows: 100, durationMilliseconds: 5_000 },
+	} as const;
+	const calls: string[] = [];
+	const data = dataFor(
+		[plan, getPlan()],
+		async (statement, parameters = []) => {
+			calls.push(statement);
+			if (statement === "UPDATE_LOCK_SQL") return [{}];
+			if (statement === "UPDATE_CANDIDATE_SQL")
+				return [
+					{
+						qp_candidate_0: id,
+						qp_candidate_1: parameters[0],
+						qp_current_0: id,
+						qp_current_1: "before",
+					},
+				];
+			if (statement === "UPDATE_CANDIDATE_POLICY_SQL") {
+				expect(parameters).toEqual([id, "after"]);
+				return [{}];
+			}
+			if (statement === "LOCK_SQL") return [{}];
+			if (statement === "FRESH_POLICY_READ_SQL")
+				return [
+					{
+						qp_result_0: id,
+						qp_result_1: "visible",
+						qp_result_1_allowed: true,
+					},
+				];
+			return [{ qp_result_0: id, qp_result_1: "after" }];
+		},
+		undefined,
+		{
+			"collection:records": {
+				"issue:records/invalidCurrent": "invalidRecord",
+			},
+		},
+	);
+
+	await expect(
+		data.records.update({ key: { id }, patch: { body: "after" } }),
+	).resolves.toEqual({ id, body: "after" });
+	expect(calls).toEqual([
+		"UPDATE_LOCK_SQL",
+		"UPDATE_CANDIDATE_SQL",
+		"UPDATE_CANDIDATE_POLICY_SQL",
+		"LOCK_SQL",
+		"FRESH_POLICY_READ_SQL",
+		"UPDATE_WRITE_SQL",
+	]);
 });
 
 test("Operation create normalization follows sparse caller Field authority", async () => {

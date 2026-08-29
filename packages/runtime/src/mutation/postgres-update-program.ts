@@ -1,3 +1,4 @@
+import { validateUpdateCandidatePolicySql } from "./postgres-candidate-policy";
 import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
@@ -44,6 +45,7 @@ export function updatePlan(
 			"fieldAuthority",
 			"currentPolicy",
 			"candidatePolicy",
+			...(operation.lifecycleProgram ? ["candidatePolicyCheck"] : []),
 			"outputAuthority",
 			"write",
 			"limits",
@@ -222,13 +224,68 @@ export function updatePlan(
 		plan.candidatePolicy,
 		`${operation.identity} candidatePolicy`,
 	);
+	const candidatePolicyCheck = operation.lifecycleProgram
+		? (() => {
+				const check = record(
+					plan.candidatePolicyCheck,
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				exact(
+					check,
+					["freshAfterRowLockWait", "sql", "parameters", "outcome"],
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				if (
+					check.freshAfterRowLockWait !== true ||
+					check.outcome !== "authorizedOrUnavailable"
+				)
+					fail(`${operation.identity} candidate Policy check is invalid`);
+				const sql = statement(
+					check.sql,
+					`${operation.identity} candidatePolicyCheck SQL`,
+				);
+				const parameters = decodePostgresCollectionParameters(
+					check.parameters,
+					sql,
+					`${operation.identity} candidatePolicyCheck`,
+				);
+				validateUpdateCandidatePolicySql({
+					sql,
+					policySql: candidatePolicy.sql,
+					parameters,
+					fields,
+					keyFields: operation.keyFields,
+					lockSql,
+					label: `${operation.identity} candidate Policy check`,
+				});
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql,
+					parameters,
+					outcome: "authorizedOrUnavailable" as const,
+					statement: bindPostgresCollectionStatement({
+						identity: operation.identity,
+						leaf: "candidate-policy",
+						text: sql,
+						parameterCount: parameters.length,
+						booleanResult: true,
+					}),
+				});
+			})()
+		: undefined;
 	const validation = record(
 		plan.candidateValidation,
 		`${operation.identity} candidateValidation`,
 	);
 	exact(
 		validation,
-		["freshAfterRowLockWait", "sql", "parameters", "result"],
+		[
+			"freshAfterRowLockWait",
+			"sql",
+			"parameters",
+			"result",
+			...(operation.lifecycleProgram ? ["currentResult"] : []),
+		],
 		`${operation.identity} candidateValidation`,
 	);
 	if (validation.freshAfterRowLockWait !== true)
@@ -250,6 +307,14 @@ export function updatePlan(
 		fields,
 		`${operation.identity} candidateValidation`,
 	);
+	const validationCurrentResult = operation.lifecycleProgram
+		? candidateResults(
+				validation.currentResult,
+				validationSql,
+				fields,
+				`${operation.identity} candidateValidation current`,
+			)
+		: undefined;
 	const write = record(plan.write, `${operation.identity} write`);
 	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
 	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
@@ -335,12 +400,15 @@ export function updatePlan(
 			sql: validationSql,
 			parameters: validationParameters,
 			result: validationResult,
+			...(validationCurrentResult
+				? { currentResult: validationCurrentResult }
+				: {}),
 			statement: bindPostgresCollectionStatement({
 				identity: operation.identity,
 				leaf: "candidate-validation",
 				text: validationSql,
 				parameterCount: validationParameters.length,
-				result: validationResult,
+				result: [...validationResult, ...(validationCurrentResult ?? [])],
 			}),
 		}),
 		fieldAuthority: Object.freeze({
@@ -349,6 +417,7 @@ export function updatePlan(
 		}),
 		currentPolicy,
 		candidatePolicy,
+		...(candidatePolicyCheck ? { candidatePolicyCheck } : {}),
 		outputAuthority: output,
 		write: Object.freeze({
 			sql: writeSql,

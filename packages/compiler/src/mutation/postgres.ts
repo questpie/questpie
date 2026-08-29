@@ -1,5 +1,6 @@
 import { canonicalBytes, compareAscii, digest } from "../canonical";
 import {
+	lowerPostgresMutationPolicyCheck,
 	lowerPostgresMutationPolicyChecks,
 	postgresMutationCollection,
 	type PolicyProgramV1,
@@ -14,6 +15,7 @@ import type {
 } from "./postgres-contract";
 import { lowerPostgresCreateOperationPlan } from "./postgres-create";
 import {
+	candidateValueParameter,
 	executionParameter,
 	expectedParameters,
 	fieldByPath,
@@ -304,6 +306,11 @@ function updatePlan(
 	});
 	const currentCheck = policyChecks.checks[0]!;
 	const candidateCheck = policyChecks.checks[1]!;
+	const candidatePolicyProof = lowerPostgresMutationPolicyCheck({
+		schema,
+		expression: candidateExpression,
+		aliases: candidateAliases,
+	});
 	const guardChecks = policyChecks.checks.slice(2);
 	const parameters = policyParameters(policyChecks.parameters);
 	const lockParameters = new Parameters();
@@ -441,8 +448,45 @@ function updatePlan(
 				: `${quote("qp_candidate")}.${quote(field.column)}`;
 		return `${value} AS ${quote(item.column)}`;
 	});
+	const validationCurrentResult = operation.lifecycleProgramDigest
+		? result(
+				collection,
+				collection.fields.map(({ path: fieldPath }) => fieldPath),
+			).map((item, index) =>
+				Object.freeze({ ...item, column: `qp_current_${index}` }),
+			)
+		: undefined;
+	const validationCurrentSelected = validationCurrentResult?.map((item) => {
+		const field = fieldByPath(collection, item.path);
+		const value =
+			field.codec.kind === "timestamp"
+				? `pg_catalog.date_trunc('milliseconds', ${quote("qp_current")}.${quote(field.column)})`
+				: `${quote("qp_current")}.${quote(field.column)}`;
+		return `${value} AS ${quote(item.column)}`;
+	});
 	const validationCurrentCte = `${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${[...validationKeyPredicates, validationCheck.sql, ...validationExpectedPredicates].join(" AND ")} LIMIT 1)`;
 	const validationCandidateCte = `${quote("qp_candidate")} AS (SELECT ${validationCandidate.columns.join(", ")} FROM ${quote("qp_current")})`;
+	const candidatePolicyCheck = operation.lifecycleProgramDigest
+		? (() => {
+				const proofParameters = policyParameters(
+					candidatePolicyProof.parameters,
+				);
+				const proofKeyPredicates = operation.keyFields.map((keyPath) => {
+					const field = fieldByPath(collection, keyPath);
+					return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${inputParameter(proofParameters, "key", field)}`;
+				});
+				const proofCandidateColumns = collection.fields.map(
+					(field) =>
+						`${candidateValueParameter(proofParameters, field)} AS ${quote(field.column)}`,
+				);
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql: `WITH ${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${proofKeyPredicates.join(" AND ")} LIMIT 1), ${quote("qp_candidate")} AS (SELECT ${proofCandidateColumns.join(", ")}) SELECT TRUE FROM ${quote("qp_current")} CROSS JOIN ${quote("qp_candidate")} WHERE ${candidatePolicyProof.sql} LIMIT 1`,
+					parameters: proofParameters.values(),
+					outcome: "authorizedOrUnavailable" as const,
+				});
+			})()
+		: undefined;
 	return Object.freeze({
 		identity: operation.identity,
 		target: operation.target,
@@ -472,6 +516,7 @@ function updatePlan(
 				collection.fields.map((field) =>
 					Object.freeze({
 						path: field.path,
+						column: field.column,
 						codec: field.codec,
 						nullable: field.nullable,
 						requiredInput: false,
@@ -486,9 +531,12 @@ function updatePlan(
 		}),
 		candidateValidation: Object.freeze({
 			freshAfterRowLockWait: true as const,
-			sql: `WITH ${validationCurrentCte}, ${validationCandidateCte} SELECT ${validationSelected.join(", ")} FROM ${quote("qp_candidate")}`,
+			sql: `WITH ${validationCurrentCte}, ${validationCandidateCte} SELECT ${[...validationSelected, ...(validationCurrentSelected ?? [])].join(", ")} FROM ${quote("qp_candidate")}${validationCurrentSelected ? ` CROSS JOIN ${quote("qp_current")}` : ""}`,
 			parameters: validationParameters.values(),
 			result: validationResult,
+			...(validationCurrentResult
+				? { currentResult: Object.freeze(validationCurrentResult) }
+				: {}),
 		}),
 		fieldAuthority: Object.freeze({
 			suppliedPathsOnly: true,
@@ -504,6 +552,7 @@ function updatePlan(
 			mutableEvidenceCollections: candidateCheck.mutableEvidenceCollections,
 			sql: candidateCheck.sql,
 		}),
+		...(candidatePolicyCheck ? { candidatePolicyCheck } : {}),
 		outputAuthority: Object.freeze({
 			freshAfterRowLockWait: true as const,
 			selectedPaths: Object.freeze(outputAuthority),

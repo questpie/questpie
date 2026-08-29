@@ -84,6 +84,11 @@ export function lowerPostgresCreateOperationPlan(input: {
 		],
 	});
 	const candidateCheck = checks.checks[0]!;
+	const candidatePolicyProof = lowerPostgresMutationPolicyCheck({
+		schema,
+		expression: create.candidate,
+		aliases: { candidate: "qp_candidate" },
+	});
 	const guardChecks = checks.checks.slice(1);
 	const candidateParameters = operation.lifecycleProgramDigest
 		? new Parameters()
@@ -282,6 +287,21 @@ export function lowerPostgresCreateOperationPlan(input: {
 	const writeCandidateCte = operation.lifecycleProgramDigest
 		? `${quote("qp_candidate")} AS (SELECT ${writeCandidateColumns.join(", ")})`
 		: candidateCte;
+	const candidatePolicyCheck = operation.lifecycleProgramDigest
+		? (() => {
+				const parameters = policyParameters(candidatePolicyProof.parameters);
+				const columns = collection.fields.map(
+					(field) =>
+						`${candidateValueParameter(parameters, field)} AS ${quote(field.column)}`,
+				);
+				return Object.freeze({
+					freshAfterRowLockWait: true as const,
+					sql: `WITH ${quote("qp_candidate")} AS (SELECT ${columns.join(", ")}) SELECT TRUE FROM ${quote("qp_candidate")} WHERE ${candidatePolicyProof.sql} LIMIT 1`,
+					parameters: parameters.values(),
+					outcome: "authorizedOrUnavailable" as const,
+				});
+			})()
+		: undefined;
 	const insertColumns = collection.fields.map((field) => quote(field.column));
 	const selection = collection.fields.map(
 		(field) => `${quote("qp_candidate")}.${quote(field.column)}`,
@@ -353,6 +373,7 @@ export function lowerPostgresCreateOperationPlan(input: {
 				collection.fields.map((field) =>
 					Object.freeze({
 						path: field.path,
+						column: field.column,
 						codec: field.codec,
 						nullable: field.nullable,
 						requiredInput:
@@ -386,6 +407,7 @@ export function lowerPostgresCreateOperationPlan(input: {
 			mutableEvidenceCollections: candidateCheck.mutableEvidenceCollections,
 			sql: candidateCheck.sql,
 		}),
+		...(candidatePolicyCheck ? { candidatePolicyCheck } : {}),
 		outputAuthority: Object.freeze({
 			freshAfterRowLockWait: true as const,
 			selectedPaths: Object.freeze(outputAuthority),

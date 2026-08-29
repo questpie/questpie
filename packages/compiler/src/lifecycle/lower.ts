@@ -3,48 +3,33 @@ import ts from "typescript";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { SourceSpan } from "../types";
 import type {
-	LifecycleBindings,
 	LifecycleExpression,
 	LifecycleIdentity,
 	LifecycleObjectEntry,
 	LifecyclePhase,
 	LifecycleStatement,
 } from "./contract";
+import {
+	lowerLifecycleCapability,
+	type LifecycleLoweringBindings,
+} from "./lower-capability";
 import { analyzeLifecycleStatements } from "./statement-analysis";
 
-export type LifecycleCapabilityCandidate =
-	| Readonly<{
-			kind: "read";
-			identity: LifecycleIdentity;
-			argumentKeys: readonly string[];
-			argumentRoots: readonly string[];
-			requiredArgumentKeys: readonly string[];
-			requiredArgumentRoots: readonly string[];
-			requireNonEmptyWriteLane: false;
-			requireNonEmptySelect: true;
-			cardinality: "one" | "many";
-			first: boolean;
-			maxRows: number;
-			resultFields: Readonly<Record<string, LifecycleIdentity>>;
-	  }>
-	| Readonly<{
-			kind: "write";
-			identity: LifecycleIdentity;
-			argumentKeys: readonly string[];
-			argumentRoots: readonly string[];
-			requiredArgumentKeys: readonly string[];
-			requiredArgumentRoots: readonly string[];
-			requireNonEmptyWriteLane: boolean;
-			requireNonEmptySelect: false;
-	  }>;
+export type {
+	LifecycleCapabilityCandidate,
+	LifecycleLoweringBindings,
+} from "./lower-capability";
 
-export type LifecycleLoweringBindings = Omit<
-	LifecycleBindings,
-	"capabilities"
-> &
-	Readonly<{
-		capabilities: Readonly<Record<string, LifecycleCapabilityCandidate>>;
-	}>;
+export type LifecycleOrigin = Readonly<{
+	module: string;
+	line: number;
+	column: number;
+}>;
+
+export type LoweredLifecyclePhase = Readonly<{
+	statements: readonly LifecycleStatement[];
+	issueOrigins: ReadonlyMap<LifecycleIdentity, LifecycleOrigin>;
+}>;
 
 type DiagnosticReason =
 	| "unsupportedLifecycleSyntax"
@@ -118,212 +103,20 @@ interface Environment {
 	nextSlot: number;
 }
 
-function capabilityArgument(
-	node: ts.Expression,
-	env: Environment,
-	argumentKeys: readonly string[],
-	argumentRoots: readonly string[],
-	prefix = "",
-): LifecycleExpression {
-	if (!ts.isObjectLiteralExpression(node))
-		return fail(
-			env,
-			node,
-			"unsupportedLifecycleSyntax",
-			"pass one exact generated Operation argument object",
-		);
-	const admittedAtLevel =
-		prefix === ""
-			? argumentRoots
-			: [
-					...new Set(
-						argumentKeys
-							.filter((key) => key.startsWith(prefix))
-							.map((key) => key.slice(prefix.length).split(".")[0]!),
-					),
-				];
-	const entries = new Map<string, LifecycleObjectEntry>();
-	for (const member of node.properties) {
-		if (
-			!ts.isPropertyAssignment(member) ||
-			(!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name))
-		)
-			return fail(
-				env,
-				member,
-				"unsupportedLifecycleSyntax",
-				"use exact static Operation argument properties",
-			);
-		const key = member.name.text;
-		if (!admittedAtLevel.includes(key) || entries.has(key))
-			fail(
-				env,
-				member.name,
-				"unsupportedLifecycleSyntax",
-				"use each generated Operation argument property at most once",
-			);
-		entries.set(key, {
-			kind: "argument" as const,
-			key,
-			value: ts.isObjectLiteralExpression(member.initializer)
-				? capabilityArgument(
-						member.initializer,
-						env,
-						argumentKeys,
-						argumentRoots,
-						`${prefix}${key}.`,
-					)
-				: expression(member.initializer, env),
-		});
-	}
-	return {
-		op: "object",
-		entries: admittedAtLevel.flatMap((key) => {
-			const entry = entries.get(key);
-			return entry ? [entry] : [];
-		}),
-	};
-}
-
-function flattenedArgumentKeys(
-	value: LifecycleExpression,
-	prefix = "",
-): readonly string[] {
-	if (value.op !== "object") return [];
-	return value.entries.flatMap((entry) => {
-		if (entry.kind !== "argument") return [];
-		const path = `${prefix}${entry.key}`;
-		const nested = flattenedArgumentKeys(entry.value, `${path}.`);
-		return nested.length === 0 ? [path] : nested;
-	});
-}
-
 function capability(
 	node: ts.Expression,
 	env: Environment,
 ): Extract<LifecycleExpression, { op: "capability" }> {
-	if (
-		!ts.isCallExpression(node) ||
-		!ts.isPropertyAccessExpression(node.expression)
-	)
-		return fail(
-			env,
-			node,
-			"unsupportedLifecycleCapability",
-			"await a generated ctx.data Collection write",
-		);
-	const segments: string[] = [];
-	let target: ts.Expression = node.expression;
-	while (ts.isPropertyAccessExpression(target)) {
-		segments.unshift(target.name.text);
-		target = target.expression;
-	}
-	const name = segments.join(".");
-	const binding = env.bindings.capabilities[name];
-	if (
-		(env.phase === "check"
-			? binding?.kind !== "read"
-			: env.phase === "afterWrite"
-				? binding?.kind !== "write"
-				: true) ||
-		!ts.isIdentifier(target) ||
-		env.parameters.get(target.text) !== "capabilities" ||
-		!binding
-	)
-		return fail(
-			env,
-			node,
-			"unsupportedLifecycleCapability",
-			"use an awaited generated read in check or generated write in afterWrite",
-		);
-	if (node.arguments.length !== 1)
-		return fail(
-			env,
-			node,
-			"unsupportedLifecycleSyntax",
-			"pass one exact generated Operation argument object",
-		);
-	const argument = capabilityArgument(
-		node.arguments[0]!,
-		env,
-		binding.argumentKeys,
-		binding.argumentRoots,
-	);
-	const actualKeys = flattenedArgumentKeys(argument);
-	const actualRoots =
-		argument.op === "object"
-			? argument.entries.flatMap((entry) =>
-					entry.kind === "argument" ? [entry.key] : [],
-				)
-			: [];
-	if (binding.requiredArgumentRoots.some((key) => !actualRoots.includes(key)))
-		return fail(
-			env,
-			node.arguments[0]!,
-			"unsupportedLifecycleSyntax",
-			`provide required generated Operation arguments ${binding.requiredArgumentRoots.join(", ")}`,
-		);
-	if (binding.requiredArgumentKeys.some((key) => !actualKeys.includes(key)))
-		return fail(
-			env,
-			node.arguments[0]!,
-			"unsupportedLifecycleSyntax",
-			`provide required generated Operation arguments ${binding.requiredArgumentKeys.join(", ")}`,
-		);
-	if (
-		binding.requireNonEmptyWriteLane &&
-		!actualKeys.some(
-			(key) => key.startsWith("patch.") || key.startsWith("values."),
-		)
-	)
-		return fail(
-			env,
-			node.arguments[0]!,
-			"unsupportedLifecycleSyntax",
-			"provide at least one update patch or trusted value Field",
-		);
-	if (
-		binding.requireNonEmptySelect &&
-		!actualKeys.some((key) => key.startsWith("select."))
-	)
-		return fail(
-			env,
-			node.arguments[0]!,
-			"unsupportedLifecycleSyntax",
-			"select at least one generated Operation result Field",
-		);
-	const priorKeys = env.capabilityArgumentKeys.get(binding.identity);
-	if (
-		priorKeys &&
-		(priorKeys.length !== actualKeys.length ||
-			priorKeys.some((key, index) => key !== actualKeys[index]))
-	)
-		return fail(
-			env,
-			node.arguments[0]!,
-			"unsupportedLifecycleSyntax",
-			"use one exact argument shape for every call to this generated Operation capability",
-		);
-	env.capabilityArgumentKeys.set(binding.identity, actualKeys);
-	return {
-		op: "capability",
-		capability: binding.kind,
-		identity: binding.identity,
-		arguments: [argument],
-	};
+	return lowerLifecycleCapability(node, {
+		phase: env.phase,
+		bindings: env.bindings,
+		parameters: env.parameters,
+		capabilityArgumentKeys: env.capabilityArgumentKeys,
+		lowerExpression: (value) => expression(value, env),
+		fail: (value, reason, supportedRewrite) =>
+			fail(env, value, reason, supportedRewrite),
+	});
 }
-
-export type LifecycleOrigin = Readonly<{
-	module: string;
-	line: number;
-	column: number;
-}>;
-
-export type LoweredLifecyclePhase = Readonly<{
-	statements: readonly LifecycleStatement[];
-	issueOrigins: ReadonlyMap<LifecycleIdentity, LifecycleOrigin>;
-}>;
-
 function origin(env: Environment, node: ts.Node): LifecycleOrigin {
 	const point = env.source.getLineAndCharacterOfPosition(
 		node.getStart(env.source),
