@@ -228,6 +228,23 @@ async function report(port: number): Promise<TracerReport | null> {
 	}
 }
 
+async function waitForBlockedLifecycleChannelRead(): Promise<void> {
+	for (let attempt = 0; attempt < 200; attempt += 1) {
+		const [result] = await database!.unsafe<
+			Readonly<Array<{ blocked: boolean }>>
+		>(`SELECT EXISTS (
+  SELECT 1
+  FROM pg_catalog.pg_stat_activity
+  WHERE pid <> pg_catalog.pg_backend_pid()
+    AND query LIKE '%FROM "collaboration"."channels"%'
+    AND pg_catalog.cardinality(pg_catalog.pg_blocking_pids(pid)) > 0
+) AS blocked`);
+		if (result?.blocked) return;
+		await Bun.sleep(10);
+	}
+	throw new Error("Mutation did not reach the lifecycle Channel Policy read");
+}
+
 afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
@@ -268,6 +285,7 @@ postgresTest(
 										principal: unknown;
 										context: Readonly<{ companyId: string }>;
 										signal?: AbortSignal;
+										deadline?: number;
 									}>,
 									use: (
 										scope: GeneratedExecutionScope,
@@ -504,6 +522,209 @@ postgresTest(
 						return response;
 					},
 				}).withContext({ companyId: tracerIds.company });
+				const missingChannelId = "00000000-0000-4000-8000-000000000071";
+				const foreignCompanyId = "00000000-0000-4000-8000-000000000072";
+				const foreignSpaceId = "00000000-0000-4000-8000-000000000073";
+				const foreignChannelId = "00000000-0000-4000-8000-000000000074";
+				await database!.unsafe(
+					"INSERT INTO collaboration.companies (id, name) VALUES ($1, 'Foreign company')",
+					[foreignCompanyId],
+				);
+				await database!.unsafe(
+					"INSERT INTO collaboration.spaces (id, company_id, name) VALUES ($1, $2, 'Foreign space')",
+					[foreignSpaceId, foreignCompanyId],
+				);
+				await database!.unsafe(
+					"INSERT INTO collaboration.channels (id, space_id, name) VALUES ($1, $2, 'foreign-channel')",
+					[foreignChannelId, foreignSpaceId],
+				);
+				const rejectedCheckCallIds: string[] = [];
+				const assertChannelUnavailable = (error: unknown): string => {
+					expect(error).toMatchObject({
+						code: "CHANNEL_UNAVAILABLE",
+						payload: null,
+						status: 404,
+					});
+					expect(Object.keys(error as object).sort()).toEqual([
+						"code",
+						"payload",
+						"status",
+					]);
+					return ownErrorBytes(error);
+				};
+				let stableChannelUnavailableBytes: string | undefined;
+				for (const [label, channelId] of [
+					["missing", missingChannelId],
+					["policy-invisible", foreignChannelId],
+				] as const) {
+					const directCallId = `direct:check:${label}:${crypto.randomUUID()}`;
+					const networkCallId = `network:check:${label}:${crypto.randomUUID()}`;
+					rejectedCheckCallIds.push(directCallId, networkCallId);
+					let directError: unknown;
+					try {
+						await routeApplication.execution(executionInput, ({ mutations }) =>
+							mutations.message.publish(
+								{ body: `check-${label}-direct`, channelId },
+								{ callId: directCallId },
+							),
+						);
+					} catch (error) {
+						directError = error;
+					}
+					const directBytes = assertChannelUnavailable(directError);
+					stableChannelUnavailableBytes ??= directBytes;
+					expect(directBytes).toBe(stableChannelUnavailableBytes);
+
+					let clientError: unknown;
+					try {
+						await networkClient.mutations["message.publish"](
+							{ body: `check-${label}-network`, channelId },
+							{ callId: networkCallId },
+						);
+					} catch (error) {
+						clientError = error;
+					}
+					const clientBytes = assertChannelUnavailable(clientError);
+					expect(clientBytes).toBe(directBytes);
+					expect(wireErrorBytes.get("CHANNEL_UNAVAILABLE")).toBe(directBytes);
+				}
+				for (const secret of [
+					"collection:messages",
+					"issue:messages/channelUnavailable",
+					foreignCompanyId,
+					foreignSpaceId,
+					foreignChannelId,
+					missingChannelId,
+					"candidate",
+					"Policy",
+					"PostgreSQL",
+					"stack",
+				])
+					expect(stableChannelUnavailableBytes).not.toContain(secret);
+				const [rejectedCheckWrites] = await database!.unsafe<
+					Readonly<
+						Array<{ dispatches: number; messages: number; receipts: number }>
+					>
+				>(
+					`SELECT
+  (SELECT count(*)::int FROM collaboration.messages WHERE body LIKE 'check-%') AS messages,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id IN ($1, $2, $3, $4)) AS dispatches,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id IN ($1, $2, $3, $4)) AS receipts`,
+					rejectedCheckCallIds,
+				);
+				expect(rejectedCheckWrites).toEqual({
+					dispatches: 0,
+					messages: 0,
+					receipts: 0,
+				});
+				const assertNoMutationRecords = async (
+					callId: string,
+					body: string,
+				) => {
+					const [counts] = await database!.unsafe<
+						Readonly<
+							Array<{ dispatches: number; messages: number; receipts: number }>
+						>
+					>(
+						`SELECT
+  (SELECT count(*)::int FROM collaboration.messages WHERE body = $2) AS messages,
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $1) AS dispatches,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $1) AS receipts`,
+						[callId, body],
+					);
+					expect(counts).toEqual({ dispatches: 0, messages: 0, receipts: 0 });
+				};
+				const blocker = await database!.reserve();
+				try {
+					await blocker.unsafe("BEGIN");
+					await blocker.unsafe(
+						"LOCK TABLE collaboration.channels IN ACCESS EXCLUSIVE MODE",
+					);
+					const raceCallId = `direct:check:race:${crypto.randomUUID()}`;
+					const raceBody = "check-current-policy-race";
+					const raced = routeApplication.execution(
+						executionInput,
+						({ mutations }) =>
+							mutations.message.publish(
+								{ body: raceBody, channelId: tracerIds.channel },
+								{ callId: raceCallId },
+							),
+					);
+					await waitForBlockedLifecycleChannelRead();
+					await database!.unsafe(
+						"UPDATE collaboration.memberships SET status = 'inactive' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+						[tracerIds.company, tracerIds.principal],
+					);
+					await blocker.unsafe("COMMIT");
+					let raceError: unknown;
+					try {
+						await raced;
+					} catch (error) {
+						raceError = error;
+					}
+					expect(assertChannelUnavailable(raceError)).toBe(
+						stableChannelUnavailableBytes,
+					);
+					await assertNoMutationRecords(raceCallId, raceBody);
+					await database!.unsafe(
+						"UPDATE collaboration.memberships SET status = 'active' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+						[tracerIds.company, tracerIds.principal],
+					);
+
+					await blocker.unsafe("BEGIN");
+					await blocker.unsafe(
+						"LOCK TABLE collaboration.channels IN ACCESS EXCLUSIVE MODE",
+					);
+					const cancelledCallId = `direct:check:cancel:${crypto.randomUUID()}`;
+					const cancelledBody = "check-cancelled-read";
+					const cancellation = new AbortController();
+					const cancellationReason = new DOMException(
+						"lifecycle caller cancelled",
+						"AbortError",
+					);
+					const cancelled = routeApplication.execution(
+						{ ...executionInput, signal: cancellation.signal },
+						({ mutations }) =>
+							mutations.message.publish(
+								{ body: cancelledBody, channelId: tracerIds.channel },
+								{ callId: cancelledCallId },
+							),
+					);
+					await waitForBlockedLifecycleChannelRead();
+					cancellation.abort(cancellationReason);
+					await blocker.unsafe("COMMIT");
+					await expect(cancelled).rejects.toBe(cancellationReason);
+					await assertNoMutationRecords(cancelledCallId, cancelledBody);
+
+					await blocker.unsafe("BEGIN");
+					await blocker.unsafe(
+						"LOCK TABLE collaboration.channels IN ACCESS EXCLUSIVE MODE",
+					);
+					const deadlineCallId = `direct:check:deadline:${crypto.randomUUID()}`;
+					const deadlineBody = "check-deadline-read";
+					const expired = routeApplication.execution(
+						{ ...executionInput, deadline: Date.now() + 500 },
+						({ mutations }) =>
+							mutations.message.publish(
+								{ body: deadlineBody, channelId: tracerIds.channel },
+								{ callId: deadlineCallId },
+							),
+					);
+					await waitForBlockedLifecycleChannelRead();
+					await expect(expired).rejects.toMatchObject({
+						code: "DEADLINE_EXCEEDED",
+						retryable: true,
+					});
+					await blocker.unsafe("COMMIT");
+					await assertNoMutationRecords(deadlineCallId, deadlineBody);
+				} finally {
+					await blocker.unsafe("ROLLBACK").catch(() => {});
+					await blocker.release();
+					await database!.unsafe(
+						"UPDATE collaboration.memberships SET status = 'active' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+						[tracerIds.company, tracerIds.principal],
+					);
+				}
 				const hostileBody = "__questpie_hostile_invalid_event__";
 				const directLifecycleCallId = `direct:lifecycle:${crypto.randomUUID()}`;
 				let directLifecycleError: unknown;
@@ -686,7 +907,7 @@ postgresTest(
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
-				expect(transportCalls).toBe(3);
+				expect(transportCalls).toBe(5);
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
 					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
@@ -709,7 +930,7 @@ postgresTest(
 				expect(networkMaximumTimeout.receipt).toBe(
 					directMaximumTimeout.receipt,
 				);
-				expect(transportCalls).toBe(4);
+				expect(transportCalls).toBe(6);
 				await expect(
 					networkClient.actions["delivery.publish"](
 						{
@@ -739,7 +960,7 @@ postgresTest(
 						},
 					),
 				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
-				expect(transportCalls).toBe(6);
+				expect(transportCalls).toBe(8);
 
 				await expect(
 					invokeDelivery(

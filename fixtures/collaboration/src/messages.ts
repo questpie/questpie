@@ -1,5 +1,13 @@
-import { constraint, defineCollection, field, index, relation } from "questpie";
+import {
+	collection,
+	constraint,
+	defineCollection,
+	field,
+	index,
+	relation,
+} from "questpie";
 
+import type { CollectionLifecycle } from "#questpie/app";
 import { messageAudit } from "@questpie/collaboration-audit/questpie";
 
 import { channels } from "./channels";
@@ -18,6 +26,18 @@ export const messages = defineCollection({
 			withTimezone: true,
 		}),
 	},
+	issues: {
+		channelUnavailable: collection.issue(),
+	},
+	lifecycle: {
+		check: async ({ candidate, ctx, issues }) => {
+			const channel = await ctx.data.channels.get({
+				key: { id: candidate.channelId },
+				select: { id: true },
+			});
+			if (channel === null) throw issues.channelUnavailable();
+		},
+	} satisfies CollectionLifecycle<"messages">,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
 	},

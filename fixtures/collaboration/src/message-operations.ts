@@ -16,6 +16,11 @@ const invalidMessageEvent = operation.error({
 	status: 422,
 });
 
+const channelUnavailable = operation.error({
+	code: "CHANNEL_UNAVAILABLE",
+	status: 404,
+});
+
 export const channelOperations = defineCollectionOperations(channels, {
 	name: "channels",
 	policy: channelPolicy,
@@ -33,6 +38,10 @@ export const messageOperations = defineCollectionOperations(messages, {
 	policy: messagePolicy,
 	create: {
 		input: ["channelId", "authorMembershipId", "body"],
+		errors: { channelUnavailable },
+		issueMappings: {
+			messages: { channelUnavailable: "channelUnavailable" },
+		},
 		normalize: ({ input }) => ({ body: operation.text.trim(input.body) }),
 		values: ({ operationTime }) => ({
 			createdAt: mutation.overwrite(operationTime),

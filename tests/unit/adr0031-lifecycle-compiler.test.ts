@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 import {
 	compileApplication,
@@ -384,30 +384,120 @@ export type LifecycleTypeProof = typeof check;
 }, 30_000);
 
 test("rejects unbounded, detached, write, and inexact check capabilities", async () => {
-	for (const [authored, diagnosticClass] of [
-		[
-			`check: ({ candidate }) => { return candidate; },`,
-			"unsupportedLifecycleSyntax",
-		],
-		[
-			`check: async ({ ctx }) => { ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } }); },`,
-			"unsupportedLifecycleSyntax",
-		],
-		[
-			`check: async ({ ctx }) => { const team = await ctx.data.teams.update({ key: { id: "00000000-0000-4000-8000-000000000001" }, patch: { name: "forbidden" } }); return team; },`,
-			"unsupportedLifecycleCapability",
-		],
-		[
-			`check: async ({ ctx }) => { const team = await ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { missing: true } }); return team; },`,
-			"unsupportedLifecycleSyntax",
-		],
-		[
-			`check: async ({ ctx }) => { const rows = await Promise.all([ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } })]); return rows; },`,
-			"unsupportedLifecycleCapability",
-		],
+	for (const hostile of [
+		{
+			authored: `check: ({ candidate }) => { return candidate; },`,
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			needle: "({ candidate })",
+		},
+		{
+			authored: `check: async ({ ctx }) => { ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } }); },`,
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			needle: "ctx.data.teams.get",
+		},
+		{
+			authored: `check: async ({ ctx }) => { const team = await ctx.data.teams.update({ key: { id: "00000000-0000-4000-8000-000000000001" }, patch: { name: "forbidden" } }); return team; },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "ctx.data.teams.update",
+		},
+		{
+			authored: `check: async ({ ctx }) => { const team = await ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { missing: true } }); return team; },`,
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			needle: "missing",
+		},
+		{
+			authored: `check: async ({ ctx }) => { const rows = await Promise.all([ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } })]); return rows; },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "Promise.all",
+		},
+		{
+			authored: `check: async ({ ctx }) => { await ctx.services.audit.record({ event: "forbidden" }); },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "ctx.services",
+		},
+		{
+			authored: `check: async ({ ctx }) => { await ctx.actions.delivery.publish({ message: "forbidden" }); },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "ctx.actions",
+		},
+		{
+			authored: `check: async ({ ctx }) => { return ctx.request; },`,
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			needle: "request;",
+		},
+		{
+			authored: `check: async ({ ctx }) => { return ctx.route; },`,
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			needle: "route;",
+		},
+		{
+			authored: `check: async ({ ctx }) => { await ctx.sql.query("SELECT 1"); },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "ctx.sql",
+		},
+		{
+			authored: `check: async ({ ctx }) => { await ctx.transaction.query("SELECT 1"); },`,
+			diagnosticClass: "unsupportedLifecycleCapability",
+			needle: "ctx.transaction",
+		},
+		{
+			authored: `check: async ({ candidate }) => { setTimeout(() => void candidate, 0); },`,
+			diagnosticClass: "lifecycleCapture",
+			needle: "setTimeout",
+		},
+		{
+			authored: `check: async ({ issues }) => { if (memberships) throw issues.invalidReference(); },`,
+			diagnosticClass: "lifecycleCapture",
+			needle: "memberships)",
+		},
+		{
+			authored: `check: async ({ issues }) => { if (lifecycleCapturedValue) throw issues.invalidReference(); },`,
+			diagnosticClass: "lifecycleCapture",
+			needle: "lifecycleCapturedValue)",
+			prelude: "const lifecycleCapturedValue = true;",
+		},
 	] as const) {
+		const { authored, diagnosticClass, needle } = hostile;
+		const prelude = "prelude" in hostile ? hostile.prelude : undefined;
 		const temporary = await mkdtemp(
 			join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-check-hostile-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const ticketsPath = join(temporary, "src/tickets.ts");
+			let authoredSource = withoutTicketCheck(
+				await readFile(ticketsPath, "utf8"),
+			);
+			if (prelude)
+				authoredSource = authoredSource.replace(
+					'import { memberships } from "./memberships";',
+					`import { memberships } from "./memberships";\n\n${prelude}`,
+				);
+			authoredSource = authoredSource.replace(
+				"\t\tvalidate: ({ candidate, issues }) => {",
+				`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
+			);
+			await writeFile(ticketsPath, authoredSource);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-026",
+				diagnosticClass,
+				details: {
+					phase: "check",
+					origin: sourceOrigin("src/tickets.ts", authoredSource, needle),
+				},
+			});
+		} finally {
+			await rm(temporary, { force: true, recursive: true });
+		}
+	}
+}, 60_000);
+
+test("rejects ambient clocks and network access before lifecycle lowering", async () => {
+	for (const expression of ["Date.now()", 'fetch("https://example.invalid")']) {
+		const temporary = await mkdtemp(
+			join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-check-ambient-"),
 		);
 		try {
 			await cp(fixtureRoot, temporary, { recursive: true });
@@ -416,15 +506,17 @@ test("rejects unbounded, detached, write, and inexact check capabilities", async
 				ticketsPath,
 				withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
 					"\t\tvalidate: ({ candidate, issues }) => {",
-					`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
+					`\t\tcheck: async ({ candidate }) => { void candidate; void ${expression}; },\n\t\tvalidate: ({ candidate, issues }) => {`,
 				),
 			);
 			await expect(
 				compileApplication({ applicationRoot: temporary }),
 			).rejects.toMatchObject({
-				code: "QP-COMPOSE-026",
-				diagnosticClass,
-				details: { phase: "check" },
+				code: "QP-COMPOSE-010",
+				diagnosticClass: "impureStructuralGraph",
+				details: {
+					path: relative(resolve(import.meta.dir, "../.."), ticketsPath),
+				},
 			});
 		} finally {
 			await rm(temporary, { force: true, recursive: true });
@@ -737,6 +829,53 @@ test("projects explicit issue ownership for a generated named Mutation", async (
 				"issue:messageEvents/invalidKind": "invalidMessageEvent",
 			},
 		},
+	});
+	expect(
+		contracts.operations.find(
+			({ identity }) => identity === "mutation:messages.create",
+		),
+	).toMatchObject({
+		declaredErrors: {
+			channelUnavailable: {
+				code: "CHANNEL_UNAVAILABLE",
+				status: 404,
+				payload: null,
+			},
+		},
+		issueMappings: {
+			"collection:messages": {
+				"issue:messages/channelUnavailable": "channelUnavailable",
+			},
+		},
+	});
+	expect(
+		contracts.operations.find(
+			({ identity }) => identity === "mutation:message.publish",
+		)?.issueMappings,
+	).toMatchObject({
+		"collection:messages": {
+			"issue:messages/channelUnavailable": "channelUnavailable",
+		},
+	});
+	const lifecyclePrograms = JSON.parse(
+		compilation.generatedFiles["collection-lifecycle-programs.json"]!,
+	) as Readonly<{
+		programs: readonly Readonly<{
+			bindings: Readonly<{
+				collection: string;
+				capabilities: Readonly<Record<string, unknown>>;
+			}>;
+		}>[];
+	}>;
+	expect(
+		lifecyclePrograms.programs.find(
+			({ bindings }) => bindings.collection === "collection:messages",
+		)?.bindings.capabilities,
+	).toEqual({
+		"data.channels.get": expect.objectContaining({
+			identity: "query:channels.get",
+			kind: "read",
+		}),
 	});
 }, 30_000);
 

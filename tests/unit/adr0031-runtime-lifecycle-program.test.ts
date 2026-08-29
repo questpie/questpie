@@ -589,6 +589,22 @@ test("shares terminal statement, dependency, row, cancellation, and re-entry bud
 		expect(() => doom.throwIfDoomed()).toThrow(/budget/);
 	}
 
+	let currentTime = 0;
+	const durationDoom = createCollectionLifecycleDoom();
+	const duration = createCollectionExecutionBudget({
+		doom: durationDoom,
+		maxStatements: 20,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5,
+		clock: () => currentTime,
+	});
+	currentTime = 6;
+	expect(() => duration.assertAvailable()).toThrow("duration budget exceeded");
+	expect(() => durationDoom.throwIfDoomed()).toThrow(
+		"duration budget exceeded",
+	);
+
 	const reentryDoom = createCollectionLifecycleDoom();
 	const reentry = createCollectionExecutionBudget({
 		doom: reentryDoom,

@@ -119,6 +119,7 @@ test("generates an internal create/update kernel without publishing Collection R
 			"execution.ts",
 			"memberships.ts",
 			"message-events.ts",
+			"message-operations.ts",
 			"message-page.ts",
 			"message-policy.ts",
 			"messages.ts",
@@ -217,9 +218,16 @@ test("generates an internal create/update kernel without publishing Collection R
 		expect(compilation.generatedFiles["client.ts"]).not.toContain(
 			"provenanceRecords.update",
 		);
+		const projections = JSON.parse(
+			compilation.generatedFiles["collection-operation-set-projections.json"]!,
+		) as Readonly<{
+			sets: readonly Readonly<{ target: string }>[];
+		}>;
 		expect(
-			compilation.generatedFiles["collection-operation-set-projections.json"],
-		).toBeUndefined();
+			projections.sets.filter(
+				({ target }) => target === "collection:provenanceRecords",
+			),
+		).toEqual([]);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
@@ -269,6 +277,7 @@ test("keeps ctx.data and its SQL kernel invariant when an Operation Set pins inp
 			"execution.ts",
 			"memberships.ts",
 			"message-events.ts",
+			"message-operations.ts",
 			"message-page.ts",
 			"message-policy.ts",
 			"messages.ts",

@@ -17,6 +17,20 @@ test("lowers an unbranded Collection Operation Set to exact P3 programs", async 
 		await rm(join(temporary, "src/message-published.ts"));
 		await rm(join(temporary, "src/message-record-delivery.ts"));
 		await rm(join(temporary, "src/delivery-action.ts"));
+		const messagesPath = join(temporary, "src/messages.ts");
+		const messagesSource = await readFile(messagesPath, "utf8");
+		const lifecycleStart = messagesSource.indexOf("\n\tissues:");
+		const lifecycleEnd = messagesSource.indexOf(
+			"\n\tconstraints:",
+			lifecycleStart,
+		);
+		if (lifecycleStart < 0 || lifecycleEnd < 0)
+			throw new TypeError("fixture Message lifecycle boundary is missing");
+		await writeFile(
+			messagesPath,
+			messagesSource.slice(0, lifecycleStart) +
+				messagesSource.slice(lifecycleEnd),
+		);
 		const policyPath = join(temporary, "src/message-policy.ts");
 		const policySource = await readFile(policyPath, "utf8");
 		await writeFile(

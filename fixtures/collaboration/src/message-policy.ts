@@ -45,26 +45,13 @@ export const messagePolicy = definePolicy(messages, {
 	create: {
 		admit: policy.authenticated(),
 		candidate: ({ candidate, principal, tenant }) =>
-			expr.and(
-				expr.exists(channels, ({ row: channel }) =>
-					expr.and(
-						channel.id.equal(candidate.channelId),
-						expr.exists(spaces, ({ row: space }) =>
-							expr.and(
-								space.id.equal(channel.spaceId),
-								space.companyId.equal(tenant.id),
-							),
-						),
-					),
-				),
-				expr.exists(memberships, ({ row: membership }) =>
-					expr.and(
-						membership.id.equal(candidate.authorMembershipId),
-						membership.companyId.equal(tenant.id),
-						membership.principalId.equal(principal.id),
-						membership.scopeKey.equal("company"),
-						membership.status.equal("active"),
-					),
+			expr.exists(memberships, ({ row: membership }) =>
+				expr.and(
+					membership.id.equal(candidate.authorMembershipId),
+					membership.companyId.equal(tenant.id),
+					membership.principalId.equal(principal.id),
+					membership.scopeKey.equal("company"),
+					membership.status.equal("active"),
 				),
 			),
 	},

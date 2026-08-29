@@ -155,7 +155,10 @@ test("projects the authored message.publish Mutation into the executable applica
 	expect(messagePolicy.program.operations).toMatchObject({
 		create: {
 			admission: { kind: "authenticated" },
-			candidate: { kind: "and" },
+			candidate: {
+				kind: "exists",
+				collection: "collection:memberships",
+			},
 		},
 		read: { admission: { kind: "authenticated" } },
 	});

@@ -38,7 +38,18 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 	expect(create).toEqual({
 		identity: "mutation:messages.create",
 		admission: "authenticated",
-		declaredErrors: {},
+		declaredErrors: {
+			channelUnavailable: {
+				code: "CHANNEL_UNAVAILABLE",
+				payload: null,
+				status: 404,
+			},
+		},
+		issueMappings: {
+			"collection:messages": {
+				"issue:messages/channelUnavailable": "channelUnavailable",
+			},
+		},
 		input: {
 			kind: "object",
 			properties: {

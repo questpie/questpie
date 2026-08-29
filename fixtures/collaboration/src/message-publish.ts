@@ -32,23 +32,14 @@ export const publishMessage = defineMutation({
 		}),
 	},
 	issueMappings: {
+		messages: { channelUnavailable: "channelUnavailable" },
 		messageEvents: { invalidKind: "publicationRejected" },
 	},
 	handler: async ({ input, ctx, errors }) => {
 		ctx.signal.throwIfAborted();
-		const channel = await ctx.data.channels.get({
-			key: { id: input.channelId },
-		});
-		const space = channel
-			? await ctx.data.spaces.get({
-					key: { id: channel.spaceId },
-				})
-			: null;
-		if (channel === null || space === null || space.companyId !== ctx.tenant.id)
-			throw errors.channelUnavailable();
 		const message = await ctx.data.messages.create({
 			input: {
-				channelId: channel.id,
+				channelId: input.channelId,
 				authorMembershipId: ctx.values.selectedMembershipId,
 				body: input.body.trim(),
 			},
@@ -81,7 +72,7 @@ export const publishMessage = defineMutation({
 			// remains doomed and rolls this later dispatch back as well.
 		}
 		await ctx.dispatch.messagePublished({
-			channelId: channel.id,
+			channelId: input.channelId,
 			companyId: ctx.tenant.id,
 			messageId: message.id,
 		});
