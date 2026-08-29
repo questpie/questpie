@@ -740,8 +740,8 @@ test("Collection create enforces candidate Policy before one bound lifecycle che
 				return [
 					{
 						qp_result_0: id,
-						qp_result_1: "visible",
-						qp_result_1_allowed: true,
+						qp_result_1: null,
+						qp_result_1_allowed: false,
 					},
 				];
 			expect(parameters).toEqual(["allowed", "default body"]);

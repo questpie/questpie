@@ -7,6 +7,8 @@ import {
 	relation,
 } from "questpie";
 
+import type { CollectionLifecycle } from "#questpie/app";
+
 import { memberships } from "./memberships";
 import { organizations } from "./organizations";
 import { teams } from "./teams";
@@ -91,7 +93,22 @@ export const tickets = defineCollection({
 			)
 				throw issues.invalidReference();
 		},
-	},
+		check: async ({ candidate, ctx, issues }) => {
+			const team = await ctx.data.teams.get({
+				key: { id: candidate.teamId },
+				select: { id: true, routingStatus: true },
+			});
+			if (team === null || team.routingStatus !== "active")
+				throw issues.invalidReference();
+
+			const requester = await ctx.data.memberships.get({
+				key: { id: candidate.requesterMembershipId },
+				select: { id: true, status: true },
+			});
+			if (requester === null || requester.status !== "active")
+				throw issues.invalidReference();
+		},
+	} satisfies CollectionLifecycle<"tickets">,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
 		tenantReference: constraint.unique({

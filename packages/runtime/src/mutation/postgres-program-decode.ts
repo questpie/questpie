@@ -126,6 +126,7 @@ function decodeResults(
 	statement: string,
 	expectedPaths: readonly FieldPath[],
 	label: string,
+	columnPrefix = "qp_result",
 ): readonly PostgresResultV1[] {
 	const decoded = array(value, `${label} result`).map((raw, index) => {
 		const source = record(raw, `${label} result ${index}`);
@@ -141,7 +142,7 @@ function decodeResults(
 			fail(`${label} result ${index} nullable is invalid`);
 		const column = text(source.column, `${label} result ${index} column`);
 		if (
-			!/^qp_result_\d+$/.test(column) ||
+			column !== `${columnPrefix}_${index}` ||
 			!statement.includes(`AS "${column}"`)
 		)
 			fail(`${label} result ${index} column is not projected by SQL`);
@@ -188,12 +189,14 @@ export function candidateResults(
 	statement: string,
 	fields: LinkedPostgresCreateOperationPlanV1["candidate"]["fields"],
 	label: string,
+	columnPrefix = "qp_result",
 ): readonly PostgresResultV1[] {
 	const decoded = decodeResults(
 		value,
 		statement,
 		fields.map(({ path: fieldPath }) => fieldPath),
 		label,
+		columnPrefix,
 	);
 	if (decoded.some(({ guardColumn }) => guardColumn !== undefined))
 		fail(`${label} candidate result must not be conditionally disclosed`);

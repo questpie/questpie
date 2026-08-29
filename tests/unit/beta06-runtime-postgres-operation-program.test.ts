@@ -281,17 +281,51 @@ test("reconstructs the complete update candidate Policy statement", async () => 
 			path: ["status"],
 			codec: { kind: "text", minLength: 1, maxLength: 16 },
 		},
+		{
+			position: 4,
+			postgresType: "uuid",
+			kind: "literal",
+			codec: "uuid",
+			value: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+		},
+		{
+			position: 5,
+			postgresType: "text",
+			kind: "literal",
+			codec: "text",
+			value: "active",
+		},
 	] as const;
 	const fields = [
 		{ path: ["id"], column: "ticket_id" },
 		{ path: ["status"], column: "routing_status" },
 	] as const;
-	const policySql = '"qp_candidate"."routing_status" IS NOT NULL';
+	const currentPolicySql =
+		'"qp_current"."owner_id" IS NOT DISTINCT FROM $8::uuid';
+	const candidatePolicySql =
+		'"qp_candidate"."routing_status" IS NOT DISTINCT FROM $9::text';
 	const sql =
-		'WITH "qp_current" AS (SELECT * FROM "support"."tickets" AS "qp_current" WHERE "qp_current"."ticket_id" IS NOT DISTINCT FROM $1::uuid LIMIT 1), "qp_candidate" AS (SELECT $2::uuid AS "ticket_id", $3::text AS "routing_status") SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE "qp_candidate"."routing_status" IS NOT NULL LIMIT 1';
+		'WITH "qp_current" AS (SELECT * FROM "support"."tickets" AS "qp_current" WHERE "qp_current"."ticket_id" IS NOT DISTINCT FROM $1::uuid LIMIT 1), "qp_candidate" AS (SELECT $2::uuid AS "ticket_id", $3::text AS "routing_status") SELECT TRUE FROM "qp_current" CROSS JOIN "qp_candidate" WHERE "qp_current"."owner_id" IS NOT DISTINCT FROM $4::uuid AND "qp_candidate"."routing_status" IS NOT DISTINCT FROM $5::text LIMIT 1';
 	const input = {
 		sql,
-		policySql,
+		currentPolicySql,
+		candidatePolicySql,
+		policyParameters: [
+			{
+				position: 8,
+				postgresType: "uuid",
+				kind: "literal",
+				codec: "uuid",
+				value: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+			},
+			{
+				position: 9,
+				postgresType: "text",
+				kind: "literal",
+				codec: "text",
+				value: "active",
+			},
+		],
 		parameters,
 		fields,
 		keyFields: [["id"]] as const,

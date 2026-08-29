@@ -195,6 +195,84 @@ function renderData(resources: readonly NormalizedResource[]): string {
 		.join("\n\t\t");
 }
 
+function renderCollectionRow(
+	resource: NormalizedResource,
+	paths?: readonly (readonly string[])[],
+	optionalPaths: readonly (readonly string[])[] = [],
+): string {
+	const selected = paths
+		? new Set(paths.filter((path) => path.length === 1).map((path) => path[0]))
+		: null;
+	const members = collectionFields(resource)
+		.filter(([name]) => selected === null || selected.has(name))
+		.map(([name, field]) => {
+			const optional = optionalPaths.some(
+				(path) => path.length === 1 && path[0] === name,
+			);
+			return `readonly ${JSON.stringify(name)}${optional ? "?" : ""}: ${fieldNodeType(field, "Date")};`;
+		})
+		.join(" ");
+	return `Readonly<{ ${members} }>`;
+}
+
+function renderCollectionLifecycleDeclarations(
+	resources: readonly NormalizedResource[],
+	mutationContract: MutationGeneratedContractV1,
+): string {
+	const collections = resources.filter(
+		(resource) => resource.kind === "collection",
+	);
+	const byIdentity = new Map(
+		collections.map((resource) => [resource.identity, resource]),
+	);
+	const reads = mutationContract.operations.filter(
+		(operation) => operation.member === "get",
+	);
+	const data = reads
+		.map((operation) => {
+			const target = byIdentity.get(operation.target);
+			if (!target)
+				throw new TypeError(
+					`unknown lifecycle read target ${operation.target}`,
+				);
+			const constraints = record(target.value.constraints);
+			const primary = Object.values(constraints)
+				.map(record)
+				.find((constraint) => constraint.kind === "primaryKey");
+			return `readonly ${JSON.stringify(target.name)}: LifecycleReadCollection<${renderCollectionRow(target, operation.selectedFieldPaths, operation.optionalSelectedFieldPaths)}, ${renderKeyType(collectionFields(target), (primary?.fields ?? []) as readonly unknown[])}>;`;
+		})
+		.sort(compareAscii)
+		.join(" ");
+	const entries = collections
+		.map((resource) => {
+			const row = renderCollectionRow(resource);
+			const issues = Object.keys(record(resource.value.issues ?? {}))
+				.sort(compareAscii)
+				.map(
+					(name) =>
+						`readonly ${JSON.stringify(name)}: () => CollectionIssueValue;`,
+				)
+				.join(" ");
+			const common = `readonly candidate: ${row}; readonly current: ${row} | null; readonly issues: Readonly<{ ${issues} }>;`;
+			return `readonly ${JSON.stringify(resource.name)}: Readonly<{ readonly normalize?: (input: Readonly<{ readonly input: Readonly<Partial<${row}>>; }>) => Readonly<Partial<${row}>>; readonly validate?: (input: Readonly<{ ${common} }>) => void; readonly check?: (input: Readonly<{ ${common} readonly ctx: Readonly<{ readonly data: Readonly<GeneratedLifecycleCheckData>; }>; }>) => Promise<void>; }>;`;
+		})
+		.sort(compareAscii)
+		.join("\n\t");
+	return `export interface LifecycleReadCollection<Row, Key> {
+	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ readonly key: Key; readonly select: Select & (keyof Select extends never ? never : unknown) & Readonly<Record<Exclude<keyof Select, keyof Row>, never>>; }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
+}
+
+export interface GeneratedLifecycleCheckData {
+	${data}
+}
+
+export interface GeneratedCollectionLifecycles {
+	${entries}
+}
+
+export type CollectionLifecycle<Name extends keyof GeneratedCollectionLifecycles> = GeneratedCollectionLifecycles[Name];`;
+}
+
 function renderQueries(resources: readonly NormalizedResource[]): string {
 	return resources
 		.filter((resource) => resource.kind === "query")
@@ -334,7 +412,11 @@ export function renderAppContract(
 				`readonly ${JSON.stringify(resource.name)}: Readonly<{ direct(input: Readonly<{ request: Request; execution: Readonly<{ principal: Principal }> }>): Promise<Response>; }>;`,
 		)
 		.join("\n\t");
-	return `import type { Authority, Codec, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
+	const collectionLifecycleDeclarations = renderCollectionLifecycleDeclarations(
+		resources,
+		mutationContract,
+	);
+	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
@@ -354,6 +436,8 @@ export interface GeneratedMutationData {
 export interface GeneratedMutationDataByName {
 	${mutationDataByName}
 }
+
+${collectionLifecycleDeclarations}
 
 export interface GeneratedQueries {
 	${renderQueries(resources)}

@@ -466,6 +466,40 @@ postgresTest(
 				payload: null,
 				status: 422,
 			});
+			await app.execution(agentInput, ({ mutations }) =>
+				mutations.teams.update({
+					key: { id: supportTracerIds.teamPlatform },
+					patch: { routingStatus: "paused" },
+				}),
+			);
+			let dependentCheckError: unknown;
+			try {
+				await app.execution(agentInput, ({ mutations }) =>
+					mutations.ticket.create(
+						{
+							description: "Rejected by a Policy-aware Collection check.",
+							reference: `SUP-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+							summary: "Paused routing team",
+							teamId: supportTracerIds.teamPlatform,
+						},
+						{ callId: `direct:paused-team:${crypto.randomUUID()}` },
+					),
+				);
+			} catch (error) {
+				dependentCheckError = error;
+			} finally {
+				await app.execution(agentInput, ({ mutations }) =>
+					mutations.teams.update({
+						key: { id: supportTracerIds.teamPlatform },
+						patch: { routingStatus: "active" },
+					}),
+				);
+			}
+			expect(dependentCheckError).toMatchObject({
+				code: "INVALID_TICKET",
+				payload: null,
+				status: 422,
+			});
 			const directLifecycleErrorBytes = JSON.stringify({
 				code: (directLifecycleError as { code: unknown }).code,
 				status: (directLifecycleError as { status: unknown }).status,

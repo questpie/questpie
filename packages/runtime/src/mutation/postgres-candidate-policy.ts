@@ -57,20 +57,80 @@ function candidateColumns(
 		.join(", ");
 }
 
+function policyParameterIdentity(parameter: PostgresParameterV1): string {
+	if (parameter.kind === "executionFact")
+		return JSON.stringify([
+			parameter.kind,
+			parameter.source,
+			parameter.path,
+			parameter.codec,
+			parameter.postgresType,
+		]);
+	if (parameter.kind === "literal")
+		return JSON.stringify([
+			parameter.kind,
+			parameter.value,
+			parameter.codec,
+			parameter.postgresType,
+		]);
+	return "";
+}
+
+function remapPolicySql(
+	sql: string,
+	from: readonly PostgresParameterV1[],
+	to: readonly PostgresParameterV1[],
+	label: string,
+): string {
+	const targets = new Map(
+		to.flatMap((parameter) => {
+			const identity = policyParameterIdentity(parameter);
+			return identity ? [[identity, parameter] as const] : [];
+		}),
+	);
+	let remapped = sql;
+	const replacements: Array<readonly [string, string]> = [];
+	for (const [index, parameter] of from
+		.toSorted((left, right) => right.position - left.position)
+		.entries()) {
+		const placeholder = parameterSql(parameter);
+		if (!remapped.includes(placeholder)) continue;
+		const identity = policyParameterIdentity(parameter);
+		const target = identity ? targets.get(identity) : undefined;
+		if (!target) fail(`${label} parameters do not preserve Policy bindings`);
+		const token = `__QP_POLICY_PARAMETER_${index}__`;
+		if (remapped.includes(token)) fail(`${label} contains an invalid token`);
+		remapped = remapped.replaceAll(placeholder, token);
+		replacements.push([token, parameterSql(target)]);
+	}
+	for (const [token, replacement] of replacements)
+		remapped = remapped.replaceAll(token, replacement);
+	return remapped;
+}
+
 export function validateCreateCandidatePolicySql(input: {
 	sql: string;
 	policySql: string;
+	policyParameters: readonly PostgresParameterV1[];
 	parameters: readonly PostgresParameterV1[];
 	fields: readonly CandidateField[];
 	label: string;
 }): void {
-	const expected = `WITH ${quote("qp_candidate")} AS (SELECT ${candidateColumns(input.parameters, input.fields, input.label)}) SELECT TRUE FROM ${quote("qp_candidate")} WHERE ${input.policySql} LIMIT 1`;
+	const policySql = remapPolicySql(
+		input.policySql,
+		input.policyParameters,
+		input.parameters,
+		input.label,
+	);
+	const expected = `WITH ${quote("qp_candidate")} AS (SELECT ${candidateColumns(input.parameters, input.fields, input.label)}) SELECT TRUE FROM ${quote("qp_candidate")} WHERE ${policySql} LIMIT 1`;
 	if (input.sql !== expected) fail(`${input.label} omits Policy`);
 }
 
 export function validateUpdateCandidatePolicySql(input: {
 	sql: string;
-	policySql: string;
+	currentPolicySql: string;
+	candidatePolicySql: string;
+	policyParameters: readonly PostgresParameterV1[];
 	parameters: readonly PostgresParameterV1[];
 	fields: readonly CandidateField[];
 	keyFields: readonly FieldPath[];
@@ -94,6 +154,18 @@ export function validateUpdateCandidatePolicySql(input: {
 		if (!field) fail(`${input.label} key Field is invalid`);
 		return `${quote("qp_current")}.${quote(field.column)} IS NOT DISTINCT FROM ${parameterSql(parameter)}`;
 	});
-	const expected = `WITH ${quote("qp_current")} AS (SELECT * FROM ${table} AS ${quote("qp_current")} WHERE ${keyPredicates.join(" AND ")} LIMIT 1), ${quote("qp_candidate")} AS (SELECT ${candidateColumns(input.parameters, input.fields, input.label)}) SELECT TRUE FROM ${quote("qp_current")} CROSS JOIN ${quote("qp_candidate")} WHERE ${input.policySql} LIMIT 1`;
+	const currentPolicySql = remapPolicySql(
+		input.currentPolicySql,
+		input.policyParameters,
+		input.parameters,
+		input.label,
+	);
+	const candidatePolicySql = remapPolicySql(
+		input.candidatePolicySql,
+		input.policyParameters,
+		input.parameters,
+		input.label,
+	);
+	const expected = `WITH ${quote("qp_current")} AS (SELECT * FROM ${table} AS ${quote("qp_current")} WHERE ${keyPredicates.join(" AND ")} LIMIT 1), ${quote("qp_candidate")} AS (SELECT ${candidateColumns(input.parameters, input.fields, input.label)}) SELECT TRUE FROM ${quote("qp_current")} CROSS JOIN ${quote("qp_candidate")} WHERE ${currentPolicySql} AND ${candidatePolicySql} LIMIT 1`;
 	if (input.sql !== expected) fail(`${input.label} omits Policy`);
 }

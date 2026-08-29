@@ -224,6 +224,19 @@ export function updatePlan(
 		plan.candidatePolicy,
 		`${operation.identity} candidatePolicy`,
 	);
+	const write = record(plan.write, `${operation.identity} write`);
+	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
+	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
+	if (
+		!writeSql.includes(currentPolicy.sql) ||
+		!writeSql.includes(candidatePolicy.sql)
+	)
+		fail(`${operation.identity} write omits fresh Policy`);
+	const writeParameters = decodePostgresCollectionParameters(
+		write.parameters,
+		writeSql,
+		`${operation.identity} write`,
+	);
 	const candidatePolicyCheck = operation.lifecycleProgram
 		? (() => {
 				const check = record(
@@ -251,7 +264,9 @@ export function updatePlan(
 				);
 				validateUpdateCandidatePolicySql({
 					sql,
-					policySql: candidatePolicy.sql,
+					currentPolicySql: currentPolicy.sql,
+					candidatePolicySql: candidatePolicy.sql,
+					policyParameters: writeParameters,
 					parameters,
 					fields,
 					keyFields: operation.keyFields,
@@ -313,21 +328,9 @@ export function updatePlan(
 				validationSql,
 				fields,
 				`${operation.identity} candidateValidation current`,
+				"qp_current",
 			)
 		: undefined;
-	const write = record(plan.write, `${operation.identity} write`);
-	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
-	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
-	if (
-		!writeSql.includes(currentPolicy.sql) ||
-		!writeSql.includes(candidatePolicy.sql)
-	)
-		fail(`${operation.identity} write omits fresh Policy`);
-	const writeParameters = decodePostgresCollectionParameters(
-		write.parameters,
-		writeSql,
-		`${operation.identity} write`,
-	);
 	const expectedParameters = writeParameters.filter(
 		({ kind }) => kind === "expectedPresent" || kind === "expectedValue",
 	);

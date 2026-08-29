@@ -68,6 +68,12 @@ function resolveObjectLiteral(
 	seen: ReadonlySet<string> = new Set(),
 ): ts.ObjectLiteralExpression | null {
 	if (ts.isObjectLiteralExpression(value)) return value;
+	if (
+		ts.isParenthesizedExpression(value) ||
+		ts.isAsExpression(value) ||
+		ts.isSatisfiesExpression(value)
+	)
+		return resolveObjectLiteral(value.expression, initializers, seen);
 	if (!ts.isIdentifier(value) || seen.has(value.text)) return null;
 	const initializer = initializers.get(value.text);
 	return initializer
@@ -165,24 +171,27 @@ export async function directExportMetadata(
 										initializers,
 									);
 							}
-							if (
-								section === "lifecycle" &&
-								ts.isObjectLiteralExpression(property.initializer)
-							)
-								for (const member of property.initializer.properties) {
-									if (!ts.isPropertyAssignment(member)) continue;
-									const phase = propertyName(member.name);
-									if (
-										phase &&
-										["normalize", "validate", "check", "afterWrite"].includes(
-											phase,
+							if (section === "lifecycle") {
+								const lifecycle = resolveObjectLiteral(
+									property.initializer,
+									initializers,
+								);
+								if (lifecycle)
+									for (const member of lifecycle.properties) {
+										if (!ts.isPropertyAssignment(member)) continue;
+										const phase = propertyName(member.name);
+										if (
+											phase &&
+											["normalize", "validate", "check", "afterWrite"].includes(
+												phase,
+											)
 										)
-									)
-										lifecycleSources[phase] = {
-											source: member.initializer.getText(source),
-											span: sourceSpan(source, member.initializer),
-										};
-								}
+											lifecycleSources[phase] = {
+												source: member.initializer.getText(source),
+												span: sourceSpan(source, member.initializer),
+											};
+									}
+							}
 							if (
 								section === "augmentations" &&
 								ts.isArrayLiteralExpression(property.initializer)

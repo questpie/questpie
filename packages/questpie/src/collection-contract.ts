@@ -112,6 +112,8 @@ export interface CollectionLifecycleDefinition<
 			issues: CollectionIssueFactories<Issues>;
 		}>,
 	) => void;
+	/** Application-specialized input is projected by the Current App Contract. */
+	readonly check?: (...input: never[]) => unknown;
 }
 
 interface AugmentationBrand {

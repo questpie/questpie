@@ -96,6 +96,7 @@ export type {
 	CollectionAugmentation,
 	CollectionDefinition,
 	CollectionIssueDefinition,
+	CollectionIssueValue,
 	CollectionLifecycleDefinition,
 	ConstraintDefinition,
 	FieldReference,

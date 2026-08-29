@@ -1,14 +1,18 @@
 import type { CollectionExecutionBudget } from "./collection-budget";
+import { assertAllowedCollectionPaths } from "./collection-input";
 import {
+	hasMutationValueAt as hasValueAt,
 	mutationLeafPaths as inputPaths,
 	mutationPathKey as pathKey,
 	mutationValueAt as valueAt,
+	setMutationValueAt as setAt,
 } from "./field-path";
 import {
 	captureCollectionLifecycleFailure,
 	executeCollectionLifecyclePhase,
 	type CollectionLifecycleDoom,
 } from "./lifecycle";
+import type { LinkedCollectionLifecycleProgramV1 } from "./lifecycle";
 import type {
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresCreateOperationPlanV1,
@@ -61,7 +65,10 @@ export function createCollectionLifecycleCheckExecutor(
 		): Promise<Row | null>;
 	}>,
 ) {
-	const capabilities = (started: number) =>
+	const capabilities = (
+		program: LinkedCollectionLifecycleProgramV1,
+		started: number,
+	) =>
 		Object.freeze(
 			Object.fromEntries(
 				input.plans.plans
@@ -72,6 +79,13 @@ export function createCollectionLifecycleCheckExecutor(
 					.map((plan) => [
 						plan.identity,
 						async (rawArgument: unknown) => {
+							const binding = Object.values(program.bindings.capabilities).find(
+								(candidate) =>
+									candidate.kind === "read" &&
+									candidate.identity === plan.identity,
+							);
+							if (!binding)
+								throw new TypeError("Lifecycle read capability is unbound");
 							const argument = record(rawArgument, "Lifecycle get argument");
 							if (
 								Object.keys(argument).length !== 2 ||
@@ -87,7 +101,15 @@ export function createCollectionLifecycleCheckExecutor(
 								"Lifecycle get selection",
 								plan.operation.selectedFieldPaths,
 							);
+							const boundSelection = binding.argumentKeys
+								.filter((key) => key.startsWith("select."))
+								.map((key) => key.slice("select.".length).split("."));
 							exactPaths(
+								selectedPaths,
+								boundSelection,
+								"Lifecycle get selection",
+							);
+							assertAllowedCollectionPaths(
 								selectedPaths,
 								plan.operation.selectedFieldPaths,
 								"Lifecycle get selection",
@@ -101,7 +123,18 @@ export function createCollectionLifecycleCheckExecutor(
 								throw new TypeError(
 									"Lifecycle get selection must contain true leaves",
 								);
-							return input.executeGet(plan, { key: argument.key }, started);
+							const row = await input.executeGet(
+								plan,
+								{ key: argument.key },
+								started,
+							);
+							if (row === null) return null;
+							const selected: Record<string, unknown> = {};
+							for (const path of selectedPaths) {
+								if (!hasValueAt(row, path)) continue;
+								setAt(selected, path, valueAt(row, path, "Lifecycle get row"));
+							}
+							return Object.freeze(selected);
 						},
 					]),
 			),
@@ -149,7 +182,7 @@ export function createCollectionLifecycleCheckExecutor(
 					lifecycle,
 					"check",
 					{ candidate, current, now: input.operationTime },
-					capabilities(started),
+					capabilities(lifecycle, started),
 					input.budget,
 				),
 			);

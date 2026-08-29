@@ -1,6 +1,5 @@
 import { canonicalBytes, compareAscii, digest } from "../canonical";
 import {
-	lowerPostgresMutationPolicyCheck,
 	lowerPostgresMutationPolicyChecks,
 	postgresMutationCollection,
 	type PolicyProgramV1,
@@ -306,10 +305,12 @@ function updatePlan(
 	});
 	const currentCheck = policyChecks.checks[0]!;
 	const candidateCheck = policyChecks.checks[1]!;
-	const candidatePolicyProof = lowerPostgresMutationPolicyCheck({
+	const candidatePolicyProof = lowerPostgresMutationPolicyChecks({
 		schema,
-		expression: candidateExpression,
-		aliases: candidateAliases,
+		checks: [
+			{ expression: update.current, aliases: { current: "qp_current" } },
+			{ expression: candidateExpression, aliases: candidateAliases },
+		],
 	});
 	const guardChecks = policyChecks.checks.slice(2);
 	const parameters = policyParameters(policyChecks.parameters);
@@ -481,7 +482,7 @@ function updatePlan(
 				);
 				return Object.freeze({
 					freshAfterRowLockWait: true as const,
-					sql: `WITH ${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${proofKeyPredicates.join(" AND ")} LIMIT 1), ${quote("qp_candidate")} AS (SELECT ${proofCandidateColumns.join(", ")}) SELECT TRUE FROM ${quote("qp_current")} CROSS JOIN ${quote("qp_candidate")} WHERE ${candidatePolicyProof.sql} LIMIT 1`,
+					sql: `WITH ${quote("qp_current")} AS (SELECT * FROM ${collection.table} AS ${quote("qp_current")} WHERE ${proofKeyPredicates.join(" AND ")} LIMIT 1), ${quote("qp_candidate")} AS (SELECT ${proofCandidateColumns.join(", ")}) SELECT TRUE FROM ${quote("qp_current")} CROSS JOIN ${quote("qp_candidate")} WHERE ${candidatePolicyProof.checks.map(({ sql }) => sql).join(" AND ")} LIMIT 1`,
 					parameters: proofParameters.values(),
 					outcome: "authorizedOrUnavailable" as const,
 				});

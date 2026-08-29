@@ -46,34 +46,36 @@ type EmbeddedOperationValue<Node> =
 export type FieldOperationValue<Node> =
 	Node extends FieldDefinition<
 		infer Value,
-		boolean,
+		infer Nullable,
 		FieldDefinition["default"],
 		infer Scalar,
 		boolean,
 		boolean,
 		infer Options
 	>
-		? Scalar extends "timestamp"
-			? Date
-			: Scalar extends "object"
-				? Options extends Readonly<{
-						properties: infer Properties extends Readonly<
-							Record<string, ValueDefinition>
-						>;
-					}>
-					? Readonly<{
-							[Key in keyof Properties]: EmbeddedOperationValue<
-								Properties[Key]
-							>;
-						}>
-					: Value
-				: Scalar extends "array"
-					? Options extends Readonly<{
-							items: infer Item extends ValueDefinition;
-						}>
-						? readonly EmbeddedOperationValue<Item>[]
-						: Value
-					: Value
+		?
+				| (Scalar extends "timestamp"
+						? Date
+						: Scalar extends "object"
+							? Options extends Readonly<{
+									properties: infer Properties extends Readonly<
+										Record<string, ValueDefinition>
+									>;
+								}>
+								? Readonly<{
+										[Key in keyof Properties]: EmbeddedOperationValue<
+											Properties[Key]
+										>;
+									}>
+								: Value
+							: Scalar extends "array"
+								? Options extends Readonly<{
+										items: infer Item extends ValueDefinition;
+									}>
+									? readonly EmbeddedOperationValue<Item>[]
+									: Value
+								: Value)
+				| (Nullable extends true ? null : never)
 		: never;
 
 export type CollectionRowFor<Fields extends FieldMap> = Readonly<{

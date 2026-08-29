@@ -17,6 +17,29 @@ const collaborationRoot = resolve(
 	"../../fixtures/collaboration",
 );
 
+function withoutTicketCheck(source: string): string {
+	const start = source.indexOf("\n\t\tcheck: async ");
+	const end = source.indexOf(
+		'\n\t} satisfies CollectionLifecycle<"tickets">,',
+		start,
+	);
+	if (start < 0 || end < 0)
+		throw new TypeError("fixture ticket lifecycle check boundary is missing");
+	return source.slice(0, start) + source.slice(end);
+}
+
+function sourceOrigin(module: string, source: string, needle: string) {
+	const index = source.indexOf(needle);
+	if (index < 0) throw new TypeError(`source origin is missing: ${needle}`);
+	const prefix = source.slice(0, index);
+	const lines = prefix.split("\n");
+	return {
+		module,
+		line: lines.length,
+		column: lines.at(-1)!.length + 1,
+	};
+}
+
 test("derives transitive issue reachability from lowered nested writes and terminates cycles", async () => {
 	const temporary = await mkdtemp(
 		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-nested-writes-"),
@@ -46,7 +69,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 		const ticketsPath = join(temporary, "src/tickets.ts");
 		await writeFile(
 			ticketsPath,
-			(await readFile(ticketsPath, "utf8")).replace(
+			withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
 				`\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { labels: { update(input: unknown): Promise<void> }; memberships: { update(input: unknown): Promise<void> } } }; row: { organizationId: string; requesterMembershipId: string } }) => {
@@ -276,17 +299,46 @@ test("lowers one bounded Policy-aware check read from a generated get capability
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
 		const ticketsPath = join(temporary, "src/tickets.ts");
+		const ticketsSource = withoutTicketCheck(
+			await readFile(ticketsPath, "utf8"),
+		);
 		await writeFile(
 			ticketsPath,
-			(await readFile(ticketsPath, "utf8")).replace(
+			`import type { LifecycleTypeProof } from "./lifecycle-type-consumer";\nexport type TicketLifecycleTypeProof = LifecycleTypeProof;\n${ticketsSource.replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
-				`\t\t// @ts-expect-error LIFE-03 projects the exact generated check Context.
-\t\tcheck: async ({ candidate, ctx, issues }: { candidate: { teamId: string }; ctx: { data: { teams: { get(input: unknown): Promise<{ id: string; routingStatus: string } | null> } } }; issues: { invalidReference(): Error } }) => {
+				`\t\tcheck: async ({ candidate, ctx, issues }) => {
 \t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { routingStatus: true, id: true } });
 \t\t\tif (team === null || team.routingStatus !== "active") throw issues.invalidReference();
 \t\t},
 \t\tvalidate: ({ candidate, issues }) => {`,
-			),
+			)}`,
+		);
+		await writeFile(
+			join(temporary, "src/lifecycle-type-consumer.ts"),
+			`import type { CollectionLifecycle } from "#questpie/app";
+
+const check: NonNullable<CollectionLifecycle<"tickets">["check"]> = async ({ candidate, ctx, issues }) => {
+	candidate.teamId satisfies string;
+	const team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { id: true, routingStatus: true } });
+	team satisfies Readonly<{ id: string; routingStatus: string }> | null;
+	// @ts-expect-error a generated lifecycle get requires at least one selected Field
+	await ctx.data.teams.get({ key: { id: candidate.teamId }, select: {} });
+	throw issues.invalidReference();
+};
+void check;
+// @ts-expect-error check Context has no Service capability
+declare const noServices: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["services"];
+// @ts-expect-error only generated bounded get Operations are present
+declare const noWrites: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["data"]["teams"]["update"];
+// @ts-expect-error Collection without a generated get is absent
+declare const noComments: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["data"]["comments"];
+// @ts-expect-error LIFE-04 projects the accepted lifecycle clock spelling
+declare const noClockYet: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["now"];
+// @ts-expect-error check is always asynchronous
+const synchronousCheck: NonNullable<CollectionLifecycle<"tickets">["check"]> = () => {};
+void synchronousCheck;
+export type LifecycleTypeProof = typeof check;
+`,
 		);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
@@ -362,7 +414,7 @@ test("rejects unbounded, detached, write, and inexact check capabilities", async
 			const ticketsPath = join(temporary, "src/tickets.ts");
 			await writeFile(
 				ticketsPath,
-				(await readFile(ticketsPath, "utf8")).replace(
+				withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
 					"\t\tvalidate: ({ candidate, issues }) => {",
 					`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
 				),
@@ -476,6 +528,7 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 			digest: string;
 			bindings: Readonly<{
 				collection: string;
+				capabilities: Readonly<Record<string, unknown>>;
 				issues: Readonly<Record<string, string>>;
 				operations: readonly string[];
 			}>;
@@ -501,7 +554,17 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 	expect(tickets?.bindings.operations).toContain("mutation:ticket.create");
 	expect(tickets?.phases.normalize.length).toBeGreaterThan(0);
 	expect(tickets?.phases.validate.length).toBeGreaterThan(0);
-	expect(tickets?.phases.check).toEqual([]);
+	expect(tickets?.bindings.capabilities).toEqual({
+		"data.memberships.get": expect.objectContaining({
+			identity: "query:memberships.get",
+			kind: "read",
+		}),
+		"data.teams.get": expect.objectContaining({
+			identity: "query:teams.get",
+			kind: "read",
+		}),
+	});
+	expect(tickets?.phases.check.length).toBeGreaterThan(0);
 	expect(tickets?.phases.afterWrite).toEqual([]);
 	expect(artifactBytes).not.toContain("=>");
 	expect(artifactBytes).not.toContain(
@@ -719,13 +782,11 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 		await cp(fixtureRoot, temporary, { recursive: true });
 		const path = join(temporary, "src/tickets.ts");
 		const source = await readFile(path, "utf8");
-		await writeFile(
-			path,
-			source.replace(
-				/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
-				"\t\tnormalize: ({ input }) => crypto.randomUUID(),",
-			),
+		const authored = source.replace(
+			/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
+			"\t\tnormalize: ({ input }) => crypto.randomUUID(),",
 		);
+		await writeFile(path, authored);
 
 		try {
 			await compileApplication({ applicationRoot: temporary });
@@ -736,7 +797,7 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 				code: "QP-COMPOSE-026",
 				diagnosticClass: "lifecycleCapture",
 				details: {
-					origin: { module: "src/tickets.ts", line: 83, column: 29 },
+					origin: sourceOrigin("src/tickets.ts", authored, "crypto.randomUUID"),
 					phase: "normalize",
 				},
 			});
@@ -754,31 +815,27 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 		await cp(fixtureRoot, temporary, { recursive: true });
 		const collectionPath = join(temporary, "src/tickets.ts");
 		const collectionSource = await readFile(collectionPath, "utf8");
-		await writeFile(
-			collectionPath,
-			collectionSource
-				.replace(
-					"\t\tinvalidReference: collection.issue(),",
-					"\t\tinvalidReference: collection.issue(),\n\t\temptySummary: collection.issue(),",
-				)
-				.replace(
-					"\t\t\t\tthrow issues.invalidReference();",
-					'\t\t\t\tthrow issues.invalidReference();\n\t\t\tif (candidate.summary === "") throw issues.emptySummary();',
-				),
-		);
+		const authoredCollection = collectionSource
+			.replace(
+				"\t\tinvalidReference: collection.issue(),",
+				"\t\tinvalidReference: collection.issue(),\n\t\temptySummary: collection.issue(),",
+			)
+			.replace(
+				"\t\t\t\tthrow issues.invalidReference();",
+				'\t\t\t\tthrow issues.invalidReference();\n\t\t\tif (candidate.summary === "") throw issues.emptySummary();',
+			);
+		await writeFile(collectionPath, authoredCollection);
 		const mutationPath = join(temporary, "src/ticket-mutations.ts");
 		const mutationSource = await readFile(mutationPath, "utf8");
 		let mappingIndex = 0;
-		await writeFile(
-			mutationPath,
-			mutationSource.replace(
-				/tickets: \{ invalidReference: "invalidTicket" \},/g,
-				(match) =>
-					mappingIndex++ === 0
-						? match
-						: 'tickets: { invalidReference: "invalidTicket", emptySummary: "invalidTicket" },',
-			),
+		const authoredMutation = mutationSource.replace(
+			/tickets: \{ invalidReference: "invalidTicket" \},/g,
+			(match) =>
+				mappingIndex++ === 0
+					? match
+					: 'tickets: { invalidReference: "invalidTicket", emptySummary: "invalidTicket" },',
 		);
+		await writeFile(mutationPath, authoredMutation);
 
 		try {
 			await compileApplication({ applicationRoot: temporary });
@@ -790,17 +847,21 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 				diagnosticClass: "missingIssueMapping",
 				details: {
 					phase: "validate",
-					origin: { module: "src/tickets.ts", line: 94, column: 34 },
-					mappingOrigin: {
-						module: "src/ticket-mutations.ts",
-						line: 85,
-						column: 2,
-					},
-					callOrigin: {
-						module: "src/ticket-mutations.ts",
-						line: 86,
-						column: 3,
-					},
+					origin: sourceOrigin(
+						"src/tickets.ts",
+						authoredCollection,
+						"throw issues.emptySummary()",
+					),
+					mappingOrigin: sourceOrigin(
+						"src/ticket-mutations.ts",
+						authoredMutation,
+						"issueMappings:",
+					),
+					callOrigin: sourceOrigin(
+						"src/ticket-mutations.ts",
+						authoredMutation,
+						'tickets: { invalidReference: "invalidTicket" },',
+					),
 					operation: "mutation:ticket.create",
 					path: ["mutation:ticket.create", "collection:tickets/create"],
 					issue: "issue:tickets/emptySummary",
@@ -850,13 +911,11 @@ test("rejects a non-identity Collection issue at its exact declaration", async (
 		await cp(fixtureRoot, temporary, { recursive: true });
 		const path = join(temporary, "src/tickets.ts");
 		const source = await readFile(path, "utf8");
-		await writeFile(
-			path,
-			source.replace(
-				"\t\tinvalidReference: collection.issue(),",
-				'\t\t"bad/name": collection.issue(),',
-			),
+		const authored = source.replace(
+			"\t\tinvalidReference: collection.issue(),",
+			'\t\t"bad/name": collection.issue(),',
 		);
+		await writeFile(path, authored);
 
 		await expect(
 			compileApplication({ applicationRoot: temporary }),
@@ -865,7 +924,7 @@ test("rejects a non-identity Collection issue at its exact declaration", async (
 			diagnosticClass: "invalidIssueDeclaration",
 			details: {
 				phase: "validate",
-				origin: { module: "src/tickets.ts", line: 80, column: 3 },
+				origin: sourceOrigin("src/tickets.ts", authored, '"bad/name"'),
 				rewrite: "use an identifier-safe issue name and collection.issue()",
 			},
 		});

@@ -272,6 +272,16 @@ function createPlan(
 		candidatePolicy.sql,
 		`${operation.identity} candidate Policy SQL`,
 	);
+	const write = record(plan.write, `${operation.identity} write`);
+	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
+	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
+	if (!writeSql.includes(candidatePolicySql))
+		fail(`${operation.identity} write omits candidate Policy`);
+	const writeParameters = decodePostgresCollectionParameters(
+		write.parameters,
+		writeSql,
+		`${operation.identity} write`,
+	);
 	const candidatePolicyCheck = operation.lifecycleProgram
 		? (() => {
 				const check = record(
@@ -300,6 +310,7 @@ function createPlan(
 				validateCreateCandidatePolicySql({
 					sql,
 					policySql: candidatePolicySql,
+					policyParameters: writeParameters,
 					parameters,
 					fields,
 					label: `${operation.identity} candidate Policy check`,
@@ -319,16 +330,6 @@ function createPlan(
 				});
 			})()
 		: undefined;
-	const write = record(plan.write, `${operation.identity} write`);
-	exact(write, ["sql", "parameters", "result"], `${operation.identity} write`);
-	const writeSql = statement(write.sql, `${operation.identity} write SQL`);
-	if (!writeSql.includes(candidatePolicySql))
-		fail(`${operation.identity} write omits candidate Policy`);
-	const writeParameters = decodePostgresCollectionParameters(
-		write.parameters,
-		writeSql,
-		`${operation.identity} write`,
-	);
 	const result = results(
 		write.result,
 		writeSql,
