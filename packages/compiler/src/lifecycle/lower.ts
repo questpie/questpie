@@ -16,6 +16,7 @@ export type LifecycleCapabilityCandidate = Readonly<{
 	kind: "write";
 	identity: LifecycleIdentity;
 	argumentKeys: readonly string[];
+	argumentRoots: readonly string[];
 	requiredArgumentKeys: readonly string[];
 	requiredArgumentRoots: readonly string[];
 	requireNonEmptyWriteLane: boolean;
@@ -94,6 +95,7 @@ function capabilityArgument(
 	node: ts.Expression,
 	env: Environment,
 	argumentKeys: readonly string[],
+	argumentRoots: readonly string[],
 	prefix = "",
 ): LifecycleExpression {
 	if (!ts.isObjectLiteralExpression(node))
@@ -103,13 +105,16 @@ function capabilityArgument(
 			"unsupportedLifecycleSyntax",
 			"pass one exact generated Operation argument object",
 		);
-	const admittedAtLevel = [
-		...new Set(
-			argumentKeys
-				.filter((key) => key.startsWith(prefix))
-				.map((key) => key.slice(prefix.length).split(".")[0]!),
-		),
-	];
+	const admittedAtLevel =
+		prefix === ""
+			? argumentRoots
+			: [
+					...new Set(
+						argumentKeys
+							.filter((key) => key.startsWith(prefix))
+							.map((key) => key.slice(prefix.length).split(".")[0]!),
+					),
+				];
 	const entries = new Map<string, LifecycleObjectEntry>();
 	for (const member of node.properties) {
 		if (
@@ -138,6 +143,7 @@ function capabilityArgument(
 						member.initializer,
 						env,
 						argumentKeys,
+						argumentRoots,
 						`${prefix}${key}.`,
 					)
 				: expression(member.initializer, env),
@@ -211,6 +217,7 @@ function capability(
 		node.arguments[0]!,
 		env,
 		binding.argumentKeys,
+		binding.argumentRoots,
 	);
 	const actualKeys = flattenedArgumentKeys(argument);
 	const actualRoots =

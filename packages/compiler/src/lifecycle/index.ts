@@ -99,12 +99,21 @@ function bindingsFor(
 				].sort(compareAscii);
 				const requiredArgumentRoots =
 					operation.member === "create" ? ["input"] : ["key"];
+				const argumentRoots = [
+					operation.member === "create" ? "input" : "key",
+					...(operation.member === "update" &&
+					operation.callerInputFields.length > 0
+						? ["patch"]
+						: []),
+					...(operation.trustedValueFields.length > 0 ? ["values"] : []),
+				].sort(compareAscii);
 				return [
 					`data.${operation.target.slice("collection:".length)}.${operation.member}`,
 					Object.freeze({
 						kind: "write",
 						identity: operation.identity,
 						argumentKeys: Object.freeze(argumentKeys),
+						argumentRoots: Object.freeze(argumentRoots),
 						requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
 						requiredArgumentRoots: Object.freeze(requiredArgumentRoots),
 						requireNonEmptyWriteLane: operation.member === "update",

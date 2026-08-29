@@ -190,7 +190,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 	}
 }, 30_000);
 
-test("requires the generated create input root while admitting an empty optional input shape", async () => {
+test("requires the generated create input root for a zero-leaf input shape", async () => {
 	const temporary = await mkdtemp(
 		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-create-root-"),
 	);
@@ -204,7 +204,6 @@ export const optionalCreates = defineCollection({
 	name: "optionalCreates",
 	fields: {
 		id: field.uuid({ nullable: false, default: "randomUuid", server: true, immutable: true }),
-		note: field.text({ nullable: true }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
@@ -214,14 +213,11 @@ export const optionalCreatesPolicy = definePolicy(optionalCreates, {
 		admit: policy.authenticated(),
 		candidate: ({ candidate }) => candidate.id.equal(candidate.id),
 	},
-	fields: {
-		create: ({ candidate }) => ({ note: candidate.id.equal(candidate.id) }),
-	},
 });
 export const optionalCreatesOperations = defineCollectionOperations(optionalCreates, {
 	name: "optionalCreates",
 	policy: optionalCreatesPolicy,
-	create: { input: ["note"], select: { id: true, note: true } },
+	create: { input: [], select: { id: true } },
 });
 `,
 		);
