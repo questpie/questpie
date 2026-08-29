@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { normalizeExecutedOperationError } from "../../packages/runtime/src/application/operation-error";
 import {
 	collectionLifecycleIssueIdentity,
+	decodeCollectionLifecyclePrograms,
 	executeCollectionLifecyclePhase,
 	isCollectionLifecycleIssue,
 	linkCollectionMutationPrograms,
@@ -213,6 +214,149 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 		"code",
 		"retryable",
 	]);
+});
+
+test("decodes and executes one bound Policy-aware check read", async () => {
+	const checkContract = {
+		...lifecycleContract,
+		bindings: {
+			...bindings,
+			fields: {
+				...bindings.fields,
+				"teams.routingStatus": "collection:teams/field:routingStatus",
+			},
+			capabilities: {
+				"data.teams.get": {
+					kind: "read",
+					identity: "query:teams.get",
+					argumentKeys: ["key.id", "select.routingStatus"],
+					cardinality: "one",
+					first: true,
+					maxRows: 1,
+				},
+			},
+			operations: ["mutation:ticket.create", "query:teams.get"],
+		},
+		phases: {
+			...lifecycleContract.phases,
+			check: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:teams.get",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "key",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: "TEAM-1" },
+												},
+											],
+										},
+									},
+									{
+										kind: "argument",
+										key: "select",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "routingStatus",
+													value: { op: "literal", value: true },
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+				{
+					op: "if",
+					test: {
+						op: "binary",
+						operator: "!==",
+						left: {
+							op: "member",
+							target: { op: "local", slot: 0 },
+							field: "collection:teams/field:routingStatus",
+							optional: false,
+						},
+						right: { op: "literal", value: "active" },
+					},
+					consequent: [
+						{
+							op: "throwIssue",
+							issue: "issue:tickets/invalidReference",
+						},
+					],
+					otherwise: [],
+				},
+			],
+		},
+	} as const;
+	const checkProgram = {
+		...checkContract,
+		digest: digest("questpie.collection-lifecycle-program.v1", checkContract),
+	};
+	const decoded = decodeCollectionLifecyclePrograms(
+		{
+			format: "questpie.collection-lifecycle-programs",
+			version: 1,
+			programs: [checkProgram],
+		},
+		runtimeBuild,
+	)[0]!;
+	let observed: unknown;
+	await expect(
+		executeCollectionLifecyclePhase(
+			decoded,
+			"check",
+			{ candidate: {}, current: null, now: new Date() },
+			{
+				"query:teams.get": (argument) => {
+					observed = argument;
+					return { routingStatus: "active" };
+				},
+			},
+		),
+	).resolves.toBeUndefined();
+	expect(observed).toEqual({
+		key: { id: "TEAM-1" },
+		select: { routingStatus: true },
+	});
+	let issue: unknown;
+	try {
+		await executeCollectionLifecyclePhase(
+			decoded,
+			"check",
+			{ candidate: {}, current: null, now: new Date() },
+			{ "query:teams.get": () => ({ routingStatus: "paused" }) },
+		);
+	} catch (error) {
+		issue = error;
+	}
+	expect(isCollectionLifecycleIssue(issue)).toBe(true);
+	await expect(
+		executeCollectionLifecyclePhase(decoded, "check", {
+			candidate: {},
+			current: null,
+			now: new Date(),
+		}),
+	).rejects.toThrow("Lifecycle capability is withheld");
 });
 
 test("fails closed on compiler-only afterWrite capabilities before LIFE-05 runtime execution", () => {

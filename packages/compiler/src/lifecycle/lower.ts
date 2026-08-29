@@ -25,6 +25,7 @@ export type LifecycleCapabilityCandidate =
 			cardinality: "one" | "many";
 			first: boolean;
 			maxRows: number;
+			resultFields: Readonly<Record<string, LifecycleIdentity>>;
 	  }>
 	| Readonly<{
 			kind: "write";
@@ -105,6 +106,10 @@ interface Environment {
 	readonly bindings: LifecycleLoweringBindings;
 	readonly parameters: Map<string, string>;
 	readonly locals: Map<string, number>;
+	readonly localFields: Map<
+		string,
+		Readonly<Record<string, LifecycleIdentity>>
+	>;
 	readonly issueOriginCandidates: WeakMap<
 		Extract<LifecycleStatement, { op: "throwIssue" }>,
 		LifecycleOrigin
@@ -364,6 +369,27 @@ function fieldIdentity(
 	return identity;
 }
 
+function memberFieldIdentity(
+	env: Environment,
+	target: ts.Expression,
+	name: string,
+	node: ts.Node,
+): LifecycleIdentity {
+	const localFields = ts.isIdentifier(target)
+		? env.localFields.get(target.text)
+		: undefined;
+	if (!localFields) return fieldIdentity(env, name, node);
+	const identity = localFields[name];
+	if (!identity)
+		fail(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			`select Field ${JSON.stringify(name)} before reading it`,
+		);
+	return identity;
+}
+
 function expression(
 	node: ts.Expression,
 	env: Environment,
@@ -409,7 +435,12 @@ function expression(
 		return {
 			op: "member",
 			target: expression(node.expression, env),
-			field: fieldIdentity(env, node.name.text, node.name),
+			field: memberFieldIdentity(
+				env,
+				node.expression,
+				node.name.text,
+				node.name,
+			),
 			optional: !!node.questionDotToken,
 		};
 	if (ts.isElementAccessExpression(node))
@@ -604,6 +635,29 @@ function statements(
 					"bind only an awaited generated read to a const local",
 				);
 			env.locals.set(declaration.name.text, slot);
+			if (value.op === "capability" && value.capability === "read") {
+				const binding = Object.values(env.bindings.capabilities).find(
+					(candidate) =>
+						candidate.kind === "read" && candidate.identity === value.identity,
+				);
+				if (binding?.kind === "read") {
+					const selected = new Set(
+						(env.capabilityArgumentKeys.get(value.identity) ?? [])
+							.filter((key) => key.startsWith("select."))
+							.map((key) => key.slice("select.".length)),
+					);
+					env.localFields.set(
+						declaration.name.text,
+						Object.freeze(
+							Object.fromEntries(
+								Object.entries(binding.resultFields).filter(([name]) =>
+									selected.has(name),
+								),
+							),
+						),
+					);
+				}
+			}
 			output.push({ op: "const", slot, value });
 			continue;
 		}
@@ -612,7 +666,11 @@ function statements(
 				candidate
 					? statements(
 							ts.isBlock(candidate) ? candidate.statements : [candidate],
-							{ ...env, locals: new Map(env.locals) },
+							{
+								...env,
+								locals: new Map(env.locals),
+								localFields: new Map(env.localFields),
+							},
 						)
 					: [];
 			output.push({
@@ -726,6 +784,7 @@ export function lowerLifecyclePhase(
 		bindings,
 		parameters: new Map(),
 		locals: new Map(),
+		localFields: new Map(),
 		issueOriginCandidates: new WeakMap(),
 		capabilityArgumentKeys: new Map(),
 		nextSlot: 0,

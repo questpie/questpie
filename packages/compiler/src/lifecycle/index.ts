@@ -80,6 +80,16 @@ function bindingsFor(
 					paths: readonly (readonly string[])[],
 				) => paths.map((path) => `${prefix}.${path.join(".")}`);
 				if (operation.member === "get") {
+					const resultFields = Object.freeze(
+						Object.fromEntries(
+							operation.selectedFieldPaths
+								.filter((path) => path.length === 1)
+								.map((path) => [
+									path[0]!,
+									`${operation.target}/field:${path.join("/")}` as LifecycleIdentity,
+								]),
+						),
+					);
 					return [
 						`data.${operation.target.slice("collection:".length)}.get`,
 						Object.freeze({
@@ -101,6 +111,7 @@ function bindingsFor(
 							cardinality: "one",
 							first: true,
 							maxRows: 1,
+							resultFields,
 						}) satisfies LifecycleCapabilityCandidate,
 					];
 				}
@@ -153,12 +164,26 @@ function bindingsFor(
 		schema: `schema:${applicationName}`,
 		collection: collection.identity as LifecycleIdentity,
 		fields: Object.freeze(
-			Object.fromEntries(
-				fields.map(({ path }) => [
-					path.at(-1)!,
-					`${collection.identity}/field:${path.join("/")}` as LifecycleIdentity,
-				]),
-			),
+			Object.fromEntries([
+				...fields.map(
+					({ path }) =>
+						[
+							path.at(-1)!,
+							`${collection.identity}/field:${path.join("/")}` as LifecycleIdentity,
+						] as const,
+				),
+				...operations.operations
+					.filter((operation) => operation.member === "get")
+					.flatMap((operation) =>
+						operation.selectedFieldPaths.map(
+							(path) =>
+								[
+									`${operation.target.slice("collection:".length)}.${path.join(".")}`,
+									`${operation.target}/field:${path.join("/")}` as LifecycleIdentity,
+								] as const,
+						),
+					),
+			]),
 		),
 		issues: Object.freeze({ ...issues }),
 		capabilities: Object.freeze(capabilities),

@@ -15,7 +15,19 @@ export interface LinkedCollectionLifecycleProgramV1 {
 		collection: string;
 		fields: Readonly<Record<string, string>>;
 		issues: Readonly<Record<string, string>>;
-		capabilities: Readonly<Record<string, never>>;
+		capabilities: Readonly<
+			Record<
+				string,
+				Readonly<{
+					kind: "read";
+					identity: string;
+					argumentKeys: readonly string[];
+					cardinality: "one" | "many";
+					first: boolean;
+					maxRows: number;
+				}>
+			>
+		>;
 		operations: readonly string[];
 		jobs: readonly never[];
 	}>;
@@ -275,13 +287,31 @@ function decodeExpression(value: unknown, label: string): RecordValue {
 			const entry = record(member, `${label} entry ${index}`);
 			if (entry.kind === "spreadInput")
 				exact(entry, ["kind"], `${label} entry ${index}`);
-			else {
+			else if (entry.kind === "argument") {
+				exact(entry, ["kind", "key", "value"], `${label} entry ${index}`);
+				text(entry.key, `${label} entry ${index} key`);
+				decodeExpression(entry.value, `${label} entry ${index} value`);
+			} else {
 				exact(entry, ["kind", "field", "value"], `${label} entry ${index}`);
 				if (entry.kind !== "field") fail(`${label} entry kind is invalid`);
 				identity(entry.field, `${label} entry field`, "collection");
 				decodeExpression(entry.value, `${label} entry value`);
 			}
 		});
+		return expression;
+	}
+	if (op === "capability") {
+		exact(expression, ["op", "capability", "identity", "arguments"], label);
+		if (expression.capability !== "read" && expression.capability !== "write")
+			fail(`${label} capability is invalid`);
+		identity(
+			expression.identity,
+			`${label} identity`,
+			expression.capability === "read" ? "query" : "mutation",
+		);
+		array(expression.arguments, `${label} arguments`).forEach((member, index) =>
+			decodeExpression(member, `${label} argument ${index}`),
+		);
 		return expression;
 	}
 	if (op === "template") {
@@ -382,7 +412,7 @@ function decodeBindings(value: unknown, label: string) {
 	for (const [name, field] of Object.entries(fields)) {
 		if (!name) fail(`${label} Field name is invalid`);
 		const fieldIdentity = identity(field, `${label} Field`, "collection");
-		if (!fieldIdentity.startsWith(`${collection}/field:`))
+		if (!fieldIdentity.includes("/field:"))
 			fail(`${label} Field owner is invalid`);
 	}
 	const issues = record(bindings.issues, `${label} issues`);
@@ -390,12 +420,70 @@ function decodeBindings(value: unknown, label: string) {
 		if (!name) fail(`${label} issue name is invalid`);
 		identity(issue, `${label} issue`, "issue");
 	}
-	if (
-		Object.keys(record(bindings.capabilities, `${label} capabilities`)).length
-	)
-		fail(`${label} capabilities are unavailable in LIFE-01`);
+	const capabilities = Object.freeze(
+		Object.fromEntries(
+			Object.entries(
+				record(bindings.capabilities, `${label} capabilities`),
+			).map(([name, rawCapability]) => {
+				if (!name) fail(`${label} capability name is invalid`);
+				const capability = record(rawCapability, `${label} capability ${name}`);
+				if (capability.kind !== "read")
+					fail(`${label} capability is unavailable before LIFE-05`);
+				exact(
+					capability,
+					[
+						"kind",
+						"identity",
+						"argumentKeys",
+						"cardinality",
+						"first",
+						"maxRows",
+					],
+					`${label} capability ${name}`,
+				);
+				const capabilityIdentity = identity(
+					capability.identity,
+					`${label} capability ${name} identity`,
+					"query",
+				);
+				const argumentKeys = array(
+					capability.argumentKeys,
+					`${label} capability ${name} argument keys`,
+				).map((key) => text(key, `${label} capability ${name} argument key`));
+				if (
+					new Set(argumentKeys).size !== argumentKeys.length ||
+					argumentKeys.some(
+						(key, index) => key !== [...argumentKeys].sort()[index],
+					)
+				)
+					fail(`${label} capability ${name} argument keys are invalid`);
+				if (
+					capability.cardinality !== "one" ||
+					capability.first !== true ||
+					capability.maxRows !== 1
+				)
+					fail(`${label} capability ${name} read bound is invalid`);
+				return [
+					name,
+					Object.freeze({
+						kind: "read" as const,
+						identity: capabilityIdentity,
+						argumentKeys: Object.freeze(argumentKeys),
+						cardinality: "one" as const,
+						first: true,
+						maxRows: 1,
+					}),
+				] as const;
+			}),
+		),
+	);
 	const operations = array(bindings.operations, `${label} operations`).map(
-		(operation) => identity(operation, `${label} Operation`, "mutation"),
+		(operation) => {
+			const value = text(operation, `${label} Operation`);
+			if (!value.startsWith("mutation:") && !value.startsWith("query:"))
+				fail(`${label} Operation is invalid`);
+			return value;
+		},
 	);
 	if (new Set(operations).size !== operations.length)
 		fail(`${label} Operations must be unique`);
@@ -406,10 +494,80 @@ function decodeBindings(value: unknown, label: string) {
 		collection,
 		fields: Object.freeze({ ...fields }) as Readonly<Record<string, string>>,
 		issues: Object.freeze({ ...issues }) as Readonly<Record<string, string>>,
-		capabilities: Object.freeze({}) as Readonly<Record<string, never>>,
+		capabilities,
 		operations: Object.freeze(operations),
 		jobs: Object.freeze([]) as readonly never[],
 	});
+}
+
+function hasCapability(value: unknown): boolean {
+	if (Array.isArray(value)) return value.some(hasCapability);
+	if (!value || typeof value !== "object") return false;
+	const entry = value as RecordValue;
+	return entry.op === "capability" || Object.values(entry).some(hasCapability);
+}
+
+function structuralArgumentKeys(
+	value: unknown,
+	prefix = "",
+): readonly string[] {
+	const expression = value as RecordValue;
+	if (expression.op !== "object") return [];
+	return (expression.entries as readonly RecordValue[]).flatMap((entry) => {
+		if (entry.kind !== "argument") return [];
+		const path = `${prefix}${String(entry.key)}`;
+		const nested = structuralArgumentKeys(entry.value, `${path}.`);
+		return nested.length === 0 ? [path] : nested;
+	});
+}
+
+function validateCheckCapabilities(
+	phases: Readonly<Record<Phase, readonly RecordValue[]>>,
+	bindings: ReturnType<typeof decodeBindings>,
+	label: string,
+): void {
+	if (
+		hasCapability(phases.normalize) ||
+		hasCapability(phases.validate) ||
+		hasCapability(phases.afterWrite)
+	)
+		fail(`${label} capability is not admitted in this phase`);
+	const invoked = new Set<string>();
+	const visit = (statements: readonly RecordValue[]) => {
+		for (const statement of statements) {
+			if (statement.op === "if") {
+				visit(statement.consequent as readonly RecordValue[]);
+				visit(statement.otherwise as readonly RecordValue[]);
+				continue;
+			}
+			if (statement.op === "const") {
+				const value = statement.value as RecordValue;
+				if (value.op !== "capability") continue;
+				if (value.capability !== "read")
+					fail(`${label} check capability is invalid`);
+				const binding = Object.values(bindings.capabilities).find(
+					(candidate) => candidate.identity === value.identity,
+				);
+				if (!binding || !bindings.operations.includes(binding.identity))
+					fail(`${label} check capability is unbound`);
+				const args = value.arguments as readonly unknown[];
+				const keys = args.length === 1 ? structuralArgumentKeys(args[0]) : [];
+				if (
+					keys.length !== binding.argumentKeys.length ||
+					keys.some((key, index) => key !== binding.argumentKeys[index])
+				)
+					fail(`${label} check capability arguments are invalid`);
+				invoked.add(binding.identity);
+				continue;
+			}
+			if (hasCapability(statement))
+				fail(`${label} capability must be a top-level const read`);
+		}
+	};
+	visit(phases.check);
+	for (const binding of Object.values(bindings.capabilities))
+		if (!invoked.has(binding.identity))
+			fail(`${label} capability binding is unused`);
 }
 
 export function decodeCollectionLifecyclePrograms(
@@ -462,8 +620,13 @@ export function decodeCollectionLifecyclePrograms(
 				check: decodeStatements(phases.check, `${label} check`),
 				afterWrite: decodeStatements(phases.afterWrite, `${label} afterWrite`),
 			});
-			if (decodedPhases.check.length || decodedPhases.afterWrite.length)
-				fail(`${label} uses a phase unavailable in LIFE-01`);
+			if (decodedPhases.afterWrite.length)
+				fail(`${label} uses a phase unavailable before LIFE-05`);
+			const decodedBindings = decodeBindings(
+				program.bindings,
+				`${label} bindings`,
+			);
+			validateCheckCapabilities(decodedPhases, decodedBindings, label);
 			const contract = {
 				format: program.format,
 				interpreter: program.interpreter,
@@ -486,7 +649,7 @@ export function decodeCollectionLifecyclePrograms(
 				fail(`${label} digest does not match`);
 			return Object.freeze({
 				...contract,
-				bindings: decodeBindings(program.bindings, `${label} bindings`),
+				bindings: decodedBindings,
 				phases: decodedPhases,
 				digest: programDigest,
 			}) as LinkedCollectionLifecycleProgramV1;
@@ -544,11 +707,20 @@ function leafPaths(value: unknown, prefix: readonly string[] = []): string[] {
 
 export async function executeCollectionLifecyclePhase(
 	program: LinkedCollectionLifecycleProgramV1,
-	phase: "normalize" | "validate",
+	phase: "normalize" | "validate" | "check",
 	roots: Readonly<Record<string, unknown>>,
+	capabilities: Readonly<
+		Record<string, (argument: unknown) => unknown | Promise<unknown>>
+	> = {},
 ): Promise<unknown> {
 	const fieldNames = new Map(
-		Object.entries(program.bindings.fields).map(([name, id]) => [id, name]),
+		Object.values(program.bindings.fields).map((id) => [
+			id,
+			id
+				.slice(id.indexOf("/field:") + "/field:".length)
+				.split("/")
+				.at(-1)!,
+		]),
 	);
 	const locals = new Map<number, unknown>();
 	const safeRoots = closed(roots) as RecordValue;
@@ -629,6 +801,8 @@ export async function executeCollectionLifecyclePhase(
 				const entry = rawEntry as RecordValue;
 				if (entry.kind === "spreadInput")
 					Object.assign(output, safeRoots.input);
+				else if (entry.kind === "argument")
+					output[String(entry.key)] = evaluate(entry.value);
 				else {
 					const name = fieldNames.get(String(entry.field));
 					if (!name) throw new TypeError("Lifecycle Field binding is invalid");
@@ -670,14 +844,30 @@ export async function executeCollectionLifecyclePhase(
 		}
 		throw new TypeError("Lifecycle expression is invalid");
 	};
-	const run = (statements: readonly RecordValue[]): unknown => {
+	const run = async (statements: readonly RecordValue[]): Promise<unknown> => {
 		for (const statement of statements) {
 			if (statement.op === "const") {
-				locals.set(Number(statement.slot), evaluate(statement.value));
+				const value = statement.value as RecordValue;
+				if (value.op === "capability") {
+					const binding = Object.values(program.bindings.capabilities).find(
+						(candidate) => candidate.identity === value.identity,
+					);
+					const invoke = capabilities[String(value.identity)];
+					if (!binding || !invoke)
+						throw new TypeError("Lifecycle capability is withheld");
+					const args = value.arguments as readonly unknown[];
+					const result = closed(await invoke(evaluate(args[0])));
+					if (
+						result !== null &&
+						(!result || typeof result !== "object" || Array.isArray(result))
+					)
+						throw new TypeError("Lifecycle read cardinality is invalid");
+					locals.set(Number(statement.slot), result);
+				} else locals.set(Number(statement.slot), evaluate(statement.value));
 				continue;
 			}
 			if (statement.op === "if") {
-				const result = run(
+				const result = await run(
 					(evaluate(statement.test)
 						? statement.consequent
 						: statement.otherwise) as readonly RecordValue[],
@@ -695,7 +885,7 @@ export async function executeCollectionLifecyclePhase(
 		}
 		return undefined;
 	};
-	const outcome = run(program.phases[phase]);
+	const outcome = await run(program.phases[phase]);
 	const value =
 		Array.isArray(outcome) && outcome[0] === returned ? outcome[1] : undefined;
 	if (value === optionalAbsence)

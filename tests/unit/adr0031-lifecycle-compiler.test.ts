@@ -283,7 +283,7 @@ test("lowers one bounded Policy-aware check read from a generated get capability
 				`\t\t// @ts-expect-error LIFE-03 projects the exact generated check Context.
 \t\tcheck: async ({ candidate, ctx, issues }: { candidate: { teamId: string }; ctx: { data: { teams: { get(input: unknown): Promise<{ id: string; routingStatus: string } | null> } } }; issues: { invalidReference(): Error } }) => {
 \t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { routingStatus: true, id: true } });
-\t\t\tif (team === null) throw issues.invalidReference();
+\t\t\tif (team === null || team.routingStatus !== "active") throw issues.invalidReference();
 \t\t},
 \t\tvalidate: ({ candidate, issues }) => {`,
 			),
