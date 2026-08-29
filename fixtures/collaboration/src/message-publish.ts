@@ -55,17 +55,22 @@ export const publishMessage = defineMutation({
 			values: { createdAt: ctx.operationTime },
 		});
 		if (message.body === undefined) throw errors.channelUnavailable();
+		// LIFE-02 hostile tracer shortcut. Delete when testkit can inject trusted
+		// lifecycle candidates without application-owned sentinel branches.
+		const invalidLifecycle =
+			input.body === "__questpie_hostile_invalid_event__";
+		const invalidConstraint =
+			input.body === "__questpie_hostile_missing_message__";
 		await ctx.data.messageEvents.create({
 			input: {
-				messageId: message.id,
-				...(input.body === "__questpie_hostile_invalid_event__"
-					? {}
-					: { kind: "published" }),
+				...(invalidConstraint ? {} : { messageId: message.id }),
+				...(invalidLifecycle ? {} : { kind: "published" }),
 			},
 			values: {
 				occurredAt: ctx.operationTime,
-				...(input.body === "__questpie_hostile_invalid_event__"
-					? { kind: "invalid" }
+				...(invalidLifecycle ? { kind: "invalid" } : {}),
+				...(invalidConstraint
+					? { messageId: "00000000-0000-4000-8000-000000000099" }
 					: {}),
 			},
 		});

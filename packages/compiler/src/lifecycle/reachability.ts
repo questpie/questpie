@@ -1,5 +1,6 @@
 import { compareAscii } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
+import type { CollectionOperationProgramsV1 } from "../mutation";
 import type { EvaluatedExport, NormalizedResource } from "../types";
 import type {
 	CollectionLifecycleProgramsV1,
@@ -71,7 +72,12 @@ function issuesInStatements(
 
 export function issueBearingCollectionIdentities(
 	programs: CollectionLifecycleProgramsV1,
+	operations?: CollectionOperationProgramsV1,
 ): readonly string[] {
+	if (operations)
+		return Object.keys(
+			issueBearingCollectionRequirements(programs, operations),
+		);
 	return programs.programs
 		.filter((program) =>
 			Object.values(program.phases).some(
@@ -80,6 +86,64 @@ export function issueBearingCollectionIdentities(
 		)
 		.map((program) => program.bindings.collection)
 		.sort(compareAscii);
+}
+
+export function issueBearingCollectionRequirements(
+	programs: CollectionLifecycleProgramsV1,
+	operations: CollectionOperationProgramsV1,
+): Readonly<Record<string, readonly string[]>> {
+	const lifecycleByCollection = new Map<
+		string,
+		CollectionLifecycleProgramsV1["programs"][number]
+	>(programs.programs.map((program) => [program.bindings.collection, program]));
+	const operationByIdentity = new Map<
+		string,
+		CollectionOperationProgramsV1["operations"][number]
+	>(operations.operations.map((operation) => [operation.identity, operation]));
+	const visit = (
+		collection: string,
+		ancestors: ReadonlySet<string>,
+	): ReadonlySet<string> => {
+		if (ancestors.has(collection)) return new Set();
+		const program = lifecycleByCollection.get(collection);
+		if (!program) return new Set();
+		const owners = new Set<string>();
+		if (
+			Object.values(program.phases).some(
+				(statements) => issuesInStatements(statements).length > 0,
+			)
+		)
+			owners.add(collection);
+		const nextAncestors = new Set(ancestors).add(collection);
+		for (const capability of Object.values(
+			program.bindings.capabilities as Readonly<
+				Record<string, Readonly<{ identity?: unknown }>>
+			>,
+		)) {
+			if (typeof capability.identity !== "string") continue;
+			const operation = operationByIdentity.get(capability.identity);
+			if (!operation) continue;
+			for (const owner of visit(operation.target, nextAncestors))
+				owners.add(owner);
+		}
+		return owners;
+	};
+	return Object.freeze(
+		Object.fromEntries(
+			programs.programs
+				.map(
+					(program) =>
+						[
+							program.bindings.collection,
+							[...visit(program.bindings.collection, new Set())].sort(
+								compareAscii,
+							),
+						] as const,
+				)
+				.filter(([, owners]) => owners.length > 0)
+				.sort(([left], [right]) => compareAscii(left, right)),
+		),
+	);
 }
 
 function mappingOrigin(resource: NormalizedResource) {
@@ -102,6 +166,7 @@ export function validateIssueMappings(
 	resources: readonly NormalizedResource[],
 	programs: CollectionLifecycleProgramsV1,
 	evaluatedExports: readonly EvaluatedExport[],
+	operations: CollectionOperationProgramsV1,
 ): void {
 	const collections = new Map(
 		resources
@@ -111,6 +176,61 @@ export function validateIssueMappings(
 	const programsByCollection = new Map(
 		programs.programs.map((program) => [program.bindings.collection, program]),
 	);
+	const operationNodeByIdentity = new Map<string, string>();
+	for (const operation of operations.operations)
+		if (
+			(operation.member === "create" || operation.member === "update") &&
+			programsByCollection.has(operation.target)
+		)
+			operationNodeByIdentity.set(
+				operation.identity,
+				`${operation.target}/${operation.member}`,
+			);
+	const nodes = new Map<string, IssueReachabilityNode>();
+	for (const operation of operations.operations) {
+		const identity = operationNodeByIdentity.get(operation.identity);
+		const program = programsByCollection.get(operation.target);
+		const collection = [...collections.values()].find(
+			(candidate) => candidate.identity === operation.target,
+		);
+		if (!identity || !program || !collection) continue;
+		const authored = evaluatedExports.find(
+			(item) =>
+				item.logicalPath === collection.origin.logicalPath &&
+				item.exportName === collection.origin.exportName,
+		);
+		const issues: ReachableIssue[] = [];
+		for (const phase of [
+			"normalize",
+			"validate",
+			"check",
+			"afterWrite",
+		] as const) {
+			const span = authored?.lifecycleSources[phase]?.span;
+			for (const issue of issuesInStatements(program.phases[phase]))
+				issues.push({
+					issue,
+					phase,
+					origin: {
+						module: collection.origin.logicalPath,
+						line: span?.start.line ?? 1,
+						column: span?.start.column ?? 1,
+					},
+				});
+		}
+		const capabilities = program.bindings.capabilities as Readonly<
+			Record<string, Readonly<{ identity?: unknown }>>
+		>;
+		const calls = Object.values(capabilities)
+			.map((capability) =>
+				typeof capability.identity === "string"
+					? operationNodeByIdentity.get(capability.identity)
+					: undefined,
+			)
+			.filter((target): target is string => target !== undefined)
+			.sort(compareAscii);
+		nodes.set(identity, Object.freeze({ identity, issues, calls }));
+	}
 	for (const mutation of resources.filter(
 		(resource) => resource.kind === "mutation",
 	)) {
@@ -119,16 +239,27 @@ export function validateIssueMappings(
 		const declaredErrors = (mutation.contract.declaredErrors ?? {}) as Readonly<
 			Record<string, Readonly<{ payload: unknown }>>
 		>;
-		for (const [collectionName, mappings] of Object.entries(
-			authoredMappings,
-		).sort(([left], [right]) => compareAscii(left, right))) {
+		const rootCalls: string[] = [];
+		const authoredMutation = evaluatedExports.find(
+			(item) =>
+				item.logicalPath === mutation.origin.logicalPath &&
+				item.exportName === mutation.origin.exportName,
+		);
+		for (const call of authoredMutation?.mutationCalls ?? []) {
+			const collection = collections.get(call.collection);
+			if (!collection) continue;
+			const node = `${collection.identity}/${call.member}`;
+			if (nodes.has(node)) rootCalls.push(node);
+		}
+		for (const collectionName of Object.keys(authoredMappings).sort(
+			compareAscii,
+		)) {
 			const collection = collections.get(collectionName);
-			const root = `collection:${collectionName}/create`;
 			const baseDetails = {
 				phase: "validate" as const,
 				origin: mappingOrigin(mutation),
 				operation: mutation.identity,
-				path: [mutation.identity, root],
+				path: [mutation.identity],
 			};
 			if (!collection)
 				throw new CompilerDiagnosticError(
@@ -140,43 +271,28 @@ export function validateIssueMappings(
 						rewrite: `remove ${collectionName} or map a generated Collection capability`,
 					},
 				);
-			const program = programsByCollection.get(
-				collection.identity as LifecycleIdentity,
-			);
-			const authored = evaluatedExports.find(
-				(item) =>
-					item.logicalPath === collection.origin.logicalPath &&
-					item.exportName === collection.origin.exportName,
-			);
-			const directIssues: ReachableIssue[] = [];
-			if (program)
-				for (const phase of [
-					"normalize",
-					"validate",
-					"check",
-					"afterWrite",
-				] as const) {
-					const span = authored?.lifecycleSources[phase]?.span;
-					for (const issue of issuesInStatements(program.phases[phase]))
-						directIssues.push({
-							issue,
-							phase,
-							origin: {
-								module: collection.origin.logicalPath,
-								line: span?.start.line ?? 1,
-								column: span?.start.column ?? 1,
-							},
-						});
-				}
-			const reachable = traceIssueReachability(
-				root,
-				new Map([
-					[
-						root,
-						Object.freeze({ identity: root, issues: directIssues, calls: [] }),
-					],
-				]),
-			);
+		}
+		const root = mutation.identity;
+		const graph = new Map(nodes);
+		graph.set(
+			root,
+			Object.freeze({
+				identity: root,
+				issues: [],
+				calls: [...new Set(rootCalls)].sort(compareAscii),
+			}),
+		);
+		const reachable = traceIssueReachability(root, graph);
+		for (const [collectionName, mappings] of Object.entries(
+			authoredMappings,
+		).sort(([left], [right]) => compareAscii(left, right))) {
+			const collection = collections.get(collectionName)!;
+			const baseDetails = {
+				phase: "validate" as const,
+				origin: mappingOrigin(mutation),
+				operation: mutation.identity,
+				path: [mutation.identity],
+			};
 			const identities = (collection.contract.issues ?? {}) as Readonly<
 				Record<string, LifecycleIdentity>
 			>;
@@ -198,32 +314,55 @@ export function validateIssueMappings(
 						},
 					);
 			}
-			const mappedIdentities = new Set(
-				Object.keys(mappings).map((name) => identities[name]),
+		}
+		for (const reachableIssue of [...reachable.values()].sort((left, right) =>
+			compareAscii(left.issue, right.issue),
+		)) {
+			const owner = [...collections.entries()].find(([, collection]) =>
+				Object.values(collection.contract.issues ?? {}).includes(
+					reachableIssue.issue,
+				),
 			);
-			for (const reachableIssue of [...reachable.values()].sort((left, right) =>
-				compareAscii(left.issue, right.issue),
-			)) {
-				if (mappedIdentities.has(reachableIssue.issue)) continue;
-				const issueName = Object.entries(identities).find(
-					([, identity]) => identity === reachableIssue.issue,
-				)?.[0];
-				if (!issueName) continue;
-				throw new CompilerDiagnosticError(
-					"QP-COMPOSE-027",
-					"missingIssueMapping",
-					`${mutation.identity} is missing a mapping for ${reachableIssue.issue}`,
-					{
-						phase: reachableIssue.phase,
-						origin: reachableIssue.origin,
-						mappingOrigin: mappingOrigin(mutation),
-						operation: mutation.identity,
-						path: [mutation.identity, ...reachableIssue.path],
-						issue: reachableIssue.issue,
-						rewrite: issueRewrite(collectionName, issueName),
-					},
-				);
-			}
+			if (!owner) continue;
+			const [collectionName, collection] = owner;
+			const identities = (collection.contract.issues ?? {}) as Readonly<
+				Record<string, LifecycleIdentity>
+			>;
+			const issueName = Object.entries(identities).find(
+				([, identity]) => identity === reachableIssue.issue,
+			)?.[0];
+			if (!issueName || authoredMappings[collectionName]?.[issueName]) continue;
+			throw new CompilerDiagnosticError(
+				"QP-COMPOSE-027",
+				"missingIssueMapping",
+				`${mutation.identity} is missing a mapping for ${reachableIssue.issue}`,
+				{
+					phase: reachableIssue.phase,
+					origin: reachableIssue.origin,
+					mappingOrigin: mappingOrigin(mutation),
+					operation: mutation.identity,
+					path: reachableIssue.path,
+					callOrigin: (() => {
+						const firstCall = reachableIssue.path[1];
+						const call = authoredMutation?.mutationCalls.find((candidate) => {
+							const collection = collections.get(candidate.collection);
+							return (
+								collection &&
+								`${collection.identity}/${candidate.member}` === firstCall
+							);
+						});
+						return call
+							? {
+									module: authoredMutation!.logicalPath,
+									line: call.span.start.line,
+									column: call.span.start.column,
+								}
+							: mappingOrigin(mutation);
+					})(),
+					issue: reachableIssue.issue,
+					rewrite: issueRewrite(collectionName, issueName),
+				},
+			);
 		}
 	}
 }

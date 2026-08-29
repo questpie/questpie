@@ -247,6 +247,7 @@ function codecContract(value: unknown): unknown {
 function operationContract(
 	kind: "mutation" | "query",
 	value: RecordValue,
+	source?: EvaluatedExport,
 ): RecordValue {
 	const declaredErrors = normalizeDeclaredErrors(
 		value.errors,
@@ -273,6 +274,22 @@ function operationContract(
 												"QP-COMPOSE-027",
 												"invalidIssueMapping",
 												`mutation.issueMappings.${collection}.${issue} must name a declared error`,
+												{
+													phase: "validate",
+													origin: {
+														module: source?.logicalPath ?? "<unknown>",
+														line:
+															source?.memberSpans[
+																`issueMapping:${collection}/${issue}`
+															]?.start.line ?? 1,
+														column:
+															source?.memberSpans[
+																`issueMapping:${collection}/${issue}`
+															]?.start.column ?? 1,
+													},
+													path: [`mutation:${String(value.name)}`],
+													rewrite: `map ${collection}.${issue} to a payloadless declared error`,
+												},
 											);
 										return [issue, target];
 									}),
@@ -345,6 +362,7 @@ function seedContract(value: RecordValue): RecordValue {
 function ownerCollectionContract(
 	value: RecordValue,
 	contributionIdentities: readonly string[],
+	source?: EvaluatedExport,
 ): RecordValue {
 	return {
 		format: "questpie.collection-definition-contract",
@@ -355,11 +373,25 @@ function ownerCollectionContract(
 		fields: flattenFieldContracts(value.fields).map(({ contract }) => contract),
 		issues: Object.fromEntries(
 			entries(value.issues ?? {}).map(([key, issue]) => {
-				if (issue.kind !== "collectionIssue")
+				const span = source?.memberSpans[`issue:${key}`];
+				if (
+					issue.kind !== "collectionIssue" ||
+					!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)
+				)
 					throw new CompilerDiagnosticError(
 						"QP-COMPOSE-027",
 						"invalidIssueDeclaration",
 						`collection.issues.${key} must be declared with collection.issue()`,
+						{
+							phase: "validate",
+							origin: {
+								module: source?.logicalPath ?? "<unknown>",
+								line: span?.start.line ?? 1,
+								column: span?.start.column ?? 1,
+							},
+							rewrite:
+								"use an identifier-safe issue name and collection.issue()",
+						},
 					);
 				return [key, `issue:${string(value.name, "collection.name")}/${key}`];
 			}),
@@ -494,6 +526,7 @@ export function normalizeResources(
 				contract: ownerCollectionContract(
 					item.value,
 					contributions.map((entry) => entry.identity),
+					item,
 				),
 				contributions,
 				origin: {
@@ -531,7 +564,7 @@ export function normalizeResources(
 				identity,
 				kind,
 				name,
-				contract: operationContract(kind, item.value),
+				contract: operationContract(kind, item.value, item),
 				contributions: [],
 				origin: {
 					logicalPath: item.logicalPath,

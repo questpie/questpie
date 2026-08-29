@@ -15,6 +15,7 @@ import { isCollectionLifecycleIssue } from "../../packages/runtime/src/mutation/
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
 	CommittedResultUnavailable,
+	DeclaredOperationError,
 	type PreparedOperation,
 } from "../../packages/runtime/src/operation";
 import {
@@ -349,6 +350,12 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 				status: 422,
 				payload: null,
 			},
+			{
+				key: "laterFailure",
+				code: "LATER_FAILURE",
+				status: 409,
+				payload: null,
+			},
 		],
 		issueMappings: {
 			"collection:widgets": {
@@ -370,7 +377,7 @@ test("rolls back before returning a Collection issue to the Operation engine", a
 					secondCaught = error;
 					events.push("caught-again");
 				}
-				return { id: widgetId };
+				throw new DeclaredOperationError("LATER_FAILURE", 409, null);
 			},
 		},
 	} as unknown as PreparedOperation<View>;

@@ -44,10 +44,15 @@ export function decodeRuntimeIssueMappings(
 										`${label} Issue identity`,
 										"issue",
 									);
+									const issueName = issueIdentity.slice(
+										`issue:${collection.slice("collection:".length)}/`.length,
+									);
 									if (
 										!issueIdentity.startsWith(
 											`issue:${collection.slice("collection:".length)}/`,
-										)
+										) ||
+										issueName.length === 0 ||
+										issueName.includes("/")
 									)
 										fail(`${label} Issue does not belong to its Collection`);
 									const targetKey = string(target, `${label} target`);

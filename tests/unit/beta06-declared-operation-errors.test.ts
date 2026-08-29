@@ -244,6 +244,24 @@ test("rejects a lifecycle Issue borrowed across Collection artifact bindings", (
 			"operation issueMappings",
 		),
 	).toThrow("Issue does not belong to its Collection");
+	expect(() =>
+		decodeRuntimeIssueMappings(
+			{
+				"collection:tickets": {
+					"issue:tickets/nested/invalidReference": "invalidTicket",
+				},
+			},
+			[
+				{
+					key: "invalidTicket",
+					code: "INVALID_TICKET",
+					status: 422,
+					payload: null,
+				},
+			],
+			"operation issueMappings",
+		),
+	).toThrow("Issue does not belong to its Collection");
 });
 
 test("generated client verifies declared-error status and decodes its exact payload", async () => {

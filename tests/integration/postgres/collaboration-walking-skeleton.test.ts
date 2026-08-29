@@ -30,6 +30,17 @@ function postgresUrl(): string {
 	return url.toString();
 }
 
+function ownErrorBytes(error: unknown): string {
+	if (!error || typeof error !== "object") return JSON.stringify(error);
+	return JSON.stringify(
+		Object.fromEntries(
+			Object.getOwnPropertyNames(error)
+				.sort()
+				.map((key) => [key, (error as Record<string, unknown>)[key]]),
+		),
+	);
+}
+
 function runCli(root: string, arguments_: readonly string[]): string {
 	const result = Bun.spawnSync(["bun", cli, ...arguments_], {
 		cwd: root,
@@ -461,7 +472,7 @@ postgresTest(
 					receipt: `delivery:${effectId}`,
 				});
 				let transportCalls = 0;
-				let lifecycleWireErrorBytes: string | undefined;
+				const wireErrorBytes = new Map<string, string>();
 				const networkClient = createClient({
 					baseUrl: "https://app.test",
 					fetch: async (request) => {
@@ -474,13 +485,21 @@ postgresTest(
 						const response = await routeApplication.fetch(
 							new Request(request, { headers }),
 						);
-						if (response.status === 422) {
+						if (response.status >= 400) {
 							const frame = (await response.clone().json()) as Readonly<{
 								kind?: unknown;
 								error?: unknown;
 							}>;
-							if (frame.kind === "declaredError")
-								lifecycleWireErrorBytes = JSON.stringify(frame.error);
+							if (
+								(frame.kind === "declaredError" || frame.kind === "failure") &&
+								frame.error &&
+								typeof frame.error === "object" &&
+								"code" in frame.error
+							)
+								wireErrorBytes.set(
+									String(frame.error.code),
+									JSON.stringify(frame.error),
+								);
 						}
 						return response;
 					},
@@ -502,6 +521,12 @@ postgresTest(
 					payload: null,
 					status: 422,
 				});
+				expect(Object.keys(directLifecycleError as object).sort()).toEqual([
+					"code",
+					"name",
+					"payload",
+					"status",
+				]);
 				const directLifecycleErrorBytes = JSON.stringify({
 					code: (directLifecycleError as { code: unknown }).code,
 					status: (directLifecycleError as { status: unknown }).status,
@@ -521,22 +546,34 @@ postgresTest(
 					payload: null,
 					status: 422,
 				});
+				expect(Object.keys(clientLifecycleError as object).sort()).toEqual([
+					"code",
+					"payload",
+					"status",
+				]);
 				const clientLifecycleErrorBytes = JSON.stringify({
 					code: (clientLifecycleError as { code: unknown }).code,
 					status: (clientLifecycleError as { status: unknown }).status,
 					payload: (clientLifecycleError as { payload: unknown }).payload,
 				});
 				expect(clientLifecycleErrorBytes).toBe(directLifecycleErrorBytes);
-				expect(lifecycleWireErrorBytes).toBe(directLifecycleErrorBytes);
+				expect(wireErrorBytes.get("PUBLICATION_REJECTED")).toBe(
+					directLifecycleErrorBytes,
+				);
 				for (const secret of [
 					"collection:messageEvents",
 					"issue:messageEvents/invalidKind",
+					hostileBody,
 					"candidate",
 					"Policy",
 					"PostgreSQL",
-					"stack",
 				])
-					expect(clientLifecycleErrorBytes).not.toContain(secret);
+					for (const evidence of [
+						ownErrorBytes(directLifecycleError),
+						ownErrorBytes(clientLifecycleError),
+						wireErrorBytes.get("PUBLICATION_REJECTED")!,
+					])
+						expect(evidence).not.toContain(secret);
 				const afterRejectedLifecycle = await routeApplication.execution(
 					executionInput,
 					({ queries }) =>
@@ -548,6 +585,73 @@ postgresTest(
 				);
 				expect(
 					afterRejectedLifecycle.nodes.some(({ body }) => body === hostileBody),
+				).toBe(false);
+				const hostileConstraintBody = "__questpie_hostile_missing_message__";
+				let directConstraintError: unknown;
+				try {
+					await routeApplication.execution(executionInput, ({ mutations }) =>
+						mutations.message.publish(
+							{
+								body: hostileConstraintBody,
+								channelId: tracerIds.channel,
+							},
+							{ callId: `direct:constraint:${crypto.randomUUID()}` },
+						),
+					);
+				} catch (error) {
+					directConstraintError = error;
+				}
+				expect(directConstraintError).toMatchObject({
+					code: "INTERNAL",
+					retryable: false,
+				});
+				expect(Object.keys(directConstraintError as object).sort()).toEqual([
+					"code",
+					"name",
+					"retryable",
+				]);
+				let clientConstraintError: unknown;
+				try {
+					await networkClient.mutations["message.publish"](
+						{ body: hostileConstraintBody, channelId: tracerIds.channel },
+						{ callId: `network:constraint:${crypto.randomUUID()}` },
+					);
+				} catch (error) {
+					clientConstraintError = error;
+				}
+				expect(clientConstraintError).toMatchObject({
+					code: "INTERNAL",
+					retryable: false,
+				});
+				expect(Object.keys(clientConstraintError as object).sort()).toEqual([
+					"code",
+					"retryable",
+				]);
+				for (const secret of [
+					hostileConstraintBody,
+					"message_events_message_id_fkey",
+					"violates foreign key constraint",
+					"00000000-0000-4000-8000-000000000099",
+				])
+					for (const evidence of [
+						ownErrorBytes(directConstraintError),
+						ownErrorBytes(clientConstraintError),
+						wireErrorBytes.get("INTERNAL")!,
+					])
+						expect(evidence).not.toContain(secret);
+				const afterRejectedConstraint = await routeApplication.execution(
+					executionInput,
+					({ queries }) =>
+						queries.messages.page({
+							after: null,
+							channelId: tracerIds.channel,
+							first: 100,
+						}),
+				);
+				expect(
+					afterRejectedConstraint.nodes.some(
+						({ body }) => body === hostileConstraintBody,
+					),
 				).toBe(false);
 				const networkDelivery = await networkClient.actions["delivery.publish"](
 					{ effectKey: "domain-network", message: "delivery-network" },
@@ -562,7 +666,7 @@ postgresTest(
 					disposals: 2,
 					receipt: `delivery:${effectId}`,
 				});
-				expect(transportCalls).toBe(2);
+				expect(transportCalls).toBe(3);
 				const maximumTimeoutEffectKey = "provider-maximum-timeout";
 				const directMaximumTimeout = await invokeDelivery(
 					{ effectKey: "domain-direct-maximum", message: "delivery-maximum" },
@@ -585,7 +689,7 @@ postgresTest(
 				expect(networkMaximumTimeout.receipt).toBe(
 					directMaximumTimeout.receipt,
 				);
-				expect(transportCalls).toBe(3);
+				expect(transportCalls).toBe(4);
 				await expect(
 					networkClient.actions["delivery.publish"](
 						{
@@ -615,7 +719,7 @@ postgresTest(
 						},
 					),
 				).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED" });
-				expect(transportCalls).toBe(5);
+				expect(transportCalls).toBe(6);
 
 				await expect(
 					invokeDelivery(

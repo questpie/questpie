@@ -385,6 +385,7 @@ export async function createArtifacts(
 		runtimeBuild: compilerRuntimeBuild,
 		resources: operationResources,
 		evaluatedExports: input.evaluatedExports,
+		operations: collectionOperationPrograms,
 	});
 	const runtime = projectRuntimeContract({
 		configuration: input.configuration,

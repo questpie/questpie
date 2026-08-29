@@ -19,12 +19,11 @@ import {
 } from "./diagnostic";
 import { mutationDiscoverySource } from "./mutation";
 import { relationalDiscoverySource } from "./relational";
+import { directExportMetadata } from "./source-metadata";
 import type {
 	ApplicationConfiguration,
 	EvaluatedExport,
-	LifecycleSource,
 	PackageResolution,
-	SourceSpan,
 } from "./types";
 
 const FACTORIES = new Set([
@@ -108,143 +107,6 @@ function valueImportNames(node: ts.ImportDeclaration): string[] {
 					names.push((element.propertyName ?? element.name).text);
 	}
 	return names;
-}
-
-function sourceSpan(source: ts.SourceFile, node: ts.Node): SourceSpan {
-	const start = source.getLineAndCharacterOfPosition(node.getStart(source));
-	const end = source.getLineAndCharacterOfPosition(node.getEnd());
-	return {
-		start: { line: start.line + 1, column: start.character + 1 },
-		end: { line: end.line + 1, column: end.character + 1 },
-	};
-}
-
-interface ExportMetadata {
-	readonly span: SourceSpan;
-	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
-	readonly acceptanceSpans: readonly (SourceSpan | null)[];
-	readonly lifecycleSources: Readonly<Record<string, LifecycleSource>>;
-}
-const directMemberSections = new Set(
-	"list get create update delete issueMappings".split(" "),
-);
-const nestedMemberSections = "|fields|issues|constraints|indexes|relations|";
-
-function propertyName(node: ts.PropertyName | undefined): string | null {
-	if (!node) return null;
-	if (
-		ts.isIdentifier(node) ||
-		ts.isStringLiteral(node) ||
-		ts.isNumericLiteral(node)
-	)
-		return node.text;
-	return null;
-}
-
-async function directExportMetadata(
-	applicationRoot: string,
-	files: readonly string[],
-): Promise<Map<string, ExportMetadata>> {
-	const metadata = new Map<string, ExportMetadata>();
-	for (const path of files) {
-		const source = ts.createSourceFile(
-			path,
-			await readFile(path, "utf8"),
-			ts.ScriptTarget.Latest,
-			true,
-			ts.ScriptKind.TS,
-		);
-		for (const statement of source.statements) {
-			if (
-				!ts.isVariableStatement(statement) ||
-				!statement.modifiers?.some(
-					(modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword,
-				)
-			)
-				continue;
-			for (const declaration of statement.declarationList.declarations) {
-				if (!ts.isIdentifier(declaration.name) || !declaration.initializer)
-					continue;
-				const memberSpans: Record<string, SourceSpan> = {};
-				const acceptanceSpans: Array<SourceSpan | null> = [];
-				const lifecycleSources: Record<string, LifecycleSource> = {};
-				if (ts.isCallExpression(declaration.initializer)) {
-					const call = declaration.initializer;
-					const first = call.arguments[0];
-					const second = call.arguments[1];
-					const definition =
-						first && ts.isObjectLiteralExpression(first)
-							? first
-							: second && ts.isObjectLiteralExpression(second)
-								? second
-								: null;
-					if (definition)
-						for (const property of definition.properties) {
-							if (!ts.isPropertyAssignment(property)) continue;
-							const section = propertyName(property.name);
-							if (section && directMemberSections.has(section))
-								memberSpans[section] = sourceSpan(source, property);
-							const nestedKind =
-								section && nestedMemberSections.includes(`|${section}|`)
-									? section === "indexes"
-										? "index"
-										: section === "issues"
-											? "issue"
-											: section.slice(0, -1)
-									: undefined;
-							if (
-								nestedKind &&
-								ts.isObjectLiteralExpression(property.initializer)
-							) {
-								for (const member of property.initializer.properties) {
-									if (!ts.isPropertyAssignment(member)) continue;
-									const name = propertyName(member.name);
-									if (name)
-										memberSpans[`${nestedKind}:${name}`] = sourceSpan(
-											source,
-											member,
-										);
-								}
-							}
-							if (
-								section === "lifecycle" &&
-								ts.isObjectLiteralExpression(property.initializer)
-							)
-								for (const member of property.initializer.properties) {
-									if (!ts.isPropertyAssignment(member)) continue;
-									const phase = propertyName(member.name);
-									if (
-										phase &&
-										["normalize", "validate", "check", "afterWrite"].includes(
-											phase,
-										)
-									)
-										lifecycleSources[phase] = {
-											source: member.initializer.getText(source),
-											span: sourceSpan(source, member.initializer),
-										};
-								}
-							if (
-								section === "augmentations" &&
-								ts.isArrayLiteralExpression(property.initializer)
-							)
-								for (const element of property.initializer.elements)
-									acceptanceSpans.push(sourceSpan(source, element));
-						}
-				}
-				metadata.set(
-					`${logicalPath(applicationRoot, path)}\0${declaration.name.text}`,
-					{
-						span: sourceSpan(source, declaration.name),
-						memberSpans,
-						acceptanceSpans,
-						lifecycleSources,
-					},
-				);
-			}
-		}
-	}
-	return metadata;
 }
 
 export async function validateStructuralSources(
@@ -724,6 +586,7 @@ process.stdout.write(JSON.stringify(found));
 				memberSpans: origin?.memberSpans ?? {},
 				acceptanceSpans: origin?.acceptanceSpans ?? [],
 				lifecycleSources: origin?.lifecycleSources ?? {},
+				mutationCalls: origin?.mutationCalls ?? [],
 				packageId: input.packageId ?? null,
 			};
 		});

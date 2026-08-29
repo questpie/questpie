@@ -240,6 +240,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						facts,
 						operationTime: owner.operationTime,
 						lifecycleDoom,
+						issueMappings: operation.issueMappings,
 						consumeRows(count) {
 							businessRows += count;
 							if (businessRows > 100)
@@ -299,11 +300,17 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						dispatch: durableDispatch.dispatch,
 						jobs: durableDispatch.jobs,
 					});
-					const result = await operation.binding.execute({
-						input: operation.input,
-						ctx: ctx as View,
-						errors: errorFactories(operation.binding.definition),
-					} as never);
+					let result: unknown;
+					try {
+						result = await operation.binding.execute({
+							input: operation.input,
+							ctx: ctx as View,
+							errors: errorFactories(operation.binding.definition),
+						} as never);
+					} catch (error) {
+						lifecycleDoom.throwIfDoomed();
+						throw error;
+					}
 					lifecycleDoom.throwIfDoomed();
 					const validated = decodeRuntimeCodec(
 						operation.output,

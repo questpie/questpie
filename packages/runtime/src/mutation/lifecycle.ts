@@ -62,6 +62,49 @@ export interface CollectionLifecycleDoom {
 	throwIfDoomed(): void;
 }
 
+function issueIdentitiesInStatements(
+	statements: readonly RecordValue[],
+): readonly string[] {
+	return statements.flatMap((statement) =>
+		statement.op === "throwIssue" && typeof statement.issue === "string"
+			? [statement.issue]
+			: statement.op === "if"
+				? [
+						...issueIdentitiesInStatements(
+							statement.consequent as readonly RecordValue[],
+						),
+						...issueIdentitiesInStatements(
+							statement.otherwise as readonly RecordValue[],
+						),
+					]
+				: [],
+	);
+}
+
+export function collectionLifecycleProgramIssueIdentities(
+	program: LinkedCollectionLifecycleProgramV1,
+): readonly string[] {
+	return [
+		...new Set(
+			Object.values(program.phases).flatMap(issueIdentitiesInStatements),
+		),
+	].sort();
+}
+
+export function collectionLifecycleProgramAdmitted(
+	program: LinkedCollectionLifecycleProgramV1 | null,
+	mappings:
+		| Readonly<Record<string, Readonly<Record<string, string>>>>
+		| undefined,
+): boolean {
+	return (
+		!program ||
+		collectionLifecycleProgramIssueIdentities(program).every(
+			(issue) => mappings?.[program.bindings.collection]?.[issue] !== undefined,
+		)
+	);
+}
+
 export function createCollectionLifecycleDoom(): CollectionLifecycleDoom {
 	let firstIssue: unknown;
 	return Object.freeze({

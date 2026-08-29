@@ -345,6 +345,7 @@ function dataFor(
 		parameters?: readonly unknown[],
 	) => Promise<readonly Readonly<Record<string, unknown>>[]>,
 	consumeRows: (count: number) => void = () => {},
+	issueMappings?: Readonly<Record<string, Readonly<Record<string, string>>>>,
 ) {
 	return createPostgresCollectionMutationData({
 		plans: {
@@ -361,6 +362,7 @@ function dataFor(
 		},
 		operationTime: new Date("2026-08-16T20:00:00.000Z"),
 		consumeRows,
+		issueMappings,
 	});
 }
 
@@ -475,28 +477,36 @@ test("Collection create runs normalize and validate around one materialized cand
 		},
 	} as const;
 	const calls: string[] = [];
-	const data = dataFor([plan], async (statement, parameters = []) => {
-		calls.push(statement);
-		if (statement === "TITLE_AUTHORITY_SQL") {
-			expect(parameters[0]).toBe("  allowed  ");
-			return [{ allowed: true }];
-		}
-		if (statement === "MATERIALIZE_CANDIDATE_SQL")
+	const issueMappings = {
+		"collection:records": { "issue:records/blocked": "invalidRecord" },
+	};
+	const data = dataFor(
+		[plan],
+		async (statement, parameters = []) => {
+			calls.push(statement);
+			if (statement === "TITLE_AUTHORITY_SQL") {
+				expect(parameters[0]).toBe("  allowed  ");
+				return [{ allowed: true }];
+			}
+			if (statement === "MATERIALIZE_CANDIDATE_SQL")
+				return [
+					{
+						qp_candidate_0: parameters[0],
+						qp_candidate_1: "default body",
+					},
+				];
+			expect(parameters).toEqual(["allowed", "default body"]);
 			return [
 				{
-					qp_candidate_0: parameters[0],
-					qp_candidate_1: "default body",
+					qp_result_0: id,
+					qp_result_1: parameters[0],
+					qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
 				},
 			];
-		expect(parameters).toEqual(["allowed", "default body"]);
-		return [
-			{
-				qp_result_0: id,
-				qp_result_1: parameters[0],
-				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
-			},
-		];
-	});
+		},
+		undefined,
+		issueMappings,
+	);
 	await expect(
 		data.records.create({ input: { title: "  allowed  " } }),
 	).resolves.toEqual(expect.objectContaining({ title: "allowed" }));
@@ -506,14 +516,19 @@ test("Collection create runs normalize and validate around one materialized cand
 		"WRITE_WITH_btrim_gen_random_uuid_SQL",
 	]);
 
-	const rejected = dataFor([plan], async (statement) => {
-		if (statement === "TITLE_AUTHORITY_SQL") return [{ allowed: true }];
-		if (statement === "MATERIALIZE_CANDIDATE_SQL")
-			return [
-				{ qp_candidate_0: "BLOCKED ticket", qp_candidate_1: "default body" },
-			];
-		throw new Error("write must not execute after validate");
-	});
+	const rejected = dataFor(
+		[plan],
+		async (statement) => {
+			if (statement === "TITLE_AUTHORITY_SQL") return [{ allowed: true }];
+			if (statement === "MATERIALIZE_CANDIDATE_SQL")
+				return [
+					{ qp_candidate_0: "BLOCKED ticket", qp_candidate_1: "default body" },
+				];
+			throw new Error("write must not execute after validate");
+		},
+		undefined,
+		issueMappings,
+	);
 	let caught: unknown;
 	try {
 		await rejected.records.create({ input: { title: "BLOCKED ticket" } });
@@ -521,6 +536,10 @@ test("Collection create runs normalize and validate around one materialized cand
 		caught = error;
 	}
 	expect(isCollectionLifecycleIssue(caught)).toBe(true);
+	const withheld = dataFor([plan], async () => {
+		throw new Error("withheld lifecycle capability reached SQL");
+	});
+	expect(withheld.records.create).toBeUndefined();
 });
 
 test("Operation create normalization follows sparse caller Field authority", async () => {

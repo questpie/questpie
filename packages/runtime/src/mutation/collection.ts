@@ -1,7 +1,9 @@
+import type { RuntimeIssueMappings } from "../operation";
 import type {
 	PostgresParameter,
 	PostgresTransaction,
 } from "../postgres/contract";
+import { collectionNameFromTarget } from "./collection-target";
 import {
 	decodeMutationFieldInput,
 	decodeMutationFieldResult,
@@ -279,15 +281,6 @@ function validateScalars(
 	}
 }
 
-function collectionMember(target: string): string {
-	if (
-		!target.startsWith("collection:") ||
-		target.length === "collection:".length
-	)
-		throw new TypeError("Compiled Collection target is invalid");
-	return target.slice("collection:".length);
-}
-
 function createCollectionMutationData(
 	input: Readonly<{
 		plans: LinkedPostgresCollectionOperationPlansV1;
@@ -297,6 +290,7 @@ function createCollectionMutationData(
 		consumeRows(count: number): void;
 		resultValuesDecoded: boolean;
 		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
+		issueMappings?: RuntimeIssueMappings;
 	}>,
 ) {
 	const execute = async (
@@ -322,11 +316,15 @@ function createCollectionMutationData(
 		}
 	>();
 	for (const plan of input.plans.plans) {
-		const name = collectionMember(plan.target);
+		const name = collectionNameFromTarget(plan.target);
 		const members = collections.get(name) ?? {};
-		if (plan.member === "create") members.create = plan;
-		else if (plan.member === "update") members.update = plan;
-		else members.get = plan;
+		const admitted = lifecycleRuntime.collectionLifecycleProgramAdmitted(
+			plan.operation.lifecycleProgram,
+			input.issueMappings,
+		);
+		if (plan.member === "create" && admitted) members.create = plan;
+		else if (plan.member === "update" && admitted) members.update = plan;
+		else if (plan.member === "get") members.get = plan;
 		collections.set(name, members);
 	}
 	return Object.freeze(
@@ -789,6 +787,7 @@ export function createPostgresDatabaseCollectionMutationData(
 		operationTime: Date;
 		consumeRows(count: number): void;
 		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
+		issueMappings?: RuntimeIssueMappings;
 	}>,
 ) {
 	return createCollectionMutationData({

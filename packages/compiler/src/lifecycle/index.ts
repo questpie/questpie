@@ -72,6 +72,7 @@ export function projectCollectionLifecyclePrograms(
 		runtimeBuild: string;
 		resources: readonly NormalizedResource[];
 		evaluatedExports: readonly EvaluatedExport[];
+		operations: CollectionOperationProgramsV1;
 	}>,
 ): CollectionLifecycleProgramsV1 {
 	const programs = input.resources
@@ -131,7 +132,12 @@ export function projectCollectionLifecyclePrograms(
 		version: 1,
 		programs: Object.freeze(programs),
 	});
-	validateIssueMappings(input.resources, projection, input.evaluatedExports);
+	validateIssueMappings(
+		input.resources,
+		projection,
+		input.evaluatedExports,
+		input.operations,
+	);
 	return projection;
 }
 
