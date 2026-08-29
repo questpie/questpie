@@ -245,6 +245,19 @@ function exactKeys(value: WireRecord, expected: readonly string[]): void {
 	if (actual.length !== sorted.length || actual.some((key, index) => key !== sorted[index]))
 		protocolFailure();
 }
+const publicErrorPrototype = Object.create(Error.prototype, {
+	message: {
+		configurable: false,
+		get(this: WireRecord) { return typeof this.code === "string" ? this.code : ""; },
+	},
+});
+function publicError(detail: WireRecord): Error & WireRecord {
+	const error = Object.assign(new Error(), detail) as Error & WireRecord;
+	Object.setPrototypeOf(error, publicErrorPrototype);
+	for (const key of Object.getOwnPropertyNames(error))
+		if (!Object.prototype.hasOwnProperty.call(detail, key)) delete (error as unknown as Record<string, unknown>)[key];
+	return error;
+}
 function isCallIdentity(value: unknown): value is string {
 	if (typeof value !== "string" || value.length === 0 || value.includes("\\0")) return false;
 	let scalars = 0;
@@ -505,7 +518,7 @@ export function createClient(input: Readonly<{
 			}
 			exactKeys(detail, ["code", "retryable"]);
 			if (typeof detail.code !== "string" || !failureCodes.has(detail.code) || typeof detail.retryable !== "boolean") protocolFailure();
-			throw Object.assign(new Error(detail.code), detail);
+			throw publicError(detail);
 		}
 		if (frame.kind === "declaredError") {
 			exactKeys(frame, ["callId", "error", "kind", "operation", "protocol"]);
@@ -520,7 +533,7 @@ export function createClient(input: Readonly<{
 			const payload = contract.payload === null
 				? detail.payload === null ? null : protocolFailure()
 				: decode(contract.payload, detail.payload);
-			throw Object.assign(new Error(detail.code), { code: detail.code, status: detail.status, payload });
+			throw publicError({ code: detail.code, status: detail.status, payload });
 		}
 		if (action) throw new ActionOutcomeAmbiguous(callId);
 		return protocolFailure();

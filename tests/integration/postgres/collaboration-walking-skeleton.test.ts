@@ -498,7 +498,7 @@ postgresTest(
 							)
 								wireErrorBytes.set(
 									String(frame.error.code),
-									JSON.stringify(frame.error),
+									ownErrorBytes(frame.error),
 								);
 						}
 						return response;
@@ -523,15 +523,10 @@ postgresTest(
 				});
 				expect(Object.keys(directLifecycleError as object).sort()).toEqual([
 					"code",
-					"name",
 					"payload",
 					"status",
 				]);
-				const directLifecycleErrorBytes = JSON.stringify({
-					code: (directLifecycleError as { code: unknown }).code,
-					status: (directLifecycleError as { status: unknown }).status,
-					payload: (directLifecycleError as { payload: unknown }).payload,
-				});
+				const directLifecycleErrorBytes = ownErrorBytes(directLifecycleError);
 				let clientLifecycleError: unknown;
 				try {
 					await networkClient.mutations["message.publish"](
@@ -551,11 +546,7 @@ postgresTest(
 					"payload",
 					"status",
 				]);
-				const clientLifecycleErrorBytes = JSON.stringify({
-					code: (clientLifecycleError as { code: unknown }).code,
-					status: (clientLifecycleError as { status: unknown }).status,
-					payload: (clientLifecycleError as { payload: unknown }).payload,
-				});
+				const clientLifecycleErrorBytes = ownErrorBytes(clientLifecycleError);
 				expect(clientLifecycleErrorBytes).toBe(directLifecycleErrorBytes);
 				expect(wireErrorBytes.get("PUBLICATION_REJECTED")).toBe(
 					directLifecycleErrorBytes,
@@ -567,6 +558,12 @@ postgresTest(
 					"candidate",
 					"Policy",
 					"PostgreSQL",
+					"stack",
+					"sourceURL",
+					"originalLine",
+					"originalColumn",
+					"line",
+					"column",
 				])
 					for (const evidence of [
 						ownErrorBytes(directLifecycleError),
@@ -607,7 +604,6 @@ postgresTest(
 				});
 				expect(Object.keys(directConstraintError as object).sort()).toEqual([
 					"code",
-					"name",
 					"retryable",
 				]);
 				let clientConstraintError: unknown;
@@ -627,11 +623,21 @@ postgresTest(
 					"code",
 					"retryable",
 				]);
+				const directConstraintErrorBytes = ownErrorBytes(directConstraintError);
+				const clientConstraintErrorBytes = ownErrorBytes(clientConstraintError);
+				expect(clientConstraintErrorBytes).toBe(directConstraintErrorBytes);
+				expect(wireErrorBytes.get("INTERNAL")).toBe(directConstraintErrorBytes);
 				for (const secret of [
 					hostileConstraintBody,
 					"message_events_message_id_fkey",
 					"violates foreign key constraint",
 					"00000000-0000-4000-8000-000000000099",
+					"stack",
+					"sourceURL",
+					"originalLine",
+					"originalColumn",
+					"line",
+					"column",
 				])
 					for (const evidence of [
 						ownErrorBytes(directConstraintError),

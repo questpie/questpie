@@ -174,12 +174,27 @@ test("maps only an Operation-owned Collection issue after rollback", async () =>
 			},
 		},
 	} as never;
-	expect(
-		mapCollectionIssueToDeclaredError(
-			operation,
-			"issue:tickets/invalidReference",
-		),
-	).toMatchObject({ code: "INVALID_TICKET", status: 422, payload: null });
+	const mapped = mapCollectionIssueToDeclaredError(
+		operation,
+		"issue:tickets/invalidReference",
+	);
+	expect(mapped).toMatchObject({
+		code: "INVALID_TICKET",
+		status: 422,
+		payload: null,
+	});
+	expect(mapped.stack).toBeUndefined();
+	expect(Object.getOwnPropertyNames(mapped).sort()).toEqual([
+		"code",
+		"payload",
+		"status",
+	]);
+	const failure = new OperationFailure("INTERNAL");
+	expect(failure.stack).toBeUndefined();
+	expect(Object.getOwnPropertyNames(failure).sort()).toEqual([
+		"code",
+		"retryable",
+	]);
 	expect(() =>
 		mapCollectionIssueToDeclaredError(operation, "issue:tickets/forged"),
 	).toThrow(new OperationFailure("INTERNAL"));
@@ -366,7 +381,14 @@ test("generated client verifies declared-error status and decodes its exact payl
 			});
 			throw new Error("expected declared error");
 		} catch (error) {
+			expect(error).toBeInstanceOf(Error);
 			expect((error as Error).message).toBe("COMMITTED_RESULT_UNAVAILABLE");
+			expect((error as Error).stack).toBeUndefined();
+			expect(Object.getOwnPropertyNames(error as object).sort()).toEqual([
+				"code",
+				"payload",
+				"status",
+			]);
 			expect((error as { status: number }).status).toBe(503);
 			expect((error as { payload: { at: unknown } }).payload.at).toBeInstanceOf(
 				Date,

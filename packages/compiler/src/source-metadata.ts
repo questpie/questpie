@@ -10,11 +10,7 @@ export interface ExportSourceMetadata {
 	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
 	readonly acceptanceSpans: readonly (SourceSpan | null)[];
 	readonly lifecycleSources: Readonly<Record<string, LifecycleSource>>;
-	readonly mutationCalls: readonly Readonly<{
-		collection: string;
-		member: "create" | "update";
-		span: SourceSpan;
-	}>[];
+	readonly lifecycleIssueSpans: Readonly<Record<string, SourceSpan>>;
 }
 
 function logicalPath(root: string, path: string): string {
@@ -37,54 +33,6 @@ function propertyName(node: ts.PropertyName | undefined): string | null {
 		ts.isNumericLiteral(node)
 		? node.text
 		: null;
-}
-
-function mutationCallsInHandler(
-	source: ts.SourceFile,
-	node: ts.Expression,
-): ExportSourceMetadata["mutationCalls"] {
-	if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) return [];
-	const parameter = node.parameters[0]?.name;
-	if (!parameter || !ts.isObjectBindingPattern(parameter)) return [];
-	const ctx = parameter.elements.find(
-		(element) =>
-			propertyName(element.propertyName) === "ctx" ||
-			(!element.propertyName &&
-				ts.isIdentifier(element.name) &&
-				element.name.text === "ctx"),
-	);
-	if (!ctx || !ts.isIdentifier(ctx.name)) return [];
-	const ctxName = ctx.name.text;
-	const calls: Array<{
-		collection: string;
-		member: "create" | "update";
-		span: SourceSpan;
-	}> = [];
-	const visit = (candidate: ts.Node) => {
-		if (
-			ts.isCallExpression(candidate) &&
-			ts.isPropertyAccessExpression(candidate.expression)
-		) {
-			const member = candidate.expression.name.text;
-			const collection = candidate.expression.expression;
-			if (
-				(member === "create" || member === "update") &&
-				ts.isPropertyAccessExpression(collection) &&
-				ts.isPropertyAccessExpression(collection.expression) &&
-				collection.expression.name.text === "data" &&
-				ts.isIdentifier(collection.expression.expression) &&
-				collection.expression.expression.text === ctxName
-			)
-				calls.push({
-					collection: collection.name.text,
-					member,
-					span: sourceSpan(source, candidate.expression),
-				});
-		}
-		ts.forEachChild(candidate, visit);
-	};
-	visit(node.body);
-	return calls;
 }
 
 function recordIssueMappingSpans(
@@ -111,6 +59,48 @@ function recordIssueMappingSpans(
 				);
 		}
 	}
+}
+
+function recordLifecycleIssueSpans(
+	source: ts.SourceFile,
+	phase: string,
+	callback: ts.Expression,
+	spans: Record<string, SourceSpan>,
+): void {
+	if (
+		phase !== "validate" ||
+		(!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
+	)
+		return;
+	const parameter = callback.parameters[0]?.name;
+	if (!parameter || !ts.isObjectBindingPattern(parameter)) return;
+	const issueBinding = parameter.elements.find((element) => {
+		const publicName = element.propertyName
+			? propertyName(element.propertyName)
+			: ts.isIdentifier(element.name)
+				? element.name.text
+				: null;
+		return publicName === "issues" && ts.isIdentifier(element.name);
+	});
+	if (!issueBinding || !ts.isIdentifier(issueBinding.name)) return;
+	const localName = issueBinding.name.text;
+	const visit = (node: ts.Node): void => {
+		if (ts.isThrowStatement(node)) {
+			const call = node.expression;
+			if (
+				ts.isCallExpression(call) &&
+				call.arguments.length === 0 &&
+				ts.isPropertyAccessExpression(call.expression) &&
+				ts.isIdentifier(call.expression.expression) &&
+				call.expression.expression.text === localName
+			) {
+				const key = `${phase}/${call.expression.name.text}`;
+				spans[key] ??= sourceSpan(source, node);
+			}
+		}
+		ts.forEachChild(node, visit);
+	};
+	visit(callback.body);
 }
 
 const directSections = new Set(
@@ -145,9 +135,7 @@ export async function directExportMetadata(
 				const memberSpans: Record<string, SourceSpan> = {};
 				const acceptanceSpans: Array<SourceSpan | null> = [];
 				const lifecycleSources: Record<string, LifecycleSource> = {};
-				const mutationCalls: Array<
-					ExportSourceMetadata["mutationCalls"][number]
-				> = [];
+				const lifecycleIssueSpans: Record<string, SourceSpan> = {};
 				if (ts.isCallExpression(declaration.initializer)) {
 					const [first, second] = declaration.initializer.arguments;
 					const definition =
@@ -192,10 +180,6 @@ export async function directExportMetadata(
 									property.initializer,
 									memberSpans,
 								);
-							if (section === "handler")
-								mutationCalls.push(
-									...mutationCallsInHandler(source, property.initializer),
-								);
 							if (
 								section === "lifecycle" &&
 								ts.isObjectLiteralExpression(property.initializer)
@@ -213,6 +197,13 @@ export async function directExportMetadata(
 											source: member.initializer.getText(source),
 											span: sourceSpan(source, member.initializer),
 										};
+									if (phase)
+										recordLifecycleIssueSpans(
+											source,
+											phase,
+											member.initializer,
+											lifecycleIssueSpans,
+										);
 								}
 							if (
 								section === "augmentations" &&
@@ -229,7 +220,7 @@ export async function directExportMetadata(
 						memberSpans,
 						acceptanceSpans,
 						lifecycleSources,
-						mutationCalls,
+						lifecycleIssueSpans,
 					},
 				);
 			}

@@ -3,7 +3,6 @@ import type {
 	PostgresParameter,
 	PostgresTransaction,
 } from "../postgres/contract";
-import { collectionNameFromTarget } from "./collection-target";
 import {
 	decodeMutationFieldInput,
 	decodeMutationFieldResult,
@@ -316,7 +315,7 @@ function createCollectionMutationData(
 		}
 	>();
 	for (const plan of input.plans.plans) {
-		const name = collectionNameFromTarget(plan.target);
+		const name = plan.target.slice("collection:".length);
 		const members = collections.get(name) ?? {};
 		const admitted = lifecycleRuntime.collectionLifecycleProgramAdmitted(
 			plan.operation.lifecycleProgram,

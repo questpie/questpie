@@ -40,11 +40,7 @@ export interface EvaluatedExport {
 			Record<"normalize" | "validate" | "check" | "afterWrite", LifecycleSource>
 		>
 	>;
-	readonly mutationCalls: readonly Readonly<{
-		collection: string;
-		member: "create" | "update";
-		span: SourceSpan;
-	}>[];
+	readonly lifecycleIssueSpans: Readonly<Record<string, SourceSpan>>;
 	readonly packageId: string | null;
 }
 

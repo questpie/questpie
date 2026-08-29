@@ -586,7 +586,7 @@ process.stdout.write(JSON.stringify(found));
 				memberSpans: origin?.memberSpans ?? {},
 				acceptanceSpans: origin?.acceptanceSpans ?? [],
 				lifecycleSources: origin?.lifecycleSources ?? {},
-				mutationCalls: origin?.mutationCalls ?? [],
+				lifecycleIssueSpans: origin?.lifecycleIssueSpans ?? {},
 				packageId: input.packageId ?? null,
 			};
 		});

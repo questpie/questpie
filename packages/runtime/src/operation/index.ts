@@ -8,6 +8,15 @@ import { CommittedResultUnavailable } from "./committed-result-unavailable";
 
 type OperationKind = "mutation" | "query";
 
+function closePublicErrorProperties(
+	error: Error,
+	allowed: ReadonlySet<string>,
+): void {
+	for (const key of Object.getOwnPropertyNames(error))
+		if (!allowed.has(key))
+			delete (error as unknown as Record<string, unknown>)[key];
+}
+
 export interface RuntimeExecutableBinding<View> {
 	readonly identity: string;
 	readonly kind: OperationKind;
@@ -34,7 +43,10 @@ export class DeclaredOperationError extends Error {
 		readonly payload: unknown = null,
 	) {
 		super(code);
-		this.name = "DeclaredOperationError";
+		closePublicErrorProperties(this, new Set(["code", "status", "payload"]));
+	}
+	get message(): string {
+		return this.code;
 	}
 }
 
@@ -54,7 +66,10 @@ export class OperationFailure extends Error {
 		readonly retryable = false,
 	) {
 		super(code);
-		this.name = "OperationFailure";
+		closePublicErrorProperties(this, new Set(["code", "retryable"]));
+	}
+	get message(): string {
+		return this.code;
 	}
 }
 

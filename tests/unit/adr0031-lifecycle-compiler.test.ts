@@ -296,6 +296,17 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 				diagnosticClass: "missingIssueMapping",
 				details: {
 					phase: "validate",
+					origin: { module: "src/tickets.ts", line: 94, column: 34 },
+					mappingOrigin: {
+						module: "src/ticket-mutations.ts",
+						line: 85,
+						column: 2,
+					},
+					callOrigin: {
+						module: "src/ticket-mutations.ts",
+						line: 86,
+						column: 3,
+					},
 					operation: "mutation:ticket.create",
 					path: ["mutation:ticket.create", "collection:tickets/create"],
 					issue: "issue:tickets/emptySummary",
@@ -310,9 +321,9 @@ test("rejects an incomplete issue mapping with the complete Collection-call path
 	}
 }, 30_000);
 
-test("requires a mapping for a directly called issue-bearing Collection member", async () => {
+test("uses issue mappings, not handler syntax, as Collection capability admission", async () => {
 	const temporary = await mkdtemp(
-		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-absent-map-"),
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-admission-"),
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
@@ -321,34 +332,17 @@ test("requires a mapping for a directly called issue-bearing Collection member",
 		await writeFile(
 			mutationPath,
 			source.replace(
-				'\tissueMappings: {\n\t\ttickets: { invalidReference: "invalidTicket" },\n\t},\n',
-				"",
+				"\t\tconst ticket = await ctx.data.tickets.create({",
+				"\t\tconst ticketData = ctx.data.tickets;\n\t\tconst ticket = await ticketData.create({",
 			),
 		);
 
-		await expect(
-			compileApplication({ applicationRoot: temporary }),
-		).rejects.toMatchObject({
-			code: "QP-COMPOSE-027",
-			diagnosticClass: "missingIssueMapping",
-			details: {
-				phase: "validate",
-				origin: { module: "src/tickets.ts", line: 87, column: 13 },
-				mappingOrigin: {
-					module: "src/ticket-mutations.ts",
-					line: 72,
-					column: 14,
-				},
-				callOrigin: {
-					module: "src/ticket-mutations.ts",
-					line: 86,
-					column: 24,
-				},
-				operation: "mutation:ticket.create",
-				path: ["mutation:ticket.create", "collection:tickets/create"],
-				issue: "issue:tickets/invalidReference",
-			},
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
 		});
+		expect(compilation.generatedFiles["app.ts"]).toContain(
+			'readonly "invalidReference": "invalidTicket";',
+		);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
@@ -386,42 +380,11 @@ test("rejects a non-identity Collection issue at its exact declaration", async (
 	}
 }, 30_000);
 
-test("rejects a mapping that has no authored Collection write edge", async () => {
-	const temporary = await mkdtemp(
-		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-stale-map-"),
-	);
-	try {
-		await cp(fixtureRoot, temporary, { recursive: true });
-		const path = join(temporary, "src/ticket-mutations.ts");
-		const source = await readFile(path, "utf8");
-		await writeFile(
-			path,
-			source.replace(
-				"\terrors: { ticketUnavailable },\n\thandler: async ({ input, ctx, errors }) => {\n\t\tconst current = await ctx.data.tickets.get",
-				'\terrors: { invalidTicket, ticketUnavailable },\n\tissueMappings: {\n\t\ttickets: { invalidReference: "invalidTicket" },\n\t},\n\thandler: async ({ input, ctx, errors }) => {\n\t\tconst current = await ctx.data.tickets.get',
-			),
-		);
-
-		await expect(
-			compileApplication({ applicationRoot: temporary }),
-		).rejects.toMatchObject({
-			code: "QP-COMPOSE-027",
-			diagnosticClass: "invalidIssueMapping",
-			details: {
-				operation: "mutation:ticket.addComment",
-				path: ["mutation:ticket.addComment"],
-				issue: "issue:tickets/invalidReference",
-			},
-		});
-	} finally {
-		await rm(temporary, { force: true, recursive: true });
-	}
-}, 30_000);
-
 test("rejects unknown, borrowed, and payload-bearing issue mappings", async () => {
-	for (const [label, rewrite] of [
+	for (const [label, originLine, rewrite] of [
 		[
 			"unknown issue",
+			86,
 			(source: string) =>
 				source.replace(
 					'tickets: { invalidReference: "invalidTicket" },',
@@ -430,6 +393,7 @@ test("rejects unknown, borrowed, and payload-bearing issue mappings", async () =
 		],
 		[
 			"borrowed error",
+			86,
 			(source: string) =>
 				source.replace(
 					'tickets: { invalidReference: "invalidTicket" },',
@@ -438,6 +402,7 @@ test("rejects unknown, borrowed, and payload-bearing issue mappings", async () =
 		],
 		[
 			"payload-bearing error",
+			92,
 			(source: string) =>
 				source
 					.replace(
@@ -472,6 +437,13 @@ const transitionRejected = operation.error({`,
 			).rejects.toMatchObject({
 				code: "QP-COMPOSE-027",
 				diagnosticClass: "invalidIssueMapping",
+				details: {
+					origin: {
+						module: "src/ticket-mutations.ts",
+						line: originLine,
+						column: 14,
+					},
+				},
 			});
 		} finally {
 			await rm(temporary, { force: true, recursive: true });

@@ -107,13 +107,9 @@ export function issueBearingCollectionRequirements(
 		if (ancestors.has(collection)) return new Set();
 		const program = lifecycleByCollection.get(collection);
 		if (!program) return new Set();
-		const owners = new Set<string>();
-		if (
-			Object.values(program.phases).some(
-				(statements) => issuesInStatements(statements).length > 0,
-			)
-		)
-			owners.add(collection);
+		const issues = new Set<string>(
+			Object.values(program.phases).flatMap(issuesInStatements),
+		);
 		const nextAncestors = new Set(ancestors).add(collection);
 		for (const capability of Object.values(
 			program.bindings.capabilities as Readonly<
@@ -123,10 +119,10 @@ export function issueBearingCollectionRequirements(
 			if (typeof capability.identity !== "string") continue;
 			const operation = operationByIdentity.get(capability.identity);
 			if (!operation) continue;
-			for (const owner of visit(operation.target, nextAncestors))
-				owners.add(owner);
+			for (const issue of visit(operation.target, nextAncestors))
+				issues.add(issue);
 		}
-		return owners;
+		return issues;
 	};
 	return Object.freeze(
 		Object.fromEntries(
@@ -140,15 +136,26 @@ export function issueBearingCollectionRequirements(
 							),
 						] as const,
 				)
-				.filter(([, owners]) => owners.length > 0)
+				.filter(([, issues]) => issues.length > 0)
 				.sort(([left], [right]) => compareAscii(left, right)),
 		),
 	);
 }
 
-function mappingOrigin(resource: NormalizedResource) {
+function mappingOrigin(
+	resource: NormalizedResource,
+	collection?: string,
+	issue?: string,
+) {
 	const span =
-		resource.origin.memberSpans.issueMappings ?? resource.origin.span;
+		(collection && issue
+			? resource.origin.memberSpans[`issueMapping:${collection}/${issue}`]
+			: undefined) ??
+		(collection
+			? resource.origin.memberSpans[`issueMapping:${collection}`]
+			: undefined) ??
+		resource.origin.memberSpans.issueMappings ??
+		resource.origin.span;
 	return span
 		? {
 				module: resource.origin.logicalPath,
@@ -207,16 +214,26 @@ export function validateIssueMappings(
 			"afterWrite",
 		] as const) {
 			const span = authored?.lifecycleSources[phase]?.span;
-			for (const issue of issuesInStatements(program.phases[phase]))
+			const issueNames = (collection.contract.issues ?? {}) as Readonly<
+				Record<string, LifecycleIdentity>
+			>;
+			for (const issue of issuesInStatements(program.phases[phase])) {
+				const issueName = Object.entries(issueNames).find(
+					([, identity]) => identity === issue,
+				)?.[0];
+				const issueSpan = issueName
+					? authored?.lifecycleIssueSpans[`${phase}/${issueName}`]
+					: undefined;
 				issues.push({
 					issue,
 					phase,
 					origin: {
 						module: collection.origin.logicalPath,
-						line: span?.start.line ?? 1,
-						column: span?.start.column ?? 1,
+						line: issueSpan?.start.line ?? span?.start.line ?? 1,
+						column: issueSpan?.start.column ?? span?.start.column ?? 1,
 					},
 				});
+			}
 		}
 		const capabilities = program.bindings.capabilities as Readonly<
 			Record<string, Readonly<{ identity?: unknown }>>
@@ -240,24 +257,13 @@ export function validateIssueMappings(
 			Record<string, Readonly<{ payload: unknown }>>
 		>;
 		const rootCalls: string[] = [];
-		const authoredMutation = evaluatedExports.find(
-			(item) =>
-				item.logicalPath === mutation.origin.logicalPath &&
-				item.exportName === mutation.origin.exportName,
-		);
-		for (const call of authoredMutation?.mutationCalls ?? []) {
-			const collection = collections.get(call.collection);
-			if (!collection) continue;
-			const node = `${collection.identity}/${call.member}`;
-			if (nodes.has(node)) rootCalls.push(node);
-		}
 		for (const collectionName of Object.keys(authoredMappings).sort(
 			compareAscii,
 		)) {
 			const collection = collections.get(collectionName);
 			const baseDetails = {
 				phase: "validate" as const,
-				origin: mappingOrigin(mutation),
+				origin: mappingOrigin(mutation, collectionName),
 				operation: mutation.identity,
 				path: [mutation.identity],
 			};
@@ -271,6 +277,8 @@ export function validateIssueMappings(
 						rewrite: `remove ${collectionName} or map a generated Collection capability`,
 					},
 				);
+			for (const node of nodes.keys())
+				if (node.startsWith(`${collection.identity}/`)) rootCalls.push(node);
 		}
 		const root = mutation.identity;
 		const graph = new Map(nodes);
@@ -289,7 +297,7 @@ export function validateIssueMappings(
 			const collection = collections.get(collectionName)!;
 			const baseDetails = {
 				phase: "validate" as const,
-				origin: mappingOrigin(mutation),
+				origin: mappingOrigin(mutation, collectionName),
 				operation: mutation.identity,
 				path: [mutation.identity],
 			};
@@ -308,6 +316,7 @@ export function validateIssueMappings(
 						`${mutation.identity} has an invalid mapping for ${collectionName}.${issueName}`,
 						{
 							...baseDetails,
+							origin: mappingOrigin(mutation, collectionName, issueName),
 							issue: issue ?? `issue:${collectionName}/${issueName}`,
 							mappedError,
 							rewrite: issueRewrite(collectionName, issueName),
@@ -344,20 +353,12 @@ export function validateIssueMappings(
 					path: reachableIssue.path,
 					callOrigin: (() => {
 						const firstCall = reachableIssue.path[1];
-						const call = authoredMutation?.mutationCalls.find((candidate) => {
-							const collection = collections.get(candidate.collection);
-							return (
-								collection &&
-								`${collection.identity}/${candidate.member}` === firstCall
-							);
-						});
-						return call
-							? {
-									module: authoredMutation!.logicalPath,
-									line: call.span.start.line,
-									column: call.span.start.column,
-								}
-							: mappingOrigin(mutation);
+						const admitted = [...collections.entries()].find(
+							([, candidate]) =>
+								typeof firstCall === "string" &&
+								firstCall.startsWith(`${candidate.identity}/`),
+						)?.[0];
+						return mappingOrigin(mutation, admitted);
 					})(),
 					issue: reachableIssue.issue,
 					rewrite: issueRewrite(collectionName, issueName),

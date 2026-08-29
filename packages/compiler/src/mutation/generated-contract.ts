@@ -298,30 +298,43 @@ export function projectMutationGeneratedContract(
 			.filter((resource) => resource.kind === "collection")
 			.map((resource) => [resource.name, resource.identity]),
 	);
+	const issueMappingKeyByIdentity = new Map<
+		string,
+		readonly [string, string]
+	>();
+	for (const resource of resources)
+		if (resource.kind === "collection")
+			for (const [issueName, identity] of Object.entries(
+				resource.contract.issues ?? {},
+			))
+				if (typeof identity === "string")
+					issueMappingKeyByIdentity.set(identity, [resource.name, issueName]);
 	const admittedIssueBearingTargets = Object.fromEntries(
 		resources
 			.filter((resource) => resource.kind === "mutation")
 			.sort((left, right) => compareAscii(left.name, right.name))
-			.map((resource) => [
-				resource.name,
-				Object.keys(
-					(resource.contract.issueMappings ?? {}) as Readonly<
-						Record<string, unknown>
-					>,
-				)
-					.map((name) => collectionIdentityByName.get(name))
-					.filter(
-						(identity): identity is string =>
-							identity !== undefined &&
-							issueBearingTargets.includes(identity) &&
-							issueRequirements[identity]!.every((required) =>
-								Object.keys(resource.contract.issueMappings ?? {}).some(
-									(name) => collectionIdentityByName.get(name) === required,
-								),
-							),
-					)
-					.sort(compareAscii),
-			]),
+			.map((resource) => {
+				const mappings = (resource.contract.issueMappings ?? {}) as Readonly<
+					Record<string, Readonly<Record<string, unknown>>>
+				>;
+				return [
+					resource.name,
+					Object.keys(mappings)
+						.map((name) => collectionIdentityByName.get(name))
+						.filter(
+							(identity): identity is string =>
+								identity !== undefined &&
+								issueBearingTargets.includes(identity) &&
+								issueRequirements[identity]!.every((required) => {
+									const key = issueMappingKeyByIdentity.get(required);
+									return (
+										!!key && typeof mappings[key[0]]?.[key[1]] === "string"
+									);
+								}),
+						)
+						.sort(compareAscii),
+				] as const;
+			}),
 	);
 	return Object.freeze({
 		issueBearingTargets: Object.freeze(issueBearingTargets),
