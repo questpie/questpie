@@ -3,6 +3,11 @@ import { defineCollectionOperations, mutation, operation } from "questpie";
 import { tickets } from "../tickets";
 import { ticketPolicy } from "./policy";
 
+const invalidTicket = operation.error({
+	code: "INVALID_TICKET",
+	status: 422,
+});
+
 export const ticketOperations = defineCollectionOperations(tickets, {
 	name: "tickets",
 	policy: ticketPolicy,
@@ -25,6 +30,10 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 		},
 	},
 	create: {
+		errors: { invalidTicket },
+		issueMappings: {
+			tickets: { invalidReference: "invalidTicket" },
+		},
 		input: [
 			"teamId",
 			"assigneeMembershipId",
@@ -59,6 +68,10 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 		},
 	},
 	update: {
+		errors: { invalidTicket },
+		issueMappings: {
+			tickets: { invalidReference: "invalidTicket" },
+		},
 		input: [
 			"teamId",
 			"assigneeMembershipId",

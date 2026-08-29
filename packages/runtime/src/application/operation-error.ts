@@ -16,12 +16,15 @@ export function normalizeExecutedOperationError<View>(
 	operation: PreparedOperation<View>,
 	error: unknown,
 ) {
-	return normalizeOperationError(
-		isCollectionLifecycleIssue(error)
-			? mapCollectionIssueToDeclaredError(
-					operation,
-					collectionLifecycleIssueIdentity(error)!,
-				)
-			: error,
-	);
+	if (!isCollectionLifecycleIssue(error)) return normalizeOperationError(error);
+	try {
+		return normalizeOperationError(
+			mapCollectionIssueToDeclaredError(
+				operation,
+				collectionLifecycleIssueIdentity(error)!,
+			),
+		);
+	} catch (mappingError) {
+		return normalizeOperationError(mappingError);
+	}
 }

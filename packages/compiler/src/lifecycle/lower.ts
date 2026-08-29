@@ -59,7 +59,33 @@ interface Environment {
 	readonly bindings: LifecycleBindings;
 	readonly parameters: Map<string, string>;
 	readonly locals: Map<string, number>;
+	readonly issueOrigins: Map<LifecycleIdentity, LifecycleOrigin>;
 	nextSlot: number;
+}
+
+export type LifecycleOrigin = Readonly<{
+	module: string;
+	line: number;
+	column: number;
+}>;
+
+export type LoweredLifecyclePhase = Readonly<{
+	statements: readonly LifecycleStatement[];
+	issueOrigins: ReadonlyMap<LifecycleIdentity, LifecycleOrigin>;
+}>;
+
+function origin(env: Environment, node: ts.Node): LifecycleOrigin {
+	const point = env.source.getLineAndCharacterOfPosition(
+		node.getStart(env.source),
+	);
+	return {
+		module: env.module,
+		line: env.base.start.line + point.line,
+		column:
+			point.line === 0
+				? env.base.start.column + point.character - sourcePrefix.length
+				: point.character + 1,
+	};
 }
 
 function fail(
@@ -68,19 +94,12 @@ function fail(
 	reason: DiagnosticReason,
 	rewrite: string,
 ): never {
-	const point = env.source.getLineAndCharacterOfPosition(
-		node.getStart(env.source),
-	);
-	const line = env.base.start.line + point.line;
-	const column =
-		point.line === 0
-			? env.base.start.column + point.character - sourcePrefix.length
-			: point.character + 1;
+	const point = origin(env, node);
 	throw new CompilerDiagnosticError(
 		"QP-COMPOSE-026",
 		reason,
-		`${reason} in ${env.phase} at ${env.module}:${line}:${column}; ${rewrite}`,
-		{ phase: env.phase, origin: { module: env.module, line, column }, rewrite },
+		`${reason} in ${env.phase} at ${point.module}:${point.line}:${point.column}; ${rewrite}`,
+		{ phase: env.phase, origin: point, rewrite },
 	);
 }
 
@@ -387,6 +406,10 @@ function statements(
 					"unsupportedLifecycleSyntax",
 					"throw a declared generated issue",
 				);
+			env.issueOrigins.set(
+				issue,
+				env.issueOrigins.get(issue) ?? origin(env, node),
+			);
 			output.push({ op: "throwIssue", issue });
 			continue;
 		}
@@ -415,7 +438,7 @@ export function lowerLifecyclePhase(
 	module: string,
 	base: SourceSpan,
 	bindings: LifecycleBindings,
-): readonly LifecycleStatement[] {
+): LoweredLifecyclePhase {
 	if (phase !== "normalize" && phase !== "validate")
 		throw new TypeError(`${phase} is not implemented by LIFE-01`);
 	const source = ts.createSourceFile(
@@ -438,6 +461,7 @@ export function lowerLifecyclePhase(
 		bindings,
 		parameters: new Map(),
 		locals: new Map(),
+		issueOrigins: new Map(),
 		nextSlot: 0,
 	};
 	if (
@@ -498,7 +522,11 @@ export function lowerLifecyclePhase(
 			);
 		empty.parameters.set(element.name.text, role);
 	}
-	return ts.isBlock(callback.body)
+	const lowered: readonly LifecycleStatement[] = ts.isBlock(callback.body)
 		? statements(callback.body.statements, empty)
 		: [{ op: "return", value: expression(callback.body, empty) }];
+	return Object.freeze({
+		statements: Object.freeze(lowered),
+		issueOrigins: empty.issueOrigins,
+	});
 }

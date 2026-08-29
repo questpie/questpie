@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
+import { normalizeExecutedOperationError } from "../../packages/runtime/src/application/operation-error";
 import {
 	collectionLifecycleIssueIdentity,
 	executeCollectionLifecyclePhase,
@@ -8,6 +9,11 @@ import {
 	linkCollectionMutationPrograms,
 } from "../../packages/runtime/src/mutation";
 import { canonicalMutationBytes } from "../../packages/runtime/src/mutation/canonical";
+import {
+	captureCollectionLifecycleIssue,
+	createCollectionLifecycleDoom,
+} from "../../packages/runtime/src/mutation/lifecycle";
+import { OperationFailure } from "../../packages/runtime/src/operation";
 
 function digest(domain: string, value: unknown): string {
 	return createHash("sha256")
@@ -195,6 +201,18 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 	expect(isCollectionLifecycleIssue(Object.create(caught as object))).toBe(
 		false,
 	);
+	const normalized = normalizeExecutedOperationError(
+		{
+			declaredErrors: [],
+			issueMappings: { "collection:tickets": null },
+		} as never,
+		caught,
+	);
+	expect(normalized).toEqual(new OperationFailure("INTERNAL"));
+	expect(Object.getOwnPropertyNames(normalized).sort()).toEqual([
+		"code",
+		"retryable",
+	]);
 });
 
 test("normalizes a sparse lane with ordinary optional-chain semantics", async () => {
@@ -250,6 +268,52 @@ test("treats an omitted normalize phase as the identity program", async () => {
 			{ input: { reference: "SUP-123", summary: "Help" } },
 		),
 	).resolves.toEqual({ reference: "SUP-123", summary: "Help" });
+});
+
+test("keeps the first lifecycle Issue and dooms work after application catch", async () => {
+	const doom = createCollectionLifecycleDoom();
+	for (const issue of [
+		"issue:tickets/invalidReference",
+		"issue:tickets/secondIssue",
+	] as const) {
+		try {
+			await captureCollectionLifecycleIssue(doom, () =>
+				executeCollectionLifecyclePhase(
+					{
+						...lifecycle,
+						bindings: {
+							...lifecycle.bindings,
+							issues: {
+								...lifecycle.bindings.issues,
+								secondIssue: "issue:tickets/secondIssue",
+							},
+						},
+						phases: {
+							...lifecycle.phases,
+							validate: [{ op: "throwIssue", issue }],
+						},
+					} as never,
+					"validate",
+					{
+						candidate: { reference: "BAD", summary: "caught" },
+						current: null,
+						now: new Date("2026-08-29T10:00:00.000Z"),
+					},
+				),
+			);
+		} catch {
+			// Application code may catch, but the transaction owner stays doomed.
+		}
+	}
+	let doomed: unknown;
+	try {
+		doom.throwIfDoomed();
+	} catch (error) {
+		doomed = error;
+	}
+	expect(collectionLifecycleIssueIdentity(doomed)).toBe(
+		"issue:tickets/invalidReference",
+	);
 });
 
 test("rejects lifecycle digest and Runtime Build drift", () => {

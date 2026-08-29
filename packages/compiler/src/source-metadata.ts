@@ -10,7 +10,6 @@ export interface ExportSourceMetadata {
 	readonly memberSpans: Readonly<Record<string, SourceSpan>>;
 	readonly acceptanceSpans: readonly (SourceSpan | null)[];
 	readonly lifecycleSources: Readonly<Record<string, LifecycleSource>>;
-	readonly lifecycleIssueSpans: Readonly<Record<string, SourceSpan>>;
 }
 
 function logicalPath(root: string, path: string): string {
@@ -39,6 +38,7 @@ function recordIssueMappingSpans(
 	source: ts.SourceFile,
 	value: ts.ObjectLiteralExpression,
 	memberSpans: Record<string, SourceSpan>,
+	initializers: ReadonlyMap<string, ts.Expression>,
 ): void {
 	for (const collection of value.properties) {
 		if (!ts.isPropertyAssignment(collection)) continue;
@@ -48,8 +48,9 @@ function recordIssueMappingSpans(
 			source,
 			collection,
 		);
-		if (!ts.isObjectLiteralExpression(collection.initializer)) continue;
-		for (const issue of collection.initializer.properties) {
+		const issues = resolveObjectLiteral(collection.initializer, initializers);
+		if (!issues) continue;
+		for (const issue of issues.properties) {
 			if (!ts.isPropertyAssignment(issue)) continue;
 			const issueName = propertyName(issue.name);
 			if (issueName)
@@ -61,46 +62,21 @@ function recordIssueMappingSpans(
 	}
 }
 
-function recordLifecycleIssueSpans(
-	source: ts.SourceFile,
-	phase: string,
-	callback: ts.Expression,
-	spans: Record<string, SourceSpan>,
-): void {
-	if (
-		phase !== "validate" ||
-		(!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback))
-	)
-		return;
-	const parameter = callback.parameters[0]?.name;
-	if (!parameter || !ts.isObjectBindingPattern(parameter)) return;
-	const issueBinding = parameter.elements.find((element) => {
-		const publicName = element.propertyName
-			? propertyName(element.propertyName)
-			: ts.isIdentifier(element.name)
-				? element.name.text
-				: null;
-		return publicName === "issues" && ts.isIdentifier(element.name);
-	});
-	if (!issueBinding || !ts.isIdentifier(issueBinding.name)) return;
-	const localName = issueBinding.name.text;
-	const visit = (node: ts.Node): void => {
-		if (ts.isThrowStatement(node)) {
-			const call = node.expression;
-			if (
-				ts.isCallExpression(call) &&
-				call.arguments.length === 0 &&
-				ts.isPropertyAccessExpression(call.expression) &&
-				ts.isIdentifier(call.expression.expression) &&
-				call.expression.expression.text === localName
-			) {
-				const key = `${phase}/${call.expression.name.text}`;
-				spans[key] ??= sourceSpan(source, node);
-			}
-		}
-		ts.forEachChild(node, visit);
-	};
-	visit(callback.body);
+function resolveObjectLiteral(
+	value: ts.Expression,
+	initializers: ReadonlyMap<string, ts.Expression>,
+	seen: ReadonlySet<string> = new Set(),
+): ts.ObjectLiteralExpression | null {
+	if (ts.isObjectLiteralExpression(value)) return value;
+	if (!ts.isIdentifier(value) || seen.has(value.text)) return null;
+	const initializer = initializers.get(value.text);
+	return initializer
+		? resolveObjectLiteral(
+				initializer,
+				initializers,
+				new Set(seen).add(value.text),
+			)
+		: null;
 }
 
 const directSections = new Set(
@@ -121,6 +97,12 @@ export async function directExportMetadata(
 			true,
 			ts.ScriptKind.TS,
 		);
+		const initializers = new Map<string, ts.Expression>();
+		for (const statement of source.statements)
+			if (ts.isVariableStatement(statement))
+				for (const declaration of statement.declarationList.declarations)
+					if (ts.isIdentifier(declaration.name) && declaration.initializer)
+						initializers.set(declaration.name.text, declaration.initializer);
 		for (const statement of source.statements) {
 			if (
 				!ts.isVariableStatement(statement) ||
@@ -135,7 +117,6 @@ export async function directExportMetadata(
 				const memberSpans: Record<string, SourceSpan> = {};
 				const acceptanceSpans: Array<SourceSpan | null> = [];
 				const lifecycleSources: Record<string, LifecycleSource> = {};
-				const lifecycleIssueSpans: Record<string, SourceSpan> = {};
 				if (ts.isCallExpression(declaration.initializer)) {
 					const [first, second] = declaration.initializer.arguments;
 					const definition =
@@ -171,15 +152,19 @@ export async function directExportMetadata(
 											member,
 										);
 								}
-							if (
-								section === "issueMappings" &&
-								ts.isObjectLiteralExpression(property.initializer)
-							)
-								recordIssueMappingSpans(
-									source,
+							if (section === "issueMappings") {
+								const mappings = resolveObjectLiteral(
 									property.initializer,
-									memberSpans,
+									initializers,
 								);
+								if (mappings)
+									recordIssueMappingSpans(
+										source,
+										mappings,
+										memberSpans,
+										initializers,
+									);
+							}
 							if (
 								section === "lifecycle" &&
 								ts.isObjectLiteralExpression(property.initializer)
@@ -197,13 +182,6 @@ export async function directExportMetadata(
 											source: member.initializer.getText(source),
 											span: sourceSpan(source, member.initializer),
 										};
-									if (phase)
-										recordLifecycleIssueSpans(
-											source,
-											phase,
-											member.initializer,
-											lifecycleIssueSpans,
-										);
 								}
 							if (
 								section === "augmentations" &&
@@ -220,7 +198,6 @@ export async function directExportMetadata(
 						memberSpans,
 						acceptanceSpans,
 						lifecycleSources,
-						lifecycleIssueSpans,
 					},
 				);
 			}

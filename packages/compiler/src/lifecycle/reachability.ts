@@ -1,13 +1,19 @@
 import { compareAscii } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { CollectionOperationProgramsV1 } from "../mutation";
-import type { EvaluatedExport, NormalizedResource } from "../types";
+import type { NormalizedResource } from "../types";
 import type {
 	CollectionLifecycleProgramsV1,
 	LifecycleIdentity,
 	LifecyclePhase,
 	LifecycleStatement,
 } from "./contract";
+import type { LifecycleOrigin } from "./lower";
+
+export type CollectionIssueOrigins = ReadonlyMap<
+	LifecycleIdentity,
+	ReadonlyMap<LifecyclePhase, ReadonlyMap<LifecycleIdentity, LifecycleOrigin>>
+>;
 
 type ReachableIssue = Readonly<{
 	issue: LifecycleIdentity;
@@ -70,6 +76,65 @@ function issuesInStatements(
 	);
 }
 
+function buildIssueReachabilityGraph(
+	programs: CollectionLifecycleProgramsV1,
+	operations: CollectionOperationProgramsV1,
+	originFor: (
+		collection: LifecycleIdentity,
+		phase: LifecyclePhase,
+		issue: LifecycleIdentity,
+	) => ReachableIssue["origin"] = (collection) => ({
+		module: collection,
+		line: 1,
+		column: 1,
+	}),
+): Readonly<{
+	nodes: ReadonlyMap<string, IssueReachabilityNode>;
+	operationNodeByIdentity: ReadonlyMap<string, string>;
+}> {
+	const programsByCollection = new Map(
+		programs.programs.map((program) => [program.bindings.collection, program]),
+	);
+	const operationNodeByIdentity = new Map<string, string>();
+	for (const operation of operations.operations)
+		if (
+			(operation.member === "create" || operation.member === "update") &&
+			programsByCollection.has(operation.target)
+		)
+			operationNodeByIdentity.set(
+				operation.identity,
+				`${operation.target}/${operation.member}`,
+			);
+	const nodes = new Map<string, IssueReachabilityNode>();
+	for (const operation of operations.operations) {
+		const identity = operationNodeByIdentity.get(operation.identity);
+		const program = programsByCollection.get(operation.target);
+		if (!identity || !program) continue;
+		const issues = (
+			["normalize", "validate", "check", "afterWrite"] as const
+		).flatMap((phase) =>
+			issuesInStatements(program.phases[phase]).map((issue) => ({
+				issue,
+				phase,
+				origin: originFor(program.bindings.collection, phase, issue),
+			})),
+		);
+		const capabilities = program.bindings.capabilities as Readonly<
+			Record<string, Readonly<{ identity?: unknown }>>
+		>;
+		const calls = Object.values(capabilities)
+			.map((capability) =>
+				typeof capability.identity === "string"
+					? operationNodeByIdentity.get(capability.identity)
+					: undefined,
+			)
+			.filter((target): target is string => target !== undefined)
+			.sort(compareAscii);
+		nodes.set(identity, Object.freeze({ identity, issues, calls }));
+	}
+	return Object.freeze({ nodes, operationNodeByIdentity });
+}
+
 export function issueBearingCollectionIdentities(
 	programs: CollectionLifecycleProgramsV1,
 	operations?: CollectionOperationProgramsV1,
@@ -92,50 +157,21 @@ export function issueBearingCollectionRequirements(
 	programs: CollectionLifecycleProgramsV1,
 	operations: CollectionOperationProgramsV1,
 ): Readonly<Record<string, readonly string[]>> {
-	const lifecycleByCollection = new Map<
-		string,
-		CollectionLifecycleProgramsV1["programs"][number]
-	>(programs.programs.map((program) => [program.bindings.collection, program]));
-	const operationByIdentity = new Map<
-		string,
-		CollectionOperationProgramsV1["operations"][number]
-	>(operations.operations.map((operation) => [operation.identity, operation]));
-	const visit = (
-		collection: string,
-		ancestors: ReadonlySet<string>,
-	): ReadonlySet<string> => {
-		if (ancestors.has(collection)) return new Set();
-		const program = lifecycleByCollection.get(collection);
-		if (!program) return new Set();
-		const issues = new Set<string>(
-			Object.values(program.phases).flatMap(issuesInStatements),
-		);
-		const nextAncestors = new Set(ancestors).add(collection);
-		for (const capability of Object.values(
-			program.bindings.capabilities as Readonly<
-				Record<string, Readonly<{ identity?: unknown }>>
-			>,
-		)) {
-			if (typeof capability.identity !== "string") continue;
-			const operation = operationByIdentity.get(capability.identity);
-			if (!operation) continue;
-			for (const issue of visit(operation.target, nextAncestors))
-				issues.add(issue);
-		}
-		return issues;
-	};
+	const { nodes } = buildIssueReachabilityGraph(programs, operations);
 	return Object.freeze(
 		Object.fromEntries(
 			programs.programs
-				.map(
-					(program) =>
-						[
-							program.bindings.collection,
-							[...visit(program.bindings.collection, new Set())].sort(
-								compareAscii,
-							),
-						] as const,
-				)
+				.map((program) => {
+					const issues = new Set<string>();
+					for (const root of nodes.keys())
+						if (root.startsWith(`${program.bindings.collection}/`))
+							for (const issue of traceIssueReachability(root, nodes).keys())
+								issues.add(issue);
+					return [
+						program.bindings.collection,
+						[...issues].sort(compareAscii),
+					] as const;
+				})
 				.filter(([, issues]) => issues.length > 0)
 				.sort(([left], [right]) => compareAscii(left, right)),
 		),
@@ -172,82 +208,30 @@ function issueRewrite(collection: string, issue: string): string {
 export function validateIssueMappings(
 	resources: readonly NormalizedResource[],
 	programs: CollectionLifecycleProgramsV1,
-	evaluatedExports: readonly EvaluatedExport[],
 	operations: CollectionOperationProgramsV1,
+	issueOrigins: CollectionIssueOrigins,
 ): void {
 	const collections = new Map(
 		resources
 			.filter((resource) => resource.kind === "collection")
 			.map((resource) => [resource.name, resource]),
 	);
-	const programsByCollection = new Map(
-		programs.programs.map((program) => [program.bindings.collection, program]),
-	);
-	const operationNodeByIdentity = new Map<string, string>();
-	for (const operation of operations.operations)
-		if (
-			(operation.member === "create" || operation.member === "update") &&
-			programsByCollection.has(operation.target)
-		)
-			operationNodeByIdentity.set(
-				operation.identity,
-				`${operation.target}/${operation.member}`,
+	const { nodes, operationNodeByIdentity } = buildIssueReachabilityGraph(
+		programs,
+		operations,
+		(collectionIdentity, phase, issue) => {
+			const collection = [...collections.values()].find(
+				(candidate) => candidate.identity === collectionIdentity,
 			);
-	const nodes = new Map<string, IssueReachabilityNode>();
-	for (const operation of operations.operations) {
-		const identity = operationNodeByIdentity.get(operation.identity);
-		const program = programsByCollection.get(operation.target);
-		const collection = [...collections.values()].find(
-			(candidate) => candidate.identity === operation.target,
-		);
-		if (!identity || !program || !collection) continue;
-		const authored = evaluatedExports.find(
-			(item) =>
-				item.logicalPath === collection.origin.logicalPath &&
-				item.exportName === collection.origin.exportName,
-		);
-		const issues: ReachableIssue[] = [];
-		for (const phase of [
-			"normalize",
-			"validate",
-			"check",
-			"afterWrite",
-		] as const) {
-			const span = authored?.lifecycleSources[phase]?.span;
-			const issueNames = (collection.contract.issues ?? {}) as Readonly<
-				Record<string, LifecycleIdentity>
-			>;
-			for (const issue of issuesInStatements(program.phases[phase])) {
-				const issueName = Object.entries(issueNames).find(
-					([, identity]) => identity === issue,
-				)?.[0];
-				const issueSpan = issueName
-					? authored?.lifecycleIssueSpans[`${phase}/${issueName}`]
-					: undefined;
-				issues.push({
-					issue,
-					phase,
-					origin: {
-						module: collection.origin.logicalPath,
-						line: issueSpan?.start.line ?? span?.start.line ?? 1,
-						column: issueSpan?.start.column ?? span?.start.column ?? 1,
-					},
-				});
-			}
-		}
-		const capabilities = program.bindings.capabilities as Readonly<
-			Record<string, Readonly<{ identity?: unknown }>>
-		>;
-		const calls = Object.values(capabilities)
-			.map((capability) =>
-				typeof capability.identity === "string"
-					? operationNodeByIdentity.get(capability.identity)
-					: undefined,
-			)
-			.filter((target): target is string => target !== undefined)
-			.sort(compareAscii);
-		nodes.set(identity, Object.freeze({ identity, issues, calls }));
-	}
+			return (
+				issueOrigins.get(collectionIdentity)?.get(phase)?.get(issue) ?? {
+					module: collection?.origin.logicalPath ?? collectionIdentity,
+					line: collection?.origin.span?.start.line ?? 1,
+					column: collection?.origin.span?.start.column ?? 1,
+				}
+			);
+		},
+	);
 	for (const mutation of resources.filter(
 		(resource) => resource.kind === "mutation",
 	)) {
@@ -257,6 +241,14 @@ export function validateIssueMappings(
 			Record<string, Readonly<{ payload: unknown }>>
 		>;
 		const rootCalls: string[] = [];
+		if (mutation.value.kind === "frameworkGeneratedCollectionOperation") {
+			const kernelIdentity = mutation.value.kernelIdentity;
+			const generatedTarget =
+				typeof kernelIdentity === "string"
+					? operationNodeByIdentity.get(kernelIdentity)
+					: undefined;
+			if (generatedTarget) rootCalls.push(generatedTarget);
+		}
 		for (const collectionName of Object.keys(authoredMappings).sort(
 			compareAscii,
 		)) {

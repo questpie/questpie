@@ -111,6 +111,8 @@ function compileCollectionOperationSet(value) {
         });
         serverValues.push({ operation: member, assignments });
       }
+	  compiled.errors = definition.errors ?? {};
+	  compiled.issueMappings = definition.issueMappings ?? {};
     }
     members.push(compiled);
   }

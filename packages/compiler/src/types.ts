@@ -40,7 +40,6 @@ export interface EvaluatedExport {
 			Record<"normalize" | "validate" | "check" | "afterWrite", LifecycleSource>
 		>
 	>;
-	readonly lifecycleIssueSpans: Readonly<Record<string, SourceSpan>>;
 	readonly packageId: string | null;
 }
 

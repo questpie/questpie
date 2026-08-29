@@ -103,6 +103,13 @@ export const messageOperations = defineCollectionOperations(messages, {
 });
 ```
 
+A generated write is still a named Mutation. If the target Collection can
+raise a lifecycle issue, its `create` or `update` member declares payloadless
+`errors` and the same explicit Operation-level `issueMappings` shape as an
+authored Mutation. The compiler rejects an unmapped reachable issue; it never
+borrows another Operation's error map or gives transport meaning to the
+Collection issue.
+
 This retained Collection Operation Set block is temporary compatibility
 authoring. Its `operationTime` spelling remains only until that adapter is
 migrated; named Mutation and lifecycle Context use `ctx.now`.

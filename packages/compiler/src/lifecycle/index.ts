@@ -9,7 +9,7 @@ import {
 	type LifecycleIdentity,
 	type LifecyclePhase,
 } from "./contract";
-import { lowerLifecyclePhase } from "./lower";
+import { lowerLifecyclePhase, type LifecycleOrigin } from "./lower";
 import { validateIssueMappings } from "./reachability";
 
 export type {
@@ -75,6 +75,10 @@ export function projectCollectionLifecyclePrograms(
 		operations: CollectionOperationProgramsV1;
 	}>,
 ): CollectionLifecycleProgramsV1 {
+	const issueOrigins = new Map<
+		LifecycleIdentity,
+		ReadonlyMap<LifecyclePhase, ReadonlyMap<LifecycleIdentity, LifecycleOrigin>>
+	>();
 	const programs = input.resources
 		.filter((resource) => resource.kind === "collection")
 		.flatMap((collection) => {
@@ -90,25 +94,29 @@ export function projectCollectionLifecyclePrograms(
 				collection,
 				input.resources,
 			);
+			const originsByPhase = new Map<
+				LifecyclePhase,
+				ReadonlyMap<LifecycleIdentity, LifecycleOrigin>
+			>();
 			const phases = Object.fromEntries(
 				(["normalize", "validate", "check", "afterWrite"] as const).map(
 					(phase) => {
 						const source = authored.lifecycleSources[phase];
-						return [
-							phase,
-							source
-								? lowerLifecyclePhase(
-										phase,
-										source.source,
-										authored.logicalPath,
-										source.span,
-										bindings,
-									)
-								: [],
-						];
+						const lowered = source
+							? lowerLifecyclePhase(
+									phase,
+									source.source,
+									authored.logicalPath,
+									source.span,
+									bindings,
+								)
+							: null;
+						originsByPhase.set(phase, lowered?.issueOrigins ?? new Map());
+						return [phase, lowered?.statements ?? []];
 					},
 				),
 			) as Readonly<Record<LifecyclePhase, readonly never[]>>;
+			issueOrigins.set(bindings.collection, originsByPhase);
 			const contract = {
 				format: LIFECYCLE_PROGRAM_FORMAT,
 				interpreter: LIFECYCLE_INTERPRETER,
@@ -135,8 +143,8 @@ export function projectCollectionLifecyclePrograms(
 	validateIssueMappings(
 		input.resources,
 		projection,
-		input.evaluatedExports,
 		input.operations,
+		issueOrigins,
 	);
 	return projection;
 }

@@ -195,6 +195,22 @@ export function projectCollectionOperationWriteResources(
 				fields,
 				selectedOptional,
 			);
+			const declaredErrors = Object.freeze(
+				Object.fromEntries(
+					((child.errors ?? []) as readonly unknown[]).map((candidate) => {
+						const error = record(candidate, `${identity} declared error`);
+						const key = String(error.key);
+						return [
+							key,
+							Object.freeze({
+								code: String(error.code),
+								status: Number(error.status),
+								payload: error.payload,
+							}),
+						];
+					}),
+				),
+			);
 			const [logicalPath, owner = ""] = String(child.origin).split("#");
 			const exportName = owner.split(".")[0]!;
 			result.push(
@@ -211,7 +227,10 @@ export function projectCollectionOperationWriteResources(
 							program.outputCardinality === "optionalOne"
 								? Object.freeze({ kind: "nullable", codec: selected })
 								: selected,
-						declaredErrors: Object.freeze({}),
+						declaredErrors,
+						issueMappings: Object.freeze({
+							...record(child.issueMappings ?? {}, `${identity} issueMappings`),
+						}),
 						exposure:
 							record(child.exposure, `${identity} exposure`).network === true
 								? "network"

@@ -138,18 +138,33 @@ export function mapCollectionIssueToDeclaredError<View>(
 	operation: PreparedOperation<View>,
 	issueIdentity: string,
 ): DeclaredOperationError {
-	const target = Object.entries(operation.issueMappings ?? {})
-		.filter(([collection]) => {
-			const collectionName = collection.startsWith("collection:")
-				? collection.slice("collection:".length)
-				: "";
-			return (
-				collectionName.length > 0 &&
-				issueIdentity.startsWith(`issue:${collectionName}/`)
-			);
-		})
-		.map(([, issues]) => issues[issueIdentity])
-		.find((candidate) => candidate !== undefined);
+	const mappings = operation.issueMappings;
+	if (
+		mappings !== undefined &&
+		(typeof mappings !== "object" ||
+			mappings === null ||
+			Array.isArray(mappings))
+	)
+		throw new OperationFailure("INTERNAL");
+	const targets: string[] = [];
+	for (const [collection, issues] of Object.entries(mappings ?? {})) {
+		if (typeof issues !== "object" || issues === null || Array.isArray(issues))
+			throw new OperationFailure("INTERNAL");
+		const collectionName = collection.startsWith("collection:")
+			? collection.slice("collection:".length)
+			: "";
+		if (
+			collectionName.length === 0 ||
+			!issueIdentity.startsWith(`issue:${collectionName}/`)
+		)
+			continue;
+		const target = issues[issueIdentity];
+		if (target !== undefined) {
+			if (typeof target !== "string") throw new OperationFailure("INTERNAL");
+			targets.push(target);
+		}
+	}
+	const target = targets.length === 1 ? targets[0] : undefined;
 	const declared = operation.declaredErrors.find(
 		(error) => error.key === target && error.payload === null,
 	);

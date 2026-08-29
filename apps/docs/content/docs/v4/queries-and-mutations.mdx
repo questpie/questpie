@@ -307,6 +307,44 @@ export const messageOperations = defineCollectionOperations(messages, {
 });
 ```
 
+A generated write is still a named Mutation. When its Collection can raise a
+lifecycle issue, the write member must own a payloadless Operation error and an
+explicit mapping:
+
+```ts
+import { defineCollectionOperations, mutation, operation } from "questpie";
+import { messageEvents } from "../data/message-events";
+import { messageEventPolicy } from "./message-event-policy";
+
+const invalidMessage = operation.error({
+	code: "INVALID_MESSAGE",
+	status: 422,
+});
+
+export const messageEventOperations = defineCollectionOperations(
+	messageEvents,
+	{
+		name: "messageEvents",
+		policy: messageEventPolicy,
+		create: {
+			input: ["messageId", "kind"],
+			errors: { invalidMessage },
+			issueMappings: {
+				messageEvents: { invalidKind: "invalidMessage" },
+			},
+			values: ({ operationTime }) => ({
+				occurredAt: mutation.overwrite(operationTime),
+			}),
+			select: { id: true },
+		},
+	},
+);
+```
+
+The compiler rejects a generated write with an unmapped reachable issue. The
+Collection therefore stays reusable and transport-free: only this Operation
+chooses the public error code and status.
+
 The compiler lowers each selected member to an ordinary Resource:
 
 | Member   | Resource                   | Consistency boundary  |

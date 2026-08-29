@@ -1,5 +1,6 @@
 import { compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
+import { normalizeDeclaredErrors } from "../operation-errors";
 import { normalizeDataQueryTemplate } from "../relational";
 import type { EvaluatedExport, NormalizedResource } from "../types";
 import {
@@ -56,6 +57,32 @@ function path(value: unknown, label: string): readonly string[] {
 	)
 		return invalid(`${label} must be a non-empty Field path`);
 	return value as readonly string[];
+}
+
+function issueMappings(value: unknown, label: string): RecordValue {
+	const mappings = record(value ?? {}, `${label} issueMappings`);
+	return Object.freeze(
+		Object.fromEntries(
+			Object.entries(mappings)
+				.sort(([left], [right]) => compareAscii(left, right))
+				.map(([collection, candidate]) => [
+					collection,
+					Object.freeze(
+						Object.fromEntries(
+							Object.entries(record(candidate, `${label}.${collection}`))
+								.sort(([left], [right]) => compareAscii(left, right))
+								.map(([issue, target]) => {
+									if (typeof target !== "string" || target.length === 0)
+										invalid(
+											`${label}.${collection}.${issue} must name a declared error`,
+										);
+									return [issue, target];
+								}),
+						),
+					),
+				]),
+		),
+	);
 }
 
 function operationSetExports(
@@ -417,6 +444,18 @@ export function projectCollectionOperationSets(
 							rowsWritten: 100,
 							durationMilliseconds: 5_000,
 						};
+			const declaredErrors =
+				kind === "mutation"
+					? normalizeDeclaredErrors(memberContract.errors, identity, () =>
+							invalid(
+								`${identity} Collection issue errors must be payloadless`,
+							),
+						)
+					: {};
+			const normalizedIssueMappings =
+				kind === "mutation"
+					? issueMappings(memberContract.issueMappings, identity)
+					: {};
 			operationPrograms.push({
 				identity: identity as CollectionOperationProgramV1["identity"],
 				kind,
@@ -464,7 +503,15 @@ export function projectCollectionOperationSets(
 					policy,
 					inputCodec: `operation:${name}.${member}:input`,
 					outputCodec: `operation:${name}.${member}:output`,
-					errors: [],
+					errors: Object.entries(declaredErrors)
+						.sort(([left], [right]) => compareAscii(left, right))
+						.map(([key, error]) => ({
+							key,
+							...record(error, `${identity}.${key}`),
+						})),
+					...(Object.keys(normalizedIssueMappings).length > 0
+						? { issueMappings: normalizedIssueMappings }
+						: {}),
 					exposure: { direct: true, network: value.network === true },
 					limits,
 					observation: "operationEngine:v1",

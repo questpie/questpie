@@ -238,6 +238,12 @@ test("maps only an Operation-owned Collection issue after rollback", async () =>
 	expect(normalizeExecutedOperationError(operation, forgedIssue)).toEqual(
 		new OperationFailure("INTERNAL"),
 	);
+	expect(() =>
+		mapCollectionIssueToDeclaredError(
+			{ ...operation, issueMappings: { "collection:tickets": null } } as never,
+			"issue:tickets/invalidReference",
+		),
+	).toThrow(new OperationFailure("INTERNAL"));
 });
 
 test("rejects a lifecycle Issue borrowed across Collection artifact bindings", () => {

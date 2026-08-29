@@ -1,5 +1,6 @@
 import type { CollectionDefinition } from "./collection-contract";
 import type { FieldDefinition } from "./field-contract";
+import type { OperationErrorMap } from "./operation";
 import type { InlineShapeDefinition } from "./shape";
 
 type CollectionFields<Collection> =
@@ -15,6 +16,18 @@ type CollectionFields<Collection> =
 
 type CollectionName<Collection> =
 	Collection extends CollectionDefinition<infer Name> ? Name : never;
+
+type CollectionIssues<Collection> =
+	Collection extends CollectionDefinition<
+		string,
+		infer _Fields,
+		infer _Constraints,
+		infer _Indexes,
+		infer _Relations,
+		infer Issues
+	>
+		? Issues
+		: never;
 
 type CollectionPolicy<Collection> = Readonly<{
 	kind: "policy";
@@ -101,12 +114,24 @@ export type CollectionOperationSelection<Fields> = Readonly<{
 			: never;
 }>;
 
-type WriteMember<Fields, Optional extends boolean> = Readonly<{
+type WriteMember<
+	Fields,
+	Optional extends boolean,
+	Collection extends CollectionDefinition,
+> = Readonly<{
 	input: readonly FieldName<Fields>[];
 	normalize?: (
 		scope: Readonly<{ input: FieldOperands<Fields, Optional> }>,
 	) => NormalizedFields<Fields, Optional>;
 	values?: (scope: ValueProgramScope<Fields, Optional>) => ServerValues<Fields>;
+	errors?: OperationErrorMap;
+	issueMappings?: Readonly<{
+		[Name in CollectionName<Collection>]?: Readonly<
+			Partial<
+				Record<Extract<keyof CollectionIssues<Collection>, string>, string>
+			>
+		>;
+	}>;
 	select: CollectionOperationSelection<Fields>;
 }>;
 
@@ -120,8 +145,12 @@ export interface CollectionOperationSetBody<
 	readonly get?: Readonly<{
 		select: CollectionOperationSelection<CollectionFields<Collection>>;
 	}>;
-	readonly create?: WriteMember<CollectionFields<Collection>, false>;
-	readonly update?: WriteMember<CollectionFields<Collection>, true>;
+	readonly create?: WriteMember<
+		CollectionFields<Collection>,
+		false,
+		Collection
+	>;
+	readonly update?: WriteMember<CollectionFields<Collection>, true, Collection>;
 	readonly delete?: Readonly<{
 		select: CollectionOperationSelection<CollectionFields<Collection>>;
 	}>;

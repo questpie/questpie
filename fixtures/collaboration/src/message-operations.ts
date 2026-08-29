@@ -11,6 +11,11 @@ import {
 import { messages } from "./messages";
 import { spaces } from "./spaces";
 
+const invalidMessageEvent = operation.error({
+	code: "INVALID_MESSAGE_EVENT",
+	status: 422,
+});
+
 export const channelOperations = defineCollectionOperations(channels, {
 	name: "channels",
 	policy: channelPolicy,
@@ -43,6 +48,10 @@ export const messageEventOperations = defineCollectionOperations(
 		policy: messageEventPolicy,
 		create: {
 			input: ["messageId", "kind"],
+			errors: { invalidMessageEvent },
+			issueMappings: {
+				messageEvents: { invalidKind: "invalidMessageEvent" },
+			},
 			values: ({ operationTime }) => ({
 				occurredAt: mutation.overwrite(operationTime),
 			}),

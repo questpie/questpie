@@ -14,6 +14,10 @@ const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
 );
+const collaborationRoot = resolve(
+	import.meta.dir,
+	"../../fixtures/collaboration",
+);
 
 test("traces nested Collection calls deterministically without looping on re-entry", () => {
 	const origin = { module: "src/messages.ts", line: 1, column: 1 };
@@ -215,6 +219,73 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 	expect(app).toContain(
 		'issueMappings?: GeneratedMutations[Name]["issueMappings"]',
 	);
+}, 30_000);
+
+test("projects explicit issue ownership for a generated named Mutation", async () => {
+	const compilation = await compileApplication({
+		applicationRoot: collaborationRoot,
+	});
+	const contracts = JSON.parse(
+		compilation.generatedFiles["operation-contracts.json"]!,
+	) as Readonly<{
+		operations: readonly Readonly<{
+			identity: string;
+			declaredErrors: Readonly<Record<string, unknown>>;
+			issueMappings?: Readonly<Record<string, unknown>>;
+		}>[];
+	}>;
+	expect(
+		contracts.operations.find(
+			({ identity }) => identity === "mutation:messageEvents.create",
+		),
+	).toMatchObject({
+		declaredErrors: {
+			invalidMessageEvent: {
+				code: "INVALID_MESSAGE_EVENT",
+				status: 422,
+				payload: null,
+			},
+		},
+		issueMappings: {
+			"collection:messageEvents": {
+				"issue:messageEvents/invalidKind": "invalidMessageEvent",
+			},
+		},
+	});
+}, 30_000);
+
+test("rejects an unmapped issue-bearing generated named Mutation", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-generated-mapping-"),
+	);
+	try {
+		await cp(collaborationRoot, temporary, { recursive: true });
+		const path = join(temporary, "src/message-operations.ts");
+		const source = await readFile(path, "utf8");
+		await writeFile(
+			path,
+			source.replace(
+				/\n\t\t\tissueMappings: \{\n\t\t\t\tmessageEvents: \{ invalidKind: "invalidMessageEvent" \},\n\t\t\t\},/,
+				"",
+			),
+		);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-027",
+			diagnosticClass: "missingIssueMapping",
+			details: {
+				operation: "mutation:messageEvents.create",
+				path: [
+					"mutation:messageEvents.create",
+					"collection:messageEvents/create",
+				],
+				issue: "issue:messageEvents/invalidKind",
+			},
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
 }, 30_000);
 
 test("reports unsupported lifecycle capture at its authored Origin", async () => {
@@ -448,6 +519,49 @@ const transitionRejected = operation.error({`,
 		} finally {
 			await rm(temporary, { force: true, recursive: true });
 		}
+	}
+}, 30_000);
+
+test("reports a helper-authored issue mapping at its exact key Origin", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-helper-origin-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const path = join(temporary, "src/ticket-mutations.ts");
+		const source = (await readFile(path, "utf8"))
+			.replace(
+				"export const createTicket = defineMutation({",
+				`const createIssueMappings = {
+	tickets: { unknownIssue: "invalidTicket" },
+};
+
+export const createTicket = defineMutation({`,
+			)
+			.replace(
+				`issueMappings: {
+		tickets: { invalidReference: "invalidTicket" },
+	},`,
+				"issueMappings: createIssueMappings,",
+			);
+		await writeFile(path, source);
+		const prefix = source.slice(0, source.indexOf("unknownIssue"));
+		const lines = prefix.split("\n");
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-027",
+			diagnosticClass: "invalidIssueMapping",
+			details: {
+				origin: {
+					module: "src/ticket-mutations.ts",
+					line: lines.length,
+					column: lines.at(-1)!.length + 1,
+				},
+			},
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
 	}
 }, 30_000);
 
