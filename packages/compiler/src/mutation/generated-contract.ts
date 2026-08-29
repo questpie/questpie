@@ -1,9 +1,4 @@
 import { compareAscii } from "../canonical";
-import type { CollectionLifecycleProgramsV1 } from "../lifecycle/contract";
-import {
-	issueBearingCollectionIdentities,
-	issueBearingCollectionRequirements,
-} from "../lifecycle/reachability";
 import {
 	normalizeBoundPolicy,
 	type DataQueryTemplateV1,
@@ -274,7 +269,7 @@ export function renderGeneratedMutationDataByName(
 export function projectMutationGeneratedContract(
 	programs: CollectionOperationProgramsV1,
 	resources: readonly NormalizedResource[],
-	lifecycle: CollectionLifecycleProgramsV1,
+	issueRequirements: Readonly<Record<string, readonly string[]>>,
 ): MutationGeneratedContractV1 {
 	const policies = new Map<
 		string,
@@ -285,14 +280,7 @@ export function projectMutationGeneratedContract(
 			const program = normalizeBoundPolicy(resource.value).program;
 			policies.set(program.identity, program);
 		}
-	const issueRequirements = issueBearingCollectionRequirements(
-		lifecycle,
-		programs,
-	);
-	const issueBearingTargets = issueBearingCollectionIdentities(
-		lifecycle,
-		programs,
-	);
+	const issueBearingTargets = Object.keys(issueRequirements).sort(compareAscii);
 	const collectionIdentityByName = new Map(
 		resources
 			.filter((resource) => resource.kind === "collection")

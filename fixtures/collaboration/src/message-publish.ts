@@ -61,19 +61,25 @@ export const publishMessage = defineMutation({
 			input.body === "__questpie_hostile_invalid_event__";
 		const invalidConstraint =
 			input.body === "__questpie_hostile_missing_message__";
-		await ctx.data.messageEvents.create({
-			input: {
-				...(invalidConstraint ? {} : { messageId: message.id }),
-				...(invalidLifecycle ? {} : { kind: "published" }),
-			},
-			values: {
-				occurredAt: ctx.operationTime,
-				...(invalidLifecycle ? { kind: "invalid" } : {}),
-				...(invalidConstraint
-					? { messageId: "00000000-0000-4000-8000-000000000099" }
-					: {}),
-			},
-		});
+		try {
+			await ctx.data.messageEvents.create({
+				input: {
+					...(invalidConstraint ? {} : { messageId: message.id }),
+					...(invalidLifecycle ? {} : { kind: "published" }),
+				},
+				values: {
+					occurredAt: ctx.operationTime,
+					...(invalidLifecycle ? { kind: "invalid" } : {}),
+					...(invalidConstraint
+						? { messageId: "00000000-0000-4000-8000-000000000099" }
+						: {}),
+				},
+			});
+		} catch (error) {
+			if (!invalidLifecycle) throw error;
+			// Hostile proof: application catch may continue, but the outer Mutation
+			// remains doomed and rolls this later dispatch back as well.
+		}
 		await ctx.dispatch.messagePublished({
 			channelId: channel.id,
 			companyId: ctx.tenant.id,

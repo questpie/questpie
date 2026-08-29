@@ -215,6 +215,82 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 	]);
 });
 
+test("fails closed on compiler-only afterWrite capabilities before LIFE-05 runtime execution", () => {
+	const capabilityContract = {
+		...lifecycleContract,
+		bindings: {
+			...bindings,
+			capabilities: {
+				"data.tickets.update": {
+					kind: "write",
+					identity: "mutation:__collectionKernel.tickets.update",
+					argumentKeys: ["key", "patch", "values"],
+				},
+			},
+			operations: [
+				"mutation:ticket.create",
+				"mutation:__collectionKernel.tickets.update",
+			],
+		},
+		phases: {
+			...lifecycleContract.phases,
+			afterWrite: [
+				{
+					op: "effect",
+					value: {
+						op: "capability",
+						capability: "write",
+						identity: "mutation:__collectionKernel.tickets.update",
+						arguments: [],
+					},
+				},
+			],
+		},
+	} as const;
+	const capabilityLifecycle = {
+		...capabilityContract,
+		digest: digest(
+			"questpie.collection-lifecycle-program.v1",
+			capabilityContract,
+		),
+	} as const;
+	const capabilityPrograms = {
+		format: "questpie.collection-lifecycle-programs",
+		version: 1,
+		programs: [capabilityLifecycle],
+	} as const;
+	expect(() =>
+		linkCollectionMutationPrograms({
+			collectionOperations: {
+				format: "questpie.collection-operation-programs",
+				version: 1,
+				operations: [
+					{ ...operation, lifecycleProgramDigest: capabilityLifecycle.digest },
+				],
+			},
+			fieldNormalizers: {
+				format: "questpie.field-normalizer-programs",
+				version: 1,
+				programs: [],
+			},
+			serverValues: {
+				format: "questpie.server-value-programs",
+				version: 1,
+				programs: [],
+			},
+			lifecyclePrograms: capabilityPrograms,
+			expectedLifecycleProgramsDigest: digest(
+				"questpie.collection-lifecycle-programs-v1",
+				capabilityPrograms,
+			),
+			compilerRuntimeBuildDigest: runtimeBuild,
+			policies: [
+				{ identity: "policy:tickets.default", target: "collection:tickets" },
+			],
+		}),
+	).toThrow("afterWrite statement 0 op is invalid");
+});
+
 test("normalizes a sparse lane with ordinary optional-chain semantics", async () => {
 	const sparse = {
 		...lifecycle,

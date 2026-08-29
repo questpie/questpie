@@ -24,6 +24,11 @@ const publicMembers = {
 		now: "now",
 		issues: "issues",
 	},
+	afterWrite: {
+		row: "written",
+		previous: "previous",
+		ctx: "capabilities",
+	},
 } as const;
 const binaryOperators = new Set([
 	"+",
@@ -52,7 +57,7 @@ const stringMethods = new Set([
 const sourcePrefix = "const __phase = ";
 
 interface Environment {
-	readonly phase: "normalize" | "validate";
+	readonly phase: "normalize" | "validate" | "afterWrite";
 	readonly source: ts.SourceFile;
 	readonly module: string;
 	readonly base: SourceSpan;
@@ -61,6 +66,106 @@ interface Environment {
 	readonly locals: Map<string, number>;
 	readonly issueOrigins: Map<LifecycleIdentity, LifecycleOrigin>;
 	nextSlot: number;
+}
+
+function capabilityArgument(
+	node: ts.Expression,
+	env: Environment,
+): LifecycleExpression {
+	if (!ts.isObjectLiteralExpression(node))
+		return fail(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			"pass one exact generated Operation argument object",
+		);
+	const entries: LifecycleObjectEntry[] = node.properties.map((member) => {
+		if (
+			!ts.isPropertyAssignment(member) ||
+			(!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name))
+		)
+			return fail(
+				env,
+				member,
+				"unsupportedLifecycleSyntax",
+				"use exact static Operation argument properties",
+			);
+		return {
+			kind: "argument" as const,
+			key: member.name.text,
+			value: ts.isObjectLiteralExpression(member.initializer)
+				? capabilityArgument(member.initializer, env)
+				: expression(member.initializer, env),
+		};
+	});
+	return { op: "object", entries };
+}
+
+function capability(
+	node: ts.Expression,
+	env: Environment,
+): Extract<LifecycleExpression, { op: "capability" }> {
+	if (
+		!ts.isCallExpression(node) ||
+		!ts.isPropertyAccessExpression(node.expression)
+	)
+		return fail(
+			env,
+			node,
+			"unsupportedLifecycleCapability",
+			"await a generated ctx.data Collection write",
+		);
+	const segments: string[] = [];
+	let target: ts.Expression = node.expression;
+	while (ts.isPropertyAccessExpression(target)) {
+		segments.unshift(target.name.text);
+		target = target.expression;
+	}
+	const name = segments.join(".");
+	const binding = env.bindings.capabilities[name];
+	if (
+		env.phase !== "afterWrite" ||
+		!ts.isIdentifier(target) ||
+		env.parameters.get(target.text) !== "capabilities" ||
+		!binding ||
+		binding.kind !== "write"
+	)
+		return fail(
+			env,
+			node,
+			"unsupportedLifecycleCapability",
+			"use an awaited generated ctx.data.<collection>.<create|update> capability only in afterWrite",
+		);
+	if (node.arguments.length !== 1)
+		return fail(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			"pass one exact generated Operation argument object",
+		);
+	const argument = capabilityArgument(node.arguments[0]!, env);
+	const actualKeys =
+		argument.op === "object"
+			? argument.entries.map((entry) =>
+					entry.kind === "argument" ? entry.key : "",
+				)
+			: [];
+	if (
+		actualKeys.length !== binding.argumentKeys.length ||
+		binding.argumentKeys.some((key) => !actualKeys.includes(key))
+	)
+		return fail(
+			env,
+			node.arguments[0]!,
+			"unsupportedLifecycleSyntax",
+			`provide exactly ${binding.argumentKeys.join(", ")} for this generated Operation`,
+		);
+	return {
+		op: "capability",
+		capability: "write",
+		identity: binding.identity,
+		arguments: [argument],
+	};
 }
 
 export type LifecycleOrigin = Readonly<{
@@ -414,6 +519,13 @@ function statements(
 			continue;
 		}
 		if (ts.isExpressionStatement(node)) {
+			if (ts.isAwaitExpression(node.expression)) {
+				output.push({
+					op: "effect",
+					value: capability(node.expression.expression, env),
+				});
+				continue;
+			}
 			expression(node.expression, env);
 			fail(
 				env,
@@ -439,8 +551,8 @@ export function lowerLifecyclePhase(
 	base: SourceSpan,
 	bindings: LifecycleBindings,
 ): LoweredLifecyclePhase {
-	if (phase !== "normalize" && phase !== "validate")
-		throw new TypeError(`${phase} is not implemented by LIFE-01`);
+	if (phase === "check")
+		throw new TypeError("check is not implemented before LIFE-03");
 	const source = ts.createSourceFile(
 		module,
 		`${sourcePrefix}${authoredSource}`,
@@ -474,17 +586,19 @@ export function lowerLifecyclePhase(
 			"unsupportedLifecycleSyntax",
 			"author a function or arrow callback",
 		);
-	if (
-		callback.asteriskToken ||
+	const asynchronous = Boolean(
 		callback.modifiers?.some(
 			(modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
-		)
-	)
+		),
+	);
+	if (callback.asteriskToken || asynchronous !== (phase === "afterWrite"))
 		fail(
 			empty,
 			callback,
 			"unsupportedLifecycleSyntax",
-			"use synchronous normalize and validate callbacks",
+			phase === "afterWrite"
+				? "use an async afterWrite callback"
+				: "use synchronous normalize and validate callbacks",
 		);
 	if (
 		callback.parameters.length !== 1 ||

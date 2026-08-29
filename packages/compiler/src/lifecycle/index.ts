@@ -5,12 +5,16 @@ import {
 	LIFECYCLE_INTERPRETER,
 	LIFECYCLE_PROGRAM_FORMAT,
 	type CollectionLifecycleProgramsV1,
+	type LifecycleCapabilityBinding,
 	type LifecycleBindings,
 	type LifecycleIdentity,
 	type LifecyclePhase,
 } from "./contract";
 import { lowerLifecyclePhase, type LifecycleOrigin } from "./lower";
-import { validateIssueMappings } from "./reachability";
+import {
+	issueBearingCollectionRequirements,
+	validateIssueMappings,
+} from "./reachability";
 
 export type {
 	CollectionLifecycleProgramsV1,
@@ -20,6 +24,26 @@ export type {
 	LifecyclePhase,
 	LifecycleStatement,
 } from "./contract";
+
+export interface CompiledCollectionLifecycle {
+	readonly artifact: CollectionLifecycleProgramsV1;
+	readonly issueRequirements: Readonly<Record<string, readonly string[]>>;
+}
+
+function invokedCapabilities(
+	statements: readonly import("./contract").LifecycleStatement[],
+): readonly LifecycleIdentity[] {
+	return statements.flatMap((statement) =>
+		statement.op === "effect"
+			? [statement.value.identity]
+			: statement.op === "if"
+				? [
+						...invokedCapabilities(statement.consequent),
+						...invokedCapabilities(statement.otherwise),
+					]
+				: [],
+	);
+}
 
 function operationsFor(
 	collection: NormalizedResource,
@@ -41,6 +65,7 @@ function bindingsFor(
 	applicationName: string,
 	collection: NormalizedResource,
 	resources: readonly NormalizedResource[],
+	operations: CollectionOperationProgramsV1,
 ): LifecycleBindings {
 	const fields = collection.contract.fields as readonly Readonly<{
 		path: readonly string[];
@@ -48,6 +73,24 @@ function bindingsFor(
 	const issues = (collection.contract.issues ?? {}) as Readonly<
 		Record<string, LifecycleIdentity>
 	>;
+	const capabilities = Object.fromEntries(
+		operations.operations
+			.filter(
+				(operation) =>
+					operation.member === "create" || operation.member === "update",
+			)
+			.map((operation) => [
+				`data.${operation.target.slice("collection:".length)}.${operation.member}`,
+				Object.freeze({
+					kind: "write",
+					identity: operation.identity,
+					argumentKeys:
+						operation.member === "create"
+							? Object.freeze(["input", "values"])
+							: Object.freeze(["key", "patch", "values"]),
+				}) satisfies LifecycleCapabilityBinding,
+			]),
+	);
 	return Object.freeze({
 		schema: `schema:${applicationName}`,
 		collection: collection.identity as LifecycleIdentity,
@@ -60,7 +103,7 @@ function bindingsFor(
 			),
 		),
 		issues: Object.freeze({ ...issues }),
-		capabilities: Object.freeze({}),
+		capabilities: Object.freeze(capabilities),
 		operations: Object.freeze(operationsFor(collection, resources)),
 		jobs: Object.freeze([]),
 	});
@@ -74,7 +117,7 @@ export function projectCollectionLifecyclePrograms(
 		evaluatedExports: readonly EvaluatedExport[];
 		operations: CollectionOperationProgramsV1;
 	}>,
-): CollectionLifecycleProgramsV1 {
+): CompiledCollectionLifecycle {
 	const issueOrigins = new Map<
 		LifecycleIdentity,
 		ReadonlyMap<LifecyclePhase, ReadonlyMap<LifecycleIdentity, LifecycleOrigin>>
@@ -93,6 +136,7 @@ export function projectCollectionLifecyclePrograms(
 				input.applicationName,
 				collection,
 				input.resources,
+				input.operations,
 			);
 			const originsByPhase = new Map<
 				LifecyclePhase,
@@ -117,12 +161,30 @@ export function projectCollectionLifecyclePrograms(
 				),
 			) as Readonly<Record<LifecyclePhase, readonly never[]>>;
 			issueOrigins.set(bindings.collection, originsByPhase);
+			const invoked = new Set(
+				Object.values(phases).flatMap(invokedCapabilities),
+			);
+			const retainedCapabilities = Object.freeze(
+				Object.fromEntries(
+					Object.entries(bindings.capabilities).filter(([, capability]) =>
+						invoked.has(capability.identity),
+					),
+				),
+			);
+			const retainedOperations = Object.freeze(
+				[...new Set([...bindings.operations, ...invoked])].sort(compareAscii),
+			);
+			const retainedBindings = Object.freeze({
+				...bindings,
+				capabilities: retainedCapabilities,
+				operations: retainedOperations,
+			});
 			const contract = {
 				format: LIFECYCLE_PROGRAM_FORMAT,
 				interpreter: LIFECYCLE_INTERPRETER,
 				runtimeBuild: input.runtimeBuild,
 				reentryLimit: 8,
-				bindings,
+				bindings: retainedBindings,
 				phases,
 			};
 			return [
@@ -146,7 +208,13 @@ export function projectCollectionLifecyclePrograms(
 		input.operations,
 		issueOrigins,
 	);
-	return projection;
+	return Object.freeze({
+		artifact: projection,
+		issueRequirements: issueBearingCollectionRequirements(
+			projection,
+			input.operations,
+		),
+	});
 }
 
 export function bindCollectionLifecyclePrograms(

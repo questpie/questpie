@@ -21,13 +21,13 @@ type ReachableIssue = Readonly<{
 	origin: Readonly<{ module: string; line: number; column: number }>;
 }>;
 
-export type IssueReachabilityNode = Readonly<{
+type IssueReachabilityNode = Readonly<{
 	identity: string;
 	issues: readonly ReachableIssue[];
 	calls: readonly string[];
 }>;
 
-export function traceIssueReachability(
+function traceIssueReachability(
 	root: string,
 	nodes: ReadonlyMap<string, IssueReachabilityNode>,
 ): ReadonlyMap<
@@ -76,6 +76,21 @@ function issuesInStatements(
 	);
 }
 
+function callsInStatements(
+	statements: readonly LifecycleStatement[],
+): readonly LifecycleIdentity[] {
+	return statements.flatMap((statement) =>
+		statement.op === "effect"
+			? [statement.value.identity]
+			: statement.op === "if"
+				? [
+						...callsInStatements(statement.consequent),
+						...callsInStatements(statement.otherwise),
+					]
+				: [],
+	);
+}
+
 function buildIssueReachabilityGraph(
 	programs: CollectionLifecycleProgramsV1,
 	operations: CollectionOperationProgramsV1,
@@ -119,38 +134,14 @@ function buildIssueReachabilityGraph(
 				origin: originFor(program.bindings.collection, phase, issue),
 			})),
 		);
-		const capabilities = program.bindings.capabilities as Readonly<
-			Record<string, Readonly<{ identity?: unknown }>>
-		>;
-		const calls = Object.values(capabilities)
-			.map((capability) =>
-				typeof capability.identity === "string"
-					? operationNodeByIdentity.get(capability.identity)
-					: undefined,
-			)
+		const calls = Object.values(program.phases)
+			.flatMap(callsInStatements)
+			.map((identity) => operationNodeByIdentity.get(identity))
 			.filter((target): target is string => target !== undefined)
 			.sort(compareAscii);
 		nodes.set(identity, Object.freeze({ identity, issues, calls }));
 	}
 	return Object.freeze({ nodes, operationNodeByIdentity });
-}
-
-export function issueBearingCollectionIdentities(
-	programs: CollectionLifecycleProgramsV1,
-	operations?: CollectionOperationProgramsV1,
-): readonly string[] {
-	if (operations)
-		return Object.keys(
-			issueBearingCollectionRequirements(programs, operations),
-		);
-	return programs.programs
-		.filter((program) =>
-			Object.values(program.phases).some(
-				(statements) => issuesInStatements(statements).length > 0,
-			),
-		)
-		.map((program) => program.bindings.collection)
-		.sort(compareAscii);
 }
 
 export function issueBearingCollectionRequirements(

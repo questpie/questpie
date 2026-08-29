@@ -5,7 +5,7 @@ export const LIFECYCLE_INTERPRETER =
 
 export type LifecyclePhase = "normalize" | "validate" | "check" | "afterWrite";
 export type LifecycleIdentity =
-	`${"schema" | "collection" | "field" | "issue" | "operation" | "job"}:${string}`;
+	`${"schema" | "collection" | "field" | "issue" | "query" | "mutation" | "operation" | "job"}:${string}`;
 export type LifecycleScalar = null | boolean | number | string;
 
 export type LifecycleExpression =
@@ -82,12 +82,23 @@ export type LifecycleExpression =
 			target: LifecycleExpression;
 			arguments: readonly LifecycleExpression[];
 			optional: boolean;
+	  }>
+	| Readonly<{
+			op: "capability";
+			capability: "write";
+			identity: LifecycleIdentity;
+			arguments: readonly LifecycleExpression[];
 	  }>;
 
 export type LifecycleObjectEntry =
 	| Readonly<{
 			kind: "field";
 			field: LifecycleIdentity;
+			value: LifecycleExpression;
+	  }>
+	| Readonly<{
+			kind: "argument";
+			key: string;
 			value: LifecycleExpression;
 	  }>
 	| Readonly<{ kind: "spreadInput" }>;
@@ -101,14 +112,24 @@ export type LifecycleStatement =
 			otherwise: readonly LifecycleStatement[];
 	  }>
 	| Readonly<{ op: "return"; value: LifecycleExpression | null }>
-	| Readonly<{ op: "throwIssue"; issue: LifecycleIdentity }>;
+	| Readonly<{ op: "throwIssue"; issue: LifecycleIdentity }>
+	| Readonly<{
+			op: "effect";
+			value: Extract<LifecycleExpression, { op: "capability" }>;
+	  }>;
+
+export type LifecycleCapabilityBinding = Readonly<{
+	kind: "write";
+	identity: LifecycleIdentity;
+	argumentKeys: readonly string[];
+}>;
 
 export interface LifecycleBindings {
 	readonly schema: LifecycleIdentity;
 	readonly collection: LifecycleIdentity;
 	readonly fields: Readonly<Record<string, LifecycleIdentity>>;
 	readonly issues: Readonly<Record<string, LifecycleIdentity>>;
-	readonly capabilities: Readonly<Record<string, never>>;
+	readonly capabilities: Readonly<Record<string, LifecycleCapabilityBinding>>;
 	readonly operations: readonly LifecycleIdentity[];
 	readonly jobs: readonly LifecycleIdentity[];
 }

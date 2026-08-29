@@ -8,8 +8,6 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
-import { traceIssueReachability } from "../../packages/compiler/src/lifecycle/reachability";
-
 const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
@@ -19,54 +17,116 @@ const collaborationRoot = resolve(
 	"../../fixtures/collaboration",
 );
 
-test("traces nested Collection calls deterministically without looping on re-entry", () => {
-	const origin = { module: "src/messages.ts", line: 1, column: 1 };
-	const nodes = new Map([
-		[
-			"collection:messages/create",
-			{
-				identity: "collection:messages/create",
-				issues: [],
-				calls: ["collection:messageEvents/create"],
+test("derives transitive issue reachability from lowered nested writes and terminates cycles", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-nested-writes-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		await rm(join(temporary, "src/memberships/operations.ts"));
+		await rm(join(temporary, "src/teams/operations.ts"));
+		const ticketsPath = join(temporary, "src/tickets.ts");
+		await writeFile(
+			ticketsPath,
+			(await readFile(ticketsPath, "utf8")).replace(
+				"\t\tvalidate: ({ candidate, issues }) => {",
+				`\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+\t\tafterWrite: async ({ ctx }: { ctx: { data: { memberships: { update(input: unknown): Promise<void> } } } }) => {
+\t\t\tawait ctx.data.memberships.update({ key: {}, patch: {}, values: {} });
+\t\t},
+\t\tvalidate: ({ candidate, issues }) => {`,
+			),
+		);
+		const membershipsPath = join(temporary, "src/memberships.ts");
+		await writeFile(
+			membershipsPath,
+			(await readFile(membershipsPath, "utf8")).replace(
+				"\tconstraints: {",
+				`\tlifecycle: {
+\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+\t\tafterWrite: async ({ ctx }: { ctx: { data: { teams: { update(input: unknown): Promise<void> } } } }) => {
+\t\t\tawait ctx.data.teams.update({ key: {}, patch: {}, values: {} });
+\t\t},
+\t},
+\tconstraints: {`,
+			),
+		);
+		const teamsPath = join(temporary, "src/teams.ts");
+		let teamsSource = await readFile(teamsPath, "utf8");
+
+		const compiled = await compileApplication({ applicationRoot: temporary });
+		const programs = JSON.parse(
+			compiled.generatedFiles["collection-lifecycle-programs.json"]!,
+		) as Readonly<{
+			programs: readonly Readonly<{
+				bindings: Readonly<{
+					collection: string;
+					capabilities: Readonly<
+						Record<string, Readonly<{ identity: string }>>
+					>;
+				}>;
+			}>[];
+		}>;
+		expect(
+			programs.programs.find(
+				(program) => program.bindings.collection === "collection:tickets",
+			)?.bindings.capabilities,
+		).toEqual({
+			"data.memberships.update": {
+				argumentKeys: ["key", "patch", "values"],
+				identity: "mutation:__collectionKernel.memberships.update",
+				kind: "write",
 			},
-		],
-		[
-			"collection:messageEvents/create",
-			{
-				identity: "collection:messageEvents/create",
-				issues: [],
-				calls: ["collection:limits/create"],
-			},
-		],
-		[
-			"collection:limits/create",
-			{
-				identity: "collection:limits/create",
-				issues: [
-					{
-						issue: "issue:limits/exceeded" as const,
-						phase: "validate" as const,
-						origin,
-					},
+		});
+
+		teamsSource = teamsSource
+			.replace(
+				'import { constraint, defineCollection, field, index, relation } from "questpie";',
+				'import { collection, constraint, defineCollection, field, index, relation } from "questpie";',
+			)
+			.replace(
+				"\tconstraints: {",
+				`\tissues: { invalidRoute: collection.issue() },
+\tlifecycle: {
+\t\tvalidate: ({ issues }) => { throw issues.invalidRoute(); },
+\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+\t\tafterWrite: async ({ ctx }: { ctx: { data: { tickets: { update(input: unknown): Promise<void> } } } }) => {
+\t\t\tawait ctx.data.tickets.update({ key: {}, patch: {}, values: {} });
+\t\t},
+\t},
+\tconstraints: {`,
+			);
+		const issueOffset = teamsSource.indexOf("throw issues.invalidRoute");
+		const issuePrefix = teamsSource.slice(0, issueOffset);
+		const issueLines = issuePrefix.split("\n");
+		const issueOrigin = {
+			module: "src/teams.ts",
+			line: issueLines.length,
+			column: issueLines.at(-1)!.length + 1,
+		};
+		await writeFile(teamsPath, teamsSource);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-027",
+			diagnosticClass: "missingIssueMapping",
+			details: {
+				phase: "validate",
+				origin: issueOrigin,
+				operation: "mutation:ticket.assign",
+				issue: "issue:teams/invalidRoute",
+				path: [
+					"mutation:ticket.assign",
+					"collection:tickets/create",
+					"collection:memberships/update",
+					"collection:teams/update",
 				],
-				calls: ["collection:messages/create"],
 			},
-		],
-	] as const);
-	expect(
-		traceIssueReachability("collection:messages/create", nodes).get(
-			"issue:limits/exceeded",
-		),
-	).toMatchObject({
-		path: [
-			"collection:messages/create",
-			"collection:messageEvents/create",
-			"collection:limits/create",
-		],
-		phase: "validate",
-		origin,
-	});
-});
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
 
 test("compiles Team Support Desk lifecycle authoring without retaining callbacks", async () => {
 	const compilation = await compileApplication({

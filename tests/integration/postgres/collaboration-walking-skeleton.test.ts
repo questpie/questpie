@@ -505,12 +505,13 @@ postgresTest(
 					},
 				}).withContext({ companyId: tracerIds.company });
 				const hostileBody = "__questpie_hostile_invalid_event__";
+				const directLifecycleCallId = `direct:lifecycle:${crypto.randomUUID()}`;
 				let directLifecycleError: unknown;
 				try {
 					await routeApplication.execution(executionInput, ({ mutations }) =>
 						mutations.message.publish(
 							{ body: hostileBody, channelId: tracerIds.channel },
-							{ callId: `direct:lifecycle:${crypto.randomUUID()}` },
+							{ callId: directLifecycleCallId },
 						),
 					);
 				} catch (error) {
@@ -527,11 +528,12 @@ postgresTest(
 					"status",
 				]);
 				const directLifecycleErrorBytes = ownErrorBytes(directLifecycleError);
+				const networkLifecycleCallId = `network:lifecycle:${crypto.randomUUID()}`;
 				let clientLifecycleError: unknown;
 				try {
 					await networkClient.mutations["message.publish"](
 						{ body: hostileBody, channelId: tracerIds.channel },
-						{ callId: `network:lifecycle:${crypto.randomUUID()}` },
+						{ callId: networkLifecycleCallId },
 					);
 				} catch (error) {
 					clientLifecycleError = error;
@@ -583,6 +585,18 @@ postgresTest(
 				expect(
 					afterRejectedLifecycle.nodes.some(({ body }) => body === hostileBody),
 				).toBe(false);
+				const [rejectedLifecycleWrites] = await database!.unsafe<
+					Readonly<Array<{ dispatches: number; receipts: number }>>
+				>(
+					`SELECT
+  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id IN ($1, $2)) AS dispatches,
+  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id IN ($1, $2)) AS receipts`,
+					[directLifecycleCallId, networkLifecycleCallId],
+				);
+				expect(rejectedLifecycleWrites).toEqual({
+					dispatches: 0,
+					receipts: 0,
+				});
 				const hostileConstraintBody = "__questpie_hostile_missing_message__";
 				let directConstraintError: unknown;
 				try {

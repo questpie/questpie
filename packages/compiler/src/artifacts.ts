@@ -380,13 +380,14 @@ export async function createArtifacts(
 	const compilerRuntimeBuild = projectCompilerRuntimeBuild(
 		contentDigest(canonicalBytes(buildInput)),
 	).digest;
-	const lifecyclePrograms = projectCollectionLifecyclePrograms({
+	const compiledLifecycle = projectCollectionLifecyclePrograms({
 		applicationName: input.configuration.application.name,
 		runtimeBuild: compilerRuntimeBuild,
 		resources: operationResources,
 		evaluatedExports: input.evaluatedExports,
 		operations: collectionOperationPrograms,
 	});
+	const lifecyclePrograms = compiledLifecycle.artifact;
 	const runtime = projectRuntimeContract({
 		configuration: input.configuration,
 		resources: operationResources,
@@ -435,7 +436,7 @@ export async function createArtifacts(
 	const mutationDeclarations = projectMutationGeneratedContract(
 		collectionOperationPrograms,
 		input.resources,
-		lifecyclePrograms,
+		compiledLifecycle.issueRequirements,
 	);
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
