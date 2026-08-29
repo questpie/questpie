@@ -8,8 +8,6 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
-import { issueBearingCollectionRequirements } from "../../packages/compiler/src/lifecycle/reachability";
-
 const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
@@ -101,6 +99,9 @@ test("derives transitive issue reachability from lowered nested writes and termi
 				kind: "write",
 			},
 		});
+		expect(JSON.stringify(compiledTickets.phases.afterWrite)).not.toContain(
+			"mutation:__collectionKernel.labels.update",
+		);
 		await writeFile(
 			ticketsPath,
 			(await readFile(ticketsPath, "utf8")).replace(
@@ -132,7 +133,10 @@ test("derives transitive issue reachability from lowered nested writes and termi
 				"\tconstraints: {",
 				`\tissues: { invalidRoute: collection.issue() },
 \tlifecycle: {
-\t\tvalidate: ({ issues }) => { throw issues.invalidRoute(); },
+\t\tvalidate: ({ issues }) => {
+\t\t\tif (false) throw issues.invalidRoute();
+\t\t\tthrow issues.invalidRoute();
+\t\t},
 \t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { tickets: { update(input: unknown): Promise<void> } } }; row: { id: string } }) => {
 \t\t\tawait ctx.data.tickets.update({ patch: { summary: "cycle" }, key: { id: row.id } });
@@ -140,7 +144,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \t},
 \tconstraints: {`,
 			);
-		const issueOffset = teamsSource.indexOf("throw issues.invalidRoute");
+		const issueOffset = teamsSource.lastIndexOf("throw issues.invalidRoute");
 		const issuePrefix = teamsSource.slice(0, issueOffset);
 		const issueLines = issuePrefix.split("\n");
 		const issueOrigin = {
@@ -186,83 +190,160 @@ test("derives transitive issue reachability from lowered nested writes and termi
 	}
 }, 30_000);
 
-test("bounds dense cyclic issue reachability by visiting each kernel node once", () => {
-	const count = 11;
-	const identities = Array.from(
-		{ length: count },
-		(_, index) => `collection:dense${index}` as const,
+test("requires the generated create input root while admitting an empty optional input shape", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-create-root-"),
 	);
-	const operations = {
-		format: "questpie.collection-operation-programs",
-		version: 1,
-		operations: identities.map((target, index) => ({
-			identity: `mutation:__collectionKernel.dense${index}.create`,
-			kind: "mutation",
-			mode: "writeTransaction",
-			target,
-			member: "create",
-			policy: `policy:dense${index}`,
-			keyFields: [],
-			callerInputFields: [],
-			requiredCallerInputFields: [],
-			trustedValueFields: [],
-			requiredTrustedValueFields: [],
-			selectedFieldPaths: [],
-			dataQuery: null,
-			dataQueryDigest: null,
-			normalizerProgramDigest: null,
-			serverValueProgramDigest: null,
-			outputCardinality: "one",
-			limits: {
-				inputBytes: 1,
-				resultBytes: 1,
-				rowsWritten: 1,
-				durationMilliseconds: 1,
-			},
-		})),
-	} as Parameters<typeof issueBearingCollectionRequirements>[1];
-	const programs = {
-		format: "questpie.collection-lifecycle-programs",
-		version: 1,
-		programs: identities.map((collection, index) => ({
-			format: "questpie.lifecycle-program.v1",
-			interpreter: "questpie.lifecycle-interpreter.v1",
-			runtimeBuild: "b".repeat(64),
-			reentryLimit: 8,
-			bindings: {
-				schema: "schema:dense",
-				collection,
-				fields: {},
-				issues: { invalid: `issue:dense${index}/invalid` },
-				capabilities: {},
-				operations: operations.operations.map(({ identity }) => identity),
-				jobs: [],
-			},
-			phases: {
-				normalize: [],
-				validate: [{ op: "throwIssue", issue: `issue:dense${index}/invalid` }],
-				check: [],
-				afterWrite: operations.operations
-					.filter((_, targetIndex) => targetIndex !== index)
-					.map((operation) => ({
-						op: "effect",
-						value: {
-							op: "capability",
-							capability: "write",
-							identity: operation.identity,
-							arguments: [],
-						},
-					})),
-			},
-			digest: `${index}`.padStart(64, "0"),
-		})),
-	} as Parameters<typeof issueBearingCollectionRequirements>[0];
-	expect(
-		issueBearingCollectionRequirements(programs, operations)[
-			"collection:dense0"
-		],
-	).toHaveLength(count);
-}, 1_000);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		await writeFile(
+			join(temporary, "src/optional-creates.ts"),
+			`import { constraint, defineCollection, defineCollectionOperations, definePolicy, field, policy } from "questpie";
+
+export const optionalCreates = defineCollection({
+	name: "optionalCreates",
+	fields: {
+		id: field.uuid({ nullable: false, default: "randomUuid", server: true, immutable: true }),
+		note: field.text({ nullable: true }),
+	},
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});
+export const optionalCreatesPolicy = definePolicy(optionalCreates, {
+	name: "optionalCreates.default",
+	create: {
+		admit: policy.authenticated(),
+		candidate: ({ candidate }) => candidate.id.equal(candidate.id),
+	},
+	fields: {
+		create: ({ candidate }) => ({ note: candidate.id.equal(candidate.id) }),
+	},
+});
+export const optionalCreatesOperations = defineCollectionOperations(optionalCreates, {
+	name: "optionalCreates",
+	policy: optionalCreatesPolicy,
+	create: { input: ["note"], select: { id: true, note: true } },
+});
+`,
+		);
+		const ticketsPath = join(temporary, "src/tickets.ts");
+		const valid = (await readFile(ticketsPath, "utf8")).replace(
+			"\t\tvalidate: ({ candidate, issues }) => {",
+			`\t\t// @ts-expect-error LIFE-02 proves compiler lowering before LIFE-05 projects the authoring type.
+\t\tafterWrite: async ({ ctx }: { ctx: { data: { optionalCreates: { create(input: unknown): Promise<void> } } } }) => {
+\t\t\tawait ctx.data.optionalCreates.create({ input: {} });
+\t\t},
+\t\tvalidate: ({ candidate, issues }) => {`,
+		);
+		await writeFile(ticketsPath, valid);
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
+		});
+		const programs = JSON.parse(
+			compilation.generatedFiles["collection-lifecycle-programs.json"]!,
+		) as Readonly<{
+			programs: readonly Readonly<{
+				bindings: Readonly<{
+					collection: string;
+					capabilities: Readonly<Record<string, unknown>>;
+				}>;
+			}>[];
+		}>;
+		expect(
+			programs.programs.find(
+				(program) => program.bindings.collection === "collection:tickets",
+			)?.bindings.capabilities,
+		).toHaveProperty(["data.optionalCreates.create"]);
+
+		await writeFile(
+			ticketsPath,
+			valid.replace(
+				"optionalCreates.create({ input: {} })",
+				"optionalCreates.create({})",
+			),
+		);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-026",
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			details: { phase: "afterWrite" },
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("bounds dense cyclic issue reachability through the compiler seam", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-dense-cycle-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const count = 11;
+		const dataType = Array.from(
+			{ length: count },
+			(_, index) => `dense${index}: { update(input: unknown): Promise<void> }`,
+		).join("; ");
+		const definitions = Array.from({ length: count }, (_, index) => {
+			const calls = Array.from({ length: count }, (_, target) => target)
+				.filter((target) => target !== index)
+				.map(
+					(target) =>
+						`\t\tawait ctx.data.dense${target}.update({ key: { id: row.id }, patch: { note: "touch" } });`,
+				)
+				.join("\n");
+			return `export const dense${index} = defineCollection({
+\tname: "dense${index}",
+\tfields: {
+\t\tid: field.uuid({ nullable: false, default: "randomUuid", server: true, immutable: true }),
+\t\tnote: field.text({ nullable: true }),
+\t},
+\tlifecycle: {
+\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+\t\tafterWrite: async ({ ctx, row }: { ctx: { data: { ${dataType} } }; row: { id: string } }) => {
+${calls}
+\t\t},
+\t},
+\tconstraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+});`;
+		}).join("\n\n");
+		const operations = Array.from(
+			{ length: count },
+			(_, index) => `
+export const dense${index}Policy = definePolicy(dense${index}, {
+	name: "dense${index}.default",
+	update: {
+		admit: policy.authenticated(),
+		rows: ({ current }) => current.id.equal(current.id),
+		candidate: ({ candidate, current }) => candidate.id.equal(current.id),
+	},
+	fields: {
+		update: ({ current }) => ({ note: current.id.equal(current.id) }),
+	},
+});
+export const dense${index}Operations = defineCollectionOperations(dense${index}, {
+\tname: "dense${index}",
+\tpolicy: dense${index}Policy,
+\tupdate: { input: ["note"], select: { id: true, note: true } },
+});`,
+		).join("\n");
+		await writeFile(
+			join(temporary, "src/dense-lifecycle.ts"),
+			`import { constraint, defineCollection, defineCollectionOperations, definePolicy, field, policy } from "questpie";\n\n${definitions}\n${operations}\n`,
+		);
+		const startedAt = performance.now();
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
+		});
+		expect(performance.now() - startedAt).toBeLessThan(20_000);
+		const programs = JSON.parse(
+			compilation.generatedFiles["collection-lifecycle-programs.json"]!,
+		) as Readonly<{ programs: readonly unknown[] }>;
+		expect(programs.programs).toHaveLength(count + 1);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
 
 test("compiles Team Support Desk lifecycle authoring without retaining callbacks", async () => {
 	const compilation = await compileApplication({

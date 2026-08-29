@@ -97,6 +97,8 @@ function bindingsFor(
 					),
 					...prefixed("values", operation.requiredTrustedValueFields),
 				].sort(compareAscii);
+				const requiredArgumentRoots =
+					operation.member === "create" ? ["input"] : ["key"];
 				return [
 					`data.${operation.target.slice("collection:".length)}.${operation.member}`,
 					Object.freeze({
@@ -104,6 +106,7 @@ function bindingsFor(
 						identity: operation.identity,
 						argumentKeys: Object.freeze(argumentKeys),
 						requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
+						requiredArgumentRoots: Object.freeze(requiredArgumentRoots),
 						requireNonEmptyWriteLane: operation.member === "update",
 					}) satisfies LifecycleCapabilityCandidate,
 				];

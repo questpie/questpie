@@ -22,7 +22,9 @@ function argumentKeys(
 }
 
 export type LifecycleStatementAnalysis = Readonly<{
+	statements: readonly LifecycleStatement[];
 	issues: readonly LifecycleIdentity[];
+	issueStatements: readonly Extract<LifecycleStatement, { op: "throwIssue" }>[];
 	capabilities: readonly InvokedLifecycleCapability[];
 }>;
 
@@ -30,15 +32,35 @@ function analyzeSequence(
 	statements: readonly LifecycleStatement[],
 ): LifecycleStatementAnalysis & Readonly<{ fallsThrough: boolean }> {
 	const issues: LifecycleIdentity[] = [];
+	const issueStatements: Extract<LifecycleStatement, { op: "throwIssue" }>[] =
+		[];
 	const capabilities: InvokedLifecycleCapability[] = [];
+	const reachableStatements: LifecycleStatement[] = [];
 	for (const statement of statements) {
 		if (statement.op === "throwIssue") {
 			issues.push(statement.issue);
-			return { issues, capabilities, fallsThrough: false };
+			issueStatements.push(statement);
+			reachableStatements.push(statement);
+			return {
+				statements: reachableStatements,
+				issues,
+				issueStatements,
+				capabilities,
+				fallsThrough: false,
+			};
 		}
-		if (statement.op === "return")
-			return { issues, capabilities, fallsThrough: false };
+		if (statement.op === "return") {
+			reachableStatements.push(statement);
+			return {
+				statements: reachableStatements,
+				issues,
+				issueStatements,
+				capabilities,
+				fallsThrough: false,
+			};
+		}
 		if (statement.op === "effect") {
+			reachableStatements.push(statement);
 			capabilities.push({
 				identity: statement.value.identity,
 				argumentKeys: statement.value.arguments.flatMap((argument) =>
@@ -47,31 +69,74 @@ function analyzeSequence(
 			});
 			continue;
 		}
-		if (statement.op !== "if") continue;
+		if (statement.op !== "if") {
+			reachableStatements.push(statement);
+			continue;
+		}
 		const test = statement.test;
-		const branches =
+		const literalBranch =
 			test.op === "literal" && typeof test.value === "boolean"
-				? [test.value ? statement.consequent : statement.otherwise]
-				: [statement.consequent, statement.otherwise];
+				? test.value
+					? "consequent"
+					: "otherwise"
+				: null;
+		const branches = [
+			...(literalBranch === "otherwise" ? [] : [statement.consequent]),
+			...(literalBranch === "consequent" ? [] : [statement.otherwise]),
+		];
+		const analyzedBranches = branches.map(analyzeSequence);
 		let branchFallsThrough = false;
-		for (const branch of branches) {
-			const analyzed = analyzeSequence(branch);
+		for (const analyzed of analyzedBranches) {
 			issues.push(...analyzed.issues);
+			issueStatements.push(...analyzed.issueStatements);
 			capabilities.push(...analyzed.capabilities);
 			branchFallsThrough ||= analyzed.fallsThrough;
 		}
+		const consequent =
+			literalBranch === "otherwise"
+				? []
+				: (analyzedBranches[0]?.statements ?? []);
+		const otherwise =
+			literalBranch === "consequent"
+				? []
+				: (analyzedBranches[literalBranch === "otherwise" ? 0 : 1]
+						?.statements ?? []);
+		reachableStatements.push({
+			...statement,
+			consequent: Object.freeze(consequent),
+			otherwise: Object.freeze(otherwise),
+		});
 		if (!branchFallsThrough)
-			return { issues, capabilities, fallsThrough: false };
+			return {
+				statements: reachableStatements,
+				issues,
+				issueStatements,
+				capabilities,
+				fallsThrough: false,
+			};
 	}
-	return { issues, capabilities, fallsThrough: true };
+	return {
+		statements: reachableStatements,
+		issues,
+		issueStatements,
+		capabilities,
+		fallsThrough: true,
+	};
 }
 
 export function analyzeLifecycleStatements(
 	statements: readonly LifecycleStatement[],
 ): LifecycleStatementAnalysis {
-	const { issues, capabilities } = analyzeSequence(statements);
+	const {
+		statements: reachableStatements,
+		issues,
+		issueStatements,
+		capabilities,
+	} = analyzeSequence(statements);
 	return Object.freeze({
+		statements: Object.freeze(reachableStatements),
 		issues: Object.freeze(issues),
+		issueStatements: Object.freeze(issueStatements),
 		capabilities: Object.freeze(capabilities),
 	});
 }

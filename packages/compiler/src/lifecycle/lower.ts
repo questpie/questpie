@@ -10,12 +10,14 @@ import type {
 	LifecyclePhase,
 	LifecycleStatement,
 } from "./contract";
+import { analyzeLifecycleStatements } from "./statement-analysis";
 
 export type LifecycleCapabilityCandidate = Readonly<{
 	kind: "write";
 	identity: LifecycleIdentity;
 	argumentKeys: readonly string[];
 	requiredArgumentKeys: readonly string[];
+	requiredArgumentRoots: readonly string[];
 	requireNonEmptyWriteLane: boolean;
 }>;
 
@@ -80,7 +82,10 @@ interface Environment {
 	readonly bindings: LifecycleLoweringBindings;
 	readonly parameters: Map<string, string>;
 	readonly locals: Map<string, number>;
-	readonly issueOrigins: Map<LifecycleIdentity, LifecycleOrigin>;
+	readonly issueOriginCandidates: WeakMap<
+		Extract<LifecycleStatement, { op: "throwIssue" }>,
+		LifecycleOrigin
+	>;
 	readonly capabilityArgumentKeys: Map<LifecycleIdentity, readonly string[]>;
 	nextSlot: number;
 }
@@ -105,13 +110,6 @@ function capabilityArgument(
 				.map((key) => key.slice(prefix.length).split(".")[0]!),
 		),
 	];
-	if (prefix && node.properties.length === 0 && admittedAtLevel.length > 0)
-		return fail(
-			env,
-			node,
-			"unsupportedLifecycleSyntax",
-			"provide at least one generated Operation argument property",
-		);
 	const entries = new Map<string, LifecycleObjectEntry>();
 	for (const member of node.properties) {
 		if (
@@ -215,6 +213,19 @@ function capability(
 		binding.argumentKeys,
 	);
 	const actualKeys = flattenedArgumentKeys(argument);
+	const actualRoots =
+		argument.op === "object"
+			? argument.entries.flatMap((entry) =>
+					entry.kind === "argument" ? [entry.key] : [],
+				)
+			: [];
+	if (binding.requiredArgumentRoots.some((key) => !actualRoots.includes(key)))
+		return fail(
+			env,
+			node.arguments[0]!,
+			"unsupportedLifecycleSyntax",
+			`provide required generated Operation arguments ${binding.requiredArgumentRoots.join(", ")}`,
+		);
 	if (binding.requiredArgumentKeys.some((key) => !actualKeys.includes(key)))
 		return fail(
 			env,
@@ -598,11 +609,9 @@ function statements(
 					"unsupportedLifecycleSyntax",
 					"throw a declared generated issue",
 				);
-			env.issueOrigins.set(
-				issue,
-				env.issueOrigins.get(issue) ?? origin(env, node),
-			);
-			output.push({ op: "throwIssue", issue });
+			const statement = { op: "throwIssue", issue } as const;
+			env.issueOriginCandidates.set(statement, origin(env, node));
+			output.push(statement);
 			continue;
 		}
 		if (ts.isExpressionStatement(node)) {
@@ -660,7 +669,7 @@ export function lowerLifecyclePhase(
 		bindings,
 		parameters: new Map(),
 		locals: new Map(),
-		issueOrigins: new Map(),
+		issueOriginCandidates: new WeakMap(),
 		capabilityArgumentKeys: new Map(),
 		nextSlot: 0,
 	};
@@ -727,8 +736,15 @@ export function lowerLifecyclePhase(
 	const lowered: readonly LifecycleStatement[] = ts.isBlock(callback.body)
 		? statements(callback.body.statements, empty)
 		: [{ op: "return", value: expression(callback.body, empty) }];
+	const analyzed = analyzeLifecycleStatements(lowered);
+	const issueOrigins = new Map<LifecycleIdentity, LifecycleOrigin>();
+	for (const statement of analyzed.issueStatements) {
+		const statementOrigin = empty.issueOriginCandidates.get(statement);
+		if (statementOrigin && !issueOrigins.has(statement.issue))
+			issueOrigins.set(statement.issue, statementOrigin);
+	}
 	return Object.freeze({
-		statements: Object.freeze(lowered),
-		issueOrigins: empty.issueOrigins,
+		statements: analyzed.statements,
+		issueOrigins,
 	});
 }
