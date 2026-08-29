@@ -20,6 +20,7 @@ export type CompositionDiagnosticCode =
 	| "QP-DATA-003"
 	| "QP-DATA-005"
 	| "QP-DATA-022"
+	| "QP-DATA-023"
 	| "QP-DATA-025"
 	| "QP-POLICY-001"
 	| "QP-POLICY-002"
@@ -124,6 +125,7 @@ const diagnosticClassesByCode = {
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
 	"QP-DATA-022": ["relationDepthExceeded"],
+	"QP-DATA-023": ["databaseOwnedField"],
 	"QP-DATA-025": ["unsupportedExpressionCapability"],
 	"QP-POLICY-001": ["missingDefaultPolicy"],
 	"QP-POLICY-002": ["ambiguousDefaultPolicy"],

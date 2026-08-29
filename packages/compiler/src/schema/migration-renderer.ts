@@ -10,6 +10,10 @@ import {
 	renderPostgresType,
 } from "./postgres-ddl";
 import {
+	renderAddDatabaseOwnedUpdate,
+	renderDropDatabaseOwnedUpdate,
+} from "./postgres/database-owned-update";
+import {
 	childRecords,
 	mapIdentityBackward,
 	mapIdentityForward,
@@ -97,6 +101,30 @@ function renderStep(
 				return `DROP TRIGGER ${String(collection.rowTrigger)} ON ${schemaName}.${String(collection.postgresName)};\nDROP TRIGGER ${String(collection.truncateTrigger)} ON ${schemaName}.${String(collection.postgresName)};`;
 			})
 			.join("\n\n");
+	}
+	if (stepValue.kind === "addDatabaseOwnedUpdate") {
+		if (!target.databaseOwnedUpdates)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"target database-owned update projection is missing",
+			);
+		return renderAddDatabaseOwnedUpdate(
+			target.databaseOwnedUpdates,
+			stepValue.targetIdentity,
+		);
+	}
+	if (stepValue.kind === "dropDatabaseOwnedUpdate") {
+		if (!base.databaseOwnedUpdates)
+			return schemaError(
+				"QP-SCHEMA-003",
+				"invalidReference",
+				"base database-owned update projection is missing",
+			);
+		return renderDropDatabaseOwnedUpdate(
+			base.databaseOwnedUpdates,
+			stepValue.targetIdentity,
+		);
 	}
 	if (stepValue.kind === "createCollection") {
 		const collection = collectionFor(target, stepValue.targetIdentity);

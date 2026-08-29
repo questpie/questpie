@@ -8,6 +8,7 @@ export interface DataFieldDescriptor<
 	HasDefault extends boolean,
 	Immutable extends boolean = false,
 	Server extends boolean = false,
+	DatabaseOwned extends boolean = false,
 > {
 	readonly identity: Identity;
 	readonly codec: FieldCodec;
@@ -15,10 +16,12 @@ export interface DataFieldDescriptor<
 	readonly hasDefault: HasDefault;
 	readonly immutable: Immutable;
 	readonly server: Server;
+	readonly databaseOwned: DatabaseOwned;
 	readonly value?: Value;
 }
 
 export type FieldDefault = "now" | "randomUuid" | boolean | number | string;
+export type FieldOnUpdate = "now";
 
 export type FieldValue = object | string | number | boolean | null;
 
@@ -45,6 +48,7 @@ export interface FieldDefinition<
 	Options extends Readonly<Record<string, unknown>> = Readonly<
 		Record<string, unknown>
 	>,
+	OnUpdate extends FieldOnUpdate | null = FieldOnUpdate | null,
 > {
 	readonly kind: "field";
 	readonly scalar: Scalar;
@@ -52,6 +56,7 @@ export interface FieldDefinition<
 	readonly default: Default;
 	readonly immutable: Immutable;
 	readonly server: Server;
+	readonly onUpdate: OnUpdate;
 	readonly postgresName: string | null;
 	readonly options: Options;
 	readonly value?: Value;

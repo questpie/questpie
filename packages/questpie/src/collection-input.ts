@@ -142,15 +142,19 @@ type CreateNodeCodec<Node, Depth extends readonly unknown[]> =
 		infer Default,
 		FieldDefinition["scalar"],
 		boolean,
-		infer Server
+		infer Server,
+		Readonly<Record<string, unknown>>,
+		infer OnUpdate
 	>
-		? Server extends true
+		? OnUpdate extends "now"
 			? never
-			: Nullable extends true
-				? Optional<FieldCodec<Node>>
-				: Default extends null
-					? FieldCodec<Node>
-					: Optional<FieldCodec<Node>>
+			: Server extends true
+				? never
+				: Nullable extends true
+					? Optional<FieldCodec<Node>>
+					: Default extends null
+						? FieldCodec<Node>
+						: Optional<FieldCodec<Node>>
 		: Node extends InlineShapeDefinition<infer Fields>
 			? Depth extends readonly []
 				? never
@@ -172,13 +176,17 @@ type UpdateNodeCodec<Node, Depth extends readonly unknown[]> =
 		FieldDefinition["default"],
 		FieldDefinition["scalar"],
 		infer Immutable,
-		infer Server
+		infer Server,
+		Readonly<Record<string, unknown>>,
+		infer OnUpdate
 	>
-		? Server extends true
+		? OnUpdate extends "now"
 			? never
-			: Immutable extends true
+			: Server extends true
 				? never
-				: Optional<FieldCodec<Node>>
+				: Immutable extends true
+					? never
+					: Optional<FieldCodec<Node>>
 		: Node extends InlineShapeDefinition<infer Fields>
 			? Depth extends readonly []
 				? never
@@ -359,7 +367,12 @@ function nodeDescriptor(
 			? codec.optional(object)
 			: object;
 	}
-	if (node.server || (mode === "update" && node.immutable)) return null;
+	if (
+		node.onUpdate === "now" ||
+		node.server ||
+		(mode === "update" && node.immutable)
+	)
+		return null;
 	const scalar = descriptor(node.scalar, node.options);
 	const value = node.nullable ? codec.nullable(scalar) : scalar;
 	return mode === "update" || node.nullable || node.default !== null

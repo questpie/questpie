@@ -126,6 +126,12 @@ type BigintFieldOptions = FieldBaseOptions &
 	Readonly<{ minimum?: string; maximum?: string }>;
 type NumericFieldOptions = FieldBaseOptions &
 	Readonly<{ precision: number; scale: number }>;
+type TimestampFieldOptions = Omit<FieldBaseOptions, "server"> &
+	Readonly<{ default?: "now"; withTimezone?: boolean }> &
+	(
+		| Readonly<{ onUpdate: "now"; server?: false }>
+		| Readonly<{ onUpdate?: never; server?: boolean }>
+	);
 
 type FieldRuntimeOptions = FieldBaseOptions &
 	Readonly<{
@@ -140,6 +146,7 @@ type FieldRuntimeOptions = FieldBaseOptions &
 		maximumItems?: number;
 		scale?: number;
 		withTimezone?: boolean;
+		onUpdate?: "now";
 	}>;
 
 function fieldDefinition<
@@ -161,14 +168,19 @@ function fieldDefinition<
 		: false,
 	Options extends { server: infer Server extends boolean } ? Server : false,
 	Readonly<
-		Omit<Options, "nullable" | "default" | "immutable" | "server" | "postgres">
-	>
+		Omit<
+			Options,
+			"nullable" | "default" | "immutable" | "server" | "postgres" | "onUpdate"
+		>
+	>,
+	Options extends { onUpdate: infer OnUpdate extends "now" } ? OnUpdate : null
 > {
 	const {
 		nullable,
 		default: defaultValue = null,
 		immutable = false,
 		server = false,
+		onUpdate = null,
 		postgres,
 		...scalarOptions
 	} = options;
@@ -179,6 +191,7 @@ function fieldDefinition<
 		default: defaultValue,
 		immutable,
 		server,
+		onUpdate,
 		postgresName: postgres?.name ?? null,
 		options: Object.freeze(scalarOptions),
 	}) as FieldDefinition<
@@ -195,9 +208,15 @@ function fieldDefinition<
 		Readonly<
 			Omit<
 				Options,
-				"nullable" | "default" | "immutable" | "server" | "postgres"
+				| "nullable"
+				| "default"
+				| "immutable"
+				| "server"
+				| "postgres"
+				| "onUpdate"
 			>
-		>
+		>,
+		Options extends { onUpdate: infer OnUpdate extends "now" } ? OnUpdate : null
 	>;
 }
 
@@ -261,14 +280,8 @@ export const field = Object.freeze({
 	numeric: <const Options extends NumericFieldOptions>(
 		options: ExactOptions<Options, NumericFieldOptions>,
 	) => fieldDefinition<"numeric", string, Options>("numeric", options),
-	timestamp: <
-		const Options extends FieldBaseOptions &
-			Readonly<{ default?: "now"; withTimezone?: boolean }>,
-	>(
-		options: ExactOptions<
-			Options,
-			FieldBaseOptions & Readonly<{ default?: "now"; withTimezone?: boolean }>
-		>,
+	timestamp: <const Options extends TimestampFieldOptions>(
+		options: ExactOptions<Options, TimestampFieldOptions>,
 	) => fieldDefinition<"timestamp", string, Options>("timestamp", options),
 	date: <const Options extends FieldBaseOptions>(
 		options: ExactOptions<Options, FieldBaseOptions>,

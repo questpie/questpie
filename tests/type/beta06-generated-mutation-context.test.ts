@@ -37,6 +37,9 @@ test("emits only plan-backed Mutation Collection capabilities", async () => {
 declare const ctx: MutationContext<"message.publish">;
 declare const mapped: MutationContext<"message.publish">;
 declare const unmapped: MutationContext<"message.requestDigest">;
+ctx.now satisfies Date;
+// @ts-expect-error ctx.now supersedes the old public Mutation clock spelling
+ctx.operationTime;
 await mapped.data.messageEvents.create({
 	input: {
 		messageId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a2",

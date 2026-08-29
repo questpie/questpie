@@ -30,6 +30,7 @@ const tickets = defineCollection({
 		priority: field.text({ nullable: false, default: "normal" }),
 		assigneeId: field.uuid({ nullable: true }),
 		status: field.text({ nullable: false, default: "open", server: true }),
+		updatedAt: field.timestamp({ nullable: false, default: "now", onUpdate: "now", withTimezone: true }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
@@ -175,6 +176,10 @@ create.__questpie;
 create.pick({ status: true });
 // @ts-expect-error immutable Fields never belong to caller update input.
 update.pick({ reference: true });
+// @ts-expect-error database-owned Fields belong to neither caller lane.
+create.pick({ updatedAt: true });
+// @ts-expect-error database-owned Fields belong to neither caller lane.
+update.pick({ updatedAt: true });
 // @ts-expect-error selectors reject unknown Fields.
 update.omit({ missing: true });
 `,

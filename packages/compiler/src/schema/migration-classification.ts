@@ -73,6 +73,7 @@ function fieldRemainder(field: FieldShape): Readonly<Record<string, unknown>> {
 		default: _default,
 		identity: _identity,
 		nullable: _nullable,
+		onUpdate: _onUpdate,
 		path: _path,
 		postgresName: _postgresName,
 		type: _type,

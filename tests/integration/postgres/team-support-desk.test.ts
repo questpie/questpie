@@ -44,6 +44,10 @@ function postgresUrl(): string {
 	return url.toString();
 }
 
+function postgresIdentifier(value: string): string {
+	return `"${value.replaceAll('"', '""')}"`;
+}
+
 function runCli(root: string, arguments_: readonly string[]): string {
 	const result = Bun.spawnSync(["bun", cli, ...arguments_], {
 		cwd: root,
@@ -249,6 +253,44 @@ postgresTest(
 			runCli(temporary, ["migration", "apply"]);
 			expect(runCli(temporary, ["seed", "apply"])).toContain("new");
 			expect(runCli(temporary, ["seed", "apply"])).toContain("0 new");
+			await database!.unsafe(`DROP ROLE IF EXISTS questpie_tsd_managed_writer;
+CREATE ROLE questpie_tsd_managed_writer NOLOGIN;
+GRANT USAGE ON SCHEMA team_support_desk TO questpie_tsd_managed_writer;
+GRANT SELECT (id, summary, updated_at), UPDATE (summary, updated_at)
+ON team_support_desk.tickets TO questpie_tsd_managed_writer;`);
+			const [beforeManagedWriter] = await database!<
+				Readonly<{ updatedAt: Date }>[]
+			>`SELECT updated_at AS "updatedAt"
+      FROM team_support_desk.tickets
+      WHERE id = ${supportTracerIds.ticketOpen}`;
+			const [afterManagedWriter] = await database!.begin(async (writer) => {
+				await writer.unsafe("SET LOCAL ROLE questpie_tsd_managed_writer");
+				return writer<
+					Readonly<{ updatedAt: Date }>[]
+				>`UPDATE team_support_desk.tickets
+      SET updated_at = '2000-01-01T00:00:00Z'::timestamptz,
+          summary = summary
+      WHERE id = ${supportTracerIds.ticketOpen}
+      RETURNING updated_at AS "updatedAt"`;
+			});
+			expect(afterManagedWriter!.updatedAt.getTime()).toBeGreaterThan(
+				beforeManagedWriter!.updatedAt.getTime(),
+			);
+			expect(afterManagedWriter!.updatedAt.getUTCFullYear()).not.toBe(2000);
+			const managedWriterLedger = await database!<
+				Readonly<{ capturedAt: Date; changeKind: string }>[]
+			>`SELECT captured_at AS "capturedAt", change_kind AS "changeKind"
+FROM questpie_internal.change_ledger
+WHERE collection_identity = 'collection:tickets'
+  AND new_key->>'id' = ${supportTracerIds.ticketOpen}
+ORDER BY fact_id DESC
+LIMIT 1`;
+			expect(managedWriterLedger).toEqual([
+				{
+					capturedAt: afterManagedWriter!.updatedAt,
+					changeKind: "update",
+				},
+			]);
 			runFixtureScript(temporary, "auth:migrate");
 			expect(runFixtureScript(temporary, "auth:seed")).toContain(
 				"Better Auth demo identities ready: 3",
@@ -282,6 +324,90 @@ postgresTest(
 					typeof import("../../../fixtures/team-support-desk/tracer/browser/tickets/edit-input")
 				>,
 			]);
+			const schemaProjection = (await Bun.file(
+				join(temporary, ".questpie/generated/schema-projection.json"),
+			).json()) as Readonly<{
+				application: Readonly<{ postgresSchema: string }>;
+				databaseOwnedUpdates: Readonly<{
+					fields: readonly Readonly<{
+						column: string;
+						functionName: string;
+						table: string;
+						triggerName: string;
+					}>[];
+				}>;
+			}>;
+			const databaseOwnedUpdate =
+				schemaProjection.databaseOwnedUpdates.fields[0];
+			if (!databaseOwnedUpdate)
+				throw new Error("database-owned update projection is missing");
+			const schemaName = postgresIdentifier(
+				schemaProjection.application.postgresSchema,
+			);
+			const tableName = postgresIdentifier(databaseOwnedUpdate.table);
+			const triggerName = postgresIdentifier(databaseOwnedUpdate.triggerName);
+			const functionName = postgresIdentifier(databaseOwnedUpdate.functionName);
+			const columnName = postgresIdentifier(databaseOwnedUpdate.column);
+			const appOptions = {
+				postgres: {
+					connectionUrl: postgresUrl(),
+					directConnectionUrl: postgresUrl(),
+				},
+				realtime: { hmacKey: new Uint8Array(32).fill(41) },
+				maintenance: { authorize: () => true },
+			} as const;
+			const expectReadinessFailure = async (): Promise<void> => {
+				await expect(createApp(appOptions)).rejects.toMatchObject({
+					code: "QP-SCHEMA-028",
+				});
+			};
+			await database!.unsafe(
+				`DROP TRIGGER ${triggerName} ON ${schemaName}.${tableName}`,
+			);
+			await expectReadinessFailure();
+			await database!.unsafe(
+				`CREATE TRIGGER ${triggerName} BEFORE UPDATE ON ${schemaName}.${tableName} FOR EACH ROW EXECUTE FUNCTION ${schemaName}.${functionName}()`,
+			);
+			await database!.unsafe(
+				`ALTER TABLE ${schemaName}.${tableName} DISABLE TRIGGER ${triggerName}`,
+			);
+			await expectReadinessFailure();
+			await database!.unsafe(
+				`ALTER TABLE ${schemaName}.${tableName} ENABLE TRIGGER ${triggerName}`,
+			);
+			await database!
+				.unsafe(`CREATE OR REPLACE FUNCTION ${schemaName}.${functionName}() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $questpie$
+BEGIN
+  RETURN NEW;
+END
+$questpie$`);
+			await expectReadinessFailure();
+			await database!
+				.unsafe(`CREATE OR REPLACE FUNCTION ${schemaName}.${functionName}() RETURNS trigger
+LANGUAGE plpgsql SECURITY INVOKER SET search_path = pg_catalog AS $questpie$
+BEGIN
+  NEW.${columnName} := pg_catalog.transaction_timestamp();
+  RETURN NEW;
+END
+$questpie$`);
+			await database!.unsafe(
+				`GRANT EXECUTE ON FUNCTION ${schemaName}.${functionName}() TO PUBLIC`,
+			);
+			await expectReadinessFailure();
+			await database!.unsafe(
+				`REVOKE ALL ON FUNCTION ${schemaName}.${functionName}() FROM PUBLIC`,
+			);
+			const additionalTrigger = postgresIdentifier(
+				"tickets_extra_questpie_on_update",
+			);
+			await database!.unsafe(
+				`CREATE TRIGGER ${additionalTrigger} BEFORE UPDATE ON ${schemaName}.${tableName} FOR EACH ROW EXECUTE FUNCTION ${schemaName}.${functionName}()`,
+			);
+			await expectReadinessFailure();
+			await database!.unsafe(
+				`DROP TRIGGER ${additionalTrigger} ON ${schemaName}.${tableName}`,
+			);
 
 			let rejectNext = false;
 			const directReceipts: Array<
@@ -316,14 +442,7 @@ postgresTest(
 			});
 			cleanup.defer(() => directReceiver.stop(false));
 
-			const app = await createApp({
-				postgres: {
-					connectionUrl: postgresUrl(),
-					directConnectionUrl: postgresUrl(),
-				},
-				realtime: { hmacKey: new Uint8Array(32).fill(41) },
-				maintenance: { authorize: () => true },
-			});
+			const app = await createApp(appOptions);
 			cleanup.defer(() => app.close());
 			const agentPrincipal = principal.user({
 				id: supportTracerIds.principalAgent,
@@ -505,17 +624,28 @@ postgresTest(
 				status: (directLifecycleError as { status: unknown }).status,
 				payload: (directLifecycleError as { payload: unknown }).payload,
 			});
+			const editCallId = `direct:edit:${crypto.randomUUID()}`;
+			const editInput = {
+				ticketId: created.id,
+				priority: "urgent" as const,
+				summary: "Production login consistently fails",
+			};
 			const edited = await app.execution(agentInput, ({ mutations }) =>
-				mutations.ticket.edit(
-					{
-						ticketId: created.id,
-						priority: "urgent",
-						summary: "Production login consistently fails",
-					},
-					{ callId: `direct:edit:${crypto.randomUUID()}` },
-				),
+				mutations.ticket.edit(editInput, { callId: editCallId }),
 			);
 			expect(edited).toMatchObject({ id: created.id, priority: "urgent" });
+			const receiptReplay = await app.execution(agentInput, ({ mutations }) =>
+				mutations.ticket.edit(editInput, { callId: editCallId }),
+			);
+			expect(receiptReplay).toEqual(edited);
+			const receiptEvidence = await database!<
+				Readonly<{
+					operationTime: Date;
+				}>[]
+			>`SELECT operation_time AS "operationTime"
+FROM questpie_internal.mutation_call_receipts
+WHERE call_id = ${editCallId}`;
+			expect(receiptEvidence).toEqual([{ operationTime: edited.updatedAt }]);
 			const assigned = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.assign(
 					{
@@ -576,6 +706,10 @@ postgresTest(
 			expect(race.filter(({ status }) => status === "rejected")).toHaveLength(
 				1,
 			);
+			const closed = race.find(({ status }) => status === "fulfilled");
+			if (closed?.status !== "fulfilled")
+				throw new Error("concurrent close winner is missing");
+			expect(closed.value.updatedAt).toEqual(closed.value.closedAt);
 			await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.reopen(
 					{ ticketId: created.id },
@@ -751,6 +885,9 @@ postgresTest(
 				priority: "high",
 				summary: "Customer supplied updated summary",
 			});
+			expect(Date.parse(customerEdited.updatedAt)).toBeGreaterThan(
+				Date.parse(listEvidence.detail!.updatedAt),
+			);
 
 			const webhookBody = JSON.stringify({
 				eventId: `webhook:${crypto.randomUUID()}`,
@@ -999,6 +1136,7 @@ postgresTest(
 			).toMatchObject({
 				authProvider: "better-auth",
 				commentBody: firefoxComment,
+				databaseOwnedUpdateAdvanced: true,
 				lifecycleError: { code: "INVALID_TICKET", status: 422 },
 				phase: "firefox-complete",
 				reference: supportTracerIds.referenceOpen,
@@ -1011,10 +1149,17 @@ postgresTest(
 			await stop(browser, "SIGTERM");
 			await stop(recoveredHost.child, "SIGTERM");
 		} finally {
-			await cleanup.dispose();
-			await database!.unsafe(
-				'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE; DROP TABLE IF EXISTS support_auth_verification, support_auth_account, support_auth_session, support_auth_user CASCADE;',
-			);
+			try {
+				await cleanup.dispose();
+			} finally {
+				await database!
+					.unsafe(
+						'DROP SCHEMA IF EXISTS "team_support_desk" CASCADE; DROP SCHEMA IF EXISTS questpie_internal CASCADE; DROP TABLE IF EXISTS support_auth_verification, support_auth_account, support_auth_session, support_auth_user CASCADE;',
+					)
+					.finally(() =>
+						database!.unsafe("DROP ROLE IF EXISTS questpie_tsd_managed_writer"),
+					);
+			}
 		}
 	},
 	180_000,

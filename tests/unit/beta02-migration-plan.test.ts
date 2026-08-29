@@ -12,6 +12,7 @@ import {
 } from "@questpie/compiler";
 import type { RenameIdentityV1, SchemaProjectionV1 } from "@questpie/compiler";
 
+import { projectPostgresDatabaseOwnedUpdates } from "../../packages/compiler/src/schema";
 import { projectManifest } from "../../packages/compiler/src/schema/manifest";
 import type { ApplicationConfiguration } from "../../packages/compiler/src/types";
 
@@ -230,6 +231,108 @@ describe("BETA-02 migration artifacts", () => {
 		expect(enable.plan.steps).toContainEqual(
 			expect.objectContaining({ kind: "addChangeCapture" }),
 		);
+	});
+
+	test("plans database-owned update installation and removal explicitly", async () => {
+		const frozen = await loadCommittedMigration(
+			resolve(fixtureRoot, "questpie/migrations/000001_create-collaboration"),
+		);
+		const baseSchema = structuredClone(frozen.targetSchema);
+		const targetSchema = structuredClone(baseSchema);
+		const timestamp = targetSchema.collections
+			.flatMap((collection) => collection.fields as Record<string, unknown>[])
+			.find((field) => (field.type as { kind?: string }).kind === "timestamp");
+		if (!timestamp) throw new Error("timestamp fixture Field is missing");
+		timestamp.onUpdate = "now";
+		targetSchema.databaseOwnedUpdates =
+			projectPostgresDatabaseOwnedUpdates(targetSchema);
+		const owningCollection = targetSchema.collections.find((collection) =>
+			(collection.fields as Record<string, unknown>[]).some(
+				(field) => field.identity === timestamp.identity,
+			),
+		)!;
+		const collisionFields = [
+			["collection:first", "a_b", "c"],
+			["collection:second", "a", "b_c"],
+		] as const;
+		const collisionProjection = projectPostgresDatabaseOwnedUpdates({
+			...targetSchema,
+			databaseOwnedUpdates: undefined,
+			collections: collisionFields.map(
+				([identity, postgresName, fieldName]) => ({
+					...owningCollection,
+					identity,
+					postgresName,
+					constraints: [],
+					indexes: [],
+					relations: [],
+					fields: [
+						{
+							...timestamp,
+							identity: `${identity}/field:updatedAt`,
+							postgresName: fieldName,
+						},
+					],
+				}),
+			),
+		});
+		expect(
+			new Set(
+				collisionProjection.fields.map(({ functionName }) => functionName),
+			).size,
+		).toBe(2);
+
+		const install = commitDelta(
+			baseSchema,
+			targetSchema,
+			"install-database-owned-update",
+			[],
+		);
+		expect(install.planned.plan.steps).toContainEqual(
+			expect.objectContaining({
+				kind: "addDatabaseOwnedUpdate",
+				targetIdentity: timestamp.identity,
+			}),
+		);
+		expect(install.committed.files["up.sql"]).toContain("BEFORE UPDATE");
+		expect(install.committed.files["up.sql"]).toContain(
+			"pg_catalog.transaction_timestamp()",
+		);
+		const {
+			changeCapture: _changeCapture,
+			databaseOwnedUpdates: _databaseOwnedUpdates,
+			...schemaCore
+		} = baseSchema;
+		const addCollection = createMigrationPlan({
+			baseMigration: "000001_empty-applied-head",
+			baseSchema: { ...schemaCore, collections: [] },
+			targetSchema: {
+				...schemaCore,
+				collections: [owningCollection],
+				databaseOwnedUpdates: targetSchema.databaseOwnedUpdates,
+			},
+			slug: "add-database-owned-collection",
+		});
+		expect(
+			addCollection.plan.steps.filter(
+				(step) => step.kind === "addDatabaseOwnedUpdate",
+			),
+		).toHaveLength(1);
+
+		const remove = commitDelta(
+			targetSchema,
+			baseSchema,
+			"remove-database-owned-update",
+			[],
+		);
+		expect(remove.planned.plan.steps).toContainEqual(
+			expect.objectContaining({
+				kind: "dropDatabaseOwnedUpdate",
+				targetIdentity: timestamp.identity,
+			}),
+		);
+		expect(remove.committed.files["up.sql"]).toContain("DROP TRIGGER");
+		expect(remove.committed.files["up.sql"]).toContain("DROP FUNCTION");
 	});
 
 	test("loads the committed six-file collaboration migration byte for byte", async () => {

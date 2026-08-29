@@ -5,9 +5,29 @@ import { join, resolve } from "node:path";
 
 import { compileApplication, createCommittedSeed } from "@questpie/compiler";
 
+import { flattenFieldContracts } from "../../packages/compiler/src/schema/field-contract";
+
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 
 describe("BETA-02 foundational Fields", () => {
+	test("rejects non-timestamp and overlapping database-owned Fields", () => {
+		const field = (scalar: string, server: boolean) => ({
+			default: null,
+			immutable: false,
+			kind: "field",
+			nullable: false,
+			onUpdate: "now",
+			options: {},
+			postgresName: null,
+			scalar,
+			server,
+		});
+		for (const invalid of [field("text", false), field("timestamp", true)])
+			expect(() => flattenFieldContracts({ updatedAt: invalid })).toThrow(
+				/QP-DATA-023 databaseOwnedField/,
+			);
+	});
+
 	test("projects bigint, numeric, date, and literal defaults exactly", async () => {
 		const temporary = await mkdtemp(join(tmpdir(), "questpie-fields-"));
 		try {
@@ -25,7 +45,7 @@ export const measurements = defineCollection({
 		label: field.text({ nullable: false, default: "now" }),
 		enabled: field.boolean({ nullable: false, default: true }),
 		position: field.integer({ nullable: false, default: 0 }),
-		observedAt: field.timestamp({ nullable: false, withTimezone: true }),
+		observedAt: field.timestamp({ nullable: false, default: "now", onUpdate: "now", withTimezone: true }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
 });
@@ -77,6 +97,7 @@ export const measurements = defineCollection({
 				expect.objectContaining({
 					identity: "collection:measurements/field:observedAt",
 					type: { kind: "timestamp", withTimezone: true },
+					onUpdate: "now",
 				}),
 				expect.objectContaining({
 					identity: "collection:measurements/field:position",
@@ -125,6 +146,9 @@ export const measurements = defineCollection({
 						hasDefault: field.default !== null,
 						immutable: false,
 						server: false,
+						...(field.identity === "collection:measurements/field:observedAt"
+							? { databaseOwned: true }
+							: {}),
 					}),
 				),
 			);

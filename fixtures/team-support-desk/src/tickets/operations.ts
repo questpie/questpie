@@ -49,7 +49,6 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 		values: ({ tenant, operationTime }) => ({
 			organizationId: mutation.overwrite(tenant.id),
 			createdAt: mutation.overwrite(operationTime),
-			updatedAt: mutation.overwrite(operationTime),
 		}),
 		select: {
 			id: true,
@@ -82,9 +81,6 @@ export const ticketOperations = defineCollectionOperations(tickets, {
 		normalize: ({ input }) => ({
 			summary: operation.text.trimIfPresent(input.summary),
 			description: operation.text.trimIfPresent(input.description),
-		}),
-		values: ({ operationTime }) => ({
-			updatedAt: mutation.overwrite(operationTime),
 		}),
 		select: {
 			id: true,

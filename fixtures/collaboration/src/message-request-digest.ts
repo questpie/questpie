@@ -21,7 +21,7 @@ export const requestCompanyDigest = defineMutation({
 			{ companyId: input.companyId },
 			{
 				idempotencyKey: `company-digest:${input.companyId}:delayed`,
-				notBefore: new Date(ctx.operationTime.getTime() + 1_000),
+				notBefore: new Date(ctx.now.getTime() + 1_000),
 			},
 		);
 		return primary;

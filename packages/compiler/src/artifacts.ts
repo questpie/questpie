@@ -53,6 +53,7 @@ import {
 } from "./runtime";
 import {
 	expectedComparable,
+	projectPostgresDatabaseOwnedUpdates,
 	projectManifest,
 	projectMemberContributions,
 } from "./schema";
@@ -195,7 +196,12 @@ export async function createArtifacts(
 		queryProjection: relational.query,
 	});
 	const changeCapture = projectLiveQueryChangeCapture(baseSchema, liveQuery);
-	const schema = Object.freeze({ ...baseSchema, changeCapture });
+	const databaseOwnedUpdates = projectPostgresDatabaseOwnedUpdates(baseSchema);
+	const schema = Object.freeze({
+		...baseSchema,
+		changeCapture,
+		...(databaseOwnedUpdates.fields.length > 0 ? { databaseOwnedUpdates } : {}),
+	});
 	const finalManifest: Readonly<Record<string, unknown>> = Object.freeze({
 		...manifest,
 		schema,

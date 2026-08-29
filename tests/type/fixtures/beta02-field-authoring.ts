@@ -36,6 +36,7 @@ seed.insert(measurements, { id: "1", amount: "1.0000", day: new Date() });
 field.text({ nullable: false, default: "ready" });
 field.boolean({ nullable: false, default: false });
 field.integer({ nullable: false, default: 42 });
+field.timestamp({ nullable: false, default: "now", onUpdate: "now" });
 
 // @ts-expect-error every public Field constructor requires explicit nullability
 field.uuid({});
@@ -58,6 +59,10 @@ const invalidDiagnostic = new CompilerDiagnosticError(
 field.uuid({ nullable: false, unknown: true });
 // @ts-expect-error timestamp flags are booleans
 field.timestamp({ nullable: false, withTimezone: "yes" });
+// @ts-expect-error onUpdate is timestamp-only
+field.text({ nullable: false, onUpdate: "now" });
+// @ts-expect-error a database-owned onUpdate Field cannot also be server-owned
+field.timestamp({ nullable: false, onUpdate: "now", server: true });
 
 // @ts-expect-error bigint literal schema defaults are deferred in v1
 field.bigint({ nullable: false, default: "1" });

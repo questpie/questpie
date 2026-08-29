@@ -47,6 +47,30 @@ const triggerCatalog = Object.freeze([
 		ownerMatches: true as const,
 	}),
 ]);
+const databaseOwnedUpdateField = Object.freeze({
+	identity: "collection:messages/field:updatedAt",
+	table: "messages",
+	column: "updated_at",
+	functionName: "qp_on_update_messages_updated_at",
+	triggerName: "messages_updated_at_questpie_on_update",
+});
+const databaseOwnedUpdateCatalog = Object.freeze([
+	Object.freeze({
+		table: "messages",
+		triggerName: databaseOwnedUpdateField.triggerName,
+		triggerType: 19 as const,
+		triggerEnabled: "O" as const,
+		functionSchema: postgresSchema,
+		functionName: databaseOwnedUpdateField.functionName,
+		functionLanguage: "plpgsql" as const,
+		functionSource:
+			'\nBEGIN\n  NEW."updated_at" := pg_catalog.transaction_timestamp();\n  RETURN NEW;\nEND\n',
+		functionSecurityDefiner: false as const,
+		functionConfiguration: Object.freeze(["search_path=pg_catalog"] as const),
+		ownerMatches: true,
+		publicExecute: false,
+	}),
+]);
 const schema = Object.freeze({
 	format: "questpie.schema-projection" as const,
 	version: 1 as const,
@@ -84,6 +108,13 @@ const schema = Object.freeze({
 		fingerprint: "b".repeat(64),
 		sql: "",
 	}),
+	databaseOwnedUpdates: Object.freeze({
+		version: 1 as const,
+		postgresSchema,
+		fields: Object.freeze([databaseOwnedUpdateField]),
+		catalog: databaseOwnedUpdateCatalog,
+		fingerprint: "d".repeat(64),
+	}),
 }) satisfies SchemaProjectionV1;
 
 const rowsByStatement: Readonly<
@@ -107,11 +138,23 @@ const rowsByStatement: Readonly<
 	"catalog.constraints": [],
 	"catalog.indexes": [],
 	"catalog.index-terms": [],
-	"readiness.catalog.unsupported": triggerCatalog.map((trigger) => [
-		"trigger",
-		`${postgresSchema}.${trigger.table}.${trigger.name}`,
-		`${postgresSchema}.${trigger.table}`,
-	]),
+	"readiness.catalog.unsupported": [
+		...triggerCatalog.map((trigger) => [
+			"trigger",
+			`${postgresSchema}.${trigger.table}.${trigger.name}`,
+			`${postgresSchema}.${trigger.table}`,
+		]),
+		[
+			"trigger",
+			`${postgresSchema}.messages.${databaseOwnedUpdateField.triggerName}`,
+			`${postgresSchema}.messages`,
+		],
+		[
+			"function",
+			`function:${postgresSchema}.${databaseOwnedUpdateField.functionName}()`,
+			null,
+		],
+	],
 	"readiness.change-capture": triggerCatalog.map((trigger) => [
 		trigger.table,
 		trigger.name,
@@ -123,6 +166,20 @@ const rowsByStatement: Readonly<
 		trigger.functionConfiguration,
 		trigger.enabled,
 		trigger.ownerMatches,
+	]),
+	"readiness.database-owned-updates": databaseOwnedUpdateCatalog.map((row) => [
+		row.table,
+		row.triggerName,
+		row.triggerType,
+		row.triggerEnabled,
+		row.functionSchema,
+		row.functionName,
+		row.functionLanguage,
+		row.functionSource,
+		row.functionSecurityDefiner,
+		row.functionConfiguration,
+		row.ownerMatches,
+		row.publicExecute,
 	]),
 });
 
@@ -252,6 +309,7 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		"catalog.index-terms",
 		"readiness.catalog.unsupported",
 		"readiness.change-capture",
+		"readiness.database-owned-updates",
 	]);
 	for (const [index, statement] of prerequisiteObserved.statements.entries())
 		expect(observed.statements[index]).toBe(statement);
@@ -267,7 +325,8 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		[application, postgresSchema],
 		...[[], [], [], [], []].map(() => [postgresSchema]),
 		[postgresSchema],
-		[postgresSchema, ["messages"]],
+		[postgresSchema, ["messages"], triggerCatalog.map(({ name }) => name)],
+		[postgresSchema, [databaseOwnedUpdateField.triggerName]],
 	]);
 });
 
@@ -312,6 +371,32 @@ test("compiler database readiness closes descriptor rows and preserves diagnosti
 		diagnosticClass: "changedObject",
 	});
 	expect(diagnosticObserved.commits).toBe(1);
+
+	const databaseOwnedDiagnosticObserved = observations();
+	await expect(
+		verifyPostgresDatabaseRuntimeReadiness(
+			readinessInput(
+				fakeDatabase(
+					{
+						...rowsByStatement,
+						"readiness.database-owned-updates": [
+							[
+								...rowsByStatement[
+									"readiness.database-owned-updates"
+								]![0]!.slice(0, 11),
+								true,
+							],
+						],
+					},
+					databaseOwnedDiagnosticObserved,
+				),
+			),
+		),
+	).rejects.toMatchObject({
+		code: "QP-SCHEMA-028",
+		diagnosticClass: "changedObject",
+	});
+	expect(databaseOwnedDiagnosticObserved.commits).toBe(1);
 });
 
 test("compiler database readiness preserves cancellation and validates before checkout", async () => {

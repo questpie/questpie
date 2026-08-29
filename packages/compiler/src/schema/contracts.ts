@@ -1,5 +1,6 @@
 import type { MigrationClassification } from "./migration-classification";
 import type { PostgresChangeCaptureV1 } from "./postgres/change-capture";
+import type { PostgresDatabaseOwnedUpdatesV1 } from "./postgres/database-owned-update";
 
 type JsonRecord = Readonly<Record<string, unknown>>;
 
@@ -15,6 +16,7 @@ export interface SchemaProjectionV1 extends JsonRecord {
 	}>;
 	readonly collections: readonly JsonRecord[];
 	readonly changeCapture?: PostgresChangeCaptureV1;
+	readonly databaseOwnedUpdates?: PostgresDatabaseOwnedUpdatesV1;
 }
 
 export type RenameIdentityV1 =
@@ -36,6 +38,8 @@ export type MigrationStepKindV1 =
 	| "addIndex"
 	| "addChangeCapture"
 	| "dropChangeCapture"
+	| "addDatabaseOwnedUpdate"
+	| "dropDatabaseOwnedUpdate"
 	| "dropIndex"
 	| "dropRelation"
 	| "dropConstraint"

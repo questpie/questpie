@@ -37,6 +37,7 @@ function hasPhysicalChangeCapture(schema: SchemaProjectionV1): boolean {
 
 const kindRank: readonly MigrationStepKindV1[] = [
 	"createApplicationSchema",
+	"dropDatabaseOwnedUpdate",
 	"renameCollection",
 	"createCollection",
 	"renameField",
@@ -48,6 +49,7 @@ const kindRank: readonly MigrationStepKindV1[] = [
 	"addConstraint",
 	"addRelation",
 	"addIndex",
+	"addDatabaseOwnedUpdate",
 	"dropChangeCapture",
 	"addChangeCapture",
 	"dropIndex",
@@ -56,6 +58,80 @@ const kindRank: readonly MigrationStepKindV1[] = [
 	"dropField",
 	"dropCollection",
 ] as const;
+
+function databaseOwnedUpdateSteps(
+	base: SchemaProjectionV1,
+	target: SchemaProjectionV1,
+	renames: MigrationPlanV1["renames"],
+): MigrationStepV1[] {
+	const baseFields = new Map(
+		(base.databaseOwnedUpdates?.fields ?? []).map((field) => [
+			field.identity,
+			field,
+		]),
+	);
+	const targetFields = new Map(
+		(target.databaseOwnedUpdates?.fields ?? []).map((field) => [
+			field.identity,
+			field,
+		]),
+	);
+	const baseCollections = new Set(
+		base.collections.map((collection) => String(collection.identity)),
+	);
+	const steps: MigrationStepV1[] = [];
+	for (const [targetIdentity, targetField] of targetFields) {
+		const baseIdentity = mapIdentityBackward(targetIdentity, renames);
+		const baseCollectionIdentity =
+			baseIdentity.split("/field:")[0] ?? baseIdentity;
+		if (!baseCollections.has(baseCollectionIdentity)) continue;
+		const baseField = baseFields.get(baseIdentity);
+		if (baseField && canonicalBytes(baseField) === canonicalBytes(targetField))
+			continue;
+		if (baseField)
+			steps.push(
+				step({
+					kind: "dropDatabaseOwnedUpdate",
+					targetIdentity: baseIdentity,
+					containerIdentity: baseIdentity.split("/field:")[0] ?? baseIdentity,
+					lock: "shareRowExclusive",
+					scansData: false,
+					rewritesTable: false,
+					reversibleWithoutData: true,
+					classification: "destructive",
+				}),
+			);
+		steps.push(
+			step({
+				kind: "addDatabaseOwnedUpdate",
+				targetIdentity,
+				containerIdentity: targetIdentity.split("/field:")[0] ?? targetIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
+	for (const [baseIdentity] of baseFields) {
+		const targetIdentity = mapIdentityForward(baseIdentity, renames);
+		if (targetFields.has(targetIdentity)) continue;
+		steps.push(
+			step({
+				kind: "dropDatabaseOwnedUpdate",
+				targetIdentity: baseIdentity,
+				containerIdentity: baseIdentity.split("/field:")[0] ?? baseIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "destructive",
+			}),
+		);
+	}
+	return steps;
+}
 
 function sortSteps(
 	steps: MigrationStepV1[],
@@ -196,6 +272,26 @@ export function createSteps(
 				classification: "safe",
 			}),
 		);
+	const targetCollectionIdentities = new Set(
+		target.collections.map((collection) => String(collection.identity)),
+	);
+	for (const field of target.databaseOwnedUpdates?.fields ?? []) {
+		const collectionIdentity =
+			field.identity.split("/field:")[0] ?? field.identity;
+		if (!targetCollectionIdentities.has(collectionIdentity)) continue;
+		steps.push(
+			step({
+				kind: "addDatabaseOwnedUpdate",
+				targetIdentity: field.identity,
+				containerIdentity: collectionIdentity,
+				lock: "shareRowExclusive",
+				scansData: false,
+				rewritesTable: false,
+				reversibleWithoutData: true,
+				classification: "safe",
+			}),
+		);
+	}
 	return sortSteps(steps);
 }
 
@@ -311,6 +407,7 @@ export function destructiveDeltaSteps(
 		"target Collection",
 	);
 	const steps: MigrationStepV1[] = [];
+	steps.push(...databaseOwnedUpdateSteps(base, target, renames));
 	const baseHasChangeCapture = hasPhysicalChangeCapture(base);
 	const targetHasChangeCapture = hasPhysicalChangeCapture(target);
 	if (baseHasChangeCapture !== targetHasChangeCapture) {

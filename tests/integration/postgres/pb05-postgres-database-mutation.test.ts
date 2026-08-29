@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { SQL } from "bun";
 import { principal } from "questpie";
 
+import { digest } from "../../../packages/compiler/src/canonical";
 import type { ExecutionFacts } from "../../../packages/runtime/src/execution";
 import {
 	linkJobProjection,
@@ -106,7 +107,7 @@ function operation(
 				});
 				await ctx.data.messageEvents.create({
 					input: { messageId: message.id, kind: "published" },
-					values: { occurredAt: ctx.operationTime },
+					values: { occurredAt: ctx.now },
 				});
 				await ctx.dispatch.messagePublished({
 					channelId: beta05Ids.channel,
@@ -139,7 +140,28 @@ function operation(
 				createdAt: { kind: "timestamp" },
 			},
 		},
-		declaredErrors: [],
+		declaredErrors: [
+			{
+				key: "invalidMessage",
+				code: "INVALID_MESSAGE",
+				status: 422,
+				payload: null,
+			},
+			{
+				key: "invalidEvent",
+				code: "INVALID_EVENT",
+				status: 422,
+				payload: null,
+			},
+		],
+		issueMappings: {
+			"collection:messages": {
+				"issue:messages/channelUnavailable": "invalidMessage",
+			},
+			"collection:messageEvents": {
+				"issue:messageEvents/invalidKind": "invalidEvent",
+			},
+		},
 		input: { body },
 	} as unknown as PreparedOperation<View>;
 }
@@ -174,12 +196,16 @@ postgres(
 			"policy-projection.json",
 			"runtime-build.json",
 			"collection-operation-programs.json",
+			"collection-lifecycle-programs.json",
 			"reaction-projection.json",
 			"job-projection.json",
 		]);
 		const collectionArtifact = JSON.parse(
 			generated["postgres-collection-operation-plans.json"]!,
 		) as Readonly<{ digest: string }>;
+		const lifecyclePrograms = JSON.parse(
+			generated["collection-lifecycle-programs.json"]!,
+		);
 		const fixedArtifact = JSON.parse(
 			generated["postgres-mutation-transaction-statements.json"]!,
 		) as Readonly<{ digest: string }>;
@@ -192,7 +218,10 @@ postgres(
 		}>;
 		const runtimeBuild = JSON.parse(
 			generated["runtime-build.json"]!,
-		) as Readonly<{ digest: string }>;
+		) as Readonly<{
+			digest: string;
+			compilerRuntimeBuildDigest: string;
+		}>;
 		const mutation = await import("../../../packages/runtime/src/mutation");
 		const { createRuntimePostgres } =
 			await import("../../../packages/runtime/src/postgres");
@@ -210,6 +239,12 @@ postgres(
 				version: 1,
 				programs: [],
 			},
+			lifecyclePrograms,
+			expectedLifecycleProgramsDigest: digest(
+				"questpie.collection-lifecycle-programs-v1",
+				lifecyclePrograms,
+			),
+			compilerRuntimeBuildDigest: runtimeBuild.compilerRuntimeBuildDigest,
 			policies: policyProjection.policies.map(({ program }) => ({
 				identity: program.identity,
 				target: program.target,

@@ -317,8 +317,9 @@ test("lowers one bounded Policy-aware check read from a generated get capability
 			join(temporary, "src/lifecycle-type-consumer.ts"),
 			`import type { CollectionLifecycle } from "#questpie/app";
 
-const check: NonNullable<CollectionLifecycle<"tickets">["check"]> = async ({ candidate, ctx, issues }) => {
+const check: NonNullable<CollectionLifecycle<"tickets">["check"]> = async ({ candidate, ctx, issues, now }) => {
 	candidate.teamId satisfies string;
+	now satisfies Date;
 	const team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { id: true, routingStatus: true } });
 	team satisfies Readonly<{ id: string; routingStatus: string }> | null;
 	// @ts-expect-error a generated lifecycle get requires at least one selected Field
@@ -332,8 +333,6 @@ declare const noServices: Parameters<NonNullable<CollectionLifecycle<"tickets">[
 declare const noWrites: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["data"]["teams"]["update"];
 // @ts-expect-error Collection without a generated get is absent
 declare const noComments: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["data"]["comments"];
-// @ts-expect-error LIFE-04 projects the accepted lifecycle clock spelling
-declare const noClockYet: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["now"];
 // @ts-expect-error check is always asynchronous
 const synchronousCheck: NonNullable<CollectionLifecycle<"tickets">["check"]> = () => {};
 void synchronousCheck;

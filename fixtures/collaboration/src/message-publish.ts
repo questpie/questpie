@@ -43,7 +43,7 @@ export const publishMessage = defineMutation({
 				authorMembershipId: ctx.values.selectedMembershipId,
 				body: input.body.trim(),
 			},
-			values: { createdAt: ctx.operationTime },
+			values: { createdAt: ctx.now },
 		});
 		if (message.body === undefined) throw errors.channelUnavailable();
 		// LIFE-02 hostile tracer shortcut. Delete when testkit can inject trusted
@@ -59,7 +59,7 @@ export const publishMessage = defineMutation({
 					...(invalidLifecycle ? {} : { kind: "published" }),
 				},
 				values: {
-					occurredAt: ctx.operationTime,
+					occurredAt: ctx.now,
 					...(invalidLifecycle ? { kind: "invalid" } : {}),
 					...(invalidConstraint
 						? { messageId: "00000000-0000-4000-8000-000000000099" }

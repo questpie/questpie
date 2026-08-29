@@ -22,6 +22,13 @@ export function shortenedPostgresName(
 	candidate: string,
 ): string {
 	if (Buffer.byteLength(candidate) <= 63) return candidate;
+	return uniquelyShortenedPostgresName(identity, candidate);
+}
+
+export function uniquelyShortenedPostgresName(
+	identity: string,
+	candidate: string,
+): string {
 	const suffix = createHash("sha256")
 		.update(`questpie-postgres-name-v1\0${identity}`)
 		.digest("hex")

@@ -235,6 +235,7 @@ export function projectManifest(
 				type: contract.type,
 				nullable: contract.nullable,
 				default: contract.default,
+				...(contract.onUpdate === "now" ? { onUpdate: "now" } : {}),
 				collation:
 					record(contract.type, "field type").kind === "text"
 						? "questpie.binary"
@@ -515,6 +516,7 @@ export function projectManifest(
 						{
 							immutable: contract.immutable === true,
 							server: contract.server === true,
+							...(contract.onUpdate === "now" ? { databaseOwned: true } : {}),
 						},
 					] as const,
 			),

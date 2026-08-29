@@ -479,6 +479,15 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 				requiredTrustedValueFields: readonly (readonly string[])[];
 			}>[];
 		}>;
+		const databaseOwnedUpdates = JSON.parse(
+			compilation.generatedFiles["schema-projection.json"] ?? "null",
+		).databaseOwnedUpdates;
+		expect(databaseOwnedUpdates.fields).toEqual([
+			expect.objectContaining({
+				identity: "collection:tickets/field:updatedAt",
+				column: "updated_at",
+			}),
+		]);
 
 		expect(
 			postgresPlans.plans.find(
@@ -535,7 +544,6 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 				["status"],
 				["summary"],
 				["teamId"],
-				["updatedAt"],
 			],
 			requiredTrustedValueFields: [
 				["organizationId"],
@@ -566,6 +574,41 @@ test("lowers an authorized Collection update into the PostgreSQL runtime artifac
 
 test("rejects unbound Fields, open values, and ordinary Resource collisions", async () => {
 	const hostiles = [
+		{
+			name: "database-owned-caller-input",
+			source: `import { defineCollectionOperations } from "questpie";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+export const hostile = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	create: { input: ["createdAt"] as any, select: { id: true } },
+});`,
+			fieldPatch: [
+				'default: "now",\n\t\t\twithTimezone: true,',
+				'default: "now",\n\t\t\tonUpdate: "now",\n\t\t\twithTimezone: true,',
+			],
+			diagnostic: /QP-DATA-023 databaseOwnedField/,
+		},
+		{
+			name: "database-owned-trusted-values",
+			source: `import { defineCollectionOperations, mutation } from "questpie";
+import { messagePolicy } from "./message-policy";
+import { messages } from "./messages";
+export const hostile = defineCollectionOperations(messages, {
+	name: "messages",
+	policy: messagePolicy,
+	create: {
+		values: ({ operationTime }) => ({ createdAt: mutation.overwrite(operationTime) }) as any,
+		select: { id: true },
+	},
+});`,
+			fieldPatch: [
+				'default: "now",\n\t\t\twithTimezone: true,',
+				'default: "now",\n\t\t\tonUpdate: "now",\n\t\t\twithTimezone: true,',
+			],
+			diagnostic: /QP-COMPOSE-013 structuralTypeError/,
+		},
 		{
 			name: "server-caller-input",
 			source: `import { defineCollectionOperations } from "questpie";

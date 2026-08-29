@@ -63,6 +63,18 @@ export {
 } from "./postgres/change-capture";
 export type { PostgresChangeCaptureV1 } from "./postgres/change-capture";
 export {
+	assertPostgresDatabaseOwnedUpdates,
+	projectPostgresDatabaseOwnedUpdates,
+	renderAddDatabaseOwnedUpdate,
+	renderDropDatabaseOwnedUpdate,
+	verifyPostgresDatabaseOwnedUpdates,
+} from "./postgres/database-owned-update";
+export type {
+	PostgresDatabaseOwnedUpdateCatalogRowV1,
+	PostgresDatabaseOwnedUpdateFieldV1,
+	PostgresDatabaseOwnedUpdatesV1,
+} from "./postgres/database-owned-update";
+export {
 	assertPostgresCatalogComparable,
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,

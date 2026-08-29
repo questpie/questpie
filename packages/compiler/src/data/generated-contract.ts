@@ -96,9 +96,14 @@ function included(
 	mode: "fields" | "insert" | "row" | "update",
 ): boolean {
 	if (node.field) {
-		if (mode === "insert") return node.field.server !== true;
+		if (mode === "insert")
+			return node.field.server !== true && node.field.databaseOwned !== true;
 		if (mode === "update")
-			return node.field.server !== true && node.field.immutable !== true;
+			return (
+				node.field.server !== true &&
+				node.field.immutable !== true &&
+				node.field.databaseOwned !== true
+			);
 		return true;
 	}
 	return [...node.children.values()].some((child) => included(child, mode));
@@ -111,7 +116,7 @@ function renderDataTree(
 	if (node.field) {
 		const value = dataCodecType(node.field.codec);
 		if (mode === "fields")
-			return `DataFieldDescriptor<${JSON.stringify(node.field.identity)}, ${literalType(node.field.codec)}, ${value}, ${String(node.field.nullable === true)}, ${String(node.field.hasDefault === true)}, ${String(node.field.immutable === true)}, ${String(node.field.server === true)}>`;
+			return `DataFieldDescriptor<${JSON.stringify(node.field.identity)}, ${literalType(node.field.codec)}, ${value}, ${String(node.field.nullable === true)}, ${String(node.field.hasDefault === true)}, ${String(node.field.immutable === true)}, ${String(node.field.server === true)}${node.field.databaseOwned === true ? ", true" : ""}>`;
 		return node.field.nullable === true ? `${value} | null` : value;
 	}
 	return `Readonly<{ ${[...node.children.entries()]

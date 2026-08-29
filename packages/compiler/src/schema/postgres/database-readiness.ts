@@ -22,6 +22,10 @@ import {
 	type PostgresChangeCaptureTriggerV1,
 } from "./change-capture";
 import {
+	assertPostgresDatabaseOwnedUpdates,
+	type PostgresDatabaseOwnedUpdateCatalogRowV1,
+} from "./database-owned-update";
+import {
 	assertPostgresCatalogComparable,
 	type PostgresExtensionObservationRow,
 	type PostgresProviderObservationRow,
@@ -222,7 +226,11 @@ ORDER BY application_name`,
 });
 
 const changeCaptureStatementDefinition = defineStatement<
-	Readonly<{ schema: string; tables: readonly string[] }>,
+	Readonly<{
+		schema: string;
+		tables: readonly string[];
+		triggers: readonly string[];
+	}>,
 	readonly PostgresChangeCaptureTriggerV1[]
 >({
 	name: "readiness.change-capture",
@@ -235,12 +243,14 @@ JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
 JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
 JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
-WHERE n.nspname = $1 AND c.relname = ANY($2::text[]) AND NOT t.tgisinternal
+WHERE n.nspname = $1 AND c.relname = ANY($2::text[])
+  AND t.tgname = ANY($3::text[]) AND NOT t.tgisinternal
 ORDER BY c.relname, t.tgname`,
-	parameterCount: 2,
+	parameterCount: 3,
 	parameters: (input) => [
 		text(input.schema, "application schema"),
 		input.tables.map((table) => text(table, "change-capture table")),
+		input.triggers.map((trigger) => text(trigger, "change-capture trigger")),
 	],
 	decode(result) {
 		return Object.freeze(
@@ -279,13 +289,85 @@ ORDER BY c.relname, t.tgname`,
 	},
 });
 
-function managedTriggerIdentities(schema: SchemaProjectionV1): Set<string> {
-	return new Set(
-		schema.changeCapture?.triggerCatalog.map(
+const databaseOwnedUpdatesStatementDefinition = defineStatement<
+	Readonly<{ schema: string; triggers: readonly string[] }>,
+	readonly PostgresDatabaseOwnedUpdateCatalogRowV1[]
+>({
+	name: "readiness.database-owned-updates",
+	text: `SELECT c.relname, t.tgname, t.tgtype::integer, t.tgenabled,
+       pn.nspname, p.proname, l.lanname, p.prosrc, p.prosecdef, p.proconfig,
+       c.relowner = n.nspowner AND p.proowner = n.nspowner,
+       pg_catalog.has_function_privilege('public', p.oid, 'EXECUTE')
+FROM pg_catalog.pg_trigger t
+JOIN pg_catalog.pg_class c ON c.oid = t.tgrelid
+JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+JOIN pg_catalog.pg_proc p ON p.oid = t.tgfoid
+JOIN pg_catalog.pg_namespace pn ON pn.oid = p.pronamespace
+JOIN pg_catalog.pg_language l ON l.oid = p.prolang
+WHERE n.nspname = $1 AND t.tgname = ANY($2::text[]) AND NOT t.tgisinternal
+ORDER BY c.relname, t.tgname`,
+	parameterCount: 2,
+	parameters: (input) => [
+		text(input.schema, "application schema"),
+		input.triggers.map((value) => text(value, "database-owned update trigger")),
+	],
+	decode(result) {
+		return Object.freeze(
+			selectRows(result, undefined, "database-owned updates result").map(
+				(row) => {
+					if (
+						row.length !== 12 ||
+						typeof row[2] !== "number" ||
+						!Number.isSafeInteger(row[2]) ||
+						typeof row[3] !== "string" ||
+						typeof row[6] !== "string" ||
+						typeof row[8] !== "boolean" ||
+						!Array.isArray(row[9]) ||
+						typeof row[10] !== "boolean" ||
+						typeof row[11] !== "boolean"
+					)
+						throw new TypeError(
+							"invalid PostgreSQL database readiness database-owned updates result",
+						);
+					return Object.freeze({
+						table: text(row[0], "database-owned update table"),
+						triggerName: text(row[1], "database-owned update trigger"),
+						triggerType: row[2],
+						triggerEnabled: row[3],
+						functionSchema: text(
+							row[4],
+							"database-owned update function schema",
+						),
+						functionName: text(row[5], "database-owned update function"),
+						functionLanguage: row[6],
+						functionSource: text(
+							row[7],
+							"database-owned update function source",
+						),
+						functionSecurityDefiner: row[8],
+						functionConfiguration: Object.freeze(
+							row[9].map((value) => text(value, "function configuration")),
+						),
+						ownerMatches: row[10],
+						publicExecute: row[11],
+					});
+				},
+			),
+		);
+	},
+});
+
+function managedObjectIdentities(schema: SchemaProjectionV1): Set<string> {
+	return new Set([
+		...(schema.changeCapture?.triggerCatalog.map(
 			(trigger) =>
 				`${schema.application.postgresSchema}.${trigger.table}.${trigger.name}`,
-		) ?? [],
-	);
+		) ?? []),
+		...(schema.databaseOwnedUpdates?.fields.flatMap((field) => [
+			`${schema.application.postgresSchema}.${field.table}.${field.triggerName}`,
+			`function:${schema.application.postgresSchema}.${field.functionName}()`,
+		]) ?? []),
+	]);
 }
 
 function unsupportedRelationKind(kind: string): string {
@@ -320,6 +402,9 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 	const unsupportedStatement = bindStatement(catalogUnsupportedStatement);
 	const changeCaptureStatement = bindStatement(
 		changeCaptureStatementDefinition,
+	);
+	const databaseOwnedUpdatesStatement = bindStatement(
+		databaseOwnedUpdatesStatementDefinition,
 	);
 	const requiredExtensions = schema.requiredPostgres.extensions.map(
 		(extension) => extension.name,
@@ -454,12 +539,10 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 			state,
 		);
 	}
-	const managedTriggers = managedTriggerIdentities(schema);
+	const managedObjects = managedObjectIdentities(schema);
 	state.unsupportedObjects.push(
 		...unsupported.filter(
-			(object) =>
-				object.kind !== "trigger" ||
-				!managedTriggers.has(String(object.qualifiedIdentity)),
+			(object) => !managedObjects.has(String(object.qualifiedIdentity)),
 		),
 	);
 	const actual: JsonRecord = {
@@ -482,12 +565,32 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 			schema.changeCapture?.collections.map(
 				(collection) => collection.postgresName,
 			) ?? [],
+		triggers:
+			schema.changeCapture?.triggerCatalog.map((trigger) => trigger.name) ?? [],
 	});
 	if (schema.changeCapture)
 		assertPostgresChangeCapture(schema.changeCapture, capture);
 	else if (capture.length !== 0)
 		throw new TypeError(
 			"PostgreSQL change capture exists without a compiler projection",
+		);
+	const databaseOwnedUpdates = await transaction.execute(
+		databaseOwnedUpdatesStatement,
+		{
+			schema: schema.application.postgresSchema,
+			triggers:
+				schema.databaseOwnedUpdates?.fields.map((field) => field.triggerName) ??
+				[],
+		},
+	);
+	if (schema.databaseOwnedUpdates)
+		assertPostgresDatabaseOwnedUpdates(
+			schema.databaseOwnedUpdates,
+			databaseOwnedUpdates,
+		);
+	else if (databaseOwnedUpdates.length !== 0)
+		throw new TypeError(
+			"PostgreSQL database-owned updates exist without a compiler projection",
 		);
 	return Object.freeze({
 		format: "questpie.schema-fingerprint",

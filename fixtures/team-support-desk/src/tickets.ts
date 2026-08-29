@@ -64,8 +64,8 @@ export const tickets = defineCollection({
 		updatedAt: field.timestamp({
 			nullable: false,
 			default: "now",
+			onUpdate: "now",
 			withTimezone: true,
-			server: true,
 		}),
 		closedAt: field.timestamp({
 			nullable: true,

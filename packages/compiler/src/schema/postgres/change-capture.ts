@@ -224,6 +224,7 @@ export async function verifyPostgresChangeCapture(
 ): Promise<void> {
 	if (projection.collections.length === 0) return;
 	const tables = projection.collections.map(({ postgresName }) => postgresName);
+	const triggers = projection.triggerCatalog.map(({ name }) => name);
 	const actual = await sql<PostgresChangeCaptureTriggerV1[]>`
 		select c.relname as table,
 		       t.tgname as name,
@@ -242,6 +243,7 @@ export async function verifyPostgresChangeCapture(
 		join pg_catalog.pg_namespace pn on pn.oid = p.pronamespace
 		where n.nspname = ${projection.postgresSchema}
 		  and c.relname in ${sql(tables)}
+		  and t.tgname in ${sql(triggers)}
 		  and not t.tgisinternal
 		order by c.relname, t.tgname
 	`;

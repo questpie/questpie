@@ -1,4 +1,4 @@
-import { compareAscii, digest } from "../canonical";
+import { canonicalBytes, compareAscii, digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import { normalizeDeclaredErrors } from "../operation-errors";
 import { normalizeDataQueryTemplate } from "../relational";
@@ -361,6 +361,13 @@ export function projectCollectionOperationSets(
 			).map((field) => path(field, `${identity} caller input`));
 			for (const callerInputField of callerInputFields) {
 				const contract = fieldAt(collection, callerInputField)!;
+				if (contract.onUpdate === "now")
+					throw new CompilerDiagnosticError(
+						"QP-DATA-023",
+						"databaseOwnedField",
+						`${identity} cannot expose database-owned Field ${callerInputField.join(".")} as caller input`,
+						{ operation: identity, field: callerInputField, lane: "caller" },
+					);
 				if (contract.server === true)
 					invalid(
 						`${identity} cannot expose server Field ${callerInputField.join(".")} as caller input`,
@@ -370,23 +377,30 @@ export function projectCollectionOperationSets(
 						`${identity} cannot expose immutable Field ${callerInputField.join(".")} as update caller input`,
 					);
 			}
-			const staticServerValueTargets = new Set(
+			const staticServerValueTargets = new Map(
 				serverValue === null
 					? []
-					: (serverValue.assignments as readonly unknown[]).map((candidate) =>
-							JSON.stringify(
-								path(
-									record(candidate, `${identity} server-value assignment`)
-										.target,
-									`${identity} server-value target`,
-								),
-							),
-						),
+					: (serverValue.assignments as readonly unknown[]).map((candidate) => {
+							const target = path(
+								record(candidate, `${identity} server-value assignment`).target,
+								`${identity} server-value target`,
+							);
+							return [canonicalBytes(target), target] as const;
+						}),
 			);
+			for (const fieldPath of staticServerValueTargets.values()) {
+				if (fieldAt(collection, fieldPath)?.onUpdate === "now")
+					throw new CompilerDiagnosticError(
+						"QP-DATA-023",
+						"databaseOwnedField",
+						`${identity} cannot assign database-owned Field ${fieldPath.join(".")} through trusted values`,
+						{ operation: identity, field: fieldPath, lane: "trusted" },
+					);
+			}
 			if (
 				member === "create" &&
 				callerInputFields.some((field) =>
-					staticServerValueTargets.has(JSON.stringify(field)),
+					staticServerValueTargets.has(canonicalBytes(field)),
 				)
 			)
 				invalid(
@@ -397,8 +411,9 @@ export function projectCollectionOperationSets(
 					? collectionFieldFacts(collection)
 							.filter(
 								({ path: fieldPath, contract }) =>
+									contract.onUpdate !== "now" &&
 									(member === "create" || contract.immutable !== true) &&
-									!staticServerValueTargets.has(JSON.stringify(fieldPath)),
+									!staticServerValueTargets.has(canonicalBytes(fieldPath)),
 							)
 							.map(({ path: fieldPath }) => fieldPath)
 					: [];

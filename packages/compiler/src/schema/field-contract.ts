@@ -239,6 +239,7 @@ export function fieldContract(
 			"immutable",
 			"kind",
 			"nullable",
+			"onUpdate",
 			"options",
 			"postgresName",
 			"scalar",
@@ -248,6 +249,18 @@ export function fieldContract(
 	);
 	if (value.kind !== "field") invalid(`field.${key}.kind`, "must be field");
 	const scalar = string(value.scalar, `${key}.scalar`);
+	const server = boolean(value.server, `field.${key}.server`);
+	const onUpdate = value.onUpdate ?? null;
+	if (
+		onUpdate !== null &&
+		(onUpdate !== "now" || scalar !== "timestamp" || server)
+	)
+		throw new CompilerDiagnosticError(
+			"QP-DATA-023",
+			"databaseOwnedField",
+			`field.${key} onUpdate must be timestamp-only and cannot overlap server ownership`,
+			{ field: path, onUpdate },
+		);
 	const options = record(value.options ?? {}, `${key}.options`);
 	let type: RecordValue;
 	if (scalar === "text") type = textType(options, `field.${key}`);
@@ -335,7 +348,8 @@ export function fieldContract(
 		...(boolean(value.immutable, `field.${key}.immutable`)
 			? { immutable: true }
 			: {}),
-		...(boolean(value.server, `field.${key}.server`) ? { server: true } : {}),
+		...(server ? { server: true } : {}),
+		...(onUpdate === "now" ? { onUpdate } : {}),
 		default: normalizedDefault,
 		postgresName:
 			value.postgresName === null

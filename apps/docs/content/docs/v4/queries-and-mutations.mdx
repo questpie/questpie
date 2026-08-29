@@ -413,8 +413,8 @@ The network call option accepts a stable bounded text `callId`; it is not
 UUID-only. A supplied value must be valid Unicode, already NFC, contain 1–256
 Unicode scalar values, exclude U+0000, and occupy at most 1,024 UTF-8 bytes.
 The Runtime rejects rather than normalizes it. The generated client mints a UUID
-when the caller omits the value. This example deliberately supplies that UUID
-because the application also chooses to use it as a UUID Message key.
+when the caller omits the value. This example deliberately supplies one so a
+retry can reuse the same Call Identity.
 
 The caller cannot supply `companyId`, `authorId`, `createdAt`, or `updatedAt`.
 This Collection Operation Set's closed value programs own them. Those programs
@@ -524,9 +524,22 @@ Policy never supplies or rewrites a value.
 
 `ctx.now` is one transaction-stable `Date` owned by PostgreSQL. Use it when
 several writes describe one business instant. A Field with `onUpdate: "now"`
-is stronger: PostgreSQL owns the value, no lane may provide it, and every
-kernel or explicitly supported managed-writer update returns and records the
-final database value.
+is stronger: PostgreSQL owns the value and no lane may provide it. The compiler
+installs a `BEFORE UPDATE` invariant, so Collection kernels, ordinary SQL
+`UPDATE`, foreign-key update cascades, `INSERT ... ON CONFLICT DO UPDATE`,
+`MERGE`, and managed external writers all stamp the final row. `COPY` and plain
+`INSERT` do not perform an update. When they omit the Field or use `DEFAULT`,
+its database default owns the initial value; an explicitly supplied insert
+value is outside the update invariant.
+
+Startup verifies the exact trigger and function definition, owner, execution
+mode, fixed `search_path`, and revoked `PUBLIC` execute grant. A missing,
+disabled, replaced, or additional unmanaged object fails Schema readiness with
+`QP-SCHEMA-028`; QUESTPIE does not continue with a weaker clock guarantee.
+Returned or selected output observes the stamped value rather than the caller's
+attempted value, and a result receipt preserves those exact selected bytes. The
+Change Ledger captures the same committed update for invalidation and
+recomputation; it does not expose row values.
 
 QUESTPIE does not automatically retry arbitrary Mutation or lifecycle code. A
 pre-commit issue, fault, deadline, limit, or cancellation rolls back. Retrying

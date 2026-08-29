@@ -19,7 +19,7 @@ export const recordMessageDelivery = defineMutation({
 	handler: async ({ input, ctx, errors }) => {
 		const event = await ctx.data.messageEvents.create({
 			input: { messageId: input.messageId, kind: "delivered" },
-			values: { occurredAt: ctx.operationTime },
+			values: { occurredAt: ctx.now },
 		});
 		if (event.id === undefined) throw errors.deliveryUnavailable();
 		return { eventId: event.id };

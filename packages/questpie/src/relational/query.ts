@@ -18,6 +18,7 @@ type DataField = DataFieldDescriptor<
 	boolean,
 	boolean,
 	boolean,
+	boolean,
 	boolean
 >;
 
@@ -138,6 +139,7 @@ type QueryFields<Fields> = {
 		infer Codec,
 		infer Value,
 		infer Nullable,
+		boolean,
 		boolean,
 		boolean,
 		boolean
@@ -270,6 +272,7 @@ type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 				boolean,
 				boolean,
 				boolean,
+				boolean,
 				boolean
 		  >
 		| FieldDefinition
@@ -305,6 +308,7 @@ type SelectedScalars<Fields, Selection extends ScalarSelection<Fields>> = {
 		Readonly<{ kind: string }>,
 		infer Value,
 		infer Nullable,
+		boolean,
 		boolean,
 		boolean,
 		boolean

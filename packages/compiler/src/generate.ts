@@ -253,7 +253,7 @@ function renderCollectionLifecycleDeclarations(
 						`readonly ${JSON.stringify(name)}: () => CollectionIssueValue;`,
 				)
 				.join(" ");
-			const common = `readonly candidate: ${row}; readonly current: ${row} | null; readonly issues: Readonly<{ ${issues} }>;`;
+			const common = `readonly candidate: ${row}; readonly current: ${row} | null; readonly now: Date; readonly issues: Readonly<{ ${issues} }>;`;
 			return `readonly ${JSON.stringify(resource.name)}: Readonly<{ readonly normalize?: (input: Readonly<{ readonly input: Readonly<Partial<${row}>>; }>) => Readonly<Partial<${row}>>; readonly validate?: (input: Readonly<{ ${common} }>) => void; readonly check?: (input: Readonly<{ ${common} readonly ctx: Readonly<{ readonly data: Readonly<GeneratedLifecycleCheckData>; }>; }>) => Promise<void>; }>;`;
 		})
 		.sort(compareAscii)
@@ -456,7 +456,7 @@ export interface QueryContext {
 
 export interface MutationContext<Name extends keyof GeneratedMutations & keyof GeneratedMutationDataByName> extends Omit<RootExecution, "services"> {
 	readonly data: Readonly<GeneratedMutationDataByName[Name]>;
-	readonly operationTime: Date;
+	readonly now: Date;
 	readonly callId: string;
 	readonly transactionId: string;
 	readonly dispatch: Readonly<{

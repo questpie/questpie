@@ -182,7 +182,7 @@ export const closeTicket = defineMutation({
 		// and candidate state. A concurrent loser cannot overwrite the winner.
 		const updated = await ctx.data.tickets.update({
 			key: { id: input.ticketId },
-			values: { status: "closed", closedAt: ctx.operationTime },
+			values: { status: "closed", closedAt: ctx.now },
 		});
 		if (updated === null) throw errors.ticketUnavailable();
 		return ticketResult(updated);
@@ -242,7 +242,7 @@ export const addTicketComment = defineMutation({
 				kind: "public",
 			},
 		});
-		const dueAt = new Date(ctx.operationTime.getTime() + 1_500);
+		const dueAt = new Date(ctx.now.getTime() + 1_500);
 		const job = await ctx.jobs.ticket.slaFollowUp.accept(
 			{
 				organizationId: current.organizationId,

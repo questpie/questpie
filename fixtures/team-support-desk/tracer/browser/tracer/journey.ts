@@ -34,6 +34,7 @@ export async function runFirefoxJourney(input: {
 }): Promise<void> {
 	let ticket = await input.searchTicket(input.reference);
 	if (ticket === null) throw new Error("Firefox exact-reference search failed");
+	const initialUpdatedAt = Date.parse(ticket.updatedAt);
 	let ticketId = ticket.id;
 	await input.executeTicketOperation("Adding comment", ticketId, () =>
 		input.desk.mutations["ticket.addComment"](
@@ -84,6 +85,11 @@ export async function runFirefoxJourney(input: {
 	);
 	input.selectFilters("open", ticket.teamId);
 	await input.loadFilteredQueue("open", ticket.teamId);
+	const databaseOwnedUpdateAdvanced =
+		Number.isFinite(initialUpdatedAt) &&
+		Date.parse(ticket.updatedAt) > initialUpdatedAt;
+	if (!databaseOwnedUpdateAdvanced)
+		throw new Error("Firefox database-owned update timestamp did not advance");
 	let lifecycleError: Readonly<{ code: string; status: number }>;
 	try {
 		await input.desk.mutations["ticket.create"](
@@ -108,6 +114,7 @@ export async function runFirefoxJourney(input: {
 	await reportFixturePhase({
 		authProvider: "better-auth",
 		commentBody: input.commentBody,
+		databaseOwnedUpdateAdvanced,
 		lifecycleError,
 		phase: "firefox-complete",
 		reference: input.reference,

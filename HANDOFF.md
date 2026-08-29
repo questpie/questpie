@@ -645,6 +645,28 @@ provider exception, not as an Opus v2 artifact. Declared-unique `key` lookup,
 typed `ConstraintViolation`, and always-generated get/list/delete remain
 deferred.
 
+ADR-0031 implementation is complete through LIFE-04. LIFE-01 through LIFE-03
+are integrated through `2088b05f5`: the compiler lowers deterministic
+`normalize`, `validate`, and Policy-aware `check` programs; Collection Issues
+cross only explicit Operation mappings; Runtime executes them inside one
+Mutation transaction and terminal shared budget.
+
+LIFE-04 replaces the public lifecycle clock spelling with `ctx.now` and adds
+timestamp-only `onUpdate: "now"` authoring. Caller and trusted lanes exclude the
+database-owned Field, PostgreSQL installs a collision-safe exact `BEFORE UPDATE`
+trigger/function pair, migration planning owns add/drop ordering, and Runtime
+readiness fails closed with `QP-SCHEMA-028` for missing, disabled, replaced,
+additional, or privilege-drifted objects. Team Support Desk carries the
+committed migration and proves a restricted managed writer, returned and
+selected values, Change Ledger capture, committed receipt replay, direct and
+generated-client calls, and Firefox behavior on PostgreSQL 17. The tracer
+passes with 83 assertions; independent Standards, Spec, and documentation
+reviews pass. `quality:release`, two consecutive release dry-runs, and
+`git diff --check` pass. The checked package SHA-256 is
+`d1b28eab7ea19aa2b1559a2fb8736612a6d34805258149dc25988a88aabc3b16`; the
+declaration SHA-256 is
+`00877af5d2b8c0da6b57f4b061b0d567188bfd96c505bcafa8dad6400962c5fb`.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
@@ -655,13 +677,13 @@ deferred.
    application browser call on the generated client. The Query/Relations slice
    above is closed; do not recreate the deleted list variants or a second
    relational execution kernel.
-3. Convert ADR-0031 through the repository spec/ticket flow before production
-   implementation. Implement blockers-first and test-first in tracer-bullet
-   slices: compiler diagnostics and canonical artifacts, generated App Contract
-   types, Runtime/PostgreSQL execution, direct/network parity, progressive Team
-   Support Desk and hostile Collaboration migration, public docs, and final
-   browser/PostgreSQL/release evidence. Delete superseded syntax when no current
-   consumer needs it; maintain one generated Collection write/lifecycle kernel.
+3. Continue with LIFE-05 only: execute bounded sequential `afterWrite` reads,
+   nested Collection writes, and Job acceptance through the existing kernels in
+   the root Mutation transaction. Prove authored order, shared transaction and
+   budgets, deterministic re-entry failure, rollback, fresh retry, committed
+   replay, and capability absence. LIFE-01 through LIFE-04 are closed; do not
+   redesign or reimplement them. Finish consumer cleanup and final release
+   evidence in LIFE-06.
 4. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.

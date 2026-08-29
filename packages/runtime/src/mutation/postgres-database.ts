@@ -294,7 +294,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						signal,
 						deadline: options?.deadline ?? facts.deadline,
 						data,
-						operationTime: owner.operationTime,
+						now: owner.operationTime,
 						callId,
 						transactionId,
 						dispatch: durableDispatch.dispatch,

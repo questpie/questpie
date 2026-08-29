@@ -53,7 +53,7 @@ const generatedOperationDefinition${index} = Object.freeze({ name: ${JSON.string
 					throw new TypeError("generated Collection Operation adapter does not match");
 				generatedOperationHandler${index} = ({ input: operationInput, ctx }) => executeCollectionOperationAdapter({
 					adapter,
-					facts: Object.freeze({ operationTime: ctx.operationTime, principal: ctx.principal, tenant: ctx.tenant }),
+					facts: Object.freeze({ operationTime: ctx.now, principal: ctx.principal, tenant: ctx.tenant }),
 					invokeKernel: (identity, kernelInput) => {
 						if (identity !== ${JSON.stringify(kernelIdentity)}) throw new TypeError("generated Collection Operation kernel does not match");
 						return ctx.data[${JSON.stringify(collection)}][${JSON.stringify(member)}](kernelInput);

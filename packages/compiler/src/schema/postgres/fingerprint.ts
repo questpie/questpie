@@ -7,6 +7,7 @@ import type { SchemaFingerprintV1 } from "../postgres-types";
 import { readCatalogComparableInOwnedTransaction } from "./catalog-reader";
 import type { CatalogFingerprintScope } from "./catalog-reader";
 import { verifyPostgresChangeCapture } from "./change-capture";
+import { verifyPostgresDatabaseOwnedUpdates } from "./database-owned-update";
 import { expectedComparable } from "./expected-fingerprint";
 import { fail } from "./shared";
 
@@ -83,7 +84,7 @@ function catalogScope(schema: SchemaProjectionV1): CatalogFingerprintScope {
 		requiredExtensionNames: schema.requiredPostgres.extensions.map(
 			(extension) => extension.name,
 		),
-		managedTriggerIdentities: managedTriggerIdentities(schema),
+		managedObjectIdentities: managedObjectIdentities(schema),
 	};
 }
 
@@ -93,16 +94,23 @@ async function verifyManagedCatalogObjects(
 ): Promise<void> {
 	if (schema.changeCapture)
 		await verifyPostgresChangeCapture(sql, schema.changeCapture);
+	if (schema.databaseOwnedUpdates)
+		await verifyPostgresDatabaseOwnedUpdates(sql, schema.databaseOwnedUpdates);
 }
 
-function managedTriggerIdentities(
+function managedObjectIdentities(
 	schema: SchemaProjectionV1,
 ): readonly string[] {
-	if (!schema.changeCapture) return [];
-	return schema.changeCapture.triggerCatalog.map(
-		(trigger) =>
-			`${schema.application.postgresSchema}.${trigger.table}.${trigger.name}`,
-	);
+	const postgresSchema = schema.application.postgresSchema;
+	return [
+		...(schema.changeCapture?.triggerCatalog.map(
+			(trigger) => `${postgresSchema}.${trigger.table}.${trigger.name}`,
+		) ?? []),
+		...(schema.databaseOwnedUpdates?.fields.flatMap((field) => [
+			`${postgresSchema}.${field.table}.${field.triggerName}`,
+			`function:${postgresSchema}.${field.functionName}()`,
+		]) ?? []),
+	];
 }
 
 function compareComparable(

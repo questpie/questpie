@@ -126,13 +126,16 @@ function kernelProgram(
 		.filter(
 			({ path, contract }) =>
 				contract.server !== true &&
+				contract.onUpdate !== "now" &&
 				(member === "create" || contract.immutable !== true) &&
 				callerAuthority.has(canonicalBytes(path)),
 		)
 		.map(({ path }) => path);
 	const trustedValueFields = facts
 		.filter(
-			({ contract }) => member === "create" || contract.immutable !== true,
+			({ contract }) =>
+				contract.onUpdate !== "now" &&
+				(member === "create" || contract.immutable !== true),
 		)
 		.map(({ path }) => path);
 	return Object.freeze({

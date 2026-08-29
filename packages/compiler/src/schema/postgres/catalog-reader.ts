@@ -15,7 +15,7 @@ export interface CatalogFingerprintScope {
 	readonly application: string;
 	readonly applicationSchema: string;
 	readonly requiredExtensionNames: readonly string[];
-	readonly managedTriggerIdentities?: readonly string[];
+	readonly managedObjectIdentities?: readonly string[];
 }
 
 export async function readCatalogComparable(
@@ -154,16 +154,13 @@ export async function readCatalogComparableInOwnedTransaction(
 			state,
 		);
 	}
-	const managedTriggerIdentities = new Set(
-		scope.managedTriggerIdentities ?? [],
-	);
+	const managedObjectIdentities = new Set(scope.managedObjectIdentities ?? []);
 	state.unsupportedObjects.push(
 		...(
 			await readUnsupportedCatalogObjects(sql, scope.applicationSchema)
 		).filter(
 			(object) =>
-				object.kind !== "trigger" ||
-				!managedTriggerIdentities.has(String(object.qualifiedIdentity)),
+				!managedObjectIdentities.has(String(object.qualifiedIdentity)),
 		),
 	);
 	return {
