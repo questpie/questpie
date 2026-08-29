@@ -85,7 +85,7 @@ export type LifecycleExpression =
 	  }>
 	| Readonly<{
 			op: "capability";
-			capability: "write";
+			capability: "read" | "write";
 			identity: LifecycleIdentity;
 			arguments: readonly LifecycleExpression[];
 	  }>;
@@ -118,11 +118,20 @@ export type LifecycleStatement =
 			value: Extract<LifecycleExpression, { op: "capability" }>;
 	  }>;
 
-export type LifecycleCapabilityBinding = Readonly<{
-	kind: "write";
-	identity: LifecycleIdentity;
-	argumentKeys: readonly string[];
-}>;
+export type LifecycleCapabilityBinding =
+	| Readonly<{
+			kind: "read";
+			identity: LifecycleIdentity;
+			argumentKeys: readonly string[];
+			cardinality: "one" | "many";
+			first: boolean;
+			maxRows: number;
+	  }>
+	| Readonly<{
+			kind: "write";
+			identity: LifecycleIdentity;
+			argumentKeys: readonly string[];
+	  }>;
 
 export interface LifecycleBindings {
 	readonly schema: LifecycleIdentity;

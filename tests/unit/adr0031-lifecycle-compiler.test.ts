@@ -269,6 +269,117 @@ export const optionalCreatesOperations = defineCollectionOperations(optionalCrea
 	}
 }, 30_000);
 
+test("lowers one bounded Policy-aware check read from a generated get capability", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-check-read-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const ticketsPath = join(temporary, "src/tickets.ts");
+		await writeFile(
+			ticketsPath,
+			(await readFile(ticketsPath, "utf8")).replace(
+				"\t\tvalidate: ({ candidate, issues }) => {",
+				`\t\t// @ts-expect-error LIFE-03 projects the exact generated check Context.
+\t\tcheck: async ({ candidate, ctx, issues }: { candidate: { teamId: string }; ctx: { data: { teams: { get(input: unknown): Promise<{ id: string; routingStatus: string } | null> } } }; issues: { invalidReference(): Error } }) => {
+\t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { routingStatus: true, id: true } });
+\t\t\tif (team === null) throw issues.invalidReference();
+\t\t},
+\t\tvalidate: ({ candidate, issues }) => {`,
+			),
+		);
+		const compilation = await compileApplication({
+			applicationRoot: temporary,
+		});
+		const programs = JSON.parse(
+			compilation.generatedFiles["collection-lifecycle-programs.json"]!,
+		) as Readonly<{
+			programs: readonly Readonly<{
+				bindings: Readonly<{
+					collection: string;
+					capabilities: Readonly<Record<string, unknown>>;
+				}>;
+				phases: Readonly<Record<string, readonly unknown[]>>;
+			}>[];
+		}>;
+		const tickets = programs.programs.find(
+			(program) => program.bindings.collection === "collection:tickets",
+		)!;
+		expect(tickets.bindings.capabilities).toEqual({
+			"data.teams.get": {
+				argumentKeys: ["key.id", "select.id", "select.routingStatus"],
+				cardinality: "one",
+				first: true,
+				identity: "query:teams.get",
+				kind: "read",
+				maxRows: 1,
+			},
+		});
+		expect(tickets.phases.check).toEqual([
+			expect.objectContaining({
+				op: "const",
+				value: expect.objectContaining({
+					op: "capability",
+					capability: "read",
+					identity: "query:teams.get",
+				}),
+			}),
+			expect.objectContaining({ op: "if" }),
+		]);
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects unbounded, detached, write, and inexact check capabilities", async () => {
+	for (const [authored, diagnosticClass] of [
+		[
+			`check: ({ candidate }) => { return candidate; },`,
+			"unsupportedLifecycleSyntax",
+		],
+		[
+			`check: async ({ ctx }) => { ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } }); },`,
+			"unsupportedLifecycleSyntax",
+		],
+		[
+			`check: async ({ ctx }) => { const team = await ctx.data.teams.update({ key: { id: "00000000-0000-4000-8000-000000000001" }, patch: { name: "forbidden" } }); return team; },`,
+			"unsupportedLifecycleCapability",
+		],
+		[
+			`check: async ({ ctx }) => { const team = await ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { missing: true } }); return team; },`,
+			"unsupportedLifecycleSyntax",
+		],
+		[
+			`check: async ({ ctx }) => { const rows = await Promise.all([ctx.data.teams.get({ key: { id: "00000000-0000-4000-8000-000000000001" }, select: { id: true } })]); return rows; },`,
+			"unsupportedLifecycleCapability",
+		],
+	] as const) {
+		const temporary = await mkdtemp(
+			join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-check-hostile-"),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const ticketsPath = join(temporary, "src/tickets.ts");
+			await writeFile(
+				ticketsPath,
+				(await readFile(ticketsPath, "utf8")).replace(
+					"\t\tvalidate: ({ candidate, issues }) => {",
+					`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
+				),
+			);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({
+				code: "QP-COMPOSE-026",
+				diagnosticClass,
+				details: { phase: "check" },
+			});
+		} finally {
+			await rm(temporary, { force: true, recursive: true });
+		}
+	}
+}, 30_000);
+
 test("bounds dense cyclic issue reachability through the compiler seam", async () => {
 	const temporary = await mkdtemp(
 		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-dense-cycle-"),

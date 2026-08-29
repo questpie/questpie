@@ -69,6 +69,16 @@ function analyzeSequence(
 			});
 			continue;
 		}
+		if (statement.op === "const" && statement.value.op === "capability") {
+			reachableStatements.push(statement);
+			capabilities.push({
+				identity: statement.value.identity,
+				argumentKeys: statement.value.arguments.flatMap((argument) =>
+					argumentKeys(argument),
+				),
+			});
+			continue;
+		}
 		if (statement.op !== "if") {
 			reachableStatements.push(statement);
 			continue;

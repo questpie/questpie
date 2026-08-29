@@ -70,13 +70,40 @@ function bindingsFor(
 		operations.operations
 			.filter(
 				(operation) =>
-					operation.member === "create" || operation.member === "update",
+					operation.member === "get" ||
+					operation.member === "create" ||
+					operation.member === "update",
 			)
 			.map((operation) => {
 				const prefixed = (
 					prefix: string,
 					paths: readonly (readonly string[])[],
 				) => paths.map((path) => `${prefix}.${path.join(".")}`);
+				if (operation.member === "get") {
+					return [
+						`data.${operation.target.slice("collection:".length)}.get`,
+						Object.freeze({
+							kind: "read",
+							identity: operation.identity,
+							argumentKeys: Object.freeze(
+								[
+									...prefixed("key", operation.keyFields),
+									...prefixed("select", operation.selectedFieldPaths),
+								].sort(compareAscii),
+							),
+							argumentRoots: Object.freeze(["key", "select"]),
+							requiredArgumentKeys: Object.freeze(
+								prefixed("key", operation.keyFields).sort(compareAscii),
+							),
+							requiredArgumentRoots: Object.freeze(["key", "select"]),
+							requireNonEmptyWriteLane: false,
+							requireNonEmptySelect: true,
+							cardinality: "one",
+							first: true,
+							maxRows: 1,
+						}) satisfies LifecycleCapabilityCandidate,
+					];
+				}
 				const argumentKeys = [
 					...(operation.member === "update"
 						? prefixed("key", operation.keyFields)
@@ -117,6 +144,7 @@ function bindingsFor(
 						requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
 						requiredArgumentRoots: Object.freeze(requiredArgumentRoots),
 						requireNonEmptyWriteLane: operation.member === "update",
+						requireNonEmptySelect: false,
 					}) satisfies LifecycleCapabilityCandidate,
 				];
 			}),
@@ -206,11 +234,20 @@ export function projectCollectionLifecyclePrograms(
 								? [
 										[
 											name,
-											Object.freeze({
-												kind: capability.kind,
-												identity: capability.identity,
-												argumentKeys: Object.freeze(argumentKeys),
-											}) satisfies LifecycleCapabilityBinding,
+											capability.kind === "read"
+												? (Object.freeze({
+														kind: capability.kind,
+														identity: capability.identity,
+														argumentKeys: Object.freeze(argumentKeys),
+														cardinality: capability.cardinality,
+														first: capability.first,
+														maxRows: capability.maxRows,
+													}) satisfies LifecycleCapabilityBinding)
+												: (Object.freeze({
+														kind: capability.kind,
+														identity: capability.identity,
+														argumentKeys: Object.freeze(argumentKeys),
+													}) satisfies LifecycleCapabilityBinding),
 										],
 									]
 								: [];

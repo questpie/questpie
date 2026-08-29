@@ -12,15 +12,30 @@ import type {
 } from "./contract";
 import { analyzeLifecycleStatements } from "./statement-analysis";
 
-export type LifecycleCapabilityCandidate = Readonly<{
-	kind: "write";
-	identity: LifecycleIdentity;
-	argumentKeys: readonly string[];
-	argumentRoots: readonly string[];
-	requiredArgumentKeys: readonly string[];
-	requiredArgumentRoots: readonly string[];
-	requireNonEmptyWriteLane: boolean;
-}>;
+export type LifecycleCapabilityCandidate =
+	| Readonly<{
+			kind: "read";
+			identity: LifecycleIdentity;
+			argumentKeys: readonly string[];
+			argumentRoots: readonly string[];
+			requiredArgumentKeys: readonly string[];
+			requiredArgumentRoots: readonly string[];
+			requireNonEmptyWriteLane: false;
+			requireNonEmptySelect: true;
+			cardinality: "one" | "many";
+			first: boolean;
+			maxRows: number;
+	  }>
+	| Readonly<{
+			kind: "write";
+			identity: LifecycleIdentity;
+			argumentKeys: readonly string[];
+			argumentRoots: readonly string[];
+			requiredArgumentKeys: readonly string[];
+			requiredArgumentRoots: readonly string[];
+			requireNonEmptyWriteLane: boolean;
+			requireNonEmptySelect: false;
+	  }>;
 
 export type LifecycleLoweringBindings = Omit<
 	LifecycleBindings,
@@ -42,6 +57,13 @@ const publicMembers = {
 		current: "current",
 		now: "now",
 		issues: "issues",
+	},
+	check: {
+		candidate: "candidate",
+		current: "current",
+		now: "now",
+		issues: "issues",
+		ctx: "capabilities",
 	},
 	afterWrite: {
 		row: "written",
@@ -76,7 +98,7 @@ const stringMethods = new Set([
 const sourcePrefix = "const __phase = ";
 
 interface Environment {
-	readonly phase: "normalize" | "validate" | "afterWrite";
+	readonly phase: LifecyclePhase;
 	readonly source: ts.SourceFile;
 	readonly module: string;
 	readonly base: SourceSpan;
@@ -194,17 +216,20 @@ function capability(
 	const name = segments.join(".");
 	const binding = env.bindings.capabilities[name];
 	if (
-		env.phase !== "afterWrite" ||
+		(env.phase === "check"
+			? binding?.kind !== "read"
+			: env.phase === "afterWrite"
+				? binding?.kind !== "write"
+				: true) ||
 		!ts.isIdentifier(target) ||
 		env.parameters.get(target.text) !== "capabilities" ||
-		!binding ||
-		binding.kind !== "write"
+		!binding
 	)
 		return fail(
 			env,
 			node,
 			"unsupportedLifecycleCapability",
-			"use an awaited generated ctx.data.<collection>.<create|update> capability only in afterWrite",
+			"use an awaited generated read in check or generated write in afterWrite",
 		);
 	if (node.arguments.length !== 1)
 		return fail(
@@ -252,6 +277,16 @@ function capability(
 			"unsupportedLifecycleSyntax",
 			"provide at least one update patch or trusted value Field",
 		);
+	if (
+		binding.requireNonEmptySelect &&
+		!actualKeys.some((key) => key.startsWith("select."))
+	)
+		return fail(
+			env,
+			node.arguments[0]!,
+			"unsupportedLifecycleSyntax",
+			"select at least one generated Operation result Field",
+		);
 	const priorKeys = env.capabilityArgumentKeys.get(binding.identity);
 	if (
 		priorKeys &&
@@ -267,7 +302,7 @@ function capability(
 	env.capabilityArgumentKeys.set(binding.identity, actualKeys);
 	return {
 		op: "capability",
-		capability: "write",
+		capability: binding.kind,
 		identity: binding.identity,
 		arguments: [argument],
 	};
@@ -558,7 +593,16 @@ function statements(
 					"initialize a simple const local",
 				);
 			const slot = env.nextSlot++;
-			const value = expression(declaration.initializer, env);
+			const value = ts.isAwaitExpression(declaration.initializer)
+				? capability(declaration.initializer.expression, env)
+				: expression(declaration.initializer, env);
+			if (value.op === "capability" && value.capability !== "read")
+				fail(
+					env,
+					declaration.initializer,
+					"unsupportedLifecycleSyntax",
+					"bind only an awaited generated read to a const local",
+				);
 			env.locals.set(declaration.name.text, slot);
 			output.push({ op: "const", slot, value });
 			continue;
@@ -587,12 +631,12 @@ function statements(
 			continue;
 		}
 		if (ts.isThrowStatement(node)) {
-			if (env.phase !== "validate")
+			if (env.phase !== "validate" && env.phase !== "check")
 				fail(
 					env,
 					node,
 					"unsupportedLifecycleCapability",
-					"throw declared issues only from validate",
+					"throw declared issues only from validate or check",
 				);
 			const call = node.expression;
 			if (
@@ -623,9 +667,17 @@ function statements(
 		}
 		if (ts.isExpressionStatement(node)) {
 			if (ts.isAwaitExpression(node.expression)) {
+				const value = capability(node.expression.expression, env);
+				if (value.capability === "read")
+					fail(
+						env,
+						node,
+						"unsupportedLifecycleSyntax",
+						"bind an awaited generated read to a const local",
+					);
 				output.push({
 					op: "effect",
-					value: capability(node.expression.expression, env),
+					value,
 				});
 				continue;
 			}
@@ -654,8 +706,6 @@ export function lowerLifecyclePhase(
 	base: SourceSpan,
 	bindings: LifecycleLoweringBindings,
 ): LoweredLifecyclePhase {
-	if (phase === "check")
-		throw new TypeError("check is not implemented before LIFE-03");
 	const source = ts.createSourceFile(
 		module,
 		`${sourcePrefix}${authoredSource}`,
@@ -695,13 +745,14 @@ export function lowerLifecyclePhase(
 			(modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword,
 		),
 	);
-	if (callback.asteriskToken || asynchronous !== (phase === "afterWrite"))
+	const expectsAsync = phase === "check" || phase === "afterWrite";
+	if (callback.asteriskToken || asynchronous !== expectsAsync)
 		fail(
 			empty,
 			callback,
 			"unsupportedLifecycleSyntax",
-			phase === "afterWrite"
-				? "use an async afterWrite callback"
+			expectsAsync
+				? `use an async ${phase} callback`
 				: "use synchronous normalize and validate callbacks",
 		);
 	if (
