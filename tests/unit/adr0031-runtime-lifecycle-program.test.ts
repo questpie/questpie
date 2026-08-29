@@ -11,7 +11,11 @@ import {
 } from "../../packages/runtime/src/mutation";
 import { canonicalMutationBytes } from "../../packages/runtime/src/mutation/canonical";
 import {
-	captureCollectionLifecycleIssue,
+	createCollectionExecutionBudget,
+	executeCollectionStatement,
+} from "../../packages/runtime/src/mutation/collection-budget";
+import {
+	captureCollectionLifecycleFailure,
 	createCollectionLifecycleDoom,
 } from "../../packages/runtime/src/mutation/lifecycle";
 import { OperationFailure } from "../../packages/runtime/src/operation";
@@ -338,6 +342,33 @@ test("decodes and executes one bound Policy-aware check read", async () => {
 		key: { id: "TEAM-1" },
 		select: { routingStatus: true },
 	});
+	const dependencyDoom = createCollectionLifecycleDoom();
+	const dependencyBudget = createCollectionExecutionBudget({
+		doom: dependencyDoom,
+		maxStatements: 20,
+		maxDependencies: 0,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	let invoked = false;
+	await expect(
+		executeCollectionLifecyclePhase(
+			decoded,
+			"check",
+			{ candidate: {}, current: null, now: new Date() },
+			{
+				"query:teams.get": () => {
+					invoked = true;
+					return null;
+				},
+			},
+			dependencyBudget,
+		),
+	).rejects.toThrow("dependency budget exceeded");
+	expect(invoked).toBe(false);
+	expect(() => dependencyDoom.throwIfDoomed()).toThrow(
+		"dependency budget exceeded",
+	);
 	let issue: unknown;
 	try {
 		await executeCollectionLifecyclePhase(
@@ -497,7 +528,7 @@ test("keeps the first lifecycle Issue and dooms work after application catch", a
 		"issue:tickets/secondIssue",
 	] as const) {
 		try {
-			await captureCollectionLifecycleIssue(doom, () =>
+			await captureCollectionLifecycleFailure(doom, () =>
 				executeCollectionLifecyclePhase(
 					{
 						...lifecycle,
@@ -534,6 +565,85 @@ test("keeps the first lifecycle Issue and dooms work after application catch", a
 	expect(collectionLifecycleIssueIdentity(doomed)).toBe(
 		"issue:tickets/invalidReference",
 	);
+});
+
+test("shares terminal statement, dependency, row, cancellation, and re-entry budgets", () => {
+	for (const exhaust of [
+		(budget: ReturnType<typeof createCollectionExecutionBudget>) =>
+			budget.consumeStatement(),
+		(budget: ReturnType<typeof createCollectionExecutionBudget>) =>
+			budget.consumeDependency(),
+		(budget: ReturnType<typeof createCollectionExecutionBudget>) =>
+			budget.consumeRows(1),
+	] as const) {
+		const doom = createCollectionLifecycleDoom();
+		const budget = createCollectionExecutionBudget({
+			doom,
+			maxStatements: 0,
+			maxDependencies: 0,
+			maxRows: 0,
+			maxDurationMilliseconds: 5_000,
+		});
+		expect(() => exhaust(budget)).toThrow(/budget/);
+		expect(() => budget.assertAvailable()).toThrow(/budget/);
+		expect(() => doom.throwIfDoomed()).toThrow(/budget/);
+	}
+
+	const reentryDoom = createCollectionLifecycleDoom();
+	const reentry = createCollectionExecutionBudget({
+		doom: reentryDoom,
+		maxStatements: 20,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	const leave = reentry.enterLifecycle(1);
+	expect(() => reentry.enterLifecycle(1)).toThrow(
+		"lifecycle recursion exceeded",
+	);
+	leave();
+	expect(() => reentryDoom.throwIfDoomed()).toThrow(
+		"lifecycle recursion exceeded",
+	);
+
+	const cancellation = new AbortController();
+	const cancellationDoom = createCollectionLifecycleDoom();
+	const cancelled = createCollectionExecutionBudget({
+		doom: cancellationDoom,
+		signal: cancellation.signal,
+		maxStatements: 20,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	cancellation.abort(new DOMException("cancelled", "AbortError"));
+	expect(() => cancelled.assertAvailable()).toThrow("cancelled");
+	expect(() => cancellationDoom.throwIfDoomed()).toThrow("cancelled");
+});
+
+test("cancellation during a Collection statement terminally dooms the root", async () => {
+	const cancellation = new AbortController();
+	const doom = createCollectionLifecycleDoom();
+	const budget = createCollectionExecutionBudget({
+		doom,
+		signal: cancellation.signal,
+		maxStatements: 20,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	await expect(
+		executeCollectionStatement({
+			budget,
+			started: performance.now(),
+			durationMilliseconds: 5_000,
+			async use() {
+				cancellation.abort(new DOMException("cancelled in SQL", "AbortError"));
+				throw new Error("driver detail");
+			},
+		}),
+	).rejects.toThrow("cancelled in SQL");
+	expect(() => doom.throwIfDoomed()).toThrow("cancelled in SQL");
 });
 
 test("rejects lifecycle digest and Runtime Build drift", () => {

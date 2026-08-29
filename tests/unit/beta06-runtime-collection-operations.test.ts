@@ -13,6 +13,11 @@ import {
 	createPostgresDatabaseCollectionMutationData,
 } from "../../packages/runtime/src/mutation/collection";
 import {
+	createCollectionExecutionBudget,
+	type CollectionExecutionBudget,
+} from "../../packages/runtime/src/mutation/collection-budget";
+import { createCollectionLifecycleDoom } from "../../packages/runtime/src/mutation/lifecycle";
+import {
 	bindPostgresCollectionStatement,
 	decodePostgresCollectionParameters,
 } from "../../packages/runtime/src/mutation/postgres-collection-statement";
@@ -346,6 +351,8 @@ function dataFor(
 	) => Promise<readonly Readonly<Record<string, unknown>>[]>,
 	consumeRows: (count: number) => void = () => {},
 	issueMappings?: Readonly<Record<string, Readonly<Record<string, string>>>>,
+	executionBudget?: CollectionExecutionBudget,
+	lifecycleDoom?: ReturnType<typeof createCollectionLifecycleDoom>,
 ) {
 	return createPostgresCollectionMutationData({
 		plans: {
@@ -363,8 +370,52 @@ function dataFor(
 		operationTime: new Date("2026-08-16T20:00:00.000Z"),
 		consumeRows,
 		issueMappings,
+		executionBudget,
+		lifecycleDoom,
 	});
 }
+
+test("Collection work shares a terminal outer statement budget", async () => {
+	const calls: string[] = [];
+	const doom = createCollectionLifecycleDoom();
+	const budget = createCollectionExecutionBudget({
+		doom,
+		maxStatements: 2,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	const data = dataFor(
+		[getPlan()],
+		async (sql) => {
+			calls.push(sql);
+			return sql === "LOCK_SQL"
+				? [{}]
+				: [
+						{
+							qp_result_0: id,
+							qp_result_1: "visible",
+							qp_result_1_allowed: true,
+						},
+					];
+		},
+		undefined,
+		undefined,
+		budget,
+		doom,
+	);
+	await expect(data.records.get({ key: { id } })).resolves.toEqual({
+		id,
+		body: "visible",
+	});
+	await expect(data.records.get({ key: { id } })).rejects.toThrow(
+		"statement budget exceeded",
+	);
+	await expect(data.records.get({ key: { id } })).rejects.toThrow(
+		"statement budget exceeded",
+	);
+	expect(calls).toEqual(["LOCK_SQL", "FRESH_POLICY_READ_SQL"]);
+});
 
 function oneGetCheckLifecycle(operationIdentity: string) {
 	return {

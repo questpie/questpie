@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { canonicalMutationBytes } from "./canonical";
+import type { CollectionExecutionBudget } from "./collection-budget";
 import { interpretCollectionLifecyclePhase } from "./lifecycle-interpreter";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -117,19 +118,22 @@ export function collectionLifecycleProgramAdmitted(
 }
 
 export function createCollectionLifecycleDoom(): CollectionLifecycleDoom {
-	let firstIssue: unknown;
+	let hasFailure = false;
+	let firstFailure: unknown;
 	return Object.freeze({
 		capture(error: unknown) {
-			if (firstIssue === undefined && isCollectionLifecycleIssue(error))
-				firstIssue = error;
+			if (!hasFailure) {
+				hasFailure = true;
+				firstFailure = error;
+			}
 		},
 		throwIfDoomed() {
-			if (firstIssue !== undefined) throw firstIssue;
+			if (hasFailure) throw firstFailure;
 		},
 	});
 }
 
-export async function captureCollectionLifecycleIssue<T>(
+export async function captureCollectionLifecycleFailure<T>(
 	doom: CollectionLifecycleDoom | undefined,
 	use: () => Promise<T>,
 ): Promise<T> {
@@ -663,7 +667,9 @@ export function executeCollectionLifecyclePhase(
 	capabilities: Readonly<
 		Record<string, (argument: unknown) => unknown | Promise<unknown>>
 	> = {},
+	budget?: CollectionExecutionBudget,
 ): Promise<unknown> {
+	const leave = budget?.enterLifecycle(program.reentryLimit);
 	return interpretCollectionLifecyclePhase(
 		program,
 		phase,
@@ -672,32 +678,38 @@ export function executeCollectionLifecyclePhase(
 		(identity) => {
 			throw new CollectionLifecycleIssue(identity);
 		},
-	);
+		budget,
+	).finally(leave);
 }
 export async function normalizeCollectionLifecycleLanes(
 	program: LinkedCollectionLifecycleProgramV1,
 	callerInput: RecordValue,
 	trustedValues: RecordValue | undefined,
+	budget?: CollectionExecutionBudget,
+	doom?: CollectionLifecycleDoom,
 ): Promise<
 	Readonly<{
 		callerInput: RecordValue;
 		trustedValues: RecordValue | undefined;
 	}>
 > {
-	const normalize = async (value: RecordValue, label: string) => {
-		const normalized = await executeCollectionLifecyclePhase(
-			program,
-			"normalize",
-			{ input: value },
-		);
-		if (
-			!normalized ||
-			typeof normalized !== "object" ||
-			Array.isArray(normalized)
-		)
-			throw new TypeError(`${label} must be an object`);
-		return normalized as RecordValue;
-	};
+	const normalize = (value: RecordValue, label: string) =>
+		captureCollectionLifecycleFailure(doom, async () => {
+			const normalized = await executeCollectionLifecyclePhase(
+				program,
+				"normalize",
+				{ input: value },
+				{},
+				budget,
+			);
+			if (
+				!normalized ||
+				typeof normalized !== "object" ||
+				Array.isArray(normalized)
+			)
+				throw new TypeError(`${label} must be an object`);
+			return normalized as RecordValue;
+		});
 	return Object.freeze({
 		callerInput: await normalize(
 			callerInput,

@@ -1,3 +1,4 @@
+import type { CollectionExecutionBudget } from "./collection-budget";
 import type { LinkedCollectionLifecycleProgramV1 } from "./lifecycle";
 
 const optionalAbsence = Symbol("questpie.lifecycle.optional-absence");
@@ -61,7 +62,9 @@ export async function interpretCollectionLifecyclePhase(
 		Record<string, (argument: unknown) => unknown | Promise<unknown>>
 	>,
 	raiseIssue: (identity: string) => never,
+	budget?: CollectionExecutionBudget,
 ): Promise<unknown> {
+	budget?.assertAvailable();
 	const fieldNames = new Map(
 		Object.values(program.bindings.fields).map((id) => [
 			id,
@@ -76,6 +79,7 @@ export async function interpretCollectionLifecyclePhase(
 	if (phase === "normalize" && program.phases.normalize.length === 0)
 		return safeRoots.input;
 	const evaluate = (raw: unknown): unknown => {
+		budget?.assertAvailable();
 		const expression = raw as RecordValue;
 		if (expression.op === "literal") return expression.value;
 		if (expression.op === "root") return safeRoots[String(expression.root)];
@@ -195,9 +199,11 @@ export async function interpretCollectionLifecyclePhase(
 	};
 	const run = async (statements: readonly RecordValue[]): Promise<unknown> => {
 		for (const statement of statements) {
+			budget?.assertAvailable();
 			if (statement.op === "const") {
 				const value = statement.value as RecordValue;
 				if (value.op === "capability") {
+					budget?.consumeDependency();
 					const binding = Object.values(program.bindings.capabilities).find(
 						(candidate) => candidate.identity === value.identity,
 					);
@@ -206,6 +212,7 @@ export async function interpretCollectionLifecyclePhase(
 						throw new TypeError("Lifecycle capability is withheld");
 					const args = value.arguments as readonly unknown[];
 					const result = closed(await invoke(evaluate(args[0])));
+					budget?.assertAvailable();
 					if (
 						result !== null &&
 						(!result || typeof result !== "object" || Array.isArray(result))

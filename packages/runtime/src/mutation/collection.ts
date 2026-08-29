@@ -3,7 +3,17 @@ import type {
 	PostgresParameter,
 	PostgresTransaction,
 } from "../postgres/contract";
+import {
+	createCollectionExecutionScope,
+	executeCollectionStatement,
+	type CollectionExecutionBudget,
+} from "./collection-budget";
 import { createCollectionGetExecutor } from "./collection-get";
+import {
+	assertAllowedCollectionPaths as allowedPaths,
+	assertDisjointCollectionPaths as rejectOverlap,
+	assertRequiredCollectionPaths as requirePaths,
+} from "./collection-input";
 import { createCollectionLifecycleCheckExecutor } from "./collection-lifecycle-check";
 import {
 	decodeMutationFieldInput,
@@ -58,6 +68,7 @@ type ExecutionFacts = Readonly<{
 	principal: Readonly<{ id: string; kind: string }>;
 	authority: Readonly<{ kind: string }>;
 	tenant: Readonly<{ id: string }>;
+	signal?: AbortSignal;
 }>;
 function unavailable(): never {
 	throw new TypeError("Collection operation is unavailable");
@@ -95,40 +106,6 @@ function exactPaths(
 		expectedKeys.some((key, index) => key !== actualKeys[index])
 	)
 		throw new TypeError(`${label} must have exactly the compiled Fields`);
-}
-
-function allowedPaths(
-	actual: readonly Path[],
-	allowed: readonly Path[],
-	label: string,
-) {
-	const allowedKeys = new Set(allowed.map(pathKey));
-	const actualKeys = actual.map(pathKey);
-	if (
-		new Set(actualKeys).size !== actualKeys.length ||
-		actualKeys.some((key) => !allowedKeys.has(key))
-	)
-		throw new TypeError(`${label} contains undeclared Fields`);
-}
-
-function rejectOverlap(
-	callerPaths: readonly Path[],
-	trustedPaths: readonly Path[],
-	label: string,
-) {
-	const caller = new Set(callerPaths.map(pathKey));
-	if (trustedPaths.some((path) => caller.has(pathKey(path))))
-		throw new TypeError(`${label} must not overlap`);
-}
-
-function requirePaths(
-	supplied: readonly Path[],
-	required: readonly Path[],
-	label: string,
-) {
-	const present = new Set(supplied.map(pathKey));
-	if (required.some((path) => !present.has(pathKey(path))))
-		throw new TypeError(`${label} is missing required Fields`);
 }
 
 function inputField(
@@ -262,34 +239,43 @@ function createCollectionMutationData(
 		consumeRows(count: number): void;
 		resultValuesDecoded: boolean;
 		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
+		executionBudget?: CollectionExecutionBudget;
 		issueMappings?: RuntimeIssueMappings;
 	}>,
 ) {
+	const scope = createCollectionExecutionScope({
+		doom: input.lifecycleDoom,
+		budget: input.executionBudget,
+		signal: input.facts.signal,
+		consumeRows: input.consumeRows,
+	});
+	const lifecycleDoom = scope.doom;
+	const executionBudget = scope.budget;
+	const consumeRows = scope.consumeRows;
 	const execute = async (
 		plan: LinkedPostgresCollectionOperationPlanV1,
 		started: number,
 		leaf: CollectionLeaf,
 		parameters: readonly PostgresParameter[],
-	) => {
-		input.lifecycleDoom?.throwIfDoomed();
-		if (performance.now() - started > plan.limits.durationMilliseconds)
-			throw new TypeError("Collection operation exceeded its duration limit");
-		const rows = await input.executeLeaf(leaf, parameters);
-		if (performance.now() - started > plan.limits.durationMilliseconds)
-			throw new TypeError("Collection operation exceeded its duration limit");
-		return rows;
-	};
+	) =>
+		executeCollectionStatement({
+			budget: executionBudget,
+			started,
+			durationMilliseconds: plan.limits.durationMilliseconds,
+			use: () => input.executeLeaf(leaf, parameters),
+		});
 	const executeGet = createCollectionGetExecutor({
 		execute,
 		bind: (parameters, key) =>
 			bind(parameters, { key }, input.facts, input.operationTime),
 		decode: (row, result) => decodeRow(row, result, input.resultValuesDecoded),
-		consumeRows: input.consumeRows,
+		consumeRows,
 	});
 	const lifecycleCheck = createCollectionLifecycleCheckExecutor({
 		plans: input.plans,
 		operationTime: input.operationTime,
-		doom: input.lifecycleDoom,
+		doom: lifecycleDoom,
+		budget: executionBudget,
 		executeGet,
 		executePolicy: (plan, check, values, started) =>
 			execute(
@@ -444,6 +430,8 @@ function createCollectionMutationData(
 												lifecycle,
 												candidateInput,
 												trustedValues,
+												executionBudget,
+												lifecycleDoom,
 											)
 										: { callerInput: candidateInput, trustedValues };
 									const normalizedCaller = normalized.callerInput;
@@ -510,7 +498,7 @@ function createCollectionMutationData(
 											nullableByPath,
 										),
 									);
-									input.consumeRows(rows.length);
+									consumeRows(rows.length);
 									if (rows.length === 0) unavailable();
 									if (rows.length > plan.limits.rows || rows.length !== 1)
 										throw new TypeError(
@@ -662,6 +650,8 @@ function createCollectionMutationData(
 												lifecycle,
 												candidatePatch,
 												trustedValues,
+												executionBudget,
+												lifecycleDoom,
 											)
 										: { callerInput: candidatePatch, trustedValues };
 									validateScalars(
@@ -737,7 +727,7 @@ function createCollectionMutationData(
 											nullableByPath,
 										),
 									);
-									input.consumeRows(rows.length);
+									consumeRows(rows.length);
 									if (rows.length === 0) return null;
 									if (rows.length > plan.limits.rows || rows.length !== 1)
 										throw new TypeError(
@@ -764,6 +754,7 @@ export function createPostgresCollectionMutationData(
 		facts: ExecutionFacts;
 		operationTime: Date;
 		consumeRows(count: number): void;
+		executionBudget?: CollectionExecutionBudget;
 	}>,
 ) {
 	return createCollectionMutationData({
@@ -781,6 +772,7 @@ export function createPostgresDatabaseCollectionMutationData(
 		operationTime: Date;
 		consumeRows(count: number): void;
 		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
+		executionBudget?: CollectionExecutionBudget;
 		issueMappings?: RuntimeIssueMappings;
 	}>,
 ) {

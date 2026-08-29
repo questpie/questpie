@@ -1,10 +1,11 @@
+import type { CollectionExecutionBudget } from "./collection-budget";
 import {
 	mutationLeafPaths as inputPaths,
 	mutationPathKey as pathKey,
 	mutationValueAt as valueAt,
 } from "./field-path";
 import {
-	captureCollectionLifecycleIssue,
+	captureCollectionLifecycleFailure,
 	executeCollectionLifecyclePhase,
 	type CollectionLifecycleDoom,
 } from "./lifecycle";
@@ -46,6 +47,7 @@ export function createCollectionLifecycleCheckExecutor(
 		plans: LinkedPostgresCollectionOperationPlansV1;
 		operationTime: Date;
 		doom?: CollectionLifecycleDoom;
+		budget: CollectionExecutionBudget;
 		executePolicy(
 			plan: WritePlan,
 			check: PolicyCheck,
@@ -115,12 +117,18 @@ export function createCollectionLifecycleCheckExecutor(
 		): Promise<boolean> {
 			const lifecycle = plan.operation.lifecycleProgram;
 			if (!lifecycle) return true;
-			await captureCollectionLifecycleIssue(input.doom, () =>
-				executeCollectionLifecyclePhase(lifecycle, "validate", {
-					candidate,
-					current,
-					now: input.operationTime,
-				}),
+			await captureCollectionLifecycleFailure(input.doom, () =>
+				executeCollectionLifecyclePhase(
+					lifecycle,
+					"validate",
+					{
+						candidate,
+						current,
+						now: input.operationTime,
+					},
+					{},
+					input.budget,
+				),
 			);
 			const policyCheck = plan.candidatePolicyCheck;
 			if (!policyCheck)
@@ -136,12 +144,13 @@ export function createCollectionLifecycleCheckExecutor(
 				throw new TypeError(
 					"Collection candidate Policy returned multiple rows",
 				);
-			await captureCollectionLifecycleIssue(input.doom, () =>
+			await captureCollectionLifecycleFailure(input.doom, () =>
 				executeCollectionLifecyclePhase(
 					lifecycle,
 					"check",
 					{ candidate, current, now: input.operationTime },
 					capabilities(started),
+					input.budget,
 				),
 			);
 			return true;
