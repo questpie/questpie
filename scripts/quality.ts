@@ -137,12 +137,12 @@ function full(): void {
 	run(["bun", "run", "format:ratchet"]);
 	run(["bun", "run", "lint", "--deny-warnings"]);
 	run(["bun", "run", "check-types"]);
-	const ordinaryTests = ["bun", "test", "--timeout=15000"];
-	if (!process.env.PGHOST)
-		ordinaryTests.push(
-			"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
-		);
-	run(ordinaryTests);
+	run([
+		"bun",
+		"test",
+		"--timeout=15000",
+		"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+	]);
 	run(["bun", "run", "knip:report"]);
 	run(["bun", "run", "build"]);
 	run(["bun", "run", "skill:check"]);
@@ -166,7 +166,10 @@ function postgres(args: string[]): void {
 		.filter((entry) => entry.isFile() && entry.name.endsWith(".test.ts"))
 		.map((entry) => `${root}/${entry.name}`)
 		.sort();
-	let roots = tests;
+	let roots = [
+		...tests,
+		"docs/v4/prototypes/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+	];
 	if (requested) {
 		const registered = tests.flatMap((path) => {
 			const match = /^(beta\d+)-/.exec(basename(path));
