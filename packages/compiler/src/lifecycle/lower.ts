@@ -11,6 +11,22 @@ import type {
 	LifecycleStatement,
 } from "./contract";
 
+export type LifecycleCapabilityCandidate = Readonly<{
+	kind: "write";
+	identity: LifecycleIdentity;
+	argumentKeys: readonly string[];
+	requiredArgumentKeys: readonly string[];
+	requireNonEmptyWriteLane: boolean;
+}>;
+
+export type LifecycleLoweringBindings = Omit<
+	LifecycleBindings,
+	"capabilities"
+> &
+	Readonly<{
+		capabilities: Readonly<Record<string, LifecycleCapabilityCandidate>>;
+	}>;
+
 type DiagnosticReason =
 	| "unsupportedLifecycleSyntax"
 	| "lifecycleCapture"
@@ -61,16 +77,19 @@ interface Environment {
 	readonly source: ts.SourceFile;
 	readonly module: string;
 	readonly base: SourceSpan;
-	readonly bindings: LifecycleBindings;
+	readonly bindings: LifecycleLoweringBindings;
 	readonly parameters: Map<string, string>;
 	readonly locals: Map<string, number>;
 	readonly issueOrigins: Map<LifecycleIdentity, LifecycleOrigin>;
+	readonly capabilityArgumentKeys: Map<LifecycleIdentity, readonly string[]>;
 	nextSlot: number;
 }
 
 function capabilityArgument(
 	node: ts.Expression,
 	env: Environment,
+	argumentKeys: readonly string[],
+	prefix = "",
 ): LifecycleExpression {
 	if (!ts.isObjectLiteralExpression(node))
 		return fail(
@@ -79,7 +98,22 @@ function capabilityArgument(
 			"unsupportedLifecycleSyntax",
 			"pass one exact generated Operation argument object",
 		);
-	const entries: LifecycleObjectEntry[] = node.properties.map((member) => {
+	const admittedAtLevel = [
+		...new Set(
+			argumentKeys
+				.filter((key) => key.startsWith(prefix))
+				.map((key) => key.slice(prefix.length).split(".")[0]!),
+		),
+	];
+	if (prefix && node.properties.length === 0 && admittedAtLevel.length > 0)
+		return fail(
+			env,
+			node,
+			"unsupportedLifecycleSyntax",
+			"provide at least one generated Operation argument property",
+		);
+	const entries = new Map<string, LifecycleObjectEntry>();
+	for (const member of node.properties) {
 		if (
 			!ts.isPropertyAssignment(member) ||
 			(!ts.isIdentifier(member.name) && !ts.isStringLiteral(member.name))
@@ -90,15 +124,47 @@ function capabilityArgument(
 				"unsupportedLifecycleSyntax",
 				"use exact static Operation argument properties",
 			);
-		return {
+		const key = member.name.text;
+		if (!admittedAtLevel.includes(key) || entries.has(key))
+			fail(
+				env,
+				member.name,
+				"unsupportedLifecycleSyntax",
+				"use each generated Operation argument property at most once",
+			);
+		entries.set(key, {
 			kind: "argument" as const,
-			key: member.name.text,
+			key,
 			value: ts.isObjectLiteralExpression(member.initializer)
-				? capabilityArgument(member.initializer, env)
+				? capabilityArgument(
+						member.initializer,
+						env,
+						argumentKeys,
+						`${prefix}${key}.`,
+					)
 				: expression(member.initializer, env),
-		};
+		});
+	}
+	return {
+		op: "object",
+		entries: admittedAtLevel.flatMap((key) => {
+			const entry = entries.get(key);
+			return entry ? [entry] : [];
+		}),
+	};
+}
+
+function flattenedArgumentKeys(
+	value: LifecycleExpression,
+	prefix = "",
+): readonly string[] {
+	if (value.op !== "object") return [];
+	return value.entries.flatMap((entry) => {
+		if (entry.kind !== "argument") return [];
+		const path = `${prefix}${entry.key}`;
+		const nested = flattenedArgumentKeys(entry.value, `${path}.`);
+		return nested.length === 0 ? [path] : nested;
 	});
-	return { op: "object", entries };
 }
 
 function capability(
@@ -143,23 +209,44 @@ function capability(
 			"unsupportedLifecycleSyntax",
 			"pass one exact generated Operation argument object",
 		);
-	const argument = capabilityArgument(node.arguments[0]!, env);
-	const actualKeys =
-		argument.op === "object"
-			? argument.entries.map((entry) =>
-					entry.kind === "argument" ? entry.key : "",
-				)
-			: [];
+	const argument = capabilityArgument(
+		node.arguments[0]!,
+		env,
+		binding.argumentKeys,
+	);
+	const actualKeys = flattenedArgumentKeys(argument);
+	if (binding.requiredArgumentKeys.some((key) => !actualKeys.includes(key)))
+		return fail(
+			env,
+			node.arguments[0]!,
+			"unsupportedLifecycleSyntax",
+			`provide required generated Operation arguments ${binding.requiredArgumentKeys.join(", ")}`,
+		);
 	if (
-		actualKeys.length !== binding.argumentKeys.length ||
-		binding.argumentKeys.some((key) => !actualKeys.includes(key))
+		binding.requireNonEmptyWriteLane &&
+		!actualKeys.some(
+			(key) => key.startsWith("patch.") || key.startsWith("values."),
+		)
 	)
 		return fail(
 			env,
 			node.arguments[0]!,
 			"unsupportedLifecycleSyntax",
-			`provide exactly ${binding.argumentKeys.join(", ")} for this generated Operation`,
+			"provide at least one update patch or trusted value Field",
 		);
+	const priorKeys = env.capabilityArgumentKeys.get(binding.identity);
+	if (
+		priorKeys &&
+		(priorKeys.length !== actualKeys.length ||
+			priorKeys.some((key, index) => key !== actualKeys[index]))
+	)
+		return fail(
+			env,
+			node.arguments[0]!,
+			"unsupportedLifecycleSyntax",
+			"use one exact argument shape for every call to this generated Operation capability",
+		);
+	env.capabilityArgumentKeys.set(binding.identity, actualKeys);
 	return {
 		op: "capability",
 		capability: "write",
@@ -549,7 +636,7 @@ export function lowerLifecyclePhase(
 	authoredSource: string,
 	module: string,
 	base: SourceSpan,
-	bindings: LifecycleBindings,
+	bindings: LifecycleLoweringBindings,
 ): LoweredLifecyclePhase {
 	if (phase === "check")
 		throw new TypeError("check is not implemented before LIFE-03");
@@ -574,6 +661,7 @@ export function lowerLifecyclePhase(
 		parameters: new Map(),
 		locals: new Map(),
 		issueOrigins: new Map(),
+		capabilityArgumentKeys: new Map(),
 		nextSlot: 0,
 	};
 	if (

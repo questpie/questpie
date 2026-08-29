@@ -8,6 +8,8 @@ import {
 	CompilerDiagnosticError,
 } from "@questpie/compiler";
 
+import { issueBearingCollectionRequirements } from "../../packages/compiler/src/lifecycle/reachability";
+
 const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
@@ -23,16 +25,37 @@ test("derives transitive issue reachability from lowered nested writes and termi
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
+		await rm(join(temporary, "src/labels/operations.ts"));
 		await rm(join(temporary, "src/memberships/operations.ts"));
 		await rm(join(temporary, "src/teams/operations.ts"));
+		const labelsPath = join(temporary, "src/labels.ts");
+		await writeFile(
+			labelsPath,
+			(await readFile(labelsPath, "utf8"))
+				.replace(
+					'import { constraint, defineCollection, field, index, relation } from "questpie";',
+					'import { collection, constraint, defineCollection, field, index, relation } from "questpie";',
+				)
+				.replace(
+					"\tconstraints: {",
+					`\tissues: { unreachable: collection.issue() },
+\tlifecycle: {
+\t\tvalidate: ({ issues }) => { throw issues.unreachable(); },
+\t},
+\tconstraints: {`,
+				),
+		);
 		const ticketsPath = join(temporary, "src/tickets.ts");
 		await writeFile(
 			ticketsPath,
 			(await readFile(ticketsPath, "utf8")).replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
 				`\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
-\t\tafterWrite: async ({ ctx }: { ctx: { data: { memberships: { update(input: unknown): Promise<void> } } } }) => {
-\t\t\tawait ctx.data.memberships.update({ key: {}, patch: {}, values: {} });
+\t\tafterWrite: async ({ ctx, row }: { ctx: { data: { labels: { update(input: unknown): Promise<void> }; memberships: { update(input: unknown): Promise<void> } } }; row: { organizationId: string; requesterMembershipId: string } }) => {
+\t\t\tif (false) await ctx.data.labels.update({ key: { id: row.organizationId }, patch: { name: "unreachable" } });
+\t\t\tawait ctx.data.memberships.update({ patch: { status: "active" }, key: { id: row.requesterMembershipId } });
+\t\t\treturn;
+\t\t\tawait ctx.data.labels.update({ key: { id: row.organizationId }, patch: { name: "also-unreachable" } });
 \t\t},
 \t\tvalidate: ({ candidate, issues }) => {`,
 			),
@@ -44,8 +67,8 @@ test("derives transitive issue reachability from lowered nested writes and termi
 				"\tconstraints: {",
 				`\tlifecycle: {
 \t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
-\t\tafterWrite: async ({ ctx }: { ctx: { data: { teams: { update(input: unknown): Promise<void> } } } }) => {
-\t\t\tawait ctx.data.teams.update({ key: {}, patch: {}, values: {} });
+\t\tafterWrite: async ({ ctx, row }: { ctx: { data: { teams: { update(input: unknown): Promise<void> } } }; row: { id: string } }) => {
+\t\t\tawait ctx.data.teams.update({ key: { id: row.id }, patch: { routingStatus: "active" } });
 \t\t},
 \t},
 \tconstraints: {`,
@@ -65,19 +88,40 @@ test("derives transitive issue reachability from lowered nested writes and termi
 						Record<string, Readonly<{ identity: string }>>
 					>;
 				}>;
+				phases: Readonly<Record<string, readonly unknown[]>>;
 			}>[];
 		}>;
-		expect(
-			programs.programs.find(
-				(program) => program.bindings.collection === "collection:tickets",
-			)?.bindings.capabilities,
-		).toEqual({
+		const compiledTickets = programs.programs.find(
+			(program) => program.bindings.collection === "collection:tickets",
+		)!;
+		expect(compiledTickets.bindings.capabilities).toEqual({
 			"data.memberships.update": {
-				argumentKeys: ["key", "patch", "values"],
+				argumentKeys: ["key.id", "patch.status"],
 				identity: "mutation:__collectionKernel.memberships.update",
 				kind: "write",
 			},
 		});
+		await writeFile(
+			ticketsPath,
+			(await readFile(ticketsPath, "utf8")).replace(
+				'{ patch: { status: "active" }, key: { id: row.requesterMembershipId } }',
+				'{ key: { id: row.requesterMembershipId }, patch: { status: "active" } }',
+			),
+		);
+		const reordered = await compileApplication({ applicationRoot: temporary });
+		const reorderedTickets = (
+			JSON.parse(
+				reordered.generatedFiles["collection-lifecycle-programs.json"]!,
+			) as typeof programs
+		).programs.find(
+			(program) => program.bindings.collection === "collection:tickets",
+		)!;
+		expect(reorderedTickets.bindings.capabilities).toEqual(
+			compiledTickets.bindings.capabilities,
+		);
+		expect(reorderedTickets.phases.afterWrite).toEqual(
+			compiledTickets.phases.afterWrite,
+		);
 
 		teamsSource = teamsSource
 			.replace(
@@ -90,8 +134,8 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \tlifecycle: {
 \t\tvalidate: ({ issues }) => { throw issues.invalidRoute(); },
 \t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
-\t\tafterWrite: async ({ ctx }: { ctx: { data: { tickets: { update(input: unknown): Promise<void> } } } }) => {
-\t\t\tawait ctx.data.tickets.update({ key: {}, patch: {}, values: {} });
+\t\tafterWrite: async ({ ctx, row }: { ctx: { data: { tickets: { update(input: unknown): Promise<void> } } }; row: { id: string } }) => {
+\t\t\tawait ctx.data.tickets.update({ patch: { summary: "cycle" }, key: { id: row.id } });
 \t\t},
 \t},
 \tconstraints: {`,
@@ -123,10 +167,102 @@ test("derives transitive issue reachability from lowered nested writes and termi
 				],
 			},
 		});
+		await writeFile(
+			ticketsPath,
+			(await readFile(ticketsPath, "utf8")).replace(
+				'{ key: { id: row.requesterMembershipId }, patch: { status: "active" } }',
+				"{ key: {}, patch: {} }",
+			),
+		);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-026",
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			details: { phase: "afterWrite" },
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
 }, 30_000);
+
+test("bounds dense cyclic issue reachability by visiting each kernel node once", () => {
+	const count = 11;
+	const identities = Array.from(
+		{ length: count },
+		(_, index) => `collection:dense${index}` as const,
+	);
+	const operations = {
+		format: "questpie.collection-operation-programs",
+		version: 1,
+		operations: identities.map((target, index) => ({
+			identity: `mutation:__collectionKernel.dense${index}.create`,
+			kind: "mutation",
+			mode: "writeTransaction",
+			target,
+			member: "create",
+			policy: `policy:dense${index}`,
+			keyFields: [],
+			callerInputFields: [],
+			requiredCallerInputFields: [],
+			trustedValueFields: [],
+			requiredTrustedValueFields: [],
+			selectedFieldPaths: [],
+			dataQuery: null,
+			dataQueryDigest: null,
+			normalizerProgramDigest: null,
+			serverValueProgramDigest: null,
+			outputCardinality: "one",
+			limits: {
+				inputBytes: 1,
+				resultBytes: 1,
+				rowsWritten: 1,
+				durationMilliseconds: 1,
+			},
+		})),
+	} as Parameters<typeof issueBearingCollectionRequirements>[1];
+	const programs = {
+		format: "questpie.collection-lifecycle-programs",
+		version: 1,
+		programs: identities.map((collection, index) => ({
+			format: "questpie.lifecycle-program.v1",
+			interpreter: "questpie.lifecycle-interpreter.v1",
+			runtimeBuild: "b".repeat(64),
+			reentryLimit: 8,
+			bindings: {
+				schema: "schema:dense",
+				collection,
+				fields: {},
+				issues: { invalid: `issue:dense${index}/invalid` },
+				capabilities: {},
+				operations: operations.operations.map(({ identity }) => identity),
+				jobs: [],
+			},
+			phases: {
+				normalize: [],
+				validate: [{ op: "throwIssue", issue: `issue:dense${index}/invalid` }],
+				check: [],
+				afterWrite: operations.operations
+					.filter((_, targetIndex) => targetIndex !== index)
+					.map((operation) => ({
+						op: "effect",
+						value: {
+							op: "capability",
+							capability: "write",
+							identity: operation.identity,
+							arguments: [],
+						},
+					})),
+			},
+			digest: `${index}`.padStart(64, "0"),
+		})),
+	} as Parameters<typeof issueBearingCollectionRequirements>[0];
+	expect(
+		issueBearingCollectionRequirements(programs, operations)[
+			"collection:dense0"
+		],
+	).toHaveLength(count);
+}, 1_000);
 
 test("compiles Team Support Desk lifecycle authoring without retaining callbacks", async () => {
 	const compilation = await compileApplication({

@@ -6,9 +6,9 @@ import type {
 	CollectionLifecycleProgramsV1,
 	LifecycleIdentity,
 	LifecyclePhase,
-	LifecycleStatement,
 } from "./contract";
 import type { LifecycleOrigin } from "./lower";
+import { analyzeLifecycleStatements } from "./statement-analysis";
 
 export type CollectionIssueOrigins = ReadonlyMap<
 	LifecycleIdentity,
@@ -38,57 +38,23 @@ function traceIssueReachability(
 		LifecycleIdentity,
 		Readonly<ReachableIssue & { path: readonly string[] }>
 	>();
-	const visit = (
-		identity: string,
-		path: readonly string[],
-		ancestors: ReadonlySet<string>,
-	) => {
-		if (ancestors.has(identity)) return;
+	const visited = new Set<string>();
+	const visit = (identity: string, path: readonly string[]) => {
+		if (visited.has(identity)) return;
+		visited.add(identity);
 		const node = nodes.get(identity);
 		if (!node)
 			throw new TypeError(`unknown lifecycle reachability node ${identity}`);
-		const nextAncestors = new Set(ancestors).add(identity);
 		for (const issue of node.issues)
 			if (!reachable.has(issue.issue))
 				reachable.set(
 					issue.issue,
 					Object.freeze({ ...issue, path: [...path, identity] }),
 				);
-		for (const target of node.calls)
-			visit(target, [...path, identity], nextAncestors);
+		for (const target of node.calls) visit(target, [...path, identity]);
 	};
-	visit(root, [], new Set());
+	visit(root, []);
 	return reachable;
-}
-
-function issuesInStatements(
-	statements: readonly LifecycleStatement[],
-): readonly LifecycleIdentity[] {
-	return statements.flatMap((statement) =>
-		statement.op === "throwIssue"
-			? [statement.issue]
-			: statement.op === "if"
-				? [
-						...issuesInStatements(statement.consequent),
-						...issuesInStatements(statement.otherwise),
-					]
-				: [],
-	);
-}
-
-function callsInStatements(
-	statements: readonly LifecycleStatement[],
-): readonly LifecycleIdentity[] {
-	return statements.flatMap((statement) =>
-		statement.op === "effect"
-			? [statement.value.identity]
-			: statement.op === "if"
-				? [
-						...callsInStatements(statement.consequent),
-						...callsInStatements(statement.otherwise),
-					]
-				: [],
-	);
 }
 
 function buildIssueReachabilityGraph(
@@ -128,15 +94,17 @@ function buildIssueReachabilityGraph(
 		const issues = (
 			["normalize", "validate", "check", "afterWrite"] as const
 		).flatMap((phase) =>
-			issuesInStatements(program.phases[phase]).map((issue) => ({
+			analyzeLifecycleStatements(program.phases[phase]).issues.map((issue) => ({
 				issue,
 				phase,
 				origin: originFor(program.bindings.collection, phase, issue),
 			})),
 		);
 		const calls = Object.values(program.phases)
-			.flatMap(callsInStatements)
-			.map((identity) => operationNodeByIdentity.get(identity))
+			.flatMap(
+				(statements) => analyzeLifecycleStatements(statements).capabilities,
+			)
+			.map(({ identity }) => operationNodeByIdentity.get(identity))
 			.filter((target): target is string => target !== undefined)
 			.sort(compareAscii);
 		nodes.set(identity, Object.freeze({ identity, issues, calls }));

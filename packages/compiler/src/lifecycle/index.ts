@@ -10,11 +10,16 @@ import {
 	type LifecycleIdentity,
 	type LifecyclePhase,
 } from "./contract";
-import { lowerLifecyclePhase, type LifecycleOrigin } from "./lower";
+import {
+	lowerLifecyclePhase,
+	type LifecycleCapabilityCandidate,
+	type LifecycleOrigin,
+} from "./lower";
 import {
 	issueBearingCollectionRequirements,
 	validateIssueMappings,
 } from "./reachability";
+import { analyzeLifecycleStatements } from "./statement-analysis";
 
 export type {
 	CollectionLifecycleProgramsV1,
@@ -28,21 +33,6 @@ export type {
 export interface CompiledCollectionLifecycle {
 	readonly artifact: CollectionLifecycleProgramsV1;
 	readonly issueRequirements: Readonly<Record<string, readonly string[]>>;
-}
-
-function invokedCapabilities(
-	statements: readonly import("./contract").LifecycleStatement[],
-): readonly LifecycleIdentity[] {
-	return statements.flatMap((statement) =>
-		statement.op === "effect"
-			? [statement.value.identity]
-			: statement.op === "if"
-				? [
-						...invokedCapabilities(statement.consequent),
-						...invokedCapabilities(statement.otherwise),
-					]
-				: [],
-	);
 }
 
 function operationsFor(
@@ -66,7 +56,10 @@ function bindingsFor(
 	collection: NormalizedResource,
 	resources: readonly NormalizedResource[],
 	operations: CollectionOperationProgramsV1,
-): LifecycleBindings {
+): Omit<LifecycleBindings, "capabilities"> &
+	Readonly<{
+		capabilities: Readonly<Record<string, LifecycleCapabilityCandidate>>;
+	}> {
 	const fields = collection.contract.fields as readonly Readonly<{
 		path: readonly string[];
 	}>[];
@@ -79,17 +72,42 @@ function bindingsFor(
 				(operation) =>
 					operation.member === "create" || operation.member === "update",
 			)
-			.map((operation) => [
-				`data.${operation.target.slice("collection:".length)}.${operation.member}`,
-				Object.freeze({
-					kind: "write",
-					identity: operation.identity,
-					argumentKeys:
-						operation.member === "create"
-							? Object.freeze(["input", "values"])
-							: Object.freeze(["key", "patch", "values"]),
-				}) satisfies LifecycleCapabilityBinding,
-			]),
+			.map((operation) => {
+				const prefixed = (
+					prefix: string,
+					paths: readonly (readonly string[])[],
+				) => paths.map((path) => `${prefix}.${path.join(".")}`);
+				const argumentKeys = [
+					...(operation.member === "update"
+						? prefixed("key", operation.keyFields)
+						: []),
+					...prefixed(
+						operation.member === "create" ? "input" : "patch",
+						operation.callerInputFields,
+					),
+					...prefixed("values", operation.trustedValueFields),
+				].sort(compareAscii);
+				const requiredArgumentKeys = [
+					...(operation.member === "update"
+						? prefixed("key", operation.keyFields)
+						: []),
+					...prefixed(
+						operation.member === "create" ? "input" : "patch",
+						operation.requiredCallerInputFields,
+					),
+					...prefixed("values", operation.requiredTrustedValueFields),
+				].sort(compareAscii);
+				return [
+					`data.${operation.target.slice("collection:".length)}.${operation.member}`,
+					Object.freeze({
+						kind: "write",
+						identity: operation.identity,
+						argumentKeys: Object.freeze(argumentKeys),
+						requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
+						requireNonEmptyWriteLane: operation.member === "update",
+					}) satisfies LifecycleCapabilityCandidate,
+				];
+			}),
 	);
 	return Object.freeze({
 		schema: `schema:${applicationName}`,
@@ -161,18 +179,37 @@ export function projectCollectionLifecyclePrograms(
 				),
 			) as Readonly<Record<LifecyclePhase, readonly never[]>>;
 			issueOrigins.set(bindings.collection, originsByPhase);
-			const invoked = new Set(
-				Object.values(phases).flatMap(invokedCapabilities),
+			const invokedCapabilities = Object.values(phases).flatMap(
+				(statements) => analyzeLifecycleStatements(statements).capabilities,
 			);
+			const invoked = new Map<LifecycleIdentity, readonly string[]>();
+			for (const capability of invokedCapabilities)
+				invoked.set(capability.identity, capability.argumentKeys);
 			const retainedCapabilities = Object.freeze(
 				Object.fromEntries(
-					Object.entries(bindings.capabilities).filter(([, capability]) =>
-						invoked.has(capability.identity),
+					Object.entries(bindings.capabilities).flatMap(
+						([name, capability]) => {
+							const argumentKeys = invoked.get(capability.identity);
+							return argumentKeys
+								? [
+										[
+											name,
+											Object.freeze({
+												kind: capability.kind,
+												identity: capability.identity,
+												argumentKeys: Object.freeze(argumentKeys),
+											}) satisfies LifecycleCapabilityBinding,
+										],
+									]
+								: [];
+						},
 					),
 				),
 			);
 			const retainedOperations = Object.freeze(
-				[...new Set([...bindings.operations, ...invoked])].sort(compareAscii),
+				[...new Set([...bindings.operations, ...invoked.keys()])].sort(
+					compareAscii,
+				),
 			);
 			const retainedBindings = Object.freeze({
 				...bindings,
