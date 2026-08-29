@@ -43,6 +43,7 @@ import {
 import {
 	projectCommittedMigrations,
 	projectRealtimeWireContract,
+	projectCompilerRuntimeBuild,
 	projectRuntimeBuild,
 	projectRuntimeContract,
 	renderApplicationBundle,
@@ -417,18 +418,19 @@ export async function createArtifacts(
 	const contextBootstrapPlans = projectPostgresContextBootstrapPlans(schema);
 	const mutationTransactionStatements =
 		projectPostgresMutationTransactionStatements();
-	const compilerRuntimeBuild = digest("questpie-compiler-runtime-build-v1", {
-		version: "4.0.0-beta.1",
-		bunVersion: Bun.version,
-		buildInputDigest: contentDigest(canonicalBytes(buildInput)),
-		executableFormat: "bun-esm-bundle-v1",
-	});
+	const compilerRuntimeBuild = projectCompilerRuntimeBuild(
+		contentDigest(canonicalBytes(buildInput)),
+	).digest;
 	const lifecyclePrograms = projectCollectionLifecyclePrograms({
 		applicationName: input.configuration.application.name,
 		runtimeBuild: compilerRuntimeBuild,
 		resources: operationResources,
 		evaluatedExports: input.evaluatedExports,
 	});
+	const collectionLifecycleProgramsDigest =
+		lifecyclePrograms.programs.length > 0
+			? digest("questpie.collection-lifecycle-programs-v1", lifecyclePrograms)
+			: null;
 	collectionOperationPrograms = bindCollectionLifecyclePrograms(
 		collectionOperationPrograms,
 		lifecyclePrograms,
@@ -583,6 +585,7 @@ export async function createArtifacts(
 			contextBootstrapPlansDigest: contextBootstrapPlans.digest,
 			mutationTransactionStatementsDigest: mutationTransactionStatements.digest,
 			collectionOperationPlansDigest: postgresCollectionOperationPlans.digest,
+			collectionLifecycleProgramsDigest,
 			collectionOperationArtifacts:
 				collectionOperationPrograms.operations.length > 0,
 			collectionLifecycleArtifacts: lifecyclePrograms.programs.length > 0,

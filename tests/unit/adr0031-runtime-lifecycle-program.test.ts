@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import {
+	collectionLifecycleIssueIdentity,
 	executeCollectionLifecyclePhase,
 	isCollectionLifecycleIssue,
 	linkCollectionMutationPrograms,
@@ -98,6 +99,15 @@ const lifecycle = {
 	...lifecycleContract,
 	digest: digest("questpie.collection-lifecycle-program.v1", lifecycleContract),
 } as const;
+const lifecyclePrograms = {
+	format: "questpie.collection-lifecycle-programs",
+	version: 1,
+	programs: [lifecycle],
+} as const;
+const lifecycleProgramsDigest = digest(
+	"questpie.collection-lifecycle-programs-v1",
+	lifecyclePrograms,
+);
 
 const operation = {
 	identity: "mutation:__collectionKernel.tickets.create",
@@ -143,17 +153,15 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 			version: 1,
 			programs: [],
 		},
-		lifecyclePrograms: {
-			format: "questpie.collection-lifecycle-programs",
-			version: 1,
-			programs: [lifecycle],
-		},
+		lifecyclePrograms,
+		expectedLifecycleProgramsDigest: lifecycleProgramsDigest,
 		compilerRuntimeBuildDigest: runtimeBuild,
 		policies: [
 			{ identity: "policy:tickets.default", target: "collection:tickets" },
 		],
 	});
 	const program = linked.byIdentity.get(operation.identity)!;
+	expect(program.lifecycleProgram?.bindings).toEqual(bindings);
 	await expect(
 		executeCollectionLifecyclePhase(program.lifecycleProgram!, "normalize", {
 			input: { reference: "  SUP-123  ", summary: "Help" },
@@ -174,6 +182,19 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 		caught = error;
 	}
 	expect(isCollectionLifecycleIssue(caught)).toBe(true);
+	expect(collectionLifecycleIssueIdentity(caught)).toBe(
+		"issue:tickets/invalidReference",
+	);
+	const forged = Object.assign(new Error("Collection lifecycle issue"), {
+		[Symbol.for("questpie.runtime.collection-lifecycle-issue.v1")]: true,
+		identity: "issue:tickets/invalidReference",
+		name: "CollectionLifecycleIssue",
+	});
+	expect(isCollectionLifecycleIssue(forged)).toBe(false);
+	expect(collectionLifecycleIssueIdentity(forged)).toBeNull();
+	expect(isCollectionLifecycleIssue(Object.create(caught as object))).toBe(
+		false,
+	);
 });
 
 test("normalizes a sparse lane with ordinary optional-chain semantics", async () => {
@@ -246,6 +267,7 @@ test("rejects lifecycle digest and Runtime Build drift", () => {
 					version: 1,
 					programs: [hostile],
 				},
+				expectedLifecycleProgramsDigest: lifecycleProgramsDigest,
 				compilerRuntimeBuildDigest: runtimeBuild,
 				policies: [
 					{
@@ -254,5 +276,50 @@ test("rejects lifecycle digest and Runtime Build drift", () => {
 					},
 				],
 			}),
-		).toThrow(/lifecycle|Runtime Build|digest/i);
+		).toThrow(/lifecycle|Runtime Build|digest|canonical/i);
+
+	for (const driftedBindings of [
+		{ ...bindings, schema: "schema:drifted" },
+		{ ...bindings, operations: ["mutation:ticket.other"] },
+	]) {
+		const contract = { ...lifecycleContract, bindings: driftedBindings };
+		const resigned = {
+			...contract,
+			digest: digest("questpie.collection-lifecycle-program.v1", contract),
+		};
+		expect(() =>
+			linkCollectionMutationPrograms({
+				collectionOperations: {
+					format: "questpie.collection-operation-programs",
+					version: 1,
+					operations: [
+						{ ...operation, lifecycleProgramDigest: resigned.digest },
+					],
+				},
+				fieldNormalizers: {
+					format: "questpie.field-normalizer-programs",
+					version: 1,
+					programs: [],
+				},
+				serverValues: {
+					format: "questpie.server-value-programs",
+					version: 1,
+					programs: [],
+				},
+				lifecyclePrograms: {
+					format: "questpie.collection-lifecycle-programs",
+					version: 1,
+					programs: [resigned],
+				},
+				expectedLifecycleProgramsDigest: lifecycleProgramsDigest,
+				compilerRuntimeBuildDigest: runtimeBuild,
+				policies: [
+					{
+						identity: "policy:tickets.default",
+						target: "collection:tickets",
+					},
+				],
+			}),
+		).toThrow(/lifecycle program envelope digest/i);
+	}
 });

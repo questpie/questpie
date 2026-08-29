@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { createHash } from "node:crypto";
 import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
@@ -69,6 +70,13 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 	);
 	expect(compilation.generatedFiles["internal/application.js"]).not.toContain(
 		"AUTHORED_LIFECYCLE_CALLBACK_MUST_NOT_SHIP",
+	);
+	const envelopeDigest = createHash("sha256")
+		.update("questpie.collection-lifecycle-programs-v1\0")
+		.update(artifactBytes)
+		.digest("hex");
+	expect(compilation.generatedFiles["internal/application.js"]).toContain(
+		envelopeDigest,
 	);
 
 	const kernels = JSON.parse(

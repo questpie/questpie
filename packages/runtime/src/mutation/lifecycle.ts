@@ -11,10 +11,13 @@ export interface LinkedCollectionLifecycleProgramV1 {
 	readonly runtimeBuild: string;
 	readonly reentryLimit: number;
 	readonly bindings: Readonly<{
+		schema: string;
 		collection: string;
 		fields: Readonly<Record<string, string>>;
 		issues: Readonly<Record<string, string>>;
+		capabilities: Readonly<Record<string, never>>;
 		operations: readonly string[];
+		jobs: readonly never[];
 	}>;
 	readonly phases: Readonly<Record<Phase, readonly RecordValue[]>>;
 	readonly digest: string;
@@ -23,7 +26,7 @@ export interface LinkedCollectionLifecycleProgramV1 {
 const digestPattern = /^[0-9a-f]{64}$/;
 const optionalAbsence = Symbol("questpie.lifecycle.optional-absence");
 const returned = Symbol("questpie.lifecycle.returned");
-const issueBrand = Symbol.for("questpie.runtime.collection-lifecycle-issue.v1");
+const issuedLifecycleIssues = new WeakMap<Error, string>();
 
 function lifecycleDigest(domain: string, value: unknown): string {
 	return createHash("sha256")
@@ -33,29 +36,25 @@ function lifecycleDigest(domain: string, value: unknown): string {
 }
 
 class CollectionLifecycleIssue extends Error {
-	readonly [issueBrand] = true;
-
-	constructor(readonly identity: string) {
+	constructor(identity: string) {
 		super("Collection lifecycle issue");
 		this.name = "CollectionLifecycleIssue";
+		issuedLifecycleIssues.set(this, identity);
 	}
 }
 
 export function isCollectionLifecycleIssue(
 	value: unknown,
 ): value is CollectionLifecycleIssue {
-	if (!(value instanceof Error)) return false;
-	const candidate = value as Error &
-		Readonly<{ [issueBrand]?: unknown; identity?: unknown }>;
-	return (
-		candidate[issueBrand] === true && typeof candidate.identity === "string"
-	);
+	return value instanceof Error && issuedLifecycleIssues.has(value);
 }
 
 export function collectionLifecycleIssueIdentity(
 	value: unknown,
 ): string | null {
-	return isCollectionLifecycleIssue(value) ? value.identity : null;
+	return value instanceof Error
+		? (issuedLifecycleIssues.get(value) ?? null)
+		: null;
 }
 
 function fail(message: string): never {
@@ -300,7 +299,7 @@ function decodeBindings(value: unknown, label: string) {
 		],
 		label,
 	);
-	identity(bindings.schema, `${label} schema`, "schema");
+	const schema = identity(bindings.schema, `${label} schema`, "schema");
 	const collection = identity(
 		bindings.collection,
 		`${label} collection`,
@@ -330,10 +329,13 @@ function decodeBindings(value: unknown, label: string) {
 	if (array(bindings.jobs, `${label} jobs`).length)
 		fail(`${label} Jobs are unavailable in LIFE-01`);
 	return Object.freeze({
+		schema,
 		collection,
 		fields: Object.freeze({ ...fields }) as Readonly<Record<string, string>>,
 		issues: Object.freeze({ ...issues }) as Readonly<Record<string, string>>,
+		capabilities: Object.freeze({}) as Readonly<Record<string, never>>,
 		operations: Object.freeze(operations),
+		jobs: Object.freeze([]) as readonly never[],
 	});
 }
 

@@ -66,6 +66,19 @@ export interface RuntimeContractProjection {
 	readonly wireDigest: string;
 }
 
+export function projectCompilerRuntimeBuild(buildInputDigest: string) {
+	const compiler = Object.freeze({
+		version: "4.0.0-beta.1",
+		bunVersion: Bun.version,
+		buildInputDigest,
+		executableFormat: "bun-esm-bundle-v1",
+	});
+	return Object.freeze({
+		compiler,
+		digest: digest("questpie-compiler-runtime-build-v1", compiler),
+	});
+}
+
 function mutationAdmission(
 	resource: NormalizedResource,
 ): "authenticated" | "public" | "system" {
@@ -499,12 +512,10 @@ export function projectRuntimeBuild(
 		)
 		.map(([path, bytes]) => ({ path, digest: contentDigest(bytes) }))
 		.sort((left, right) => compareAscii(left.path, right.path));
-	const compiler = {
-		version: "4.0.0-beta.1",
-		bunVersion: Bun.version,
-		buildInputDigest: fileDigest("build-input.json"),
-		executableFormat: "bun-esm-bundle-v1",
-	};
+	const buildInputDigest = fileDigest("build-input.json");
+	if (!buildInputDigest)
+		throw new TypeError("Runtime Build requires build-input.json");
+	const compilerRuntimeBuild = projectCompilerRuntimeBuild(buildInputDigest);
 	const slots = input.runtime.executables.slots as readonly Readonly<{
 		identity: string;
 		kind: string;
@@ -526,11 +537,8 @@ export function projectRuntimeBuild(
 		application: `application:${input.configuration.application.name}`,
 		runtimeAbi: "questpie.runtime.v1",
 		internalProtocol: "questpie.internal.v7",
-		compiler,
-		compilerRuntimeBuildDigest: digest(
-			"questpie-compiler-runtime-build-v1",
-			compiler,
-		),
+		compiler: compilerRuntimeBuild.compiler,
+		compilerRuntimeBuildDigest: compilerRuntimeBuild.digest,
 		manifestDigest: fileDigest("manifest.json"),
 		appContractDigest: fileDigest("app.ts"),
 		clientContractDigest: input.runtime.clientContractDigest,

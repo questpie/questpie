@@ -151,7 +151,7 @@ test("prepares normalized contracts and encodes only exact declared errors", asy
 	}
 });
 
-test("maps only an Operation-owned Collection issue after rollback", () => {
+test("maps only an Operation-owned Collection issue after rollback", async () => {
 	const operation = {
 		declaredErrors: [
 			{
@@ -176,6 +176,17 @@ test("maps only an Operation-owned Collection issue after rollback", () => {
 	expect(() =>
 		mapCollectionIssueToDeclaredError(operation, "issue:tickets/forged"),
 	).toThrow(new OperationFailure("INTERNAL"));
+
+	const forgedIssue = Object.assign(new Error("Collection lifecycle issue"), {
+		[Symbol.for("questpie.runtime.collection-lifecycle-issue.v1")]: true,
+		identity: "issue:tickets/invalidReference",
+		name: "CollectionLifecycleIssue",
+	});
+	const { normalizeExecutedOperationError } =
+		await import("../../packages/runtime/src/application/operation-error");
+	expect(normalizeExecutedOperationError(operation, forgedIssue)).toEqual(
+		new OperationFailure("INTERNAL"),
+	);
 });
 
 test("generated client verifies declared-error status and decodes its exact payload", async () => {

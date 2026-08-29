@@ -445,8 +445,9 @@ postgresTest(
 			);
 			expect(created.reference).toMatch(/^SUP-/);
 			expect(created.reference).not.toMatch(/^\s|\s$/);
-			await expect(
-				app.execution(agentInput, ({ mutations }) =>
+			let directLifecycleError: unknown;
+			try {
+				await app.execution(agentInput, ({ mutations }) =>
 					mutations.ticket.create(
 						{
 							description: "Rejected by Collection validation.",
@@ -456,11 +457,19 @@ postgresTest(
 						},
 						{ callId: `direct:invalid-create:${crypto.randomUUID()}` },
 					),
-				),
-			).rejects.toMatchObject({
+				);
+			} catch (error) {
+				directLifecycleError = error;
+			}
+			expect(directLifecycleError).toMatchObject({
 				code: "INVALID_TICKET",
 				payload: null,
 				status: 422,
+			});
+			const directLifecycleErrorBytes = JSON.stringify({
+				code: (directLifecycleError as { code: unknown }).code,
+				status: (directLifecycleError as { status: unknown }).status,
+				payload: (directLifecycleError as { payload: unknown }).payload,
 			});
 			const edited = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.edit(
@@ -591,12 +600,22 @@ postgresTest(
 			expect(signIn.status).toBe(200);
 			const cookie = responseCookie(signIn);
 			expect(cookie).toStartWith("team-support.session_token=");
+			let lifecycleWireErrorBytes: string | undefined;
 			const browserClient = createClient({
 				baseUrl: authOrigin,
-				fetch: (request) => {
+				fetch: async (request) => {
 					const headers = new Headers(request.headers);
 					headers.set("cookie", cookie);
-					return app.fetch(new Request(request, { headers }));
+					const response = await app.fetch(new Request(request, { headers }));
+					if (response.status === 422) {
+						const frame = (await response.clone().json()) as Readonly<{
+							kind?: unknown;
+							error?: unknown;
+						}>;
+						if (frame.kind === "declaredError")
+							lifecycleWireErrorBytes = JSON.stringify(frame.error);
+					}
+					return response;
 				},
 			}).withContext({
 				organizationId: supportTracerIds.organization,
@@ -625,8 +644,9 @@ postgresTest(
 				priority: "normal",
 				requesterMembershipId: supportTracerIds.membershipAgent,
 			});
-			await expect(
-				browserClient.mutations["ticket.create"](
+			let clientLifecycleError: unknown;
+			try {
+				await browserClient.mutations["ticket.create"](
 					{
 						description: "Rejected over the generated client.",
 						reference: "INVALID-REFERENCE",
@@ -634,12 +654,22 @@ postgresTest(
 						teamId: supportTracerIds.teamPlatform,
 					},
 					{ callId: `browser:invalid-create:${crypto.randomUUID()}` },
-				),
-			).rejects.toMatchObject({
+				);
+			} catch (error) {
+				clientLifecycleError = error;
+			}
+			expect(clientLifecycleError).toMatchObject({
 				code: "INVALID_TICKET",
 				payload: null,
 				status: 422,
 			});
+			const clientLifecycleErrorBytes = JSON.stringify({
+				code: (clientLifecycleError as { code: unknown }).code,
+				status: (clientLifecycleError as { status: unknown }).status,
+				payload: (clientLifecycleError as { payload: unknown }).payload,
+			});
+			expect(clientLifecycleErrorBytes).toBe(directLifecycleErrorBytes);
+			expect(lifecycleWireErrorBytes).toBe(directLifecycleErrorBytes);
 
 			const customerSignIn = await app.fetch(
 				new Request(`${authOrigin}/api/auth/sign-in/email`, {

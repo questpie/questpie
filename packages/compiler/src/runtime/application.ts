@@ -73,6 +73,7 @@ function applicationEntry(
 		contextBootstrapPlansDigest: string;
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
+		collectionLifecycleProgramsDigest: string | null;
 		collectionOperationArtifacts: boolean;
 		collectionLifecycleArtifacts: boolean;
 		collectionOperationAdapterArtifacts: boolean;
@@ -394,6 +395,7 @@ const schemaProjection = ${JSON.stringify(input.schemaProjection)};
 const expectedContextBootstrapPlansDigest = ${JSON.stringify(input.contextBootstrapPlansDigest)};
 const expectedMutationTransactionStatementsDigest = ${JSON.stringify(input.mutationTransactionStatementsDigest)};
 const expectedCollectionOperationPlansDigest = ${JSON.stringify(input.collectionOperationPlansDigest)};
+const expectedCollectionLifecycleProgramsDigest = ${JSON.stringify(input.collectionLifecycleProgramsDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
 const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
 ${generatedOperations.definitions}
@@ -442,6 +444,7 @@ function linkMutationArtifacts(runtimeModule, artifactFiles, compilerRuntimeBuil
 		fieldNormalizers: ${emptyFieldNormalizerPrograms},
 		serverValues: ${emptyServerValuePrograms},
 		lifecyclePrograms: raw.lifecycle,
+		expectedLifecycleProgramsDigest: expectedCollectionLifecycleProgramsDigest,
 		compilerRuntimeBuildDigest,
 		policies: raw.policies,
 	});
@@ -762,6 +765,7 @@ export async function renderApplicationBundle(
 		contextBootstrapPlansDigest: string;
 		mutationTransactionStatementsDigest: string;
 		collectionOperationPlansDigest: string;
+		collectionLifecycleProgramsDigest: string | null;
 		collectionOperationArtifacts: boolean;
 		collectionLifecycleArtifacts: boolean;
 		collectionOperationAdapterArtifacts: boolean;

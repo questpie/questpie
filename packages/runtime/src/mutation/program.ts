@@ -540,6 +540,7 @@ export function linkCollectionMutationPrograms(
 		fieldNormalizers: unknown;
 		serverValues: unknown;
 		lifecyclePrograms?: unknown;
+		expectedLifecycleProgramsDigest?: string;
 		compilerRuntimeBuildDigest?: string;
 		policies: readonly MutationPolicyLinkV1[];
 	}>,
@@ -565,6 +566,14 @@ export function linkCollectionMutationPrograms(
 	);
 	const normalizers = decodeFieldNormalizerPrograms(input.fieldNormalizers);
 	const serverValues = decodeServerValuePrograms(input.serverValues);
+	if (
+		input.lifecyclePrograms &&
+		mutationProgramDigest(
+			"questpie.collection-lifecycle-programs-v1",
+			input.lifecyclePrograms,
+		) !== input.expectedLifecycleProgramsDigest
+	)
+		fail("lifecycle program envelope digest is invalid");
 	const lifecyclePrograms = input.lifecyclePrograms
 		? decodeCollectionLifecyclePrograms(
 				input.lifecyclePrograms,
