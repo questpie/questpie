@@ -301,8 +301,6 @@ postgres(
 		let freshRetry: Awaited<ReturnType<typeof invoke>> | undefined;
 		let rollbackCall = "";
 		let rollbackBody = "";
-		let freshRetryCall = "";
-		let freshRetryBody = "";
 		try {
 			committed = await invoke(
 				operation(body, () => (handlerCalls += 1)),
@@ -353,14 +351,36 @@ postgres(
 			expect(handlerCalls).toBe(2);
 			expect(faultCalls).toBe(1);
 
-			freshRetryCall = `pb05-fresh-retry-${crypto.randomUUID()}`;
-			freshRetryBody = `fresh-retry-${crypto.randomUUID()}`;
+			const rollbackProbe = new SQL(postgresUrl());
+			try {
+				const [rolledBack] = await rollbackProbe.unsafe(
+					`SELECT
+					  (SELECT count(*)::int FROM collaboration.messages WHERE body = $1) AS messages,
+					  (SELECT count(*)::int FROM collaboration.message_events e JOIN collaboration.messages m ON m.id = e.message_id WHERE m.body = $1) AS audits,
+					  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $2) AS receipts,
+					  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $2) AS intents,
+					  (SELECT count(*)::int FROM questpie_internal.durable_runs r JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS runs,
+					  (SELECT count(*)::int FROM questpie_internal.durable_run_events e JOIN questpie_internal.durable_runs r ON r.run_id = e.run_id JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS events`,
+					[rollbackBody, rollbackCall],
+				);
+				expect(rolledBack).toEqual({
+					messages: 0,
+					audits: 0,
+					receipts: 0,
+					intents: 0,
+					runs: 0,
+					events: 0,
+				});
+			} finally {
+				await rollbackProbe.close({ timeout: 2 });
+			}
+
 			freshRetry = await invoke(
-				operation(freshRetryBody, () => (handlerCalls += 1)),
-				freshRetryCall,
+				operation(rollbackBody, () => (handlerCalls += 1)),
+				rollbackCall,
 			);
 			expect(freshRetry.committed).toBe(true);
-			expect(freshRetry.value).toMatchObject({ body: freshRetryBody });
+			expect(freshRetry.value).toMatchObject({ body: rollbackBody });
 			expect(handlerCalls).toBe(3);
 		} finally {
 			await database.close({ deadlineAt: Date.now() + 5_000 });
@@ -410,24 +430,6 @@ postgres(
 				[messageId, callId],
 			);
 			expect(transactionWitness).toEqual({ transactions: 1 });
-			const [rolledBack] = await verify.unsafe(
-				`SELECT
-				  (SELECT count(*)::int FROM collaboration.messages WHERE body = $1) AS messages,
-				  (SELECT count(*)::int FROM collaboration.message_events e JOIN collaboration.messages m ON m.id = e.message_id WHERE m.body = $1) AS audits,
-				  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $2) AS receipts,
-				  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $2) AS intents,
-				  (SELECT count(*)::int FROM questpie_internal.durable_runs r JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS runs,
-				  (SELECT count(*)::int FROM questpie_internal.durable_run_events e JOIN questpie_internal.durable_runs r ON r.run_id = e.run_id JOIN questpie_internal.durable_dispatches i ON i.record_id = r.dispatch_id WHERE i.call_id = $2) AS events`,
-				[rollbackBody, rollbackCall],
-			);
-			expect(rolledBack).toEqual({
-				messages: 0,
-				audits: 0,
-				receipts: 0,
-				intents: 0,
-				runs: 0,
-				events: 0,
-			});
 			if (!freshRetry) throw new Error("fresh retry result is unavailable");
 			const [retried] = await verify.unsafe(
 				`SELECT
@@ -435,11 +437,7 @@ postgres(
 				  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audits,
 				  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $3) AS receipts,
 				  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $3) AS intents`,
-				[
-					(freshRetry.value as { id: string }).id,
-					freshRetryBody,
-					freshRetryCall,
-				],
+				[(freshRetry.value as { id: string }).id, rollbackBody, rollbackCall],
 			);
 			expect(retried).toEqual({
 				messages: 1,

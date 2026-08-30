@@ -645,7 +645,7 @@ provider exception, not as an Opus v2 artifact. Declared-unique `key` lookup,
 typed `ConstraintViolation`, and always-generated get/list/delete remain
 deferred.
 
-ADR-0031 implementation is complete through LIFE-04. LIFE-01 through LIFE-03
+ADR-0031 implementation is complete through LIFE-06. LIFE-01 through LIFE-03
 are integrated through `2088b05f5`: the compiler lowers deterministic
 `normalize`, `validate`, and Policy-aware `check` programs; Collection Issues
 cross only explicit Operation mappings; Runtime executes them inside one
@@ -667,6 +667,33 @@ reviews pass. `quality:release`, two consecutive release dry-runs, and
 declaration SHA-256 is
 `00877af5d2b8c0da6b57f4b061b0d567188bfd96c505bcafa8dad6400962c5fb`.
 
+LIFE-05 and LIFE-06 are integrated at `b883c1451`. The compiler emits exact
+phase capabilities and generated types for bounded Policy-aware get/list,
+sequential nested Collection writes, and Job acceptance. Runtime decodes and
+interprets only the closed phase grammar, rejects issue throws outside
+`validate` and `check`, and charges every capability plus lifecycle-owned Job
+SQL and returned rows to one terminal root budget. PostgreSQL executes list
+plans, nested writes, and durable acceptance on the owning Mutation
+transaction; rollback, cancellation, re-entry exhaustion, fresh retry, and
+committed replay retain the ADR-0031 semantics.
+
+Team Support Desk now owns the beginner lifecycle syntax and Collaboration the
+hostile nested-write case. Superseded Operation Set normalizer/value callbacks
+are gone. Explicit Operation Sets remain only for deliberately public
+Operations and current Policy-aware lifecycle get/list capabilities; they
+still compose the one generated Collection kernel and are not a lifecycle
+compatibility implementation. The PostgreSQL 17 atomic tracer passes with 15
+assertions and proves one transaction identity across root/nested writes,
+durable acceptance, receipt, and Change Ledger plus rollback, replay, and fresh
+retry. Team Support Desk PostgreSQL/Firefox passes with 83 assertions;
+Collaboration passes with 284 and exactly one lifecycle-created published
+event. The checked package remains SHA-256
+`d800dfa96bcdfcad99454539b5b3525777e8f4e23897027ca963c583eb23388c`;
+the declaration SHA-256 remains
+`00877af5d2b8c0da6b57f4b061b0d567188bfd96c505bcafa8dad6400962c5fb`.
+Final independent Standards and Spec reviews pass. `quality:release` and two
+consecutive byte-identical release dry-runs pass at those checked hashes.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
@@ -677,13 +704,11 @@ declaration SHA-256 is
    application browser call on the generated client. The Query/Relations slice
    above is closed; do not recreate the deleted list variants or a second
    relational execution kernel.
-3. Continue with LIFE-05 only: execute bounded sequential `afterWrite` reads,
-   nested Collection writes, and Job acceptance through the existing kernels in
-   the root Mutation transaction. Prove authored order, shared transaction and
-   budgets, deterministic re-entry failure, rollback, fresh retry, committed
-   replay, and capability absence. LIFE-01 through LIFE-04 are closed; do not
-   redesign or reimplement them. Finish consumer cleanup and final release
-   evidence in LIFE-06.
+3. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
+   reimplement lifecycle, restore callback-based Operation Set normalization,
+   or create a second Collection/CRUD kernel. Start the next vertical from its
+   own accepted authority; OpenTelemetry still requires a separate docs-first
+   decision before any implementation.
 4. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.

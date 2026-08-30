@@ -1,7 +1,7 @@
 # Collection lifecycle implementation map
 
-- Status: ready for ticketed implementation
-- Date: 2026-08-29
+- Status: complete through LIFE-06
+- Date: 2026-08-30
 - Classification: Kernel implementation of Accepted ADR-0031 plus Product
   projection through the reference consumers
 - Primary tracer: `fixtures/team-support-desk`
@@ -137,6 +137,8 @@ Ticket: `questpie/questpie#347`.
 
 Blocked by: LIFE-02, LIFE-03, and LIFE-04.
 
+Completed at `b883c1451`.
+
 Add sequential Policy-aware reads, nested Collection writes, and Job acceptance
 through the existing kernels. Prove authored order, shared transaction ID,
 shared budgets, deterministic re-entry failure, root rollback, fresh retry,
@@ -148,6 +150,8 @@ transaction, timer, parallel, detached, or external-effect capabilities.
 Ticket: `questpie/questpie#348`.
 
 Blocked by: LIFE-01 through LIFE-05.
+
+Completed at `b883c1451`.
 
 Finish Team Support Desk as the beginner/DX consumer and Collaboration as the
 authority/security hostile consumer. Remove old normalizer/value spellings and
@@ -188,8 +192,32 @@ Spec reviews over the complete vertical.
 
 ## Completion
 
-The vertical is complete only when every child ticket is closed in dependency
-order, both reference consumers use the production contract, superseded syntax
-has no current consumer, public docs match executable generated types, all
-required PostgreSQL/browser/release evidence passes, resources are cleaned up,
-and the final worktree is clean.
+The production compiler, canonical artifact, generated App Contract, Runtime,
+PostgreSQL owner, direct/wire/client path, reference consumers, and public guide
+are integrated at `b883c1451`. `afterWrite` executes bounded reads, sequential
+nested writes, and Job acceptance through the existing kernels in the root
+Mutation transaction. Every capability invocation and every Job statement/row
+spends the same terminal lifecycle budget. Runtime rejects forged phase syntax,
+including Collection Issue throws outside `validate` and `check`.
+
+Team Support Desk is the beginner/DX consumer; Collaboration is the hostile
+authority consumer. Their former Operation Set normalizer and trusted-value
+callbacks are deleted. Explicit Operation Sets remain only where a current
+consumer deliberately publishes an Operation or where lifecycle needs an
+explicitly declared Policy-aware get/list capability. They are accepted
+authoring shorthand over the one generated Collection kernel, not a retained
+lifecycle compatibility path or parallel CRUD kernel.
+
+The PostgreSQL 17 atomic tracer proves one transaction identity across the root
+write, lifecycle nested write, durable acceptance, receipt, and Change Ledger,
+plus rollback, committed replay, and an explicit fresh retry. The Team Support
+Desk PostgreSQL/Firefox journey passes with 83 assertions and Collaboration
+passes with 284, including exactly one lifecycle-created `published` event.
+Focused compiler, artifact, generated-contract, Runtime, budget, direct/wire,
+and hostile tests cover phase legality, shared limits, cancellation, re-entry,
+and nondisclosure. Final independent Standards and Spec reviews pass.
+`quality:release` and two byte-identical release dry-runs pass with package
+SHA-256
+`d800dfa96bcdfcad99454539b5b3525777e8f4e23897027ca963c583eb23388c`
+and declaration SHA-256
+`00877af5d2b8c0da6b57f4b061b0d567188bfd96c505bcafa8dad6400962c5fb`.
