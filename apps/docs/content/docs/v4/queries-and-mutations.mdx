@@ -79,6 +79,7 @@ stable.
 Collections may own exactly four lifecycle phases and payloadless issues:
 
 ```ts
+import type { CollectionLifecycle } from "#questpie/app";
 import { collection, defineCollection, field } from "questpie";
 
 export const tickets = defineCollection({
@@ -115,7 +116,7 @@ export const tickets = defineCollection({
 			if (candidate.status === "closed" && candidate.closedAt === null)
 				throw issues.closedWithoutTime();
 		},
-	},
+	} satisfies CollectionLifecycle<"tickets">,
 });
 
 export const teams = defineCollection({
@@ -252,7 +253,7 @@ lifecycleRecursionExceeded` and rolls back.
 Define the common Collection surface once:
 
 ```ts title="src/features/message-operations.ts"
-import { defineCollectionOperations, mutation, operation } from "questpie";
+import { defineCollectionOperations } from "questpie";
 import { messages } from "../data/collaboration";
 import { channelMessagePage } from "./message-data";
 import { messagePolicy } from "./messages-policy";
@@ -274,15 +275,6 @@ export const messageOperations = defineCollectionOperations(messages, {
 	},
 	create: {
 		input: ["channelId", "title", "body"],
-		normalize: ({ input }) => ({
-			title: operation.text.trim(input.title),
-		}),
-		values: ({ principal, tenant, operationTime }) => ({
-			companyId: mutation.overwrite(tenant.id),
-			authorId: mutation.overwrite(principal.id),
-			createdAt: mutation.overwrite(operationTime),
-			updatedAt: mutation.overwrite(operationTime),
-		}),
 		select: {
 			id: true,
 			channelId: true,
@@ -295,12 +287,6 @@ export const messageOperations = defineCollectionOperations(messages, {
 	},
 	update: {
 		input: ["title", "body"],
-		normalize: ({ input }) => ({
-			title: operation.text.trimIfPresent(input.title),
-		}),
-		values: ({ operationTime }) => ({
-			updatedAt: mutation.overwrite(operationTime),
-		}),
 		select: { id: true, title: true, body: true, updatedAt: true },
 	},
 	delete: { select: { id: true } },
@@ -312,7 +298,7 @@ lifecycle issue, the write member must own a payloadless Operation error and an
 explicit mapping:
 
 ```ts
-import { defineCollectionOperations, mutation, operation } from "questpie";
+import { defineCollectionOperations, operation } from "questpie";
 import { messageEvents } from "../data/message-events";
 import { messageEventPolicy } from "./message-event-policy";
 
@@ -332,9 +318,6 @@ export const messageEventOperations = defineCollectionOperations(
 			issueMappings: {
 				messageEvents: { invalidKind: "invalidMessage" },
 			},
-			values: ({ operationTime }) => ({
-				occurredAt: mutation.overwrite(operationTime),
-			}),
 			select: { id: true },
 		},
 	},
@@ -416,12 +399,11 @@ The Runtime rejects rather than normalizes it. The generated client mints a UUID
 when the caller omits the value. This example deliberately supplies one so a
 retry can reuse the same Call Identity.
 
-The caller cannot supply `companyId`, `authorId`, `createdAt`, or `updatedAt`.
-This Collection Operation Set's closed value programs own them. Those programs
-cannot read data, call a Service, perform I/O, dispatch work, sample an ambient
-clock, or target an undeclared Field. Their generated Context still calls the
-PostgreSQL transaction-stable clock `operationTime`; that spelling is temporary
-adapter compatibility. Named Mutations and lifecycle programs use `ctx.now`.
+Collection Operation Set writes fit caller Fields and database defaults.
+Collection lifecycle owns normalization, and `onUpdate: "now"` owns database
+update timestamps. When a write needs tenant, principal, or cross-Collection
+trusted values, expose a named Mutation and pass those values through its exact
+`ctx.data` call. Named Mutations and lifecycle programs use `ctx.now`.
 
 ## Use `check` for database-backed integrity
 
@@ -479,11 +461,42 @@ lifecycle: {
 }
 ```
 
+The exact acceptance object also permits `notBefore?: Date` for an absolute
+delayed start. No other key is accepted.
+
 The compiler-recognized effect graph admits sequential bounded Collection
 reads/writes and Job acceptance only. A list requires an explicit `first`.
 Bounded `for...of` is legal only over a compiler-known bounded result.
 `Promise.all`, detached work, Services, Actions, Request, Route, filesystem,
 network, timers, raw SQL, and raw transactions are unrepresentable.
+
+`ctx.data.teams.list` exists only when the application explicitly declares the
+`teams.list` Collection Operation. It accepts that Operation's exact parameters
+and returns its bounded `nodes` as a readonly array inside lifecycle code:
+
+```ts
+import type { CollectionLifecycle } from "#questpie/app";
+
+export const ticketTeamReindexLifecycle = {
+	afterWrite: async ({ row, ctx }) => {
+		const teams = await ctx.data.teams.list({
+			organizationId: row.organizationId,
+			first: 2,
+			after: null,
+		});
+		for (const team of teams) {
+			await ctx.jobs.ticket.reindex.accept({
+				input: { ticketId: row.id },
+				idempotencyKey: `ticket:${row.id}:team:${team.id}`,
+			});
+		}
+	},
+} satisfies CollectionLifecycle<"tickets">;
+```
+
+This does not publish an automatic list Operation. The declared list's Policy,
+selection, ordering, and PostgreSQL plan execute in the owning Mutation
+transaction, and the observed rows count against the same budget.
 
 Nested lifecycle writes execute synchronously in authored invocation order
 through the same Collection kernel. They share the outer transaction and its

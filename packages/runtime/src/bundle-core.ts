@@ -14,6 +14,7 @@ export {
 	executeLinkedPostgresContextBootstrap,
 	executeLinkedPostgresQueryPlan,
 	executePostgresDatabaseQuery,
+	executePostgresTransactionQuery,
 	linkPostgresContextBootstrapPlans,
 	linkPostgresQueryPlans,
 } from "./relational";

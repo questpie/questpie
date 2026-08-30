@@ -1,8 +1,5 @@
 import type { RuntimeIssueMappings } from "../operation";
-import type {
-	PostgresParameter,
-	PostgresTransaction,
-} from "../postgres/contract";
+import type { PostgresParameter } from "../postgres/contract";
 import {
 	createCollectionExecutionScope,
 	executeCollectionStatement,
@@ -56,7 +53,7 @@ type CollectionLeaf =
 	| NonNullable<LinkedPostgresUpdateOperationPlanV1["candidatePolicyCheck"]>
 	| LinkedPostgresUpdateOperationPlanV1["fieldAuthority"]["checks"][number]
 	| LinkedPostgresUpdateOperationPlanV1["write"];
-type ExecuteCollectionLeaf = (
+export type ExecuteCollectionLeaf = (
 	leaf: CollectionLeaf,
 	parameters: readonly PostgresParameter[],
 ) => Promise<readonly Row[]>;
@@ -64,7 +61,7 @@ export type TransactionQuery = (
 	statement: string,
 	parameters?: readonly unknown[],
 ) => Promise<readonly Row[]>;
-type ExecutionFacts = Readonly<{
+export type ExecutionFacts = Readonly<{
 	principal: Readonly<{ id: string; kind: string }>;
 	authority: Readonly<{ kind: string }>;
 	tenant: Readonly<{ id: string }>;
@@ -230,7 +227,7 @@ function bind(
 	});
 }
 
-function createCollectionMutationData(
+export function createCollectionMutationData(
 	input: Readonly<{
 		plans: LinkedPostgresCollectionOperationPlansV1;
 		executeLeaf: ExecuteCollectionLeaf;
@@ -241,6 +238,12 @@ function createCollectionMutationData(
 		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
 		executionBudget?: CollectionExecutionBudget;
 		issueMappings?: RuntimeIssueMappings;
+		callId?: string;
+		acceptJob?(identity: string, request: unknown): Promise<unknown>;
+		executeList?(
+			identity: string,
+			request: unknown,
+		): Promise<Readonly<{ nodes: readonly Row[]; observed: number }>>;
 	}>,
 ) {
 	const scope = createCollectionExecutionScope({
@@ -271,12 +274,43 @@ function createCollectionMutationData(
 		decode: (row, result) => decodeRow(row, result, input.resultValuesDecoded),
 		consumeRows,
 	});
+	const executeList = input.executeList
+		? async (identity: string, request: unknown, started: number) => {
+				const result = await executeCollectionStatement({
+					budget: executionBudget,
+					started,
+					durationMilliseconds: 5_000,
+					use: () => input.executeList!(identity, request),
+				});
+				consumeRows(result.observed);
+				return result.nodes;
+			}
+		: undefined;
+	type CollectionData = Readonly<
+		Record<
+			string,
+			Readonly<Record<string, (request: unknown) => Promise<unknown>>>
+		>
+	>;
+	let data: CollectionData;
 	const lifecycleCheck = createCollectionLifecycleCheckExecutor({
 		plans: input.plans,
 		operationTime: input.operationTime,
 		doom: lifecycleDoom,
 		budget: executionBudget,
 		executeGet,
+		executeList,
+		executeWrite: async (identity, request) => {
+			const plan = input.plans.byIdentity.get(identity);
+			if (!plan || (plan.member !== "create" && plan.member !== "update"))
+				throw new TypeError("Lifecycle write capability is unavailable");
+			const collection = data[plan.target.slice("collection:".length)];
+			const executeMember = collection?.[plan.member];
+			if (!executeMember)
+				throw new TypeError("Lifecycle write capability is withheld");
+			return executeMember(request);
+		},
+		executeJob: input.acceptJob,
 		executePolicy: (plan, check, values, started) =>
 			execute(
 				plan,
@@ -315,7 +349,7 @@ function createCollectionMutationData(
 		else if (plan.member === "get") members.get = plan;
 		collections.set(name, members);
 	}
-	return Object.freeze(
+	data = Object.freeze(
 		Object.fromEntries(
 			[...collections].map(([name, plans]) => [
 				name,
@@ -504,11 +538,19 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection create exceeded its row limit",
 										);
-									return decodeRow(
+									const written = decodeRow(
 										rows[0]!,
 										plan.write.result,
 										input.resultValuesDecoded,
 									);
+									await lifecycleCheck.executeAfterWrite(
+										plan,
+										written,
+										null,
+										input.callId ?? "",
+										started,
+									);
+									return written;
 								},
 							}
 						: {}),
@@ -692,6 +734,7 @@ function createCollectionMutationData(
 										plan.candidateValidation.result,
 										input.resultValuesDecoded,
 									);
+									let current: Row | null = null;
 									if (lifecycle) {
 										const currentResult =
 											plan.candidateValidation.currentResult;
@@ -699,7 +742,7 @@ function createCollectionMutationData(
 											throw new TypeError(
 												"Lifecycle update current candidate is incomplete",
 											);
-										const current = decodeRow(
+										current = decodeRow(
 											candidates[0]!,
 											currentResult,
 											input.resultValuesDecoded,
@@ -733,11 +776,19 @@ function createCollectionMutationData(
 										throw new TypeError(
 											"Collection update exceeded its row limit",
 										);
-									return decodeRow(
+									const written = decodeRow(
 										rows[0]!,
 										plan.write.result,
 										input.resultValuesDecoded,
 									);
+									await lifecycleCheck.executeAfterWrite(
+										plan,
+										written,
+										current,
+										input.callId ?? "",
+										started,
+									);
+									return written;
 								},
 							}
 						: {}),
@@ -745,41 +796,5 @@ function createCollectionMutationData(
 			]),
 		),
 	);
-}
-
-export function createPostgresCollectionMutationData(
-	input: Readonly<{
-		plans: LinkedPostgresCollectionOperationPlansV1;
-		query: TransactionQuery;
-		facts: ExecutionFacts;
-		operationTime: Date;
-		consumeRows(count: number): void;
-		executionBudget?: CollectionExecutionBudget;
-	}>,
-) {
-	return createCollectionMutationData({
-		...input,
-		resultValuesDecoded: false,
-		executeLeaf: (leaf, parameters) => input.query(leaf.sql, parameters),
-	});
-}
-
-export function createPostgresDatabaseCollectionMutationData(
-	input: Readonly<{
-		plans: LinkedPostgresCollectionOperationPlansV1;
-		transaction: PostgresTransaction;
-		facts: ExecutionFacts;
-		operationTime: Date;
-		consumeRows(count: number): void;
-		lifecycleDoom?: lifecycleRuntime.CollectionLifecycleDoom;
-		executionBudget?: CollectionExecutionBudget;
-		issueMappings?: RuntimeIssueMappings;
-	}>,
-) {
-	return createCollectionMutationData({
-		...input,
-		resultValuesDecoded: true,
-		executeLeaf: (leaf, parameters) =>
-			input.transaction.execute(leaf.statement, parameters),
-	});
+	return data;
 }

@@ -100,6 +100,8 @@ interface Environment {
 		LifecycleOrigin
 	>;
 	readonly capabilityArgumentKeys: Map<LifecycleIdentity, readonly string[]>;
+	readonly boundedSlots: Set<number>;
+	readonly slotFields: Map<number, Readonly<Record<string, LifecycleIdentity>>>;
 	nextSlot: number;
 }
 
@@ -224,7 +226,17 @@ function expression(
 			"pass data through a phase input or immutable local",
 		);
 	}
-	if (ts.isPropertyAccessExpression(node) || ts.isPropertyAccessChain(node))
+	if (ts.isPropertyAccessExpression(node) || ts.isPropertyAccessChain(node)) {
+		if (
+			ts.isIdentifier(node.expression) &&
+			env.parameters.get(node.expression.text) === "capabilities" &&
+			(node.name.text === "now" ||
+				(env.phase === "afterWrite" && node.name.text === "callId"))
+		)
+			return {
+				op: "root",
+				root: node.name.text as "now" | "callId",
+			};
 		return {
 			op: "member",
 			target: expression(node.expression, env),
@@ -236,6 +248,7 @@ function expression(
 			),
 			optional: !!node.questionDotToken,
 		};
+	}
 	if (ts.isElementAccessExpression(node))
 		return fail(
 			env,
@@ -359,12 +372,19 @@ function expression(
 					"unsupportedLifecycleSyntax",
 					`use ${method} with exactly ${arity} arguments`,
 				);
+			const optional =
+				!!node.questionDotToken || !!node.expression.questionDotToken;
+			const loweredTarget = expression(node.expression.expression, env);
+			const target =
+				optional && loweredTarget.op === "member"
+					? { ...loweredTarget, optional: true }
+					: loweredTarget;
 			return {
 				op: "stringMethod",
 				method,
-				target: expression(node.expression.expression, env),
+				target,
 				arguments: node.arguments.map((item) => expression(item, env)),
-				optional: !!node.questionDotToken || !!node.expression.questionDotToken,
+				optional,
 			};
 		}
 		let target: ts.Expression = node.expression;
@@ -443,12 +463,14 @@ function statements(
 						declaration.name.text,
 						Object.freeze(
 							Object.fromEntries(
-								Object.entries(binding.resultFields).filter(([name]) =>
-									selected.has(name),
+								Object.entries(binding.resultFields).filter(
+									([name]) => selected.size === 0 || selected.has(name),
 								),
 							),
 						),
 					);
+					env.slotFields.set(slot, env.localFields.get(declaration.name.text)!);
+					if (binding.cardinality === "many") env.boundedSlots.add(slot);
 				}
 			}
 			output.push({ op: "const", slot, value });
@@ -463,6 +485,8 @@ function statements(
 								...env,
 								locals: new Map(env.locals),
 								localFields: new Map(env.localFields),
+								boundedSlots: new Set(env.boundedSlots),
+								slotFields: new Map(env.slotFields),
 							},
 						)
 					: [];
@@ -540,6 +564,56 @@ function statements(
 				"remove detached work and return the supported result",
 			);
 		}
+		if (ts.isForOfStatement(node)) {
+			if (
+				env.phase !== "afterWrite" ||
+				node.awaitModifier ||
+				!ts.isVariableDeclarationList(node.initializer) ||
+				!(node.initializer.flags & ts.NodeFlags.Const) ||
+				node.initializer.declarations.length !== 1 ||
+				!ts.isIdentifier(node.initializer.declarations[0]!.name) ||
+				!ts.isIdentifier(node.expression)
+			)
+				fail(
+					env,
+					node,
+					"unsupportedLifecycleSyntax",
+					"use bounded for...of over a const read result in afterWrite",
+				);
+			const sourceSlot = env.locals.get(node.expression.text);
+			if (sourceSlot === undefined || !env.boundedSlots.has(sourceSlot))
+				fail(
+					env,
+					node.expression,
+					"unsupportedLifecycleSyntax",
+					"iterate only a compiler-known bounded read result",
+				);
+			const declaration = node.initializer.declarations[0]!;
+			const name = (declaration.name as ts.Identifier).text;
+			const slot = env.nextSlot++;
+			const nested: Environment = {
+				...env,
+				locals: new Map(env.locals),
+				localFields: new Map(env.localFields),
+				boundedSlots: new Set(env.boundedSlots),
+				slotFields: new Map(env.slotFields),
+			};
+			nested.locals.set(name, slot);
+			const fields = env.slotFields.get(sourceSlot);
+			if (fields) nested.localFields.set(name, fields);
+			output.push({
+				op: "forOf",
+				slot,
+				sourceSlot,
+				body: statements(
+					ts.isBlock(node.statement)
+						? node.statement.statements
+						: [node.statement],
+					nested,
+				),
+			});
+			continue;
+		}
 		fail(
 			env,
 			node,
@@ -556,6 +630,7 @@ export function lowerLifecyclePhase(
 	module: string,
 	base: SourceSpan,
 	bindings: LifecycleLoweringBindings,
+	capabilityArgumentKeys: Map<LifecycleIdentity, readonly string[]> = new Map(),
 ): LoweredLifecyclePhase {
 	const source = ts.createSourceFile(
 		module,
@@ -579,7 +654,9 @@ export function lowerLifecyclePhase(
 		locals: new Map(),
 		localFields: new Map(),
 		issueOriginCandidates: new WeakMap(),
-		capabilityArgumentKeys: new Map(),
+		capabilityArgumentKeys,
+		boundedSlots: new Set(),
+		slotFields: new Map(),
 		nextSlot: 0,
 	};
 	if (

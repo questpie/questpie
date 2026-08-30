@@ -35,6 +35,68 @@ export interface CompiledCollectionLifecycle {
 	readonly issueRequirements: Readonly<Record<string, readonly string[]>>;
 }
 
+type CodecShape = Readonly<{
+	keys: readonly string[];
+	requiredKeys: readonly string[];
+	roots: readonly string[];
+	requiredRoots: readonly string[];
+}>;
+
+function lifecycleJobShape(value: unknown): CodecShape | null {
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const root = value as Readonly<Record<string, unknown>>;
+	if (root.kind !== "object" || !root.properties) return null;
+	const properties = root.properties as Readonly<Record<string, unknown>>;
+	const walk = (
+		codecValue: unknown,
+		prefix: string,
+		required: boolean,
+	): Readonly<{ keys: readonly string[]; requiredKeys: readonly string[] }> => {
+		if (
+			!codecValue ||
+			typeof codecValue !== "object" ||
+			Array.isArray(codecValue)
+		)
+			return { keys: [prefix], requiredKeys: required ? [prefix] : [] };
+		const codec = codecValue as Readonly<Record<string, unknown>>;
+		if (codec.kind === "optional") return walk(codec.codec, prefix, false);
+		if (codec.kind === "nullable") return walk(codec.codec, prefix, required);
+		if (codec.kind !== "object" || !codec.properties)
+			return { keys: [prefix], requiredKeys: required ? [prefix] : [] };
+		const members = Object.entries(
+			codec.properties as Readonly<Record<string, unknown>>,
+		).map(([name, child]) => walk(child, `${prefix}.${name}`, required));
+		return {
+			keys: members.flatMap((member) => member.keys),
+			requiredKeys: members.flatMap((member) => member.requiredKeys),
+		};
+	};
+	const members = Object.entries(properties).map(([name, codec]) =>
+		walk(codec, name, true),
+	);
+	return Object.freeze({
+		keys: Object.freeze(
+			[
+				...members.flatMap((member) =>
+					member.keys.map((key) => `input.${key}`),
+				),
+				"idempotencyKey",
+				"notBefore",
+			].sort(compareAscii),
+		),
+		requiredKeys: Object.freeze(
+			[
+				...members.flatMap((member) =>
+					member.requiredKeys.map((key) => `input.${key}`),
+				),
+				"idempotencyKey",
+			].sort(compareAscii),
+		),
+		roots: Object.freeze(["idempotencyKey", "input", "notBefore"]),
+		requiredRoots: Object.freeze(["idempotencyKey", "input"]),
+	});
+}
+
 function operationsFor(
 	collection: NormalizedResource,
 	resources: readonly NormalizedResource[],
@@ -66,100 +128,180 @@ function bindingsFor(
 	const issues = (collection.contract.issues ?? {}) as Readonly<
 		Record<string, LifecycleIdentity>
 	>;
-	const capabilities = Object.fromEntries(
-		operations.operations
-			.filter(
-				(operation) =>
-					operation.member === "get" ||
-					operation.member === "create" ||
-					operation.member === "update",
-			)
-			.map((operation) => {
-				const prefixed = (
-					prefix: string,
-					paths: readonly (readonly string[])[],
-				) => paths.map((path) => `${prefix}.${path.join(".")}`);
-				if (operation.member === "get") {
-					const resultFields = Object.freeze(
-						Object.fromEntries(
-							operation.selectedFieldPaths
-								.filter((path) => path.length === 1)
-								.map((path) => [
-									path[0]!,
-									`${operation.target}/field:${path.join("/")}` as LifecycleIdentity,
-								]),
-						),
-					);
-					return [
-						`data.${operation.target.slice("collection:".length)}.get`,
-						Object.freeze({
-							kind: "read",
-							identity: operation.identity,
-							argumentKeys: Object.freeze(
-								[
-									...prefixed("key", operation.keyFields),
-									...prefixed("select", operation.selectedFieldPaths),
-								].sort(compareAscii),
-							),
-							argumentRoots: Object.freeze(["key", "select"]),
-							requiredArgumentKeys: Object.freeze(
-								prefixed("key", operation.keyFields).sort(compareAscii),
-							),
-							requiredArgumentRoots: Object.freeze(["key", "select"]),
-							requireNonEmptyWriteLane: false,
-							requireNonEmptySelect: true,
-							cardinality: "one",
-							first: true,
-							maxRows: 1,
-							resultFields,
-						}) satisfies LifecycleCapabilityCandidate,
-					];
-				}
-				const argumentKeys = [
-					...(operation.member === "update"
-						? prefixed("key", operation.keyFields)
-						: []),
-					...prefixed(
-						operation.member === "create" ? "input" : "patch",
-						operation.callerInputFields,
+	const operationCapabilities = operations.operations
+		.filter(
+			(operation) =>
+				operation.member === "get" ||
+				operation.member === "list" ||
+				operation.member === "create" ||
+				operation.member === "update",
+		)
+		.map((operation) => {
+			const prefixed = (
+				prefix: string,
+				paths: readonly (readonly string[])[],
+			) => paths.map((path) => `${prefix}.${path.join(".")}`);
+			if (operation.member === "get") {
+				const resultFields = Object.freeze(
+					Object.fromEntries(
+						operation.selectedFieldPaths
+							.filter((path) => path.length === 1)
+							.map((path) => [
+								path[0]!,
+								`${operation.target}/field:${path.join("/")}` as LifecycleIdentity,
+							]),
 					),
-					...prefixed("values", operation.trustedValueFields),
-				].sort(compareAscii);
-				const requiredArgumentKeys = [
-					...(operation.member === "update"
-						? prefixed("key", operation.keyFields)
-						: []),
-					...prefixed(
-						operation.member === "create" ? "input" : "patch",
-						operation.requiredCallerInputFields,
-					),
-					...prefixed("values", operation.requiredTrustedValueFields),
-				].sort(compareAscii);
-				const requiredArgumentRoots =
-					operation.member === "create" ? ["input"] : ["key"];
-				const argumentRoots = [
-					operation.member === "create" ? "input" : "key",
-					...(operation.member === "update" &&
-					operation.callerInputFields.length > 0
-						? ["patch"]
-						: []),
-					...(operation.trustedValueFields.length > 0 ? ["values"] : []),
-				].sort(compareAscii);
+				);
 				return [
-					`data.${operation.target.slice("collection:".length)}.${operation.member}`,
+					`data.${operation.target.slice("collection:".length)}.get`,
 					Object.freeze({
-						kind: "write",
+						kind: "read",
 						identity: operation.identity,
-						argumentKeys: Object.freeze(argumentKeys),
-						argumentRoots: Object.freeze(argumentRoots),
-						requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
-						requiredArgumentRoots: Object.freeze(requiredArgumentRoots),
-						requireNonEmptyWriteLane: operation.member === "update",
-						requireNonEmptySelect: false,
+						argumentKeys: Object.freeze(
+							[
+								...prefixed("key", operation.keyFields),
+								...prefixed("select", operation.selectedFieldPaths),
+							].sort(compareAscii),
+						),
+						argumentRoots: Object.freeze(["key", "select"]),
+						requiredArgumentKeys: Object.freeze(
+							prefixed("key", operation.keyFields).sort(compareAscii),
+						),
+						requiredArgumentRoots: Object.freeze(["key", "select"]),
+						requireNonEmptyWriteLane: false,
+						requireNonEmptySelect: true,
+						cardinality: "one",
+						first: true,
+						maxRows: 1,
+						resultFields,
 					}) satisfies LifecycleCapabilityCandidate,
 				];
-			}),
-	);
+			}
+			if (operation.member === "list") {
+				const query = operation.dataQuery;
+				if (!query)
+					throw new TypeError(`${operation.identity} has no Data Query`);
+				const first = query.parameters.find(
+					(parameter) => parameter.name === query.page.first.parameter,
+				);
+				if (
+					query.page.first.parameter !== "first" ||
+					!first ||
+					first.kind !== "scalar" ||
+					first.codec.kind !== "integer" ||
+					typeof first.codec.maximum !== "number" ||
+					!Number.isSafeInteger(first.codec.maximum) ||
+					first.codec.maximum < 1 ||
+					first.codec.maximum > 10_000
+				)
+					throw new TypeError(
+						`${operation.identity} lifecycle list requires a bounded first parameter`,
+					);
+				const parameterNames = query.parameters
+					.map((parameter) => parameter.name)
+					.sort(compareAscii);
+				const resultFields = Object.freeze(
+					Object.fromEntries(
+						query.select.flatMap((selection) =>
+							selection.kind === "field"
+								? [
+										[
+											selection.key,
+											selection.field as LifecycleIdentity,
+										] as const,
+									]
+								: [],
+						),
+					),
+				);
+				return [
+					`data.${operation.target.slice("collection:".length)}.list`,
+					Object.freeze({
+						kind: "read",
+						identity: operation.identity,
+						argumentKeys: Object.freeze(parameterNames),
+						argumentRoots: Object.freeze(parameterNames),
+						requiredArgumentKeys: Object.freeze(parameterNames),
+						requiredArgumentRoots: Object.freeze(parameterNames),
+						requireNonEmptyWriteLane: false,
+						requireNonEmptySelect: false,
+						cardinality: "many",
+						first: false,
+						maxRows: first.codec.maximum,
+						resultFields,
+					}) satisfies LifecycleCapabilityCandidate,
+				];
+			}
+			const argumentKeys = [
+				...(operation.member === "update"
+					? prefixed("key", operation.keyFields)
+					: []),
+				...prefixed(
+					operation.member === "create" ? "input" : "patch",
+					operation.callerInputFields,
+				),
+				...prefixed("values", operation.trustedValueFields),
+			].sort(compareAscii);
+			const requiredArgumentKeys = [
+				...(operation.member === "update"
+					? prefixed("key", operation.keyFields)
+					: []),
+				...prefixed(
+					operation.member === "create" ? "input" : "patch",
+					operation.requiredCallerInputFields,
+				),
+				...prefixed("values", operation.requiredTrustedValueFields),
+			].sort(compareAscii);
+			const requiredArgumentRoots =
+				operation.member === "create" ? ["input"] : ["key"];
+			const argumentRoots = [
+				operation.member === "create" ? "input" : "key",
+				...(operation.member === "update" &&
+				operation.callerInputFields.length > 0
+					? ["patch"]
+					: []),
+				...(operation.trustedValueFields.length > 0 ? ["values"] : []),
+			].sort(compareAscii);
+			return [
+				`data.${operation.target.slice("collection:".length)}.${operation.member}`,
+				Object.freeze({
+					kind: "write",
+					identity: operation.identity,
+					argumentKeys: Object.freeze(argumentKeys),
+					argumentRoots: Object.freeze(argumentRoots),
+					requiredArgumentKeys: Object.freeze(requiredArgumentKeys),
+					requiredArgumentRoots: Object.freeze(requiredArgumentRoots),
+					requireNonEmptyWriteLane: operation.member === "update",
+					requireNonEmptySelect: false,
+				}) satisfies LifecycleCapabilityCandidate,
+			];
+		});
+	const jobCapabilities = resources
+		.filter((resource) => resource.kind === "job")
+		.flatMap((resource) => {
+			const shape = lifecycleJobShape(resource.contract.input);
+			return shape
+				? [
+						[
+							`jobs.${resource.name}.accept`,
+							Object.freeze({
+								kind: "acceptJob",
+								identity: resource.identity as LifecycleIdentity,
+								argumentKeys: shape.keys,
+								argumentRoots: shape.roots,
+								requiredArgumentKeys: shape.requiredKeys,
+								requiredArgumentRoots: shape.requiredRoots,
+								requireNonEmptyWriteLane: false,
+								requireNonEmptySelect: false,
+							}) satisfies LifecycleCapabilityCandidate,
+						] as const,
+					]
+				: [];
+		});
+	const capabilities = Object.fromEntries([
+		...operationCapabilities,
+		...jobCapabilities,
+	]);
 	return Object.freeze({
 		schema: `schema:${applicationName}`,
 		collection: collection.identity as LifecycleIdentity,
@@ -172,6 +314,28 @@ function bindingsFor(
 							`${collection.identity}/field:${path.join("/")}` as LifecycleIdentity,
 						] as const,
 				),
+				...operations.operations
+					.filter((operation) => operation.member === "list")
+					.flatMap(
+						(operation) =>
+							operation.dataQuery?.select.flatMap((selection) => {
+								if (selection.kind !== "field") return [];
+								const fieldName = selection.field
+									.slice(selection.field.indexOf("/field:") + "/field:".length)
+									.split("/")
+									.at(-1)!;
+								if (selection.key !== fieldName)
+									throw new TypeError(
+										`${operation.identity} lifecycle list cannot alias selected Field ${selection.field}`,
+									);
+								return [
+									[
+										`${operation.target.slice("collection:".length)}.${selection.key}`,
+										selection.field as LifecycleIdentity,
+									] as const,
+								];
+							}) ?? [],
+					),
 				...operations.operations
 					.filter((operation) => operation.member === "get")
 					.flatMap((operation) =>
@@ -188,7 +352,16 @@ function bindingsFor(
 		issues: Object.freeze({ ...issues }),
 		capabilities: Object.freeze(capabilities),
 		operations: Object.freeze(operationsFor(collection, resources)),
-		jobs: Object.freeze([]),
+		jobs: Object.freeze(
+			resources
+				.filter(
+					(resource) =>
+						resource.kind === "job" &&
+						lifecycleJobShape(resource.contract.input) !== null,
+				)
+				.map((resource) => resource.identity as LifecycleIdentity)
+				.sort(compareAscii),
+		),
 	});
 }
 
@@ -225,6 +398,10 @@ export function projectCollectionLifecyclePrograms(
 				LifecyclePhase,
 				ReadonlyMap<LifecycleIdentity, LifecycleOrigin>
 			>();
+			const capabilityArgumentKeys = new Map<
+				LifecycleIdentity,
+				readonly string[]
+			>();
 			const phases = Object.fromEntries(
 				(["normalize", "validate", "check", "afterWrite"] as const).map(
 					(phase) => {
@@ -236,6 +413,7 @@ export function projectCollectionLifecyclePrograms(
 									authored.logicalPath,
 									source.span,
 									bindings,
+									capabilityArgumentKeys,
 								)
 							: null;
 						originsByPhase.set(phase, lowered?.issueOrigins ?? new Map());
@@ -281,14 +459,26 @@ export function projectCollectionLifecyclePrograms(
 				),
 			);
 			const retainedOperations = Object.freeze(
-				[...new Set([...bindings.operations, ...invoked.keys()])].sort(
-					compareAscii,
-				),
+				[
+					...new Set([
+						...bindings.operations,
+						...Object.values(retainedCapabilities)
+							.filter((capability) => capability.kind !== "acceptJob")
+							.map((capability) => capability.identity),
+					]),
+				].sort(compareAscii),
+			);
+			const retainedJobs = Object.freeze(
+				Object.values(retainedCapabilities)
+					.filter((capability) => capability.kind === "acceptJob")
+					.map((capability) => capability.identity)
+					.sort(compareAscii),
 			);
 			const retainedBindings = Object.freeze({
 				...bindings,
 				capabilities: retainedCapabilities,
 				operations: retainedOperations,
+				jobs: retainedJobs,
 			});
 			const contract = {
 				format: LIFECYCLE_PROGRAM_FORMAT,

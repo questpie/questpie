@@ -41,7 +41,7 @@ export const publishMessage = defineMutation({
 			input: {
 				channelId: input.channelId,
 				authorMembershipId: ctx.values.selectedMembershipId,
-				body: input.body.trim(),
+				body: input.body,
 			},
 			values: { createdAt: ctx.now },
 		});
@@ -52,24 +52,26 @@ export const publishMessage = defineMutation({
 			input.body === "__questpie_hostile_invalid_event__";
 		const invalidConstraint =
 			input.body === "__questpie_hostile_missing_message__";
-		try {
-			await ctx.data.messageEvents.create({
-				input: {
-					...(invalidConstraint ? {} : { messageId: message.id }),
-					...(invalidLifecycle ? {} : { kind: "published" }),
-				},
-				values: {
-					occurredAt: ctx.now,
-					...(invalidLifecycle ? { kind: "invalid" } : {}),
-					...(invalidConstraint
-						? { messageId: "00000000-0000-4000-8000-000000000099" }
-						: {}),
-				},
-			});
-		} catch (error) {
-			if (!invalidLifecycle) throw error;
-			// Hostile proof: application catch may continue, but the outer Mutation
-			// remains doomed and rolls this later dispatch back as well.
+		if (invalidLifecycle || invalidConstraint) {
+			try {
+				await ctx.data.messageEvents.create({
+					input: {
+						...(invalidConstraint ? {} : { messageId: message.id }),
+						...(invalidLifecycle ? {} : { kind: "published" }),
+					},
+					values: {
+						occurredAt: ctx.now,
+						...(invalidLifecycle ? { kind: "invalid" } : {}),
+						...(invalidConstraint
+							? { messageId: "00000000-0000-4000-8000-000000000099" }
+							: {}),
+					},
+				});
+			} catch (error) {
+				if (!invalidLifecycle) throw error;
+				// Hostile proof: application catch may continue, but the outer Mutation
+				// remains doomed and rolls this later dispatch back as well.
+			}
 		}
 		await ctx.dispatch.messagePublished({
 			channelId: input.channelId,

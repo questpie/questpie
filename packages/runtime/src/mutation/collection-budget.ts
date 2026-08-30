@@ -1,5 +1,6 @@
 import {
 	createCollectionLifecycleDoom,
+	CollectionLifecycleRecursionError,
 	type CollectionLifecycleDoom,
 } from "./lifecycle";
 
@@ -87,7 +88,7 @@ export function createCollectionExecutionBudget(
 			lifecycleDepth += 1;
 			if (lifecycleDepth > reentryLimit) {
 				lifecycleDepth -= 1;
-				terminal(new TypeError("Collection lifecycle recursion exceeded"));
+				terminal(new CollectionLifecycleRecursionError());
 			}
 			let active = true;
 			return () => {
@@ -96,6 +97,21 @@ export function createCollectionExecutionBudget(
 				lifecycleDepth -= 1;
 			};
 		},
+	});
+}
+
+export function createDefaultCollectionExecutionBudget(
+	input: Readonly<{
+		doom: CollectionLifecycleDoom;
+		signal?: AbortSignal;
+	}>,
+): CollectionExecutionBudget {
+	return createCollectionExecutionBudget({
+		...input,
+		maxStatements: 20,
+		maxDependencies: 20,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
 	});
 }
 
@@ -112,14 +128,7 @@ export function createCollectionExecutionScope(
 	const doom = input.doom ?? createCollectionLifecycleDoom();
 	const budget =
 		input.budget ??
-		createCollectionExecutionBudget({
-			doom,
-			signal: input.signal,
-			maxStatements: 20,
-			maxDependencies: 20,
-			maxRows: 100,
-			maxDurationMilliseconds: 5_000,
-		});
+		createDefaultCollectionExecutionBudget({ doom, signal: input.signal });
 	return Object.freeze({
 		doom,
 		budget,

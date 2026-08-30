@@ -17,14 +17,14 @@ export type LifecycleCapabilityCandidate =
 			requiredArgumentKeys: readonly string[];
 			requiredArgumentRoots: readonly string[];
 			requireNonEmptyWriteLane: false;
-			requireNonEmptySelect: true;
+			requireNonEmptySelect: boolean;
 			cardinality: "one" | "many";
 			first: boolean;
 			maxRows: number;
 			resultFields: Readonly<Record<string, LifecycleIdentity>>;
 	  }>
 	| Readonly<{
-			kind: "write";
+			kind: "write" | "acceptJob";
 			identity: LifecycleIdentity;
 			argumentKeys: readonly string[];
 			argumentRoots: readonly string[];
@@ -162,7 +162,9 @@ export function lowerLifecycleCapability(
 		(env.phase === "check"
 			? binding?.kind !== "read"
 			: env.phase === "afterWrite"
-				? binding?.kind !== "write"
+				? binding?.kind !== "read" &&
+					binding?.kind !== "write" &&
+					binding?.kind !== "acceptJob"
 				: true) ||
 		!ts.isIdentifier(target) ||
 		env.parameters.get(target.text) !== "capabilities" ||
@@ -171,7 +173,7 @@ export function lowerLifecycleCapability(
 		return env.fail(
 			node,
 			"unsupportedLifecycleCapability",
-			"use an awaited generated read in check or generated write in afterWrite",
+			"use an awaited generated read in check or sequential generated read/write/Job acceptance in afterWrite",
 		);
 	if (node.arguments.length !== 1)
 		return env.fail(

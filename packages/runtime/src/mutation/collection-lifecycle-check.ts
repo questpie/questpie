@@ -63,29 +63,38 @@ export function createCollectionLifecycleCheckExecutor(
 			request: unknown,
 			started: number,
 		): Promise<Row | null>;
+		executeList?(
+			identity: string,
+			request: unknown,
+			started: number,
+		): Promise<readonly Row[]>;
+		executeWrite(identity: string, request: unknown): Promise<unknown>;
+		executeJob?(identity: string, request: unknown): Promise<unknown>;
 	}>,
 ) {
-	const capabilities = (
+	const readCapabilities = (
 		program: LinkedCollectionLifecycleProgramV1,
 		started: number,
 	) =>
 		Object.freeze(
 			Object.fromEntries(
-				input.plans.plans
-					.filter(
-						(plan): plan is LinkedPostgresGetOperationPlanV1 =>
-							plan.member === "get",
-					)
-					.map((plan) => [
-						plan.identity,
+				Object.values(program.bindings.capabilities)
+					.filter((binding) => binding.kind === "read")
+					.map((binding) => [
+						binding.identity,
 						async (rawArgument: unknown) => {
-							const binding = Object.values(program.bindings.capabilities).find(
-								(candidate) =>
-									candidate.kind === "read" &&
-									candidate.identity === plan.identity,
-							);
-							if (!binding)
-								throw new TypeError("Lifecycle read capability is unbound");
+							if (binding.cardinality === "many") {
+								if (!input.executeList)
+									throw new TypeError("Lifecycle list capability is withheld");
+								return input.executeList(
+									binding.identity,
+									rawArgument,
+									started,
+								);
+							}
+							const plan = input.plans.byIdentity.get(binding.identity);
+							if (!plan || plan.member !== "get")
+								throw new TypeError("Lifecycle get capability is unbound");
 							const argument = record(rawArgument, "Lifecycle get argument");
 							if (
 								Object.keys(argument).length !== 2 ||
@@ -182,11 +191,57 @@ export function createCollectionLifecycleCheckExecutor(
 					lifecycle,
 					"check",
 					{ candidate, current, now: input.operationTime },
-					capabilities(lifecycle, started),
+					readCapabilities(lifecycle, started),
 					input.budget,
 				),
 			);
 			return true;
+		},
+		async executeAfterWrite(
+			plan: WritePlan,
+			written: Row,
+			previous: Row | null,
+			callId: string,
+			started: number,
+		): Promise<void> {
+			const lifecycle = plan.operation.lifecycleProgram;
+			if (!lifecycle || lifecycle.phases.afterWrite.length === 0) return;
+			if (callId.length === 0)
+				throw new TypeError("Lifecycle call ID is unavailable");
+			const writes = Object.fromEntries(
+				Object.values(lifecycle.bindings.capabilities)
+					.filter((binding) => binding.kind === "write")
+					.map((binding) => [
+						binding.identity,
+						(request: unknown) => input.executeWrite(binding.identity, request),
+					]),
+			);
+			const jobs = Object.fromEntries(
+				Object.values(lifecycle.bindings.capabilities)
+					.filter((binding) => binding.kind === "acceptJob")
+					.map((binding) => [
+						binding.identity,
+						(request: unknown) => {
+							if (!input.executeJob)
+								throw new TypeError("Lifecycle Job capability is withheld");
+							return input.executeJob(binding.identity, request);
+						},
+					]),
+			);
+			await captureCollectionLifecycleFailure(input.doom, () =>
+				executeCollectionLifecyclePhase(
+					lifecycle,
+					"afterWrite",
+					{
+						written,
+						previous,
+						now: input.operationTime,
+						callId,
+					},
+					{ ...readCapabilities(lifecycle, started), ...writes, ...jobs },
+					input.budget,
+				),
+			);
 		},
 	});
 }

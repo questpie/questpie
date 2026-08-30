@@ -8,10 +8,7 @@ import {
 	linkCollectionOperationAdapters,
 } from "../../packages/runtime/src/mutation";
 import { canonicalMutationBytes } from "../../packages/runtime/src/mutation/canonical";
-import {
-	createPostgresCollectionMutationData,
-	createPostgresDatabaseCollectionMutationData,
-} from "../../packages/runtime/src/mutation/collection";
+import { createCollectionMutationData } from "../../packages/runtime/src/mutation/collection";
 import {
 	createCollectionExecutionBudget,
 	type CollectionExecutionBudget,
@@ -353,8 +350,17 @@ function dataFor(
 	issueMappings?: Readonly<Record<string, Readonly<Record<string, string>>>>,
 	executionBudget?: CollectionExecutionBudget,
 	lifecycleDoom?: ReturnType<typeof createCollectionLifecycleDoom>,
+	executeList?: (
+		identity: string,
+		request: unknown,
+	) => Promise<
+		Readonly<{
+			nodes: readonly Readonly<Record<string, unknown>>[];
+			observed: number;
+		}>
+	>,
 ) {
-	return createPostgresCollectionMutationData({
+	return createCollectionMutationData({
 		plans: {
 			plans,
 			byIdentity: new Map(
@@ -362,16 +368,20 @@ function dataFor(
 			),
 		} as never,
 		query,
+		resultValuesDecoded: false,
+		executeLeaf: (leaf, parameters) => query(leaf.sql, parameters),
 		facts: {
 			principal: { kind: "user", id: principalId },
 			authority: { kind: "ordinary" },
 			tenant: { id: "tenant-1" },
 		},
 		operationTime: new Date("2026-08-16T20:00:00.000Z"),
+		callId: "call-1",
 		consumeRows,
 		issueMappings,
 		executionBudget,
 		lifecycleDoom,
+		executeList,
 	});
 }
 
@@ -816,6 +826,290 @@ test("Collection create enforces candidate Policy before one bound lifecycle che
 		throw new Error("withheld lifecycle capability reached SQL");
 	});
 	expect(withheld.records.create).toBeUndefined();
+});
+
+test("afterWrite re-enters the same Collection kernel before the root returns", async () => {
+	const baseline = createPlan();
+	const lifecycleProgram = {
+		format: "questpie.lifecycle-program.v1",
+		interpreter: "questpie.lifecycle-interpreter.v1",
+		runtimeBuild: "b".repeat(64),
+		reentryLimit: 8,
+		bindings: {
+			schema: "schema:test",
+			collection: "collection:records",
+			fields: { title: "collection:records/field:title" },
+			issues: {},
+			capabilities: {
+				createRecord: {
+					kind: "write",
+					identity: "mutation:records.create",
+					argumentKeys: ["input.title"],
+				},
+			},
+			operations: ["mutation:records.create"],
+			jobs: [],
+		},
+		phases: {
+			normalize: [],
+			validate: [],
+			check: [],
+			afterWrite: [
+				{
+					op: "if",
+					test: {
+						op: "binary",
+						operator: "===",
+						left: {
+							op: "member",
+							target: { op: "root", root: "written" },
+							field: "collection:records/field:title",
+							optional: false,
+						},
+						right: { op: "literal", value: "root" },
+					},
+					consequent: [
+						{
+							op: "effect",
+							value: {
+								op: "capability",
+								capability: "write",
+								identity: "mutation:records.create",
+								arguments: [
+									{
+										op: "object",
+										entries: [
+											{
+												kind: "argument",
+												key: "input",
+												value: {
+													op: "object",
+													entries: [
+														{
+															kind: "argument",
+															key: "title",
+															value: {
+																op: "literal",
+																value: "nested",
+															},
+														},
+													],
+												},
+											},
+										],
+									},
+								],
+							},
+						},
+					],
+					otherwise: [],
+				},
+			],
+		},
+		digest: "c".repeat(64),
+	} as const;
+	const plan = {
+		...baseline,
+		operation: { ...baseline.operation, lifecycleProgram },
+		candidateValidation: {
+			freshAfterRowLockWait: true,
+			sql: "MATERIALIZE_CANDIDATE_SQL",
+			parameters: baseline.write.parameters.slice(0, 3),
+			result: [
+				{
+					path: ["title"],
+					column: "qp_candidate_0",
+					codec: baseline.candidate.fields[0]!.codec,
+					nullable: false,
+				},
+				{
+					path: ["body"],
+					column: "qp_candidate_1",
+					codec: baseline.candidate.fields[1]!.codec,
+					nullable: false,
+				},
+			],
+		},
+		candidatePolicyCheck: {
+			freshAfterRowLockWait: true,
+			sql: "CANDIDATE_POLICY_SQL",
+			parameters: [],
+			outcome: "authorizedOrUnavailable",
+		},
+		write: {
+			...baseline.write,
+			parameters: [
+				{
+					...baseline.write.parameters[0]!,
+					kind: "candidateValue",
+				},
+				{
+					position: 2,
+					kind: "candidateValue",
+					path: ["body"],
+					codec: baseline.candidate.fields[1]!.codec,
+					postgresType: "text",
+				},
+			],
+		},
+	} as const;
+	const calls: string[] = [];
+	const data = dataFor([plan], async (statement, parameters = []) => {
+		calls.push(statement);
+		if (statement === "TITLE_AUTHORITY_SQL") return [{}];
+		if (statement === "MATERIALIZE_CANDIDATE_SQL")
+			return [
+				{ qp_candidate_0: parameters[0], qp_candidate_1: "default body" },
+			];
+		if (statement === "CANDIDATE_POLICY_SQL") return [{}];
+		return [
+			{
+				qp_result_0: id,
+				qp_result_1: parameters[0],
+				qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+			},
+		];
+	});
+
+	await expect(
+		data.records.create({ input: { title: "root" } }),
+	).resolves.toEqual(expect.objectContaining({ title: "root" }));
+	expect(calls).toEqual([
+		"TITLE_AUTHORITY_SQL",
+		"MATERIALIZE_CANDIDATE_SQL",
+		"CANDIDATE_POLICY_SQL",
+		"WRITE_WITH_btrim_gen_random_uuid_SQL",
+		"TITLE_AUTHORITY_SQL",
+		"MATERIALIZE_CANDIDATE_SQL",
+		"CANDIDATE_POLICY_SQL",
+		"WRITE_WITH_btrim_gen_random_uuid_SQL",
+	]);
+
+	const listLifecycle = {
+		...lifecycleProgram,
+		bindings: {
+			...lifecycleProgram.bindings,
+			capabilities: {
+				listRecords: {
+					kind: "read",
+					identity: "query:records.list",
+					argumentKeys: ["first"],
+					cardinality: "many",
+					first: true,
+					maxRows: 2,
+				},
+			},
+			operations: ["mutation:records.create", "query:records.list"],
+		},
+		phases: {
+			...lifecycleProgram.phases,
+			afterWrite: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:records.list",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "first",
+										value: { op: "literal", value: 2 },
+									},
+								],
+							},
+						],
+					},
+				},
+			],
+		},
+	} as const;
+	const listPlan = {
+		...plan,
+		operation: { ...plan.operation, lifecycleProgram: listLifecycle },
+	};
+	const listCalls: unknown[] = [];
+	const observedRows: number[] = [];
+	const withList = dataFor(
+		[listPlan],
+		async (statement, parameters = []) => {
+			if (statement === "TITLE_AUTHORITY_SQL") return [{}];
+			if (statement === "MATERIALIZE_CANDIDATE_SQL")
+				return [
+					{ qp_candidate_0: parameters[0], qp_candidate_1: "default body" },
+				];
+			if (statement === "CANDIDATE_POLICY_SQL") return [{}];
+			return [
+				{
+					qp_result_0: id,
+					qp_result_1: parameters[0],
+					qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+				},
+			];
+		},
+		(count) => observedRows.push(count),
+		undefined,
+		undefined,
+		undefined,
+		async (identity, request) => {
+			listCalls.push(identity, request);
+			return { nodes: [{ id }, { id: principalId }], observed: 2 };
+		},
+	);
+	await expect(
+		withList.records.create({ input: { title: "root" } }),
+	).resolves.toEqual(expect.objectContaining({ title: "root" }));
+	expect(listCalls).toEqual(["query:records.list", { first: 2 }]);
+	expect(observedRows).toEqual([1, 2]);
+
+	const recursionDoom = createCollectionLifecycleDoom();
+	const recursiveLifecycle = {
+		...lifecycleProgram,
+		reentryLimit: 2,
+		phases: {
+			...lifecycleProgram.phases,
+			afterWrite: [lifecycleProgram.phases.afterWrite[0]!.consequent[0]!],
+		},
+	};
+	const recursivePlan = {
+		...plan,
+		operation: { ...plan.operation, lifecycleProgram: recursiveLifecycle },
+	};
+	const recursive = dataFor(
+		[recursivePlan],
+		async (statement, parameters = []) => {
+			if (statement === "TITLE_AUTHORITY_SQL") return [{}];
+			if (statement === "MATERIALIZE_CANDIDATE_SQL")
+				return [
+					{ qp_candidate_0: parameters[0], qp_candidate_1: "default body" },
+				];
+			if (statement === "CANDIDATE_POLICY_SQL") return [{}];
+			return [
+				{
+					qp_result_0: id,
+					qp_result_1: parameters[0],
+					qp_result_2: new Date("2026-08-16T20:00:00.000Z"),
+				},
+			];
+		},
+		undefined,
+		undefined,
+		undefined,
+		recursionDoom,
+	);
+	await expect(
+		recursive.records.create({ input: { title: "root" } }),
+	).rejects.toMatchObject({
+		code: "QP-DATA-024",
+		diagnosticClass: "lifecycleRecursionExceeded",
+	});
+	expect(() => recursionDoom.throwIfDoomed()).toThrow(
+		"lifecycle recursion exceeded",
+	);
 });
 
 test("Collection update preserves current and enforces candidate Policy before check", async () => {
@@ -2272,7 +2566,7 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 		},
 	} as const;
 	const calls: unknown[][] = [];
-	const data = createPostgresCollectionMutationData({
+	const data = createCollectionMutationData({
 		plans: {
 			plans: [complexPlan],
 			byIdentity: new Map([[complexPlan.identity, complexPlan]]),
@@ -2284,7 +2578,8 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 		},
 		operationTime: new Date("2026-08-28T10:00:00.000Z"),
 		consumeRows() {},
-		async query(_sql, parameters = []) {
+		resultValuesDecoded: false,
+		async executeLeaf(_leaf, parameters = []) {
 			calls.push([...parameters]);
 			return [
 				{
@@ -2333,7 +2628,7 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 			value: { kind: "json", value: { audit: true } },
 		},
 	});
-	const databaseData = createPostgresDatabaseCollectionMutationData({
+	const databaseData = createCollectionMutationData({
 		plans: {
 			plans: [complexPlan],
 			byIdentity: new Map([[complexPlan.identity, complexPlan]]),
@@ -2345,24 +2640,22 @@ test("treats object, array, and json Fields as atomic normalized jsonb values", 
 		},
 		operationTime: new Date("2026-08-28T10:00:00.000Z"),
 		consumeRows() {},
-		transaction: {
-			async execute(statement: typeof writeStatement) {
-				return statement.decode({
-					command: "SELECT",
-					rowCount: 1,
-					rows: [
-						[
-							{
-								displayName: "Ada",
-								verifiedAt: "2026-08-28T09:00:00.000Z",
-							},
-							["owner"],
-							{ kind: "json", value: { audit: true } },
-						],
+		resultValuesDecoded: true,
+		executeLeaf: async (leaf) =>
+			leaf.statement.decode({
+				command: "SELECT",
+				rowCount: 1,
+				rows: [
+					[
+						{
+							displayName: "Ada",
+							verifiedAt: "2026-08-28T09:00:00.000Z",
+						},
+						["owner"],
+						{ kind: "json", value: { audit: true } },
 					],
-				});
-			},
-		} as any,
+				],
+			}),
 	});
 	expect(
 		await (databaseData as any).records.create({

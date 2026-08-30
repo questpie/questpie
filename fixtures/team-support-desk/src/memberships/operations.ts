@@ -1,4 +1,4 @@
-import { defineCollectionOperations, mutation } from "questpie";
+import { defineCollectionOperations } from "questpie";
 
 import { memberships } from "../memberships";
 import { membershipPolicy } from "./policy";
@@ -14,12 +14,5 @@ export const membershipOperations = defineCollectionOperations(memberships, {
 			role: true,
 			status: true,
 		},
-	},
-	update: {
-		input: ["role", "status"],
-		values: ({ operationTime }) => ({
-			updatedAt: mutation.overwrite(operationTime),
-		}),
-		select: { id: true, role: true, status: true, updatedAt: true },
 	},
 });

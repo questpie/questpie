@@ -1,4 +1,4 @@
-import { defineCollectionOperations, mutation } from "questpie";
+import { defineCollectionOperations } from "questpie";
 
 import { provenancePolicy, recordPolicy } from "./archive-policy";
 import { provenance } from "./provenance";
@@ -9,9 +9,6 @@ export const recordOperations = defineCollectionOperations(records, {
 	policy: recordPolicy,
 	create: {
 		input: ["archiveCode", "catalogueNumber", "visibility", "title", "body"],
-		values: ({ operationTime }) => ({
-			createdAt: mutation.overwrite(operationTime),
-		}),
 		select: {
 			archiveCode: true,
 			catalogueNumber: true,
@@ -28,9 +25,6 @@ export const provenanceOperations = defineCollectionOperations(provenance, {
 	policy: provenancePolicy,
 	create: {
 		input: ["archiveCode", "catalogueNumber", "sequence", "kind", "note"],
-		values: ({ operationTime }) => ({
-			recordedAt: mutation.overwrite(operationTime),
-		}),
 		select: { sequence: true, recordedAt: true },
 	},
 });

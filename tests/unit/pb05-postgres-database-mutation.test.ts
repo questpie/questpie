@@ -8,6 +8,7 @@ import {
 	type LinkedReactionProjection,
 } from "../../packages/runtime/src/durable";
 import type {
+	LinkedCollectionMutationProgramsV1,
 	LinkedPostgresCollectionOperationPlansV1,
 	LinkedPostgresMutationTransactionStatements,
 } from "../../packages/runtime/src/mutation";
@@ -26,6 +27,11 @@ import {
 	type PostgresStatement,
 	type PostgresTransactionRunner,
 } from "../../packages/runtime/src/postgres/contract";
+import type {
+	LinkedPostgresQueryPlan,
+	LinkedPostgresQueryPlans,
+	PostgresQueryPlanV1,
+} from "../../packages/runtime/src/relational";
 import {
 	createPb05OperationalMeasurement,
 	instrumentPb05TransactionRunner,
@@ -93,6 +99,11 @@ function fixedStatements(): LinkedPostgresMutationTransactionStatements {
 
 const authorityStatement = statement("collection.widgets.create.authority", 0);
 const writeStatement = statement("collection.widgets.create.write", 1);
+const candidateStatement = statement("collection.widgets.create.candidate", 1);
+const candidatePolicyStatement = statement(
+	"collection.widgets.create.candidate-policy",
+	0,
+);
 const collectionPlan = {
 	identity: "mutation:widgets.create",
 	target: "collection:widgets",
@@ -540,6 +551,372 @@ test("executes a fresh Mutation through one static read-committed database trans
 	).toEqual({
 		"mutation:fresh:handler": { count: 1, totalMs: 7, maxMs: 7 },
 	});
+});
+
+test("reruns afterWrite and Job acceptance only on an explicit fresh retry", async () => {
+	const linked = fixedStatements();
+	const listDigest = "a".repeat(64);
+	const listStatement = statement(`query.${listDigest}`, 3);
+	const listPlan = {
+		format: "questpie.postgres-query-plan",
+		version: 1,
+		queryDigest: listDigest,
+		templateDigest: listDigest,
+		policy: "policy:widgets.default",
+		policyProgramDigest: "b".repeat(64),
+		usedExecutionFacts: [],
+		admission: "authenticated",
+		binding: {
+			parameters: [
+				{ name: "after", kind: "cursor", nullable: true },
+				{
+					name: "first",
+					kind: "scalar",
+					codec: { kind: "integer", minimum: 1, maximum: 2 },
+					nullable: false,
+				},
+			],
+		},
+		page: {
+			kind: "forwardCursor",
+			first: { parameter: "first", minimum: 1, maximum: 2 },
+			after: { parameter: "after" },
+			scopeParameters: [],
+			order: [
+				{
+					field: "collection:widgets/field:id",
+					codec: "uuid",
+					nullable: false,
+				},
+			],
+		},
+		sql: "SELECT widget list",
+		parameters: [
+			{
+				position: 1,
+				kind: "cursorPresent",
+				parameter: "after",
+				postgresType: "boolean",
+			},
+			{
+				position: 2,
+				kind: "cursorValue",
+				parameter: "after",
+				field: "collection:widgets/field:id",
+				postgresType: "uuid",
+			},
+			{
+				position: 3,
+				kind: "queryParameter",
+				parameter: "first",
+				postgresType: "integer",
+			},
+		],
+		result: [
+			{
+				kind: "field",
+				key: "id",
+				field: "collection:widgets/field:id",
+				column: "qp_f0",
+				codec: { kind: "uuid" },
+				nullable: false,
+			},
+		],
+	} as const satisfies PostgresQueryPlanV1;
+	const linkedListPlan = Object.freeze({
+		plan: listPlan,
+		statement: listStatement,
+	}) as LinkedPostgresQueryPlan;
+	const queryPlans = Object.freeze({
+		plans: [linkedListPlan],
+		get: (digest: string) =>
+			digest === listDigest ? linkedListPlan : undefined,
+	}) satisfies LinkedPostgresQueryPlans;
+	const listOperation = {
+		identity: "query:widgets.list",
+		member: "list",
+		dataQueryDigest: listDigest,
+	} as unknown as LinkedCollectionMutationProgramsV1["operations"][number];
+	const collectionOperations = Object.freeze({
+		operations: [listOperation],
+		byIdentity: new Map([[listOperation.identity, listOperation]]),
+		byTarget: new Map(),
+	}) satisfies LinkedCollectionMutationProgramsV1;
+	const lifecycle = {
+		format: "questpie.lifecycle-program.v1",
+		interpreter: "questpie.lifecycle-interpreter.v1",
+		runtimeBuild: "d".repeat(64),
+		reentryLimit: 8,
+		bindings: {
+			schema: "schema:generic",
+			collection: "collection:widgets",
+			fields: { id: "collection:widgets/field:id" },
+			issues: {},
+			capabilities: {
+				"data.widgets.list": {
+					kind: "read",
+					identity: "query:widgets.list",
+					argumentKeys: ["after", "first"],
+					cardinality: "many",
+					first: false,
+					maxRows: 2,
+				},
+				"jobs.reports.companyDigest.accept": {
+					kind: "acceptJob",
+					identity: "job:reports.companyDigest",
+					argumentKeys: ["idempotencyKey", "input.widgetId"],
+				},
+			},
+			operations: ["mutation:widgets.publish", "query:widgets.list"],
+			jobs: ["job:reports.companyDigest"],
+		},
+		phases: {
+			normalize: [],
+			validate: [],
+			check: [],
+			afterWrite: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:widgets.list",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "after",
+										value: { op: "literal", value: null },
+									},
+									{
+										kind: "argument",
+										key: "first",
+										value: { op: "literal", value: 2 },
+									},
+								],
+							},
+						],
+					},
+				},
+				{
+					op: "effect",
+					value: {
+						op: "capability",
+						capability: "acceptJob",
+						identity: "job:reports.companyDigest",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "idempotencyKey",
+										value: { op: "root", root: "callId" },
+									},
+									{
+										kind: "argument",
+										key: "input",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "widgetId",
+													value: {
+														op: "member",
+														target: { op: "root", root: "written" },
+														field: "collection:widgets/field:id",
+														optional: false,
+													},
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+			],
+		},
+		digest: "e".repeat(64),
+	} as const;
+	const lifecyclePlan = {
+		...collectionPlan,
+		operation: { ...collectionPlan.operation, lifecycleProgram: lifecycle },
+		candidateValidation: {
+			freshAfterRowLockWait: true,
+			sql: "SELECT CANDIDATE",
+			parameters: collectionPlan.write.parameters,
+			result: collectionPlan.write.result,
+			statement: candidateStatement,
+		},
+		candidatePolicyCheck: {
+			freshAfterRowLockWait: true,
+			sql: "SELECT CANDIDATE POLICY",
+			parameters: [],
+			outcome: "authorizedOrUnavailable",
+			statement: candidatePolicyStatement,
+		},
+	};
+	const lifecyclePlans = {
+		plans: [lifecyclePlan],
+		byIdentity: new Map([[lifecyclePlan.identity, lifecyclePlan]]),
+	} as unknown as LinkedPostgresCollectionOperationPlansV1;
+	const calls: string[] = [];
+	let transactionCalls = 0;
+	const database: PostgresTransactionRunner = {
+		transaction: (input) => {
+			transactionCalls += 1;
+			return input.use({
+				[transactionBrand]: true,
+				async execute(candidate, value) {
+					const parameters = candidate.parameters(value);
+					calls.push(candidate.name);
+					if (candidate === linked.get("mutation.receipt.claim")?.statement)
+						return [{ transactionId: "906", operationTime }] as never;
+					if (candidate === authorityStatement) return [{}] as never;
+					if (candidate === candidateStatement)
+						return [{ qp_result_0: widgetId }] as never;
+					if (candidate === candidatePolicyStatement) return [{}] as never;
+					if (candidate === writeStatement)
+						return [{ qp_result_0: widgetId }] as never;
+					if (candidate === listStatement)
+						return [{ qp_f0: widgetId }, { qp_f0: principalId }] as never;
+					if (
+						candidate === linked.get("mutation.dispatch.kernel.mark")?.statement
+					)
+						return (transactionCalls === 1 ? [] : [{ enabled: "on" }]) as never;
+					if (
+						candidate === linked.get("mutation.job.acceptance.claim")?.statement
+					)
+						return [{ dispatchId: parameters[7] }] as never;
+					if (candidate === linked.get("mutation.dispatch.accept")?.statement)
+						return [{ dispatchId: parameters[1] }] as never;
+					if (
+						candidate === linked.get("mutation.dispatch.run.insert")?.statement
+					)
+						return [{ runId: parameters[1] }] as never;
+					return [] as never;
+				},
+			});
+		},
+	};
+	const invoke = createPostgresDatabaseMutationInvoker<View>({
+		database,
+		application: "application:generic",
+		transactionStatements: linked,
+		collectionPlans: lifecyclePlans,
+		collectionOperations,
+		queryPlans,
+		reactions: emptyReactions,
+		jobs,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+
+	await expect(invoke(operation, "lifecycle-job-call")).rejects.toThrow();
+	expect(transactionCalls).toBe(1);
+	expect(calls.filter((name) => name === writeStatement.name)).toHaveLength(1);
+
+	await expect(invoke(operation, "lifecycle-job-call")).resolves.toMatchObject({
+		committed: true,
+		value: { id: widgetId },
+	});
+	expect(transactionCalls).toBe(2);
+	expect(calls.filter((name) => name === writeStatement.name)).toHaveLength(2);
+	expect(calls.filter((name) => name === listStatement.name)).toHaveLength(2);
+	expect(calls.indexOf(listStatement.name)).toBeLessThan(
+		calls.indexOf("mutation.job.acceptance.claim"),
+	);
+	expect(calls).toContain("mutation.job.acceptance.claim");
+	expect(calls.at(-1)).toBe("mutation.receipt.commit");
+
+	const acceptance = (idempotencyKey: string) =>
+		({
+			op: "effect",
+			value: {
+				op: "capability",
+				capability: "acceptJob",
+				identity: "job:reports.companyDigest",
+				arguments: [
+					{
+						op: "object",
+						entries: [
+							{
+								kind: "argument",
+								key: "idempotencyKey",
+								value: { op: "literal", value: idempotencyKey },
+							},
+							{
+								kind: "argument",
+								key: "input",
+								value: {
+									op: "object",
+									entries: [
+										{
+											kind: "argument",
+											key: "widgetId",
+											value: {
+												op: "member",
+												target: { op: "root", root: "written" },
+												field: "collection:widgets/field:id",
+												optional: false,
+											},
+										},
+									],
+								},
+							},
+						],
+					},
+				],
+			},
+		}) as const;
+	const budgetLifecycle = {
+		...lifecycle,
+		phases: {
+			...lifecycle.phases,
+			afterWrite: [
+				acceptance("budget-1"),
+				acceptance("budget-2"),
+				acceptance("budget-3"),
+			],
+		},
+	};
+	const budgetPlan = {
+		...lifecyclePlan,
+		operation: {
+			...lifecyclePlan.operation,
+			lifecycleProgram: budgetLifecycle,
+		},
+	};
+	const budgetInvoke = createPostgresDatabaseMutationInvoker<View>({
+		database,
+		application: "application:generic",
+		transactionStatements: linked,
+		collectionPlans: {
+			plans: [budgetPlan],
+			byIdentity: new Map([[budgetPlan.identity, budgetPlan]]),
+		} as unknown as LinkedPostgresCollectionOperationPlansV1,
+		reactions: emptyReactions,
+		jobs,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+	const budgetStart = calls.length;
+	await expect(budgetInvoke(operation, "lifecycle-job-budget")).rejects.toThrow(
+		"Collection statement budget exceeded",
+	);
+	const budgetCalls = calls.slice(budgetStart);
+	expect(
+		budgetCalls.filter((name) => name === "mutation.dispatch.run.insert"),
+	).toHaveLength(2);
+	expect(budgetCalls).not.toContain("mutation.receipt.commit");
 });
 
 test("refuses a malformed receipt transaction identity before the handler", async () => {

@@ -28,6 +28,14 @@ function withoutTicketCheck(source: string): string {
 	return source.slice(0, start) + source.slice(end);
 }
 
+function withTicketNormalize(source: string, authored: string): string {
+	const start = source.indexOf("\n\t\tnormalize:");
+	const end = source.indexOf("\n\t\tvalidate:", start);
+	if (start < 0 || end < 0)
+		throw new TypeError("fixture normalize boundary is missing");
+	return `${source.slice(0, start)}\n${authored}${source.slice(end)}`;
+}
+
 function sourceOrigin(module: string, source: string, needle: string) {
 	const index = source.indexOf(needle);
 	if (index < 0) throw new TypeError(`source origin is missing: ${needle}`);
@@ -38,6 +46,15 @@ function sourceOrigin(module: string, source: string, needle: string) {
 		line: lines.length,
 		column: lines.at(-1)!.length + 1,
 	};
+}
+
+function nestedRecords(
+	value: unknown,
+): readonly Readonly<Record<string, unknown>>[] {
+	if (!value || typeof value !== "object") return [];
+	if (Array.isArray(value)) return value.flatMap(nestedRecords);
+	const record = value as Readonly<Record<string, unknown>>;
+	return [record, ...Object.values(record).flatMap(nestedRecords)];
 }
 
 test("derives transitive issue reachability from lowered nested writes and terminates cycles", async () => {
@@ -71,7 +88,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 			ticketsPath,
 			withoutTicketCheck(await readFile(ticketsPath, "utf8")).replace(
 				"\t\tvalidate: ({ candidate, issues }) => {",
-				`\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+				`\t\t// @ts-expect-error narrowed proof-only callback contract
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { labels: { update(input: unknown): Promise<void> }; memberships: { update(input: unknown): Promise<void> } } }; row: { organizationId: string; requesterMembershipId: string } }) => {
 \t\t\tif (false) await ctx.data.labels.update({ key: { id: row.organizationId }, patch: { name: "unreachable" } });
 \t\t\tawait ctx.data.memberships.update({ patch: { status: "active" }, key: { id: row.requesterMembershipId } });
@@ -87,7 +104,6 @@ test("derives transitive issue reachability from lowered nested writes and termi
 			(await readFile(membershipsPath, "utf8")).replace(
 				"\tconstraints: {",
 				`\tlifecycle: {
-\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { teams: { update(input: unknown): Promise<void> } } }; row: { id: string } }) => {
 \t\t\tawait ctx.data.teams.update({ key: { id: row.id }, patch: { routingStatus: "active" } });
 \t\t},
@@ -160,7 +176,7 @@ test("derives transitive issue reachability from lowered nested writes and termi
 \t\t\tif (false) throw issues.invalidRoute();
 \t\t\tthrow issues.invalidRoute();
 \t\t},
-\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
+\t\t// @ts-expect-error narrowed proof-only callback contract
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { tickets: { update(input: unknown): Promise<void> } } }; row: { id: string } }) => {
 \t\t\tawait ctx.data.tickets.update({ patch: { summary: "cycle" }, key: { id: row.id } });
 \t\t},
@@ -245,9 +261,11 @@ export const optionalCreatesOperations = defineCollectionOperations(optionalCrea
 `,
 		);
 		const ticketsPath = join(temporary, "src/tickets.ts");
-		const valid = (await readFile(ticketsPath, "utf8")).replace(
+		const valid = withoutTicketCheck(
+			await readFile(ticketsPath, "utf8"),
+		).replace(
 			"\t\tvalidate: ({ candidate, issues }) => {",
-			`\t\t// @ts-expect-error LIFE-02 proves compiler lowering before LIFE-05 projects the authoring type.
+			`\t\t// @ts-expect-error narrowed proof-only callback contract
 \t\tafterWrite: async ({ ctx }: { ctx: { data: { optionalCreates: { create(input: unknown): Promise<void> } } } }) => {
 \t\t\tawait ctx.data.optionalCreates.create({ input: {} });
 \t\t},
@@ -292,16 +310,47 @@ export const optionalCreatesOperations = defineCollectionOperations(optionalCrea
 	}
 }, 30_000);
 
-test("lowers one bounded Policy-aware check read from a generated get capability", async () => {
+test("lowers bounded lifecycle reads and afterWrite writes", async () => {
 	const temporary = await mkdtemp(
 		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-check-read-"),
 	);
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
+		const teamsOperationsPath = join(temporary, "src/teams/operations.ts");
+		const teamsOperations = await readFile(teamsOperationsPath, "utf8");
+		await writeFile(
+			teamsOperationsPath,
+			teamsOperations
+				.replace(
+					'import { teams } from "../teams";',
+					'import { teams } from "../teams";\nimport { teamListPlan } from "./query-plan";',
+				)
+				.replace(
+					"\tpolicy: teamPolicy,",
+					"\tpolicy: teamPolicy,\n\tlist: { data: teamListPlan },",
+				),
+		);
+		const teamsQueriesPath = join(temporary, "src/teams/queries.ts");
+		await writeFile(
+			teamsQueriesPath,
+			(await readFile(teamsQueriesPath, "utf8")).replace(
+				'name: "teams.list"',
+				'name: "teams.browse"',
+			),
+		);
+		await rm(join(temporary, "src/team-mutations.ts"));
 		const ticketsPath = join(temporary, "src/tickets.ts");
-		const ticketsSource = withoutTicketCheck(
+		const sourceWithoutCheck = withoutTicketCheck(
 			await readFile(ticketsPath, "utf8"),
 		);
+		const normalizeStart = sourceWithoutCheck.indexOf("\n\t\tnormalize:");
+		const validateStart = sourceWithoutCheck.indexOf(
+			"\n\t\tvalidate:",
+			normalizeStart,
+		);
+		if (normalizeStart < 0 || validateStart < 0)
+			throw new TypeError("fixture normalize boundary is missing");
+		const ticketsSource = `${sourceWithoutCheck.slice(0, normalizeStart)}\n\t\tnormalize: ({ input }) => input,${sourceWithoutCheck.slice(validateStart)}`;
 		await writeFile(
 			ticketsPath,
 			`import type { LifecycleTypeProof } from "./lifecycle-type-consumer";\nexport type TicketLifecycleTypeProof = LifecycleTypeProof;\n${ticketsSource.replace(
@@ -309,6 +358,14 @@ test("lowers one bounded Policy-aware check read from a generated get capability
 				`\t\tcheck: async ({ candidate, ctx, issues }) => {
 \t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { routingStatus: true, id: true } });
 \t\t\tif (team === null || team.routingStatus !== "active") throw issues.invalidReference();
+\t\t},
+\t\tafterWrite: async ({ ctx, row }) => {
+\t\t\tif (ctx.callId === "" || ctx.now > ctx.now) return;
+\t\t\tconst team = await ctx.data.teams.get({ key: { id: row.teamId }, select: { routingStatus: true, id: true } });
+\t\t\tif (team !== null) await ctx.data.teams.update({ key: { id: team.id }, patch: { routingStatus: "active" } });
+\t\t\tconst listedTeams = await ctx.data.teams.list({ organizationId: row.organizationId, first: 2, after: null });
+\t\t\tfor (const listedTeam of listedTeams) await ctx.data.teams.update({ key: { id: listedTeam.id }, patch: { routingStatus: "active" } });
+\t\t\tawait ctx.jobs.ticket.slaFollowUp.accept({ input: { organizationId: row.organizationId, ticketId: row.id, reference: row.reference, summary: row.summary, dueAt: ctx.now }, idempotencyKey: ctx.callId });
 \t\t},
 \t\tvalidate: ({ candidate, issues }) => {`,
 			)}`,
@@ -327,6 +384,22 @@ const check: NonNullable<CollectionLifecycle<"tickets">["check"]> = async ({ can
 	throw issues.invalidReference();
 };
 void check;
+const afterWrite: NonNullable<CollectionLifecycle<"tickets">["afterWrite"]> = async ({ row, previous, ctx }) => {
+	ctx.now satisfies Date;
+	ctx.callId satisfies string;
+	const team = await ctx.data.teams.get({ key: { id: row.teamId }, select: { id: true } });
+	team satisfies Readonly<{ id: string }> | null;
+	const listedTeams = await ctx.data.teams.list({ organizationId: row.organizationId, first: 2, after: null });
+	listedTeams satisfies ReadonlyArray<Readonly<{ id: string; organizationId: string; name: string; routingStatus: string }>>;
+	for (const listedTeam of listedTeams) listedTeam.id satisfies string;
+	// @ts-expect-error a generated lifecycle list requires an explicit first
+	await ctx.data.teams.list({ organizationId: row.organizationId, after: null });
+	await ctx.data.teams.update({ key: { id: row.teamId }, patch: { routingStatus: "active" } });
+	const accepted = await ctx.jobs.ticket.slaFollowUp.accept({ input: { organizationId: row.organizationId, ticketId: row.id, reference: row.reference, summary: row.summary, dueAt: ctx.now }, idempotencyKey: ctx.callId });
+	accepted.resource satisfies "job:ticket.slaFollowUp";
+	previous satisfies typeof row | null;
+};
+void afterWrite;
 // @ts-expect-error check Context has no Service capability
 declare const noServices: Parameters<NonNullable<CollectionLifecycle<"tickets">["check"]>>[0]["ctx"]["services"];
 // @ts-expect-error only generated bounded get Operations are present
@@ -336,6 +409,18 @@ declare const noComments: Parameters<NonNullable<CollectionLifecycle<"tickets">[
 // @ts-expect-error check is always asynchronous
 const synchronousCheck: NonNullable<CollectionLifecycle<"tickets">["check"]> = () => {};
 void synchronousCheck;
+// @ts-expect-error afterWrite has no Service capability
+declare const noAfterWriteServices: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["services"];
+// @ts-expect-error afterWrite has no Action capability
+declare const noAfterWriteActions: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["actions"];
+// @ts-expect-error afterWrite has no Request capability
+declare const noAfterWriteRequest: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["request"];
+// @ts-expect-error afterWrite has no Route capability
+declare const noAfterWriteRoute: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["route"];
+// @ts-expect-error afterWrite has no raw SQL capability
+declare const noAfterWriteSql: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["sql"];
+// @ts-expect-error afterWrite has no raw transaction capability
+declare const noAfterWriteTransaction: Parameters<NonNullable<CollectionLifecycle<"tickets">["afterWrite"]>>[0]["ctx"]["transaction"];
 export type LifecycleTypeProof = typeof check;
 `,
 		);
@@ -349,6 +434,7 @@ export type LifecycleTypeProof = typeof check;
 				bindings: Readonly<{
 					collection: string;
 					capabilities: Readonly<Record<string, unknown>>;
+					jobs: readonly string[];
 				}>;
 				phases: Readonly<Record<string, readonly unknown[]>>;
 			}>[];
@@ -365,7 +451,33 @@ export type LifecycleTypeProof = typeof check;
 				kind: "read",
 				maxRows: 1,
 			},
+			"data.teams.list": {
+				argumentKeys: ["after", "first", "organizationId"],
+				cardinality: "many",
+				first: false,
+				identity: "query:teams.list",
+				kind: "read",
+				maxRows: 100,
+			},
+			"data.teams.update": {
+				argumentKeys: ["key.id", "patch.routingStatus"],
+				identity: "mutation:__collectionKernel.teams.update",
+				kind: "write",
+			},
+			"jobs.ticket.slaFollowUp.accept": {
+				argumentKeys: [
+					"idempotencyKey",
+					"input.dueAt",
+					"input.organizationId",
+					"input.reference",
+					"input.summary",
+					"input.ticketId",
+				],
+				identity: "job:ticket.slaFollowUp",
+				kind: "acceptJob",
+			},
 		});
+		expect(tickets.bindings.jobs).toEqual(["job:ticket.slaFollowUp"]);
 		expect(tickets.phases.check).toEqual([
 			expect.objectContaining({
 				op: "const",
@@ -377,8 +489,119 @@ export type LifecycleTypeProof = typeof check;
 			}),
 			expect.objectContaining({ op: "if" }),
 		]);
+		expect(tickets.phases.afterWrite).toEqual([
+			expect.objectContaining({
+				op: "if",
+				test: expect.objectContaining({ op: "binary", operator: "||" }),
+			}),
+			expect.objectContaining({
+				op: "const",
+				value: expect.objectContaining({
+					op: "capability",
+					capability: "read",
+					identity: "query:teams.get",
+				}),
+			}),
+			expect.objectContaining({ op: "if" }),
+			expect.objectContaining({
+				op: "const",
+				value: expect.objectContaining({
+					op: "capability",
+					capability: "read",
+					identity: "query:teams.list",
+				}),
+			}),
+			expect.objectContaining({
+				op: "forOf",
+				body: [expect.objectContaining({ op: "effect" })],
+			}),
+			expect.objectContaining({
+				op: "effect",
+				value: expect.objectContaining({
+					capability: "acceptJob",
+					identity: "job:ticket.slaFollowUp",
+				}),
+			}),
+		]);
+		await writeFile(
+			ticketsPath,
+			(await readFile(ticketsPath, "utf8")).replace(
+				"organizationId: row.organizationId, first: 2, after: null",
+				"organizationId: row.organizationId, after: null",
+			),
+		);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-026",
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			details: { phase: "afterWrite" },
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects different argument shapes for one capability across phases", async () => {
+	const temporary = await mkdtemp(
+		join(resolve(import.meta.dir, "../.."), ".tmp-adr0031-cross-phase-shape-"),
+	);
+	try {
+		await cp(fixtureRoot, temporary, { recursive: true });
+		const path = join(temporary, "src/tickets.ts");
+		const source = withoutTicketCheck(await readFile(path, "utf8")).replace(
+			"\t\tvalidate: ({ candidate, issues }) => {",
+			`\t\tcheck: async ({ candidate, ctx }) => {
+\t\t\tconst team = await ctx.data.teams.get({ key: { id: candidate.teamId }, select: { id: true, routingStatus: true } });
+\t\t\tif (team === null) return;
+\t\t},
+\t\tafterWrite: async ({ row, ctx }) => {
+\t\t\tconst team = await ctx.data.teams.get({ key: { id: row.teamId }, select: { id: true } });
+\t\t\tif (team === null) return;
+\t\t},
+\t\tvalidate: ({ candidate, issues }) => {`,
+		);
+		await writeFile(path, source);
+		await expect(
+			compileApplication({ applicationRoot: temporary }),
+		).rejects.toMatchObject({
+			code: "QP-COMPOSE-026",
+			diagnosticClass: "unsupportedLifecycleSyntax",
+			details: { phase: "afterWrite" },
+		});
+	} finally {
+		await rm(temporary, { force: true, recursive: true });
+	}
+}, 30_000);
+
+test("rejects parallel, detached, ambient, and external afterWrite work", async () => {
+	for (const authored of [
+		`afterWrite: async ({ ctx }) => { await ctx.services.audit.record({}); },`,
+		`afterWrite: async ({ ctx }) => { await ctx.actions.delivery.publish({}); },`,
+		`afterWrite: async ({ ctx }) => { ctx.jobs.ticket.slaFollowUp.accept({ input: {}, idempotencyKey: ctx.callId }); },`,
+		`afterWrite: async ({ ctx }) => { await Promise.all([ctx.jobs.ticket.slaFollowUp.accept({ input: {}, idempotencyKey: ctx.callId })]); },`,
+		`afterWrite: async ({ row }) => { setTimeout(() => void row, 0); },`,
+	] as const) {
+		const temporary = await mkdtemp(
+			join(
+				resolve(import.meta.dir, "../.."),
+				".tmp-adr0031-after-write-hostile-",
+			),
+		);
+		try {
+			await cp(fixtureRoot, temporary, { recursive: true });
+			const path = join(temporary, "src/tickets.ts");
+			const source = withoutTicketCheck(await readFile(path, "utf8")).replace(
+				"\t\tvalidate: ({ candidate, issues }) => {",
+				`\t\t${authored}\n\t\tvalidate: ({ candidate, issues }) => {`,
+			);
+			await writeFile(path, source);
+			await expect(
+				compileApplication({ applicationRoot: temporary }),
+			).rejects.toMatchObject({ code: "QP-COMPOSE-026" });
+		} finally {
+			await rm(temporary, { force: true, recursive: true });
+		}
 	}
 }, 30_000);
 
@@ -549,7 +772,6 @@ test("bounds dense cyclic issue reachability through the compiler seam", async (
 \t\tnote: field.text({ nullable: true }),
 \t},
 \tlifecycle: {
-\t\t// @ts-expect-error LIFE-02 proves compiler reachability before LIFE-05 projects the authoring type.
 \t\tafterWrite: async ({ ctx, row }: { ctx: { data: { ${dataType} } }; row: { id: string } }) => {
 ${calls}
 \t\t},
@@ -589,7 +811,7 @@ export const dense${index}Operations = defineCollectionOperations(dense${index},
 		const programs = JSON.parse(
 			compilation.generatedFiles["collection-lifecycle-programs.json"]!,
 		) as Readonly<{ programs: readonly unknown[] }>;
-		expect(programs.programs).toHaveLength(count + 1);
+		expect(programs.programs).toHaveLength(count + 3);
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
@@ -644,6 +866,19 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 	});
 	expect(tickets?.bindings.operations).toContain("mutation:ticket.create");
 	expect(tickets?.phases.normalize.length).toBeGreaterThan(0);
+	const optionalStringCalls = nestedRecords(tickets?.phases.normalize).filter(
+		(expression) =>
+			expression.op === "stringMethod" && expression.optional === true,
+	);
+	expect(optionalStringCalls.length).toBeGreaterThan(0);
+	expect(
+		optionalStringCalls.every((expression) => {
+			const target = expression.target as
+				| Readonly<Record<string, unknown>>
+				| undefined;
+			return target?.op === "member" && target.optional === true;
+		}),
+	).toBe(true);
 	expect(tickets?.phases.validate.length).toBeGreaterThan(0);
 	expect(tickets?.bindings.capabilities).toEqual({
 		"data.memberships.get": expect.objectContaining({
@@ -654,9 +889,13 @@ test("compiles Team Support Desk lifecycle authoring without retaining callbacks
 			identity: "query:teams.get",
 			kind: "read",
 		}),
+		"jobs.ticket.slaFollowUp.accept": expect.objectContaining({
+			identity: "job:ticket.slaFollowUp",
+			kind: "acceptJob",
+		}),
 	});
 	expect(tickets?.phases.check.length).toBeGreaterThan(0);
-	expect(tickets?.phases.afterWrite).toEqual([]);
+	expect(tickets?.phases.afterWrite.length).toBeGreaterThan(0);
 	expect(artifactBytes).not.toContain("=>");
 	expect(artifactBytes).not.toContain(
 		"AUTHORED_LIFECYCLE_CALLBACK_MUST_NOT_SHIP",
@@ -813,24 +1052,6 @@ test("projects explicit issue ownership for a generated named Mutation", async (
 	}>;
 	expect(
 		contracts.operations.find(
-			({ identity }) => identity === "mutation:messageEvents.create",
-		),
-	).toMatchObject({
-		declaredErrors: {
-			invalidMessageEvent: {
-				code: "INVALID_MESSAGE_EVENT",
-				status: 422,
-				payload: null,
-			},
-		},
-		issueMappings: {
-			"collection:messageEvents": {
-				"issue:messageEvents/invalidKind": "invalidMessageEvent",
-			},
-		},
-	});
-	expect(
-		contracts.operations.find(
 			({ identity }) => identity === "mutation:messages.create",
 		),
 	).toMatchObject({
@@ -840,10 +1061,18 @@ test("projects explicit issue ownership for a generated named Mutation", async (
 				status: 404,
 				payload: null,
 			},
+			invalidMessageEvent: {
+				code: "INVALID_MESSAGE_EVENT",
+				status: 422,
+				payload: null,
+			},
 		},
 		issueMappings: {
 			"collection:messages": {
 				"issue:messages/channelUnavailable": "channelUnavailable",
+			},
+			"collection:messageEvents": {
+				"issue:messageEvents/invalidKind": "invalidMessageEvent",
 			},
 		},
 	});
@@ -875,6 +1104,10 @@ test("projects explicit issue ownership for a generated named Mutation", async (
 			identity: "query:channels.get",
 			kind: "read",
 		}),
+		"data.messageEvents.create": expect.objectContaining({
+			identity: "mutation:__collectionKernel.messageEvents.create",
+			kind: "write",
+		}),
 	});
 }, 30_000);
 
@@ -889,7 +1122,7 @@ test("rejects an unmapped issue-bearing generated named Mutation", async () => {
 		await writeFile(
 			path,
 			source.replace(
-				/\n\t\t\tissueMappings: \{\n\t\t\t\tmessageEvents: \{ invalidKind: "invalidMessageEvent" \},\n\t\t\t\},/,
+				/\n\t\t\tmessageEvents: \{ invalidKind: "invalidMessageEvent" \},/,
 				"",
 			),
 		);
@@ -899,9 +1132,10 @@ test("rejects an unmapped issue-bearing generated named Mutation", async () => {
 			code: "QP-COMPOSE-027",
 			diagnosticClass: "missingIssueMapping",
 			details: {
-				operation: "mutation:messageEvents.create",
+				operation: "mutation:messages.create",
 				path: [
-					"mutation:messageEvents.create",
+					"mutation:messages.create",
+					"collection:messages/create",
 					"collection:messageEvents/create",
 				],
 				issue: "issue:messageEvents/invalidKind",
@@ -920,8 +1154,8 @@ test("reports unsupported lifecycle capture at its authored Origin", async () =>
 		await cp(fixtureRoot, temporary, { recursive: true });
 		const path = join(temporary, "src/tickets.ts");
 		const source = await readFile(path, "utf8");
-		const authored = source.replace(
-			/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
+		const authored = withTicketNormalize(
+			source,
 			"\t\tnormalize: ({ input }) => crypto.randomUUID(),",
 		);
 		await writeFile(path, authored);
@@ -1203,13 +1437,7 @@ test("rejects unsupported lifecycle syntax and capability at compilation", async
 			await cp(fixtureRoot, temporary, { recursive: true });
 			const path = join(temporary, "src/tickets.ts");
 			const source = await readFile(path, "utf8");
-			await writeFile(
-				path,
-				source.replace(
-					/\t\tnormalize: \(\{ input \}\) =>[\s\S]*?\n\t\t\t\t: input,/,
-					authored,
-				),
-			);
+			await writeFile(path, withTicketNormalize(source, authored));
 			await expect(
 				compileApplication({ applicationRoot: temporary }),
 			).rejects.toMatchObject({ code: "QP-COMPOSE-026", diagnosticClass });

@@ -220,6 +220,34 @@ test("links and interprets an artifact-bound Collection lifecycle without callba
 	]);
 });
 
+test("rejects a recomputed artifact that throws a Collection Issue from afterWrite", () => {
+	const hostileContract = {
+		...lifecycleContract,
+		phases: {
+			...lifecycleContract.phases,
+			validate: [],
+			afterWrite: [
+				{ op: "throwIssue", issue: "issue:tickets/invalidReference" },
+			],
+		},
+	} as const;
+	const hostileProgram = {
+		...hostileContract,
+		digest: digest("questpie.collection-lifecycle-program.v1", hostileContract),
+	};
+
+	expect(() =>
+		decodeCollectionLifecyclePrograms(
+			{
+				format: "questpie.collection-lifecycle-programs",
+				version: 1,
+				programs: [hostileProgram],
+			},
+			runtimeBuild,
+		),
+	).toThrow("afterWrite cannot throw Collection Issues");
+});
+
 test("decodes and executes one bound Policy-aware check read", async () => {
 	const checkContract = {
 		...lifecycleContract,
@@ -390,33 +418,174 @@ test("decodes and executes one bound Policy-aware check read", async () => {
 	).rejects.toThrow("Lifecycle capability is withheld");
 });
 
-test("fails closed on compiler-only afterWrite capabilities before LIFE-05 runtime execution", () => {
+test("executes bound afterWrite read, write, and Job acceptance in order", async () => {
 	const capabilityContract = {
 		...lifecycleContract,
 		bindings: {
 			...bindings,
+			fields: {
+				...bindings.fields,
+				"teams.id": "collection:teams/field:id",
+			},
 			capabilities: {
+				"data.teams.get": {
+					kind: "read",
+					identity: "query:teams.get",
+					argumentKeys: ["key.id", "select.id"],
+					cardinality: "one",
+					first: true,
+					maxRows: 1,
+				},
 				"data.tickets.update": {
 					kind: "write",
 					identity: "mutation:__collectionKernel.tickets.update",
-					argumentKeys: ["key", "patch", "values"],
+					argumentKeys: ["key.id", "patch.summary"],
+				},
+				"jobs.ticket.notify.accept": {
+					kind: "acceptJob",
+					identity: "job:ticket.notify",
+					argumentKeys: ["idempotencyKey", "input.ticketId"],
 				},
 			},
 			operations: [
 				"mutation:ticket.create",
+				"query:teams.get",
 				"mutation:__collectionKernel.tickets.update",
 			],
+			jobs: ["job:ticket.notify"],
 		},
 		phases: {
 			...lifecycleContract.phases,
 			afterWrite: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:teams.get",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "key",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: "team-1" },
+												},
+											],
+										},
+									},
+									{
+										kind: "argument",
+										key: "select",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: { op: "literal", value: true },
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
 				{
 					op: "effect",
 					value: {
 						op: "capability",
 						capability: "write",
 						identity: "mutation:__collectionKernel.tickets.update",
-						arguments: [],
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "key",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "id",
+													value: {
+														op: "member",
+														target: { op: "local", slot: 0 },
+														field: "collection:teams/field:id",
+														optional: false,
+													},
+												},
+											],
+										},
+									},
+									{
+										kind: "argument",
+										key: "patch",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "summary",
+													value: { op: "literal", value: "audited" },
+												},
+											],
+										},
+									},
+								],
+							},
+						],
+					},
+				},
+				{
+					op: "effect",
+					value: {
+						op: "capability",
+						capability: "acceptJob",
+						identity: "job:ticket.notify",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "idempotencyKey",
+										value: { op: "root", root: "callId" },
+									},
+									{
+										kind: "argument",
+										key: "input",
+										value: {
+											op: "object",
+											entries: [
+												{
+													kind: "argument",
+													key: "ticketId",
+													value: {
+														op: "member",
+														target: { op: "local", slot: 0 },
+														field: "collection:teams/field:id",
+														optional: false,
+													},
+												},
+											],
+										},
+									},
+								],
+							},
+						],
 					},
 				},
 			],
@@ -434,6 +603,70 @@ test("fails closed on compiler-only afterWrite capabilities before LIFE-05 runti
 		version: 1,
 		programs: [capabilityLifecycle],
 	} as const;
+	const [decoded] = decodeCollectionLifecyclePrograms(
+		capabilityPrograms,
+		runtimeBuild,
+	);
+	const calls: unknown[] = [];
+	await executeCollectionLifecyclePhase(
+		decoded!,
+		"afterWrite",
+		{ written: {}, previous: null, callId: "call-1" },
+		{
+			"query:teams.get": (argument) => {
+				calls.push(["read", argument]);
+				return { id: "ticket-1" };
+			},
+			"mutation:__collectionKernel.tickets.update": (argument) => {
+				calls.push(["write", argument]);
+				return { id: "ticket-1" };
+			},
+			"job:ticket.notify": (argument) => {
+				calls.push(["job", argument]);
+				return { runId: "run-1" };
+			},
+		},
+	);
+	expect(calls).toEqual([
+		["read", { key: { id: "team-1" }, select: { id: true } }],
+		["write", { key: { id: "ticket-1" }, patch: { summary: "audited" } }],
+		["job", { idempotencyKey: "call-1", input: { ticketId: "ticket-1" } }],
+	]);
+	calls.length = 0;
+	const budgetDoom = createCollectionLifecycleDoom();
+	const dependencyBudget = createCollectionExecutionBudget({
+		doom: budgetDoom,
+		maxStatements: 20,
+		maxDependencies: 2,
+		maxRows: 100,
+		maxDurationMilliseconds: 5_000,
+	});
+	await expect(
+		executeCollectionLifecyclePhase(
+			decoded!,
+			"afterWrite",
+			{ written: {}, previous: null, callId: "call-1" },
+			{
+				"query:teams.get": (argument) => {
+					calls.push(["read", argument]);
+					return { id: "ticket-1" };
+				},
+				"mutation:__collectionKernel.tickets.update": (argument) => {
+					calls.push(["write", argument]);
+					return { id: "ticket-1" };
+				},
+				"job:ticket.notify": (argument) => {
+					calls.push(["job", argument]);
+					return { runId: "run-1" };
+				},
+			},
+			dependencyBudget,
+		),
+	).rejects.toThrow("dependency budget exceeded");
+	expect(calls.map(([kind]) => kind)).toEqual(["read", "write"]);
+	expect(() => budgetDoom.throwIfDoomed()).toThrow(
+		"dependency budget exceeded",
+	);
 	expect(() =>
 		linkCollectionMutationPrograms({
 			collectionOperations: {
@@ -463,7 +696,132 @@ test("fails closed on compiler-only afterWrite capabilities before LIFE-05 runti
 				{ identity: "policy:tickets.default", target: "collection:tickets" },
 			],
 		}),
-	).toThrow("afterWrite statement 0 op is invalid");
+	).not.toThrow();
+});
+
+test("iterates only a compiler-bounded afterWrite read result", async () => {
+	const contract = {
+		...lifecycleContract,
+		bindings: {
+			...bindings,
+			fields: { ...bindings.fields, "teams.id": "collection:teams/field:id" },
+			capabilities: {
+				"data.teams.list": {
+					kind: "read",
+					identity: "query:teams.list",
+					argumentKeys: ["first"],
+					cardinality: "many",
+					first: true,
+					maxRows: 2,
+				},
+				"jobs.ticket.notify.accept": {
+					kind: "acceptJob",
+					identity: "job:ticket.notify",
+					argumentKeys: ["idempotencyKey", "input.ticketId"],
+				},
+			},
+			operations: ["mutation:ticket.create", "query:teams.list"],
+			jobs: ["job:ticket.notify"],
+		},
+		phases: {
+			...lifecycleContract.phases,
+			afterWrite: [
+				{
+					op: "const",
+					slot: 0,
+					value: {
+						op: "capability",
+						capability: "read",
+						identity: "query:teams.list",
+						arguments: [
+							{
+								op: "object",
+								entries: [
+									{
+										kind: "argument",
+										key: "first",
+										value: { op: "literal", value: 2 },
+									},
+								],
+							},
+						],
+					},
+				},
+				{
+					op: "forOf",
+					slot: 1,
+					sourceSlot: 0,
+					body: [
+						{
+							op: "effect",
+							value: {
+								op: "capability",
+								capability: "acceptJob",
+								identity: "job:ticket.notify",
+								arguments: [
+									{
+										op: "object",
+										entries: [
+											{
+												kind: "argument",
+												key: "idempotencyKey",
+												value: { op: "root", root: "callId" },
+											},
+											{
+												kind: "argument",
+												key: "input",
+												value: {
+													op: "object",
+													entries: [
+														{
+															kind: "argument",
+															key: "ticketId",
+															value: {
+																op: "member",
+																target: { op: "local", slot: 1 },
+																field: "collection:teams/field:id",
+																optional: false,
+															},
+														},
+													],
+												},
+											},
+										],
+									},
+								],
+							},
+						},
+					],
+				},
+			],
+		},
+	} as const;
+	const program = {
+		...contract,
+		digest: digest("questpie.collection-lifecycle-program.v1", contract),
+	} as const;
+	const [decoded] = decodeCollectionLifecyclePrograms(
+		{
+			format: "questpie.collection-lifecycle-programs",
+			version: 1,
+			programs: [program],
+		},
+		runtimeBuild,
+	);
+	const accepted: unknown[] = [];
+	await executeCollectionLifecyclePhase(
+		decoded!,
+		"afterWrite",
+		{ written: {}, previous: null, now: new Date(), callId: "call-1" },
+		{
+			"query:teams.list": () => [{ id: "team-1" }, { id: "team-2" }],
+			"job:ticket.notify": (argument) => accepted.push(argument),
+		},
+	);
+	expect(accepted).toEqual([
+		{ idempotencyKey: "call-1", input: { ticketId: "team-1" } },
+		{ idempotencyKey: "call-1", input: { ticketId: "team-2" } },
+	]);
 });
 
 test("normalizes a sparse lane with ordinary optional-chain semantics", async () => {
@@ -498,6 +856,31 @@ test("normalizes a sparse lane with ordinary optional-chain semantics", async ()
 
 	await expect(
 		executeCollectionLifecyclePhase(sparse, "normalize", {
+			input: { summary: "trusted lane without reference" },
+		}),
+	).resolves.toEqual({ summary: "trusted lane without reference" });
+	const sparseIf = {
+		...sparse,
+		phases: {
+			...sparse.phases,
+			normalize: [
+				{
+					op: "if",
+					test: sparse.phases.normalize[0]!.value.test,
+					consequent: [
+						{
+							op: "return",
+							value: { op: "literal", value: "wrong branch" },
+						},
+					],
+					otherwise: [],
+				},
+				{ op: "return", value: { op: "root", root: "input" } },
+			],
+		},
+	} as never;
+	await expect(
+		executeCollectionLifecyclePhase(sparseIf, "normalize", {
 			input: { summary: "trusted lane without reference" },
 		}),
 	).resolves.toEqual({ summary: "trusted lane without reference" });

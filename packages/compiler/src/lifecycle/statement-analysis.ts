@@ -80,6 +80,17 @@ function analyzeSequence(
 			continue;
 		}
 		if (statement.op !== "if") {
+			if (statement.op === "forOf") {
+				const analyzed = analyzeSequence(statement.body);
+				issues.push(...analyzed.issues);
+				issueStatements.push(...analyzed.issueStatements);
+				capabilities.push(...analyzed.capabilities);
+				reachableStatements.push({
+					...statement,
+					body: Object.freeze(analyzed.statements),
+				});
+				continue;
+			}
 			reachableStatements.push(statement);
 			continue;
 		}

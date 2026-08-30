@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { canonicalMutationBytes } from "./canonical";
 import type { CollectionExecutionBudget } from "./collection-budget";
+import { validateLifecycleCapabilities } from "./lifecycle-capability-validation";
 import { interpretCollectionLifecyclePhase } from "./lifecycle-interpreter";
 
 type RecordValue = Readonly<Record<string, unknown>>;
@@ -20,18 +21,23 @@ export interface LinkedCollectionLifecycleProgramV1 {
 		capabilities: Readonly<
 			Record<
 				string,
-				Readonly<{
-					kind: "read";
-					identity: string;
-					argumentKeys: readonly string[];
-					cardinality: "one" | "many";
-					first: boolean;
-					maxRows: number;
-				}>
+				| Readonly<{
+						kind: "read";
+						identity: string;
+						argumentKeys: readonly string[];
+						cardinality: "one" | "many";
+						first: boolean;
+						maxRows: number;
+				  }>
+				| Readonly<{
+						kind: "write" | "acceptJob";
+						identity: string;
+						argumentKeys: readonly string[];
+				  }>
 			>
 		>;
 		operations: readonly string[];
-		jobs: readonly never[];
+		jobs: readonly string[];
 	}>;
 	readonly phases: Readonly<Record<Phase, readonly RecordValue[]>>;
 	readonly digest: string;
@@ -72,6 +78,16 @@ export function collectionLifecycleIssueIdentity(
 export interface CollectionLifecycleDoom {
 	capture(error: unknown): void;
 	throwIfDoomed(): void;
+}
+
+export class CollectionLifecycleRecursionError extends TypeError {
+	readonly code = "QP-DATA-024";
+	readonly diagnosticClass = "lifecycleRecursionExceeded";
+
+	constructor() {
+		super("Collection lifecycle recursion exceeded");
+		this.name = "CollectionLifecycleRecursionError";
+	}
 }
 
 function issueIdentitiesInStatements(
@@ -305,12 +321,20 @@ function decodeExpression(value: unknown, label: string): RecordValue {
 	}
 	if (op === "capability") {
 		exact(expression, ["op", "capability", "identity", "arguments"], label);
-		if (expression.capability !== "read" && expression.capability !== "write")
+		if (
+			expression.capability !== "read" &&
+			expression.capability !== "write" &&
+			expression.capability !== "acceptJob"
+		)
 			fail(`${label} capability is invalid`);
 		identity(
 			expression.identity,
 			`${label} identity`,
-			expression.capability === "read" ? "query" : "mutation",
+			expression.capability === "read"
+				? "query"
+				: expression.capability === "write"
+					? "mutation"
+					: "job",
 		);
 		array(expression.arguments, `${label} arguments`).forEach((member, index) =>
 			decodeExpression(member, `${label} argument ${index}`),
@@ -384,6 +408,27 @@ function decodeStatements(
 			} else if (statement.op === "throwIssue") {
 				exact(statement, ["op", "issue"], statementLabel);
 				identity(statement.issue, `${statementLabel} issue`, "issue");
+			} else if (statement.op === "effect") {
+				exact(statement, ["op", "value"], statementLabel);
+				const effect = decodeExpression(
+					statement.value,
+					`${statementLabel} value`,
+				);
+				if (
+					effect.op !== "capability" ||
+					(effect.capability !== "write" && effect.capability !== "acceptJob")
+				)
+					fail(`${statementLabel} effect is invalid`);
+			} else if (statement.op === "forOf") {
+				exact(statement, ["op", "slot", "sourceSlot", "body"], statementLabel);
+				if (
+					!Number.isSafeInteger(statement.slot) ||
+					Number(statement.slot) < 0 ||
+					!Number.isSafeInteger(statement.sourceSlot) ||
+					Number(statement.sourceSlot) < 0
+				)
+					fail(`${statementLabel} slot is invalid`);
+				decodeStatements(statement.body, `${statementLabel} body`);
 			} else fail(`${statementLabel} op is invalid`);
 			return statement;
 		}),
@@ -430,24 +475,34 @@ function decodeBindings(value: unknown, label: string) {
 			).map(([name, rawCapability]) => {
 				if (!name) fail(`${label} capability name is invalid`);
 				const capability = record(rawCapability, `${label} capability ${name}`);
-				if (capability.kind !== "read")
-					fail(`${label} capability is unavailable before LIFE-05`);
+				if (
+					capability.kind !== "read" &&
+					capability.kind !== "write" &&
+					capability.kind !== "acceptJob"
+				)
+					fail(`${label} capability kind is invalid`);
 				exact(
 					capability,
-					[
-						"kind",
-						"identity",
-						"argumentKeys",
-						"cardinality",
-						"first",
-						"maxRows",
-					],
+					capability.kind === "read"
+						? [
+								"kind",
+								"identity",
+								"argumentKeys",
+								"cardinality",
+								"first",
+								"maxRows",
+							]
+						: ["kind", "identity", "argumentKeys"],
 					`${label} capability ${name}`,
 				);
 				const capabilityIdentity = identity(
 					capability.identity,
 					`${label} capability ${name} identity`,
-					"query",
+					capability.kind === "read"
+						? "query"
+						: capability.kind === "write"
+							? "mutation"
+							: "job",
 				);
 				const argumentKeys = array(
 					capability.argumentKeys,
@@ -461,21 +516,37 @@ function decodeBindings(value: unknown, label: string) {
 				)
 					fail(`${label} capability ${name} argument keys are invalid`);
 				if (
-					capability.cardinality !== "one" ||
-					capability.first !== true ||
-					capability.maxRows !== 1
+					capability.kind === "read" &&
+					capability.cardinality !== "one" &&
+					capability.cardinality !== "many"
+				)
+					fail(`${label} capability ${name} read cardinality is invalid`);
+				if (
+					capability.kind === "read" &&
+					(typeof capability.first !== "boolean" ||
+						!Number.isSafeInteger(capability.maxRows) ||
+						Number(capability.maxRows) < 1 ||
+						Number(capability.maxRows) > 10_000 ||
+						(capability.cardinality === "one" &&
+							(capability.first !== true || capability.maxRows !== 1)))
 				)
 					fail(`${label} capability ${name} read bound is invalid`);
 				return [
 					name,
-					Object.freeze({
-						kind: "read" as const,
-						identity: capabilityIdentity,
-						argumentKeys: Object.freeze(argumentKeys),
-						cardinality: "one" as const,
-						first: true,
-						maxRows: 1,
-					}),
+					capability.kind === "read"
+						? Object.freeze({
+								kind: "read" as const,
+								identity: capabilityIdentity,
+								argumentKeys: Object.freeze(argumentKeys),
+								cardinality: capability.cardinality as "one" | "many",
+								first: capability.first as boolean,
+								maxRows: Number(capability.maxRows),
+							})
+						: Object.freeze({
+								kind: capability.kind as "write" | "acceptJob",
+								identity: capabilityIdentity,
+								argumentKeys: Object.freeze(argumentKeys),
+							}),
 				] as const;
 			}),
 		),
@@ -490,8 +561,10 @@ function decodeBindings(value: unknown, label: string) {
 	);
 	if (new Set(operations).size !== operations.length)
 		fail(`${label} Operations must be unique`);
-	if (array(bindings.jobs, `${label} jobs`).length)
-		fail(`${label} Jobs are unavailable in LIFE-01`);
+	const jobs = array(bindings.jobs, `${label} jobs`).map((job) =>
+		identity(job, `${label} Job`, "job"),
+	);
+	if (new Set(jobs).size !== jobs.length) fail(`${label} Jobs must be unique`);
 	return Object.freeze({
 		schema,
 		collection,
@@ -499,78 +572,8 @@ function decodeBindings(value: unknown, label: string) {
 		issues: Object.freeze({ ...issues }) as Readonly<Record<string, string>>,
 		capabilities,
 		operations: Object.freeze(operations),
-		jobs: Object.freeze([]) as readonly never[],
+		jobs: Object.freeze(jobs),
 	});
-}
-
-function hasCapability(value: unknown): boolean {
-	if (Array.isArray(value)) return value.some(hasCapability);
-	if (!value || typeof value !== "object") return false;
-	const entry = value as RecordValue;
-	return entry.op === "capability" || Object.values(entry).some(hasCapability);
-}
-
-function structuralArgumentKeys(
-	value: unknown,
-	prefix = "",
-): readonly string[] {
-	const expression = value as RecordValue;
-	if (expression.op !== "object") return [];
-	return (expression.entries as readonly RecordValue[]).flatMap((entry) => {
-		if (entry.kind !== "argument") return [];
-		const path = `${prefix}${String(entry.key)}`;
-		const nested = structuralArgumentKeys(entry.value, `${path}.`);
-		return nested.length === 0 ? [path] : nested;
-	});
-}
-
-function validateCheckCapabilities(
-	phases: Readonly<Record<Phase, readonly RecordValue[]>>,
-	bindings: ReturnType<typeof decodeBindings>,
-	label: string,
-): void {
-	if (
-		hasCapability(phases.normalize) ||
-		hasCapability(phases.validate) ||
-		hasCapability(phases.afterWrite)
-	)
-		fail(`${label} capability is not admitted in this phase`);
-	const invoked = new Set<string>();
-	const visit = (statements: readonly RecordValue[]) => {
-		for (const statement of statements) {
-			if (statement.op === "if") {
-				visit(statement.consequent as readonly RecordValue[]);
-				visit(statement.otherwise as readonly RecordValue[]);
-				continue;
-			}
-			if (statement.op === "const") {
-				const value = statement.value as RecordValue;
-				if (value.op !== "capability") continue;
-				if (value.capability !== "read")
-					fail(`${label} check capability is invalid`);
-				const binding = Object.values(bindings.capabilities).find(
-					(candidate) => candidate.identity === value.identity,
-				);
-				if (!binding || !bindings.operations.includes(binding.identity))
-					fail(`${label} check capability is unbound`);
-				const args = value.arguments as readonly unknown[];
-				const keys = args.length === 1 ? structuralArgumentKeys(args[0]) : [];
-				if (
-					keys.length !== binding.argumentKeys.length ||
-					keys.some((key, index) => key !== binding.argumentKeys[index])
-				)
-					fail(`${label} check capability arguments are invalid`);
-				invoked.add(binding.identity);
-				continue;
-			}
-			if (hasCapability(statement))
-				fail(`${label} capability must be a top-level const read`);
-		}
-	};
-	visit(phases.check);
-	for (const binding of Object.values(bindings.capabilities))
-		if (!invoked.has(binding.identity))
-			fail(`${label} capability binding is unused`);
 }
 
 export function decodeCollectionLifecyclePrograms(
@@ -623,13 +626,16 @@ export function decodeCollectionLifecyclePrograms(
 				check: decodeStatements(phases.check, `${label} check`),
 				afterWrite: decodeStatements(phases.afterWrite, `${label} afterWrite`),
 			});
-			if (decodedPhases.afterWrite.length)
-				fail(`${label} uses a phase unavailable before LIFE-05`);
 			const decodedBindings = decodeBindings(
 				program.bindings,
 				`${label} bindings`,
 			);
-			validateCheckCapabilities(decodedPhases, decodedBindings, label);
+			validateLifecycleCapabilities(
+				decodedPhases,
+				decodedBindings,
+				label,
+				fail,
+			);
 			const contract = {
 				format: program.format,
 				interpreter: program.interpreter,
@@ -662,7 +668,7 @@ export function decodeCollectionLifecyclePrograms(
 
 export function executeCollectionLifecyclePhase(
 	program: LinkedCollectionLifecycleProgramV1,
-	phase: "normalize" | "validate" | "check",
+	phase: Phase,
 	roots: Readonly<Record<string, unknown>>,
 	capabilities: Readonly<
 		Record<string, (argument: unknown) => unknown | Promise<unknown>>

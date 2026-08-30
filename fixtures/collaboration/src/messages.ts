@@ -30,12 +30,20 @@ export const messages = defineCollection({
 		channelUnavailable: collection.issue(),
 	},
 	lifecycle: {
+		normalize: ({ input }) =>
+			input.body?.includes("") ? { ...input, body: input.body.trim() } : input,
 		check: async ({ candidate, ctx, issues }) => {
 			const channel = await ctx.data.channels.get({
 				key: { id: candidate.channelId },
 				select: { id: true },
 			});
 			if (channel === null) throw issues.channelUnavailable();
+		},
+		afterWrite: async ({ row, ctx }) => {
+			await ctx.data.messageEvents.create({
+				input: { messageId: row.id, kind: "published" },
+				values: { occurredAt: ctx.now },
+			});
 		},
 	} satisfies CollectionLifecycle<"messages">,
 	constraints: {

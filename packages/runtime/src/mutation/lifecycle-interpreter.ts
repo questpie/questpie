@@ -56,7 +56,7 @@ function leafPaths(value: unknown, prefix: readonly string[] = []): string[] {
 
 export async function interpretCollectionLifecyclePhase(
 	program: LinkedCollectionLifecycleProgramV1,
-	phase: "normalize" | "validate" | "check",
+	phase: "normalize" | "validate" | "check" | "afterWrite",
 	roots: Readonly<Record<string, unknown>>,
 	capabilities: Readonly<
 		Record<string, (argument: unknown) => unknown | Promise<unknown>>
@@ -213,7 +213,12 @@ export async function interpretCollectionLifecyclePhase(
 					const args = value.arguments as readonly unknown[];
 					const result = closed(await invoke(evaluate(args[0])));
 					budget?.assertAvailable();
-					if (
+					if (binding.kind !== "read")
+						throw new TypeError("Lifecycle read capability is invalid");
+					if (binding.cardinality === "many") {
+						if (!Array.isArray(result) || result.length > binding.maxRows)
+							throw new TypeError("Lifecycle read cardinality is invalid");
+					} else if (
 						result !== null &&
 						(!result || typeof result !== "object" || Array.isArray(result))
 					)
@@ -223,12 +228,24 @@ export async function interpretCollectionLifecyclePhase(
 				continue;
 			}
 			if (statement.op === "if") {
+				const test = evaluate(statement.test);
 				const result = await run(
-					(evaluate(statement.test)
+					(test !== optionalAbsence && test
 						? statement.consequent
 						: statement.otherwise) as readonly RecordValue[],
 				);
 				if (Array.isArray(result) && result[0] === returned) return result;
+				continue;
+			}
+			if (statement.op === "forOf") {
+				const source = locals.get(Number(statement.sourceSlot));
+				if (!Array.isArray(source))
+					throw new TypeError("Lifecycle forOf source is invalid");
+				for (const member of source) {
+					locals.set(Number(statement.slot), member);
+					const result = await run(statement.body as readonly RecordValue[]);
+					if (Array.isArray(result) && result[0] === returned) return result;
+				}
 				continue;
 			}
 			if (statement.op === "return")
@@ -237,6 +254,23 @@ export async function interpretCollectionLifecyclePhase(
 					statement.value === null ? undefined : evaluate(statement.value),
 				];
 			if (statement.op === "throwIssue") raiseIssue(String(statement.issue));
+			if (statement.op === "effect") {
+				budget?.consumeDependency();
+				const value = statement.value as RecordValue;
+				const binding = Object.values(program.bindings.capabilities).find(
+					(candidate) => candidate.identity === value.identity,
+				);
+				const invoke = capabilities[String(value.identity)];
+				if (
+					!binding ||
+					(binding.kind !== "write" && binding.kind !== "acceptJob") ||
+					!invoke
+				)
+					throw new TypeError("Lifecycle capability is withheld");
+				const args = value.arguments as readonly unknown[];
+				await invoke(evaluate(args[0]));
+				budget?.assertAvailable();
+			}
 		}
 		return undefined;
 	};

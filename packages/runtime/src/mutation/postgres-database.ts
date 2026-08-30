@@ -17,11 +17,19 @@ import {
 	type PostgresTransactionRunner,
 } from "../postgres/contract";
 import {
+	type DataQueryBindingV1,
+	executePostgresTransactionQuery,
+	type LinkedPostgresQueryPlans,
+	type PostgresQueryObservationV1,
+} from "../relational";
+import {
 	canonicalMutationBytes,
 	deterministicUuid,
 	mutationDigest,
 } from "./canonical";
-import { createPostgresDatabaseCollectionMutationData } from "./collection";
+import { createCollectionMutationData } from "./collection";
+import { createDefaultCollectionExecutionBudget } from "./collection-budget";
+import { budgetPostgresTransaction } from "./collection-budget-postgres";
 import { createDurableDispatch } from "./dispatch";
 import type { MutationInvoker } from "./index";
 import { createCollectionLifecycleDoom } from "./lifecycle";
@@ -31,6 +39,7 @@ import type {
 	LinkedPostgresMutationTransactionStatement,
 	LinkedPostgresMutationTransactionStatements,
 } from "./postgres-transaction-statements";
+import type { LinkedCollectionMutationProgramsV1 } from "./program";
 
 const fixedIdentities = [
 	"mutation.dispatch.accept",
@@ -49,6 +58,37 @@ const emptyJobs: LinkedJobProjection = Object.freeze({
 	byIdentity: new Map(),
 });
 type FixedIdentity = (typeof fixedIdentities)[number];
+
+function lifecycleJobRequest(value: unknown): Readonly<{
+	payload: Readonly<Record<string, unknown>>;
+	options: Readonly<{ idempotencyKey: string; notBefore?: Date }>;
+}> {
+	if (!value || typeof value !== "object" || Array.isArray(value))
+		throw new TypeError("Lifecycle Job argument must be an object");
+	const {
+		input: payload,
+		idempotencyKey,
+		notBefore,
+		...unknown
+	} = value as Readonly<Record<string, unknown>>;
+	if (Object.keys(unknown).length > 0)
+		throw new TypeError("Lifecycle Job argument has unknown keys");
+	if (!payload || typeof payload !== "object" || Array.isArray(payload))
+		throw new TypeError("Lifecycle Job input must be an object");
+	if (typeof idempotencyKey !== "string" || idempotencyKey.length === 0)
+		throw new TypeError("Lifecycle Job idempotency key is invalid");
+	if (notBefore !== undefined && !(notBefore instanceof Date))
+		throw new TypeError("Lifecycle Job notBefore is invalid");
+	return Object.freeze({
+		payload: Object.freeze({
+			...(payload as Readonly<Record<string, unknown>>),
+		}),
+		options: Object.freeze({
+			idempotencyKey,
+			...(notBefore instanceof Date ? { notBefore } : {}),
+		}),
+	});
+}
 
 function fixedStatements(
 	linked: LinkedPostgresMutationTransactionStatements,
@@ -147,6 +187,8 @@ export function createPostgresDatabaseMutationInvoker<View>(
 		application: string;
 		transactionStatements: LinkedPostgresMutationTransactionStatements;
 		collectionPlans: LinkedPostgresCollectionOperationPlansV1;
+		collectionOperations?: LinkedCollectionMutationProgramsV1;
+		queryPlans?: LinkedPostgresQueryPlans;
 		reactions: LinkedReactionProjection;
 		jobs?: LinkedJobProjection;
 		contextInputCodec: RuntimeCodec;
@@ -234,18 +276,9 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						);
 					let businessRows = 0;
 					const lifecycleDoom = createCollectionLifecycleDoom();
-					const data = createPostgresDatabaseCollectionMutationData({
-						plans: input.collectionPlans,
-						transaction,
-						facts,
-						operationTime: owner.operationTime,
-						lifecycleDoom,
-						issueMappings: operation.issueMappings,
-						consumeRows(count) {
-							businessRows += count;
-							if (businessRows > 100)
-								throw new TypeError("Mutation exceeded its business row limit");
-						},
+					const lifecycleBudget = createDefaultCollectionExecutionBudget({
+						doom: lifecycleDoom,
+						signal,
 					});
 					const recordIdForSlot = (dispatchSlot: string) =>
 						deterministicUuid(
@@ -266,7 +299,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						sourceOperation: operation.binding.identity,
 						callId,
 					});
-					const jobAcceptance = createJobAcceptance({
+					const commonJobAcceptance = Object.freeze({
 						application: input.application,
 						tenantId: facts.tenant.id,
 						principal: facts.principal,
@@ -279,13 +312,117 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							id: callId,
 							correlationId: callId,
 						}),
+					});
+					const jobAcceptance = createJobAcceptance({
+						...commonJobAcceptance,
 						transaction: jobTransaction,
+					});
+					const linkedJobs = input.jobs ?? emptyJobs;
+					const lifecycleJobAcceptance = createJobAcceptance({
+						...commonJobAcceptance,
+						transaction: createPostgresJobAcceptanceTransaction({
+							transaction: budgetPostgresTransaction(
+								transaction,
+								lifecycleBudget,
+							),
+							statements: input.transactionStatements,
+							application: input.application,
+							sourceOperation: operation.binding.identity,
+							callId,
+						}),
 					});
 					const durableDispatch = createDurableDispatch(
 						input.reactions,
-						input.jobs ?? emptyJobs,
+						linkedJobs,
 						jobAcceptance,
 					);
+					const data = createCollectionMutationData({
+						plans: input.collectionPlans,
+						facts,
+						operationTime: owner.operationTime,
+						resultValuesDecoded: true,
+						executeLeaf: (leaf, parameters) =>
+							transaction.execute(leaf.statement, parameters),
+						callId,
+						lifecycleDoom,
+						executionBudget: lifecycleBudget,
+						issueMappings: operation.issueMappings,
+						executeList: async (identity, argument) => {
+							const list = input.collectionOperations?.byIdentity.get(identity);
+							if (
+								!list ||
+								list.member !== "list" ||
+								list.dataQueryDigest === null
+							)
+								throw new TypeError("Lifecycle list capability is withheld");
+							const linkedPlan = input.queryPlans?.get(list.dataQueryDigest);
+							if (!linkedPlan)
+								throw new TypeError("Lifecycle list Query plan is unavailable");
+							if (
+								!argument ||
+								typeof argument !== "object" ||
+								Array.isArray(argument)
+							)
+								throw new TypeError(
+									"Lifecycle list argument must be an object",
+								);
+							const values = argument as Readonly<Record<string, unknown>>;
+							let observation: PostgresQueryObservationV1 | undefined;
+							const page = await executePostgresTransactionQuery({
+								linkedPlan,
+								binding: {
+									templateDigest: linkedPlan.plan.templateDigest,
+									values: linkedPlan.plan.binding.parameters.map(
+										({ name }) => ({
+											parameter: name,
+											value: values[
+												name
+											] as DataQueryBindingV1["values"][number]["value"],
+										}),
+									),
+								},
+								executionFacts: {
+									authority: facts.authority,
+									principal: {
+										id: facts.principal.id,
+										kind: facts.principal.kind,
+									},
+									tenant: { id: facts.tenant.id },
+								},
+								transaction,
+								signal,
+								observer: {
+									recordPostgresQuery(value) {
+										observation = value;
+									},
+								},
+							});
+							if (!observation)
+								throw new TypeError(
+									"Lifecycle list observation is unavailable",
+								);
+							return Object.freeze({
+								nodes: page.nodes,
+								observed: observation.observed,
+							});
+						},
+						acceptJob: async (identity, argument) => {
+							const job = linkedJobs.byIdentity.get(identity);
+							if (!job)
+								throw new TypeError("Lifecycle Job capability is withheld");
+							const request = lifecycleJobRequest(argument);
+							return lifecycleJobAcceptance.accept(
+								job,
+								request.payload,
+								request.options,
+							);
+						},
+						consumeRows(count) {
+							businessRows += count;
+							if (businessRows > 100)
+								throw new TypeError("Mutation exceeded its business row limit");
+						},
+					});
 					const ctx = Object.freeze({
 						principal: facts.principal,
 						authority: facts.authority,

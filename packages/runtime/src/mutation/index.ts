@@ -14,7 +14,6 @@ export {
 	CommittedResultUnavailable,
 	type CommittedResultUnavailablePayload,
 } from "../operation";
-export { createPostgresCollectionMutationData } from "./collection";
 export { linkJobProjection, linkReactionProjection } from "../durable";
 export type { LinkedReactionProjection } from "../durable";
 export { createPostgresDatabaseMutationInvoker } from "./postgres-database";

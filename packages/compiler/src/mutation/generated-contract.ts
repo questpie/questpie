@@ -81,7 +81,7 @@ function hasRequiredPathAtOrBelow(
 	);
 }
 
-function parameterType(
+export function renderDataQueryParameterType(
 	parameter: DataQueryTemplateV1["parameters"][number],
 ): string {
 	if (parameter.kind === "cursor") return "string | null";
@@ -96,7 +96,7 @@ function parameterType(
 	return parameter.kind === "list" ? `ReadonlyArray<${scalar}>` : scalar;
 }
 
-function listSelection(
+export function renderDataQuerySelection(
 	template: DataQueryTemplateV1,
 	types: MutationDataTypeRenderer,
 	optionalPaths: ReadonlySet<string>,
@@ -146,10 +146,14 @@ function method(
 		const input = program.dataQuery.parameters
 			.map(
 				(parameter) =>
-					`readonly ${JSON.stringify(parameter.name)}: ${parameterType(parameter)};`,
+					`readonly ${JSON.stringify(parameter.name)}: ${renderDataQueryParameterType(parameter)};`,
 			)
 			.join(" ");
-		const row = listSelection(program.dataQuery, types, optionalOutputPaths);
+		const row = renderDataQuerySelection(
+			program.dataQuery,
+			types,
+			optionalOutputPaths,
+		);
 		return `readonly list: (input: Readonly<{ ${input} }>) => Promise<Readonly<{ nodes: ReadonlyArray<${row}>; pageInfo: Readonly<{ endCursor: string | null; hasNextPage: boolean; }>; }>>;`;
 	}
 	if (program.member === "get" || program.member === "delete") {

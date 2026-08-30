@@ -8,6 +8,8 @@ import { compareAscii } from "./canonical";
 import { renderCoreDataContract } from "./data";
 import { renderJobDeclarations } from "./job";
 import {
+	renderDataQueryParameterType,
+	renderDataQuerySelection,
 	renderGeneratedMutationData,
 	renderGeneratedMutationDataByName,
 	renderMutationDeclarations,
@@ -34,7 +36,6 @@ function record(value: unknown): RecordValue {
 		throw new TypeError("expected an object while rendering declarations");
 	return value as RecordValue;
 }
-
 function fieldType(
 	field: RecordValue,
 	timestampType: "Date" | "string" = "string",
@@ -57,7 +58,6 @@ function fieldType(
 	if (field.nullable === true) type = `${type} | null`;
 	return type;
 }
-
 function fieldNodeType(
 	field: RecordValue,
 	timestampType: "Date" | "string" = "string",
@@ -71,7 +71,6 @@ function fieldNodeType(
 		)
 		.join(" ")} }>`;
 }
-
 function fieldAtPath(
 	fields: readonly [string, RecordValue][],
 	reference: unknown,
@@ -84,12 +83,10 @@ function fieldAtPath(
 	}
 	return node?.kind === "inlineShape" ? undefined : node;
 }
-
 interface KeyTypeNode {
 	field?: RecordValue;
 	children: Map<string, KeyTypeNode>;
 }
-
 function renderKeyType(
 	fields: readonly [string, RecordValue][],
 	references: readonly unknown[],
@@ -121,7 +118,6 @@ function renderKeyType(
 	};
 	return render(root);
 }
-
 function embeddedValueType(value: RecordValue): string {
 	const options = record(value.options ?? {});
 	let type =
@@ -137,7 +133,6 @@ function embeddedValueType(value: RecordValue): string {
 	if (value.nullable === true) type = `${type} | null`;
 	return type;
 }
-
 function embeddedObjectType(properties: RecordValue): string {
 	return `Readonly<{ ${Object.entries(properties)
 		.sort(([left], [right]) => compareAscii(left, right))
@@ -226,23 +221,100 @@ function renderCollectionLifecycleDeclarations(
 		collections.map((resource) => [resource.identity, resource]),
 	);
 	const reads = mutationContract.operations.filter(
-		(operation) => operation.member === "get",
+		(operation) => operation.member === "get" || operation.member === "list",
 	);
-	const data = reads
-		.map((operation) => {
-			const target = byIdentity.get(operation.target);
-			if (!target)
+	const lifecycleTypes = {
+		field: (target: `collection:${string}`, path: readonly string[]) => {
+			const collection = byIdentity.get(target);
+			const field = collection
+				? fieldAtPath(collectionFields(collection), path)
+				: undefined;
+			if (!field)
 				throw new TypeError(
-					`unknown lifecycle read target ${operation.target}`,
+					`unknown lifecycle Field ${target}/${path.join("/")}`,
 				);
+			return fieldType(field, "Date");
+		},
+		fieldIdentity: (identity: string) => {
+			const marker = "/field:";
+			const index = identity.indexOf(marker);
+			const collection = byIdentity.get(identity.slice(0, index));
+			const field = collection
+				? fieldAtPath(
+						collectionFields(collection),
+						identity.slice(index + marker.length).split("/"),
+					)
+				: undefined;
+			if (!field) throw new TypeError(`unknown lifecycle Field ${identity}`);
+			return fieldType(field, "Date");
+		},
+	};
+	const writes = renderGeneratedMutationData(
+		{
+			...mutationContract,
+			operations: mutationContract.operations.filter(
+				(operation) =>
+					operation.member === "create" || operation.member === "update",
+			),
+		},
+		lifecycleTypes,
+	);
+	const dataByTarget = new Map<string, string[]>();
+	for (const operation of reads) {
+		const target = byIdentity.get(operation.target);
+		if (!target)
+			throw new TypeError(`unknown lifecycle read target ${operation.target}`);
+		let member: string;
+		if (operation.member === "get") {
 			const constraints = record(target.value.constraints);
 			const primary = Object.values(constraints)
 				.map(record)
 				.find((constraint) => constraint.kind === "primaryKey");
-			return `readonly ${JSON.stringify(target.name)}: LifecycleReadCollection<${renderCollectionRow(target, operation.selectedFieldPaths, operation.optionalSelectedFieldPaths)}, ${renderKeyType(collectionFields(target), (primary?.fields ?? []) as readonly unknown[])}>;`;
-		})
+			member = `LifecycleReadCollection<${renderCollectionRow(target, operation.selectedFieldPaths, operation.optionalSelectedFieldPaths)}, ${renderKeyType(collectionFields(target), (primary?.fields ?? []) as readonly unknown[])}>`;
+		} else {
+			if (!operation.dataQuery)
+				throw new TypeError(`${operation.identity} has no Data Query`);
+			const parameters = operation.dataQuery.parameters
+				.map(
+					(parameter) =>
+						`readonly ${JSON.stringify(parameter.name)}: ${renderDataQueryParameterType(parameter)};`,
+				)
+				.join(" ");
+			const optionalPaths = new Set(
+				operation.optionalSelectedFieldPaths.map((path) => path.join("/")),
+			);
+			const row = renderDataQuerySelection(
+				operation.dataQuery,
+				lifecycleTypes,
+				optionalPaths,
+			);
+			member = `LifecycleListCollection<Readonly<{ ${parameters} }>, ${row}>`;
+		}
+		const members = dataByTarget.get(target.name) ?? [];
+		members.push(member);
+		dataByTarget.set(target.name, members);
+	}
+	const data = [...dataByTarget.entries()]
+		.map(
+			([name, members]) =>
+				`readonly ${JSON.stringify(name)}: ${members.join(" & ")};`,
+		)
 		.sort(compareAscii)
 		.join(" ");
+	const jobAcceptances = renderServerOperationType(
+		"Lifecycle Job",
+		resources
+			.filter(
+				(resource) =>
+					resource.kind === "job" &&
+					record(resource.contract.input).kind === "object",
+			)
+			.map((resource) => ({
+				name: resource.name,
+				origin: resource.origin,
+				value: `Readonly<{ accept(input: Readonly<{ readonly input: ${renderCodecType(resource.contract.input)}; readonly idempotencyKey: string; readonly notBefore?: Date; }>): Promise<JobRunReceipt<${JSON.stringify(resource.name)}>>; }>`,
+			})),
+	);
 	const entries = collections
 		.map((resource) => {
 			const row = renderCollectionRow(resource);
@@ -254,7 +326,7 @@ function renderCollectionLifecycleDeclarations(
 				)
 				.join(" ");
 			const common = `readonly candidate: ${row}; readonly current: ${row} | null; readonly now: Date; readonly issues: Readonly<{ ${issues} }>;`;
-			return `readonly ${JSON.stringify(resource.name)}: Readonly<{ readonly normalize?: (input: Readonly<{ readonly input: Readonly<Partial<${row}>>; }>) => Readonly<Partial<${row}>>; readonly validate?: (input: Readonly<{ ${common} }>) => void; readonly check?: (input: Readonly<{ ${common} readonly ctx: Readonly<{ readonly data: Readonly<GeneratedLifecycleCheckData>; }>; }>) => Promise<void>; }>;`;
+			return `readonly ${JSON.stringify(resource.name)}: Readonly<{ readonly normalize?: (input: Readonly<{ readonly input: Readonly<Partial<${row}>>; }>) => Readonly<Partial<${row}>>; readonly validate?: (input: Readonly<{ ${common} }>) => void; readonly check?: (input: Readonly<{ ${common} readonly ctx: Readonly<{ readonly data: Readonly<GeneratedLifecycleCheckData>; readonly now: Date; }>; }>) => Promise<void>; readonly afterWrite?: (input: Readonly<{ readonly row: ${row}; readonly previous: ${row} | null; readonly ctx: Readonly<{ readonly data: Readonly<GeneratedLifecycleCheckData & GeneratedLifecycleAfterWriteData>; readonly jobs: Readonly<GeneratedLifecycleJobAcceptances>; readonly now: Date; readonly callId: string; }>; }>) => Promise<void>; }>;`;
 		})
 		.sort(compareAscii)
 		.join("\n\t");
@@ -262,9 +334,19 @@ function renderCollectionLifecycleDeclarations(
 	get<const Select extends Readonly<Partial<Record<keyof Row, true>>>>(input: Readonly<{ readonly key: Key; readonly select: Select & (keyof Select extends never ? never : unknown) & Readonly<Record<Exclude<keyof Select, keyof Row>, never>>; }>): Promise<Readonly<Pick<Row, keyof Select & keyof Row>> | null>;
 }
 
+export interface LifecycleListCollection<Input, Row> {
+	list(input: Input): Promise<ReadonlyArray<Row>>;
+}
+
 export interface GeneratedLifecycleCheckData {
 	${data}
 }
+
+export interface GeneratedLifecycleAfterWriteData {
+	${writes}
+}
+
+export type GeneratedLifecycleJobAcceptances = ${jobAcceptances};
 
 export interface GeneratedCollectionLifecycles {
 	${entries}

@@ -1,5 +1,7 @@
 import { constraint, defineCollection, field, index, relation } from "questpie";
 
+import type { CollectionLifecycle } from "#questpie/app";
+
 import { memberships } from "./memberships";
 import { tickets } from "./tickets";
 
@@ -35,6 +37,10 @@ export const comments = defineCollection({
 			immutable: true,
 		}),
 	},
+	lifecycle: {
+		normalize: ({ input }) =>
+			input.body?.includes("") ? { ...input, body: input.body.trim() } : input,
+	} satisfies CollectionLifecycle<"comments">,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
 	},

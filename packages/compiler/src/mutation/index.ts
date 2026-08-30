@@ -16,6 +16,8 @@ export type {
 	CollectionOperationProgramV1,
 } from "./operation-set-contract";
 export {
+	renderDataQueryParameterType,
+	renderDataQuerySelection,
 	projectMutationGeneratedContract,
 	renderGeneratedMutationData,
 	renderGeneratedMutationDataByName,

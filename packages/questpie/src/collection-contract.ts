@@ -114,6 +114,8 @@ export interface CollectionLifecycleDefinition<
 	) => void;
 	/** Application-specialized input is projected by the Current App Contract. */
 	readonly check?: (...input: never[]) => unknown;
+	/** Application-specialized input is projected by the Current App Contract. */
+	readonly afterWrite?: (...input: never[]) => unknown;
 }
 
 interface AugmentationBrand {

@@ -75,9 +75,6 @@ type View = Readonly<{
 		messages: Readonly<{
 			create(input: unknown): Promise<Readonly<Record<string, unknown>>>;
 		}>;
-		messageEvents: Readonly<{
-			create(input: unknown): Promise<Readonly<Record<string, unknown>>>;
-		}>;
 	}>;
 	dispatch: Readonly<{
 		messagePublished(input: unknown): Promise<void>;
@@ -104,10 +101,6 @@ function operation(
 						authorMembershipId: beta05Ids.membership,
 						body: (input as { body: string }).body,
 					},
-				});
-				await ctx.data.messageEvents.create({
-					input: { messageId: message.id, kind: "published" },
-					values: { occurredAt: ctx.now },
 				});
 				await ctx.dispatch.messagePublished({
 					channelId: beta05Ids.channel,
@@ -305,8 +298,11 @@ postgres(
 		const callId = `pb05-db-${crypto.randomUUID()}`;
 		const body = `database-${crypto.randomUUID()}`;
 		let committed: Awaited<ReturnType<typeof invoke>> | undefined;
+		let freshRetry: Awaited<ReturnType<typeof invoke>> | undefined;
 		let rollbackCall = "";
 		let rollbackBody = "";
+		let freshRetryCall = "";
+		let freshRetryBody = "";
 		try {
 			committed = await invoke(
 				operation(body, () => (handlerCalls += 1)),
@@ -356,6 +352,16 @@ postgres(
 			).rejects.toThrow("forced receipt refusal");
 			expect(handlerCalls).toBe(2);
 			expect(faultCalls).toBe(1);
+
+			freshRetryCall = `pb05-fresh-retry-${crypto.randomUUID()}`;
+			freshRetryBody = `fresh-retry-${crypto.randomUUID()}`;
+			freshRetry = await invoke(
+				operation(freshRetryBody, () => (handlerCalls += 1)),
+				freshRetryCall,
+			);
+			expect(freshRetry.committed).toBe(true);
+			expect(freshRetry.value).toMatchObject({ body: freshRetryBody });
+			expect(handlerCalls).toBe(3);
 		} finally {
 			await database.close({ deadlineAt: Date.now() + 5_000 });
 		}
@@ -382,6 +388,28 @@ postgres(
 				runs: 1,
 				events: 1,
 			});
+			const [transactionWitness] = await verify.unsafe(
+				`SELECT count(DISTINCT witness.transaction_id)::int AS transactions
+				 FROM (
+				   SELECT ledger.transaction_id
+				   FROM questpie_internal.change_ledger AS ledger
+				   WHERE ledger.application_name = 'application:collaboration'
+				     AND ledger.new_key->>'id' IN (
+				       $1::text,
+				       (SELECT event.id::text FROM collaboration.message_events AS event WHERE event.message_id = ($1::text)::uuid LIMIT 1)
+				     )
+				   UNION ALL
+				   SELECT receipt.transaction_id
+				   FROM questpie_internal.mutation_call_receipts AS receipt
+				   WHERE receipt.call_id = $2
+				   UNION ALL
+				   SELECT dispatch.transaction_id
+				   FROM questpie_internal.durable_dispatches AS dispatch
+				   WHERE dispatch.call_id = $2
+				 ) AS witness`,
+				[messageId, callId],
+			);
+			expect(transactionWitness).toEqual({ transactions: 1 });
 			const [rolledBack] = await verify.unsafe(
 				`SELECT
 				  (SELECT count(*)::int FROM collaboration.messages WHERE body = $1) AS messages,
@@ -399,6 +427,25 @@ postgres(
 				intents: 0,
 				runs: 0,
 				events: 0,
+			});
+			if (!freshRetry) throw new Error("fresh retry result is unavailable");
+			const [retried] = await verify.unsafe(
+				`SELECT
+				  (SELECT count(*)::int FROM collaboration.messages WHERE id = $1 AND body = $2) AS messages,
+				  (SELECT count(*)::int FROM collaboration.message_events WHERE message_id = $1) AS audits,
+				  (SELECT count(*)::int FROM questpie_internal.mutation_call_receipts WHERE call_id = $3) AS receipts,
+				  (SELECT count(*)::int FROM questpie_internal.durable_dispatches WHERE call_id = $3) AS intents`,
+				[
+					(freshRetry.value as { id: string }).id,
+					freshRetryBody,
+					freshRetryCall,
+				],
+			);
+			expect(retried).toEqual({
+				messages: 1,
+				audits: 1,
+				receipts: 1,
+				intents: 1,
 			});
 		} finally {
 			await verify.close({ timeout: 2 });

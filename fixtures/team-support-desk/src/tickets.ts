@@ -82,10 +82,43 @@ export const tickets = defineCollection({
 		invalidReference: collection.issue(),
 	},
 	lifecycle: {
-		normalize: ({ input }) =>
-			input.reference?.includes("")
-				? { ...input, reference: input.reference.trim() }
-				: input,
+		normalize: ({ input }) => {
+			if (input.reference?.includes("")) {
+				if (input.summary?.includes("")) {
+					if (input.description?.includes(""))
+						return {
+							...input,
+							reference: input.reference.trim(),
+							summary: input.summary.trim(),
+							description: input.description.trim(),
+						};
+					return {
+						...input,
+						reference: input.reference.trim(),
+						summary: input.summary.trim(),
+					};
+				}
+				if (input.description?.includes(""))
+					return {
+						...input,
+						reference: input.reference.trim(),
+						description: input.description.trim(),
+					};
+				return { ...input, reference: input.reference.trim() };
+			}
+			if (input.summary?.includes("")) {
+				if (input.description?.includes(""))
+					return {
+						...input,
+						summary: input.summary.trim(),
+						description: input.description.trim(),
+					};
+				return { ...input, summary: input.summary.trim() };
+			}
+			return input.description?.includes("")
+				? { ...input, description: input.description.trim() }
+				: input;
+		},
 		validate: ({ candidate, issues }) => {
 			if (
 				!candidate.reference.startsWith("SUP-") &&
@@ -107,6 +140,18 @@ export const tickets = defineCollection({
 			});
 			if (requester === null || requester.status !== "active")
 				throw issues.invalidReference();
+		},
+		afterWrite: async ({ row, ctx }) => {
+			await ctx.jobs.ticket.slaFollowUp.accept({
+				input: {
+					organizationId: row.organizationId,
+					ticketId: row.id,
+					reference: row.reference,
+					summary: row.summary,
+					dueAt: ctx.now,
+				},
+				idempotencyKey: `ticket:${row.id}:${ctx.callId}`,
+			});
 		},
 	} satisfies CollectionLifecycle<"tickets">,
 	constraints: {

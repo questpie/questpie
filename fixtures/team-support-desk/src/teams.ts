@@ -1,5 +1,7 @@
 import { constraint, defineCollection, field, index, relation } from "questpie";
 
+import type { CollectionLifecycle } from "#questpie/app";
+
 import { organizations } from "./organizations";
 
 export const teams = defineCollection({
@@ -37,6 +39,10 @@ export const teams = defineCollection({
 			server: true,
 		}),
 	},
+	lifecycle: {
+		normalize: ({ input }) =>
+			input.name?.includes("") ? { ...input, name: input.name.trim() } : input,
+	} satisfies CollectionLifecycle<"teams">,
 	constraints: {
 		primary: constraint.primaryKey({ fields: ["id"] }),
 		tenantName: constraint.unique({ fields: ["organizationId", "name"] }),

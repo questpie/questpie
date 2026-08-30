@@ -449,6 +449,7 @@ function linkMutationArtifacts(runtimeModule, artifactFiles, compilerRuntimeBuil
 		policies: raw.policies,
 	});
 	return Object.freeze({
+		collectionOperations: operations,
 		collectionAdapters: linkCollectionOperationAdapters({
 			artifact: raw.adapters,
 			fieldNormalizers: raw.normalizers,
@@ -634,6 +635,8 @@ export async function createApplication(input) {
 					transactionStatements: mutationArtifacts.transactionStatements,
 					facts,
 					collectionPlans: mutationArtifacts.collectionPlans,
+					collectionOperations: mutationArtifacts.collectionOperations,
+					queryPlans,
 					reactions: mutationArtifacts.reactions,
 					jobs: mutationArtifacts.jobs,
 					contextInputCodec: ${contextDefinition}.input,

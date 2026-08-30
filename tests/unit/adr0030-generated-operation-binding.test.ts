@@ -44,8 +44,16 @@ test("binds Collection Operation Set writes as ordinary exact Operations", async
 				payload: null,
 				status: 404,
 			},
+			invalidMessageEvent: {
+				code: "INVALID_MESSAGE_EVENT",
+				payload: null,
+				status: 422,
+			},
 		},
 		issueMappings: {
+			"collection:messageEvents": {
+				"issue:messageEvents/invalidKind": "invalidMessageEvent",
+			},
 			"collection:messages": {
 				"issue:messages/channelUnavailable": "channelUnavailable",
 			},

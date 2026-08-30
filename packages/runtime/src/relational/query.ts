@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import { assertOperationAdmission } from "../operation";
 import type { PostgresParameter, PostgresTransactionRunner } from "../postgres";
+import type { PostgresTransaction } from "../postgres";
 import {
 	createCursorBindingV2,
 	type CursorOrderTerm,
@@ -751,5 +752,21 @@ export function executePostgresDatabaseQuery(
 				parameters,
 				signal,
 			),
+	});
+}
+
+/** Executes an already-linked Query plan inside an owning transaction. */
+export function executePostgresTransactionQuery(
+	input: PostgresQueryExecutionInput &
+		Readonly<{
+			linkedPlan: LinkedPostgresQueryPlan;
+			transaction: PostgresTransaction;
+		}>,
+): Promise<DataQueryPage> {
+	return executePostgresQueryWithRows({
+		...input,
+		plan: input.linkedPlan.plan,
+		read: (parameters) =>
+			input.transaction.execute(input.linkedPlan.statement, parameters),
 	});
 }

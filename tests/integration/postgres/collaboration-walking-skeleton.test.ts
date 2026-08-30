@@ -1159,6 +1159,16 @@ postgresTest(
 					principal: { id: tracerIds.principal, kind: "user" },
 				},
 			});
+			const [published] = await database!.unsafe<
+				readonly Readonly<{ events: number }>[]
+			>(
+				`SELECT count(*)::int AS events
+FROM collaboration.message_events AS events
+JOIN collaboration.messages AS messages ON messages.id = events.message_id
+WHERE messages.body = $1 AND events.kind = 'published'`,
+				[body],
+			);
+			expect(published).toEqual({ events: 1 });
 
 			await stop(first.child, "SIGKILL");
 			const recovered = await startHost(temporary, first.port);

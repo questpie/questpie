@@ -64,9 +64,7 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		expect(bundle).toContain("linkCollectionOperationAdapters");
 		expect(bundle).toContain("linkPostgresCollectionOperationPlans");
 		expect(bundle).toContain("linkReactionProjection");
-		expect(linkedApplication).toContain(
-			"createPostgresDatabaseCollectionMutationData",
-		);
+		expect(linkedApplication).toContain("createCollectionMutationData");
 		expect(bundle).toContain("createPostgresLiveQueryCoordinator");
 		expect(bundle).toContain("linkLiveQueryProgram");
 		expect(bundle).toContain("input.realtime.hmacKey");

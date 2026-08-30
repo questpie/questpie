@@ -1,13 +1,7 @@
-import { defineCollectionOperations, mutation, operation } from "questpie";
+import { defineCollectionOperations, operation } from "questpie";
 
 import { channels } from "./channels";
-import { messageEvents } from "./message-events";
-import {
-	channelPolicy,
-	messageEventPolicy,
-	messagePolicy,
-	spacePolicy,
-} from "./message-policy";
+import { channelPolicy, messagePolicy, spacePolicy } from "./message-policy";
 import { messages } from "./messages";
 import { spaces } from "./spaces";
 
@@ -38,33 +32,11 @@ export const messageOperations = defineCollectionOperations(messages, {
 	policy: messagePolicy,
 	create: {
 		input: ["channelId", "authorMembershipId", "body"],
-		errors: { channelUnavailable },
 		issueMappings: {
 			messages: { channelUnavailable: "channelUnavailable" },
+			messageEvents: { invalidKind: "invalidMessageEvent" },
 		},
-		normalize: ({ input }) => ({ body: operation.text.trim(input.body) }),
-		values: ({ operationTime }) => ({
-			createdAt: mutation.overwrite(operationTime),
-		}),
+		errors: { channelUnavailable, invalidMessageEvent },
 		select: { id: true, channelId: true, body: true, createdAt: true },
 	},
 });
-
-export const messageEventOperations = defineCollectionOperations(
-	messageEvents,
-	{
-		name: "messageEvents",
-		policy: messageEventPolicy,
-		create: {
-			input: ["messageId", "kind"],
-			errors: { invalidMessageEvent },
-			issueMappings: {
-				messageEvents: { invalidKind: "invalidMessageEvent" },
-			},
-			values: ({ operationTime }) => ({
-				occurredAt: mutation.overwrite(operationTime),
-			}),
-			select: { id: true },
-		},
-	},
-);
