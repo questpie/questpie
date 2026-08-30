@@ -1,0 +1,235 @@
+{
+	"protocolVersion": 2,
+	"ticket": "DX-INVERSE-TOMANY-PROJECTION-RATIFICATION",
+	"proof": "Ratify only the bounded inverse toMany Query projection delta: one child-Collection-owned comments.list structural selection per Query, literal first 1 through 50, the existing four-Relation-edge ceiling, exact readonly child-array typing, Policy-before-limit one-statement PostgreSQL execution, compatible v1 and linked v2 artifacts, direct/network/watch parity, bounded cancellation and nondisclosure semantics. Keep ADR-0032 and all live authority Proposed until a committed protocol-v2 PASS record exists. Do not accept polymorphic Relations, nested cursors, aggregates, React projection, a second query kernel, or any lifecycle change.",
+	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+	"reviewOutput": "docs/v4/prototypes/inverse-tomany-projection/REVIEW.json",
+	"authorityHeads": {
+		"clean feat/v4 continuation head": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+		"committed proposed inverse projection proof": "6e5eb5dc82d3234b741536f81781af1101d592b9"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification before projection",
+			"path": "SPEC.md",
+			"sha256": "c6b15dcb82e020be32b55ab432547d0e722513d01af602cbdd8d59c48326ae26"
+		},
+		{
+			"name": "canonical product language before projection",
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"name": "canonical handoff before projection",
+			"path": "HANDOFF.md",
+			"sha256": "237c17994f1bf78cb95d1b2c8c16c472a92395b2491821d77dc8a64aa5b82304"
+		},
+		{
+			"name": "accepted tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "accepted relation and query grammar",
+			"path": "docs/adr/0008-freeze-the-foundational-data-and-structural-query-contract.md",
+			"sha256": "a36af0bea0ecaf41b96db7344d9858b12227db6201cceb58c79a54de7a7ae544"
+		},
+		{
+			"name": "accepted Policy and nondisclosure contract",
+			"path": "docs/adr/0010-freeze-trusted-context-and-relational-policy.md",
+			"sha256": "8926977b62a872b23d3071fa98e404d39dd7b43801c0330f9316714c63f546d0"
+		},
+		{
+			"name": "accepted Query snapshot and Operation ownership",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "accepted Live Query and Change Ledger contract",
+			"path": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"sha256": "14cfc6eceae76c8411d8c9193486e3d89f16fa66dd605fad30aeeb2cdb8bd9b8"
+		},
+		{
+			"name": "accepted generated client and Runtime ownership",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "accepted shared relational kernel",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "4413e7ed5ada104a85498e11cea2ac78dc6e2dffd6931c475f7b56afb4541610"
+		},
+		{
+			"name": "accepted delivery sequence",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "proposed bounded inverse toMany decision",
+			"path": "docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md",
+			"sha256": "0c5a7f347b9f54682e498adf03d735d14f1cb192e870646bc0148e88f3134262"
+		},
+		{
+			"name": "current ADR index before projection",
+			"path": "docs/adr/README.md",
+			"sha256": "6f65e52dbda74c67d10721b7b1f6e9adb58f8b46c1483b371f4c0367702bd675"
+		},
+		{
+			"name": "accepted query grammar workbench before projection",
+			"path": "docs/v4/data-model-and-query-grammar.md",
+			"sha256": "ebbd1daefe2894822f1d499b9082c516a743f14fccf67e07d42515ec67aa47dd"
+		},
+		{
+			"name": "current public data and query guide before projection",
+			"path": "apps/docs/content/docs/v4/data-and-queries.mdx",
+			"sha256": "010eeb693c019a53642f927ee8b86f268c2ce1a7ac094fbf65a6bb340a9d0c00"
+		},
+		{
+			"name": "candidate staging declaration",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/CANDIDATE.md",
+			"sha256": "52a577004ea89d33c38a95f9aabcd6b3447eab753fdd8b7ed09a33332be2ca52"
+		},
+		{
+			"name": "candidate comparison record",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/CANDIDATES.md",
+			"sha256": "f9a1a6e28536eb5d39f42a62c38579d976e83a2baed6cb106d647cc2621beb10"
+		},
+		{
+			"name": "public documentation draft rationale",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/PUBLIC-DRAFT.md",
+			"sha256": "76a2046afdd730dafac6e2d34d4fc0c57a37f48043d7166a4841e514c29b7af6"
+		},
+		{
+			"name": "independent adversarial review record",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/ADVERSARIAL-REVIEWS.md",
+			"sha256": "e4977b6ebc2dc72df9469bf240f77bceb21198a110ff0b4d25955a4f1ff112bf"
+		},
+		{
+			"name": "authoring type boundary proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/authoring-types.ts",
+			"sha256": "a02c2d117fc4da94d5bc9c5e35cd529620dde83f816483a395adc3b87bb4de1b"
+		},
+		{
+			"name": "authoring type diagnostics proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/authoring-types.test.ts",
+			"sha256": "368b0c4044842c01b1720d018a9b00cfd953c28b55c0970c2dd6ed1afdfa55c0"
+		},
+		{
+			"name": "canonical artifact v2 proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/artifacts/v2.ts",
+			"sha256": "2e64a59fd9d482e99361217f58a8a8168f690496b6e98eaa04cc98b9a9bd045d"
+		},
+		{
+			"name": "artifact compatibility and hostile linkage proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/artifacts/v2.test.ts",
+			"sha256": "b1f9d2b060e2ded369b4cd700b2d04bff9152debd55f42b1e548be3d72a05741"
+		},
+		{
+			"name": "Live Query dependency proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/live-query/dependencies.ts",
+			"sha256": "12d6b38bcad03951c6298d8a698ebd2bc133c91c01880604443ecd09e430977b"
+		},
+		{
+			"name": "Live Query dependency replacement tests",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/live-query/dependencies.test.ts",
+			"sha256": "de0fde52cd403d93010266612e79d15b9070865349e6ec4ca122d7c266ca7f07"
+		},
+		{
+			"name": "direct network and watch parity proof",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/parity/executor.ts",
+			"sha256": "0696669edca01bac9ebeba558c401414b11994be78feede0c30f4500d7881d61"
+		},
+		{
+			"name": "direct network and watch parity tests",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/parity/executor.test.ts",
+			"sha256": "72ba23c50b83d5a7879e0907f1710ec0689ba515e5d9a06bfe379501e33247ae"
+		},
+		{
+			"name": "PostgreSQL one-statement proof kernel",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.ts",
+			"sha256": "daa1014ba9800d05861d5e7d1c1d9add610dd40fcb66cb528b8882639f0e4885"
+		},
+		{
+			"name": "PostgreSQL Policy cursor cancellation and hostile tests",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.test.ts",
+			"sha256": "4817c40c6c7c8d8ebbec0d6a862f305344a0bdabfed6bc3d3655312c45b20682"
+		},
+		{
+			"name": "exact post-PASS authority projection",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/authority-projection.json",
+			"sha256": "862edab0f4ee4aaf915a9af12089b008b8ee309be4dee2ab258f04ee264c1dd4"
+		},
+		{
+			"name": "Proposed-status hash and projection staging gate",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/staging-check.ts",
+			"sha256": "1bfcf8f2a2a000ba2f71c7af10ca45f44633c2ef5d04dde733f5f27b53edf37f"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/inverse-tomany-projection/authoring-types.test.ts docs/v4/prototypes/inverse-tomany-projection/artifacts/v2.test.ts docs/v4/prototypes/inverse-tomany-projection/live-query/dependencies.test.ts docs/v4/prototypes/inverse-tomany-projection/parity/executor.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=<allocated-trust-auth-postgresql-17-port> PGDATABASE=postgres PGUSER=postgres bun test docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun docs/v4/prototypes/inverse-tomany-projection/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/inverse-tomany-projection/**/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc --noEmit --strict --skipLibCheck --target ES2024 --module preserve --moduleResolution bundler --types bun docs/v4/prototypes/inverse-tomany-projection/authoring-types.ts docs/v4/prototypes/inverse-tomany-projection/authoring-types.test.ts docs/v4/prototypes/inverse-tomany-projection/artifacts/v2.ts docs/v4/prototypes/inverse-tomany-projection/artifacts/v2.test.ts docs/v4/prototypes/inverse-tomany-projection/live-query/dependencies.ts docs/v4/prototypes/inverse-tomany-projection/live-query/dependencies.test.ts docs/v4/prototypes/inverse-tomany-projection/parity/executor.ts docs/v4/prototypes/inverse-tomany-projection/parity/executor.test.ts docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.ts docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md docs/v4/prototypes/inverse-tomany-projection",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs build (detached 6e5eb5d worktree with authority-projection.json applied)",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check efd835a073ae33e4dfa3f5bef2cf2cad8c46c393..HEAD",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0032 remains Proposed and the ADR index, SPEC, CONTEXT, public guide, and HANDOFF do not project it as Accepted before a committed PASS. authority-projection.json is exact candidate evidence and applies only after the review record is committed and verified.",
+		"The public authoring surface reuses the child Collection's list member as a structurally disjoint nested overload: comments.list requires literal first 1..50, total orderBy, exact non-empty select, optional child-row where, and forbids parameters and page; root list requires its root shape and forbids first. Mixed variable objects and wrong source Collections fail statically and at compile time.",
+		"The inverse parent accepts only a branded list from the Collection named by its inverseOf owning Relation. Generated output is exact readonly Child[], empty and fully hidden sets are [], and conditional selected-output Fields are optional rather than null.",
+		"One Query template contains at most one projected inverse list and at most four selected or filtered Relation edges total. No nested cursor, child pageInfo, aggregate, quantifier, offset, backward page, implicit order, hidden tie-breaker, arbitrary recursion, synthetic many-to-many, or polymorphic Relation is accepted.",
+		"Data Query Template v1 remains byte-for-byte readable and emitted for all toOne-only graphs, including shipped recursive v1 vectors. Template v2 is emitted only for inverse lists and binds resolved inverse/source identities, literal bound, normalized filter, total order, recursive selection, and exact digest.",
+		"Query Projection v2 and PostgreSQL Plans v2 bind the template version/digest, exact exported SQL bytes, ordered parameters and bindings, decoded opaque-root-cursor order tuple, result ordinals/nullability, root and child Policy digests, statement digest, App Contract, and Runtime Build. Readiness and decoding fail closed on unknown versions, mismatches, unresolved identities, forged ordinals, or unlinked columns.",
+		"One structural Query executes exactly one PostgreSQL statement in the existing relational kernel and read-only repeatable-read snapshot. Root authorization/filter/order/page and sentinel precede one LEFT JOIN LATERAL whose correlation, child Policy, child filter, total order, and literal limit occur in that order. Child Policy runs before order and limit.",
+		"Runtime groups by compiler-owned ordinals, derives root hasNextPage from distinct root ordinals, discards the complete sentinel group, and exposes no partial application result. The structural maximum is 5,050 flattened root-child positions; the existing 1,048,576-byte result and 256 Live dependency-token limits remain unchanged and no fake general 10,000-row Query limit is introduced.",
+		"Cancellation before dispatch performs no SQL. In-flight cancellation or deadline cancels the statement and closes the snapshot; the connection remains reusable. QUESTPIE performs no automatic Query retry, and a Live recomputation is a new authorized snapshot.",
+		"Live dependency compilation records inverse/source/correlation identities, child and nested Policy evidence, empty misses, authored filter, ordering, root page/sentinel, and child-list boundaries; relevant committed changes dirty the watch, and only successful recomputation atomically replaces the complete dependency set.",
+		"Direct execution, generated network client, Fetch, and watch use the same linked plan and decoder and expose parity for success, limits, cancellation, and sanitized INTERNAL failures. No SQL, PostgreSQL detail, protected Field, hidden identity/cardinality, Policy evidence, or forged ordinal reaches callers or observations.",
+		"The exact post-PASS public documentation explains why comments.list is a bounded structural selection rather than an Operation, its disjoint root/nested grammar, result typing, Policy-before-limit behavior, one-list/four-edge bounds, cursor and retry absence, transaction/cancellation semantics, direct/network/watch parity, diagnostics, and nondisclosure.",
+		"ADR-0032 supersedes only ADR-0008's one-hop selection clause and projected-toMany deferral. It preserves Relation declaration, Data/Schema contracts, Policy, Query snapshot, Live Query, generated client, shared relational kernel, and tracer-led delivery, and it changes no lifecycle authority."
+	]
+}
