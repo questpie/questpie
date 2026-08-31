@@ -1,6 +1,7 @@
 export { END_OUTCOMES, EVENT_OUTCOMES, EVENT_SCOPES } from "./grammar";
 export { createObservationHandle, resolveObservationHandle } from "./handle";
 export { createObservationKernel } from "./kernel";
+export { observePostgresTransaction } from "./postgres";
 export { retainScopeThroughResponse } from "./response";
 export type {
 	ActiveObservation,

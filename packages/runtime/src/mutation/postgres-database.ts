@@ -4,6 +4,7 @@ import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
 import { createJobAcceptance, durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
 import type { ExecutionFacts } from "../execution";
+import { observePostgresTransaction } from "../observation";
 import {
 	assertOperationAdmission,
 	CommittedResultUnavailable,
@@ -59,6 +60,23 @@ const emptyJobs: LinkedJobProjection = Object.freeze({
 	byIdentity: new Map(),
 });
 type FixedIdentity = (typeof fixedIdentities)[number];
+
+function mutationPostgresObservationFailure(
+	error: unknown,
+	signal: AbortSignal,
+) {
+	const errorCode =
+		error instanceof QuestpiePostgresError ? { errorCode: error.code } : {};
+	if (
+		(error instanceof QuestpiePostgresError && error.code !== "cancelled") ||
+		!signal.aborted
+	)
+		return { outcome: "framework_error" as const, ...errorCode };
+	return signal.reason instanceof DOMException &&
+		signal.reason.name === "TimeoutError"
+		? { outcome: "deadline" as const, ...errorCode }
+		: { outcome: "cancelled" as const, ...errorCode };
+}
 
 function lifecycleJobRequest(value: unknown): Readonly<{
 	payload: Readonly<Record<string, unknown>>;
@@ -251,7 +269,16 @@ export function createPostgresDatabaseMutationInvoker<View>(
 				input.database.transaction({
 					mode: { isolation: "readCommitted", access: "readWrite" },
 					control: { signal },
-					use: async (transaction) => {
+					use: async (rawTransaction) => {
+						const transaction = options?.observation
+							? observePostgresTransaction({
+									execution: options.observation.execution,
+									failure: (error) =>
+										mutationPostgresObservationFailure(error, signal),
+									principalKind: facts.principal.kind,
+									transaction: rawTransaction,
+								})
+							: rawTransaction;
 						const transactionStarted = performance.now();
 						const scope = [
 							input.application,

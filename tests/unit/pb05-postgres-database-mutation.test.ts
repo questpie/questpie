@@ -582,6 +582,46 @@ test("executes a fresh Mutation through one static read-committed database trans
 				.map((event) => event.executionId),
 		),
 	).toEqual(new Set([observed.execution.identity.executionId]));
+	const postgresqlEvents = observationEvents.filter(
+		(event) => event.scopeKind === "postgresql",
+	);
+	expect(
+		postgresqlEvents.map((event) =>
+			event.kind === "scope.started"
+				? event.start
+				: event.kind === "scope.ended"
+					? event.end
+					: event.observationEvent,
+		),
+	).toEqual([
+		{
+			databaseOperation: "SELECT",
+			kind: "postgresql",
+			statementIdentity: "mutation.receipt.claim",
+		},
+		{ kind: "postgresql", outcome: "ok" },
+		{
+			databaseOperation: "SELECT",
+			kind: "postgresql",
+			statementIdentity: "collection.widgets.create.authority",
+		},
+		{ kind: "postgresql", outcome: "ok" },
+		{
+			databaseOperation: "SELECT",
+			kind: "postgresql",
+			statementIdentity: "collection.widgets.create.write",
+		},
+		{ kind: "postgresql", outcome: "ok" },
+		{
+			databaseOperation: "SELECT",
+			kind: "postgresql",
+			statementIdentity: "mutation.receipt.commit",
+		},
+		{ kind: "postgresql", outcome: "ok" },
+	]);
+	expect(new Set(postgresqlEvents.map((event) => event.executionId))).toEqual(
+		new Set([observed.execution.identity.executionId]),
+	);
 	expect(transactionCalls).toBe(1);
 	expect(handlerSignal).toBe(controlSignal);
 	expect(calls.map(({ name }) => name)).toEqual([
@@ -655,6 +695,94 @@ test("preserves operation-local cancellation and translates its deadline at the 
 		expect(error).toBeInstanceOf(OperationFailure);
 		expect(error).toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
 	}
+});
+
+test("classifies PostgreSQL statement timeout separately from owned cancellation and deadline", async () => {
+	const linked = fixedStatements();
+	async function run(
+		code: "cancelled" | "statementTimeout",
+		options: Readonly<{ signal?: AbortSignal; deadline?: number }>,
+	) {
+		const events: ExecutionEventV2[] = [];
+		const observed = observedMutation(events);
+		const databaseFailure = new QuestpiePostgresError({
+			code,
+			phase: "statement",
+			statementName: "mutation.receipt.claim",
+		});
+		const invoke = createPostgresDatabaseMutationInvoker<View>({
+			database: {
+				async transaction(input) {
+					return input.use({
+						[transactionBrand]: true,
+						async execute() {
+							await Bun.sleep(1);
+							throw databaseFailure;
+						},
+					});
+				},
+			},
+			application: "application:generic",
+			transactionStatements: linked,
+			collectionPlans,
+			reactions: emptyReactions,
+			contextInputCodec: { kind: "object", properties: {} },
+			runtimeBuildDigest: "d".repeat(64),
+			facts,
+		});
+		let caught: unknown;
+		try {
+			await observed.mutation.run(() =>
+				invoke(operation, `postgres-${code}`, {
+					...observed.options,
+					...options,
+				}),
+			);
+		} catch (error) {
+			caught = error;
+		}
+		return {
+			caught,
+			databaseFailure,
+			end: events.find(
+				(event) =>
+					event.kind === "scope.ended" && event.scopeKind === "postgresql",
+			),
+		};
+	}
+
+	const statementTimeout = await run("statementTimeout", {});
+	expect(statementTimeout.caught).toBe(statementTimeout.databaseFailure);
+	expect(statementTimeout.end).toMatchObject({
+		end: {
+			errorCode: "statementTimeout",
+			kind: "postgresql",
+			outcome: "framework_error",
+		},
+	});
+
+	const cancellation = new AbortController();
+	const cancellationReason = new DOMException("cancel Mutation", "AbortError");
+	cancellation.abort(cancellationReason);
+	const cancelled = await run("cancelled", { signal: cancellation.signal });
+	expect(cancelled.caught).toBe(cancellationReason);
+	expect(cancelled.end).toMatchObject({
+		end: {
+			errorCode: "cancelled",
+			kind: "postgresql",
+			outcome: "cancelled",
+		},
+	});
+
+	const deadline = await run("cancelled", { deadline: Date.now() - 1 });
+	expect(deadline.caught).toMatchObject({ code: "DEADLINE_EXCEEDED" });
+	expect(deadline.end).toMatchObject({
+		end: {
+			errorCode: "cancelled",
+			kind: "postgresql",
+			outcome: "deadline",
+		},
+	});
 });
 
 test("reruns afterWrite and Job acceptance only on an explicit fresh retry", async () => {
