@@ -935,3 +935,104 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 });
+
+test("operation-local Mutation cancellation owns Mutation and Execution terminals", async () => {
+	const cancellation = new AbortController();
+	const reason = new DOMException("cancel only this Mutation", "AbortError");
+	const harness = await runtimeHarness(async (_operation, _callId, options) => {
+		expect(options?.signal).toBe(cancellation.signal);
+		options?.signal?.throwIfAborted();
+		throw new Error("expected the operation-local signal to abort");
+	});
+	cancellation.abort(reason);
+	try {
+		await expect(
+			harness.runtime.execution(
+				{
+					principal: principal.user({ id: principalId }),
+					context: { companyId },
+				},
+				(operations) =>
+					operations.invoke(
+						"mutation:message.publish",
+						{ channelId, body: "cancelled locally" },
+						{ signal: cancellation.signal },
+					),
+			),
+		).rejects.toBe(reason);
+		expect(
+			harness.events
+				.filter(
+					(event): event is Extract<
+						ExecutionEventV2,
+						{ kind: "scope.ended" }
+					> => event.kind === "scope.ended",
+				)
+				.map(({ end }) => [end.kind, end.outcome]),
+		).toEqual([
+			["mutation", "cancelled"],
+			["execution", "cancelled"],
+		]);
+		expect(
+			harness.events
+				.filter(
+					(event): event is Extract<
+						ExecutionEventV2,
+						{ kind: "scope.event" }
+					> => event.kind === "scope.event" && event.scopeKind === "execution",
+				)
+				.map(({ observationEvent }) => observationEvent.kind),
+		).toEqual(["context.completed", "execution.cancelled"]);
+	} finally {
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
+	}
+});
+
+test("operation-local Mutation deadline owns Mutation and Execution terminals", async () => {
+	const deadline = Date.now() + 1_000;
+	const harness = await runtimeHarness(async (_operation, _callId, options) => {
+		expect(options?.deadline).toBe(deadline);
+		throw new runtimeOperation.OperationFailure("DEADLINE_EXCEEDED", true);
+	});
+	try {
+		await expect(
+			harness.runtime.execution(
+				{
+					principal: principal.user({ id: principalId }),
+					context: { companyId },
+				},
+				(operations) =>
+					operations.invoke(
+						"mutation:message.publish",
+						{ channelId, body: "deadline locally" },
+						{ deadline },
+					),
+			),
+		).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
+		expect(
+			harness.events
+				.filter(
+					(event): event is Extract<
+						ExecutionEventV2,
+						{ kind: "scope.ended" }
+					> => event.kind === "scope.ended",
+				)
+				.map(({ end }) => [end.kind, end.outcome]),
+		).toEqual([
+			["mutation", "deadline"],
+			["execution", "deadline"],
+		]);
+		expect(
+			harness.events
+				.filter(
+					(event): event is Extract<
+						ExecutionEventV2,
+						{ kind: "scope.event" }
+					> => event.kind === "scope.event" && event.scopeKind === "execution",
+				)
+				.map(({ observationEvent }) => observationEvent.kind),
+		).toEqual(["context.completed", "execution.deadline_exceeded"]);
+	} finally {
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
+	}
+});

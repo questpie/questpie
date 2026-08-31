@@ -414,6 +414,10 @@ export async function createRuntimeApplication<
 				throw controlled.controller.signal.reason;
 			throw error;
 		} finally {
+			if (executionEnd.outcome === "cancelled")
+				observedExecution?.scope.event({ kind: "execution.cancelled" });
+			else if (executionEnd.outcome === "deadline")
+				observedExecution?.scope.event({ kind: "execution.deadline_exceeded" });
 			observedExecution?.scope.end(executionEnd);
 			activeRoots.delete(pending);
 			rootControllers.delete(controlled.controller);

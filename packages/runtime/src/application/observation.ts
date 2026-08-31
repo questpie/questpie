@@ -18,6 +18,7 @@ import {
 	DeclaredOperationError,
 	OperationFailure,
 } from "../operation";
+import { isOperationAbort } from "./operation-error";
 
 export function createApplicationObservation(
 	input: Readonly<{
@@ -74,7 +75,10 @@ export function applicationObservationFailure(
 			(error instanceof OperationFailure && error.code === "DEADLINE_EXCEEDED"))
 	)
 		return { outcome: "deadline" as const, ...code };
-	if (input.aborted && !input.committedMutation)
+	if (
+		!input.committedMutation &&
+		(input.aborted || isOperationAbort(error))
+	)
 		return { outcome: "cancelled" as const, ...code };
 	if (error instanceof DeclaredOperationError)
 		return { outcome: "declared_error" as const, ...code };

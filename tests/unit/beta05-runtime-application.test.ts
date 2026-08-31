@@ -2168,6 +2168,14 @@ test("refuses a late result from a handler that ignores deadline cancellation", 
 		["query", "deadline"],
 		["execution", "deadline"],
 	]);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+					event.kind === "scope.event" && event.scopeKind === "execution",
+			)
+			.map(({ observationEvent }) => observationEvent.kind),
+	).toEqual(["context.completed", "execution.deadline_exceeded"]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
@@ -2240,6 +2248,14 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 		["query", "cancelled"],
 		["execution", "cancelled"],
 	]);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+					event.kind === "scope.event" && event.scopeKind === "execution",
+			)
+			.map(({ observationEvent }) => observationEvent.kind),
+	).toEqual(["context.completed", "execution.cancelled"]);
 });
 
 test("shares the first absolute close deadline and does not restart it for stuck phases", async () => {

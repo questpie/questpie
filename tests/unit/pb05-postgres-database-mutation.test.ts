@@ -21,6 +21,7 @@ import {
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
+	OperationFailure,
 	type PreparedOperation,
 } from "../../packages/runtime/src/operation";
 import {
@@ -616,6 +617,43 @@ test("executes a fresh Mutation through one static read-committed database trans
 	).toEqual({
 		"mutation:fresh:handler": { count: 1, totalMs: 7, maxMs: 7 },
 	});
+});
+
+test("preserves operation-local cancellation and translates its deadline at the transaction owner", async () => {
+	const linked = fixedStatements();
+	const invoke = createPostgresDatabaseMutationInvoker<View>({
+		database: {
+			async transaction(input) {
+				await Bun.sleep(1);
+				input.control?.signal?.throwIfAborted();
+				throw new Error("expected the operation-local control to abort");
+			},
+		},
+		application: "application:generic",
+		transactionStatements: linked,
+		collectionPlans,
+		reactions: emptyReactions,
+		contextInputCodec: { kind: "object", properties: {} },
+		runtimeBuildDigest: "d".repeat(64),
+		facts,
+	});
+	const cancellation = new AbortController();
+	const reason = new DOMException("cancel only this Mutation", "AbortError");
+	cancellation.abort(reason);
+	await expect(
+		invoke(operation, "operation-local-cancel", {
+			signal: cancellation.signal,
+		}),
+	).rejects.toBe(reason);
+	try {
+		await invoke(operation, "operation-local-deadline", {
+			deadline: Date.now() - 1,
+		});
+		throw new Error("expected operation-local deadline");
+	} catch (error) {
+		expect(error).toBeInstanceOf(OperationFailure);
+		expect(error).toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
+	}
 });
 
 test("reruns afterWrite and Job acceptance only on an explicit fresh retry", async () => {

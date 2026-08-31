@@ -10,6 +10,7 @@ import {
 	DeclaredOperationError,
 	isOperationCallId,
 	isPostgresTransactionId,
+	OperationFailure,
 	type PreparedOperation,
 } from "../operation";
 import {
@@ -626,6 +627,9 @@ export function createPostgresDatabaseMutationInvoker<View>(
 					: ("cancelled" as const)
 				: ("framework_error" as const);
 			transactionObservation?.end({ kind: "transaction", outcome });
+			if (outcome === "deadline")
+				throw new OperationFailure("DEADLINE_EXCEEDED", true);
+			if (outcome === "cancelled") throw signal.reason;
 			throw error;
 		}
 	};
