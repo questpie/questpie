@@ -12,6 +12,8 @@ const projection = JSON.parse(
 	unchangedBeforePass: ReadonlyArray<
 		Readonly<{ path: string; sha256: string }>
 	>;
+	postPassChanges: ReadonlyArray<Readonly<{ path: string }>>;
+	postImplementationTracerChanges: ReadonlyArray<Readonly<{ path: string }>>;
 	breakingDeletions: readonly string[];
 }>;
 
@@ -30,6 +32,21 @@ strictEqual(
 	digest(projection.publicDraft.source),
 	projection.publicDraft.sha256,
 	"public draft hash changed without refreshing its projection binding",
+);
+strictEqual(
+	projection.postPassChanges.some(({ path }) => path.startsWith("apps/docs/")),
+	false,
+	"acceptance projection must not publish unimplemented public instructions",
+);
+deepStrictEqual(
+	projection.postImplementationTracerChanges.map(({ path }) => path).sort(),
+	[
+		"apps/docs/content/docs/v4/beta1-release.mdx",
+		"apps/docs/content/docs/v4/durable-reactions.mdx",
+		"apps/docs/content/docs/v4/meta.json",
+		"apps/docs/content/docs/v4/opentelemetry.mdx",
+		"apps/docs/content/docs/v4/runtime-and-studio.mdx",
+	],
 );
 
 const adr = readFileSync(
@@ -65,6 +82,9 @@ const expectedBreakingFacts = [
 	"replace only the private Runtime events input",
 	"do not add a second observation kernel",
 	"protocol v8 refuses v7",
+	"replace the protocol-v7 compiler catalog",
+	"replace --allow-non-rolling-protocol-v7",
+	"replace protocol-v7 readiness",
 	"version mismatch",
 ];
 for (const fact of expectedBreakingFacts)
@@ -90,6 +110,15 @@ doesNotMatch(candidateText, /\bfallbacks?\b/iu);
 match(candidateText, /no v1\s+compatibility event/u);
 match(candidateText, /non-rolling/u);
 match(candidateText, /telemetry defects never\s+replace it/iu);
+match(
+	candidateText,
+	/generated declarations import that core-owned type only/iu,
+);
+match(candidateText, /null supplies zero links/iu);
+match(candidateText, /rejected for either non-ratio sampler/iu);
+match(candidateText, /QP-START-004 telemetryUnavailable/u);
+match(candidateText, /QP-START-004\s+telemetryInvalidConfiguration/u);
+match(candidateText, /SIGINT\/SIGTERM.*close the App, then close telemetry/su);
 
 const productionEventSource = readFileSync(
 	"packages/runtime/src/application/events.ts",

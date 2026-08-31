@@ -144,3 +144,52 @@ start/event/end facts, and names every production v1 owner to delete atomically.
 Fresh replacement audits must review the resulting clean repair head. A PASS
 there remains ordinary adversarial evidence; only the later manifest-bound
 repository reviewer can accept ADR-0033.
+
+## Replacement-head audits at `3ca53ace8`
+
+Verdict: BLOCKED, repaired in the next candidate. These were read-only
+adversarial reviews, not formal acceptance.
+
+The exact-head authority/spec audit found three staging and ownership defects.
+The projection would have published install instructions immediately after
+acceptance even though the draft itself required a passing implementation
+tracer. It omitted the current durable public guide whose v6-to-v7 operator
+instruction must gain the distinct v7-to-v8 cutover. It also failed to name the
+owner and import direction of the nominal `QuestpieObservability` type, leaving
+generated declarations at risk of importing an absent optional package. The
+repair keeps all `apps/docs` publication in an explicit post-implementation-
+tracer set, binds `durable-reactions.mdx`, and makes `questpie` own and export
+the opaque type that the optional exact-peer adapter implements.
+
+The fresh Fable 5 high review found two exact contract gaps. Durable attempts
+required a creation-time link even though old rows and no-adapter acceptance
+persist null. They now always start a root, use exactly one link only for a
+non-null first-acceptance context, and use zero links without fabricating an
+identity otherwise. The sampler table required an argument for the ratio
+sampler but did not decide what a supplied argument meant for the two non-ratio
+samplers. The repaired contract rejects that combination as invalid
+configuration.
+
+The exact-head Runtime/compiler/deletion audit found five executable gaps. The
+kernel did not validate optional operational UUIDs or the closed durable
+terminal payload, and its public nested entry could open a second Execution for
+one issued identity. The artifact duplicated event-owner and end-outcome maps
+instead of binding the Runtime values. The PostgreSQL proof compared only the
+three Durable tables rather than the complete live production catalog. Finally,
+the breaking inventory omitted the production protocol-v7 compiler, migration,
+CLI, readiness, and test owners. The repair adds hostile payload and duplicate-
+Execution tests, derives the artifact maps from the exported Runtime constants,
+installs the real bootstrap-through-v7 chain and compares all 21 live v7/v8
+tables, columns, constraints, and indexes, and binds every atomic v8 replacement
+owner without a compatibility path.
+
+The replacement continuation also required the already intended operational
+edges to become mechanically reviewable: the 1..64 printable-ASCII
+`deploymentEnvironment` bound, exact embedded and CLI diagnostic reasons,
+SIGINT/SIGTERM close order and primary-failure rule, and the complete production
+protocol-v7 compiler, migration, CLI, readiness, and test owner inventory. The
+authority projection now hashes those unchanged owners and requires their
+atomic v8 replacement without aliases or mixed-version compatibility.
+
+Fresh read-only replacement reviews must evaluate the next clean committed
+head. No finding in this section is an acceptance verdict.

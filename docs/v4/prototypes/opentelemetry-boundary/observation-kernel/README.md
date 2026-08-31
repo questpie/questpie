@@ -21,8 +21,8 @@ The executable cases prove:
   absence of raw Call, Principal, Tenant, Policy, SQL, payload, exception text,
   and stack data;
 - all 14 projected span-start shapes plus Runtime lifecycle, exact event/end
-  payloads, and one explicit extraction value carrying validated `tracestate`
-  into remote-parent ingress;
+  payloads with full closed-key and identifier validation, and one explicit
+  extraction value carrying validated `tracestate` into remote-parent ingress;
 - a built-in no-op with null durable trace context and no adapter close owner;
 - exactly-once `scope.run`, neutral observation bypass after a pre-entry adapter
   fault, rejection of saved or delayed callback entry, containment of a hostile
@@ -33,8 +33,11 @@ The executable cases prove:
 - Fetch scope retention through streaming response EOF, error, consumer cancel,
   and host abort even when the source and cancellation callback never settle;
 - nominal Runtime-issued Execution identity, rejection of structural clones,
-  foreign roots, invalid start facts, invalid scope outcomes, and invalid event
+  foreign roots, a second root scope for one issued identity, invalid start
+  facts, invalid scope outcomes, invalid event payloads, and invalid event
   ownership;
+- zero or one durable acceptance link, so traced Runs link once while legacy or
+  no-adapter Runs still start one unlinked physical-attempt root;
 - a committed PostgreSQL transaction remaining `ok` when its outer Mutation
   later closes `ambiguous`, with retry owned only by a physical durable Attempt;
 - refusal of late nested materialization or Envelope-counter recreation after
@@ -43,6 +46,10 @@ The executable cases prove:
 - independent Envelope callback limits, injected low-counter exhaustion,
   best-effort end of an existing adapter scope, and refusal of new
   materialization.
+
+The exported readonly event-owner and end-outcome maps are the executable
+source used by the artifact proof to compare the complete projection rather
+than spot-checking duplicated rows.
 
 Run the proof with:
 

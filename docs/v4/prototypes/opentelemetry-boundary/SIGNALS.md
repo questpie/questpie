@@ -23,22 +23,22 @@ enabled by the adapter in v1.
 
 ## Span graph
 
-| Scope                          | Kind       | Exact name                             | Parent or link                                                 |
-| ------------------------------ | ---------- | -------------------------------------- | -------------------------------------------------------------- |
-| generated Operation Fetch      | `SERVER`   | `POST /_questpie/operation`            | valid remote parent; restart creates root plus link; else root |
-| authored matched Route         | `SERVER`   | `{METHOD} {matched route template}`    | same ingress rule                                              |
-| unmatched framework Fetch      | `SERVER`   | `{METHOD}`                             | same ingress rule; no raw path                                 |
-| direct root Execution          | `INTERNAL` | `questpie execution`                   | active valid local context, otherwise root                     |
-| Query Operation                | `INTERNAL` | `query {Resource identity}`            | owning Execution                                               |
-| Mutation Operation             | `INTERNAL` | `mutation {Resource identity}`         | owning Execution                                               |
-| Action Operation               | `INTERNAL` | `action {Resource identity}`           | owning Execution or durable Attempt                            |
-| Mutation transaction           | `INTERNAL` | `questpie transaction`                 | owning Mutation                                                |
-| compiler-owned PostgreSQL call | `CLIENT`   | uppercase SQL verb                     | active Operation/transaction/attempt scope                     |
-| Job acceptance                 | `PRODUCER` | `job {Resource identity} accept`       | accepting Execution or Mutation transaction                    |
-| Reaction committed-fact accept | `PRODUCER` | `reaction {Resource identity} accept`  | Mutation transaction that commits the dispatch fact            |
-| Job physical attempt           | `CONSUMER` | `job {Resource identity} attempt`      | new root with first-acceptance link at span creation           |
-| Reaction physical attempt      | `CONSUMER` | `reaction {Resource identity} attempt` | new root with committed-fact-acceptance link at span creation  |
-| Action effect                  | `CLIENT`   | `action {Resource identity}`           | current Operation or physical Attempt                          |
+| Scope                          | Kind       | Exact name                             | Parent or link                                                             |
+| ------------------------------ | ---------- | -------------------------------------- | -------------------------------------------------------------------------- |
+| generated Operation Fetch      | `SERVER`   | `POST /_questpie/operation`            | valid remote parent; restart creates root plus link; else root             |
+| authored matched Route         | `SERVER`   | `{METHOD} {matched route template}`    | same ingress rule                                                          |
+| unmatched framework Fetch      | `SERVER`   | `{METHOD}`                             | same ingress rule; no raw path                                             |
+| direct root Execution          | `INTERNAL` | `questpie execution`                   | active valid local context, otherwise root                                 |
+| Query Operation                | `INTERNAL` | `query {Resource identity}`            | owning Execution                                                           |
+| Mutation Operation             | `INTERNAL` | `mutation {Resource identity}`         | owning Execution                                                           |
+| Action Operation               | `INTERNAL` | `action {Resource identity}`           | owning Execution or durable Attempt                                        |
+| Mutation transaction           | `INTERNAL` | `questpie transaction`                 | owning Mutation                                                            |
+| compiler-owned PostgreSQL call | `CLIENT`   | uppercase SQL verb                     | active Operation/transaction/attempt scope                                 |
+| Job acceptance                 | `PRODUCER` | `job {Resource identity} accept`       | accepting Execution or Mutation transaction                                |
+| Reaction committed-fact accept | `PRODUCER` | `reaction {Resource identity} accept`  | Mutation transaction that commits the dispatch fact                        |
+| Job physical attempt           | `CONSUMER` | `job {Resource identity} attempt`      | new root; exactly one first-acceptance link when stored, otherwise no link |
+| Reaction physical attempt      | `CONSUMER` | `reaction {Resource identity} attempt` | new root; exactly one committed-fact link when stored, otherwise no link   |
+| Action effect                  | `CLIENT`   | `action {Resource identity}`           | current Operation or physical Attempt                                      |
 
 Live Query initial execution and recomputation use the same Query span. They
 set `questpie.execution.entry` to `watch_initial` or `watch_recompute`.

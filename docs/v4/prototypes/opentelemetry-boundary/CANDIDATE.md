@@ -16,7 +16,8 @@ The candidate has four changes:
    Runtime/test `events` callback with no dual v1 emission and no new public
    callback;
 2. add one private scoped observation kernel and one optional opaque
-   generated-App `observability` input;
+   generated-App `observability` input whose core-owned public type never makes
+   generated declarations import the optional adapter package;
 3. persist only first-acceptance trace ID, span ID, and flags for delayed durable
    links; and
 4. add the explicit `@questpie/opentelemetry` adapter without adding an authored
@@ -56,5 +57,7 @@ dashboard, Collector distribution, or telemetry-backed Policy/audit/readiness/
 retry/scheduling is accepted. No trace or span identity aliases a Call,
 transaction, Dispatch, Run, Attempt, or Effect identity.
 
-Implementation, SPEC/ticket projection, and public API publication remain
-blocked until this candidate passes the repository acceptance protocol.
+Implementation and SPEC/ticket projection remain blocked until this candidate
+passes the repository acceptance protocol. Acceptance alone does not publish
+the install guide: public API/package instructions remain candidate material
+until their implementation tracer and release evidence pass.

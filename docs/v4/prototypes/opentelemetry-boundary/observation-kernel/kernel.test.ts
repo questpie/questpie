@@ -225,6 +225,73 @@ describe("private observation kernel", () => {
 		});
 	});
 
+	test("admits zero or one durable acceptance link for legacy and traced Runs", () => {
+		const fixture = makeAdapter();
+		const lines: string[] = [];
+		const kernel = createKernel({
+			adapter: fixture.adapter,
+			emitCanonicalLine: (line) => lines.push(line),
+		});
+		const root = execution(kernel);
+		for (const trace of [
+			{ kind: "root" },
+			{ kind: "root-with-links", links: [traceContext] },
+		] as const) {
+			const attempt = kernel.beginScope(root.identity, {
+				attemptNumber: 1,
+				kind: "job.attempt",
+				principalKind: "service",
+				resourceIdentity: "job:tickets.example",
+				trace,
+			});
+			attempt.end({ kind: "job.attempt", outcome: "ok" });
+		}
+		expect(
+			fixture.beginInputs.slice(-2).map(
+				(input) =>
+					(
+						input as {
+							trace:
+								| { kind: "root" }
+								| {
+										kind: "root-with-links";
+										links: readonly NeutralTraceContextV1[];
+								  };
+						}
+					).trace,
+			),
+		).toEqual([
+			{ kind: "root" },
+			{ kind: "root-with-links", links: [traceContext] },
+		]);
+		expect(
+			lines
+				.map((line) => JSON.parse(line))
+				.filter((event) => event.scopeKind === "job.attempt")
+				.map((event) => event.kind),
+		).toEqual(["scope.started", "scope.ended", "scope.started", "scope.ended"]);
+
+		const noAdapterLines: string[] = [];
+		const noAdapterKernel = createKernel({
+			emitCanonicalLine: (line) => noAdapterLines.push(line),
+		});
+		const noAdapterRoot = execution(noAdapterKernel);
+		const legacyAttempt = noAdapterKernel.beginScope(noAdapterRoot.identity, {
+			attemptNumber: 1,
+			kind: "reaction.attempt",
+			principalKind: "service",
+			resourceIdentity: "reaction:tickets.example",
+			trace: { kind: "root" },
+		});
+		legacyAttempt.end({ kind: "reaction.attempt", outcome: "ok" });
+		expect(
+			noAdapterLines
+				.map((line) => JSON.parse(line))
+				.filter((event) => event.scopeKind === "reaction.attempt")
+				.map((event) => event.kind),
+		).toEqual(["scope.started", "scope.ended"]);
+	});
+
 	test("co-emits canonical Envelope v2 and reuses one root Execution identity", () => {
 		const lines: string[] = [];
 		const fixture = makeAdapter();
@@ -739,6 +806,14 @@ describe("private observation kernel", () => {
 			onDiagnostic: (code) => diagnostics.push(code),
 		});
 		const root = execution(kernel);
+		expect(() =>
+			kernel.beginScope(root.identity, {
+				entry: "direct",
+				kind: "execution",
+				principalKind: "user",
+				trace: { kind: "root" },
+			}),
+		).toThrow("root Execution");
 		expect(root.scope.context).toBeNull();
 		expect(diagnostics).toContain("adapter_context_invalid");
 		expect(() =>
@@ -775,5 +850,79 @@ describe("private observation kernel", () => {
 				trace: { kind: "active-parent" },
 			} as unknown as Parameters<ObservationKernel["beginExecution"]>[0]),
 		).toThrow("must be an Execution");
+	});
+
+	test("rejects every malformed or open event payload before projection", () => {
+		const kernel = createKernel();
+		const executionRoot = execution(kernel);
+		const accepted = kernel.beginScope(executionRoot.identity, {
+			kind: "job.accept",
+			principalKind: "service",
+			resourceIdentity: "job:tickets.example",
+			trace: { kind: "active-parent" },
+		});
+		const attempt = kernel.beginScope(executionRoot.identity, {
+			attemptNumber: 1,
+			kind: "job.attempt",
+			principalKind: "service",
+			resourceIdentity: "job:tickets.example",
+			trace: { kind: "root" },
+		});
+		const effect = kernel.beginScope(executionRoot.identity, {
+			kind: "action.effect",
+			principalKind: "service",
+			resourceIdentity: "action:notifications.send",
+			trace: { kind: "active-parent" },
+		});
+		const transaction = kernel.beginScope(executionRoot.identity, {
+			kind: "transaction",
+			principalKind: "service",
+			trace: { kind: "active-parent" },
+		});
+
+		for (const event of [
+			{ kind: "durable.accepted", dispatchId: "not-a-uuid" },
+			{ kind: "durable.accepted", runId: "not-a-uuid" },
+			{ kind: "durable.accepted", injected: "open" },
+		] as const)
+			expect(() =>
+				accepted.event(
+					event as unknown as Parameters<typeof accepted.event>[0],
+				),
+			).toThrow("payload");
+		for (const event of [
+			{ kind: "durable.fenced", attemptId: "not-a-uuid" },
+			{ kind: "durable.terminal", outcome: "ambiguous" },
+			{
+				kind: "durable.terminal",
+				outcome: "framework_error",
+				errorCode: "UNKNOWN",
+			},
+			{ kind: "durable.retry_scheduled" },
+			{
+				kind: "durable.retry_scheduled",
+				attemptNumber: 1,
+				retryDelayMilliseconds: 1,
+				injected: true,
+			},
+		] as const)
+			expect(() =>
+				attempt.event(event as unknown as Parameters<typeof attempt.event>[0]),
+			).toThrow("payload");
+		expect(() =>
+			effect.event({
+				kind: "action.ambiguous",
+				effectId: "not-a-uuid",
+			} as unknown as Parameters<typeof effect.event>[0]),
+		).toThrow("payload");
+		expect(() =>
+			transaction.event({ kind: "transaction.committed", transactionId: "0" }),
+		).toThrow("payload");
+		expect(() =>
+			executionRoot.scope.event({
+				kind: "context.completed",
+				injected: true,
+			} as unknown as Parameters<typeof executionRoot.scope.event>[0]),
+		).toThrow("payload");
 	});
 });

@@ -3,8 +3,33 @@ import { createHash, randomBytes, randomUUID } from "node:crypto";
 import type { Pool, PoolClient } from "pg";
 
 import {
+	bootstrapChecksum,
+	bootstrapSql,
+} from "../../../../../packages/compiler/src/schema/postgres/bootstrap";
+import {
+	internalProtocolV2Checksum,
+	internalProtocolV2Sql,
+} from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v2";
+import {
+	internalProtocolV3Checksum,
+	internalProtocolV3Sql,
+} from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v3";
+import {
+	internalProtocolV4Checksum,
+	internalProtocolV4Sql,
+} from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v4";
+import {
+	internalProtocolV5Checksum,
+	internalProtocolV5Sql,
+} from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v5";
+import {
+	internalProtocolV6Checksum,
+	internalProtocolV6Sql,
+} from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v6";
+import {
 	internalProtocolV7Catalog,
 	internalProtocolV7Checksum,
+	internalProtocolV7Sql,
 } from "../../../../../packages/compiler/src/schema/postgres/internal-protocol-v7";
 import { durableRunIdentity } from "../../../../../packages/runtime/src/durable/acceptance";
 
@@ -68,6 +93,15 @@ function insertAfterTable<Row extends readonly unknown[]>(
 	return Object.freeze(result);
 }
 
+function compareCatalogRows(
+	left: readonly unknown[],
+	right: readonly unknown[],
+): number {
+	const leftKey = `${String(left[0])}\0${String(left[1])}`;
+	const rightKey = `${String(right[0])}\0${String(right[1])}`;
+	return leftKey < rightKey ? -1 : leftKey > rightKey ? 1 : 0;
+}
+
 export const internalProtocolV8Sql = `ALTER TABLE questpie_internal.durable_runs
   ADD COLUMN trace_id bytea,
   ADD COLUMN span_id bytea,
@@ -96,10 +130,10 @@ export const internalProtocolV8Catalog = Object.freeze({
 		"durable_runs",
 		traceColumns,
 	),
-	constraints: insertAfterTable(
-		internalProtocolV7Catalog.constraints,
-		"durable_runs",
-		[traceConstraint],
+	constraints: Object.freeze(
+		[...internalProtocolV7Catalog.constraints, traceConstraint].sort(
+			compareCatalogRows,
+		),
 	),
 	indexes: Object.freeze([...internalProtocolV7Catalog.indexes]),
 });
@@ -197,155 +231,31 @@ async function transaction<Result>(
 /** Exact protocol-v7 columns and constraints used by Job/Reaction acceptance. */
 export async function installProtocolV7(pool: Pool, schemaName: string) {
 	const schema = identifier(schemaName);
-	await pool.query(`CREATE SCHEMA ${schema};
-CREATE TABLE ${schema}.protocol (
-  singleton boolean PRIMARY KEY,
-  version integer NOT NULL,
-  checksum text NOT NULL,
-  CONSTRAINT protocol_singleton_true CHECK (singleton),
-  CONSTRAINT protocol_checksum_sha256 CHECK (checksum ~ '^[0-9a-f]{64}$')
-);
-INSERT INTO ${schema}.protocol (singleton, version, checksum)
-VALUES (true, 7, '${internalProtocolV7Checksum}');
-
-CREATE TABLE ${schema}.durable_dispatches (
-  application_name text NOT NULL,
-  tenant_id text NOT NULL,
-  source_operation text NOT NULL,
-  principal_kind text NOT NULL,
-  principal_id text NOT NULL,
-  call_id text NOT NULL,
-  dispatch_slot text NOT NULL,
-  record_id uuid NOT NULL,
-  resource_identity text NOT NULL,
-  input_digest text NOT NULL,
-  payload_bytes bytea NOT NULL,
-  transaction_id xid8 NOT NULL,
-  recorded_at timestamptz NOT NULL,
-  state text NOT NULL,
-  resource_kind text NOT NULL,
-  PRIMARY KEY (application_name, record_id),
-  CONSTRAINT durable_dispatch_origin_key UNIQUE
-    (application_name, tenant_id, source_operation, principal_kind, principal_id, call_id, dispatch_slot),
-  CONSTRAINT durable_dispatch_principal_kind_known CHECK
-    (principal_kind IN ('anonymous', 'service', 'user')),
-  CONSTRAINT durable_dispatch_call_id_bounded CHECK (length(call_id) BETWEEN 1 AND 256),
-  CONSTRAINT durable_dispatch_input_digest_sha256 CHECK (input_digest ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT durable_dispatch_payload_bytes_bounded CHECK (octet_length(payload_bytes) <= 262144),
-  CONSTRAINT durable_dispatch_state_known CHECK (state IN ('accepted', 'pending')),
-  CONSTRAINT durable_dispatch_resource_kind_known CHECK (resource_kind IN ('job', 'reaction'))
-);
-
-CREATE TABLE ${schema}.durable_runs (
-  application_name text NOT NULL,
-  run_id uuid NOT NULL,
-  dispatch_id uuid NOT NULL,
-  resource_identity text NOT NULL,
-  tenant_id text NOT NULL,
-  principal_kind text NOT NULL,
-  principal_id text NOT NULL,
-  run_as text NOT NULL,
-  context_input_bytes bytea NOT NULL,
-  payload_bytes bytea NOT NULL,
-  retry_bytes bytea NOT NULL,
-  runtime_build_digest text NOT NULL,
-  executable_digest text NOT NULL,
-  causation_kind text NOT NULL,
-  causation_id text NOT NULL,
-  correlation_id text NOT NULL,
-  state text NOT NULL,
-  attempt_count integer NOT NULL,
-  current_attempt_id uuid,
-  lease_token_digest text,
-  lease_expires_at timestamptz,
-  available_at timestamptz NOT NULL,
-  horizon_at timestamptz NOT NULL,
-  cancellation_requested boolean NOT NULL,
-  event_sequence integer NOT NULL,
-  result_bytes bytea,
-  failure_code text,
-  dead_letter boolean NOT NULL,
-  accepted_at timestamptz NOT NULL,
-  terminal_at timestamptz,
-  semantic_version integer NOT NULL,
-  PRIMARY KEY (application_name, run_id),
-  CONSTRAINT durable_run_dispatch_unique UNIQUE (application_name, dispatch_id),
-  FOREIGN KEY (application_name, dispatch_id)
-    REFERENCES ${schema}.durable_dispatches (application_name, record_id),
-  CONSTRAINT durable_run_state_known CHECK
-    (state IN ('cancelled', 'delayed', 'failed', 'ready', 'running', 'succeeded')),
-  CONSTRAINT durable_run_principal_kind_known CHECK
-    (principal_kind IN ('anonymous', 'service', 'user')),
-  CONSTRAINT durable_run_as_known CHECK (run_as = 'caller'),
-  CONSTRAINT durable_run_causation_kind_known CHECK
-    (causation_kind IN ('explicit', 'mutationDispatch')),
-  CONSTRAINT durable_run_attempt_count_bounded CHECK (attempt_count BETWEEN 0 AND 8),
-  CONSTRAINT durable_run_event_sequence_bounded CHECK (event_sequence BETWEEN 0 AND 1024),
-  CONSTRAINT durable_run_payload_bytes_bounded CHECK (octet_length(payload_bytes) <= 262144),
-  CONSTRAINT durable_run_context_bytes_bounded CHECK (octet_length(context_input_bytes) <= 262144),
-  CONSTRAINT durable_run_retry_bytes_bounded CHECK (octet_length(retry_bytes) <= 4096),
-  CONSTRAINT durable_run_result_bytes_bounded CHECK
-    (result_bytes IS NULL OR octet_length(result_bytes) <= 262144),
-  CONSTRAINT durable_run_lease_shape CHECK (
-    (state = 'running' AND current_attempt_id IS NOT NULL
-      AND lease_token_digest IS NOT NULL AND lease_expires_at IS NOT NULL)
-    OR (state <> 'running' AND current_attempt_id IS NULL
-      AND lease_token_digest IS NULL AND lease_expires_at IS NULL)
-  ),
-  CONSTRAINT durable_run_lease_digest_sha256 CHECK
-    (lease_token_digest IS NULL OR lease_token_digest ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT durable_run_terminal_shape CHECK (
-    (state IN ('cancelled', 'failed', 'succeeded') AND terminal_at IS NOT NULL)
-    OR (state IN ('delayed', 'ready', 'running') AND terminal_at IS NULL)
-  ),
-  CONSTRAINT durable_run_result_shape CHECK (
-    (state = 'succeeded' AND result_bytes IS NOT NULL AND failure_code IS NULL)
-    OR (state <> 'succeeded' AND result_bytes IS NULL)
-  ),
-  CONSTRAINT durable_run_failure_shape CHECK (
-    (state = 'failed' AND failure_code IS NOT NULL)
-    OR (state <> 'failed' AND NOT dead_letter)
-  ),
-  CONSTRAINT durable_run_failure_code_known CHECK (
-    failure_code IS NULL OR failure_code IN
-      ('EFFECT_AMBIGUOUS', 'EFFECT_CONFLICT', 'HANDLER_FAILED', 'REACTION_ERROR',
-       'RESOURCE_LIMIT', 'RETRY_EXHAUSTED', 'RUN_AS_DENIED', 'VALIDATION_FAILED')
-  ),
-  CONSTRAINT durable_run_semantic_version_positive CHECK (semantic_version > 0)
-);
-CREATE INDEX durable_runs_claim_idx ON ${schema}.durable_runs
-  (application_name, state, available_at, run_id);
-CREATE INDEX durable_runs_lease_idx ON ${schema}.durable_runs
-  (application_name, state, lease_expires_at);
-CREATE INDEX durable_runs_resource_idx ON ${schema}.durable_runs
-  (application_name, resource_identity, state);
-
-CREATE TABLE ${schema}.durable_attempts (
-  application_name text NOT NULL,
-  attempt_id uuid NOT NULL,
-  run_id uuid NOT NULL,
-  attempt_number integer NOT NULL,
-  worker_id text NOT NULL,
-  lease_token_digest text NOT NULL,
-  lease_expires_at timestamptz NOT NULL,
-  deadline_at timestamptz NOT NULL,
-  started_at timestamptz NOT NULL,
-  heartbeat_at timestamptz NOT NULL,
-  outcome text,
-  failure_code text,
-  PRIMARY KEY (application_name, attempt_id),
-  CONSTRAINT durable_attempt_number_unique UNIQUE (application_name, run_id, attempt_number),
-  FOREIGN KEY (application_name, run_id)
-    REFERENCES ${schema}.durable_runs (application_name, run_id) ON DELETE CASCADE,
-  CONSTRAINT durable_attempt_number_bounded CHECK (attempt_number BETWEEN 1 AND 8),
-  CONSTRAINT durable_attempt_worker_bounded CHECK (length(worker_id) BETWEEN 1 AND 128),
-  CONSTRAINT durable_attempt_lease_digest_sha256 CHECK (lease_token_digest ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT durable_attempt_outcome_known CHECK
-    (outcome IS NULL OR outcome IN ('cancelled', 'failed', 'leaseSuperseded', 'succeeded')),
-  CONSTRAINT durable_attempt_failure_shape CHECK (failure_code IS NULL OR outcome = 'failed')
-);`);
+	const upgrades = [
+		[2, internalProtocolV2Checksum, internalProtocolV2Sql],
+		[3, internalProtocolV3Checksum, internalProtocolV3Sql],
+		[4, internalProtocolV4Checksum, internalProtocolV4Sql],
+		[5, internalProtocolV5Checksum, internalProtocolV5Sql],
+		[6, internalProtocolV6Checksum, internalProtocolV6Sql],
+		[7, internalProtocolV7Checksum, internalProtocolV7Sql],
+	] as const;
+	await transaction(pool, async (client) => {
+		await client.query(bootstrapSql.replaceAll("questpie_internal", schema));
+		await client.query(
+			`INSERT INTO ${schema}.protocol (singleton, version, checksum)
+			 VALUES (true, 1, $1)`,
+			[bootstrapChecksum],
+		);
+		for (const [version, checksum, sql] of upgrades) {
+			await client.query(sql.replaceAll("questpie_internal", schema));
+			await client.query(
+				`UPDATE ${schema}.protocol SET version = $1, checksum = $2
+				 WHERE singleton = true`,
+				[version, checksum],
+			);
+		}
+	});
 }
-
 async function protocolRow(pool: Queryable, schema: string) {
 	const result = await pool.query<{ version: number; checksum: string }>(
 		`SELECT version, checksum FROM ${schema}.protocol WHERE singleton = true`,
@@ -392,6 +302,107 @@ export async function upgradeProtocolV8(
 	});
 }
 
+function normalizeCatalogDefinition(value: string, schemaName: string): string {
+	return value
+		.replaceAll(`"${schemaName}".`, "questpie_internal.")
+		.replaceAll(`${schemaName}.`, "questpie_internal.");
+}
+
+/** Reads the same fixed PostgreSQL catalog shape as the production verifier. */
+export async function readLiveProtocolCatalog(pool: Pool, schemaName: string) {
+	const tables = await pool.query<{ name: string }>(
+		`SELECT c.relname AS name
+		 FROM pg_catalog.pg_class c
+		 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		 WHERE n.nspname = $1 AND c.relkind = 'r'
+		 ORDER BY c.relname`,
+		[schemaName],
+	);
+	const columns = await pool.query<{
+		table: string;
+		name: string;
+		type: string;
+		notNull: boolean;
+	}>(
+		`SELECT c.relname AS table, a.attname AS name,
+		        pg_catalog.format_type(a.atttypid, a.atttypmod) AS type,
+		        a.attnotnull AS "notNull"
+		 FROM pg_catalog.pg_attribute a
+		 JOIN pg_catalog.pg_class c ON c.oid = a.attrelid
+		 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		 WHERE n.nspname = $1 AND c.relkind = 'r'
+		   AND a.attnum > 0 AND NOT a.attisdropped
+		 ORDER BY c.relname, a.attnum`,
+		[schemaName],
+	);
+	const constraints = await pool.query<{
+		table: string;
+		name: string;
+		type: string;
+		definition: string;
+	}>(
+		`SELECT c.relname AS table, con.conname AS name,
+		        con.contype::text AS type,
+		        pg_catalog.pg_get_constraintdef(con.oid, true) AS definition
+		 FROM pg_catalog.pg_constraint con
+		 JOIN pg_catalog.pg_class c ON c.oid = con.conrelid
+		 JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+		 WHERE n.nspname = $1 AND con.contype <> 'n'
+		 ORDER BY c.relname, con.conname`,
+		[schemaName],
+	);
+	const indexes = await pool.query<{
+		table: string;
+		name: string;
+		method: string;
+		unique: boolean;
+		primary: boolean;
+		definition: string;
+	}>(
+		`SELECT t.relname AS table, i.relname AS name, am.amname AS method,
+		        x.indisunique AS unique, x.indisprimary AS primary,
+		        pg_catalog.pg_get_indexdef(i.oid) AS definition
+		 FROM pg_catalog.pg_index x
+		 JOIN pg_catalog.pg_class i ON i.oid = x.indexrelid
+		 JOIN pg_catalog.pg_class t ON t.oid = x.indrelid
+		 JOIN pg_catalog.pg_namespace n ON n.oid = t.relnamespace
+		 JOIN pg_catalog.pg_am am ON am.oid = i.relam
+		 WHERE n.nspname = $1
+		 ORDER BY t.relname, i.relname`,
+		[schemaName],
+	);
+	return Object.freeze({
+		tables: Object.freeze(tables.rows.map(({ name }) => name)),
+		columns: Object.freeze(
+			columns.rows.map((column) =>
+				Object.freeze([column.table, column.name, column.type, column.notNull]),
+			),
+		),
+		constraints: Object.freeze(
+			constraints.rows.map((constraint) =>
+				Object.freeze([
+					constraint.table,
+					constraint.name,
+					constraint.type,
+					normalizeCatalogDefinition(constraint.definition, schemaName),
+				]),
+			),
+		),
+		indexes: Object.freeze(
+			indexes.rows.map((index) =>
+				Object.freeze([
+					index.table,
+					index.name,
+					index.method,
+					index.unique,
+					index.primary,
+					normalizeCatalogDefinition(index.definition, schemaName),
+				]),
+			),
+		),
+	});
+}
+
 async function selectRun(queryable: Queryable, schema: string, runId: string) {
 	const selected = await queryable.query<{
 		dispatch_id: string;
@@ -414,6 +425,9 @@ async function acceptInTransaction(
 	schema: string,
 	input: AcceptanceInput,
 ): Promise<AcceptedRun> {
+	await client.query(
+		"SELECT set_config('questpie.durable_kernel', 'on', true)",
+	);
 	const requestDigest = digest(input.requestDigest, "request digest");
 	const payload = boundedBytes(input.payloadBytes);
 	const trace = input.trace === null ? null : traceContext(input.trace);
@@ -545,6 +559,9 @@ export async function startAttempt(
 ): Promise<Attempt> {
 	const schema = identifier(schemaName);
 	return transaction(pool, async (client) => {
+		await client.query(
+			"SELECT set_config('questpie.durable_kernel', 'on', true)",
+		);
 		const selected = await client.query<{
 			application_name: string;
 			attempt_count: number;
@@ -615,6 +632,9 @@ export async function pruneAttempts(
 ) {
 	const schema = identifier(schemaName);
 	await transaction(pool, async (client) => {
+		await client.query(
+			"SELECT set_config('questpie.durable_kernel', 'on', true)",
+		);
 		await client.query(
 			`UPDATE ${schema}.durable_runs SET state = 'ready', current_attempt_id = NULL,
 			 lease_token_digest = NULL, lease_expires_at = NULL WHERE run_id = $1`,

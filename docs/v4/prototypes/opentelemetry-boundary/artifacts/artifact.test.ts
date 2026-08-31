@@ -9,6 +9,10 @@ import {
 } from "node:assert";
 
 import {
+	END_OUTCOMES as runtimeEndOutcomes,
+	EVENT_SCOPES as runtimeEventScopes,
+} from "../observation-kernel/kernel";
+import {
 	ArtifactDiagnostic,
 	buildArtifacts,
 	digestArtifactBytes,
@@ -98,17 +102,15 @@ describe("canonical OpenTelemetry projection and config artifacts", () => {
 			maximum: "18446744073709551615",
 		});
 		deepStrictEqual(
-			first.projection.spanEventScopes["questpie.durable.retry_scheduled"],
-			["job.attempt", "reaction.attempt"],
+			first.projection.spanEventScopes,
+			Object.fromEntries(
+				Object.entries(runtimeEventScopes).map(([event, scopes]) => [
+					`questpie.${event}`,
+					scopes,
+				]),
+			),
 		);
-		deepStrictEqual(first.projection.endOutcomesByScope.mutation, [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"ambiguous",
-		]);
+		deepStrictEqual(first.projection.endOutcomesByScope, runtimeEndOutcomes);
 		deepStrictEqual(first.projection.envelopeEventShape, {
 			started: "exact_redacted_start_variant",
 			event: "exact_event_variant",
@@ -247,6 +249,26 @@ describe("canonical OpenTelemetry projection and config artifacts", () => {
 				environment: { OTEL_TRACES_SAMPLER: "always_on" },
 			},
 			"environment.OTEL_TRACES_SAMPLER",
+		);
+		expectDiagnostic(
+			{
+				...baseInput,
+				environment: {
+					OTEL_TRACES_SAMPLER: "parentbased_always_on",
+					OTEL_TRACES_SAMPLER_ARG: "0.5",
+				},
+			},
+			"environment.OTEL_TRACES_SAMPLER_ARG",
+		);
+		expectDiagnostic(
+			{
+				...baseInput,
+				environment: {
+					OTEL_TRACES_SAMPLER: "parentbased_traceidratio",
+					OTEL_TRACES_SAMPLER_ARG: "0.5junk",
+				},
+			},
+			"environment.OTEL_TRACES_SAMPLER_ARG",
 		);
 
 		const ignored = buildArtifacts({

@@ -129,10 +129,13 @@ budget.
 ### Generated host interface
 
 Generated `CreateAppInput` gains one optional `observability` member using the
-opaque `QuestpieObservability` type. Only `@questpie/opentelemetry` and the
-repository-private test adapter can construct it; a structural third-party
-object is rejected before readiness. It is host configuration, not application
-Context, a Definition, Service, compiler Package, plugin, or ambient global.
+opaque `QuestpieObservability` type owned and publicly exported by `questpie`.
+Generated declarations import that core-owned type only; they never import the
+optional adapter package. `@questpie/opentelemetry` implements the type, while a
+repository-private test adapter receives a private construction seam. A
+structural third-party object is rejected before readiness. It is host
+configuration, not application Context, a Definition, Service, compiler
+Package, plugin, or ambient global.
 
 Opacity is API discipline, not a security or authorization boundary. A hostile
 JavaScript host can reflect on process objects and is already inside the trusted
@@ -173,10 +176,14 @@ self-diagnostic only, and close resolves within 30 seconds.
 
 `questpie start --telemetry=opentelemetry` explicitly resolves the installed
 official adapter from the application root before creating the generated app.
-It is the only accepted telemetry flag value. Missing package, incompatible
-interface, or invalid explicit SDK configuration fails with `QP-START-004`
-before readiness and traffic. The CLI uses the same nested cleanup sequence.
-Without the flag it does not load the package.
+It is the only accepted telemetry flag value. A missing package, missing
+`createOpenTelemetry` export, or incompatible neutral interface fails with
+`QP-START-004 telemetryUnavailable`. An adapter `QP-OTEL-001
+invalidConfiguration` becomes `QP-START-004
+telemetryInvalidConfiguration`, retaining only its safe option path or
+environment-variable name. Every failure occurs before readiness and traffic.
+The CLI uses the same nested cleanup sequence. Without the flag it does not
+load the package.
 
 The exact adapter options, supported `OTEL_*` subset, bounds, missing-package
 diagnostic, close behavior, and peer compatibility are frozen by `BOUNDARY.md`.
@@ -230,7 +237,8 @@ baggage, exporter bytes, SDK object, or sampling configuration.
 Exact duplicate Job acceptance and duplicate or replayed Reaction dispatch
 retain the first stored context. Rollback stores none. Existing rows and
 no-adapter acceptance carry null. Each Physical Attempt starts a new `CONSUMER`
-root with the accepted context supplied as a link at span creation. Retry,
+root. A non-null stored acceptance context supplies exactly one creation-time
+link; null supplies zero links and never a fabricated all-zero context. Retry,
 lease recovery, and reclaim are sibling roots: Run and Dispatch identity stay
 stable while Attempt and span identity change. Effect spans are children of the
 current attempt; stable Effect Identity never merges physical calls.
@@ -272,6 +280,13 @@ through 65,536. New finished spans are dropped when full; application work
 never waits for queue space. Exact buffer, export, metric interval, and close
 bounds live in `BOUNDARY.md`. Observation failures never become declared
 Operation errors or retry signals.
+
+The ratio sampler requires `OTEL_TRACES_SAMPLER_ARG`; either non-ratio sampler
+rejects that variable rather than ignoring it. Adapter
+`deploymentEnvironment` is 1 through 64 printable ASCII characters. On
+SIGINT/SIGTERM the CLI stops ingress, closes the App, then closes telemetry; the
+adapter close bound remains 30 seconds and an App/Runtime close failure remains
+primary.
 
 Cancellation and deadline finish the owning semantic scopes with bounded
 outcomes; they do not keep background telemetry work attached to the cancelled

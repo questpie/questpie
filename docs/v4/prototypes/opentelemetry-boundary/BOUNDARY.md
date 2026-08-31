@@ -4,10 +4,13 @@ Status: normative candidate evidence for Proposed ADR-0033
 
 ## Private neutral interface and public opaque handle
 
-ADR-0033 does not open a provider SPI. Generated `CreateAppInput` accepts the
-opaque nominal `QuestpieObservability` handle returned by the official package.
-Only the official adapter and repository-private test adapter can construct the
-brand. Third-party structural objects are rejected before readiness.
+ADR-0033 does not open a provider SPI. The `questpie` package owns and publicly
+exports the opaque nominal `QuestpieObservability` type. Generated
+`CreateAppInput` imports that type from `questpie`; a generated declaration
+never imports the optional adapter package. `@questpie/opentelemetry` implements
+the type, and the repository-private test adapter receives a private
+construction seam. Third-party structural objects are rejected before
+readiness.
 
 This nominal boundary defines supported API provenance; it is not a sandbox or
 authorization claim against a hostile in-process JavaScript host. Runtime
@@ -72,25 +75,27 @@ or caller/application payload.
 The start union has these exact variants; a field absent from a row is not
 admitted on that variant:
 
-| `kind`                           | Required semantic fields                                                                                              |
-| -------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `runtime`                        | service Principal, root                                                                                               |
-| `fetch`                          | generated-operation/unmatched, normalized method, scheme, null Principal, ingress trace plan, HTTP suppress           |
-| `route`                          | normalized method, matched template, scheme, null Principal, ingress trace plan, HTTP suppress                        |
-| `execution`                      | entry, resolved Principal, trace plan                                                                                 |
-| `query`/`mutation`/`action`      | entry, Resource identity, resolved Principal, active parent                                                           |
-| `transaction`                    | resolved Principal, active parent, optional canonical nonzero PostgreSQL `xid8` decimal text                          |
-| `postgresql`                     | SQL verb, statement identity, resolved Principal, active parent, PostgreSQL suppress                                  |
-| `job.accept`/`reaction.accept`   | Resource identity, resolved Principal, active parent, optional Dispatch/Run UUIDs                                     |
-| `job.attempt`/`reaction.attempt` | Resource identity, resolved Principal, attempt number, root plus acceptance link, optional Dispatch/Run/Attempt UUIDs |
-| `action.effect`                  | Resource identity, resolved Principal, active parent, optional Effect UUID                                            |
+| `kind`                           | Required semantic fields                                                                                                                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `runtime`                        | service Principal, root                                                                                                                  |
+| `fetch`                          | generated-operation/unmatched, normalized method, scheme, null Principal, ingress trace plan, HTTP suppress                              |
+| `route`                          | normalized method, matched template, scheme, null Principal, ingress trace plan, HTTP suppress                                           |
+| `execution`                      | entry, resolved Principal, trace plan                                                                                                    |
+| `query`/`mutation`/`action`      | entry, Resource identity, resolved Principal, active parent                                                                              |
+| `transaction`                    | resolved Principal, active parent, optional canonical nonzero PostgreSQL `xid8` decimal text                                             |
+| `postgresql`                     | SQL verb, statement identity, resolved Principal, active parent, PostgreSQL suppress                                                     |
+| `job.accept`/`reaction.accept`   | Resource identity, resolved Principal, active parent, optional Dispatch/Run UUIDs                                                        |
+| `job.attempt`/`reaction.attempt` | Resource identity, resolved Principal, attempt number, root plus zero-or-one stored acceptance link, optional Dispatch/Run/Attempt UUIDs |
+| `action.effect`                  | Resource identity, resolved Principal, active parent, optional Effect UUID                                                               |
 
 The trace plan is exactly `active-parent`, `remote-parent` with the complete
-validated extraction result, `root`, or `root-with-links` with bounded neutral
-contexts. An ingress `continue` uses `remote-parent`; `restart` uses
+validated extraction result, `root`, or `root-with-links` with exactly one
+neutral context. An ingress `continue` uses `remote-parent`; `restart` uses
 `root-with-links` and intentionally drops incoming `tracestate` after deriving
-the link. Durable attempts always use `root-with-links`. No single ambiguous
-`traceContext` slot exists.
+the link. A durable attempt uses `root-with-links` only when its first successful
+acceptance stored a non-null context; a null old-row or no-adapter context uses
+`root` and creates no link. It never fabricates a zero trace or span identity.
+No single ambiguous `traceContext` slot exists.
 
 The event union has payload only where the signal projection requires it:
 transaction ambiguity/commit may carry canonical nonzero PostgreSQL `xid8` text; durable acceptance
@@ -205,9 +210,23 @@ Excess Envelope projection is reported by the kernel's bounded
 retry, or alter the Execution. A late nested scope cannot recreate Envelope
 counter state after its root Execution ends.
 
-## Official adapter interface
+## Public opaque core type
 
 ```ts
+declare const questpieObservabilityBrand: unique symbol;
+
+export interface QuestpieObservability {
+	readonly [questpieObservabilityBrand]: true;
+}
+```
+
+## Official adapter interface
+
+The official adapter imports that core-owned public type and exports:
+
+```ts
+import type { QuestpieObservability } from "questpie";
+
 export type OpenTelemetryOptions = Readonly<{
 	ingress?: Readonly<{
 		trustBoundary?: "continue" | "restart"; // default: continue
@@ -215,12 +234,6 @@ export type OpenTelemetryOptions = Readonly<{
 	operationalIds?: "omit" | "spans"; // default: omit
 	deploymentEnvironment?: string; // 1..64 printable ASCII characters
 }>;
-
-declare const questpieObservabilityBrand: unique symbol;
-
-export interface QuestpieObservability {
-	readonly [questpieObservabilityBrand]: true;
-}
 
 export interface QuestpieOpenTelemetry extends QuestpieObservability {
 	close(): Promise<void>;
@@ -259,23 +272,28 @@ try {
 
 The official adapter constructs its SDK explicitly and reads only this subset:
 
-| Variable                         | Accepted values and bound                                                        | Default                 |
-| -------------------------------- | -------------------------------------------------------------------------------- | ----------------------- |
-| `OTEL_SERVICE_NAME`              | 1..128 UTF-8 bytes                                                               | application identity    |
-| `OTEL_TRACES_EXPORTER`           | `otlp` or `none`                                                                 | `otlp`                  |
-| `OTEL_METRICS_EXPORTER`          | `otlp` or `none`                                                                 | `otlp`                  |
-| `OTEL_EXPORTER_OTLP_PROTOCOL`    | `http/protobuf`                                                                  | `http/protobuf`         |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`    | valid absolute `http:` or `https:` URL, at most 2,048 bytes                      | SDK OTLP default        |
-| `OTEL_EXPORTER_OTLP_HEADERS`     | SDK header grammar, at most 8 KiB; never enters signals                          | absent                  |
-| `OTEL_EXPORTER_OTLP_TIMEOUT`     | integer 1..30,000 ms                                                             | 10,000 ms               |
-| `OTEL_TRACES_SAMPLER`            | `parentbased_always_on`, `parentbased_always_off`, or `parentbased_traceidratio` | `parentbased_always_on` |
-| `OTEL_TRACES_SAMPLER_ARG`        | decimal ratio 0..1; required only for ratio sampler                              | absent                  |
-| `OTEL_BSP_SCHEDULE_DELAY`        | integer 1..30,000 ms                                                             | 5,000 ms                |
-| `OTEL_BSP_EXPORT_TIMEOUT`        | integer 1..30,000 ms                                                             | 30,000 ms               |
-| `OTEL_BSP_MAX_QUEUE_SIZE`        | integer 1..65,536 spans                                                          | 2,048                   |
-| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | integer 1..queue size                                                            | min(512, queue size)    |
-| `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                        | 60,000 ms               |
-| `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                             | 30,000 ms               |
+| Variable                         | Accepted values and bound                                                                | Default                 |
+| -------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------- |
+| `OTEL_SERVICE_NAME`              | 1..128 UTF-8 bytes                                                                       | application identity    |
+| `OTEL_TRACES_EXPORTER`           | `otlp` or `none`                                                                         | `otlp`                  |
+| `OTEL_METRICS_EXPORTER`          | `otlp` or `none`                                                                         | `otlp`                  |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`    | `http/protobuf`                                                                          | `http/protobuf`         |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`    | valid absolute `http:` or `https:` URL, at most 2,048 bytes                              | SDK OTLP default        |
+| `OTEL_EXPORTER_OTLP_HEADERS`     | SDK header grammar, at most 8 KiB; never enters signals                                  | absent                  |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`     | integer 1..30,000 ms                                                                     | 10,000 ms               |
+| `OTEL_TRACES_SAMPLER`            | `parentbased_always_on`, `parentbased_always_off`, or `parentbased_traceidratio`         | `parentbased_always_on` |
+| `OTEL_TRACES_SAMPLER_ARG`        | decimal ratio 0..1; required for ratio sampler and rejected for either non-ratio sampler | absent                  |
+| `OTEL_BSP_SCHEDULE_DELAY`        | integer 1..30,000 ms                                                                     | 5,000 ms                |
+| `OTEL_BSP_EXPORT_TIMEOUT`        | integer 1..30,000 ms                                                                     | 30,000 ms               |
+| `OTEL_BSP_MAX_QUEUE_SIZE`        | integer 1..65,536 spans                                                                  | 2,048                   |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | integer 1..queue size                                                                    | min(512, queue size)    |
+| `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                                | 60,000 ms               |
+| `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                                     | 30,000 ms               |
+
+`OTEL_TRACES_SAMPLER_ARG` is required exactly when the ratio sampler is
+selected. Supplying it with `parentbased_always_on` or
+`parentbased_always_off` is invalid configuration; the adapter does not ignore
+it.
 
 An invalid supported variable rejects embedded adapter creation with
 `QP-OTEL-001 invalidConfiguration` before App readiness. Its payload contains

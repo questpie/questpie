@@ -16,6 +16,7 @@ import {
 	internalProtocolV8Catalog,
 	internalProtocolV8Checksum,
 	pruneAttempts,
+	readLiveProtocolCatalog,
 	restoreRun,
 	startAttempt,
 	traceContext,
@@ -111,6 +112,9 @@ describe("protocol-v8 durable trace-link candidate", () => {
 	test("requires explicit non-rolling cutover and exact checksum compatibility", async () => {
 		const legacy = acceptance("reaction", "legacy", 1);
 		await accept(pool, schema, { ...legacy, trace: null });
+		expect(await readLiveProtocolCatalog(pool, schema)).toEqual(
+			internalProtocolV7Catalog,
+		);
 		await assertRuntimeProtocol(pool, schema, 7);
 		await expect(assertRuntimeProtocol(pool, schema, 8)).rejects.toThrow(
 			"protocol v8 Runtime refused",
@@ -123,6 +127,9 @@ describe("protocol-v8 durable trace-link candidate", () => {
 			"protocol v7 Runtime refused",
 		);
 		await assertRuntimeProtocol(pool, schema, 8);
+		expect(await readLiveProtocolCatalog(pool, schema)).toEqual(
+			internalProtocolV8Catalog,
+		);
 		expect(
 			JSON.parse(await backupRun(pool, schema, legacy.dispatchId)),
 		).toMatchObject({ traceIdHex: null, spanIdHex: null, flags: null });
@@ -132,32 +139,6 @@ describe("protocol-v8 durable trace-link candidate", () => {
 			[schema],
 		);
 		expect(invented.rows[0]?.count).toBe("0");
-		const actualColumns = await pool.query<{
-			table_name: string;
-			column_name: string;
-			data_type: string;
-			is_nullable: "NO" | "YES";
-		}>(
-			`SELECT table_name, column_name, data_type, is_nullable
-			 FROM information_schema.columns
-			 WHERE table_schema = $1
-			   AND table_name IN ('durable_attempts', 'durable_dispatches', 'durable_runs')
-			 ORDER BY table_name, ordinal_position`,
-			[schema],
-		);
-		const expectedColumns = internalProtocolV8Catalog.columns
-			.filter(([table]) =>
-				["durable_attempts", "durable_dispatches", "durable_runs"].includes(
-					table,
-				),
-			)
-			.map(([table, column, type, notNull]) => ({
-				table_name: table,
-				column_name: column,
-				data_type: type,
-				is_nullable: notNull ? ("NO" as const) : ("YES" as const),
-			}));
-		expect(actualColumns.rows).toEqual(expectedColumns);
 	});
 
 	test("Job and Reaction first-run acceptance retain first context", async () => {
@@ -245,13 +226,23 @@ describe("protocol-v8 durable trace-link candidate", () => {
 		).toThrow("trace flags");
 		const input = acceptance("job", "database-hostile", 11);
 		const accepted = await accept(pool, schema, input);
-		await expect(
-			pool.query(
-				`UPDATE "${schema}".durable_runs
+		const client = await pool.connect();
+		try {
+			await client.query("BEGIN");
+			await client.query(
+				"SELECT set_config('questpie.durable_kernel', 'on', true)",
+			);
+			await expect(
+				client.query(
+					`UPDATE "${schema}".durable_runs
 				 SET trace_id = $2, span_id = $3, trace_flags = 1 WHERE run_id = $1`,
-				[accepted.runId, Buffer.alloc(16), Buffer.alloc(8, 1)],
-			),
-		).rejects.toMatchObject({ code: "23514" });
+					[accepted.runId, Buffer.alloc(16), Buffer.alloc(8, 1)],
+				),
+			).rejects.toMatchObject({ code: "23514" });
+		} finally {
+			await client.query("ROLLBACK").catch(() => undefined);
+			client.release();
+		}
 	});
 
 	test("retry and reclaim use ephemeral roots over production Attempt rows", async () => {

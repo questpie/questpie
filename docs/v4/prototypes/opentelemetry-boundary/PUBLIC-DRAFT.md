@@ -1,7 +1,8 @@
 # Observe a QUESTPIE application with OpenTelemetry
 
-Status: candidate public documentation; do not publish before ADR-0033 is
-Accepted and the implementation tracer passes
+Status: candidate public documentation; acceptance alone does not publish this
+page. Publish and route it only after ADR-0033 is Accepted and the implementation
+tracer proves the package and commands below.
 
 OpenTelemetry belongs in the host, not in application handlers. Configure it
 once and QUESTPIE observes the Runtime work it already owns: Fetch ingress,
@@ -18,7 +19,10 @@ bun add questpie@4.0.0-beta.1 @questpie/opentelemetry@4.0.0-beta.1
 ```
 
 The adapter has an exact `questpie` peer dependency. Upgrade both packages to
-the same version in one change; a version mismatch fails before readiness.
+the same version in one change; a version mismatch fails before readiness. The
+generated App declaration imports its opaque `QuestpieObservability` input type
+from `questpie`, not from this optional package, so applications without the
+adapter still typecheck.
 
 Then pass it to the generated App:
 
@@ -54,9 +58,10 @@ const telemetry = await createOpenTelemetry({
 });
 ```
 
-The defaults are `continue`, `omit`, and no deployment environment. Unknown
-options fail adapter creation. Raw Call Identity is omitted in both operational
-ID modes.
+The defaults are `continue`, `omit`, and no deployment environment.
+`deploymentEnvironment` accepts 1 through 64 printable ASCII characters.
+Unknown options fail adapter creation. Raw Call Identity is omitted in both
+operational-ID modes.
 
 The host owns both objects. Nested cleanup closes telemetry even if App creation
 fails. Close the App first so it stops traffic and drains Runtime work. Close
@@ -64,38 +69,47 @@ telemetry second so the adapter can flush what remains. Adapter close is
 idempotent and resolves within 30 seconds; exporter failure cannot undo Runtime
 cleanup or replace its primary error.
 
+For the CLI host, SIGINT/SIGTERM first stops ingress, then closes the App, then
+closes telemetry. The same 30-second adapter bound applies. An App or Runtime
+close failure remains primary even if export, flush, or shutdown also fails.
+
 `questpie start --telemetry=opentelemetry` performs the same explicit setup for
 the CLI host and resolves `@questpie/opentelemetry` from the application root.
 Without the flag, QUESTPIE does not load the adapter or start exporter work. A
-missing or incompatible package, or invalid supported environment value, fails
-before readiness with `QP-START-004`. For invalid environment configuration,
-the CLI wraps the adapter's `QP-OTEL-001` diagnostic. The diagnostic names only
-the invalid variable or option path; it never prints an endpoint, header, or
-credential value. An embedded host receives `QP-OTEL-001` directly and should
-fix the named setting before creating the App again.
+missing package, missing `createOpenTelemetry` export, or incompatible neutral
+interface fails before readiness with `QP-START-004 telemetryUnavailable`. An
+invalid supported option or environment variable rejects embedded creation as
+`QP-OTEL-001 invalidConfiguration`; the CLI wraps it as `QP-START-004
+telemetryInvalidConfiguration`. The diagnostic names only the invalid variable
+or option path; it never prints an endpoint, header, credential, or rejected
+value. Repair that named setting before creating the App again.
 
 ## Configure export
 
 The adapter constructs its SDK explicitly and reads only this environment
 subset:
 
-| Variable                         | Accepted values and bound                                                        | Default                 |
-| -------------------------------- | -------------------------------------------------------------------------------- | ----------------------- |
-| `OTEL_SERVICE_NAME`              | 1..128 UTF-8 bytes                                                               | application identity    |
-| `OTEL_TRACES_EXPORTER`           | `otlp` or `none`                                                                 | `otlp`                  |
-| `OTEL_METRICS_EXPORTER`          | `otlp` or `none`                                                                 | `otlp`                  |
-| `OTEL_EXPORTER_OTLP_PROTOCOL`    | `http/protobuf`                                                                  | `http/protobuf`         |
-| `OTEL_EXPORTER_OTLP_ENDPOINT`    | absolute `http:` or `https:` URL, at most 2,048 bytes                            | SDK OTLP default        |
-| `OTEL_EXPORTER_OTLP_HEADERS`     | SDK header grammar, at most 8 KiB                                                | absent                  |
-| `OTEL_EXPORTER_OTLP_TIMEOUT`     | integer 1..30,000 ms                                                             | 10,000 ms               |
-| `OTEL_TRACES_SAMPLER`            | `parentbased_always_on`, `parentbased_always_off`, or `parentbased_traceidratio` | `parentbased_always_on` |
-| `OTEL_TRACES_SAMPLER_ARG`        | decimal ratio 0..1; required only for the ratio sampler                          | absent                  |
-| `OTEL_BSP_SCHEDULE_DELAY`        | integer 1..30,000 ms                                                             | 5,000 ms                |
-| `OTEL_BSP_EXPORT_TIMEOUT`        | integer 1..30,000 ms                                                             | 30,000 ms               |
-| `OTEL_BSP_MAX_QUEUE_SIZE`        | integer 1..65,536 spans                                                          | 2,048                   |
-| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | integer 1..queue size                                                            | min(512, queue size)    |
-| `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                        | 60,000 ms               |
-| `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                             | 30,000 ms               |
+| Variable                         | Accepted values and bound                                                                    | Default                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------- | ----------------------- |
+| `OTEL_SERVICE_NAME`              | 1..128 UTF-8 bytes                                                                           | application identity    |
+| `OTEL_TRACES_EXPORTER`           | `otlp` or `none`                                                                             | `otlp`                  |
+| `OTEL_METRICS_EXPORTER`          | `otlp` or `none`                                                                             | `otlp`                  |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`    | `http/protobuf`                                                                              | `http/protobuf`         |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`    | absolute `http:` or `https:` URL, at most 2,048 bytes                                        | SDK OTLP default        |
+| `OTEL_EXPORTER_OTLP_HEADERS`     | SDK header grammar, at most 8 KiB                                                            | absent                  |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`     | integer 1..30,000 ms                                                                         | 10,000 ms               |
+| `OTEL_TRACES_SAMPLER`            | `parentbased_always_on`, `parentbased_always_off`, or `parentbased_traceidratio`             | `parentbased_always_on` |
+| `OTEL_TRACES_SAMPLER_ARG`        | decimal ratio 0..1; required for the ratio sampler and rejected for either non-ratio sampler | absent                  |
+| `OTEL_BSP_SCHEDULE_DELAY`        | integer 1..30,000 ms                                                                         | 5,000 ms                |
+| `OTEL_BSP_EXPORT_TIMEOUT`        | integer 1..30,000 ms                                                                         | 30,000 ms               |
+| `OTEL_BSP_MAX_QUEUE_SIZE`        | integer 1..65,536 spans                                                                      | 2,048                   |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | integer 1..queue size                                                                        | min(512, queue size)    |
+| `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                                    | 60,000 ms               |
+| `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                                         | 30,000 ms               |
+
+`OTEL_TRACES_SAMPLER_ARG` is required exactly for
+`parentbased_traceidratio`. Supplying it with either non-ratio sampler is
+invalid configuration rather than an ignored setting.
 
 For example, point both OTLP exporters at a Collector when starting the CLI:
 
@@ -152,10 +166,13 @@ producer span and, in the same successful transaction, stores only the trace
 ID, span ID, and flags needed for a later link. Rollback stores nothing, and a
 duplicate acceptance keeps the original link.
 
-Each physical attempt starts a new consumer root linked to the acceptance.
-Retries and lease recovery are sibling roots. Durable Run identity stays
-stable, but Attempt and span identities change. This represents at-least-once
-physical work without pretending a delayed Job is one long request.
+Each physical attempt starts a new consumer root. When first acceptance stored a
+non-null trace context, the root has exactly one acceptance link. Existing rows
+and no-adapter acceptance store null, so their attempts have no link; QUESTPIE
+never fabricates a zero trace identity. Retries and lease recovery are sibling
+roots. Durable Run identity stays stable, but Attempt and span identities
+change. This represents at-least-once physical work without pretending a
+delayed Job is one long request.
 
 ## Know what leaves the process
 

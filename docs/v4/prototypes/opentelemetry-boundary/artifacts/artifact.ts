@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { canonicalJsonLine } from "../../../../../packages/runtime/src/canonical-json";
+import { END_OUTCOMES, EVENT_SCOPES } from "../observation-kernel/kernel";
 
 export type ArtifactDigestDomain = "projection-v1" | "config-v1";
 
@@ -307,19 +308,23 @@ const SPAN_ATTRIBUTES = Object.freeze([
 	"url.scheme",
 ]);
 
-const EVENT_NAMES = Object.freeze([
-	"questpie.action.ambiguous",
-	"questpie.context.completed",
-	"questpie.durable.accepted",
-	"questpie.durable.fenced",
-	"questpie.durable.retry_scheduled",
-	"questpie.durable.terminal",
-	"questpie.execution.cancelled",
-	"questpie.execution.deadline_exceeded",
-	"questpie.operation.post_commit_ambiguous",
-	"questpie.receipt.replayed",
-	"questpie.transaction.committed",
-]);
+const SPAN_EVENT_SCOPES = Object.freeze(
+	Object.fromEntries(
+		Object.entries(EVENT_SCOPES).map(([event, scopes]) => [
+			`questpie.${event}`,
+			Object.freeze([...scopes]),
+		]),
+	),
+);
+const EVENT_NAMES = Object.freeze(Object.keys(SPAN_EVENT_SCOPES).sort());
+const END_OUTCOMES_BY_SCOPE = Object.freeze(
+	Object.fromEntries(
+		Object.entries(END_OUTCOMES).map(([scope, outcomes]) => [
+			scope,
+			Object.freeze([...outcomes]),
+		]),
+	),
+);
 
 const SPAN_GRAPH = Object.freeze([
 	{
@@ -534,123 +539,8 @@ function createProjection(questpieVersion: string) {
 		}),
 		spanEventLimit: 32,
 		spanEventNames: EVENT_NAMES,
-		spanEventScopes: Object.freeze({
-			"questpie.context.completed": Object.freeze(["execution"]),
-			"questpie.receipt.replayed": Object.freeze(["mutation"]),
-			"questpie.transaction.committed": Object.freeze(["transaction"]),
-			"questpie.operation.post_commit_ambiguous": Object.freeze(["mutation"]),
-			"questpie.durable.accepted": Object.freeze([
-				"job.accept",
-				"reaction.accept",
-			]),
-			"questpie.execution.cancelled": Object.freeze(["execution"]),
-			"questpie.execution.deadline_exceeded": Object.freeze(["execution"]),
-			"questpie.durable.fenced": Object.freeze([
-				"job.attempt",
-				"reaction.attempt",
-			]),
-			"questpie.durable.retry_scheduled": Object.freeze([
-				"job.attempt",
-				"reaction.attempt",
-			]),
-			"questpie.durable.terminal": Object.freeze([
-				"job.attempt",
-				"reaction.attempt",
-			]),
-			"questpie.action.ambiguous": Object.freeze(["action.effect"]),
-		}),
-		endOutcomesByScope: Object.freeze({
-			runtime: Object.freeze([
-				"ok",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			fetch: Object.freeze(["ok", "framework_error", "cancelled", "deadline"]),
-			route: Object.freeze(["ok", "framework_error", "cancelled", "deadline"]),
-			execution: Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			query: Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			mutation: Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-				"ambiguous",
-			]),
-			action: Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-				"ambiguous",
-			]),
-			transaction: Object.freeze([
-				"ok",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			postgresql: Object.freeze([
-				"ok",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			"job.accept": Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			"reaction.accept": Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-			]),
-			"job.attempt": Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-				"fenced",
-				"retry",
-			]),
-			"reaction.attempt": Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-				"fenced",
-				"retry",
-			]),
-			"action.effect": Object.freeze([
-				"ok",
-				"declared_error",
-				"framework_error",
-				"cancelled",
-				"deadline",
-				"ambiguous",
-			]),
-		}),
+		spanEventScopes: SPAN_EVENT_SCOPES,
+		endOutcomesByScope: END_OUTCOMES_BY_SCOPE,
 		transactionIdentity: Object.freeze({
 			kind: "postgresXid8Text",
 			canonicalPattern: "^[1-9][0-9]{0,19}$",

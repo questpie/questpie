@@ -14,6 +14,11 @@ JSON-line artifacts:
 - `questpie.opentelemetry-effective-config` binds that projection digest to the
   safe Resource and bounded effective adapter settings.
 
+The event-owner and end-outcome maps are derived directly from the executable
+observation-kernel contract rather than copied into the artifact builder. The
+proof deep-compares both complete maps, so adding a scope, event, owner, or
+outcome cannot silently leave artifact bytes behind.
+
 Their SHA-256 digests use distinct NUL-terminated domains. Object insertion
 order therefore cannot change bytes, while a projection or package-version
 change necessarily changes both bindings.

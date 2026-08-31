@@ -63,6 +63,15 @@ export type ObservationOutcome =
 	| "ambiguous"
 	| "fenced"
 	| "retry";
+export type DurableFailureCode =
+	| "EFFECT_AMBIGUOUS"
+	| "EFFECT_CONFLICT"
+	| "HANDLER_FAILED"
+	| "REACTION_ERROR"
+	| "RESOURCE_LIMIT"
+	| "RETRY_EXHAUSTED"
+	| "RUN_AS_DENIED"
+	| "VALIDATION_FAILED";
 export type ObservationDiagnostic =
 	| "adapter_begin_fault"
 	| "adapter_context_invalid"
@@ -164,10 +173,12 @@ type AttemptStartV1 = Readonly<{
 	principalKind: PrincipalKind;
 	resourceIdentity: string;
 	runId?: string;
-	trace: Readonly<{
-		kind: "root-with-links";
-		links: readonly NeutralTraceContextV1[];
-	}>;
+	trace:
+		| Readonly<{ kind: "root" }>
+		| Readonly<{
+				kind: "root-with-links";
+				links: readonly NeutralTraceContextV1[];
+		  }>;
 }>;
 type EffectStartV1 = Readonly<{
 	effectId?: string;
@@ -213,9 +224,9 @@ export type ObservationEventV1 =
 			retryDelayMilliseconds: number;
 	  }>
 	| Readonly<{
-			errorCode?: string;
+			errorCode?: DurableFailureCode;
 			kind: "durable.terminal";
-			outcome: ObservationOutcome;
+			outcome: "ok" | "framework_error" | "cancelled";
 	  }>
 	| Readonly<{ effectId?: string; kind: "action.ambiguous" }>;
 type OrdinaryEndOutcome =
@@ -516,13 +527,13 @@ function validateObservationStart(input: ObservationStartV1): void {
 	if (input.trace.kind === "root-with-links") {
 		if (
 			input.trace.links.length !== 1 ||
-			!isValidTraceContext(input.trace.links[0])
+			input.trace.links.some((link) => !isValidTraceContext(link))
 		)
 			throw new TypeError("observation creation link is invalid");
 	}
 }
 
-const EVENT_SCOPES: Readonly<
+export const EVENT_SCOPES: Readonly<
 	Record<ObservationEventKind, readonly ScopeKind[]>
 > = Object.freeze({
 	"context.completed": ["execution"],
@@ -538,6 +549,64 @@ const EVENT_SCOPES: Readonly<
 	"action.ambiguous": ["action.effect"],
 });
 
+const EVENT_PAYLOAD_KEYS: Readonly<
+	Record<ObservationEventKind, readonly string[]>
+> = Object.freeze({
+	"context.completed": ["kind"],
+	"receipt.replayed": ["kind"],
+	"transaction.committed": ["kind", "transactionId"],
+	"operation.post_commit_ambiguous": ["kind", "transactionId"],
+	"durable.accepted": ["kind", "dispatchId", "runId"],
+	"execution.cancelled": ["kind"],
+	"execution.deadline_exceeded": ["kind"],
+	"durable.fenced": ["kind", "attemptId"],
+	"durable.retry_scheduled": [
+		"kind",
+		"attemptNumber",
+		"retryDelayMilliseconds",
+	],
+	"durable.terminal": ["kind", "outcome", "errorCode"],
+	"action.ambiguous": ["kind", "effectId"],
+});
+const REQUIRED_EVENT_KEYS: Readonly<
+	Record<ObservationEventKind, readonly string[]>
+> = Object.freeze({
+	"context.completed": ["kind"],
+	"receipt.replayed": ["kind"],
+	"transaction.committed": ["kind"],
+	"operation.post_commit_ambiguous": ["kind"],
+	"durable.accepted": ["kind"],
+	"execution.cancelled": ["kind"],
+	"execution.deadline_exceeded": ["kind"],
+	"durable.fenced": ["kind"],
+	"durable.retry_scheduled": [
+		"kind",
+		"attemptNumber",
+		"retryDelayMilliseconds",
+	],
+	"durable.terminal": ["kind", "outcome"],
+	"action.ambiguous": ["kind"],
+});
+
+const DURABLE_FAILURE_CODES: ReadonlySet<string> = new Set([
+	"EFFECT_AMBIGUOUS",
+	"EFFECT_CONFLICT",
+	"HANDLER_FAILED",
+	"REACTION_ERROR",
+	"RESOURCE_LIMIT",
+	"RETRY_EXHAUSTED",
+	"RUN_AS_DENIED",
+	"VALIDATION_FAILED",
+] satisfies readonly DurableFailureCode[]);
+
+function exactEventKeys(input: ObservationEventV1): boolean {
+	const allowed = new Set(EVENT_PAYLOAD_KEYS[input.kind]);
+	return (
+		Object.keys(input).every((key) => allowed.has(key)) &&
+		REQUIRED_EVENT_KEYS[input.kind].every((key) => key in input)
+	);
+}
+
 function validateObservationEvent(
 	scope: ScopeKind,
 	input: ObservationEventV1,
@@ -545,9 +614,20 @@ function validateObservationEvent(
 	if (!EVENT_SCOPES[input.kind].includes(scope))
 		throw new TypeError("observation event is invalid for its scope");
 	if (
+		!exactEventKeys(input) ||
 		("transactionId" in input &&
 			input.transactionId !== undefined &&
 			!isPostgresTransactionIdentity(input.transactionId)) ||
+		("dispatchId" in input &&
+			input.dispatchId !== undefined &&
+			!isUuid(input.dispatchId)) ||
+		("runId" in input && input.runId !== undefined && !isUuid(input.runId)) ||
+		("attemptId" in input &&
+			input.attemptId !== undefined &&
+			!isUuid(input.attemptId)) ||
+		("effectId" in input &&
+			input.effectId !== undefined &&
+			!isUuid(input.effectId)) ||
 		("attemptNumber" in input &&
 			(!Number.isInteger(input.attemptNumber) ||
 				input.attemptNumber < 1 ||
@@ -555,83 +635,88 @@ function validateObservationEvent(
 		("retryDelayMilliseconds" in input &&
 			(!Number.isInteger(input.retryDelayMilliseconds) ||
 				input.retryDelayMilliseconds < 0 ||
-				input.retryDelayMilliseconds > 900_000))
+				input.retryDelayMilliseconds > 900_000)) ||
+		(input.kind === "durable.terminal" &&
+			(!["ok", "framework_error", "cancelled"].includes(input.outcome) ||
+				(input.errorCode !== undefined &&
+					!DURABLE_FAILURE_CODES.has(input.errorCode))))
 	)
 		throw new TypeError("observation event payload is invalid");
 }
 
-const END_OUTCOMES: Readonly<Record<ScopeKind, readonly ObservationOutcome[]>> =
-	Object.freeze({
-		runtime: ["ok", "framework_error", "cancelled", "deadline"],
-		fetch: ["ok", "framework_error", "cancelled", "deadline"],
-		route: ["ok", "framework_error", "cancelled", "deadline"],
-		execution: [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-		],
-		query: ["ok", "declared_error", "framework_error", "cancelled", "deadline"],
-		mutation: [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"ambiguous",
-		],
-		action: [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"ambiguous",
-		],
-		transaction: ["ok", "framework_error", "cancelled", "deadline"],
-		postgresql: ["ok", "framework_error", "cancelled", "deadline"],
-		"job.accept": [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-		],
-		"reaction.accept": [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-		],
-		"job.attempt": [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"fenced",
-			"retry",
-		],
-		"reaction.attempt": [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"fenced",
-			"retry",
-		],
-		"action.effect": [
-			"ok",
-			"declared_error",
-			"framework_error",
-			"cancelled",
-			"deadline",
-			"ambiguous",
-		],
-	});
+export const END_OUTCOMES: Readonly<
+	Record<ScopeKind, readonly ObservationOutcome[]>
+> = Object.freeze({
+	runtime: ["ok", "framework_error", "cancelled", "deadline"],
+	fetch: ["ok", "framework_error", "cancelled", "deadline"],
+	route: ["ok", "framework_error", "cancelled", "deadline"],
+	execution: [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+	],
+	query: ["ok", "declared_error", "framework_error", "cancelled", "deadline"],
+	mutation: [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+		"ambiguous",
+	],
+	action: [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+		"ambiguous",
+	],
+	transaction: ["ok", "framework_error", "cancelled", "deadline"],
+	postgresql: ["ok", "framework_error", "cancelled", "deadline"],
+	"job.accept": [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+	],
+	"reaction.accept": [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+	],
+	"job.attempt": [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+		"fenced",
+		"retry",
+	],
+	"reaction.attempt": [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+		"fenced",
+		"retry",
+	],
+	"action.effect": [
+		"ok",
+		"declared_error",
+		"framework_error",
+		"cancelled",
+		"deadline",
+		"ambiguous",
+	],
+});
 
 function validateObservationEnd(
 	scope: ScopeKind,
@@ -841,8 +926,11 @@ export function createObservationKernel(
 	const beginScope = (
 		execution: ExecutionIdentityV2 | null,
 		input: ObservationStartV1,
+		allowRootExecution = false,
 	): ObservationScope => {
 		validateExecution(execution);
+		if (input.kind === "execution" && !allowRootExecution)
+			throw new TypeError("root Execution must begin through beginExecution");
 		validateObservationStart(input);
 		const ownsNoExecution =
 			input.kind === "runtime" ||
@@ -1044,7 +1132,7 @@ export function createObservationKernel(
 				throw new TypeError("root observation entry must be an Execution");
 			const identity = allocateExecution();
 			if (identity === null) return null;
-			const inner = beginScope(identity, input);
+			const inner = beginScope(identity, input, true);
 			let ended = false;
 			const scope: ObservationScope = Object.freeze({
 				context: inner.context,
@@ -1064,7 +1152,7 @@ export function createObservationKernel(
 			});
 			return Object.freeze({ identity, scope });
 		},
-		beginScope,
+		beginScope: (execution, input) => beginScope(execution, input),
 		current: () => activeObservation.getStore() ?? null,
 		durableTraceContext: (scope) =>
 			adapter === null || scope.context === null

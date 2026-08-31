@@ -4,9 +4,11 @@ This isolated Proposed-ADR-0033 proof imports the production protocol-v7
 catalog and checksum, then derives and pins protocol v8 as exactly three
 nullable columns plus one completeness constraint on `durable_runs`. Tables,
 existing columns, existing constraints, and indexes otherwise remain byte-for-
-byte catalog projections of v7. The executable PostgreSQL seam is extracted
-from the production v7 `durable_dispatches`, `durable_runs`, and
-`durable_attempts` DDL and uses the production deterministic Run identity.
+byte catalog projections of v7. The executable PostgreSQL proof applies the
+actual production bootstrap and v2-through-v7 SQL chain, then compares the
+complete live 21-table v7 and v8 catalogs—columns, deparsed constraints, and
+indexes—to the imported exact artifacts. Acceptance also uses the production
+deterministic Run identity and durable-kernel transaction marker.
 
 There is deliberately no database `runtime_instances` registry. The cutover is
 an operator-owned, explicit non-rolling acknowledgement followed by exact
