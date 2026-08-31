@@ -56,6 +56,16 @@ export function beginApplicationExecution(
 	});
 }
 
+export function bindApplicationExecutionObservation(
+	execution: ObservationExecution | null,
+	entry: ExecutionEntry | undefined,
+) {
+	if (execution === null || entry === undefined) return Object.freeze({});
+	return Object.freeze({
+		observation: Object.freeze({ entry, execution: execution.observation }),
+	});
+}
+
 export function applicationObservationFailure(
 	error: unknown,
 	input: Readonly<{
@@ -75,10 +85,7 @@ export function applicationObservationFailure(
 			(error instanceof OperationFailure && error.code === "DEADLINE_EXCEEDED"))
 	)
 		return { outcome: "deadline" as const, ...code };
-	if (
-		!input.committedMutation &&
-		(input.aborted || isOperationAbort(error))
-	)
+	if (!input.committedMutation && (input.aborted || isOperationAbort(error)))
 		return { outcome: "cancelled" as const, ...code };
 	if (error instanceof DeclaredOperationError)
 		return { outcome: "declared_error" as const, ...code };

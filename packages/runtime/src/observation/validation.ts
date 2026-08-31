@@ -12,11 +12,16 @@ import { END_OUTCOMES, EVENT_OUTCOMES, EVENT_SCOPES } from "./grammar";
 
 const UUID_V4 =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
+const UUID =
+	/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MAX_UINT64 = 18_446_744_073_709_551_615n;
 const ENCODER = new TextEncoder();
 
 export function isUuidV4(value: unknown): value is string {
 	return typeof value === "string" && UUID_V4.test(value);
+}
+function isUuid(value: unknown): value is string {
+	return typeof value === "string" && UUID.test(value);
 }
 function isXid8(value: unknown): value is string {
 	return (
@@ -296,9 +301,11 @@ export function validateObservationStart(input: ObservationStartV1): void {
 			(value.attemptNumber as number) > 8)
 	)
 		throw new TypeError("observation attempt number is invalid");
-	for (const key of ["dispatchId", "runId", "attemptId", "effectId"] as const)
+	for (const key of ["dispatchId", "runId", "attemptId"] as const)
 		if (value[key] !== undefined && !isUuidV4(value[key]))
 			throw new TypeError(`observation ${key} is invalid`);
+	if (value.effectId !== undefined && !isUuid(value.effectId))
+		throw new TypeError("observation effectId is invalid");
 	const allowedTrace =
 		kind === "runtime"
 			? ["root"]
@@ -360,9 +367,11 @@ export function validateObservationEvent(
 		!isXid8(input.transactionId)
 	)
 		throw new TypeError("observation event transaction is invalid");
-	for (const key of ["dispatchId", "runId", "attemptId", "effectId"] as const)
+	for (const key of ["dispatchId", "runId", "attemptId"] as const)
 		if (value[key] !== undefined && !isUuidV4(value[key]))
 			throw new TypeError("observation event identity is invalid");
+	if (value.effectId !== undefined && !isUuid(value.effectId))
+		throw new TypeError("observation event identity is invalid");
 	if (
 		"attemptNumber" in input &&
 		(!Number.isInteger(input.attemptNumber) ||

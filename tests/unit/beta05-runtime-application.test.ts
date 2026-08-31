@@ -4,10 +4,15 @@ import { createHash } from "node:crypto";
 import { codec, defineContext, defineService, principal } from "questpie";
 
 import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
+import { projectOperationWireV3 } from "../../packages/compiler/src/runtime/operation-wire-v3";
 import {
 	createRuntimeApplication,
 	type ExecutionEventV2,
 } from "../../packages/runtime/src";
+import {
+	createRuntimeActionExecutor,
+	type RuntimeActionBinding,
+} from "../../packages/runtime/src/action";
 import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
 import {
 	createObservationHandle,
@@ -154,8 +159,14 @@ function runtimeArtifacts(
 		actionContractIdentities ?? inferredActionIdentities
 	).map((identity) => ({
 		identity,
-		input: { kind: "text" },
-		output: { kind: "text" },
+		input: {
+			kind: "object",
+			properties: { message: { kind: "text" } },
+		},
+		output: {
+			kind: "object",
+			properties: { receipt: { kind: "text" } },
+		},
 		declaredErrors: {},
 		admission: "authenticated",
 		limits: {
@@ -329,8 +340,11 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 	};
 }
 
-function runtimeArtifactsV2() {
-	const original = runtimeArtifacts();
+function runtimeArtifactsV2(
+	additionalSlots: readonly unknown[] = [],
+	actionContractIdentities?: readonly string[],
+) {
+	const original = runtimeArtifacts(additionalSlots, actionContractIdentities);
 	const { digest: _wireDigest, ...wireV1 } = original.wireContract;
 	const wireV2WithoutDigest = {
 		...wireV1,
@@ -394,6 +408,52 @@ function runtimeArtifactsV2() {
 		...wireV2WithoutDigest,
 		digest: digest("questpie-operation-wire-v2", wireV2WithoutDigest),
 	};
+	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
+		original.runtimeBuild;
+	const reboundBuild = {
+		...runtimeBuildWithoutDigest,
+		wireDigest: wireContract.digest,
+		inventory: runtimeBuildWithoutDigest.inventory.map((item) =>
+			item.path === "wire-contract.json"
+				? { ...item, digest: fileDigest(wireBytes) }
+				: item,
+		),
+	};
+	return {
+		...original,
+		artifactFiles: {
+			...original.artifactFiles,
+			"wire-contract.json": wireBytes,
+		},
+		runtimeBuild: {
+			...reboundBuild,
+			digest: digest("questpie-runtime-build-v1", reboundBuild),
+		},
+		wireContract,
+	};
+}
+
+function runtimeArtifactsV3(
+	additionalSlots: readonly unknown[],
+	actionContractIdentities: readonly string[],
+) {
+	const original = runtimeArtifactsV2(
+		additionalSlots,
+		actionContractIdentities,
+	);
+	const actionOperations = original.operationContracts.operations
+		.filter((operation) => operation.identity.startsWith("action:"))
+		.map(({ declaredErrors, identity, input, output }) => ({
+			declaredErrors,
+			identity,
+			input,
+			output,
+		}));
+	const wireContract = projectOperationWireV3({
+		retainedWireV2: original.wireContract,
+		actionOperations,
+	});
 	const wireBytes = `${JSON.stringify(wireContract)}\n`;
 	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
 		original.runtimeBuild;
@@ -1193,6 +1253,175 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
 		await app.close({ deadlineAt: Date.now() + 2_000 });
 	}
+});
+
+test("carries one issued Execution privately through direct and network Action", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const action = {
+		identity: "action:delivery.publish",
+		admission: "authenticated",
+		limits: {
+			inputBytes: 1_024,
+			resultBytes: 1_024,
+			durationMilliseconds: 5_000,
+		},
+		input: codec.object({ message: codec.text() }),
+		output: codec.object({ receipt: codec.text() }),
+		declaredErrors: [],
+		execute: () => ({ receipt: "sent" }),
+	} satisfies RuntimeActionBinding<Readonly<{ marker: true }>>;
+	const actions = createRuntimeActionExecutor({
+		application: "application:collaboration",
+		bindings: [action],
+		project: () => Object.freeze({ marker: true as const }),
+	});
+	const actionSlot = {
+		identity: action.identity,
+		kind: "action" as const,
+		slot: "handler" as const,
+		origin: {
+			path: "src/delivery-action.ts",
+			exportName: "deliveryPublish",
+			packageId: null,
+		},
+		sourceDigest: sha("a"),
+		contractDigest: sha("b"),
+		runtimeGraphDigest: sha("c"),
+		bundleExport: "action_delivery_publish_handler",
+	};
+	const artifacts = runtimeArtifactsV3([actionSlot], [action.identity]);
+	const events: ExecutionEventV2[] = [];
+	const executableAction = {
+		...actionSlot,
+		execute: action.execute,
+		definition: { name: "delivery.publish", handler: action.execute },
+	};
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts as never),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts as never, [
+			{
+				identity: "context:app.context",
+				kind: "context" as const,
+				slot: "resolve" as const,
+				runtimeGraphDigest: sha("3"),
+				bundleExport: "context_app_context_resolve",
+				definition: context,
+			},
+			queryExecutable(() => ({ count: 1 })),
+			executableAction,
+		]),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			projectExecution: (scope) => ({ actionScope: scope }),
+			invokeAction: ({
+				callId,
+				effectKey,
+				execution,
+				identity,
+				input,
+				timeoutMilliseconds,
+			}) =>
+				actions.invoke(identity, {
+					callId,
+					effectKey,
+					input,
+					scope: execution.actionScope,
+					...(timeoutMilliseconds === undefined ? {} : { timeoutMilliseconds }),
+				}),
+			resolvePrincipal: async (request) => readIngressPrincipal(request),
+		},
+		events: (event) => events.push(event),
+	});
+
+	await expect(
+		app.execution(
+			{
+				principal: principal.user({
+					id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				}),
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+			},
+			({ execution }) =>
+				actions.invoke(action.identity, {
+					effectKey: "delivery-1",
+					input: { message: "hello" },
+					scope: execution.actionScope,
+				}),
+		),
+	).resolves.toEqual({ receipt: "sent" });
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "action"],
+		["scope.started", "action.effect"],
+		["scope.ended", "action.effect"],
+		["scope.ended", "action"],
+		["scope.ended", "execution"],
+	]);
+	expect(new Set(events.map((event) => event.executionId))).toEqual(
+		new Set([events[0]!.executionId]),
+	);
+
+	events.length = 0;
+	const user = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const request = new Request("http://runtime.test/_questpie/operation", {
+		method: "POST",
+		headers: {
+			"content-type": "application/vnd.questpie.operation+json;version=1",
+		},
+		body: JSON.stringify({
+			application: artifacts.runtimeBuild.application,
+			callId: "call:network-action",
+			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+			context: {
+				companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+			},
+			effectKey: "delivery-network-1",
+			input: { message: "hello" },
+			operation: action.identity,
+			protocol: { name: "questpie.operation", version: 1 },
+			timeoutMilliseconds: 1_000,
+			wireDigest: artifacts.wireContract.digest,
+		}),
+	});
+	bindIngressPrincipal(request, user);
+	const response = await app.fetch(request);
+	expect(response.status).toBe(200);
+	expect(await response.json()).toMatchObject({
+		kind: "result",
+		operation: action.identity,
+		payload: { receipt: "sent" },
+	});
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "action"],
+		["scope.started", "action.effect"],
+		["scope.ended", "action.effect"],
+		["scope.ended", "action"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+	]);
+	const executionId = events.find(
+		(event) => event.scopeKind === "execution",
+	)?.executionId;
+	expect(
+		events
+			.filter((event) => event.scopeKind !== "fetch")
+			.every((event) => event.executionId === executionId),
+	).toBe(true);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
 test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {

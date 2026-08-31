@@ -1,3 +1,9 @@
+import type { Principal } from "questpie";
+
+export function principalIdentity(value: Principal): string {
+	return `${value.kind}:${value.id}`;
+}
+
 export function controlledRoot(
 	input: Readonly<{
 		signal?: AbortSignal;

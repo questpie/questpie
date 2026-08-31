@@ -57,6 +57,7 @@ import {
 import {
 	applicationObservationFailure,
 	beginApplicationExecution,
+	bindApplicationExecutionObservation,
 	createApplicationObservation,
 	observeApplicationFetch,
 	runApplicationOperation,
@@ -74,7 +75,7 @@ import {
 	retainClientPairs,
 	type RetainedClientPair,
 } from "./retained-clients";
-import { controlledRoot } from "./root";
+import { controlledRoot, principalIdentity } from "./root";
 import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
 export type {
@@ -171,10 +172,6 @@ export interface RuntimeApplication<Input, ExecutionView> {
 }
 
 type RuntimeState = "closed" | "draining" | "ready" | "verifying";
-
-function principalIdentity(value: Principal): string {
-	return `${value.kind}:${value.id}`;
-}
 
 export async function createRuntimeApplication<
 	Context extends ContextDefinition,
@@ -336,6 +333,10 @@ export async function createRuntimeApplication<
 					signal: controlled.controller.signal,
 					deadline: root.deadline,
 					liveQueryObservation: root.liveQueryObservation,
+					...bindApplicationExecutionObservation(
+						observedExecution,
+						root.observationEntry,
+					),
 				},
 				(view) => {
 					observedExecution?.scope.event({ kind: "context.completed" });
