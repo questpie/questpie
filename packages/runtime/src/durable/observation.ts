@@ -13,18 +13,23 @@ export async function runObservedDurableAttempt(
 		use(): Promise<DurableWorkerOutcome>;
 	}>,
 ): Promise<DurableWorkerOutcome> {
+	if (input.observation === undefined)
+		throw new TypeError("Durable Attempt observation decision is required");
 	const kind =
 		input.request.capability === "job" ? "job.attempt" : "reaction.attempt";
-	const scope = input.observation?.begin({
-		attemptId: input.request.attemptId,
-		attemptNumber: input.request.attemptNumber,
-		dispatchId: input.request.dispatchId,
-		kind,
-		principalKind: input.request.principal.kind,
-		resourceIdentity: input.request.resource,
-		runId: input.request.runId,
-		trace: { kind: "root" },
-	});
+	const scope =
+		input.observation === null
+			? null
+			: input.observation.begin({
+					attemptId: input.request.attemptId,
+					attemptNumber: input.request.attemptNumber,
+					dispatchId: input.request.dispatchId,
+					kind,
+					principalKind: input.request.principal.kind,
+					resourceIdentity: input.request.resource,
+					runId: input.request.runId,
+					trace: { kind: "root" },
+				});
 	if (!scope) return input.use();
 	try {
 		const outcome = await scope.run(input.use);

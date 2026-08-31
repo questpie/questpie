@@ -788,10 +788,12 @@ postgresTest(
 		// outside its declared result codec. The worker factory here is the one
 		// the generated application builds; only the executor differs.
 		const worker = createDurableWorker({
-			attemptExecution: (_request, work) =>
-				work.preparationError === undefined
+			attemptExecution: (_request, work) => {
+				work.enter();
+				return work.preparationError === undefined
 					? work.use(undefined)
-					: work.failure(work.preparationError),
+					: work.failure(work.preparationError);
+			},
 			kernel: prepared.kernel,
 			ledger: prepared.ledger,
 			jobs: Object.freeze({ members: new Map(), byIdentity: new Map() }),

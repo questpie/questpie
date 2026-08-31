@@ -83,6 +83,7 @@ export type DurableAttemptExecution<Execution = unknown> = (
 	request: DurableAttemptExecutionRequest,
 	work: Readonly<{
 		preparationError?: unknown;
+		enter(): void;
 		use(execution: Execution): Promise<DurableWorkerOutcome>;
 		failure(error: unknown): Promise<DurableWorkerOutcome>;
 	}>,
@@ -256,6 +257,7 @@ export function createDurableWorker<Execution>(
 			failureCode: DurableFailureCode | null,
 			resultBytes: Uint8Array | null,
 		): Promise<DurableWorkerOutcome> => {
+			await stopHeartbeat();
 			if (fenced)
 				return Object.freeze({
 					runId: claim.runId,
@@ -311,7 +313,9 @@ export function createDurableWorker<Execution>(
 				failureCode: code,
 			});
 		};
-		let timer: ReturnType<typeof setInterval>;
+		let timer: ReturnType<typeof setInterval> | undefined;
+		let heartbeatStopped = false;
+		let heartbeatTail: Promise<void> = Promise.resolve();
 		const observe = async (): Promise<void> => {
 			if (deadlineExpired) return;
 			const beat = await input.kernel.heartbeat(claim);
@@ -327,13 +331,24 @@ export function createDurableWorker<Execution>(
 			if (beat.deadlineExpired) {
 				// A non-cooperative attempt must not renew its lease past its deadline.
 				deadlineExpired = true;
+				heartbeatStopped = true;
 				clearInterval(timer);
-				controller.abort(new DOMException("Attempt deadline", "AbortError"));
+				controller.abort(new DOMException("Attempt deadline", "TimeoutError"));
 			}
 		};
-		timer = setInterval(() => {
-			void observe().catch(() => undefined);
-		}, heartbeatMilliseconds);
+		const scheduleHeartbeat = (): Promise<void> => {
+			if (heartbeatStopped) return Promise.resolve();
+			const pending = heartbeatTail.then(async () => {
+				if (!heartbeatStopped) await observe();
+			});
+			heartbeatTail = pending.catch(() => undefined);
+			return pending;
+		};
+		const stopHeartbeat = async (): Promise<void> => {
+			heartbeatStopped = true;
+			if (timer !== undefined) clearInterval(timer);
+			await heartbeatTail;
+		};
 		try {
 			return await input.attemptExecution(
 				Object.freeze({
@@ -349,12 +364,23 @@ export function createDurableWorker<Execution>(
 				}),
 				{
 					...(preparationError === undefined ? {} : { preparationError }),
+					enter: () => {
+						if (timer !== undefined)
+							throw new TypeError("Durable Attempt was entered twice");
+						timer = setInterval(() => {
+							void scheduleHeartbeat().catch(() => undefined);
+						}, heartbeatMilliseconds);
+					},
 					failure: async (error) => {
+						if (timer === undefined)
+							throw new TypeError("Durable Attempt was not entered");
 						if (error instanceof DurableLeaseLost) fenced = true;
 						else if (!cancelled) return settle(classify(error), null);
 						return settle(null, null);
 					},
 					use: async (execution) => {
+						if (timer === undefined)
+							throw new TypeError("Durable Attempt was not entered");
 						let failureCode: DurableFailureCode | null = null;
 						let resultBytes: Uint8Array | null = null;
 						try {
@@ -371,7 +397,7 @@ export function createDurableWorker<Execution>(
 								signal: controller.signal,
 								attempt: Object.freeze({
 									number: claim.attemptNumber,
-									heartbeat: observe,
+									heartbeat: scheduleHeartbeat,
 								}),
 								errors: errorFactories(definition),
 								assertResolvedTenant(tenantId: string) {
@@ -432,7 +458,7 @@ export function createDurableWorker<Execution>(
 				},
 			);
 		} finally {
-			clearInterval(timer);
+			await stopHeartbeat();
 		}
 	};
 

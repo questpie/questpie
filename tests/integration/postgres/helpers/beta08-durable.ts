@@ -5,12 +5,16 @@ import type { Principal } from "questpie";
 
 import { runtimeArtifactDigest } from "../../../../packages/runtime/src/application/artifact-protocol";
 import {
+	createPostgresDatabaseDurableAttemptObservation,
 	createPostgresDatabaseDurableEffectLedger,
 	createPostgresDatabaseDurableKernel,
 	type DurableEffectLedger,
 } from "../../../../packages/runtime/src/durable";
 import { linkReactionProjection } from "../../../../packages/runtime/src/durable/projection";
-import type { DurableKernel } from "../../../../packages/runtime/src/durable/rows";
+import type {
+	DurableClaim,
+	DurableKernel,
+} from "../../../../packages/runtime/src/durable/rows";
 import type {
 	PostgresDatabase,
 	PostgresTransactionRunner,
@@ -303,6 +307,62 @@ async function buildBeta08Durable(
 		id: beta05Ids.readerPrincipal,
 	});
 	const reactions = linkReactionProjection(JSON.parse(reactionProjectionBytes));
+	const attemptPostgres = createPostgresDatabaseDurableAttemptObservation({
+		database: runtimeDatabase,
+	});
+	const runExplicitNullAttempt = <Result>(
+		claim: DurableClaim,
+		use: () => Result | Promise<Result>,
+	) =>
+		attemptPostgres.run({
+			observation: null,
+			principalKind: claim.principal.kind,
+			signal: undefined,
+			use,
+		});
+	const exposeKernel = (kernel: DurableKernel): DurableKernel =>
+		Object.freeze({
+			...kernel,
+			heartbeat: (claim) =>
+				runExplicitNullAttempt(claim, () => kernel.heartbeat(claim)),
+			succeed: (claim, resultBytes) =>
+				runExplicitNullAttempt(claim, () => kernel.succeed(claim, resultBytes)),
+			fail: (claim, failure) =>
+				runExplicitNullAttempt(claim, () => kernel.fail(claim, failure)),
+			cancel: (claim) =>
+				runExplicitNullAttempt(claim, () => kernel.cancel(claim)),
+		});
+	const exposeLedger = (ledger: DurableEffectLedger): DurableEffectLedger =>
+		Object.freeze({
+			...ledger,
+			reserve: (claim, request) =>
+				runExplicitNullAttempt(claim, () => ledger.reserve(claim, request)),
+			settle: (claim, request) =>
+				runExplicitNullAttempt(claim, () => ledger.settle(claim, request)),
+			markAmbiguous: (claim, request) =>
+				runExplicitNullAttempt(claim, () =>
+					ledger.markAmbiguous(claim, request),
+				),
+		});
+	const createKernel = (
+		options: Readonly<{ random?: () => number; claimBatch?: number }> = {},
+	) =>
+		createPostgresDatabaseDurableKernel({
+			database: runtimeDatabase,
+			attemptDatabase: attemptPostgres.database,
+			application: beta08Application,
+			reactions,
+			claimBatch: options.claimBatch,
+			random: options.random,
+		});
+	const kernel = exposeKernel(createKernel());
+	const ledger = exposeLedger(
+		createPostgresDatabaseDurableEffectLedger({
+			database: runtimeDatabase,
+			attemptDatabase: attemptPostgres.database,
+			application: beta08Application,
+		}),
+	);
 	const harness = Object.freeze({
 		app,
 		createSiblingApplication: createApplication,
@@ -339,25 +399,11 @@ async function buildBeta08Durable(
 			}),
 		compilation: prepared.compilation,
 		database: runtimeDatabase,
-		kernel: createPostgresDatabaseDurableKernel({
-			database: runtimeDatabase,
-			application: beta08Application,
-			reactions,
-		}),
+		kernel,
 		kernelWith: (
 			options: Readonly<{ random?: () => number; claimBatch?: number }>,
-		) =>
-			createPostgresDatabaseDurableKernel({
-				database: runtimeDatabase,
-				application: beta08Application,
-				reactions,
-				claimBatch: options.claimBatch,
-				random: options.random,
-			}),
-		ledger: createPostgresDatabaseDurableEffectLedger({
-			database: runtimeDatabase,
-			application: beta08Application,
-		}),
+		) => exposeKernel(createKernel(options)),
+		ledger,
 		// The maintenance surface the generated application publishes: its
 		// Principal brand is the one the relocated fixture mints, so a test drives
 		// the same object an operator would.
@@ -412,10 +458,45 @@ export function retiredDurableKernel(
 	}>;
 	for (const reaction of projection.reactions)
 		reaction.contractDigest = "0".repeat(64);
-	return createPostgresDatabaseDurableKernel({
+	const attemptPostgres = createPostgresDatabaseDurableAttemptObservation({
 		database,
+	});
+	const kernel = createPostgresDatabaseDurableKernel({
+		database,
+		attemptDatabase: attemptPostgres.database,
 		application: beta08Application,
 		reactions: linkReactionProjection(projection),
+	});
+	return Object.freeze({
+		...kernel,
+		heartbeat: (claim) =>
+			attemptPostgres.run({
+				observation: null,
+				principalKind: claim.principal.kind,
+				signal: undefined,
+				use: () => kernel.heartbeat(claim),
+			}),
+		succeed: (claim, resultBytes) =>
+			attemptPostgres.run({
+				observation: null,
+				principalKind: claim.principal.kind,
+				signal: undefined,
+				use: () => kernel.succeed(claim, resultBytes),
+			}),
+		fail: (claim, failure) =>
+			attemptPostgres.run({
+				observation: null,
+				principalKind: claim.principal.kind,
+				signal: undefined,
+				use: () => kernel.fail(claim, failure),
+			}),
+		cancel: (claim) =>
+			attemptPostgres.run({
+				observation: null,
+				principalKind: claim.principal.kind,
+				signal: undefined,
+				use: () => kernel.cancel(claim),
+			}),
 	});
 }
 

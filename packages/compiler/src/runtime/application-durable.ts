@@ -13,13 +13,15 @@ export function renderDurableWorkerOwner(
 		.filter((binding) => binding.kind === "job")
 		.map((binding) => [binding.identity, binding]));
 	const durableApplication = ${JSON.stringify(input.application)};
+	const durableAttemptPostgres = createPostgresDatabaseDurableAttemptObservation({ database });
 	const durableKernel = createPostgresDatabaseDurableKernel({
 		database,
+		attemptDatabase: durableAttemptPostgres.database,
 		application: durableApplication,
 		reactions: mutationArtifacts.reactions,
 		jobs: mutationArtifacts.jobs,
 	});
-	const durableLedger = createPostgresDatabaseDurableEffectLedger({ database, application: durableApplication });
+	const durableLedger = createPostgresDatabaseDurableEffectLedger({ database, attemptDatabase: durableAttemptPostgres.database, application: durableApplication });
 	const durableMaintenance = createPostgresDatabaseDurablePrincipalMaintenance({
 		database,
 		application: durableApplication,
@@ -81,15 +83,21 @@ export function renderDurableWorkerOwner(
 			(observation, proceed) => runObservedDurableAttempt({
 				observation,
 				request,
-				use: async () => {
-					if (work.preparationError !== undefined) return work.failure(work.preparationError);
-					try {
-						return await proceed();
-					} catch (error) {
-						if (entered) throw error;
-						return work.failure(error);
-					}
-				},
+				use: () => durableAttemptPostgres.run({
+					observation,
+					principalKind: request.principal.kind,
+					signal: request.signal,
+					use: async () => {
+						work.enter();
+						if (work.preparationError !== undefined) return work.failure(work.preparationError);
+						try {
+							return await proceed();
+						} catch (error) {
+							if (entered) throw error;
+							return work.failure(error);
+						}
+					},
+				}),
 			}),
 			({ execution: { actionScope, ...execution }, ...operations }) => {
 				entered = true;

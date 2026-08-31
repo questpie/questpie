@@ -10,6 +10,7 @@ import {
 } from "../../packages/runtime/src/bundle-core";
 import {
 	createPostgresDatabaseDurableEffectLedger as createEffectFromDurable,
+	createPostgresDatabaseDurableAttemptObservation,
 	createPostgresDatabaseDurableKernel as createKernelFromDurable,
 	createPostgresDatabaseDurablePrincipalMaintenance as createMaintenanceFromDurable,
 	type LinkedJobProjection,
@@ -51,23 +52,27 @@ test("database Durable admission combines exact Job and Reaction digests", async
 			["job:reports.companyDigest", { contractDigest: jobDigest }],
 		]),
 	} as unknown as LinkedJobProjection;
+	const database: PostgresTransactionRunner = {
+		transaction: (input) =>
+			input.use({
+				[transactionBrand]: true,
+				async execute(statement, value) {
+					expect(statement).toBe(durableAdmissionSelect);
+					admittedDigests.push(
+						...JSON.parse(statement.parameters(value)[1] as string),
+					);
+					return [] as never;
+				},
+			}),
+	};
 	const kernel = createPostgresDatabaseDurableKernel({
 		application,
 		reactions: projectedReactions,
 		jobs,
-		database: {
-			transaction: (input) =>
-				input.use({
-					[transactionBrand]: true,
-					async execute(statement, value) {
-						expect(statement).toBe(durableAdmissionSelect);
-						admittedDigests.push(
-							...JSON.parse(statement.parameters(value)[1] as string),
-						);
-						return [] as never;
-					},
-				}),
-		},
+		database,
+		attemptDatabase: createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 	});
 
 	await expect(kernel.admit(1)).resolves.toEqual([]);
@@ -111,11 +116,17 @@ test("database-mode Durable facades share only the injected transaction runner",
 	};
 	const kernel = createPostgresDatabaseDurableKernel({
 		database,
+		attemptDatabase: createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 		reactions,
 	});
 	const effects = createPostgresDatabaseDurableEffectLedger({
 		database,
+		attemptDatabase: createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 	});
 	const maintenance = createPostgresDatabaseDurablePrincipalMaintenance({
@@ -167,17 +178,25 @@ test("database-mode facades preserve runner errors and cancellation identity", a
 	const failing = (failure: unknown): PostgresTransactionRunner => ({
 		transaction: () => Promise.reject(failure),
 	});
+	const cancellationDatabase = failing(cancellation);
+	const primaryDatabase = failing(primary);
 	const kernel = createPostgresDatabaseDurableKernel({
-		database: failing(cancellation),
+		database: cancellationDatabase,
+		attemptDatabase: createPostgresDatabaseDurableAttemptObservation({
+			database: cancellationDatabase,
+		}).database,
 		application,
 		reactions,
 	});
 	const effects = createPostgresDatabaseDurableEffectLedger({
-		database: failing(primary),
+		database: primaryDatabase,
+		attemptDatabase: createPostgresDatabaseDurableAttemptObservation({
+			database: primaryDatabase,
+		}).database,
 		application,
 	});
 	const maintenance = createPostgresDatabaseDurablePrincipalMaintenance({
-		database: failing(primary),
+		database: primaryDatabase,
 		application,
 		authorize: () => true,
 	});

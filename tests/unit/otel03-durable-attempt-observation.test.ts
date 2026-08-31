@@ -203,3 +203,18 @@ test("keeps the same Attempt outcome when observation is absent", async () => {
 	).toBe(outcome);
 	expect(calls).toBe(1);
 });
+
+test("refuses an omitted Attempt observation decision before work", async () => {
+	let calls = 0;
+	await expect(
+		runObservedDurableAttempt({
+			observation: undefined as never,
+			request,
+			use: async () => {
+				calls += 1;
+				throw new Error("must not execute");
+			},
+		}),
+	).rejects.toThrow("Durable Attempt observation decision is required");
+	expect(calls).toBe(0);
+});

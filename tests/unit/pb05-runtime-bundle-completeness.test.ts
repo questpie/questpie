@@ -289,11 +289,17 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 
 	const kernel = core.createPostgresDatabaseDurableKernel({
 		database,
+		attemptDatabase: core.createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 		reactions: { byIdentity: new Map() } as never,
 	});
 	const effects = core.createPostgresDatabaseDurableEffectLedger({
 		database,
+		attemptDatabase: core.createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 	});
 	const maintenance = core.createPostgresDatabaseDurablePrincipalMaintenance({

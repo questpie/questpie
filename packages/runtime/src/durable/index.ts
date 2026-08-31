@@ -26,6 +26,7 @@ export type {
 	DurableRunHandle,
 } from "./effects";
 export { createPostgresDatabaseDurableEffectLedger } from "./postgres-database-effect-ledger";
+export { createPostgresDatabaseDurableAttemptObservation } from "./postgres-attempt-observation";
 export type {
 	DurableEffectLedger,
 	DurableEffectReservation,

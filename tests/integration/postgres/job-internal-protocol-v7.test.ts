@@ -13,6 +13,7 @@ import {
 	verifyInternalProtocolV7,
 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v7";
 import { linkJobProjection } from "../../../packages/runtime/src/durable/job-projection";
+import { createPostgresDatabaseDurableAttemptObservation } from "../../../packages/runtime/src/durable/postgres-attempt-observation";
 import { createPostgresDatabaseDurableEffectLedger } from "../../../packages/runtime/src/durable/postgres-database-effect-ledger";
 import { createPostgresDatabaseDurableKernel } from "../../../packages/runtime/src/durable/postgres-database-kernel";
 import { linkReactionProjection } from "../../../packages/runtime/src/durable/projection";
@@ -247,20 +248,33 @@ VALUES
 					idleInTransactionMs: 5_000,
 				},
 			});
+			const attemptPostgres = createPostgresDatabaseDurableAttemptObservation({
+				database: runtimeDatabase,
+			});
 			const kernel = createPostgresDatabaseDurableKernel({
 				database: runtimeDatabase,
+				attemptDatabase: attemptPostgres.database,
 				application,
 				reactions,
 				jobs,
 			});
 			const worker = createDurableWorker({
-				attemptExecution: (_request, work) =>
-					work.preparationError === undefined
-						? work.use(undefined)
-						: work.failure(work.preparationError),
+				attemptExecution: (request, work) =>
+					attemptPostgres.run({
+						observation: null,
+						principalKind: request.principal.kind,
+						signal: request.signal,
+						use: () => {
+							work.enter();
+							return work.preparationError === undefined
+								? work.use(undefined)
+								: work.failure(work.preparationError);
+						},
+					}),
 				kernel,
 				ledger: createPostgresDatabaseDurableEffectLedger({
 					database: runtimeDatabase,
+					attemptDatabase: attemptPostgres.database,
 					application,
 				}),
 				reactions,
