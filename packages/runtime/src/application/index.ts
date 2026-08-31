@@ -61,6 +61,8 @@ import {
 	bindApplicationExecutionObservation,
 	createApplicationObservation,
 	observeApplicationFetch,
+	observeApplicationRoute,
+	observeApplicationUnmatchedFetch,
 	runApplicationOperation,
 } from "./observation";
 import {
@@ -368,7 +370,7 @@ export async function createRuntimeApplication<
 		}
 	};
 	const executionAt = <Result>(
-		entry: "direct" | "worker",
+		entry: "direct" | "fetch" | "worker",
 		root: ExecutionInput<ContextInputOf<Context>>,
 		use: ExecutionUse<ExecutionView, Result>,
 		around?: WorkerExecutionAround<Result>,
@@ -428,10 +430,21 @@ export async function createRuntimeApplication<
 					service,
 					signal,
 					deadline,
-					execution,
+					execution: (input, execute) =>
+						executionAt(root.entry ?? "direct", input, execute),
 				}),
 			),
 		);
+	const observeRoute: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["observeRoute"] = (request, routeTemplate, use) =>
+		observeApplicationRoute(observation, request, routeTemplate, use);
+	const observeUnmatchedFetch: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["observeUnmatchedFetch"] = (request, use) =>
+		observeApplicationUnmatchedFetch(observation, request, use);
 	let realtimeCallSequence = 0;
 	const realtime =
 		input.program.createRealtime?.({
@@ -748,6 +761,8 @@ export async function createRuntimeApplication<
 		applicationService: core.applicationService,
 		execution,
 		workerExecution,
+		observeRoute,
+		observeUnmatchedFetch,
 		fetch: observeApplicationFetch(observation, operationPath, fetch),
 		route,
 		close,

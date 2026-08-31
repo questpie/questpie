@@ -160,64 +160,179 @@ const HTTP_METHODS = new Set<HttpMethod>([
 	"TRACE",
 ]);
 
+function observedHttpRequest(request: Request) {
+	const url = new URL(request.url);
+	const scheme =
+		url.protocol === "http:"
+			? ("http" as const)
+			: url.protocol === "https:"
+				? ("https" as const)
+				: null;
+	const method = request.method.toUpperCase();
+	return Object.freeze({
+		method: HTTP_METHODS.has(method as HttpMethod)
+			? (method as HttpMethod)
+			: ("_OTHER" as const),
+		scheme,
+		url,
+	});
+}
+
+type OwnedHttpResponse = Readonly<{
+	outcome: "ok" | "framework_error" | "deadline";
+	response: Response;
+	signal: AbortSignal;
+	finalize(): void;
+	retainControl: boolean;
+}>;
+
+/** Owns one matched authored Route from ingress through response-body completion. */
+export async function observeApplicationRoute(
+	observation: ObservationKernel | null,
+	request: Request,
+	routeTemplate: string,
+	execute: () => Promise<OwnedHttpResponse>,
+): Promise<Response> {
+	if (observation === null) {
+		const owned = await execute();
+		if (!owned.retainControl) return owned.response;
+		return retainScopeThroughResponse(
+			null,
+			owned.response,
+			"route",
+			owned.signal,
+			owned.finalize,
+			owned.outcome,
+		);
+	}
+	const http = observedHttpRequest(request);
+	if (http.scheme === null) {
+		const owned = await execute();
+		if (!owned.retainControl) return owned.response;
+		return retainScopeThroughResponse(
+			null,
+			owned.response,
+			"route",
+			owned.signal,
+			owned.finalize,
+			owned.outcome,
+		);
+	}
+	const ingressTrace = observation.extract({
+		traceparent: request.headers.get("traceparent"),
+		tracestate: request.headers.get("tracestate"),
+	});
+	const scope = observation.beginScope(null, {
+		kind: "route",
+		method: http.method,
+		principalKind: null,
+		routeTemplate,
+		scheme: http.scheme,
+		suppressHttp: true,
+		trace: ingressTrace ?? { kind: "root" },
+	});
+	try {
+		const owned = await scope.run(execute);
+		return retainScopeThroughResponse(
+			scope,
+			owned.response,
+			"route",
+			owned.signal,
+			owned.finalize,
+			owned.outcome,
+		);
+	} catch (error) {
+		const failure = applicationObservationFailure(error, {
+			aborted: request.signal.aborted,
+			committedMutation: false,
+			deadlineExpired: false,
+		});
+		const outcome =
+			failure.outcome === "cancelled" || failure.outcome === "deadline"
+				? failure.outcome
+				: "framework_error";
+		scope.end({
+			httpResponseStatusCode: null,
+			kind: "route",
+			outcome,
+		});
+		throw error;
+	}
+}
+
+/** Owns a Route-router response that matched no authored method. */
+export function observeApplicationUnmatchedFetch(
+	observation: ObservationKernel | null,
+	request: Request,
+	execute: () => Promise<Response>,
+): Promise<Response> {
+	return observeApplicationHttpFetch(
+		observation,
+		request,
+		() => "unmatched",
+		() => execute(),
+	);
+}
+
+async function observeApplicationHttpFetch(
+	observation: ObservationKernel | null,
+	request: Request,
+	requestKind: (
+		http: ReturnType<typeof observedHttpRequest>,
+	) => "generated_operation" | "unmatched",
+	execute: (request: Request) => Promise<Response>,
+): Promise<Response> {
+	if (observation === null) return execute(request);
+	const http = observedHttpRequest(request);
+	if (http.scheme === null) return execute(request);
+	const ingressTrace = observation.extract({
+		traceparent: request.headers.get("traceparent"),
+		tracestate: request.headers.get("tracestate"),
+	});
+	const scope = observation.beginScope(null, {
+		kind: "fetch",
+		method: http.method,
+		principalKind: null,
+		requestKind: requestKind(http),
+		scheme: http.scheme,
+		suppressHttp: true,
+		trace: ingressTrace ?? { kind: "root" },
+	});
+	try {
+		const response = await scope.run(() => execute(request));
+		return retainScopeThroughResponse(scope, response, "fetch", request.signal);
+	} catch (error) {
+		const failure = applicationObservationFailure(error, {
+			aborted: request.signal.aborted,
+			committedMutation: false,
+			deadlineExpired: false,
+		});
+		const outcome =
+			failure.outcome === "cancelled" || failure.outcome === "deadline"
+				? failure.outcome
+				: "framework_error";
+		scope.end({
+			httpResponseStatusCode: null,
+			kind: "fetch",
+			outcome,
+		});
+		throw error;
+	}
+}
+
 export function observeApplicationFetch(
 	observation: ObservationKernel | null,
 	operationPath: string,
 	execute: (request: Request) => Promise<Response>,
 ): (request: Request) => Promise<Response> {
-	if (observation === null) return execute;
-	return async (request) => {
-		const url = new URL(request.url);
-		const scheme =
-			url.protocol === "http:"
-				? ("http" as const)
-				: url.protocol === "https:"
-					? ("https" as const)
-					: null;
-		if (scheme === null) return execute(request);
-		const ingressTrace = observation.extract({
-			traceparent: request.headers.get("traceparent"),
-			tracestate: request.headers.get("tracestate"),
-		});
-		const method = request.method.toUpperCase();
-		const scope = observation.beginScope(null, {
-			kind: "fetch",
-			method: HTTP_METHODS.has(method as HttpMethod)
-				? (method as HttpMethod)
-				: "_OTHER",
-			principalKind: null,
-			requestKind:
-				method === "POST" && url.pathname === operationPath
+	return (request) =>
+		observeApplicationHttpFetch(
+			observation,
+			request,
+			(http) =>
+				http.method === "POST" && http.url.pathname === operationPath
 					? "generated_operation"
 					: "unmatched",
-			scheme,
-			suppressHttp: true,
-			trace: ingressTrace ?? { kind: "root" },
-		});
-		try {
-			const response = await scope.run(() => execute(request));
-			return retainScopeThroughResponse(
-				scope,
-				response,
-				"fetch",
-				request.signal,
-			);
-		} catch (error) {
-			const failure = applicationObservationFailure(error, {
-				aborted: request.signal.aborted,
-				committedMutation: false,
-				deadlineExpired: false,
-			});
-			const outcome =
-				failure.outcome === "cancelled" || failure.outcome === "deadline"
-					? failure.outcome
-					: "framework_error";
-			scope.end({
-				httpResponseStatusCode: null,
-				kind: "fetch",
-				outcome,
-			});
-			throw error;
-		}
-	};
+			execute,
+		);
 }

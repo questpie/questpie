@@ -91,6 +91,7 @@ export interface RuntimeApplication<Input, ExecutionView> {
 			principal: Principal;
 			signal?: AbortSignal;
 			deadline?: number;
+			entry?: "direct" | "fetch";
 		}>,
 		use: (
 			scope: RouteExecutionScope<
@@ -99,6 +100,23 @@ export interface RuntimeApplication<Input, ExecutionView> {
 			>,
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
+	observeRoute(
+		request: Request,
+		routeTemplate: string,
+		use: () => Promise<
+			Readonly<{
+				outcome: "ok" | "framework_error" | "deadline";
+				response: Response;
+				signal: AbortSignal;
+				finalize(): void;
+				retainControl: boolean;
+			}>
+		>,
+	): Promise<Response>;
+	observeUnmatchedFetch(
+		request: Request,
+		use: () => Promise<Response>,
+	): Promise<Response>;
 	fetch(request: Request): Promise<Response>;
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }

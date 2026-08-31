@@ -2,21 +2,25 @@ import type { ObservationScope } from "./contract";
 
 /** Retains an owned HTTP scope through body EOF, source error, consumer cancel, or host abort. */
 export function retainScopeThroughResponse(
-	scope: ObservationScope,
+	scope: ObservationScope | null,
 	response: Response,
 	kind: "fetch" | "route" = "fetch",
 	signal?: AbortSignal,
+	onFinalize?: () => void,
+	responseOutcome: "ok" | "framework_error" | "deadline" = "ok",
 ): Response {
 	if (response.body === null) {
-		scope.end({
+		onFinalize?.();
+		scope?.end({
 			httpResponseStatusCode: response.status,
 			kind,
-			outcome: signal?.aborted === true ? "cancelled" : "ok",
+			outcome: signal?.aborted === true ? "cancelled" : responseOutcome,
 		});
 		return response;
 	}
 	if (signal?.aborted === true) {
-		scope.end({
+		onFinalize?.();
+		scope?.end({
 			httpResponseStatusCode: response.status,
 			kind,
 			outcome: "cancelled",
@@ -33,11 +37,14 @@ export function retainScopeThroughResponse(
 	const reader = response.body.getReader();
 	let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
 	let finalized = false;
-	const finalize = (outcome: "ok" | "framework_error" | "cancelled") => {
+	const finalize = (
+		outcome: "ok" | "framework_error" | "cancelled" | "deadline",
+	) => {
 		if (finalized) return;
 		finalized = true;
 		if (signal !== undefined) signal.removeEventListener("abort", abort);
-		scope.end({ httpResponseStatusCode: response.status, kind, outcome });
+		onFinalize?.();
+		scope?.end({ httpResponseStatusCode: response.status, kind, outcome });
 	};
 	const abort = () => {
 		finalize("cancelled");
@@ -60,7 +67,7 @@ export function retainScopeThroughResponse(
 				const result = await reader.read();
 				if (finalized) return;
 				if (result.done) {
-					finalize("ok");
+					finalize(responseOutcome);
 					streamController.close();
 					return;
 				}
@@ -70,9 +77,12 @@ export function retainScopeThroughResponse(
 				streamController.error(error);
 			}
 		},
-		cancel(reason) {
-			finalize("cancelled");
-			void reader.cancel(reason).catch(() => undefined);
+		async cancel(reason) {
+			try {
+				await reader.cancel(reason);
+			} finally {
+				finalize("cancelled");
+			}
 		},
 	});
 	return new Response(body, {

@@ -14,6 +14,7 @@ import type {
 	ExecutionEntry,
 	RuntimeExecutionObservation,
 } from "../observation";
+import { retainScopeThroughResponse } from "../observation/response";
 import { decodeContextInput } from "./context-input";
 import {
 	type AnyApplicationService,
@@ -155,9 +156,27 @@ export interface ApplicationRuntime<Input, View> {
 			principal: Principal;
 			signal?: AbortSignal;
 			deadline?: number;
+			entry?: "direct" | "fetch";
 		}>,
 		use: (scope: RouteExecutionScope<Input, View>) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
+	observeRoute(
+		request: Request,
+		routeTemplate: string,
+		use: () => Promise<
+			Readonly<{
+				outcome: "ok" | "framework_error" | "deadline";
+				response: Response;
+				signal: AbortSignal;
+				finalize(): void;
+				retainControl: boolean;
+			}>
+		>,
+	): Promise<Response>;
+	observeUnmatchedFetch(
+		request: Request,
+		use: () => Promise<Response>,
+	): Promise<Response>;
 	close(): Promise<void>;
 }
 
@@ -281,6 +300,31 @@ export function createApplicationRuntime<
 	return Object.freeze({
 		applicationService: services.application,
 		execution,
+		observeRoute: async (
+			_request: Request,
+			_routeTemplate: string,
+			use: () => Promise<
+				Readonly<{
+					outcome: "ok" | "framework_error" | "deadline";
+					response: Response;
+					signal: AbortSignal;
+					finalize(): void;
+					retainControl: boolean;
+				}>
+			>,
+		) => {
+			const owned = await use();
+			if (!owned.retainControl) return owned.response;
+			return retainScopeThroughResponse(
+				null,
+				owned.response,
+				"route",
+				owned.signal,
+				owned.finalize,
+			);
+		},
+		observeUnmatchedFetch: (_request: Request, use: () => Promise<Response>) =>
+			use(),
 		operationWire: <Result>(
 			input: Readonly<{
 				principal: Principal;
