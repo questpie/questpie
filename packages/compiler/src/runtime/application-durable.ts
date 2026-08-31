@@ -25,7 +25,7 @@ export function renderDurableWorkerOwner(
 		application: durableApplication,
 		authorize: input.maintenance.authorize,
 	});
-	const durableExecute = (request, { execution, ...operations }) => {
+	const durableExecute = (request, { execution, queryObservation, ...operations }) => {
 		request.assertResolvedTenant(execution.tenant.id);
 		if (request.capability === "job") {
 			const binding = jobBindings.get(request.job.identity);
@@ -60,6 +60,7 @@ export function renderDurableWorkerOwner(
 									tenant: { id: execution.tenant.id },
 								},
 								database,
+								observation: queryObservation,
 								signal: execution.signal,
 							});
 						},
@@ -90,9 +91,10 @@ export function renderDurableWorkerOwner(
 					}
 				},
 			}),
-			({ execution: { actionScope: _actionScope, ...execution }, ...operations }) => {
+			({ execution: { actionScope, ...execution }, ...operations }) => {
 				entered = true;
-				return work.use(Object.freeze({ execution, ...operations }));
+				const queryObservation = executionObservationOf(actionScope)?.execution ?? null;
+				return work.use(Object.freeze({ execution, queryObservation, ...operations }));
 			},
 		);
 	};

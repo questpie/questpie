@@ -1,4 +1,5 @@
 import {
+	QuestpiePostgresError,
 	transactionBrand,
 	type PostgresStatement,
 	type PostgresStatementOperation,
@@ -12,6 +13,24 @@ type PostgresObservationFailure = Readonly<{
 	errorCode?: string;
 	outcome: "framework_error" | "cancelled" | "deadline";
 }>;
+
+export function postgresObservationFailure(
+	error: unknown,
+	signal?: AbortSignal,
+): PostgresObservationFailure {
+	const errorCode =
+		error instanceof QuestpiePostgresError ? { errorCode: error.code } : {};
+	if (
+		error instanceof QuestpiePostgresError &&
+		error.code === "cancelled" &&
+		signal?.aborted === true
+	)
+		return signal.reason instanceof DOMException &&
+			signal.reason.name === "TimeoutError"
+			? { outcome: "deadline", ...errorCode }
+			: { outcome: "cancelled", ...errorCode };
+	return { outcome: "framework_error", ...errorCode };
+}
 
 export function observePostgresTransaction(
 	input: Readonly<{

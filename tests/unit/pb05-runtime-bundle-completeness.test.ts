@@ -244,6 +244,8 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 			database,
 			{ statement: queryStatement } as never,
 			[tenantId],
+			undefined,
+			null,
 		),
 	).resolves.toEqual([{ id: "message:one" }]);
 
@@ -389,7 +391,13 @@ test("bundle database arms preserve exact errors and cancellation", async () => 
 	});
 	const linked = { statement: statement("query.bundle-failure") } as never;
 	await expect(
-		core.executeLinkedPostgresQueryPlan(failing(primary), linked, []),
+		core.executeLinkedPostgresQueryPlan(
+			failing(primary),
+			linked,
+			[],
+			undefined,
+			null,
+		),
 	).rejects.toBe(primary);
 	await expect(
 		core.executeLinkedPostgresContextBootstrap(failing(cancellation), linked, {

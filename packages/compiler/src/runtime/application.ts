@@ -13,6 +13,7 @@ import {
 	renderDirectJobAcceptance,
 	renderDirectJobOperations,
 } from "./application-jobs";
+import { renderDatabaseQueryProject } from "./application-query";
 import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
@@ -605,31 +606,7 @@ export async function createApplication(input) {
 					expected: artifacts.runtimeBuild,
 				});
 			},
-			project: ({ facts }) => Object.freeze({
-				data: Object.freeze({
-					run: (definition, operationInput) => {
-						const queryDigest = structuralQueryDigests.get(definition);
-						const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
-						if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
-						return executePostgresDatabaseQuery({
-							linkedPlan,
-							binding: {
-								templateDigest: linkedPlan.plan.templateDigest,
-								values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
-							},
-							executionFacts: {
-								authority: facts.authority,
-								principal: { id: facts.principal.id, kind: facts.principal.kind },
-								tenant: { id: facts.tenant.id },
-							},
-							database,
-							signal: facts.signal,
-							observer: facts.liveQueryObservation ?? undefined,
-						});
-					},
-				}),
-				signal: facts.signal,
-			}),
+			${renderDatabaseQueryProject()}
 			projectMutation: ({ facts }) => {
 				if (!mutationArtifacts)
 					throw new TypeError("Mutation artifacts are not linked");

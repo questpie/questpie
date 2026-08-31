@@ -84,6 +84,14 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		);
 		expect(linkedApplication).toContain("executePostgresDatabaseQuery");
 		expect(linkedApplication).toContain(
+			"executionObservationOf(scope)?.execution??null",
+		);
+		expect(linkedApplication).toContain("observation:queryObservation");
+		expect(linkedApplication).toContain(
+			"executionObservationOf(actionScope)?.execution??null",
+		);
+		expect(linkedApplication).not.toContain("queryObservation:ctx");
+		expect(linkedApplication).toContain(
 			"createPostgresDatabaseMutationInvoker",
 		);
 		expect(linkedApplication).toContain("createPostgresDatabaseDurableKernel");

@@ -1,4 +1,10 @@
 import {
+	observePostgresTransaction,
+	postgresObservationFailure,
+	type PrincipalKind,
+	type RuntimeExecutionObservation,
+} from "../observation";
+import {
 	definePostgresStatement,
 	type PostgresParameter,
 	type PostgresStatement,
@@ -198,11 +204,28 @@ export async function executeLinkedPostgresQueryPlan(
 	database: PostgresTransactionRunner,
 	linked: LinkedPostgresQueryPlan,
 	parameters: readonly PostgresParameter[],
-	signal?: AbortSignal,
+	signal: AbortSignal | undefined,
+	observation: Readonly<{
+		execution: RuntimeExecutionObservation;
+		principalKind: PrincipalKind;
+	}> | null,
 ): Promise<readonly PostgresQueryRow[]> {
+	if (observation === undefined)
+		throw new TypeError("PostgreSQL Query observation decision is required");
 	return database.transaction({
 		mode: { isolation: "repeatableRead", access: "readOnly" },
 		control: { signal },
-		use: (transaction) => transaction.execute(linked.statement, parameters),
+		use: (rawTransaction) => {
+			const transaction =
+				observation === null
+					? rawTransaction
+					: observePostgresTransaction({
+							execution: observation.execution,
+							failure: (error) => postgresObservationFailure(error, signal),
+							principalKind: observation.principalKind,
+							transaction: rawTransaction,
+						});
+			return transaction.execute(linked.statement, parameters);
+		},
 	});
 }
