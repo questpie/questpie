@@ -1,0 +1,243 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0033",
+	"proof": "Freeze one Runtime-owned closed observation kernel, Execution Envelope v2, an exact low-cardinality OpenTelemetry projection, first-acceptance durable trace links, and one optional exact-peer official adapter while preserving Policy, PostgreSQL, outcome, retry, cancellation, disclosure, and application-result authority.",
+	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+	"reviewOutput": "docs/v4/prototypes/opentelemetry-boundary/REVIEW.json",
+	"authorityHeads": {
+		"accepted feat/v4 base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "c6b15dcb82e020be32b55ab432547d0e722513d01af602cbdd8d59c48326ae26"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"name": "current delivery handoff",
+			"path": "HANDOFF.md",
+			"sha256": "237c17994f1bf78cb95d1b2c8c16c472a92395b2491821d77dc8a64aa5b82304"
+		},
+		{
+			"name": "ADR status and supersession index",
+			"path": "docs/adr/README.md",
+			"sha256": "6f65e52dbda74c67d10721b7b1f6e9adb58f8b46c1483b371f4c0367702bd675"
+		},
+		{
+			"name": "tracer-led delivery procedure",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "accepted Runtime Envelope and observation direction",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "accepted Service Route and application Auth composition",
+			"path": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"sha256": "5db374d76fc838dc5ae2eaabc214e82b03e26c1526611ad9384f48c6f78e1ea9"
+		},
+		{
+			"name": "accepted post-commit Operation outcome",
+			"path": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"sha256": "47a26be509b42d8a8b82c0ef1bbde6b70667234b6b4c9c7d0a2d5ac3e439acdf"
+		},
+		{
+			"name": "accepted Action and Job ownership",
+			"path": "docs/adr/0026-freeze-action-and-unify-checkpointed-work-in-job.md",
+			"sha256": "c327aa569f6ae1716adefb6f7bc0281b5d81f2193eaae51bd0a4006a27ebb93d"
+		},
+		{
+			"name": "accepted proof classification and delivery flow",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted Action Effect Identity and limits",
+			"path": "docs/adr/0028-freeze-action-effect-identity-limits-and-wire-v3.md",
+			"sha256": "d3e6316d44a0cacdccae6eafd9457916b710ce3d5f3fbc6cd46977acb1cadd78"
+		},
+		{
+			"name": "candidate Runtime observation and OpenTelemetry decision",
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"sha256": "1206bb5efa7df3d45efd92a229dfa7fe819cfadd7b09f25d21c6bdf6c065ce47"
+		},
+		{
+			"name": "candidate proof wayfinder",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/README.md",
+			"sha256": "b7490d97e8cf8ff8be2c15413dc5addf7b4bfa66bcdeaeb34113dc7917976b45"
+		},
+		{
+			"name": "selected candidate",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/CANDIDATE.md",
+			"sha256": "52545ae97514c993750d8f6f09ef5c9992ee04688a9f81d441dc451f637f3e16"
+		},
+		{
+			"name": "candidate comparison",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/CANDIDATES.md",
+			"sha256": "d7e0798a85a22267084a5baf68f56d52c39ef36ae4f54b3991362be8417dc636"
+		},
+		{
+			"name": "exact Runtime and adapter boundary",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/BOUNDARY.md",
+			"sha256": "66060787ca0551aabd9a009f0b013d4111371feb31596723b125f6b9f655929e"
+		},
+		{
+			"name": "exact OpenTelemetry signal projection",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/SIGNALS.md",
+			"sha256": "d1c39c27742a32c3951a6363f3c0d3322b46318c1cafab95c9406ac525259aa3"
+		},
+		{
+			"name": "candidate finished-product public guide",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/PUBLIC-DRAFT.md",
+			"sha256": "1f4c3bf2904e9c08b45c4f2cbf5c49162c8e58c7fdaf4750946c423b0ee196fd"
+		},
+		{
+			"name": "adversarial design review ledger",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/ADVERSARIAL-REVIEWS.md",
+			"sha256": "c8da5c05ed0f4670a9862fbc128a21136c6c47f2f0e78590c419d9c20660259d"
+		},
+		{
+			"name": "authority and breaking projection ledger",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/authority-projection.json",
+			"sha256": "d2eb86099e7308633ee292d14accb712b73f549cfa64ff710d820da2531818d8"
+		},
+		{
+			"name": "candidate staging proof",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/staging-check.ts",
+			"sha256": "5e90adcdc29a6b3708ab7c4e2dea61fed6a0ea1a81d84a0dd16a47efcf485c81"
+		},
+		{
+			"name": "artifact proof explanation",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/README.md",
+			"sha256": "0800ce0406995d527bc4ac69ec7704a6e29265db0d1a52be6065444033b1685a"
+		},
+		{
+			"name": "canonical signal and config artifact proof",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.ts",
+			"sha256": "ad6eebbb8f4d9a0b2ff6d2f0fa3ececca86c10eb73849e1c83009eda08d222da"
+		},
+		{
+			"name": "artifact hostile tests",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.test.ts",
+			"sha256": "13a4ff34b26aef5126afb77fab86d0c44659c32bd0acb0c6899cab79d93d9799"
+		},
+		{
+			"name": "artifact proof type boundary",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/tsconfig.json",
+			"sha256": "9c3255b25a42eeeac50e8afcead3e3fe75bc72ba98ba7ee4473c17e87cbd46f3"
+		},
+		{
+			"name": "observation kernel proof explanation",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/README.md",
+			"sha256": "a2e221179fc709dddc16593e61ba157ac935d7ffe0a795be8b4d57947dc0582b"
+		},
+		{
+			"name": "closed observation kernel proof",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.ts",
+			"sha256": "686ebef0321db6a4a27f189ef5fd236771fc1816bb59fd060f6e01ec63a17b55"
+		},
+		{
+			"name": "observation kernel hostile tests",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.test.ts",
+			"sha256": "e90f1712ecb3e00fd2ff4af837bf3028898582a8c175200f1f387c3997277eff"
+		},
+		{
+			"name": "observation proof type boundary",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/tsconfig.json",
+			"sha256": "5da71959c80d934aaccfd9a00ed4e7a89d1dd8551d90e4d2563449c76961f023"
+		},
+		{
+			"name": "durable link proof explanation",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/durable-link/README.md",
+			"sha256": "d261b920d0ef3c944c2b961ff0fb8b2429cf60af79756028d61014c8c5416f98"
+		},
+		{
+			"name": "protocol-v8 durable-link proof",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/durable-link/kernel.ts",
+			"sha256": "b1fa0a7b6bcc1efbac3cdd3d4ce4340ca8813f7168935b771e699221e3b2c818"
+		},
+		{
+			"name": "PostgreSQL 17 durable-link hostile tests",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/durable-link/check.test.ts",
+			"sha256": "0ca986399825f5efd6a070a77b88951c433209bd49f48ee61807191342c75cc3"
+		},
+		{
+			"name": "durable proof type boundary",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/durable-link/tsconfig.json",
+			"sha256": "658b2fe13941e60dd4e0fdc450cae142a37c79b52b32e9c70f6224809c0062c8"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.test.ts docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.test.ts",
+			"result": "PASS: 29 tests, 123 assertions"
+		},
+		{
+			"command": "PGHOST=127.0.0.1 PGPORT=<allocated-trust-auth-postgresql-17-port> PGUSER=postgres PGDATABASE=postgres bun test docs/v4/prototypes/opentelemetry-boundary/durable-link/check.test.ts",
+			"result": "PASS: PostgreSQL 17, 7 tests, 42 assertions, disposable container removed"
+		},
+		{
+			"command": "bunx tsc -p docs/v4/prototypes/opentelemetry-boundary/observation-kernel/tsconfig.json --pretty false",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc -p docs/v4/prototypes/opentelemetry-boundary/artifacts/tsconfig.json --pretty false",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc -p docs/v4/prototypes/opentelemetry-boundary/durable-link/tsconfig.json --pretty false",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint docs/v4/prototypes/opentelemetry-boundary/**/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md docs/v4/prototypes/opentelemetry-boundary",
+			"result": "PASS"
+		},
+		{
+			"command": "bun docs/v4/prototypes/opentelemetry-boundary/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"Runtime owns one private scoped observation kernel that co-emits Execution Envelope v2 and one optional neutral adapter projection; application Definitions, Context, Policy, Operations, Services, Actions, Jobs, Routes, and handlers gain no telemetry capability or authored signal API.",
+		"Execution Envelope v2 uses one cryptographically random Runtime-instance UUID, unsigned 64-bit decimal counters, exact root Execution ownership, closed redacted start/event/end unions, canonical JSON lines, a 64 KiB line bound, a 2,048-record Execution bound, no raw Call Identity, and no v1 dual emission or compatibility adapter.",
+		"The exact 14-scope graph, start facts, event owners and payloads, per-scope outcomes, transaction xid8 text, trace plans, operational links, span status, attributes, events, metrics, units, boundaries, and cardinality limits are structurally closed and shared by the Runtime and canonical signal artifact.",
+		"Observation is fail-open for application work and fail-closed for disclosure: nominal Execution identity, exactly-once async context entry, re-entry containment, hostile getters, delayed callbacks, extra keys, invalid enums, streaming EOF/error/cancel/host-abort lifetime, idempotent end, and late or exhausted Envelope materialization are executable hostile cases.",
+		"Generated CreateAppInput remains eventless and gains only a questpie-owned opaque QuestpieObservability input. The optional exact-peer @questpie/opentelemetry package owns the SDK graph; core questpie has no OpenTelemetry dependency, no provider registry, no ambient global, and no third-party structural adapter contract.",
+		"The official adapter extracts only bounded W3C traceparent and tracestate at owned Fetch ingress, supports explicit continue or restart trust-boundary behavior, never accepts baggage, and suppresses only duplicate same-layer owned Fetch and PostgreSQL instrumentation.",
+		"Job and Reaction first acceptance persist only nullable trace ID, span ID, and flags on the Durable Run. Duplicate acceptance preserves the first value, rollback persists none, legacy or no-adapter Runs create unlinked Attempt roots, traced Runs create exactly one link, retries and reclaims are sibling roots, and no trace identity becomes durable or authorization authority.",
+		"Protocol v8 is exactly the production v7 catalog plus three nullable Durable Run trace columns and one completeness constraint. The full live 21-table v7 and v8 PostgreSQL 17 catalogs match their canonical artifacts, mixed v7/v8 Runtime operation is refused in both directions, and the upgrade is an explicit non-rolling cutover with no compatibility alias or in-place downgrade.",
+		"Supported adapter options and OTEL environment variables are an exact bounded subset with secret-safe diagnostics. Queue saturation, exporter failure, and adapter failure never block or retry work; SDK self-observability owns SDK drops, QUESTPIE owns only its bounded observation diagnostics, and Collector/backend configuration owns telemetry retention.",
+		"Direct, generated-network, browser, recompute, Route, worker, Action-effect, and PostgreSQL paths retain one Runtime semantic owner. Telemetry cannot authorize work, alter Policy, create cancellation/deadline/ambiguity/fencing/retry, settle an Action, replace audit or Change Ledger truth, or expose PostgreSQL details.",
+		"The host owns adapter lifetime, closes the App before telemetry, preserves Runtime close failure as primary, and bounds idempotent concurrent telemetry close to 30 seconds. The CLI resolves the exact official adapter from the application root and distinguishes unavailable from invalid configuration before readiness.",
+		"ADR-0033 remains Proposed until this manifest-bound review returns PASS. Acceptance projects only internal authority; package installation instructions and apps/docs publication remain blocked until the implementation, PostgreSQL 17, browser, and release tracers pass."
+	]
+}
