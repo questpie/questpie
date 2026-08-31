@@ -639,9 +639,21 @@ signal artifacts, protocol-v8 first-acceptance durable trace links, and the
 optional exact-peer `@questpie/opentelemetry` integration. It adds no authored
 telemetry capability or generic provider matrix.
 
-OpenTelemetry is not implemented. The Accepted design is converted into the
-implementation contract and eight-ticket topological queue at
-`docs/v4/implementation/opentelemetry/`. Start test-first at OTEL-01; OTEL-04
+ADR-0034 is Accepted after focused candidate
+`c6cce528ed837305ba816e2a83e0e4ebc593798f` received a manifest-bound
+Claude Opus medium `PASS`; the verified record is committed at
+`85ee561b8cd3476f83f9b1f83ea0fff16e79ec19`. It repairs only two incomplete
+ADR-0033 private-interface clauses: extraction returns the complete
+continue/restart ingress trace plan, and a Fetch/Route terminal before a
+`Response` carries explicit null rather than an invented HTTP status. The old
+decoder and any synthetic-status path must be deleted atomically in OTEL-02.
+
+OpenTelemetry implementation has started. OTEL-01 is complete at
+`5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b`: one direct generated Query now
+crosses the opaque handle, exact signal artifact/Runtime Build binding, private
+Runtime observation kernel, and canonical Execution Envelope v2 path with no
+v1 or compatibility path. Continue test-first at OTEL-02 using ADR-0034's
+complete ingress plan and response-absent terminal. OTEL-04
 protocol v8 and OTEL-05 adapter work may split only after the one Runtime owner
 census closes at OTEL-03. `questpie` remains the sole application
 authoring/Runtime package; compiler, Runtime, and testkit packages remain
@@ -723,10 +735,13 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
 3. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel.
-4. ADR-0033 design is Accepted but unimplemented. Preserve its reviewed bytes
-   and pull OTEL-01 from `docs/v4/implementation/opentelemetry/README.md` red
-   first. Follow its blocking edges; do not publish the `apps/docs` install
-   guide before OTEL-07 passes and OTEL-08 closes release evidence.
+4. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 is
+   complete; continue OTEL-02 red-first from
+   `docs/v4/implementation/opentelemetry/README.md`. Replace the bare extraction
+   and numeric-only HTTP terminal grammar atomically; do not retain old
+   decoders, synthetic statuses, or a second observation kernel. Do not publish
+   the `apps/docs` install guide before OTEL-07 passes and OTEL-08 closes release
+   evidence.
 5. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.

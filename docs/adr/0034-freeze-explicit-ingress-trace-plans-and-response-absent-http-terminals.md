@@ -1,6 +1,6 @@
 # ADR 0034: Freeze explicit ingress trace plans and response-absent HTTP terminals
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-31
 
 ## Context
@@ -123,6 +123,19 @@ ingress.
 - The canonical signal projection and Runtime Build binding must advance
   atomically when implementation resumes.
 
+## Acceptance evidence
+
+Candidate `9afe302ab59c67f13716d0a6412a8c83122d75b4` received `BLOCKED` for
+missing falsification rows. The record is retained in
+[`REVIEW.json`](../v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW.json).
+Replacement candidate `c6cce528ed837305ba816e2a83e0e4ebc593798f` added the exact invalid
+context, bounded `tracestate`, and three response-absent outcome cases and
+received a fresh manifest-bound Claude Opus medium `PASS`. The verified record
+is committed at `85ee561b8cd3476f83f9b1f83ea0fff16e79ec19` in
+[`REVIEW-REPLACEMENT.json`](../v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW-REPLACEMENT.json).
+It binds packet digest
+`8a1542d4924985aebf5038e929e351cf80d3aff7953ab47554c1c7fce2e3ad5d`.
+
 ## Supersession ledger
 
 This decision supersedes ADR-0033 only where its private interface says
@@ -138,10 +151,9 @@ kernel, exact-peer adapter, durable links, protocol v8, and release evidence.
 The Accepted ADR-0033 proof remains historical evidence; this focused proof
 adds the missing executable cases rather than rewriting its reviewed bytes.
 
-Before PASS, this ADR is not product authority and `docs/adr/README.md`,
-`SPEC.md`, `CONTEXT.md`, public documentation, and `HANDOFF.md` remain unchanged.
-After PASS, those authority projections land separately before OTEL-02
-implementation continues.
+The acceptance record precedes this separate authority projection. OTEL-02
+implements the replacement atomically; finished public OpenTelemetry
+documentation remains blocked by OTEL-07 and OTEL-08.
 
 ## Rejected alternatives
 

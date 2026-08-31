@@ -369,6 +369,19 @@ may consume the same kernel projection. The adapter is exact-peer with
 handle. It adds no handler capability, public event callback, general provider
 SPI, or OpenTelemetry dependency to core.
 
+At owned Fetch/Route ingress, the optional adapter returns one complete closed
+trace plan: `remote-parent` with validated context and bounded `tracestate` for
+continue, `root-with-links` with exactly one validated context and no
+`tracestate` for restart, or null when no valid incoming context exists. Runtime
+validates and freezes that value without reading adapter configuration or using
+a side channel.
+
+A Fetch/Route end carries the actual integer `100..599` status when a
+`Response` existed. If cancellation, deadline, or framework failure terminates
+the scope before any `Response`, it carries explicit null; `ok` can never carry
+null. The OpenTelemetry projection omits `http.response.status_code` in that
+case and never fabricates `499`, `500`, or another sentinel.
+
 Observation is lossy and non-authoritative. Sampling, queue loss, exporter or
 Collector failure, and bounded shutdown cannot change Policy, PostgreSQL work,
 commit, cancellation, retry, fencing, settlement, application results, or

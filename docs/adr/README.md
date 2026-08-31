@@ -38,6 +38,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
 32. [Freeze Runtime observation and the OpenTelemetry projection](./0033-freeze-runtime-observation-and-opentelemetry-projection.md)
+33. [Freeze explicit ingress trace plans and response-absent HTTP terminals](./0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md)
 
 ## Open decisions
 
@@ -97,6 +98,12 @@ official OpenTelemetry adapter, and the non-rolling protocol-v8 durable
 trace-link cutover. Observation remains lossy and non-authoritative; the
 decision adds no authored telemetry capability, public event callback, general
 provider SPI, audit truth, or implementation status.
+ADR-0034 narrowly repairs two incomplete ADR-0033 private-interface clauses.
+Adapter extraction returns the complete continue/restart ingress trace plan,
+and Fetch/Route terminals use an exact numeric-or-null response-status union so
+pre-Response cancellation, deadline, or framework failure never invents an
+HTTP response. No old decoder, second observation kernel, or compatibility path
+is retained.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

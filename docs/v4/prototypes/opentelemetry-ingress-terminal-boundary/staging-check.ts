@@ -8,14 +8,14 @@ const adrPath =
 	"docs/adr/0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md";
 const adr = readFileSync(adrPath, "utf8");
 
-match(adr, /^- Status: Proposed$/m);
-doesNotMatch(adr, /^- Status: Accepted$/m);
-doesNotMatch(readFileSync("docs/adr/README.md", "utf8"), /0034-/u);
-doesNotMatch(readFileSync("SPEC.md", "utf8"), /ADR-0034/u);
-doesNotMatch(readFileSync("CONTEXT.md", "utf8"), /ADR-0034/u);
-doesNotMatch(readFileSync("HANDOFF.md", "utf8"), /ADR-0034/u);
+match(adr, /^- Status: Accepted$/m);
+doesNotMatch(adr, /^- Status: Proposed$/m);
+match(readFileSync("docs/adr/README.md", "utf8"), /0034-/u);
+match(readFileSync("SPEC.md", "utf8"), /it carries explicit null/u);
+match(readFileSync("CONTEXT.md", "utf8"), /Response-absent HTTP Terminal/u);
+match(readFileSync("HANDOFF.md", "utf8"), /ADR-0034 is Accepted/u);
 strictEqual(existsSync(`${root}/REVIEW.json`), true);
-strictEqual(existsSync(`${root}/REVIEW-REPLACEMENT.json`), false);
+strictEqual(existsSync(`${root}/REVIEW-REPLACEMENT.json`), true);
 const blockedReviewBytes = readFileSync(`${root}/REVIEW.json`);
 strictEqual(
 	createHash("sha256").update(blockedReviewBytes).digest("hex"),
@@ -30,6 +30,33 @@ strictEqual(
 	"9afe302ab59c67f13716d0a6412a8c83122d75b4",
 );
 strictEqual(blockedReview.verdict, "BLOCKED");
+const acceptedReviewBytes = readFileSync(`${root}/REVIEW-REPLACEMENT.json`);
+strictEqual(
+	createHash("sha256").update(acceptedReviewBytes).digest("hex"),
+	"68fd15ea30b9c5819c4f35da52489ee94d910e314b0ef56b086ae5199617a5c1",
+);
+const acceptedReview = JSON.parse(acceptedReviewBytes.toString()) as Readonly<{
+	reviewedHead: string;
+	verdict: string;
+}>;
+strictEqual(
+	acceptedReview.reviewedHead,
+	"c6cce528ed837305ba816e2a83e0e4ebc593798f",
+);
+strictEqual(acceptedReview.verdict, "PASS");
+
+const verified = Bun.spawnSync(
+	[
+		"bun",
+		"run",
+		"review:accept:verify",
+		"--",
+		"--record",
+		`${root}/REVIEW-REPLACEMENT.json`,
+	],
+	{ stderr: "pipe", stdout: "pipe" },
+);
+strictEqual(verified.exitCode, 0, verified.stderr.toString());
 
 const changed = Bun.spawnSync(["git", "diff", "--name-only", `${base}..HEAD`], {
 	stderr: "pipe",
@@ -38,7 +65,15 @@ const changed = Bun.spawnSync(["git", "diff", "--name-only", `${base}..HEAD`], {
 strictEqual(changed.exitCode, 0, changed.stderr.toString());
 for (const path of changed.stdout.toString().trim().split("\n").filter(Boolean))
 	strictEqual(
-		path === adrPath || path.startsWith(`${root}/`),
+		path === adrPath ||
+			path.startsWith(`${root}/`) ||
+			[
+				"CONTEXT.md",
+				"HANDOFF.md",
+				"SPEC.md",
+				"docs/adr/README.md",
+				"docs/v4/implementation/opentelemetry/README.md",
+			].includes(path),
 		true,
 		`candidate changed an out-of-scope path: ${path}`,
 	);

@@ -623,6 +623,22 @@ object, baggage, `tracestate`, identity authority, or application data. A
 Durable Run may persist only these three facts for a later zero-or-one Attempt
 link.
 
+### Ingress Trace Plan
+
+The complete validated trace-parent decision returned by the Official
+Observability Adapter for owned Fetch/Route ingress. It is `remote-parent` with
+bounded `tracestate` for continue, `root-with-links` with exactly one Neutral
+Trace Context and no `tracestate` for restart, or absent when no valid incoming
+context exists. Runtime does not infer this decision from adapter configuration
+or identity.
+
+### Response-absent HTTP Terminal
+
+A Fetch/Route scope end caused by framework failure, cancellation, or deadline
+before a `Response` exists. Its response-status fact is explicit null and the
+OpenTelemetry HTTP response-status attribute is omitted. It is never a
+successful end and never uses a fabricated numeric status.
+
 ### Official Observability Adapter
 
 The optional exact-peer `@questpie/opentelemetry` package that implements the

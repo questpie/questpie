@@ -2,7 +2,7 @@
 
 - Status: ready for implementation
 - Spec: [`SPEC.md`](./SPEC.md)
-- Authority: Accepted ADR-0033 and its verified replacement review
+- Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
 - Tracker state: local queue; external task identifiers may be attached later
 
@@ -74,10 +74,17 @@ Red test:
   data or change work.
 
 Pull the same Query through generated Fetch and generated client. Add the exact
-`traceparent`/`tracestate` extraction and continue/restart plans, null ingress
+`traceparent`/`tracestate` extraction. The adapter returns the complete closed
+ingress trace plan: `remote-parent` with the validated extraction for continue,
+`root-with-links` with exactly one validated context and no `tracestate` for
+restart, or null for absent/invalid propagation. Runtime validates/freezes the
+plan and retains no bare-context decoder or side channel. Add null ingress
 Principal/Execution, bounded method/route/scheme/status fields, no raw unmatched
 path, no baggage, same-layer HTTP suppression, response-body retention, and
-idempotent terminal handling.
+idempotent terminal handling. A real `Response` contributes its exact integer
+status; a pre-Response framework error, cancellation, or deadline contributes
+explicit null, never a synthetic numeric status. `ok` plus null is invalid and
+the adapter omits `http.response.status_code` for the null branch.
 
 Acceptance:
 
@@ -86,6 +93,11 @@ Acceptance:
 - EOF, source error, consumer cancel, host abort, later signals, invalid
   `traceparent`, orphan/non-printable/oversized `tracestate`, restart link, and
   extraction-fault-as-absent hostiles pass;
+- malformed trace context members, structurally open plans, all three
+  pre-Response outcomes, numeric status boundaries, `ok` plus null, and
+  post-decode caller mutation hostiles pass;
+- the signal projection bytes/digest, Runtime Build binding, generated goldens,
+  and later adapter effective-config digest advance atomically with the grammar;
 - generated client and React/application code contain no telemetry import or
   manual context handling.
 
