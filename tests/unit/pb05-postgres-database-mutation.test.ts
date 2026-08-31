@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { principal } from "questpie";
 
@@ -17,6 +18,7 @@ import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/sr
 import {
 	createObservationKernel,
 	type ExecutionEventV2,
+	type ObservationAdapterV1,
 } from "../../packages/runtime/src/observation";
 import {
 	CommittedResultUnavailable,
@@ -188,8 +190,31 @@ const facts = {
 	deadline: null,
 };
 
-function observedMutation(events: ExecutionEventV2[]) {
+function observedMutation(
+	events: ExecutionEventV2[],
+	postgresParents?: string[],
+) {
+	const active = new AsyncLocalStorage<string>();
+	const adapter: ObservationAdapterV1 | undefined = postgresParents
+		? Object.freeze({
+				format: "questpie.runtime-observability" as const,
+				version: 1 as const,
+				extract: () => null,
+				begin(input) {
+					if (input.kind === "postgresql")
+						postgresParents.push(active.getStore() ?? "none");
+					return Object.freeze({
+						context: null,
+						run: async <Result>(use: () => Result | Promise<Result>) =>
+							await active.run(input.kind, use),
+						event: () => undefined,
+						end: () => undefined,
+					});
+				},
+			})
+		: undefined;
 	const observation = createObservationKernel({
+		adapter,
 		applicationIdentity: "application:generic",
 		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
 		events: (event) => events.push(event),
@@ -1224,7 +1249,8 @@ test("refuses a surplus fixed statement before entering a transaction", () => {
 test("joins one projected Reaction dispatch to the same static transaction", async () => {
 	const linked = fixedStatements();
 	const observationEvents: ExecutionEventV2[] = [];
-	const observed = observedMutation(observationEvents);
+	const postgresParents: string[] = [];
+	const observed = observedMutation(observationEvents, postgresParents);
 	const calls: Array<
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
@@ -1310,6 +1336,9 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 			runId: calls[7]?.parameters[1],
 		},
 	});
+	expect(postgresParents).toEqual(
+		Array.from({ length: calls.length }, () => "transaction"),
+	);
 });
 
 test("accepts multiple independently keyed Jobs inside one Mutation transaction", async () => {

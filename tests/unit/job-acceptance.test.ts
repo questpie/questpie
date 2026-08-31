@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { principal } from "questpie";
 
@@ -16,6 +17,7 @@ import {
 import {
 	createObservationKernel,
 	type ExecutionEventV2,
+	type ObservationAdapterV1,
 } from "../../packages/runtime/src/observation";
 import {
 	definePostgresStatement,
@@ -233,7 +235,7 @@ test("observes the exact Job acceptance owner and accepted identity", async () =
 	]);
 });
 
-test("nests direct Job acceptance PostgreSQL statements under its producer", async () => {
+test("keeps direct Job acceptance PostgreSQL under its accepting Execution", async () => {
 	const identities = [
 		"mutation.dispatch.accept",
 		"mutation.dispatch.event.insert",
@@ -259,7 +261,26 @@ test("nests direct Job acceptance PostgreSQL statements under its producer", asy
 			linkedEntries.find((entry) => entry.identity === identity),
 	}) as LinkedPostgresMutationTransactionStatements;
 	const events: ExecutionEventV2[] = [];
+	const parents: string[] = [];
+	const active = new AsyncLocalStorage<string>();
+	const adapter: ObservationAdapterV1 = Object.freeze({
+		format: "questpie.runtime-observability",
+		version: 1,
+		extract: () => null,
+		begin(input) {
+			if (input.kind === "postgresql")
+				parents.push(active.getStore() ?? "none");
+			return Object.freeze({
+				context: null,
+				run: async <Result>(use: () => Result | Promise<Result>) =>
+					await active.run(input.kind, use),
+				event: () => undefined,
+				end: () => undefined,
+			});
+		},
+	});
 	const observation = createObservationKernel({
+		adapter,
 		applicationIdentity: "application:collaboration",
 		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
 		events: (event) => events.push(event),
@@ -334,6 +355,7 @@ test("nests direct Job acceptance PostgreSQL statements under its producer", asy
 			.filter((event) => event.kind === "scope.started")
 			.map((event) => event.start),
 	).toHaveLength(6);
+	expect(parents).toEqual(Array.from({ length: 6 }, () => "execution"));
 	expect(new Set(semantic.map((event) => event.executionId))).toEqual(
 		new Set([execution.identity.executionId]),
 	);

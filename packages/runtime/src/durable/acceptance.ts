@@ -323,9 +323,7 @@ export function createJobAcceptance(
 				return deferred.promise;
 			};
 			try {
-				const result = await (observation
-					? observation.run(execute)
-					: execute());
+				const result = await execute();
 				if (observedDispatchId === undefined)
 					throw new TypeError("Job acceptance identity is unavailable");
 				observation?.event({

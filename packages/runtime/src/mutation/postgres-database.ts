@@ -624,9 +624,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 								);
 							};
 							try {
-								await (acceptanceObservation
-									? acceptanceObservation.run(acceptReaction)
-									: acceptReaction());
+								await acceptReaction();
 								acceptanceObservation?.event({
 									dispatchId: recordId,
 									kind: "durable.accepted",
