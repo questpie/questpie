@@ -3,15 +3,20 @@ import { createHash } from "node:crypto";
 
 import { codec, defineContext, defineService, principal } from "questpie";
 
+import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
 import {
 	createRuntimeApplication,
-	type ExecutionEventV1,
+	type ExecutionEventV2,
 } from "../../packages/runtime/src";
+import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
+import {
+	createObservationHandle,
+	type ObservationAdapterV1,
+} from "../../packages/runtime/src/observation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
 } from "../../packages/runtime/src/operation/ingress";
-import expectedRuntimeEvents from "../goldens/beta05/runtime-events.json";
 
 const sha = (character: string) => character.repeat(64);
 
@@ -39,6 +44,8 @@ function runtimeArtifacts(
 	additionalSlots: readonly unknown[] = [],
 	actionContractIdentities?: readonly string[],
 ) {
+	const observationSignalProjection =
+		projectObservationSignalProjection("4.0.0-beta.1");
 	const runtimeExecutables = {
 		format: "questpie.runtime-executables",
 		version: 1,
@@ -210,6 +217,7 @@ function runtimeArtifacts(
 		"internal/package-inventories.json": "[]\n",
 		"internal/server.ts": "export const executable = true;\n",
 		"manifest.json": '{"format":"questpie.manifest"}\n',
+		"opentelemetry-signal-projection.json": observationSignalProjection.bytes,
 		"operation-contracts.json": `${JSON.stringify(operationContracts)}\n`,
 		"policy-projection.json": "{}\n",
 		"postgres-context-bootstrap-plans.json": `${JSON.stringify(contextBootstrapPlans)}\n`,
@@ -270,6 +278,7 @@ function runtimeArtifacts(
 		postgresMutationTransactionStatementsDigest:
 			mutationTransactionStatements.digest,
 		postgresCollectionOperationPlansDigest: collectionOperationPlansDigest,
+		observationSignalProjectionDigest: observationSignalProjection.digest,
 		committedMigrationsDigest: fileDigest(
 			artifactFiles["committed-migrations.json"],
 		),
@@ -805,6 +814,44 @@ test("rejects a changed inventory file before readiness or executable disclosure
 			program,
 		}),
 	).rejects.toThrow("manifest.json digest does not match");
+	const forgedSignalProjection = {
+		...JSON.parse(
+			artifacts.artifactFiles["opentelemetry-signal-projection.json"],
+		),
+		unexpected: true,
+	};
+	const forgedSignalBytes = `${JSON.stringify(forgedSignalProjection)}\n`;
+	const { digest: _signalBuildDigest, ...unsignedSignalBuild } =
+		artifacts.runtimeBuild;
+	const resignedSignalBuild = {
+		...unsignedSignalBuild,
+		observationSignalProjectionDigest: digest(
+			"questpie-opentelemetry-projection-v1",
+			forgedSignalProjection,
+		),
+		inventory: unsignedSignalBuild.inventory.map((item) =>
+			item.path === "opentelemetry-signal-projection.json"
+				? { ...item, digest: fileDigest(forgedSignalBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...resignedSignalBuild,
+					digest: digest("questpie-runtime-build-v1", resignedSignalBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"opentelemetry-signal-projection.json": forgedSignalBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow("opentelemetry-signal-projection.json has invalid keys");
 	const { digest: _digest, ...unsignedBuild } = artifacts.runtimeBuild;
 	const mismatchedBuild = {
 		...unsignedBuild,
@@ -951,6 +998,161 @@ test("runs one valid build through the direct operation engine", async () => {
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
+test("does zero observation work when the optional boundary is absent", () => {
+	expect(
+		createApplicationObservation({
+			applicationIdentity: "application:collaboration",
+			runtimeBuildDigest: sha("a"),
+		}),
+	).toBeNull();
+	expect(() =>
+		createObservationHandle({
+			format: "questpie.runtime-observability",
+			version: 1,
+		} as never),
+	).toThrow("Runtime observation adapter is incompatible");
+});
+
+test("keeps one direct Query result and error across absent, sampled, working, and faulting observation", async () => {
+	let readinessChecks = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	let handlerCalls = 0;
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(({ input }) => {
+			handlerCalls += 1;
+			if ((input as Readonly<{ first: number }>).first === 8)
+				throw new Error("private handler failure");
+			return { count: 7 };
+		}),
+	];
+	const program = {
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
+			signal: facts.signal,
+		}),
+		resolvePrincipal: async () => principal.anonymous(),
+		verifyReadiness: () => {
+			readinessChecks += 1;
+		},
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program,
+			observability: {} as never,
+		}),
+	).rejects.toThrow("Runtime observation handle is incompatible");
+	expect(readinessChecks).toBe(0);
+
+	for (const mode of [
+		"absent",
+		"sampled",
+		"working",
+		"pre-entry-fault",
+	] as const) {
+		const events: ExecutionEventV2[] = [];
+		const begins: string[] = [];
+		const adapter: ObservationAdapterV1 | undefined =
+			mode === "absent"
+				? undefined
+				: {
+						format: "questpie.runtime-observability",
+						version: 1,
+						extract: () => null,
+						begin(input) {
+							begins.push(input.kind);
+							return {
+								context:
+									mode === "working"
+										? {
+												format: "questpie.trace-context",
+												version: 1,
+												traceId: new Uint8Array(16).fill(1),
+												spanId: new Uint8Array(8).fill(2),
+												flags: 1,
+											}
+										: null,
+								async run(use) {
+									if (mode === "pre-entry-fault")
+										throw new Error("adapter down");
+									return await use();
+								},
+								event: () => undefined,
+								end: () => undefined,
+							};
+						},
+					};
+		const before = handlerCalls;
+		const app = await createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program,
+			...(adapter === undefined
+				? {}
+				: { observability: createObservationHandle(adapter) }),
+			events: (event) => events.push(event),
+		});
+		const result = await app.execution(
+			{
+				principal: principal.anonymous(),
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+			},
+			(operations) => operations.invoke("query:messages.page", { first: 7 }),
+		);
+		expect(result).toEqual({ count: 7 });
+		expect(handlerCalls - before).toBe(1);
+		expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+			["scope.started", "execution"],
+			["scope.event", "execution"],
+			["scope.started", "query"],
+			["scope.ended", "query"],
+			["scope.ended", "execution"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
+		events.length = 0;
+		begins.length = 0;
+		const beforeError = handlerCalls;
+		await expect(
+			app.execution(
+				{
+					principal: principal.anonymous(),
+					context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+				},
+				(operations) => operations.invoke("query:messages.page", { first: 8 }),
+			),
+		).rejects.toMatchObject({ code: "INTERNAL" });
+		expect(handlerCalls - beforeError).toBe(1);
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual([
+			["query", "framework_error"],
+			["execution", "framework_error"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
+		await app.close({ deadlineAt: Date.now() + 2_000 });
+	}
+});
+
 test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {
 	const context = defineContext({
 		name: "app.context",
@@ -980,7 +1182,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	const startupEntered = new Promise<void>((resolve) => {
 		reportStarted = resolve;
 	});
-	const events: ExecutionEventV1[] = [];
+	const events: ExecutionEventV2[] = [];
 	let coordinatorDrains = 0;
 	const creation = createRuntimeApplication({
 		artifacts: runtimeArtifactEnvelope(artifacts),
@@ -1009,10 +1211,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	expect(events).toEqual([]);
 	releaseStartup();
 	const app = await creation;
-	expect(events.map(({ event }) => event)).toContainEqual({
-		family: "runtime",
-		kind: "ready",
-	});
+	expect(events).toEqual([]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 	expect(coordinatorDrains).toBe(1);
 
@@ -1478,10 +1677,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 				return readIngressPrincipal(request);
 			},
 		},
-		events: (event) => {
-			events.push(event);
-			throw new Error("telemetry unavailable");
-		},
+		events: (event) => events.push(event),
 		now: () => new Date("2026-08-15T16:00:00.000Z"),
 	});
 	const baseFrame = {
@@ -1596,23 +1792,16 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	expect(handlerCalls).toBe(2);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 	const eventBytes = JSON.stringify(events);
-	expect(events).toEqual(expectedRuntimeEvents);
 	expect(eventBytes).not.toContain(baseFrame.context.companyId);
 	expect(eventBytes).not.toContain('"input"');
-	expect(
-		events.map(
-			(event) =>
-				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-		),
-	).toEqual([
-		"ready",
-		"accepted",
-		"result",
-		"accepted",
-		"result",
-		"drainStarted",
-		"stopped",
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
 	]);
+	expect(new Set(events.map(({ executionId }) => executionId)).size).toBe(1);
 });
 
 test("executes a retained v1 Query only for its exact deployment-owned digest pair", async () => {
@@ -1914,11 +2103,16 @@ test("refuses a late result from a handler that ignores deadline cancellation", 
 	releases[0]?.();
 	await expect(pending).rejects.toThrow("DEADLINE_EXCEEDED");
 	expect(
-		events.map(
-			(event) =>
-				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-		),
-	).toEqual(["ready", "accepted", "failed"]);
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["query", "deadline"],
+		["execution", "deadline"],
+	]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
@@ -1980,20 +2174,17 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 	await expect(held).rejects.toThrow("Runtime draining");
 	await closing;
 	await app.close({ deadlineAt: Date.now() + 2_000 });
-	const eventKinds = events.map(
-		(event) =>
-			(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-	);
-	expect(eventKinds.slice(0, 4)).toEqual([
-		"ready",
-		"accepted",
-		"drainStarted",
-		"drainTimedOut",
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["query", "cancelled"],
+		["execution", "cancelled"],
 	]);
-	expect(eventKinds.at(-1)).toBe("stopped");
-	const failedIndex = eventKinds.indexOf("failed");
-	if (failedIndex !== -1)
-		expect(failedIndex).toBeLessThan(eventKinds.indexOf("stopped"));
 });
 
 test("shares the first absolute close deadline and does not restart it for stuck phases", async () => {
@@ -2024,13 +2215,20 @@ test("shares the first absolute close deadline and does not restart it for stuck
 	await closing;
 	expect(Date.now() - startedAt).toBeLessThan(100);
 	expect(coordinatorDeadlines).toEqual([deadlineAt]);
-	const stoppedEventCount = events.length;
-	expect(
-		(events.at(-1) as Readonly<{ event: Readonly<{ kind: string }> }>).event
-			.kind,
-	).toBe("stopped");
+	const eventsAtClose = events.length;
 
 	releases[0]?.();
 	await expect(heldOutcome).resolves.toMatchObject({ name: "AbortError" });
-	expect(events).toHaveLength(stoppedEventCount);
+	expect(events.length).toBeGreaterThan(eventsAtClose);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["query", "cancelled"],
+		["execution", "cancelled"],
+	]);
 });

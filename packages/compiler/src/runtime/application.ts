@@ -562,6 +562,7 @@ export async function createApplication(input) {
 		runtime = await createRuntimeApplication({
 		artifacts: loaded.artifacts,
 		artifactFiles: loaded.artifactFiles,
+		observability: input.observability,
 		serverExports,
 		bindings: {
 			application: ${JSON.stringify(`application:${input.configuration.application.name}`)},

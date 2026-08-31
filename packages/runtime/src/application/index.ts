@@ -3,6 +3,7 @@ import {
 	type ContextDefinition,
 	type ContextInputOf,
 	type Principal,
+	type QuestpieObservability,
 	type ServiceDefinition,
 	type ServiceDependencyMap,
 	type ServiceEffect,
@@ -21,6 +22,11 @@ import {
 } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
+import {
+	type ExecutionEntry,
+	type ExecutionEventV2,
+	type ObservationEndV1,
+} from "../observation";
 import {
 	createOperationEngine,
 	CommittedResultUnavailable,
@@ -48,7 +54,10 @@ import {
 	validateRuntimeExecutableBindings,
 	type RuntimeExecutableBindings,
 } from "./bindings";
-import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import {
+	applicationObservationFailure,
+	createApplicationObservation,
+} from "./observation";
 import {
 	isOperationAbort,
 	normalizeExecutedOperationError,
@@ -65,7 +74,6 @@ import {
 import { controlledRoot } from "./root";
 import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
-export type { ExecutionEventV1 } from "./events";
 export type {
 	RuntimeExecutableBindings,
 	RuntimeExecutableInventoryBinding,
@@ -179,7 +187,8 @@ export async function createRuntimeApplication<
 		retainedClients?: readonly RetainedClientPair[];
 		drainMilliseconds?: number;
 		maximumActiveRootsPerPrincipal?: number;
-		events?: (event: ExecutionEventV1) => void;
+		observability?: QuestpieObservability;
+		events?: (event: ExecutionEventV2) => void;
 		now?: () => Date;
 	}>,
 ): Promise<RuntimeApplication<ContextInputOf<Context>, ExecutionView>> {
@@ -201,6 +210,13 @@ export async function createRuntimeApplication<
 	const drainMilliseconds = input.drainMilliseconds ?? 30_000;
 	const artifacts = decodeRuntimeArtifacts(input.artifacts);
 	verifyRuntimeArtifactFiles(artifacts, input.artifactFiles);
+	const observation = createApplicationObservation({
+		applicationIdentity: artifacts.runtimeBuild.application,
+		runtimeBuildDigest: artifacts.runtimeBuild.digest,
+		observability: input.observability,
+		events: input.events,
+		wallClock: input.now,
+	});
 	const retainedClients = retainClientPairs(input.retainedClients);
 	const validatedBindings = validateRuntimeExecutableBindings(
 		artifacts,
@@ -259,30 +275,9 @@ export async function createRuntimeApplication<
 	const rootControllers = new Set<AbortController>();
 	const maximumRoots = input.maximumActiveRootsPerPrincipal ?? 64;
 	const nowMilliseconds = () => (input.now?.() ?? new Date()).getTime();
-	let rootSequence = 0;
 	let callSequence = 0;
 	let closePromise: Promise<void> | undefined;
-	const emit = createEventEmitter({
-		application: artifacts.runtimeBuild.application,
-		deploymentDigest: artifacts.runtimeBuild.runtimeExecutablesDigest,
-		sink: input.events,
-		now: input.now,
-	});
-	const emitBeforeStopped = (...event: Parameters<typeof emit>): void => {
-		if (state !== "closed") emit(...event);
-	};
 	state = "ready";
-	emit(
-		{ family: "runtime", kind: "ready" },
-		{
-			links: [
-				{
-					kind: "artifact",
-					id: artifacts.runtimeBuild.runtimeExecutablesDigest,
-				},
-			],
-		},
-	);
 
 	const executeRoot = async <Result>(
 		root: Readonly<{
@@ -291,6 +286,7 @@ export async function createRuntimeApplication<
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			observationEntry?: ExecutionEntry;
 		}>,
 		use: (
 			input: Readonly<{
@@ -315,92 +311,101 @@ export async function createRuntimeApplication<
 		if (active >= maximumRoots)
 			throw new OperationFailure("RESOURCE_LIMIT", true);
 		activeByPrincipal.set(principalKey, active + 1);
-		rootSequence += 1;
-		const executionId = `execution:${rootSequence}`;
 		const controlled = controlledRoot({ ...root, now: nowMilliseconds });
+		const observedExecution =
+			observation && root.observationEntry
+				? observation.beginExecution({
+						entry: root.observationEntry,
+						kind: "execution",
+						principalKind: root.principal.kind,
+						trace: { kind: "root" },
+					})
+				: null;
 		let committedMutation = false;
 		rootControllers.add(controlled.controller);
-		const pending = core.execution(
-			{
-				principal: root.principal,
-				context: root.context,
-				signal: controlled.controller.signal,
-				deadline: root.deadline,
-				liveQueryObservation: root.liveQueryObservation,
-			},
-			(view) =>
-				use({
-					view,
-					invoke: async (operation, callId, options) => {
-						const eventFacts = {
-							executionId,
-							correlationId: callId,
-							principalRef: principalKey,
-							links: [
-								{
-									kind: "operation" as const,
-									id: operation.binding.identity,
-								},
-								{ kind: "operationCall" as const, id: callId },
-							],
-						};
-						emitBeforeStopped(
-							{
-								family: "operation",
-								kind: "accepted",
-								operation: operation.binding.identity,
-							},
-							eventFacts,
-						);
-						try {
-							let result: unknown;
-							if (operation.binding.kind === "mutation") {
-								if (view.mutation === undefined)
-									throw new OperationFailure("INTERNAL");
-								const invocation = await view.mutation(
-									operation,
-									callId,
-									options,
-								);
-								committedMutation = invocation.committed;
-								result = invocation.value;
-							} else {
-								result = await operationEngine.invokePrepared(
-									operation,
-									view.operation,
-								);
-							}
-							if (controlled.deadlineExpired)
-								if (!committedMutation)
+		const observedOutcome = (error: unknown) =>
+			applicationObservationFailure(error, {
+				committedMutation,
+				deadlineExpired: controlled.deadlineExpired,
+				aborted: controlled.controller.signal.aborted,
+			});
+		const runCore = () =>
+			core.execution(
+				{
+					principal: root.principal,
+					context: root.context,
+					signal: controlled.controller.signal,
+					deadline: root.deadline,
+					liveQueryObservation: root.liveQueryObservation,
+				},
+				(view) => {
+					observedExecution?.scope.event({ kind: "context.completed" });
+					return use({
+						view,
+						invoke: async (operation, callId, options) => {
+							const observedQuery =
+								observedExecution && operation.binding.kind === "query"
+									? observation!.beginScope(observedExecution.identity, {
+											entry: root.observationEntry!,
+											kind: "query",
+											principalKind: root.principal.kind,
+											resourceIdentity: operation.binding.identity,
+											trace: { kind: "active-parent" },
+										})
+									: null;
+							let queryEnd: ObservationEndV1 = {
+								kind: "query",
+								outcome: "ok",
+							};
+							const invokeOperation = async () => {
+								let result: unknown;
+								if (operation.binding.kind === "mutation") {
+									if (view.mutation === undefined)
+										throw new OperationFailure("INTERNAL");
+									const invocation = await view.mutation(
+										operation,
+										callId,
+										options,
+									);
+									committedMutation = invocation.committed;
+									result = invocation.value;
+								} else {
+									result = await operationEngine.invokePrepared(
+										operation,
+										view.operation,
+									);
+								}
+								if (controlled.deadlineExpired && !committedMutation)
 									throw new OperationFailure("DEADLINE_EXCEEDED", true);
-							if (controlled.controller.signal.aborted)
-								if (!committedMutation)
+								if (controlled.controller.signal.aborted && !committedMutation)
 									throw controlled.controller.signal.reason;
-							emitBeforeStopped(
-								{
-									family: "operation",
-									kind: "result",
-									operation: operation.binding.identity,
-								},
-								eventFacts,
-							);
-							return result;
-						} catch (error) {
-							emitBeforeStopped(
-								{
-									family: "operation",
-									kind: "failed",
-									operation: operation.binding.identity,
-								},
-								eventFacts,
-							);
-							if (isOperationAbort(error)) throw error;
-							throw normalizeExecutedOperationError(operation, error);
-						}
-					},
-				}),
-		);
+								return result;
+							};
+							try {
+								return await (observedQuery
+									? observedQuery.run(invokeOperation)
+									: invokeOperation());
+							} catch (error) {
+								const normalized = isOperationAbort(error)
+									? error
+									: normalizeExecutedOperationError(operation, error);
+								queryEnd = { kind: "query", ...observedOutcome(normalized) };
+								throw normalized;
+							} finally {
+								observedQuery?.end(queryEnd);
+							}
+						},
+					});
+				},
+			);
+		const pending = observedExecution
+			? observedExecution.scope.run(runCore)
+			: runCore();
 		activeRoots.add(pending);
+		let executionEnd: ObservationEndV1 = {
+			kind: "execution",
+			outcome: "ok",
+		};
 		try {
 			const result = await pending;
 			if (controlled.deadlineExpired && !committedMutation)
@@ -409,6 +414,7 @@ export async function createRuntimeApplication<
 				throw controlled.controller.signal.reason;
 			return result;
 		} catch (error) {
+			executionEnd = { kind: "execution", ...observedOutcome(error) };
 			if (error instanceof CommittedResultUnavailable) throw error;
 			if (controlled.deadlineExpired && !committedMutation)
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
@@ -416,6 +422,7 @@ export async function createRuntimeApplication<
 				throw controlled.controller.signal.reason;
 			throw error;
 		} finally {
+			observedExecution?.scope.end(executionEnd);
 			activeRoots.delete(pending);
 			rootControllers.delete(controlled.controller);
 			controlled.dispose();
@@ -428,34 +435,37 @@ export async function createRuntimeApplication<
 		ContextInputOf<Context>,
 		ExecutionView
 	>["execution"] = (root, use) =>
-		executeRoot(root, async ({ invoke, view }) => {
-			const operations: RuntimeOperations = Object.freeze({
-				invoke: (
-					identity: string,
-					operationInput: unknown,
-					options?: Readonly<{
-						callId?: string;
-						signal?: AbortSignal;
-						deadline?: number;
-					}>,
-				) => {
-					const prepared = operationEngine.prepare(identity, operationInput);
-					if (prepared.binding.kind === "mutation") {
-						const callId = options?.callId ?? crypto.randomUUID();
-						if (!isOperationCallId(callId))
-							throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-						return invoke(prepared, callId, options);
-					}
-					callSequence += 1;
-					return invoke(prepared, `direct:${callSequence}`);
-				},
-			});
-			const scope = Object.freeze({
-				...operations,
-				execution: await view.execution(),
-			});
-			return use(scope);
-		});
+		executeRoot(
+			{ ...root, observationEntry: "direct" },
+			async ({ invoke, view }) => {
+				const operations: RuntimeOperations = Object.freeze({
+					invoke: (
+						identity: string,
+						operationInput: unknown,
+						options?: Readonly<{
+							callId?: string;
+							signal?: AbortSignal;
+							deadline?: number;
+						}>,
+					) => {
+						const prepared = operationEngine.prepare(identity, operationInput);
+						if (prepared.binding.kind === "mutation") {
+							const callId = options?.callId ?? crypto.randomUUID();
+							if (!isOperationCallId(callId))
+								throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+							return invoke(prepared, callId, options);
+						}
+						callSequence += 1;
+						return invoke(prepared, `direct:${callSequence}`);
+					},
+				});
+				const scope = Object.freeze({
+					...operations,
+					execution: await view.execution(),
+				});
+				return use(scope);
+			},
+		);
 	const route: RuntimeApplication<
 		ContextInputOf<Context>,
 		ExecutionView
@@ -734,15 +744,11 @@ export async function createRuntimeApplication<
 		const closeInput = Object.freeze({ deadlineAt });
 		state = "draining";
 		realtime?.beginDrain();
-		emit({ family: "runtime", kind: "drainStarted" });
 		closePromise = (async () => {
-			let timedOut = false;
-			let timeoutEmitted = false;
 			let shutdownFailure: unknown;
 			const settle = async (work: Promise<unknown>): Promise<void> => {
 				const remaining = Math.max(0, deadlineAt - Date.now());
 				if (remaining === 0) {
-					timedOut = true;
 					void work.catch(() => {});
 					return;
 				}
@@ -759,7 +765,6 @@ export async function createRuntimeApplication<
 					if (timer) clearTimeout(timer);
 				}
 				if (!settled) {
-					timedOut = true;
 					void work.catch(() => {});
 				}
 			};
@@ -772,8 +777,6 @@ export async function createRuntimeApplication<
 			};
 			if (activeRoots.size > 0) await settle(Promise.allSettled(activeRoots));
 			if (activeRoots.size > 0) {
-				emit({ family: "runtime", kind: "drainTimedOut" });
-				timeoutEmitted = true;
 				for (const controller of rootControllers)
 					controller.abort(new DOMException("Runtime draining", "AbortError"));
 			}
@@ -782,9 +785,6 @@ export async function createRuntimeApplication<
 				await settlePhase(input.program.liveQueryCoordinator.drain(closeInput));
 			await settlePhase(core.close());
 			state = "closed";
-			if (timedOut && !timeoutEmitted)
-				emit({ family: "runtime", kind: "drainTimedOut" });
-			emit({ family: "runtime", kind: "stopped" });
 			if (shutdownFailure !== undefined) throw shutdownFailure;
 		})();
 		return closePromise;

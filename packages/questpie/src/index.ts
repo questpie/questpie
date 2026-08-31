@@ -49,6 +49,7 @@ export type {
 	ServiceInstances,
 	ServiceLifetime,
 } from "./service";
+export type { QuestpieObservability } from "./observability";
 export { defineCredentialResolver } from "./credential-resolver";
 export type {
 	CredentialResolution,

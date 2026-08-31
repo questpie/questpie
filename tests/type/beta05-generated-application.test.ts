@@ -53,6 +53,9 @@ test("emits one executable App over the same exact Query engine", async () => {
 			"createRuntimeApplication",
 		);
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
+			"observability",
+		);
+		expect(compilation.generatedFiles["internal/application.js"]).toContain(
 			"serverExports",
 		);
 		expect(compilation.generatedFiles["internal/application.js"]).not.toContain(
@@ -98,7 +101,9 @@ test("emits one executable App over the same exact Query engine", async () => {
 		await writeFile(
 			join(temporary, "generated-app-contract-consumer.ts"),
 			`import { createApp, type QueryDefinition } from "#questpie/app";
-import { principal } from "questpie";
+import { principal, type QuestpieObservability } from "questpie";
+
+declare const observability: QuestpieObservability;
 
 type MessagePageHandlerOutput = Awaited<
 	ReturnType<QueryDefinition<"messages.page">["handler"]>
@@ -114,6 +119,19 @@ async function useGeneratedApp() {
 		postgres: { url: "postgres://localhost/questpie" },
 		realtime: { hmacKey: new Uint8Array(32) },
 		maintenance: { authorize: () => true },
+	});
+	createApp({
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: { authorize: () => true },
+		observability,
+	});
+	createApp({
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: { authorize: () => true },
+		// @ts-expect-error observation handles are nominal and cannot be forged structurally
+		observability: {},
 	});
 	// @ts-expect-error maintenance authorization is deployment-owned and required
 	createApp({

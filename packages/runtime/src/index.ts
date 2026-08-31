@@ -2,13 +2,13 @@ export { createRuntimeApplication } from "./application";
 export { CommittedResultUnavailable } from "./operation";
 export type { CommittedResultUnavailablePayload } from "./operation";
 export type {
-	ExecutionEventV1,
 	RuntimeApplication,
 	RuntimeApplicationProgram,
 	RuntimeExecutableBindings,
 	RuntimeExecutableInventoryBinding,
 	RuntimeOperations,
 } from "./application";
+export type { ExecutionEventV2 } from "./observation";
 
 export {
 	createApplicationRuntime,

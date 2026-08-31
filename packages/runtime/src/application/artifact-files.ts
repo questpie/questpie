@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 
+import { END_OUTCOMES, EVENT_OUTCOMES, EVENT_SCOPES } from "../observation";
 import {
+	exactRuntimeArtifactKeys as exact,
 	failRuntimeArtifact as fail,
 	runtimeArtifactDigest as artifactDigest,
 	runtimeArtifactRecord as record,
@@ -47,6 +49,83 @@ export function verifyRuntimeArtifactFiles(
 			fail(`artifact file ${path} is not canonical JSON`);
 		}
 	};
+	const signalProjection = record(
+		parseJsonFile("opentelemetry-signal-projection.json"),
+		"opentelemetry-signal-projection.json",
+	);
+	exact(
+		signalProjection,
+		[
+			"format",
+			"version",
+			"semanticConventions",
+			"instrumentationScope",
+			"resourceAttributeAllowlist",
+			"spanGraph",
+			"spanAttributeAllowlist",
+			"spanAttributeScopes",
+			"spanAttributeMaximumUtf8Bytes",
+			"httpMethodNormalization",
+			"postgresOperations",
+			"spanStatus",
+			"spanEventLimit",
+			"spanEventNames",
+			"spanEventOutcomes",
+			"spanEventScopes",
+			"endOutcomesByScope",
+			"transactionIdentity",
+			"envelopeEventShape",
+			"observationDropCauses",
+			"jobQueueDelayOrigin",
+			"operationHistogramBoundariesSeconds",
+			"durableHistogramBoundariesSeconds",
+			"metrics",
+			"forbiddenSignalMaterial",
+		],
+		"opentelemetry-signal-projection.json",
+	);
+	if (
+		signalProjection.format !== "questpie.opentelemetry-signal-projection" ||
+		signalProjection.version !== 1 ||
+		artifactDigest("questpie-opentelemetry-projection-v1", signalProjection) !==
+			build.observationSignalProjectionDigest
+	)
+		fail("OpenTelemetry signal projection semantic digest does not match");
+	const expectedEventScopes = Object.fromEntries(
+		Object.entries(EVENT_SCOPES).map(([event, scopes]) => [
+			`questpie.${event}`,
+			scopes,
+		]),
+	);
+	const expectedEventOutcomes = Object.fromEntries(
+		Object.entries(EVENT_OUTCOMES).map(([event, outcomes]) => [
+			`questpie.${event}`,
+			outcomes,
+		]),
+	);
+	if (
+		artifactDigest(
+			"questpie-observation-event-scopes-v1",
+			signalProjection.spanEventScopes,
+		) !==
+			artifactDigest(
+				"questpie-observation-event-scopes-v1",
+				expectedEventScopes,
+			) ||
+		artifactDigest(
+			"questpie-observation-event-outcomes-v1",
+			signalProjection.spanEventOutcomes,
+		) !==
+			artifactDigest(
+				"questpie-observation-event-outcomes-v1",
+				expectedEventOutcomes,
+			) ||
+		artifactDigest(
+			"questpie-observation-end-outcomes-v1",
+			signalProjection.endOutcomesByScope,
+		) !== artifactDigest("questpie-observation-end-outcomes-v1", END_OUTCOMES)
+	)
+		fail("OpenTelemetry signal projection grammar does not match Runtime");
 	const rawContextBootstrap = record(
 		parseJsonFile("postgres-context-bootstrap-plans.json"),
 		"postgres-context-bootstrap-plans.json",
