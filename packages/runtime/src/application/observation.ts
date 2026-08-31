@@ -61,7 +61,11 @@ export function applicationObservationFailure(
 			? error.code
 			: undefined;
 	const code = errorCode === undefined ? {} : { errorCode };
-	if (input.deadlineExpired && !input.committedMutation)
+	if (
+		!input.committedMutation &&
+		(input.deadlineExpired ||
+			(error instanceof OperationFailure && error.code === "DEADLINE_EXCEEDED"))
+	)
 		return { outcome: "deadline" as const, ...code };
 	if (input.aborted && !input.committedMutation)
 		return { outcome: "cancelled" as const, ...code };
@@ -109,7 +113,9 @@ export function observeApplicationFetch(
 				: "_OTHER",
 			principalKind: null,
 			requestKind:
-				url.pathname === operationPath ? "generated_operation" : "unmatched",
+				method === "POST" && url.pathname === operationPath
+					? "generated_operation"
+					: "unmatched",
 			scheme,
 			suppressHttp: true,
 			trace: ingressTrace ?? { kind: "root" },
@@ -123,10 +129,19 @@ export function observeApplicationFetch(
 				request.signal,
 			);
 		} catch (error) {
+			const failure = applicationObservationFailure(error, {
+				aborted: request.signal.aborted,
+				committedMutation: false,
+				deadlineExpired: false,
+			});
+			const outcome =
+				failure.outcome === "cancelled" || failure.outcome === "deadline"
+					? failure.outcome
+					: "framework_error";
 			scope.end({
 				httpResponseStatusCode: null,
 				kind: "fetch",
-				outcome: request.signal.aborted ? "cancelled" : "framework_error",
+				outcome,
 			});
 			throw error;
 		}

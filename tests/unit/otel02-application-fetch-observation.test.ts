@@ -11,6 +11,7 @@ import {
 	type ObservationAdapterV1,
 	type ObservationStartV1,
 } from "../../packages/runtime/src/observation";
+import { OperationFailure } from "../../packages/runtime/src/operation";
 
 const TRACE: NeutralTraceContextV1 = {
 	flags: 1,
@@ -153,6 +154,14 @@ test("owns exact Fetch propagation and retains its scope through body EOF", asyn
 	});
 	expect(JSON.stringify(starts.at(-1))).not.toContain("must-drop");
 	expect(work).toBe(5);
+	const wrongMethod = await fetch(
+		new Request("https://runtime.test/_questpie/operation", { method: "GET" }),
+	);
+	expect(await wrongMethod.text()).toBe("ordinary result");
+	expect(starts.at(-1)).toMatchObject({
+		method: "GET",
+		requestKind: "unmatched",
+	});
 	expect(JSON.stringify(events)).not.toContain("customer-id");
 	const startsBeforeUnsupportedScheme = starts.length;
 	const unsupportedScheme = await fetch(
@@ -181,10 +190,13 @@ test("ends pre-Response Fetch failures without inventing an HTTP status", async 
 		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
 		runtimeBuildDigest: "a".repeat(64),
 	});
+	let failure: "deadline" | "framework" = "framework";
 	const fetch = observeApplicationFetch(
 		observation,
 		"/_questpie/operation",
 		async () => {
+			if (failure === "deadline")
+				throw new OperationFailure("DEADLINE_EXCEEDED", true);
 			throw new Error("before response");
 		},
 	);
@@ -198,6 +210,10 @@ test("ends pre-Response Fetch failures without inventing an HTTP status", async 
 			new Request("https://runtime.test/private", { signal: abort.signal }),
 		),
 	).rejects.toThrow("before response");
+	failure = "deadline";
+	await expect(
+		fetch(new Request("https://runtime.test/private")),
+	).rejects.toThrow("DEADLINE_EXCEEDED");
 	expect(ends).toEqual([
 		{
 			httpResponseStatusCode: null,
@@ -205,6 +221,7 @@ test("ends pre-Response Fetch failures without inventing an HTTP status", async 
 			outcome: "framework_error",
 		},
 		{ httpResponseStatusCode: null, kind: "fetch", outcome: "cancelled" },
+		{ httpResponseStatusCode: null, kind: "fetch", outcome: "deadline" },
 	]);
 });
 
