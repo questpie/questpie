@@ -200,6 +200,10 @@ export type ObservationStartV1 =
 	| AcceptStartV1
 	| AttemptStartV1
 	| EffectStartV1;
+export type ExecutionChildStartV1 = Exclude<
+	ObservationStartV1,
+	Readonly<{ kind: "runtime" | "fetch" | "route" | "execution" }>
+>;
 
 export type PostgresTransactionIdentity = string;
 
@@ -385,7 +389,11 @@ export type ObservationKernelOptions = Readonly<{
 }>;
 export interface ObservationExecution {
 	readonly identity: ExecutionIdentityV2;
+	readonly observation: RuntimeExecutionObservation;
 	readonly scope: ObservationScope;
+}
+export interface RuntimeExecutionObservation {
+	begin(input: ExecutionChildStartV1): ObservationScope;
 }
 export interface ObservationKernel {
 	readonly runtimeInstanceId: string;

@@ -343,7 +343,7 @@ export async function createRuntimeApplication<
 						invoke: async (operation, callId, options) => {
 							const observedQuery =
 								observedExecution && operation.binding.kind === "query"
-									? observation!.beginScope(observedExecution.identity, {
+									? observedExecution.observation.begin({
 											entry: root.observationEntry!,
 											kind: "query",
 											principalKind: root.principal.kind,

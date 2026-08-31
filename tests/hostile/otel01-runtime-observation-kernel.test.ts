@@ -163,9 +163,10 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 			},
 		] as const;
 		for (const start of nested)
-			expect(
-				observation.beginScope(execution.identity, start).context,
-			).toBeNull();
+			expect(execution.observation.begin(start).context).toBeNull();
+		expect(() => execution.observation.begin(rootless[0] as never)).toThrow(
+			"invalid Execution identity owner",
+		);
 	});
 
 	test("rejects foreign identities, extra keys, invalid events, and invalid outcomes", () => {

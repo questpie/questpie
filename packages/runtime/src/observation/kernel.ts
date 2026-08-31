@@ -5,6 +5,7 @@ import { canonicalJsonLine } from "../canonical-json";
 import type {
 	ActiveObservation,
 	ExecutionEventV2,
+	ExecutionChildStartV1,
 	ExecutionIdentityV2,
 	NeutralTraceContextV1,
 	ObservationEndV1,
@@ -366,6 +367,9 @@ export function createObservationKernel(
 			const identity = allocateExecution();
 			if (identity === null) return null;
 			const inner = beginScope(identity, input, true);
+			const executionObservation = Object.freeze({
+				begin: (start: ExecutionChildStartV1) => beginScope(identity, start),
+			});
 			let ended = false;
 			const scope: ObservationScope = Object.freeze({
 				context: inner.context,
@@ -383,7 +387,11 @@ export function createObservationKernel(
 					}
 				},
 			});
-			return Object.freeze({ identity, scope });
+			return Object.freeze({
+				identity,
+				observation: executionObservation,
+				scope,
+			});
 		},
 		beginScope: (execution, input) => beginScope(execution, input),
 		current: () => active.getStore() ?? null,
