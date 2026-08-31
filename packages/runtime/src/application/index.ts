@@ -58,8 +58,10 @@ import type {
 import {
 	applicationObservationFailure,
 	beginApplicationExecution,
+	beginApplicationRuntime,
 	bindApplicationExecutionObservation,
 	createApplicationObservation,
+	endApplicationRuntime,
 	observeApplicationFetch,
 	observeApplicationRoute,
 	observeApplicationUnmatchedFetch,
@@ -193,7 +195,6 @@ export async function createRuntimeApplication<
 	const nowMilliseconds = () => (input.now?.() ?? new Date()).getTime();
 	let callSequence = 0;
 	let closePromise: Promise<void> | undefined;
-	state = "ready";
 
 	const executeRoot = async <Result>(
 		root: Readonly<{
@@ -202,7 +203,7 @@ export async function createRuntimeApplication<
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
-			observationEntry?: ExecutionEntry;
+			observationEntry: ExecutionEntry;
 			around?: WorkerExecutionAround<Result>;
 			completionOwnsAbort?: boolean;
 		}>,
@@ -270,7 +271,7 @@ export async function createRuntimeApplication<
 						invoke: (operation, callId, options) =>
 							runApplicationOperation({
 								execution: observedExecution,
-								entry: root.observationEntry!,
+								entry: root.observationEntry,
 								kind: operation.binding.kind,
 								principalKind: root.principal.kind,
 								resourceIdentity: operation.binding.identity,
@@ -711,11 +712,13 @@ export async function createRuntimeApplication<
 		const closeInput = Object.freeze({ deadlineAt });
 		state = "draining";
 		realtime?.beginDrain();
+		let closeDeadlineExpired = false;
 		closePromise = (async () => {
 			let shutdownFailure: unknown;
 			const settle = async (work: Promise<unknown>): Promise<void> => {
 				const remaining = Math.max(0, deadlineAt - Date.now());
 				if (remaining === 0) {
+					closeDeadlineExpired = true;
 					void work.catch(() => {});
 					return;
 				}
@@ -732,6 +735,7 @@ export async function createRuntimeApplication<
 					if (timer) clearTimeout(timer);
 				}
 				if (!settled) {
+					closeDeadlineExpired = true;
 					void work.catch(() => {});
 				}
 			};
@@ -753,9 +757,23 @@ export async function createRuntimeApplication<
 			await settlePhase(core.close());
 			state = "closed";
 			if (shutdownFailure !== undefined) throw shutdownFailure;
-		})();
+		})()
+			.catch((error) => {
+				endApplicationRuntime(runtimeObservation, {
+					deadlineExpired: closeDeadlineExpired,
+					error,
+				});
+				throw error;
+			})
+			.then(() => {
+				endApplicationRuntime(runtimeObservation, {
+					deadlineExpired: closeDeadlineExpired,
+				});
+			});
 		return closePromise;
 	};
+	const runtimeObservation = beginApplicationRuntime(observation);
+	state = "ready";
 
 	return Object.freeze({
 		applicationService: core.applicationService,

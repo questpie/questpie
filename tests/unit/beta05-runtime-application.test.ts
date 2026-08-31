@@ -1220,6 +1220,12 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 				: { observability: createObservationHandle(adapter) }),
 			events: (event) => events.push(event),
 		});
+		expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+			["scope.started", "runtime"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["runtime"]);
+		events.length = 0;
+		begins.length = 0;
 		const result = await app.execution(
 			{
 				principal: principal.anonymous(),
@@ -1341,7 +1347,13 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 				"exit:execution",
 			]);
 		}
+		events.length = 0;
 		await app.close({ deadlineAt: Date.now() + 2_000 });
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual([["runtime", "ok"]]);
 	}
 });
 
@@ -1448,6 +1460,7 @@ test("carries one issued Execution privately through direct and network Action",
 		),
 	).resolves.toEqual({ receipt: "sent" });
 	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "runtime"],
 		["scope.started", "execution"],
 		["scope.event", "execution"],
 		["scope.started", "action"],
@@ -1456,9 +1469,13 @@ test("carries one issued Execution privately through direct and network Action",
 		["scope.ended", "action"],
 		["scope.ended", "execution"],
 	]);
-	expect(new Set(events.map((event) => event.executionId))).toEqual(
-		new Set([events[0]!.executionId]),
-	);
+	expect(
+		new Set(
+			events
+				.filter((event) => event.scopeKind !== "runtime")
+				.map((event) => event.executionId),
+		),
+	).toEqual(new Set([events[1]!.executionId]));
 
 	events.length = 0;
 	const user = principal.user({
@@ -1586,6 +1603,7 @@ test("observes Live Query initial and recompute evaluations as distinct entries"
 			.filter((event) => event.kind === "scope.started")
 			.map((event) => [event.scopeKind, event.start.entry]),
 	).toEqual([
+		["runtime", undefined],
 		["execution", "watch_initial"],
 		["query", "watch_initial"],
 		["execution", "watch_recompute"],
@@ -1652,7 +1670,9 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	expect(events).toEqual([]);
 	releaseStartup();
 	const app = await creation;
-	expect(events).toEqual([]);
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "runtime"],
+	]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 	expect(coordinatorDrains).toBe(1);
 
@@ -2254,6 +2274,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
 		["scope.started", "fetch"],
 		["scope.ended", "fetch"],
+		["scope.ended", "runtime"],
 	]);
 	expect(events.every(({ executionId }) => executionId === null)).toBe(true);
 });
@@ -2371,6 +2392,7 @@ test("executes a retained v1 Query only for its exact deployment-owned digest pa
 async function createHoldingRuntime(
 	input: Readonly<{
 		coordinatorDeadlines?: number[];
+		coordinatorDrainFailure?: Error;
 		drainMilliseconds?: number;
 		events?: (event: unknown) => void;
 		holdCoordinatorDrain?: boolean;
@@ -2419,12 +2441,14 @@ async function createHoldingRuntime(
 			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
-			...(input.coordinatorDeadlines
+			...(input.coordinatorDeadlines || input.coordinatorDrainFailure
 				? {
 						liveQueryCoordinator: {
 							start: () => Promise.resolve(),
 							drain(close: Readonly<{ deadlineAt: number }>) {
-								input.coordinatorDeadlines!.push(close.deadlineAt);
+								input.coordinatorDeadlines?.push(close.deadlineAt);
+								if (input.coordinatorDrainFailure)
+									throw input.coordinatorDrainFailure;
 								return input.holdCoordinatorDrain
 									? new Promise<void>(() => {})
 									: Promise.resolve();
@@ -2438,6 +2462,28 @@ async function createHoldingRuntime(
 	});
 	return { app, releases, artifacts };
 }
+
+test("preserves a Runtime close failure and observes it once", async () => {
+	const events: unknown[] = [];
+	const closeFailure = new Error("coordinator close failed");
+	const { app } = await createHoldingRuntime({
+		coordinatorDrainFailure: closeFailure,
+		events: (event) => events.push(event),
+	});
+	const closing = app.close({ deadlineAt: Date.now() + 2_000 });
+	await expect(closing).rejects.toBe(closeFailure);
+	await expect(app.close({ deadlineAt: Date.now() + 4_000 })).rejects.toBe(
+		closeFailure,
+	);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([["runtime", "framework_error"]]);
+});
 
 test("separates runtime deadlines from Fetch disconnect cancellation", async () => {
 	const { app, releases, artifacts } = await createHoldingRuntime();
@@ -2668,6 +2714,7 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 			.map(({ end }) => [end.kind, end.outcome]),
 	).toEqual([
 		["query", "cancelled"],
+		["runtime", "deadline"],
 		["execution", "cancelled"],
 	]);
 	expect(
@@ -2721,6 +2768,7 @@ test("shares the first absolute close deadline and does not restart it for stuck
 			)
 			.map(({ end }) => [end.kind, end.outcome]),
 	).toEqual([
+		["runtime", "deadline"],
 		["query", "cancelled"],
 		["execution", "cancelled"],
 	]);

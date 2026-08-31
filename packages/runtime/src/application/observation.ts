@@ -42,12 +42,53 @@ export function createApplicationObservation(
 	});
 }
 
+export function beginApplicationRuntime(
+	observation: ObservationKernel | null,
+): ObservationScope | null {
+	if (observation === null) return null;
+	return observation.beginScope(null, {
+		kind: "runtime",
+		principalKind: "service",
+		trace: { kind: "root" },
+	});
+}
+
+export function endApplicationRuntime(
+	scope: ObservationScope | null,
+	input: Readonly<{
+		deadlineExpired: boolean;
+		error?: unknown;
+	}>,
+): void {
+	if (scope === null) return;
+	if (!("error" in input)) {
+		scope.end({
+			kind: "runtime",
+			outcome: input.deadlineExpired ? "deadline" : "ok",
+		});
+		return;
+	}
+	const failure = applicationObservationFailure(input.error, {
+		aborted: false,
+		committedMutation: false,
+		deadlineExpired: input.deadlineExpired,
+	});
+	scope.end({
+		kind: "runtime",
+		...failure,
+		outcome:
+			failure.outcome === "declared_error"
+				? "framework_error"
+				: failure.outcome,
+	});
+}
+
 export function beginApplicationExecution(
 	observation: ObservationKernel | null,
-	entry: ExecutionEntry | undefined,
+	entry: ExecutionEntry,
 	principalKind: PrincipalKind,
 ) {
-	if (observation === null || entry === undefined) return null;
+	if (observation === null) return null;
 	return observation.beginExecution({
 		entry,
 		kind: "execution",
@@ -58,9 +99,9 @@ export function beginApplicationExecution(
 
 export function bindApplicationExecutionObservation(
 	execution: ObservationExecution | null,
-	entry: ExecutionEntry | undefined,
+	entry: ExecutionEntry,
 ) {
-	if (execution === null || entry === undefined) return Object.freeze({});
+	if (execution === null) return Object.freeze({});
 	return Object.freeze({
 		observation: Object.freeze({ entry, execution: execution.observation }),
 	});
