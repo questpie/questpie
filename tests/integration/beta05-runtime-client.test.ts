@@ -914,6 +914,23 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 				transactionId: "18446744073709551615",
 			},
 		});
+		const mutationEvents = harness.events.filter(
+			(event) => event.scopeKind === "mutation",
+		);
+		expect(mutationEvents.map((event) => event.kind)).toEqual([
+			"scope.started",
+			"scope.event",
+			"scope.ended",
+		]);
+		expect(mutationEvents[1]).toMatchObject({
+			observationEvent: {
+				kind: "operation.post_commit_ambiguous",
+				transactionId: "18446744073709551615",
+			},
+		});
+		expect(mutationEvents[2]).toMatchObject({
+			end: { kind: "mutation", outcome: "ambiguous" },
+		});
 	} finally {
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}

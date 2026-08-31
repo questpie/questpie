@@ -6,11 +6,18 @@ import {
 	type ExecutionEntry,
 	type HttpMethod,
 	type ObservationKernel,
+	type ObservationExecution,
+	type ObservationEndV1,
+	type ObservationScope,
 	type PrincipalKind,
 	retainScopeThroughResponse,
 	resolveObservationHandle,
 } from "../observation";
-import { DeclaredOperationError, OperationFailure } from "../operation";
+import {
+	CommittedResultUnavailable,
+	DeclaredOperationError,
+	OperationFailure,
+} from "../operation";
 
 export function createApplicationObservation(
 	input: Readonly<{
@@ -72,6 +79,62 @@ export function applicationObservationFailure(
 	if (error instanceof DeclaredOperationError)
 		return { outcome: "declared_error" as const, ...code };
 	return { outcome: "framework_error" as const, ...code };
+}
+
+export async function runApplicationOperation<Result>(
+	input: Readonly<{
+		execution: ObservationExecution | null;
+		entry: ExecutionEntry;
+		kind: "mutation" | "query";
+		principalKind: PrincipalKind;
+		resourceIdentity: string;
+		normalizeError(error: unknown): unknown;
+		failure(error: unknown): ReturnType<typeof applicationObservationFailure>;
+		use(
+			observation: Readonly<{
+				execution: ObservationExecution["observation"];
+				operation: ObservationScope;
+			}> | null,
+		): Promise<Result>;
+	}>,
+): Promise<Result> {
+	const scope = input.execution
+		? input.execution.observation.begin({
+				entry: input.entry,
+				kind: input.kind,
+				principalKind: input.principalKind,
+				resourceIdentity: input.resourceIdentity,
+				trace: { kind: "active-parent" },
+			})
+		: null;
+	let end: ObservationEndV1 = { kind: input.kind, outcome: "ok" };
+	const use = () =>
+		input.use(
+			scope && input.execution
+				? {
+						execution: input.execution.observation,
+						operation: scope,
+					}
+				: null,
+		);
+	try {
+		return await (scope ? scope.run(use) : use());
+	} catch (error) {
+		const normalized = input.normalizeError(error);
+		if (
+			input.kind === "mutation" &&
+			normalized instanceof CommittedResultUnavailable
+		) {
+			scope?.event({
+				kind: "operation.post_commit_ambiguous",
+				transactionId: normalized.payload.transactionId,
+			});
+			end = { kind: "mutation", outcome: "ambiguous" };
+		} else end = { kind: input.kind, ...input.failure(normalized) };
+		throw normalized;
+	} finally {
+		scope?.end(end);
+	}
 }
 
 const HTTP_METHODS = new Set<HttpMethod>([

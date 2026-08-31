@@ -30,5 +30,6 @@ export type {
 	ObservationTracePlanV1,
 	PostgresTransactionIdentity,
 	PrincipalKind,
+	RuntimeExecutionObservation,
 	ScopeKind,
 } from "./contract";

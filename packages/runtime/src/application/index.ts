@@ -59,6 +59,7 @@ import {
 	beginApplicationExecution,
 	createApplicationObservation,
 	observeApplicationFetch,
+	runApplicationOperation,
 } from "./observation";
 import {
 	isOperationAbort,
@@ -340,59 +341,52 @@ export async function createRuntimeApplication<
 					observedExecution?.scope.event({ kind: "context.completed" });
 					return use({
 						view,
-						invoke: async (operation, callId, options) => {
-							const observedQuery =
-								observedExecution && operation.binding.kind === "query"
-									? observedExecution.observation.begin({
-											entry: root.observationEntry!,
-											kind: "query",
-											principalKind: root.principal.kind,
-											resourceIdentity: operation.binding.identity,
-											trace: { kind: "active-parent" },
-										})
-									: null;
-							let queryEnd: ObservationEndV1 = {
-								kind: "query",
-								outcome: "ok",
-							};
-							const invokeOperation = async () => {
-								let result: unknown;
-								if (operation.binding.kind === "mutation") {
-									if (view.mutation === undefined)
-										throw new OperationFailure("INTERNAL");
-									const invocation = await view.mutation(
-										operation,
-										callId,
-										options,
-									);
-									committedMutation = invocation.committed;
-									result = invocation.value;
-								} else {
-									result = await operationEngine.invokePrepared(
-										operation,
-										view.operation,
-									);
-								}
-								if (controlled.deadlineExpired && !committedMutation)
-									throw new OperationFailure("DEADLINE_EXCEEDED", true);
-								if (controlled.controller.signal.aborted && !committedMutation)
-									throw controlled.controller.signal.reason;
-								return result;
-							};
-							try {
-								return await (observedQuery
-									? observedQuery.run(invokeOperation)
-									: invokeOperation());
-							} catch (error) {
-								const normalized = isOperationAbort(error)
-									? error
-									: normalizeExecutedOperationError(operation, error);
-								queryEnd = { kind: "query", ...observedOutcome(normalized) };
-								throw normalized;
-							} finally {
-								observedQuery?.end(queryEnd);
-							}
-						},
+						invoke: (operation, callId, options) =>
+							runApplicationOperation({
+								execution: observedExecution,
+								entry: root.observationEntry!,
+								kind: operation.binding.kind,
+								principalKind: root.principal.kind,
+								resourceIdentity: operation.binding.identity,
+								failure: observedOutcome,
+								normalizeError: (error) =>
+									isOperationAbort(error)
+										? error
+										: normalizeExecutedOperationError(operation, error),
+								use: async (operationObservation) => {
+									let result: unknown;
+									if (operation.binding.kind === "mutation") {
+										if (view.mutation === undefined)
+											throw new OperationFailure("INTERNAL");
+										const invocation = await view.mutation(operation, callId, {
+											...options,
+											...(operationObservation
+												? {
+														observation: {
+															execution: operationObservation.execution,
+															mutation: operationObservation.operation,
+														},
+													}
+												: {}),
+										});
+										committedMutation = invocation.committed;
+										result = invocation.value;
+									} else {
+										result = await operationEngine.invokePrepared(
+											operation,
+											view.operation,
+										);
+									}
+									if (controlled.deadlineExpired && !committedMutation)
+										throw new OperationFailure("DEADLINE_EXCEEDED", true);
+									if (
+										controlled.controller.signal.aborted &&
+										!committedMutation
+									)
+										throw controlled.controller.signal.reason;
+									return result;
+								},
+							}),
 					});
 				},
 			);

@@ -15,6 +15,10 @@ import type {
 import { isCollectionLifecycleIssue } from "../../packages/runtime/src/mutation/lifecycle";
 import { createPostgresDatabaseMutationInvoker } from "../../packages/runtime/src/mutation/postgres-database";
 import {
+	createObservationKernel,
+	type ExecutionEventV2,
+} from "../../packages/runtime/src/observation";
+import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
 	type PreparedOperation,
@@ -181,6 +185,36 @@ const facts = {
 	signal: new AbortController().signal,
 	deadline: null,
 };
+
+function observedMutation(events: ExecutionEventV2[]) {
+	const observation = createObservationKernel({
+		applicationIdentity: "application:generic",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected observed Execution");
+	const mutation = execution.observation.begin({
+		entry: "direct",
+		kind: "mutation",
+		principalKind: "user",
+		resourceIdentity: "mutation:widgets.publish",
+		trace: { kind: "active-parent" },
+	});
+	return Object.freeze({
+		execution,
+		mutation,
+		options: Object.freeze({
+			observation: { execution: execution.observation, mutation },
+		}),
+	});
+}
 
 type View = Readonly<{
 	data: Readonly<{
@@ -508,13 +542,44 @@ test("executes a fresh Mutation through one static read-committed database trans
 		runtimeBuildDigest: "d".repeat(64),
 		facts,
 	});
+	const observationEvents: ExecutionEventV2[] = [];
+	const observed = observedMutation(observationEvents);
 
 	await expect(
-		invoke(signalOperation, "database-static-call"),
+		observed.mutation.run(() =>
+			invoke(signalOperation, "database-static-call", observed.options),
+		),
 	).resolves.toEqual({
 		committed: true,
 		value: { id: widgetId },
 	});
+	observed.mutation.end({ kind: "mutation", outcome: "ok" });
+	observed.execution.scope.end({ kind: "execution", outcome: "ok" });
+	expect(
+		observationEvents
+			.filter((event) => event.scopeKind === "transaction")
+			.map((event) =>
+				event.kind === "scope.event"
+					? event.observationEvent
+					: event.kind === "scope.ended"
+						? event.end
+						: event.start,
+			),
+	).toEqual([
+		{ kind: "transaction" },
+		{ kind: "transaction.committed", transactionId: "901" },
+		{ kind: "transaction", outcome: "ok" },
+	]);
+	expect(
+		new Set(
+			observationEvents
+				.filter(
+					(event) =>
+						event.scopeKind === "mutation" || event.scopeKind === "transaction",
+				)
+				.map((event) => event.executionId),
+		),
+	).toEqual(new Set([observed.execution.identity.executionId]));
 	expect(transactionCalls).toBe(1);
 	expect(handlerSignal).toBe(controlSignal);
 	expect(calls.map(({ name }) => name)).toEqual([
@@ -1182,9 +1247,13 @@ test("wraps only a caller-resolvable commit outcome after learning the xid", asy
 			runtimeBuildDigest: "d".repeat(64),
 			facts,
 		});
+		const observationEvents: ExecutionEventV2[] = [];
+		const observed = observedMutation(observationEvents);
 
 		try {
-			await invoke(operation, `ambiguous-${phase}`);
+			await observed.mutation.run(() =>
+				invoke(operation, `ambiguous-${phase}`, observed.options),
+			);
 			throw new Error("expected invocation to reject");
 		} catch (error) {
 			if (phase === "commit") {
@@ -1194,6 +1263,28 @@ test("wraps only a caller-resolvable commit outcome after learning the xid", asy
 				});
 			} else expect(error).toBe(failure);
 		}
+		expect(
+			observationEvents
+				.filter((event) => event.scopeKind === "transaction")
+				.map((event) =>
+					event.kind === "scope.event"
+						? event.observationEvent
+						: event.kind === "scope.ended"
+							? event.end
+							: event.start,
+				),
+		).toEqual(
+			phase === "commit"
+				? [
+						{ kind: "transaction" },
+						{ kind: "transaction.committed", transactionId: "903" },
+						{ kind: "transaction", outcome: "ok" },
+					]
+				: [
+						{ kind: "transaction" },
+						{ kind: "transaction", outcome: "framework_error" },
+					],
+		);
 	}
 });
 
@@ -1255,11 +1346,37 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 		runtimeBuildDigest: "d".repeat(64),
 		facts,
 	});
+	const observationEvents: ExecutionEventV2[] = [];
+	const observed = observedMutation(observationEvents);
 
-	await expect(invoke(replayOperation, "replay-call")).resolves.toEqual({
-		committed: true,
-		value: { id: widgetId },
-	});
+	await expect(
+		observed.mutation.run(() =>
+			invoke(replayOperation, "replay-call", observed.options),
+		),
+	).resolves.toEqual({ committed: true, value: { id: widgetId } });
+	expect(
+		observationEvents
+			.filter(
+				(event) =>
+					event.scopeKind === "mutation" || event.scopeKind === "transaction",
+			)
+			.map((event) =>
+				event.kind === "scope.event"
+					? event.observationEvent
+					: event.kind === "scope.ended"
+						? event.end
+						: event.start,
+			),
+	).toEqual([
+		{
+			entry: "direct",
+			kind: "mutation",
+		},
+		{ kind: "transaction" },
+		{ kind: "receipt.replayed" },
+		{ kind: "transaction.committed" },
+		{ kind: "transaction", outcome: "ok" },
+	]);
 	expect(calls).toEqual(["mutation.receipt.claim", "mutation.receipt.read"]);
 	expect(handlerCalls).toBe(0);
 	expect(
