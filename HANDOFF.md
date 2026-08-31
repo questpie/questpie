@@ -639,12 +639,14 @@ signal artifacts, protocol-v8 first-acceptance durable trace links, and the
 optional exact-peer `@questpie/opentelemetry` integration. It adds no authored
 telemetry capability or generic provider matrix.
 
-OpenTelemetry is not implemented. Continue through the tracer-led delivery
-flow by projecting the Accepted design into one coherent spec and blocked
-tracer-ticket graph before changing production. `questpie` remains the sole
-application authoring/Runtime package; compiler, Runtime, and testkit packages
-remain private. The public `apps/docs` install guide and release claims wait
-for the package, CLI, Runtime, PostgreSQL 17, browser, and release tracers. The
+OpenTelemetry is not implemented. The Accepted design is converted into the
+implementation contract and eight-ticket topological queue at
+`docs/v4/implementation/opentelemetry/`. Start test-first at OTEL-01; OTEL-04
+protocol v8 and OTEL-05 adapter work may split only after the one Runtime owner
+census closes at OTEL-03. `questpie` remains the sole application
+authoring/Runtime package; compiler, Runtime, and testkit packages remain
+private. Public `apps/docs` changes are structurally blocked until OTEL-07's
+reference tracers pass, then land with release closure in OTEL-08. The
 historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
 remains research, not additional authority.
 
@@ -722,10 +724,9 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel.
 4. ADR-0033 design is Accepted but unimplemented. Preserve its reviewed bytes
-   while converting the authority through spec and tracer tickets, with
-   explicit blocking edges, before production code. Do not publish the
-   `apps/docs` install guide until its implementation tracer and release
-   evidence pass.
+   and pull OTEL-01 from `docs/v4/implementation/opentelemetry/README.md` red
+   first. Follow its blocking edges; do not publish the `apps/docs` install
+   guide before OTEL-07 passes and OTEL-08 closes release evidence.
 5. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
