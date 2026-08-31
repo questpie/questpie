@@ -67,6 +67,7 @@ function statement(
 ): PostgresStatement<readonly PostgresParameter[], readonly never[]> {
 	return definePostgresStatement({
 		name,
+		operation: "SELECT",
 		text: `SELECT ${parameterCount}`,
 		parameterCount,
 		parameters: (value) => value,

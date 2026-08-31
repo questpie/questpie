@@ -118,6 +118,7 @@ export const durableRunInspect: PostgresStatement<
 	DurableRunView | null
 > = definePostgresStatement({
 	name: "durable.inspection.run",
+	operation: "SELECT",
 	text: `SELECT run_id::text AS "runId", dispatch_id::text AS "dispatchId",
        resource_identity AS "resource", state, attempt_count AS "attemptCount",
        current_attempt_id::text AS "currentAttemptId",
@@ -191,6 +192,7 @@ export const durableRunEventsRead: PostgresStatement<
 	readonly DurableRunEventView[]
 > = definePostgresStatement({
 	name: "durable.inspection.events",
+	operation: "SELECT",
 	text: `SELECT sequence, kind, attempt_id::text AS "attemptId",
        lease_token_digest AS "leaseTokenDigest", error_code AS "errorCode"
 FROM questpie_internal.durable_run_events

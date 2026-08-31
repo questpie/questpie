@@ -46,6 +46,7 @@ function rowBytes(value: unknown): Uint8Array {
 
 const readObservedPlans = definePostgresStatement({
 	name: "live-query.observed-plans-read-for-invalidation",
+	operation: "SELECT",
 	text: `SELECT plan.scope_identity,
        plan.binding_identity,
        plan.query_identity,
@@ -93,6 +94,7 @@ FOR UPDATE OF watch`,
 
 const invalidateObservedBindings = definePostgresStatement({
 	name: "live-query.observed-bindings-invalidate",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_watch_bindings AS watch
 SET invalidation_generation = watch.invalidation_generation + dirty.increment,
     invalidated_at = pg_catalog.transaction_timestamp()

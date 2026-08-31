@@ -332,6 +332,7 @@ export function bindPostgresCollectionStatement(
 	).slice(0, 48)}`;
 	return definePostgresStatement({
 		name: statementName,
+		operation: "SELECT",
 		text: input.text,
 		parameterCount: input.parameterCount,
 		parameters(value: readonly PostgresParameter[]) {

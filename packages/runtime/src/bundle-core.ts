@@ -43,10 +43,16 @@ export {
 	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
 } from "./durable";
-export { createRuntimePostgres, definePostgresStatement } from "./postgres";
+export {
+	createRuntimePostgres,
+	definePostgresAdministrativeStatement,
+	definePostgresStatement,
+} from "./postgres";
 export type {
+	PostgresDatabaseOperation,
 	PostgresParameter,
 	PostgresStatement,
+	PostgresStatementOperation,
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "./postgres";

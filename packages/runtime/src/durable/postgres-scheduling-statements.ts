@@ -65,6 +65,7 @@ export const durableAdmissionSelect: PostgresStatement<
 	readonly DurableAdmission[]
 > = definePostgresStatement({
 	name: "durable.admission.select",
+	operation: "SELECT",
 	text: `WITH eligible AS (
   SELECT run_id, resource_identity, executable_digest, available_at,
          row_number() OVER (PARTITION BY tenant_id ORDER BY available_at, run_id) AS tenant_turn
@@ -134,6 +135,7 @@ export const durableCancelledRunsReap: PostgresStatement<
 	readonly DurableCancelledRun[]
 > = definePostgresStatement({
 	name: "durable.cancellation.reap.runs",
+	operation: "UPDATE",
 	text: `WITH candidates AS (
   SELECT application_name, run_id
   FROM questpie_internal.durable_runs
@@ -193,6 +195,7 @@ export const durableCancelledAttemptsComplete: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.cancellation.reap.attempts",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = 'cancelled'
 WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL`,

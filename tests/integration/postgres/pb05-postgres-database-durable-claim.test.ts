@@ -121,6 +121,7 @@ type ClaimState = Readonly<{
 
 const inspectClaim = definePostgresStatement<string, ClaimState>({
 	name: "durable.claim.inspect",
+	operation: "SELECT",
 	text: `SELECT runs.state,
        runs.attempt_count,
        runs.current_attempt_id::text,
@@ -176,6 +177,7 @@ WHERE runs.application_name = 'application:collaboration'
 
 const lockRun = definePostgresStatement<string, void>({
 	name: "durable.claim.lock",
+	operation: "SELECT",
 	text: `SELECT 1
 FROM questpie_internal.durable_runs
 WHERE application_name = 'application:collaboration' AND run_id = $1::uuid
@@ -193,6 +195,7 @@ const requestCancellation = definePostgresStatement<
 	void
 >({
 	name: "durable.claim.request-cancellation",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET cancellation_requested = true,
     lease_expires_at = CASE WHEN $2 THEN transaction_timestamp() - interval '1 second'

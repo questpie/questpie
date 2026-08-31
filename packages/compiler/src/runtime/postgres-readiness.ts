@@ -1,4 +1,5 @@
 import type {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
 	PostgresTransactionRunner,
 	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
@@ -129,6 +130,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
 		runtime: Readonly<{
+			definePostgresAdministrativeStatement: typeof definePostgresAdministrativeStatement;
 			definePostgresStatement: typeof definePostgresStatement;
 			verifyReadinessPrerequisites: typeof verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction;
 		}>;
@@ -159,6 +161,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 					transaction,
 					input.schema,
 					input.runtime.definePostgresStatement,
+					input.runtime.definePostgresAdministrativeStatement,
 				);
 				const fingerprintDigest = digest(
 					"questpie-schema-fingerprint-v1",

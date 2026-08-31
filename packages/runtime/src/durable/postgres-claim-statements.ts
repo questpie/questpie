@@ -152,6 +152,7 @@ export const durableClaimRunSelect: PostgresStatement<
 	DurableClaimRun | null
 > = definePostgresStatement({
 	name: "durable.claim.run.select",
+	operation: "SELECT",
 	text: `SELECT ${runSelection}
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
@@ -210,6 +211,7 @@ export const durableClaimAttemptsExhaust: PostgresStatement<
 	readonly Readonly<{ attemptId: string; leaseTokenDigest: string }>[]
 > = definePostgresStatement({
 	name: "durable.claim.attempts.exhaust",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = 'failed', failure_code = 'RETRY_EXHAUSTED'
 WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL
@@ -222,6 +224,7 @@ RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDige
 export const durableClaimRunExhaust: PostgresStatement<RunIdentityInput, void> =
 	definePostgresStatement({
 		name: "durable.claim.run.exhaust",
+		operation: "UPDATE",
 		text: `UPDATE questpie_internal.durable_runs
 SET state = 'failed', current_attempt_id = NULL, lease_token_digest = NULL,
     lease_expires_at = NULL, result_bytes = NULL,
@@ -247,6 +250,7 @@ export const durableClaimRunLease: PostgresStatement<
 	Readonly<{ leaseExpiresAt: Date; deadlineAt: Date }>
 > = definePostgresStatement({
 	name: "durable.claim.run.lease",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET state = 'running', attempt_count = $3, current_attempt_id = $4,
     lease_token_digest = $5,
@@ -284,6 +288,7 @@ export const durableClaimAttemptsSupersede: PostgresStatement<
 	readonly Readonly<{ attemptId: string; leaseTokenDigest: string }>[]
 > = definePostgresStatement({
 	name: "durable.claim.attempts.supersede",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = 'leaseSuperseded'
 WHERE application_name = $1 AND run_id = $2 AND attempt_id <> $3 AND outcome IS NULL
@@ -313,6 +318,7 @@ export const durableClaimAttemptInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.claim.attempt.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_attempts
   (application_name, attempt_id, run_id, attempt_number, worker_id, lease_token_digest,
    lease_expires_at, deadline_at, started_at, heartbeat_at)

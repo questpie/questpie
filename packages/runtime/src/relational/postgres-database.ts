@@ -115,6 +115,7 @@ export function linkPostgresQueryPlan(
 	const columns = validateResultColumns(plan);
 	const statement = definePostgresStatement({
 		name: "query." + plan.queryDigest,
+		operation: "SELECT",
 		text: plan.sql,
 		parameterCount: plan.parameters.length,
 		parameters: (parameters: readonly PostgresParameter[]) => parameters,

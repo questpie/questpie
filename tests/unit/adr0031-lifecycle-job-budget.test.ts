@@ -14,6 +14,7 @@ const statement = definePostgresStatement<
 	readonly Readonly<{ id: string }>[]
 >({
 	name: "lifecycle.job.budget",
+	operation: "SELECT",
 	text: "SELECT id",
 	parameterCount: 0,
 	parameters: (input) => input,

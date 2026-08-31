@@ -6,6 +6,7 @@ import {
 	createMigrationPostgres,
 	createRuntimePostgres,
 	definePostgresChannel,
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
 	type MigrationPostgresSession,
 	type PostgresTransaction,
@@ -33,6 +34,7 @@ function pgbouncerUrl(): string {
 
 const observeTransaction = definePostgresStatement({
 	name: "pb03.observe-transaction",
+	operation: "SELECT",
 	text: `SELECT
 	$1::text,
 	pg_catalog.current_setting('transaction_isolation'),
@@ -49,6 +51,7 @@ const observeTransaction = definePostgresStatement({
 
 const sleep = definePostgresStatement({
 	name: "pb03.sleep",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_sleep($1::double precision)",
 	parameterCount: 1,
 	parameters: (seconds: number) => [seconds],
@@ -57,6 +60,7 @@ const sleep = definePostgresStatement({
 
 const invalidDecoder = definePostgresStatement({
 	name: "pb03.invalid-decoder",
+	operation: "SELECT",
 	text: "SELECT 42::integer",
 	parameterCount: 0,
 	parameters: () => [],
@@ -69,6 +73,7 @@ const invalidDecoder = definePostgresStatement({
 
 const currentBackendPid = definePostgresStatement({
 	name: "pb03.current-backend-pid",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_backend_pid()",
 	parameterCount: 0,
 	parameters: () => [],
@@ -82,6 +87,7 @@ const currentBackendPid = definePostgresStatement({
 
 const backendIsSleeping = definePostgresStatement({
 	name: "pb03.backend-is-sleeping",
+	operation: "SELECT",
 	text: `SELECT EXISTS (
 	SELECT 1
 	FROM pg_catalog.pg_stat_activity
@@ -99,7 +105,7 @@ const backendIsSleeping = definePostgresStatement({
 	},
 });
 
-const createCommitProbeTable = definePostgresStatement({
+const createCommitProbeTable = definePostgresAdministrativeStatement({
 	name: "pb03.commit-probe-table-create",
 	text: "CREATE TEMP TABLE qp_pb03_commit_probe (value integer)",
 	parameterCount: 0,
@@ -107,7 +113,7 @@ const createCommitProbeTable = definePostgresStatement({
 	decode: () => undefined,
 });
 
-const createCommitDelayFunction = definePostgresStatement({
+const createCommitDelayFunction = definePostgresAdministrativeStatement({
 	name: "pb03.commit-delay-function-create",
 	text: `CREATE FUNCTION pg_temp.qp_pb03_commit_delay()
 RETURNS trigger
@@ -123,7 +129,7 @@ $$`,
 	decode: () => undefined,
 });
 
-const createCommitDelayTrigger = definePostgresStatement({
+const createCommitDelayTrigger = definePostgresAdministrativeStatement({
 	name: "pb03.commit-delay-trigger-create",
 	text: `CREATE CONSTRAINT TRIGGER qp_pb03_commit_delay
 AFTER INSERT ON qp_pb03_commit_probe
@@ -137,13 +143,14 @@ EXECUTE FUNCTION pg_temp.qp_pb03_commit_delay()`,
 
 const insertCommitProbe = definePostgresStatement({
 	name: "pb03.commit-probe-insert",
+	operation: "INSERT",
 	text: "INSERT INTO qp_pb03_commit_probe (value) VALUES (1)",
 	parameterCount: 0,
 	parameters: () => [],
 	decode: () => undefined,
 });
 
-const createSensitiveConstraint = definePostgresStatement({
+const createSensitiveConstraint = definePostgresAdministrativeStatement({
 	name: "pb03.sensitive-constraint-create",
 	text: `CREATE TEMP TABLE qp_pb03_sensitive (
 	value text CHECK (false)
@@ -155,6 +162,7 @@ const createSensitiveConstraint = definePostgresStatement({
 
 const violateSensitiveConstraint = definePostgresStatement({
 	name: "pb03.sensitive-constraint-violate",
+	operation: "INSERT",
 	text: "INSERT INTO qp_pb03_sensitive (value) VALUES ($1::text)",
 	parameterCount: 1,
 	parameters: (value: string) => [value],
@@ -163,6 +171,7 @@ const violateSensitiveConstraint = definePostgresStatement({
 
 const backendIsCommitting = definePostgresStatement({
 	name: "pb03.backend-is-committing",
+	operation: "SELECT",
 	text: `SELECT EXISTS (
 	SELECT 1
 	FROM pg_catalog.pg_stat_activity
@@ -183,6 +192,7 @@ const backendIsCommitting = definePostgresStatement({
 
 const terminateBackend = definePostgresStatement({
 	name: "pb03.backend-terminate",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_terminate_backend($1::integer)",
 	parameterCount: 1,
 	parameters: (pid: number) => [pid],
@@ -196,6 +206,7 @@ const terminateBackend = definePostgresStatement({
 
 const notify = definePostgresStatement({
 	name: "pb03.notify",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_notify($1::text, $2::text)",
 	parameterCount: 2,
 	parameters: (input: Readonly<{ channel: string; payload: string }>) => [
@@ -205,7 +216,7 @@ const notify = definePostgresStatement({
 	decode: () => undefined,
 });
 
-const dropListenerFrontier = definePostgresStatement({
+const dropListenerFrontier = definePostgresAdministrativeStatement({
 	name: "pb03.listener-frontier-drop",
 	text: "DROP TABLE IF EXISTS qp_pb03_listener_frontier",
 	parameterCount: 0,
@@ -213,7 +224,7 @@ const dropListenerFrontier = definePostgresStatement({
 	decode: () => undefined,
 });
 
-const createListenerFrontier = definePostgresStatement({
+const createListenerFrontier = definePostgresAdministrativeStatement({
 	name: "pb03.listener-frontier-create",
 	text: `CREATE TABLE qp_pb03_listener_frontier (
 	value integer NOT NULL
@@ -225,6 +236,7 @@ const createListenerFrontier = definePostgresStatement({
 
 const lockListenerFrontier = definePostgresStatement({
 	name: "pb03.listener-frontier-lock",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_advisory_xact_lock($1::bigint)",
 	parameterCount: 1,
 	parameters: (key: bigint) => [key],
@@ -233,6 +245,7 @@ const lockListenerFrontier = definePostgresStatement({
 
 const writeListenerFrontier = definePostgresStatement({
 	name: "pb03.listener-frontier-write",
+	operation: "INSERT",
 	text: "INSERT INTO qp_pb03_listener_frontier (value) VALUES ($1::integer)",
 	parameterCount: 1,
 	parameters: (value: number) => [value],
@@ -241,6 +254,7 @@ const writeListenerFrontier = definePostgresStatement({
 
 const readListenerFrontier = definePostgresStatement({
 	name: "pb03.listener-frontier-read",
+	operation: "SELECT",
 	text: "SELECT coalesce(max(value), 0)::integer FROM qp_pb03_listener_frontier",
 	parameterCount: 0,
 	parameters: () => [],
@@ -254,6 +268,7 @@ const readListenerFrontier = definePostgresStatement({
 
 const terminateListener = definePostgresStatement({
 	name: "pb03.terminate-listener",
+	operation: "SELECT",
 	text: `SELECT coalesce(
 	pg_catalog.bool_or(pg_catalog.pg_terminate_backend(pid)),
 	false
@@ -272,6 +287,7 @@ WHERE application_name = $1::text
 
 const listenerSessionCount = definePostgresStatement({
 	name: "pb03.listener-session-count",
+	operation: "SELECT",
 	text: `SELECT count(*)::integer
 FROM pg_catalog.pg_stat_activity
 WHERE application_name = $1::text
@@ -286,7 +302,7 @@ WHERE application_name = $1::text
 	},
 });
 
-const createMigrationProbe = definePostgresStatement({
+const createMigrationProbe = definePostgresAdministrativeStatement({
 	name: "pb03.migration-probe-create",
 	text: "CREATE TEMP TABLE qp_pb03_migration_probe (value text) ON COMMIT PRESERVE ROWS",
 	parameterCount: 0,
@@ -296,6 +312,7 @@ const createMigrationProbe = definePostgresStatement({
 
 const insertMigrationProbe = definePostgresStatement({
 	name: "pb03.migration-probe-insert",
+	operation: "INSERT",
 	text: "INSERT INTO qp_pb03_migration_probe (value) VALUES ($1::text)",
 	parameterCount: 1,
 	parameters: (value: string) => [value],
@@ -304,6 +321,7 @@ const insertMigrationProbe = definePostgresStatement({
 
 const observeMigrationSession = definePostgresStatement({
 	name: "pb03.migration-session-observe",
+	operation: "SELECT",
 	text: `SELECT
 	pg_catalog.pg_backend_pid(),
 	EXISTS (

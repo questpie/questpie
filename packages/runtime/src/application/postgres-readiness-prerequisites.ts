@@ -76,7 +76,7 @@ function statement<Input, Output>(
 		decode(result: StatementResult): Output;
 	}>,
 ): PostgresStatement<Input, Output> {
-	return definePostgresStatement(input);
+	return definePostgresStatement({ ...input, operation: "SELECT" });
 }
 
 const protocolStatement = statement<void, Protocol | null>({

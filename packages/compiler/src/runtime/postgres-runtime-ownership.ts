@@ -5,6 +5,7 @@ export function renderPostgresRuntimeImports(): string {
 		createPostgresDatabaseDurablePrincipalMaintenance,
 		createPostgresDatabaseMutationInvoker,
 		createRuntimePostgres,
+		definePostgresAdministrativeStatement,
 		definePostgresStatement,
 		executePostgresDatabaseQuery,
 		verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction`;

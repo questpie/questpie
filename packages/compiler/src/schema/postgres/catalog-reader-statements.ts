@@ -6,6 +6,7 @@ type CatalogResult = Readonly<{
 
 export interface CatalogStatement<Row> {
 	readonly name: string;
+	readonly operation: "SELECT";
 	readonly text: string;
 	readonly parameterCount: 1;
 	parameters(applicationSchema: string): readonly [string];
@@ -128,6 +129,7 @@ export function defineCatalogStatement<Row>(
 ): CatalogStatement<Row> {
 	return Object.freeze({
 		name: input.name,
+		operation: "SELECT" as const,
 		text: input.text,
 		parameterCount: 1 as const,
 		parameters(applicationSchema: string): readonly [string] {

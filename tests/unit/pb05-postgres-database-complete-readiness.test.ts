@@ -5,6 +5,7 @@ import { internalProtocolV7Checksum } from "../../packages/compiler/src/schema";
 import type { SchemaProjectionV1 } from "../../packages/compiler/src/schema";
 import { verifyPostgresDatabaseReadinessPrerequisites } from "../../packages/runtime/src/application/postgres-readiness-prerequisites";
 import {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
 	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
 } from "../../packages/runtime/src/bundle-core";
@@ -187,6 +188,7 @@ function readinessInput(database: PostgresTransactionRunner) {
 	return {
 		database,
 		runtime: {
+			definePostgresAdministrativeStatement,
 			definePostgresStatement,
 			verifyReadinessPrerequisites:
 				verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,

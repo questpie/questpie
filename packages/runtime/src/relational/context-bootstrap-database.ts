@@ -324,6 +324,7 @@ function linkPlan(
 	}
 	const statement = definePostgresStatement({
 		name: `context.${plan.digest}`,
+		operation: "SELECT",
 		text: plan.sql,
 		parameterCount: plan.key.length + plan.fields.length,
 		parameters(lookup: ContextBootstrapLookupV1): readonly PostgresParameter[] {

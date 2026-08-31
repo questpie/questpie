@@ -69,6 +69,7 @@ function decodedCount(
 
 const lockAuthorityPartition = definePostgresStatement({
 	name: "live-query.retention-authority-lock",
+	operation: "SELECT",
 	text: `SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended(
   $1,
   0
@@ -91,6 +92,7 @@ const lockAuthorityPartition = definePostgresStatement({
 
 const deleteExpiredPartitionResults = definePostgresStatement({
 	name: "live-query.retention-expired-partition-delete",
+	operation: "DELETE",
 	text: `DELETE FROM questpie_internal.retained_live_query_results
 WHERE application_name = $1
   AND authority_partition_digest = $2
@@ -108,6 +110,7 @@ type AcknowledgedResult = RetainedLiveQueryCompleteResult &
 
 const retainAcknowledgedResult = definePostgresStatement({
 	name: "live-query.retention-result-upsert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.retained_live_query_results
   (application_name, token_digest, authority_partition_digest, deployment_digest,
    query_identity, input_digest, wire_version, retained_generation, result_bytes,
@@ -155,6 +158,7 @@ RETURNING token_digest`,
 
 const evictExcessPartitionResults = definePostgresStatement({
 	name: "live-query.retention-excess-partition-delete",
+	operation: "DELETE",
 	text: `WITH evicted AS (
   SELECT token_digest
   FROM questpie_internal.retained_live_query_results
@@ -178,6 +182,7 @@ WHERE retained.application_name = $1
 
 const readRetainedResult = definePostgresStatement({
 	name: "live-query.retention-result-read",
+	operation: "SELECT",
 	text: `SELECT deployment_digest,
        authority_partition_digest,
        query_identity,
@@ -246,6 +251,7 @@ WHERE application_name = $1
 
 const pruneExpiredResults = definePostgresStatement({
 	name: "live-query.retention-expired-delete",
+	operation: "SELECT",
 	text: `WITH deleted AS (
   DELETE FROM questpie_internal.retained_live_query_results
   WHERE application_name = $1
@@ -260,6 +266,7 @@ SELECT count(*)::integer FROM deleted`,
 
 const pruneLedgerFacts = definePostgresStatement({
 	name: "live-query.retention-ledger-delete",
+	operation: "SELECT",
 	text: `WITH minimum AS (
   SELECT min(xid_horizon) AS horizon
   FROM questpie_internal.reconciliation_consumers

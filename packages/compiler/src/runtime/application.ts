@@ -594,6 +594,7 @@ export async function createApplication(input) {
 				return verifyPostgresDatabaseRuntimeReadiness({
 					database,
 					runtime: {
+						definePostgresAdministrativeStatement,
 						definePostgresStatement,
 						verifyReadinessPrerequisites: verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
 					},

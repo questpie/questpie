@@ -1,7 +1,10 @@
 export {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
+	type PostgresDatabaseOperation,
 	type PostgresParameter,
 	type PostgresStatement,
+	type PostgresStatementOperation,
 	type PostgresTransaction,
 	type PostgresTransactionRunner,
 } from "./postgres/contract-types.js";

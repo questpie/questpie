@@ -180,6 +180,7 @@ export const durableMaintenanceRunRead: PostgresStatement<
 	DurableMaintenanceRun
 > = definePostgresStatement({
 	name: "durable.maintenance.run.read",
+	operation: "SELECT",
 	text: runReadText,
 	parameterCount: 2,
 	parameters: identityParameters,
@@ -191,6 +192,7 @@ export const durableMaintenanceRunReadLocked: PostgresStatement<
 	DurableMaintenanceRun
 > = definePostgresStatement({
 	name: "durable.maintenance.run.read-locked",
+	operation: "SELECT",
 	text: `${runReadText}\nFOR UPDATE`,
 	parameterCount: 2,
 	parameters: identityParameters,
@@ -202,6 +204,7 @@ export const durableMaintenanceRunStateRead: PostgresStatement<
 	DurableRunState | null
 > = definePostgresStatement({
 	name: "durable.maintenance.run.state-read",
+	operation: "SELECT",
 	text: `SELECT state
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2`,
@@ -236,6 +239,7 @@ export const durableMaintenanceAuditInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.maintenance.audit.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_maintenance_commands
   (application_name, command_id, run_id, command, outcome, rejection_code,
    actor_kind, actor_id, state_before, state_after, reason, requested_at)
@@ -276,6 +280,7 @@ export const durableMaintenanceVersionRead: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "durable.maintenance.run.version-read",
+	operation: "SELECT",
 	text: `SELECT event_sequence AS "version"
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2`,
@@ -304,6 +309,7 @@ export const durableMaintenanceCancellationInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.maintenance.cancellation.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_cancellations
   (application_name, cancellation_id, run_id, requested_by_kind, requested_by_id,
    reason, requested_at)
@@ -328,6 +334,7 @@ function runWrite(
 ): PostgresStatement<RunWriteInput, void> {
 	return definePostgresStatement({
 		name,
+		operation: "UPDATE",
 		text: textValue,
 		parameterCount: 2,
 		parameters: identityParameters,
@@ -378,6 +385,7 @@ export const durableMaintenanceEffectAcknowledge: PostgresStatement<
 	string | null
 > = definePostgresStatement({
 	name: "durable.maintenance.effect.acknowledge",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_effects
 SET status = 'acknowledged', settled_at = pg_catalog.transaction_timestamp()
 WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'ambiguous'
@@ -413,6 +421,7 @@ export const durableMaintenanceAuditRead: PostgresStatement<
 	readonly DurableMaintenanceAuditEntry[]
 > = definePostgresStatement({
 	name: "durable.maintenance.audit.read",
+	operation: "SELECT",
 	text: `SELECT command_id::text AS "commandId", command, outcome,
        rejection_code AS "rejectionCode", actor_kind AS "actorKind",
        actor_id AS "actorId", state_before AS "stateBefore",

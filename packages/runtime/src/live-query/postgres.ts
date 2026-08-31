@@ -127,6 +127,7 @@ function decodeHorizon(row: Row | undefined): Readonly<{
 }
 const initializeConsumer = definePostgresStatement({
 	name: "live-query.reconciliation-consumer-initialize",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.reconciliation_consumers
   (application_name, consumer_id, xid_horizon, acknowledged_at)
 VALUES ($1, $2, pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot()), pg_catalog.clock_timestamp())
@@ -137,6 +138,7 @@ ON CONFLICT DO NOTHING`,
 });
 const readHorizon = definePostgresStatement({
 	name: "live-query.reconciliation-horizon-read",
+	operation: "SELECT",
 	text: `SELECT xid_horizon::text,
        pg_catalog.pg_snapshot_xmin(pg_catalog.pg_current_snapshot())::text
 FROM questpie_internal.reconciliation_consumers
@@ -153,6 +155,7 @@ FOR UPDATE`,
 });
 const readFacts = definePostgresStatement({
 	name: "live-query.change-ledger-facts-read",
+	operation: "SELECT",
 	text: `SELECT fact_identity::text,
        fact_id::text,
        transaction_id::text,
@@ -213,6 +216,7 @@ ORDER BY transaction_id, fact_id`,
 });
 const recordProcessedFacts = definePostgresStatement({
 	name: "live-query.change-ledger-facts-record-processed",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.processed_change_facts
   (application_name, consumer_id, fact_identity, processed_at)
 SELECT $1, $2, fact_identity, pg_catalog.clock_timestamp()
@@ -231,6 +235,7 @@ ON CONFLICT DO NOTHING`,
 
 const advanceHorizon = definePostgresStatement({
 	name: "live-query.reconciliation-horizon-advance",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.reconciliation_consumers
 SET xid_horizon = $3::xid8, acknowledged_at = pg_catalog.clock_timestamp()
 WHERE application_name = $1 AND consumer_id = $2`,

@@ -1,6 +1,10 @@
 import type {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
+	PostgresDatabaseOperation,
+	PostgresParameter,
 	PostgresStatement,
+	PostgresStatementOperation,
 	PostgresTransaction,
 } from "@questpie/runtime/bundle-core-types";
 
@@ -37,13 +41,27 @@ import {
 } from "./fingerprint-order";
 import { fail } from "./shared";
 
-type StatementDefinition<Input, Output> = Parameters<
-	typeof definePostgresStatement<Input, Output>
->[0];
+type StatementDefinition<
+	Input,
+	Output,
+	Operation extends PostgresStatementOperation = PostgresStatementOperation,
+> = Readonly<{
+	name: string;
+	operation: Operation;
+	text: string;
+	parameterCount: number;
+	parameters(input: Input): readonly PostgresParameter[];
+	decode: PostgresStatement<Input, Output, Operation>["decode"];
+}>;
 
-function defineStatement<Input, Output>(
-	input: StatementDefinition<Input, Output>,
-): StatementDefinition<Input, Output> {
+function defineStatement<
+	Input,
+	Output,
+	const Operation extends PostgresStatementOperation =
+		PostgresDatabaseOperation,
+>(
+	input: StatementDefinition<Input, Output, Operation>,
+): StatementDefinition<Input, Output, Operation> {
 	return Object.freeze(input);
 }
 
@@ -83,6 +101,7 @@ const providerStatementDefinition = defineStatement<
 	PostgresProviderObservationRow
 >({
 	name: "readiness.fingerprint.provider",
+	operation: "SELECT",
 	text: `SELECT current_setting('server_version'),
        datcollate,
        datctype,
@@ -131,6 +150,7 @@ const extensionsStatementDefinition = defineStatement<
 	readonly PostgresExtensionObservationRow[]
 >({
 	name: "readiness.fingerprint.extensions",
+	operation: "SELECT",
 	text: `SELECT extname, extversion
 FROM pg_catalog.pg_extension
 WHERE extname = ANY($1::text[])
@@ -153,8 +173,13 @@ ORDER BY extname`,
 	},
 });
 
-const searchPathStatementDefinition = defineStatement<void, void>({
+const searchPathStatementDefinition = defineStatement<
+	void,
+	void,
+	"administrative"
+>({
 	name: "readiness.catalog.search-path",
+	operation: "administrative",
 	text: "SET LOCAL search_path = pg_catalog",
 	parameterCount: 0,
 	parameters: () => [],
@@ -173,6 +198,7 @@ const searchPathStatementDefinition = defineStatement<void, void>({
 function existsStatement(name: string, textValue: string) {
 	return defineStatement<string | void, boolean>({
 		name,
+		operation: "SELECT",
 		text: textValue,
 		parameterCount: name === "readiness.catalog.namespace" ? 1 : 0,
 		parameters: (value) =>
@@ -200,6 +226,7 @@ const catalogBindingsStatementDefinition = defineStatement<
 	readonly Readonly<{ application: string; applicationSchema: string }>[]
 >({
 	name: "readiness.catalog.application-bindings",
+	operation: "SELECT",
 	text: `SELECT application_name, postgres_schema
 FROM questpie_internal.application_bindings
 WHERE application_name = $1 OR postgres_schema = $2
@@ -234,6 +261,7 @@ const changeCaptureStatementDefinition = defineStatement<
 	readonly PostgresChangeCaptureTriggerV1[]
 >({
 	name: "readiness.change-capture",
+	operation: "SELECT",
 	text: `SELECT c.relname, t.tgname, t.tgtype::integer,
        pg_catalog.encode(t.tgargs, 'hex'), pn.nspname, p.proname,
        p.prosecdef, p.proconfig, t.tgenabled,
@@ -294,6 +322,7 @@ const databaseOwnedUpdatesStatementDefinition = defineStatement<
 	readonly PostgresDatabaseOwnedUpdateCatalogRowV1[]
 >({
 	name: "readiness.database-owned-updates",
+	operation: "SELECT",
 	text: `SELECT c.relname, t.tgname, t.tgtype::integer, t.tgenabled,
        pn.nspname, p.proname, l.lanname, p.prosrc, p.prosecdef, p.proconfig,
        c.relowner = n.nspowner AND p.proowner = n.nspowner,
@@ -383,10 +412,13 @@ export async function verifyPostgresDatabaseSchemaReadiness(
 	transaction: PostgresTransaction,
 	schema: SchemaProjectionV1,
 	bindStatement: typeof definePostgresStatement,
+	bindAdministrativeStatement: typeof definePostgresAdministrativeStatement,
 ): Promise<SchemaFingerprintV1> {
 	const providerStatement = bindStatement(providerStatementDefinition);
 	const extensionsStatement = bindStatement(extensionsStatementDefinition);
-	const searchPathStatement = bindStatement(searchPathStatementDefinition);
+	const searchPathStatement = bindAdministrativeStatement(
+		searchPathStatementDefinition,
+	);
 	const namespaceStatement = bindStatement(namespaceStatementDefinition);
 	const bindingCatalogStatement = bindStatement(
 		bindingCatalogStatementDefinition,

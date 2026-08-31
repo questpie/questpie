@@ -96,6 +96,7 @@ export const durableRunTerminal: PostgresStatement<
 	RunTransitionResult
 > = definePostgresStatement({
 	name: "durable.terminal.run",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET state = $5, current_attempt_id = NULL, lease_token_digest = NULL, lease_expires_at = NULL,
     result_bytes = $6, failure_code = $7, dead_letter = $8,
@@ -148,6 +149,7 @@ export const durableRunRetry: PostgresStatement<
 	RunTransitionResult
 > = definePostgresStatement({
 	name: "durable.retry.run",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET state = 'delayed', current_attempt_id = NULL, lease_token_digest = NULL,
     lease_expires_at = NULL, failure_code = $5,
@@ -191,6 +193,7 @@ export const durableAttemptComplete: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.terminal.attempt",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = $3, failure_code = $4
 WHERE application_name = $1 AND attempt_id = $2`,
