@@ -217,3 +217,31 @@ The earlier Fable 5 high design-readiness PASS remains useful adversarial,
 nonformal evidence only. Its residual Runtime note is superseded by the concrete
 open-start/open-end hostile evidence above and cannot waive the executable
 repair or the later manifest-bound acceptance review.
+
+## First manifest-bound acceptance review
+
+Reviewed head: `bddada48b6c62795a77b005de397f351d1138cf9`
+
+Verdict: `BLOCKED`. The exact committed record is `REVIEW.json`; it does not
+accept ADR-0033. A future replacement review writes
+`REVIEW-REPLACEMENT.json` and may run only after a fresh manifest-bound head.
+
+The reviewer found two blockers. First, the executable signal artifact emitted
+`questpie.execution.entry` for Query, Mutation, and Action while normative
+`SIGNALS.md` admitted it only for Execution and Query, and the artifact carried
+no per-scope attribute map capable of detecting that drift. The pending repair
+must select the exact scope set, bind it into canonical artifact bytes, test the
+negative scopes, and regenerate dependent digests.
+
+Second, the Fetch lifetime proof claimed EOF, source error, consumer cancel,
+and host-abort coverage but executed only EOF and host abort. The pending repair
+must execute source error with one `framework_error` end and consumer cancel
+with one `cancelled` end, including idempotence against later EOF/abort.
+
+The review's non-blocking exactness notes are recorded rather than silently
+dropped: Reaction committed-fact acceptance belongs in the ADR owner list;
+`durable.terminal` admits only `ok`, `framework_error`, or `cancelled`;
+Execution trace plans admit only active parent or root; `occurredAt` needs an
+exact millisecond-format assertion; the PostgreSQL command records port 55439;
+and the durable catalog helper uses `const` where it is never reassigned. These
+notes do not substitute for closing the two blockers.

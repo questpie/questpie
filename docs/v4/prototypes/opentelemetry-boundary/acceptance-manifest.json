@@ -3,7 +3,7 @@
 	"ticket": "ADR-0033",
 	"proof": "Freeze one Runtime-owned closed observation kernel, Execution Envelope v2, an exact low-cardinality OpenTelemetry projection, first-acceptance durable trace links, and one optional exact-peer official adapter while preserving Policy, PostgreSQL, outcome, retry, cancellation, disclosure, and application-result authority.",
 	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-	"reviewOutput": "docs/v4/prototypes/opentelemetry-boundary/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
 		"accepted feat/v4 base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393"
 	},
@@ -76,7 +76,7 @@
 		{
 			"name": "candidate Runtime observation and OpenTelemetry decision",
 			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
-			"sha256": "1206bb5efa7df3d45efd92a229dfa7fe819cfadd7b09f25d21c6bdf6c065ce47"
+			"sha256": "08a3be487d625986b2998d9e7314d095d9147ec26d3a179c816541589477ea72"
 		},
 		{
 			"name": "candidate proof wayfinder",
@@ -86,7 +86,7 @@
 		{
 			"name": "selected candidate",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/CANDIDATE.md",
-			"sha256": "52545ae97514c993750d8f6f09ef5c9992ee04688a9f81d441dc451f637f3e16"
+			"sha256": "effa2310e974b8feef8e667762b03f7c34830bfc58499356a86428e960397810"
 		},
 		{
 			"name": "candidate comparison",
@@ -96,12 +96,12 @@
 		{
 			"name": "exact Runtime and adapter boundary",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/BOUNDARY.md",
-			"sha256": "66060787ca0551aabd9a009f0b013d4111371feb31596723b125f6b9f655929e"
+			"sha256": "2e18dfe276c67429e83d6dd2497cdfec8ab37b2e3adcbc406bba12551f5070ec"
 		},
 		{
 			"name": "exact OpenTelemetry signal projection",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/SIGNALS.md",
-			"sha256": "d1c39c27742a32c3951a6363f3c0d3322b46318c1cafab95c9406ac525259aa3"
+			"sha256": "b29a09312c8eb5d7fb1016a83a5b6f842ea3a1abc24061b38b7537067cfde8b6"
 		},
 		{
 			"name": "candidate finished-product public guide",
@@ -111,7 +111,12 @@
 		{
 			"name": "adversarial design review ledger",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/ADVERSARIAL-REVIEWS.md",
-			"sha256": "c8da5c05ed0f4670a9862fbc128a21136c6c47f2f0e78590c419d9c20660259d"
+			"sha256": "7ff0490f7cad4b197fb0bb075ef99551568ec3e6359203920c29184fef55be3b"
+		},
+		{
+			"name": "committed blocked acceptance record for bddada48",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/REVIEW.json",
+			"sha256": "1644adc531b6444286fbaf8e113cd0650ae97f2520a8a7fbd51965ca2056c143"
 		},
 		{
 			"name": "authority and breaking projection ledger",
@@ -121,22 +126,22 @@
 		{
 			"name": "candidate staging proof",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/staging-check.ts",
-			"sha256": "5e90adcdc29a6b3708ab7c4e2dea61fed6a0ea1a81d84a0dd16a47efcf485c81"
+			"sha256": "1b6a6fff838612c871fd37ba75997465f2a75e72bff30cbc5e908993bd1b18cc"
 		},
 		{
 			"name": "artifact proof explanation",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/README.md",
-			"sha256": "0800ce0406995d527bc4ac69ec7704a6e29265db0d1a52be6065444033b1685a"
+			"sha256": "80385c5910db53e60559cd1105fd86304537e87e2d7592a77a5d1e71a0231b02"
 		},
 		{
 			"name": "canonical signal and config artifact proof",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.ts",
-			"sha256": "ad6eebbb8f4d9a0b2ff6d2f0fa3ececca86c10eb73849e1c83009eda08d222da"
+			"sha256": "1ef7d46f6c9c040c1ab7a75fe02db4992788a37b95c9a51f7e278caca1de9419"
 		},
 		{
 			"name": "artifact hostile tests",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.test.ts",
-			"sha256": "13a4ff34b26aef5126afb77fab86d0c44659c32bd0acb0c6899cab79d93d9799"
+			"sha256": "332bd4a7b49517a09f211624eab131b4a0a5fc644b7e823d188d3d0660857085"
 		},
 		{
 			"name": "artifact proof type boundary",
@@ -146,17 +151,17 @@
 		{
 			"name": "observation kernel proof explanation",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/README.md",
-			"sha256": "a2e221179fc709dddc16593e61ba157ac935d7ffe0a795be8b4d57947dc0582b"
+			"sha256": "56bb8298f78f13c545a0729d3e47ac4d22d6d1594912f137765f35e6716dac01"
 		},
 		{
 			"name": "closed observation kernel proof",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.ts",
-			"sha256": "686ebef0321db6a4a27f189ef5fd236771fc1816bb59fd060f6e01ec63a17b55"
+			"sha256": "1e2e12dd0d217fa5db43248ea124efc66b4115003e407c704b396f02fba24e4a"
 		},
 		{
 			"name": "observation kernel hostile tests",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.test.ts",
-			"sha256": "e90f1712ecb3e00fd2ff4af837bf3028898582a8c175200f1f387c3997277eff"
+			"sha256": "23846d47f66f924706cb8bf151d6d3079c2e9d09dd01bb7d0e341757c932b872"
 		},
 		{
 			"name": "observation proof type boundary",
@@ -171,7 +176,7 @@
 		{
 			"name": "protocol-v8 durable-link proof",
 			"path": "docs/v4/prototypes/opentelemetry-boundary/durable-link/kernel.ts",
-			"sha256": "b1fa0a7b6bcc1efbac3cdd3d4ce4340ca8813f7168935b771e699221e3b2c818"
+			"sha256": "5213af4abb0f91faea52015ae4710c9ba565d81ba3c780092c4756d4d882e5b0"
 		},
 		{
 			"name": "PostgreSQL 17 durable-link hostile tests",
@@ -190,7 +195,7 @@
 			"result": "PASS"
 		},
 		{
-			"command": "PGHOST=127.0.0.1 PGPORT=<allocated-trust-auth-postgresql-17-port> PGUSER=postgres PGDATABASE=postgres bun test docs/v4/prototypes/opentelemetry-boundary/durable-link/check.test.ts",
+			"command": "PGHOST=127.0.0.1 PGPORT=55439 PGUSER=postgres PGDATABASE=postgres bun test docs/v4/prototypes/opentelemetry-boundary/durable-link/check.test.ts",
 			"result": "PASS"
 		},
 		{

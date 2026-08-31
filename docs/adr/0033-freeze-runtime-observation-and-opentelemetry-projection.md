@@ -37,7 +37,8 @@ owners—not handler wrappers—start and finish scopes:
 - generated Fetch/Route ingress and direct root Execution;
 - Query, Mutation, and Action execution;
 - Mutation transaction and compiler-owned PostgreSQL statements;
-- Job acceptance and Job/Reaction physical attempts; and
+- Job acceptance, Reaction committed-fact acceptance, and Job/Reaction physical
+  attempts; and
 - Action effects.
 
 The kernel co-emits the closed Execution Envelope and invokes one optional

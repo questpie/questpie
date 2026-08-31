@@ -60,21 +60,34 @@ Every string is at most 256 UTF-8 bytes. Resource and statement identities are
 compiler-bounded. Exact UUID attributes appear only when `operationalIds` is
 `spans`.
 
-| Attribute                      | Type    | Allowed scopes                     | Values                                                                                             |
-| ------------------------------ | ------- | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `questpie.resource`            | string  | Operation, accept, attempt, Action | exact static Resource identity                                                                     |
-| `questpie.operation.kind`      | string  | Operation                          | `query`, `mutation`, `action`                                                                      |
-| `questpie.execution.entry`     | string  | Execution, Query                   | `direct`, `fetch`, `watch_initial`, `watch_recompute`, `worker`                                    |
-| `questpie.outcome`             | string  | all semantic spans                 | `ok`, `declared_error`, `framework_error`, `cancelled`, `deadline`, `ambiguous`, `fenced`, `retry` |
-| `questpie.error.code`          | string  | terminal semantic spans            | declared code or closed framework code                                                             |
-| `questpie.statement.identity`  | string  | PostgreSQL                         | compiler-owned fixed statement identity                                                            |
-| `questpie.attempt.number`      | integer | durable Attempt                    | 1..8                                                                                               |
-| `questpie.runtime.instance.id` | string  | operational span opt-in            | canonical UUID                                                                                     |
-| `questpie.transaction.id`      | string  | transaction/ambiguity opt-in       | canonical nonzero PostgreSQL `xid8` decimal text, maximum `18446744073709551615`                   |
-| `questpie.dispatch.id`         | string  | accept/attempt opt-in              | canonical UUID                                                                                     |
-| `questpie.run.id`              | string  | attempt opt-in                     | canonical UUID                                                                                     |
-| `questpie.attempt.id`          | string  | attempt opt-in                     | canonical UUID                                                                                     |
-| `questpie.effect.id`           | string  | effect opt-in                      | canonical UUID                                                                                     |
+| Attribute                      | Type    | Allowed scopes                                          | Values                                                                                             |
+| ------------------------------ | ------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `questpie.resource`            | string  | Query, Mutation, Action, accept, attempt, Action effect | exact static Resource identity                                                                     |
+| `questpie.operation.kind`      | string  | Operation                                               | `query`, `mutation`, `action`                                                                      |
+| `questpie.execution.entry`     | string  | Execution, Query, Mutation, Action                      | `direct`, `fetch`, `watch_initial`, `watch_recompute`, `worker`                                    |
+| `questpie.outcome`             | string  | all semantic spans                                      | `ok`, `declared_error`, `framework_error`, `cancelled`, `deadline`, `ambiguous`, `fenced`, `retry` |
+| `questpie.error.code`          | string  | terminal semantic spans                                 | declared code or closed framework code                                                             |
+| `questpie.statement.identity`  | string  | PostgreSQL                                              | compiler-owned fixed statement identity                                                            |
+| `questpie.attempt.number`      | integer | durable Attempt                                         | 1..8                                                                                               |
+| `questpie.runtime.instance.id` | string  | operational span opt-in                                 | canonical UUID                                                                                     |
+| `questpie.transaction.id`      | string  | transaction/ambiguity opt-in                            | canonical nonzero PostgreSQL `xid8` decimal text, maximum `18446744073709551615`                   |
+| `questpie.dispatch.id`         | string  | accept/attempt opt-in                                   | canonical UUID                                                                                     |
+| `questpie.run.id`              | string  | accept/attempt opt-in                                   | canonical UUID                                                                                     |
+| `questpie.attempt.id`          | string  | attempt opt-in                                          | canonical UUID                                                                                     |
+| `questpie.effect.id`           | string  | effect opt-in                                           | canonical UUID                                                                                     |
+| `questpie.retry.delay_ms`      | integer | Job/Reaction attempt event                              | 0..900,000                                                                                         |
+
+`questpie.execution.entry` is the Runtime entry dimension, not a Query-only
+fact. One resolved entry is copied to the owning Execution and every Query,
+Mutation, or Action Operation beneath it. This keeps direct, generated Fetch,
+Live Query, and worker traffic comparable without reconstructing ancestry from
+span names.
+
+The canonical projection artifact owns an exact `spanAttributeScopes` entry
+for every attribute above and every stable HTTP/PostgreSQL attribute. It also
+binds the complete event-owner, event-outcome, and end-outcome maps from the
+executable observation contract. The flat allowlist is therefore only a
+closed-name set; it cannot silently authorize an attribute on a new scope.
 
 HTTP SERVER spans add only stable `http.request.method`, matched `http.route`
 when available, `url.scheme`, and `http.response.status_code`. They omit raw

@@ -31,7 +31,8 @@ The executable cases prove:
 - per-Runtime async-context and same-layer suppression isolation across
   interleaved awaits;
 - Fetch scope retention through streaming response EOF, error, consumer cancel,
-  and host abort even when the source and cancellation callback never settle;
+  and host abort even when the source and cancellation callback never settle,
+  with exactly one HTTP-status-bearing end across later EOF/abort races;
 - nominal Runtime-issued Execution identity, rejection of structural clones,
   foreign roots, a second root scope for one issued identity, invalid start
   facts, exact allowed and required start/trace/end keys, every closed enum and
@@ -39,6 +40,8 @@ The executable cases prove:
   event ownership before adapter or Envelope projection;
 - zero or one durable acceptance link, so traced Runs link once while legacy or
   no-adapter Runs still start one unlinked physical-attempt root;
+- Execution roots admit only an active parent or a new root; remote parents and
+  creation links remain Fetch/Route ingress ownership;
 - a committed PostgreSQL transaction remaining `ok` when its outer Mutation
   later closes `ambiguous`, with retry owned only by a physical durable Attempt;
 - refusal of late nested materialization or Envelope-counter recreation after
@@ -48,9 +51,9 @@ The executable cases prove:
   best-effort end of an existing adapter scope, and refusal of new
   materialization.
 
-The exported readonly event-owner and end-outcome maps are the executable
-source used by the artifact proof to compare the complete projection rather
-than spot-checking duplicated rows.
+The exported readonly event-owner, event-outcome, and end-outcome maps are the
+executable source used by the artifact proof to compare the complete projection
+rather than spot-checking duplicated rows.
 
 Run the proof with:
 

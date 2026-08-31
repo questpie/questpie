@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 
 import { canonicalJsonLine } from "../../../../../packages/runtime/src/canonical-json";
-import { END_OUTCOMES, EVENT_SCOPES } from "../observation-kernel/kernel";
+import {
+	END_OUTCOMES,
+	EVENT_OUTCOMES,
+	EVENT_SCOPES,
+	type ScopeKind,
+} from "../observation-kernel/kernel";
 
 export type ArtifactDigestDomain = "projection-v1" | "config-v1";
 
@@ -306,13 +311,89 @@ const SPAN_ATTRIBUTES = Object.freeze([
 	"questpie.statement.identity",
 	"questpie.transaction.id",
 	"url.scheme",
-]);
+] as const);
+
+const ALL_SCOPES = Object.freeze([
+	"runtime",
+	"fetch",
+	"route",
+	"execution",
+	"query",
+	"mutation",
+	"action",
+	"transaction",
+	"postgresql",
+	"job.accept",
+	"reaction.accept",
+	"job.attempt",
+	"reaction.attempt",
+	"action.effect",
+] satisfies readonly ScopeKind[]);
+
+type ProjectedSpanAttribute =
+	| (typeof SPAN_ATTRIBUTES)[number]
+	| "questpie.retry.delay_ms";
+
+const SPAN_ATTRIBUTE_SCOPES = Object.freeze({
+	"db.operation.name": Object.freeze(["postgresql"]),
+	"db.system.name": Object.freeze(["postgresql"]),
+	"http.request.method": Object.freeze(["fetch", "route"]),
+	"http.response.status_code": Object.freeze(["fetch", "route"]),
+	"http.route": Object.freeze(["route"]),
+	"questpie.attempt.id": Object.freeze(["job.attempt", "reaction.attempt"]),
+	"questpie.attempt.number": Object.freeze(["job.attempt", "reaction.attempt"]),
+	"questpie.dispatch.id": Object.freeze([
+		"job.accept",
+		"reaction.accept",
+		"job.attempt",
+		"reaction.attempt",
+	]),
+	"questpie.effect.id": Object.freeze(["action.effect"]),
+	"questpie.error.code": ALL_SCOPES,
+	"questpie.execution.entry": Object.freeze([
+		"execution",
+		"query",
+		"mutation",
+		"action",
+	]),
+	"questpie.operation.kind": Object.freeze(["query", "mutation", "action"]),
+	"questpie.outcome": ALL_SCOPES,
+	"questpie.resource": Object.freeze([
+		"query",
+		"mutation",
+		"action",
+		"job.accept",
+		"reaction.accept",
+		"job.attempt",
+		"reaction.attempt",
+		"action.effect",
+	]),
+	"questpie.retry.delay_ms": Object.freeze(["job.attempt", "reaction.attempt"]),
+	"questpie.run.id": Object.freeze([
+		"job.accept",
+		"reaction.accept",
+		"job.attempt",
+		"reaction.attempt",
+	]),
+	"questpie.runtime.instance.id": ALL_SCOPES,
+	"questpie.statement.identity": Object.freeze(["postgresql"]),
+	"questpie.transaction.id": Object.freeze(["transaction", "mutation"]),
+	"url.scheme": Object.freeze(["fetch", "route"]),
+} satisfies Readonly<Record<ProjectedSpanAttribute, readonly ScopeKind[]>>);
 
 const SPAN_EVENT_SCOPES = Object.freeze(
 	Object.fromEntries(
 		Object.entries(EVENT_SCOPES).map(([event, scopes]) => [
 			`questpie.${event}`,
 			Object.freeze([...scopes]),
+		]),
+	),
+);
+const SPAN_EVENT_OUTCOMES = Object.freeze(
+	Object.fromEntries(
+		Object.entries(EVENT_OUTCOMES).map(([event, outcomes]) => [
+			`questpie.${event}`,
+			Object.freeze([...outcomes]),
 		]),
 	),
 );
@@ -505,6 +586,7 @@ function createProjection(questpieVersion: string) {
 		resourceAttributeAllowlist: RESOURCE_ATTRIBUTES,
 		spanGraph: SPAN_GRAPH,
 		spanAttributeAllowlist: SPAN_ATTRIBUTES,
+		spanAttributeScopes: SPAN_ATTRIBUTE_SCOPES,
 		spanAttributeMaximumUtf8Bytes: 256,
 		httpMethodNormalization: Object.freeze([
 			"CONNECT",
@@ -539,6 +621,7 @@ function createProjection(questpieVersion: string) {
 		}),
 		spanEventLimit: 32,
 		spanEventNames: EVENT_NAMES,
+		spanEventOutcomes: SPAN_EVENT_OUTCOMES,
 		spanEventScopes: SPAN_EVENT_SCOPES,
 		endOutcomesByScope: END_OUTCOMES_BY_SCOPE,
 		transactionIdentity: Object.freeze({

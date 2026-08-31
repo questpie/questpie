@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
 	createObservationKernel,
+	EVENT_OUTCOMES,
 	retainScopeThroughResponse,
 	type NeutralTraceContextV1,
 	type ObservationAdapterV1,
@@ -325,6 +326,12 @@ describe("private observation kernel", () => {
 			);
 		}
 		const decoded = lines.map((line) => JSON.parse(line));
+		expect(decoded.every((event) => event.occurredAt === occurredAt)).toBe(
+			true,
+		);
+		expect(decoded[0]?.occurredAt).toMatch(
+			/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u,
+		);
 		expect(decoded.slice(0, 5).map((event) => event.executionId)).toEqual(
 			Array.from({ length: 5 }, () => root.identity.executionId),
 		);
@@ -673,6 +680,94 @@ describe("private observation kernel", () => {
 		]);
 	});
 
+	test("ends Fetch exactly once with framework_error when its source errors", async () => {
+		const fixture = makeAdapter();
+		const kernel = createKernel({ adapter: fixture.adapter });
+		const fetch = kernel.beginScope(null, {
+			kind: "fetch",
+			method: "GET",
+			principalKind: null,
+			requestKind: "unmatched",
+			scheme: "https",
+			suppressHttp: true,
+			trace: { kind: "root" },
+		});
+		const sourceFailure = new Error("source failed");
+		const source = new ReadableStream<Uint8Array>({
+			pull: () => {
+				throw sourceFailure;
+			},
+		});
+		const abort = new AbortController();
+		const response = retainScopeThroughResponse(
+			fetch,
+			new Response(source, { status: 502 }),
+			"fetch",
+			abort.signal,
+		);
+		await expect(response.body!.getReader().read()).rejects.toBe(sourceFailure);
+		abort.abort();
+		await Bun.sleep(0);
+		expect(fixture.ends).toEqual([
+			{
+				httpResponseStatusCode: 502,
+				kind: "fetch",
+				outcome: "framework_error",
+			},
+		]);
+	});
+
+	test("ends Fetch exactly once on consumer cancel despite later EOF and abort", async () => {
+		const fixture = makeAdapter();
+		const kernel = createKernel({ adapter: fixture.adapter });
+		const fetch = kernel.beginScope(null, {
+			kind: "fetch",
+			method: "GET",
+			principalKind: null,
+			requestKind: "unmatched",
+			scheme: "https",
+			suppressHttp: true,
+			trace: { kind: "root" },
+		});
+		let finishPull = () => undefined;
+		const source = new ReadableStream<Uint8Array>({
+			pull(controller) {
+				return new Promise<void>((resolve) => {
+					finishPull = () => {
+						try {
+							controller.close();
+						} catch {
+							// Cancellation may already have terminally closed the source.
+						}
+						resolve();
+					};
+				});
+			},
+		});
+		const abort = new AbortController();
+		const response = retainScopeThroughResponse(
+			fetch,
+			new Response(source, { status: 206 }),
+			"fetch",
+			abort.signal,
+		);
+		const reader = response.body!.getReader();
+		const pending = reader.read();
+		await Bun.sleep(0);
+		await reader.cancel("consumer stopped");
+		finishPull();
+		abort.abort();
+		await pending.catch(() => undefined);
+		await Bun.sleep(0);
+		expect(fixture.ends).toEqual([
+			{
+				httpResponseStatusCode: 206,
+				kind: "fetch",
+				outcome: "cancelled",
+			},
+		]);
+	});
+
 	test("isolates adapter event and end faults", () => {
 		const diagnostics: string[] = [];
 		const fixture = makeAdapter({
@@ -700,6 +795,21 @@ describe("private observation kernel", () => {
 		const fixture = makeAdapter();
 		const kernel = createKernel({ adapter: fixture.adapter });
 		const root = execution(kernel);
+		for (const trace of [
+			{
+				kind: "remote-parent",
+				extracted: { context: traceContext, tracestate: null },
+			},
+			{ kind: "root-with-links", links: [traceContext] },
+		] as const)
+			expect(() =>
+				kernel.beginExecution({
+					entry: "direct",
+					kind: "execution",
+					principalKind: "user",
+					trace,
+				} as unknown as Parameters<ObservationKernel["beginExecution"]>[0]),
+			).toThrow("trace plan");
 		const mutation = kernel.beginScope(root.identity, {
 			entry: "fetch",
 			kind: "mutation",
@@ -853,6 +963,9 @@ describe("private observation kernel", () => {
 	});
 
 	test("rejects every malformed or open event payload before projection", () => {
+		expect(EVENT_OUTCOMES).toEqual({
+			"durable.terminal": ["ok", "framework_error", "cancelled"],
+		});
 		const kernel = createKernel();
 		const executionRoot = execution(kernel);
 		const accepted = kernel.beginScope(executionRoot.identity, {

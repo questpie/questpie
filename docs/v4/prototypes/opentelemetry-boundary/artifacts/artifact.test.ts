@@ -10,6 +10,7 @@ import {
 
 import {
 	END_OUTCOMES as runtimeEndOutcomes,
+	EVENT_OUTCOMES as runtimeEventOutcomes,
 	EVENT_SCOPES as runtimeEventScopes,
 } from "../observation-kernel/kernel";
 import {
@@ -85,17 +86,103 @@ describe("canonical OpenTelemetry projection and config artifacts", () => {
 		match(first.configDigest, /^[0-9a-f]{64}$/u);
 		strictEqual(
 			first.projectionDigest,
-			"94568377fb1d713d98e81922e33dcaea31cc03192f5b1bcb16fba330b2517f7c",
+			"3028812618c963a95d87b3b5b9b7391dae3508c48232a56971f98f850020a2f2",
 		);
 		strictEqual(
 			first.configDigest,
-			"0da930d424c5fc8fe3fae177d360fafe30f52066e3ce8eb66ac5d6242077637f",
+			"ec560329e40abc6876a1127777e0d56290f7fbe2e73e2401b02a6e186657c0f8",
 		);
 		strictEqual(first.config.projectionDigest, first.projectionDigest);
 		strictEqual(first.projection.semanticConventions.version, "1.44.0");
 		strictEqual(first.projection.instrumentationScope.name, "questpie");
 		strictEqual(first.projection.instrumentationScope.version, "4.0.0-beta.1");
 		strictEqual(first.projection.spanGraph.length, 14);
+		deepStrictEqual(first.projection.spanAttributeScopes, {
+			"db.operation.name": ["postgresql"],
+			"db.system.name": ["postgresql"],
+			"http.request.method": ["fetch", "route"],
+			"http.response.status_code": ["fetch", "route"],
+			"http.route": ["route"],
+			"questpie.attempt.id": ["job.attempt", "reaction.attempt"],
+			"questpie.attempt.number": ["job.attempt", "reaction.attempt"],
+			"questpie.dispatch.id": [
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+			],
+			"questpie.effect.id": ["action.effect"],
+			"questpie.error.code": [
+				"runtime",
+				"fetch",
+				"route",
+				"execution",
+				"query",
+				"mutation",
+				"action",
+				"transaction",
+				"postgresql",
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+				"action.effect",
+			],
+			"questpie.execution.entry": ["execution", "query", "mutation", "action"],
+			"questpie.operation.kind": ["query", "mutation", "action"],
+			"questpie.outcome": [
+				"runtime",
+				"fetch",
+				"route",
+				"execution",
+				"query",
+				"mutation",
+				"action",
+				"transaction",
+				"postgresql",
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+				"action.effect",
+			],
+			"questpie.resource": [
+				"query",
+				"mutation",
+				"action",
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+				"action.effect",
+			],
+			"questpie.retry.delay_ms": ["job.attempt", "reaction.attempt"],
+			"questpie.run.id": [
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+			],
+			"questpie.runtime.instance.id": [
+				"runtime",
+				"fetch",
+				"route",
+				"execution",
+				"query",
+				"mutation",
+				"action",
+				"transaction",
+				"postgresql",
+				"job.accept",
+				"reaction.accept",
+				"job.attempt",
+				"reaction.attempt",
+				"action.effect",
+			],
+			"questpie.statement.identity": ["postgresql"],
+			"questpie.transaction.id": ["transaction", "mutation"],
+			"url.scheme": ["fetch", "route"],
+		});
 		deepStrictEqual(first.projection.transactionIdentity, {
 			kind: "postgresXid8Text",
 			canonicalPattern: "^[1-9][0-9]{0,19}$",
@@ -107,6 +194,15 @@ describe("canonical OpenTelemetry projection and config artifacts", () => {
 				Object.entries(runtimeEventScopes).map(([event, scopes]) => [
 					`questpie.${event}`,
 					scopes,
+				]),
+			),
+		);
+		deepStrictEqual(
+			first.projection.spanEventOutcomes,
+			Object.fromEntries(
+				Object.entries(runtimeEventOutcomes).map(([event, outcomes]) => [
+					`questpie.${event}`,
+					outcomes,
 				]),
 			),
 		);

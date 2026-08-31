@@ -80,7 +80,7 @@ admitted on that variant:
 | `runtime`                        | service Principal, root                                                                                                                  |
 | `fetch`                          | generated-operation/unmatched, normalized method, scheme, null Principal, ingress trace plan, HTTP suppress                              |
 | `route`                          | normalized method, matched template, scheme, null Principal, ingress trace plan, HTTP suppress                                           |
-| `execution`                      | entry, resolved Principal, trace plan                                                                                                    |
+| `execution`                      | entry, resolved Principal, active parent or root                                                                                         |
 | `query`/`mutation`/`action`      | entry, Resource identity, resolved Principal, active parent                                                                              |
 | `transaction`                    | resolved Principal, active parent, optional canonical nonzero PostgreSQL `xid8` decimal text                                             |
 | `postgresql`                     | SQL verb, statement identity, resolved Principal, active parent, PostgreSQL suppress                                                     |
@@ -97,6 +97,11 @@ acceptance stored a non-null context; a null old-row or no-adapter context uses
 `root` and creates no link. It never fabricates a zero trace or span identity.
 No single ambiguous `traceContext` slot exists.
 
+An Execution trace plan is closed further to `active-parent` or `root`.
+`remote-parent` belongs only to owned Fetch/Route ingress, and
+`root-with-links` belongs only to ingress restart or a linked durable Attempt;
+neither is admitted directly on an Execution start.
+
 The event union has payload only where the signal projection requires it:
 transaction ambiguity/commit may carry canonical nonzero PostgreSQL `xid8` text; durable acceptance
 may carry Dispatch/Run UUIDs; fencing may carry Attempt UUID; retry requires
@@ -105,6 +110,10 @@ a closed error code; Action ambiguity may carry Effect UUID. The other four
 events are payloadless. The end union repeats its scope `kind`, always carries
 the closed outcome and optional closed error code, and requires HTTP response
 status for `fetch` and `route`. The kernel rejects a mismatched end kind.
+
+The `durable.terminal` event outcome is exactly `ok`, `framework_error`, or
+`cancelled`. It cannot carry `declared_error`, `deadline`, `ambiguous`, `fenced`,
+or `retry`; those are scope-end outcomes or separately owned events.
 
 Events are admitted only on these scopes:
 

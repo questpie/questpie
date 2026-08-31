@@ -87,7 +87,7 @@ function insertAfterTable<Row extends readonly unknown[]>(
 	additions: readonly Row[],
 ): readonly Row[] {
 	const result = [...rows];
-	let index = result.findLastIndex((row) => row[0] === table) + 1;
+	const index = result.findLastIndex((row) => row[0] === table) + 1;
 	if (index === 0) throw new TypeError(`catalog table ${table} is absent`);
 	result.splice(index, 0, ...additions);
 	return Object.freeze(result);

@@ -61,3 +61,9 @@ Implementation and SPEC/ticket projection remain blocked until this candidate
 passes the repository acceptance protocol. Acceptance alone does not publish
 the install guide: public API/package instructions remain candidate material
 until their implementation tracer and release evidence pass.
+
+The first manifest-bound review of head `bddada48b6c62795a77b005de397f351d1138cf9`
+returned `BLOCKED`. A replacement candidate remains pending until the signal
+artifact binds the exact per-scope `questpie.execution.entry` projection and the
+Fetch lifetime proof executes source-error plus consumer-cancel hostiles. The
+committed BLOCKED record is evidence only and does not change Proposed authority.

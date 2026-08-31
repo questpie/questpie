@@ -56,7 +56,39 @@ const adr = readFileSync(
 match(adr, /^- Status: Proposed$/m);
 doesNotMatch(adr, /^- Status: Accepted$/m);
 doesNotMatch(readFileSync("docs/adr/README.md", "utf8"), /ADR-0033|0033-/u);
-strictEqual(existsSync(`${root}/REVIEW.json`), false);
+strictEqual(existsSync(`${root}/REVIEW.json`), true);
+strictEqual(
+	digest(`${root}/REVIEW.json`),
+	"1644adc531b6444286fbaf8e113cd0650ae97f2520a8a7fbd51965ca2056c143",
+);
+const blockedReview = JSON.parse(
+	readFileSync(`${root}/REVIEW.json`, "utf8"),
+) as Readonly<{
+	reviewedHead: string;
+	verdict: string;
+	primary: Readonly<{ disposition: string }>;
+}>;
+strictEqual(
+	blockedReview.reviewedHead,
+	"bddada48b6c62795a77b005de397f351d1138cf9",
+);
+strictEqual(blockedReview.verdict, "BLOCKED");
+strictEqual(blockedReview.primary.disposition, "BLOCKED");
+strictEqual(existsSync(`${root}/REVIEW-REPLACEMENT.json`), false);
+
+const acceptanceManifest = JSON.parse(
+	readFileSync(`${root}/acceptance-manifest.json`, "utf8"),
+) as Readonly<{
+	reviewOutput: string;
+	verification: ReadonlyArray<Readonly<{ command: string }>>;
+}>;
+strictEqual(acceptanceManifest.reviewOutput, `${root}/REVIEW-REPLACEMENT.json`);
+strictEqual(
+	acceptanceManifest.verification.some(({ command }) =>
+		command.includes("PGHOST=127.0.0.1 PGPORT=55439"),
+	),
+	true,
+);
 
 const candidatePaths = Bun.spawnSync(
 	["git", "diff", "--name-only", `${projection.base}..HEAD`],

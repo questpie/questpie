@@ -134,7 +134,7 @@ export type ExecutionStartV1 = Readonly<{
 	entry: ExecutionEntry;
 	kind: "execution";
 	principalKind: PrincipalKind;
-	trace: ObservationTracePlanV1;
+	trace: Readonly<{ kind: "active-parent" }> | Readonly<{ kind: "root" }>;
 }>;
 type OperationStartV1 = Readonly<{
 	entry: ExecutionEntry;
@@ -691,11 +691,13 @@ function validateClosedObservationStart(input: ObservationStartV1): void {
 	const traceKinds =
 		kind === "runtime"
 			? ["root"]
-			: kind === "fetch" || kind === "route" || kind === "execution"
+			: kind === "fetch" || kind === "route"
 				? ["active-parent", "remote-parent", "root", "root-with-links"]
-				: kind === "job.attempt" || kind === "reaction.attempt"
-					? ["root", "root-with-links"]
-					: ["active-parent"];
+				: kind === "execution"
+					? ["active-parent", "root"]
+					: kind === "job.attempt" || kind === "reaction.attempt"
+						? ["root", "root-with-links"]
+						: ["active-parent"];
 	if (!validTracePlan(value.trace, traceKinds))
 		throw new TypeError("observation start trace plan is invalid");
 }
@@ -757,6 +759,13 @@ export const EVENT_SCOPES: Readonly<
 	"durable.retry_scheduled": ["job.attempt", "reaction.attempt"],
 	"durable.terminal": ["job.attempt", "reaction.attempt"],
 	"action.ambiguous": ["action.effect"],
+});
+export const EVENT_OUTCOMES = Object.freeze({
+	"durable.terminal": Object.freeze([
+		"ok",
+		"framework_error",
+		"cancelled",
+	] as const),
 });
 
 const EVENT_PAYLOAD_KEYS: Readonly<
@@ -849,7 +858,7 @@ function validateObservationEvent(
 				input.retryDelayMilliseconds < 0 ||
 				input.retryDelayMilliseconds > 900_000)) ||
 		(input.kind === "durable.terminal" &&
-			(!["ok", "framework_error", "cancelled"].includes(input.outcome) ||
+			(!EVENT_OUTCOMES["durable.terminal"].includes(input.outcome) ||
 				(input.errorCode !== undefined &&
 					!DURABLE_FAILURE_CODES.has(input.errorCode))))
 	)
