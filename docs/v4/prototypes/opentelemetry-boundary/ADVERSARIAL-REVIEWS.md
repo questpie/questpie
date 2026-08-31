@@ -193,3 +193,27 @@ atomic v8 replacement without aliases or mixed-version compatibility.
 
 Fresh read-only replacement reviews must evaluate the next clean committed
 head. No finding in this section is an acceptance verdict.
+
+## Runtime replacement audit at `d3c43670`
+
+Verdict: BLOCKED, repaired in the next candidate. This exact-head review was
+adversarial evidence, not formal acceptance.
+
+The Runtime review found that hostile structurally open start and end objects
+could cross the supposedly closed observation boundary even though event
+payloads already rejected extra keys. The executable repair must apply the same
+exact-key rejection to every start and end variant and prove both with hostile
+inputs before a replacement head is eligible for acceptance.
+
+The same review found two omitted production protocol owners:
+`packages/runtime/src/bundle-core-types.d.ts` still fixes bundle readiness to
+protocol version 7, and
+`tests/unit/pb05-runtime-bundle-completeness.test.ts` still asserts
+`readiness.protocol.v7` and version 7. The projection now hashes both unchanged
+files and requires their atomic v8 replacement with no v7 field, alias, or
+compatibility assertion.
+
+The earlier Fable 5 high design-readiness PASS remains useful adversarial,
+nonformal evidence only. Its residual Runtime note is superseded by the concrete
+open-start/open-end hostile evidence above and cannot waive the executable
+repair or the later manifest-bound acceptance review.

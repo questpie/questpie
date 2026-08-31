@@ -491,7 +491,217 @@ function positiveInteger(value: number, name: string): number {
 	return value;
 }
 
+const ENTRIES: ReadonlySet<string> = new Set<ExecutionEntry>([
+	"direct",
+	"fetch",
+	"watch_initial",
+	"watch_recompute",
+	"worker",
+]);
+const PRINCIPAL_KINDS: ReadonlySet<unknown> = new Set<PrincipalKind>([
+	"anonymous",
+	"service",
+	"user",
+]);
+const HTTP_METHODS: ReadonlySet<string> = new Set<HttpMethod>([
+	"CONNECT",
+	"DELETE",
+	"GET",
+	"HEAD",
+	"OPTIONS",
+	"PATCH",
+	"POST",
+	"PUT",
+	"TRACE",
+	"_OTHER",
+]);
+const DATABASE_OPERATIONS: ReadonlySet<string> = new Set<DatabaseOperation>([
+	"SELECT",
+	"INSERT",
+	"UPDATE",
+	"DELETE",
+	"CALL",
+]);
+type KeyShape = Readonly<{
+	allowed: readonly string[];
+	required: readonly string[];
+}>;
+function keyShape(
+	required: readonly string[],
+	optional: readonly string[] = [],
+): KeyShape {
+	return Object.freeze({
+		allowed: Object.freeze([...required, ...optional]),
+		required: Object.freeze([...required]),
+	});
+}
+const OPERATION_START_KEYS = keyShape([
+	"entry",
+	"kind",
+	"principalKind",
+	"resourceIdentity",
+	"trace",
+]);
+const ACCEPT_START_KEYS = keyShape(
+	["kind", "principalKind", "resourceIdentity", "trace"],
+	["dispatchId", "runId"],
+);
+const ATTEMPT_START_KEYS = keyShape(
+	["attemptNumber", "kind", "principalKind", "resourceIdentity", "trace"],
+	["attemptId", "dispatchId", "runId"],
+);
+const START_KEYS: Readonly<Record<ScopeKind, KeyShape>> = Object.freeze({
+	runtime: keyShape(["kind", "principalKind", "trace"]),
+	fetch: keyShape([
+		"kind",
+		"requestKind",
+		"method",
+		"principalKind",
+		"scheme",
+		"suppressHttp",
+		"trace",
+	]),
+	route: keyShape([
+		"kind",
+		"method",
+		"principalKind",
+		"routeTemplate",
+		"scheme",
+		"suppressHttp",
+		"trace",
+	]),
+	execution: keyShape(["entry", "kind", "principalKind", "trace"]),
+	query: OPERATION_START_KEYS,
+	mutation: OPERATION_START_KEYS,
+	action: OPERATION_START_KEYS,
+	transaction: keyShape(["kind", "principalKind", "trace"], ["transactionId"]),
+	postgresql: keyShape([
+		"databaseOperation",
+		"kind",
+		"principalKind",
+		"statementIdentity",
+		"suppressPostgres",
+		"trace",
+	]),
+	"job.accept": ACCEPT_START_KEYS,
+	"reaction.accept": ACCEPT_START_KEYS,
+	"job.attempt": ATTEMPT_START_KEYS,
+	"reaction.attempt": ATTEMPT_START_KEYS,
+	"action.effect": keyShape(
+		["kind", "principalKind", "resourceIdentity", "trace"],
+		["effectId"],
+	),
+});
+
+function exactRecordKeys(
+	value: unknown,
+	allowed: readonly string[],
+	required: readonly string[],
+): value is Readonly<Record<string, unknown>> {
+	if (value === null || typeof value !== "object" || Array.isArray(value))
+		return false;
+	const record = value as Readonly<Record<string, unknown>>;
+	const allow = new Set(allowed);
+	return (
+		Reflect.ownKeys(record).every(
+			(key) => typeof key === "string" && allow.has(key),
+		) && required.every((key) => Object.hasOwn(record, key))
+	);
+}
+
+function exactTraceContext(value: unknown): value is NeutralTraceContextV1 {
+	return (
+		exactRecordKeys(
+			value,
+			["format", "version", "traceId", "spanId", "flags"],
+			["format", "version", "traceId", "spanId", "flags"],
+		) && isValidTraceContext(value as NeutralTraceContextV1)
+	);
+}
+
+function validTracePlan(
+	value: unknown,
+	allowedKinds: readonly string[],
+): boolean {
+	if (!exactRecordKeys(value, ["kind", "extracted", "links"], ["kind"]))
+		return false;
+	if (typeof value.kind !== "string" || !allowedKinds.includes(value.kind))
+		return false;
+	switch (value.kind) {
+		case "active-parent":
+		case "root":
+			return exactRecordKeys(value, ["kind"], ["kind"]);
+		case "remote-parent": {
+			if (!exactRecordKeys(value, ["kind", "extracted"], ["kind", "extracted"]))
+				return false;
+			const extracted = value.extracted;
+			return (
+				exactRecordKeys(
+					extracted,
+					["context", "tracestate"],
+					["context", "tracestate"],
+				) &&
+				exactTraceContext(extracted.context) &&
+				(extracted.tracestate === null ||
+					(typeof extracted.tracestate === "string" &&
+						isValidTracestate(extracted.tracestate)))
+			);
+		}
+		case "root-with-links":
+			return (
+				exactRecordKeys(value, ["kind", "links"], ["kind", "links"]) &&
+				Array.isArray(value.links) &&
+				value.links.length === 1 &&
+				value.links.every(exactTraceContext)
+			);
+		default:
+			return false;
+	}
+}
+
+function validateClosedObservationStart(input: ObservationStartV1): void {
+	const value = input as unknown as Readonly<Record<string, unknown>>;
+	const kind = value.kind;
+	if (typeof kind !== "string" || !Object.hasOwn(START_KEYS, kind))
+		throw new TypeError("observation start kind is invalid");
+	const keys = START_KEYS[kind as ScopeKind];
+	if (!exactRecordKeys(value, keys.allowed, keys.required))
+		throw new TypeError("observation start shape is invalid");
+	if (
+		(kind === "runtime" && value.principalKind !== "service") ||
+		((kind === "fetch" || kind === "route") && value.principalKind !== null) ||
+		(kind !== "runtime" &&
+			kind !== "fetch" &&
+			kind !== "route" &&
+			!PRINCIPAL_KINDS.has(value.principalKind)) ||
+		("entry" in value && !ENTRIES.has(value.entry as string)) ||
+		("method" in value && !HTTP_METHODS.has(value.method as string)) ||
+		("scheme" in value &&
+			value.scheme !== "http" &&
+			value.scheme !== "https") ||
+		("requestKind" in value &&
+			value.requestKind !== "generated_operation" &&
+			value.requestKind !== "unmatched") ||
+		("databaseOperation" in value &&
+			!DATABASE_OPERATIONS.has(value.databaseOperation as string)) ||
+		("suppressHttp" in value && value.suppressHttp !== true) ||
+		("suppressPostgres" in value && value.suppressPostgres !== true)
+	)
+		throw new TypeError("observation start value is invalid");
+	const traceKinds =
+		kind === "runtime"
+			? ["root"]
+			: kind === "fetch" || kind === "route" || kind === "execution"
+				? ["active-parent", "remote-parent", "root", "root-with-links"]
+				: kind === "job.attempt" || kind === "reaction.attempt"
+					? ["root", "root-with-links"]
+					: ["active-parent"];
+	if (!validTracePlan(value.trace, traceKinds))
+		throw new TypeError("observation start trace plan is invalid");
+}
+
 function validateObservationStart(input: ObservationStartV1): void {
+	validateClosedObservationStart(input);
 	if ("resourceIdentity" in input && !boundedIdentity(input.resourceIdentity))
 		throw new TypeError("observation Resource identity is invalid");
 	if (input.kind === "route" && !boundedIdentity(input.routeTemplate))
@@ -602,8 +812,10 @@ const DURABLE_FAILURE_CODES: ReadonlySet<string> = new Set([
 function exactEventKeys(input: ObservationEventV1): boolean {
 	const allowed = new Set(EVENT_PAYLOAD_KEYS[input.kind]);
 	return (
-		Object.keys(input).every((key) => allowed.has(key)) &&
-		REQUIRED_EVENT_KEYS[input.kind].every((key) => key in input)
+		Reflect.ownKeys(input).every(
+			(key) => typeof key === "string" && allowed.has(key),
+		) &&
+		REQUIRED_EVENT_KEYS[input.kind].every((key) => Object.hasOwn(input, key))
 	);
 }
 
@@ -718,10 +930,31 @@ export const END_OUTCOMES: Readonly<
 	],
 });
 
+function validateClosedObservationEnd(input: ObservationEndV1): void {
+	const value = input as unknown as Readonly<Record<string, unknown>>;
+	const kind = value.kind;
+	if (typeof kind !== "string" || !Object.hasOwn(END_OUTCOMES, kind))
+		throw new TypeError("observation end kind is invalid");
+	const http = kind === "fetch" || kind === "route";
+	if (
+		!exactRecordKeys(
+			value,
+			http
+				? ["errorCode", "httpResponseStatusCode", "kind", "outcome"]
+				: ["errorCode", "kind", "outcome"],
+			http
+				? ["httpResponseStatusCode", "kind", "outcome"]
+				: ["kind", "outcome"],
+		)
+	)
+		throw new TypeError("observation end shape is invalid");
+}
+
 function validateObservationEnd(
 	scope: ScopeKind,
 	input: ObservationEndV1,
 ): void {
+	validateClosedObservationEnd(input);
 	if (input.kind !== scope || !END_OUTCOMES[scope].includes(input.outcome))
 		throw new TypeError("observation end is invalid for its scope");
 	if (
@@ -732,7 +965,7 @@ function validateObservationEnd(
 	)
 		throw new TypeError("observation HTTP status is invalid");
 	if (input.errorCode !== undefined && !boundedIdentity(input.errorCode))
-		throw new TypeError("observation error code is invalid");
+		throw new TypeError("observation end error code is invalid");
 }
 
 function envelopeStart(input: ObservationStartV1): EnvelopeStartV2 {

@@ -34,8 +34,9 @@ The executable cases prove:
   and host abort even when the source and cancellation callback never settle;
 - nominal Runtime-issued Execution identity, rejection of structural clones,
   foreign roots, a second root scope for one issued identity, invalid start
-  facts, invalid scope outcomes, invalid event payloads, and invalid event
-  ownership;
+  facts, exact allowed and required start/trace/end keys, every closed enum and
+  suppression value, invalid scope outcomes, invalid event payloads, and invalid
+  event ownership before adapter or Envelope projection;
 - zero or one durable acceptance link, so traced Runs link once while legacy or
   no-adapter Runs still start one unlinked physical-attempt root;
 - a committed PostgreSQL transaction remaining `ok` when its outer Mutation

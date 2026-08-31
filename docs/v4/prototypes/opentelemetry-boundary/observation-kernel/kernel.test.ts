@@ -925,4 +925,152 @@ describe("private observation kernel", () => {
 			} as unknown as Parameters<typeof executionRoot.scope.event>[0]),
 		).toThrow("payload");
 	});
+
+	test("rejects open or invalid start and end facts before adapter or Envelope disclosure", () => {
+		const fixture = makeAdapter();
+		const lines: string[] = [];
+		const kernel = createKernel({
+			adapter: fixture.adapter,
+			emitCanonicalLine: (line) => lines.push(line),
+		});
+		const root = execution(kernel);
+		const beginsBefore = fixture.beginInputs.length;
+		const linesBefore = lines.length;
+		const invalidStarts: unknown[] = [
+			{
+				entry: "direct",
+				kind: "query",
+				principalKind: "user",
+				resourceIdentity: "query:tickets.detail",
+				trace: { kind: "active-parent" },
+				secret: "START-SENTINEL",
+			},
+			{
+				entry: "INJECTED",
+				kind: "query",
+				principalKind: "user",
+				resourceIdentity: "query:tickets.detail",
+				trace: { kind: "active-parent" },
+			},
+			{
+				entry: "direct",
+				kind: "query",
+				principalKind: "ADMIN",
+				resourceIdentity: "query:tickets.detail",
+				trace: { kind: "active-parent" },
+			},
+			{
+				kind: "fetch",
+				method: "PASSWORD",
+				principalKind: null,
+				requestKind: "generated_operation",
+				scheme: "https",
+				suppressHttp: true,
+				trace: { kind: "root" },
+			},
+			{
+				kind: "fetch",
+				method: "GET",
+				principalKind: null,
+				requestKind: "INJECTED",
+				scheme: "https",
+				suppressHttp: true,
+				trace: { kind: "root" },
+			},
+			{
+				kind: "fetch",
+				method: "GET",
+				principalKind: null,
+				requestKind: "unmatched",
+				scheme: "ftp",
+				suppressHttp: true,
+				trace: { kind: "root" },
+			},
+			{
+				kind: "fetch",
+				method: "GET",
+				principalKind: null,
+				requestKind: "unmatched",
+				scheme: "https",
+				suppressHttp: false,
+				trace: { kind: "root" },
+			},
+			{
+				databaseOperation: "UPSERT",
+				kind: "postgresql",
+				principalKind: "service",
+				statementIdentity: "ticket.detail",
+				suppressPostgres: true,
+				trace: { kind: "active-parent" },
+			},
+			{
+				databaseOperation: "SELECT",
+				kind: "postgresql",
+				principalKind: "service",
+				statementIdentity: "ticket.detail",
+				suppressPostgres: false,
+				trace: { kind: "active-parent" },
+			},
+			{
+				entry: "direct",
+				kind: "query",
+				principalKind: "user",
+				resourceIdentity: "query:tickets.detail",
+				trace: { kind: "root" },
+			},
+			{
+				entry: "direct",
+				kind: "query",
+				principalKind: "user",
+				resourceIdentity: "query:tickets.detail",
+				trace: { kind: "active-parent", secret: "TRACE-SENTINEL" },
+			},
+			{
+				kind: "fetch",
+				principalKind: null,
+				requestKind: "unmatched",
+				scheme: "https",
+				suppressHttp: true,
+				trace: { kind: "root" },
+			},
+		];
+		for (const start of invalidStarts) {
+			const kind = (start as { kind: string }).kind;
+			expect(() =>
+				kernel.beginScope(
+					kind === "runtime" || kind === "fetch" || kind === "route"
+						? null
+						: root.identity,
+					start as Parameters<ObservationKernel["beginScope"]>[1],
+				),
+			).toThrow("start");
+		}
+		expect(fixture.beginInputs).toHaveLength(beginsBefore);
+		expect(lines).toHaveLength(linesBefore);
+
+		const query = kernel.beginScope(root.identity, {
+			entry: "direct",
+			kind: "query",
+			principalKind: "user",
+			resourceIdentity: "query:tickets.detail",
+			trace: { kind: "active-parent" },
+		});
+		const endsBefore = fixture.ends.length;
+		const linesBeforeEnds = lines.length;
+		for (const end of [
+			{ kind: "query", outcome: "ok", secret: "END-SENTINEL" },
+			{ kind: "query" },
+			{ kind: "query", outcome: "INJECTED" },
+			{ kind: "query", outcome: "framework_error", errorCode: "" },
+		] as const)
+			expect(() =>
+				query.end(end as unknown as Parameters<typeof query.end>[0]),
+			).toThrow("end");
+		expect(fixture.ends).toHaveLength(endsBefore);
+		expect(lines).toHaveLength(linesBeforeEnds);
+		const emitted = lines.join("");
+		expect(emitted).not.toContain("START-SENTINEL");
+		expect(emitted).not.toContain("TRACE-SENTINEL");
+		expect(emitted).not.toContain("END-SENTINEL");
+	});
 });

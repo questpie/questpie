@@ -85,6 +85,7 @@ const expectedBreakingFacts = [
 	"replace the protocol-v7 compiler catalog",
 	"replace --allow-non-rolling-protocol-v7",
 	"replace protocol-v7 readiness",
+	"replace the protocol version 7 bundle contract",
 	"version mismatch",
 ];
 for (const fact of expectedBreakingFacts)
@@ -92,6 +93,16 @@ for (const fact of expectedBreakingFacts)
 		projection.breakingDeletions.some((entry) => entry.includes(fact)),
 		true,
 		`missing breaking deletion: ${fact}`,
+	);
+
+for (const path of [
+	"packages/runtime/src/bundle-core-types.d.ts",
+	"tests/unit/pb05-runtime-bundle-completeness.test.ts",
+])
+	strictEqual(
+		projection.unchangedBeforePass.some((file) => file.path === path),
+		true,
+		`missing unchanged bundle owner: ${path}`,
 	);
 
 const candidateText = [

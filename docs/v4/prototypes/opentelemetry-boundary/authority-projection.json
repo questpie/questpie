@@ -144,6 +144,14 @@
 		{
 			"path": "tests/unit/pb05-postgres-database-runtime-readiness.test.ts",
 			"sha256": "4cd4bbe7adf6c835ccc440b9058e9a1c7a434a80cb6ba430a11a84cb2f65607c"
+		},
+		{
+			"path": "packages/runtime/src/bundle-core-types.d.ts",
+			"sha256": "aeca3212f0c3da8c27e9bb32dfaaae64283923584af2d58e9359c7287f30ac5b"
+		},
+		{
+			"path": "tests/unit/pb05-runtime-bundle-completeness.test.ts",
+			"sha256": "7626e0f6c582db389ae890f2233fef15d77b4ca417500e625885c2de5dbec7b9"
 		}
 	],
 	"postPassChanges": [
@@ -215,6 +223,7 @@
 		"replace the protocol-v7 compiler catalog, checksum, SQL, schema and Seed apply exports with protocol v8 across packages/compiler/src/runtime/postgres-readiness.ts, packages/compiler/src/schema/index.ts, packages/compiler/src/schema/postgres/apply.ts, packages/compiler/src/schema/postgres/internal-protocol-v7*.ts, and packages/compiler/src/seed/postgres/apply.ts; delete v7-only names after all current owners move",
 		"replace --allow-non-rolling-protocol-v7 routing in packages/questpie/cli/questpie.ts with the v8 cutover and retain no v7 alias",
 		"replace protocol-v7 readiness in packages/runtime/src/application/postgres-readiness-prerequisites.ts and the v7 unit/integration assertions in tests/unit/job-protocol-v7-cutover.test.ts, tests/unit/pb05-postgres-database-complete-readiness.test.ts, tests/unit/pb05-postgres-database-runtime-readiness.test.ts, and tests/integration/postgres/job-internal-protocol-v7.test.ts; delete tests whose only owner is v7",
+		"replace the protocol version 7 bundle contract in packages/runtime/src/bundle-core-types.d.ts and the readiness.protocol.v7/version-7 assertions in tests/unit/pb05-runtime-bundle-completeness.test.ts atomically with v8; retain no v7 bundle field, readiness alias, or compatibility assertion",
 		"exact questpie/@questpie-opentelemetry version mismatch and explicit missing CLI adapter fail before readiness"
 	]
 }
