@@ -5,8 +5,13 @@ private implementation by product domain, not by generic technical layer.
 
 ## Topology
 
-- Keep `questpie` as the single published package and explicit public barrel.
-- Keep compiler, runtime, and testkit packages private implementation modules.
+- Keep `questpie` as the sole application authoring/Runtime package and its
+  explicit public barrel. Compiler, Runtime, and testkit packages remain
+  private implementation modules.
+- ADR-0033 accepts one optional exact-peer package,
+  `@questpie/opentelemetry`, as a narrow exception. Applications still author
+  and run through `questpie`, and the integration implements the core-owned
+  opaque observation handle. This is not a generic integration-package rule.
 - Group compiler implementation under domain folders such as `composition/`,
   `schema/`, and `seed/`.
 - Give each domain one internal seam at `<domain>/index.ts`. Cross-domain imports
@@ -14,7 +19,8 @@ private implementation by product domain, not by generic technical layer.
 - Place adapters below their owning domain, for example
   `schema/postgres/apply.ts`, instead of creating a provider-layer directory.
 - Add an adapter seam only when two real adapters exist. PostgreSQL is the only
-  durable adapter in v1.
+  durable adapter in v1. Do not turn optional integrations into a generic
+  provider matrix, registry, or application-authored provider SPI.
 
 ## Interface discipline
 

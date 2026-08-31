@@ -281,16 +281,37 @@ maintenance clauses below remain beta.1 requirements; the Studio clauses are
 the contract a later privileged administration vertical must re-enter through,
 not current release gates.
 
-- Operation, transaction, change, dispatch, run, attempt, effect, error,
-  subscription, migration, log, trace, metric, and audit events use one closed
-  versioned correlation schema with monotonic per-owner sequencing.
-- Runtime records are append-only. The Execution Envelope is not a mutable
-  aggregate record.
-- Credentials, database URLs, raw payloads, Policy evidence rows, serialized
-  Context, Service state, secrets, and stack traces cannot enter the envelope.
-- CLI, Studio, telemetry, and tests consume canonical artifacts, Runtime state,
-  receipts, and the same event contract. Missing telemetry and partial Runtime
-  availability remain explicit.
+- Execution Envelope v2 is one closed, append-only, lossy Runtime projection;
+  it is not a mutable aggregate, audit log, durable truth, or authorization,
+  retry, cancellation, settlement, fencing, or ordering authority.
+- One random Runtime Instance UUIDv4 owns unsigned 64-bit decimal Event and
+  Execution sequences starting at 1. Event and Execution identities are exactly
+  the instance identity plus `:event:` or `:execution:` and the respective
+  sequence. A root Execution allocates its opaque identity, every nested scope
+  shares it, Runtime lifecycle records outside an Execution carry null, and
+  each physical Attempt owns a fresh worker root. Sequence orders records only
+  within one Runtime instance.
+- The exact safe identity and disclosure allowlist is application identity,
+  Runtime Build digest, RFC 3339 UTC millisecond occurrence time, Principal
+  kind (`anonymous`, `service`, or `user`), ordinary Authority class, optional
+  neutral trace context with exact 16-byte trace ID, 8-byte span ID, and
+  one-byte flags, and closed artifact, Operation, canonical nonzero PostgreSQL
+  `xid8` transaction, Dispatch, Durable Run, Physical Attempt, and Effect links.
+- Principal and Tenant identity, raw Call Identity, generic correlation IDs,
+  request and result payloads, headers, credentials, database URLs, Context,
+  Policy identity or evidence, Service state, SQL text or parameters, provider
+  payload, exception messages, and stacks cannot enter the Envelope. Adapters
+  cannot supply Envelope facts or semantic outcomes.
+- Canonical lines are bounded to 64 KiB and one Execution to 2,048 records.
+  Overflow drops only the callback projection and emits a bounded diagnostic;
+  it cannot change work. Missing records, telemetry, and cross-instance order
+  remain explicit.
+- CLI, Studio, telemetry, and tests join canonical artifacts, Runtime state,
+  PostgreSQL receipts, Change Ledger facts, and durable state according to each
+  owner's contract. Envelope and OpenTelemetry never replace those authorities.
+- Durable audit is separately owned and cannot be reconstructed from lossy
+  Envelope or telemetry signals. No telemetry or audit retention period is
+  implied by this gate.
 - Studio application data uses normal App authority, generated Operations, and
   Policy. It has no raw SQL, internal-table CRUD, Policy bypass, second backend,
   `defineStudio`, or Operator App framework.

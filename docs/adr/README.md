@@ -37,6 +37,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 29. [Unify Policy expression authoring](./0029-unify-policy-expression-authoring.md)
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
+32. [Freeze Runtime observation and the OpenTelemetry projection](./0033-freeze-runtime-observation-and-opentelemetry-projection.md)
 
 ## Open decisions
 
@@ -89,6 +90,13 @@ program; payloadless Collection issues; explicit Operation-owned issue mapping;
 `ctx.now`; and database-owned `onUpdate: "now"`. It preserves Policy as the
 sole authored authorization mechanism, one Mutation transaction, and one
 generated Collection write kernel.
+ADR-0033 narrowly supersedes ADR-0014 only for the private Execution Envelope v1
+event schema and fixed digest. It adds Execution Envelope v2's exact safe
+allowlist, one private scoped observation kernel, one optional exact-peer
+official OpenTelemetry adapter, and the non-rolling protocol-v8 durable
+trace-link cutover. Observation remains lossy and non-authoritative; the
+decision adds no authored telemetry capability, public event callback, general
+provider SPI, audit truth, or implementation status.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

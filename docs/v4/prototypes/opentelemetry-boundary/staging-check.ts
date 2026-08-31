@@ -1,4 +1,10 @@
-import { deepStrictEqual, doesNotMatch, match, strictEqual } from "node:assert";
+import {
+	deepStrictEqual,
+	doesNotMatch,
+	match,
+	notStrictEqual,
+	strictEqual,
+} from "node:assert";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 
@@ -8,6 +14,13 @@ const projection = JSON.parse(
 ) as Readonly<{
 	base: string;
 	status: string;
+	acceptance: Readonly<{
+		record: string;
+		sha256: string;
+		reviewedHead: string;
+		recordCommit: string;
+		verdict: string;
+	}>;
 	publicDraft: Readonly<{ source: string; sha256: string }>;
 	unchangedBeforePass: ReadonlyArray<
 		Readonly<{ path: string; sha256: string }>
@@ -21,13 +34,24 @@ const digest = (path: string) =>
 	createHash("sha256").update(readFileSync(path)).digest("hex");
 
 strictEqual(projection.base, "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393");
-strictEqual(projection.status, "candidate-only-until-verified-pass");
-for (const file of projection.unchangedBeforePass)
-	strictEqual(
-		digest(file.path),
-		file.sha256,
-		`premature projection: ${file.path}`,
-	);
+strictEqual(projection.status, "accepted-unimplemented-spec-tickets-next");
+const postPassPaths = new Set(
+	projection.postPassChanges.map(({ path }) => path),
+);
+for (const file of projection.unchangedBeforePass) {
+	if (postPassPaths.has(file.path))
+		notStrictEqual(
+			digest(file.path),
+			file.sha256,
+			`missing Accepted authority projection: ${file.path}`,
+		);
+	else
+		strictEqual(
+			digest(file.path),
+			file.sha256,
+			`unplanned post-acceptance change: ${file.path}`,
+		);
+}
 strictEqual(
 	digest(projection.publicDraft.source),
 	projection.publicDraft.sha256,
@@ -53,9 +77,9 @@ const adr = readFileSync(
 	"docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
 	"utf8",
 );
-match(adr, /^- Status: Proposed$/m);
-doesNotMatch(adr, /^- Status: Accepted$/m);
-doesNotMatch(readFileSync("docs/adr/README.md", "utf8"), /ADR-0033|0033-/u);
+match(adr, /^- Status: Accepted$/m);
+doesNotMatch(adr, /^- Status: Proposed$/m);
+match(readFileSync("docs/adr/README.md", "utf8"), /0033-/u);
 strictEqual(existsSync(`${root}/REVIEW.json`), true);
 strictEqual(
 	digest(`${root}/REVIEW.json`),
@@ -74,7 +98,68 @@ strictEqual(
 );
 strictEqual(blockedReview.verdict, "BLOCKED");
 strictEqual(blockedReview.primary.disposition, "BLOCKED");
-strictEqual(existsSync(`${root}/REVIEW-REPLACEMENT.json`), false);
+strictEqual(existsSync(projection.acceptance.record), true);
+strictEqual(digest(projection.acceptance.record), projection.acceptance.sha256);
+strictEqual(
+	projection.acceptance.reviewedHead,
+	"c3bd1a2d337e6142013fe79ab5b78fca0fe327e0",
+);
+strictEqual(
+	projection.acceptance.recordCommit,
+	"17ee8898af956c838b3f62b8a34cccd23e365b92",
+);
+strictEqual(projection.acceptance.verdict, "PASS");
+const recordCommitIsAncestor = Bun.spawnSync(
+	[
+		"git",
+		"merge-base",
+		"--is-ancestor",
+		projection.acceptance.recordCommit,
+		"HEAD",
+	],
+	{ stdout: "pipe", stderr: "pipe" },
+);
+strictEqual(
+	recordCommitIsAncestor.exitCode,
+	0,
+	recordCommitIsAncestor.stderr.toString(),
+);
+const acceptedReview = JSON.parse(
+	readFileSync(projection.acceptance.record, "utf8"),
+) as Readonly<{
+	reviewedHead: string;
+	verdict: string;
+	primary: Readonly<{ disposition: string }>;
+}>;
+strictEqual(acceptedReview.reviewedHead, projection.acceptance.reviewedHead);
+strictEqual(acceptedReview.verdict, "PASS");
+strictEqual(acceptedReview.primary.disposition, "PASS");
+
+const recordCommit = Bun.spawnSync(
+	[
+		"git",
+		"show",
+		`${projection.acceptance.recordCommit}:${projection.acceptance.record}`,
+	],
+	{ stdout: "pipe", stderr: "pipe" },
+);
+strictEqual(recordCommit.exitCode, 0, recordCommit.stderr.toString());
+strictEqual(
+	createHash("sha256").update(recordCommit.stdout).digest("hex"),
+	projection.acceptance.sha256,
+);
+const verified = Bun.spawnSync(
+	[
+		"bun",
+		"run",
+		"review:accept:verify",
+		"--",
+		"--record",
+		projection.acceptance.record,
+	],
+	{ stdout: "pipe", stderr: "pipe" },
+);
+strictEqual(verified.exitCode, 0, verified.stderr.toString());
 
 const acceptanceManifest = JSON.parse(
 	readFileSync(`${root}/acceptance-manifest.json`, "utf8"),
@@ -104,9 +189,10 @@ for (const path of paths)
 	strictEqual(
 		path ===
 			"docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md" ||
-			path.startsWith(`${root}/`),
+			path.startsWith(`${root}/`) ||
+			postPassPaths.has(path),
 		true,
-		`candidate changed live authority or production: ${path}`,
+		`Accepted projection changed an unplanned path: ${path}`,
 	);
 
 const expectedBreakingFacts = [
@@ -188,4 +274,4 @@ deepStrictEqual(
 	[],
 );
 
-console.log("OpenTelemetry candidate staging: PASS");
+console.log("OpenTelemetry Accepted projection staging: PASS");

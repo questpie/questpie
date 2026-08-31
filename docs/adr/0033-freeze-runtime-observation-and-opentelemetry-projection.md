@@ -1,6 +1,6 @@
 # ADR 0033: Freeze Runtime observation and the OpenTelemetry projection
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-30
 
 ## Context
@@ -323,6 +323,15 @@ the receiver during work, and proves close ordering plus bounded flush. Release
 requires deterministic package archives, isolated install/import/build,
 declaration digests, strict dependency checks, PostgreSQL 17, Firefox,
 `quality:release`, docs build, and independent Standards and Spec review.
+
+## Acceptance evidence
+
+Candidate `c3bd1a2d337e6142013fe79ab5b78fca0fe327e0` received a fresh
+manifest-bound Claude Opus medium `PASS`. The verified record is committed at
+`17ee8898af956c838b3f62b8a34cccd23e365b92` in
+[`REVIEW-REPLACEMENT.json`](../v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json).
+It binds packet digest
+`2197b4780c4e68042cd447829c9d3edd6f569ec543e06d263cc814734a27122c`.
 
 ## Consequences
 

@@ -630,9 +630,23 @@ SHA-256 `bee891d02adc2fffe3f8151840a7337def2ebf7a2a1a9c9583a589c4dbf01573`
 and declaration SHA-256
 `41f9fb9298284876a088894f911d69bc7ba52a3018b9f793c1b553a4020020cb`.
 
-The OpenTelemetry workbench at
-`docs/v4/research/observability-2026/WORKBENCH.md` is research only. It creates
-no accepted public or Runtime API.
+ADR-0033 is Accepted after the manifest-bound replacement candidate
+`c3bd1a2d337e6142013fe79ab5b78fca0fe327e0` received `PASS`. The verified
+`docs/v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json` record is
+committed at `17ee8898af956c838b3f62b8a34cccd23e365b92`. The accepted boundary
+freezes one private Runtime observation kernel, Execution Envelope v2, exact
+signal artifacts, protocol-v8 first-acceptance durable trace links, and the
+optional exact-peer `@questpie/opentelemetry` integration. It adds no authored
+telemetry capability or generic provider matrix.
+
+OpenTelemetry is not implemented. Continue through the tracer-led delivery
+flow by projecting the Accepted design into one coherent spec and blocked
+tracer-ticket graph before changing production. `questpie` remains the sole
+application authoring/Runtime package; compiler, Runtime, and testkit packages
+remain private. The public `apps/docs` install guide and release claims wait
+for the package, CLI, Runtime, PostgreSQL 17, browser, and release tracers. The
+historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
+remains research, not additional authority.
 
 ADR-0031 is Accepted after the manifest-bound lifecycle candidate
 `ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1` received the committed
@@ -706,12 +720,12 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    relational execution kernel.
 3. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
    reimplement lifecycle, restore callback-based Operation Set normalization,
-   or create a second Collection/CRUD kernel. Start the next vertical from its
-   own accepted authority; OpenTelemetry still requires a separate docs-first
-   decision before any implementation.
-4. Treat OpenTelemetry as a separate docs-first decision. The research
-   workbench may inform a future tracer, but it is not authority for exports,
-   span names, attributes, sampling, exporters or persistence behavior.
+   or create a second Collection/CRUD kernel.
+4. ADR-0033 design is Accepted but unimplemented. Preserve its reviewed bytes
+   while converting the authority through spec and tracer tickets, with
+   explicit blocking edges, before production code. Do not publish the
+   `apps/docs` install guide until its implementation tracer and release
+   evidence pass.
 5. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.

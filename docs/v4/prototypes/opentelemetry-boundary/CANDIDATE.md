@@ -1,6 +1,6 @@
 # Runtime observation and OpenTelemetry candidate
 
-Status: Proposed design candidate; not Accepted authority
+Status: Accepted design proof; production implementation not started
 
 ## Delta
 
@@ -57,13 +57,18 @@ dashboard, Collector distribution, or telemetry-backed Policy/audit/readiness/
 retry/scheduling is accepted. No trace or span identity aliases a Call,
 transaction, Dispatch, Run, Attempt, or Effect identity.
 
-Implementation and SPEC/ticket projection remain blocked until this candidate
-passes the repository acceptance protocol. Acceptance alone does not publish
-the install guide: public API/package instructions remain candidate material
-until their implementation tracer and release evidence pass.
+The manifest-bound replacement review of head
+`c3bd1a2d337e6142013fe79ab5b78fca0fe327e0` returned `PASS`. The verified
+record is `REVIEW-REPLACEMENT.json`, committed at
+`17ee8898af956c838b3f62b8a34cccd23e365b92`. ADR-0033 is therefore Accepted
+design authority, but OpenTelemetry remains unimplemented. The next delivery
+step is uninterrupted spec and tracer-ticket projection before production
+code.
 
-The first manifest-bound review of head `bddada48b6c62795a77b005de397f351d1138cf9`
-returned `BLOCKED`. A replacement candidate remains pending until the signal
-artifact binds the exact per-scope `questpie.execution.entry` projection and the
-Fetch lifetime proof executes source-error plus consumer-cancel hostiles. The
-committed BLOCKED record is evidence only and does not change Proposed authority.
+The first manifest-bound review of head
+`bddada48b6c62795a77b005de397f351d1138cf9` returned `BLOCKED`; its record
+remains historical evidence. Head `c3bd1a2d337e6142013fe79ab5b78fca0fe327e0`
+closed both findings with a canonical per-scope attribute map and executable
+Fetch source-error/consumer-cancel hostiles. Acceptance does not publish the
+install guide: `apps/docs` instructions wait for package, Runtime, PostgreSQL
+17, browser, and release tracer evidence.

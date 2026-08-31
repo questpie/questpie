@@ -599,10 +599,37 @@ Do not use: internal state, kernel row, telemetry.
 
 ### Execution Envelope
 
-The versioned correlation schema carried by each append-only Runtime event. It
-correlates operation, transaction, causation, idempotency, dispatch, Job
-attempt/checkpoint, error, log, span, and audit identities. It is not one mutable
-execution record.
+The closed v2 safe-correlation schema carried by each append-only Runtime
+observation event. It contains Runtime-instance and per-instance sequence
+identity, Application and Runtime Build identity, occurrence time, Principal
+kind, ordinary Authority class, optional neutral Trace Context, and only the
+closed artifact, Operation, PostgreSQL transaction, Dispatch, Durable Run,
+Physical Attempt, and Effect links. It excludes caller correlation text,
+identity values, payloads, secrets, Policy evidence, SQL, exception text, and
+stacks. It is not a mutable execution record, audit truth, or authority.
+
+### Observation Scope
+
+One Runtime-owned start/event/end lifetime for a closed semantic execution
+boundary. It owns ordering, active trace context, cancellation-aligned end, and
+same-layer instrumentation suppression. Application handlers cannot author or
+receive it.
+
+### Neutral Trace Context
+
+A closed in-process correlation value containing exactly a nonzero 16-byte
+trace ID, nonzero 8-byte span ID, and one byte of flags. It carries no SDK
+object, baggage, `tracestate`, identity authority, or application data. A
+Durable Run may persist only these three facts for a later zero-or-one Attempt
+link.
+
+### Official Observability Adapter
+
+The optional exact-peer `@questpie/opentelemetry` package that implements the
+core-owned opaque observability handle and projects closed Runtime observation
+facts into OpenTelemetry. It is host configuration, not a Definition, Service,
+Context capability, public event callback, general provider SPI, authorization
+model, audit store, or durable truth.
 
 ### Deployment Compatibility
 

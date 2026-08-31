@@ -1,6 +1,6 @@
 # OpenTelemetry boundary adversarial review ledger
 
-Status: candidate evidence for Proposed ADR-0033; not an acceptance record
+Status: design-review evidence for Accepted ADR-0033; not an acceptance record
 
 This ledger records independent design audits. It cannot accept ADR-0033 and
 must not be confused with the manifest-bound repository acceptance record.
@@ -245,3 +245,26 @@ Execution trace plans admit only active parent or root; `occurredAt` needs an
 exact millisecond-format assertion; the PostgreSQL command records port 55439;
 and the durable catalog helper uses `const` where it is never reassigned. These
 notes do not substitute for closing the two blockers.
+
+## Manifest-bound replacement acceptance
+
+Reviewed head: `c3bd1a2d337e6142013fe79ab5b78fca0fe327e0`
+
+Verdict: `PASS`. The repository verifier accepts
+`REVIEW-REPLACEMENT.json`; the record is committed at
+`17ee8898af956c838b3f62b8a34cccd23e365b92`. This is the formal acceptance
+record for ADR-0033.
+
+The replacement head closed both prior findings. The canonical projection now
+binds and fully tests the exact per-scope attribute map, including
+`questpie.execution.entry` on Execution, Query, Mutation, and Action. The Fetch
+lifetime proof executes EOF, source error, consumer cancellation, and host
+abort with one terminal end and idempotence against later signals. Runtime
+event owners, terminal event outcomes, and end outcomes share the executable
+contract with the artifact; dependent digests are pinned.
+
+The review also confirmed the full protocol-v8 catalog proof, atomic v1/v7
+deletion inventory, exact package/type ownership, disclosure boundary, and all
+previous non-blocking exactness repairs. Design acceptance does not claim
+implementation: spec and tracer tickets come next, and public install
+instructions remain gated on implementation and release evidence.

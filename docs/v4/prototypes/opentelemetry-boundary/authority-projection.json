@@ -1,7 +1,14 @@
 {
 	"format": "questpie.authority-projection.v1",
 	"base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-	"status": "candidate-only-until-verified-pass",
+	"status": "accepted-unimplemented-spec-tickets-next",
+	"acceptance": {
+		"record": "docs/v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json",
+		"sha256": "2752f26bf625a4eda7637eefa81372c226b30088a13b3df79e0b775f798aea46",
+		"reviewedHead": "c3bd1a2d337e6142013fe79ab5b78fca0fe327e0",
+		"recordCommit": "17ee8898af956c838b3f62b8a34cccd23e365b92",
+		"verdict": "PASS"
+	},
 	"publicDraft": {
 		"source": "docs/v4/prototypes/opentelemetry-boundary/PUBLIC-DRAFT.md",
 		"sha256": "1f4c3bf2904e9c08b45c4f2cbf5c49162c8e58c7fdaf4750946c423b0ee196fd",

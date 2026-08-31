@@ -343,20 +343,44 @@ continuation/history, and multi-version evidence before public release.
 
 ## 10. Execution Envelope and Studio
 
-The Runtime emits an append-only event family. Every event carries the same
-versioned Execution Envelope correlation schema. It correlates:
+The Runtime emits one closed append-only Execution Envelope v2 event family
+from one private scoped observation kernel. Its exact safe correlation surface
+is:
 
-- operation identity and run identity;
-- Principal, Tenant, and Authority class without leaking secrets;
-- transaction identity;
-- idempotency and causation identity;
-- change-ledger and dispatch identity;
-- Job attempt and checkpoint identity;
-- timing, declared errors, logs, spans, and audit events.
+- one random Runtime-instance UUID plus per-instance unsigned event and root-
+  Execution sequences and their opaque derived event/Execution identities;
+- Application Identity and exact Runtime Build digest;
+- RFC 3339 UTC millisecond occurrence time;
+- resolved Principal kind and ordinary Authority class, never Principal or
+  Tenant identity;
+- optional neutral trace ID, span ID, and flags; and
+- closed links for artifact, Operation, canonical PostgreSQL `xid8`
+  transaction, Dispatch, Durable Run, Physical Attempt, and Effect identities.
 
-CLI, Studio, OpenTelemetry exporters, tests, and a future Cloud consume this
-contract. They do not reconstruct separate truths from text logs or private
-tables.
+Raw Call Identity, generic correlation text, request or response payloads,
+headers, credentials, database URLs, Context, Policy identity or evidence,
+Service state, SQL text or parameters, provider payloads, exception messages,
+stacks, and arbitrary attributes are absent. The Runtime assigns every identity
+and semantic outcome; an adapter cannot add Envelope facts.
+
+CLI, Studio, tests, and the official optional `@questpie/opentelemetry` adapter
+may consume the same kernel projection. The adapter is exact-peer with
+`questpie`; generated Apps accept only the core-owned opaque observability
+handle. It adds no handler capability, public event callback, general provider
+SPI, or OpenTelemetry dependency to core.
+
+Observation is lossy and non-authoritative. Sampling, queue loss, exporter or
+Collector failure, and bounded shutdown cannot change Policy, PostgreSQL work,
+commit, cancellation, retry, fencing, settlement, application results, or
+Runtime close outcome. Telemetry is not an audit log, Change Ledger, receipt,
+or durable truth, and QUESTPIE owns no telemetry-retention period.
+
+Job and committed-fact Reaction acceptance may persist only nullable trace ID,
+span ID, and flags beside the Durable Run. Each Physical Attempt is a fresh root
+with zero or one first-acceptance link. Internal protocol v8 is the exact v7
+catalog plus those three columns and their completeness constraint. V7 to v8 is
+an explicit non-rolling cutover: mixed v7/v8 operation and in-place downgrade
+are unsupported.
 
 Studio shows:
 
