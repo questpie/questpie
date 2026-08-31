@@ -81,17 +81,39 @@ describe("canonical OpenTelemetry projection and config artifacts", () => {
 		match(first.configDigest, /^[0-9a-f]{64}$/u);
 		strictEqual(
 			first.projectionDigest,
-			"e256a5d694b3e1d823649e98604f61d8e7088afdffe2d1c7d48450abcde05e90",
+			"94568377fb1d713d98e81922e33dcaea31cc03192f5b1bcb16fba330b2517f7c",
 		);
 		strictEqual(
 			first.configDigest,
-			"0795a6d3d0c21d69f977c78c86e7c6dfb7c9d4826a3ed4f4c38465f891376cf1",
+			"0da930d424c5fc8fe3fae177d360fafe30f52066e3ce8eb66ac5d6242077637f",
 		);
 		strictEqual(first.config.projectionDigest, first.projectionDigest);
 		strictEqual(first.projection.semanticConventions.version, "1.44.0");
 		strictEqual(first.projection.instrumentationScope.name, "questpie");
 		strictEqual(first.projection.instrumentationScope.version, "4.0.0-beta.1");
 		strictEqual(first.projection.spanGraph.length, 14);
+		deepStrictEqual(first.projection.transactionIdentity, {
+			kind: "postgresXid8Text",
+			canonicalPattern: "^[1-9][0-9]{0,19}$",
+			maximum: "18446744073709551615",
+		});
+		deepStrictEqual(
+			first.projection.spanEventScopes["questpie.durable.retry_scheduled"],
+			["job.attempt", "reaction.attempt"],
+		);
+		deepStrictEqual(first.projection.endOutcomesByScope.mutation, [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"ambiguous",
+		]);
+		deepStrictEqual(first.projection.envelopeEventShape, {
+			started: "exact_redacted_start_variant",
+			event: "exact_event_variant",
+			ended: "exact_end_variant",
+		});
 		deepStrictEqual(first.projection.httpMethodNormalization, [
 			"CONNECT",
 			"DELETE",

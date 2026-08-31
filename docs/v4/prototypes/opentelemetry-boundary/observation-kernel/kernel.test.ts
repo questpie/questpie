@@ -124,7 +124,7 @@ describe("private observation kernel", () => {
 				kind: "transaction",
 				principalKind: "user",
 				trace: { kind: "active-parent" },
-				transactionId: runtimeInstanceId,
+				transactionId: "42",
 			},
 			{
 				databaseOperation: "SELECT",
@@ -177,7 +177,14 @@ describe("private observation kernel", () => {
 				statementIdentity: "ticket.detail",
 			}),
 		);
-		root.scope.event({
+		const attempt = kernel.beginScope(root.identity, {
+			attemptNumber: 2,
+			kind: "job.attempt",
+			principalKind: "service",
+			resourceIdentity: "job:tickets.example",
+			trace: { kind: "root-with-links", links: [traceContext] },
+		});
+		attempt.event({
 			attemptNumber: 2,
 			kind: "durable.retry_scheduled",
 			retryDelayMilliseconds: 1_500,
@@ -233,7 +240,7 @@ describe("private observation kernel", () => {
 			resourceIdentity: "mutation:tickets.assign",
 			trace: { kind: "active-parent" },
 		});
-		nested.event({ kind: "transaction.committed" });
+		nested.event({ kind: "receipt.replayed" });
 		nested.end({ kind: "mutation", outcome: "ok" });
 		root.scope.end({ kind: "execution", outcome: "ok" });
 		const lifecycle = kernel.beginScope(null, {
@@ -366,18 +373,18 @@ describe("private observation kernel", () => {
 		const root = execution(kernel);
 		const nested = kernel.beginScope(root.identity, {
 			entry: "fetch",
-			kind: "query",
+			kind: "mutation",
 			principalKind: "user",
-			resourceIdentity: "query:tickets.pending",
+			resourceIdentity: "mutation:tickets.pending",
 			trace: { kind: "active-parent" },
 		});
 		root.scope.end({ kind: "execution", outcome: "ok" });
 		const emitted = lines.length;
-		nested.event({ kind: "context.completed" });
-		nested.end({ kind: "query", outcome: "ok" });
+		nested.event({ kind: "receipt.replayed" });
+		nested.end({ kind: "mutation", outcome: "ok" });
 		expect(lines).toHaveLength(emitted);
-		expect(fixture.events).toContainEqual({ kind: "context.completed" });
-		expect(fixture.ends).toContainEqual({ kind: "query", outcome: "ok" });
+		expect(fixture.events).toContainEqual({ kind: "receipt.replayed" });
+		expect(fixture.ends).toContainEqual({ kind: "mutation", outcome: "ok" });
 	});
 
 	test("contains adapter re-entry and post-entry faults without replacing the result", async () => {
@@ -405,6 +412,66 @@ describe("private observation kernel", () => {
 		expect(calls).toBe(1);
 		expect(diagnostics).toContain("adapter_reentry");
 		expect(diagnostics).toContain("adapter_post_entry_fault");
+	});
+
+	test("closes callback entry before a delayed adapter use can run", async () => {
+		let delayedUse: (() => unknown) | null = null;
+		const diagnostics: string[] = [];
+		const fixture = makeAdapter({
+			run: async <Result>(use: () => Result | Promise<Result>) => {
+				delayedUse = use;
+				return undefined as Result;
+			},
+		});
+		const root = execution(
+			createKernel({
+				adapter: fixture.adapter,
+				onDiagnostic: (code) => diagnostics.push(code),
+			}),
+		);
+		let calls = 0;
+		expect(
+			await root.scope.run(async () => {
+				calls += 1;
+				return "fallback result";
+			}),
+		).toBe("fallback result");
+		expect(calls).toBe(1);
+		expect(() => delayedUse!()).toThrow("entry closed");
+		expect(calls).toBe(1);
+		expect(diagnostics).toContain("adapter_reentry");
+	});
+
+	test("contains a throwing adapter context getter", () => {
+		const diagnostics: string[] = [];
+		const adapter: ObservationAdapterV1 = {
+			format: "questpie.runtime-observability",
+			version: 1,
+			extract: () => null,
+			begin: () =>
+				Object.defineProperty(
+					{
+						run: async <Result>(use: () => Result | Promise<Result>) =>
+							await use(),
+						event: () => undefined,
+						end: () => undefined,
+					},
+					"context",
+					{
+						get: () => {
+							throw new Error("hostile getter");
+						},
+					},
+				) as unknown as ObservationScopeAdapterV1,
+		};
+		const root = execution(
+			createKernel({
+				adapter,
+				onDiagnostic: (code) => diagnostics.push(code),
+			}),
+		);
+		expect(root.scope.context).toBeNull();
+		expect(diagnostics).toContain("adapter_context_invalid");
 	});
 
 	test("preserves the original application failure", async () => {
@@ -509,6 +576,36 @@ describe("private observation kernel", () => {
 		]);
 	});
 
+	test("ends Fetch immediately on host abort without awaiting source cancellation", async () => {
+		const fixture = makeAdapter();
+		const kernel = createKernel({ adapter: fixture.adapter });
+		const fetch = kernel.beginScope(null, {
+			kind: "fetch",
+			method: "GET",
+			principalKind: null,
+			requestKind: "unmatched",
+			scheme: "https",
+			suppressHttp: true,
+			trace: { kind: "root" },
+		});
+		const source = new ReadableStream<Uint8Array>({
+			pull: () => new Promise(() => undefined),
+			cancel: () => new Promise(() => undefined),
+		});
+		const abort = new AbortController();
+		retainScopeThroughResponse(
+			fetch,
+			new Response(source, { status: 200 }),
+			"fetch",
+			abort.signal,
+		);
+		abort.abort(new Error("host stopped"));
+		await Bun.sleep(0);
+		expect(fixture.ends).toEqual([
+			{ httpResponseStatusCode: 200, kind: "fetch", outcome: "cancelled" },
+		]);
+	});
+
 	test("isolates adapter event and end faults", () => {
 		const diagnostics: string[] = [];
 		const fixture = makeAdapter({
@@ -532,6 +629,43 @@ describe("private observation kernel", () => {
 		expect(diagnostics).toContain("adapter_event_fault");
 	});
 
+	test("keeps a committed transaction ok when its Mutation becomes ambiguous", () => {
+		const fixture = makeAdapter();
+		const kernel = createKernel({ adapter: fixture.adapter });
+		const root = execution(kernel);
+		const mutation = kernel.beginScope(root.identity, {
+			entry: "fetch",
+			kind: "mutation",
+			principalKind: "user",
+			resourceIdentity: "mutation:tickets.close",
+			trace: { kind: "active-parent" },
+		});
+		const transaction = kernel.beginScope(root.identity, {
+			kind: "transaction",
+			principalKind: "user",
+			trace: { kind: "active-parent" },
+			transactionId: "42",
+		});
+		transaction.event({ kind: "transaction.committed", transactionId: "42" });
+		transaction.end({ kind: "transaction", outcome: "ok" });
+		mutation.event({
+			kind: "operation.post_commit_ambiguous",
+			transactionId: "42",
+		});
+		expect(() =>
+			mutation.event({
+				attemptNumber: 2,
+				kind: "durable.retry_scheduled",
+				retryDelayMilliseconds: 100,
+			}),
+		).toThrow("invalid for its scope");
+		mutation.end({ kind: "mutation", outcome: "ambiguous" });
+		expect(fixture.ends.slice(-2)).toEqual([
+			{ kind: "transaction", outcome: "ok" },
+			{ kind: "mutation", outcome: "ambiguous" },
+		]);
+	});
+
 	test("Envelope limits drop only the callback projection while adapter signals continue", () => {
 		const lines: string[] = [];
 		const diagnostics: string[] = [];
@@ -550,11 +684,11 @@ describe("private observation kernel", () => {
 			resourceIdentity: "mutation:tickets.assign",
 			trace: { kind: "active-parent" },
 		});
-		nested.event({ kind: "transaction.committed" });
+		nested.event({ kind: "receipt.replayed" });
 		nested.end({ kind: "mutation", outcome: "ok" });
 		root.scope.end({ kind: "execution", outcome: "ok" });
 		expect(lines).toHaveLength(2);
-		expect(fixture.events).toEqual([{ kind: "transaction.committed" }]);
+		expect(fixture.events).toEqual([{ kind: "receipt.replayed" }]);
 		expect(fixture.ends).toEqual([
 			{ kind: "mutation", outcome: "ok" },
 			{ kind: "execution", outcome: "ok" },
@@ -572,7 +706,7 @@ describe("private observation kernel", () => {
 		});
 		const root = execution(kernel);
 		root.scope.event({ kind: "context.completed" });
-		root.scope.event({ kind: "transaction.committed" });
+		root.scope.event({ kind: "execution.cancelled" });
 		root.scope.end({ kind: "execution", outcome: "ok" });
 		expect(kernel.disabled).toBe(true);
 		expect(
@@ -619,5 +753,27 @@ describe("private observation kernel", () => {
 				},
 			),
 		).toThrow("local Execution identity");
+		root.scope.end({ kind: "execution", outcome: "ok" });
+		expect(() =>
+			kernel.beginScope(
+				{ ...root.identity },
+				{
+					entry: "direct",
+					kind: "query",
+					principalKind: "user",
+					resourceIdentity: "query:tickets.forged",
+					trace: { kind: "active-parent" },
+				},
+			),
+		).toThrow("local Execution identity");
+		expect(() =>
+			kernel.beginExecution({
+				entry: "direct",
+				kind: "query",
+				principalKind: "user",
+				resourceIdentity: "query:tickets.root",
+				trace: { kind: "active-parent" },
+			} as unknown as Parameters<ObservationKernel["beginExecution"]>[0]),
+		).toThrow("must be an Execution");
 	});
 });

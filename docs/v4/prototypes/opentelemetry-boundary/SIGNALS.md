@@ -70,7 +70,7 @@ compiler-bounded. Exact UUID attributes appear only when `operationalIds` is
 | `questpie.statement.identity`  | string  | PostgreSQL                         | compiler-owned fixed statement identity                                                            |
 | `questpie.attempt.number`      | integer | durable Attempt                    | 1..8                                                                                               |
 | `questpie.runtime.instance.id` | string  | operational span opt-in            | canonical UUID                                                                                     |
-| `questpie.transaction.id`      | string  | transaction/ambiguity opt-in       | PostgreSQL transaction UUID                                                                        |
+| `questpie.transaction.id`      | string  | transaction/ambiguity opt-in       | canonical nonzero PostgreSQL `xid8` decimal text, maximum `18446744073709551615`                   |
 | `questpie.dispatch.id`         | string  | accept/attempt opt-in              | canonical UUID                                                                                     |
 | `questpie.run.id`              | string  | attempt opt-in                     | canonical UUID                                                                                     |
 | `questpie.attempt.id`          | string  | attempt opt-in                     | canonical UUID                                                                                     |
@@ -107,6 +107,19 @@ status follows OTel HTTP server conventions. No exception event is recorded.
 A span accepts at most 32 QUESTPIE events. A thirty-third event increments the
 adapter's drop diagnostic and is omitted. Event attributes use only the span
 allowlist above plus `questpie.retry.delay_ms`, an integer 0..900,000.
+
+Event owners are exact: Context/cancellation/deadline belong to Execution;
+receipt replay and post-commit ambiguity to Mutation; commit to transaction;
+acceptance to its producer; fencing/retry/terminal to a physical Attempt; and
+Action ambiguity to the effect. No other scope accepts a QUESTPIE event.
+
+Runtime, HTTP, transaction, and PostgreSQL scopes end only `ok`,
+`framework_error`, `cancelled`, or `deadline`. Execution, Query, and acceptance
+also admit `declared_error`. Mutation, Action, and Action effect additionally
+admit `ambiguous`. Job/Reaction attempts additionally admit only `fenced` and
+`retry`. A committed transaction remains `ok` if the outer Mutation later
+becomes post-commit `ambiguous`; observation never initiates retry or changes
+rollback/cancellation ownership.
 
 ## Metrics
 

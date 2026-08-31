@@ -8,7 +8,9 @@ JSON-line artifacts:
 
 - `questpie.opentelemetry-signal-projection` binds the exact installed
   `questpie` version, Semantic Conventions 1.44.0, the closed span graph,
-  attribute allowlists, event bound, metrics, and histogram boundaries;
+  attribute allowlists, per-scope event owners and end outcomes, canonical
+  PostgreSQL `xid8` transaction identity, exact Envelope event shape, event
+  bound, metrics, and histogram boundaries;
 - `questpie.opentelemetry-effective-config` binds that projection digest to the
   safe Resource and bounded effective adapter settings.
 

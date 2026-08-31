@@ -12,8 +12,9 @@ PostgreSQL durable authority, Policy nondisclosure, and ADR-0023 outcomes.
 The candidate has four changes:
 
 1. replace process-local Envelope identities and raw `callId` correlation with
-   Execution Envelope v2, including an atomic migration of the optional host
-   `events` callback with no dual v1 emission;
+   Execution Envelope v2, including an atomic migration of the private
+   Runtime/test `events` callback with no dual v1 emission and no new public
+   callback;
 2. add one private scoped observation kernel and one optional opaque
    generated-App `observability` input;
 3. persist only first-acceptance trace ID, span ID, and flags for delayed durable

@@ -10,11 +10,15 @@ and Actions.
 
 ## Enable the official adapter
 
-Install the optional adapter beside `questpie`:
+Install the optional adapter beside the exact matching `questpie` version. For
+the first beta, install both packages together:
 
 ```sh
-bun add @questpie/opentelemetry
+bun add questpie@4.0.0-beta.1 @questpie/opentelemetry@4.0.0-beta.1
 ```
+
+The adapter has an exact `questpie` peer dependency. Upgrade both packages to
+the same version in one change; a version mismatch fails before readiness.
 
 Then pass it to the generated App:
 
@@ -63,9 +67,62 @@ cleanup or replace its primary error.
 `questpie start --telemetry=opentelemetry` performs the same explicit setup for
 the CLI host and resolves `@questpie/opentelemetry` from the application root.
 Without the flag, QUESTPIE does not load the adapter or start exporter work. A
-missing or incompatible package fails before readiness with `QP-START-004`.
-Use the documented `OTEL_*` subset for the SDK and OTLP/HTTP exporter; QUESTPIE
-configuration files do not hold exporter credentials.
+missing or incompatible package, or invalid supported environment value, fails
+before readiness with `QP-START-004`. For invalid environment configuration,
+the CLI wraps the adapter's `QP-OTEL-001` diagnostic. The diagnostic names only
+the invalid variable or option path; it never prints an endpoint, header, or
+credential value. An embedded host receives `QP-OTEL-001` directly and should
+fix the named setting before creating the App again.
+
+## Configure export
+
+The adapter constructs its SDK explicitly and reads only this environment
+subset:
+
+| Variable                         | Accepted values and bound                                                        | Default                 |
+| -------------------------------- | -------------------------------------------------------------------------------- | ----------------------- |
+| `OTEL_SERVICE_NAME`              | 1..128 UTF-8 bytes                                                               | application identity    |
+| `OTEL_TRACES_EXPORTER`           | `otlp` or `none`                                                                 | `otlp`                  |
+| `OTEL_METRICS_EXPORTER`          | `otlp` or `none`                                                                 | `otlp`                  |
+| `OTEL_EXPORTER_OTLP_PROTOCOL`    | `http/protobuf`                                                                  | `http/protobuf`         |
+| `OTEL_EXPORTER_OTLP_ENDPOINT`    | absolute `http:` or `https:` URL, at most 2,048 bytes                            | SDK OTLP default        |
+| `OTEL_EXPORTER_OTLP_HEADERS`     | SDK header grammar, at most 8 KiB                                                | absent                  |
+| `OTEL_EXPORTER_OTLP_TIMEOUT`     | integer 1..30,000 ms                                                             | 10,000 ms               |
+| `OTEL_TRACES_SAMPLER`            | `parentbased_always_on`, `parentbased_always_off`, or `parentbased_traceidratio` | `parentbased_always_on` |
+| `OTEL_TRACES_SAMPLER_ARG`        | decimal ratio 0..1; required only for the ratio sampler                          | absent                  |
+| `OTEL_BSP_SCHEDULE_DELAY`        | integer 1..30,000 ms                                                             | 5,000 ms                |
+| `OTEL_BSP_EXPORT_TIMEOUT`        | integer 1..30,000 ms                                                             | 30,000 ms               |
+| `OTEL_BSP_MAX_QUEUE_SIZE`        | integer 1..65,536 spans                                                          | 2,048                   |
+| `OTEL_BSP_MAX_EXPORT_BATCH_SIZE` | integer 1..queue size                                                            | min(512, queue size)    |
+| `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                        | 60,000 ms               |
+| `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                             | 30,000 ms               |
+
+For example, point both OTLP exporters at a Collector when starting the CLI:
+
+```sh
+OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318 \
+	questpie start --telemetry=opentelemetry
+```
+
+To exercise the integration without exporting either signal, disable both
+exporters explicitly:
+
+```sh
+OTEL_TRACES_EXPORTER=none OTEL_METRICS_EXPORTER=none \
+	questpie start --telemetry=opentelemetry
+```
+
+Other `OTEL_*` variables are ignored by this adapter version. Logs, generic
+Resource attributes, baggage, Prometheus, console, Zipkin, gRPC, and declarative
+configuration are not enabled. QUESTPIE configuration files do not hold
+exporter credentials.
+
+The finished-span queue defaults to 2,048 and may be configured from 1 through
+65,536. The batch size must not exceed the queue; if omitted, it is the smaller
+of 512 and the configured queue. When the queue is full, the SDK drops the new
+finished span and reports that through SDK self-observability. Application work
+never waits for queue space, and QUESTPIE does not create a second reliable drop
+ledger.
 
 ## Keep handlers ordinary
 
@@ -79,11 +136,14 @@ generated client unchanged. Its Mutation can accept a delayed Job and its
 worker can retry an Action after restart without copying a trace ID or naming a
 span.
 
-If an embedded host already consumes Runtime envelopes through the optional
-`events` callback, update it to `ExecutionEventV2` in the same release. Runtime
-does not dual-emit v1 and v2. That callback remains a lossy closed event
-consumer; it is not an OpenTelemetry adapter and cannot own propagation, active
-scope, metrics, or shutdown.
+The span shape follows the Runtime entry rather than the calling syntax:
+
+- a direct execution is a root, or a child of the host's active context, and has
+  no HTTP server span;
+- generated network ingress has an HTTP server span, then child Execution and
+  Operation spans; and
+- each worker attempt is a fresh root linked to the first successful durable
+  acceptance, not a child that keeps the accepting request open.
 
 ## Understand delayed work
 
@@ -120,6 +180,11 @@ PostgreSQL rows, receipts, durable history, and application results remain the
 truth. Spans and metrics can be sampled, dropped, delayed, or unavailable. They
 cannot authorize a request, change Policy, trigger a retry, settle an ambiguous
 effect, or make a commit disappear.
+
+Telemetry is not an audit log. It does not decide whether a Job is accepted or
+retried, and it does not settle an Action effect. Durable records remain
+authoritative even when every signal is lost; audit retention is separately
+owned, and QUESTPIE promises no duration here.
 
 QUESTPIE does not promise a telemetry retention period. The OpenTelemetry SDK
 owns finite buffering and export attempts. Your Collector or backend owns

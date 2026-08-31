@@ -56,11 +56,12 @@ Verdict: BLOCKED, repaired in the candidate
 
 ## Required final audits
 
-A continuation audit found one additional staging hole before executable proof:
-the candidate had not stated what happens to the existing public `events`
-callback. The repaired boundary advances that callback atomically to
-`ExecutionEventV2`, forbids dual emission and adapter reconstruction from the
-callback, and makes callback failure disable only that lossy consumer.
+A continuation audit initially treated `events` as public. The later exact-head
+authority audit found that generated `CreateAppInput` has no such member: it is
+a private Runtime/test seam. The repaired boundary advances only that private
+type atomically to `ExecutionEventV2`, forbids dual emission and adapter
+reconstruction from the callback, keeps generated App input eventless, and
+makes callback failure disable only that lossy consumer.
 
 After all executable proofs and deterministic gates pass, fresh independent
 authority, Runtime/compiler, beginner-DX, and deletion audits must review the
@@ -112,3 +113,34 @@ require null Execution identity, every other semantic scope requires its local
 owner, pre-existing nested scopes cannot recreate Envelope counters after root
 end, and the ADR no longer conditions `envelope_limit` diagnostics on adapter
 presence. This PASS is adversarial evidence only, never the acceptance verdict.
+
+## First committed-head final audits
+
+Verdict: BLOCKED, repaired in the replacement candidate. These audits reviewed
+the first committed Proposed head independently; none is a formal acceptance
+record.
+
+The authority and beginner-DX audits found that the draft still described the
+private Runtime `events` seam as generated/public in isolated places, used UUID
+language for PostgreSQL transaction identity, omitted affected documentation
+and navigation from the post-PASS projection, left the per-scope event/outcome
+matrix partly descriptive, and did not give operators a complete supported
+`OTEL_*`, diagnostic, direct/network/worker, or non-audit contract. The repair
+keeps generated `CreateAppInput` eventless, binds canonical nonzero PostgreSQL
+`xid8` text, makes the matrices exact, expands the manifest-bound projection,
+and rewrites the public draft around exact-version installation, configuration,
+recovery, parity, and authority ownership.
+
+The Runtime/compiler/deletion audit found that the durable proof modeled a toy
+catalog rather than production protocol v7, structural clones could reopen an
+Execution, saved adapter entry and hostile context getters escaped containment,
+host abort could leave a streaming Fetch scope open, Envelope events omitted
+safe lifecycle facts, and the v1 deletion inventory was incomplete. The repair
+imports the production v7 catalog and acceptance identity seam, proves the exact
+three-column/check v8 delta on PostgreSQL 17, makes Execution identity nominal
+and single-use, closes delayed/getter/abort hostiles, carries the exact redacted
+start/event/end facts, and names every production v1 owner to delete atomically.
+
+Fresh replacement audits must review the resulting clean repair head. A PASS
+there remains ordinary adversarial evidence; only the later manifest-bound
+repository reviewer can accept ADR-0033.

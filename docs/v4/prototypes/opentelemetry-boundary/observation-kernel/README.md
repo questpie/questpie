@@ -8,10 +8,10 @@ not production code and it does not publish a provider SPI.
 `kernel.ts` models one Runtime-owned root Execution plus nested scope lifecycle.
 Runtime facts become one closed `ExecutionEventV2` start/event/end union and the
 same value is encoded by the repository canonical JSON-line kernel. The
-optional callback is the breaking v2 replacement for the existing host `events`
-callback; the proof never emits v1 in parallel. The neutral adapter receives
-only closed lifecycle input and cannot author Envelope identity, authority,
-outcome, or payload.
+optional callback is the breaking v2 replacement for the existing private
+Runtime/test `events` seam; generated App input remains eventless and the proof
+never emits v1 in parallel. The neutral adapter receives only closed lifecycle
+input and cannot author Envelope identity, authority, outcome, or payload.
 
 The executable cases prove:
 
@@ -25,11 +25,18 @@ The executable cases prove:
   into remote-parent ingress;
 - a built-in no-op with null durable trace context and no adapter close owner;
 - exactly-once `scope.run`, neutral observation bypass after a pre-entry adapter
-  fault, preservation of application results and failures, and containment of
-  callback re-entry;
+  fault, rejection of saved or delayed callback entry, containment of a hostile
+  adapter context getter, preservation of application results and failures,
+  and containment of callback re-entry;
 - per-Runtime async-context and same-layer suppression isolation across
   interleaved awaits;
-- Fetch scope retention through streaming response EOF and idempotent end;
+- Fetch scope retention through streaming response EOF, error, consumer cancel,
+  and host abort even when the source and cancellation callback never settle;
+- nominal Runtime-issued Execution identity, rejection of structural clones,
+  foreign roots, invalid start facts, invalid scope outcomes, and invalid event
+  ownership;
+- a committed PostgreSQL transaction remaining `ok` when its outer Mutation
+  later closes `ambiguous`, with retry owned only by a physical durable Attempt;
 - refusal of late nested materialization or Envelope-counter recreation after
   root end;
 - fail-open host callback, adapter event, and adapter end faults; and

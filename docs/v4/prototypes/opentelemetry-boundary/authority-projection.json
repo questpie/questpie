@@ -4,7 +4,7 @@
 	"status": "candidate-only-until-verified-pass",
 	"publicDraft": {
 		"source": "docs/v4/prototypes/opentelemetry-boundary/PUBLIC-DRAFT.md",
-		"sha256": "ceb29f67e1bb390bd530f6a3eb356a2f7d9a484e1c9168399e37020572df7256",
+		"sha256": "c2854ddd6da5a8984f198f1b5d349b17f355cb9cb2197bc6daf00b982950e8af",
 		"destination": "apps/docs/content/docs/v4/opentelemetry.mdx",
 		"transformation": "replace the candidate status with docs frontmatter; preserve every behavioral paragraph"
 	},
@@ -36,6 +36,42 @@
 		{
 			"path": ".agents/skills/questpie-v4/references/codebase.md",
 			"sha256": "dff962a66d70729569e95fade08987a334143bb9ad12bb540137c9d894eddfd7"
+		},
+		{
+			"path": "docs/v4/runtime-client-envelope-and-studio.md",
+			"sha256": "399c6f494e04d67f8ce5bedfb9a9cd9db1247966d06ad68bc952addfe7c71e62"
+		},
+		{
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "e44b7874dbea21c9a00d9c3e107dc21e6c301746e769a9669fd5fe7a9a53a4e8"
+		},
+		{
+			"path": "docs/v4/beta1-build-spec.md",
+			"sha256": "94ae8a6cbc7a076d13a09118d3de769c2ccd4fd60e5353c8dea9a87bcc0fc552"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/meta.json",
+			"sha256": "efa05c157ceebbc7749895967713c61ddb7cc0b8c7035f2e84809fdaa57fb4bf"
+		},
+		{
+			"path": "packages/runtime/src/application/events.ts",
+			"sha256": "7d272cec17a7e5c7b6d32bbcd899be4e0a0852e65fc5705d10cd8eb26d90dcd1"
+		},
+		{
+			"path": "packages/runtime/src/application/index.ts",
+			"sha256": "399a6a7aa00b1d86ebabb9f8f2deb9776c2dce168e0ac35740e459a1999e6c8b"
+		},
+		{
+			"path": "packages/runtime/src/index.ts",
+			"sha256": "1f17f3ea0ce9f50675fb740d45c7af12de13d795b0335450c08978f22603a8ac"
+		},
+		{
+			"path": "tests/unit/beta05-runtime-application.test.ts",
+			"sha256": "694eea60e89cc2df823cb46af480595ec88db557890cab65b680ff0357b5d40e"
+		},
+		{
+			"path": "tests/integration/beta05-runtime-client.test.ts",
+			"sha256": "fc60e5db6416004648263b106df01e6b62c5ecdf123fad99dce3e31f518e2a70"
 		}
 	],
 	"postPassChanges": [
@@ -74,11 +110,28 @@
 		{
 			"path": ".agents/skills/questpie-v4/references/codebase.md",
 			"change": "replace the single-published-package routing rule with questpie as the sole application authoring/runtime package plus separately accepted optional official integration packages; retain private compiler/runtime/testkit and no generic provider matrix"
+		},
+		{
+			"path": "docs/v4/runtime-client-envelope-and-studio.md",
+			"change": "replace the fixed Envelope-v1 schema and digests with reviewed v2 semantics and regenerated implementation artifacts only after implementation"
+		},
+		{
+			"path": "docs/v4/implementation-gates.md",
+			"change": "replace the broad log/metric/audit correlation promise with the exact v2 allowlist and separate audit ownership"
+		},
+		{
+			"path": "docs/v4/beta1-build-spec.md",
+			"change": "stop calling lossy Execution events durable truth; retain PostgreSQL receipts, ledger, and durable state as truth"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/meta.json",
+			"change": "route the finished OpenTelemetry public guide"
 		}
 	],
 	"breakingDeletions": [
-		"delete ExecutionEventV1 and every v1 emitter/type path when v2 lands; do not dual-emit or add a compatibility adapter",
-		"replace the events CreateAppInput type atomically with ExecutionEventV2",
+		"delete ExecutionEventV1 and createEventEmitter in packages/runtime/src/application/events.ts when the one observation kernel lands; do not dual-emit or add a compatibility adapter",
+		"replace only the private Runtime events input/import/export in packages/runtime/src/application/index.ts and packages/runtime/src/index.ts atomically with ExecutionEventV2; generated CreateAppInput remains without an events callback",
+		"replace the v1 event assertions/imports in tests/unit/beta05-runtime-application.test.ts and tests/integration/beta05-runtime-client.test.ts; delete tests whose only owner is v1",
 		"do not add a second observation kernel, provider registry, ctx.telemetry, or authored signal API",
 		"protocol v8 refuses v7 and v7 refuses v8; do not add mixed-version decoding or rolling compatibility",
 		"exact questpie/@questpie-opentelemetry version mismatch and explicit missing CLI adapter fail before readiness"

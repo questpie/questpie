@@ -121,7 +121,7 @@ type RouteStartV1 = Readonly<{
 	suppressHttp: true;
 	trace: ObservationTracePlanV1;
 }>;
-type ExecutionStartV1 = Readonly<{
+export type ExecutionStartV1 = Readonly<{
 	entry: ExecutionEntry;
 	kind: "execution";
 	principalKind: PrincipalKind;
@@ -138,7 +138,7 @@ type TransactionStartV1 = Readonly<{
 	kind: "transaction";
 	principalKind: PrincipalKind;
 	trace: Readonly<{ kind: "active-parent" }>;
-	transactionId?: string;
+	transactionId?: PostgresTransactionIdentity;
 }>;
 type PostgresStartV1 = Readonly<{
 	databaseOperation: DatabaseOperation;
@@ -187,12 +187,16 @@ export type ObservationStartV1 =
 	| AcceptStartV1
 	| AttemptStartV1
 	| EffectStartV1;
+export type PostgresTransactionIdentity = string;
 export type ObservationEventV1 =
 	| Readonly<{ kind: "context.completed" | "receipt.replayed" }>
-	| Readonly<{ kind: "transaction.committed"; transactionId?: string }>
+	| Readonly<{
+			kind: "transaction.committed";
+			transactionId?: PostgresTransactionIdentity;
+	  }>
 	| Readonly<{
 			kind: "operation.post_commit_ambiguous";
-			transactionId?: string;
+			transactionId?: PostgresTransactionIdentity;
 	  }>
 	| Readonly<{
 			dispatchId?: string;
@@ -214,17 +218,43 @@ export type ObservationEventV1 =
 			outcome: ObservationOutcome;
 	  }>
 	| Readonly<{ effectId?: string; kind: "action.ambiguous" }>;
+type OrdinaryEndOutcome =
+	| "ok"
+	| "declared_error"
+	| "framework_error"
+	| "cancelled"
+	| "deadline";
 export type ObservationEndV1 =
 	| Readonly<{
 			errorCode?: string;
 			httpResponseStatusCode: number;
 			kind: "fetch" | "route";
-			outcome: ObservationOutcome;
+			outcome: Exclude<OrdinaryEndOutcome, "declared_error">;
 	  }>
 	| Readonly<{
 			errorCode?: string;
-			kind: Exclude<ScopeKind, "fetch" | "route">;
-			outcome: ObservationOutcome;
+			kind: "runtime" | "transaction" | "postgresql";
+			outcome: "ok" | "framework_error" | "cancelled" | "deadline";
+	  }>
+	| Readonly<{
+			errorCode?: string;
+			kind: "execution" | "query";
+			outcome: OrdinaryEndOutcome;
+	  }>
+	| Readonly<{
+			errorCode?: string;
+			kind: "mutation" | "action" | "action.effect";
+			outcome: OrdinaryEndOutcome | "ambiguous";
+	  }>
+	| Readonly<{
+			errorCode?: string;
+			kind: "job.accept" | "reaction.accept";
+			outcome: OrdinaryEndOutcome;
+	  }>
+	| Readonly<{
+			errorCode?: string;
+			kind: "job.attempt" | "reaction.attempt";
+			outcome: OrdinaryEndOutcome | "fenced" | "retry";
 	  }>;
 
 export interface ObservationScopeAdapterV1 {
@@ -268,15 +298,57 @@ type EnvelopeCommonV2 = Readonly<{
 	}>;
 	version: 2;
 }>;
+export type EnvelopeStartV2 =
+	| Readonly<{ kind: "runtime" }>
+	| Readonly<{
+			kind: "fetch";
+			method: HttpMethod;
+			requestKind: "generated_operation" | "unmatched";
+			scheme: "http" | "https";
+	  }>
+	| Readonly<{
+			kind: "route";
+			method: HttpMethod;
+			routeTemplate: string;
+			scheme: "http" | "https";
+	  }>
+	| Readonly<{ entry: ExecutionEntry; kind: "execution" }>
+	| Readonly<{
+			entry: ExecutionEntry;
+			kind: "query" | "mutation" | "action";
+	  }>
+	| Readonly<{
+			kind: "transaction";
+			transactionId?: PostgresTransactionIdentity;
+	  }>
+	| Readonly<{
+			databaseOperation: DatabaseOperation;
+			kind: "postgresql";
+			statementIdentity: string;
+	  }>
+	| Readonly<{
+			dispatchId?: string;
+			kind: "job.accept" | "reaction.accept";
+			runId?: string;
+	  }>
+	| Readonly<{
+			attemptId?: string;
+			attemptNumber: number;
+			dispatchId?: string;
+			kind: "job.attempt" | "reaction.attempt";
+			runId?: string;
+	  }>
+	| Readonly<{ effectId?: string; kind: "action.effect" }>;
 export type ExecutionEventV2 =
-	| (EnvelopeCommonV2 & Readonly<{ kind: "scope.started" }>)
+	| (EnvelopeCommonV2 &
+			Readonly<{ kind: "scope.started"; start: EnvelopeStartV2 }>)
 	| (EnvelopeCommonV2 &
 			Readonly<{
 				kind: "scope.event";
 				observationEvent: ObservationEventV1;
 			}>)
 	| (EnvelopeCommonV2 &
-			Readonly<{ kind: "scope.ended"; outcome: ObservationOutcome }>);
+			Readonly<{ end: ObservationEndV1; kind: "scope.ended" }>);
 
 type ActiveObservation = Readonly<{
 	context: NeutralTraceContextV1 | null;
@@ -317,7 +389,7 @@ export interface ObservationKernel {
 			tracestate: string | null;
 		}>,
 	): ExtractedTraceContextV1 | null;
-	beginExecution(input: ObservationStartV1): ObservationExecution | null;
+	beginExecution(input: ExecutionStartV1): ObservationExecution | null;
 	beginScope(
 		execution: ExecutionIdentityV2 | null,
 		input: ObservationStartV1,
@@ -330,6 +402,25 @@ const UUID_V4 =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const MAXIMUM_UINT64 = 18_446_744_073_709_551_615n;
 const UTF8 = new TextDecoder();
+const UTF8_ENCODER = new TextEncoder();
+
+function isPostgresTransactionIdentity(value: unknown): value is string {
+	if (typeof value !== "string" || !/^[1-9][0-9]{0,19}$/u.test(value))
+		return false;
+	return BigInt(value) <= MAXIMUM_UINT64;
+}
+
+function isUuid(value: unknown): value is string {
+	return typeof value === "string" && UUID_V4.test(value);
+}
+
+function boundedIdentity(value: unknown): value is string {
+	return (
+		typeof value === "string" &&
+		UTF8_ENCODER.encode(value).byteLength >= 1 &&
+		UTF8_ENCODER.encode(value).byteLength <= 256
+	);
+}
 
 function isValidTraceContext(
 	value: NeutralTraceContextV1 | null | undefined,
@@ -389,6 +480,244 @@ function positiveInteger(value: number, name: string): number {
 	return value;
 }
 
+function validateObservationStart(input: ObservationStartV1): void {
+	if ("resourceIdentity" in input && !boundedIdentity(input.resourceIdentity))
+		throw new TypeError("observation Resource identity is invalid");
+	if (input.kind === "route" && !boundedIdentity(input.routeTemplate))
+		throw new TypeError("observation route template is invalid");
+	if (input.kind === "postgresql" && !boundedIdentity(input.statementIdentity))
+		throw new TypeError("observation statement identity is invalid");
+	if (
+		input.kind === "transaction" &&
+		input.transactionId !== undefined &&
+		!isPostgresTransactionIdentity(input.transactionId)
+	)
+		throw new TypeError("observation transaction identity is invalid");
+	if (
+		(input.kind === "job.attempt" || input.kind === "reaction.attempt") &&
+		(!Number.isInteger(input.attemptNumber) ||
+			input.attemptNumber < 1 ||
+			input.attemptNumber > 8)
+	)
+		throw new TypeError("observation attempt number is invalid");
+	const optionalIds = input as Partial<
+		Record<"dispatchId" | "runId" | "attemptId" | "effectId", unknown>
+	>;
+	for (const key of ["dispatchId", "runId", "attemptId", "effectId"] as const)
+		if (optionalIds[key] !== undefined && !isUuid(optionalIds[key]))
+			throw new TypeError(`observation ${key} is invalid`);
+	if (input.trace.kind === "remote-parent") {
+		if (
+			!isValidTraceContext(input.trace.extracted.context) ||
+			!isValidTracestate(input.trace.extracted.tracestate)
+		)
+			throw new TypeError("observation remote parent is invalid");
+	}
+	if (input.trace.kind === "root-with-links") {
+		if (
+			input.trace.links.length !== 1 ||
+			!isValidTraceContext(input.trace.links[0])
+		)
+			throw new TypeError("observation creation link is invalid");
+	}
+}
+
+const EVENT_SCOPES: Readonly<
+	Record<ObservationEventKind, readonly ScopeKind[]>
+> = Object.freeze({
+	"context.completed": ["execution"],
+	"receipt.replayed": ["mutation"],
+	"transaction.committed": ["transaction"],
+	"operation.post_commit_ambiguous": ["mutation"],
+	"durable.accepted": ["job.accept", "reaction.accept"],
+	"execution.cancelled": ["execution"],
+	"execution.deadline_exceeded": ["execution"],
+	"durable.fenced": ["job.attempt", "reaction.attempt"],
+	"durable.retry_scheduled": ["job.attempt", "reaction.attempt"],
+	"durable.terminal": ["job.attempt", "reaction.attempt"],
+	"action.ambiguous": ["action.effect"],
+});
+
+function validateObservationEvent(
+	scope: ScopeKind,
+	input: ObservationEventV1,
+): void {
+	if (!EVENT_SCOPES[input.kind].includes(scope))
+		throw new TypeError("observation event is invalid for its scope");
+	if (
+		("transactionId" in input &&
+			input.transactionId !== undefined &&
+			!isPostgresTransactionIdentity(input.transactionId)) ||
+		("attemptNumber" in input &&
+			(!Number.isInteger(input.attemptNumber) ||
+				input.attemptNumber < 1 ||
+				input.attemptNumber > 8)) ||
+		("retryDelayMilliseconds" in input &&
+			(!Number.isInteger(input.retryDelayMilliseconds) ||
+				input.retryDelayMilliseconds < 0 ||
+				input.retryDelayMilliseconds > 900_000))
+	)
+		throw new TypeError("observation event payload is invalid");
+}
+
+const END_OUTCOMES: Readonly<Record<ScopeKind, readonly ObservationOutcome[]>> =
+	Object.freeze({
+		runtime: ["ok", "framework_error", "cancelled", "deadline"],
+		fetch: ["ok", "framework_error", "cancelled", "deadline"],
+		route: ["ok", "framework_error", "cancelled", "deadline"],
+		execution: [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+		],
+		query: ["ok", "declared_error", "framework_error", "cancelled", "deadline"],
+		mutation: [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"ambiguous",
+		],
+		action: [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"ambiguous",
+		],
+		transaction: ["ok", "framework_error", "cancelled", "deadline"],
+		postgresql: ["ok", "framework_error", "cancelled", "deadline"],
+		"job.accept": [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+		],
+		"reaction.accept": [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+		],
+		"job.attempt": [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"fenced",
+			"retry",
+		],
+		"reaction.attempt": [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"fenced",
+			"retry",
+		],
+		"action.effect": [
+			"ok",
+			"declared_error",
+			"framework_error",
+			"cancelled",
+			"deadline",
+			"ambiguous",
+		],
+	});
+
+function validateObservationEnd(
+	scope: ScopeKind,
+	input: ObservationEndV1,
+): void {
+	if (input.kind !== scope || !END_OUTCOMES[scope].includes(input.outcome))
+		throw new TypeError("observation end is invalid for its scope");
+	if (
+		(input.kind === "fetch" || input.kind === "route") &&
+		(!Number.isInteger(input.httpResponseStatusCode) ||
+			input.httpResponseStatusCode < 100 ||
+			input.httpResponseStatusCode > 599)
+	)
+		throw new TypeError("observation HTTP status is invalid");
+	if (input.errorCode !== undefined && !boundedIdentity(input.errorCode))
+		throw new TypeError("observation error code is invalid");
+}
+
+function envelopeStart(input: ObservationStartV1): EnvelopeStartV2 {
+	switch (input.kind) {
+		case "runtime":
+			return { kind: input.kind };
+		case "fetch":
+			return {
+				kind: input.kind,
+				method: input.method,
+				requestKind: input.requestKind,
+				scheme: input.scheme,
+			};
+		case "route":
+			return {
+				kind: input.kind,
+				method: input.method,
+				routeTemplate: input.routeTemplate,
+				scheme: input.scheme,
+			};
+		case "execution":
+		case "query":
+		case "mutation":
+		case "action":
+			return { entry: input.entry, kind: input.kind };
+		case "transaction":
+			return {
+				kind: input.kind,
+				...(input.transactionId === undefined
+					? {}
+					: { transactionId: input.transactionId }),
+			};
+		case "postgresql":
+			return {
+				databaseOperation: input.databaseOperation,
+				kind: input.kind,
+				statementIdentity: input.statementIdentity,
+			};
+		case "job.accept":
+		case "reaction.accept":
+			return {
+				...(input.dispatchId === undefined
+					? {}
+					: { dispatchId: input.dispatchId }),
+				kind: input.kind,
+				...(input.runId === undefined ? {} : { runId: input.runId }),
+			};
+		case "job.attempt":
+		case "reaction.attempt":
+			return {
+				...(input.attemptId === undefined
+					? {}
+					: { attemptId: input.attemptId }),
+				attemptNumber: input.attemptNumber,
+				...(input.dispatchId === undefined
+					? {}
+					: { dispatchId: input.dispatchId }),
+				kind: input.kind,
+				...(input.runId === undefined ? {} : { runId: input.runId }),
+			};
+		case "action.effect":
+			return {
+				...(input.effectId === undefined ? {} : { effectId: input.effectId }),
+				kind: input.kind,
+			};
+		default:
+			return input satisfies never;
+	}
+}
+
 export function createObservationKernel(
 	options: ObservationKernelOptions,
 ): ObservationKernel {
@@ -419,6 +748,7 @@ export function createObservationKernel(
 	const adapter = options.adapter ?? null;
 	const activeObservation = new AsyncLocalStorage<ActiveObservation>();
 	const envelopeCounts = new Map<string, number>();
+	const issuedExecutions = new WeakSet<ExecutionIdentityV2>();
 	const endedExecutions = new WeakSet<ExecutionIdentityV2>();
 	let executionSequence = 0n;
 	let eventSequence = 0n;
@@ -443,10 +773,12 @@ export function createObservationKernel(
 			return null;
 		}
 		executionSequence += 1n;
-		return Object.freeze({
+		const identity = Object.freeze({
 			executionId: `${instanceId}:execution:${executionSequence}`,
 			executionSequence: String(executionSequence),
 		});
+		issuedExecutions.add(identity);
+		return identity;
 	};
 	const allocateEvent = () => {
 		if (disabled || eventSequence >= maximumSequence) {
@@ -462,6 +794,7 @@ export function createObservationKernel(
 	const validateExecution = (execution: ExecutionIdentityV2 | null) => {
 		if (execution === null) return;
 		if (
+			!issuedExecutions.has(execution) ||
 			!/^(?:0|[1-9][0-9]*)$/u.test(execution.executionSequence) ||
 			execution.executionId !==
 				`${instanceId}:execution:${execution.executionSequence}`
@@ -510,6 +843,7 @@ export function createObservationKernel(
 		input: ObservationStartV1,
 	): ObservationScope => {
 		validateExecution(execution);
+		validateObservationStart(input);
 		const ownsNoExecution =
 			input.kind === "runtime" ||
 			input.kind === "fetch" ||
@@ -523,22 +857,29 @@ export function createObservationKernel(
 		const startedIdentity = allocateEvent();
 		if (startedIdentity === null) return inertScope();
 		let adapterScope: ObservationScopeAdapterV1 | null = null;
+		let adapterContext: NeutralTraceContextV1 | null = null;
 		if (adapter !== null) {
+			let candidate: ObservationScopeAdapterV1 | null = null;
 			try {
-				adapterScope = adapter.begin({ ...input, execution });
+				candidate = adapter.begin({ ...input, execution });
 			} catch {
 				diagnostic("adapter_begin_fault");
+			}
+			try {
+				if (candidate === null) throw new TypeError("adapter begin failed");
+				const candidateContext = candidate.context;
+				if (candidateContext !== null && !isValidTraceContext(candidateContext))
+					throw new TypeError("adapter context is invalid");
+				adapterScope = candidate;
+				adapterContext = candidateContext;
+			} catch {
+				if (candidate !== null) diagnostic("adapter_context_invalid");
 			}
 		}
 		let context: NeutralTraceContextV1 | null = null;
 		if (adapterScope !== null) {
-			if (adapterScope.context === null) context = null;
-			else if (isValidTraceContext(adapterScope.context))
-				context = freezeTraceContext(adapterScope.context);
-			else {
-				diagnostic("adapter_context_invalid");
-				adapterScope = null;
-			}
+			context =
+				adapterContext === null ? null : freezeTraceContext(adapterContext);
 		}
 		const base = (eventIdentity: {
 			eventId: string;
@@ -560,7 +901,11 @@ export function createObservationKernel(
 			...(context === null ? {} : { traceContext: traceProjection(context) }),
 			version: 2,
 		});
-		emit({ ...base(startedIdentity), kind: "scope.started" });
+		emit({
+			...base(startedIdentity),
+			kind: "scope.started",
+			start: envelopeStart(input),
+		});
 		let ended = false;
 		let adapterSignalsEnabled = adapterScope !== null;
 		const scope: ObservationScope = {
@@ -575,8 +920,13 @@ export function createObservationKernel(
 				if (adapterScope === null)
 					return await activeObservation.run(state, use);
 				let entries = 0;
+				let entryOpen = true;
 				let callbackPromise: Promise<Result> | null = null;
 				const guardedUse = () => {
+					if (!entryOpen) {
+						diagnostic("adapter_reentry");
+						throw new Error("adapter callback after entry closed");
+					}
 					entries += 1;
 					if (entries > 1) {
 						diagnostic("adapter_reentry");
@@ -600,6 +950,8 @@ export function createObservationKernel(
 							use,
 						);
 					}
+				} finally {
+					entryOpen = false;
 				}
 				if (callbackPromise === null) {
 					diagnostic("adapter_pre_entry_fault");
@@ -611,6 +963,7 @@ export function createObservationKernel(
 			},
 			event(eventInput) {
 				if (ended) return;
+				validateObservationEvent(input.kind, eventInput);
 				const eventIdentity = allocateEvent();
 				if (
 					eventIdentity !== null &&
@@ -631,8 +984,7 @@ export function createObservationKernel(
 			},
 			end(endInput) {
 				if (ended) return;
-				if (endInput.kind !== input.kind)
-					throw new TypeError("observation end kind must match its scope");
+				validateObservationEnd(input.kind, endInput);
 				ended = true;
 				const eventIdentity = allocateEvent();
 				if (
@@ -641,8 +993,8 @@ export function createObservationKernel(
 				)
 					emit({
 						...base(eventIdentity),
+						end: endInput,
 						kind: "scope.ended",
-						outcome: endInput.outcome,
 					});
 				if (!adapterSignalsEnabled || adapterScope === null) return;
 				try {
@@ -688,6 +1040,8 @@ export function createObservationKernel(
 			}
 		},
 		beginExecution(input) {
+			if ((input as ObservationStartV1).kind !== "execution")
+				throw new TypeError("root observation entry must be an Execution");
 			const identity = allocateExecution();
 			if (identity === null) return null;
 			const inner = beginScope(identity, input);
@@ -723,49 +1077,63 @@ export function retainScopeThroughResponse(
 	scope: ObservationScope,
 	response: Response,
 	kind: "fetch" | "route" = "fetch",
+	signal?: AbortSignal,
 ): Response {
 	if (response.body === null) {
 		scope.end({
 			httpResponseStatusCode: response.status,
 			kind,
-			outcome: "ok",
+			outcome: signal?.aborted === true ? "cancelled" : "ok",
 		});
 		return response;
 	}
 	const reader = response.body.getReader();
+	let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
+	let finalized = false;
+	const finalize = (outcome: "ok" | "framework_error" | "cancelled") => {
+		if (finalized) return;
+		finalized = true;
+		if (signal !== undefined) signal.removeEventListener("abort", abort);
+		scope.end({
+			httpResponseStatusCode: response.status,
+			kind,
+			outcome,
+		});
+	};
+	const abort = () => {
+		finalize("cancelled");
+		try {
+			controller?.error(signal?.reason);
+		} catch {
+			// The downstream stream is already terminal.
+		}
+		void reader.cancel(signal?.reason).catch(() => undefined);
+	};
 	const body = new ReadableStream<Uint8Array>({
+		start(streamController) {
+			controller = streamController;
+			if (signal?.aborted === true) abort();
+			else signal?.addEventListener("abort", abort, { once: true });
+		},
 		async pull(controller) {
+			if (finalized) return;
 			try {
 				const result = await reader.read();
+				if (finalized) return;
 				if (result.done) {
+					finalize("ok");
 					controller.close();
-					scope.end({
-						httpResponseStatusCode: response.status,
-						kind,
-						outcome: "ok",
-					});
 					return;
 				}
 				controller.enqueue(result.value);
 			} catch (error) {
-				scope.end({
-					httpResponseStatusCode: response.status,
-					kind,
-					outcome: "framework_error",
-				});
+				finalize("framework_error");
 				controller.error(error);
 			}
 		},
-		async cancel(reason) {
-			try {
-				await reader.cancel(reason);
-			} finally {
-				scope.end({
-					httpResponseStatusCode: response.status,
-					kind,
-					outcome: "cancelled",
-				});
-			}
+		cancel(reason) {
+			finalize("cancelled");
+			void reader.cancel(reason).catch(() => undefined);
 		},
 	});
 	return new Response(body, {

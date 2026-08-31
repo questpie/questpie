@@ -79,7 +79,7 @@ admitted on that variant:
 | `route`                          | normalized method, matched template, scheme, null Principal, ingress trace plan, HTTP suppress                        |
 | `execution`                      | entry, resolved Principal, trace plan                                                                                 |
 | `query`/`mutation`/`action`      | entry, Resource identity, resolved Principal, active parent                                                           |
-| `transaction`                    | resolved Principal, active parent, optional transaction UUID                                                          |
+| `transaction`                    | resolved Principal, active parent, optional canonical nonzero PostgreSQL `xid8` decimal text                          |
 | `postgresql`                     | SQL verb, statement identity, resolved Principal, active parent, PostgreSQL suppress                                  |
 | `job.accept`/`reaction.accept`   | Resource identity, resolved Principal, active parent, optional Dispatch/Run UUIDs                                     |
 | `job.attempt`/`reaction.attempt` | Resource identity, resolved Principal, attempt number, root plus acceptance link, optional Dispatch/Run/Attempt UUIDs |
@@ -93,13 +93,39 @@ the link. Durable attempts always use `root-with-links`. No single ambiguous
 `traceContext` slot exists.
 
 The event union has payload only where the signal projection requires it:
-transaction ambiguity/commit may carry a transaction UUID; durable acceptance
+transaction ambiguity/commit may carry canonical nonzero PostgreSQL `xid8` text; durable acceptance
 may carry Dispatch/Run UUIDs; fencing may carry Attempt UUID; retry requires
 attempt number and delay milliseconds; terminal requires outcome and may carry
 a closed error code; Action ambiguity may carry Effect UUID. The other four
 events are payloadless. The end union repeats its scope `kind`, always carries
 the closed outcome and optional closed error code, and requires HTTP response
 status for `fetch` and `route`. The kernel rejects a mismatched end kind.
+
+Events are admitted only on these scopes:
+
+| Scope                         | Events                                    |
+| ----------------------------- | ----------------------------------------- |
+| `execution`                   | context completed, cancellation, deadline |
+| `mutation`                    | receipt replayed, post-commit ambiguity   |
+| `transaction`                 | transaction committed                     |
+| Job/Reaction acceptance       | durable accepted                          |
+| Job/Reaction physical attempt | fenced, retry scheduled, terminal         |
+| `action.effect`               | Action ambiguity                          |
+
+Every other scope is eventless. End outcomes are also closed by scope:
+
+| Scope                                  | Allowed outcomes                                   |
+| -------------------------------------- | -------------------------------------------------- |
+| Runtime, Fetch/Route, transaction, SQL | `ok`, `framework_error`, `cancelled`, `deadline`   |
+| Execution, Query, acceptance           | the preceding values plus `declared_error`         |
+| Mutation, Action, Action effect        | the preceding values plus `ambiguous`              |
+| Job/Reaction attempt                   | ordinary/declared values plus `fenced` and `retry` |
+
+Telemetry never creates cancellation, deadline, ambiguity, fencing, or retry;
+it records an outcome already owned by the Runtime semantic boundary. A
+committed transaction ends `ok` even when the outer Mutation later ends
+`ambiguous`. Pre-commit cancellation/deadline retains the accepted rollback
+semantics.
 
 The executable copy of these exact unions is
 `observation-kernel/kernel.ts`. Its compile/test gate constructs every one of
@@ -108,10 +134,11 @@ and retry variants, both ingress trace plans, and HTTP EOF completion. This is
 the candidate's generated type feasibility proof, not a second Runtime
 interface.
 
-The kernel has a distinct root-Execution entry that allocates one execution
-identity. Nested scope starts require that identity and cannot allocate or
-replace it. Runtime lifecycle records may explicitly carry no Execution;
-durable physical attempts enter through a fresh worker root.
+The kernel has a distinct root-Execution entry that allocates one nominal,
+Runtime-owned execution identity. Nested scope starts require the exact issued
+live object; structurally equal clones, ended identities, and non-Execution
+root starts are rejected. Runtime lifecycle records may explicitly carry no
+Execution; durable physical attempts enter through a fresh worker root.
 
 Fetch and Route ingress always carry null Execution identity because they begin
 before Context Resolution and may remain open through streamed-response EOF.
@@ -135,7 +162,9 @@ that diagnostic as a release failure; application work remains fail-open.
 Arbitrary adapters are not accepted input.
 
 `end` is idempotent inside the kernel. Runtime ends every scope in `finally` and
-ignores later calls. The official adapter is concurrency-safe. Runtime
+ignores later calls. A saved adapter callback cannot enter after the adapter
+returns or fails before entry, and adapter-returned property getters are inside
+the same fault containment. The official adapter is concurrency-safe. Runtime
 serializes calls for one scope but may use different scopes concurrently.
 
 Fetch extraction projects only the two named header values above. Invalid
@@ -144,7 +173,9 @@ over 512 bytes returns null. A successful extraction remains one frozen value
 from `extract` through the `remote-parent` fetch/route start; no side channel or
 object-identity correlation is used. A SERVER scope begins before
 Context Resolution and ends only when the response body reaches EOF, errors, or
-is cancelled; returning a streaming `Response` does not end it. PostgreSQL and
+is cancelled; returning a streaming `Response` does not end it. Host abort ends
+the scope once immediately and cancels the underlying reader best-effort; it
+does not await a non-cooperative reader. PostgreSQL and
 owned Fetch scopes run with same-layer auto-instrumentation suppressed. Action
 and attempt scopes do not suppress standard outbound HTTP instrumentation, so a
 provider HTTP span can become their child.
@@ -153,12 +184,18 @@ With no `observability` input, Runtime binds its internal null adapter. It
 allocates no trace context, creates no task or timer, persists null durable
 context, and adds no close work.
 
-The existing optional host `events` callback receives the kernel's closed
-`ExecutionEventV2` projection. It is not an observation adapter: it cannot own
-scope context, extraction, propagation, suppression, metrics, or shutdown. A
-callback fault disables the callback for that Runtime instance and is otherwise
-fail-open. Runtime emits no v1 compatibility event, and the official adapter
-never consumes the callback.
+The existing private Runtime/test `events` callback receives the kernel's closed
+`ExecutionEventV2` projection. It is not generated App input and this decision
+adds no public events API. It cannot own scope context, extraction, propagation,
+suppression, metrics, or shutdown. A callback fault disables the callback for
+that Runtime instance and is otherwise fail-open. Runtime emits no v1
+compatibility event, and the official adapter never consumes the callback.
+
+Envelope `scope.started` carries the exact redacted start variant, including
+safe method/route/entry/statement and opted-in transaction, Dispatch, Run,
+Attempt, or Effect links but never trace-plan `tracestate`. `scope.event` carries
+the exact event payload, and `scope.ended` carries the exact end variant with
+HTTP status and closed error code where applicable.
 
 The kernel emits at most 2,048 Envelope records for one Execution and at most
 64 KiB for one canonical Envelope line. These bounds govern only the lossy
@@ -240,10 +277,12 @@ The official adapter constructs its SDK explicitly and reads only this subset:
 | `OTEL_METRIC_EXPORT_INTERVAL`    | integer 1,000..300,000 ms                                                        | 60,000 ms               |
 | `OTEL_METRIC_EXPORT_TIMEOUT`     | integer 1..30,000 ms                                                             | 30,000 ms               |
 
-An invalid supported variable rejects explicit adapter creation before App
-readiness. Other `OTEL_*` variables are ignored by this adapter version. Logs,
-generic Resource attributes, baggage, Prometheus, console, Zipkin, gRPC, and
-declarative configuration are not enabled in v1.
+An invalid supported variable rejects embedded adapter creation with
+`QP-OTEL-001 invalidConfiguration` before App readiness. Its payload contains
+only the closed option path or environment-variable name and never the endpoint,
+header, credential, or rejected value. Other `OTEL_*` variables are ignored by
+this adapter version. Logs, generic Resource attributes, baggage, Prometheus,
+console, Zipkin, gRPC, and declarative configuration are not enabled in v1.
 
 The effective batch-size default follows a smaller configured queue. Setting
 only `OTEL_BSP_MAX_QUEUE_SIZE=128`, for example, selects a batch size of 128;
@@ -261,6 +300,10 @@ resolves `@questpie/opentelemetry` from the application root, never from the
 CLI's installation directory. Missing package, an export without
 `createOpenTelemetry`, or an adapter whose neutral interface version is not 1
 fails before generated-App creation with `QP-START-004 telemetryUnavailable`.
+If adapter creation returns `QP-OTEL-001`, the CLI fails with
+`QP-START-004 telemetryInvalidConfiguration` and preserves only the safe
+variable/path in its cause. Operators repair that named setting and restart;
+neither diagnostic prints its value.
 
 Release `4.0.0-beta.1` declares an exact `questpie: 4.0.0-beta.1` peer. Every
 later adapter release pins the exact same `questpie` version. Runtime still

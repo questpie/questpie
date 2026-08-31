@@ -57,13 +57,14 @@ entry records a closed defect diagnostic and is rejected by release evidence;
 the first application result remains authoritative. Telemetry defects never
 replace it.
 
-The existing optional host `events` callback remains the one public Envelope
-consumer seam, but its generated type advances atomically from
-`ExecutionEventV1` to `ExecutionEventV2`. Runtime does not dual-emit v1 and v2,
-and there is no compatibility adapter. A callback fault disables that callback
-for the Runtime instance and cannot change application work. The OpenTelemetry
-adapter does not consume this callback or reconstruct scope state from it; both
-projections are emitted by the same private kernel.
+The existing `events` callback is a private Runtime/test seam, not part of the
+generated App Contract. Its private type advances atomically from
+`ExecutionEventV1` to `ExecutionEventV2`; this decision does not add a public
+events API. Runtime does not dual-emit v1 and v2, and there is no compatibility
+adapter. A callback fault disables that callback for the Runtime instance and
+cannot change application work. The OpenTelemetry adapter does not consume this
+callback or reconstruct scope state from it; both projections are emitted by
+the same private kernel.
 
 The two concrete adapters are the built-in no-op and the official
 OpenTelemetry adapter. The no-op allocates no SDK object, starts no task,
@@ -72,8 +73,8 @@ persists no trace context, and adds no shutdown wait.
 ### Execution Envelope v2
 
 Envelope v1 bytes and digests remain historical evidence. Runtime emits only
-v2 after this vertical, including through the optional `events` callback. V2
-is a closed append-only event family with:
+v2 after this vertical, including through its private `events` seam. V2 is a
+closed append-only event family with:
 
 - a cryptographically random RFC 4122 UUIDv4 `runtimeInstanceId`, created once
   for each successful Runtime process start and never persisted or reused;
@@ -87,8 +88,9 @@ is a closed append-only event family with:
   (`ordinary`), never Principal or Tenant identity;
 - an optional neutral trace context containing exactly a 16-byte trace ID,
   8-byte span ID, and one byte of trace flags; and
-- closed safe links for artifact, Operation, PostgreSQL transaction, Dispatch,
-  Durable Run, Physical Attempt, and Effect identities.
+- closed safe links for artifact, Operation, canonical nonzero PostgreSQL
+  `xid8` transaction text, Dispatch, Durable Run, Physical Attempt, and Effect
+  identities.
 
 Only a root Execution allocates an `executionSequence` and `executionId`.
 Every nested Operation, transaction, statement, acceptance, and effect scope
@@ -274,6 +276,11 @@ Operation errors or retry signals.
 Cancellation and deadline finish the owning semantic scopes with bounded
 outcomes; they do not keep background telemetry work attached to the cancelled
 Execution. QUESTPIE does not retry application work for telemetry delivery.
+The per-scope outcome/event matrix in `BOUNDARY.md` is exact: `retry` and
+`fenced` belong only to physical Attempts, ambiguity only to Mutation, Action,
+or Action effect, and a committed transaction stays `ok` even if its outer
+Mutation later becomes post-commit `ambiguous`. Observation records those
+semantic outcomes and never initiates them.
 
 QUESTPIE owns no telemetry retention period. Adapter/SDK configuration owns
 finite in-process buffering and export attempts. The Collector/backend owns
@@ -318,14 +325,19 @@ declaration digests, strict dependency checks, PostgreSQL 17, Firefox,
 ## Supersession ledger
 
 This decision supersedes ADR-0014 only for the Execution Envelope/event schema
-and fixed v1 digest, replacing Runtime emission and the generated host callback
-type with v2. In particular, v2 narrows ADR-0014 and the pre-projection SPEC
+and fixed v1 digest, replacing the private Runtime emitter/type with v2 and
+adding no generated/public events callback. In particular, v2 narrows ADR-0014
+and the pre-projection SPEC
 language that implied Principal/Tenant, Policy, idempotency, error, log, and
 audit identities were always safe correlation fields; only the exact v2
 allowlist survives. The opaque official adapter input does not reopen
 ADR-0014's general host/provider SPI deferral. It adds the exact OpenTelemetry
 projection and one additive optional public package with corresponding release
-and public-documentation routing updates.
+and public-documentation routing updates. It also supersedes the repository
+codebase-routing statement that `questpie` is the only published package:
+`questpie` remains the sole application authoring/Runtime package, while
+`@questpie/opentelemetry` is one separately versioned, exact-peer optional
+official integration package. This is not a generic integration-package rule.
 
 It preserves ADR-0014 Runtime, Operation, generated App, direct/Fetch/worker,
 readiness, drain, nondisclosure, and compatibility ownership; ADR-0023

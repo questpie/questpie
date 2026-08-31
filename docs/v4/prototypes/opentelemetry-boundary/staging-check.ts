@@ -62,7 +62,7 @@ for (const path of paths)
 
 const expectedBreakingFacts = [
 	"delete ExecutionEventV1",
-	"replace the events CreateAppInput type atomically",
+	"replace only the private Runtime events input",
 	"do not add a second observation kernel",
 	"protocol v8 refuses v7",
 	"version mismatch",
@@ -87,7 +87,7 @@ const candidateText = [
 	].map((path) => readFileSync(`${root}/${path}`, "utf8")),
 ].join("\n");
 doesNotMatch(candidateText, /\bfallbacks?\b/iu);
-match(candidateText, /no v1 compatibility event/u);
+match(candidateText, /no v1\s+compatibility event/u);
 match(candidateText, /non-rolling/u);
 match(candidateText, /telemetry defects never\s+replace it/iu);
 
@@ -97,6 +97,15 @@ const productionEventSource = readFileSync(
 );
 match(productionEventSource, /ExecutionEventV1/u);
 doesNotMatch(productionEventSource, /ExecutionEventV2/u);
+const generatedSource = readFileSync(
+	"packages/compiler/src/generate.ts",
+	"utf8",
+);
+const generatedCreateInput = generatedSource.slice(
+	generatedSource.indexOf("export type CreateAppInput"),
+	generatedSource.indexOf("export async function createApp"),
+);
+doesNotMatch(generatedCreateInput, /events\??:/u);
 const corePackage = JSON.parse(
 	readFileSync("packages/questpie/package.json", "utf8"),
 ) as Readonly<{ dependencies?: Readonly<Record<string, string>> }>;
