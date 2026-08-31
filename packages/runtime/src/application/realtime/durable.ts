@@ -1,6 +1,7 @@
 import type { Principal } from "questpie";
 
 import type { PostgresRealtimeWatch } from "../../live-query";
+import type { ExecutionEntry } from "../../observation";
 import type {
 	LiveQueryCoordinatorDelivery,
 	LiveQueryCoordinatorEvaluation,
@@ -9,9 +10,16 @@ import type {
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
+export type LiveQueryExecutionEntry = Extract<
+	ExecutionEntry,
+	"watch_initial" | "watch_recompute"
+>;
+
 type DurableRealtimePreparedWatch = Readonly<{
 	authorityPartitionDigest: string;
-	evaluate(): Promise<LiveQueryCoordinatorEvaluation>;
+	evaluate(
+		entry: LiveQueryExecutionEntry,
+	): Promise<LiveQueryCoordinatorEvaluation>;
 }>;
 
 export type DurableRealtimeAttachment = Readonly<{

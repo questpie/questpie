@@ -23,11 +23,13 @@ import { LiveQueryEvaluationFailure } from "./coordinator";
 import type {
 	DurableRealtimeAttachment,
 	DurableRealtimeCoordinator,
+	LiveQueryExecutionEntry,
 } from "./durable";
 
 type MaybePromise<Value> = Value | Promise<Value>;
 
 export type RealtimeCarrierEvaluation<Context> = Readonly<{
+	entry: LiveQueryExecutionEntry;
 	principal: Principal;
 	context: Context;
 	query: string;
@@ -116,10 +118,12 @@ export function createRealtimeCarrier<Context>(
 		binding: Binding,
 		context: Context,
 		queryInput: unknown,
+		entry: LiveQueryExecutionEntry,
 	) => {
 		let evaluation: Awaited<ReturnType<typeof input.evaluate>>;
 		try {
 			evaluation = await input.evaluate({
+				entry,
 				principal: session.principal,
 				context,
 				query: binding.query.identity,
@@ -243,8 +247,8 @@ export function createRealtimeCarrier<Context>(
 									context,
 								}),
 							),
-							evaluate: () =>
-								evaluateComplete(session, binding, context, queryInput),
+							evaluate: (entry) =>
+								evaluateComplete(session, binding, context, queryInput, entry),
 						});
 					} catch {
 						return null;

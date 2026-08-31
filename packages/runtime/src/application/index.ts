@@ -486,6 +486,7 @@ export async function createRuntimeApplication<
 			contextInput: input.program.context.input,
 			resolvePrincipal: input.program.resolvePrincipal,
 			evaluate: async ({
+				entry,
 				principal: caller,
 				context,
 				query,
@@ -503,6 +504,7 @@ export async function createRuntimeApplication<
 						context,
 						signal,
 						liveQueryObservation: observation,
+						observationEntry: entry,
 					},
 					({ invoke }) => invoke(prepared, `realtime:${realtimeCallSequence}`),
 				);

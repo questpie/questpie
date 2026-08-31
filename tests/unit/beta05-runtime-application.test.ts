@@ -14,6 +14,7 @@ import {
 	type RuntimeActionBinding,
 } from "../../packages/runtime/src/action";
 import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
+import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
 import {
 	createObservationHandle,
 	type ObservationAdapterV1,
@@ -1421,6 +1422,86 @@ test("carries one issued Execution privately through direct and network Action",
 			.filter((event) => event.scopeKind !== "fetch")
 			.every((event) => event.executionId === executionId),
 	).toBe(true);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
+test("observes Live Query initial and recompute evaluations as distinct entries", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	const events: ExecutionEventV2[] = [];
+	let evaluate!: (input: Readonly<Record<string, unknown>>) => Promise<unknown>;
+	const observation = Object.freeze({
+		recordContext: () => undefined,
+		recordPostgresQuery: () => undefined,
+		recordStructuralQuery: () => undefined,
+		recordStructuralQueryReached: () => undefined,
+		finish: () => {
+			throw new Error("not used by the application bridge");
+		},
+	}) satisfies LiveQueryObservation;
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, [
+			{
+				identity: "context:app.context",
+				kind: "context" as const,
+				slot: "resolve" as const,
+				runtimeGraphDigest: sha("3"),
+				bundleExport: "context_app_context_resolve",
+				definition: context,
+			},
+			queryExecutable(({ input }) => ({
+				count: (input as Readonly<{ first: number }>).first,
+			})),
+		]),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+			createRealtime: (input) => {
+				evaluate = input.evaluate as typeof evaluate;
+				return {
+					fetch: async () => null,
+					beginDrain: () => undefined,
+					drain: async () => undefined,
+				};
+			},
+		},
+		events: (event) => events.push(event),
+	});
+	const caller = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	for (const entry of ["watch_initial", "watch_recompute"] as const)
+		await expect(
+			evaluate({
+				entry,
+				principal: caller,
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+				query: "query:messages.page",
+				input: { first: 2 },
+				signal: new AbortController().signal,
+				observation,
+			}),
+		).resolves.toEqual({ count: 2 });
+
+	expect(
+		events
+			.filter((event) => event.kind === "scope.started")
+			.map((event) => [event.scopeKind, event.start.entry]),
+	).toEqual([
+		["execution", "watch_initial"],
+		["query", "watch_initial"],
+		["execution", "watch_recompute"],
+		["query", "watch_recompute"],
+	]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 

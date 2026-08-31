@@ -154,6 +154,7 @@ function harness(
 	let contextDecodes = 0;
 	let principalResolutions = 0;
 	let evaluationFailures = 0;
+	const executionEntries: string[] = [];
 	const observedPlans: unknown[] = [];
 	let attachment: DurableRealtimeAttachment | undefined;
 	const watches = new Map<
@@ -209,7 +210,7 @@ function harness(
 				)
 					return;
 				try {
-					const completed = await prepared.evaluate();
+					const completed = await prepared.evaluate("watch_initial");
 					await holder.publish(watch, {
 						...completed,
 						delivery: opened.resumeRequested ? "reset" : "initial",
@@ -245,8 +246,10 @@ function harness(
 			principalResolutions += 1;
 			return user;
 		},
-		evaluate: async () =>
-			Object.freeze({ result: await evaluate(), observedPlan }),
+		evaluate: async (input) => {
+			executionEntries.push(input.entry);
+			return Object.freeze({ result: await evaluate(), observedPlan });
+		},
 		onObservedPlan(value) {
 			observedPlans.push(value);
 		},
@@ -256,7 +259,19 @@ function harness(
 		contextDecodes: () => contextDecodes,
 		principalResolutions: () => principalResolutions,
 		observedPlans,
+		executionEntries,
 		evaluationFailures: () => evaluationFailures,
+		async recompute(bindingId: string) {
+			const holder = attachment;
+			const watch = watches.get(bindingId)?.watch;
+			if (!holder || !watch) throw new Error("watch is unavailable");
+			const prepared = await holder.prepare(
+				watch,
+				new AbortController().signal,
+			);
+			if (!prepared) throw new Error("watch is not prepared");
+			await prepared.evaluate("watch_recompute");
+		},
 	};
 }
 
@@ -310,6 +325,9 @@ test("serves ready, complete delivery, acknowledgement, and close frames", async
 		payload: { nodes: [{ body: "complete result" }] },
 		resumeToken: expect.any(String),
 	});
+	expect(value.executionEntries).toEqual(["watch_initial"]);
+	await value.recompute("binding:one");
+	expect(value.executionEntries).toEqual(["watch_initial", "watch_recompute"]);
 	const token = delivery?.resumeToken;
 	expect(
 		(

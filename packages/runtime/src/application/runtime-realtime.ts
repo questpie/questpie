@@ -6,6 +6,7 @@ import {
 	linkLiveQueryProgram,
 	type LiveQueryObservation,
 } from "../live-query";
+import type { ExecutionEntry } from "../observation";
 import { OperationFailure } from "../operation";
 import type { RuntimeArtifactsV1 } from "./artifacts";
 import {
@@ -31,6 +32,7 @@ export type RuntimeRealtimeFactory<Input> = (
 		resolvePrincipal(request: Request): MaybePromise<Principal | null>;
 		evaluate(
 			scope: Readonly<{
+				entry: Extract<ExecutionEntry, "watch_initial" | "watch_recompute">;
 				principal: Principal;
 				context: Input;
 				query: string;
@@ -91,11 +93,19 @@ export const createRuntimeRealtime: RuntimeRealtimeFactory<unknown> = (
 		resolvePrincipal: input.resolvePrincipal,
 		decodeContext: (value: unknown) =>
 			decodeRuntimeCodec(input.contextInput as never, value, "$context"),
-		evaluate: async ({ principal, context, query, input: value, signal }) => {
+		evaluate: async ({
+			entry,
+			principal,
+			context,
+			query,
+			input: value,
+			signal,
+		}) => {
 			const linked = program.queries.get(query);
 			if (!linked?.watchable) throw new OperationFailure("NOT_FOUND");
 			const observation = createLiveQueryObservation(linked);
 			const result = await input.evaluate({
+				entry,
 				principal,
 				context,
 				query,
