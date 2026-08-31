@@ -766,8 +766,24 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 
+	const runtimeEvents = harness.events.filter(
+		(event) => event.scopeKind === "runtime",
+	);
 	expect(
-		harness.events.slice(0, 19).map((event) => [event.kind, event.scopeKind]),
+		runtimeEvents.map((event) =>
+			event.kind === "scope.ended"
+				? [event.kind, event.scopeKind, event.end.outcome]
+				: [event.kind, event.scopeKind],
+		),
+	).toEqual([
+		["scope.started", "runtime"],
+		["scope.ended", "runtime", "ok"],
+	]);
+	const operationEvents = harness.events.filter(
+		(event) => event.scopeKind !== "runtime",
+	);
+	expect(
+		operationEvents.slice(0, 19).map((event) => [event.kind, event.scopeKind]),
 	).toEqual([
 		["scope.started", "execution"],
 		["scope.event", "execution"],
@@ -789,7 +805,7 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		["scope.ended", "execution"],
 		["scope.ended", "fetch"],
 	]);
-	const firstFetch = harness.events.slice(5, 12);
+	const firstFetch = operationEvents.slice(5, 12);
 	expect(firstFetch[0]).toMatchObject({
 		executionId: null,
 		principalKind: null,
