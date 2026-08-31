@@ -1,6 +1,6 @@
 # OpenTelemetry implementation queue
 
-- Status: ready for implementation
+- Status: OTEL-01 through OTEL-03 complete; OTEL-04 and OTEL-05 unblocked
 - Spec: [`SPEC.md`](./SPEC.md)
 - Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
@@ -31,6 +31,8 @@ observation kernel, public event callback, or generic provider interface.
 
 ## OTEL-01 — Observe one direct Query through the deep Runtime module
 
+Status: complete at `5a3c9c987`.
+
 Blocked by: none.
 
 Red test:
@@ -60,6 +62,8 @@ Acceptance:
   format/lint, architecture, and `git diff --check` pass.
 
 ## OTEL-02 — Own Fetch ingress, propagation, and streamed lifetime
+
+Status: complete through `594053d09`.
 
 Blocked by: OTEL-01.
 
@@ -102,6 +106,8 @@ Acceptance:
   manual context handling.
 
 ## OTEL-03 — Replace every remaining Runtime owner with Envelope v2
+
+Status: complete through `eeeefcfaa`.
 
 Blocked by: OTEL-01 and OTEL-02.
 
