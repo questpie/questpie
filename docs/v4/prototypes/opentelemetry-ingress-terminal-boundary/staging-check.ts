@@ -1,4 +1,5 @@
 import { doesNotMatch, match, strictEqual } from "node:assert";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 
 const root = "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary";
@@ -13,7 +14,22 @@ doesNotMatch(readFileSync("docs/adr/README.md", "utf8"), /0034-/u);
 doesNotMatch(readFileSync("SPEC.md", "utf8"), /ADR-0034/u);
 doesNotMatch(readFileSync("CONTEXT.md", "utf8"), /ADR-0034/u);
 doesNotMatch(readFileSync("HANDOFF.md", "utf8"), /ADR-0034/u);
-strictEqual(existsSync(`${root}/REVIEW.json`), false);
+strictEqual(existsSync(`${root}/REVIEW.json`), true);
+strictEqual(existsSync(`${root}/REVIEW-REPLACEMENT.json`), false);
+const blockedReviewBytes = readFileSync(`${root}/REVIEW.json`);
+strictEqual(
+	createHash("sha256").update(blockedReviewBytes).digest("hex"),
+	"f4248c3c16ef079fb854068044d357fd700930cf94f59ff310cb2600ec38e94c",
+);
+const blockedReview = JSON.parse(blockedReviewBytes.toString()) as Readonly<{
+	reviewedHead: string;
+	verdict: string;
+}>;
+strictEqual(
+	blockedReview.reviewedHead,
+	"9afe302ab59c67f13716d0a6412a8c83122d75b4",
+);
+strictEqual(blockedReview.verdict, "BLOCKED");
 
 const changed = Bun.spawnSync(["git", "diff", "--name-only", `${base}..HEAD`], {
 	stderr: "pipe",

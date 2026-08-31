@@ -3,7 +3,7 @@
 	"ticket": "ADR-0034",
 	"proof": "Repair exactly two omissions in ADR-0033's private neutral observation interface: make continue versus restart an explicit complete ingress trace plan, and represent a Fetch/Route terminal before Response creation without fabricating an HTTP status.",
 	"diffBase": "5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b",
-	"reviewOutput": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
 		"OTEL-01 implementation base": "5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b",
 		"ADR-0033 accepted candidate": "c3bd1a2d337e6142013fe79ab5b78fca0fe327e0",
@@ -108,7 +108,7 @@
 		{
 			"name": "delta hostile tests",
 			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/kernel.test.ts",
-			"sha256": "4e52de4bdd1db11aa15fb57031593e18f4506609604eba7a5f57834f42a62e04"
+			"sha256": "5dd6fad450f4cc3f25a66f35a2c0982978aebcacaa3e9f3fd1702e3acbc94cd6"
 		},
 		{
 			"name": "delta proof type boundary",
@@ -118,7 +118,12 @@
 		{
 			"name": "candidate staging proof",
 			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/staging-check.ts",
-			"sha256": "875c6c15951bc3821045f5caebffb928bc1c37e7c15ea8edca22a14c6eb01c2e"
+			"sha256": "2ddb66a4512e2bc2882093309d64dc831d476b0fdc33df25bcf48af6aa720963"
+		},
+		{
+			"name": "committed blocked review for 9afe302ab",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW.json",
+			"sha256": "f4248c3c16ef079fb854068044d357fd700930cf94f59ff310cb2600ec38e94c"
 		}
 	],
 	"verification": [

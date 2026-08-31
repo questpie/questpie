@@ -33,9 +33,31 @@ describe("OpenTelemetry ingress trace plan delta", () => {
 	});
 
 	test("rejects ambiguous, structurally open, and invalid plans", () => {
+		const invalidContexts = [
+			{ ...context, format: "other.trace-context" },
+			{ ...context, version: 2 },
+			{ ...context, flags: 256 },
+			{ ...context, traceId: new Uint8Array(15).fill(1) },
+			{ ...context, traceId: new Uint8Array(16) },
+			{ ...context, spanId: new Uint8Array(7).fill(1) },
+			{ ...context, spanId: new Uint8Array(8) },
+		];
 		for (const value of [
 			{ context, tracestate: null },
 			{ kind: "continue", context, tracestate: null },
+			{ kind: "remote-parent", extracted: { context } },
+			{
+				kind: "remote-parent",
+				extracted: { context, tracestate: "x".repeat(513) },
+			},
+			{
+				kind: "remote-parent",
+				extracted: { context, tracestate: "vendor=\u0001" },
+			},
+			...invalidContexts.map((invalidContext) => ({
+				extracted: { context: invalidContext, tracestate: null },
+				kind: "remote-parent",
+			})),
 			{
 				kind: "remote-parent",
 				extracted: { context, tracestate: null },
@@ -63,16 +85,26 @@ describe("OpenTelemetry HTTP terminal delta", () => {
 			outcome: "ok",
 		});
 		expect(
-			decodeHttpObservationEnd({
+			[
+				{ kind: "fetch", outcome: "framework_error" },
+				{ kind: "route", outcome: "cancelled" },
+				{ kind: "fetch", outcome: "deadline" },
+			].map(({ kind, outcome }) =>
+				decodeHttpObservationEnd({
+					httpResponseStatusCode: null,
+					kind,
+					outcome,
+				}),
+			),
+		).toEqual([
+			{
 				httpResponseStatusCode: null,
-				kind: "route",
-				outcome: "cancelled",
-			}),
-		).toEqual({
-			httpResponseStatusCode: null,
-			kind: "route",
-			outcome: "cancelled",
-		});
+				kind: "fetch",
+				outcome: "framework_error",
+			},
+			{ httpResponseStatusCode: null, kind: "route", outcome: "cancelled" },
+			{ httpResponseStatusCode: null, kind: "fetch", outcome: "deadline" },
+		]);
 	});
 
 	test("forbids synthetic, missing, successful, or declared-error pre-Response ends", () => {
