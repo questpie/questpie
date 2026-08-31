@@ -82,11 +82,23 @@ export type DurableHeartbeat = Readonly<{
 	deadlineExpired: boolean;
 }>;
 
-export type DurableTransition = Readonly<{
-	status: "applied" | "fenced";
-	state: DurableRunState | null;
-	deadLetter: boolean;
-}>;
+export type DurableTransition =
+	| Readonly<{
+			status: "fenced";
+			state: null;
+			deadLetter: false;
+	  }>
+	| Readonly<{
+			status: "applied";
+			state: "delayed";
+			deadLetter: false;
+			retryDelayMilliseconds: number;
+	  }>
+	| Readonly<{
+			status: "applied";
+			state: Exclude<DurableRunState, "delayed">;
+			deadLetter: boolean;
+	  }>;
 
 export type DurableRunView = Readonly<{
 	runId: string;

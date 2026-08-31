@@ -52,7 +52,6 @@ export type {
 } from "./relational";
 
 export {
-	createDurableReactionWorker,
 	createDurableWorker,
 	createDurableRunHandle,
 	createJobAcceptance,
@@ -65,7 +64,8 @@ export {
 } from "./durable";
 export type {
 	DurableActor,
-	DurableAttemptExecutor,
+	DurableAttemptExecution,
+	DurableAttemptExecutionRequest,
 	DurableAttemptHandle,
 	DurableAttemptRequest,
 	DurableJobAttemptRequest,

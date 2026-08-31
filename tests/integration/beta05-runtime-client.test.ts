@@ -963,10 +963,10 @@ test("operation-local Mutation cancellation owns Mutation and Execution terminal
 		expect(
 			harness.events
 				.filter(
-					(event): event is Extract<
-						ExecutionEventV2,
-						{ kind: "scope.ended" }
-					> => event.kind === "scope.ended",
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+						event.kind === "scope.ended",
 				)
 				.map(({ end }) => [end.kind, end.outcome]),
 		).toEqual([
@@ -976,10 +976,10 @@ test("operation-local Mutation cancellation owns Mutation and Execution terminal
 		expect(
 			harness.events
 				.filter(
-					(event): event is Extract<
-						ExecutionEventV2,
-						{ kind: "scope.event" }
-					> => event.kind === "scope.event" && event.scopeKind === "execution",
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+						event.kind === "scope.event" && event.scopeKind === "execution",
 				)
 				.map(({ observationEvent }) => observationEvent.kind),
 		).toEqual(["context.completed", "execution.cancelled"]);
@@ -1012,10 +1012,10 @@ test("operation-local Mutation deadline owns Mutation and Execution terminals", 
 		expect(
 			harness.events
 				.filter(
-					(event): event is Extract<
-						ExecutionEventV2,
-						{ kind: "scope.ended" }
-					> => event.kind === "scope.ended",
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+						event.kind === "scope.ended",
 				)
 				.map(({ end }) => [end.kind, end.outcome]),
 		).toEqual([
@@ -1025,10 +1025,10 @@ test("operation-local Mutation deadline owns Mutation and Execution terminals", 
 		expect(
 			harness.events
 				.filter(
-					(event): event is Extract<
-						ExecutionEventV2,
-						{ kind: "scope.event" }
-					> => event.kind === "scope.event" && event.scopeKind === "execution",
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+						event.kind === "scope.event" && event.scopeKind === "execution",
 				)
 				.map(({ observationEvent }) => observationEvent.kind),
 		).toEqual(["context.completed", "execution.deadline_exceeded"]);

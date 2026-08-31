@@ -254,6 +254,10 @@ VALUES
 				jobs,
 			});
 			const worker = createDurableWorker({
+				attemptExecution: (_request, work) =>
+					work.preparationError === undefined
+						? work.use(undefined)
+						: work.failure(work.preparationError),
 				kernel,
 				ledger: createPostgresDatabaseDurableEffectLedger({
 					database: runtimeDatabase,

@@ -495,6 +495,7 @@ export async function createApplication(input) {
 		createJobAcceptance,
 		createPostgresJobAcceptanceTransaction,
 		executionObservationOf,
+		runObservedDurableAttempt,
 		${postgresRuntimeTemplates.renderPostgresRuntimeImports()},
 		createRuntimeApplication,
 		executeCollectionOperationAdapter,

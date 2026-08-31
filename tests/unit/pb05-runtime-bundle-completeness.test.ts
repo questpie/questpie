@@ -113,6 +113,7 @@ function successfulDatabase(observed: Observed): PostgresTransactionRunner {
 function statement(name: string, parameterCount = 0) {
 	return core.definePostgresStatement({
 		name,
+		operation: "SELECT",
 		text: "SELECT 1",
 		parameterCount,
 		parameters: (input: readonly PostgresParameter[] | undefined) =>
@@ -148,7 +149,7 @@ function mutationStatements() {
 
 test("private Runtime bundles expose only the required PB database subset", () => {
 	const requiredCore = [
-		"createDurableReactionWorker",
+		"createDurableWorker",
 		"createLinkedPostgresContextBootstrapFactory",
 		"createPostgresDatabaseDurableEffectLedger",
 		"createPostgresDatabaseDurableKernel",
@@ -165,6 +166,7 @@ test("private Runtime bundles expose only the required PB database subset", () =
 		"linkPostgresMutationTransactionStatements",
 		"linkPostgresQueryPlans",
 		"linkReactionProjection",
+		"runObservedDurableAttempt",
 		"verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction",
 	] as const;
 	const requiredRealtime = [

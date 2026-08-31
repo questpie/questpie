@@ -14,6 +14,7 @@ import {
 	type RuntimeActionBinding,
 } from "../../packages/runtime/src/action";
 import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
+import { runObservedDurableAttempt } from "../../packages/runtime/src/durable";
 import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
 import {
 	createObservationHandle,
@@ -1172,6 +1173,7 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 	] as const) {
 		const events: ExecutionEventV2[] = [];
 		const begins: string[] = [];
+		const runs: string[] = [];
 		const adapter: ObservationAdapterV1 | undefined =
 			mode === "absent"
 				? undefined
@@ -1195,7 +1197,12 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 								async run(use) {
 									if (mode === "pre-entry-fault")
 										throw new Error("adapter down");
-									return await use();
+									runs.push(`enter:${input.kind}`);
+									try {
+										return await use();
+									} finally {
+										runs.push(`exit:${input.kind}`);
+									}
 								},
 								event: () => undefined,
 								end: () => undefined,
@@ -1252,6 +1259,88 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 			["execution", "framework_error"],
 		]);
 		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
+		events.length = 0;
+		begins.length = 0;
+		runs.length = 0;
+		const cancelled = new AbortController();
+		cancelled.abort(new DOMException("Run cancelled", "AbortError"));
+		let workerUseCalls = 0;
+		expect(
+			await app.workerExecution(
+				{
+					principal: principal.anonymous(),
+					context: {
+						companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+					},
+					signal: cancelled.signal,
+				},
+				async (observation, proceed) => {
+					if (mode === "working") {
+						await runObservedDurableAttempt({
+							observation,
+							request: {
+								capability: "job",
+								attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
+								attemptNumber: 1,
+								contextInput: {},
+								dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
+								principal: { kind: "anonymous", id: "anonymous" },
+								resource: "job:reports.companyDigest",
+								runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
+								signal: cancelled.signal,
+							},
+							use: async () => {
+								try {
+									await proceed();
+								} catch (error) {
+									expect(error).toBe(cancelled.signal.reason);
+								}
+								return {
+									attemptNumber: 1,
+									failureCode: null,
+									outcome: "cancelled",
+									resource: "job:reports.companyDigest",
+									runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
+								};
+							},
+						});
+						return "settled-cancelled";
+					}
+					try {
+						return await proceed();
+					} catch (error) {
+						expect(error).toBe(cancelled.signal.reason);
+						return "settled-cancelled";
+					}
+				},
+				async () => {
+					workerUseCalls += 1;
+					return "unreachable";
+				},
+			),
+		).toBe("settled-cancelled");
+		expect(workerUseCalls).toBe(0);
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual(
+			mode === "working"
+				? [
+						["job.attempt", "cancelled"],
+						["execution", "cancelled"],
+					]
+				: [["execution", "cancelled"]],
+		);
+		if (mode === "working") {
+			expect(begins).toEqual(["execution", "job.attempt"]);
+			expect(runs).toEqual([
+				"enter:execution",
+				"enter:job.attempt",
+				"exit:job.attempt",
+				"exit:execution",
+			]);
+		}
 		await app.close({ deadlineAt: Date.now() + 2_000 });
 	}
 });
@@ -2511,6 +2600,29 @@ test("enforces 64 active roots per Principal across the shared admission gate", 
 			operations.invoke("query:messages.page", { first: 1 }),
 		),
 	).rejects.toThrow("RESOURCE_LIMIT");
+	let workerAroundCalls = 0;
+	let workerUseCalls = 0;
+	expect(
+		await app.workerExecution(
+			{ principal: firstPrincipal, context },
+			async (_observation, proceed) => {
+				workerAroundCalls += 1;
+				try {
+					await proceed();
+				} catch (error) {
+					expect(error).toMatchObject({ code: "RESOURCE_LIMIT" });
+					return "settled-admission-failure";
+				}
+				throw new Error("saturated worker root was admitted");
+			},
+			async () => {
+				workerUseCalls += 1;
+				return "unreachable";
+			},
+		),
+	).toBe("settled-admission-failure");
+	expect(workerAroundCalls).toBe(1);
+	expect(workerUseCalls).toBe(0);
 	const independent = app.execution(
 		{ principal: secondPrincipal, context },
 		(operations) => operations.invoke("query:messages.page", { first: 1 }),

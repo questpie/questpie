@@ -8,8 +8,8 @@ import type {
 	DurableTransition,
 } from "../../packages/runtime/src/durable/rows";
 import {
-	createDurableReactionWorker,
 	createDurableWorker,
+	type DurableAttemptExecution,
 	type DurableWorkAttemptRequest,
 } from "../../packages/runtime/src/durable/worker";
 
@@ -169,6 +169,10 @@ const unusedLedger = {
 	},
 	read: async () => [],
 } as never;
+const attemptExecution: DurableAttemptExecution<undefined> = (_request, work) =>
+	work.preparationError === undefined
+		? work.use(undefined)
+		: work.failure(work.preparationError);
 
 test("executes and settles a Job through the shared worker without Reaction effects", async () => {
 	const claimed = claim({
@@ -178,14 +182,29 @@ test("executes and settles a Job through the shared worker without Reaction effe
 		payload: { companyId: "company:one" },
 	});
 	const state = kernelFor(claimed);
+	const ownership: string[] = [];
 	let request: DurableWorkAttemptRequest | undefined;
 	const worker = createDurableWorker({
-		kernel: state.kernel,
+		kernel: {
+			...state.kernel,
+			succeed: async (claim, bytes) => {
+				ownership.push("settlement");
+				return state.kernel.succeed(claim, bytes);
+			},
+		},
 		ledger: unusedLedger,
 		reactions,
 		jobs,
 		workerId: "worker:test",
-		execute: async (attempt) => {
+		attemptExecution: async (_attempt, work) => {
+			ownership.push("attempt:start");
+			const outcome = await work.use(Object.freeze({ marker: "worker" }));
+			ownership.push("attempt:end");
+			return outcome;
+		},
+		execute: async (attempt, execution) => {
+			ownership.push("handler");
+			expect(execution).toEqual({ marker: "worker" });
 			request = attempt;
 			expect(attempt.capability).toBe("job");
 			if (attempt.capability !== "job") throw new Error("expected Job");
@@ -209,6 +228,95 @@ test("executes and settles a Job through the shared worker without Reaction effe
 	expect(JSON.parse(new TextDecoder().decode(state.succeeded[0]))).toEqual({
 		reportId: "report:one",
 	});
+	expect(ownership).toEqual([
+		"attempt:start",
+		"handler",
+		"settlement",
+		"attempt:end",
+	]);
+});
+
+test("settles a pre-cancelled claim without entering Context or handler work", async () => {
+	const claimed = Object.freeze({
+		...claim({
+			resource: "job:reports.companyDigest",
+			executableDigest: digest("b"),
+			semanticVersion: 2,
+			payload: { companyId: "company:one" },
+		}),
+		cancellationRequested: true,
+	});
+	const state = kernelFor(claimed);
+	let handlerCalls = 0;
+	let cancellationSettlements = 0;
+	const worker = createDurableWorker({
+		kernel: {
+			...state.kernel,
+			cancel: async (attempt) => {
+				cancellationSettlements += 1;
+				return state.kernel.cancel(attempt);
+			},
+		},
+		ledger: unusedLedger,
+		reactions,
+		jobs,
+		attemptExecution: (request, work) => {
+			expect(request.signal.aborted).toBe(true);
+			return work.failure(request.signal.reason);
+		},
+		execute: async () => {
+			handlerCalls += 1;
+			return { reportId: "unreachable" };
+		},
+	});
+
+	expect(await worker.poll()).toMatchObject({
+		outcomes: [{ outcome: "cancelled", failureCode: null }],
+	});
+	expect(handlerCalls).toBe(0);
+	expect(cancellationSettlements).toBe(1);
+});
+
+test("settles corrupt stored Context and pre-handler Context failures", async () => {
+	for (const failure of ["stored-bytes", "context-bootstrap"] as const) {
+		const base = claim({
+			resource: "job:reports.companyDigest",
+			executableDigest: digest("b"),
+			semanticVersion: 2,
+			payload: { companyId: "company:one" },
+		});
+		const claimed = Object.freeze({
+			...base,
+			...(failure === "stored-bytes"
+				? { contextInputBytes: new TextEncoder().encode("{") }
+				: {}),
+		});
+		const state = kernelFor(claimed);
+		let handlerCalls = 0;
+		const worker = createDurableWorker({
+			kernel: state.kernel,
+			ledger: unusedLedger,
+			reactions,
+			jobs,
+			attemptExecution: (_request, work) => {
+				if (failure === "stored-bytes") {
+					expect(work.preparationError).toBeInstanceOf(SyntaxError);
+					return work.failure(work.preparationError);
+				}
+				return work.failure(new Error("Context bootstrap failed"));
+			},
+			execute: async () => {
+				handlerCalls += 1;
+				return { reportId: "unreachable" };
+			},
+		});
+
+		expect(await worker.poll()).toMatchObject({
+			outcomes: [{ outcome: "failed", failureCode: "HANDLER_FAILED" }],
+		});
+		expect(handlerCalls).toBe(0);
+		expect(state.failed).toEqual(["HANDLER_FAILED"]);
+	}
 });
 
 test("retries an ordinary Job handler failure through the shared kernel", async () => {
@@ -220,9 +328,15 @@ test("retries an ordinary Job handler failure through the shared kernel", async 
 	});
 	const state = kernelFor(
 		claimed,
-		Object.freeze({ status: "applied", state: "delayed", deadLetter: false }),
+		Object.freeze({
+			status: "applied",
+			state: "delayed",
+			deadLetter: false,
+			retryDelayMilliseconds: 750,
+		}),
 	);
 	const worker = createDurableWorker({
+		attemptExecution,
 		kernel: state.kernel,
 		ledger: unusedLedger,
 		reactions,
@@ -236,6 +350,7 @@ test("retries an ordinary Job handler failure through the shared kernel", async 
 		expect.objectContaining({
 			outcome: "retryScheduled",
 			failureCode: "HANDLER_FAILED",
+			retryDelayMilliseconds: 750,
 		}),
 	]);
 	expect(state.failed).toEqual(["HANDLER_FAILED"]);
@@ -254,6 +369,7 @@ test("fails a Job before handler work when fresh Context resolves another Tenant
 	);
 	let handlerReached = false;
 	const worker = createDurableWorker({
+		attemptExecution,
 		kernel: state.kernel,
 		ledger: unusedLedger,
 		reactions,
@@ -285,6 +401,7 @@ test("settles a declared Job error permanently through the shared failure vocabu
 		Object.freeze({ status: "applied", state: "failed", deadLetter: true }),
 	);
 	const worker = createDurableWorker({
+		attemptExecution,
 		kernel: state.kernel,
 		ledger: unusedLedger,
 		reactions,
@@ -313,6 +430,7 @@ test("refuses an incompatible Job before claim", async () => {
 		}),
 	).kernel;
 	const worker = createDurableWorker({
+		attemptExecution,
 		kernel: { ...kernel, claim: async () => (claims += 1) as never },
 		ledger: unusedLedger,
 		reactions,
@@ -331,7 +449,7 @@ test("refuses an incompatible Job before claim", async () => {
 	expect(claims).toBe(0);
 });
 
-test("preserves the legacy Reaction-only worker and effect surface", async () => {
+test("executes a Reaction and its effect surface through the shared worker", async () => {
 	const claimed = claim({
 		resource: "reaction:messages.published",
 		executableDigest: digest("c"),
@@ -339,10 +457,12 @@ test("preserves the legacy Reaction-only worker and effect surface", async () =>
 		payload: { messageId: "message:one" },
 	});
 	const state = kernelFor(claimed);
-	const worker = createDurableReactionWorker({
+	const worker = createDurableWorker({
+		attemptExecution,
 		kernel: state.kernel,
 		ledger: unusedLedger,
 		reactions,
+		jobs,
 		execute: async (attempt) => {
 			expect(attempt.capability).toBe("reaction");
 			expect(attempt.reaction.identity).toBe("reaction:messages.published");

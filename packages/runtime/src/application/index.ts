@@ -4,10 +4,6 @@ import {
 	type ContextInputOf,
 	type Principal,
 	type QuestpieObservability,
-	type ServiceDefinition,
-	type ServiceDependencyMap,
-	type ServiceEffect,
-	type ServiceInstance,
 } from "questpie";
 
 import {
@@ -15,11 +11,7 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import {
-	createApplicationRuntime,
-	type RouteExecutionScope,
-	type RuntimeProgram,
-} from "../execution";
+import { createApplicationRuntime } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
@@ -49,11 +41,20 @@ import {
 	resultFrame,
 } from "../operation";
 import { verifyRuntimeArtifactFiles } from "./artifact-files";
-import { decodeRuntimeArtifacts, type RuntimeArtifactsV1 } from "./artifacts";
+import { decodeRuntimeArtifacts } from "./artifacts";
 import {
 	validateRuntimeExecutableBindings,
 	type RuntimeExecutableBindings,
 } from "./bindings";
+import type {
+	ExecutionInput,
+	ExecutionUse,
+	MaybePromise,
+	RuntimeApplication,
+	RuntimeApplicationProgram,
+	RuntimeOperations,
+	WorkerExecutionAround,
+} from "./contract";
 import {
 	applicationObservationFailure,
 	beginApplicationExecution,
@@ -66,110 +67,23 @@ import {
 	isOperationAbort,
 	normalizeExecutedOperationError,
 } from "./operation-error";
-import type {
-	LiveQueryCoordinator,
-	RealtimeCarrierObservedPlan,
-} from "./realtime";
 import {
 	matchesRetainedClientPair,
 	retainClientPairs,
 	type RetainedClientPair,
 } from "./retained-clients";
 import { controlledRoot, principalIdentity } from "./root";
-import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
 export type {
 	RuntimeExecutableBindings,
 	RuntimeExecutableInventoryBinding,
 	RuntimeReactionBinding,
 } from "./bindings";
-
-type MaybePromise<Value> = Value | Promise<Value>;
-
-export interface RuntimeApplicationProgram<
-	Context extends ContextDefinition,
-	OperationView,
-	ExecutionView = OperationView,
-> extends RuntimeProgram<Context, OperationView> {
-	readonly projectExecution?: RuntimeProgram<Context, ExecutionView>["project"];
-	readonly projectMutation?: (
-		scope: Parameters<RuntimeProgram<Context, OperationView>["project"]>[0],
-	) => MaybePromise<MutationInvoker<OperationView>>;
-	readonly invokeAction?: (
-		input: Readonly<{
-			identity: string;
-			input: unknown;
-			effectKey: string;
-			callId: string;
-			timeoutMilliseconds?: number;
-			execution: ExecutionView;
-			operations: RuntimeOperations;
-		}>,
-	) => MaybePromise<unknown>;
-	readonly resolvePrincipal: (
-		request: Request,
-	) => MaybePromise<Principal | null>;
-	readonly verifyReadiness?: (
-		artifacts: RuntimeArtifactsV1,
-	) => MaybePromise<void>;
-	readonly onLiveQueryObserved?: (
-		input: RealtimeCarrierObservedPlan,
-	) => MaybePromise<void>;
-	readonly liveQueryCoordinator?: LiveQueryCoordinator;
-	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
-}
-
-export interface RuntimeOperations {
-	invoke(
-		operation: string,
-		input: unknown,
-		options?: Readonly<{
-			callId?: string;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-	): Promise<unknown>;
-}
-
-export interface RuntimeApplication<Input, ExecutionView> {
-	applicationService<
-		Definition extends ServiceDefinition<
-			string,
-			"application",
-			ServiceEffect,
-			ServiceDependencyMap,
-			unknown
-		>,
-	>(
-		definition: Definition,
-	): Promise<ServiceInstance<Definition>>;
-	execution<Result>(
-		input: Readonly<{
-			principal: Principal;
-			context: Input;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-		use: (
-			scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
-		) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	route<Result>(
-		input: Readonly<{
-			principal: Principal;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-		use: (
-			scope: RouteExecutionScope<
-				Input,
-				RuntimeOperations & Readonly<{ execution: ExecutionView }>
-			>,
-		) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	fetch(request: Request): Promise<Response>;
-	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
-}
+export type {
+	RuntimeApplication,
+	RuntimeApplicationProgram,
+	RuntimeOperations,
+} from "./contract";
 
 type RuntimeState = "closed" | "draining" | "ready" | "verifying";
 
@@ -287,6 +201,8 @@ export async function createRuntimeApplication<
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
 			observationEntry?: ExecutionEntry;
+			around?: WorkerExecutionAround<Result>;
+			completionOwnsAbort?: boolean;
 		}>,
 		use: (
 			input: Readonly<{
@@ -303,14 +219,20 @@ export async function createRuntimeApplication<
 			}>,
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> => {
-		if (state !== "ready")
-			throw new OperationFailure("RUNTIME_UNAVAILABLE", true);
-		if (!principal.is(root.principal)) throw new OperationFailure("NOT_FOUND");
-		const principalKey = principalIdentity(root.principal);
-		const active = activeByPrincipal.get(principalKey) ?? 0;
-		if (active >= maximumRoots)
-			throw new OperationFailure("RESOURCE_LIMIT", true);
-		activeByPrincipal.set(principalKey, active + 1);
+		let admittedPrincipalKey: string | null = null;
+		const admitRoot = () => {
+			if (state !== "ready")
+				throw new OperationFailure("RUNTIME_UNAVAILABLE", true);
+			if (!principal.is(root.principal))
+				throw new OperationFailure("NOT_FOUND");
+			const principalKey = principalIdentity(root.principal);
+			const active = activeByPrincipal.get(principalKey) ?? 0;
+			if (active >= maximumRoots)
+				throw new OperationFailure("RESOURCE_LIMIT", true);
+			activeByPrincipal.set(principalKey, active + 1);
+			admittedPrincipalKey = principalKey;
+		};
+		if (!root.around) admitRoot();
 		const controlled = controlledRoot({ ...root, now: nowMilliseconds });
 		const observedExecution = beginApplicationExecution(
 			observation,
@@ -325,8 +247,9 @@ export async function createRuntimeApplication<
 				deadlineExpired: controlled.deadlineExpired,
 				aborted: controlled.controller.signal.aborted,
 			});
-		const runCore = () =>
-			core.execution(
+		const runCore = () => {
+			if (admittedPrincipalKey === null) admitRoot();
+			return core.execution(
 				{
 					principal: root.principal,
 					context: root.context,
@@ -391,9 +314,16 @@ export async function createRuntimeApplication<
 					});
 				},
 			);
-		const pending = observedExecution
-			? observedExecution.scope.run(runCore)
-			: runCore();
+		};
+		const executeObserved = () =>
+			root.around
+				? root.around(observedExecution?.observation ?? null, runCore)
+				: runCore();
+		const pending = Promise.resolve().then(() =>
+			observedExecution
+				? observedExecution.scope.run(executeObserved)
+				: executeObserved(),
+		);
 		activeRoots.add(pending);
 		let executionEnd: ObservationEndV1 = {
 			kind: "execution",
@@ -401,10 +331,16 @@ export async function createRuntimeApplication<
 		};
 		try {
 			const result = await pending;
-			if (controlled.deadlineExpired && !committedMutation)
+			if (controlled.deadlineExpired && !committedMutation) {
+				executionEnd = { kind: "execution", outcome: "deadline" };
+				if (root.completionOwnsAbort) return result;
 				throw new OperationFailure("DEADLINE_EXCEEDED", true);
-			if (controlled.controller.signal.aborted && !committedMutation)
+			}
+			if (controlled.controller.signal.aborted && !committedMutation) {
+				executionEnd = { kind: "execution", outcome: "cancelled" };
+				if (root.completionOwnsAbort) return result;
 				throw controlled.controller.signal.reason;
+			}
 			return result;
 		} catch (error) {
 			executionEnd = { kind: "execution", ...observedOutcome(error) };
@@ -423,17 +359,26 @@ export async function createRuntimeApplication<
 			activeRoots.delete(pending);
 			rootControllers.delete(controlled.controller);
 			controlled.dispose();
-			const remaining = (activeByPrincipal.get(principalKey) ?? 1) - 1;
-			if (remaining === 0) activeByPrincipal.delete(principalKey);
-			else activeByPrincipal.set(principalKey, remaining);
+			if (admittedPrincipalKey !== null) {
+				const remaining =
+					(activeByPrincipal.get(admittedPrincipalKey) ?? 1) - 1;
+				if (remaining === 0) activeByPrincipal.delete(admittedPrincipalKey);
+				else activeByPrincipal.set(admittedPrincipalKey, remaining);
+			}
 		}
 	};
-	const execution: RuntimeApplication<
-		ContextInputOf<Context>,
-		ExecutionView
-	>["execution"] = (root, use) =>
+	const executionAt = <Result>(
+		entry: "direct" | "worker",
+		root: ExecutionInput<ContextInputOf<Context>>,
+		use: ExecutionUse<ExecutionView, Result>,
+		around?: WorkerExecutionAround<Result>,
+	): Promise<Awaited<Result>> =>
 		executeRoot(
-			{ ...root, observationEntry: "direct" },
+			{
+				...root,
+				observationEntry: entry,
+				...(around ? { around, completionOwnsAbort: true } : {}),
+			},
 			async ({ invoke, view }) => {
 				const operations: RuntimeOperations = Object.freeze({
 					invoke: (
@@ -463,6 +408,15 @@ export async function createRuntimeApplication<
 				return use(scope);
 			},
 		);
+	const execution: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["execution"] = (root, use) => executionAt("direct", root, use);
+	const workerExecution: RuntimeApplication<
+		ContextInputOf<Context>,
+		ExecutionView
+	>["workerExecution"] = (root, around, use) =>
+		executionAt("worker", root, use, around);
 	const route: RuntimeApplication<
 		ContextInputOf<Context>,
 		ExecutionView
@@ -793,6 +747,7 @@ export async function createRuntimeApplication<
 	return Object.freeze({
 		applicationService: core.applicationService,
 		execution,
+		workerExecution,
 		fetch: observeApplicationFetch(observation, operationPath, fetch),
 		route,
 		close,

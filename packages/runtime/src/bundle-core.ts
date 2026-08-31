@@ -36,7 +36,6 @@ export {
 } from "./mutation";
 export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-transaction-statements";
 export {
-	createDurableReactionWorker,
 	createDurableWorker,
 	createDurableJobContext,
 	createDurableReactionContext,
@@ -45,6 +44,7 @@ export {
 	createPostgresDatabaseDurableKernel,
 	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
+	runObservedDurableAttempt,
 } from "./durable";
 export {
 	createRuntimePostgres,

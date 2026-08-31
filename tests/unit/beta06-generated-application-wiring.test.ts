@@ -87,6 +87,9 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 			"createPostgresDatabaseMutationInvoker",
 		);
 		expect(linkedApplication).toContain("createPostgresDatabaseDurableKernel");
+		expect(linkedApplication).toContain("runtime.workerExecution");
+		expect(linkedApplication).toContain("runObservedDurableAttempt");
+		expect(linkedApplication).not.toContain("createDurableReactionWorker");
 		expect(linkedApplication).toContain(
 			"createPostgresDatabaseDurableEffectLedger",
 		);

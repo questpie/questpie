@@ -65,11 +65,13 @@ export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 export { createDurableJobContext } from "./job-context";
 export { createDurableReactionContext } from "./reaction-context";
 export { durablePrincipal } from "./principal";
+export { runObservedDurableAttempt } from "./observation";
 export { markDurableKernelTransaction } from "./rows";
 export type { DurableActor, DurableQuery } from "./rows";
-export { createDurableReactionWorker, createDurableWorker } from "./worker";
+export { createDurableWorker } from "./worker";
 export type {
-	DurableAttemptExecutor,
+	DurableAttemptExecution,
+	DurableAttemptExecutionRequest,
 	DurableAttemptHandle,
 	DurableAttemptRequest,
 	DurableJobAttemptRequest,

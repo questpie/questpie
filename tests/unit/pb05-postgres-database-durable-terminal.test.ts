@@ -149,6 +149,7 @@ test("separates retry scheduling from permanent terminal failure", async () => {
 		status: "applied",
 		state: "delayed",
 		deadLetter: false,
+		retryDelayMilliseconds: 500,
 	});
 	expect(retrying.calls.map(({ statement }) => statement)).toEqual([
 		durableKernelMarker,
