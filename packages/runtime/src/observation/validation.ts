@@ -302,7 +302,7 @@ export function validateObservationStart(input: ObservationStartV1): void {
 	)
 		throw new TypeError("observation attempt number is invalid");
 	for (const key of ["dispatchId", "runId", "attemptId"] as const)
-		if (value[key] !== undefined && !isUuidV4(value[key]))
+		if (value[key] !== undefined && !isUuid(value[key]))
 			throw new TypeError(`observation ${key} is invalid`);
 	if (value.effectId !== undefined && !isUuid(value.effectId))
 		throw new TypeError("observation effectId is invalid");
@@ -368,7 +368,7 @@ export function validateObservationEvent(
 	)
 		throw new TypeError("observation event transaction is invalid");
 	for (const key of ["dispatchId", "runId", "attemptId"] as const)
-		if (value[key] !== undefined && !isUuidV4(value[key]))
+		if (value[key] !== undefined && !isUuid(value[key]))
 			throw new TypeError("observation event identity is invalid");
 	if (value.effectId !== undefined && !isUuid(value.effectId))
 		throw new TypeError("observation event identity is invalid");

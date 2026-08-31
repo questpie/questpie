@@ -1223,6 +1223,8 @@ test("refuses a surplus fixed statement before entering a transaction", () => {
 
 test("joins one projected Reaction dispatch to the same static transaction", async () => {
 	const linked = fixedStatements();
+	const observationEvents: ExecutionEventV2[] = [];
+	const observed = observedMutation(observationEvents);
 	const calls: Array<
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
@@ -1264,8 +1266,12 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 	});
 
 	await expect(
-		invoke(dispatchedOperation, "database-dispatch-call"),
+		observed.mutation.run(() =>
+			invoke(dispatchedOperation, "database-dispatch-call", observed.options),
+		),
 	).resolves.toMatchObject({ committed: true, value: { id: widgetId } });
+	observed.mutation.end({ kind: "mutation", outcome: "ok" });
+	observed.execution.scope.end({ kind: "execution", outcome: "ok" });
 	expect(calls.map(({ name }) => name)).toEqual([
 		"mutation.receipt.claim",
 		"collection.widgets.create.authority",
@@ -1282,10 +1288,34 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 	expect(calls[6]?.parameters[1]).toBe(calls[4]?.parameters[7]);
 	expect(calls[7]?.parameters).toHaveLength(20);
 	expect(calls[8]?.parameters[1]).toBe(calls[7]?.parameters[1]);
+	const acceptance = observationEvents.filter(
+		(event) => event.scopeKind === "reaction.accept",
+	);
+	expect(
+		acceptance.map((event) =>
+			event.kind === "scope.event"
+				? event.observationEvent.kind
+				: event.kind === "scope.ended"
+					? event.end.outcome
+					: event.kind,
+		),
+	).toEqual(["scope.started", "durable.accepted", "ok"]);
+	expect(acceptance[0]).toMatchObject({
+		executionId: observed.execution.identity.executionId,
+		principalKind: "user",
+		resourceIdentity: "reaction:notifyWidget",
+		start: {
+			dispatchId: calls[4]?.parameters[7],
+			kind: "reaction.accept",
+			runId: calls[7]?.parameters[1],
+		},
+	});
 });
 
 test("accepts multiple independently keyed Jobs inside one Mutation transaction", async () => {
 	const linked = fixedStatements();
+	const observationEvents: ExecutionEventV2[] = [];
+	const observed = observedMutation(observationEvents);
 	const calls: Array<
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
@@ -1357,10 +1387,13 @@ test("accepts multiple independently keyed Jobs inside one Mutation transaction"
 		facts,
 	});
 
-	await expect(invoke(jobOperation, "database-jobs-call")).resolves.toEqual({
-		committed: true,
-		value: { id: widgetId },
-	});
+	await expect(
+		observed.mutation.run(() =>
+			invoke(jobOperation, "database-jobs-call", observed.options),
+		),
+	).resolves.toEqual({ committed: true, value: { id: widgetId } });
+	observed.mutation.end({ kind: "mutation", outcome: "ok" });
+	observed.execution.scope.end({ kind: "execution", outcome: "ok" });
 	expect(
 		calls.filter(({ name }) => name === "mutation.job.acceptance.claim"),
 	).toHaveLength(2);
@@ -1378,6 +1411,31 @@ test("accepts multiple independently keyed Jobs inside one Mutation transaction"
 	expect(runCalls[0]?.parameters[19]).toEqual(operationTime);
 	expect(runCalls[1]?.parameters[16]).toBe("ready");
 	expect(calls.at(-1)?.name).toBe("mutation.receipt.commit");
+	const acceptance = observationEvents.filter(
+		(event) => event.scopeKind === "job.accept",
+	);
+	expect(
+		acceptance.map((event) =>
+			event.kind === "scope.event"
+				? event.observationEvent.kind
+				: event.kind === "scope.ended"
+					? event.end.outcome
+					: event.kind,
+		),
+	).toEqual([
+		"scope.started",
+		"durable.accepted",
+		"ok",
+		"scope.started",
+		"durable.accepted",
+		"ok",
+		"scope.started",
+		"durable.accepted",
+		"ok",
+	]);
+	expect(new Set(acceptance.map((event) => event.executionId))).toEqual(
+		new Set([observed.execution.identity.executionId]),
+	);
 });
 
 test("wraps only a caller-resolvable commit outcome after learning the xid", async () => {

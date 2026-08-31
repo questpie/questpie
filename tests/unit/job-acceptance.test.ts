@@ -9,6 +9,21 @@ import {
 	type JobAcceptanceTransaction,
 } from "../../packages/runtime/src/durable";
 import type { LinkedJobMember } from "../../packages/runtime/src/durable";
+import {
+	createPostgresJobAcceptanceTransaction,
+	type LinkedPostgresMutationTransactionStatements,
+} from "../../packages/runtime/src/mutation";
+import {
+	createObservationKernel,
+	type ExecutionEventV2,
+} from "../../packages/runtime/src/observation";
+import {
+	definePostgresStatement,
+	QuestpiePostgresError,
+	transactionBrand,
+	type PostgresParameter,
+	type PostgresStatement,
+} from "../../packages/runtime/src/postgres/contract";
 
 const tenantId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
 const principalId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4";
@@ -75,6 +90,7 @@ function acceptance(
 		},
 		runtimeBuildDigest: "d".repeat(64),
 		acceptedAt: overrides.acceptedAt ?? acceptedAt,
+		signal: new AbortController().signal,
 		causation: Object.freeze({
 			kind: "mutationDispatch",
 			id: "mutation-call",
@@ -126,6 +142,285 @@ test("accepts independently keyed Jobs and replays an equivalent canonical reque
 		state: "ready",
 		availableAt: acceptedAt,
 	});
+});
+
+test("observes the exact Job acceptance owner and accepted identity", async () => {
+	const events: ExecutionEventV2[] = [];
+	const observation = createObservationKernel({
+		applicationIdentity: "application:collaboration",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected observed Execution");
+	const store = memoryTransaction();
+	const owner = createJobAcceptance({
+		application: "application:collaboration",
+		tenantId,
+		principal: principal.user({ id: principalId }),
+		contextInput: { companyId: "tenant" },
+		contextInputCodec: {
+			kind: "object",
+			properties: { companyId: { kind: "text" } },
+		},
+		runtimeBuildDigest: "d".repeat(64),
+		acceptedAt,
+		signal: new AbortController().signal,
+		causation: Object.freeze({
+			kind: "explicit",
+			id: "server-execution",
+			correlationId: "server-execution",
+		}),
+		observation: execution.observation,
+		transaction: store.transaction,
+	});
+
+	const receipt = await execution.scope.run(() =>
+		owner.accept(job, { companyId: tenantId }, { idempotencyKey: "observed" }),
+	);
+	const acceptanceEvents = events.filter(
+		(event) => event.scopeKind === "job.accept",
+	);
+	expect(
+		acceptanceEvents.map((event) =>
+			event.kind === "scope.event"
+				? event.observationEvent.kind
+				: event.kind === "scope.ended"
+					? event.end.outcome
+					: event.kind,
+		),
+	).toEqual(["scope.started", "durable.accepted", "ok"]);
+	expect(acceptanceEvents[0]).toMatchObject({
+		executionId: execution.identity.executionId,
+		principalKind: "user",
+		resourceIdentity: job.identity,
+		start: { kind: "job.accept" },
+	});
+	expect(acceptanceEvents[1]).toMatchObject({
+		observationEvent: {
+			dispatchId: store.writes[0]?.dispatchId,
+			kind: "durable.accepted",
+			runId: receipt.runId,
+		},
+	});
+	await expect(
+		execution.scope.run(() =>
+			owner.accept(
+				job,
+				{ companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a1" },
+				{ idempotencyKey: "observed" },
+			),
+		),
+	).rejects.toBeInstanceOf(JobAcceptanceConflict);
+	expect(
+		events
+			.filter((event) => event.scopeKind === "job.accept")
+			.slice(3)
+			.map((event) =>
+				event.kind === "scope.ended"
+					? [event.kind, event.end.outcome, event.end.errorCode]
+					: [event.kind],
+			),
+	).toEqual([
+		["scope.started"],
+		["scope.ended", "declared_error", "JOB_ACCEPTANCE_CONFLICT"],
+	]);
+});
+
+test("nests direct Job acceptance PostgreSQL statements under its producer", async () => {
+	const identities = [
+		"mutation.dispatch.accept",
+		"mutation.dispatch.event.insert",
+		"mutation.dispatch.kernel.mark",
+		"mutation.dispatch.run.insert",
+		"mutation.job.acceptance.claim",
+		"mutation.job.acceptance.read",
+	] as const;
+	const linkedEntries = identities.map((identity) => ({
+		identity,
+		statement: definePostgresStatement({
+			name: identity,
+			operation: identity.includes("insert") ? "INSERT" : "SELECT",
+			text: "SELECT 1",
+			parameterCount: 0,
+			parameters: (value: readonly PostgresParameter[]) => value,
+			decode: () => [],
+		}) as PostgresStatement<readonly PostgresParameter[], readonly never[]>,
+	}));
+	const linked = Object.freeze({
+		statements: linkedEntries,
+		get: (identity: string) =>
+			linkedEntries.find((entry) => entry.identity === identity),
+	}) as LinkedPostgresMutationTransactionStatements;
+	const events: ExecutionEventV2[] = [];
+	const observation = createObservationKernel({
+		applicationIdentity: "application:collaboration",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected observed Execution");
+	const signal = new AbortController().signal;
+	const transaction = createPostgresJobAcceptanceTransaction({
+		application: "application:collaboration",
+		callId: "explicit:call",
+		observation: {
+			execution: execution.observation,
+			principalKind: "user",
+			signal,
+		},
+		sourceOperation: "execution:jobs.accept",
+		statements: linked,
+		transaction: {
+			[transactionBrand]: true,
+			execute: async (statement, parameters) => {
+				if (statement.name === "mutation.dispatch.kernel.mark")
+					return [{ enabled: "on" }] as never;
+				if (statement.name === "mutation.job.acceptance.claim")
+					return [{ dispatchId: parameters[7] }] as never;
+				if (statement.name === "mutation.dispatch.accept")
+					return [{ dispatchId: parameters[1] }] as never;
+				if (statement.name === "mutation.dispatch.run.insert")
+					return [{ runId: parameters[1] }] as never;
+				return [] as never;
+			},
+		},
+	});
+	const owner = createJobAcceptance({
+		application: "application:collaboration",
+		acceptedAt,
+		causation: {
+			kind: "explicit",
+			id: "explicit:call",
+			correlationId: "explicit:call",
+		},
+		contextInput: {},
+		contextInputCodec: { kind: "object", properties: {} },
+		observation: execution.observation,
+		principal: principal.user({ id: principalId }),
+		runtimeBuildDigest: "d".repeat(64),
+		signal,
+		tenantId,
+		transaction,
+	});
+
+	await execution.scope.run(() =>
+		owner.accept(
+			job,
+			{ companyId: tenantId },
+			{ idempotencyKey: "postgres-observed" },
+		),
+	);
+	const semantic = events.filter((event) => event.scopeKind !== "execution");
+	expect(semantic[0]).toMatchObject({
+		kind: "scope.started",
+		scopeKind: "job.accept",
+	});
+	expect(
+		semantic
+			.filter((event) => event.scopeKind === "postgresql")
+			.filter((event) => event.kind === "scope.started")
+			.map((event) => event.start),
+	).toHaveLength(6);
+	expect(new Set(semantic.map((event) => event.executionId))).toEqual(
+		new Set([execution.identity.executionId]),
+	);
+	expect(semantic.at(-2)).toMatchObject({
+		observationEvent: { kind: "durable.accepted" },
+		scopeKind: "job.accept",
+	});
+	expect(semantic.at(-1)).toMatchObject({
+		end: { kind: "job.accept", outcome: "ok" },
+		scopeKind: "job.accept",
+	});
+});
+
+test("classifies exact Job acceptance database and owned abort failures", async () => {
+	for (const scenario of [
+		{ code: "statementTimeout", outcome: "framework_error", reason: null },
+		{
+			code: "cancelled",
+			outcome: "cancelled",
+			reason: new DOMException("cancelled", "AbortError"),
+		},
+		{
+			code: "cancelled",
+			outcome: "deadline",
+			reason: new DOMException("deadline", "TimeoutError"),
+		},
+	] as const) {
+		const events: ExecutionEventV2[] = [];
+		const observation = createObservationKernel({
+			applicationIdentity: "application:collaboration",
+			createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+			events: (event) => events.push(event),
+			runtimeBuildDigest: "d".repeat(64),
+		});
+		const execution = observation.beginExecution({
+			entry: "direct",
+			kind: "execution",
+			principalKind: "user",
+			trace: { kind: "root" },
+		});
+		if (execution === null) throw new Error("expected observed Execution");
+		const controller = new AbortController();
+		if (scenario.reason !== null) controller.abort(scenario.reason);
+		const failure = new QuestpiePostgresError({
+			code: scenario.code,
+			phase: "statement",
+		});
+		const owner = createJobAcceptance({
+			application: "application:collaboration",
+			acceptedAt,
+			causation: {
+				kind: "explicit",
+				id: "explicit:failure",
+				correlationId: "explicit:failure",
+			},
+			contextInput: {},
+			contextInputCodec: { kind: "object", properties: {} },
+			observation: execution.observation,
+			principal: principal.user({ id: principalId }),
+			runtimeBuildDigest: "d".repeat(64),
+			signal: controller.signal,
+			tenantId,
+			transaction: { accept: async () => Promise.reject(failure) },
+		});
+
+		await expect(
+			execution.scope.run(() =>
+				owner.accept(
+					job,
+					{ companyId: tenantId },
+					{ idempotencyKey: `failure:${scenario.outcome}` },
+				),
+			),
+		).rejects.toBe(failure);
+		expect(
+			events.find(
+				(event) =>
+					event.scopeKind === "job.accept" && event.kind === "scope.ended",
+			),
+		).toMatchObject({
+			end: {
+				errorCode: scenario.code,
+				kind: "job.accept",
+				outcome: scenario.outcome,
+			},
+		});
+	}
 });
 
 test("conflicts when one scoped Job identity changes input, notBefore, Context, or run-as", async () => {

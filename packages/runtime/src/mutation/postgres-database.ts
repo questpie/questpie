@@ -355,6 +355,8 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							contextInputCodec: input.contextInputCodec,
 							runtimeBuildDigest: input.runtimeBuildDigest,
 							acceptedAt: owner.operationTime,
+							observation: options?.observation?.execution,
+							signal,
 							causation: Object.freeze({
 								kind: "mutationDispatch" as const,
 								id: callId,
@@ -514,98 +516,133 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							throw new TypeError("Mutation result exceeds its byte limit");
 						for (const dispatch of durableDispatch.pending) {
 							const recordId = recordIdForSlot(dispatch.slot);
-							const firstMarker = await transaction.execute(
-								statements["mutation.dispatch.kernel.mark"].statement,
-								[],
-							);
-							if (firstMarker[0]?.enabled !== "on")
-								throw new TypeError(
-									"Durable kernel transaction marker is unavailable",
-								);
-							await transaction.execute(
-								statements["mutation.dispatch.insert"].statement,
-								[
-									input.application,
-									facts.tenant.id,
-									operation.binding.identity,
-									facts.principal.kind,
-									facts.principal.id,
-									callId,
-									dispatch.slot,
-									recordId,
-									dispatch.resourceKind,
-									dispatch.resource.identity,
-									mutationDigest(dispatch.payloadBytes),
-									dispatch.payloadBytes,
-									owner.operationTime,
-								],
-							);
-							const secondMarker = await transaction.execute(
-								statements["mutation.dispatch.kernel.mark"].statement,
-								[],
-							);
-							if (secondMarker[0]?.enabled !== "on")
-								throw new TypeError(
-									"Durable kernel transaction marker is unavailable",
-								);
-							const advanced = await transaction.execute(
-								statements["mutation.dispatch.accept"].statement,
-								[input.application, recordId],
-							);
-							if (advanced.length !== 1 || advanced[0]!.dispatchId !== recordId)
-								throw new TypeError(
-									"Durable dispatch acceptance did not advance",
-								);
 							const runId = durableRunIdentity(recordId);
-							const inserted = await transaction.execute(
-								statements["mutation.dispatch.run.insert"].statement,
-								[
-									input.application,
+							const reactionAcceptedAt = owner.operationTime;
+							const acceptanceObservation =
+								options?.observation?.execution.begin({
+									dispatchId: recordId,
+									kind: "reaction.accept",
+									principalKind: facts.principal.kind,
+									resourceIdentity: dispatch.resource.identity,
 									runId,
-									recordId,
-									dispatch.resource.identity,
-									1,
-									facts.tenant.id,
-									facts.principal.kind,
-									facts.principal.id,
-									canonicalMutationBytes(
-										encodeRuntimeCodec(
-											input.contextInputCodec,
-											facts.contextInput,
-										),
-									),
-									dispatch.payloadBytes,
-									retryBytes(dispatch.resource.retry),
-									input.runtimeBuildDigest,
-									dispatch.resource.contractDigest,
-									"mutationDispatch",
-									callId,
-									callId,
-									"ready",
-									owner.operationTime,
-									new Date(
-										owner.operationTime.getTime() +
-											dispatch.resource.retry.horizonMilliseconds,
-									),
-									owner.operationTime,
-								],
-							);
-							if (inserted.length !== 1 || inserted[0]!.runId !== runId)
-								throw new TypeError(
-									"Durable dispatch acceptance did not advance",
+									trace: { kind: "active-parent" },
+								});
+							const acceptReaction = async () => {
+								const firstMarker = await transaction.execute(
+									statements["mutation.dispatch.kernel.mark"].statement,
+									[],
 								);
-							await transaction.execute(
-								statements["mutation.dispatch.event.insert"].statement,
-								[
-									input.application,
+								if (firstMarker[0]?.enabled !== "on")
+									throw new TypeError(
+										"Durable kernel transaction marker is unavailable",
+									);
+								await transaction.execute(
+									statements["mutation.dispatch.insert"].statement,
+									[
+										input.application,
+										facts.tenant.id,
+										operation.binding.identity,
+										facts.principal.kind,
+										facts.principal.id,
+										callId,
+										dispatch.slot,
+										recordId,
+										dispatch.resourceKind,
+										dispatch.resource.identity,
+										mutationDigest(dispatch.payloadBytes),
+										dispatch.payloadBytes,
+										reactionAcceptedAt,
+									],
+								);
+								const secondMarker = await transaction.execute(
+									statements["mutation.dispatch.kernel.mark"].statement,
+									[],
+								);
+								if (secondMarker[0]?.enabled !== "on")
+									throw new TypeError(
+										"Durable kernel transaction marker is unavailable",
+									);
+								const advanced = await transaction.execute(
+									statements["mutation.dispatch.accept"].statement,
+									[input.application, recordId],
+								);
+								if (
+									advanced.length !== 1 ||
+									advanced[0]!.dispatchId !== recordId
+								)
+									throw new TypeError(
+										"Durable dispatch acceptance did not advance",
+									);
+								const inserted = await transaction.execute(
+									statements["mutation.dispatch.run.insert"].statement,
+									[
+										input.application,
+										runId,
+										recordId,
+										dispatch.resource.identity,
+										1,
+										facts.tenant.id,
+										facts.principal.kind,
+										facts.principal.id,
+										canonicalMutationBytes(
+											encodeRuntimeCodec(
+												input.contextInputCodec,
+												facts.contextInput,
+											),
+										),
+										dispatch.payloadBytes,
+										retryBytes(dispatch.resource.retry),
+										input.runtimeBuildDigest,
+										dispatch.resource.contractDigest,
+										"mutationDispatch",
+										callId,
+										callId,
+										"ready",
+										reactionAcceptedAt,
+										new Date(
+											reactionAcceptedAt.getTime() +
+												dispatch.resource.retry.horizonMilliseconds,
+										),
+										reactionAcceptedAt,
+									],
+								);
+								if (inserted.length !== 1 || inserted[0]!.runId !== runId)
+									throw new TypeError(
+										"Durable dispatch acceptance did not advance",
+									);
+								await transaction.execute(
+									statements["mutation.dispatch.event.insert"].statement,
+									[
+										input.application,
+										runId,
+										reactionAcceptedAt,
+										dispatch.resource.identity,
+										recordId,
+										callId,
+										callId,
+									],
+								);
+							};
+							try {
+								await (acceptanceObservation
+									? acceptanceObservation.run(acceptReaction)
+									: acceptReaction());
+								acceptanceObservation?.event({
+									dispatchId: recordId,
+									kind: "durable.accepted",
 									runId,
-									owner.operationTime,
-									dispatch.resource.identity,
-									recordId,
-									callId,
-									callId,
-								],
-							);
+								});
+								acceptanceObservation?.end({
+									kind: "reaction.accept",
+									outcome: "ok",
+								});
+							} catch (error) {
+								acceptanceObservation?.end({
+									kind: "reaction.accept",
+									...mutationPostgresObservationFailure(error, signal),
+								});
+								throw error;
+							}
 						}
 						await transaction.execute(
 							statements["mutation.receipt.commit"].statement,

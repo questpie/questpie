@@ -1,5 +1,13 @@
 import type { JobAcceptanceRecord, JobAcceptanceTransaction } from "../durable";
-import type { PostgresTransaction } from "../postgres/contract";
+import {
+	observePostgresTransaction,
+	type PrincipalKind,
+	type RuntimeExecutionObservation,
+} from "../observation";
+import {
+	QuestpiePostgresError,
+	type PostgresTransaction,
+} from "../postgres/contract";
 import type { LinkedPostgresMutationTransactionStatement } from "./postgres-transaction-statements";
 import type { LinkedPostgresMutationTransactionStatements } from "./postgres-transaction-statements";
 
@@ -31,6 +39,11 @@ export function createPostgresJobAcceptanceTransaction(
 		application: string;
 		sourceOperation: string;
 		callId: string;
+		observation?: Readonly<{
+			execution: RuntimeExecutionObservation;
+			principalKind: PrincipalKind;
+			signal: AbortSignal;
+		}>;
 	}>,
 ): JobAcceptanceTransaction {
 	const statements = Object.freeze(
@@ -47,13 +60,37 @@ export function createPostgresJobAcceptanceTransaction(
 	) as Readonly<
 		Record<StatementIdentity, LinkedPostgresMutationTransactionStatement>
 	>;
+	const observation = input.observation;
+	const transaction = observation
+		? observePostgresTransaction({
+				execution: observation.execution,
+				failure: (error) => {
+					const errorCode =
+						error instanceof QuestpiePostgresError
+							? { errorCode: error.code }
+							: {};
+					if (
+						error instanceof QuestpiePostgresError &&
+						error.code === "cancelled" &&
+						observation.signal.aborted
+					)
+						return observation.signal.reason instanceof DOMException &&
+							observation.signal.reason.name === "TimeoutError"
+							? { outcome: "deadline" as const, ...errorCode }
+							: { outcome: "cancelled" as const, ...errorCode };
+					return { outcome: "framework_error" as const, ...errorCode };
+				},
+				principalKind: observation.principalKind,
+				transaction: input.transaction,
+			})
+		: input.transaction;
 	return Object.freeze({
 		accept: async (record: JobAcceptanceRecord) => {
 			await requireMarker(
-				input.transaction,
+				transaction,
 				statements["mutation.dispatch.kernel.mark"],
 			);
-			const claimed = await input.transaction.execute(
+			const claimed = await transaction.execute(
 				statements["mutation.job.acceptance.claim"].statement,
 				[
 					input.application,
@@ -72,7 +109,7 @@ export function createPostgresJobAcceptanceTransaction(
 				],
 			);
 			if (claimed.length === 0) {
-				const existing = await input.transaction.execute(
+				const existing = await transaction.execute(
 					statements["mutation.job.acceptance.read"].statement,
 					[input.application, record.dispatchId],
 				);
@@ -89,10 +126,10 @@ export function createPostgresJobAcceptanceTransaction(
 			if (claimed.length !== 1 || claimed[0]!.dispatchId !== record.dispatchId)
 				throw new TypeError("Job acceptance claim did not advance");
 			await requireMarker(
-				input.transaction,
+				transaction,
 				statements["mutation.dispatch.kernel.mark"],
 			);
-			const advanced = await input.transaction.execute(
+			const advanced = await transaction.execute(
 				statements["mutation.dispatch.accept"].statement,
 				[input.application, record.dispatchId],
 			);
@@ -101,7 +138,7 @@ export function createPostgresJobAcceptanceTransaction(
 				advanced[0]!.dispatchId !== record.dispatchId
 			)
 				throw new TypeError("Job acceptance did not advance");
-			const inserted = await input.transaction.execute(
+			const inserted = await transaction.execute(
 				statements["mutation.dispatch.run.insert"].statement,
 				[
 					input.application,
@@ -128,7 +165,7 @@ export function createPostgresJobAcceptanceTransaction(
 			);
 			if (inserted.length !== 1 || inserted[0]!.runId !== record.runId)
 				throw new TypeError("Job acceptance run did not advance");
-			await input.transaction.execute(
+			await transaction.execute(
 				statements["mutation.dispatch.event.insert"].statement,
 				[
 					input.application,
