@@ -187,11 +187,11 @@
 	"verification": [
 		{
 			"command": "bun test docs/v4/prototypes/opentelemetry-boundary/observation-kernel/kernel.test.ts docs/v4/prototypes/opentelemetry-boundary/artifacts/artifact.test.ts",
-			"result": "PASS: 29 tests, 123 assertions"
+			"result": "PASS"
 		},
 		{
 			"command": "PGHOST=127.0.0.1 PGPORT=<allocated-trust-auth-postgresql-17-port> PGUSER=postgres PGDATABASE=postgres bun test docs/v4/prototypes/opentelemetry-boundary/durable-link/check.test.ts",
-			"result": "PASS: PostgreSQL 17, 7 tests, 42 assertions, disposable container removed"
+			"result": "PASS"
 		},
 		{
 			"command": "bunx tsc -p docs/v4/prototypes/opentelemetry-boundary/observation-kernel/tsconfig.json --pretty false",
