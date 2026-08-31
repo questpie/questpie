@@ -17,10 +17,10 @@ import type {
 } from "./contract";
 import { projectEnvelopeStart, projectTraceContext } from "./projection";
 import {
+	decodeIngressTracePlan,
 	freezeTraceContext,
 	isUuidV4,
 	isValidTraceContext,
-	isValidTracestate,
 	validateObservationEnd,
 	validateObservationEvent,
 	validateObservationStart,
@@ -347,19 +347,14 @@ export function createObservationKernel(
 		extract(input) {
 			if (adapter === null) return null;
 			try {
-				const extracted = adapter.extract(input);
-				if (extracted === null) return null;
-				if (
-					!isValidTraceContext(extracted.context) ||
-					!isValidTracestate(extracted.tracestate)
-				) {
+				const candidate = adapter.extract(input);
+				if (candidate === null) return null;
+				const plan = decodeIngressTracePlan(candidate);
+				if (plan === null) {
 					diagnostic("adapter_context_invalid");
 					return null;
 				}
-				return Object.freeze({
-					context: freezeTraceContext(extracted.context),
-					tracestate: extracted.tracestate,
-				});
+				return plan;
 			} catch {
 				diagnostic("adapter_context_invalid");
 				return null;

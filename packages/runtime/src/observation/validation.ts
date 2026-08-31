@@ -1,5 +1,6 @@
 import type {
 	DurableFailureCode,
+	IngressTracePlanV1,
 	NeutralTraceContextV1,
 	ObservationEndV1,
 	ObservationEventKind,
@@ -128,6 +129,27 @@ function validTracePlan(
 		default:
 			return false;
 	}
+}
+
+export function decodeIngressTracePlan(
+	value: unknown,
+): IngressTracePlanV1 | null {
+	if (!validTracePlan(value, ["remote-parent", "root-with-links"])) return null;
+	const plan = value as IngressTracePlanV1;
+	if (plan.kind === "remote-parent")
+		return Object.freeze({
+			extracted: Object.freeze({
+				context: freezeTraceContext(plan.extracted.context),
+				tracestate: plan.extracted.tracestate,
+			}),
+			kind: "remote-parent",
+		});
+	return Object.freeze({
+		kind: "root-with-links",
+		links: Object.freeze([freezeTraceContext(plan.links[0])]) as readonly [
+			NeutralTraceContextV1,
+		],
+	});
 }
 
 type Shape = Readonly<{
@@ -388,13 +410,21 @@ export function validateObservationEnd(
 		throw new TypeError("observation end shape is invalid");
 	if (input.kind !== scope || !END_OUTCOMES[scope].includes(input.outcome))
 		throw new TypeError("observation end is invalid for its scope");
-	if (
-		http &&
-		(!Number.isInteger(input.httpResponseStatusCode) ||
+	if (http) {
+		if (input.httpResponseStatusCode === null) {
+			if (
+				input.outcome !== "framework_error" &&
+				input.outcome !== "cancelled" &&
+				input.outcome !== "deadline"
+			)
+				throw new TypeError("observation HTTP status is invalid");
+		} else if (
+			!Number.isInteger(input.httpResponseStatusCode) ||
 			input.httpResponseStatusCode < 100 ||
-			input.httpResponseStatusCode > 599)
-	)
-		throw new TypeError("observation HTTP status is invalid");
+			input.httpResponseStatusCode > 599
+		)
+			throw new TypeError("observation HTTP status is invalid");
+	}
 	if (input.errorCode !== undefined && !boundedIdentity(input.errorCode))
 		throw new TypeError("observation end error code is invalid");
 }

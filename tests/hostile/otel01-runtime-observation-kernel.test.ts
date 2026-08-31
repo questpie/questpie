@@ -221,13 +221,16 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 		).toBeNull();
 	});
 
-	test("contains invalid extraction and freezes valid neutral trace bytes", () => {
+	test("accepts only exact ingress trace plans and defensively copies their bytes", () => {
 		const diagnostics: string[] = [];
 		const invalid = { ...TRACE, traceId: new Uint8Array(16) };
 		const observation = kernel(
 			{
 				...adapterWith(async (use) => await use()),
-				extract: () => ({ context: invalid, tracestate: null }),
+				extract: () => ({
+					extracted: { context: invalid, tracestate: null },
+					kind: "remote-parent",
+				}),
 			},
 			diagnostics,
 		);
@@ -235,22 +238,142 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 			observation.extract({ traceparent: null, tracestate: null }),
 		).toBeNull();
 		expect(diagnostics).toEqual(["adapter_context_invalid"]);
+		for (const tracestate of ["vendor=bad\nvalue", "x".repeat(513)]) {
+			const invalidTracestate = kernel({
+				...adapterWith(async (use) => await use()),
+				extract: () => ({
+					extracted: { context: TRACE, tracestate },
+					kind: "remote-parent",
+				}),
+			});
+			expect(
+				invalidTracestate.extract({ traceparent: null, tracestate: null }),
+			).toBeNull();
+		}
 
 		const source = Uint8Array.from(TRACE.traceId);
 		const valid = kernel({
 			...adapterWith(async (use) => await use()),
 			extract: () => ({
-				context: { ...TRACE, traceId: source },
-				tracestate: "vendor=value",
+				extracted: {
+					context: { ...TRACE, traceId: source },
+					tracestate: "vendor=value",
+				},
+				kind: "remote-parent",
 			}),
 		});
 		const extracted = valid.extract({
 			traceparent: "ignored-by-kernel",
 			tracestate: null,
 		});
-		expect(extracted?.context.traceId).toEqual(TRACE.traceId);
+		expect(extracted?.kind).toBe("remote-parent");
+		if (extracted?.kind !== "remote-parent")
+			throw new Error("expected remote-parent plan");
+		expect(extracted.extracted.context.traceId).toEqual(TRACE.traceId);
 		source[0] = 99;
-		expect(extracted?.context.traceId[0]).toBe(1);
+		expect(extracted.extracted.context.traceId[0]).toBe(1);
+		expect(Object.isFrozen(extracted)).toBe(true);
+		expect(Object.isFrozen(extracted.extracted)).toBe(true);
+
+		const linkSource = Uint8Array.from(TRACE.spanId);
+		const restarted = kernel({
+			...adapterWith(async (use) => await use()),
+			extract: () => ({
+				kind: "root-with-links",
+				links: [{ ...TRACE, spanId: linkSource }],
+			}),
+		}).extract({ traceparent: null, tracestate: null });
+		expect(restarted?.kind).toBe("root-with-links");
+		if (restarted?.kind !== "root-with-links")
+			throw new Error("expected restart plan");
+		linkSource[0] = 99;
+		expect(restarted.links[0]?.spanId[0]).toBe(1);
+		expect(Object.isFrozen(restarted.links)).toBe(true);
+	});
+
+	test("rejects malformed, open, and forbidden ingress trace plans", () => {
+		const malformed = [
+			{ kind: "active-parent" },
+			{ kind: "root" },
+			{ kind: "root-with-links", links: [] },
+			{ kind: "root-with-links", links: [TRACE, TRACE] },
+			{ kind: "root-with-links", links: [TRACE], tracestate: "forbidden" },
+			{ extracted: { context: TRACE }, kind: "remote-parent" },
+			{
+				extracted: { context: TRACE, extra: true, tracestate: null },
+				kind: "remote-parent",
+			},
+			{
+				extracted: { context: TRACE, tracestate: null },
+				extra: true,
+				kind: "remote-parent",
+			},
+			{
+				extracted: {
+					context: { ...TRACE, flags: 256 },
+					tracestate: null,
+				},
+				kind: "remote-parent",
+			},
+		] as const;
+		for (const plan of malformed) {
+			const diagnostics: string[] = [];
+			const observation = kernel(
+				{
+					...adapterWith(async (use) => await use()),
+					extract: () => plan as never,
+				},
+				diagnostics,
+			);
+			expect(
+				observation.extract({ traceparent: null, tracestate: null }),
+			).toBeNull();
+			expect(diagnostics).toEqual(["adapter_context_invalid"]);
+		}
+	});
+
+	test("admits exact response-present boundaries and response-absent terminals", () => {
+		const fetchStart = {
+			kind: "fetch",
+			method: "GET",
+			principalKind: null,
+			requestKind: "generated_operation",
+			scheme: "https",
+			suppressHttp: true,
+			trace: { kind: "root" },
+		} as const;
+		for (const status of [100, 599]) {
+			kernel().beginScope(null, fetchStart).end({
+				httpResponseStatusCode: status,
+				kind: "fetch",
+				outcome: "ok",
+			});
+		}
+		for (const outcome of [
+			"framework_error",
+			"cancelled",
+			"deadline",
+		] as const) {
+			kernel()
+				.beginScope(null, fetchStart)
+				.end({ httpResponseStatusCode: null, kind: "fetch", outcome });
+		}
+		for (const end of [
+			{ httpResponseStatusCode: 99, kind: "fetch", outcome: "ok" },
+			{ httpResponseStatusCode: 600, kind: "fetch", outcome: "ok" },
+			{ httpResponseStatusCode: null, kind: "fetch", outcome: "ok" },
+			{
+				httpResponseStatusCode: null,
+				kind: "fetch",
+				outcome: "declared_error",
+			},
+		] as const) {
+			expect(() =>
+				kernel()
+					.beginScope(null, fetchStart)
+					.end(end as never),
+			).toThrow();
+		}
 	});
 
 	test("contains adapter pre-entry faults and runs application work exactly once with null context", async () => {

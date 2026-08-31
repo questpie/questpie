@@ -852,6 +852,48 @@ test("rejects a changed inventory file before readiness or executable disclosure
 			program,
 		}),
 	).rejects.toThrow("opentelemetry-signal-projection.json has invalid keys");
+	const currentSignalProjection = JSON.parse(
+		artifacts.artifactFiles["opentelemetry-signal-projection.json"],
+	);
+	const forgedGrammarProjection = {
+		...currentSignalProjection,
+		httpTerminalGrammar: {
+			...currentSignalProjection.httpTerminalGrammar,
+			null: { outcomes: ["framework_error", "cancelled"] },
+		},
+	};
+	const forgedGrammarBytes = `${JSON.stringify(forgedGrammarProjection)}\n`;
+	const resignedGrammarBuild = {
+		...unsignedSignalBuild,
+		observationSignalProjectionDigest: digest(
+			"questpie-opentelemetry-projection-v1",
+			forgedGrammarProjection,
+		),
+		inventory: unsignedSignalBuild.inventory.map((item) =>
+			item.path === "opentelemetry-signal-projection.json"
+				? { ...item, digest: fileDigest(forgedGrammarBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...resignedGrammarBuild,
+					digest: digest("questpie-runtime-build-v1", resignedGrammarBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"opentelemetry-signal-projection.json": forgedGrammarBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow(
+		"OpenTelemetry ingress and HTTP terminal grammar does not match Runtime",
+	);
 	const { digest: _digest, ...unsignedBuild } = artifacts.runtimeBuild;
 	const mismatchedBuild = {
 		...unsignedBuild,
@@ -1759,6 +1801,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		resolves: 0,
 	});
 
+	events.length = 0;
 	const network = await send(baseFrame);
 	expect(network.status).toBe(200);
 	expect((await network.json()) as unknown).toMatchObject({
@@ -1782,7 +1825,22 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		principalResolutions: 1,
 		resolves: 2,
 	});
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+	]);
 
+	events.length = 0;
 	principalFailure = true;
 	const failedPrincipal = await send({ ...baseFrame, callId: "call:2" });
 	expect((await failedPrincipal.json()) as unknown).toMatchObject({
@@ -1795,13 +1853,10 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	expect(eventBytes).not.toContain(baseFrame.context.companyId);
 	expect(eventBytes).not.toContain('"input"');
 	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
-		["scope.started", "execution"],
-		["scope.event", "execution"],
-		["scope.started", "query"],
-		["scope.ended", "query"],
-		["scope.ended", "execution"],
+		["scope.started", "fetch"],
+		["scope.ended", "fetch"],
 	]);
-	expect(new Set(events.map(({ executionId }) => executionId)).size).toBe(1);
+	expect(events.every(({ executionId }) => executionId === null)).toBe(true);
 });
 
 test("executes a retained v1 Query only for its exact deployment-owned digest pair", async () => {

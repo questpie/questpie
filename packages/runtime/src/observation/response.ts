@@ -15,6 +15,21 @@ export function retainScopeThroughResponse(
 		});
 		return response;
 	}
+	if (signal?.aborted === true) {
+		scope.end({
+			httpResponseStatusCode: response.status,
+			kind,
+			outcome: "cancelled",
+		});
+		try {
+			const retained = response.clone();
+			void response.body.cancel(signal.reason).catch(() => undefined);
+			return retained;
+		} catch {
+			/* Preserving an already-created Response remains authoritative. */
+		}
+		return response;
+	}
 	const reader = response.body.getReader();
 	let controller: ReadableStreamDefaultController<Uint8Array> | null = null;
 	let finalized = false;

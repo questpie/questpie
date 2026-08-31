@@ -13,6 +13,7 @@ export type {
 	ExecutionStartV1,
 	ExtractedTraceContextV1,
 	HttpMethod,
+	IngressTracePlanV1,
 	NeutralTraceContextV1,
 	ObservationAdapterV1,
 	ObservationDiagnostic,

@@ -3,6 +3,11 @@ import type { QuestpieObservability } from "questpie";
 import {
 	createObservationKernel,
 	type ExecutionEventV2,
+	type ExecutionEntry,
+	type HttpMethod,
+	type ObservationKernel,
+	type PrincipalKind,
+	retainScopeThroughResponse,
 	resolveObservationHandle,
 } from "../observation";
 import { DeclaredOperationError, OperationFailure } from "../operation";
@@ -29,6 +34,20 @@ export function createApplicationObservation(
 	});
 }
 
+export function beginApplicationExecution(
+	observation: ObservationKernel | null,
+	entry: ExecutionEntry | undefined,
+	principalKind: PrincipalKind,
+) {
+	if (observation === null || entry === undefined) return null;
+	return observation.beginExecution({
+		entry,
+		kind: "execution",
+		principalKind,
+		trace: { kind: entry === "fetch" ? "active-parent" : "root" },
+	});
+}
+
 export function applicationObservationFailure(
 	error: unknown,
 	input: Readonly<{
@@ -49,4 +68,67 @@ export function applicationObservationFailure(
 	if (error instanceof DeclaredOperationError)
 		return { outcome: "declared_error" as const, ...code };
 	return { outcome: "framework_error" as const, ...code };
+}
+
+const HTTP_METHODS = new Set<HttpMethod>([
+	"CONNECT",
+	"DELETE",
+	"GET",
+	"HEAD",
+	"OPTIONS",
+	"PATCH",
+	"POST",
+	"PUT",
+	"TRACE",
+]);
+
+export function observeApplicationFetch(
+	observation: ObservationKernel | null,
+	operationPath: string,
+	execute: (request: Request) => Promise<Response>,
+): (request: Request) => Promise<Response> {
+	if (observation === null) return execute;
+	return async (request) => {
+		const url = new URL(request.url);
+		const scheme =
+			url.protocol === "http:"
+				? ("http" as const)
+				: url.protocol === "https:"
+					? ("https" as const)
+					: null;
+		if (scheme === null) return execute(request);
+		const ingressTrace = observation.extract({
+			traceparent: request.headers.get("traceparent"),
+			tracestate: request.headers.get("tracestate"),
+		});
+		const method = request.method.toUpperCase();
+		const scope = observation.beginScope(null, {
+			kind: "fetch",
+			method: HTTP_METHODS.has(method as HttpMethod)
+				? (method as HttpMethod)
+				: "_OTHER",
+			principalKind: null,
+			requestKind:
+				url.pathname === operationPath ? "generated_operation" : "unmatched",
+			scheme,
+			suppressHttp: true,
+			trace: ingressTrace ?? { kind: "root" },
+		});
+		try {
+			const response = await scope.run(() => execute(request));
+			return retainScopeThroughResponse(
+				scope,
+				response,
+				"fetch",
+				request.signal,
+			);
+		} catch (error) {
+			scope.end({
+				httpResponseStatusCode: null,
+				kind: "fetch",
+				outcome: request.signal.aborted ? "cancelled" : "framework_error",
+			});
+			throw error;
+		}
+	};
 }

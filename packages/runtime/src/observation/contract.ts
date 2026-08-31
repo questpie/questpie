@@ -94,6 +94,12 @@ export type ExtractedTraceContextV1 = Readonly<{
 	context: NeutralTraceContextV1;
 	tracestate: string | null;
 }>;
+export type IngressTracePlanV1 =
+	| Readonly<{ kind: "remote-parent"; extracted: ExtractedTraceContextV1 }>
+	| Readonly<{
+			kind: "root-with-links";
+			links: readonly [NeutralTraceContextV1];
+	  }>;
 export type ObservationTracePlanV1 =
 	| Readonly<{ kind: "active-parent" }>
 	| Readonly<{ kind: "remote-parent"; extracted: ExtractedTraceContextV1 }>
@@ -237,6 +243,12 @@ export type ObservationEndV1 =
 	  }>
 	| Readonly<{
 			errorCode?: string;
+			httpResponseStatusCode: null;
+			kind: "fetch" | "route";
+			outcome: "framework_error" | "cancelled" | "deadline";
+	  }>
+	| Readonly<{
+			errorCode?: string;
 			kind: "runtime" | "transaction" | "postgresql";
 			outcome: "ok" | "framework_error" | "cancelled" | "deadline";
 	  }>
@@ -272,7 +284,7 @@ export interface ObservationAdapterV1 {
 	readonly version: 1;
 	extract(
 		input: Readonly<{ traceparent: string | null; tracestate: string | null }>,
-	): ExtractedTraceContextV1 | null;
+	): IngressTracePlanV1 | null;
 	begin(
 		input: ObservationStartV1 &
 			Readonly<{ execution: ExecutionIdentityV2 | null }>,
@@ -382,7 +394,7 @@ export interface ObservationKernel {
 	readonly disabled: boolean;
 	extract(
 		input: Readonly<{ traceparent: string | null; tracestate: string | null }>,
-	): ExtractedTraceContextV1 | null;
+	): IngressTracePlanV1 | null;
 	beginExecution(input: ExecutionStartV1): ObservationExecution | null;
 	beginScope(
 		execution: ExecutionIdentityV2 | null,

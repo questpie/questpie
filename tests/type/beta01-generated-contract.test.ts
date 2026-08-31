@@ -52,6 +52,8 @@ describe("BETA-01 generated contract", () => {
 		expect(first.generatedFiles["app.ts"]).not.toContain(
 			"@questpie/opentelemetry",
 		);
+		expect(first.generatedFiles["client.ts"]).not.toContain("observability");
+		expect(first.generatedFiles["client.ts"]).not.toContain("traceparent");
 		const workspaceGraph = await Promise.all(
 			[
 				"packages/questpie",
@@ -95,10 +97,10 @@ describe("BETA-01 generated contract", () => {
 			"durable-kernel.json",
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
-			"internal/application-3wvkbhzm.js",
+			"internal/application-34d8fee2.js",
 			"internal/application-br7x7drg.js",
+			"internal/application-fdxdjtdr.js",
 			"internal/application-qga406mn.js",
-			"internal/application-z1yr3tf7.js",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",

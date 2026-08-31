@@ -195,6 +195,48 @@ const SPAN_GRAPH = Object.freeze([
 		scope: "action_effect",
 	},
 ]);
+const INGRESS_TRACE_PLAN_GRAMMAR = deepFreeze({
+	absent: { adapterReturn: null, runtimePlan: "root" },
+	variants: [
+		{
+			exactKeys: ["extracted", "kind"],
+			extracted: {
+				context: "neutral-trace-context-v1",
+				exactKeys: ["context", "tracestate"],
+				tracestate: {
+					maximumUtf8Bytes: 512,
+					printableAsciiOnly: true,
+					type: "string-or-null",
+				},
+			},
+			kind: "remote-parent",
+		},
+		{
+			exactKeys: ["kind", "links"],
+			kind: "root-with-links",
+			links: {
+				exactLength: 1,
+				item: "neutral-trace-context-v1",
+			},
+		},
+	],
+});
+const HTTP_TERMINAL_GRAMMAR = deepFreeze({
+	field: "httpResponseStatusCode",
+	null: {
+		outcomes: ["framework_error", "cancelled", "deadline"],
+		value: null,
+	},
+	numeric: {
+		maximum: 599,
+		minimum: 100,
+		outcomes: ["ok", "framework_error", "cancelled", "deadline"],
+		type: "integer",
+	},
+	projectedAttribute: "http.response.status_code",
+	projectedWhen: "numeric",
+	scopes: ["fetch", "route"],
+});
 const METRICS = Object.freeze([
 	{
 		attributes: [
@@ -304,6 +346,8 @@ export function projectObservationSignalProjection(questpieVersion: string) {
 		spanAttributeAllowlist: SPAN_ATTRIBUTES,
 		spanAttributeScopes: SPAN_ATTRIBUTE_SCOPES,
 		spanAttributeMaximumUtf8Bytes: 256,
+		ingressTracePlanGrammar: INGRESS_TRACE_PLAN_GRAMMAR,
+		httpTerminalGrammar: HTTP_TERMINAL_GRAMMAR,
 		httpMethodNormalization: [
 			"CONNECT",
 			"DELETE",

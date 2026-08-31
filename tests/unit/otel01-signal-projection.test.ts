@@ -25,7 +25,7 @@ test("projects the accepted exact OpenTelemetry signal artifact", () => {
 		},
 	});
 	expect(projection.digest).toBe(
-		"3028812618c963a95d87b3b5b9b7391dae3508c48232a56971f98f850020a2f2",
+		"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
 	);
 	expect(projection.bytes.endsWith("\n")).toBe(true);
 	expect(projection.artifact.spanGraph).toHaveLength(14);
@@ -34,6 +34,48 @@ test("projects the accepted exact OpenTelemetry signal artifact", () => {
 	expect(projection.artifact.spanAttributeScopes).toMatchObject({
 		"questpie.execution.entry": ["execution", "query", "mutation", "action"],
 		"questpie.retry.delay_ms": ["job.attempt", "reaction.attempt"],
+	});
+	expect(projection.artifact.ingressTracePlanGrammar).toEqual({
+		absent: { adapterReturn: null, runtimePlan: "root" },
+		variants: [
+			{
+				exactKeys: ["extracted", "kind"],
+				extracted: {
+					context: "neutral-trace-context-v1",
+					exactKeys: ["context", "tracestate"],
+					tracestate: {
+						maximumUtf8Bytes: 512,
+						printableAsciiOnly: true,
+						type: "string-or-null",
+					},
+				},
+				kind: "remote-parent",
+			},
+			{
+				exactKeys: ["kind", "links"],
+				kind: "root-with-links",
+				links: {
+					exactLength: 1,
+					item: "neutral-trace-context-v1",
+				},
+			},
+		],
+	});
+	expect(projection.artifact.httpTerminalGrammar).toEqual({
+		field: "httpResponseStatusCode",
+		null: {
+			outcomes: ["framework_error", "cancelled", "deadline"],
+			value: null,
+		},
+		numeric: {
+			maximum: 599,
+			minimum: 100,
+			outcomes: ["ok", "framework_error", "cancelled", "deadline"],
+			type: "integer",
+		},
+		projectedAttribute: "http.response.status_code",
+		projectedWhen: "numeric",
+		scopes: ["fetch", "route"],
 	});
 	expect(projection.artifact.spanEventOutcomes).toEqual({
 		"questpie.durable.terminal": ["ok", "framework_error", "cancelled"],
@@ -80,7 +122,7 @@ test("binds the signal projection into generated Runtime Build inventory", async
 			projectObservationSignalProjection("4.0.0-beta.1").bytes,
 		);
 		expect(runtimeBuild.observationSignalProjectionDigest).toBe(
-			"3028812618c963a95d87b3b5b9b7391dae3508c48232a56971f98f850020a2f2",
+			"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
 		);
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({

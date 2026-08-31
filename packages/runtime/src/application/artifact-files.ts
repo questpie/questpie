@@ -9,6 +9,47 @@ import {
 } from "./artifact-protocol";
 import type { RuntimeArtifactsV1 } from "./artifacts";
 
+const EXPECTED_INGRESS_TRACE_PLAN_GRAMMAR = {
+	absent: { adapterReturn: null, runtimePlan: "root" },
+	variants: [
+		{
+			exactKeys: ["extracted", "kind"],
+			extracted: {
+				context: "neutral-trace-context-v1",
+				exactKeys: ["context", "tracestate"],
+				tracestate: {
+					maximumUtf8Bytes: 512,
+					printableAsciiOnly: true,
+					type: "string-or-null",
+				},
+			},
+			kind: "remote-parent",
+		},
+		{
+			exactKeys: ["kind", "links"],
+			kind: "root-with-links",
+			links: { exactLength: 1, item: "neutral-trace-context-v1" },
+		},
+	],
+} as const;
+
+const EXPECTED_HTTP_TERMINAL_GRAMMAR = {
+	field: "httpResponseStatusCode",
+	null: {
+		outcomes: ["framework_error", "cancelled", "deadline"],
+		value: null,
+	},
+	numeric: {
+		maximum: 599,
+		minimum: 100,
+		outcomes: ["ok", "framework_error", "cancelled", "deadline"],
+		type: "integer",
+	},
+	projectedAttribute: "http.response.status_code",
+	projectedWhen: "numeric",
+	scopes: ["fetch", "route"],
+} as const;
+
 export function verifyRuntimeArtifactFiles(
 	artifacts: RuntimeArtifactsV1,
 	files: Readonly<Record<string, Uint8Array | string>>,
@@ -65,6 +106,8 @@ export function verifyRuntimeArtifactFiles(
 			"spanAttributeAllowlist",
 			"spanAttributeScopes",
 			"spanAttributeMaximumUtf8Bytes",
+			"ingressTracePlanGrammar",
+			"httpTerminalGrammar",
 			"httpMethodNormalization",
 			"postgresOperations",
 			"spanStatus",
@@ -126,6 +169,27 @@ export function verifyRuntimeArtifactFiles(
 		) !== artifactDigest("questpie-observation-end-outcomes-v1", END_OUTCOMES)
 	)
 		fail("OpenTelemetry signal projection grammar does not match Runtime");
+	if (
+		artifactDigest(
+			"questpie-observation-ingress-trace-plan-grammar-v1",
+			signalProjection.ingressTracePlanGrammar,
+		) !==
+			artifactDigest(
+				"questpie-observation-ingress-trace-plan-grammar-v1",
+				EXPECTED_INGRESS_TRACE_PLAN_GRAMMAR,
+			) ||
+		artifactDigest(
+			"questpie-observation-http-terminal-grammar-v1",
+			signalProjection.httpTerminalGrammar,
+		) !==
+			artifactDigest(
+				"questpie-observation-http-terminal-grammar-v1",
+				EXPECTED_HTTP_TERMINAL_GRAMMAR,
+			)
+	)
+		fail(
+			"OpenTelemetry ingress and HTTP terminal grammar does not match Runtime",
+		);
 	const rawContextBootstrap = record(
 		parseJsonFile("postgres-context-bootstrap-plans.json"),
 		"postgres-context-bootstrap-plans.json",

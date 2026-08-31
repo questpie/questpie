@@ -56,7 +56,9 @@ import {
 } from "./bindings";
 import {
 	applicationObservationFailure,
+	beginApplicationExecution,
 	createApplicationObservation,
+	observeApplicationFetch,
 } from "./observation";
 import {
 	isOperationAbort,
@@ -312,15 +314,11 @@ export async function createRuntimeApplication<
 			throw new OperationFailure("RESOURCE_LIMIT", true);
 		activeByPrincipal.set(principalKey, active + 1);
 		const controlled = controlledRoot({ ...root, now: nowMilliseconds });
-		const observedExecution =
-			observation && root.observationEntry
-				? observation.beginExecution({
-						entry: root.observationEntry,
-						kind: "execution",
-						principalKind: root.principal.kind,
-						trace: { kind: "root" },
-					})
-				: null;
+		const observedExecution = beginApplicationExecution(
+			observation,
+			root.observationEntry,
+			root.principal.kind,
+		);
 		let committedMutation = false;
 		rootControllers.add(controlled.controller);
 		const observedOutcome = (error: unknown) =>
@@ -644,6 +642,7 @@ export async function createRuntimeApplication<
 						actionRequest || frame.timeoutMilliseconds === null
 							? undefined
 							: nowMilliseconds() + frame.timeoutMilliseconds,
+					observationEntry: "fetch",
 				},
 				async ({ invoke, view }) => {
 					if (!actionRequest) return invoke(prepared!, frame.callId);
@@ -793,7 +792,7 @@ export async function createRuntimeApplication<
 	return Object.freeze({
 		applicationService: core.applicationService,
 		execution,
-		fetch,
+		fetch: observeApplicationFetch(observation, operationPath, fetch),
 		route,
 		close,
 	});

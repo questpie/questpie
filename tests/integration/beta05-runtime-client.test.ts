@@ -766,13 +766,54 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 
-	expect(harness.events.map((event) => [event.kind, event.scopeKind])).toEqual([
+	expect(
+		harness.events.slice(0, 19).map((event) => [event.kind, event.scopeKind]),
+	).toEqual([
 		["scope.started", "execution"],
 		["scope.event", "execution"],
 		["scope.started", "query"],
 		["scope.ended", "query"],
 		["scope.ended", "execution"],
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
 	]);
+	const firstFetch = harness.events.slice(5, 12);
+	expect(firstFetch[0]).toMatchObject({
+		executionId: null,
+		principalKind: null,
+		scopeKind: "fetch",
+		start: {
+			kind: "fetch",
+			method: "POST",
+			requestKind: "generated_operation",
+			scheme: "http",
+		},
+	});
+	expect(firstFetch.at(-1)).toMatchObject({
+		end: { httpResponseStatusCode: 200, kind: "fetch", outcome: "ok" },
+		executionId: null,
+	});
+	expect(firstFetch[1]).toMatchObject({
+		scopeKind: "execution",
+		start: { entry: "fetch", kind: "execution" },
+	});
+	const fetchExecutionIds = new Set(
+		firstFetch.slice(1, -1).map((event) => event.executionId),
+	);
+	expect(fetchExecutionIds.size).toBe(1);
+	expect(fetchExecutionIds.has(null)).toBe(false);
 	const eventBytes = JSON.stringify(harness.events);
 	expect(eventBytes).not.toContain("companyId");
 	expect(eventBytes).not.toContain("one engine");
