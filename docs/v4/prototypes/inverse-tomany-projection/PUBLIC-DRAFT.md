@@ -155,7 +155,7 @@ comments: comments.list({
 	first: 20,
 	where: ({ row }) => row.body.equal("public reply"),
 	orderBy: { createdAt: "desc", id: "desc" },
-	select: { id: true, body: true },
+	select: { id: true, body: true, createdAt: true },
 });
 ```
 
@@ -169,6 +169,9 @@ predicate and are not implied by a child selection.
   compiled artifact bound.
 - `orderBy` is required and must end in a declared child primary-key or unique
   Constraint. QUESTPIE never adds a hidden tie-breaker.
+- Every child order Field must be selected directly and be unconditionally
+  visible under selected-output Policy. Otherwise the Query is unavailable
+  with `QP-DATA-008`, because relative order would disclose a protected value.
 - One structural Query may contain one inverse list. Nested plural lists
   and child cursors are not supported.
 - The complete traversal path may contain at most four Relation edges. The
@@ -186,15 +189,16 @@ limit.
 The compiler reports the authored path and Origin. It emits no partial
 artifact.
 
-| Diagnostic                           | Common cause                                                    | Recovery                                                          |
-| ------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `QP-DATA-026 invalidInverseList`     | List comes from the wrong child Collection.                     | Use the Collection named by the inverse member's `inverseOf`.     |
-| `QP-DATA-026 invalidInverseList`     | `first` is dynamic, zero, fractional, or greater than 50.       | Use a literal integer from 1 through 50.                          |
-| `QP-DATA-026 invalidInverseList`     | `select` or `orderBy` is empty or names an unknown child Field. | Select at least one child member and use only child Fields.       |
-| `QP-DATA-026 invalidInverseList`     | Order lacks a non-null primary-key or unique suffix.            | End the explicit order with the qualifying Constraint's Fields.   |
-| `QP-DATA-026 invalidInverseList`     | A second child list or child cursor appears in the Query.       | Keep one child list; use a separate child Query for continuation. |
-| `QP-DATA-022 relationDepthExceeded`  | The selected path reaches a fifth Relation edge.                | Shorten the selection or split it into another Query.             |
-| `QP-DATA-012 executionLimitExceeded` | Row, byte, duration, or dependency work exceeds a limit.        | Narrow the lists; no partial result is returned.                  |
+| Diagnostic                           | Common cause                                                    | Recovery                                                              |
+| ------------------------------------ | --------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `QP-DATA-026 invalidInverseList`     | List comes from the wrong child Collection.                     | Use the Collection named by the inverse member's `inverseOf`.         |
+| `QP-DATA-026 invalidInverseList`     | `first` is dynamic, zero, fractional, or greater than 50.       | Use a literal integer from 1 through 50.                              |
+| `QP-DATA-026 invalidInverseList`     | `select` or `orderBy` is empty or names an unknown child Field. | Select at least one child member and use only child Fields.           |
+| `QP-DATA-026 invalidInverseList`     | Order lacks a non-null primary-key or unique suffix.            | End the explicit order with the qualifying Constraint's Fields.       |
+| `QP-DATA-008 orderFieldNotSelected`  | A child order Field is unselected or conditionally visible.     | Select it directly and use only unconditionally visible order Fields. |
+| `QP-DATA-026 invalidInverseList`     | A second child list or child cursor appears in the Query.       | Keep one child list; use a separate child Query for continuation.     |
+| `QP-DATA-022 relationDepthExceeded`  | The selected path reaches a fifth Relation edge.                | Shorten the selection or split it into another Query.                 |
+| `QP-DATA-012 executionLimitExceeded` | Row, byte, duration, or dependency work exceeds a limit.        | Narrow the lists; no partial result is returned.                      |
 
 ## Policy and disclosure
 

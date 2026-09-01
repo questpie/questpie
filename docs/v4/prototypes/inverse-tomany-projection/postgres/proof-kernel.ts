@@ -61,6 +61,23 @@ export type TicketProjection = Readonly<{
 	}>[];
 }>;
 
+export function assertChildOrderDisclosure(
+	input: Readonly<{
+		orderFields: readonly string[];
+		selectedFields: readonly string[];
+		unconditionallyVisibleFields: readonly string[];
+	}>,
+): void {
+	const selected = new Set(input.selectedFields);
+	const visible = new Set(input.unconditionallyVisibleFields);
+	if (
+		input.orderFields.some(
+			(field) => !selected.has(field) || !visible.has(field),
+		)
+	)
+		throw new TypeError("QP-DATA-008 orderFieldNotSelected");
+}
+
 function integer(value: unknown, label: string): number {
 	const parsed = typeof value === "string" ? Number(value) : value;
 	if (typeof parsed !== "number" || !Number.isSafeInteger(parsed))

@@ -207,6 +207,18 @@ type OrderedField<Fields extends FieldMap> = Readonly<
 	>
 >;
 
+type UnconditionallyVisibleFields<Fields extends FieldMap> = Readonly<{
+	[Key in keyof Fields as Fields[Key] extends Readonly<{
+		conditionalOutput: true;
+	}>
+		? never
+		: Key]: Fields[Key];
+}>;
+
+type ValidOrderedField<Fields extends FieldMap, Order> = Readonly<
+	Record<Exclude<keyof Order, keyof Fields>, never>
+>;
+
 type ValidSelection<Fields, Relations, Selection> = Readonly<
 	Record<Exclude<keyof Selection, keyof Fields | LiteralKeys<Relations>>, never>
 > &
@@ -242,7 +254,10 @@ export interface CollectionListAuthoring<
 	Fields extends FieldMap,
 	Relations extends RelationMap,
 > {
-	<const Selection extends Readonly<Record<string, unknown>>>(
+	<
+		const Selection extends Readonly<Record<string, unknown>>,
+		const Order extends OrderedField<UnconditionallyVisibleFields<Fields>>,
+	>(
 		definition: Readonly<{
 			first: ChildListFirst;
 			parameters?: never;
@@ -250,8 +265,10 @@ export interface CollectionListAuthoring<
 			where?: (
 				scope: Readonly<{ row: QueryFields<Fields> }>,
 			) => BooleanExpression;
-			orderBy: OrderedField<Fields>;
+			orderBy: Order &
+				ValidOrderedField<UnconditionallyVisibleFields<Fields>, Order>;
 			select: Selection &
+				Readonly<Record<keyof Order, true>> &
 				ObjectSelection<Fields, Relations> &
 				ValidSelection<Fields, Relations, NoInfer<Selection>>;
 		}>,

@@ -2,7 +2,11 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 
 import pg from "pg";
 
-import { decodeInverseList, inverseListSql } from "./proof-kernel";
+import {
+	assertChildOrderDisclosure,
+	decodeInverseList,
+	inverseListSql,
+} from "./proof-kernel";
 
 const client = new pg.Client({
 	host: process.env.PGHOST,
@@ -55,6 +59,11 @@ afterAll(async () => {
 });
 
 test("one statement preserves Policy-before-limit, empty arrays, disclosure, and the root sentinel", async () => {
+	assertChildOrderDisclosure({
+		orderFields: ["createdAt", "id"],
+		selectedFields: ["id", "body", "createdAt"],
+		unconditionallyVisibleFields: ["id", "createdAt"],
+	});
 	await client.query("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
 	try {
 		const isolation = await client.query("SHOW transaction_isolation");
@@ -93,6 +102,32 @@ test("one statement preserves Policy-before-limit, empty arrays, disclosure, and
 		await client.query("ROLLBACK");
 		throw error;
 	}
+});
+
+test("a conditional or unselected child order Field is refused before PostgreSQL", async () => {
+	let dispatches = 0;
+	const execute = async (
+		input: Parameters<typeof assertChildOrderDisclosure>[0],
+	) => {
+		assertChildOrderDisclosure(input);
+		dispatches += 1;
+		return client.query(inverseListSql, ["tenant-a", null, 1, 1]);
+	};
+	await expect(
+		execute({
+			orderFields: ["body", "id"],
+			selectedFields: ["body", "id"],
+			unconditionallyVisibleFields: ["id", "createdAt"],
+		}),
+	).rejects.toThrow("QP-DATA-008 orderFieldNotSelected");
+	await expect(
+		execute({
+			orderFields: ["createdAt", "id"],
+			selectedFields: ["id"],
+			unconditionallyVisibleFields: ["id", "createdAt"],
+		}),
+	).rejects.toThrow("QP-DATA-008 orderFieldNotSelected");
+	expect(dispatches).toBe(0);
 });
 
 test("the decoded root cursor order boundary participates in the same statement", async () => {

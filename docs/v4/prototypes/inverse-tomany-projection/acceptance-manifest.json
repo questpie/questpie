@@ -3,10 +3,11 @@
 	"ticket": "DX-INVERSE-TOMANY-PROJECTION-RATIFICATION",
 	"proof": "Ratify only the bounded inverse toMany Query projection delta: one child-Collection-owned comments.list structural selection per Query, literal first 1 through 50, the existing four-Relation-edge ceiling, exact readonly child-array typing, Policy-before-limit one-statement PostgreSQL execution, compatible v1 and linked v2 artifacts, direct/network/watch parity, bounded cancellation and nondisclosure semantics. Keep ADR-0032 and all live authority Proposed until a committed protocol-v2 PASS record exists. Do not accept polymorphic Relations, nested cursors, aggregates, React projection, a second query kernel, or any lifecycle change.",
 	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-	"reviewOutput": "docs/v4/prototypes/inverse-tomany-projection/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/inverse-tomany-projection/REVIEW-02.json",
 	"authorityHeads": {
 		"clean feat/v4 continuation head": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-		"committed proposed inverse projection proof": "6e5eb5dc82d3234b741536f81781af1101d592b9"
+		"committed proposed inverse projection proof": "6e5eb5dc82d3234b741536f81781af1101d592b9",
+		"blocked candidate and preserved review record": "fb559ef2f5b524ff1a5eca0bd5808cae731b42cc"
 	},
 	"authorityDocuments": [
 		{
@@ -77,7 +78,7 @@
 		{
 			"name": "proposed bounded inverse toMany decision",
 			"path": "docs/adr/0032-freeze-bounded-inverse-tomany-query-projection.md",
-			"sha256": "0c5a7f347b9f54682e498adf03d735d14f1cb192e870646bc0148e88f3134262"
+			"sha256": "125a52cfb7eeed2978aa35ea83c52528f027362bb7c3ee7ef2d9650e948f0237"
 		},
 		{
 			"name": "current ADR index before projection",
@@ -97,7 +98,7 @@
 		{
 			"name": "candidate staging declaration",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/CANDIDATE.md",
-			"sha256": "52a577004ea89d33c38a95f9aabcd6b3447eab753fdd8b7ed09a33332be2ca52"
+			"sha256": "774212bf27a380d4f644cd0eef994992e66454ab93e093f94b3a69b196b922b6"
 		},
 		{
 			"name": "candidate comparison record",
@@ -107,7 +108,7 @@
 		{
 			"name": "public documentation draft rationale",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/PUBLIC-DRAFT.md",
-			"sha256": "76a2046afdd730dafac6e2d34d4fc0c57a37f48043d7166a4841e514c29b7af6"
+			"sha256": "e2c6aa858ba87200440b41920645a5cf5471bc2b03cba32252334b72d747d760"
 		},
 		{
 			"name": "independent adversarial review record",
@@ -115,14 +116,19 @@
 			"sha256": "e4977b6ebc2dc72df9469bf240f77bceb21198a110ff0b4d25955a4f1ff112bf"
 		},
 		{
+			"name": "preserved formal BLOCKED review of the superseded candidate",
+			"path": "docs/v4/prototypes/inverse-tomany-projection/REVIEW.json",
+			"sha256": "f1df4f713bb3f17109a38960ba464d3f9f116b3d687b7bca487e073a9e7d4228"
+		},
+		{
 			"name": "authoring type boundary proof",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/authoring-types.ts",
-			"sha256": "a02c2d117fc4da94d5bc9c5e35cd529620dde83f816483a395adc3b87bb4de1b"
+			"sha256": "dd9d0404b305bf0562d5113147ab6c046e462508f938853d801a185862691695"
 		},
 		{
 			"name": "authoring type diagnostics proof",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/authoring-types.test.ts",
-			"sha256": "368b0c4044842c01b1720d018a9b00cfd953c28b55c0970c2dd6ed1afdfa55c0"
+			"sha256": "3efec63ea54a96f842e11ba7e4a20fddb07437a58de176b8b7a2d2aae0dc7850"
 		},
 		{
 			"name": "canonical artifact v2 proof",
@@ -157,17 +163,17 @@
 		{
 			"name": "PostgreSQL one-statement proof kernel",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.ts",
-			"sha256": "daa1014ba9800d05861d5e7d1c1d9add610dd40fcb66cb528b8882639f0e4885"
+			"sha256": "81bd819441e2c3f3a5f1ef666f844cd40bfd0279ec5bf35c6adbeea5f8594b63"
 		},
 		{
 			"name": "PostgreSQL Policy cursor cancellation and hostile tests",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/postgres/proof-kernel.test.ts",
-			"sha256": "4817c40c6c7c8d8ebbec0d6a862f305344a0bdabfed6bc3d3655312c45b20682"
+			"sha256": "673684dfbd0b3b0310792a0d507c9f63e7fd17f7dff404e1d43b66c2da508f5b"
 		},
 		{
 			"name": "exact post-PASS authority projection",
 			"path": "docs/v4/prototypes/inverse-tomany-projection/authority-projection.json",
-			"sha256": "862edab0f4ee4aaf915a9af12089b008b8ee309be4dee2ab258f04ee264c1dd4"
+			"sha256": "0455a997e5ec3a6b3fa87d30d0c8d70068588562cbfecc049a6da8e8eac1dc3a"
 		},
 		{
 			"name": "Proposed-status hash and projection staging gate",
@@ -219,10 +225,10 @@
 	],
 	"acceptanceCriteria": [
 		"ADR-0032 remains Proposed and the ADR index, SPEC, CONTEXT, public guide, and HANDOFF do not project it as Accepted before a committed PASS. authority-projection.json is exact candidate evidence and applies only after the review record is committed and verified.",
-		"The public authoring surface reuses the child Collection's list member as a structurally disjoint nested overload: comments.list requires literal first 1..50, total orderBy, exact non-empty select, optional child-row where, and forbids parameters and page; root list requires its root shape and forbids first. Mixed variable objects and wrong source Collections fail statically and at compile time.",
+		"The public authoring surface reuses the child Collection's list member as a structurally disjoint nested overload: comments.list requires literal first 1..50, total orderBy whose Fields are directly selected and unconditionally Policy-visible, exact non-empty select, optional child-row where, and forbids parameters and page; root list requires its root shape and forbids first. Mixed variable objects, wrong source Collections, unselected order Fields, and conditionally disclosed order Fields fail statically and at compile time.",
 		"The inverse parent accepts only a branded list from the Collection named by its inverseOf owning Relation. Generated output is exact readonly Child[], empty and fully hidden sets are [], and conditional selected-output Fields are optional rather than null.",
 		"One Query template contains at most one projected inverse list and at most four selected or filtered Relation edges total. No nested cursor, child pageInfo, aggregate, quantifier, offset, backward page, implicit order, hidden tie-breaker, arbitrary recursion, synthetic many-to-many, or polymorphic Relation is accepted.",
-		"Data Query Template v1 remains byte-for-byte readable and emitted for all toOne-only graphs, including shipped recursive v1 vectors. Template v2 is emitted only for inverse lists and binds resolved inverse/source identities, literal bound, normalized filter, total order, recursive selection, and exact digest.",
+		"Data Query Template v1 remains byte-for-byte readable and emitted for all toOne-only graphs, including shipped recursive v1 vectors. Template v2 is emitted only for inverse lists and canonically binds root maximumRelationEdges: 4, resolved inverse/source identities, literal bound, normalized filter, total order, recursive selection, and exact digest.",
 		"Query Projection v2 and PostgreSQL Plans v2 bind the template version/digest, exact exported SQL bytes, ordered parameters and bindings, decoded opaque-root-cursor order tuple, result ordinals/nullability, root and child Policy digests, statement digest, App Contract, and Runtime Build. Readiness and decoding fail closed on unknown versions, mismatches, unresolved identities, forged ordinals, or unlinked columns.",
 		"One structural Query executes exactly one PostgreSQL statement in the existing relational kernel and read-only repeatable-read snapshot. Root authorization/filter/order/page and sentinel precede one LEFT JOIN LATERAL whose correlation, child Policy, child filter, total order, and literal limit occur in that order. Child Policy runs before order and limit.",
 		"Runtime groups by compiler-owned ordinals, derives root hasNextPage from distinct root ordinals, discards the complete sentinel group, and exposes no partial application result. The structural maximum is 5,050 flattened root-child positions; the existing 1,048,576-byte result and 256 Live dependency-token limits remain unchanged and no fake general 10,000-row Query limit is introduced.",
@@ -230,6 +236,6 @@
 		"Live dependency compilation records inverse/source/correlation identities, child and nested Policy evidence, empty misses, authored filter, ordering, root page/sentinel, and child-list boundaries; relevant committed changes dirty the watch, and only successful recomputation atomically replaces the complete dependency set.",
 		"Direct execution, generated network client, Fetch, and watch use the same linked plan and decoder and expose parity for success, limits, cancellation, and sanitized INTERNAL failures. No SQL, PostgreSQL detail, protected Field, hidden identity/cardinality, Policy evidence, or forged ordinal reaches callers or observations.",
 		"The exact post-PASS public documentation explains why comments.list is a bounded structural selection rather than an Operation, its disjoint root/nested grammar, result typing, Policy-before-limit behavior, one-list/four-edge bounds, cursor and retry absence, transaction/cancellation semantics, direct/network/watch parity, diagnostics, and nondisclosure.",
-		"ADR-0032 supersedes only ADR-0008's one-hop selection clause and projected-toMany deferral. It preserves Relation declaration, Data/Schema contracts, Policy, Query snapshot, Live Query, generated client, shared relational kernel, and tracer-led delivery, and it changes no lifecycle authority."
+		"ADR-0032 supersedes ADR-0008's one-hop selection clause, projected-toMany deferral, and the workbench section 15 registry closure only enough to register already-shipped QP-DATA-022 and new QP-DATA-026. It preserves Relation declaration, Data/Schema contracts, Policy, Query snapshot, Live Query, generated client, shared relational kernel, tracer-led delivery, all other unregistered diagnostic gaps, and lifecycle authority."
 	]
 }

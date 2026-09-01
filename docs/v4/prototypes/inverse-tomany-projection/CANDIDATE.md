@@ -14,7 +14,15 @@ Query, and one-statement relational-kernel ownership. It proposes only:
 2. one child-owned, literal-bounded inverse list per Query.
 
 The exact supersession is ADR-0008's one-hop clause and projected-`toMany`
-deferral. No other Accepted ADR clause changes.
+deferral plus the workbench section 15 registry closure only enough to register
+the already-shipped `QP-DATA-022` and new `QP-DATA-026`. Intervening diagnostic
+numbers remain unregistered. No other Accepted ADR clause changes.
+
+The first formal review of head `9ba3770c8` is preserved at `fb559ef2f` with a
+`BLOCKED` verdict. This replacement changes only its three findings: the
+diagnostic registry/supersession ledger, the canonical
+`maximumRelationEdges: 4` Template v2 member, and the requirement that every
+child order Field is directly selected and unconditionally Policy-visible.
 
 ## KISS result
 
@@ -34,12 +42,14 @@ or quantifiers.
 
 - `authoring-types.test.ts` proves exact readonly-array output and rejects the
   wrong source Collection, parent Fields in child selection/order, nonliteral
-  bounds, zero, fractions, and 51.
+  bounds, zero, fractions, 51, unselected child order Fields, and conditionally
+  disclosed child order Fields.
 - `postgres/proof-kernel.test.ts` runs one PostgreSQL 17 statement and proves
   inverse correlation, child Policy before limit, payload-only filtering,
   deterministic total order, Field omission, empty arrays, root sentinel
   grouping, a read-only repeatable-read snapshot, row/byte failures, hostile
-  ordinals, in-flight cancellation, deadline rollback, and connection reuse.
+  ordinals, refusal of unsafe child ordering before SQL, in-flight
+  cancellation, deadline rollback, and connection reuse.
 - `live-query/dependencies.test.ts` proves recursive selection traversal reaches
   the inverse Relation, child Collection, nested Relation, child and nested
   Policies, Policy evidence Collections, tenant fact, empty miss, ordering,

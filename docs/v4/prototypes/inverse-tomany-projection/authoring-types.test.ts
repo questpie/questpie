@@ -125,6 +125,7 @@ comments.list({
 	first: 1,
 	orderBy: { id: "asc" },
 	select: {
+		id: true,
 		author: {
 			select: {
 				// @ts-expect-error nested child Relation selection remains exact
@@ -132,6 +133,20 @@ comments.list({
 			},
 		},
 	},
+});
+
+comments.list({
+	// @ts-expect-error every child order Field must be selected directly
+	first: 1,
+	orderBy: { createdAt: "desc", id: "desc" },
+	select: { id: true },
+});
+
+comments.list({
+	// @ts-expect-error a conditionally disclosed Field cannot order a child list
+	first: 1,
+	orderBy: { body: "asc", id: "asc" },
+	select: { body: true, id: true },
 });
 
 comments.list({

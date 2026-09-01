@@ -71,6 +71,10 @@ The nested list grammar is closed:
 - `orderBy` is required, non-empty, and child-total; its ordered suffix must
   exactly match one declared child primary-key or unique Constraint whose
   participating Fields are non-null;
+- every child order Field must also be selected directly and must be
+  unconditionally visible under selected-output Field Policy; a missing or
+  conditionally visible order Field is `QP-DATA-008 orderFieldNotSelected`, so
+  the Query is unavailable rather than leaking relative order;
 - `where` is optional and uses the existing structural scalar Query expression
   grammar over the child row;
 - child `toOne` selections may continue within the shared Relation-depth
@@ -97,10 +101,11 @@ emitted recursive `toOne` selections within the shipped four-edge ceiling; its
 bytes and digests are never reinterpreted. The compiler continues to emit v1
 for every `toOne`-only selection graph and emits Data Query Template v2 only
 when the graph contains a projected inverse list. No existing v1 artifact
-requires regeneration. The v2 inverse selection node contains the output key, resolved
+requires regeneration. The v2 template adds the canonical root member
+`maximumRelationEdges: 4`. Its inverse selection node contains the output key, resolved
 inverse Relation identity, source Collection identity, literal `first`,
 normalized child filter, ordered child terms, and recursive child selection.
-Its canonical digest binds all of those facts.
+Its canonical digest binds the root ceiling and all of those inverse-node facts.
 
 A compilation containing any v2 template emits Query Projection v2 and
 PostgreSQL Query Plans v2; each entry names its template version and digest.
@@ -132,17 +137,18 @@ exact diagnostic class for a wrong source, invalid `first`, empty or unknown
 selection, non-total order, a second plural list, a nested cursor, or an
 unsupported child expression. `QP-DATA-022` remains the depth failure.
 
-| Outcome                                                        | Exact boundary | Public behavior                                                               |
-| -------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------- |
-| `QP-DATA-022 relationDepthExceeded`                            | compile        | Fatal diagnostic with exact path and Origin; shorten or split the projection. |
-| `QP-DATA-026 invalidInverseList`                               | compile        | Fatal classed diagnostic with exact path and Origin; no artifact is emitted.  |
-| unknown version, digest mismatch, unresolved inverse, bad plan | readiness      | Runtime refuses readiness and serves no work; details remain internal.        |
-| forged result ordinal, disclosure guard, or result value       | execute/decode | Sanitized `INTERNAL`; no application or PostgreSQL detail reaches the caller. |
-| `QP-DATA-012` invalid root runtime bound                       | bind           | Whole-call `executionLimitExceeded`; SQL is not dispatched.                   |
-| `QP-DATA-012` row, dependency, or semantic-byte excess         | execute/decode | Whole-call `executionLimitExceeded`; no partial result.                       |
-| cancellation before dispatch                                   | bind           | `CANCELLED`; SQL is not dispatched.                                           |
-| cancellation while PostgreSQL runs                             | execute        | The statement is cancelled and snapshot rolled back; no partial result.       |
-| deadline while PostgreSQL runs                                 | execute        | `DEADLINE_EXCEEDED`; statement and snapshot close; no partial result.         |
+| Outcome                                                        | Exact boundary | Public behavior                                                                        |
+| -------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------------- |
+| `QP-DATA-022 relationDepthExceeded`                            | compile        | Fatal diagnostic with exact path and Origin; shorten or split the projection.          |
+| `QP-DATA-026 invalidInverseList`                               | compile        | Fatal classed diagnostic with exact path and Origin; no artifact is emitted.           |
+| `QP-DATA-008 orderFieldNotSelected`                            | compile        | Fatal diagnostic when a child order Field is not directly and unconditionally visible. |
+| unknown version, digest mismatch, unresolved inverse, bad plan | readiness      | Runtime refuses readiness and serves no work; details remain internal.                 |
+| forged result ordinal, disclosure guard, or result value       | execute/decode | Sanitized `INTERNAL`; no application or PostgreSQL detail reaches the caller.          |
+| `QP-DATA-012` invalid root runtime bound                       | bind           | Whole-call `executionLimitExceeded`; SQL is not dispatched.                            |
+| `QP-DATA-012` row, dependency, or semantic-byte excess         | execute/decode | Whole-call `executionLimitExceeded`; no partial result.                                |
+| cancellation before dispatch                                   | bind           | `CANCELLED`; SQL is not dispatched.                                                    |
+| cancellation while PostgreSQL runs                             | execute        | The statement is cancelled and snapshot rolled back; no partial result.                |
+| deadline while PostgreSQL runs                                 | execute        | `DEADLINE_EXCEEDED`; statement and snapshot close; no partial result.                  |
 
 ### PostgreSQL, Policy, and nondisclosure
 
@@ -165,8 +171,10 @@ introduced.
 
 Child row Policy runs before ordering and limit, so hidden rows neither occupy
 a visible slot nor reveal their existence. Existing selected-output Field
-Policy applies to each visible child after row authorization. A missing or
-denied target Policy fails compilation or readiness exactly as for `toOne`;
+Policy applies to each visible child after row authorization. Child order
+Fields are a stricter boundary: each is directly selected and unconditionally
+visible, or compilation fails with `QP-DATA-008` before an artifact is emitted.
+A missing or denied target Policy fails compilation or readiness exactly as for `toOne`;
 PostgreSQL constraint names, SQL text, row counts, Policy evidence, and hidden
 child identities never enter a public failure.
 
@@ -227,10 +235,15 @@ detail.
 
 ## Supersession ledger
 
-This decision supersedes only ADR-0008's fixed one-hop structural selection
-clause and its deferral of projected `toMany` arrays. The replacement is a
-shared maximum of four Relation edges plus the one bounded inverse-list
-grammar above.
+This decision supersedes ADR-0008's fixed one-hop structural selection clause,
+its deferral of projected `toMany` arrays, and the workbench section 15 claim
+that the data-diagnostic registry ends at `QP-DATA-014`. The replacement keeps
+the existing v1 codes and explicitly registers the already-shipped
+`QP-DATA-022 relationDepthExceeded` plus
+`QP-DATA-026 invalidInverseList`. It also establishes a shared maximum of four
+Relation edges plus the one bounded inverse-list grammar above. Codes
+`QP-DATA-015` through `QP-DATA-021` and `QP-DATA-023` through `QP-DATA-025` are
+not implicitly registered by this decision.
 
 It preserves ADR-0008's Relation declaration, Data Contract, Schema
 Projection, exact selection, filter, total-order, cursor, Policy-scope, and
