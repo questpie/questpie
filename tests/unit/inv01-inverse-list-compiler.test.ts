@@ -255,6 +255,34 @@ test("rejects a conditionally visible child order Field", async () => {
 	});
 });
 
+test("rejects an unsupported inverse child filter expression", async () => {
+	const forged = accepted.replace(
+		'where: ({ row }) => row.body.notEqual("filtered")',
+		'where: () => ({ kind: "forgedExpression" } as any)',
+	);
+	await expect(evaluate(source(forged))).rejects.toMatchObject({
+		code: "QP-DATA-026",
+		details: {
+			path: "comments",
+			origin: { path: "ticket detail.ts", exportName: "ticketDetail" },
+		},
+	});
+});
+
+test("rejects a non-true nested inverse child Field selection", async () => {
+	const nonTrueNestedField = accepted.replace(
+		"ticket: { select: { id: true } }",
+		"ticket: { select: { id: false as any } }",
+	);
+	await expect(evaluate(source(nonTrueNestedField))).rejects.toMatchObject({
+		code: "QP-DATA-026",
+		details: {
+			path: "comments.ticket.id",
+			origin: { path: "ticket detail.ts", exportName: "ticketDetail" },
+		},
+	});
+});
+
 test("rejects the fifth selected Relation edge", async () => {
 	await expect(evaluate(source(recursiveToOne))).rejects.toMatchObject({
 		code: "QP-DATA-022",

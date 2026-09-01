@@ -230,11 +230,12 @@ function compileDataQuery(value) {
           return orderKeys[orderKeys.length - constraint.fields.length + index] === name;
         }));
       if (!unique) fail("QP-DATA-026", "invalidInverseList", key);
-      const filter = selected.where === undefined ? null : queryExpression(selected.where({ row: makeFields(child) }));
+      const filter = selected.where === undefined ? null : queryExpression(selected.where({ row: makeFields(child) }), key);
       const compileNested = (nestedOwner, nestedSelection, path) => {
         const compiled = [];
         for (const [nestedKey, nestedValue] of Object.entries(nestedSelection)) {
           if (nestedOwner.fields[nestedKey]) {
+            if (nestedValue !== true) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
             compiled.push({ kind: "field", key: nestedKey, field: fieldIdentity(nestedOwner, nestedKey) });
             continue;
           }
@@ -280,13 +281,36 @@ function compileDataQuery(value) {
   const fields = makeFields(collection);
   const relationState = { plural: 0, edges: 0 };
   const relations = makeRelations(collection, relationState);
-  const queryExpression = (candidate) => {
-    if (candidate?.kind !== "booleanExpression") return candidate;
-    if (candidate.operator === "and" || candidate.operator === "or") return { kind: candidate.operator, expressions: candidate.operands.map(queryExpression) };
-    if (candidate.operator === "not") return { kind: "not", expression: queryExpression(candidate.operands[0]) };
-    if (candidate.operator === "always") return { kind: "constant", value: true };
-	if (candidate.operator === "exists") throw new Error("QP-DATA-025 unsupportedExpressionCapability expr.exists is Policy-only");
-    throw new Error("QP-DATA-005 unknownOperator " + String(candidate.operator));
+  const queryExpression = (candidate, inversePath = null) => {
+    const invalid = () => {
+      if (inversePath !== null) fail("QP-DATA-026", "invalidInverseList", inversePath);
+      throw new Error("QP-DATA-005 unknownOperator " + String(candidate?.operator ?? candidate?.kind));
+    };
+    if (candidate?.kind !== "booleanExpression") {
+      if (inversePath === null) return candidate;
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return invalid();
+      if (["equal", "notEqual", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "in", "notIn", "isNull", "isNotNull"].includes(candidate.kind)) return candidate;
+      return invalid();
+    }
+    const operands = candidate.operands;
+    if (!Array.isArray(operands)) return invalid();
+    if (candidate.operator === "and" || candidate.operator === "or") {
+      if (operands.length < 2) return invalid();
+      return { kind: candidate.operator, expressions: operands.map((operand) => queryExpression(operand, inversePath)) };
+    }
+    if (candidate.operator === "not") {
+      if (operands.length !== 1) return invalid();
+      return { kind: "not", expression: queryExpression(operands[0], inversePath) };
+    }
+    if (candidate.operator === "always") {
+      if (operands.length !== 0) return invalid();
+      return { kind: "constant", value: true };
+    }
+	if (candidate.operator === "exists") {
+	  if (inversePath !== null) return invalid();
+	  throw new Error("QP-DATA-025 unsupportedExpressionCapability expr.exists is Policy-only");
+	}
+    return invalid();
   };
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
