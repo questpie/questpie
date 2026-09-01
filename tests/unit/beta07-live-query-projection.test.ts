@@ -404,7 +404,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 		expect(sql).not.toContain("collaboration.message_events");
 		expect(message).toMatchObject({
 			contractDigest:
-				"0c372ac93ba55280f20ec7646d408fdd0edf5c4f5717b92201432693da2ad94f",
+				"47f2b820bb4148c2ad10ea82999865d3f8e545f2b0226a6ac8d68c456b64babd",
 			possibleObservationSlotsDigest:
 				"2dc70e43527e54a338ae817d1a8953666b86201b513cd5b4a1f1093ca26fb114",
 		});
@@ -427,7 +427,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			),
 		).toEqual({
 			"query-watchability.json":
-				"90a0deb6f438298174b3347ddb8a880c8a3504567794294ccc6f75ef499ee1df",
+				"90840ffe0400113db02eae6f0ffce8db6339643e1bb2004e6b91f5048b620a28",
 			"change-ledger.json":
 				"e6f31477481424bdf9ddf9e9ae1816fe1ef816843193bd0a37dba97eaa840373",
 			"live-query-dependency-algebra.json":

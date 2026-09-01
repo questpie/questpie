@@ -7,10 +7,12 @@ import { pathToFileURL } from "node:url";
 import { renderClientContract } from "../../packages/compiler/src/runtime/client";
 
 type GeneratedClientModule = Readonly<{
-	createClient(input: Readonly<{
-		baseUrl: string;
-		fetch(request: Request): Promise<Response>;
-	}>): Readonly<{
+	createClient(
+		input: Readonly<{
+			baseUrl: string;
+			fetch(request: Request): Promise<Response>;
+		}>,
+	): Readonly<{
 		withContext(context: Readonly<{ companyId: string }>): Readonly<{
 			queries: Readonly<{
 				"messages.page"(
@@ -115,18 +117,14 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 			"eyJjb21wYW55SWQiOiIwMThmNWY2ZS01ZjJjLTdiNDEtYTg1NC0zZDlhNmI2YjYxYTAifQ",
 		);
 		expect(observed?.headers.get("Questpie-Call-Id")).toBe("query-visible-1");
-		expect(observed?.headers.get("Questpie-Timeout-Milliseconds")).toBe(
-			"5000",
-		);
+		expect(observed?.headers.get("Questpie-Timeout-Milliseconds")).toBe("5000");
 		expect(observed?.headers.get("Questpie-Application")).toBe(
 			"application:collaboration",
 		);
 		expect(observed?.headers.get("Questpie-Client-Contract")).toBe(
 			"1".repeat(64),
 		);
-		expect(observed?.headers.get("Questpie-Wire-Digest")).toBe(
-			"2".repeat(64),
-		);
+		expect(observed?.headers.get("Questpie-Wire-Digest")).toBe("2".repeat(64));
 	} finally {
 		await rm(directory, { force: true, recursive: true });
 	}

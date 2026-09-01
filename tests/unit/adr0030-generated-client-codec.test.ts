@@ -62,8 +62,8 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 			renderClientContract(
 				[
 					{
-						identity: "query:reports.read",
-						kind: "query",
+						identity: "mutation:reports.read",
+						kind: "mutation",
 						name: "reports.read",
 						contract: {
 							exposure: "network",
@@ -90,7 +90,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 				fetch(request: Request): Promise<Response>;
 			}): {
 				withContext(input: {}): {
-					queries: Record<
+					mutations: Record<
 						string,
 						(input: {
 							at: Date;
@@ -128,7 +128,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 						JSON.stringify({
 							protocol: { name: "questpie.operation", version: 1 },
 							kind: "result",
-							operation: "query:reports.read",
+							operation: "mutation:reports.read",
 							callId: frame.callId,
 							payload: next,
 						}),
@@ -141,7 +141,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 					);
 				},
 			});
-			return client.withContext({}).queries["reports.read"]!({
+			return client.withContext({}).mutations["reports.read"]!({
 				...directInput,
 			});
 		};
@@ -173,8 +173,8 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 			renderClientContract(
 				[
 					{
-						identity: "query:reports.read",
-						kind: "query",
+						identity: "mutation:reports.read",
+						kind: "mutation",
 						name: "reports.read",
 						contract: {
 							exposure: "network",
@@ -201,7 +201,7 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 				fetch(request: Request): Promise<Response>;
 			}): {
 				withContext(input: {}): {
-					queries: Record<string, (input: unknown) => Promise<unknown>>;
+					mutations: Record<string, (input: unknown) => Promise<unknown>>;
 				};
 			};
 		};
@@ -214,7 +214,7 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 					throw new Error("transport must not be reached");
 				},
 			})
-			.withContext({}).queries["reports.read"]!;
+			.withContext({}).mutations["reports.read"]!;
 		// eslint-disable-next-line no-sparse-arrays -- Lossy JSON transport is the hostile boundary under test.
 		const sparse = [, "value"];
 		for (const value of [sparse, Number.NaN, -0]) {
@@ -254,7 +254,7 @@ test("generated transform preserves optional, array, cursor, and object directio
 									zonedAt: { kind: "timestamp", withTimezone: true },
 									note: {
 										kind: "optional",
-										codec: { kind: "text" },
+										codec: { kind: "text", maxLength: 100 },
 									},
 									items: {
 										kind: "array",
@@ -304,28 +304,26 @@ test("generated transform preserves optional, array, cursor, and object directio
 				baseUrl: "http://runtime.test",
 				fetch: async (request) => {
 					calls += 1;
-					const frame = (await request.json()) as {
-						callId: string;
-						input: Record<string, unknown>;
-					};
-					expect(Object.keys(frame.input)).toEqual([
+					expect(request.method).toBe("GET");
+					expect(request.body).toBeNull();
+					const url = new URL(request.url);
+					expect([...url.searchParams.keys()]).toEqual([
 						"cursor",
 						"items",
 						"zonedAt",
 					]);
-					expect(frame.input.items).toEqual(["2026-08-28T10:20:30.000"]);
+					expect(url.searchParams.get("items")).toBe(
+						'~json:["2026-08-28T10:20:30.000"]',
+					);
+					const callId = request.headers.get("Questpie-Call-Id");
 					return new Response(
 						JSON.stringify({
-							protocol: { name: "questpie.operation", version: 1 },
-							kind: "result",
-							operation: "query:reports.list",
-							callId: frame.callId,
-							payload: { items: ["2026-08-28T10:20:30.000Z"] },
+							callId,
+							result: { items: ["2026-08-28T10:20:30.000Z"] },
 						}),
 						{
 							headers: {
-								"content-type":
-									"application/vnd.questpie.operation+json;version=1",
+								"content-type": "application/json; charset=utf-8",
 							},
 						},
 					);

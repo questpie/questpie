@@ -3,6 +3,7 @@ import { canonicalBytes, compareAscii, digest } from "./canonical";
 import { normalizeCodecContract, type CodecContractProblem } from "./codec";
 import { compositionContract } from "./composition";
 import { CompilerDiagnosticError } from "./diagnostic";
+import { validateOperationHttpAuthoring } from "./http";
 import { normalizeJobContract } from "./job";
 import { normalizeDeclaredErrors } from "./operation-errors";
 import { normalizeReactionContract } from "./reaction";
@@ -249,6 +250,7 @@ function operationContract(
 	value: RecordValue,
 	source?: EvaluatedExport,
 ): RecordValue {
+	validateOperationHttpAuthoring(value, source);
 	const declaredErrors = normalizeDeclaredErrors(
 		value.errors,
 		kind,
@@ -576,6 +578,7 @@ export function normalizeResources(
 				value: item.value,
 			});
 		} else if (kind === "action") {
+			validateOperationHttpAuthoring(item.value, item);
 			resources.push({
 				identity,
 				kind,

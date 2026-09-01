@@ -11,7 +11,7 @@ const pageInfoCodec = codec.object({
 
 const pageInputCodec = {
 	first: codec.integer(),
-	after: codec.nullable(codec.text()),
+	after: codec.nullable(codec.cursor()),
 } as const;
 
 export const listTeams = defineQuery({

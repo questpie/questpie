@@ -23,7 +23,12 @@ export function renderCodecType(
 		return renderCodecType(descriptor.codec, timestampType);
 	if (descriptor.kind === "array")
 		return `ReadonlyArray<${renderCodecType(descriptor.items, timestampType)}>`;
-	if (descriptor.kind === "uuid" || descriptor.kind === "text") return "string";
+	if (
+		descriptor.kind === "cursor" ||
+		descriptor.kind === "uuid" ||
+		descriptor.kind === "text"
+	)
+		return "string";
 	if (
 		descriptor.kind === "bigint" ||
 		descriptor.kind === "numeric" ||

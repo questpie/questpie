@@ -1,5 +1,6 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
+import { validateCanonicalHttpProjection } from "../http";
 import type { NormalizedResource } from "../types";
 
 export { explainExecutionComposition } from "./explain";
@@ -347,6 +348,7 @@ export function projectExecutionComposition(
 }> {
 	validateServiceGraph(resources);
 	validateRouteComposition(resources);
+	validateCanonicalHttpProjection(resources);
 	const contexts = resources.filter((resource) => resource.kind === "context");
 	if (contexts.length > 1)
 		throw new CompilerDiagnosticError(

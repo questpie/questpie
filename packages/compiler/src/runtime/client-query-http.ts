@@ -7,9 +7,15 @@ export function renderClientQueryHttp(
 	}>,
 ): string {
 	return String.raw`
-const canonicalQueryFailureCodes = new Set([
-	"DEADLINE_EXCEEDED", "INTERNAL", "NOT_FOUND", "PROTOCOL_UNSUPPORTED", "RESOURCE_LIMIT", "RUNTIME_UNAVAILABLE", "UNAUTHENTICATED",
-]);
+const canonicalQueryFailures: WireRecord = Object.freeze({
+	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
+	INTERNAL: Object.freeze({ status: 500, retryable: false }),
+	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
+	PROTOCOL_UNSUPPORTED: Object.freeze({ status: 400, retryable: false }),
+	RESOURCE_LIMIT: Object.freeze({ status: 429, retryable: true }),
+	RUNTIME_UNAVAILABLE: Object.freeze({ status: 503, retryable: true }),
+	UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false }),
+});
 function utf8Length(value: string): number {
 	return new TextEncoder().encode(value).byteLength;
 }
@@ -122,7 +128,9 @@ async function invokeCanonicalQuery<Result>(input: Readonly<{
 		throw publicError({ code: detail.code, status: contract.status, payload });
 	}
 	exactKeys(detail, ["code", "retryable"]);
-	if (typeof detail.code !== "string" || !canonicalQueryFailureCodes.has(detail.code) || typeof detail.retryable !== "boolean") return protocolFailure();
+	if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();
+	const failureContract = wireRecord(canonicalQueryFailures[detail.code]);
+	if (response.status !== failureContract.status || detail.retryable !== failureContract.retryable) return protocolFailure();
 	throw publicError(detail);
 }
 `;
