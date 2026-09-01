@@ -56,6 +56,30 @@ export type CompositionDiagnosticCode =
 export function controlledEvaluationFailure(
 	stderr: string,
 ): CompilerDiagnosticError {
+	const decodeMarker = (value: string): string | null => {
+		try {
+			return decodeURIComponent(value);
+		} catch {
+			return null;
+		}
+	};
+	const path = stderr.match(/QP-PATH ([A-Za-z0-9_.-]+)/)?.[1];
+	const originMatch = stderr.match(
+		/QP-ORIGIN ([A-Za-z0-9_.~%/-]+) ([A-Za-z0-9_.~%$-]+)/,
+	);
+	const originPath = originMatch ? decodeMarker(originMatch[1]!) : null;
+	const originExport = originMatch ? decodeMarker(originMatch[2]!) : null;
+	const details = {
+		...(path ? { path } : {}),
+		...(originPath !== null && originExport !== null
+			? {
+					origin: {
+						path: originPath,
+						exportName: originExport,
+					},
+				}
+			: {}),
+	};
 	if (stderr.includes("QP-COMPOSE-002"))
 		return new CompilerDiagnosticError(
 			"QP-COMPOSE-002",
@@ -74,15 +98,16 @@ export function controlledEvaluationFailure(
 			"invalidOperator",
 			"controlled relational evaluation found an unknown operator",
 		);
-	if (stderr.includes("QP-DATA-008")) return orderFieldNotSelected();
+	if (stderr.includes("QP-DATA-008")) return orderFieldNotSelected(details);
 	if (stderr.includes("QP-DATA-022"))
 		return new CompilerDiagnosticError(
 			"QP-DATA-022",
 			"relationDepthExceeded",
 			"controlled relational evaluation exceeded the measured Relation depth",
+			details,
 		);
 	if (stderr.includes("QP-DATA-025")) return unsupportedExpressionCapability();
-	if (stderr.includes("QP-DATA-026")) return invalidInverseList();
+	if (stderr.includes("QP-DATA-026")) return invalidInverseList(details);
 	return new CompilerDiagnosticError(
 		"QP-COMPOSE-013",
 		"structuralTypeError",
@@ -90,19 +115,25 @@ export function controlledEvaluationFailure(
 	);
 }
 
-export function orderFieldNotSelected(): CompilerDiagnosticError {
+export function orderFieldNotSelected(
+	details: Readonly<Record<string, unknown>> = {},
+): CompilerDiagnosticError {
 	return new CompilerDiagnosticError(
 		"QP-DATA-008",
 		"orderFieldNotSelected",
 		"an inverse child order Field must be directly and unconditionally selected",
+		details,
 	);
 }
 
-export function invalidInverseList(): CompilerDiagnosticError {
+export function invalidInverseList(
+	details: Readonly<Record<string, unknown>> = {},
+): CompilerDiagnosticError {
 	return new CompilerDiagnosticError(
 		"QP-DATA-026",
 		"invalidInverseList",
 		"the inverse child list does not match the closed grammar",
+		details,
 	);
 }
 

@@ -6,14 +6,27 @@ import {
 	relationRef,
 } from "questpie";
 
+const teams = defineCollection({
+	name: "teams",
+	fields: { id: field.uuid({ nullable: false }) },
+	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
+	relations: {},
+});
 const comments = defineCollection({
 	name: "comments",
 	fields: {
 		id: field.uuid({ nullable: false }),
+		teamId: field.uuid({ nullable: false }),
 		body: field.text({ nullable: false }),
 	},
 	constraints: { primary: constraint.primaryKey({ fields: ["id"] }) },
-	relations: {},
+	relations: {
+		team: relation.toOne({
+			target: teams,
+			fields: ["teamId"],
+			references: ["id"],
+		}),
+	},
 });
 const tickets = defineCollection({
 	name: "tickets",
@@ -33,7 +46,7 @@ const labels = defineCollection({
 const child = comments.list({
 	first: 50,
 	orderBy: { id: "asc" },
-	select: { id: true },
+	select: { id: true, team: { select: { id: true } } },
 });
 const query = tickets.list({
 	parameters: {},
@@ -42,8 +55,10 @@ const query = tickets.list({
 	select: { id: true, comments: child },
 	page: () => ({ first: undefined as never, after: undefined as never }),
 });
-const exact: readonly Readonly<{ id: string }>[] =
-	undefined as unknown as (typeof query.result.nodes)[number]["comments"];
+const exact: readonly Readonly<{
+	id: string;
+	team: Readonly<{ id: string }> | null;
+}>[] = undefined as unknown as (typeof query.result.nodes)[number]["comments"];
 void exact;
 
 const wrongSource = labels.list({
@@ -65,6 +80,35 @@ comments.list({
 	first: 51,
 	orderBy: { id: "asc" },
 	select: { id: true },
+});
+
+const dynamicFirst: number = 10;
+comments.list({
+	// @ts-expect-error child first must remain a compiler-visible literal
+	first: dynamicFirst,
+	orderBy: { id: "asc" },
+	select: { id: true },
+});
+
+// @ts-expect-error nested orderBy is required and non-empty
+comments.list({
+	first: 1,
+	orderBy: {},
+	select: { id: true },
+});
+
+comments.list({
+	// @ts-expect-error nested select is required and non-empty
+	first: 1,
+	orderBy: { id: "asc" },
+	select: {},
+});
+
+// @ts-expect-error nested select rejects unknown keys
+comments.list({
+	first: 1,
+	orderBy: { id: "asc" },
+	select: { id: true, missing: true },
 });
 
 const mixed = {

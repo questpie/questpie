@@ -460,8 +460,17 @@ export interface CollectionListAuthoring<
 				scope: Readonly<{ row: QueryFields<Fields> }>,
 			) => BooleanExpression;
 			orderBy: Order &
+				(keyof Order extends never ? never : unknown) &
+				Readonly<Record<Exclude<keyof Order, keyof Fields>, never>> &
 				Readonly<Record<Exclude<keyof Order, keyof Selection>, never>>;
-			select: Selection;
+			select: Selection &
+				(keyof Selection extends never ? never : unknown) &
+				Readonly<
+					Record<
+						Exclude<keyof Selection, keyof Fields | LiteralKeys<Relations>>,
+						never
+					>
+				>;
 			parameters?: never;
 			page?: never;
 		}>,

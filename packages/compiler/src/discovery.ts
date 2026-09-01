@@ -534,7 +534,12 @@ for (const list of candidates.values()) {
     const rightDirect = direct.has(right.logicalPath + "\\0" + right.exportName) ? 0 : 1;
     return leftDirect - rightDirect || (left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
   });
-  found.push({ ...list[0], value: projectMutationValue(list[0].value) });
+  try {
+    found.push({ ...list[0], value: projectMutationValue(list[0].value) });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "controlled evaluation failed";
+    throw new Error(message + " QP-ORIGIN " + encodeURIComponent(list[0].logicalPath) + " " + encodeURIComponent(list[0].exportName));
+  }
 }
 found.sort((left, right) => left.logicalPath < right.logicalPath ? -1 : left.logicalPath > right.logicalPath ? 1 : left.exportName < right.exportName ? -1 : left.exportName > right.exportName ? 1 : 0);
 process.stdout.write(JSON.stringify(found));

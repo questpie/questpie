@@ -166,54 +166,62 @@ function compileDataQuery(value) {
         descending: (options) => ({ kind: "order", field: identity, direction: "desc", nulls: options.nulls }),
       }];
     }));
+  function conditionallySelected(identity) {
+    const target = identity.slice(0, identity.indexOf("/field:"));
+    const field = identity.slice(identity.indexOf("/field:") + 7);
+    for (const record of records) for (const candidate of Object.values(record.exports)) {
+      if (candidate?.__questpie?.resourceKind !== "policy" || candidate.target !== target) continue;
+      const program = compilePolicy(candidate).program;
+      if (program.attachment?.kind !== "default") continue;
+      if (program.fields?.selectedOutput?.some((rule) => rule.path.length === 1 && rule.path[0] === field)) return true;
+    }
+    return false;
+  }
+  const fail = (code, diagnosticClass, path) => {
+    const safePath = /^(?:[A-Za-z_$][A-Za-z0-9_$]*)(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(path) ? path : "selection";
+    throw new Error(code + " " + diagnosticClass + " QP-PATH " + safePath);
+  };
   const compileSelection = (selection, owner, state) => Object.entries(selection).map(([key, selected]) => {
     if (selected?.kind === "toManyList") {
       const relation = owner.relations[key];
-      if (relation?.kind !== "toMany") throw new Error("QP-DATA-026 invalidInverseList");
+      if (relation?.kind !== "toMany") fail("QP-DATA-026", "invalidInverseList", key);
       if (Object.keys(selected).some((name) => !["kind", "source", "first", "where", "orderBy", "select"].includes(name)))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       state.plural += 1;
       state.edges += 1;
-      if (state.plural !== 1) throw new Error("QP-DATA-026 invalidInverseList");
-      if (state.edges > 4) throw new Error("QP-DATA-022 relationDepthExceeded");
+      if (state.plural !== 1) fail("QP-DATA-026", "invalidInverseList", key);
+      if (state.edges > 4) fail("QP-DATA-022", "relationDepthExceeded", key);
       const expectedSource = relation.inverseOf.slice(0, relation.inverseOf.indexOf("/relation:"));
-      if (selected.source !== expectedSource) throw new Error("QP-DATA-026 invalidInverseList");
+      if (selected.source !== expectedSource) fail("QP-DATA-026", "invalidInverseList", key);
       if (!Number.isInteger(selected.first) || selected.first < 1 || selected.first > 50)
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       const child = relationalCollections.get(selected.source.slice("collection:".length));
       if (!child || !selected.select || typeof selected.select !== "object" || Array.isArray(selected.select))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       const owningName = relation.inverseOf.slice(relation.inverseOf.indexOf("/relation:") + 10);
       const owning = child.relations[owningName];
       if (owning?.kind !== "toOne" || owning.target !== collectionIdentity(owner))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       const selectedKeys = Object.keys(selected.select);
       if (selectedKeys.length === 0 || selectedKeys.some((name) => {
         if (child.fields[name]) return selected.select[name] !== true;
         return child.relations[name]?.kind !== "toOne" || !selected.select[name] || typeof selected.select[name] !== "object";
       }))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       if (!selected.orderBy || typeof selected.orderBy !== "object" || Array.isArray(selected.orderBy))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       const orderKeys = Object.keys(selected.orderBy);
       if (orderKeys.length === 0 || orderKeys.some((name) => !child.fields[name]))
-        throw new Error("QP-DATA-026 invalidInverseList");
+        fail("QP-DATA-026", "invalidInverseList", key);
       if (orderKeys.some((name) => !selectedKeys.includes(name)))
-        throw new Error("QP-DATA-008 orderFieldNotSelected");
+        fail("QP-DATA-008", "orderFieldNotSelected", key + "." + orderKeys.find((name) => !selectedKeys.includes(name)));
       if (orderKeys.some((name) => {
         const term = selected.orderBy[name];
         return term !== "asc" && term !== "desc" &&
           (!term || typeof term !== "object" || !["asc", "desc"].includes(term.direction) || !["first", "last"].includes(term.nulls) || Object.keys(term).some((key) => key !== "direction" && key !== "nulls"));
-      })) throw new Error("QP-DATA-026 invalidInverseList");
-      const conditionalOrder = orderKeys.some((name) => {
-        for (const record of records) for (const candidate of Object.values(record.exports)) {
-          if (candidate?.__questpie?.resourceKind !== "policy" || candidate.target !== selected.source) continue;
-          const program = compilePolicy(candidate).program;
-          if (program.attachment?.kind === "default" && program.fields?.selectedOutput?.some((rule) => rule.path.length === 1 && rule.path[0] === name)) return true;
-        }
-        return false;
-      });
-      if (conditionalOrder) throw new Error("QP-DATA-008 orderFieldNotSelected");
+      })) fail("QP-DATA-026", "invalidInverseList", key);
+      const conditionalOrder = orderKeys.find((name) => conditionallySelected(fieldIdentity(child, name)));
+      if (conditionalOrder) fail("QP-DATA-008", "orderFieldNotSelected", key + "." + conditionalOrder);
       const unique = Object.values(child.constraints).some((constraint) =>
         (constraint.kind === "primaryKey" || constraint.kind === "unique") &&
         constraint.fields.every((field) => child.fields[typeof field === "string" ? field : field.field]?.nullable !== true) &&
@@ -221,26 +229,38 @@ function compileDataQuery(value) {
           const name = typeof field === "string" ? field : field.field;
           return orderKeys[orderKeys.length - constraint.fields.length + index] === name;
         }));
-      if (!unique) throw new Error("QP-DATA-026 invalidInverseList");
-      if (selected.where !== undefined) queryExpression(selected.where({ row: makeFields(child) }));
-      const validateNested = (nestedOwner, nestedSelection) => {
+      if (!unique) fail("QP-DATA-026", "invalidInverseList", key);
+      const filter = selected.where === undefined ? null : queryExpression(selected.where({ row: makeFields(child) }));
+      const compileNested = (nestedOwner, nestedSelection, path) => {
+        const compiled = [];
         for (const [nestedKey, nestedValue] of Object.entries(nestedSelection)) {
-          if (nestedOwner.fields[nestedKey]) continue;
+          if (nestedOwner.fields[nestedKey]) {
+            compiled.push({ kind: "field", key: nestedKey, field: fieldIdentity(nestedOwner, nestedKey) });
+            continue;
+          }
           const nestedRelation = nestedOwner.relations[nestedKey];
-          if (nestedRelation?.kind !== "toOne" || !nestedValue?.select) throw new Error("QP-DATA-026 invalidInverseList");
+          if (nestedRelation?.kind !== "toOne" || !nestedValue?.select) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
           state.edges += 1;
-          if (state.edges > 4) throw new Error("QP-DATA-022 relationDepthExceeded");
+          if (state.edges > 4) fail("QP-DATA-022", "relationDepthExceeded", path + "." + nestedKey);
           const nestedTarget = relationalCollections.get(nestedRelation.target.slice("collection:".length));
-          if (!nestedTarget) throw new Error("QP-DATA-026 invalidInverseList");
-          validateNested(nestedTarget, nestedValue.select);
+          if (!nestedTarget) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
+          compiled.push({ kind: "toOne", key: nestedKey, relation: collectionIdentity(nestedOwner) + "/relation:" + nestedKey, select: compileNested(nestedTarget, nestedValue.select, path + "." + nestedKey) });
         }
+        return compiled;
       };
-      validateNested(child, selected.select);
-      return { kind: "inverseList", key, source: selected.source, first: selected.first };
+      return {
+        kind: "inverseList", key, relation: relation.inverseOf, source: selected.source,
+        first: selected.first, filter,
+        order: orderKeys.map((name) => {
+          const term = selected.orderBy[name];
+          return { field: fieldIdentity(child, name), direction: typeof term === "string" ? term : term.direction, nulls: typeof term === "string" ? "last" : term.nulls };
+        }),
+        select: compileNested(child, selected.select, key),
+      };
     }
     if (selected?.kind === "toOne") {
       state.edges += 1;
-      if (state.edges > 4) throw new Error("QP-DATA-022 relationDepthExceeded");
+      if (state.edges > 4) fail("QP-DATA-022", "relationDepthExceeded", key);
       return { ...selected, key };
     }
     return { kind: "field", key, field: selected.__queryField };
@@ -314,20 +334,13 @@ function compileDataQuery(value) {
         if (fieldIdentity(candidate, name) === identity) return field;
     throw new Error("QP-DATA unknown selected Field " + identity);
   };
-  const conditionallySelected = (fieldIdentity) => {
-    const target = fieldIdentity.slice(0, fieldIdentity.indexOf("/field:"));
-    const field = fieldIdentity.slice(fieldIdentity.indexOf("/field:") + 7);
-    for (const record of records) for (const candidate of Object.values(record.exports)) {
-      if (candidate?.__questpie?.resourceKind !== "policy" || candidate.target !== target) continue;
-      const program = compilePolicy(candidate).program;
-      if (program.attachment?.kind !== "default") continue;
-      if (program.fields?.selectedOutput?.some((rule) => rule.path.length === 1 && rule.path[0] === field)) return true;
-    }
-    return false;
-  };
-  const selectedCodec = (selected, nested = false) => {
+  const selectedCodec = (selected, nested = false, outputKey = null) => {
     if (selected.kind === "toOne")
       return { kind: "nullable", codec: { kind: "object", properties: Object.fromEntries(selected.select.map((child) => [child.key, selectedCodec(child, true)])) } };
+	if (selected.kind === "toManyList") {
+	  const compiled = templateInput.select.find((candidate) => candidate.kind === "inverseList" && candidate.key === outputKey);
+	  return { kind: "array", items: { kind: "object", properties: Object.fromEntries(compiled.select.map((child) => [child.key, selectedCodec(child, true)])) } };
+	}
     const field = selected.field ?? selected.__queryField;
     const codec = operationFieldCodec(fieldForIdentity(field));
     return nested && conditionallySelected(field) ? { kind: "optional", codec } : codec;
@@ -336,7 +349,7 @@ function compileDataQuery(value) {
     templateInput,
     input: { kind: "object", properties: Object.fromEntries(Object.entries(template.parameters).map(([name, parameter]) => [name, parameterCodec(parameter)])) },
     output: { kind: "object", properties: {
-      nodes: { kind: "array", items: { kind: "object", properties: Object.fromEntries(Object.entries(selection).map(([key, selected]) => [key, selectedCodec(selected)])) } },
+      nodes: { kind: "array", items: { kind: "object", properties: Object.fromEntries(Object.entries(selection).map(([key, selected]) => [key, selectedCodec(selected, false, key)])) } },
       pageInfo: { kind: "object", properties: { endCursor: { kind: "nullable", codec: { kind: "text" } }, hasNextPage: { kind: "boolean" } } },
     } },
   };
