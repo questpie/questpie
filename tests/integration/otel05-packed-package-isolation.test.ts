@@ -84,6 +84,7 @@ packageIsolationTest(
 
 		const coreFiles = [
 			join(questpieRoot, "package.json"),
+			...files(join(questpieRoot, "cli")),
 			...files(join(questpieRoot, "src")),
 			...(existsSync(join(questpieRoot, "dist"))
 				? files(join(questpieRoot, "dist"))
@@ -91,7 +92,14 @@ packageIsolationTest(
 		].filter((path) => /\.(?:d\.ts|js|json|ts)$/u.test(path));
 		for (const path of coreFiles) {
 			const source = readFileSync(path, "utf8");
-			expect(source, path).not.toContain("@questpie/opentelemetry");
+			const ownsExplicitCliResolution =
+				path === join(questpieRoot, "cli/telemetry.ts") ||
+				path === join(questpieRoot, "dist/cli.js");
+			if (ownsExplicitCliResolution)
+				expect(source.match(/@questpie\/opentelemetry/gu), path).toHaveLength(
+					1,
+				);
+			else expect(source, path).not.toContain("@questpie/opentelemetry");
 			expect(source, path).not.toContain("@opentelemetry/");
 		}
 

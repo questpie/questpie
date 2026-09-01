@@ -233,6 +233,10 @@ else if (lane === "release") {
 		],
 		{ QUESTPIE_OTEL05_PACKAGE_ISOLATION: "1" },
 	);
+	runWithEnvironment(
+		["bun", "test", "tests/integration/otel06-packed-cli-telemetry.test.ts"],
+		{ QUESTPIE_OTEL06_CLI_TRACER: "1" },
+	);
 	run(["bun", "run", "scripts/performance.ts", "check"]);
 } else if (lane === "typescript-forward") {
 	compiler(
