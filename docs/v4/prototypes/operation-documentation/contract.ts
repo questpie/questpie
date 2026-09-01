@@ -62,7 +62,6 @@ export type OperationDocumentationArtifactV1 = Readonly<{
 	version: 1;
 	operations: readonly Readonly<{
 		identity: string;
-		origin: DocumentationOrigin;
 		summary: string;
 		description?: string;
 		examples?: readonly Readonly<{ input: unknown; output?: unknown }>[];
@@ -271,7 +270,6 @@ export function compileOperationDocumentation(
 				);
 			return {
 				identity: source.identity,
-				origin: source.origin,
 				summary,
 				...(description === undefined ? {} : { description }),
 				...(examples === undefined ? {} : { examples }),

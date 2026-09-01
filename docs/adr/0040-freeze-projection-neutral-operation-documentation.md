@@ -58,10 +58,12 @@ are bounded to 4,096 per Operation and remain inside the generated-byte budget.
 
 The compiler emits `operation-documentation.json` with format
 `questpie.operation-documentation`, version 1, ASCII-sorted Resource identities,
-Origins, validated prose, and canonical wire examples. Its domain-separated
-digest is independent of Client Contract, Operation Wire, Schema Projection,
-and Schema Fingerprint digests. A prose-only change therefore cannot invalidate
-a generated client or plan a database migration.
+validated prose, and canonical wire examples. Origin stays in the compiler's
+explain/source index and outside these semantic bytes, so relocating an
+unchanged Definition does not churn the documentation digest. Its
+domain-separated digest is independent of Client Contract, Operation Wire,
+Schema Projection, and Schema Fingerprint digests. A prose-only change therefore
+cannot invalidate a generated client or plan a database migration.
 
 OpenAPI, MCP, generated declaration documentation, explain output, and any
 future application-specific skill projection pin this documentation digest next

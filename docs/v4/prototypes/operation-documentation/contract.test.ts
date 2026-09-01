@@ -73,6 +73,16 @@ describe("projection-neutral Operation documentation", () => {
 		expect(digest("questpie-client-contract-v1", semantic)).toBe(clientDigest);
 	});
 
+	test("keeps semantic bytes stable when the Definition relocates", () => {
+		const before = compileOperationDocumentation([source()]);
+		const after = compileOperationDocumentation([
+			source({
+				origin: { module: "src/support/tickets.ts", line: 91, column: 7 },
+			}),
+		]);
+		expect(after).toEqual(before);
+	});
+
 	test("rejects silently ignored Operation members with Origin and no value", () => {
 		try {
 			assertClosedOperationMembers(
