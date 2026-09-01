@@ -85,7 +85,7 @@ function failed(failure: WatchFailure): QueryResourceSnapshot<never> {
 
 class Resource<Output> implements QueryResource<Output> {
 	readonly #input: unknown;
-	readonly #listeners = new Set<() => void>();
+	readonly #listeners = new Map<symbol, () => void>();
 	readonly #remove: () => void;
 	readonly #reportSubscriberError: (error: unknown) => void;
 	readonly #startWatch: (
@@ -122,27 +122,27 @@ class Resource<Output> implements QueryResource<Output> {
 		return this.#listeners.size > 0;
 	}
 
-	getSnapshot(): QueryResourceSnapshot<Output> {
-		return this.#snapshot;
-	}
+	readonly getSnapshot = (): QueryResourceSnapshot<Output> => this.#snapshot;
 
-	subscribe(notify: () => void): () => void {
+	readonly subscribe = (notify: () => void): (() => void) => {
+		if (this.#snapshot.kind === "failed") return () => undefined;
 		this.#touch();
-		this.#listeners.add(notify);
+		const token = Symbol();
+		this.#listeners.set(token, notify);
 		if (this.#listeners.size === 1) this.#open();
 		let active = true;
 		return () => {
 			if (!active) return;
 			active = false;
-			this.#listeners.delete(notify);
+			this.#listeners.delete(token);
 			if (this.#listeners.size === 0) this.#idle();
 		};
-	}
+	};
 
 	#publish(snapshot: QueryResourceSnapshot<Output>): void {
 		if (Object.is(this.#snapshot, snapshot)) return;
 		this.#snapshot = snapshot;
-		const listeners = Array.from(this.#listeners);
+		const listeners = Array.from(this.#listeners.values());
 		for (const listener of listeners) {
 			try {
 				listener();
@@ -290,8 +290,8 @@ export function createQueryResourceScope(
 					remove: () => entries.delete(key),
 					reportSubscriberError:
 						input?.reportSubscriberError ?? (() => undefined),
-					startWatch: (_input, callback, options) =>
-						definition.watch(operationInput, callback, options),
+					startWatch: (input, callback, options) =>
+						definition.watch(input as Input, callback, options),
 					touch: () => touch(key),
 				});
 				entries.set(key, Object.freeze({ key, resource }));

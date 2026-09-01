@@ -15,6 +15,7 @@ type Driver<Output> = Readonly<{
 			{ kind: "connected" } | { kind: "reconnecting"; attempt: number }
 		>,
 	): void;
+	inputs(): readonly unknown[];
 	starts(): number;
 	stops(): number;
 	staleDeliver(output: Output): void;
@@ -30,6 +31,7 @@ function driver<Output>(): Driver<Output> {
 	let options: WatchOptions = {};
 	let startCount = 0;
 	let stopCount = 0;
+	const inputs: unknown[] = [];
 	const callbacks: Array<(output: Output, delivery: QueryDelivery) => void> =
 		[];
 	return {
@@ -42,13 +44,15 @@ function driver<Output>(): Driver<Output> {
 		state(state) {
 			options.onStateChange?.(state);
 		},
+		inputs: () => inputs,
 		starts: () => startCount,
 		stops: () => stopCount,
 		staleDeliver(output) {
 			callbacks[0]?.(output, { kind: "update" });
 		},
-		watch(_input, next, nextOptions) {
+		watch(input, next, nextOptions) {
 			startCount += 1;
+			inputs.push(structuredClone(input));
 			callback = next;
 			callbacks.push(next);
 			options = nextOptions;
@@ -87,6 +91,17 @@ test("shares exact same-scope identity but isolates client Context scopes", () =
 	expect(first.observe({ first: 10 })).not.toBe(second.observe({ first: 10 }));
 	expect(() => first.observe({ first: 0 })).toThrow("invalid first");
 	expect(firstDriver.starts()).toBe(0);
+});
+
+test("watches only the canonical input snapshot captured by observe", () => {
+	const controlled = driver<Readonly<{ value: string }>>();
+	const query = method(createQueryResourceScope(), controlled);
+	const input = { first: 10 };
+	const resource = query.observe(input);
+	input.first = 20;
+	const stop = resource.subscribe(() => undefined);
+	expect(controlled.inputs()).toEqual([{ first: 10 }]);
+	stop();
 });
 
 test("starts lazily, shares one watch, and contains stale generations", () => {
@@ -131,6 +146,44 @@ test("starts lazily, shares one watch, and contains stale generations", () => {
 	expect(seen).toContain("ready");
 });
 
+test("tracks duplicate callback subscriptions independently on one watch", () => {
+	const controlled = driver<Readonly<{ value: string }>>();
+	const query = method(createQueryResourceScope(), controlled);
+	const resource = query.observe({ first: 10 });
+	const notify = () => undefined;
+	const firstStop = resource.subscribe(notify);
+	const secondStop = resource.subscribe(notify);
+	expect(controlled.starts()).toBe(1);
+
+	firstStop();
+	expect(controlled.stops()).toBe(0);
+	expect(resource.getSnapshot()).toMatchObject({
+		connection: { kind: "connecting" },
+	});
+
+	secondStop();
+	expect(controlled.stops()).toBe(1);
+	expect(resource.getSnapshot()).toMatchObject({
+		connection: { kind: "idle" },
+	});
+});
+
+test("exposes stable callables for the exact useSyncExternalStore invocation", () => {
+	const controlled = driver<Readonly<{ value: string }>>();
+	const query = method(createQueryResourceScope(), controlled);
+	const resource = query.observe({ first: 10 });
+	const subscribe = resource.subscribe;
+	const getSnapshot = resource.getSnapshot;
+	const stop = subscribe(() => undefined);
+	expect(getSnapshot()).toEqual({
+		kind: "pending",
+		connection: { kind: "connecting" },
+	});
+	expect(resource.subscribe).toBe(subscribe);
+	expect(resource.getSnapshot).toBe(getSnapshot);
+	stop();
+});
+
 test("retains complete data on reconnect and clears it on terminal failure", () => {
 	const controlled = driver<Readonly<{ value: string }>>();
 	const query = method(createQueryResourceScope(), controlled);
@@ -152,6 +205,29 @@ test("retains complete data on reconnect and clears it on terminal failure", () 
 	expect(controlled.stops()).toBe(1);
 	expect(query.observe({ first: 10 })).not.toBe(resource);
 	stop();
+});
+
+test("keeps a failed resource terminal and recovers only through fresh observe", () => {
+	const controlled = driver<Readonly<{ value: string }>>();
+	const query = method(createQueryResourceScope(), controlled);
+	const failedResource = query.observe({ first: 10 });
+	const stop = failedResource.subscribe(() => undefined);
+	controlled.fail({ code: "TRANSPORT_FAILED" });
+	stop();
+
+	const staleStop = failedResource.subscribe(() => undefined);
+	expect(controlled.starts()).toBe(1);
+	expect(failedResource.getSnapshot()).toEqual({
+		kind: "failed",
+		failure: { code: "TRANSPORT_FAILED" },
+	});
+	staleStop();
+
+	const freshResource = query.observe({ first: 10 });
+	expect(freshResource).not.toBe(failedResource);
+	const freshStop = freshResource.subscribe(() => undefined);
+	expect(controlled.starts()).toBe(2);
+	freshStop();
 });
 
 test("bounds retained identities, evicts idle LRU, and refuses all-pinned excess", () => {

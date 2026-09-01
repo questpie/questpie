@@ -106,12 +106,12 @@
 		{
 			"name": "framework-neutral Query Resource executable prototype",
 			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.ts",
-			"sha256": "8a99c349ae0c9802198fba7a0d0ca47250726e21926c66227ce9dd4cddfd7e67"
+			"sha256": "ef981db523dbea23c14a2b36208005f04ded1d3d0bed71b3a7fbec759d220cc0"
 		},
 		{
 			"name": "Query Resource hostile state and lifetime tests",
 			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.test.ts",
-			"sha256": "412693f912c236bf447f9f5da68f5270eda3b56cb10a5926ed3df19c308e4c54"
+			"sha256": "b23ec2cb5296267d5654d81a79e3c7493806291cb0098045db421f85321f1493"
 		},
 		{
 			"name": "generated and React integration type evidence",
