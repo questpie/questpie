@@ -38,6 +38,7 @@ export interface WatchOptions {
 export interface WatchableQueryMethod<Input, Output> {
 	(input: Input, options?: CallOptions): Promise<Output>;
 	watch(input: Input, callback: (result: Output, delivery: QueryDelivery) => void, options?: WatchOptions): () => void;
+	observe(input: Input): QueryResource<Output>;
 }
 `;
 	const realtimeTypes = !input.enabled
@@ -178,11 +179,15 @@ type RealtimeBinding = {
 					return;
 				}
 				scheduleReconnect();
-			}).finally(() => { streamStarted = false; streamReady = false; });
+			}).finally(() => {
+				streamStarted = false;
+				streamReady = false;
+				if (bindings.size > 0 && reconnectTimer === undefined) ensureStream();
+			});
 		};
-		const watchBinding = <Result>(query: string, operationInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => {
+		const watchEncodedBinding = <Result>(query: string, encodedInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => {
 			const bindingId = crypto.randomUUID();
-			const binding: RealtimeBinding = { query, input: structuredClone(operationInput), callback: callback as RealtimeBinding["callback"], options, resumeToken: null };
+			const binding: RealtimeBinding = { query, input: structuredClone(encodedInput), callback: callback as RealtimeBinding["callback"], options, resumeToken: null };
 			bindings.set(bindingId, binding);
 			ensureStream();
 			if (streamReady) openBinding(bindingId, binding);
@@ -206,6 +211,7 @@ type RealtimeBinding = {
 			if (options.signal?.aborted) close();
 			else options.signal?.addEventListener("abort", close, { once: true });
 			return close;
-		};`;
+		};
+		const watchBinding = <Result>(query: string, operationInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => watchEncodedBinding(query, operationInput, callback, options);`;
 	return Object.freeze({ watchTypes, realtimeTypes, realtimeScope });
 }
