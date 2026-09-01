@@ -138,6 +138,22 @@ describe("projection-neutral Operation documentation", () => {
 				}),
 			]),
 		).toThrow("runtimeMintedExample");
+		expect(
+			compileOperationDocumentation([
+				source({
+					input: {
+						kind: "object",
+						properties: {
+							after: { kind: "optional", codec: { kind: "cursor" } },
+						},
+					},
+					describe: {
+						summary: "Start the first visible page",
+						examples: [{ input: {} }],
+					},
+				}),
+			]).artifact.operations[0]?.examples,
+		).toEqual([{ input: {} }]);
 		expect(() =>
 			compileOperationDocumentation([
 				source({

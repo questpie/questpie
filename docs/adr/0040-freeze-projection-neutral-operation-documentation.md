@@ -50,7 +50,7 @@ handler inputs.
 `summary` is NFC plain text, one line, 1–120 Unicode scalars. `description` is
 NFC plain text, 1–1,024 Unicode scalars. Leading/trailing whitespace, lone
 surrogates, C0/C1 controls other than line feed in `description`, and bidi
-override/isolate controls fail. The compiler escapes each target format; prose
+directional controls fail. The compiler escapes each target format; prose
 does not become executable source or authority. Total canonical example bytes
 are bounded to 4,096 per Operation and remain inside the generated-byte budget.
 

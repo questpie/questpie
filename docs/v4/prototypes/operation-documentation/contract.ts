@@ -102,7 +102,7 @@ export function assertClosedOperationMembers(
 		kind === "mutation"
 			? [...common, "errors", "issueMappings", "policy"]
 			: kind === "action"
-				? [...common, "errors", "limits"]
+				? [...common, "errors", "limits", "policy"]
 				: [...common, "query"],
 	);
 	const member = Object.keys(value)
@@ -149,6 +149,8 @@ function canonicalExample(
 	origin: DocumentationOrigin,
 	path: readonly string[],
 ): unknown {
+	if (hasRuntimeMintedValue(codec, value))
+		throw new DocumentationDiagnostic("runtimeMintedExample", origin, path);
 	try {
 		const decoded = decodeRuntimeCodec(codec, value);
 		return encodeRuntimeCodec(codec, decoded);
@@ -157,13 +159,25 @@ function canonicalExample(
 	}
 }
 
-function hasCursor(codec: RuntimeCodec): boolean {
-	if (codec.kind === "cursor") return true;
-	if (codec.kind === "array") return hasCursor(codec.items);
-	if (codec.kind === "nullable" || codec.kind === "optional")
-		return hasCursor(codec.codec);
-	return (
-		codec.kind === "object" && Object.values(codec.properties).some(hasCursor)
+function hasRuntimeMintedValue(codec: RuntimeCodec, value: unknown): boolean {
+	if (codec.kind === "cursor") return value !== null && value !== undefined;
+	if (codec.kind === "nullable")
+		return value === null ? false : hasRuntimeMintedValue(codec.codec, value);
+	if (codec.kind === "optional")
+		return value === undefined
+			? false
+			: hasRuntimeMintedValue(codec.codec, value);
+	if (codec.kind === "array")
+		return (
+			Array.isArray(value) &&
+			value.some((item) => hasRuntimeMintedValue(codec.items, item))
+		);
+	if (codec.kind !== "object") return false;
+	const input = record(value);
+	if (!input) return false;
+	return Object.entries(codec.properties).some(
+		([key, child]) =>
+			Object.hasOwn(input, key) && hasRuntimeMintedValue(child, input[key]),
 	);
 }
 
@@ -209,16 +223,6 @@ export function compileOperationDocumentation(
 					"exampleCodecMismatch",
 					source.origin,
 					["describe", "examples"],
-				);
-			if (
-				rawExamples !== undefined &&
-				rawExamples.length > 0 &&
-				(hasCursor(source.input) || hasCursor(source.output))
-			)
-				throw new DocumentationDiagnostic(
-					"runtimeMintedExample",
-					source.origin,
-					["describe", "examples", "cursor"],
 				);
 			const examples = rawExamples?.map((raw, index) => {
 				const example = record(raw);
