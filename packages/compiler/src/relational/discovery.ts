@@ -246,7 +246,7 @@ function compileDataQuery(value) {
           if (!nestedTarget) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
           compiled.push({ kind: "toOne", key: nestedKey, relation: collectionIdentity(nestedOwner) + "/relation:" + nestedKey, select: compileNested(nestedTarget, nestedValue.select, path + "." + nestedKey) });
         }
-        return compiled;
+        return compiled.sort((left, right) => left.key < right.key ? -1 : left.key > right.key ? 1 : 0);
       };
       return {
         kind: "inverseList", key, relation: relation.inverseOf, source: selected.source,

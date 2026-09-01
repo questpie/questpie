@@ -79,8 +79,8 @@ test("compiles the Team Support Desk child list through the production evaluator
 			},
 		],
 		select: [
-			{ kind: "field", key: "id", field: "collection:comments/field:id" },
 			{ kind: "field", key: "body", field: "collection:comments/field:body" },
+			{ kind: "field", key: "id", field: "collection:comments/field:id" },
 			{
 				kind: "toOne",
 				key: "ticket",
