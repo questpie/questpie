@@ -142,10 +142,6 @@ selector/stale-output behavior, explain equality, and deletion of polymorphic
 RPC, raw Route OpenAPI, security, MCP/skills, custom paths, duplicate schemas,
 handlers, or registries.
 
-The inherited `quality:full` release-checksum mismatch at this branch base is
-unrelated baseline state. This docs/prototype candidate changes no release input
-or checksum and claims no PASS for that gate.
-
 ## Product ratification boundary
 
 This Product projection supersedes nothing independently and depends on the
