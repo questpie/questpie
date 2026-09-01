@@ -700,19 +700,26 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    status. ADR-0030 provenance/trusted values and ADR-0031 lifecycle/issue
    mapping are closed; do not recreate their proof, re-grill settled lifecycle
    direction, or create a parallel write kernel.
-2. Keep Team Support Desk as the golden reference consumer and every
-   application browser call on the generated client. The Query/Relations slice
-   above is closed; do not recreate the deleted list variants or a second
-   relational execution kernel.
-3. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
+2. ADR-0032 accepts one bounded inverse child list through overloaded
+   `comments.list({ first, orderBy, select })`, while root
+   `tickets.list({ parameters, page, ... })` remains disjoint. Implement the
+   accepted slice blockers-first in the existing relational compiler/Runtime
+   kernel; do not restore `window`, add a second plural list, or create a
+   parallel query kernel.
+3. Keep Team Support Desk as the golden beginner/DX consumer and Collaboration
+   as the hostile authority/Live consumer. Migrate progressively and delete
+   `comments.page` only after the new `tickets.detail` path has PostgreSQL and
+   Firefox evidence; preserve the nullable detail wrapper and existing
+   notification Query call.
+4. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority; OpenTelemetry still requires a separate docs-first
    decision before any implementation.
-4. Treat OpenTelemetry as a separate docs-first decision. The research
+5. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-5. Do not reopen the reference application by adding Cron, Collection triggers,
+6. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-6. Do not push, tag or publish without explicit authority.
+7. Do not push, tag or publish without explicit authority.

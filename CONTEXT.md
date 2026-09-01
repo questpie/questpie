@@ -228,6 +228,15 @@ A closed read template with explicit selection, filter, total order, forward
 page, and declared data dependencies. It is a structural value, not a Resource
 or executable handler.
 
+### Bounded Inverse List
+
+One exact readonly child array selected through an inverse `toMany` Relation
+inside a Structural Query. The child Collection authors the nested
+`list({ first, orderBy, select })` fragment; it has no child cursor or
+`pageInfo`, and the complete Query may contain only one plural list.
+
+_Avoid_: window, nested Query, implicit has-many
+
 ### Binary Text Order
 
 The one foundational deterministic text comparison named `questpie.binary`.
