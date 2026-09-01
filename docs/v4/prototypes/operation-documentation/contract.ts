@@ -14,6 +14,16 @@ const bidiControl = /[\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/u;
 
 type RecordValue = Readonly<Record<string, unknown>>;
 
+export type OperationDocumentationMemberKind =
+	| "query"
+	| "mutation"
+	| "action"
+	| "collectionList"
+	| "collectionGet"
+	| "collectionCreate"
+	| "collectionUpdate"
+	| "collectionDelete";
+
 export type DocumentationOrigin = Readonly<{
 	module: string;
 	line: number;
@@ -47,14 +57,10 @@ export interface OperationDescription<Input, Output> {
 
 export type OperationDocumentationSource = Readonly<{
 	identity: `query:${string}` | `mutation:${string}` | `action:${string}`;
-	kind: "query" | "mutation" | "action";
+	kind: OperationDocumentationMemberKind;
 	input: RuntimeCodec;
 	output: RuntimeCodec;
-	describe?: Readonly<{
-		summary: string;
-		description?: string;
-		examples?: readonly Readonly<{ input: unknown; output?: unknown }>[];
-	}>;
+	definition: RecordValue;
 	origin: DocumentationOrigin;
 }>;
 
@@ -85,24 +91,74 @@ function hasForbiddenControl(value: string, allowLineFeed: boolean): boolean {
 }
 
 export function assertClosedOperationMembers(
-	kind: OperationDocumentationSource["kind"],
+	kind: OperationDocumentationMemberKind,
 	value: RecordValue,
 	origin: DocumentationOrigin,
+	identity = `${kind}:${String(value.name ?? "<member>")}`,
 ): void {
-	const common = ["describe", "handler", "input", "name", "network", "output"];
-	const allowed = new Set(
-		kind === "mutation"
-			? [...common, "errors", "issueMappings", "policy"]
-			: kind === "action"
-				? [...common, "errors", "limits", "policy"]
-				: [...common, "query"],
-	);
+	const allowedByKind = {
+		query: [
+			"describe",
+			"handler",
+			"input",
+			"name",
+			"network",
+			"output",
+			"query",
+		],
+		mutation: [
+			"describe",
+			"errors",
+			"handler",
+			"input",
+			"issueMappings",
+			"name",
+			"network",
+			"output",
+			"policy",
+		],
+		action: [
+			"describe",
+			"errors",
+			"handler",
+			"input",
+			"limits",
+			"name",
+			"network",
+			"output",
+			"policy",
+		],
+		collectionList: ["data", "describe"],
+		collectionGet: ["describe", "select"],
+		collectionCreate: [
+			"describe",
+			"errors",
+			"input",
+			"issueMappings",
+			"normalize",
+			"select",
+			"values",
+		],
+		collectionUpdate: [
+			"describe",
+			"errors",
+			"input",
+			"issueMappings",
+			"normalize",
+			"select",
+			"values",
+		],
+		collectionDelete: ["describe", "select"],
+	} as const satisfies Readonly<
+		Record<OperationDocumentationMemberKind, readonly string[]>
+	>;
+	const allowed = new Set<string>(allowedByKind[kind]);
 	const member = Object.keys(value)
 		.sort()
 		.find((key) => !allowed.has(key));
 	if (member)
 		throw new DocumentationDiagnostic("unexpectedOperationMember", origin, [
-			`${kind}:${String(value.name ?? "<unknown>")}`,
+			identity,
 			member,
 		]);
 }
@@ -182,8 +238,7 @@ export function compileOperationDocumentation(
 	bytes: string;
 	digest: string;
 }> {
-	const operations = sources
-		.filter((source) => source.describe !== undefined)
+	const operations = [...sources]
 		.sort((left, right) =>
 			left.identity < right.identity
 				? -1
@@ -191,8 +246,15 @@ export function compileOperationDocumentation(
 					? 1
 					: 0,
 		)
-		.map((source) => {
-			const describe = record(source.describe);
+		.flatMap((source) => {
+			assertClosedOperationMembers(
+				source.kind,
+				source.definition,
+				source.origin,
+				source.identity,
+			);
+			if (source.definition.describe === undefined) return [];
+			const describe = record(source.definition.describe);
 			if (!describe)
 				throw new DocumentationDiagnostic("missingSummary", source.origin, [
 					"describe",
@@ -263,12 +325,14 @@ export function compileOperationDocumentation(
 					source.origin,
 					["describe", "examples"],
 				);
-			return {
-				identity: source.identity,
-				summary,
-				...(description === undefined ? {} : { description }),
-				...(examples === undefined ? {} : { examples }),
-			};
+			return [
+				{
+					identity: source.identity,
+					summary,
+					...(description === undefined ? {} : { description }),
+					...(examples === undefined ? {} : { examples }),
+				},
+			];
 		});
 	const artifact: OperationDocumentationArtifactV1 = {
 		format: "questpie.operation-documentation",

@@ -3,12 +3,14 @@
 	"ticket": "DX-PROJECTION-NEUTRAL-OPERATION-DOCUMENTATION",
 	"proof": "Ratify one optional Operation describe envelope and one compiler-owned documentation artifact/digest shared by declarations, docs, OpenAPI, and future MCP without adding codec or Field metadata, projection-specific prose, Runtime authority, application-specific skill generation, fallback, or production implementation. Keep ADR-0040 and every authority/public projection Proposed until a committed protocol-v2 PASS record exists.",
 	"diffBase": "e00943dc0033a644f485433b2a765e55e23cd2c8",
-	"reviewOutput": "docs/v4/prototypes/operation-documentation/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/operation-documentation/REVIEW-REPLACEMENT.json",
 	"authorityHeads": {
 		"integrated accepted authority base": "e00943dc0033a644f485433b2a765e55e23cd2c8",
 		"initial focused candidate": "7c5fb9ebac0b8b5d6db4926965e0db21e6079745",
 		"relocation-stable repaired candidate": "827f816a663a81d7ee7de7ea81a1bf9d6b66e67d",
-		"Fable adversarial findings repaired before fresh manifest": "e3ec535d31079afc93b0a83c2f50e2dafff0506e"
+		"Fable adversarial findings repaired before fresh manifest": "e3ec535d31079afc93b0a83c2f50e2dafff0506e",
+		"formally blocked candidate": "7d711b01cb08eb07db8c9ef9ada849ba7d26e9e8",
+		"committed BLOCKED record": "7ad5d6af759e0228e2ac2a2eccae23c47ba8afd4"
 	},
 	"authorityDocuments": [
 		{
@@ -77,9 +79,14 @@
 			"sha256": "512a85a352052408f68ce626a9b12b98ff9408b8fd26c9111cde1beca16d9a81"
 		},
 		{
+			"name": "preserved formal BLOCKED findings",
+			"path": "docs/v4/prototypes/operation-documentation/REVIEW.json",
+			"sha256": "3f4b92738e8d6ba10a94053029cbf295911eadf69a27866185acc93451fac8ab"
+		},
+		{
 			"name": "Proposed projection-neutral Operation documentation decision",
 			"path": "docs/adr/0040-freeze-projection-neutral-operation-documentation.md",
-			"sha256": "b87c2ecd37bd2449c3e34d3e392e4897e81b774f0795fd34656b789f39d58801"
+			"sha256": "0b77fec845103f3a36dcbb1d966c820302e8fdecfee5b53ba88ca092f95a0633"
 		},
 		{
 			"name": "focused interface candidates",
@@ -89,17 +96,17 @@
 		{
 			"name": "executable proof declaration",
 			"path": "docs/v4/prototypes/operation-documentation/README.md",
-			"sha256": "39ea3f190e01e24ccf8bd5c271cf2caab22dee75b0e0269cca592f610192cbb2"
+			"sha256": "2b423c19a7abbee39a1a5908ac2b086ecaa824780fc866a6ae024fffa26968ca"
 		},
 		{
 			"name": "documentation compiler and artifact prototype",
 			"path": "docs/v4/prototypes/operation-documentation/contract.ts",
-			"sha256": "c0d323894fb45c572f9276f410b57fadfc4b6481d1b3e489e9660dde6591fb19"
+			"sha256": "1f893452eec772a490bee72125a6bb868c85236e86bb016147f18a69b0d25699"
 		},
 		{
 			"name": "documentation compiler executable evidence",
 			"path": "docs/v4/prototypes/operation-documentation/contract.test.ts",
-			"sha256": "6009f837a986e318f1e6882cd34e3e03e003a2989911af9000cd51732557cb0e"
+			"sha256": "91b791d7e024b36692f1b74a0fc6ec719bf2316b14961d8797ff4239defd9742"
 		},
 		{
 			"name": "typed example inference evidence",
@@ -149,13 +156,13 @@
 	"acceptanceCriteria": [
 		"ADR-0040, the ADR index, SPEC, CONTEXT, public documentation, and HANDOFF remain Proposed or unchanged until a committed protocol-v2 PASS record exists. Production implementation begins only after a separate authority projection commit.",
 		"Query, Mutation, Action, and their generated Collection Operation Set members share one optional describe envelope whose required summary and optional description/examples are inferred from the existing Operation input/output codecs. No codec, Field, Context, error, Route, Job, projection-specific, or application-configuration metadata member exists.",
-		"All Query, Mutation, and Action Definition shapes become closed. Unknown or misspelled members fail at exact Origin/member path with QP-COMPOSE-030 and no value disclosure instead of being silently dropped.",
+		"The closure contract explicitly preserves the real per-kind authored asymmetry for handler and plan-backed Query, Mutation, Action, and Collection list/get/create/update/delete members. Both production fixtures bind those existing member sets to the proof. Unknown or misspelled members fail at exact Origin/member path with QP-COMPOSE-030 and no value disclosure instead of being silently dropped.",
 		"Summary and description use the exact bounded NFC plain-text grammar. Examples are non-executable synthetic documentation data, decode and re-encode through the existing codecs, reject present Runtime-minted cursor values and invalid canonical values, disclose no values in diagnostics, and are bounded to 4096 canonical bytes per Operation within the existing generated-byte ceiling.",
-		"The compiler emits deterministic ASCII-ordered questpie.operation-documentation v1 semantic bytes and a domain-separated digest. Origin remains outside those bytes, making relocation stable. Documentation changes do not change Client Contract, Operation Wire, Schema Projection, or Schema Fingerprint identity and cannot plan a migration or stale a generated client.",
-		"OpenAPI, future MCP, generated JSDoc, explain, and any later application-specific skill projection consume the same documentation artifact and pin its digest with their semantic sources. Runtime and the canonical HTTP adapter never read it at request time, and no projection may execute an example.",
-		"OpenAPI derives summary, description, and schema-valid examples without authored HTTP placement. Future MCP may map summary/title/description but emits only Query readOnlyHint in this slice; prose, examples, annotations, discovery, and model confirmation never grant Authority or replace Policy.",
+		"The proof emits deterministic ASCII-ordered questpie.operation-documentation v1 semantic bytes and a domain-separated digest. Origin remains outside those bytes, making relocation stable. DOC-01, rather than this ratification proof, owns executable cross-artifact digest independence, stale deletion, and migration/client non-interference.",
+		"DOC-01 owns production compiler authoring plus Package/application parity. DOC-02 owns OpenAPI, future MCP, generated JSDoc and explain consumption, digest pins, target-specific escaping hostiles, exposure/disclosure parity, and executable proof that Runtime and the canonical HTTP adapter do not read documentation at request time. No projection may execute an example.",
+		"The decision defines that OpenAPI derives summary, description, and schema-valid examples without authored HTTP placement, while future MCP may map summary/title/description. Any risk hint derives from separately Accepted Operation kind semantics, never prose, examples, annotations, discovery, or model confirmation; those never grant Authority or replace Policy. Projection behavior remains a DOC-02 implementation gate.",
 		"The public repository skills/questpie tree remains one portable framework-authoring skill built only from released public docs. It is not application-generated, never embeds application prose, and stays distinct from the internal contributor skill. Application-specific skill generation remains deferred.",
-		"Package and application authors use the same describe primitive and diagnostics. Exposure remains separately owned: direct-only prose does not make an Operation network-, OpenAPI-, MCP-, or skill-visible, and Policy-hidden members/evidence remain undisclosed.",
+		"Package and application authors are designed to use the same describe primitive and diagnostics, with executable parity owned by DOC-01. Exposure remains separately owned: direct-only prose does not make an Operation network-, OpenAPI-, MCP-, or skill-visible, and Policy-hidden members/evidence remain undisclosed; executable projection parity is owned by DOC-02.",
 		"The candidate adds no production bytes, codec decorator/chaining, Field prose, error examples, custom grouping, generated application skill, alternate schema, Runtime capability, handler, retry, compatibility alias, fallback, or unrelated OpenTelemetry behavior. Every named deferral requires its own tracer and authority."
 	]
 }

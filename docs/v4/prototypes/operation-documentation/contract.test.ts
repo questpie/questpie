@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+
+import * as ts from "typescript";
 
 import {
 	assertClosedOperationMembers,
@@ -30,21 +33,146 @@ function source(
 		input,
 		output,
 		origin,
-		describe: {
-			summary: "Close an open ticket",
-			description: "Returns the committed ticket state.",
-			examples: [{ input: { id }, output: { id, status: "closed" } }],
+		definition: {
+			name: "tickets.close",
+			input,
+			output,
+			policy: {},
+			errors: {},
+			handler: () => undefined,
+			describe: {
+				summary: "Close an open ticket",
+				description: "Returns the committed ticket state.",
+				examples: [{ input: { id }, output: { id, status: "closed" } }],
+			},
 		},
 		...overrides,
 	};
 }
 
+function described(
+	describe: Readonly<Record<string, unknown>> | undefined,
+	overrides: Partial<OperationDocumentationSource> = {},
+): OperationDocumentationSource {
+	const base = source(overrides);
+	return {
+		...base,
+		definition: {
+			...base.definition,
+			...(describe === undefined ? { describe: undefined } : { describe }),
+		},
+	};
+}
+
 describe("projection-neutral Operation documentation", () => {
+	test("admits the member sets authored by both production fixtures", () => {
+		const seen = new Map<string, number>();
+		const propertyNames = (value: ts.ObjectLiteralExpression): string[] =>
+			value.properties.map((property) => {
+				if (ts.isSpreadAssignment(property))
+					throw new Error("fixture Definition uses an unprovable spread");
+				const name = property.name;
+				if (!name || (!ts.isIdentifier(name) && !ts.isStringLiteral(name)))
+					throw new Error("fixture Definition uses a non-static member name");
+				return name.text;
+			});
+		const check = (
+			kind: Parameters<typeof assertClosedOperationMembers>[0],
+			value: ts.ObjectLiteralExpression,
+			module: string,
+		) => {
+			assertClosedOperationMembers(
+				kind,
+				Object.fromEntries(propertyNames(value).map((name) => [name, true])),
+				{ module, line: 1, column: 1 },
+			);
+			seen.set(kind, (seen.get(kind) ?? 0) + 1);
+		};
+		for (const module of new Bun.Glob(
+			"fixtures/{collaboration,team-support-desk}/src/**/*.ts",
+		).scanSync(".")) {
+			const file = ts.createSourceFile(
+				module,
+				readFileSync(module, "utf8"),
+				ts.ScriptTarget.Latest,
+				true,
+				ts.ScriptKind.TS,
+			);
+			const visit = (node: ts.Node): void => {
+				if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) {
+					const factory = node.expression.text;
+					if (
+						factory === "defineQuery" ||
+						factory === "defineMutation" ||
+						factory === "defineAction"
+					) {
+						const definition = node.arguments[0];
+						if (!definition || !ts.isObjectLiteralExpression(definition))
+							throw new Error(
+								`${factory} in ${module} is not an object literal`,
+							);
+						check(
+							factory === "defineQuery"
+								? "query"
+								: factory === "defineMutation"
+									? "mutation"
+									: "action",
+							definition,
+							module,
+						);
+					} else if (factory === "defineCollectionOperations") {
+						const body = node.arguments[1];
+						if (!body || !ts.isObjectLiteralExpression(body))
+							throw new Error(
+								`defineCollectionOperations in ${module} is not an object literal`,
+							);
+						for (const property of body.properties) {
+							if (!property.name || !ts.isIdentifier(property.name)) continue;
+							const member = property.name.text;
+							if (
+								!["list", "get", "create", "update", "delete"].includes(member)
+							)
+								continue;
+							if (
+								!ts.isPropertyAssignment(property) ||
+								!ts.isObjectLiteralExpression(property.initializer)
+							)
+								throw new Error(
+									`Collection ${member} in ${module} is not an object literal`,
+								);
+							check(
+								`collection${member[0]!.toUpperCase()}${member.slice(1)}` as Parameters<
+									typeof assertClosedOperationMembers
+								>[0],
+								property.initializer,
+								module,
+							);
+						}
+					}
+				}
+				ts.forEachChild(node, visit);
+			};
+			visit(file);
+		}
+		expect(seen.get("query")).toBeGreaterThan(0);
+		expect(seen.get("mutation")).toBeGreaterThan(0);
+		expect(seen.get("action")).toBeGreaterThan(0);
+		expect(
+			[...seen.entries()]
+				.filter(([kind]) => kind.startsWith("collection"))
+				.reduce((count, [, value]) => count + value, 0),
+		).toBeGreaterThan(0);
+	});
+
 	test("emits deterministic ASCII-sorted canonical bytes", () => {
 		const query = source({
 			identity: "query:tickets.detail",
 			kind: "query",
-			describe: { summary: "Fetch one visible ticket" },
+			definition: {
+				name: "tickets.detail",
+				query: {},
+				describe: { summary: "Fetch one visible ticket" },
+			},
 		});
 		const left = compileOperationDocumentation([source(), query]);
 		const right = compileOperationDocumentation([query, source()]);
@@ -60,7 +188,7 @@ describe("projection-neutral Operation documentation", () => {
 	test("uses a domain-separated digest for prose changes", () => {
 		const before = compileOperationDocumentation([source()]);
 		const after = compileOperationDocumentation([
-			source({ describe: { summary: "Close a currently open ticket" } }),
+			described({ summary: "Close a currently open ticket" }),
 		]);
 		expect(after.digest).not.toBe(before.digest);
 	});
@@ -128,6 +256,86 @@ describe("projection-neutral Operation documentation", () => {
 				origin,
 			),
 		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"collectionList",
+				{ data: {}, describe: {} },
+				origin,
+			),
+		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"collectionGet",
+				{ select: {}, describe: {} },
+				origin,
+			),
+		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"collectionCreate",
+				{
+					input: [],
+					normalize: () => ({}),
+					values: () => ({}),
+					errors: {},
+					issueMappings: {},
+					select: {},
+					describe: {},
+				},
+				origin,
+			),
+		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"collectionDelete",
+				{ select: {}, describe: {} },
+				origin,
+			),
+		).not.toThrow();
+	});
+
+	test("composes closed member admission with artifact compilation", () => {
+		expect(() =>
+			compileOperationDocumentation([
+				described(
+					{ summary: "Close an open ticket" },
+					{
+						definition: {
+							...source().definition,
+							descriptin: { secret: "do not disclose" },
+						},
+					},
+				),
+			]),
+		).toThrow("unexpectedOperationMember");
+	});
+
+	test("enforces scalar text boundaries including astral scalars", () => {
+		expect(() =>
+			compileOperationDocumentation([described({ summary: "x".repeat(120) })]),
+		).not.toThrow();
+		expect(() =>
+			compileOperationDocumentation([described({ summary: "x".repeat(121) })]),
+		).toThrow("invalidText");
+		expect(() =>
+			compileOperationDocumentation([described({ summary: "😀".repeat(120) })]),
+		).not.toThrow();
+		expect(() =>
+			compileOperationDocumentation([
+				described({
+					summary: "Bounded description",
+					description: "x".repeat(1024),
+				}),
+			]),
+		).not.toThrow();
+		expect(() =>
+			compileOperationDocumentation([
+				described({
+					summary: "Bounded description",
+					description: "x".repeat(1025),
+				}),
+			]),
+		).toThrow("invalidText");
 	});
 
 	test.each([
@@ -137,29 +345,25 @@ describe("projection-neutral Operation documentation", () => {
 		["bidi \u202e control", "invalidText"],
 	])("rejects invalid summary %s", (summary, reason) => {
 		expect(() =>
-			compileOperationDocumentation([source({ describe: { summary } })]),
+			compileOperationDocumentation([described({ summary })]),
 		).toThrow(reason);
 	});
 
 	test("accepts description line feeds but rejects codec-mismatched examples", () => {
 		expect(
 			compileOperationDocumentation([
-				source({
-					describe: {
-						summary: "Close an open ticket",
-						description: "First line.\nSecond line.",
-					},
+				described({
+					summary: "Close an open ticket",
+					description: "First line.\nSecond line.",
 				}),
 			]).artifact.operations[0]?.description,
 		).toBe("First line.\nSecond line.");
 		let mismatch: unknown;
 		try {
 			compileOperationDocumentation([
-				source({
-					describe: {
-						summary: "Close an open ticket",
-						examples: [{ input: { id: "not-a-uuid" } }],
-					},
+				described({
+					summary: "Close an open ticket",
+					examples: [{ input: { id: "not-a-uuid" } }],
 				}),
 			]);
 		} catch (error) {
@@ -174,12 +378,10 @@ describe("projection-neutral Operation documentation", () => {
 
 	test("does not disclose invalid prose or missing example data", () => {
 		for (const candidate of [
-			source({ describe: { summary: "private-value\u2028injection" } }),
-			source({
-				describe: {
-					summary: "Close an open ticket",
-					examples: [{} as never],
-				},
+			described({ summary: "private-value\u2028injection" }),
+			described({
+				summary: "Close an open ticket",
+				examples: [{} as never],
 			}),
 		]) {
 			let diagnostic: unknown;
@@ -196,48 +398,55 @@ describe("projection-neutral Operation documentation", () => {
 	test("forbids Runtime-minted cursor examples and bounds canonical bytes", () => {
 		expect(() =>
 			compileOperationDocumentation([
-				source({
-					input: { kind: "object", properties: { after: { kind: "cursor" } } },
-					describe: {
+				described(
+					{
 						summary: "Page visible tickets",
 						examples: [{ input: { after: "opaque" } }],
 					},
-				}),
+					{
+						input: {
+							kind: "object",
+							properties: { after: { kind: "cursor" } },
+						},
+					},
+				),
 			]),
 		).toThrow("runtimeMintedExample");
 		expect(
 			compileOperationDocumentation([
-				source({
-					input: {
-						kind: "object",
-						properties: {
-							after: { kind: "optional", codec: { kind: "cursor" } },
-						},
-					},
-					describe: {
+				described(
+					{
 						summary: "Start the first visible page",
 						examples: [{ input: {} }],
 					},
-				}),
+					{
+						input: {
+							kind: "object",
+							properties: {
+								after: { kind: "optional", codec: { kind: "cursor" } },
+							},
+						},
+					},
+				),
 			]).artifact.operations[0]?.examples,
 		).toEqual([{ input: {} }]);
 		expect(() =>
 			compileOperationDocumentation([
-				source({
-					input: { kind: "object", properties: { value: { kind: "text" } } },
-					describe: {
+				described(
+					{
 						summary: "Document a bounded value",
 						examples: [{ input: { value: "x".repeat(5000) } }],
 					},
-				}),
+					{
+						input: { kind: "object", properties: { value: { kind: "text" } } },
+					},
+				),
 			]),
 		).toThrow("exampleLimitExceeded");
 	});
 
 	test("omits absent descriptions without mutating semantic Operations", () => {
-		const result = compileOperationDocumentation([
-			source({ describe: undefined }),
-		]);
+		const result = compileOperationDocumentation([described(undefined)]);
 		expect(result.artifact.operations).toEqual([]);
 	});
 });

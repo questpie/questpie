@@ -42,8 +42,25 @@ Operation. Member-level closure admits `describe` and rejects every other new
 member.
 
 All Operation Definition shapes become closed. An unknown member fails at its
-Origin instead of being ignored. No codec, Field, Collection, Context, error,
-Route, Job, or application configuration metadata member is introduced.
+Origin instead of being ignored. Closure preserves the existing per-kind
+asymmetry instead of inventing a generic Operation bag:
+
+- handler Query authoring admits `name`, `network`, `input`, `output`, and
+  `handler`; plan-backed Query authoring admits `name`, `network`, and `query`;
+- Mutation admits `name`, `network`, `input`, `output`, `policy`, `errors`,
+  `issueMappings`, and `handler`;
+- Action admits `name`, `network`, `input`, `output`, `policy`, `errors`,
+  `limits`, and `handler`;
+- Collection `list` admits `data`; `get` and `delete` admit `select`; and
+  `create` and `update` admit `input`, `normalize`, `values`, `errors`,
+  `issueMappings`, and `select`.
+
+Each shape additionally admits `describe`. Query has no authored Policy or
+limit member because its plan and generated execution contract own those
+semantics; Mutation limits are derived by its write kernel; Action alone owns
+authored external-effect limits. Generated `kind` and `identity` fields are not
+authored members. No codec, Field, Collection, Context, error, Route, Job, or
+application configuration metadata member is introduced.
 
 The compiler validates examples through the existing codecs and canonical wire
 encoder. Cursor values are forbidden because only Runtime can mint a valid
@@ -54,10 +71,12 @@ handler inputs.
 `summary` is NFC plain text, one line, 1–120 Unicode scalars. `description` is
 NFC plain text, 1–1,024 Unicode scalars. Leading/trailing whitespace, lone
 surrogates, C0, DEL, C1 controls other than line feed in `description`, Unicode
-line/paragraph separators in `summary`, and bidi directional controls fail. The
-compiler escapes each target format; prose
-does not become executable source or authority. Total canonical example bytes
-are bounded to 4,096 per Operation and remain inside the generated-byte budget.
+line/paragraph separators in `summary`, and bidi directional controls fail.
+Plain text remains data and does not become executable source or authority.
+Target-specific escaping, including JSDoc comment terminators and JSON/OpenAPI
+serialization, is an implementation-tracer obligation rather than evidence
+claimed by this ratification proof. Total canonical example bytes are bounded
+to 4,096 per Operation and remain inside the generated-byte budget.
 
 ## Artifact and digest boundary
 
@@ -82,9 +101,10 @@ the summary to optional `title` and summary plus description to `description`.
 Any MCP risk hint is derived only from accepted Operation kind semantics, never
 from `describe`; documentation never grants Authority, changes Policy, or
 justifies Mutation/Action risk annotations. MCP prose is model-facing
-application instruction. This contract claims bounded structural safety and no
-content filter or compiler-proven prompt purity. Generated JSDoc is emitted from
-this artifact and is never extracted from authored comments.
+application instruction. This contract claims no content filter or
+compiler-proven prompt purity. Generated JSDoc is emitted from this artifact
+and is never extracted from authored comments; its safe escaping belongs to the
+projection implementation gate named below.
 
 The planned public repository skill at `skills/questpie` is a portable framework
 authoring skill. It is not generated from application prose. An
@@ -111,22 +131,35 @@ each projection still follows its own accepted exposure selection.
 
 ## Supersession ledger
 
-This decision fills only ADR-0036's explicit descriptive-metadata deferral and
-adds closed member admission to Query, Mutation, Action, and the five Collection
-Operation Set members. It does
-not change canonical codecs, Operation execution, network exposure, HTTP paths,
-OpenAPI schema ownership, Policy, Runtime, or the public skill format. It
-rejects projection-specific prose and codec-level examples as candidates rather
-than superseding an Accepted surface.
+This decision fills ADR-0036's explicit descriptive-metadata deferral and the
+matching deferral in the Accepted
+`docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md`.
+It adds closed member admission to Query, Mutation, Action, and the five
+Collection Operation Set members without changing that proposal's four
+top-level OpenAPI members or its ownership of paths, methods, schemas, and
+outcomes. It does not change canonical codecs, Operation execution, network
+exposure, HTTP paths, Policy, Runtime, or the public skill format. It rejects
+projection-specific prose and codec-level examples as candidates rather than
+superseding an Accepted surface.
 
 ## Acceptance
 
 ADR-0040 remains Proposed until executable evidence and an independent review
-prove exact type inference, closed member admission, text and example
-validation, canonical bytes/digest separation, Origin-safe diagnostics,
-OpenAPI/MCP/JSDoc consumption, Package parity, relocation, stale deletion, and
-the absence of codec metadata, projection-specific prose, Runtime reads,
-fallbacks, or application-specific skill generation.
+prove exact type inference, fixture-bound closed member admission including a
+Collection Operation Set member, text and example validation, deterministic
+domain-separated semantic bytes, relocation stability, Origin-safe
+non-disclosing diagnostics, and the absence of codec metadata,
+projection-specific prose, Runtime capability, fallbacks, or
+application-specific skill generation.
+
+After ratification, `DOC-01` owns compiler authoring, Package/application
+parity, artifact emission and stale deletion, plus executable proof that its
+digest remains outside Client Contract, Operation Wire, Schema Projection, and
+Schema Fingerprint identity. `DOC-02` owns OpenAPI, MCP, generated JSDoc and
+explain consumption, digest pins, target-specific escaping hostiles (including
+`*/` and JSON/OpenAPI strings), exposure/disclosure parity, and proof that the
+Runtime and canonical HTTP adapter do not read documentation at request time.
+Neither ticket may project an application-specific generated skill.
 
 No ADR index, SPEC, CONTEXT, public documentation, or HANDOFF projection may
 describe this decision as Accepted before a committed PASS record exists.
