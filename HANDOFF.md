@@ -703,9 +703,10 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
 2. ADR-0032 accepts one bounded inverse child list through overloaded
    `comments.list({ first, orderBy, select })`, while root
    `tickets.list({ parameters, page, ... })` remains disjoint. Implement the
-   accepted slice blockers-first in the existing relational compiler/Runtime
-   kernel; do not restore `window`, add a second plural list, or create a
-   parallel query kernel.
+   accepted slice blockers-first through INV-01 to INV-06 in
+   `docs/v4/implementation/inverse-tomany-projection/README.md`, using the
+   existing relational compiler/Runtime kernel; do not restore `window`, add a
+   second plural list, or create a parallel query kernel.
 3. Keep Team Support Desk as the golden beginner/DX consumer and Collaboration
    as the hostile authority/Live consumer. Migrate progressively and delete
    `comments.page` only after the new `tickets.detail` path has PostgreSQL and
