@@ -105,6 +105,7 @@ const response = (body: BodyInit, contentType: string) =>
 	});
 const server = Bun.serve({
 	hostname: "127.0.0.1",
+	idleTimeout: 120,
 	port: portFromArguments(),
 	async fetch(request) {
 		const url = new URL(request.url);

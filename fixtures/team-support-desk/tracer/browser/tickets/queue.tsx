@@ -13,7 +13,7 @@ type TicketQueueProps = Readonly<{
 	onTeamFilter: (teamId: string) => void;
 	page: TicketPage | null;
 	pageIndex: number;
-	queueKind: "loading" | "ready" | "error";
+	queueKind: "failed" | "pending" | "ready" | "reconnecting" | "reset";
 	queueMessage: string;
 	selectedTicketId: string | null;
 	statusFilter: string;
@@ -115,7 +115,7 @@ export function TicketQueue({
 				className="ticket-list"
 				data-ticket-list
 				aria-label="Tickets"
-				aria-busy={queueKind === "loading"}
+				aria-busy={queueKind === "pending" || queueKind === "reconnecting"}
 			>
 				{page?.nodes.map((ticket) => (
 					<li key={ticket.id}>

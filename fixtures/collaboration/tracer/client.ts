@@ -133,9 +133,10 @@ async function start(): Promise<void> {
 	const replacement = retiredScope.queries["messages.page"].observe(queryInput);
 	const retainedStop = retained.subscribe(() => undefined);
 	retainedStop();
+	const retainedSnapshot = retained.getSnapshot();
 	queryResourceEvidence.retainedEvictionTerminal =
-		retained.getSnapshot().kind === "failed" &&
-		retained.getSnapshot().failure.code === "RESOURCE_LIMIT" &&
+		retainedSnapshot.kind === "failed" &&
+		retainedSnapshot.failure.code === "RESOURCE_LIMIT" &&
 		replacement !== retained &&
 		retiredScope.queries["messages.page"].observe(queryInput) === replacement;
 
@@ -218,7 +219,11 @@ async function start(): Promise<void> {
 					await report("signed-out-ready", whoami);
 					const retiredClient = createClient({
 						baseUrl: location.origin,
-						fetch: (request) => fetch(request, { credentials: "omit" }),
+						fetch: Object.assign(
+							(request: RequestInfo | URL) =>
+								fetch(request, { credentials: "omit" }),
+							{ preconnect: fetch.preconnect },
+						),
 					}).withContext({ companyId: tracerIds.company });
 					const retiredResource =
 						retiredClient.queries["messages.page"].observe(queryInput);

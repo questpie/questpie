@@ -17,6 +17,8 @@ type TicketDetailPanelProps = Readonly<{
 	onEdit: () => void;
 	onSummary: () => void;
 	onTransition: () => void;
+	resourceMessage: string;
+	resourceState: "failed" | "pending" | "ready" | "reconnecting" | "reset";
 	session: SupportSession;
 	ticket: TicketDetail | null;
 }>;
@@ -34,12 +36,23 @@ export function TicketDetailPanel({
 	onEdit,
 	onSummary,
 	onTransition,
+	resourceMessage,
+	resourceState,
 	session,
 	ticket,
 }: TicketDetailPanelProps) {
 	if (ticket === null)
 		return (
 			<section className="detail" aria-labelledby="detail-heading">
+				<div
+					className="state-banner"
+					data-detail-state
+					data-kind={resourceState}
+					role="status"
+					aria-live="polite"
+				>
+					{resourceMessage}
+				</div>
 				<div className="detail-empty">
 					<span className="empty-glyph" aria-hidden="true">
 						↗
@@ -61,6 +74,15 @@ export function TicketDetailPanel({
 	return (
 		<section className="detail" aria-labelledby="detail-heading">
 			<div className="detail-content">
+				<div
+					className="state-banner"
+					data-detail-state
+					data-kind={resourceState}
+					role="status"
+					aria-live="polite"
+				>
+					{resourceMessage}
+				</div>
 				<header className="detail-header">
 					<div>
 						<p className="reference" data-detail-reference>

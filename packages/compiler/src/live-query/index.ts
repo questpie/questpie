@@ -199,6 +199,18 @@ function policyObservation(
 	return { collections: [...collections].sort(compareAscii), tenant };
 }
 
+function collectSelectionRelations(
+	value: unknown,
+	relations: Set<string>,
+): void {
+	for (const selection of records(value, "Query selection")) {
+		if (selection.kind !== "toOne") continue;
+		relations.add(String(selection.relation));
+		if (selection.select !== undefined)
+			collectSelectionRelations(selection.select, relations);
+	}
+}
+
 function structuralSlots(
 	input: Readonly<{
 		contextProjection: JsonRecord;
@@ -255,10 +267,9 @@ function structuralSlots(
 			String(template.from),
 			...observed.collections,
 		]);
-		const relationIdentities = records(template.select, "Query selection")
-			.filter((selection) => selection.kind === "toOne")
-			.map((selection) => String(selection.relation))
-			.sort(compareAscii);
+		const relationIdentitySet = new Set<string>();
+		collectSelectionRelations(template.select, relationIdentitySet);
+		const relationIdentities = [...relationIdentitySet].sort(compareAscii);
 		for (const identity of relationIdentities) {
 			const relation = relations.get(identity);
 			if (!relation)

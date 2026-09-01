@@ -1141,6 +1141,7 @@ WHERE call_id = ${editCallId}`;
 				phase: "firefox-complete",
 				reference: supportTracerIds.referenceOpen,
 				role: "agent",
+				watchedCommentObserved: true,
 			});
 			const browserReceipts = (await (
 				await fetch(`${receiverOrigin}/__receipts`)

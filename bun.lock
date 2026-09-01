@@ -100,6 +100,7 @@
       "name": "@questpie/fixture-team-support-desk",
       "version": "4.0.0-beta.1",
       "dependencies": {
+        "@questpie/react": "workspace:*",
         "better-auth": "1.7.1",
         "pg": "8.23.0",
         "questpie": "workspace:*",
@@ -133,6 +134,19 @@
         "@types/bun": "1.3.14",
         "pg": "8.22.0",
         "typescript": "6.0.2",
+      },
+    },
+    "packages/react": {
+      "name": "@questpie/react",
+      "version": "4.0.0-beta.1",
+      "devDependencies": {
+        "@types/react": "19.2.17",
+        "react": "19.2.8",
+        "typescript": "6.0.2",
+      },
+      "peerDependencies": {
+        "questpie": "4.0.0-beta.1",
+        "react": "^19.2.0",
       },
     },
     "packages/runtime": {
@@ -657,6 +671,8 @@
     "@questpie/fixture-collaboration": ["@questpie/fixture-collaboration@workspace:fixtures/collaboration"],
 
     "@questpie/fixture-team-support-desk": ["@questpie/fixture-team-support-desk@workspace:fixtures/team-support-desk"],
+
+    "@questpie/react": ["@questpie/react@workspace:packages/react"],
 
     "@questpie/runtime": ["@questpie/runtime@workspace:packages/runtime"],
 

@@ -229,6 +229,78 @@ test("keeps a Query with declared raw reads one-shot only", () => {
 	);
 });
 
+test("declares every nested Relation collection reached by a structural Query", () => {
+	const nestedData = {
+		...data,
+		collections: [
+			{
+				identity: "collection:memberships",
+				relations: [
+					{
+						identity: "collection:memberships/relation:organization",
+						target: "collection:organizations",
+					},
+				],
+			},
+			data.collections[1],
+			{ identity: "collection:organizations", relations: [] },
+		],
+	};
+	const nestedQuery = {
+		...structuralQuery,
+		queries: [
+			{
+				...structuralQuery.queries[0],
+				template: {
+					...structuralQuery.queries[0]!.template,
+					select: [
+						{
+							kind: "toOne",
+							relation: "collection:messages/relation:author",
+							select: [
+								{
+									kind: "toOne",
+									relation: "collection:memberships/relation:organization",
+									select: [],
+								},
+							],
+						},
+					],
+				},
+			},
+		],
+	};
+	const result = projectLiveQueryCompilation({
+		resources: [query],
+		contextProjection: context,
+		dataProjection: nestedData,
+		policyProjection: policy,
+		queryProjection: nestedQuery,
+	});
+	const watchability = result.artifacts["query-watchability.json"] as {
+		queries: readonly {
+			possibleObservationSlots: readonly {
+				kind: string;
+				collections?: readonly string[];
+				relations?: readonly string[];
+			}[];
+		}[];
+	};
+	const slot = watchability.queries[0]?.possibleObservationSlots.find(
+		(candidate) => candidate.kind === "structuralQuery",
+	);
+
+	expect(slot?.collections).toEqual([
+		"collection:memberships",
+		"collection:messages",
+		"collection:organizations",
+	]);
+	expect(slot?.relations).toEqual([
+		"collection:memberships/relation:organization",
+		"collection:messages/relation:author",
+	]);
+});
+
 test("emits Message watchability and inventories every live-query artifact", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-live-query-"));
 	try {

@@ -1,27 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useQueryResource } from "@questpie/react";
+
 import type { SupportSession } from "./auth/client";
 import { reportFixturePhase } from "./fixture-control";
-import type {
-	CommentPage,
-	LabelPage,
-	SupportDesk,
-	TeamPage,
-	TicketDetail,
-	TicketPage,
-} from "./questpie";
+import type { SupportDesk } from "./questpie";
 import { errorMessage } from "./shared/format";
-import { TicketDetailPanel } from "./tickets/detail";
-import { CreateTicketDialog, EditTicketDialog } from "./tickets/dialogs";
-import { ticketEditInput } from "./tickets/edit-input";
+import { CreateTicketDialog } from "./tickets/dialogs";
 import { TicketQueue } from "./tickets/queue";
+import { SelectedTicket } from "./tickets/selected";
 import { firefoxJourneyFromUrl, runFirefoxJourney } from "./tracer/journey";
-
-type DetailState = Readonly<{
-	comments: CommentPage;
-	labels: LabelPage;
-	ticket: TicketDetail;
-}>;
 
 type DeskApplicationProps = Readonly<{
 	desk: SupportDesk;
@@ -29,221 +17,133 @@ type DeskApplicationProps = Readonly<{
 	session: SupportSession;
 }>;
 
+type JourneyTicket = Readonly<{
+	id: string;
+	reference: string;
+	status: string;
+	teamId: string;
+	updatedAt: Date;
+}>;
+
 export function DeskApplication({
 	desk,
 	onSignOut,
 	session,
 }: DeskApplicationProps) {
-	const [page, setPage] = useState<TicketPage | null>(null);
 	const [pageIndex, setPageIndex] = useState(0);
 	const [cursors, setCursors] = useState<ReadonlyArray<string | null>>([null]);
 	const [statusFilter, setStatusFilter] = useState("");
 	const [teamFilter, setTeamFilter] = useState("");
-	const [teams, setTeams] = useState<TeamPage["nodes"]>([]);
-	const [detail, setDetail] = useState<DetailState | null>(null);
-	const [detailTitle, setDetailTitle] = useState("Choose a ticket");
-	const [detailMessage, setDetailMessage] = useState(
-		"Select an item from the queue to see its conversation and available actions.",
-	);
-	const [queueKind, setQueueKind] = useState<"loading" | "ready" | "error">(
-		"loading",
-	);
-	const [queueMessage, setQueueMessage] = useState("Loading queue…");
-	const [busy, setBusy] = useState(false);
-	const [actionStatus, setActionStatus] = useState("");
-	const [actionKind, setActionKind] = useState<"ok" | "error">("ok");
+	const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
+	const [creating, setCreating] = useState(false);
 	const [createError, setCreateError] = useState("");
-	const [editError, setEditError] = useState("");
-	const [ready, setReady] = useState(false);
 	const createDialog = useRef<HTMLDialogElement>(null);
-	const editDialog = useRef<HTMLDialogElement>(null);
-	const queueRequest = useRef(0);
-	const detailRequest = useRef(0);
+	const readyReported = useRef(false);
+	const failureReported = useRef(false);
 	const tracerStarted = useRef(false);
-	const filterSnapshot = useRef({ status: "", teamId: "" });
-	const pageSnapshot = useRef({ after: null as string | null, index: 0 });
+	const after = cursors[pageIndex] ?? null;
 
-	const loadQueue = useCallback(
-		async (
-			status: string,
-			teamId: string,
-			after: string | null,
-			index: number,
-		): Promise<TicketPage> => {
-			const request = ++queueRequest.current;
-			setQueueKind("loading");
-			setQueueMessage("Loading queue…");
-			try {
-				const nextPage = await desk.queries["tickets.queue"]({
-					after,
-					first: 8,
-					statuses: status ? [status] : null,
-					teamIds: teamId ? [teamId] : null,
-				});
-				if (request === queueRequest.current) {
-					setPage(nextPage);
-					setPageIndex(index);
-					filterSnapshot.current = { status, teamId };
-					pageSnapshot.current = { after, index };
-					setQueueKind("ready");
-					setQueueMessage(
-						nextPage.nodes.length === 0
+	const queueResource = desk.queries["tickets.queue"].observe({
+		after,
+		first: 8,
+		statuses: statusFilter ? [statusFilter] : null,
+		teamIds: teamFilter ? [teamFilter] : null,
+	});
+	const queueSnapshot = useQueryResource(queueResource);
+	const teamsResource = desk.queries["teams.list"].observe({
+		after: null,
+		first: 100,
+		organizationId: session.organizationId,
+	});
+	const teamsSnapshot = useQueryResource(teamsResource);
+	const page = queueSnapshot.kind === "ready" ? queueSnapshot.value : null;
+	const teams = teamsSnapshot.kind === "ready" ? teamsSnapshot.value.nodes : [];
+	const queueKind =
+		queueSnapshot.kind === "failed"
+			? "failed"
+			: queueSnapshot.connection.kind === "reconnecting"
+				? "reconnecting"
+				: queueSnapshot.kind === "pending"
+					? "pending"
+					: queueSnapshot.delivery.kind === "reset"
+						? "reset"
+						: "ready";
+	const queueMessage =
+		queueSnapshot.kind === "failed"
+			? `Live queue unavailable (${queueSnapshot.failure.code}).`
+			: queueSnapshot.kind === "pending"
+				? queueSnapshot.connection.kind === "reconnecting"
+					? `Reconnecting to the live queue (attempt ${queueSnapshot.connection.attempt})…`
+					: "Loading live queue…"
+				: queueSnapshot.connection.kind === "reconnecting"
+					? `Reconnecting while retaining ${queueSnapshot.value.nodes.length} authorized ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"}…`
+					: queueSnapshot.delivery.kind === "reset"
+						? `Queue replaced after ${queueSnapshot.delivery.reason.replaceAll("-", " ")}.`
+						: queueSnapshot.value.nodes.length === 0
 							? "No tickets match these filters."
-							: `${nextPage.nodes.length} ticket${nextPage.nodes.length === 1 ? "" : "s"} on this page`,
-					);
-				}
-				return nextPage;
-			} catch (error) {
-				if (request === queueRequest.current) {
-					setPage(null);
-					setQueueKind("error");
-					setQueueMessage(`Queue error: ${errorMessage(error)}.`);
-				}
-				throw error;
-			}
-		},
-		[desk],
-	);
-
-	const selectTicket = useCallback(
-		async (ticketId: string): Promise<TicketDetail | null> => {
-			const request = ++detailRequest.current;
-			setDetail(null);
-			setDetailTitle("Loading ticket…");
-			setDetailMessage("Fetching details and activity.");
-			try {
-				const [ticket, comments, labels] = await Promise.all([
-					desk.queries["tickets.detail"]({ id: ticketId }),
-					desk.queries["comments.page"]({ after: null, first: 50, ticketId }),
-					desk.queries["labels.page"]({ after: null, first: 50, ticketId }),
-				]);
-				if (request !== detailRequest.current) return ticket;
-				if (ticket === null) {
-					setDetailTitle("Ticket unavailable");
-					setDetailMessage(
-						"The ticket no longer exists or is outside your access.",
-					);
-					return null;
-				}
-				setDetail({ comments, labels, ticket });
-				setActionStatus("");
-				setActionKind("ok");
-				await reportFixturePhase({
-					phase: "ticket-selected",
-					reference: ticket.reference,
-					ticketId,
-				});
-				return ticket;
-			} catch (error) {
-				if (request === detailRequest.current) {
-					setDetail(null);
-					setDetailTitle("Ticket unavailable");
-					setDetailMessage(errorMessage(error));
-				}
-				throw error;
-			}
-		},
-		[desk],
-	);
-
-	const refreshCurrentQueue = useCallback(async (): Promise<void> => {
-		const { status, teamId } = filterSnapshot.current;
-		const { after, index } = pageSnapshot.current;
-		await loadQueue(status, teamId, after, index);
-	}, [loadQueue]);
-
-	const executeTicketOperation = useCallback(
-		async (
-			label: string,
-			ticketId: string,
-			operation: () => Promise<unknown>,
-		): Promise<TicketDetail> => {
-			setBusy(true);
-			setActionKind("ok");
-			setActionStatus(`${label}…`);
-			try {
-				await operation();
-				const [ticket] = await Promise.all([
-					selectTicket(ticketId),
-					refreshCurrentQueue(),
-				]);
-				if (ticket === null)
-					throw new Error("ticket unavailable after mutation");
-				setActionStatus(`${label} complete.`);
-				return ticket;
-			} catch (error) {
-				setActionKind("error");
-				setActionStatus(`${label} failed: ${errorMessage(error)}.`);
-				throw error;
-			} finally {
-				setBusy(false);
-			}
-		},
-		[refreshCurrentQueue, selectTicket],
-	);
-
-	const searchTicket = useCallback(
-		async (reference: string): Promise<TicketDetail | null> => {
-			setQueueKind("loading");
-			setQueueMessage(`Finding ${reference}…`);
-			try {
-				const match = await desk.queries["tickets.searchByReference"]({
-					reference,
-				});
-				if (match === null) {
-					setQueueKind("ready");
-					setQueueMessage(`No ticket has reference ${reference}.`);
-					return null;
-				}
-				setQueueKind("ready");
-				setQueueMessage(`Found ${match.reference}.`);
-				return selectTicket(match.id);
-			} catch (error) {
-				setQueueKind("error");
-				setQueueMessage(`Search failed: ${errorMessage(error)}.`);
-				throw error;
-			}
-		},
-		[desk, selectTicket],
-	);
+							: `${queueSnapshot.value.nodes.length} ticket${queueSnapshot.value.nodes.length === 1 ? "" : "s"} on this page`;
+	const initiallyReady =
+		queueSnapshot.kind === "ready" && teamsSnapshot.kind === "ready";
 
 	useEffect(() => {
-		void Promise.all([
-			desk.queries["teams.list"]({
-				after: null,
-				first: 100,
-				organizationId: session.organizationId,
-			}),
-			loadQueue("", "", null, 0),
-		])
-			.then(async ([teamPage]) => {
-				setTeams(teamPage.nodes);
-				setReady(true);
-				await reportFixturePhase({ phase: "desk-ready", role: session.role });
-			})
-			.catch(async (error: unknown) => {
-				await reportFixturePhase({
-					error: errorMessage(error),
-					phase: "desk-error",
-				});
+		if (!initiallyReady || readyReported.current) return;
+		readyReported.current = true;
+		void reportFixturePhase({ phase: "desk-ready", role: session.role });
+	}, [initiallyReady, session.role]);
+
+	useEffect(() => {
+		const failed = [queueSnapshot, teamsSnapshot].find(
+			(snapshot) => snapshot.kind === "failed",
+		);
+		if (!failed || failureReported.current) return;
+		failureReported.current = true;
+		void reportFixturePhase({
+			error: failed.failure.code,
+			phase: "desk-error",
+		});
+	}, [queueSnapshot, teamsSnapshot]);
+
+	const searchTicket = useCallback(
+		async (reference: string): Promise<JourneyTicket | null> => {
+			const match = await desk.queries["tickets.searchByReference"]({
+				reference,
 			});
-	}, [desk, loadQueue, session.organizationId, session.role]);
+			if (match !== null) setSelectedTicketId(match.id);
+			return match;
+		},
+		[desk],
+	);
+
+	const executeTicketOperation = useCallback(
+		async <Output,>(
+			_label: string,
+			operation: () => Promise<Output>,
+		): Promise<Output> => operation(),
+		[],
+	);
 
 	useEffect(() => {
 		const journey = firefoxJourneyFromUrl(location.href);
-		if (!ready || journey === null || tracerStarted.current) return;
+		if (!initiallyReady || journey === null || tracerStarted.current) return;
 		tracerStarted.current = true;
 		void runFirefoxJourney({
 			...journey,
 			desk,
 			executeTicketOperation,
-			loadFilteredQueue: (status, teamId) => loadQueue(status, teamId, null, 0),
+			loadFilteredQueue: (status, teamId) =>
+				desk.queries["tickets.queue"]({
+					after: null,
+					first: 8,
+					statuses: status ? [status] : null,
+					teamIds: teamId ? [teamId] : null,
+				}),
 			role: session.role,
 			searchTicket,
 			selectFilters: (status, teamId) => {
 				setStatusFilter(status);
 				setTeamFilter(teamId);
 				setCursors([null]);
+				setPageIndex(0);
 			},
 		}).catch(async (error: unknown) => {
 			await reportFixturePhase({
@@ -254,8 +154,7 @@ export function DeskApplication({
 	}, [
 		desk,
 		executeTicketOperation,
-		loadQueue,
-		ready,
+		initiallyReady,
 		searchTicket,
 		session.role,
 	]);
@@ -264,35 +163,26 @@ export function DeskApplication({
 		setStatusFilter(status);
 		setTeamFilter(teamId);
 		setCursors([null]);
-		void loadQueue(status, teamId, null, 0).catch(() => undefined);
+		setPageIndex(0);
 	}
 
 	function nextPage(): void {
-		const after = page?.pageInfo.endCursor;
-		if (!page?.pageInfo.hasNextPage || !after) return;
+		const nextAfter = page?.pageInfo.endCursor;
+		if (!page?.pageInfo.hasNextPage || !nextAfter) return;
 		const index = pageIndex + 1;
 		setCursors((current) => {
 			const next = [...current];
-			next[index] = after;
+			next[index] = nextAfter;
 			return next;
 		});
-		void loadQueue(statusFilter, teamFilter, after, index).catch(
-			() => undefined,
-		);
+		setPageIndex(index);
 	}
 
 	function previousPage(): void {
 		if (pageIndex === 0) return;
-		const index = pageIndex - 1;
-		void loadQueue(
-			statusFilter,
-			teamFilter,
-			cursors[index] ?? null,
-			index,
-		).catch(() => undefined);
+		setPageIndex((current) => current - 1);
 	}
 
-	const ticket = detail?.ticket ?? null;
 	return (
 		<>
 			<header className="topbar">
@@ -325,7 +215,7 @@ export function DeskApplication({
 
 			<main className="workspace">
 				<TicketQueue
-					busy={busy}
+					busy={creating}
 					onCreate={() => {
 						setCreateError("");
 						createDialog.current?.showModal();
@@ -335,104 +225,47 @@ export function DeskApplication({
 					onSearch={(reference) =>
 						void searchTicket(reference).catch(() => undefined)
 					}
-					onSelect={(ticketId) =>
-						void selectTicket(ticketId).catch(() => undefined)
-					}
+					onSelect={setSelectedTicketId}
 					onStatusFilter={(status) => changeFilters(status, teamFilter)}
 					onTeamFilter={(teamId) => changeFilters(statusFilter, teamId)}
 					page={page}
 					pageIndex={pageIndex}
 					queueKind={queueKind}
 					queueMessage={queueMessage}
-					selectedTicketId={ticket?.id ?? null}
+					selectedTicketId={selectedTicketId}
 					statusFilter={statusFilter}
 					teamFilter={teamFilter}
 					teams={teams}
 				/>
-				<TicketDetailPanel
-					actionKind={actionKind}
-					actionStatus={actionStatus}
-					busy={busy}
-					comments={detail?.comments ?? null}
-					detailMessage={detailMessage}
-					detailTitle={detailTitle}
-					labels={detail?.labels ?? null}
-					onAssign={() => {
-						if (!ticket) return;
-						void executeTicketOperation("Assigning ticket", ticket.id, () =>
-							desk.mutations["ticket.assign"](
-								{
-									assigneeMembershipId: session.membershipId,
-									ticketId: ticket.id,
-								},
-								{ callId: `browser:assign:${crypto.randomUUID()}` },
-							),
-						).catch(() => undefined);
-					}}
-					onComment={(body, form) => {
-						if (!ticket) return;
-						void executeTicketOperation("Adding comment", ticket.id, () =>
-							desk.mutations["ticket.addComment"](
-								{ body, ticketId: ticket.id },
-								{ callId: `browser:comment:${crypto.randomUUID()}` },
-							),
-						)
-							.then(() => form.reset())
-							.catch(() => undefined);
-					}}
-					onEdit={() => {
-						setEditError("");
-						editDialog.current?.showModal();
-					}}
-					onSummary={() => {
-						if (!ticket) return;
-						const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-						void executeTicketOperation(
-							"Sending summary",
-							ticket.id,
-							async () => {
-								const result = await desk.actions[
-									"notification.sendTicketSummary"
-								](
-									{ ticketId: ticket.id },
-									{ effectKey, timeoutMilliseconds: 3_000 },
-								);
-								await reportFixturePhase({
-									effectId: result.effectId,
-									effectKey,
-									phase: "summary-sent",
-									receipt: result.providerReceipt,
-									ticketReference: result.ticketReference,
-								});
-							},
-						).catch(() => undefined);
-					}}
-					onTransition={() => {
-						if (!ticket) return;
-						const close = ticket.status !== "closed";
-						void executeTicketOperation(
-							close ? "Closing ticket" : "Reopening ticket",
-							ticket.id,
-							() =>
-								desk.mutations[close ? "ticket.close" : "ticket.reopen"](
-									{ ticketId: ticket.id },
-									{
-										callId: `browser:${close ? "close" : "reopen"}:${crypto.randomUUID()}`,
-									},
-								),
-						).catch(() => undefined);
-					}}
-					session={session}
-					ticket={ticket}
-				/>
+				{selectedTicketId === null ? (
+					<section className="detail" aria-labelledby="detail-heading">
+						<div className="detail-empty">
+							<span className="empty-glyph" aria-hidden="true">
+								↗
+							</span>
+							<h2 id="detail-heading">Choose a ticket</h2>
+							<p>
+								Select an item from the queue to see its conversation and
+								available actions.
+							</p>
+						</div>
+					</section>
+				) : (
+					<SelectedTicket
+						desk={desk}
+						key={selectedTicketId}
+						session={session}
+						ticketId={selectedTicketId}
+					/>
+				)}
 			</main>
 
 			<CreateTicketDialog
-				busy={busy}
+				busy={creating}
 				dialogRef={createDialog}
 				error={createError}
 				onSubmit={(data) => {
-					setBusy(true);
+					setCreating(true);
 					setCreateError("");
 					void desk.mutations["ticket.create"](
 						{
@@ -444,36 +277,17 @@ export function DeskApplication({
 						},
 						{ callId: `browser:create:${crypto.randomUUID()}` },
 					)
-						.then(async (created) => {
+						.then((created) => {
 							createDialog.current?.close();
 							createDialog.current?.querySelector("form")?.reset();
 							setCursors([null]);
-							await loadQueue(statusFilter, teamFilter, null, 0);
-							await selectTicket(created.id);
+							setPageIndex(0);
+							setSelectedTicketId(created.id);
 						})
 						.catch((error: unknown) => setCreateError(errorMessage(error)))
-						.finally(() => setBusy(false));
+						.finally(() => setCreating(false));
 				}}
 				teams={teams}
-			/>
-			<EditTicketDialog
-				busy={busy}
-				dialogRef={editDialog}
-				error={editError}
-				onSubmit={(data) => {
-					if (!ticket) return;
-					setEditError("");
-					void executeTicketOperation("Saving changes", ticket.id, () =>
-						desk.mutations["ticket.edit"](
-							ticketEditInput(session.role, data, ticket.id),
-							{ callId: `browser:edit:${crypto.randomUUID()}` },
-						),
-					)
-						.then(() => editDialog.current?.close())
-						.catch((error: unknown) => setEditError(errorMessage(error)));
-				}}
-				role={session.role}
-				ticket={ticket}
 			/>
 		</>
 	);
