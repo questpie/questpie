@@ -725,6 +725,13 @@ export class ActionOutcomeAmbiguous extends Error {
 	}
 }
 
+export class CandidateCredentialFailure extends Error {
+	constructor(readonly kind: "malformed" | "unavailable") {
+		super("credential resolution failed");
+		this.name = "CandidateCredentialFailure";
+	}
+}
+
 export function createCandidateAdapter(
 	input: Readonly<{
 		application: string;
@@ -860,11 +867,23 @@ export function createCandidateAdapter(
 		let principal: unknown;
 		try {
 			principal = await input.resolvePrincipal(request, controller.signal);
-		} catch {
+		} catch (error) {
 			if (cancelled()) return cancellationResponse();
-			return finish(
-				correlatedFailure("RUNTIME_UNAVAILABLE", true, 503, query, callId),
-			);
+			if (error instanceof CandidateCredentialFailure)
+				return error.kind === "malformed"
+					? finish(
+							correlatedFailure("UNAUTHENTICATED", false, 401, query, callId),
+						)
+					: finish(
+							correlatedFailure(
+								"RUNTIME_UNAVAILABLE",
+								true,
+								503,
+								query,
+								callId,
+							),
+						);
+			return finish(correlatedFailure("INTERNAL", false, 500, query, callId));
 		}
 		if (cancelled()) return cancellationResponse();
 

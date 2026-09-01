@@ -58,8 +58,8 @@ The fixed phase order is:
 
 1. observe an already-aborted request signal or expired deadline;
 2. resolve credentials once; zero resolver produces the Accepted anonymous
-   Principal without a provider call, while malformed or unavailable credentials
-   never fall back to anonymous;
+   Principal without a provider call, while typed malformed or unavailable
+   credential failures never fall back to anonymous;
 3. decode the compiler-derived Operation input and Context input through their
    canonical codecs;
 4. resolve Context once from that decoded input;
@@ -73,9 +73,12 @@ It and the immutable deadline reach the one Operation executor. The adapter
 checks cancellation before credentials and after every awaited phase; once
 cancelled it performs no later decode, Context, executor, validation, or encoding
 phase and cleans up its request listener and deadline owner. Direct and network
-calls share these semantics. Resolver malformed/unavailable errors precede
-request decode; provider unavailable is `RUNTIME_UNAVAILABLE`. Decode precedes
-Context and Policy. Policy denial preserves Accepted nondisclosure.
+calls share these semantics. A typed malformed-credential ingress failure is
+correlated `UNAUTHENTICATED`, non-retryable HTTP 401, and value-free. A typed
+provider outage is correlated retryable `RUNTIME_UNAVAILABLE` HTTP 503. Both
+precede request decode, Context, and Policy and neither falls back to anonymous;
+an untyped resolver fault is sanitized `INTERNAL`. Policy denial preserves
+Accepted nondisclosure.
 
 The adapter owns transport decoding only. Direct and canonical network HTTP share
 the Operation executor, handler, Policy, limits, result validation, declared
@@ -202,11 +205,12 @@ type CommittedResultUnavailable = {
 };
 ```
 
-Applicable framework mapping is `PROTOCOL_UNSUPPORTED` 400, `NOT_FOUND` 404,
-`DEADLINE_EXCEEDED` 408, `RESOURCE_LIMIT` 429, `RUNTIME_UNAVAILABLE` 503, and
-sanitized `INTERNAL` 500. Deadline/resource/unavailable are retryable;
-protocol/not-found/internal are not. RPC-only `APPLICATION_MISMATCH` and
-`CLIENT_OUTDATED` are absent.
+Applicable framework mapping is `PROTOCOL_UNSUPPORTED` 400,
+`UNAUTHENTICATED` 401, `NOT_FOUND` 404, `DEADLINE_EXCEEDED` 408,
+`RESOURCE_LIMIT` 429, `RUNTIME_UNAVAILABLE` 503, and sanitized `INTERNAL` 500.
+Deadline/resource/unavailable are retryable;
+protocol/unauthenticated/not-found/internal are not. RPC-only
+`APPLICATION_MISMATCH` and `CLIENT_OUTDATED` are absent.
 
 Action is outcome-sensitive: pre-dispatch `RESOURCE_LIMIT` follows ordinary
 classification, while ADR-0028's post-handler oversized settled result or

@@ -6,8 +6,9 @@
 - Kernel dependency:
   [CANONICAL-HTTP-CONTRACT.md](./CANONICAL-HTTP-CONTRACT.md)
 - Excluded: custom paths or methods, authored request/response schemas, raw-Route
-  OpenAPI, security schemes, MCP, skills, multiple bindings, a second handler or
-  Policy model, and production implementation
+  OpenAPI, security schemes, MCP, skills, new descriptive-metadata authoring,
+  multiple bindings, a second handler or Policy model, and production
+  implementation
 
 This document adds no wire or supersession. The linked Kernel contract solely
 owns canonical HTTP execution, carriers, cancellation, disclosure, raw-Route
@@ -53,22 +54,14 @@ This duplicates the network exposure fact and lets surfaces drift. It is
 rejected. A server-only Operation stays direct; a network Operation always has
 the linked canonical endpoint.
 
-## Projection-neutral descriptive metadata
+## Descriptive metadata is deferred
 
-HTTP carries no documentation. Query/Mutation/Action Definitions may carry
-literal `summary` and `description`; codec constructors may carry literal
-`description` and codec-valid `examples` in their existing options object.
-Stored Fields consume the same codec metadata through canonical Field codec
-projection. Descriptions are non-empty NFC literals. Examples must be closed,
-compile-time codec-valid, canonically encodable values; callbacks, environment
-reads, and unprovable examples fail at the codec Origin.
-
-The canonical codec/App Contract artifact and digest own this metadata.
-Generated declaration JSDoc, public reference docs, generated client, OpenAPI,
-and future MCP consume it and cannot override it. MCP remains outside this
-candidate; this seam prevents projection-specific schema or description
-registries. Nullability, lists, discriminated unions, bounds, validation,
-output, and error schemas always derive from codecs.
+This candidate adds no `summary`, `description`, `examples`, group, or other
+descriptive authoring member. OpenAPI V1 uses only already-canonical Resource
+identity and codec facts and invents no prose. A projection-neutral metadata
+owner shared by declarations, public docs, OpenAPI, and MCP requires its own
+focused decision and executable artifact/digest proof; no projection-specific
+description registry may precede it.
 
 ## Selector, artifact, and exact fields
 

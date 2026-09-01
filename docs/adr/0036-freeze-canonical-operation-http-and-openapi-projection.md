@@ -44,6 +44,11 @@ semantics are owned by
 The compiler-owned documentation projection and explain semantics are owned by
 [`HTTP-OPENAPI-PROPOSAL.md`](../v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md).
 
+This decision adds no descriptive authoring surface. Projection-neutral
+summaries, descriptions, examples, and custom groups remain deferred to a
+separate focused artifact/digest decision rather than being introduced only for
+OpenAPI.
+
 ## Supersession ledger
 
 The sole detailed supersession boundary is the linked Kernel contract's

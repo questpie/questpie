@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 
 import {
 	ActionOutcomeAmbiguous,
+	CandidateCredentialFailure,
 	canonicalContextHeader,
 	canonicalCallHeaders,
 	canonicalOperationPath,
@@ -743,7 +744,7 @@ test("server cancellation and deadline precede credentials and stop every later 
 		clientContractDigest,
 		definitions: [definition],
 		resolvePrincipal: () => {
-			throw new Error("credential unavailable");
+			throw new CandidateCredentialFailure("unavailable");
 		},
 		wireDigest,
 	});
@@ -754,6 +755,27 @@ test("server cancellation and deadline precede credentials and stop every later 
 	expect(await credentialFirst.json()).toEqual({
 		callId: expect.any(String),
 		error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
+	});
+	expect(executions).toBe(0);
+
+	const malformed = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		definitions: [definition],
+		resolvePrincipal: () => {
+			throw new CandidateCredentialFailure("malformed");
+		},
+		wireDigest,
+	});
+	const malformedCredential = await malformed.fetch(
+		new Request(
+			"https://candidate.test/_questpie/query/deadline.probe?unknown=input",
+		),
+	);
+	expect(malformedCredential.status).toBe(401);
+	expect(await malformedCredential.json()).toEqual({
+		callId: expect.any(String),
+		error: { code: "UNAUTHENTICATED", retryable: false },
 	});
 	expect(executions).toBe(0);
 });
