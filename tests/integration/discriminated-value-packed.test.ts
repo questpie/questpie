@@ -30,6 +30,7 @@ test("packed questpie exposes only the three discriminated helpers", async () =>
 		join(tmpdir(), "questpie-discriminated-pack-"),
 	);
 	try {
+		run(["bun", "run", "build"], packageRoot);
 		run(
 			[
 				"bun",
@@ -174,4 +175,4 @@ console.log(JSON.stringify({
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}
-}, 15_000);
+}, 30_000);
