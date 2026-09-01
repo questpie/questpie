@@ -711,9 +711,14 @@ retry, Mutation invalidation, global provider, SSR, Suspense, hydration, or
 fallback behavior. Team Support Desk owns deletion of handwritten request
 generation guards, Live Query state, late-delivery checks, and post-Mutation
 refresh fan-out. Collaboration owns authority, Context, reconnect, rollback,
-capacity, eviction, cancellation, and subscriber-lifetime hostiles. The
-discriminated reference recipe remains ordinary TypeScript and creates no
-Relation, codec, generated descriptor, or Runtime polymorphic kernel.
+capacity, eviction, cancellation, and subscriber-lifetime hostiles.
+
+ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
+Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,
+`DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
+disjunctions and branded reference values. They replace the copied public
+recipe without creating a Relation, codec, generated descriptor, Policy
+traversal, or Runtime polymorphic kernel.
 
 ## Immediate continuation
 
@@ -735,10 +740,14 @@ Relation, codec, generated descriptor, or Runtime polymorphic kernel.
    React adapter and public-doc verification. Delete the executable prototype
    after production parity; do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
-5. Treat OpenTelemetry as a separate docs-first decision. The research
+5. Implement ADR-0037 as one small production export plus the public recipe.
+   Preserve the exact three-helper boundary and do not add a codec variant,
+   polymorphic Relation, generated descriptor, registry, or compatibility
+   alias.
+6. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-6. Do not reopen the reference application by adding Cron, Collection triggers,
+7. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-7. Do not push, tag or publish without explicit authority.
+8. Do not push, tag or publish without explicit authority.

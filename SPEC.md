@@ -575,8 +575,10 @@ ADR-0035 accepts the generated framework-neutral Query Resource projection and
 the optional exact-peer `@questpie/react` adapter. Query Resource identity stays
 inside one immutable generated Context scope; React owns only
 `useSyncExternalStore` subscription. Mutation results do not update or
-invalidate resources directly. A discriminated reference value remains an
-ordinary TypeScript recipe rather than a Relation, codec, or Runtime kernel.
+invalidate resources directly. ADR-0037 exports `DiscriminatedValue`,
+`DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
+disjunctions and branded reference values. Those helpers create no Relation,
+codec, generated descriptor, Policy traversal, or Runtime kernel.
 
 Transactional Dispatch, caller-run-as Reaction, attempt/lease fencing, bounded
 retry and timeout, cancellation, external-effect ambiguity, retention, and

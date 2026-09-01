@@ -1,6 +1,6 @@
 # ADR-0037: Freeze discriminated value TypeScript helpers
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-01
 - Owners: Product architecture, public TypeScript surface
 
@@ -52,3 +52,8 @@ branch narrowing, exhaustive missing-case rejection, extra-case rejection,
 heterogeneous return unions, readonly values, hostile prototype-like kinds, and
 absence of codec/Relation/Runtime exports. Independent Product review and
 repository gates are required; formal Kernel acceptance is not.
+
+The focused runtime and strict TypeScript evidence passed at the clean Product
+candidate. A fresh independent Standards and Spec review returned PASS on both
+axes. ADR-0027 therefore accepts this Product projection without a formal
+Kernel acceptance manifest.

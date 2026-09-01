@@ -122,10 +122,12 @@ transport, retry, invalidation, or fallback owner.
 
 ## Discriminated reference recipe
 
-The finished public recipe remains ordinary TypeScript. No production package
-exports its generic aliases or matcher in this vertical. No codec, Field,
-Relation, SQL, foreign key, inverse, Policy traversal, dependency descriptor,
-or Runtime polymorphic kernel is generated.
+ADR-0037 supersedes only the copied declarations in this recipe. The finished
+public guide imports `DiscriminatedValue`, `DiscriminatedReference`, and
+`matchDiscriminated` from `questpie`; their production implementation belongs
+to the separate ADR-0037 Product slice, not to QRI. No codec, Field, Relation,
+SQL, foreign key, inverse, Policy traversal, dependency descriptor, or Runtime
+polymorphic kernel is generated.
 
 ## Evidence and deletion
 

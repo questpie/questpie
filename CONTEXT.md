@@ -212,6 +212,10 @@ An ordinary application TypeScript union such as `{ kind, id }` that can name
 one of several domain variants. It has no Relation, foreign key, join, cascade,
 Policy traversal, or automatic Live Query dependency semantics.
 
+Use `DiscriminatedReference` to construct the union and `matchDiscriminated` to
+handle every variant. Use `DiscriminatedValue` for a disjunction whose members
+carry more than an ID.
+
 Do not use: polymorphic Relation, generated reference descriptor.
 
 ### Open JSON

@@ -1,7 +1,7 @@
 # Discriminated value helper prototype
 
-- Status: Proposed Product evidence; not Accepted authority
-- Authority candidate: ADR-0037
+- Status: reviewed Product evidence for Accepted ADR-0037; not production code
+- Authority: ADR-0037
 
 This prototype replaces the copy-pasted ADR-0035 recipe with three small
 ordinary-TypeScript helpers. It proves type inference and hostile dispatch only;

@@ -134,8 +134,9 @@ evidence, and close the complete release-sensitive vertical.
 - [ ] Public examples use iterative `const api = client.withContext(ctx)` and
       inferred generated input/output; they repeat no Query parameters or
       projection metadata and claim no Context disposal semantics.
-- [ ] The discriminated reference recipe exports no production helper and makes
-      no Relation, codec, SQL, Policy, or Runtime polymorphism claim.
+- [ ] The discriminated reference recipe imports the exact three ADR-0037
+      helpers and makes no Relation, codec, SQL, Policy, or Runtime
+      polymorphism claim; QRI adds no duplicate implementation or alias.
 - [ ] Prototype runtime/test duplication and every obsolete fixture path named
       in the ADR deletion ledger are removed with no compatibility fallback.
 - [ ] Relevant PostgreSQL 17/browser tracers, package isolation, workspace

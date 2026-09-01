@@ -183,31 +183,66 @@ Use ordinary TypeScript when a value can name one of several domain variants
 but needs no database Relation behavior:
 
 ```ts title="src/domain/activity-subject.ts"
-type DiscriminatedValue<Variants extends Record<string, object>> = {
-	[Kind in keyof Variants]: Readonly<{ kind: Kind } & Variants[Kind]>;
-}[keyof Variants];
+import {
+	type DiscriminatedReference,
+	type DiscriminatedValue,
+	matchDiscriminated,
+} from "questpie";
 
-type ActivitySubject = DiscriminatedValue<{
-	appointment: { id: string };
-	barber: { id: string };
-}>;
-
-type Cases<Value extends { kind: PropertyKey }, Result> = {
-	[Kind in Value["kind"]]: (value: Extract<Value, { kind: Kind }>) => Result;
+declare const appointmentIdBrand: unique symbol;
+export type AppointmentId = string & {
+	readonly [appointmentIdBrand]: true;
 };
 
-export function matchDiscriminated<Value extends { kind: PropertyKey }, Result>(
-	value: Value,
-	cases: Cases<Value, Result>,
-): Result {
-	return cases[value.kind](value as never);
+declare const barberIdBrand: unique symbol;
+export type BarberId = string & { readonly [barberIdBrand]: true };
+
+export type ActivitySubject = DiscriminatedReference<{
+	appointment: AppointmentId;
+	barber: BarberId;
+}>;
+
+export function activitySubjectHref(subject: ActivitySubject): string {
+	return matchDiscriminated(subject, {
+		appointment: ({ id }) => `/appointments/${id}`,
+		barber: ({ id }) => `/barbers/${id}`,
+	});
 }
+
+export type Activity = DiscriminatedValue<{
+	appointmentCreated: { id: AppointmentId; startsAt: Date };
+	barberUnavailable: { id: BarberId; reason: string };
+}>;
+
+export function activitySummary(activity: Activity) {
+	return matchDiscriminated(activity, {
+		appointmentCreated: ({ id, startsAt }) =>
+			({ href: `/appointments/${id}`, startsAt }) as const,
+		barberUnavailable: ({ id, reason }) => `${id}: ${reason}`,
+	});
+}
+
+export type ActivitySummary = ReturnType<typeof activitySummary>;
+// readonly { href: string; startsAt: Date } | string
 ```
 
-The union and matcher give exhaustive TypeScript handling. They create no
-codec, Field, foreign key, inverse, join, cascade, Policy traversal, Live Query
-dependency, generated descriptor, or Runtime polymorphic Relation. Resolve a
-target through an explicit named Query or Mutation so current Policy controls
-disclosure.
+The helpers preserve each branded ID and make the generated union's `kind`,
+`id`, and top-level variant fields readonly. `matchDiscriminated` requires one
+branch for every `kind`. Each branch parameter narrows to its matching variant,
+and the return type is the inferred union of all branch results. An omitted or
+extra branch fails TypeScript. Use `DiscriminatedValue` when each variant carries
+a larger object instead of one ID.
+
+TypeScript exhaustiveness applies only to typed values and a typed cases object.
+At runtime, an unknown `kind`, or an unsafe cases object with a missing,
+inherited, or non-callable case, makes `matchDiscriminated` throw the value-free
+`TypeError` message `invalid discriminated value`. It invokes only an own
+callable case. Validate data with the boundary's ordinary codec before matching
+it.
+
+These helpers create no codec, Field, foreign key, inverse, join, cascade,
+Policy traversal, Live Query dependency, generated descriptor, or Runtime
+polymorphic Relation. Resolve a target through an explicit named Query or
+Mutation so current Policy controls disclosure.
 
 Next, [run durable Jobs and Reactions](./durable-reactions).
