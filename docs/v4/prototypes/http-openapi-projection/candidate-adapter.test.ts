@@ -387,29 +387,16 @@ test("one composed generated client and adapter carry canonical Query input and 
 	expect(stale.status).toBe(400);
 	expect(stale.headers.get("Cache-Control")).toBe("private, no-store");
 	expect(executions).toHaveLength(1);
+	const scalarQuery =
+		adapter.client.withContext(contextA).queries["codec.all"]!;
+	await expect(scalarQuery({ ...allScalarsInput, count: -0 })).rejects.toThrow(
+		"must be a safe integer",
+	);
 	await expect(
-		adapter.call(
-			"query",
-			"codec.all",
-			{ ...allScalarsInput, count: -0 },
-			contextA,
-		),
-	).rejects.toThrow("must be a safe integer");
-	await expect(
-		adapter.call(
-			"query",
-			"codec.all",
-			{ ...allScalarsInput, big: "9223372036854775808" },
-			contextA,
-		),
+		scalarQuery({ ...allScalarsInput, big: "9223372036854775808" }),
 	).rejects.toThrow("must be within PostgreSQL bigint");
 	await expect(
-		adapter.call(
-			"query",
-			"codec.all",
-			{ ...allScalarsInput, money: "1234567.89" },
-			contextA,
-		),
+		scalarQuery({ ...allScalarsInput, money: "1234567.89" }),
 	).rejects.toThrow("canonical numeric(8, 2)");
 });
 
@@ -517,10 +504,13 @@ test("composed POST carriers preserve Mutation identity and Action ambiguity sem
 		transport: async () => new Response("truncated", { status: 200 }),
 	});
 	await expect(
-		unavailable.call("action", "reports.export", {}, contextA, {
-			callId: "ambiguous-call",
-			effectKey: "provider-export-2",
-		}),
+		unavailable.client.withContext(contextA).actions["reports.export"]!(
+			{},
+			{
+				callId: "ambiguous-call",
+				effectKey: "provider-export-2",
+			},
+		),
 	).rejects.toEqual(new ActionOutcomeAmbiguous("ambiguous-call"));
 	const malformedFrame = createCandidateAdapter({
 		application,
@@ -544,10 +534,13 @@ test("composed POST carriers preserve Mutation identity and Action ambiguity sem
 			}),
 	});
 	await expect(
-		malformedFrame.call("action", "reports.export", {}, contextA, {
-			callId: "malformed-call",
-			effectKey: "provider-export-3",
-		}),
+		malformedFrame.client.withContext(contextA).actions["reports.export"]!(
+			{},
+			{
+				callId: "malformed-call",
+				effectKey: "provider-export-3",
+			},
+		),
 	).rejects.toEqual(new ActionOutcomeAmbiguous("malformed-call"));
 });
 
@@ -618,4 +611,207 @@ test("Query outcomes are private/no-store and never reused across Principal or C
 			}),
 		),
 	).toMatchObject({ status: 404 });
+});
+
+test("server cancellation and deadline precede credentials and stop every later phase", async () => {
+	let credentials = 0;
+	let executions = 0;
+	const definition = {
+		context: contextCodec,
+		execute: async () => {
+			executions += 1;
+			return { kind: "result" as const, value: { accepted: true } };
+		},
+		input: { kind: "object", properties: {} },
+		kind: "query" as const,
+		name: "deadline.probe",
+		output: {
+			kind: "object",
+			properties: { accepted: { kind: "boolean" } },
+		},
+	};
+	const adapter = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		definitions: [definition],
+		resolvePrincipal: () => {
+			credentials += 1;
+			return "principal";
+		},
+		wireDigest,
+	});
+	const alreadyAborted = new AbortController();
+	alreadyAborted.abort("caller-cancelled");
+	const cancelled = await adapter.fetch(
+		new Request("https://candidate.test/_questpie/query/deadline.probe", {
+			headers: {
+				"Questpie-Context": canonicalContextHeader(contextCodec, contextA),
+			},
+			signal: alreadyAborted.signal,
+		}),
+	);
+	expect(cancelled.status).toBe(408);
+	expect(await cancelled.json()).toEqual({
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(credentials).toBe(0);
+	expect(executions).toBe(0);
+
+	const instants = [0, 10];
+	const expired = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		clock: {
+			nowMilliseconds: () => instants.shift() ?? 10,
+			schedule: () => () => {},
+		},
+		definitions: [definition],
+		resolvePrincipal: () => {
+			credentials += 1;
+			return "principal";
+		},
+		wireDigest,
+	});
+	const expiredResponse = await expired.fetch(
+		new Request("https://candidate.test/_questpie/query/deadline.probe", {
+			headers: {
+				"Questpie-Call-Id": "expired-call",
+				"Questpie-Timeout-Milliseconds": "5",
+			},
+		}),
+	);
+	expect(expiredResponse.status).toBe(408);
+	expect(await expiredResponse.json()).toEqual({
+		callId: "expired-call",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(credentials).toBe(0);
+	expect(executions).toBe(0);
+
+	const unavailable = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		definitions: [definition],
+		resolvePrincipal: () => {
+			throw new Error("credential unavailable");
+		},
+		wireDigest,
+	});
+	const credentialFirst = await unavailable.fetch(
+		new Request("https://candidate.test/_questpie/query/deadline.probe"),
+	);
+	expect(credentialFirst.status).toBe(503);
+	expect(await credentialFirst.json()).toEqual({
+		callId: expect.any(String),
+		error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
+	});
+	expect(executions).toBe(0);
+});
+
+test("network cancellation reaches the bounded execution signal and wins before encoding", async () => {
+	let entered!: () => void;
+	const executing = new Promise<void>((resolve) => {
+		entered = resolve;
+	});
+	let observedDeadline: number | null | undefined;
+	let observedSignal: AbortSignal | undefined;
+	let adapter: ReturnType<typeof createCandidateAdapter>;
+	adapter = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		definitions: [
+			{
+				context: { kind: "object", properties: {} },
+				execute: async ({ deadlineMilliseconds, signal }) => {
+					observedDeadline = deadlineMilliseconds;
+					observedSignal = signal;
+					entered();
+					await new Promise<void>((resolve) =>
+						signal.addEventListener("abort", () => resolve(), { once: true }),
+					);
+					return { kind: "result", value: { invalidAfterAbort: true } };
+				},
+				input: { kind: "object", properties: {} },
+				kind: "query",
+				name: "deadline.network",
+				output: { kind: "object", properties: {} },
+			},
+		],
+		resolvePrincipal: () => "principal",
+		transport: (request) => adapter.fetch(request),
+		wireDigest,
+	});
+	const controller = new AbortController();
+	const pending = adapter.client.withContext({}).queries["deadline.network"]!(
+		{},
+		{
+			callId: "cancelled-network-call",
+			signal: controller.signal,
+			timeoutMilliseconds: 5_000,
+		},
+	);
+	await executing;
+	controller.abort("caller-cancelled");
+	expect(await pending).toEqual({
+		callId: "cancelled-network-call",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(observedSignal?.aborted).toBe(true);
+	expect(observedDeadline).toBeNumber();
+});
+
+test("missing Query Context is admitted exactly when its codec accepts the empty object", async () => {
+	const contexts: unknown[] = [];
+	const adapter = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		definitions: [
+			{
+				context: { kind: "object", properties: {} },
+				execute: async ({ context }) => {
+					contexts.push(context);
+					return { kind: "result", value: {} };
+				},
+				input: { kind: "object", properties: {} },
+				kind: "query",
+				name: "context.empty",
+				output: { kind: "object", properties: {} },
+			},
+			{
+				context: contextCodec,
+				execute: async ({ context }) => {
+					contexts.push(context);
+					return { kind: "result", value: {} };
+				},
+				input: { kind: "object", properties: {} },
+				kind: "query",
+				name: "context.required",
+				output: { kind: "object", properties: {} },
+			},
+		],
+		resolvePrincipal: () => "principal",
+		wireDigest,
+	});
+	const empty = await adapter.fetch(
+		new Request("https://candidate.test/_questpie/query/context.empty", {
+			headers: { "Questpie-Call-Id": "empty-context-call" },
+		}),
+	);
+	expect(empty.status).toBe(200);
+	expect(await empty.json()).toEqual({
+		callId: "empty-context-call",
+		result: {},
+	});
+	expect(contexts).toEqual([{}]);
+	const required = await adapter.fetch(
+		new Request("https://candidate.test/_questpie/query/context.required", {
+			headers: { "Questpie-Call-Id": "required-context-call" },
+		}),
+	);
+	expect(required.status).toBe(400);
+	expect(await required.json()).toEqual({
+		callId: "required-context-call",
+		error: { code: "PROTOCOL_UNSUPPORTED", retryable: false },
+	});
+	expect(contexts).toEqual([{}]);
 });

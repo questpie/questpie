@@ -38,18 +38,18 @@ network Operation from the same App Contract and codec metadata used by types,
 clients, declarations, and future MCP. Authors never restate parameters,
 schemas, nullability, validation, results, or errors. Raw Routes retain explicit
 external-protocol method/path behavior and are omitted with Origins. The exact
-grammar, diagnostics, disclosure, retry, cancellation, collision, and explain
-semantics are normative in
-`docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md`.
+wire grammar, diagnostics, disclosure, retry, cancellation, and collision
+semantics are owned by
+[`CANONICAL-HTTP-CONTRACT.md`](../v4/implementation/beta2-execution-breadth/CANONICAL-HTTP-CONTRACT.md).
+The compiler-owned documentation projection and explain semantics are owned by
+[`HTTP-OPENAPI-PROPOSAL.md`](../v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md).
 
 ## Supersession ledger
 
-This proposal supersedes only the fixed-path/polymorphic portions of ADR-0011's
-Operation Wire and generated-client transport. It preserves Operation identity,
-exposure, codecs, Context, Principal, Policy, Execution, Call and Effect
-Identity, envelopes, limits, transactions, receipts, errors, cancellation,
-nondisclosure, observability, and direct/network semantic parity. ADR-0015 raw
-Route behavior is unchanged. OpenAPI remains a Product projection.
+The sole detailed supersession boundary is the linked Kernel contract's
+“Sole supersession and ratification boundary.” This ADR proposes exactly that
+boundary and no other. ADR-0015 raw Route behavior remains unchanged; OpenAPI
+remains the separate linked Product projection.
 
 ## Acceptance staging
 

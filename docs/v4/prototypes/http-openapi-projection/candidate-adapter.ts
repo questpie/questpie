@@ -504,14 +504,41 @@ export function projectCanonicalInventory(
 	});
 }
 
-export type CandidateExecutionScope = Readonly<{
+type CandidateExecutionScopeBase = Readonly<{
 	callId: string;
 	context: unknown;
-	effectKey?: string;
+	deadlineMilliseconds: number | null;
 	input: unknown;
 	principal: unknown;
+	signal: AbortSignal;
 	timeoutMilliseconds?: number;
 }>;
+
+export type CandidateQueryExecutionScope = CandidateExecutionScopeBase &
+	Readonly<{ effectKey?: never }>;
+export type CandidateMutationExecutionScope = CandidateExecutionScopeBase &
+	Readonly<{ effectKey?: never }>;
+export type CandidateActionExecutionScope = CandidateExecutionScopeBase &
+	Readonly<{ effectKey: string }>;
+export type CandidateExecutionScope =
+	| CandidateActionExecutionScope
+	| CandidateMutationExecutionScope
+	| CandidateQueryExecutionScope;
+
+type CandidateClock = Readonly<{
+	nowMilliseconds(): number;
+	schedule(callback: () => void, delayMilliseconds: number): () => void;
+}>;
+
+function clockNow(clock: CandidateClock): number {
+	const value = clock.nowMilliseconds();
+	if (!Number.isFinite(value) || value < 0) invalid();
+	return value;
+}
+
+function deadlineFrom(startedAt: number, timeoutMilliseconds: number): number {
+	return Math.min(Number.MAX_SAFE_INTEGER, startedAt + timeoutMilliseconds);
+}
 
 export type CandidateOutcome =
 	| Readonly<{ kind: "result"; value: unknown }>
@@ -523,13 +550,48 @@ export type CandidateOutcome =
 	  }>
 	| Readonly<{ kind: "postHandlerResourceLimit" }>;
 
-type CandidateDefinition = Readonly<{
+type CandidateDefinitionBase = Readonly<{
 	context: unknown;
-	execute(scope: CandidateExecutionScope): Promise<CandidateOutcome>;
 	input: unknown;
-	kind: CandidateKind;
 	name: string;
 	output: unknown;
+}>;
+type CandidateDefinition =
+	| (CandidateDefinitionBase &
+			Readonly<{
+				execute(scope: CandidateQueryExecutionScope): Promise<CandidateOutcome>;
+				kind: "query";
+			}>)
+	| (CandidateDefinitionBase &
+			Readonly<{
+				execute(
+					scope: CandidateMutationExecutionScope,
+				): Promise<CandidateOutcome>;
+				kind: "mutation";
+			}>)
+	| (CandidateDefinitionBase &
+			Readonly<{
+				execute(
+					scope: CandidateActionExecutionScope,
+				): Promise<CandidateOutcome>;
+				kind: "action";
+			}>);
+
+export type QueryCallOptions = Readonly<{
+	callId?: string;
+	signal?: AbortSignal;
+	timeoutMilliseconds?: number;
+}>;
+export type MutationCallOptions = Readonly<{
+	callId?: string;
+	signal?: AbortSignal;
+	timeoutMilliseconds?: number;
+}>;
+export type ActionCallOptions = Readonly<{
+	callId?: string;
+	effectKey: string;
+	signal?: AbortSignal;
+	timeoutMilliseconds?: number;
 }>;
 
 type CandidateFrame =
@@ -667,13 +729,39 @@ export function createCandidateAdapter(
 	input: Readonly<{
 		application: string;
 		clientContractDigest: string;
+		clock?: CandidateClock;
 		definitions: readonly CandidateDefinition[];
-		resolvePrincipal(request: Request): unknown | Promise<unknown>;
+		resolvePrincipal(
+			request: Request,
+			signal: AbortSignal,
+		): unknown | Promise<unknown>;
 		transport?: (request: Request) => Promise<Response>;
 		wireDigest: string;
 	}>,
 ) {
 	generatedCompatibilityHeaders(input);
+	const clock: CandidateClock =
+		input.clock ??
+		Object.freeze({
+			nowMilliseconds: () => performance.now(),
+			schedule(callback: () => void, delayMilliseconds: number) {
+				let timer: ReturnType<typeof setTimeout> | undefined;
+				let cancelled = false;
+				const arm = (remaining: number) => {
+					const delay = Math.min(remaining, 2_147_483_647);
+					timer = setTimeout(() => {
+						if (cancelled) return;
+						if (remaining > delay) arm(remaining - delay);
+						else callback();
+					}, delay);
+				};
+				arm(delayMilliseconds);
+				return () => {
+					cancelled = true;
+					if (timer !== undefined) clearTimeout(timer);
+				};
+			},
+		});
 	const definitions = new Map(
 		input.definitions.map((definition) => [
 			`${definition.kind}:${definition.name}`,
@@ -681,6 +769,7 @@ export function createCandidateAdapter(
 		]),
 	);
 	const fetchHandler = async (request: Request): Promise<Response> => {
+		const startedAt = clockNow(clock);
 		const url = new URL(request.url);
 		const query = isQueryPath(url.pathname);
 		const match =
@@ -696,6 +785,8 @@ export function createCandidateAdapter(
 			request.method !== (kind === "query" ? "GET" : "POST")
 		)
 			return correlatedFailure("NOT_FOUND", false, 404, query);
+		if (request.signal.aborted)
+			return correlatedFailure("DEADLINE_EXCEEDED", true, 408, query);
 		if (!exactCompatibility(request, input))
 			return correlatedFailure("PROTOCOL_UNSUPPORTED", false, 400, query);
 
@@ -724,13 +815,58 @@ export function createCandidateAdapter(
 				callId,
 			);
 		}
+		const deadlineMilliseconds =
+			timeoutMilliseconds === undefined
+				? null
+				: deadlineFrom(startedAt, timeoutMilliseconds);
+		const controller = new AbortController();
+		const abortFromRequest = () => controller.abort(request.signal.reason);
+		request.signal.addEventListener("abort", abortFromRequest, { once: true });
+		let cancelDeadline = () => {};
+		const observedAt = clockNow(clock);
+		if (
+			request.signal.aborted ||
+			(deadlineMilliseconds !== null && observedAt >= deadlineMilliseconds)
+		)
+			controller.abort("deadline exceeded");
+		else if (deadlineMilliseconds !== null)
+			cancelDeadline = clock.schedule(
+				() => controller.abort("deadline exceeded"),
+				deadlineMilliseconds - observedAt,
+			);
+		const cleanup = () => {
+			cancelDeadline();
+			request.signal.removeEventListener("abort", abortFromRequest);
+		};
+		const finish = (result: Response): Response => {
+			cleanup();
+			return result;
+		};
+		const cancelled = (): boolean => {
+			if (request.signal.aborted && !controller.signal.aborted)
+				controller.abort(request.signal.reason);
+			if (
+				deadlineMilliseconds !== null &&
+				clockNow(clock) >= deadlineMilliseconds &&
+				!controller.signal.aborted
+			)
+				controller.abort("deadline exceeded");
+			return controller.signal.aborted;
+		};
+		const cancellationResponse = () =>
+			finish(correlatedFailure("DEADLINE_EXCEEDED", true, 408, query, callId));
+		if (cancelled()) return cancellationResponse();
 
 		let principal: unknown;
 		try {
-			principal = await input.resolvePrincipal(request);
+			principal = await input.resolvePrincipal(request, controller.signal);
 		} catch {
-			return correlatedFailure("RUNTIME_UNAVAILABLE", true, 503, query, callId);
+			if (cancelled()) return cancellationResponse();
+			return finish(
+				correlatedFailure("RUNTIME_UNAVAILABLE", true, 503, query, callId),
+			);
 		}
+		if (cancelled()) return cancellationResponse();
 
 		let operationInput: unknown;
 		let context: unknown;
@@ -741,8 +877,13 @@ export function createCandidateAdapter(
 					url.search.slice(1),
 				);
 				const header = request.headers.get("Questpie-Context");
-				if (header === null) invalid();
-				context = decodeCanonicalContextHeader(definition.context, header);
+				context =
+					header === null
+						? decodeRuntimeCodec(
+								decodeRuntimeCodecDescriptor(definition.context),
+								{},
+							)
+						: decodeCanonicalContextHeader(definition.context, header);
 			} else {
 				const contentType = request.headers.get("Content-Type");
 				if (
@@ -764,41 +905,52 @@ export function createCandidateAdapter(
 				);
 			}
 		} catch {
-			return correlatedFailure(
-				"PROTOCOL_UNSUPPORTED",
-				false,
-				400,
-				query,
-				callId,
+			if (cancelled()) return cancellationResponse();
+			return finish(
+				correlatedFailure("PROTOCOL_UNSUPPORTED", false, 400, query, callId),
 			);
 		}
+		if (cancelled()) return cancellationResponse();
 
 		let outcome: CandidateOutcome;
 		try {
-			outcome = await definition.execute({
+			const executionScope = {
 				callId,
 				context,
-				...(effectKey === undefined ? {} : { effectKey }),
+				deadlineMilliseconds,
+				...(kind === "action" ? { effectKey: effectKey ?? invalid() } : {}),
 				input: operationInput,
 				principal,
+				signal: controller.signal,
 				...(timeoutMilliseconds === undefined ? {} : { timeoutMilliseconds }),
-			});
+			} satisfies CandidateExecutionScope;
+			outcome = await (
+				definition.execute as (
+					scope: CandidateExecutionScope,
+				) => Promise<CandidateOutcome>
+			)(executionScope);
 		} catch {
-			return correlatedFailure("INTERNAL", false, 500, query, callId);
+			if (cancelled()) return cancellationResponse();
+			return finish(correlatedFailure("INTERNAL", false, 500, query, callId));
 		}
+		if (cancelled()) return cancellationResponse();
 		if (outcome.kind === "postHandlerResourceLimit") {
 			if (kind !== "action")
-				return correlatedFailure("INTERNAL", false, 500, query, callId);
-			return correlatedFailure("RESOURCE_LIMIT", false, 429, false, callId);
+				return finish(correlatedFailure("INTERNAL", false, 500, query, callId));
+			return finish(
+				correlatedFailure("RESOURCE_LIMIT", false, 429, false, callId),
+			);
 		}
 		if (outcome.kind === "declaredError")
-			return response(
-				{
-					callId,
-					error: { code: outcome.code, payload: outcome.payload },
-				},
-				outcome.status,
-				query,
+			return finish(
+				response(
+					{
+						callId,
+						error: { code: outcome.code, payload: outcome.payload },
+					},
+					outcome.status,
+					query,
+				),
 			);
 		let encodedResult: unknown;
 		try {
@@ -807,23 +959,22 @@ export function createCandidateAdapter(
 				outcome.value,
 			);
 		} catch {
-			return correlatedFailure("INTERNAL", false, 500, query, callId);
+			if (cancelled()) return cancellationResponse();
+			return finish(correlatedFailure("INTERNAL", false, 500, query, callId));
 		}
-		return response({ callId, result: encodedResult }, 200, query);
+		if (cancelled()) return cancellationResponse();
+		return finish(response({ callId, result: encodedResult }, 200, query));
 	};
 
 	const transport = input.transport ?? fetchHandler;
-	const call = async (
+	type InternalCallOptions = QueryCallOptions &
+		Readonly<{ effectKey?: string }>;
+	const invoke = async (
 		kind: CandidateKind,
 		name: string,
 		operationInput: unknown,
 		context: unknown,
-		options: Readonly<{
-			callId?: string;
-			effectKey?: string;
-			signal?: AbortSignal;
-			timeoutMilliseconds?: number;
-		}> = {},
+		options: InternalCallOptions = {},
 	): Promise<CandidateFrame> => {
 		const definition = definitions.get(`${kind}:${name}`);
 		if (!definition) invalid();
@@ -897,46 +1048,88 @@ export function createCandidateAdapter(
 			throw error;
 		}
 	};
-	type ScopedCall = (
+	type QueryCall = (
 		operationInput: unknown,
-		options?: Readonly<{
-			callId?: string;
-			effectKey?: string;
-			signal?: AbortSignal;
-			timeoutMilliseconds?: number;
-		}>,
+		options?: QueryCallOptions,
 	) => Promise<CandidateFrame>;
-	const scopedCalls = (kind: CandidateKind, context: unknown) =>
+	type MutationCall = (
+		operationInput: unknown,
+		options?: MutationCallOptions,
+	) => Promise<CandidateFrame>;
+	type ActionCall = (
+		operationInput: unknown,
+		options: ActionCallOptions,
+	) => Promise<CandidateFrame>;
+	const definitionsFor = (kind: CandidateKind) =>
+		input.definitions
+			.filter((definition) => definition.kind === kind)
+			.sort((left, right) => compareAscii(left.name, right.name));
+	const queryCalls = (context: unknown) =>
 		Object.freeze(
 			Object.fromEntries(
-				input.definitions
-					.filter((definition) => definition.kind === kind)
-					.sort((left, right) => compareAscii(left.name, right.name))
-					.map(
-						(definition) =>
-							[
-								definition.name,
-								((operationInput, options) =>
-									call(
-										kind,
-										definition.name,
-										operationInput,
-										context,
-										options,
-									)) satisfies ScopedCall,
-							] as const,
-					),
+				definitionsFor("query").map(
+					(definition) =>
+						[
+							definition.name,
+							((operationInput, options) =>
+								invoke(
+									"query",
+									definition.name,
+									operationInput,
+									context,
+									options,
+								)) satisfies QueryCall,
+						] as const,
+				),
 			),
-		) as Readonly<Record<string, ScopedCall>>;
+		) as Readonly<Record<string, QueryCall>>;
+	const mutationCalls = (context: unknown) =>
+		Object.freeze(
+			Object.fromEntries(
+				definitionsFor("mutation").map(
+					(definition) =>
+						[
+							definition.name,
+							((operationInput, options) =>
+								invoke(
+									"mutation",
+									definition.name,
+									operationInput,
+									context,
+									options,
+								)) satisfies MutationCall,
+						] as const,
+				),
+			),
+		) as Readonly<Record<string, MutationCall>>;
+	const actionCalls = (context: unknown) =>
+		Object.freeze(
+			Object.fromEntries(
+				definitionsFor("action").map(
+					(definition) =>
+						[
+							definition.name,
+							((operationInput, options) =>
+								invoke(
+									"action",
+									definition.name,
+									operationInput,
+									context,
+									options,
+								)) satisfies ActionCall,
+						] as const,
+				),
+			),
+		) as Readonly<Record<string, ActionCall>>;
 	const client = Object.freeze({
 		withContext(context: unknown) {
 			const scopedContext = immutableContext(context);
 			return Object.freeze({
-				actions: scopedCalls("action", scopedContext),
-				mutations: scopedCalls("mutation", scopedContext),
-				queries: scopedCalls("query", scopedContext),
+				actions: actionCalls(scopedContext),
+				mutations: mutationCalls(scopedContext),
+				queries: queryCalls(scopedContext),
 			});
 		},
 	});
-	return Object.freeze({ call, client, fetch: fetchHandler });
+	return Object.freeze({ client, fetch: fetchHandler });
 }
