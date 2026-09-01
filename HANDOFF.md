@@ -720,6 +720,13 @@ disjunctions and branded reference values. They replace the copied public
 recipe without creating a Relation, codec, generated descriptor, Policy
 traversal, or Runtime polymorphic kernel.
 
+The ADR-0037 implementation slice is closed. Unit, type, and packed-package
+integration evidence proves heterogeneous return-union inference, the exact
+three-export public-root surface, and the absence of codec or polymorphic
+Relation companions. The executable prototype was deleted after production
+parity. Independent Standards and Spec reviews, `quality:release`, and two
+byte-identical release dry-runs pass.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
@@ -740,10 +747,9 @@ traversal, or Runtime polymorphic kernel.
    React adapter and public-doc verification. Delete the executable prototype
    after production parity; do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
-5. Implement ADR-0037 as one small production export plus the public recipe.
-   Preserve the exact three-helper boundary and do not add a codec variant,
-   polymorphic Relation, generated descriptor, registry, or compatibility
-   alias.
+5. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
+   a codec variant, polymorphic Relation, generated descriptor, registry, or
+   compatibility alias.
 6. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
