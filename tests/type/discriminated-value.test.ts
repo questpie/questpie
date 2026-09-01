@@ -49,8 +49,19 @@ function render(value: Subject) {
 }
 
 type Rendered = ReturnType<typeof render>;
-const result: string | Readonly<{ href: string }> = null as never as Rendered;
-void result;
+type Equal<Left, Right> = [Left] extends [Right]
+  ? [Right] extends [Left]
+    ? true
+    : false
+  : false;
+type Expect<Value extends true> = Value;
+type RenderedIsExact = Expect<
+  Equal<
+    Rendered,
+    string | Readonly<{ href: \`/appointments/\${AppointmentId}\` }>
+  >
+>;
+void (null as never as RenderedIsExact);
 
 interface ActivityVariants {
   readonly created: { readonly at: Date };
