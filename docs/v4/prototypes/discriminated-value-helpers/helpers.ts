@@ -1,11 +1,11 @@
 export type DiscriminatedValue<
-	Variants extends Readonly<Record<string, object>>,
+	Variants extends Readonly<{ [Kind in keyof Variants]: object }>,
 > = {
 	[Kind in keyof Variants & string]: Readonly<{ kind: Kind } & Variants[Kind]>;
 }[keyof Variants & string];
 
 export type DiscriminatedReference<
-	Targets extends Readonly<Record<string, unknown>>,
+	Targets extends Readonly<{ [Kind in keyof Targets]: unknown }>,
 > = DiscriminatedValue<{
 	[Kind in keyof Targets & string]: { id: Targets[Kind] };
 }>;

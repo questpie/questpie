@@ -38,6 +38,13 @@ type Activity = DiscriminatedValue<{
 }>;
 declare const activity: Activity;
 
+interface InterfaceVariants {
+	readonly created: { readonly at: Date };
+	readonly closed: { readonly reason: string };
+}
+const interfaceVariant: DiscriminatedValue<InterfaceVariants> = activity;
+void interfaceVariant;
+
 // @ts-expect-error every variant is required
 matchDiscriminated(activity, { created: ({ at }) => at });
 
