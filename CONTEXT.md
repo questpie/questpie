@@ -275,6 +275,13 @@ The generated versioned protocol that carries one exact Operation call and its
 closed result, declared-error, framework-failure, or rejection frame between a
 client and the QUESTPIE Runtime.
 
+### Canonical Operation HTTP
+
+The single compiler-derived network binding for one `network: true` Query,
+Mutation, or Action. Its method, path, input, Context carrier, identity carrier,
+outcomes, and generated client derive from the App Contract. It delegates to
+the Operation kernel and owns no handler, Policy, or fallback route.
+
 ### Migration Plan
 
 The ordered database change proposal derived from the Compiled Manifest,
@@ -523,6 +530,13 @@ the source Collection's current Policy and disclosure rules.
 A compiler output such as OpenAPI, MCP, or a skill bundle derived from exact
 App Contract members and Origins. It grants no handler or authorization
 authority.
+
+### OpenAPI Projection
+
+The optional deterministic OpenAPI 3.1 Contract Projection of canonical
+network Operations. It derives paths and schemas from Resource identities and
+codecs, omits raw Routes, and creates no exposure, authorization, handler, or
+projection-specific authoring vocabulary.
 
 ### Transactional Dispatch
 

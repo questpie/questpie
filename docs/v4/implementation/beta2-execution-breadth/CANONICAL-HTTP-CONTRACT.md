@@ -1,6 +1,6 @@
 # Canonical Operation HTTP contract
 
-- Status: Proposed focused acceptance candidate; not Accepted authority
+- Status: Accepted Kernel/public protocol contract
 - Owner: Kernel/public Operation Wire, compiler, Runtime, generated client
 - Scope: canonical Query, Mutation, and Action network endpoints and transport
 - Companion Product projection:
@@ -274,8 +274,7 @@ Execution, transactions, receipts, errors, cancellation, nondisclosure,
 observability, and direct/network parity. OpenAPI is only the linked Product
 projection.
 
-Ratify through ADR-0027 focused formal acceptance. ADR-0036 and all authority or
-public projections remain Proposed until a committed protocol-v2 PASS record.
-The later tracer deletes the polymorphic RPC route, negative RPC prototype, and
-temporary duplicate codec switch in one replacement vertical. No compatibility
-handler, redirect, fallback, or parallel wire survives.
+The exact manifest-bound candidate received a committed protocol-v2 `PASS`.
+The implementation tracer deletes the polymorphic RPC route, negative RPC
+prototype, and temporary duplicate codec switch in one replacement vertical.
+No compatibility handler, redirect, fallback, or parallel wire survives.

@@ -1,6 +1,6 @@
 # ADR-0036: Freeze canonical Operation HTTP and OpenAPI projection
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-01
 - Owners: Product architecture, compiler, Runtime
 - Scope: narrow Operation Wire supersession and compiler-owned OpenAPI Product
@@ -15,7 +15,7 @@ restating codec-owned facts. Network exposure, canonical codecs, typed Context,
 Policy, execution, result/error envelopes, and generated clients already exist.
 The missing decision is only their deterministic transport projection.
 
-## Proposed decision
+## Decision
 
 Every `network: true` Query, Mutation, and Action has exactly one endpoint:
 
@@ -52,13 +52,16 @@ OpenAPI.
 ## Supersession ledger
 
 The sole detailed supersession boundary is the linked Kernel contract's
-“Sole supersession and ratification boundary.” This ADR proposes exactly that
+“Sole supersession and ratification boundary.” This ADR accepts exactly that
 boundary and no other. ADR-0015 raw Route behavior remains unchanged; OpenAPI
 remains the separate linked Product projection.
 
-## Acceptance staging
+## Acceptance
 
-This ADR remains Proposed and is not authority until a committed protocol-v2
-PASS record exists. No ADR index, SPEC, CONTEXT, public documentation, or
-HANDOFF projection may call it Accepted before that record. Production wiring
-and deletion begin only after authority projection.
+The exact candidate at
+`33ff02a07fd28a0dd6ef4b4fbbbaf9a41c484a09` received a protocol-v2 `PASS`.
+The generated review record is committed at `4cfe81dda` and verifies without
+model credentials. The retained first review remains the immutable `BLOCKED`
+record for the repaired metadata-ownership and credential-outcome findings.
+
+Production wiring and deletion begin only after this authority projection.

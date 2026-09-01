@@ -1,6 +1,6 @@
 # OpenAPI Operation projection
 
-- Status: Proposed Product projection; not Accepted authority
+- Status: Accepted Product projection; implementation pending
 - Owner: compiler Product projection and public documentation
 - Scope: optional OpenAPI emission from canonical network Operations
 - Kernel dependency:
@@ -140,7 +140,7 @@ handlers, or registries.
 This Product projection supersedes nothing independently and depends on the
 single supersession boundary in
 [CANONICAL-HTTP-CONTRACT.md](./CANONICAL-HTTP-CONTRACT.md). Ratify the combined
-candidate through ADR-0027 focused formal acceptance. ADR-0036, SPEC, CONTEXT,
-ADR index, public docs, and HANDOFF remain Proposed until a committed protocol-v2
-PASS record. This candidate adds no production compiler, Runtime, config,
-golden, compatibility handler, fallback, or parallel wire.
+candidate through ADR-0027 focused formal acceptance. The exact combined
+candidate received a committed protocol-v2 `PASS`. It adds no production
+compiler, Runtime, config, golden, compatibility handler, fallback, or parallel
+wire; those bytes belong to the implementation tracer.

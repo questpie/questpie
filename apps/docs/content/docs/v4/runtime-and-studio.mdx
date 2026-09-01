@@ -24,8 +24,8 @@ Build writes a checksum-verified bundle that joins the
 [compiled application and generated contract](./definition-composition#use-generated-output),
 the [reviewed migration and verified schema](./schema-lifecycle#apply-and-verify),
 and the [matched executable bindings](./executable-definitions#load-only-a-matched-runtime-build).
-It also binds the generated Operation Wire. QUESTPIE publishes the complete
-bundle atomically.
+It also binds the generated canonical HTTP projection. QUESTPIE publishes the
+complete bundle atomically.
 
 Migration apply is explicit. Runtime startup does not create or apply a
 migration. Startup verifies the bundle, Runtime ABI, Application Identity,
@@ -70,28 +70,24 @@ the body cannot request System Authority. Reaction slots are not network
 Operations. See [immutable Context scopes](./context-and-policy#create-immutable-client-and-direct-scopes)
 for concurrent client and direct-root examples.
 
-The generated Operation Wire binds the Application Identity, client contract, wire
+The generated client binds the Application Identity, client contract, wire
 digest, Operation, Call Identity, Context input, Operation input, and timeout.
-It has closed frames for a result, a declared application error, a framework
-failure, and a protocol rejection. The generated client restores compiled
-values such as `Date` and preserves the exact declared error code, status, and
-payload.
+It calls one kind-specific endpoint per Operation and decodes closed outcomes
+for a result, a declared application error, or a framework failure. It restores
+compiled values such as `Date` and preserves the exact declared error code,
+status, and payload.
 
-A deployment can keep an older client-contract digest and Operation Wire digest
-together as one retained compatibility entry. A Query runs when its pair is
-current or retained; every other old pair fails with `CLIENT_OUTDATED`.
-ADR-0023 narrows this compatibility rule for Mutations: only a current Wire v2
-pair can execute a Mutation.
+Generated calls send the current application, client-contract, and wire
+digests. If those headers are present, all three must match before work begins.
+The Runtime does not retain the former polymorphic endpoint or route old clients
+through a compatibility handler. Rebuild the generated client together with
+the application when this network contract changes.
 
-Operation Wire v1 remains preserved historical authority. Wire v2 adds one
-framework transaction outcome for a Mutation that committed but whose result
-could not be produced. The failure is
+A Mutation that committed but whose result could not be produced returns
 `COMMITTED_RESULT_UNAVAILABLE`, HTTP `500`, `retryable: true`, with the request
 `callId` and committed PostgreSQL transaction identity. Retryability means the
-caller can replay the exact call identity to recover its receipt; the generated
-transport still performs no automatic Mutation retry. A Wire v1 Query may run
-under a retained pair, but a Wire v1 Mutation is rejected with a v1-readable
-`CLIENT_OUTDATED` response before Context Resolution or Operation execution.
+caller can replay the exact Idempotency-Key to recover its receipt; the
+generated transport still performs no automatic Mutation retry.
 
 QUESTPIE does not retry a Mutation automatically. If a response is lost after
 commit, the caller reuses the stable Call Identity to recover the stored result
@@ -176,14 +172,14 @@ worker role.
 
 ## Deploy compatible artifacts
 
-QUESTPIE checks compatibility by dimension. An Operation Wire compatibility
-entry is the exact pair of one generated client-contract digest and its wire
-digest.
+QUESTPIE checks compatibility by dimension. A canonical HTTP generated client
+must carry the current application, client-contract, and wire digests as one
+matched set.
 
 | Dimension          | Behavior                                                                 |
 | ------------------ | ------------------------------------------------------------------------ |
 | schema             | The migration head and Schema Fingerprint must agree.                    |
-| wire               | Only the current or an explicitly retained digest pair runs.             |
+| wire               | Only the current generated-client digest set runs.                       |
 | Policy and Context | A changed artifact applies to new roots and resets existing watches.     |
 | realtime           | An accepted Resume Token continues; every other client receives a reset. |
 | executable         | Pending durable work keeps compatible executable bytes available.        |
@@ -213,7 +209,7 @@ identity, a bounded reason, idempotency, expected-version fencing, a typed
 winner, and append-only audit. A stale durable-command caller receives the
 current version it can retry against.
 
-Maintenance has no browser or Operation-Wire transport in beta.1. Studio is
+Maintenance has no browser or canonical Operation transport in beta.1. Studio is
 deferred to a later privileged administration vertical; beta.1 does not ship an
 artifact viewer.
 

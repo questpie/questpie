@@ -694,6 +694,18 @@ the declaration SHA-256 remains
 Final independent Standards and Spec reviews pass. `quality:release` and two
 consecutive byte-identical release dry-runs pass at those checked hashes.
 
+ADR-0036 is Accepted after the exact replacement candidate
+`33ff02a07fd28a0dd6ef4b4fbbbaf9a41c484a09` received the committed pinned
+protocol-v2 `PASS` at `4cfe81dda`. Every network Query, Mutation, and Action has
+one compiler-derived visible endpoint: GET `/_questpie/query/<name>`, POST
+`/_questpie/mutation/<name>`, or POST `/_questpie/action/<name>`. Generated
+clients and optional OpenAPI 3.1 derive from the same Resource identities,
+codecs, Context, outcomes, Policy, cancellation, and executor. Raw Routes keep
+their authored external-protocol paths. The former polymorphic endpoint is
+deleted by the implementation tracer with no fallback, redirect, compatibility
+handler, or parallel wire. Projection-neutral descriptive metadata remains a
+separate decision.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
@@ -709,10 +721,15 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority; OpenTelemetry still requires a separate docs-first
    decision before any implementation.
-4. Treat OpenTelemetry as a separate docs-first decision. The research
+4. Implement ADR-0036 as one replacement tracer: compiler artifact and
+   diagnostics, Runtime adapter, generated client, direct/network parity,
+   OpenAPI/explain, PostgreSQL/browser hostiles, then atomic deletion of the
+   polymorphic RPC path. Keep metadata and MCP outside this implementation
+   slice and retain no fallback.
+5. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-5. Do not reopen the reference application by adding Cron, Collection triggers,
+6. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-6. Do not push, tag or publish without explicit authority.
+7. Do not push, tag or publish without explicit authority.

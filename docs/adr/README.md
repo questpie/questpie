@@ -37,6 +37,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 29. [Unify Policy expression authoring](./0029-unify-policy-expression-authoring.md)
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
+32. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
 
 ## Open decisions
 
@@ -89,6 +90,12 @@ program; payloadless Collection issues; explicit Operation-owned issue mapping;
 `ctx.now`; and database-owned `onUpdate: "now"`. It preserves Policy as the
 sole authored authorization mechanism, one Mutation transaction, and one
 generated Collection write kernel.
+ADR-0036 replaces the polymorphic Operation RPC endpoint with one
+compiler-derived endpoint per network Query, Mutation, and Action. Generated
+clients and optional OpenAPI 3.1 use the same Resource identities, codecs,
+Context, outcomes, Policy, cancellation, and executor. It adds no authored HTTP
+path, projection-specific schema or prose, compatibility endpoint, fallback,
+or second handler.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path
