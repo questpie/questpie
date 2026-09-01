@@ -9,6 +9,7 @@
 		"executable-definitions",
 		"queries-and-mutations",
 		"realtime",
+		"reactive-query-resources",
 		"durable-reactions",
 		"multi-instance",
 		"semantic-kernels-and-public-surface",

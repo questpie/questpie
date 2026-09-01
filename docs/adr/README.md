@@ -37,6 +37,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 29. [Unify Policy expression authoring](./0029-unify-policy-expression-authoring.md)
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
+32. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
 
 ## Open decisions
 
@@ -89,6 +90,12 @@ program; payloadless Collection issues; explicit Operation-owned issue mapping;
 `ctx.now`; and database-owned `onUpdate: "now"`. It preserves Policy as the
 sole authored authorization mechanism, one Mutation transaction, and one
 generated Collection write kernel.
+ADR-0035 adds `.observe(input)` only to compiler-proven watchable generated
+Queries, keeps canonical Query Resource identity and bounded lifetime inside one
+immutable generated Context scope, and accepts an optional exact-peer React
+`useSyncExternalStore` adapter. It adds no fallback poller, Mutation
+invalidation, global provider, second client cache, or polymorphic Relation
+kernel.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path

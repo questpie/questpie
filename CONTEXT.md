@@ -206,6 +206,14 @@ but no independent Field identity, Relation, Policy boundary, or lifecycle.
 
 _Avoid_: nested Collection, hidden table
 
+### Discriminated Reference Value
+
+An ordinary application TypeScript union such as `{ kind, id }` that can name
+one of several domain variants. It has no Relation, foreign key, join, cascade,
+Policy traversal, or automatic Live Query dependency semantics.
+
+Do not use: polymorphic Relation, generated reference descriptor.
+
 ### Open JSON
 
 A tagged JSON value stored in one JSONB Field without a closed property schema
@@ -488,6 +496,13 @@ them.
 A subscription to the recomputed authorized result of one Query. The Runtime
 records the supported data, Policy, tenancy, Relation, and pagination reads that
 the handler actually executes, then replaces the dependency set after each run.
+
+### Query Resource
+
+The framework-neutral generated-client view of one watchable Query and one
+canonical input inside an immutable Context scope. It exposes one immutable
+snapshot and subscription lifecycle. It is not a server cache, entity cache,
+Mutation invalidation target, or second realtime transport.
 
 ### Resume Token
 

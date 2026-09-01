@@ -1,6 +1,6 @@
 # ADR 0035: Freeze Query Resource and React client integration
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-01
 
 ## Context
@@ -220,6 +220,16 @@ or codec requires its own consumer and decision.
 - React remains optional and replaceable without weakening generated-client
   identity or Live Query authority.
 
+## Acceptance
+
+ADR-0027 classifies this generated-client and optional React integration as a
+Product projection over the accepted Live Query kernel. The exact clean
+candidate `e909a8e14dc4b5e9f294f27df6bb9f27ef859efe` passed an independent
+read-only replacement review after its retained-eviction hostile was repaired.
+All eight deterministic candidate gates passed, including 13 focused tests with
+50 assertions, strict TypeScript, staging, lint, formatting, architecture, and
+both diff checks.
+
 ## Supersession ledger
 
 This decision adds one projection to ADR-0012's generated watchable Query
@@ -233,6 +243,24 @@ delivery.
 It does not supersede Query execution, Operation Wire, Policy, Context,
 credentials, Mutation, transaction, Change Ledger, server cache, or Runtime
 capability ownership.
+
+## Deletion ledger
+
+- The Query Resource core lands before the optional React package. Production
+  code replaces the executable prototype; it does not preserve a compatibility
+  resource or a second cache.
+- Team Support Desk deletes request-generation guards, hand-authored Live Query
+  loading/error state, late-delivery checks, and post-Mutation refresh fan-out
+  as each production tracer slice takes ownership.
+- Collaboration adds hostile coverage for Context isolation, authority reset,
+  rollback silence, reconnect, capacity, eviction, cancellation, and subscriber
+  lifetime. It adds no application cache or alternate client.
+- The discriminated reference example remains an ordinary TypeScript recipe.
+  No production helper, codec, Relation descriptor, or Runtime polymorphic
+  kernel is created by this decision.
+- After production and fixture parity, the prototype implementation and its
+  duplicate tests are deleted. The ADR and ordinary repository history retain
+  the decision and review evidence.
 
 ## Rejected alternatives
 
