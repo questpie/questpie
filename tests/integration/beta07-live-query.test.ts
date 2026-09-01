@@ -307,7 +307,11 @@ test("multiplexes private resume acknowledgements behind the public watch method
 		const delivery = new Promise<Readonly<{ result: unknown; meta: unknown }>>(
 			(resolve) => {
 				method.watch(
-					{ after: null, channelId: "channel:one", first: 20 },
+					{
+						after: null,
+						channelId: "00000000-0000-4000-8000-000000000001",
+						first: 20,
+					},
 					(result, meta) => resolve({ result, meta }),
 				);
 			},

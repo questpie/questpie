@@ -49,6 +49,7 @@ type RealtimeBinding = {
 	readonly input: unknown;
 	readonly callback: (result: unknown, delivery: QueryDelivery) => void;
 	readonly options: WatchOptions;
+	readonly terminate: () => void;
 	resumeToken: string | null;
 };
 `;
@@ -74,6 +75,11 @@ type RealtimeBinding = {
 		const commandBase = Object.freeze({ protocol: ${canonicalBytes(input.realtime.protocol).trim()}, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, realtimeWireDigest: ${JSON.stringify(input.realtime.digest)}, scopeId });
 		const openBinding = (bindingId: string, binding: RealtimeBinding): void => {
 			void command({ ...commandBase, command: "open", bindingId, context, input: binding.input, query: binding.query, resumeToken: binding.resumeToken }).catch(() => binding.options.onError?.(Object.freeze({ code: "TRANSPORT_FAILED" })));
+		};
+		const failBindings = (failure: WatchFailure): void => {
+			const failed = Array.from(bindings.values());
+			for (const binding of failed) binding.terminate();
+			for (const binding of failed) binding.options.onError?.(failure);
 		};
 		const consumeFrame = async (value: unknown): Promise<void> => {
 			const frame = wireRecord(value);
@@ -116,6 +122,7 @@ type RealtimeBinding = {
 				const error = wireRecord(frame.error);
 				exactKeys(error, ["code"]);
 				if (!binding || binding.query !== frame.query || !["AUTHORIZATION_FAILED", "OUTPUT_INVALID", "RESOURCE_LIMIT", "TRANSPORT_FAILED", "VERSION_INCOMPATIBLE"].includes(String(error.code))) protocolFailure();
+				binding.terminate();
 				binding.options.onError?.(Object.freeze({ code: error.code as WatchFailure["code"] }));
 				return;
 			}
@@ -167,15 +174,15 @@ type RealtimeBinding = {
 			}).catch((error: unknown) => {
 				if (streamAbort?.signal.aborted) return;
 				if (error instanceof Error && error.message === "PROTOCOL_UNSUPPORTED") {
-					for (const binding of bindings.values()) binding.options.onError?.(Object.freeze({ code: "VERSION_INCOMPATIBLE" }));
+					failBindings(Object.freeze({ code: "VERSION_INCOMPATIBLE" }));
 					return;
 				}
 				if (error instanceof Error && error.message === "RESOURCE_LIMIT") {
-					for (const binding of bindings.values()) binding.options.onError?.(Object.freeze({ code: "RESOURCE_LIMIT" }));
+					failBindings(Object.freeze({ code: "RESOURCE_LIMIT" }));
 					return;
 				}
 				if (error instanceof Error && (error as Error & { retryable?: boolean }).retryable === false) {
-					for (const binding of bindings.values()) binding.options.onError?.(Object.freeze({ code: "TRANSPORT_FAILED" }));
+					failBindings(Object.freeze({ code: "TRANSPORT_FAILED" }));
 					return;
 				}
 				scheduleReconnect();
@@ -187,11 +194,22 @@ type RealtimeBinding = {
 		};
 		const watchEncodedBinding = <Result>(query: string, encodedInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => {
 			const bindingId = crypto.randomUUID();
-			const binding: RealtimeBinding = { query, input: structuredClone(encodedInput), callback: callback as RealtimeBinding["callback"], options, resumeToken: null };
+			let closed = false;
+			const terminate = (): void => {
+				if (closed) return;
+				closed = true;
+				bindings.delete(bindingId);
+				if (bindings.size === 0) {
+					streamAbort?.abort();
+					if (reconnectTimer !== undefined) clearTimeout(reconnectTimer);
+					reconnectTimer = undefined;
+					streamReady = false;
+				}
+			};
+			const binding: RealtimeBinding = { query, input: structuredClone(encodedInput), callback: callback as RealtimeBinding["callback"], options, terminate, resumeToken: null };
 			bindings.set(bindingId, binding);
 			ensureStream();
 			if (streamReady) openBinding(bindingId, binding);
-			let closed = false;
 			const close = (): void => {
 				if (closed) return;
 				closed = true;
@@ -212,6 +230,6 @@ type RealtimeBinding = {
 			else options.signal?.addEventListener("abort", close, { once: true });
 			return close;
 		};
-		const watchBinding = <Result>(query: string, operationInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => watchEncodedBinding(query, operationInput, callback, options);`;
+		const watchBinding = <Result>(query: string, operationInput: unknown, callback: (result: Result, delivery: QueryDelivery) => void, options: WatchOptions = {}): (() => void) => watchEncodedBinding(query, encode(inputCodecs[query], operationInput), callback, options);`;
 	return Object.freeze({ watchTypes, realtimeTypes, realtimeScope });
 }
