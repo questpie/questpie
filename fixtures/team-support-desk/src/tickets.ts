@@ -5,6 +5,7 @@ import {
 	field,
 	index,
 	relation,
+	relationRef,
 } from "questpie";
 
 import type { CollectionLifecycle } from "#questpie/app";
@@ -181,6 +182,9 @@ export const tickets = defineCollection({
 			fields: ["assigneeMembershipId"],
 			references: ["id"],
 			onDelete: "setNull",
+		}),
+		comments: relation.toMany({
+			inverseOf: relationRef("comments", "ticket"),
 		}),
 	},
 	indexes: {
