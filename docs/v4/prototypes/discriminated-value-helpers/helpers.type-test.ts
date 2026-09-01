@@ -13,6 +13,11 @@ type Subject = DiscriminatedReference<{
 	appointment: AppointmentId;
 	barber: BarberId;
 }>;
+declare let readonlySubject: Subject;
+// @ts-expect-error discriminants are readonly
+readonlySubject.kind = "appointment";
+// @ts-expect-error reference IDs are readonly
+readonlySubject.id = readonlySubject.id;
 
 function render(subject: Subject) {
 	return matchDiscriminated(subject, {
