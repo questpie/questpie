@@ -1,0 +1,9 @@
+{
+	"extends": "../../tsconfig.base.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"paths": { "questpie": ["../../packages/questpie/src/index.ts"] },
+		"types": []
+	},
+	"files": ["fixtures/inv01-inverse-list-authoring.ts"]
+}

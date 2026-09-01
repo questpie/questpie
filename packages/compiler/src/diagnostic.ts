@@ -19,9 +19,11 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-027"
 	| "QP-DATA-003"
 	| "QP-DATA-005"
+	| "QP-DATA-008"
 	| "QP-DATA-022"
 	| "QP-DATA-023"
 	| "QP-DATA-025"
+	| "QP-DATA-026"
 	| "QP-POLICY-001"
 	| "QP-POLICY-002"
 	| "QP-SCHEMA-001"
@@ -72,6 +74,7 @@ export function controlledEvaluationFailure(
 			"invalidOperator",
 			"controlled relational evaluation found an unknown operator",
 		);
+	if (stderr.includes("QP-DATA-008")) return orderFieldNotSelected();
 	if (stderr.includes("QP-DATA-022"))
 		return new CompilerDiagnosticError(
 			"QP-DATA-022",
@@ -79,10 +82,27 @@ export function controlledEvaluationFailure(
 			"controlled relational evaluation exceeded the measured Relation depth",
 		);
 	if (stderr.includes("QP-DATA-025")) return unsupportedExpressionCapability();
+	if (stderr.includes("QP-DATA-026")) return invalidInverseList();
 	return new CompilerDiagnosticError(
 		"QP-COMPOSE-013",
 		"structuralTypeError",
 		"controlled child evaluation failed",
+	);
+}
+
+export function orderFieldNotSelected(): CompilerDiagnosticError {
+	return new CompilerDiagnosticError(
+		"QP-DATA-008",
+		"orderFieldNotSelected",
+		"an inverse child order Field must be directly and unconditionally selected",
+	);
+}
+
+export function invalidInverseList(): CompilerDiagnosticError {
+	return new CompilerDiagnosticError(
+		"QP-DATA-026",
+		"invalidInverseList",
+		"the inverse child list does not match the closed grammar",
 	);
 }
 
@@ -124,9 +144,11 @@ const diagnosticClassesByCode = {
 	],
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
+	"QP-DATA-008": ["orderFieldNotSelected"],
 	"QP-DATA-022": ["relationDepthExceeded"],
 	"QP-DATA-023": ["databaseOwnedField"],
 	"QP-DATA-025": ["unsupportedExpressionCapability"],
+	"QP-DATA-026": ["invalidInverseList"],
 	"QP-POLICY-001": ["missingDefaultPolicy"],
 	"QP-POLICY-002": ["ambiguousDefaultPolicy"],
 	"QP-SCHEMA-001": ["invalidDefinition"],
