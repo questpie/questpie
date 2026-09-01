@@ -454,10 +454,11 @@ export function renderAppContract(
 		`{ ${selection
 			.map((selected) => {
 				const key = JSON.stringify(String(selected.key));
-				if (selected.kind === "field") {
+				if (selected.kind === "field")
 					return `${key}${selected.optional ? "?" : ""}: ${fieldType(fieldByIdentity(selected.field))};`;
-				}
-				return `${key}: ${renderSelection(selected.select)} | null;`;
+				return selected.kind === "inverseList"
+					? `${key}: readonly ${renderSelection(selected.select)}[];`
+					: `${key}: ${renderSelection(selected.select)} | null;`;
 			})
 			.join(" ")} }`;
 	const queryRuns = relational.queries

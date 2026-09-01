@@ -2,7 +2,7 @@ import type {
 	FieldIdentity,
 	PolicyIdentity,
 	PolicyProgramV1,
-	RootQuerySelectionV1,
+	QuerySelectionV2,
 } from "./types";
 
 export type RelationalGeneratedSelectionV1 =
@@ -14,6 +14,11 @@ export type RelationalGeneratedSelectionV1 =
 	  }>
 	| Readonly<{
 			kind: "toOne";
+			key: string;
+			select: readonly RelationalGeneratedSelectionV1[];
+	  }>
+	| Readonly<{
+			kind: "inverseList";
 			key: string;
 			select: readonly RelationalGeneratedSelectionV1[];
 	  }>;
@@ -37,7 +42,7 @@ export function projectRelationalGeneratedContract(
 			identity: string | null;
 			policy: PolicyIdentity;
 			origin: Readonly<{ path: string; exportName: string }>;
-			select: readonly RootQuerySelectionV1[];
+			select: readonly QuerySelectionV2[];
 		}>[];
 	}>,
 ): RelationalGeneratedContractV1 {
@@ -58,7 +63,7 @@ export function projectRelationalGeneratedContract(
 		);
 	};
 	const projectSelection = (
-		selection: RootQuerySelectionV1,
+		selection: QuerySelectionV2,
 		optionalPaths: ReadonlySet<string>,
 		nested = false,
 	): RelationalGeneratedSelectionV1 => {
@@ -74,7 +79,7 @@ export function projectRelationalGeneratedContract(
 			});
 		}
 		return Object.freeze({
-			kind: "toOne",
+			kind: selection.kind,
 			key: selection.key,
 			select: Object.freeze(
 				selection.select.map((child) =>

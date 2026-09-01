@@ -1,3 +1,4 @@
+import { canonicalJsonLine, sha256Digest } from "../canonical-json";
 import {
 	definePostgresStatement,
 	type PostgresParameter,
@@ -5,13 +6,14 @@ import {
 	type PostgresTransactionRunner,
 } from "../postgres";
 import type {
-	PostgresQueryPlanV1,
+	PostgresInverseListResultV2,
+	PostgresQueryPlan,
 	PostgresQueryResultV1,
 	PostgresQueryRow,
 } from "./query";
 
 export type LinkedPostgresQueryPlan = Readonly<{
-	plan: PostgresQueryPlanV1;
+	plan: PostgresQueryPlan;
 	statement: PostgresStatement<
 		readonly PostgresParameter[],
 		readonly PostgresQueryRow[]
@@ -30,27 +32,43 @@ function freeze<T>(value: T): T {
 	return Object.freeze(value);
 }
 
+function artifactDigest(domain: string, value: unknown): string {
+	return sha256Digest(
+		Buffer.concat([Buffer.from(`${domain}\0`), canonicalJsonLine(value)]),
+	);
+}
+
 function resultColumns(
-	result: readonly PostgresQueryResultV1[],
+	result: readonly (PostgresQueryResultV1 | PostgresInverseListResultV2)[],
 ): readonly string[] {
 	return result.flatMap((item) => {
 		if (item.kind === "field")
 			return item.guardColumn === undefined
 				? [item.column]
 				: [item.column, item.guardColumn];
+		if (item.kind === "toOne")
+			return [
+				item.presenceColumn,
+				...item.fields.flatMap((field) =>
+					field.guardColumn === undefined
+						? [field.column]
+						: [field.column, field.guardColumn],
+				),
+				...resultColumns(item.relations ?? []),
+			];
 		return [
-			item.presenceColumn,
 			...item.fields.flatMap((field) =>
 				field.guardColumn === undefined
 					? [field.column]
 					: [field.column, field.guardColumn],
 			),
-			...resultColumns(item.relations ?? []),
+			...resultColumns(item.relations),
+			item.ordinalColumn,
 		];
 	});
 }
 
-function validateParameters(plan: PostgresQueryPlanV1): void {
+function validateParameters(plan: PostgresQueryPlan): void {
 	const referenced = new Set(
 		[...plan.sql.matchAll(/\$(\d+)(?!\d)/g)].map((match) => Number(match[1])),
 	);
@@ -68,8 +86,11 @@ function validateParameters(plan: PostgresQueryPlanV1): void {
 		throw new TypeError("Query SQL placeholders do not match its parameters");
 }
 
-function validateResultColumns(plan: PostgresQueryPlanV1): readonly string[] {
-	const columns = resultColumns(plan.result);
+function validateResultColumns(plan: PostgresQueryPlan): readonly string[] {
+	const columns = [
+		...(plan.version === 2 ? plan.ordinalColumns.slice(0, 1) : []),
+		...resultColumns(plan.result),
+	];
 	if (
 		columns.length === 0 ||
 		new Set(columns).size !== columns.length ||
@@ -77,7 +98,11 @@ function validateResultColumns(plan: PostgresQueryPlanV1): readonly string[] {
 	)
 		throw new TypeError("Query result columns are invalid");
 	const rootFrom = plan.sql.indexOf(' FROM "qp_page" AS ');
-	const rootProjection = rootFrom < 0 ? plan.sql : plan.sql.slice(0, rootFrom);
+	const selectStart = plan.sql.lastIndexOf(") SELECT ", rootFrom);
+	const rootProjection =
+		rootFrom < 0 || selectStart < 0
+			? plan.sql
+			: plan.sql.slice(selectStart + ") SELECT ".length, rootFrom);
 	let previous = -1;
 	for (const column of columns) {
 		const projection = 'AS "' + column + '"';
@@ -96,12 +121,12 @@ function validateResultColumns(plan: PostgresQueryPlanV1): readonly string[] {
 }
 
 export function linkPostgresQueryPlan(
-	input: PostgresQueryPlanV1,
+	input: PostgresQueryPlan,
 ): LinkedPostgresQueryPlan {
 	const plan = freeze(structuredClone(input));
 	if (
 		plan.format !== "questpie.postgres-query-plan" ||
-		plan.version !== 1 ||
+		(plan.version !== 1 && plan.version !== 2) ||
 		!/^[0-9a-f]{64}$/u.test(plan.queryDigest) ||
 		plan.queryDigest !== plan.templateDigest ||
 		!/^[0-9a-f]{64}$/u.test(plan.policyProgramDigest) ||
@@ -111,6 +136,19 @@ export function linkPostgresQueryPlan(
 		plan.sql.trim().length === 0
 	)
 		throw new TypeError("invalid compiled PostgreSQL Query plan");
+	if (plan.version === 2) {
+		const { statementDigest, ...statement } = plan;
+		if (
+			plan.templateVersion !== 2 ||
+			plan.ordinalColumns.length !== 2 ||
+			plan.ordinalColumns[0] !== "qp_root_ordinal" ||
+			!/^qp_inverse_[0-9]+_ordinal$/u.test(plan.ordinalColumns[1]) ||
+			!/^([0-9a-f]{64})$/u.test(plan.inversePolicyProgramDigest) ||
+			statementDigest !==
+				artifactDigest("questpie-postgres-query-statement-v2", statement)
+		)
+			throw new TypeError("invalid compiled PostgreSQL Query plan v2 linkage");
+	}
 	validateParameters(plan);
 	const columns = validateResultColumns(plan);
 	const statement = definePostgresStatement({
@@ -143,8 +181,14 @@ export function linkPostgresQueryPlan(
 
 export function linkPostgresQueryPlans(
 	artifact: string,
-	expectedQueryDigests: readonly string[],
+	expectedQueries: readonly (
+		| string
+		| Readonly<{ digest: string; templateVersion: 1 | 2 }>
+	)[],
 ): LinkedPostgresQueryPlans {
+	const expectedDigest = (
+		expected: string | Readonly<{ digest: string; templateVersion: 1 | 2 }>,
+	): string => (typeof expected === "string" ? expected : expected.digest);
 	let decoded: unknown;
 	try {
 		decoded = JSON.parse(artifact);
@@ -157,15 +201,29 @@ export function linkPostgresQueryPlans(
 	if (
 		Object.keys(envelope).sort().join(",") !== "format,plans,version" ||
 		envelope.format !== "questpie.postgres-query-plans" ||
-		envelope.version !== 1 ||
+		(envelope.version !== 1 && envelope.version !== 2) ||
 		!Array.isArray(envelope.plans)
 	)
 		throw new TypeError("invalid PostgreSQL Query plans artifact");
 	const plans = Object.freeze(
 		envelope.plans.map((plan) =>
-			linkPostgresQueryPlan(plan as PostgresQueryPlanV1),
+			linkPostgresQueryPlan(plan as PostgresQueryPlan),
 		),
 	);
+	if (
+		(envelope.version === 1 &&
+			plans.some(
+				({ plan }) => plan.version !== 1 || "templateVersion" in plan,
+			)) ||
+		(envelope.version === 2 &&
+			(!plans.some(({ plan }) => plan.version === 2) ||
+				plans.some(
+					({ plan }) =>
+						!("templateVersion" in plan) ||
+						plan.templateVersion !== plan.version,
+				)))
+	)
+		throw new TypeError("PostgreSQL Query plan version linkage is invalid");
 	for (let index = 1; index < plans.length; index += 1) {
 		if (plans[index - 1]!.plan.queryDigest >= plans[index]!.plan.queryDigest)
 			throw new TypeError(
@@ -173,13 +231,18 @@ export function linkPostgresQueryPlans(
 			);
 	}
 	if (
-		expectedQueryDigests.length !== plans.length ||
-		expectedQueryDigests.some(
-			(queryDigest, index) =>
+		expectedQueries.length !== plans.length ||
+		expectedQueries.some((expected, index) => {
+			const queryDigest = expectedDigest(expected);
+			return (
 				!/^[0-9a-f]{64}$/u.test(queryDigest) ||
-				(index > 0 && expectedQueryDigests[index - 1]! >= queryDigest) ||
-				plans[index]!.plan.queryDigest !== queryDigest,
-		)
+				(index > 0 &&
+					expectedDigest(expectedQueries[index - 1]!) >= queryDigest) ||
+				plans[index]!.plan.queryDigest !== queryDigest ||
+				(typeof expected !== "string" &&
+					plans[index]!.plan.version !== expected.templateVersion)
+			);
+		})
 	)
 		throw new TypeError(
 			"PostgreSQL Query plans do not match the Runtime Query identities",

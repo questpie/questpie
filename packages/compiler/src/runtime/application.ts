@@ -13,6 +13,7 @@ import {
 	renderDirectJobAcceptance,
 	renderDirectJobOperations,
 } from "./application-jobs";
+import { expectedQueryTemplates } from "./application-query-artifacts";
 import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
 
@@ -326,6 +327,7 @@ function applicationEntry(
 				`[structuralQuery${index}${query.identity === null ? "" : ".query"}, ${JSON.stringify(String(query.digest))}]`,
 		)
 		.join(",\n");
+	const queryTemplates = expectedQueryTemplates(structuralQueries);
 	const collectionDefinitions = input.resources
 		.filter((resource) => resource.kind === "collection")
 		.sort((left, right) => compareAscii(left.identity, right.identity))
@@ -397,7 +399,7 @@ const expectedMutationTransactionStatementsDigest = ${JSON.stringify(input.mutat
 const expectedCollectionOperationPlansDigest = ${JSON.stringify(input.collectionOperationPlansDigest)};
 const expectedCollectionLifecycleProgramsDigest = ${JSON.stringify(input.collectionLifecycleProgramsDigest)};
 const structuralQueryDigests = new Map([${structuralEntries}]);
-const expectedQueryDigests = [...new Set(structuralQueryDigests.values())].sort();
+const expectedQueryTemplates = ${JSON.stringify(queryTemplates)};
 ${generatedOperations.definitions}
 const serverExports = Object.freeze({${serverEntries.join(",\n")}});
 const slotBindings = Object.freeze([${bindingEntries.join(",\n")}]);
@@ -587,7 +589,7 @@ export async function createApplication(input) {
 				${generatedOperations.linkHandlers}
 				const queryPlanBytes = loaded.artifactFiles["postgres-query-plans.json"];
 				if (queryPlanBytes !== undefined)
-					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryDigests);
+					queryPlans = linkPostgresQueryPlans(queryPlanBytes, expectedQueryTemplates);
 				else if (structuralQueryDigests.size !== 0)
 					throw new TypeError("PostgreSQL Query plans are unavailable");
 				return verifyPostgresDatabaseRuntimeReadiness({

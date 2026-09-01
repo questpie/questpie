@@ -95,7 +95,10 @@ export function projectRelationalCompilation(
 			);
 			return {
 				identity: null,
-				digest: digest("questpie-data-query-template-v1", template),
+				digest: digest(
+					`questpie-data-query-template-v${template.version}`,
+					template,
+				),
 				policy: selectedPolicy.identity,
 				template,
 				origin,
@@ -127,7 +130,10 @@ export function projectRelationalCompilation(
 			);
 			return {
 				identity: resource.identity,
-				digest: digest("questpie-data-query-template-v1", template),
+				digest: digest(
+					`questpie-data-query-template-v${template.version}`,
+					template,
+				),
 				policy: selectedPolicy.identity,
 				template,
 				origin: {
@@ -145,6 +151,18 @@ export function projectRelationalCompilation(
 				`${right.origin.path}\0${right.origin.exportName}`,
 			),
 	);
+	const queryProjectionVersion = queries.some(
+		({ template }) => template.version === 2,
+	)
+		? 2
+		: 1;
+	const projectedQueries =
+		queryProjectionVersion === 1
+			? queries
+			: queries.map((query) => ({
+					...query,
+					templateVersion: query.template.version,
+				}));
 	const structuralOrigins = queries.map((query) => ({
 		kind: "dataQuery",
 		digest: query.digest,
@@ -168,8 +186,8 @@ export function projectRelationalCompilation(
 		},
 		query: {
 			format: "questpie.query-projection",
-			version: 1,
-			queries,
+			version: queryProjectionVersion,
+			queries: projectedQueries,
 		},
 		explain: {
 			format: "questpie.relational-explain",

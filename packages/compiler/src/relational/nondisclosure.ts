@@ -49,9 +49,14 @@ function projectionEntries(
 	key: "plans" | "policies" | "queries",
 ): readonly unknown[] {
 	const projection = record(value, format);
+	const versionAccepted =
+		projection.version === 1 ||
+		(projection.version === 2 &&
+			(format === "questpie.query-projection" ||
+				format === "questpie.postgres-query-plans"));
 	if (
 		projection.format !== format ||
-		projection.version !== 1 ||
+		!versionAccepted ||
 		!Array.isArray(projection[key])
 	)
 		throw new TypeError(`invalid ${format}`);
@@ -171,7 +176,10 @@ export function projectRelationalNondisclosure(
 			templateDigest,
 			policy,
 			policyProgramDigest,
-			postgresQueryPlanDigest: digest("questpie-postgres-query-plan-v1", plan),
+			postgresQueryPlanDigest: digest(
+				`questpie-postgres-query-plan-v${String(plan.version)}`,
+				plan,
+			),
 			keyedLookup: {
 				proofPlanDigest: digest(
 					"questpie-postgres-keyed-lookup-proof-v1",

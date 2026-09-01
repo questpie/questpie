@@ -92,6 +92,33 @@ export type RootQuerySelectionV1 =
 			select: readonly RootQuerySelectionV1[];
 	  }>;
 
+export type InverseQueryFilterV2 =
+	| RelatedQueryFilterV1
+	| Readonly<{ kind: "constant"; value: true }>;
+
+export type QuerySelectionV2 =
+	| FieldQuerySelectionV1
+	| Readonly<{
+			kind: "toOne";
+			key: string;
+			relation: RelationIdentity;
+			select: readonly QuerySelectionV2[];
+	  }>
+	| Readonly<{
+			kind: "inverseList";
+			key: string;
+			relation: RelationIdentity;
+			source: CollectionIdentity;
+			first: number;
+			filter: InverseQueryFilterV2 | null;
+			order: readonly Readonly<{
+				field: FieldIdentity;
+				direction: "asc" | "desc";
+				nulls: "first" | "last";
+			}>[];
+			select: readonly QuerySelectionV2[];
+	  }>;
+
 export type QueryParameterV1 =
 	| Readonly<{
 			name: string;
@@ -130,6 +157,22 @@ export interface DataQueryTemplateV1 {
 		uniqueConstraint: ConstraintIdentity;
 	}>;
 }
+
+export interface DataQueryTemplateV2 {
+	readonly format: "questpie.data-query-template";
+	readonly version: 2;
+	readonly from: CollectionIdentity;
+	readonly schemaProjectionDigest: string;
+	readonly dataContractProjectionDigest: string;
+	readonly maximumRelationEdges: 4;
+	readonly parameters: readonly QueryParameterV1[];
+	readonly select: readonly QuerySelectionV2[];
+	readonly filter: RootQueryFilterV1 | null;
+	readonly order: DataQueryTemplateV1["order"];
+	readonly page: DataQueryTemplateV1["page"];
+}
+
+export type DataQueryTemplate = DataQueryTemplateV1 | DataQueryTemplateV2;
 
 export type PolicyOperandV1 =
 	| Readonly<{

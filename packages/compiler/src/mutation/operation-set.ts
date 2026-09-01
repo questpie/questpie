@@ -432,19 +432,25 @@ export function projectCollectionOperationSets(
 							callerInputFields,
 						)
 					: [];
-			const rawTemplate =
-				member === "list"
-					? normalizeDataQueryTemplate(memberContract.templateInput, {
-							schemaProjectionDigest: digest(
-								"questpie-schema-projection-v1",
-								input.schema,
-							),
-							dataContractProjectionDigest: digest(
-								"questpie-data-contract-projection-v1",
-								input.data,
-							),
-						})
-					: null;
+			const rawTemplate = (() => {
+				if (member !== "list") return null;
+				const normalized = normalizeDataQueryTemplate(
+					memberContract.templateInput,
+					{
+						schemaProjectionDigest: digest(
+							"questpie-schema-projection-v1",
+							input.schema,
+						),
+						dataContractProjectionDigest: digest(
+							"questpie-data-contract-projection-v1",
+							input.data,
+						),
+					},
+				);
+				if (normalized.version !== 1)
+					invalid(`${identity} cannot project an inverse child list`);
+				return normalized;
+			})();
 			const limits =
 				kind === "query"
 					? {
