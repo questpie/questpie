@@ -26,18 +26,31 @@ test("emits one executable App over the same exact Query engine", async () => {
 			force: true,
 			recursive: true,
 		});
-		await mkdir(join(temporary, "node_modules/questpie"));
+		await mkdir(join(temporary, "node_modules/questpie/internal"), {
+			recursive: true,
+		});
 		await writeFile(
 			join(temporary, "node_modules/questpie/package.json"),
 			JSON.stringify({
 				name: "questpie",
 				type: "module",
-				exports: "./index.ts",
+				exports: {
+					".": "./index.ts",
+					"./internal/observability": "./internal/observability.ts",
+				},
 			}),
 		);
 		await symlink(
 			resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 			join(temporary, "node_modules/questpie/index.ts"),
+			"file",
+		);
+		await symlink(
+			resolve(
+				repositoryRoot,
+				"packages/questpie/src/internal/observability.ts",
+			),
+			join(temporary, "node_modules/questpie/internal/observability.ts"),
 			"file",
 		);
 		const compilation = await compileApplication({

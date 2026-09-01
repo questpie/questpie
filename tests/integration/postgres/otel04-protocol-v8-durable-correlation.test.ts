@@ -18,7 +18,6 @@ import {
 } from "../../../packages/compiler/src/schema/postgres/internal-protocol-v8";
 import {
 	createJobAcceptance,
-	type DurableClaim,
 	type DurableWorkerOutcome,
 } from "../../../packages/runtime/src/durable";
 import { linkJobProjection } from "../../../packages/runtime/src/durable/job-projection";

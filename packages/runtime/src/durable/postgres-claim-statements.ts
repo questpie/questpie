@@ -155,6 +155,7 @@ export type DurableClaimRun = Readonly<{
 	correlationId: string;
 	cancellationRequested: boolean;
 	attemptCount: number;
+	queueDelayMilliseconds: number;
 }>;
 
 type RunIdentityInput = Readonly<{ application: string; runId: string }>;
@@ -174,8 +175,16 @@ const runSelection = `run_id::text AS "runId",
        causation_id AS "causationId",
        correlation_id AS "correlationId",
        cancellation_requested AS "cancellationRequested",
-       attempt_count AS "attemptCount",
-       trace_id AS "traceId",
+	   attempt_count AS "attemptCount",
+	   GREATEST(0, floor(extract(epoch FROM (
+	     pg_catalog.transaction_timestamp() - (
+	       horizon_at - (
+	         (pg_catalog.convert_from(retry_bytes, 'UTF8')::jsonb ->> 'horizonMilliseconds')::double precision
+	         * interval '1 millisecond'
+	       )
+	     )
+	   )) * 1000))::float8 AS "queueDelayMilliseconds",
+	   trace_id AS "traceId",
        span_id AS "spanId",
        trace_flags AS "traceFlags"`;
 
@@ -208,12 +217,12 @@ FOR UPDATE SKIP LOCKED`,
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (result.rowCount === 0) return null;
 		const row = result.rows[0];
-		if (row?.length !== 19)
+		if (row?.length !== 20)
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (typeof row[14] !== "boolean")
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		return Object.freeze({
-			acceptanceTrace: acceptanceTrace(row[16], row[17], row[18]),
+			acceptanceTrace: acceptanceTrace(row[17], row[18], row[19]),
 			runId: uuid(row[0] as string, "run identity"),
 			dispatchId: uuid(row[1] as string, "dispatch identity"),
 			resource: text(row[2] as string, "Resource Identity"),
@@ -235,6 +244,12 @@ FOR UPDATE SKIP LOCKED`,
 			correlationId: text(row[13] as string, "correlation identity"),
 			cancellationRequested: row[14],
 			attemptCount: integer(row[15] as number, 0, 8, "attempt count"),
+			queueDelayMilliseconds: integer(
+				row[16] as number,
+				0,
+				Number.MAX_SAFE_INTEGER,
+				"queue delay",
+			),
 		});
 	},
 });

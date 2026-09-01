@@ -73,6 +73,7 @@ export type DurableAttemptExecutionRequest = Readonly<{
 	capability: "job" | "reaction";
 	attemptId: string;
 	attemptNumber: number;
+	queueDelayMilliseconds: number;
 	contextInput: unknown;
 	dispatchId: string;
 	principal: DurableClaim["principal"];
@@ -358,6 +359,7 @@ export function createDurableWorker<Execution>(
 					capability: available.capability,
 					attemptId: claim.attemptId,
 					attemptNumber: claim.attemptNumber,
+					queueDelayMilliseconds: claim.queueDelayMilliseconds,
 					contextInput,
 					dispatchId: claim.dispatchId,
 					principal: claim.principal,

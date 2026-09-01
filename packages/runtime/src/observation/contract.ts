@@ -167,11 +167,10 @@ type AcceptStartV1 = Readonly<{
 	runId?: string;
 	trace: Readonly<{ kind: "active-parent" }>;
 }>;
-type AttemptStartV1 = Readonly<{
+type AttemptStartBaseV1 = Readonly<{
 	attemptId?: string;
 	attemptNumber: number;
 	dispatchId?: string;
-	kind: "job.attempt" | "reaction.attempt";
 	principalKind: PrincipalKind;
 	resourceIdentity: string;
 	runId?: string;
@@ -182,6 +181,11 @@ type AttemptStartV1 = Readonly<{
 				links: readonly NeutralTraceContextV1[];
 		  }>;
 }>;
+type AttemptStartV1 = AttemptStartBaseV1 &
+	(
+		| Readonly<{ kind: "job.attempt"; queueDelayMilliseconds: number }>
+		| Readonly<{ kind: "reaction.attempt" }>
+	);
 type EffectStartV1 = Readonly<{
 	effectId?: string;
 	kind: "action.effect";

@@ -131,6 +131,9 @@ export async function createRuntimeApplication<
 	const observation = createApplicationObservation({
 		applicationIdentity: artifacts.runtimeBuild.application,
 		runtimeBuildDigest: artifacts.runtimeBuild.digest,
+		questpieVersion: artifacts.runtimeBuild.compiler.version,
+		signalProjectionDigest:
+			artifacts.runtimeBuild.observationSignalProjectionDigest,
 		observability: input.observability,
 		events: input.events,
 		wallClock: input.now,

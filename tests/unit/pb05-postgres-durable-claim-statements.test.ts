@@ -94,6 +94,14 @@ test("claim statements reject malformed parameters before PostgreSQL", () => {
 	).toThrow("worker identity");
 });
 
+test("Job queue delay keeps the original effective eligibility across retries", () => {
+	expect(durableClaimRunSelect.text).toContain("horizon_at");
+	expect(durableClaimRunSelect.text).toContain("horizonMilliseconds");
+	expect(durableClaimRunSelect.text).not.toContain(
+		"transaction_timestamp() - available_at",
+	);
+});
+
 test("claim statement decoders close cardinality and scalar shape", () => {
 	const acceptedTraceId = Uint8Array.from(
 		{ length: 16 },
@@ -120,6 +128,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 		"correlation:one",
 		false,
 		1,
+		125,
 		acceptedTraceId,
 		acceptedSpanId,
 		1,
@@ -144,7 +153,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 	const oldRow = durableClaimRunSelect.decode({
 		command: "SELECT",
 		rowCount: 1,
-		rows: [[...selectedRow.slice(0, 16), null, null, null]],
+		rows: [[...selectedRow.slice(0, 17), null, null, null]],
 	});
 	expect(oldRow?.acceptanceTrace).toBeNull();
 	for (const invalidTrace of [
@@ -157,7 +166,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 			durableClaimRunSelect.decode({
 				command: "SELECT",
 				rowCount: 1,
-				rows: [[...selectedRow.slice(0, 16), ...invalidTrace]],
+				rows: [[...selectedRow.slice(0, 17), ...invalidTrace]],
 			}),
 		).toThrow("acceptance trace");
 	expect(() =>
@@ -181,6 +190,7 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 					"cause",
 					"correlation",
 					false,
+					0,
 					0,
 					null,
 					null,

@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import { codec, defineContext, defineService, principal } from "questpie";
+import { createOfficialQuestpieObservability } from "questpie/internal/observability";
 
 import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
 import { projectOperationWireV3 } from "../../packages/compiler/src/runtime/operation-wire-v3";
@@ -16,16 +17,16 @@ import {
 import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
 import { runObservedDurableAttempt } from "../../packages/runtime/src/durable";
 import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
-import {
-	createObservationHandle,
-	type ObservationAdapterV1,
-} from "../../packages/runtime/src/observation";
+import type { ObservationAdapterV1 } from "../../packages/runtime/src/observation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
 } from "../../packages/runtime/src/operation/ingress";
 
 const sha = (character: string) => character.repeat(64);
+
+const createObservationHandle = (adapter: ObservationAdapterV1) =>
+	createOfficialQuestpieObservability(() => adapter);
 
 function canonical(value: unknown): string {
 	if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -1107,13 +1108,20 @@ test("does zero observation work when the optional boundary is absent", () => {
 		createApplicationObservation({
 			applicationIdentity: "application:collaboration",
 			runtimeBuildDigest: sha("a"),
+			questpieVersion: "4.0.0-beta.1",
 		}),
 	).toBeNull();
 	expect(() =>
-		createObservationHandle({
-			format: "questpie.runtime-observability",
-			version: 1,
-		} as never),
+		createApplicationObservation({
+			applicationIdentity: "application:collaboration",
+			runtimeBuildDigest: sha("a"),
+			signalProjectionDigest: sha("b"),
+			questpieVersion: "4.0.0-beta.1",
+			observability: createObservationHandle({
+				format: "questpie.runtime-observability",
+				version: 1,
+			} as never),
+		}),
 	).toThrow("Runtime observation adapter is incompatible");
 });
 
@@ -1285,9 +1293,11 @@ test("keeps one direct Query result and error across absent, sampled, working, a
 						await runObservedDurableAttempt({
 							observation,
 							request: {
+								acceptanceTrace: null,
 								capability: "job",
 								attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 								attemptNumber: 1,
+								queueDelayMilliseconds: 0,
 								contextInput: {},
 								dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
 								principal: { kind: "anonymous", id: "anonymous" },

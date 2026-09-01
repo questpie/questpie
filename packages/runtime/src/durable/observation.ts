@@ -19,27 +19,36 @@ export async function runObservedDurableAttempt(
 		throw new TypeError(
 			"Durable Attempt acceptance trace decision is required",
 		);
+	const common = {
+		attemptId: input.request.attemptId,
+		attemptNumber: input.request.attemptNumber,
+		dispatchId: input.request.dispatchId,
+		principalKind: input.request.principal.kind,
+		resourceIdentity: input.request.resource,
+		runId: input.request.runId,
+		trace:
+			input.request.acceptanceTrace === null
+				? ({ kind: "root" } as const)
+				: ({
+						kind: "root-with-links",
+						links: [input.request.acceptanceTrace],
+					} as const),
+	};
 	const kind =
 		input.request.capability === "job" ? "job.attempt" : "reaction.attempt";
 	const scope =
 		input.observation === null
 			? null
-			: input.observation.begin({
-					attemptId: input.request.attemptId,
-					attemptNumber: input.request.attemptNumber,
-					dispatchId: input.request.dispatchId,
-					kind,
-					principalKind: input.request.principal.kind,
-					resourceIdentity: input.request.resource,
-					runId: input.request.runId,
-					trace:
-						input.request.acceptanceTrace === null
-							? { kind: "root" }
-							: {
-									kind: "root-with-links",
-									links: [input.request.acceptanceTrace],
-								},
-				});
+			: input.request.capability === "job"
+				? input.observation.begin({
+						...common,
+						kind: "job.attempt",
+						queueDelayMilliseconds: input.request.queueDelayMilliseconds,
+					})
+				: input.observation.begin({
+						...common,
+						kind: "reaction.attempt",
+					});
 	if (!scope) return input.use();
 	try {
 		const outcome = await scope.run(input.use);

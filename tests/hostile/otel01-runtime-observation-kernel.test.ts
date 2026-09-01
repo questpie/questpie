@@ -140,6 +140,7 @@ describe("OTEL-01 hostile Runtime observation kernel", () => {
 				dispatchId: uuid,
 				kind: "job.attempt",
 				principalKind: "service",
+				queueDelayMilliseconds: 0,
 				resourceIdentity: "notify.ticket",
 				runId: uuid,
 				trace: { kind: "root" },

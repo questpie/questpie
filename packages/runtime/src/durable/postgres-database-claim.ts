@@ -59,6 +59,7 @@ function claim(
 		semanticVersion: row.semanticVersion,
 		attemptId: input.attemptId,
 		attemptNumber: input.attemptNumber,
+		queueDelayMilliseconds: row.queueDelayMilliseconds,
 		leaseToken: input.leaseToken,
 		leaseMilliseconds: input.leaseMilliseconds,
 		leaseExpiresAt: input.leaseExpiresAt,

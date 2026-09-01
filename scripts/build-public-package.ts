@@ -26,7 +26,8 @@ for (const workspace of ["questpie", "runtime", "compiler"]) {
 run(["bun", "packages/runtime/scripts/copy-source-declarations.ts"]);
 
 const internal = resolve(repositoryRoot, "packages/questpie/dist/internal");
-rmSync(internal, { force: true, recursive: true });
+rmSync(resolve(internal, "compiler"), { force: true, recursive: true });
+rmSync(resolve(internal, "runtime"), { force: true, recursive: true });
 cpSync(
 	resolve(repositoryRoot, "packages/compiler/dist"),
 	resolve(internal, "compiler"),

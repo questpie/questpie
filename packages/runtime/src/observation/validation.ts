@@ -176,8 +176,19 @@ const accept = shape(
 	["kind", "principalKind", "resourceIdentity", "trace"],
 	["dispatchId", "runId"],
 );
-const attempt = shape(
+const reactionAttempt = shape(
 	["attemptNumber", "kind", "principalKind", "resourceIdentity", "trace"],
+	["attemptId", "dispatchId", "runId"],
+);
+const jobAttempt = shape(
+	[
+		"attemptNumber",
+		"kind",
+		"principalKind",
+		"queueDelayMilliseconds",
+		"resourceIdentity",
+		"trace",
+	],
 	["attemptId", "dispatchId", "runId"],
 );
 const START_SHAPES: Readonly<Record<ScopeKind, Shape>> = {
@@ -215,8 +226,8 @@ const START_SHAPES: Readonly<Record<ScopeKind, Shape>> = {
 	]),
 	"job.accept": accept,
 	"reaction.accept": accept,
-	"job.attempt": attempt,
-	"reaction.attempt": attempt,
+	"job.attempt": jobAttempt,
+	"reaction.attempt": reactionAttempt,
 	"action.effect": shape(
 		["kind", "principalKind", "resourceIdentity", "trace"],
 		["effectId"],
@@ -301,6 +312,12 @@ export function validateObservationStart(input: ObservationStartV1): void {
 			(value.attemptNumber as number) > 8)
 	)
 		throw new TypeError("observation attempt number is invalid");
+	if (
+		kind === "job.attempt" &&
+		(!Number.isSafeInteger(value.queueDelayMilliseconds) ||
+			(value.queueDelayMilliseconds as number) < 0)
+	)
+		throw new TypeError("observation queue delay is invalid");
 	for (const key of ["dispatchId", "runId", "attemptId"] as const)
 		if (value[key] !== undefined && !isUuid(value[key]))
 			throw new TypeError(`observation ${key} is invalid`);

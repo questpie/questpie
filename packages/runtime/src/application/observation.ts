@@ -1,4 +1,7 @@
+import { randomUUID } from "node:crypto";
+
 import type { QuestpieObservability } from "questpie";
+import { QUESTPIE_OBSERVABILITY_PACKAGE_VERSION } from "questpie/internal/observability";
 
 import {
 	createObservationKernel,
@@ -24,21 +27,44 @@ export function createApplicationObservation(
 	input: Readonly<{
 		applicationIdentity: string;
 		runtimeBuildDigest: string;
+		questpieVersion?: string;
+		signalProjectionDigest?: string;
 		observability?: QuestpieObservability;
 		events?: (event: ExecutionEventV2) => void;
 		wallClock?: () => Date;
+		createRuntimeInstanceId?: () => string;
 	}>,
 ) {
 	if (input.observability === undefined && input.events === undefined)
 		return null;
+	const runtimeInstanceId = (input.createRuntimeInstanceId ?? randomUUID)();
+	const signalProjectionDigest = input.signalProjectionDigest;
+	let adapter;
+	if (input.observability !== undefined) {
+		if (
+			signalProjectionDigest === undefined ||
+			input.questpieVersion !== QUESTPIE_OBSERVABILITY_PACKAGE_VERSION
+		)
+			throw new TypeError(
+				"Runtime observation artifact binding is unavailable",
+			);
+		adapter = resolveObservationHandle(input.observability, {
+			format: "questpie.observation-runtime-metadata",
+			version: 1,
+			applicationIdentity: input.applicationIdentity,
+			runtimeBuildDigest: input.runtimeBuildDigest,
+			runtimeInstanceId,
+			signalProjectionDigest,
+			questpieVersion: input.questpieVersion,
+		});
+	}
 	return createObservationKernel({
 		applicationIdentity: input.applicationIdentity,
 		runtimeBuildDigest: input.runtimeBuildDigest,
-		...(input.observability === undefined
-			? {}
-			: { adapter: resolveObservationHandle(input.observability) }),
+		...(adapter === undefined ? {} : { adapter }),
 		events: input.events,
 		wallClock: input.wallClock,
+		createRuntimeInstanceId: () => runtimeInstanceId,
 	});
 }
 

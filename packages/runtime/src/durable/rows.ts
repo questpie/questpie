@@ -36,6 +36,7 @@ export type DurableClaim = Readonly<{
 	semanticVersion: number;
 	attemptId: string;
 	attemptNumber: number;
+	queueDelayMilliseconds: number;
 	leaseToken: string;
 	leaseMilliseconds: number;
 	leaseExpiresAt: Date;

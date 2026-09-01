@@ -28,6 +28,7 @@ type PackageJson = {
 	exports?: Record<string, unknown>;
 	scripts?: Record<string, string>;
 	dependencies?: Record<string, string>;
+	peerDependencies?: Record<string, string>;
 };
 
 function fail(message: string): never {
@@ -95,6 +96,46 @@ for (const { path, json } of publicPackages) {
 		!inspection.includes("dist/index.js")
 	)
 		fail(`${label}: tarball omits built declarations or ESM entry`);
+	if (
+		json.name === "questpie" &&
+		(!inspection.includes("dist/internal/observability.d.ts") ||
+			!inspection.includes("dist/internal/observability.js"))
+	)
+		fail(`${label}: tarball omits the official observability bridge`);
+	if (
+		json.name === "questpie" &&
+		JSON.stringify(Object.keys(json.exports).sort()) !==
+			JSON.stringify([".", "./internal/observability"])
+	)
+		fail(`${label}: exports an unexpected observability surface`);
+	if (
+		json.name === "questpie" &&
+		Object.keys(json.dependencies ?? {}).some(
+			(name) =>
+				name === "@questpie/opentelemetry" ||
+				name.startsWith("@opentelemetry/"),
+		)
+	)
+		fail(`${label}: core must not depend on OpenTelemetry`);
+	if (json.name === "@questpie/opentelemetry") {
+		if (
+			JSON.stringify(Object.keys(json.exports).sort()) !== JSON.stringify(["."])
+		)
+			fail(`${label}: exports an unexpected public surface`);
+		if (
+			JSON.stringify(json.peerDependencies) !==
+			JSON.stringify({ questpie: json.version })
+		)
+			fail(`${label}: questpie must be its sole exact-version peer`);
+		if (
+			Object.keys(json.dependencies ?? {}).some(
+				(name) => !name.startsWith("@opentelemetry/"),
+			)
+		)
+			fail(`${label}: owns a non-OpenTelemetry production dependency`);
+		if (inspection.includes("dist/testing"))
+			fail(`${label}: publishes the repository-only test harness`);
+	}
 	if (/packed .*\bsrc\//.test(inspection))
 		fail(`${label}: tarball unexpectedly contains source files`);
 }
@@ -158,6 +199,10 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			"packages/questpie",
 			{
 				".": { types: "./dist/index.d.ts", import: "./dist/index.js" },
+				"./internal/observability": {
+					types: "./dist/internal/observability.d.ts",
+					import: "./dist/internal/observability.js",
+				},
 			},
 			false,
 		);
@@ -167,6 +212,7 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			"./bundle-core": "./dist/bundle-core.js",
 			"./bundle-core-types": "./dist/bundle-core-types.d.ts",
 			"./bundle-realtime": "./dist/bundle-realtime.js",
+			"./observation": "./dist/observation/index.js",
 		});
 		install("@questpie/compiler", "packages/compiler", {
 			".": "./dist/index.js",
@@ -203,6 +249,60 @@ async function verifyPrivateBuildClosure(): Promise<void> {
 			fail(
 				`private Runtime declaration export is not consumable: ${typecheck.stdout.toString()}${typecheck.stderr.toString()}`.trim(),
 			);
+		const bridgeTypeConsumer = join(temporary, "bridge-type-consumer.ts");
+		writeFileSync(
+			bridgeTypeConsumer,
+			`import {
+	bindOfficialQuestpieObservability,
+	createOfficialQuestpieObservability,
+	type QuestpieObservationRuntimeMetadataV1,
+} from "questpie/internal/observability";
+// @ts-expect-error the official bridge is deliberately absent from the public root
+import { bindOfficialQuestpieObservability as leakedBridge } from "questpie";
+declare const metadata: QuestpieObservationRuntimeMetadataV1;
+const handle = createOfficialQuestpieObservability(() => ({}));
+bindOfficialQuestpieObservability(handle, metadata);
+void leakedBridge;
+`,
+		);
+		const bridgeTypecheck = Bun.spawnSync(
+			[
+				"bun",
+				join(nodeModules, "typescript", "bin", "tsc"),
+				"--noEmit",
+				"--module",
+				"Preserve",
+				"--moduleResolution",
+				"Bundler",
+				"--target",
+				"ES2022",
+				bridgeTypeConsumer,
+			],
+			{ cwd: temporary, stdout: "pipe", stderr: "pipe" },
+		);
+		if (bridgeTypecheck.exitCode !== 0)
+			fail(
+				`official bridge declarations are not isolated: ${bridgeTypecheck.stdout.toString()}${bridgeTypecheck.stderr.toString()}`.trim(),
+			);
+
+		const questpieRoot = await import(
+			`${pathToFileURL(join(nodeModules, "questpie/dist/index.js")).href}?relocated=${crypto.randomUUID()}`
+		);
+		for (const forbidden of [
+			"bindOfficialQuestpieObservability",
+			"createOfficialQuestpieObservability",
+			"QUESTPIE_OBSERVABILITY_PACKAGE_VERSION",
+		])
+			if (forbidden in questpieRoot)
+				fail(`questpie: root unexpectedly exports ${forbidden}`);
+		const bridge = await import(
+			`${pathToFileURL(join(nodeModules, "questpie/dist/internal/observability.js")).href}?relocated=${crypto.randomUUID()}`
+		);
+		if (
+			typeof bridge.createOfficialQuestpieObservability !== "function" ||
+			typeof bridge.bindOfficialQuestpieObservability !== "function"
+		)
+			fail("questpie: relocated official observability bridge is incomplete");
 
 		const applicationRoot = join(temporary, "application");
 		cpSync(resolve("fixtures/collaboration"), applicationRoot, {

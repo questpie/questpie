@@ -16,18 +16,31 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 			recursive: true,
 			filter: (source) => !source.endsWith("/node_modules"),
 		});
-		await mkdir(join(temporary, "node_modules/questpie"), { recursive: true });
+		await mkdir(join(temporary, "node_modules/questpie/internal"), {
+			recursive: true,
+		});
 		await writeFile(
 			join(temporary, "node_modules/questpie/package.json"),
 			JSON.stringify({
 				name: "questpie",
 				type: "module",
-				exports: "./index.ts",
+				exports: {
+					".": "./index.ts",
+					"./internal/observability": "./internal/observability.ts",
+				},
 			}),
 		);
 		await symlink(
 			resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 			join(temporary, "node_modules/questpie/index.ts"),
+			"file",
+		);
+		await symlink(
+			resolve(
+				repositoryRoot,
+				"packages/questpie/src/internal/observability.ts",
+			),
+			join(temporary, "node_modules/questpie/internal/observability.ts"),
 			"file",
 		);
 
@@ -148,6 +161,12 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 		])
 			expect(bundle).not.toContain(replaced);
 		expect(linkedApplication).not.toContain("@questpie/runtime");
+		expect(
+			linkedApplication.match(/questpie\/internal\/observability/g),
+		).toHaveLength(2);
+		expect(linkedApplication).not.toContain(
+			"Runtime observation handle is already bound",
+		);
 
 		const internalApplication = await import(
 			pathToFileURL(
@@ -165,6 +184,30 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 			"bindIngressPrincipalForRequest",
 			"createApplication",
 		]);
+		const { createOfficialQuestpieObservability } = await import(
+			pathToFileURL(
+				join(temporary, "node_modules/questpie/internal/observability.ts"),
+			).href
+		);
+		const received: unknown[] = [];
+		const observability = createOfficialQuestpieObservability(
+			(metadata: unknown) => {
+				received.push(metadata);
+				return Object.freeze({
+					format: "questpie.runtime-observability",
+					version: 1,
+					extract: () => null,
+					begin: () =>
+						Object.freeze({
+							context: null,
+							run: async <Result>(use: () => Result | Promise<Result>) =>
+								await use(),
+							event: () => undefined,
+							end: () => undefined,
+						}),
+				});
+			},
+		);
 		await expect(
 			internalApplication.createApplication({
 				postgres: {
@@ -175,6 +218,24 @@ test("relocated generated application owns one PostgreSQL Runtime without Bun SQ
 				maintenance: { authorize: () => true },
 			}),
 		).rejects.toThrow("HMAC key must contain at least 32 bytes");
+		await expect(
+			internalApplication.createApplication({
+				postgres: {
+					connectionUrl: "postgres://localhost:1/questpie",
+					directConnectionUrl: "postgres://localhost:1/questpie",
+				},
+				realtime: { hmacKey: new Uint8Array(32) },
+				maintenance: { authorize: () => true },
+				observability,
+			}),
+		).rejects.toThrow();
+		expect(received).toHaveLength(1);
+		expect(received[0]).toMatchObject({
+			format: "questpie.observation-runtime-metadata",
+			version: 1,
+			applicationIdentity: "application:collaboration",
+			questpieVersion: "4.0.0-beta.1",
+		});
 	} finally {
 		await rm(temporary, { force: true, recursive: true });
 	}

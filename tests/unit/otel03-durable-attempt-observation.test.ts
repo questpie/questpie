@@ -17,6 +17,7 @@ const request = Object.freeze({
 	capability: "job" as const,
 	attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 	attemptNumber: 2,
+	queueDelayMilliseconds: 125,
 	contextInput: { tenant: "stored" },
 	dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
 	principal: Object.freeze({ kind: "user" as const, id: "user:one" }),
@@ -143,6 +144,7 @@ test("starts each Attempt as a fresh root with its first-acceptance link", async
 		}),
 	);
 	expect(starts.find(({ kind }) => kind === "job.attempt")).toMatchObject({
+		queueDelayMilliseconds: 125,
 		trace: { kind: "root-with-links", links: [acceptanceTrace] },
 	});
 });

@@ -22,6 +22,7 @@ const claim = Object.freeze({
 	semanticVersion: 1,
 	attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 	attemptNumber: 1,
+	queueDelayMilliseconds: 125,
 	leaseToken: "lease-token",
 	leaseMilliseconds: 30_000,
 	leaseExpiresAt: new Date("2026-08-22T00:00:30.000Z"),

@@ -106,6 +106,7 @@ function claim(
 		semanticVersion: input.semanticVersion,
 		attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 		attemptNumber: 1,
+		queueDelayMilliseconds: 125,
 		leaseToken: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6203",
 		leaseMilliseconds: 30_000,
 		leaseExpiresAt: new Date("2026-08-25T00:00:30.000Z"),

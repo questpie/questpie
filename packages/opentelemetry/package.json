@@ -1,0 +1,35 @@
+{
+	"name": "@questpie/opentelemetry",
+	"version": "4.0.0-beta.1",
+	"files": [
+		"dist"
+	],
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"scripts": {
+		"build": "bun scripts/build.ts",
+		"generate:projection": "bun scripts/generate-signal-projection.ts",
+		"types:check": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json --noEmit"
+	},
+	"dependencies": {
+		"@opentelemetry/api": "1.9.1",
+		"@opentelemetry/context-async-hooks": "2.10.0",
+		"@opentelemetry/core": "2.10.0",
+		"@opentelemetry/exporter-metrics-otlp-http": "0.221.0",
+		"@opentelemetry/exporter-trace-otlp-http": "0.221.0",
+		"@opentelemetry/resources": "2.10.0",
+		"@opentelemetry/sdk-metrics": "2.10.0",
+		"@opentelemetry/sdk-trace": "2.10.0"
+	},
+	"devDependencies": {
+		"questpie": "workspace:*"
+	},
+	"peerDependencies": {
+		"questpie": "4.0.0-beta.1"
+	}
+}

@@ -720,6 +720,7 @@ test("keeps a Reaction structural SELECT under the active Reaction Attempt", asy
 			observation: execution.observation,
 			request: {
 				capability: "reaction",
+				acceptanceTrace: null,
 				attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 				attemptNumber: 1,
 				contextInput: { tenant: "stored" },

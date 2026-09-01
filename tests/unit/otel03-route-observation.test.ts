@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { codec, defineContext, defineService, principal } from "questpie";
+import { createOfficialQuestpieObservability } from "questpie/internal/observability";
 
 import {
 	createApplicationRuntime,
@@ -13,10 +14,12 @@ import {
 	observeApplicationUnmatchedFetch,
 } from "../../packages/runtime/src/application/observation";
 import {
-	createObservationHandle,
 	type ExecutionEventV2,
 	type ObservationAdapterV1,
 } from "../../packages/runtime/src/observation";
+
+const createObservationHandle = (adapter: ObservationAdapterV1) =>
+	createOfficialQuestpieObservability(() => adapter);
 
 test("owns one matched Route through credential work, nested Execution, and response EOF", async () => {
 	const events: ExecutionEventV2[] = [];
@@ -38,6 +41,8 @@ test("owns one matched Route through credential work, nested Execution, and resp
 	const observation = createApplicationObservation({
 		applicationIdentity: "application:routes",
 		runtimeBuildDigest: "d".repeat(64),
+		questpieVersion: "4.0.0-beta.1",
+		signalProjectionDigest: "e".repeat(64),
 		observability: createObservationHandle(adapter),
 		events: (event) => events.push(event),
 	});

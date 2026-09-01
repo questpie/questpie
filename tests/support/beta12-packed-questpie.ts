@@ -9,7 +9,7 @@ export async function installQuestpieForTracer(
 ): Promise<string> {
 	const packageRoot = join(applicationRoot, "node_modules/questpie");
 	await rm(packageRoot, { force: true, recursive: true });
-	await mkdir(packageRoot, { recursive: true });
+	await mkdir(join(packageRoot, "internal"), { recursive: true });
 	if (tarball) {
 		const extracted = Bun.spawnSync([
 			"tar",
@@ -37,11 +37,23 @@ export async function installQuestpieForTracer(
 
 	await writeFile(
 		join(packageRoot, "package.json"),
-		JSON.stringify({ name: "questpie", type: "module", exports: "./index.ts" }),
+		JSON.stringify({
+			name: "questpie",
+			type: "module",
+			exports: {
+				".": "./index.ts",
+				"./internal/observability": "./internal/observability.ts",
+			},
+		}),
 	);
 	await symlink(
 		resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 		join(packageRoot, "index.ts"),
+		"file",
+	);
+	await symlink(
+		resolve(repositoryRoot, "packages/questpie/src/internal/observability.ts"),
+		join(packageRoot, "internal/observability.ts"),
 		"file",
 	);
 	return join(packageRoot, "index.ts");
