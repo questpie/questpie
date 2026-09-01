@@ -679,11 +679,14 @@ workspace typechecks, architecture, generated goldens and `git diff --check`
 pass. The full lane at `4b2f9c5e0` recorded 823 passes and only the already-owned
 OTEL-08 release-checksum failures plus the manifest-bound PostgreSQL proof that
 requires `PGHOST`; the affected acceptance tests and deterministic gates were
-rerun after `eeeefcfaa`. OTEL-04 protocol v8 and OTEL-05 adapter work are now
-unblocked and may proceed in parallel. `questpie` remains the sole application
-authoring/Runtime package; compiler, Runtime, and testkit packages remain
-private. Public `apps/docs` changes are structurally blocked until OTEL-07's
-reference tracers pass, then land with release closure in OTEL-08. The
+rerun after `eeeefcfaa`. OTEL-04 protocol v8 is complete through `6dff55285`,
+OTEL-05's exact-peer adapter is complete through `5b5cf8404`, and OTEL-06's CLI
+plus loopback OTLP operation is complete through `0a37ee993` after independent
+Standards and Spec PASS. OTEL-07 reference tracers are now unblocked.
+`questpie` remains the sole application authoring/Runtime package; compiler,
+Runtime, and testkit packages remain private. Public `apps/docs` changes are
+structurally blocked until OTEL-07's reference tracers pass, then land with
+release closure in OTEL-08. The
 historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
 remains research, not additional authority.
 
@@ -761,11 +764,11 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel.
 4. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
-   OTEL-03 are complete through `eeeefcfaa`. Continue blockers-first with
-   OTEL-04 protocol-v8 durable correlation and OTEL-05's exact-peer adapter;
-   they may proceed in parallel. Do not restore a v7/v8 Runtime compatibility
-   path, add a second observation kernel, or publish the `apps/docs` install
-   guide before OTEL-07 passes and OTEL-08 closes release evidence.
+   OTEL-06 are complete through `0a37ee993`. Continue with OTEL-07's reference
+   browser and hostile tracers, then OTEL-08's public guide and release closure.
+   Do not restore a v7/v8 Runtime compatibility path, add a second observation
+   kernel, or publish the `apps/docs` install guide before OTEL-07 passes and
+   OTEL-08 closes release evidence.
 5. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.

@@ -1,6 +1,6 @@
 # OpenTelemetry implementation queue
 
-- Status: OTEL-01 through OTEL-03 complete; OTEL-04 and OTEL-05 unblocked
+- Status: OTEL-01 through OTEL-06 complete; OTEL-07 unblocked
 - Spec: [`SPEC.md`](./SPEC.md)
 - Authority: Accepted ADR-0033 and ADR-0034 with their verified replacement reviews
 - Delivery rule: every ticket starts red and lands a narrow runnable tracer
@@ -202,6 +202,8 @@ Acceptance:
 - all OpenTelemetry dependencies live under the adapter package.
 
 ## OTEL-06 — Operate the adapter through CLI and loopback OTLP
+
+Status: complete at `0a37ee993` after independent Standards and Spec PASS.
 
 Blocked by: OTEL-03 and OTEL-05.
 
