@@ -40,6 +40,12 @@ import {
 	type ValueOf,
 } from "./value";
 
+export { matchDiscriminated } from "./discriminated-value";
+export type {
+	DiscriminatedReference,
+	DiscriminatedValue,
+} from "./discriminated-value";
+
 export { defineService } from "./service";
 export type {
 	ServiceDefinition,

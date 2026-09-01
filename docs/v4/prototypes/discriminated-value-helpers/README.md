@@ -1,11 +1,11 @@
-# Discriminated value helper prototype
+# Discriminated value helper evidence
 
-- Status: reviewed Product evidence for Accepted ADR-0037; not production code
+- Status: archived Product evidence for Accepted ADR-0037
 - Authority: ADR-0037
 
-This prototype replaces the copy-pasted ADR-0035 recipe with three small
-ordinary-TypeScript helpers. It proves type inference and hostile dispatch only;
-it is not imported by production packages.
+This evidence established the exact three-helper boundary before Product
+acceptance. Production parity now lives in the public `questpie` export and its
+public-root tests; the duplicate executable prototype was deleted.
 
 The intended use is:
 
@@ -21,5 +21,5 @@ const label = matchDiscriminated(subject, {
 });
 ```
 
-This is a polymorphic reference **value**, not a polymorphic Relation. Each
+This remains a polymorphic reference **value**, not a polymorphic Relation. Each
 variant is resolved by a named Query or Mutation and current Policy.

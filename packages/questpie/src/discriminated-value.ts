@@ -21,7 +21,7 @@ type DiscriminatedCases<Value extends Readonly<{ kind: string }>> = {
 type ExactCases<
 	Value extends Readonly<{ kind: string }>,
 	Cases extends DiscriminatedCases<Value>,
-> = Cases & Record<Exclude<keyof Cases, KindOf<Value>>, never>;
+> = Cases & Readonly<Record<Exclude<keyof Cases, KindOf<Value>>, never>>;
 
 type CaseResult<Cases> = ReturnType<
 	Cases[keyof Cases] extends (...arguments_: never[]) => unknown
