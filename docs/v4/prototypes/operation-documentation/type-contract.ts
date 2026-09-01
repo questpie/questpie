@@ -1,7 +1,11 @@
+import { codec, type CodecValue } from "../../../../packages/questpie/src";
 import type { OperationDescription } from "./contract";
 
-type CloseInput = Readonly<{ id: string }>;
-type CloseOutput = Readonly<{ id: string; status: "closed" }>;
+const closeInput = codec.object({ id: codec.uuid() });
+const closeOutput = codec.object({ id: codec.uuid(), status: codec.text() });
+
+type CloseInput = CodecValue<typeof closeInput>;
+type CloseOutput = CodecValue<typeof closeOutput>;
 
 export const describedClose = {
 	summary: "Close an open ticket",
@@ -30,7 +34,7 @@ export const invalidOutput = {
 		{
 			input: { id: "synthetic-ticket-id" },
 			// @ts-expect-error Operation examples inherit the output codec value.
-			output: { id: "synthetic-ticket-id", status: "open" },
+			output: { id: "synthetic-ticket-id", status: 42 },
 		},
 	],
 } as const satisfies OperationDescription<CloseInput, CloseOutput>;

@@ -12,11 +12,12 @@ adding them only to OpenAPI would create a second contract. The same prose is
 also useful in generated declarations, public documentation, and the proposed
 MCP catalogue.
 
-The current Operation factories have no documentation slot. Their compiler
-projection also drops unknown members, so a misspelling could appear to work
-while emitting nothing. Codecs are closed reusable value grammars; attaching
-prose to them would change every codec consumer and make one description leak
-into unrelated Operations.
+The current Operation factories have no documentation slot. Query and Mutation
+composition can drop an unknown member when non-literal or untyped authoring
+escapes TypeScript, so a misspelling could appear to work while emitting
+nothing; Action discovery is already closed. Codecs are closed reusable value
+grammars; attaching prose to them would change every codec consumer and make one
+description leak into unrelated Operations.
 
 ## Proposed decision
 
@@ -32,10 +33,13 @@ describe: {
 ```
 
 `summary` is required when `describe` is present. `description` and `examples`
-are optional. Examples are typed from that Operation's existing input and
-output codecs; they introduce no schema language and never execute. Collection
-Operation Set members use the same shape at the member that establishes the
-generated Operation.
+are optional. Every example explicitly contains `input`, including `{}` for an
+empty-input Operation; `output` is optional. Examples are typed from that
+Operation's existing input and output codecs, introduce no schema language, and
+never execute. Collection Operation Set `list`, `get`, `create`, `update`, and
+`delete` members use the same shape at the member that establishes the generated
+Operation. Member-level closure admits `describe` and rejects every other new
+member.
 
 All Operation Definition shapes become closed. An unknown member fails at its
 Origin instead of being ignored. No codec, Field, Collection, Context, error,
@@ -49,8 +53,9 @@ handler inputs.
 
 `summary` is NFC plain text, one line, 1–120 Unicode scalars. `description` is
 NFC plain text, 1–1,024 Unicode scalars. Leading/trailing whitespace, lone
-surrogates, C0/C1 controls other than line feed in `description`, and bidi
-directional controls fail. The compiler escapes each target format; prose
+surrogates, C0, DEL, C1 controls other than line feed in `description`, Unicode
+line/paragraph separators in `summary`, and bidi directional controls fail. The
+compiler escapes each target format; prose
 does not become executable source or authority. Total canonical example bytes
 are bounded to 4,096 per Operation and remain inside the generated-byte budget.
 
@@ -67,16 +72,21 @@ cannot invalidate a generated client or plan a database migration.
 
 OpenAPI, MCP, generated declaration documentation, explain output, and any
 future application-specific skill projection pin this documentation digest next
-to their semantic source digests. The canonical HTTP adapter and Runtime do not
-read the artifact at request time.
+to their semantic source digests. OpenAPI places the pin at compiler-owned
+`info.x-questpie-operation-documentation-digest`, changing none of its four
+accepted top-level members. The canonical HTTP adapter and Runtime do not read
+the artifact at request time.
 
 OpenAPI projects `summary`, `description`, and schema-valid examples. MCP maps
 the summary to optional `title` and summary plus description to `description`.
-Only Query receives `readOnlyHint: true`; documentation never grants Authority,
-changes Policy, or justifies Mutation/Action risk annotations. Generated JSDoc
-is emitted from this artifact and is never extracted from authored comments.
+Any MCP risk hint is derived only from accepted Operation kind semantics, never
+from `describe`; documentation never grants Authority, changes Policy, or
+justifies Mutation/Action risk annotations. MCP prose is model-facing
+application instruction. This contract claims bounded structural safety and no
+content filter or compiler-proven prompt purity. Generated JSDoc is emitted from
+this artifact and is never extracted from authored comments.
 
-The public repository skill at `skills/questpie` remains a portable framework
+The planned public repository skill at `skills/questpie` is a portable framework
 authoring skill. It is not generated from application prose. An
 application-specific generated skill remains a named later consumer of this
 artifact rather than beta.2 scope.
@@ -88,6 +98,12 @@ examples, cursor examples, or byte-limit overflow are fatal compile diagnostics
 with the exact Origin and member path. Diagnostics disclose no example values.
 Package and application Origins remain visible in explain output.
 
+The registered fatal diagnostic is:
+
+| Code             | Class                  | Closed reasons                                                                                                                                              |
+| ---------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QP-COMPOSE-030` | `invalidDocumentation` | `unexpectedOperationMember`, `missingSummary`, `invalidText`, `missingExampleInput`, `exampleCodecMismatch`, `runtimeMintedExample`, `exampleLimitExceeded` |
+
 Descriptions are application-authored public contract data. They may explain
 domain purpose but must not claim access the caller's Policy does not grant.
 They do not reveal Policy evidence or make a hidden Operation discoverable:
@@ -96,10 +112,12 @@ each projection still follows its own accepted exposure selection.
 ## Supersession ledger
 
 This decision fills only ADR-0036's explicit descriptive-metadata deferral and
-adds closed member admission to Query, Mutation, and Action composition. It does
+adds closed member admission to Query, Mutation, Action, and the five Collection
+Operation Set members. It does
 not change canonical codecs, Operation execution, network exposure, HTTP paths,
 OpenAPI schema ownership, Policy, Runtime, or the public skill format. It
-supersedes research proposing projection-specific prose or codec-level examples.
+rejects projection-specific prose and codec-level examples as candidates rather
+than superseding an Accepted surface.
 
 ## Acceptance
 

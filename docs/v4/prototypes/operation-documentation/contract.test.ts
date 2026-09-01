@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { digest } from "../../../../packages/compiler/src/canonical";
 import {
 	assertClosedOperationMembers,
 	compileOperationDocumentation,
@@ -58,19 +57,12 @@ describe("projection-neutral Operation documentation", () => {
 		expect(left.digest).toHaveLength(64);
 	});
 
-	test("keeps documentation digest independent of semantic client contract", () => {
-		const semantic = {
-			identity: source().identity,
-			input,
-			output,
-		};
-		const clientDigest = digest("questpie-client-contract-v1", semantic);
+	test("uses a domain-separated digest for prose changes", () => {
 		const before = compileOperationDocumentation([source()]);
 		const after = compileOperationDocumentation([
 			source({ describe: { summary: "Close a currently open ticket" } }),
 		]);
 		expect(after.digest).not.toBe(before.digest);
-		expect(digest("questpie-client-contract-v1", semantic)).toBe(clientDigest);
 	});
 
 	test("keeps semantic bytes stable when the Definition relocates", () => {
@@ -102,6 +94,42 @@ describe("projection-neutral Operation documentation", () => {
 		}
 	});
 
+	test("admits the existing authored members for every Operation kind", () => {
+		expect(() =>
+			assertClosedOperationMembers(
+				"query",
+				{ name: "tickets.detail", network: true, query: {}, describe: {} },
+				origin,
+			),
+		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"mutation",
+				{
+					name: "tickets.close",
+					policy: {},
+					errors: {},
+					issueMappings: {},
+					describe: {},
+				},
+				origin,
+			),
+		).not.toThrow();
+		expect(() =>
+			assertClosedOperationMembers(
+				"action",
+				{
+					name: "reports.export",
+					policy: {},
+					errors: {},
+					limits: {},
+					describe: {},
+				},
+				origin,
+			),
+		).not.toThrow();
+	});
+
 	test.each([
 		[" leading whitespace", "invalidText"],
 		["not NFC: e\u0301", "invalidText"],
@@ -124,7 +152,8 @@ describe("projection-neutral Operation documentation", () => {
 				}),
 			]).artifact.operations[0]?.description,
 		).toBe("First line.\nSecond line.");
-		expect(() =>
+		let mismatch: unknown;
+		try {
 			compileOperationDocumentation([
 				source({
 					describe: {
@@ -132,8 +161,36 @@ describe("projection-neutral Operation documentation", () => {
 						examples: [{ input: { id: "not-a-uuid" } }],
 					},
 				}),
-			]),
-		).toThrow("exampleCodecMismatch");
+			]);
+		} catch (error) {
+			mismatch = error;
+		}
+		expect(mismatch).toBeInstanceOf(DocumentationDiagnostic);
+		expect((mismatch as DocumentationDiagnostic).reason).toBe(
+			"exampleCodecMismatch",
+		);
+		expect(String(mismatch)).not.toContain("not-a-uuid");
+	});
+
+	test("does not disclose invalid prose or missing example data", () => {
+		for (const candidate of [
+			source({ describe: { summary: "private-value\u2028injection" } }),
+			source({
+				describe: {
+					summary: "Close an open ticket",
+					examples: [{} as never],
+				},
+			}),
+		]) {
+			let diagnostic: unknown;
+			try {
+				compileOperationDocumentation([candidate]);
+			} catch (error) {
+				diagnostic = error;
+			}
+			expect(diagnostic).toBeInstanceOf(DocumentationDiagnostic);
+			expect(String(diagnostic)).not.toContain("private-value");
+		}
 	});
 
 	test("forbids Runtime-minted cursor examples and bounds canonical bytes", () => {

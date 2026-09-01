@@ -27,6 +27,7 @@ export class DocumentationDiagnostic extends TypeError {
 			| "exampleCodecMismatch"
 			| "exampleLimitExceeded"
 			| "invalidText"
+			| "missingExampleInput"
 			| "missingSummary"
 			| "runtimeMintedExample"
 			| "unexpectedOperationMember",
@@ -88,15 +89,7 @@ export function assertClosedOperationMembers(
 	value: RecordValue,
 	origin: DocumentationOrigin,
 ): void {
-	const common = [
-		"describe",
-		"handler",
-		"input",
-		"kind",
-		"name",
-		"network",
-		"output",
-	];
+	const common = ["describe", "handler", "input", "name", "network", "output"];
 	const allowed = new Set(
 		kind === "mutation"
 			? [...common, "errors", "issueMappings", "policy"]
@@ -133,6 +126,8 @@ function text(
 		!bidiControl.test(value) &&
 		!hasForbiddenControl(value, mode === "description") &&
 		(mode === "description" || !value.includes("\n")) &&
+		(mode === "description" ||
+			(!value.includes("\u2028") && !value.includes("\u2029"))) &&
 		scalars <= (mode === "summary" ? 120 : 1024);
 	if (!valid)
 		throw new DocumentationDiagnostic("invalidText", origin, [
@@ -227,7 +222,7 @@ export function compileOperationDocumentation(
 				const example = record(raw);
 				if (!example || !Object.hasOwn(example, "input"))
 					throw new DocumentationDiagnostic(
-						"exampleCodecMismatch",
+						"missingExampleInput",
 						source.origin,
 						["describe", "examples", String(index)],
 					);

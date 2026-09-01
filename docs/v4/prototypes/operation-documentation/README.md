@@ -6,8 +6,10 @@
 
 The proof isolates the smallest new authoring seam. It demonstrates closed
 Operation members, bounded text, example decode/re-encode through the existing
-codec kernel, deterministic artifact bytes, and a digest that changes without
-changing the semantic Client Contract digest.
+codec kernel, deterministic relocation-stable artifact bytes, and a
+domain-separated documentation digest. Binding the production generated factory
+types and keeping this artifact out of the real Client Contract digest remain
+explicit implementation gates after ratification.
 
 Run:
 
