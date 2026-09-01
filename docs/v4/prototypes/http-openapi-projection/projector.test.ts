@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 
 import type { NormalizedResource } from "../../../../packages/compiler/src/types";
+import { projectCodecJsonSchema } from "./codec-schema";
 import { projectOpenApi } from "./projector";
 
 const origin = (logicalPath: string, exportName = "definition") =>
@@ -32,6 +33,29 @@ const text = Object.freeze({ kind: "text", minLength: 1, maxLength: 100 });
 const output = Object.freeze({
 	kind: "object",
 	properties: Object.freeze({ accepted: Object.freeze({ kind: "boolean" }) }),
+});
+
+test("schema records exact wire numeric boundaries instead of widening JavaScript or PostgreSQL", () => {
+	expect(projectCodecJsonSchema({ kind: "integer" })).toEqual({
+		type: "integer",
+		minimum: Number.MIN_SAFE_INTEGER,
+		maximum: Number.MAX_SAFE_INTEGER,
+		"x-questpie-negative-zero": false,
+	});
+	expect(projectCodecJsonSchema({ kind: "bigint" })).toMatchObject({
+		type: "string",
+		"x-questpie-postgresql-minimum": "-9223372036854775808",
+		"x-questpie-postgresql-maximum": "9223372036854775807",
+	});
+	const numeric = projectCodecJsonSchema({
+		kind: "numeric",
+		precision: 8,
+		scale: 2,
+	});
+	const pattern = new RegExp(String(numeric.pattern));
+	expect(pattern.test("123456.78")).toBe(true);
+	expect(pattern.test("1234567.89")).toBe(false);
+	expect(pattern.test("1.2")).toBe(false);
 });
 const networkContract = Object.freeze({
 	exposure: "network",
@@ -181,6 +205,7 @@ test("proof: the closed codec owner lowers without widening unknown members", ()
 		type: "integer",
 		minimum: 1,
 		maximum: 10,
+		"x-questpie-negative-zero": false,
 	});
 	expect(input.properties.cursor).toEqual({
 		anyOf: [{ type: "string", "x-questpie-codec": "cursor" }, { type: "null" }],

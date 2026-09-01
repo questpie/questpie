@@ -38,8 +38,8 @@ network Operation from the same App Contract and codec metadata used by types,
 clients, declarations, and future MCP. Authors never restate parameters,
 schemas, nullability, validation, results, or errors. Raw Routes retain explicit
 external-protocol method/path behavior and are omitted with Origins. The exact
-grammar, diagnostics, artifacts, digests, disclosure, retry, cancellation,
-collision, and explain contracts are normative in
+grammar, diagnostics, disclosure, retry, cancellation, collision, and explain
+semantics are normative in
 `docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md`.
 
 ## Supersession ledger

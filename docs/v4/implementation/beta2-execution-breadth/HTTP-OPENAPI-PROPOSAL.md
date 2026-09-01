@@ -109,12 +109,26 @@ The fixed phase order is:
 Cancellation stops before the next phase. Resolver malformed/unavailable errors
 precede request decode; provider unavailable is `RUNTIME_UNAVAILABLE`. Decode
 precedes Context and Policy. Policy denial preserves Accepted nondisclosure. No
-request member can supply Principal, Authority, or Context.
+request member can supply Principal, Authority, or resolved Context facts.
 
 The adapter owns transport decoding only. Direct and canonical network HTTP share
 the Operation executor, handler, Policy, limits, result validation, declared
 errors, cancellation, transaction, and observability path. There is no fallback,
 parallel handler, or transport retry loop.
+
+Generated CallOptions retain safe canonical carriers. Query and Action accept
+at most one `Questpie-Call-Id`; Mutation derives `callId` only from required
+`Idempotency-Key`. All kinds accept at most one
+`Questpie-Timeout-Milliseconds`, an ASCII base-10 positive safe integer without
+sign, whitespace, leading zero, exponent, or normalization. These headers are
+framework metadata, never input, Context, Principal, or Authority. After Action
+dispatch every untrusted transport failure remains correlated to the chosen
+callId as `ACTION_OUTCOME_AMBIGUOUS`.
+
+Generated clients send the reserved trio `Questpie-Application`,
+`Questpie-Client-Contract`, and `Questpie-Wire-Digest`. If any is present, all
+are required and must match before work. Ordinary OpenAPI callers omit all three.
+This is stale-client detection, not another route or compatibility fallback.
 
 The generated typed client is compiled from the same endpoint projection. Query
 methods issue canonical GETs; Mutation and Action methods issue canonical POSTs.
@@ -144,10 +158,11 @@ uses one codec-driven lexical encoding, then UTF-8 percent encoding.
 
 The compiler admits GET only when every reachable codec branch has a static
 maximum canonical encoded size. An unbounded text/array/JSON branch reports
-`queryHttpEncodingUnsupported`; there is no POST fallback. The complete encoded
-query string counts against the Operation's existing `inputBytes` limit and the
-Accepted 1,048,576-byte outer request ceiling; the lower bound wins. No new
-speculative URL constant or authored HTTP budget is introduced.
+`queryHttpEncodingUnsupported`; there is no POST fallback. The complete ASCII
+query after percent encoding is at most 16,384 bytes; decoded canonical Context
+JSON is at most 65,536 UTF-8 bytes. Both fixed HTTP framing bounds are checked
+before codec decode. They are not Action's semantic `inputBytes` and are not
+author configuration.
 
 ### Mutation and Action JSON
 
@@ -176,9 +191,8 @@ identity; authors cannot rename, default, or read it. Missing/invalid/duplicate
 values fail before dispatch. `Idempotency-Key` is rejected on Query and Action;
 `Effect-Key` is rejected on Query and Mutation.
 
-After successful request decode, Query and Action receive their existing
-framework-owned Call Identity; HTTP accepts no caller-supplied Call Identity for
-them.
+After successful request decode, Query and Action receive the validated optional
+caller Call Identity or their existing framework-owned default.
 
 ### Exact responses, cancellation, and disclosure
 
@@ -216,10 +230,17 @@ unavailable are retryable; protocol/not-found/internal are not. Pre-correlation
 failure omits `callId`; later outcomes are correlated. RPC-only
 `APPLICATION_MISMATCH`/`CLIENT_OUTDATED` are impossible and absent from OpenAPI.
 
+Action is outcome-sensitive: pre-dispatch `RESOURCE_LIMIT` follows the ordinary
+classification, while ADR-0028's post-handler oversized settled result or
+declared outcome is correlated and non-retryable because provider nonacceptance
+is not proven.
+
 Missing and Policy-invisible targets remain identical 404. PostgreSQL detail,
 stack, cause, credential detail, Context, and Policy evidence never appear.
 Response `Content-Type` is `application/json; charset=utf-8`; OpenAPI content key
-is `application/json`.
+is `application/json`. Every Query response, including failures, carries
+`Cache-Control: private, no-store`; no cache entry may be reused across
+Principal or Context, and `Vary` is not treated as authorization.
 
 Pre-commit cancellation rolls back and uses `DEADLINE_EXCEEDED` 408. After
 Mutation commit, cancellation/response loss is exact ADR-0023 HTTP 500 with
@@ -301,10 +322,10 @@ false, object, string, array, null, unknown projection names, paths, URLs, and
 environment placeholders fail application-v1. Absence is the only disabled
 spelling. Selection emits documentation only and never exposes an Operation.
 
-OpenAPI has exactly top-level `openapi: "3.1.0"`, `info`, `paths`,
-`components.schemas`, and `x-questpie-source-artifacts`; no servers, security,
-tags, or inferred prose. `info.title` is application identity; `info.version` is
-Client Contract digest. Each network Operation produces one canonical path
+OpenAPI has exactly top-level `openapi: "3.1.0"`, `info`, `paths`, and
+`components.schemas`; no servers, security, top-level tags, or inferred prose.
+`info.title` is application identity; `info.version` is Client Contract digest.
+Each network Operation produces one canonical path
 with inferred method, exact Resource Identity `operationId`, derived Query
 parameters or JSON body, and exact success/declared/framework/post-commit
 schemas. Shared statuses use ASCII-sorted `oneOf`. Content key is
@@ -322,29 +343,20 @@ group metadata is authored. A future projection-neutral `group` requires
 evidence and focused ratification; later MCP must consume the same Operation and
 codec metadata owner.
 
-Compiler emits `http-projection.json` and `http-route-trie.json` when a binding
-exists, with digests `digest("questpie.http-projection-v1", artifact)` and
-`digest("questpie.http-route-trie-v1", artifact)`. Selected OpenAPI digest is
-`digest("questpie.openapi-projection-v1", document)`. Source-artifact fields are
-exactly `clientContractDigest`, `operationWireDigest`, `httpProjectionDigest`,
-and `httpRouteTrieDigest`.
-
-The compiler artifact owner creates all three. Runtime consumes only the HTTP
-artifacts; OpenAPI is never executable. Files enter checksums; HTTP and selected
-OpenAPI digests enter Runtime Build inventory. Relocation/key reordering preserve
-bytes; atomic replacement deletes stale OpenAPI.
+Artifact names, digest domains, checksum/Runtime Build membership, and exact
+explain bytes are deferred to the production tracer. They are repository
+mechanics, not part of this public protocol ratification. The V1 selector/output
+contract frozen here is exact `projections.openapi: true` and compiler-owned
+`openapi.json`; absence deletes a previous compiler-owned file on the next
+successful atomic generation.
 
 ## Explain parity
 
-`questpie explain projection openapi` consumes the build projection, writes
-nothing, starts no Runtime, and returns exact fields `format`, `version`,
-`projection`, `selected`, `path`, `sourceArtifacts`, `included`, and `omitted`.
-Included entries contain Identity, kind, method, path, Origin. Omitted entries
-contain Identity, Origin, and one of `notHttpProjected`, `rawRouteUnsupported`,
-`unsupportedResourceKind`, `openapiNotSelected`. Unselected path is null and
-included is empty. Build/explain membership is equal after document bytes are
-removed. No credentials, Context, Policy evidence, handler source, values, or
-database detail appear.
+Explain reports the same selected/included/omitted identities and Origins as
+generation, writes nothing, and discloses no credentials, Context, Policy
+evidence, handler source, values, or database detail. Its exact CLI record shape
+is deferred to the production tracer rather than frozen without executable
+evidence.
 
 ## Proof and hostile acceptance matrix
 
@@ -356,10 +368,16 @@ Implementation starts with hostiles for canonical method/path, kind/name
 collisions, Query canonical lexical/structured encoding and unsupported unbounded
 codecs, Mutation Idempotency-Key, Action Effect-Key/ambiguity, credential/
 cancellation precedence, exact response envelopes, nondisclosure, raw wildcard
-rejection without Q63, selector/digest/checksum/stale output, explain equality,
+rejection without Q63, cross-Principal and cross-Context cache non-reuse,
+selector/stale-output behavior, explain equality,
 and deletion of the polymorphic RPC route, raw Route OpenAPI, security,
 MCP/skills, custom
 paths, duplicate schemas, handlers, or registries.
+
+The inherited `quality:full` release-checksum mismatch at this branch base is
+recorded as unrelated baseline state. This docs/prototype candidate changes no
+release input or checksum and claims no PASS for that gate; its focused gates
+remain independently green.
 
 ## Supersession, ratification, and deletion boundary
 

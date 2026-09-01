@@ -60,13 +60,22 @@ function project(codec: Codec): JsonSchema {
 	if (codec.kind === "integer")
 		return {
 			type: "integer",
-			...(codec.minimum === undefined ? {} : { minimum: codec.minimum }),
-			...(codec.maximum === undefined ? {} : { maximum: codec.maximum }),
+			minimum: Math.max(
+				Number(codec.minimum ?? Number.MIN_SAFE_INTEGER),
+				Number.MIN_SAFE_INTEGER,
+			),
+			maximum: Math.min(
+				Number(codec.maximum ?? Number.MAX_SAFE_INTEGER),
+				Number.MAX_SAFE_INTEGER,
+			),
+			"x-questpie-negative-zero": false,
 		};
 	if (codec.kind === "bigint")
 		return {
 			type: "string",
 			pattern: "^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$",
+			"x-questpie-postgresql-minimum": "-9223372036854775808",
+			"x-questpie-postgresql-maximum": "9223372036854775807",
 			...(codec.minimum === undefined
 				? {}
 				: { "x-questpie-minimum": codec.minimum }),

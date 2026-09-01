@@ -13,7 +13,10 @@ The prototype establishes three bounded facts:
 3. compiler-owned kind/name paths, readable codec-driven Query values, typed
    non-empty Context in a disjoint reserved header, and the exact POST
    `{input, context}` shape are deterministic without authored placement or
-   schema maps.
+   schema maps; and
+4. the actual accepted generated-client codec implementation round-trips the
+   representative wire scalars and rejects unsafe integer, PostgreSQL bigint,
+   and numeric precision witnesses.
 
 The second fact is a negative result. Production implementation must project
 every existing `network: true` Operation onto its canonical endpoint; it adds no
@@ -25,4 +28,5 @@ Run the evidence with:
 ```sh
 bun test docs/v4/prototypes/http-openapi-projection/projector.test.ts
 bun test docs/v4/prototypes/http-openapi-projection/canonical-http-proof.test.ts
+bun test docs/v4/prototypes/http-openapi-projection/generated-client-codec-proof.test.ts
 ```
