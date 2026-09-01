@@ -694,6 +694,39 @@ the declaration SHA-256 remains
 Final independent Standards and Spec reviews pass. `quality:release` and two
 consecutive byte-identical release dry-runs pass at those checked hashes.
 
+ADR-0035 is Accepted as a Product projection under ADR-0027. The exact clean
+candidate `e909a8e14dc4b5e9f294f27df6bb9f27ef859efe` passed independent
+replacement review after the retained-eviction hostile was closed; all eight
+deterministic gates pass with 13 focused tests and 50 assertions. Only
+compiler-proven watchable generated Queries gain `.observe(input)`. One
+immutable generated `withContext(input)` scope owns canonical Query Resource
+identity and a bounded 128-entry idle-LRU registry. Observation starts no work;
+subscribers share one accepted watch; terminal failure and eviction require a
+fresh observation. The scope has no disposal protocol and must remain an
+ordinary iterative `const api = client.withContext(ctx)` value.
+
+The optional exact-peer `@questpie/react` package owns only
+`useQueryResource` over `useSyncExternalStore`. It adds no cache, transport,
+retry, Mutation invalidation, global provider, SSR, Suspense, hydration, or
+fallback behavior. Team Support Desk owns deletion of handwritten request
+generation guards, Live Query state, late-delivery checks, and post-Mutation
+refresh fan-out. Collaboration owns authority, Context, reconnect, rollback,
+capacity, eviction, cancellation, and subscriber-lifetime hostiles.
+
+ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
+Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,
+`DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
+disjunctions and branded reference values. They replace the copied public
+recipe without creating a Relation, codec, generated descriptor, Policy
+traversal, or Runtime polymorphic kernel.
+
+The ADR-0037 implementation slice is closed. Unit, type, and packed-package
+integration evidence proves heterogeneous return-union inference, the exact
+three-export public-root surface, and the absence of codec or polymorphic
+Relation companions. The executable prototype was deleted after production
+parity. Independent Standards and Spec reviews, `quality:release`, and two
+byte-identical release dry-runs pass.
+
 ## Immediate continuation
 
 1. Confirm `/home/drepkovsky/code/questpie-v4`, branch `feat/v4`, and a clean
@@ -709,10 +742,18 @@ consecutive byte-identical release dry-runs pass at those checked hashes.
    or create a second Collection/CRUD kernel. Start the next vertical from its
    own accepted authority; OpenTelemetry still requires a separate docs-first
    decision before any implementation.
-4. Treat OpenTelemetry as a separate docs-first decision. The research
+4. Implement ADR-0035 only from its tracer ticket ledger: framework-neutral
+   Query Resource core first, then fixture deletion/hostiles, then the optional
+   React adapter and public-doc verification. Delete the executable prototype
+   after production parity; do not retain a compatibility Resource, callback
+   Context scope, global cache, fallback poller, or second realtime kernel.
+5. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
+   a codec variant, polymorphic Relation, generated descriptor, registry, or
+   compatibility alias.
+6. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-5. Do not reopen the reference application by adding Cron, Collection triggers,
+7. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-6. Do not push, tag or publish without explicit authority.
+8. Do not push, tag or publish without explicit authority.

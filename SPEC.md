@@ -35,7 +35,8 @@ and incremental adoption. QUESTPIE does not maintain a host-adapter matrix or
 promise lifecycle parity with Next.js, Hono, Elysia, Adonis, or other hosts.
 
 Frontend applications remain framework-neutral. They use the concrete generated
-client or a small integration such as the TanStack Query package.
+client and its Query Resources directly, or the optional exact-peer React
+adapter that projects those same resources.
 
 The optional Studio is an application inspector and operational control surface.
 It is not an Operator App framework. Product-specific Operator Apps live in
@@ -264,6 +265,15 @@ The compiler instruments Collection, Policy, tenancy, Relation, and pagination
 reads, and the Runtime replaces the dependency set after each recomputation.
 Handler call sites alone are not sufficient. Raw SQL must declare an explicit
 dependency token or the Query is not reactive.
+
+A compiler-proven watchable generated Query also exposes `observe(input)`.
+One immutable `withContext(input)` client scope owns canonical Query Resource
+identity, a 128-entry idle-LRU registry, and complete immutable snapshots.
+Observation is allocation-only; the first subscriber opens one accepted watch,
+later subscribers share it, and the last unsubscribe stops it. Terminal failure
+and eviction clear or tombstone the resource without a poller, one-shot fallback,
+Mutation invalidation, or second realtime kernel. A fresh `observe` call is the
+only recovery from a terminal resource.
 
 Reactive Collections write to a durable PostgreSQL Change Ledger inside the
 business transaction. A wake mechanism may be lossy because reconciliation
@@ -560,6 +570,15 @@ reconciliation, opaque resume/reset, and bounded client behavior are accepted
 in ADR-0012 and `docs/v4/live-query-and-change-ledger.md`. They do not accept
 durable Reaction delivery, atomic multi-Query publication, persistent offline
 resume, or a production Runtime.
+
+ADR-0035 accepts the generated framework-neutral Query Resource projection and
+the optional exact-peer `@questpie/react` adapter. Query Resource identity stays
+inside one immutable generated Context scope; React owns only
+`useSyncExternalStore` subscription. Mutation results do not update or
+invalidate resources directly. ADR-0037 exports `DiscriminatedValue`,
+`DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
+disjunctions and branded reference values. Those helpers create no Relation,
+codec, generated descriptor, Policy traversal, or Runtime kernel.
 
 Transactional Dispatch, caller-run-as Reaction, attempt/lease fencing, bounded
 retry and timeout, cancellation, external-effect ambiguity, retention, and

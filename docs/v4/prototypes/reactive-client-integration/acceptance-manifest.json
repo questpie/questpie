@@ -1,0 +1,186 @@
+{
+	"protocolVersion": 2,
+	"ticket": "REACTIVE-CLIENT-INTEGRATION-RATIFICATION",
+	"proof": "Propose one generated framework-neutral Query Resource projection over the already Accepted watchable Query method and one optional exact-peer React adapter. Freeze scope-local canonical identity, bounded retention, complete immutable snapshots, shared-watch lifetime, cancellation, reconnect, terminal failure, credential-transition, nondisclosure, and package-isolation semantics without changing Runtime, Policy, Context, Change Ledger, Operation Wire, or Mutation ownership. Include a docs-only discriminated reference value recipe that is explicitly not a Relation, codec, or Runtime polymorphic kernel. Keep ADR-0035 and every public or canonical projection non-authoritative until a committed protocol-v2 PASS record exists.",
+	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+	"reviewOutput": "docs/v4/prototypes/reactive-client-integration/REVIEW.json",
+	"authorityHeads": {
+		"clean feat/v4 candidate base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification before projection",
+			"path": "SPEC.md",
+			"sha256": "c6b15dcb82e020be32b55ab432547d0e722513d01af602cbdd8d59c48326ae26"
+		},
+		{
+			"name": "canonical product language before projection",
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"name": "canonical handoff before projection",
+			"path": "HANDOFF.md",
+			"sha256": "237c17994f1bf78cb95d1b2c8c16c472a92395b2491821d77dc8a64aa5b82304"
+		},
+		{
+			"name": "live ADR index before projection",
+			"path": "docs/adr/README.md",
+			"sha256": "6f65e52dbda74c67d10721b7b1f6e9adb58f8b46c1483b371f4c0367702bd675"
+		},
+		{
+			"name": "accepted tracer-led delivery flow",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "accepted Live Query and Change Ledger decision",
+			"path": "docs/adr/0012-freeze-live-query-and-change-ledger.md",
+			"sha256": "14cfc6eceae76c8411d8c9193486e3d89f16fa66dd605fad30aeeb2cdb8bd9b8"
+		},
+		{
+			"name": "accepted Runtime and generated client decision",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "accepted semantic kernels and public surface decision",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "4413e7ed5ada104a85498e11cea2ac78dc6e2dffd6931c475f7b56afb4541610"
+		},
+		{
+			"name": "accepted API ergonomics and identity decision",
+			"path": "docs/adr/0022-freeze-api-ergonomics-and-operation-projection.md",
+			"sha256": "e82ac28162d5f26acf5f70e7221a51fabe9b3e62810e38b90d3ae99d762b73be"
+		},
+		{
+			"name": "accepted tracer-led delivery decision",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted Live Query contract",
+			"path": "docs/v4/live-query-and-change-ledger.md",
+			"sha256": "e5bed2ef783c7019a17083f779ace6e6004eb33a7fe23f057ee9e949e82c2ea8"
+		},
+		{
+			"name": "accepted generated-client public surface",
+			"path": "docs/v4/semantic-kernels-and-public-surface.md",
+			"sha256": "36d44b200920aad36b831b651a08bba4e74c952feca6ccf2085df267bbad748d"
+		},
+		{
+			"name": "Team Support Desk concrete client DX evidence",
+			"path": "docs/v4/implementation/team-support-desk/DX-EVIDENCE.md",
+			"sha256": "87d367dc7d367fa54dd60e8eedc3eb571bce91dab183a00bcaa283ea1e0e0b3c"
+		},
+		{
+			"name": "proposed focused client integration decision",
+			"path": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
+			"sha256": "93edbb13b9565d39838b51924c986bff350ec3164da735885fe34c1e24562d75"
+		},
+		{
+			"name": "candidate staging declaration",
+			"path": "docs/v4/prototypes/reactive-client-integration/CANDIDATE.md",
+			"sha256": "834ff70becab73ec53224196b670c59d7453cc6bb9d564f4371d16100686edce"
+		},
+		{
+			"name": "exact proposed executable contract",
+			"path": "docs/v4/prototypes/reactive-client-integration/SPEC.md",
+			"sha256": "cec613b8aefa9cfc09eb781924b311e8efe322bdc4a4b138f5fdff3d4359e4d0"
+		},
+		{
+			"name": "pre-acceptance public documentation draft",
+			"path": "docs/v4/prototypes/reactive-client-integration/PUBLIC-DRAFT.md",
+			"sha256": "87a5010d8a00e3de896248e23cc33c6947bd4e03ee07c6c3684a91c95fdaf3e9"
+		},
+		{
+			"name": "framework-neutral Query Resource executable prototype",
+			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.ts",
+			"sha256": "ca2040780ed1588ee019b40ace694659828372bb6b9ff84b7c0a241d29ded0c5"
+		},
+		{
+			"name": "Query Resource hostile state and lifetime tests",
+			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.test.ts",
+			"sha256": "6bf51e6def0406e231f052fecd2229f88dcc93ffacd42bbb73b4189ebead9a66"
+		},
+		{
+			"name": "generated and React integration type evidence",
+			"path": "docs/v4/prototypes/reactive-client-integration/authoring-types.test.ts",
+			"sha256": "1394cc98e42bb596ab45de394c503d9844a78737fdfa04a53112ee2e5584a508"
+		},
+		{
+			"name": "discriminated reference value helper evidence",
+			"path": "docs/v4/prototypes/reactive-client-integration/discriminated-reference.ts",
+			"sha256": "da0381e382b44112a2e913f808e72f6a1f051600d97cdfc4b5eaac788495760e"
+		},
+		{
+			"name": "discriminated reference value type and absence tests",
+			"path": "docs/v4/prototypes/reactive-client-integration/discriminated-reference.test.ts",
+			"sha256": "d431ca968720666107d3634feeadc44a98d254c3eab82ed576e6f70d4845d6ed"
+		},
+		{
+			"name": "Proposed-status and authority-hash staging gate",
+			"path": "docs/v4/prototypes/reactive-client-integration/staging-check.ts",
+			"sha256": "95a2419e41a7be84a9e34db781615030411f6532e71f40586e7ba82e64692925"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/reactive-client-integration/query-resource.test.ts docs/v4/prototypes/reactive-client-integration/authoring-types.test.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun docs/v4/prototypes/reactive-client-integration/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/reactive-client-integration/query-resource.ts docs/v4/prototypes/reactive-client-integration/query-resource.test.ts docs/v4/prototypes/reactive-client-integration/authoring-types.test.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.test.ts docs/v4/prototypes/reactive-client-integration/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc --noEmit --strict --skipLibCheck --target ES2024 --module preserve --moduleResolution bundler --types bun docs/v4/prototypes/reactive-client-integration/query-resource.ts docs/v4/prototypes/reactive-client-integration/query-resource.test.ts docs/v4/prototypes/reactive-client-integration/authoring-types.test.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/adr/0035-freeze-query-resource-and-react-client-integration.md docs/v4/prototypes/reactive-client-integration/CANDIDATE.md docs/v4/prototypes/reactive-client-integration/SPEC.md docs/v4/prototypes/reactive-client-integration/PUBLIC-DRAFT.md docs/v4/prototypes/reactive-client-integration/acceptance-manifest.json docs/v4/prototypes/reactive-client-integration/query-resource.ts docs/v4/prototypes/reactive-client-integration/query-resource.test.ts docs/v4/prototypes/reactive-client-integration/authoring-types.test.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.ts docs/v4/prototypes/reactive-client-integration/discriminated-reference.test.ts docs/v4/prototypes/reactive-client-integration/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check efd835a073ae33e4dfa3f5bef2cf2cad8c46c393..HEAD",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0035 remains Proposed and no live ADR index, SPEC, CONTEXT, public documentation, or HANDOFF text projects it as Accepted before a committed protocol-v2 PASS record. Acceptance and public projection are a separate coherent commit.",
+		"Only compiler-proven watchable generated Query methods gain observe(input). Existing call and watch behavior remains, while one-shot-only Queries have no observe member and no fallback poller or one-shot resource path.",
+		"One generated withContext scope owns canonical Query Resource identity from exact Query identity and generated canonical input bytes. Equivalent same-scope observations share; different client or Context scopes never share; keys, input, Context, and credentials remain private.",
+		"The registry retains at most 128 identities, evicts only idle least-recently-used resources, pins subscribed resources, and returns an unregistered terminal RESOURCE_LIMIT resource without work when every entry is pinned. Eviction invalidates and terminally tombstones the retained handle so it cannot restart off-registry or remove a later same-identity replacement; recovery requires fresh observation.",
+		"Query Resource exposes only stable immutable getSnapshot and subscribe. First subscriber lazily opens one watch, later subscribers share it, unsubscribe is idempotent, last unsubscribe stops once, and callbacks from invalid generations cannot publish.",
+		"Initial, update, and reset replace one complete decoded result. Retryable reconnect retains only a previously disclosed complete value and reports the existing attempt. Accepted watch failures clear data, stop and remove the resource, disclose only the closed code, and permit recovery only through fresh observation.",
+		"One subscriber fault cannot alter resource state, watch lifetime, or peer notification. Resource and client diagnostics contain no Query input, Context, credential, result, Policy evidence, canonical key, endpoint, header, response, or stack.",
+		"Context scope is the cache partition. The application Auth host discards old scopes on credential transitions; the generated client and React adapter do not inspect cookies, infer Auth lifetime, share across scopes, or create a global provider.",
+		"One subscriber cannot cancel another. Last unsubscribe stops shared watch and reconnect work. Query Resource adds no shared AbortSignal, timeout, retry schedule, detached work, application retry, mutation retry, or terminal-failure fallback.",
+		"The optional @questpie/react package exports only useQueryResource over useSyncExternalStore, pins exact matching questpie and React 19 peer bounds, and owns no cache, identity, transport, retry, invalidation, Context, credential, compiler, Runtime, PostgreSQL, ReactDOM, TanStack, OpenTelemetry, SSR, Suspense, hydration, or fallback behavior.",
+		"Mutation results never directly mutate or invalidate Query Resources. Only Accepted Change Ledger matching and fresh authorized Live Query recomputation publish an update; rollback publishes none; atomic screens use one composite Query; one-shot Query refresh remains explicit application work.",
+		"The discriminated reference value recipe is ordinary TypeScript evidence only. It creates no public helper, codec, Field, constraint, foreign key, inverse, join, cascade, Policy traversal, Live Query dependency, generated descriptor, or Runtime polymorphic Relation kernel.",
+		"Team Support Desk is the beginner deletion tracer and Collaboration is the hostile Context, authority, reconnect, rollback, capacity, cancellation, and subscriber-lifetime tracer. No implementation begins before formal PASS and separate Accepted authority projection."
+	]
+}

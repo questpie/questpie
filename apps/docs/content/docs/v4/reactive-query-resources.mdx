@@ -1,0 +1,248 @@
+---
+title: Use reactive Query state
+description: Observe one generated Query directly or through the optional React adapter.
+kind: guide
+---
+
+A Query Resource keeps the latest complete result of one watchable Query in a
+framework-neutral client value. The generated client owns Query identity,
+input validation and encoding, Context partitioning, and Live Query transport.
+A UI adapter only subscribes to that value.
+
+## Observe a generated Query
+
+Create one immutable Context scope and use it for ordinary Query, Mutation, and
+Action calls:
+
+```ts title="web/barbershop-api.ts"
+import { createClient } from "#questpie/client";
+
+export const client = createClient({ baseUrl: location.origin });
+
+export function createBarbershopApi(shopId: string) {
+	const api = client.withContext({ shopId });
+	return api;
+}
+```
+
+`withContext` returns an ordinary immutable value. It does not open a
+connection or own a disposable resource. Keep using `api.queries`,
+`api.mutations`, and `api.actions`; do not wrap the scope in a callback or a
+disposal construct.
+
+Only a compiler-proven watchable generated Query has `observe`:
+
+```ts title="web/appointments-resource.ts"
+import { createBarbershopApi } from "./barbershop-api";
+
+export function observeAppointments(shopId: string, barberId: string) {
+	const api = createBarbershopApi(shopId);
+
+	return api.queries["appointments.calendar"].observe({
+		barberId,
+		after: null,
+		first: 50,
+	});
+}
+```
+
+`observe` validates and canonically encodes the same generated input used by a
+call or watch. Invalid input fails locally before registry work or I/O. A Query
+with unsupported reads stays callable once and has neither `.watch` nor
+`.observe`.
+
+Read the current snapshot and subscribe to changes:
+
+```ts title="web/render-appointments.ts"
+import { observeAppointments } from "./appointments-resource";
+
+const appointments = observeAppointments("shop:central", "barber:maya");
+
+function render() {
+	const snapshot = appointments.getSnapshot();
+	if (snapshot.kind === "pending") return showLoading();
+	if (snapshot.kind === "failed") return showFailure(snapshot.failure.code);
+	return showAppointments(snapshot.value.nodes);
+}
+
+render();
+const unsubscribe = appointments.subscribe(render);
+```
+
+The first subscriber opens one Live Query watch. Later subscribers share it.
+The last unsubscribe stops it. A later subscriber can reopen an idle resource.
+Every `initial`, `update`, or `reset` delivery replaces the complete value; the
+resource never merges rows or publishes a partial patch.
+
+## Read the closed snapshot state
+
+A resource returns the same frozen snapshot object until observable state
+changes. It is `pending`, `ready` with the complete Query output, or `failed`
+with one closed `WatchFailure`. Pending and ready state reports `idle`,
+`connecting`, `connected`, or `reconnecting` with a positive attempt number.
+
+During a retryable carrier reconnect, a ready resource retains only the
+complete value already disclosed inside the same Context scope. It exposes the
+existing reconnect attempt and adds no retry schedule. A successful delivery
+replaces the complete value.
+
+`AUTHORIZATION_FAILED`, `OUTPUT_INVALID`, `RESOURCE_LIMIT`,
+`TRANSPORT_FAILED`, and `VERSION_INCOMPATIBLE` are terminal. Terminal failure
+clears retained output, stops the watch, and exposes only the closed failure
+code. Call `observe` again to recover with a fresh resource. The resource does
+not fall back to polling or a one-shot Query.
+
+## Keep Context and credentials isolated
+
+One `withContext` scope is one Query Resource partition. Equivalent
+observations in that scope return the same resource. Different client or
+Context scopes never share, even when their Context input is byte-equal.
+
+Credentials remain owned by the application's Auth integration. On sign-in,
+sign-out, account switch, or another credential-lifetime transition, unmount
+the old UI and create a new immutable Context scope. QUESTPIE does not inspect
+cookies or infer that transition.
+
+Every server recomputation still resolves fresh Context and evaluates current
+Policy. An authority reset replaces the complete value. An authorization
+failure clears it before publishing `AUTHORIZATION_FAILED`.
+
+## Stay within the client bound
+
+Each Context scope retains at most 128 Query Resource identities. It evicts
+only an idle least-recently-used resource. Subscribed resources remain pinned.
+If all 128 entries are subscribed, a new observation returns an unregistered
+terminal `RESOURCE_LIMIT` resource and opens no watch.
+
+An evicted handle is also terminal `RESOURCE_LIMIT`. It cannot restart outside
+the registry or disturb a later resource with the same identity. Call
+`observe` again to get the current resource.
+
+One subscriber cannot cancel another. Last unsubscribe stops the shared watch
+and reconnect work. A failing subscriber callback does not change resource
+state or prevent peer notification.
+
+## Use the optional React adapter
+
+Install the adapter beside the exact matching QUESTPIE release and React 19:
+
+```sh
+bun add @questpie/react react
+```
+
+The package exports one hook:
+
+```tsx title="web/AppointmentCalendar.tsx"
+import { useQueryResource } from "@questpie/react";
+
+import { createBarbershopApi } from "./barbershop-api";
+
+const api = createBarbershopApi("shop:central");
+
+export function AppointmentCalendar({ barberId }: { barberId: string }) {
+	const resource = api.queries["appointments.calendar"].observe({
+		barberId,
+		after: null,
+		first: 50,
+	});
+	const snapshot = useQueryResource(resource);
+
+	if (snapshot.kind === "pending") return <p>Loading appointments…</p>;
+	if (snapshot.kind === "failed")
+		return <p>Appointments unavailable: {snapshot.failure.code}</p>;
+
+	return (
+		<ul>
+			{snapshot.value.nodes.map((appointment) => (
+				<li key={appointment.id}>{appointment.startsAt.toLocaleString()}</li>
+			))}
+		</ul>
+	);
+}
+```
+
+`useQueryResource` calls
+`useSyncExternalStore(resource.subscribe, resource.getSnapshot)`. The adapter
+owns no identity, cache, transport, Context, credentials, retry, invalidation,
+or error translation. Version 1 is client-rendering only and defines no SSR,
+hydration, Suspense, transition, server-component, or fallback behavior.
+
+## Let committed Queries publish updates
+
+A Mutation result never writes or invalidates a Query Resource. A committed
+change can update it only after Change Ledger matching and a fresh authorized
+Live Query recomputation. Rollback publishes nothing.
+
+When one screen needs an atomic view, author and observe one composite Query.
+Independent Query Resources converge independently. Re-call a one-shot-only
+Query explicitly when the application needs another result.
+
+## Model a discriminated reference value
+
+Use ordinary TypeScript when a value can name one of several domain variants
+but needs no database Relation behavior:
+
+```ts title="src/domain/activity-subject.ts"
+import {
+	type DiscriminatedReference,
+	type DiscriminatedValue,
+	matchDiscriminated,
+} from "questpie";
+
+declare const appointmentIdBrand: unique symbol;
+export type AppointmentId = string & {
+	readonly [appointmentIdBrand]: true;
+};
+
+declare const barberIdBrand: unique symbol;
+export type BarberId = string & { readonly [barberIdBrand]: true };
+
+export type ActivitySubject = DiscriminatedReference<{
+	appointment: AppointmentId;
+	barber: BarberId;
+}>;
+
+export function activitySubjectHref(subject: ActivitySubject): string {
+	return matchDiscriminated(subject, {
+		appointment: ({ id }) => `/appointments/${id}`,
+		barber: ({ id }) => `/barbers/${id}`,
+	});
+}
+
+export type Activity = DiscriminatedValue<{
+	appointmentCreated: { id: AppointmentId; startsAt: Date };
+	barberUnavailable: { id: BarberId; reason: string };
+}>;
+
+export function activitySummary(activity: Activity) {
+	return matchDiscriminated(activity, {
+		appointmentCreated: ({ id, startsAt }) =>
+			({ href: `/appointments/${id}`, startsAt }) as const,
+		barberUnavailable: ({ id, reason }) => `${id}: ${reason}`,
+	});
+}
+
+export type ActivitySummary = ReturnType<typeof activitySummary>;
+// readonly { href: string; startsAt: Date } | string
+```
+
+The helpers preserve each branded ID and make the generated union's `kind`,
+`id`, and top-level variant fields readonly. `matchDiscriminated` requires one
+branch for every `kind`. Each branch parameter narrows to its matching variant,
+and the return type is the inferred union of all branch results. An omitted or
+extra branch fails TypeScript. Use `DiscriminatedValue` when each variant carries
+a larger object instead of one ID.
+
+TypeScript exhaustiveness applies only to typed values and a typed cases object.
+At runtime, an unknown `kind`, or an unsafe cases object with a missing,
+inherited, or non-callable case, makes `matchDiscriminated` throw the value-free
+`TypeError` message `invalid discriminated value`. It invokes only an own
+callable case. Validate data with the boundary's ordinary codec before matching
+it.
+
+These helpers create no codec, Field, foreign key, inverse, join, cascade,
+Policy traversal, Live Query dependency, generated descriptor, or Runtime
+polymorphic Relation. Resolve a target through an explicit named Query or
+Mutation so current Policy controls disclosure.
+
+Next, [run durable Jobs and Reactions](./durable-reactions).
