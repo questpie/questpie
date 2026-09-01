@@ -14,6 +14,7 @@
 		"multi-instance",
 		"semantic-kernels-and-public-surface",
 		"services",
+		"operation-http-and-openapi",
 		"beta1-release",
 		"runtime-and-studio"
 	]

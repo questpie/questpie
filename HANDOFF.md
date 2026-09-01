@@ -713,6 +713,18 @@ generation guards, Live Query state, late-delivery checks, and post-Mutation
 refresh fan-out. Collaboration owns authority, Context, reconnect, rollback,
 capacity, eviction, cancellation, and subscriber-lifetime hostiles.
 
+ADR-0036 is Accepted after the exact replacement candidate
+`33ff02a07fd28a0dd6ef4b4fbbbaf9a41c484a09` received the committed pinned
+protocol-v2 `PASS` at `4cfe81dda`. Every network Query, Mutation, and Action has
+one compiler-derived visible endpoint: GET `/_questpie/query/<name>`, POST
+`/_questpie/mutation/<name>`, or POST `/_questpie/action/<name>`. Generated
+clients and optional OpenAPI 3.1 derive from the same Resource identities,
+codecs, Context, outcomes, Policy, cancellation, and executor. Raw Routes keep
+their authored external-protocol paths. The former polymorphic endpoint is
+deleted by the implementation tracer with no fallback, redirect, compatibility
+handler, or parallel wire. Projection-neutral descriptive metadata remains a
+separate decision.
+
 ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
 Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,
 `DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
@@ -747,13 +759,18 @@ byte-identical release dry-runs pass.
    React adapter and public-doc verification. Delete the executable prototype
    after production parity; do not retain a compatibility Resource, callback
    Context scope, global cache, fallback poller, or second realtime kernel.
-5. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
+5. Implement ADR-0036 as one replacement tracer: compiler artifact and
+   diagnostics, Runtime adapter, generated client, direct/network parity,
+   OpenAPI/explain, PostgreSQL/browser hostiles, then atomic deletion of the
+   polymorphic RPC path. Keep metadata and MCP outside this implementation
+   slice and retain no fallback.
+6. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
    a codec variant, polymorphic Relation, generated descriptor, registry, or
    compatibility alias.
-6. Treat OpenTelemetry as a separate docs-first decision. The research
+7. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-7. Do not reopen the reference application by adding Cron, Collection triggers,
+8. Do not reopen the reference application by adding Cron, Collection triggers,
    checkpoints, generic browser control or workflow orchestration without new
    product authority.
-8. Do not push, tag or publish without explicit authority.
+9. Do not push, tag or publish without explicit authority.

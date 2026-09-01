@@ -242,6 +242,22 @@ data facade, Mutation facade, raw database, or System elevation. It enters the
 normal Context/Policy/Operation engine through an explicit Execution
 transition. Routes are not generated JSON client Operations.
 
+Each `network: true` Operation has one compiler-derived HTTP binding. Query uses
+`GET /_questpie/query/<qualified-name>` with codec-owned canonical URL input and
+one typed `Questpie-Context` header. Mutation and Action use
+`POST /_questpie/mutation/<qualified-name>` and
+`POST /_questpie/action/<qualified-name>` with the exact body
+`{ input, context }`. Mutation Call Identity uses `Idempotency-Key`; Action
+Effect Identity uses `Effect-Key`. Generated clients use these visible
+per-Operation endpoints. The former polymorphic endpoint has no compatibility
+route, redirect, or fallback.
+
+The canonical HTTP adapter owns transport decoding and delegates to the same
+credential, Context, Policy, Operation, limit, transaction, cancellation,
+result, error, nondisclosure, and observation owners as direct execution. Raw
+Routes retain authored external-protocol paths and share collision analysis;
+they are not inferred ordinary Operations.
+
 Direct Collection operations use the same Policy, transaction, error, and
 observation machinery. They are not a private Admin API.
 
@@ -419,6 +435,14 @@ OpenAPI, MCP, and skills are compiler-owned projections of canonical App
 Contract members and Origins. Unsupported contracts produce diagnostics. Their
 invocations reuse the accepted Execution, Policy, Operation, limits, errors,
 and Execution Envelope and cannot own business handlers or authority.
+
+Exact `questpie.json` selection `{ "projections": { "openapi": true } }`
+emits deterministic OpenAPI 3.1 from the canonical Operation HTTP binding and
+existing codecs. Authors cannot restate paths, methods, parameters, schemas,
+nullability, bounds, results, errors, grouping, handlers, or authorization for
+OpenAPI. Raw Routes and security schemes are omitted. Projection-neutral prose
+metadata remains a separate decision rather than an OpenAPI-only authoring
+surface.
 
 ## 12. Hosting and Cloud
 

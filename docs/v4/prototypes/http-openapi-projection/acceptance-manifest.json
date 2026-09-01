@@ -1,0 +1,219 @@
+{
+	"protocolVersion": 2,
+	"ticket": "DX-CANONICAL-HTTP-OPENAPI-RATIFICATION",
+	"proof": "Ratify one deterministic per-Operation HTTP replacement and its compiler-owned OpenAPI projection without adding authored HTTP placement, descriptive metadata, duplicate schemas, a second executor, compatibility route, fallback, or production implementation. Preserve typed credential-ingress outcomes and keep ADR-0036 and every authority/public projection Proposed until a committed protocol-v2 PASS record exists.",
+	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+	"reviewOutput": "docs/v4/prototypes/http-openapi-projection/REVIEW-02.json",
+	"authorityHeads": {
+		"accepted feat/v4 continuation base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+		"blocked manifest candidate retained as evidence": "37f7a5e6863275070e37a965d98ad415e2f11e34",
+		"replacement repair candidate before fresh manifest": "5cc1197e39bfeb5eb97829495950f5b7f8879f94"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "repository quality and evidence ownership",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "e0fb79556af46b0f9e005d762e30fee59876012846b4c6087f00607dda230cc8"
+		},
+		{
+			"name": "canonical product specification before projection",
+			"path": "SPEC.md",
+			"sha256": "c6b15dcb82e020be32b55ab432547d0e722513d01af602cbdd8d59c48326ae26"
+		},
+		{
+			"name": "canonical product language before projection",
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"name": "canonical handoff before projection",
+			"path": "HANDOFF.md",
+			"sha256": "237c17994f1bf78cb95d1b2c8c16c472a92395b2491821d77dc8a64aa5b82304"
+		},
+		{
+			"name": "ADR index with ADR-0036 still unprojected",
+			"path": "docs/adr/README.md",
+			"sha256": "6f65e52dbda74c67d10721b7b1f6e9adb58f8b46c1483b371f4c0367702bd675"
+		},
+		{
+			"name": "accepted Query Mutation and lifecycle ownership",
+			"path": "docs/adr/0011-freeze-query-mutation-and-explicit-lifecycle.md",
+			"sha256": "19e8c611bbcd5230e79c64398d5495365e807e265ca0500aece797ed54d1e458"
+		},
+		{
+			"name": "accepted Runtime client envelope",
+			"path": "docs/adr/0014-freeze-runtime-client-envelope-and-minimal-studio.md",
+			"sha256": "650e88f7a78ec9c0fa105c9c7209aa470b611feaba10d79fb55fc621f586f7e4"
+		},
+		{
+			"name": "accepted Service Route and auth composition",
+			"path": "docs/adr/0015-freeze-service-route-and-auth-composition.md",
+			"sha256": "5db374d76fc838dc5ae2eaabc214e82b03e26c1526611ad9384f48c6f78e1ea9"
+		},
+		{
+			"name": "accepted contract projection ownership",
+			"path": "docs/adr/0018-freeze-file-search-and-contract-projections.md",
+			"sha256": "53655c1feaeb17f61d70186c71fd754f3a2da9cef331a6b1b5fea69d517dc1d4"
+		},
+		{
+			"name": "accepted semantic kernel and public surface ownership",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "4413e7ed5ada104a85498e11cea2ac78dc6e2dffd6931c475f7b56afb4541610"
+		},
+		{
+			"name": "accepted post-commit Mutation outcome",
+			"path": "docs/adr/0023-freeze-post-commit-operation-outcome.md",
+			"sha256": "47a26be509b42d8a8b82c0ef1bbde6b70667234b6b4c9c7d0a2d5ac3e439acdf"
+		},
+		{
+			"name": "accepted focused delivery flow",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted Action effect identity limits and Wire v3",
+			"path": "docs/adr/0028-freeze-action-effect-identity-limits-and-wire-v3.md",
+			"sha256": "d3e6316d44a0cacdccae6eafd9457916b710ce3d5f3fbc6cd46977acb1cadd78"
+		},
+		{
+			"name": "Proposed canonical HTTP and OpenAPI decision",
+			"path": "docs/adr/0036-freeze-canonical-operation-http-and-openapi-projection.md",
+			"sha256": "7bd24c91fa24c465000576e8f444069a9aace6b93605af7cb82f0b2ef28641a0"
+		},
+		{
+			"name": "accepted tracer-led delivery procedure",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "current Runtime client contract before supersession",
+			"path": "docs/v4/runtime-client-envelope-and-studio.md",
+			"sha256": "399c6f494e04d67f8ce5bedfb9a9cd9db1247966d06ad68bc952addfe7c71e62"
+		},
+		{
+			"name": "accepted Route and credential owner contract",
+			"path": "docs/v4/service-route-and-auth-composition.md",
+			"sha256": "1900029f27b0b3bdab8b24cf14eb7cfbed0a4ee285cc9ef1a8a28626be8d7885"
+		},
+		{
+			"name": "accepted compiler projection contract",
+			"path": "docs/v4/files-search-and-contract-projections.md",
+			"sha256": "e664d1ef425480f7856c597e577605d030dcd38fd242d0268e1aa5420f1d00ad"
+		},
+		{
+			"name": "accepted projection and public surface boundary",
+			"path": "docs/v4/semantic-kernels-and-public-surface.md",
+			"sha256": "36d44b200920aad36b831b651a08bba4e74c952feca6ccf2085df267bbad748d"
+		},
+		{
+			"name": "proposed Kernel canonical Operation HTTP contract",
+			"path": "docs/v4/implementation/beta2-execution-breadth/CANONICAL-HTTP-CONTRACT.md",
+			"sha256": "99b82b1effb08758be91642620ca5bc019524d64df7577a45aafc5d7d6c8c099"
+		},
+		{
+			"name": "proposed Product OpenAPI projection",
+			"path": "docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md",
+			"sha256": "22ff0c861056be133d6027ea90c1ceb6ad23ae88a16ad25946156fe696e42513"
+		},
+		{
+			"name": "executable HTTP OpenAPI proof declaration",
+			"path": "docs/v4/prototypes/http-openapi-projection/README.md",
+			"sha256": "9fc1077bafcb59e5324ecaa855eaeb418740b4e1e0077132a63d52455067124e"
+		},
+		{
+			"name": "closed codec schema prototype owner",
+			"path": "docs/v4/prototypes/http-openapi-projection/codec-schema.ts",
+			"sha256": "02df72c68666e369a157711d469c2d3d554464705f25dd7d9b4e10f6d0e542f7"
+		},
+		{
+			"name": "deterministic OpenAPI projector prototype",
+			"path": "docs/v4/prototypes/http-openapi-projection/projector.ts",
+			"sha256": "3eb65434534febc71c218b59f4843d23f31b698f86e13e21a986face0c2feff2"
+		},
+		{
+			"name": "OpenAPI schema and negative RPC proof",
+			"path": "docs/v4/prototypes/http-openapi-projection/projector.test.ts",
+			"sha256": "064ffb4e619afd25b90817e6da03a18c6c1ebfbd3a4a0939164503422475d0ca"
+		},
+		{
+			"name": "composed candidate generated client and HTTP adapter",
+			"path": "docs/v4/prototypes/http-openapi-projection/candidate-adapter.ts",
+			"sha256": "d86227ec3f77fb2b89994c8eda90e103bf29ad5296aa88c2df26947cc9439e1b"
+		},
+		{
+			"name": "candidate adapter carrier cancellation and disclosure proof",
+			"path": "docs/v4/prototypes/http-openapi-projection/candidate-adapter.test.ts",
+			"sha256": "d4df91a663d23412b4491a8ced1ac9fe3b1eb260f409b71dc9a99bfa812c0fa4"
+		},
+		{
+			"name": "disjoint generated call option type proof",
+			"path": "docs/v4/prototypes/http-openapi-projection/candidate-adapter.types.ts",
+			"sha256": "2c04e335c74f8ac2f8579900f9e9f581f20e48a4208793024d5062cc34fa6943"
+		},
+		{
+			"name": "Kernel Product ownership and normative budget proof",
+			"path": "docs/v4/prototypes/http-openapi-projection/proposal-ownership.test.ts",
+			"sha256": "7d2cfc84acc2de1ec3b9a739b3e32b18e6c0f4899f5c965614857e2641b57198"
+		},
+		{
+			"name": "verbatim blocked first formal acceptance record",
+			"path": "docs/v4/prototypes/http-openapi-projection/REVIEW.json",
+			"sha256": "233ddb466a5c29562f3984d221881071fef7a7d748d29ef202dfd301cc88681a"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/http-openapi-projection/projector.test.ts docs/v4/prototypes/http-openapi-projection/candidate-adapter.test.ts docs/v4/prototypes/http-openapi-projection/proposal-ownership.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc --noEmit --strict --skipLibCheck --noUncheckedIndexedAccess --target ES2024 --module ESNext --moduleResolution Bundler --lib ES2024,DOM --types bun docs/v4/prototypes/http-openapi-projection/candidate-adapter.ts docs/v4/prototypes/http-openapi-projection/candidate-adapter.types.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "QUESTPIE_DIFF_BASE=efd835a073ae33e4dfa3f5bef2cf2cad8c46c393 bun run check:changed",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs build",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check efd835a073ae33e4dfa3f5bef2cf2cad8c46c393..HEAD",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0036, its ADR index entry, SPEC, CONTEXT, public documentation, and HANDOFF remain unaccepted and unprojected until a committed protocol-v2 PASS record exists. Production implementation and legacy-wire deletion start only after the separate authority projection commit.",
+		"Every network Query, Mutation, and Action receives exactly one compiler-derived endpoint: GET /_questpie/query/<qualified-name>, POST /_questpie/mutation/<qualified-name>, or POST /_questpie/action/<qualified-name>. Authors cannot provide an HTTP method or path, and the polymorphic /_questpie/operation endpoint is deleted without redirect, compatibility route, POST fallback, or parallel handler.",
+		"Network exposure remains owned only by existing network intent. The canonical HTTP adapter performs transport decoding and invokes the same Operation executor, Policy, limits, transaction, result validation, error handling, cancellation, observability, and nondisclosure path as direct execution; it adds no transport retry.",
+		"Query GET has no body. Its exact top-level object input uses codec-selected readable or tagged canonical URL values, ASCII key ordering, uppercase percent escapes, duplicate and noncanonical refusal, static branch bounds, and the fixed complete-query limit; unsupported Query codecs fail compilation rather than falling back to POST.",
+		"Query Context is disjoint from input and credential Principal and uses one canonical unpadded-base64url Questpie-Context header. Omission is admitted only when the exact Context codec accepts the empty object; duplicates, joining, padding, noncanonical bytes, invalid JSON, and codec mismatch fail before Context resolution.",
+		"Mutation and Action accept only exact application/json bodies {input, context}. Raw request bytes undergo fatal UTF-8 decoding before duplicate-key JSON parsing, exact-key checks, codec decode, Context resolution, Policy, or execution. Mutation requires Idempotency-Key; Action requires Effect-Key; wrong-kind or duplicate identity carriers fail without first/last-wins behavior.",
+		"The server captures one request start, derives one saturating immutable deadline, combines caller and deadline cancellation into one owned signal, checks cancellation before credentials and after every awaited phase, and cleans timer/listener ownership. Credential resolution remains separate from Context: a typed malformed ingress failure is value-free correlated UNAUTHENTICATED HTTP 401 and non-retryable, a typed provider outage is retryable RUNTIME_UNAVAILABLE HTTP 503, an untyped fault is sanitized INTERNAL, and none falls back to anonymous or reaches request decode, Context, Policy, or execution.",
+		"Generated Query, Mutation, and Action calls have disjoint exact option surfaces. Query and Mutation cannot carry Effect Identity, Action requires effectKey, Mutation callId maps only to Idempotency-Key, and generated clients use the visible per-Operation endpoints with no private polymorphic transport.",
+		"Success, declared errors, framework failures, committed Mutation ambiguity, and Action ambiguity preserve their Accepted semantic outcomes and correlation. Missing and Policy-invisible targets remain indistinguishable; SQL, PostgreSQL detail, stack, credentials, Context, protected values, and Policy evidence never cross the wire. Every Query response is private, no-store.",
+		"Raw Routes retain explicit external-protocol method/path ownership and one Fetch router. Canonical Operation endpoints and raw Routes share conservative collision analysis with both Origins and no precedence; raw Routes are omitted from OpenAPI with the exact rawRouteUnsupported reason and gain no inferred schema or second ordinary Route mode.",
+		"OpenAPI emission is selected only by exact questpie.json projections.openapi true and emits compiler-owned openapi.json from the same App Contract, existing codec descriptors, Resource identities, and Origins. Authors cannot restate parameters, schemas, nullability, bounds, validation, results, errors, tags, grouping, handlers, or authorization for OpenAPI. This candidate adds no summary, description, examples, group, or other descriptive authoring; a projection-neutral metadata owner shared by declarations, public docs, OpenAPI, and MCP remains a separate focused artifact/digest decision.",
+		"OpenAPI 3.1 output, schemas, paths, parameters, statuses, oneOf branches, tags, omissions, and explain inventory are deterministic and canonically ordered. Runtime-inexact standard-schema subsets are marked honestly, cross-kind operationId collisions fail with both Origins, grouping is inferred from the first namespace segment, and explain writes nothing or discloses no runtime evidence.",
+		"The Kernel contract is the sole supersession boundary: only ADR-0011's fixed polymorphic dispatch path/method, generated-client use of that path, and corresponding Operation Wire artifact compatibility change. All previously Accepted identity, codec, Context, Principal, Policy, Call/Effect Identity, transaction, receipt, limit, cancellation, error, nondisclosure, observability, raw Route, and direct/network parity semantics remain intact."
+	]
+}

@@ -1,0 +1,136 @@
+---
+title: Call Operations through HTTP and OpenAPI
+description: Use compiler-derived Query, Mutation, and Action endpoints without restating paths or schemas.
+kind: guide
+---
+
+Every network Operation has one HTTP endpoint derived from its kind and
+Qualified Resource Name. You author the Operation once. QUESTPIE projects its
+HTTP path, generated-client call, request codec, response codec, declared
+errors, and optional OpenAPI document from the same App Contract.
+
+| Operation                    | Method | Path                                    |
+| ---------------------------- | ------ | --------------------------------------- |
+| Query `appointments.list`    | `GET`  | `/_questpie/query/appointments.list`    |
+| Mutation `appointments.book` | `POST` | `/_questpie/mutation/appointments.book` |
+| Action `receipts.send`       | `POST` | `/_questpie/action/receipts.send`       |
+
+An Operation cannot declare a second HTTP path or method. The Runtime does not
+mount a polymorphic compatibility endpoint, redirect, or POST fallback.
+
+## Prefer the generated client
+
+The generated client owns canonical URL, header, and body encoding. Its calls
+remain visible by Operation name in browser network tools:
+
+```ts title="web/appointments.ts"
+import { createClient } from "#questpie/client";
+
+const client = createClient({
+	baseUrl: "https://barbershop.example",
+	credentials: "include",
+});
+
+const shop = client.withContext({
+	shopId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b7131",
+});
+
+const appointments = await shop.queries["appointments.list"]({
+	after: null,
+	first: 20,
+});
+```
+
+Credentials remain HTTP ingress material. `withContext` supplies typed Context
+input and cannot supply Principal or Authority. Direct and network calls use
+the same Context Resolution, Policy, Operation, limits, result validation,
+errors, cancellation, transaction behavior, and observability.
+
+## Understand Query GET encoding
+
+A Query uses `GET` and has no body. Each present top-level input member becomes
+one query parameter. QUESTPIE sorts parameter names by ASCII bytes and uses
+uppercase UTF-8 percent escapes. Spaces are `%20`, never `+`. Duplicate,
+unknown, malformed, or noncanonical parameters fail before Context Resolution
+or Policy.
+
+Readable scalar codecs use their canonical text. Nullable `null` uses `~null`.
+Bounded arrays, nested objects, and discriminated unions use one tagged
+`~json:<canonical-json>` value. Text beginning with `~` is escaped as text.
+Unsupported or unbounded Query input fails compilation instead of falling back
+to POST. The complete encoded query is limited to 16,384 bytes.
+
+Query Context travels in exactly one `Questpie-Context` header as unpadded
+base64url over canonical Context JSON. Missing Context is valid only when the
+application Context codec accepts the exact empty object. Query responses,
+including failures, carry `Cache-Control: private, no-store` and cannot be
+reused across Principal or Context.
+
+## Send Mutation and Action bodies
+
+Mutation and Action accept only this JSON shape:
+
+```json
+{
+	"input": {},
+	"context": {}
+}
+```
+
+The exact child shapes come from the application codecs. Invalid UTF-8,
+duplicate or unknown keys, invalid JSON, and codec mismatches fail before
+Context and Policy.
+
+A Mutation requires one `Idempotency-Key`. Replaying the same key and canonical
+input recovers the committed receipt without applying the write twice. Reusing
+the key with different input returns `IDEMPOTENCY_CONFLICT`. The transport
+never retries automatically.
+
+An Action requires one `Effect-Key`. A failure after external dispatch remains
+the explicit `ACTION_OUTCOME_AMBIGUOUS` outcome. QUESTPIE does not turn an
+unknown provider result into success, rollback, or automatic retry.
+
+## Handle failures without disclosure
+
+Canonical HTTP preserves declared errors and the closed framework failures.
+Missing and Policy-invisible targets remain the same `404`. Responses never
+include PostgreSQL detail, SQL, stacks, credential detail, serialized Context,
+protected values, or Policy evidence.
+
+Credential resolution precedes request decoding. Malformed credentials return
+a value-free, non-retryable `UNAUTHENTICATED` response. A credential-provider
+outage returns retryable `RUNTIME_UNAVAILABLE`; an unexpected resolver fault is
+sanitized. None falls back to the anonymous Principal.
+
+Cancellation and the immutable request deadline reach the same execution-owned
+signal used by direct calls. Cancellation is checked before credentials and
+after each awaited transport phase. Mutation cancellation after commit keeps
+the explicit committed-result recovery identity.
+
+## Generate OpenAPI 3.1
+
+Enable the compiler projection in `questpie.json`:
+
+```json title="questpie.json"
+{
+	"projections": {
+		"openapi": true
+	}
+}
+```
+
+The compiler emits deterministic `openapi.json` from the canonical network
+Operations and their codecs. It derives paths, parameters, request bodies,
+results, declared errors, framework failures, nullability, bounds, and inferred
+namespace tags. Authors cannot restate them for OpenAPI.
+
+Raw Routes keep their authored external-protocol method and path. QUESTPIE
+omits them from this projection because a raw `Request` and `Response` do not
+provide a canonical Operation schema. Security schemes are also absent;
+application credential composition remains the ingress owner.
+
+OpenAPI marks constraints that JSON Schema cannot express exactly as Runtime
+validation requirements. The Runtime codec remains authoritative. This release
+adds no summary, description, example, or custom-group authoring; those require
+one projection-neutral metadata owner shared by declarations, public docs,
+OpenAPI, and MCP.

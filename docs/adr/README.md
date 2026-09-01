@@ -38,7 +38,8 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
 32. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
-33. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
+33. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
+34. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
 
 ## Open decisions
 
@@ -97,6 +98,12 @@ immutable generated Context scope, and accepts an optional exact-peer React
 `useSyncExternalStore` adapter. It adds no fallback poller, Mutation
 invalidation, global provider, second client cache, or polymorphic Relation
 kernel.
+ADR-0036 replaces the polymorphic Operation RPC endpoint with one
+compiler-derived endpoint per network Query, Mutation, and Action. Generated
+clients and optional OpenAPI 3.1 use the same Resource identities, codecs,
+Context, outcomes, Policy, cancellation, and executor. It adds no authored HTTP
+path, projection-specific schema or prose, compatibility endpoint, fallback,
+or second handler.
 ADR-0037 exports `DiscriminatedValue`, `DiscriminatedReference`, and
 `matchDiscriminated` as ordinary TypeScript helpers. They preserve exhaustive
 disjunction handling and branded reference IDs without creating a codec,

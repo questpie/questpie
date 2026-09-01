@@ -1,8 +1,9 @@
 # BETA.2 execution-breadth implementation queue
 
 - Status: ready for implementation
-- Authority: ADR-0015, ADR-0026, `SPEC.md`, and the accepted proof at
-  `docs/v4/prototypes/beta2-execution-breadth/`
+- Authority: ADR-0015, ADR-0026, ADR-0036, `SPEC.md`, the accepted proof at
+  `docs/v4/prototypes/beta2-execution-breadth/`, and the accepted canonical HTTP
+  proof at `docs/v4/prototypes/http-openapi-projection/`
 - Accepted design head: `fe05d61c4fec878cc72d19c9254ab098f48531dc`
 - Verified review: `REVIEW-03.json`, committed at `173db46e`
 - Scope: Route/Auth composition, Action, ordinary/scheduled/checkpointed Job,
@@ -34,7 +35,11 @@ EB-00 accepted authority (done)
             -> EB-06 Mutation checkpoint crash/resume
                  -> EB-07 Action checkpoint ambiguity/recovery (also EB-03)
                  -> EB-08 timers, signals, cancel, bounds, compatibility
-  -> EB-09 generated client + OpenAPI/MCP projection (EB-02, EB-03)
+  -> EB-09 generated client projection (EB-02, EB-03)
+       -> HTTP-01 canonical Query GET tracer
+            -> HTTP-02 canonical Mutation/Action tracer + old-route deletion
+                 -> HTTP-03 complete OpenAPI/explain projection
+                      -> HTTP-04 reference-consumer and hostile closure
   -> EB-10 collaboration end-to-end guide/fixture (EB-02 through EB-09)
 ```
 
@@ -252,15 +257,74 @@ Acceptance:
 - cancellation and timeout have one terminal winner and append-only history;
 - child work and compensation remain typed absent.
 
-## EB-09 — Generated client and OpenAPI/MCP projections
+## EB-09 — Generated client projection
 
 Blocked by: EB-02 and EB-03.
 
-- network Actions project once from the canonical App Contract into client,
-  OpenAPI, MCP, and skill output; Routes and generic Job controls do not;
+- network Actions project once from the canonical App Contract into the
+  generated client; Routes and generic Job controls do not;
 - every projection preserves Policy, input/output, declared error, Origin, and
   exposure identity and calls the same Operation/Execution path;
 - no parallel handler or model-specific authority appears.
+
+ADR-0036 supersedes this ticket's former OpenAPI grouping with the HTTP tickets
+below. MCP and public skill output require their own accepted projection
+contracts and cannot ride the HTTP implementation implicitly.
+
+## HTTP-01 — Run one canonical Query through GET
+
+Blocked by: EB-02 and the accepted ADR-0036 authority projection.
+
+Start red with one bounded Query whose generated client must call its exact
+`GET /_questpie/query/<qualified-name>` endpoint. Drive the canonical endpoint
+descriptor through compiler normalization, App Contract, executable binding,
+generated declarations, Query URL and Context-header codecs, Fetch routing,
+the existing Operation executor, and decoded client result. Bind
+`QP-COMPOSE-028` and `QP-COMPOSE-029`; reject unsupported/unbounded GET input,
+noncanonical query bytes, duplicate/unknown input, malformed Context, and raw
+Route collisions. Prove direct/Fetch/client parity, cancellation cleanup,
+nondisclosure, deterministic artifact bytes, and no POST fallback.
+
+## HTTP-02 — Run Mutation and Action, then delete the old route
+
+Blocked by: HTTP-01 and EB-03.
+
+Start red with one Mutation replay and one Action ambiguity case using their
+visible kind-specific POST endpoints. Drive exact `{ input, context }` decoding,
+case-insensitive JSON charset handling, Idempotency-Key, Effect-Key, optional
+Call Identity, timeout, credential-before-decode ordering, committed-result
+recovery, and Action outcome classification through the same executor and
+generated client. Finish the slice by deleting the polymorphic Operation route,
+private client transport, retained-pair routing, and compatibility fixtures in
+one atomic change. Hostile tests must prove the old path is absent rather than
+redirected or translated.
+
+## HTTP-03 — Emit the complete OpenAPI and explain projection
+
+Blocked by: HTTP-01 and HTTP-02.
+
+Start red from one application containing Query, Mutation, Action, direct-only
+Operation, and raw Route. With `projections.openapi: true`, emit one complete,
+deterministic OpenAPI 3.1 document from the same canonical endpoint and codec
+artifacts used at Runtime. Cover parameters, request bodies, results, declared
+errors, the fixed applicable framework failures, nullability, bounds, inferred
+namespace tags, operation IDs, omissions with Origins, stale deletion, and
+`questpie explain`. Reject unknown configuration and operation-ID/path
+collisions. No OpenAPI-specific schema, prose, path, security, handler, or
+fallback authoring enters production.
+
+## HTTP-04 — Close reference consumers and network hostiles
+
+Blocked by: HTTP-01 through HTTP-03.
+
+Move Team Support Desk generated calls to the canonical endpoints and make
+Collaboration the authority/nondisclosure hostile consumer. Prove PostgreSQL 17
+commit, rollback, replay, Policy invisibility, credential outage, deadline, and
+Action ambiguity through real Fetch and generated-client calls. Prove Firefox
+Network tools expose Query, Mutation, and Action names and the old polymorphic
+path never appears. Finish public guide snippets, package/declaration checks,
+independent Standards and Spec reviews, `quality:release`, two byte-identical
+release dry-runs, owned-resource cleanup, and `git diff --check`.
 
 ## EB-10 — One runnable collaboration backend journey
 
