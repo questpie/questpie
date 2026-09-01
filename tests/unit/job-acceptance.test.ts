@@ -235,6 +235,141 @@ test("observes the exact Job acceptance owner and accepted identity", async () =
 	]);
 });
 
+test("persists only the accepting Job scope trace context", async () => {
+	const acceptedTrace = Object.freeze({
+		format: "questpie.trace-context" as const,
+		version: 1 as const,
+		traceId: Uint8Array.from({ length: 16 }, (_, index) => index + 1),
+		spanId: Uint8Array.from({ length: 8 }, (_, index) => index + 17),
+		flags: 1,
+	});
+	const adapter: ObservationAdapterV1 = Object.freeze({
+		format: "questpie.runtime-observability",
+		version: 1,
+		extract: () => null,
+		begin(input) {
+			return Object.freeze({
+				context: input.kind === "job.accept" ? acceptedTrace : null,
+				run: async <Result>(use: () => Result | Promise<Result>) => await use(),
+				event: () => undefined,
+				end: () => undefined,
+			});
+		},
+	});
+	const observation = createObservationKernel({
+		adapter,
+		applicationIdentity: "application:collaboration",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected observed Execution");
+	const store = memoryTransaction();
+	const owner = createJobAcceptance({
+		application: "application:collaboration",
+		acceptedAt,
+		causation: {
+			kind: "explicit",
+			id: "explicit:trace",
+			correlationId: "explicit:trace",
+		},
+		contextInput: {},
+		contextInputCodec: { kind: "object", properties: {} },
+		observation: execution.observation,
+		principal: principal.user({ id: principalId }),
+		runtimeBuildDigest: "d".repeat(64),
+		signal: new AbortController().signal,
+		tenantId,
+		transaction: store.transaction,
+	});
+
+	await execution.scope.run(() =>
+		owner.accept(job, { companyId: tenantId }, { idempotencyKey: "trace" }),
+	);
+	expect(store.writes[0]?.acceptanceTrace).toEqual(acceptedTrace);
+});
+
+test("keeps the durable receipt and ledger input when the adapter faults", async () => {
+	const faultingAdapter: ObservationAdapterV1 = Object.freeze({
+		format: "questpie.runtime-observability",
+		version: 1,
+		extract: () => null,
+		begin() {
+			throw new Error("adapter unavailable");
+		},
+	});
+	const observedStore = memoryTransaction();
+	const observation = createObservationKernel({
+		adapter: faultingAdapter,
+		applicationIdentity: "application:collaboration",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected fault-contained Execution");
+	const observed = createJobAcceptance({
+		application: "application:collaboration",
+		acceptedAt,
+		causation: {
+			kind: "explicit",
+			id: "explicit:fault",
+			correlationId: "explicit:fault",
+		},
+		contextInput: {},
+		contextInputCodec: { kind: "object", properties: {} },
+		observation: execution.observation,
+		principal: principal.user({ id: principalId }),
+		runtimeBuildDigest: "d".repeat(64),
+		signal: new AbortController().signal,
+		tenantId,
+		transaction: observedStore.transaction,
+	});
+	const absentStore = memoryTransaction();
+	const absent = createJobAcceptance({
+		application: "application:collaboration",
+		acceptedAt,
+		causation: {
+			kind: "explicit",
+			id: "explicit:fault",
+			correlationId: "explicit:fault",
+		},
+		contextInput: {},
+		contextInputCodec: { kind: "object", properties: {} },
+		principal: principal.user({ id: principalId }),
+		runtimeBuildDigest: "d".repeat(64),
+		signal: new AbortController().signal,
+		tenantId,
+		transaction: absentStore.transaction,
+	});
+
+	const observedReceipt = await execution.scope.run(() =>
+		observed.accept(
+			job,
+			{ companyId: tenantId },
+			{ idempotencyKey: "fault-neutral" },
+		),
+	);
+	const absentReceipt = await absent.accept(
+		job,
+		{ companyId: tenantId },
+		{ idempotencyKey: "fault-neutral" },
+	);
+
+	expect(observedReceipt).toEqual(absentReceipt);
+	expect(observedStore.writes).toEqual(absentStore.writes);
+	expect(observedStore.writes[0]?.acceptanceTrace).toBeNull();
+});
+
 test("keeps direct Job acceptance PostgreSQL under its accepting Execution", async () => {
 	const identities = [
 		"mutation.dispatch.accept",
@@ -262,6 +397,14 @@ test("keeps direct Job acceptance PostgreSQL under its accepting Execution", asy
 	}) as LinkedPostgresMutationTransactionStatements;
 	const events: ExecutionEventV2[] = [];
 	const parents: string[] = [];
+	const durableTrace = Object.freeze({
+		format: "questpie.trace-context" as const,
+		version: 1 as const,
+		traceId: Uint8Array.from({ length: 16 }, (_, index) => index + 1),
+		spanId: Uint8Array.from({ length: 8 }, (_, index) => index + 17),
+		flags: 1,
+	});
+	let runParameters: readonly PostgresParameter[] | null = null;
 	const active = new AsyncLocalStorage<string>();
 	const adapter: ObservationAdapterV1 = Object.freeze({
 		format: "questpie.runtime-observability",
@@ -271,7 +414,7 @@ test("keeps direct Job acceptance PostgreSQL under its accepting Execution", asy
 			if (input.kind === "postgresql")
 				parents.push(active.getStore() ?? "none");
 			return Object.freeze({
-				context: null,
+				context: input.kind === "job.accept" ? durableTrace : null,
 				run: async <Result>(use: () => Result | Promise<Result>) =>
 					await active.run(input.kind, use),
 				event: () => undefined,
@@ -313,8 +456,10 @@ test("keeps direct Job acceptance PostgreSQL under its accepting Execution", asy
 					return [{ dispatchId: parameters[7] }] as never;
 				if (statement.name === "mutation.dispatch.accept")
 					return [{ dispatchId: parameters[1] }] as never;
-				if (statement.name === "mutation.dispatch.run.insert")
+				if (statement.name === "mutation.dispatch.run.insert") {
+					runParameters = parameters;
 					return [{ runId: parameters[1] }] as never;
+				}
 				return [] as never;
 			},
 		},
@@ -356,6 +501,11 @@ test("keeps direct Job acceptance PostgreSQL under its accepting Execution", asy
 			.map((event) => event.start),
 	).toHaveLength(6);
 	expect(parents).toEqual(Array.from({ length: 6 }, () => "execution"));
+	expect(runParameters?.slice(-3)).toEqual([
+		durableTrace.traceId,
+		durableTrace.spanId,
+		durableTrace.flags,
+	]);
 	expect(new Set(semantic.map((event) => event.executionId))).toEqual(
 		new Set([execution.identity.executionId]),
 	);

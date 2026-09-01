@@ -1,3 +1,4 @@
+import type { NeutralTraceContextV1 } from "../observation";
 import {
 	definePostgresStatement,
 	type PostgresStatement,
@@ -66,6 +67,33 @@ function bytes(value: unknown, maximum: number, label: string): Uint8Array {
 	return new Uint8Array(value);
 }
 
+function acceptanceTrace(
+	traceIdValue: unknown,
+	spanIdValue: unknown,
+	flagsValue: unknown,
+): NeutralTraceContextV1 | null {
+	if (traceIdValue === null && spanIdValue === null && flagsValue === null)
+		return null;
+	if (traceIdValue === null || spanIdValue === null || flagsValue === null)
+		throw new TypeError("invalid PostgreSQL Durable acceptance trace context");
+	const traceId = bytes(traceIdValue, 16, "acceptance trace identity");
+	const spanId = bytes(spanIdValue, 8, "acceptance span identity");
+	if (
+		traceId.byteLength !== 16 ||
+		spanId.byteLength !== 8 ||
+		traceId.every((byte) => byte === 0) ||
+		spanId.every((byte) => byte === 0)
+	)
+		throw new TypeError("invalid PostgreSQL Durable acceptance trace context");
+	return Object.freeze({
+		format: "questpie.trace-context",
+		version: 1,
+		traceId,
+		spanId,
+		flags: integer(flagsValue as number, 0, 255, "acceptance trace flags"),
+	});
+}
+
 function principalKind(value: unknown): DurablePrincipalKind {
 	if (value !== "anonymous" && value !== "service" && value !== "user")
 		throw new TypeError("invalid PostgreSQL Durable Principal kind");
@@ -110,6 +138,7 @@ function returnedAttempts(
 }
 
 export type DurableClaimRun = Readonly<{
+	acceptanceTrace: NeutralTraceContextV1 | null;
 	runId: string;
 	dispatchId: string;
 	resource: string;
@@ -145,7 +174,10 @@ const runSelection = `run_id::text AS "runId",
        causation_id AS "causationId",
        correlation_id AS "correlationId",
        cancellation_requested AS "cancellationRequested",
-       attempt_count AS "attemptCount"`;
+       attempt_count AS "attemptCount",
+       trace_id AS "traceId",
+       span_id AS "spanId",
+       trace_flags AS "traceFlags"`;
 
 export const durableClaimRunSelect: PostgresStatement<
 	RunIdentityInput,
@@ -176,11 +208,12 @@ FOR UPDATE SKIP LOCKED`,
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (result.rowCount === 0) return null;
 		const row = result.rows[0];
-		if (row?.length !== 16)
+		if (row?.length !== 19)
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (typeof row[14] !== "boolean")
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		return Object.freeze({
+			acceptanceTrace: acceptanceTrace(row[16], row[17], row[18]),
 			runId: uuid(row[0] as string, "run identity"),
 			dispatchId: uuid(row[1] as string, "dispatch identity"),
 			resource: text(row[2] as string, "Resource Identity"),

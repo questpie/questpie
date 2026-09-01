@@ -51,8 +51,8 @@ function successfulDatabase(observed: Observed): PostgresTransactionRunner {
 				async execute(statement: PostgresStatement<unknown, unknown>) {
 					observed.statements.push({ transaction, name: statement.name });
 					switch (statement.name) {
-						case "readiness.protocol.v7":
-							return { version: 7, checksum: "b".repeat(64) } as never;
+						case "readiness.protocol.v8":
+							return { version: 8, checksum: "b".repeat(64) } as never;
 						case "readiness.application-binding":
 							return [
 								{ application, postgresSchema: realtimeApplication },
@@ -215,7 +215,7 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 		use: (transaction) =>
 			core.verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction({
 				transaction,
-				protocol: { version: 7, checksum: "b".repeat(64) },
+				protocol: { version: 8, checksum: "b".repeat(64) },
 				application,
 				postgresSchema: realtimeApplication,
 				migrationHead: "000001_initial",

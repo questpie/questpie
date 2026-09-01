@@ -95,37 +95,71 @@ test("claim statements reject malformed parameters before PostgreSQL", () => {
 });
 
 test("claim statement decoders close cardinality and scalar shape", () => {
+	const acceptedTraceId = Uint8Array.from(
+		{ length: 16 },
+		(_, index) => index + 1,
+	);
+	const acceptedSpanId = Uint8Array.from(
+		{ length: 8 },
+		(_, index) => index + 17,
+	);
+	const selectedRow = [
+		runId,
+		"018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
+		"reaction:messagePublished",
+		1,
+		"tenant:one",
+		"user",
+		"user:one",
+		new Uint8Array([1]),
+		new Uint8Array([2]),
+		new Uint8Array([3]),
+		"b".repeat(64),
+		"c".repeat(64),
+		"cause:one",
+		"correlation:one",
+		false,
+		1,
+		acceptedTraceId,
+		acceptedSpanId,
+		1,
+	] as const;
 	const selected = durableClaimRunSelect.decode({
 		command: "SELECT",
 		rowCount: 1,
-		rows: [
-			[
-				runId,
-				"018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
-				"reaction:messagePublished",
-				1,
-				"tenant:one",
-				"user",
-				"user:one",
-				new Uint8Array([1]),
-				new Uint8Array([2]),
-				new Uint8Array([3]),
-				"b".repeat(64),
-				"c".repeat(64),
-				"cause:one",
-				"correlation:one",
-				false,
-				1,
-			],
-		],
+		rows: [selectedRow],
 	});
 	expect(selected).toMatchObject({
 		runId,
 		semanticVersion: 1,
 		principalKind: "user",
 		attemptCount: 1,
+		acceptanceTrace: {
+			format: "questpie.trace-context",
+			version: 1,
+			flags: 1,
+		},
 	});
 	expect(Object.isFrozen(selected)).toBe(true);
+	const oldRow = durableClaimRunSelect.decode({
+		command: "SELECT",
+		rowCount: 1,
+		rows: [[...selectedRow.slice(0, 16), null, null, null]],
+	});
+	expect(oldRow?.acceptanceTrace).toBeNull();
+	for (const invalidTrace of [
+		[acceptedTraceId, null, 1],
+		[new Uint8Array(16), acceptedSpanId, 1],
+		[acceptedTraceId, new Uint8Array(8), 1],
+		[acceptedTraceId, acceptedSpanId, 256],
+	] as const)
+		expect(() =>
+			durableClaimRunSelect.decode({
+				command: "SELECT",
+				rowCount: 1,
+				rows: [[...selectedRow.slice(0, 16), ...invalidTrace]],
+			}),
+		).toThrow("acceptance trace");
 	expect(() =>
 		durableClaimRunSelect.decode({
 			command: "SELECT",
@@ -148,6 +182,9 @@ test("claim statement decoders close cardinality and scalar shape", () => {
 					"correlation",
 					false,
 					0,
+					null,
+					null,
+					null,
 				],
 			],
 		}),

@@ -15,6 +15,10 @@ export async function runObservedDurableAttempt(
 ): Promise<DurableWorkerOutcome> {
 	if (input.observation === undefined)
 		throw new TypeError("Durable Attempt observation decision is required");
+	if (input.request.acceptanceTrace === undefined)
+		throw new TypeError(
+			"Durable Attempt acceptance trace decision is required",
+		);
 	const kind =
 		input.request.capability === "job" ? "job.attempt" : "reaction.attempt";
 	const scope =
@@ -28,7 +32,13 @@ export async function runObservedDurableAttempt(
 					principalKind: input.request.principal.kind,
 					resourceIdentity: input.request.resource,
 					runId: input.request.runId,
-					trace: { kind: "root" },
+					trace:
+						input.request.acceptanceTrace === null
+							? { kind: "root" }
+							: {
+									kind: "root-with-links",
+									links: [input.request.acceptanceTrace],
+								},
 				});
 	if (!scope) return input.use();
 	try {

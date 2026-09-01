@@ -70,6 +70,7 @@ function selectedRun(
 	}> = {},
 ) {
 	return {
+		acceptanceTrace: null,
 		runId,
 		dispatchId,
 		resource: input.resource ?? "reaction:messagePublished",

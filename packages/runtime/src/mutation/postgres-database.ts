@@ -604,6 +604,9 @@ export function createPostgresDatabaseMutationInvoker<View>(
 												dispatch.resource.retry.horizonMilliseconds,
 										),
 										reactionAcceptedAt,
+										acceptanceObservation?.context?.traceId ?? null,
+										acceptanceObservation?.context?.spanId ?? null,
+										acceptanceObservation?.context?.flags ?? null,
 									],
 								);
 								if (inserted.length !== 1 || inserted[0]!.runId !== runId)

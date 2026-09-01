@@ -53,10 +53,10 @@ export {
 	verifyInternalProtocolV6,
 } from "./postgres/internal-protocol-v6";
 export {
-	ensureInternalProtocolV7,
-	internalProtocolV7Checksum,
-	verifyInternalProtocolV7,
-} from "./postgres/internal-protocol-v7";
+	ensureInternalProtocolV8,
+	internalProtocolV8Checksum,
+	verifyInternalProtocolV8,
+} from "./postgres/internal-protocol-v8";
 export {
 	projectPostgresChangeCapture,
 	verifyPostgresChangeCapture,

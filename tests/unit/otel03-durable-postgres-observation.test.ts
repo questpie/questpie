@@ -302,6 +302,7 @@ test("observes Reaction effect writes but leaves external effect inspection raw"
 		database,
 	});
 	const claim = Object.freeze({
+		acceptanceTrace: null,
 		attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 		attemptNumber: 1,
 		cancellationRequested: false,

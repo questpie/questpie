@@ -1,11 +1,9 @@
 export {
-	acceptDurableDispatch,
 	createJobAcceptance,
 	durableRunIdentity,
 	JobAcceptanceConflict,
 } from "./acceptance";
 export type {
-	DurableAcceptance,
 	JobAcceptance,
 	JobAcceptanceOptions,
 	JobAcceptanceReceipt,
@@ -67,8 +65,7 @@ export { createDurableJobContext } from "./job-context";
 export { createDurableReactionContext } from "./reaction-context";
 export { durablePrincipal } from "./principal";
 export { runObservedDurableAttempt } from "./observation";
-export { markDurableKernelTransaction } from "./rows";
-export type { DurableActor, DurableQuery } from "./rows";
+export type { DurableActor } from "./rows";
 export { createDurableWorker } from "./worker";
 export type {
 	DurableAttemptExecution,

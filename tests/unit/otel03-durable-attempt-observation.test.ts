@@ -8,9 +8,12 @@ import {
 import {
 	createObservationKernel,
 	type ExecutionEventV2,
+	type ObservationAdapterV1,
+	type ObservationStartV1,
 } from "../../packages/runtime/src/observation";
 
 const request = Object.freeze({
+	acceptanceTrace: null,
 	capability: "job" as const,
 	attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
 	attemptNumber: 2,
@@ -82,6 +85,65 @@ test("observes a complete successful Job Attempt under one worker Execution", as
 			kind: "job.attempt",
 			runId: request.runId,
 		},
+	});
+});
+
+test("starts each Attempt as a fresh root with its first-acceptance link", async () => {
+	const acceptanceTrace = Object.freeze({
+		format: "questpie.trace-context" as const,
+		version: 1 as const,
+		traceId: Uint8Array.from({ length: 16 }, (_, index) => index + 1),
+		spanId: Uint8Array.from({ length: 8 }, (_, index) => index + 17),
+		flags: 1,
+	});
+	const starts: ObservationStartV1[] = [];
+	const adapter: ObservationAdapterV1 = Object.freeze({
+		format: "questpie.runtime-observability",
+		version: 1,
+		extract: () => null,
+		begin(input) {
+			starts.push(input);
+			return Object.freeze({
+				context: null,
+				run: async <Result>(use: () => Result | Promise<Result>) => await use(),
+				event: () => undefined,
+				end: () => undefined,
+			});
+		},
+	});
+	const kernel = createObservationKernel({
+		adapter,
+		applicationIdentity: "application:collaboration",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		runtimeBuildDigest: "d".repeat(64),
+	});
+	const execution = kernel.beginExecution({
+		entry: "worker",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (execution === null) throw new Error("expected worker Execution");
+	const outcome = Object.freeze({
+		attemptNumber: 2,
+		failureCode: null,
+		outcome: "succeeded" as const,
+		resource: request.resource,
+		runId: request.runId,
+	}) satisfies DurableWorkerOutcome;
+
+	await execution.scope.run(() =>
+		runObservedDurableAttempt({
+			observation: execution.observation,
+			request: {
+				...request,
+				acceptanceTrace,
+			} as DurableAttemptExecutionRequest,
+			use: async () => outcome,
+		}),
+	);
+	expect(starts.find(({ kind }) => kind === "job.attempt")).toMatchObject({
+		trace: { kind: "root-with-links", links: [acceptanceTrace] },
 	});
 });
 
@@ -216,5 +278,20 @@ test("refuses an omitted Attempt observation decision before work", async () => 
 			},
 		}),
 	).rejects.toThrow("Durable Attempt observation decision is required");
+	expect(calls).toBe(0);
+});
+
+test("refuses an omitted first-acceptance trace decision before work", async () => {
+	let calls = 0;
+	await expect(
+		runObservedDurableAttempt({
+			observation: null,
+			request: { ...request, acceptanceTrace: undefined } as never,
+			use: async () => {
+				calls += 1;
+				throw new Error("must not execute");
+			},
+		}),
+	).rejects.toThrow("Durable Attempt acceptance trace decision is required");
 	expect(calls).toBe(0);
 });

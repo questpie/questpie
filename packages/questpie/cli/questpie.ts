@@ -19,14 +19,13 @@ type Compiler = Readonly<{
 	loadCommittedSeed(path: string): Promise<unknown>;
 	applyCommittedMigrations(
 		input: Readonly<{
-			allowNonRollingProtocolV7?: boolean;
+			allowNonRollingProtocolV8?: boolean;
 			connectionString?: string;
 			migrations: readonly unknown[];
 		}>,
 	): Promise<Readonly<{ status: string }>>;
 	applyCommittedSeeds(
 		input: Readonly<{
-			allowNonRollingProtocolV7?: boolean;
 			connectionString?: string;
 			schema: unknown;
 			seeds: readonly unknown[];
@@ -111,8 +110,8 @@ async function main(): Promise<void> {
 		);
 		if (migrations.length === 0) fail("no committed migrations found");
 		const result = await api.applyCommittedMigrations({
-			allowNonRollingProtocolV7: cliArguments.includes(
-				"--allow-non-rolling-protocol-v7",
+			allowNonRollingProtocolV8: cliArguments.includes(
+				"--allow-non-rolling-protocol-v8",
 			),
 			connectionString: databaseUrl(),
 			migrations,
@@ -135,9 +134,6 @@ async function main(): Promise<void> {
 		);
 		if (seeds.length === 0) fail("no committed Seeds found");
 		const result = await api.applyCommittedSeeds({
-			allowNonRollingProtocolV7: cliArguments.includes(
-				"--allow-non-rolling-protocol-v7",
-			),
 			connectionString: databaseUrl(),
 			schema: await loadGeneratedSchemaProjection(root),
 			seeds,

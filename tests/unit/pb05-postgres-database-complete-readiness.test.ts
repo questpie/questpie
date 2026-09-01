@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 
 import { verifyPostgresDatabaseRuntimeReadiness } from "../../packages/compiler/src/runtime/postgres-readiness";
-import { internalProtocolV7Checksum } from "../../packages/compiler/src/schema";
+import { internalProtocolV8Checksum } from "../../packages/compiler/src/schema";
 import type { SchemaProjectionV1 } from "../../packages/compiler/src/schema";
 import { verifyPostgresDatabaseReadinessPrerequisites } from "../../packages/runtime/src/application/postgres-readiness-prerequisites";
 import {
@@ -121,7 +121,7 @@ const schema = Object.freeze({
 const rowsByStatement: Readonly<
 	Record<string, readonly (readonly unknown[])[]>
 > = Object.freeze({
-	"readiness.protocol.v7": [[7, internalProtocolV7Checksum]],
+	"readiness.protocol.v8": [[8, internalProtocolV8Checksum]],
 	"readiness.application-binding": [[application, postgresSchema]],
 	"readiness.migration-receipts": [
 		["000001_create-collaboration", 1, null, migrationChecksum],
@@ -271,7 +271,7 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 	const prerequisiteObserved = observations();
 	await verifyPostgresDatabaseReadinessPrerequisites({
 		database: fakeDatabase(rowsByStatement, prerequisiteObserved),
-		protocol: { version: 7, checksum: internalProtocolV7Checksum },
+		protocol: { version: 8, checksum: internalProtocolV8Checksum },
 		application,
 		postgresSchema,
 		migrationHead: "000001_create-collaboration",
@@ -295,7 +295,7 @@ test("compiler database readiness owns one complete fixed snapshot", async () =>
 		{ isolation: "repeatableRead", access: "readOnly" },
 	]);
 	expect(observed.names).toEqual([
-		"readiness.protocol.v7",
+		"readiness.protocol.v8",
 		"readiness.application-binding",
 		"readiness.migration-receipts",
 		"readiness.fingerprint.provider",

@@ -80,12 +80,12 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, pg_catalog.pg_current
   (application_name, run_id, dispatch_id, resource_identity, semantic_version, tenant_id, principal_kind, principal_id,
    run_as, context_input_bytes, payload_bytes, retry_bytes, runtime_build_digest, executable_digest,
    causation_kind, causation_id, correlation_id, state, attempt_count, available_at, horizon_at,
-   cancellation_requested, event_sequence, dead_letter, accepted_at)
+   cancellation_requested, event_sequence, dead_letter, accepted_at, trace_id, span_id, trace_flags)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'caller', $9, $10, $11, $12, $13,
-   $14, $15, $16, $17, 0, $18, $19, false, 1, false, $20)
+   $14, $15, $16, $17, 0, $18, $19, false, 1, false, $20, $21, $22, $23)
 ON CONFLICT DO NOTHING
 RETURNING run_id::text AS "runId"`,
-			parameterCount: 20,
+			parameterCount: 23,
 			result: result("INSERT", range(0, 1), range(0, 1), [
 				{ key: "runId", codec: "text", nullable: false },
 			]),

@@ -4,6 +4,7 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import { canonicalMutationBytes } from "../mutation/canonical";
+import type { NeutralTraceContextV1 } from "../observation";
 import { DeclaredOperationError } from "../operation";
 import type { DurableEffectLedger } from "./durable-effect-contract";
 import {
@@ -68,6 +69,7 @@ export type DurableWorkAttemptExecutor<Execution = unknown> = (
 ) => Promise<unknown>;
 
 export type DurableAttemptExecutionRequest = Readonly<{
+	acceptanceTrace: NeutralTraceContextV1 | null;
 	capability: "job" | "reaction";
 	attemptId: string;
 	attemptNumber: number;
@@ -352,6 +354,7 @@ export function createDurableWorker<Execution>(
 		try {
 			return await input.attemptExecution(
 				Object.freeze({
+					acceptanceTrace: claim.acceptanceTrace,
 					capability: available.capability,
 					attemptId: claim.attemptId,
 					attemptNumber: claim.attemptNumber,

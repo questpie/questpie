@@ -161,6 +161,9 @@ export function createPostgresJobAcceptanceTransaction(
 					record.availableAt,
 					record.horizonAt,
 					record.acceptedAt,
+					record.acceptanceTrace?.traceId ?? null,
+					record.acceptanceTrace?.spanId ?? null,
+					record.acceptanceTrace?.flags ?? null,
 				],
 			);
 			if (inserted.length !== 1 || inserted[0]!.runId !== record.runId)

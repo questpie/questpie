@@ -83,7 +83,7 @@ function fixedStatements(): LinkedPostgresMutationTransactionStatements {
 		["mutation.dispatch.accept", 2],
 		["mutation.dispatch.insert", 13],
 		["mutation.dispatch.kernel.mark", 0],
-		["mutation.dispatch.run.insert", 20],
+		["mutation.dispatch.run.insert", 23],
 		["mutation.job.acceptance.claim", 13],
 		["mutation.job.acceptance.read", 2],
 		["mutation.receipt.claim", 7],
@@ -193,6 +193,13 @@ const facts = {
 function observedMutation(
 	events: ExecutionEventV2[],
 	postgresParents?: string[],
+	durableTrace?: Readonly<{
+		format: "questpie.trace-context";
+		version: 1;
+		traceId: Uint8Array;
+		spanId: Uint8Array;
+		flags: number;
+	}>,
 ) {
 	const active = new AsyncLocalStorage<string>();
 	const adapter: ObservationAdapterV1 | undefined = postgresParents
@@ -204,7 +211,8 @@ function observedMutation(
 					if (input.kind === "postgresql")
 						postgresParents.push(active.getStore() ?? "none");
 					return Object.freeze({
-						context: null,
+						context:
+							input.kind === "reaction.accept" ? (durableTrace ?? null) : null,
 						run: async <Result>(use: () => Result | Promise<Result>) =>
 							await active.run(input.kind, use),
 						event: () => undefined,
@@ -1250,7 +1258,18 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 	const linked = fixedStatements();
 	const observationEvents: ExecutionEventV2[] = [];
 	const postgresParents: string[] = [];
-	const observed = observedMutation(observationEvents, postgresParents);
+	const durableTrace = Object.freeze({
+		format: "questpie.trace-context" as const,
+		version: 1 as const,
+		traceId: Uint8Array.from({ length: 16 }, (_, index) => index + 1),
+		spanId: Uint8Array.from({ length: 8 }, (_, index) => index + 17),
+		flags: 1,
+	});
+	const observed = observedMutation(
+		observationEvents,
+		postgresParents,
+		durableTrace,
+	);
 	const calls: Array<
 		Readonly<{ name: string; parameters: readonly unknown[] }>
 	> = [];
@@ -1312,7 +1331,12 @@ test("joins one projected Reaction dispatch to the same static transaction", asy
 	]);
 	expect(calls[4]?.parameters).toHaveLength(13);
 	expect(calls[6]?.parameters[1]).toBe(calls[4]?.parameters[7]);
-	expect(calls[7]?.parameters).toHaveLength(20);
+	expect(calls[7]?.parameters).toHaveLength(23);
+	expect(calls[7]?.parameters.slice(-3)).toEqual([
+		durableTrace.traceId,
+		durableTrace.spanId,
+		durableTrace.flags,
+	]);
 	expect(calls[8]?.parameters[1]).toBe(calls[7]?.parameters[1]);
 	const acceptance = observationEvents.filter(
 		(event) => event.scopeKind === "reaction.accept",

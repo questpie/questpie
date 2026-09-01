@@ -99,6 +99,7 @@ function claim(
 	}>,
 ): DurableClaim {
 	return Object.freeze({
+		acceptanceTrace: null,
 		runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
 		dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
 		resource: input.resource,

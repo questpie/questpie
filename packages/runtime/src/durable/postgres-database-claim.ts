@@ -52,6 +52,7 @@ function claim(
 	}>,
 ): DurableClaim {
 	return Object.freeze({
+		acceptanceTrace: row.acceptanceTrace,
 		runId: row.runId,
 		dispatchId: row.dispatchId,
 		resource: row.resource,
