@@ -891,9 +891,11 @@ export function createCandidateAdapter(
 					contentType?.toLowerCase() !== "application/json; charset=utf-8"
 				)
 					invalid();
-				const body = record(
-					parseJsonWithoutDuplicateKeys(await request.text()),
-				);
+				const bodyText = new TextDecoder("utf-8", {
+					fatal: true,
+					ignoreBOM: true,
+				}).decode(await request.arrayBuffer());
+				const body = record(parseJsonWithoutDuplicateKeys(bodyText));
 				exactKeys(body, ["context", "input"]);
 				operationInput = decodeRuntimeCodec(
 					decodeRuntimeCodecDescriptor(definition.input),

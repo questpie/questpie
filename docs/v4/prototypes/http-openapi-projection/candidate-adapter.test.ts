@@ -544,6 +544,56 @@ test("composed POST carriers preserve Mutation identity and Action ambiguity sem
 	).rejects.toEqual(new ActionOutcomeAmbiguous("malformed-call"));
 });
 
+test("rejects malformed POST UTF-8 before Operation execution", async () => {
+	let executions = 0;
+	const adapter = createCandidateAdapter({
+		application,
+		clientContractDigest,
+		wireDigest,
+		definitions: [
+			{
+				context: contextCodec,
+				execute: async () => {
+					executions += 1;
+					return { kind: "result", value: null };
+				},
+				input: {
+					kind: "object",
+					properties: { value: { kind: "text", maxLength: 100 } },
+				},
+				kind: "mutation",
+				name: "text.replace",
+				output: { kind: "nullable", codec: { kind: "text" } },
+			},
+		],
+		resolvePrincipal: () => "principal",
+	});
+	const prefix = new TextEncoder().encode(
+		`{"context":${JSON.stringify(contextA)},"input":{"value":"`,
+	);
+	const suffix = new TextEncoder().encode('"}}');
+	const body = new Uint8Array(prefix.length + 1 + suffix.length);
+	body.set(prefix);
+	body[prefix.length] = 0xff;
+	body.set(suffix, prefix.length + 1);
+	const response = await adapter.fetch(
+		new Request("https://candidate.test/_questpie/mutation/text.replace", {
+			body,
+			headers: {
+				"Content-Type": "application/json",
+				"Idempotency-Key": "invalid-utf8-call",
+			},
+			method: "POST",
+		}),
+	);
+	expect(response.status).toBe(400);
+	expect(await response.json()).toEqual({
+		callId: "invalid-utf8-call",
+		error: { code: "PROTOCOL_UNSUPPORTED", retryable: false },
+	});
+	expect(executions).toBe(0);
+});
+
 test("Query outcomes are private/no-store and never reused across Principal or Context", async () => {
 	let executions = 0;
 	const adapter = createCandidateAdapter({
