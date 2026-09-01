@@ -83,11 +83,12 @@ before Operation execution. Principal, Authority, call identity, credentials,
 deadline, and transport metadata are never model arguments.
 
 `outputSchema` is the exact output codec schema. Success returns the canonical
-result as `structuredContent`; a compact JSON text block may accompany it for
-older presentation clients but is not a second result contract. Declared and
-framework Operation failures return `isError: true` with a closed structured
-error value. Only malformed MCP protocol, unknown tool, and arguments that do
-not match the published tool schema use JSON-RPC protocol errors.
+result as `structuredContent`; the serialized canonical JSON also appears in a
+text block as the current protocol recommends, but is not a second result
+contract. Input/Context codec validation, declared errors, and framework
+Operation failures return `isError: true` with a closed structured error value.
+Only an unknown tool, a malformed `CallToolRequest` envelope, or an MCP server
+failure uses a JSON-RPC protocol error.
 
 Mutation call identity and Action effect identity remain framework-owned MCP
 invocation metadata. The adapter never retries automatically. Post-commit
