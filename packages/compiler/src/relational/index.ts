@@ -1,5 +1,5 @@
 import { digest } from "../canonical";
-import type { DataQueryTemplateV1, PolicyProgramV1 } from "./types";
+import type { DataQueryTemplate, PolicyProgramV1 } from "./types";
 
 export { relationalDiscoverySource } from "./discovery";
 export { projectRelationalGeneratedContract } from "./generated-contract";
@@ -37,6 +37,8 @@ export {
 export { normalizeDataQueryTemplate } from "./normalize-query";
 export type {
 	DataQueryTemplateV1,
+	DataQueryTemplateV2,
+	DataQueryTemplate,
 	PolicyExpressionV1,
 	PolicyProgramV1,
 	RootQueryFilterV1,
@@ -48,6 +50,6 @@ export function policyProgramDigest(program: PolicyProgramV1): string {
 	return digest("questpie-policy-program-v1", program);
 }
 
-export function dataQueryTemplateDigest(template: DataQueryTemplateV1): string {
-	return digest("questpie-data-query-template-v1", template);
+export function dataQueryTemplateDigest(template: DataQueryTemplate): string {
+	return digest(`questpie-data-query-template-v${template.version}`, template);
 }

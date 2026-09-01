@@ -13,10 +13,12 @@ import {
 } from "./shared";
 import type {
 	CollectionIdentity,
+	DataQueryTemplate,
 	DataQueryTemplateV1,
+	InverseQueryFilterV2,
 	QueryParameterV1,
+	QuerySelectionV2,
 	RootQueryFilterV1,
-	RootQuerySelectionV1,
 	ScalarCodecV1,
 } from "./types";
 
@@ -86,9 +88,34 @@ function normalizeSelection(
 	depth = 0,
 	path: readonly string[] = [],
 	origin?: Readonly<{ path: string; exportName: string }>,
-): RootQuerySelectionV1 {
+): QuerySelectionV2 {
 	const selection = record(value, "Query selection");
 	if (selection.kind === "field") return cloneJson(selection) as never;
+	if (selection.kind === "inverseList") {
+		return {
+			kind: "inverseList",
+			key: string(selection.key, "inverse selection key"),
+			relation: string(
+				selection.relation,
+				"inverse Relation identity",
+			) as QuerySelectionV2 & never,
+			source: string(
+				selection.source,
+				"inverse source Collection identity",
+			) as QuerySelectionV2 & never,
+			first: Number(selection.first),
+			filter:
+				selection.filter === null
+					? null
+					: (normalizeFilter(selection.filter, true) as InverseQueryFilterV2),
+			order: cloneJson(array(selection.order, "inverse Query order")) as never,
+			select: array(selection.select, "inverse Query selection")
+				.map((child) =>
+					normalizeSelection(child, depth + 1, [...path, "inverse"], origin),
+				)
+				.sort((left, right) => compareAscii(left.key, right.key)),
+		};
+	}
 	if (selection.kind !== "toOne")
 		throw new TypeError(
 			`unsupported Query selection ${String(selection.kind)}`,
@@ -151,7 +178,7 @@ export function normalizeDataQueryTemplate(
 		dataContractProjectionDigest: string;
 	}>,
 	origin?: Readonly<{ path: string; exportName: string }>,
-): DataQueryTemplateV1 {
+): DataQueryTemplate {
 	const input = record(value, "Data Query Template");
 	const parameters = array(input.parameters, "Query parameters")
 		.map(normalizeParameter)
@@ -159,9 +186,16 @@ export function normalizeDataQueryTemplate(
 	const select = array(input.select, "Query selection")
 		.map((selection) => normalizeSelection(selection, 0, [], origin))
 		.sort((left, right) => compareAscii(left.key, right.key));
-	return {
+	const version = select.some(function containsInverse(selection): boolean {
+		return (
+			selection.kind === "inverseList" ||
+			(selection.kind === "toOne" && selection.select.some(containsInverse))
+		);
+	})
+		? 2
+		: 1;
+	const shared = {
 		format: "questpie.data-query-template",
-		version: 1,
 		from: string(input.from, "Query from") as CollectionIdentity,
 		schemaProjectionDigest: digests.schemaProjectionDigest,
 		dataContractProjectionDigest: digests.dataContractProjectionDigest,
@@ -175,4 +209,12 @@ export function normalizeDataQueryTemplate(
 			record(input.page, "Query page"),
 		) as DataQueryTemplateV1["page"],
 	};
+	return version === 1
+		? ({ ...shared, version, select } as DataQueryTemplateV1)
+		: ({
+				...shared,
+				version,
+				maximumRelationEdges: 4,
+				select,
+			} as DataQueryTemplate);
 }

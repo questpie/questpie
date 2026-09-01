@@ -191,15 +191,155 @@ is true, including for a null Field.
 
 ## Traverse declared Relations
 
-Structural Query v1 can select one `toOne` hop and filter with `exists` or
-`notExists` over one owning or inverse Relation. A `toOne` result is nullable at
-the public boundary. V1 does not project `toMany` arrays or traverse a second
-Relation hop.
+Existing Query Template v1 can traverse `toOne` Relations within the shared
+four-edge ceiling and filter with `exists` or `notExists` over one owning or
+inverse Relation. A `toOne` result is nullable at the public boundary. Those v1
+bytes remain readable and continue to be emitted for `toOne`-only graphs.
 
 The compiler derives a dependency template from every selected, filtered,
 joined, ordered, cursor, and page Field. Authors cannot edit that template.
 [Policy](./context-and-policy) and [Live Query](./realtime) add their own
 execution facts; they cannot remove a structural read.
+
+## Select one bounded inverse child list
+
+Put the foreign key on the owning Collection and declare the inverse once. The
+inverse creates no column, foreign key, migration, endpoint, or public CRUD
+surface.
+
+```ts title="src/data/comments.ts"
+import { constraint, defineCollection, field, relation } from "questpie";
+import { tickets } from "./tickets";
+
+export const comments = defineCollection({
+	name: "comments",
+	fields: {
+		id: field.uuid({ nullable: false }),
+		ticketId: field.uuid({ nullable: false }),
+		body: field.text({ nullable: false, minLength: 1, maxLength: 8_192 }),
+		createdAt: field.timestamp({ nullable: false, withTimezone: true }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+	relations: {
+		ticket: relation.toOne({
+			target: tickets,
+			fields: ["ticketId"],
+			references: ["id"],
+		}),
+	},
+});
+```
+
+```ts title="src/data/tickets.ts"
+import {
+	constraint,
+	defineCollection,
+	field,
+	relation,
+	relationRef,
+} from "questpie";
+
+export const tickets = defineCollection({
+	name: "tickets",
+	fields: {
+		id: field.uuid({ nullable: false }),
+		summary: field.text({ nullable: false, minLength: 1, maxLength: 500 }),
+	},
+	constraints: {
+		primary: constraint.primaryKey({ fields: ["id"] }),
+	},
+	relations: {
+		comments: relation.toMany({
+			inverseOf: relationRef("comments", "ticket"),
+		}),
+	},
+});
+```
+
+Import the child Collection into the Query module. The nested `list` form owns
+the child Field types; it is a structural selection, not another Query or
+network call.
+
+```ts title="src/queries/ticket-detail.ts"
+import { codec } from "questpie";
+import { defineQuery } from "#questpie/app";
+import { comments } from "../data/comments";
+import { tickets } from "../data/tickets";
+
+export const ticketDetailPage = defineQuery({
+	name: "tickets.detailPage",
+	network: true,
+	query: tickets.list({
+		parameters: {
+			ids: codec.list(codec.uuid(), { maximum: 1 }),
+			first: codec.integer({ minimum: 1, maximum: 1 }),
+			after: codec.nullable(codec.cursor()),
+		},
+		where: ({ row, parameters }) => row.id.in(parameters.ids),
+		orderBy: { id: "asc" },
+		select: {
+			id: true,
+			summary: true,
+			comments: comments.list({
+				first: 50,
+				where: ({ row }) => row.body.notEqual("filtered"),
+				orderBy: { createdAt: "desc", id: "desc" },
+				select: { id: true, body: true, createdAt: true },
+			}),
+		},
+		page: ({ parameters }) => ({
+			first: parameters.first,
+			after: parameters.after,
+		}),
+	}),
+});
+```
+
+Root and nested `list` are mutually exclusive overloads. Root `list` requires
+`parameters` and `page` and forbids `first`; nested `list` requires a literal
+`first` from 1 through 50 and forbids the root members. The compiler rejects a
+mixed object even when it passed through a variable.
+
+The result keeps the outer `nodes` and `pageInfo`. Each
+`ticket.comments` is an exact readonly array and is `[]`, never `null`, when no
+authorized child is visible. A conditional selected-output Field becomes
+optional, such as `body?: string`; denial omits it rather than returning
+`null`. A nested `toOne` result remains nullable.
+
+The child `where` changes only the child payload, never parent membership.
+Child Policy runs before child ordering and limit, so a hidden child consumes
+no visible slot. Every child order is explicit and must end in a non-null
+primary or unique key. Every child order Field must also be selected directly
+and be unconditionally visible under selected-output Policy; otherwise
+`QP-DATA-008 orderFieldNotSelected` makes the Query unavailable. QUESTPIE adds
+no hidden tie-breaker.
+
+One Query may contain one inverse child list and at most four total Relation
+edges. A child list has no cursor or `pageInfo`; use an ordinary child Query for
+independent continuation. A second plural list, aggregate, quantifier,
+polymorphic Relation, or synthetic many-to-many projection remains outside
+this contract.
+
+The root page and child list execute as one Policy-aware PostgreSQL statement
+inside one read-only repeatable-read snapshot. A 100-row root page and 50-row
+child bound produce at most 5,050 flattened positions including the root
+sentinel. Cancellation, deadline, row-shape failure, or semantic-byte excess
+returns no partial parent or child payload, and QUESTPIE does not automatically
+retry the Query.
+
+Direct calls, Fetch, the generated client, and watched recomputation use the
+same linked plan and decoder. Child insert, update, delete, Relation move,
+ordering-boundary change, empty-list miss, or reached Policy-fact change dirties
+the watch. A successful recomputation replaces the complete dependency plan;
+a failed or cancelled recomputation publishes nothing.
+
+`QP-DATA-026 invalidInverseList` reports a wrong child source, dynamic or
+out-of-range `first`, unknown selection, non-total order, mixed overload, second
+plural list, or nested cursor at the authored Origin. `QP-DATA-022` reports a
+fifth Relation edge. Public failures contain no SQL, PostgreSQL names, Policy
+evidence, hidden cardinality, or protected values.
 
 ## Treat cursors as scoped data
 

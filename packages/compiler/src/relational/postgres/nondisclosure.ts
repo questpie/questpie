@@ -1,4 +1,4 @@
-import type { DataQueryTemplateV1, PolicyProgramV1 } from "../types";
+import type { DataQueryTemplate, PolicyProgramV1 } from "../types";
 import {
 	fieldValueSql,
 	postgresType,
@@ -34,7 +34,7 @@ export function lowerPostgresKeyedLookupProof(
 		catalog: PostgresCatalog;
 		collection: PostgresCollection;
 		policy: PolicyProgramV1;
-		template: DataQueryTemplateV1;
+		template: DataQueryTemplate;
 	}>,
 ): PostgresKeyedLookupProofV1 {
 	const read = input.policy.operations.read;

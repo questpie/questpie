@@ -1,5 +1,6 @@
 import type {
-	DataQueryTemplateV1,
+	DataQueryTemplate,
+	InverseQueryFilterV2,
 	QueryOperandV1,
 	RootQueryFilterV1,
 	ScalarCodecV1,
@@ -17,12 +18,12 @@ import { PostgresParameters } from "./parameters";
 export interface QuerySqlContext {
 	readonly catalog: PostgresCatalog;
 	readonly parameters: PostgresParameters;
-	readonly template: DataQueryTemplateV1;
+	readonly template: DataQueryTemplate;
 	readonly alias: string;
 }
 
 function parameterCodec(
-	template: DataQueryTemplateV1,
+	template: DataQueryTemplate,
 	name: string,
 ): ScalarCodecV1 {
 	const parameter = template.parameters.find(
@@ -33,10 +34,7 @@ function parameterCodec(
 	return parameter.codec;
 }
 
-function parameterNullable(
-	template: DataQueryTemplateV1,
-	name: string,
-): boolean {
+function parameterNullable(template: DataQueryTemplate, name: string): boolean {
 	const parameter = template.parameters.find(
 		(candidate) => candidate.name === name,
 	);
@@ -114,10 +112,12 @@ function scalarFilterSql(
 }
 
 export function queryFilterSql(
-	filter: RootQueryFilterV1,
+	filter: RootQueryFilterV1 | InverseQueryFilterV2,
 	context: QuerySqlContext,
 ): string {
 	switch (filter.kind) {
+		case "constant":
+			return filter.value ? "TRUE" : "FALSE";
 		case "and":
 		case "or":
 			if (filter.expressions.length === 0)
@@ -170,7 +170,7 @@ export function filterParameters(
 }
 
 export function orderSql(
-	template: DataQueryTemplateV1,
+	template: DataQueryTemplate,
 	catalog: PostgresCatalog,
 	alias: string,
 ): string {

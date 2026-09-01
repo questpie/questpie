@@ -263,6 +263,75 @@ type LiteralKeys<Value> = {
 	[Key in keyof Value]: string extends Key ? never : Key;
 }[keyof Value];
 
+type ChildListFirst =
+	| 1
+	| 2
+	| 3
+	| 4
+	| 5
+	| 6
+	| 7
+	| 8
+	| 9
+	| 10
+	| 11
+	| 12
+	| 13
+	| 14
+	| 15
+	| 16
+	| 17
+	| 18
+	| 19
+	| 20
+	| 21
+	| 22
+	| 23
+	| 24
+	| 25
+	| 26
+	| 27
+	| 28
+	| 29
+	| 30
+	| 31
+	| 32
+	| 33
+	| 34
+	| 35
+	| 36
+	| 37
+	| 38
+	| 39
+	| 40
+	| 41
+	| 42
+	| 43
+	| 44
+	| 45
+	| 46
+	| 47
+	| 48
+	| 49
+	| 50;
+
+declare const childListSelectionBrand: unique symbol;
+
+export interface ChildListSelection<
+	Source extends `collection:${string}`,
+	Row,
+> {
+	readonly kind: "toManyList";
+	readonly source: Source;
+	readonly first: ChildListFirst;
+	readonly [childListSelectionBrand]: Row;
+}
+
+type InverseSource<InverseOf extends string> =
+	InverseOf extends `collection:${infer Name}/relation:${string}`
+		? `collection:${Name}`
+		: never;
+
 type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 	[Key in keyof Fields]?: Fields[Key] extends
 		| DataFieldDescriptor<
@@ -294,7 +363,9 @@ type ObjectSelection<Fields, Relations extends CollectionRelations> = Readonly<{
 						select: ObjectSelection<TargetFields, TargetRelations>;
 					}>
 				: never
-			: never;
+			: Relations[Key] extends InverseRelationDefinition<infer InverseOf>
+				? ChildListSelection<InverseSource<InverseOf>, unknown>
+				: never;
 	}>;
 
 type ScalarSelection<Fields> = Readonly<{
@@ -351,19 +422,68 @@ type SelectedObject<
 						? SelectedObject<TargetFields, TargetRelations, Nested> | null
 						: never
 					: never
-				: never
+				: Relations[Key] extends InverseRelationDefinition<infer InverseOf>
+					? Selection[Key] extends ChildListSelection<
+							InverseSource<InverseOf>,
+							infer Row
+						>
+						? readonly Readonly<Row>[]
+						: never
+					: never
 			: never;
 };
 
 export interface CollectionListAuthoring<
+	Name extends string,
 	Fields extends FieldMap,
 	Relations extends CollectionRelations,
 > {
+	<
+		const Selection extends ObjectSelection<Fields, Relations>,
+		const Order extends Readonly<
+			Partial<
+				Record<
+					keyof Fields & string,
+					| "asc"
+					| "desc"
+					| Readonly<{
+							direction: "asc" | "desc";
+							nulls: "first" | "last";
+					  }>
+				>
+			>
+		>,
+	>(
+		definition: Readonly<{
+			first: ChildListFirst;
+			where?: (
+				scope: Readonly<{ row: QueryFields<Fields> }>,
+			) => BooleanExpression;
+			orderBy: Order &
+				(keyof Order extends never ? never : unknown) &
+				Readonly<Record<Exclude<keyof Order, keyof Fields>, never>> &
+				Readonly<Record<Exclude<keyof Order, keyof Selection>, never>>;
+			select: Selection &
+				(keyof Selection extends never ? never : unknown) &
+				Readonly<
+					Record<
+						Exclude<keyof Selection, keyof Fields | LiteralKeys<Relations>>,
+						never
+					>
+				>;
+			parameters?: never;
+			page?: never;
+		}>,
+	): ChildListSelection<
+		`collection:${Name}`,
+		SelectedObject<Fields, Relations, Selection>
+	>;
 	<
 		const Parameters extends CodecParameterMap,
 		const Selection extends ObjectSelection<Fields, Relations>,
 	>(
 		definition: Readonly<{
+			first?: never;
 			parameters: Parameters;
 			where: (
 				scope: Readonly<{
@@ -411,12 +531,23 @@ export interface CollectionListAuthoring<
 }
 
 export function collectionList<
+	Name extends string,
 	Fields extends FieldMap,
 	Relations extends CollectionRelations,
 >(
-	collection: Readonly<{ name: string; fields: Fields; relations: Relations }>,
-): CollectionListAuthoring<Fields, Relations> {
+	collection: Readonly<{ name: Name; fields: Fields; relations: Relations }>,
+): CollectionListAuthoring<Name, Fields, Relations> {
 	return ((definition: Readonly<Record<string, unknown>>) => {
+		if ("first" in definition) {
+			return Object.freeze({
+				kind: "toManyList",
+				source: `collection:${collection.name}`,
+				first: definition.first,
+				where: definition.where,
+				orderBy: definition.orderBy,
+				select: definition.select,
+			});
+		}
 		const codecs = codecRecord(definition.parameters);
 		const parameters = Object.fromEntries(
 			Object.entries(codecs).map(([name, descriptor]) => [
@@ -474,7 +605,7 @@ export function collectionList<
 					}),
 			}),
 		});
-	}) as unknown as CollectionListAuthoring<Fields, Relations>;
+	}) as unknown as CollectionListAuthoring<Name, Fields, Relations>;
 }
 
 type DescriptorFieldKey<Descriptor extends DataQueryDescriptor> =
@@ -536,6 +667,7 @@ function materializeObjectSelection(
 		Object.fromEntries(
 			Object.entries(selection).map(([key, selected]) => {
 				if (selected === true) return [key, fields[key]];
+				if (codecRecord(selected).kind === "toManyList") return [key, selected];
 				const relation = codecRecord(relations[key]);
 				const nested = codecRecord(codecRecord(selected).select);
 				return [

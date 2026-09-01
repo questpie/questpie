@@ -22,6 +22,15 @@ Template bytes, diagnostics, lowering, introspection, and drift. They are not
 are accepted together with the affected artifact bytes and generated contract
 after the section 16 proofs and focused acceptance review.
 
+ADR-0032 supersedes this workbench wherever it describes structural selection
+as one-hop or projected inverse `toMany` arrays as deferred. Existing recursive
+`toOne` Template v1 bytes remain readable and emitted within the shared
+four-edge ceiling. One child-owned bounded inverse `list({ first, ... })`
+selection emits Template v2 and otherwise preserves this document's Relation,
+cursor, Policy, dependency, and one-statement rules. It also extends section
+15's closed registry only for the already-shipped `QP-DATA-022` and the new
+`QP-DATA-026`; intervening code numbers remain unregistered.
+
 This workbench does not define Policy evaluation, Principal, Auth, operation
 handlers, Mutation execution, transport, environment bindings, storage,
 workflow, Change Ledger matching, or Studio syntax. It names the exact data
@@ -182,25 +191,26 @@ grill. `rejected` is intentionally unavailable.
 
 ### Relations
 
-| Capability                                                      | Classification    | Contract                                                                                                                                                                           |
-| --------------------------------------------------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Foreign-key-owning `relation.toOne`                             | accepted baseline | Stored on the source Collection and projected unchanged to schema artifact v1.                                                                                                     |
-| Explicit inverse `relation.toMany` traversal                    | v1                | Owned by the target Collection, points to one source `toOne`, and exists only in the Data Contract Projection.                                                                     |
-| `toOne` nested selection                                        | v1                | One traversal hop; result is always nullable at the public boundary.                                                                                                               |
-| `exists` and `notExists` Relation filtering                     | v1                | One traversal hop over `toOne` or inverse `toMany`.                                                                                                                                |
-| Projected `toMany` arrays                                       | deferred          | Per-parent ordering, limits, cost, and pagination need their own proof.                                                                                                            |
-| Synthetic many-to-many Relation                                 | deferred          | V1 models the join Collection and two explicit `toOne` Relations.                                                                                                                  |
-| Polymorphic Relation                                            | deferred          | It cannot silently become an unchecked `(kind, id)` pair in schema artifact v1.                                                                                                    |
-| Multiple explicit nullable foreign keys plus a check Constraint | accepted baseline | This is the v1 alternative when a closed set of target kinds is required. Each Relation remains ordinary and explicit.                                                             |
-| Relation from a Collection Augmentation                         | deferred          | Cross-owner reference authority remains outside Collection Augmentation v1. An app cannot add an inverse member to a sealed Package Collection without vendoring that composition. |
-| Implicit inverse name synthesized on another Owner              | rejected          | A source Definition cannot add a member to a target Owner.                                                                                                                         |
-| Generic target string or unvalidated soft Relation              | rejected          | Every traversal resolves one semantic Relation identity.                                                                                                                           |
+| Capability                                                      | Classification       | Contract                                                                                                                                                                           |
+| --------------------------------------------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Foreign-key-owning `relation.toOne`                             | accepted baseline    | Stored on the source Collection and projected unchanged to schema artifact v1.                                                                                                     |
+| Explicit inverse `relation.toMany` traversal                    | v1                   | Owned by the target Collection, points to one source `toOne`, and exists only in the Data Contract Projection.                                                                     |
+| `toOne` nested selection                                        | v1                   | One traversal hop; result is always nullable at the public boundary.                                                                                                               |
+| `exists` and `notExists` Relation filtering                     | v1                   | One traversal hop over `toOne` or inverse `toMany`.                                                                                                                                |
+| One bounded projected inverse `toMany` array                    | accepted by ADR-0032 | Child-owned `list`, literal 1–50 bound, exact selection, total child order, one plural list, and no child cursor.                                                                  |
+| Synthetic many-to-many Relation                                 | deferred             | V1 models the join Collection and two explicit `toOne` Relations.                                                                                                                  |
+| Polymorphic Relation                                            | deferred             | It cannot silently become an unchecked `(kind, id)` pair in schema artifact v1.                                                                                                    |
+| Multiple explicit nullable foreign keys plus a check Constraint | accepted baseline    | This is the v1 alternative when a closed set of target kinds is required. Each Relation remains ordinary and explicit.                                                             |
+| Relation from a Collection Augmentation                         | deferred             | Cross-owner reference authority remains outside Collection Augmentation v1. An app cannot add an inverse member to a sealed Package Collection without vendoring that composition. |
+| Implicit inverse name synthesized on another Owner              | rejected             | A source Definition cannot add a member to a target Owner.                                                                                                                         |
+| Generic target string or unvalidated soft Relation              | rejected             | Every traversal resolves one semantic Relation identity.                                                                                                                           |
 
 ### Structural data Queries
 
 | Capability                                                                                      | Classification        | Contract                                                                                                      |
 | ----------------------------------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Exact scalar and one-hop `toOne` selection                                                      | v1                    | Output aliases and member references normalize explicitly.                                                    |
+| Exact scalar and recursive `toOne` selection                                                    | v1                    | Existing bytes remain readable and emitted within the shared four-edge ceiling.                               |
+| One bounded inverse child list                                                                  | v2                    | Child-owned exact selection, literal 1–50 bound, total order, one plural list, and no nested cursor.          |
 | Boolean filters, scalar comparisons, set membership, null tests, and one-hop Relation existence | v1                    | Closed operator matrix in section 9.                                                                          |
 | Explicit base-Collection ordering                                                               | v1                    | No default order. Every term names direction and null placement.                                              |
 | Forward cursor pagination                                                                       | v1                    | Requires a proved total order and returns a connection shape.                                                 |
@@ -733,8 +743,10 @@ later direct-Collection operation contract.
 
 Output keys are lower-camel member keys. They can alias a selected Field or
 Relation, but two outputs cannot share a key. One Field can be selected more
-than once under distinct keys. V1 selection expressions are only a Field or a
-one-hop `toOne.select`. Computed values and `toMany` selection are deferred.
+than once under distinct keys. V1 selection expressions are a Field or bounded
+recursive `toOne.select` within four Relation edges. V2 additionally permits
+one bounded inverse child list. Computed values and further plural selection
+remain deferred.
 
 The parameter object is a closed literal map. Parameters are non-null scalar
 codecs, bounded non-null scalar-list codecs, or the one nullable cursor codec.
@@ -750,7 +762,7 @@ explicitly supplying the Collection type would otherwise prevent later
 definition generics from being inferred. The type-only `AppData` edge uses the
 current virtual App Contract accepted by ADR-0007 and is erased before
 structural evaluation. The descriptor contains its exact `name`, concrete
-scalar Fields, and one-hop Relation endpoints; it does not expose a recursive
+scalar Fields, and bounded Relation endpoints; it does not expose a recursive
 application registry. `from` is that exact name literal, not broad `string`.
 
 The normalized template is application output because its bytes bind both
@@ -988,8 +1000,9 @@ Until then, no surface can claim that two structural Queries in one Execution
 observe one consistent state, and a Live Query recomputation spanning more than
 one structural Query has no defined common snapshot.
 
-One structural Query lowers to one PostgreSQL statement. Base rows, one-hop
-`toOne` projections, the `first + 1` sentinel, and all dependency facts observe
+One structural Query lowers to one PostgreSQL statement. Base rows, bounded
+`toOne` projections, an optional bounded inverse child list, the `first + 1`
+sentinel, and all dependency facts observe
 that statement snapshot. A later Query Resource can use this paginated form
 only when every applicable Policy row filter lowers into the same SQL
 predicate. A non-representable post-query Policy filter cannot shorten the page
@@ -1138,16 +1151,17 @@ readability. A scalar codec change requires coordinated versions for Schema
 Projection, Data Contract Projection, and every protocol that embeds it.
 
 The recursive filter declarations above document artifact JSON. Selection is
-depth-one by construction: a root `toOne` contains only Field selections, and
-a Relation predicate contains `RelatedQueryFilterV1`, which cannot contain
-another Relation predicate. They are not emitted as the public application
+bounded to four Relation edges; a Relation predicate still contains
+`RelatedQueryFilterV1`, which cannot contain another Relation predicate. They
+are not emitted as the public application
 inference mechanism. Public builders use bounded node brands and generated
 concrete overloads; the TypeScript fixture must prove that no whole-application
 recursive generic enters declarations.
 
 Every root Field identity must belong to `from`. Every nested selection and
 `RelatedQueryFilterV1` Field must belong to that Relation's target Collection.
-An inverse `toMany` can appear in a Relation predicate but not selection. The
+An inverse `toMany` can appear in a Relation predicate or as the one bounded
+v2 child-list selection accepted by ADR-0032. The
 normalizer rejects a cross-scope Field even when its raw identity exists in the
 application.
 
@@ -1779,7 +1793,9 @@ type DataDiagnosticCodeV1 =
 	| "QP-DATA-011"
 	| "QP-DATA-012"
 	| "QP-DATA-013"
-	| "QP-DATA-014";
+	| "QP-DATA-014"
+	| "QP-DATA-022"
+	| "QP-DATA-026";
 
 type DataDiagnosticClassV1 =
 	| "invalidScalarValue"
@@ -1795,7 +1811,9 @@ type DataDiagnosticClassV1 =
 	| "cursorTemplateMismatch"
 	| "executionLimitExceeded"
 	| "cursorScopeMismatch"
-	| "invalidParameterReference";
+	| "invalidParameterReference"
+	| "relationDepthExceeded"
+	| "invalidInverseList";
 
 interface DataDiagnosticV1 extends QuestpieDiagnosticBaseV1 {
 	code: DataDiagnosticCodeV1;
@@ -1822,6 +1840,8 @@ interface DataDiagnosticV1 extends QuestpieDiagnosticBaseV1 {
 | `QP-DATA-012` | `executionLimitExceeded`    | bind                   | none          | A valid binding exceeds the Runtime's configured row/page limit before a database read.                                                     |
 | `QP-DATA-013` | `cursorScopeMismatch`       | bind                   | none          | For v1, Cursor and current template-parameter scope differ. For v2, the Query-parameter scope or Policy-equivalent execution scope differs. |
 | `QP-DATA-014` | `invalidParameterReference` | compile or bind        | fatal or none | A parameter name violates the 1-to-63 lower-camel grammar, or a parameter is missing, duplicated, unused, incompatible, or supplied twice.  |
+| `QP-DATA-022` | `relationDepthExceeded`     | compile                | fatal         | A selected or filtered fifth Relation edge exceeds the shared structural ceiling.                                                           |
+| `QP-DATA-026` | `invalidInverseList`        | compile                | fatal         | A bounded inverse child list has a wrong source, bound, selection, order, plurality, cursor, or child expression.                           |
 
 An unresolved typed Relation reference is `QP-COMPOSE-004`. A resolved
 reference with wrong cardinality, Owner, or declaring target is `QP-DATA-003`.
@@ -1829,7 +1849,9 @@ Invalid Field lists or reference targets inside schema-owning `relation.toOne`
 remain `QP-SCHEMA-003`. Runtime diagnostics set `blocking: "none"`; compile
 diagnostics set `blocking: "fatal"`, matching shared-envelope exit code `2`.
 
-The registry is closed for this v1 protocol. A later Policy rejection for
+The registry is closed except for the ADR-0032 registration of the
+already-shipped `QP-DATA-022` and new `QP-DATA-026`. Unlisted intervening code
+numbers remain unregistered. A later Policy rejection for
 non-pushdown pagination belongs to the Policy diagnostic registry, not a new
 unregistered `QP-DATA-*` code.
 
@@ -1875,7 +1897,7 @@ mismatches intentionally share one external result.
 The one proof question is:
 
 > Can this one closed Query model express exact selection, filtering, stable
-> ordering, forward pagination, and one-hop Relation traversal while producing
+> ordering, forward pagination, and bounded Relation traversal while producing
 > deterministic Query bytes and a complete declared dependency template?
 
 The self-contained prototype lives only on throwaway branch
@@ -1940,7 +1962,7 @@ If the semantic proof survives, a separate fixture must prove:
 - insert optionality from nullability and defaults;
 - update patch value shapes;
 - scalar selection aliases;
-- nullable one-hop `toOne` selection;
+- nullable bounded recursive `toOne` selection and one exact inverse child list;
 - `exists`/`notExists` typing over owning `toOne` and inverse `toMany`;
 - `in`/`notIn` literal tuple typing plus bounded runtime list parameters;
 - composite and nullable-key total-order diagnostics;
@@ -2027,7 +2049,7 @@ When this vertical becomes eligible, its smallest queue is:
 2. Schema and Data Contract Projection dual-artifact goldens;
 3. closed expression builders and normalizer;
 4. private PostgreSQL lowerer for the accepted operator matrix;
-5. Relation resolution and one-hop selection/existence lowering;
+5. Relation resolution, bounded selection/existence lowering, and inverse-list v2 binding;
 6. total-order validator, cursor codec, and forward page lowering;
 7. dependency-template derivation;
 8. generated concrete row and selection types;
@@ -2078,8 +2100,9 @@ accepted bytes or generated types above:
 - Package extensibility and cross-owner Relation contributions; the later
   composition/extensibility grill must decide whether any accepted mechanism
   can add Relation members without reintroducing target-side mutation;
-- projected `toMany`, aggregates, computed output, offset/backward/snapshot
-  pagination, search, locking, and arbitrary joins;
+- a second projected `toMany`, nested child cursors, aggregates, computed
+  output, offset/backward/snapshot pagination, search, locking, and arbitrary
+  joins;
 - every schema Field or Constraint kind beyond the closed v1 set;
 - Studio editing or visualization syntax.
 

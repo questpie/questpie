@@ -37,9 +37,10 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 29. [Unify Policy expression authoring](./0029-unify-policy-expression-authoring.md)
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
-32. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
-33. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
-34. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
+32. [Freeze bounded inverse `toMany` Query projection](./0032-freeze-bounded-inverse-tomany-query-projection.md)
+33. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
+34. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
+35. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
 
 ## Open decisions
 
@@ -92,6 +93,11 @@ program; payloadless Collection issues; explicit Operation-owned issue mapping;
 `ctx.now`; and database-owned `onUpdate: "now"`. It preserves Policy as the
 sole authored authorization mechanism, one Mutation transaction, and one
 generated Collection write kernel.
+ADR-0032 supersedes ADR-0008's one-hop description and projected-`toMany`
+deferral. Existing recursive-`toOne` Template v1 bytes remain readable and
+emitted; one child-owned bounded `collection.list({ first, ... })` inverse
+projection emits Template v2, shares one Policy-aware PostgreSQL statement,
+and returns one exact readonly child array without nested cursor semantics.
 ADR-0035 adds `.observe(input)` only to compiler-proven watchable generated
 Queries, keeps canonical Query Resource identity and bounded lifetime inside one
 immutable generated Context scope, and accepts an optional exact-peer React

@@ -1,30 +1,24 @@
 import { compareAscii, digest } from "../../canonical";
-import type { PolicyScopeBindingV1 } from "../binding";
-import type {
-	DataQueryTemplateV1,
-	FieldQuerySelectionV1,
-	PolicyProgramV1,
-	QueryParameterV1,
-	RootQuerySelectionV1,
-	ScalarCodecV1,
-} from "../types";
+import type { DataQueryTemplate } from "../types";
 import {
 	buildPostgresCatalog,
-	fieldValueSql,
 	qualifiedTable,
 	quoteIdentifier,
 	requiredCollection,
 	requiredField,
-	type PostgresCatalog,
 } from "./model";
-import {
-	lowerPostgresKeyedLookupProof,
-	type PostgresKeyedLookupProofV1,
-} from "./nondisclosure";
+import { lowerPostgresKeyedLookupProof } from "./nondisclosure";
 import {
 	PostgresParameters,
 	type PostgresQueryParameterV1,
 } from "./parameters";
+import type {
+	PostgresQueryPlan,
+	PostgresQueryPlansV1,
+	PostgresQueryPlansV2,
+	PostgresQueryPlanV1,
+	PostgresQueryPlanV2,
+} from "./plan";
 import { policyExpressionSql } from "./policy";
 import {
 	cursorSql,
@@ -34,87 +28,27 @@ import {
 	queryParameter,
 	type QuerySqlContext,
 } from "./query";
+import {
+	lowerPostgresSelections,
+	relationPolicyClosure,
+	type PolicyProjectionEntry,
+} from "./selection";
 
-export type PostgresQueryResultV1 =
-	| Readonly<{
-			kind: "field";
-			key: string;
-			field: string;
-			column: string;
-			codec: ScalarCodecV1;
-			nullable: boolean;
-			guardColumn?: string;
-	  }>
-	| Readonly<{
-			kind: "toOne";
-			key: string;
-			relation: string;
-			collection: string;
-			presenceColumn: string;
-			fields: readonly Readonly<{
-				key: string;
-				field: string;
-				column: string;
-				codec: ScalarCodecV1;
-				nullable: boolean;
-				guardColumn?: string;
-			}>[];
-			relations?: readonly Extract<PostgresQueryResultV1, { kind: "toOne" }>[];
-	  }>;
-
-export interface PostgresQueryPlanV1 {
-	readonly format: "questpie.postgres-query-plan";
-	readonly version: 1;
-	readonly queryDigest: string;
-	readonly templateDigest: string;
-	readonly policy: string;
-	readonly policyProgramDigest: string;
-	readonly disclosureProgramDigest: string;
-	readonly usedExecutionFacts: readonly (
-		| "authorityKind"
-		| "principalKind"
-		| "principalId"
-		| "tenantId"
-	)[];
-	readonly admission: "authenticated" | "public" | "system";
-	readonly binding: Readonly<{
-		parameters: readonly QueryParameterV1[];
-	}>;
-	readonly page: Readonly<{
-		kind: "forwardCursor";
-		first: Readonly<{ parameter: string; minimum: number; maximum: number }>;
-		after: Readonly<{ parameter: string }>;
-		scopeParameters: readonly string[];
-		order: readonly Readonly<{
-			field: string;
-			codec: string;
-			nullable: boolean;
-			withTimezone?: boolean;
-		}>[];
-	}>;
-	readonly sql: string;
-	readonly parameters: readonly PostgresQueryParameterV1[];
-	readonly result: readonly PostgresQueryResultV1[];
-	readonly nondisclosure: Readonly<{
-		keyedLookup: PostgresKeyedLookupProofV1;
-	}>;
-}
-
-export interface PostgresQueryPlansV1 {
-	readonly format: "questpie.postgres-query-plans";
-	readonly version: 1;
-	readonly plans: readonly PostgresQueryPlanV1[];
-}
-
-interface PolicyProjectionEntry {
-	readonly program: PolicyProgramV1;
-	readonly scopeBindings: readonly PolicyScopeBindingV1[];
-}
+export type {
+	PostgresInverseListResultV2,
+	PostgresQueryPlan,
+	PostgresQueryPlansV1,
+	PostgresQueryPlansV2,
+	PostgresQueryPlanV1,
+	PostgresQueryPlanV2,
+	PostgresQueryResultV1,
+} from "./plan";
 
 interface QueryProjectionEntry {
 	readonly digest: string;
 	readonly policy: string;
-	readonly template: DataQueryTemplateV1;
+	readonly templateVersion?: 1 | 2;
+	readonly template: DataQueryTemplate;
 }
 
 function record(
@@ -134,7 +68,8 @@ function projectionEntries(
 	const projection = record(value, format);
 	if (
 		projection.format !== format ||
-		projection.version !== 1 ||
+		(projection.version !== 1 &&
+			!(format === "questpie.query-projection" && projection.version === 2)) ||
 		!Array.isArray(projection[key])
 	)
 		throw new TypeError(`invalid ${format}`);
@@ -168,16 +103,6 @@ function usedExecutionFacts(
 	).filter((fact) => used.has(fact));
 }
 
-function admissionSql(
-	admission: "authenticated" | "public" | "system",
-	parameters: PostgresParameters,
-): string {
-	if (admission === "public") return "TRUE";
-	if (admission === "system")
-		return `(${parameters.execution("authority", ["kind"], "authority")} IS NOT DISTINCT FROM ${parameters.literal("system", "authority")})`;
-	return `(${parameters.execution("principal", ["kind"], "text")} IS DISTINCT FROM ${parameters.literal("anonymous", "text")})`;
-}
-
 function selectedPolicy(
 	identity: string,
 	policies: readonly PolicyProjectionEntry[],
@@ -200,243 +125,18 @@ function selectedPolicy(
 	return policy;
 }
 
-function defaultPolicy(
-	collection: string,
-	policies: readonly PolicyProjectionEntry[],
-): PolicyProjectionEntry {
-	const candidates = policies.filter(
-		({ program }) =>
-			program.target === collection && program.attachment.kind === "default",
-	);
-	if (candidates.length !== 1)
-		throw new TypeError(`expected one default Policy for ${collection}`);
-	return candidates[0]!;
-}
-
-function relationJoin(
-	selection: Extract<RootQuerySelectionV1, { kind: "toOne" }>,
-	path: readonly number[],
-	rootAlias: string,
-	catalog: PostgresCatalog,
-	parameters: PostgresParameters,
-	policies: readonly PolicyProjectionEntry[],
-): Readonly<{
-	join: string;
-	columns: readonly string[];
-	columnNames: readonly string[];
-	result: Extract<PostgresQueryResultV1, { kind: "toOne" }>;
-}> {
-	const relation = catalog.relations.get(selection.relation);
-	if (!relation) throw new TypeError(`unknown Relation ${selection.relation}`);
-	const target = requiredCollection(catalog, relation.target);
-	const policy = defaultPolicy(target.identity, policies);
-	const read = policy.program.operations.read;
-	if (!read)
-		throw new TypeError(`Policy ${policy.program.identity} denies read`);
-	const pathKey = path.join("_");
-	const rowAlias = `qp_relation_${pathKey}_row`;
-	const relationAlias = `qp_relation_${pathKey}`;
-	const aliases = new Map([["row", rowAlias]]);
-	const rowDisclosure = policyExpressionSql(read.rows, {
-		catalog,
-		parameters,
-		aliases,
-	});
-	const disclosure = admissionSql(read.admission.kind, parameters);
-	const correlations = relation.fields.map((source, relationIndex) => {
-		const targetIdentity = relation.references[relationIndex];
-		if (!targetIdentity)
-			throw new TypeError(`invalid Relation ${relation.identity}`);
-		const sourceField = requiredField(catalog, source);
-		const targetField = requiredField(catalog, targetIdentity);
-		return `${quoteIdentifier(rowAlias)}.${quoteIdentifier(targetField.postgresName)} IS NOT DISTINCT FROM ${quoteIdentifier(rootAlias)}.${quoteIdentifier(sourceField.postgresName)}`;
-	});
-	const selected = selection.select
-		.filter(
-			(selection): selection is FieldQuerySelectionV1 =>
-				selection.kind === "field",
-		)
-		.map((fieldSelection, fieldIndex) => {
-			const field = requiredField(catalog, fieldSelection.field);
-			const column = `qp_relation_${pathKey}_value_${fieldIndex}`;
-			const rule = policy.program.fields?.selectedOutput.find(
-				(candidate) =>
-					JSON.stringify(candidate.path) === JSON.stringify(field.path),
-			);
-			const guardColumn = `qp_relation_${pathKey}_allowed_${fieldIndex}`;
-			const guardAlias = `qp_relation_${pathKey}_guard_${fieldIndex}`;
-			const guard = rule
-				? policyExpressionSql(rule.when, {
-						catalog,
-						parameters,
-						aliases,
-					})
-				: null;
-			return {
-				inner:
-					guard === null
-						? [
-								`${fieldValueSql(field, rowAlias)} AS ${quoteIdentifier(column)}`,
-							]
-						: [
-								`CASE WHEN ${quoteIdentifier(guardAlias)}."allowed" THEN ${fieldValueSql(field, rowAlias)} ELSE NULL END AS ${quoteIdentifier(column)}`,
-								`${quoteIdentifier(guardAlias)}."allowed" AS ${quoteIdentifier(guardColumn)}`,
-							],
-				guardJoin:
-					guard === null
-						? null
-						: `CROSS JOIN LATERAL (SELECT ${guard} AS "allowed") AS ${quoteIdentifier(guardAlias)}`,
-				result: {
-					key: fieldSelection.key,
-					field: field.identity,
-					column,
-					codec: field.codec,
-					nullable: field.nullable,
-					...(guard === null ? {} : { guardColumn }),
-				},
-			};
-		});
-	const nested = selection.select
-		.filter(
-			(
-				selection,
-			): selection is Extract<RootQuerySelectionV1, { kind: "toOne" }> =>
-				selection.kind === "toOne",
-		)
-		.map((child, index) =>
-			relationJoin(
-				child,
-				[...path, index],
-				rowAlias,
-				catalog,
-				parameters,
-				policies,
-			),
-		);
-	const presenceColumn = `qp_relation_${pathKey}_present`;
-	const innerColumns = [
-		`TRUE AS ${quoteIdentifier(presenceColumn)}`,
-		...selected.flatMap(({ inner }) => inner),
-		...nested.flatMap(({ columns }) => columns),
-	];
-	const columnNames = [
-		presenceColumn,
-		...selected.flatMap(({ result }) => [
-			result.column,
-			...(result.guardColumn === undefined ? [] : [result.guardColumn]),
-		]),
-		...nested.flatMap(({ columnNames }) => columnNames),
-	];
-	const ownedJoins = [
-		...selected.flatMap(({ guardJoin }) =>
-			guardJoin === null ? [] : [guardJoin],
-		),
-		...nested.map(({ join }) => join),
-	];
-	const join = `LEFT JOIN LATERAL (SELECT ${innerColumns.join(", ")} FROM ${qualifiedTable(catalog, target)} AS ${quoteIdentifier(rowAlias)}${ownedJoins.length > 0 ? ` ${ownedJoins.join(" ")}` : ""} WHERE ${[...correlations, disclosure, rowDisclosure].join(" AND ")} LIMIT 1) AS ${quoteIdentifier(relationAlias)} ON TRUE`;
-	return {
-		join,
-		columns: columnNames.map(
-			(column) =>
-				`${quoteIdentifier(relationAlias)}.${quoteIdentifier(column)} AS ${quoteIdentifier(column)}`,
-		),
-		columnNames,
-		result: {
-			kind: "toOne",
-			key: selection.key,
-			relation: relation.identity,
-			collection: target.identity,
-			presenceColumn,
-			fields: selected.map(({ result }) => result),
-			relations: nested.map(({ result }) => result),
-		},
-	};
-}
-
-function relationPolicyClosure(
-	selection: readonly RootQuerySelectionV1[],
-	catalog: PostgresCatalog,
-	policies: readonly PolicyProjectionEntry[],
-): readonly PolicyProgramV1[] {
-	return selection.flatMap((selected) => {
-		if (selected.kind === "field") return [];
-		const relation = catalog.relations.get(selected.relation);
-		if (!relation) throw new TypeError(`unknown Relation ${selected.relation}`);
-		const policy = defaultPolicy(relation.target, policies);
-		return [
-			policy.program,
-			...relationPolicyClosure(selected.select, catalog, policies),
-		];
-	});
-}
-
-function rootFieldResult(
-	selection: FieldQuerySelectionV1,
-	index: number,
-	rootAlias: string,
-	policy: PolicyProjectionEntry,
-	catalog: PostgresCatalog,
-	parameters: PostgresParameters,
-): Readonly<{
-	columns: readonly string[];
-	joins: readonly string[];
-	result: PostgresQueryResultV1;
-}> {
-	const field = requiredField(catalog, selection.field);
-	const column = `qp_${selection.key}`;
-	const rule = policy.program.fields?.selectedOutput.find(
-		(candidate) =>
-			JSON.stringify(candidate.path) === JSON.stringify(field.path),
-	);
-	if (!rule)
-		return {
-			columns: [
-				`${fieldValueSql(field, rootAlias)} AS ${quoteIdentifier(column)}`,
-			],
-			joins: [],
-			result: {
-				kind: "field",
-				key: selection.key,
-				field: field.identity,
-				column,
-				codec: field.codec,
-				nullable: field.nullable,
-			},
-		};
-	const guardAlias = `qp_guard_${index}`;
-	const guardColumn = `qp_${selection.key}_allowed`;
-	const guard = policyExpressionSql(rule.when, {
-		catalog,
-		parameters,
-		aliases: new Map([["row", rootAlias]]),
-	});
-	return {
-		columns: [
-			`CASE WHEN ${quoteIdentifier(guardAlias)}."allowed" THEN ${fieldValueSql(field, rootAlias)} ELSE NULL END AS ${quoteIdentifier(column)}`,
-			`${quoteIdentifier(guardAlias)}."allowed" AS ${quoteIdentifier(guardColumn)}`,
-		],
-		joins: [
-			`CROSS JOIN LATERAL (SELECT ${guard} AS "allowed") AS ${quoteIdentifier(guardAlias)}`,
-		],
-		result: {
-			kind: "field",
-			key: selection.key,
-			field: field.identity,
-			column,
-			codec: field.codec,
-			nullable: field.nullable,
-			guardColumn,
-		},
-	};
-}
-
 export function lowerPostgresQueryPlan(
 	input: Readonly<{
 		schema: unknown;
 		query: QueryProjectionEntry;
 		policies: readonly PolicyProjectionEntry[];
 	}>,
-): PostgresQueryPlanV1 {
+): PostgresQueryPlan {
+	if (
+		input.query.templateVersion !== undefined &&
+		input.query.templateVersion !== input.query.template.version
+	)
+		throw new TypeError("Query Projection template version mismatch");
 	const catalog = buildPostgresCatalog(input.schema);
 	const rootCollection = requiredCollection(catalog, input.query.template.from);
 	const policy = selectedPolicy(input.query.policy, input.policies);
@@ -492,38 +192,23 @@ export function lowerPostgresQueryPlan(
 		throw new TypeError("forward page first parameter requires integer bounds");
 	const usedScopeParameters = filterParameters(input.query.template.filter);
 
-	const columns: string[] = [];
-	const joins: string[] = [];
-	const result: PostgresQueryResultV1[] = [];
-	for (const [index, selection] of input.query.template.select.entries()) {
-		if (selection.kind === "field") {
-			const rendered = rootFieldResult(
-				selection,
-				index,
-				pageAlias,
-				policy,
-				catalog,
-				parameters,
-			);
-			columns.push(...rendered.columns);
-			joins.push(...rendered.joins);
-			result.push(rendered.result);
-			continue;
-		}
-		const rendered = relationJoin(
-			selection,
-			[index],
-			pageAlias,
+	const { columns, joins, result, inversePolicy, inverseOrdinal } =
+		lowerPostgresSelections({
+			selection: input.query.template.select,
+			rootAlias: pageAlias,
+			rootCollection: rootCollection.identity,
+			template: input.query.template,
+			rootPolicy: policy,
 			catalog,
 			parameters,
-			input.policies,
-		);
-		columns.push(...rendered.columns);
-		joins.push(rendered.join);
-		result.push(rendered.result);
-	}
+			policies: input.policies,
+		});
 
-	const sql = `WITH "qp_page" AS MATERIALIZED (SELECT ${quoteIdentifier(pageAlias)}.* FROM ${qualifiedTable(catalog, rootCollection)} AS ${quoteIdentifier(pageAlias)} WHERE ${policySql} AND ${filterSql} AND ${boundarySql} ORDER BY ${ordering} LIMIT (${first} + 1)) SELECT ${columns.join(", ")} FROM "qp_page" AS ${quoteIdentifier(pageAlias)}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} ORDER BY ${ordering};\n`;
+	const v2 = input.query.template.version === 2;
+	if (v2 && (!inversePolicy || !inverseOrdinal))
+		throw new TypeError("Template v2 requires one inverse list");
+	const rootOrdinal = "qp_root_ordinal";
+	const sql = `WITH "qp_page" AS MATERIALIZED (SELECT ${quoteIdentifier(pageAlias)}.*${v2 ? `, ROW_NUMBER() OVER (ORDER BY ${ordering}) AS ${quoteIdentifier(rootOrdinal)}` : ""} FROM ${qualifiedTable(catalog, rootCollection)} AS ${quoteIdentifier(pageAlias)} WHERE ${policySql} AND ${filterSql} AND ${boundarySql} ORDER BY ${ordering} LIMIT (${first} + 1)) SELECT ${v2 ? `${quoteIdentifier(pageAlias)}.${quoteIdentifier(rootOrdinal)} AS ${quoteIdentifier(rootOrdinal)}, ` : ""}${columns.join(", ")} FROM "qp_page" AS ${quoteIdentifier(pageAlias)}${joins.length > 0 ? ` ${joins.join(" ")}` : ""} ORDER BY ${v2 ? `${quoteIdentifier(pageAlias)}.${quoteIdentifier(rootOrdinal)}, ${quoteIdentifier(inverseOrdinal!)}` : ordering};\n`;
 	const positionalParameters = parameters.values();
 	const keyedLookup = lowerPostgresKeyedLookupProof({
 		catalog,
@@ -531,9 +216,9 @@ export function lowerPostgresQueryPlan(
 		policy: policy.program,
 		template: input.query.template,
 	});
-	return Object.freeze({
+	const base = {
 		format: "questpie.postgres-query-plan",
-		version: 1,
+		version: input.query.template.version,
 		queryDigest: input.query.digest,
 		templateDigest: input.query.digest,
 		policy: policy.program.identity,
@@ -580,7 +265,22 @@ export function lowerPostgresQueryPlan(
 		parameters: positionalParameters,
 		result: Object.freeze(result),
 		nondisclosure: Object.freeze({ keyedLookup }),
-	});
+	} as const;
+	if (!v2) return Object.freeze(base) as PostgresQueryPlanV1;
+	const linked = {
+		...base,
+		version: 2 as const,
+		templateVersion: 2 as const,
+		inversePolicyProgramDigest: digest(
+			"questpie-policy-program-v1",
+			inversePolicy!,
+		),
+		ordinalColumns: [rootOrdinal, inverseOrdinal!] as const,
+	};
+	return Object.freeze({
+		...linked,
+		statementDigest: digest("questpie-postgres-query-statement-v2", linked),
+	}) as PostgresQueryPlanV2;
 }
 
 export function lowerPostgresQueryPlans(
@@ -589,7 +289,14 @@ export function lowerPostgresQueryPlans(
 		queryProjection: unknown;
 		policyProjection: unknown;
 	}>,
-): PostgresQueryPlansV1 {
+): PostgresQueryPlansV1 | PostgresQueryPlansV2 {
+	const queryProjection = record(
+		input.queryProjection,
+		"questpie.query-projection",
+	);
+	const version = queryProjection.version;
+	if (version !== 1 && version !== 2)
+		throw new TypeError("invalid questpie.query-projection");
 	const policies = projectionEntries(
 		input.policyProjection,
 		"questpie.policy-projection",
@@ -600,16 +307,22 @@ export function lowerPostgresQueryPlans(
 		"questpie.query-projection",
 		"queries",
 	) as readonly QueryProjectionEntry[];
-	const plans = queries
+	const loweredPlans = queries
 		.map((query) =>
 			lowerPostgresQueryPlan({ schema: input.schema, query, policies }),
 		)
 		.sort((left, right) => compareAscii(left.queryDigest, right.queryDigest));
+	const plans =
+		version === 1
+			? loweredPlans
+			: loweredPlans.map((plan) =>
+					plan.version === 1 ? { ...plan, templateVersion: 1 as const } : plan,
+				);
 	return Object.freeze({
 		format: "questpie.postgres-query-plans",
-		version: 1,
+		version,
 		plans: Object.freeze(plans),
-	});
+	}) as PostgresQueryPlansV1 | PostgresQueryPlansV2;
 }
 
 export type { PostgresQueryParameterV1 } from "./parameters";

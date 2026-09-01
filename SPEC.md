@@ -676,6 +676,17 @@ explicitly maps every transitively reachable issue to its own declared error.
 `onUpdate: "now"` is database-owned. No Collection becomes public merely by
 existing, and no second CRUD or lifecycle kernel exists.
 
+ADR-0032 supersedes only ADR-0008's one-hop structural-selection description
+and projected-`toMany` deferral. Existing recursive-`toOne` Query Template v1
+bytes remain readable and emitted. A Query may select one bounded inverse list
+through the child Collection's overloaded `list({ first, orderBy, select })`
+form; root and nested list shapes are disjoint, the complete traversal remains
+capped at four Relation edges, and one Policy-aware PostgreSQL statement owns
+the root page and child array. Template/Projection/PostgreSQL Plan v2 binds the
+new inverse node, decoded cursor-order boundary, SQL, Policy, result, and
+Runtime Build digests. No nested cursor, second plural list, aggregate,
+polymorphic Relation, or second relational kernel is accepted.
+
 ## 17. Current delivery sequence and historical grilling order
 
 ADR-0027 makes this the current sequence:
