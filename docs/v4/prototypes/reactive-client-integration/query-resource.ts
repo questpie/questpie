@@ -139,6 +139,17 @@ class Resource<Output> implements QueryResource<Output> {
 		};
 	};
 
+	evict(): boolean {
+		if (this.subscribed) return false;
+		this.#generation += 1;
+		const stop = this.#stop;
+		this.#stop = undefined;
+		stop?.();
+		this.#remove();
+		this.#publish(failed({ code: "RESOURCE_LIMIT" }));
+		return true;
+	}
+
 	#publish(snapshot: QueryResourceSnapshot<Output>): void {
 		if (Object.is(this.#snapshot, snapshot)) return;
 		this.#snapshot = snapshot;
@@ -250,10 +261,8 @@ export function createQueryResourceScope(
 	};
 	const admit = (): boolean => {
 		if (entries.size < capacity) return true;
-		for (const [key, entry] of entries) {
-			if (entry.resource.subscribed) continue;
-			entries.delete(key);
-			return true;
+		for (const entry of entries.values()) {
+			if (entry.resource.evict()) return true;
 		}
 		return false;
 	};
@@ -285,9 +294,12 @@ export function createQueryResourceScope(
 					return existing.resource as QueryResource<Output>;
 				}
 				if (!admit()) return terminalResource({ code: "RESOURCE_LIMIT" });
-				const resource = new Resource<Output>({
+				let resource!: Resource<Output>;
+				resource = new Resource<Output>({
 					operationInput,
-					remove: () => entries.delete(key),
+					remove: () => {
+						if (entries.get(key)?.resource === resource) entries.delete(key);
+					},
 					reportSubscriberError:
 						input?.reportSubscriberError ?? (() => undefined),
 					startWatch: (input, callback, options) =>

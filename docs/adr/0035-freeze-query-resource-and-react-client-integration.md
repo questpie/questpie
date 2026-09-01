@@ -59,6 +59,11 @@ resource has a subscriber, the new observation returns an unregistered resource
 in terminal `RESOURCE_LIMIT` state. It opens no watch. Registry capacity is a
 client-memory bound, not a server watch-authority or Policy decision.
 
+Eviction invalidates the idle resource's generation and leaves that retained
+handle in terminal `RESOURCE_LIMIT` state. Subscribing the evicted handle cannot
+reopen work, re-enter the registry, or remove a later resource with the same
+identity. Recovery requires a fresh `observe` call.
+
 Calling `observe` is deterministic allocation only. It performs no I/O and
 starts no task, watch, reconnect loop, or timer. This makes an idempotent
 `observe` call safe during a frontend render even when that render is abandoned.

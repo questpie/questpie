@@ -36,8 +36,8 @@ below it.
 - `query-resource.test.ts` proves exact same-scope identity, cross-scope
   isolation, lazy first-subscriber start, shared watch, last-unsubscribe stop,
   stale-generation containment, complete replacement, reconnect retention,
-  terminal clearing, recovery by fresh observation, bounded idle eviction, and
-  local capacity failure.
+  terminal clearing, recovery by fresh observation, bounded terminal idle
+  eviction, retained-handle containment, and local capacity failure.
 - `authoring-types.test.ts` proves exact output inference, `.observe` absence on
   one-shot Queries, immutable snapshots, and the React hook's generic
   projection.

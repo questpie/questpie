@@ -50,6 +50,9 @@ resource. Client instances and Context scopes never share.
 The registry holds 128 identities. It evicts only an idle least-recently-used
 resource. Subscribed resources are pinned. Exhaustion with all entries pinned
 returns one unregistered terminal `RESOURCE_LIMIT` resource and starts no work.
+Eviction invalidates the idle generation and tombstones the retained handle as
+terminal `RESOURCE_LIMIT`. That handle cannot restart off-registry or remove a
+later replacement; only fresh observation recovers.
 
 ## Lifetime and concurrency
 

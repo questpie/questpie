@@ -19,6 +19,7 @@ type Driver<Output> = Readonly<{
 	starts(): number;
 	stops(): number;
 	staleDeliver(output: Output): void;
+	staleFail(failure: WatchFailure): void;
 	watch(
 		input: unknown,
 		callback: (output: Output, delivery: QueryDelivery) => void,
@@ -34,6 +35,7 @@ function driver<Output>(): Driver<Output> {
 	const inputs: unknown[] = [];
 	const callbacks: Array<(output: Output, delivery: QueryDelivery) => void> =
 		[];
+	const optionHistory: WatchOptions[] = [];
 	return {
 		deliver(output, delivery = { kind: "initial" }) {
 			callback?.(output, delivery);
@@ -50,11 +52,15 @@ function driver<Output>(): Driver<Output> {
 		staleDeliver(output) {
 			callbacks[0]?.(output, { kind: "update" });
 		},
+		staleFail(failure) {
+			optionHistory[0]?.onError?.(failure);
+		},
 		watch(input, next, nextOptions) {
 			startCount += 1;
 			inputs.push(structuredClone(input));
 			callback = next;
 			callbacks.push(next);
+			optionHistory.push(nextOptions);
 			options = nextOptions;
 			let stopped = false;
 			return () => {
@@ -249,6 +255,31 @@ test("bounds retained identities, evicts idle LRU, and refuses all-pinned excess
 		failure: { code: "RESOURCE_LIMIT" },
 	});
 	stop();
+});
+
+test("tombstones retained evicted handles without disturbing their replacement", () => {
+	const controlled = driver<Readonly<{ value: string }>>();
+	const query = method(createQueryResourceScope({ capacity: 1 }), controlled);
+	const evicted = query.observe({ first: 1 });
+	const stopInitial = evicted.subscribe(() => undefined);
+	stopInitial();
+	expect(controlled.starts()).toBe(1);
+
+	query.observe({ first: 2 });
+	const replacement = query.observe({ first: 1 });
+	expect(replacement).not.toBe(evicted);
+	expect(evicted.getSnapshot()).toEqual({
+		kind: "failed",
+		failure: { code: "RESOURCE_LIMIT" },
+	});
+
+	const stopEvicted = evicted.subscribe(() => undefined);
+	const stopReplacement = replacement.subscribe(() => undefined);
+	expect(controlled.starts()).toBe(2);
+	controlled.staleFail({ code: "TRANSPORT_FAILED" });
+	expect(query.observe({ first: 1 })).toBe(replacement);
+	stopEvicted();
+	stopReplacement();
 });
 
 test("isolates a subscriber fault and continues notifying peers", () => {

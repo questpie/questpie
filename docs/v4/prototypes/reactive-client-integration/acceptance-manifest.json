@@ -86,32 +86,32 @@
 		{
 			"name": "proposed focused client integration decision",
 			"path": "docs/adr/0035-freeze-query-resource-and-react-client-integration.md",
-			"sha256": "d4a374810750d4c5ccc966f72ddc8da46ef02ae479c1887fb20b38045facf1f1"
+			"sha256": "93edbb13b9565d39838b51924c986bff350ec3164da735885fe34c1e24562d75"
 		},
 		{
 			"name": "candidate staging declaration",
 			"path": "docs/v4/prototypes/reactive-client-integration/CANDIDATE.md",
-			"sha256": "c3e08375e245f14b7d9b8f9ea70411d4fb28ad328eb60e9aa22c66c598d9a651"
+			"sha256": "834ff70becab73ec53224196b670c59d7453cc6bb9d564f4371d16100686edce"
 		},
 		{
 			"name": "exact proposed executable contract",
 			"path": "docs/v4/prototypes/reactive-client-integration/SPEC.md",
-			"sha256": "2cdce4ae789c9feaace0962500d4ba6ee8dc23d476d80d22704f5e0fda7e6160"
+			"sha256": "cec613b8aefa9cfc09eb781924b311e8efe322bdc4a4b138f5fdff3d4359e4d0"
 		},
 		{
 			"name": "pre-acceptance public documentation draft",
 			"path": "docs/v4/prototypes/reactive-client-integration/PUBLIC-DRAFT.md",
-			"sha256": "a72d90e36e60717682974a093abf337c5fe7721ebbe160007947963d0e046abf"
+			"sha256": "87a5010d8a00e3de896248e23cc33c6947bd4e03ee07c6c3684a91c95fdaf3e9"
 		},
 		{
 			"name": "framework-neutral Query Resource executable prototype",
 			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.ts",
-			"sha256": "ef981db523dbea23c14a2b36208005f04ded1d3d0bed71b3a7fbec759d220cc0"
+			"sha256": "ca2040780ed1588ee019b40ace694659828372bb6b9ff84b7c0a241d29ded0c5"
 		},
 		{
 			"name": "Query Resource hostile state and lifetime tests",
 			"path": "docs/v4/prototypes/reactive-client-integration/query-resource.test.ts",
-			"sha256": "b23ec2cb5296267d5654d81a79e3c7493806291cb0098045db421f85321f1493"
+			"sha256": "6bf51e6def0406e231f052fecd2229f88dcc93ffacd42bbb73b4189ebead9a66"
 		},
 		{
 			"name": "generated and React integration type evidence",
@@ -172,7 +172,7 @@
 		"ADR-0035 remains Proposed and no live ADR index, SPEC, CONTEXT, public documentation, or HANDOFF text projects it as Accepted before a committed protocol-v2 PASS record. Acceptance and public projection are a separate coherent commit.",
 		"Only compiler-proven watchable generated Query methods gain observe(input). Existing call and watch behavior remains, while one-shot-only Queries have no observe member and no fallback poller or one-shot resource path.",
 		"One generated withContext scope owns canonical Query Resource identity from exact Query identity and generated canonical input bytes. Equivalent same-scope observations share; different client or Context scopes never share; keys, input, Context, and credentials remain private.",
-		"The registry retains at most 128 identities, evicts only idle least-recently-used resources, pins subscribed resources, and returns an unregistered terminal RESOURCE_LIMIT resource without work when every entry is pinned.",
+		"The registry retains at most 128 identities, evicts only idle least-recently-used resources, pins subscribed resources, and returns an unregistered terminal RESOURCE_LIMIT resource without work when every entry is pinned. Eviction invalidates and terminally tombstones the retained handle so it cannot restart off-registry or remove a later same-identity replacement; recovery requires fresh observation.",
 		"Query Resource exposes only stable immutable getSnapshot and subscribe. First subscriber lazily opens one watch, later subscribers share it, unsubscribe is idempotent, last unsubscribe stops once, and callbacks from invalid generations cannot publish.",
 		"Initial, update, and reset replace one complete decoded result. Retryable reconnect retains only a previously disclosed complete value and reports the existing attempt. Accepted watch failures clear data, stop and remove the resource, disclose only the closed code, and permit recovery only through fresh observation.",
 		"One subscriber fault cannot alter resource state, watch lifetime, or peer notification. Resource and client diagnostics contain no Query input, Context, credential, result, Policy evidence, canonical key, endpoint, header, response, or stack.",

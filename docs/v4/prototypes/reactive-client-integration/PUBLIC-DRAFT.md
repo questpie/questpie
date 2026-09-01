@@ -45,6 +45,10 @@ The first subscriber opens the watch. Further subscribers share it. The last
 unsubscribe stops it. A later subscriber opens a fresh watch while the resource
 keeps its last complete idle snapshot in the bounded client cache.
 
+The scope may evict an idle least-recently-used resource to stay within its
+bound. An evicted handle becomes terminal `RESOURCE_LIMIT` and cannot reopen a
+watch. Call `observe` again to obtain the current resource.
+
 The result is always complete. An `update` or `reset` replaces it; the client
 does not patch entities or echo Mutation input. During retryable reconnect, a
 ready resource keeps its previously disclosed value and exposes the reconnect
