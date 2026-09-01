@@ -18,8 +18,8 @@ annotations as untrusted hints. Input remains object-rooted; the final
 `2026-07-28` revision permits arbitrary JSON output schemas and matching
 `structuredContent`:
 
-- [MCP tools](https://modelcontextprotocol.io/specification/draft/server/tools)
-- [2026-07-28 revision](https://blog.modelcontextprotocol.io/posts/2026-07-28-release-candidate/)
+- [MCP 2026-07-28 tools](https://modelcontextprotocol.io/specification/2026-07-28/server/tools)
+- [MCP 2026-07-28 transport](https://modelcontextprotocol.io/specification/2026-07-28/basic/transports)
 - [JSON Schema 2020-12](https://modelcontextprotocol.io/seps/1613-establish-json-schema-2020-12-as-default-dialect-f)
 
 ## The no-duplication rule
