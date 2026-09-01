@@ -1,12 +1,13 @@
 {
 	"protocolVersion": 2,
 	"ticket": "DX-CANONICAL-HTTP-OPENAPI-RATIFICATION",
-	"proof": "Ratify one deterministic per-Operation HTTP replacement and its compiler-owned OpenAPI projection without adding authored HTTP placement, duplicate schemas, a second executor, compatibility route, fallback, or production implementation. Keep ADR-0036 and every authority/public projection Proposed until a committed protocol-v2 PASS record exists.",
+	"proof": "Ratify one deterministic per-Operation HTTP replacement and its compiler-owned OpenAPI projection without adding authored HTTP placement, descriptive metadata, duplicate schemas, a second executor, compatibility route, fallback, or production implementation. Preserve typed credential-ingress outcomes and keep ADR-0036 and every authority/public projection Proposed until a committed protocol-v2 PASS record exists.",
 	"diffBase": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-	"reviewOutput": "docs/v4/prototypes/http-openapi-projection/REVIEW.json",
+	"reviewOutput": "docs/v4/prototypes/http-openapi-projection/REVIEW-02.json",
 	"authorityHeads": {
 		"accepted feat/v4 continuation base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
-		"independently reviewed replacement candidate before manifest": "fad77a35ad49053cca67df321deb5141fff913f7"
+		"blocked manifest candidate retained as evidence": "37f7a5e6863275070e37a965d98ad415e2f11e34",
+		"replacement repair candidate before fresh manifest": "5cc1197e39bfeb5eb97829495950f5b7f8879f94"
 	},
 	"authorityDocuments": [
 		{
@@ -87,7 +88,7 @@
 		{
 			"name": "Proposed canonical HTTP and OpenAPI decision",
 			"path": "docs/adr/0036-freeze-canonical-operation-http-and-openapi-projection.md",
-			"sha256": "19cf614723c355e142dde72e1b057a01aa472c73028914d59e0ce7d943407280"
+			"sha256": "7bd24c91fa24c465000576e8f444069a9aace6b93605af7cb82f0b2ef28641a0"
 		},
 		{
 			"name": "accepted tracer-led delivery procedure",
@@ -117,12 +118,12 @@
 		{
 			"name": "proposed Kernel canonical Operation HTTP contract",
 			"path": "docs/v4/implementation/beta2-execution-breadth/CANONICAL-HTTP-CONTRACT.md",
-			"sha256": "62759509bd4ffde24a64baffc9d51905632dbbdb9ebc29778c4a85b795bdfd32"
+			"sha256": "99b82b1effb08758be91642620ca5bc019524d64df7577a45aafc5d7d6c8c099"
 		},
 		{
 			"name": "proposed Product OpenAPI projection",
 			"path": "docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md",
-			"sha256": "e894c8ad5ef33da6266ca128907dbb21cc393f0cda1ccaf6a0668167def41e07"
+			"sha256": "22ff0c861056be133d6027ea90c1ceb6ad23ae88a16ad25946156fe696e42513"
 		},
 		{
 			"name": "executable HTTP OpenAPI proof declaration",
@@ -147,12 +148,12 @@
 		{
 			"name": "composed candidate generated client and HTTP adapter",
 			"path": "docs/v4/prototypes/http-openapi-projection/candidate-adapter.ts",
-			"sha256": "0438af1a34c56f14578759243828abd76c9bb4f858bf1dca53d609402403c766"
+			"sha256": "d86227ec3f77fb2b89994c8eda90e103bf29ad5296aa88c2df26947cc9439e1b"
 		},
 		{
 			"name": "candidate adapter carrier cancellation and disclosure proof",
 			"path": "docs/v4/prototypes/http-openapi-projection/candidate-adapter.test.ts",
-			"sha256": "c88c11764cc7291ebfd1c373d58651b1231f6c76a14fe1cce991a435e6a4fbc0"
+			"sha256": "d4df91a663d23412b4491a8ced1ac9fe3b1eb260f409b71dc9a99bfa812c0fa4"
 		},
 		{
 			"name": "disjoint generated call option type proof",
@@ -163,6 +164,11 @@
 			"name": "Kernel Product ownership and normative budget proof",
 			"path": "docs/v4/prototypes/http-openapi-projection/proposal-ownership.test.ts",
 			"sha256": "7d2cfc84acc2de1ec3b9a739b3e32b18e6c0f4899f5c965614857e2641b57198"
+		},
+		{
+			"name": "verbatim blocked first formal acceptance record",
+			"path": "docs/v4/prototypes/http-openapi-projection/REVIEW.json",
+			"sha256": "233ddb466a5c29562f3984d221881071fef7a7d748d29ef202dfd301cc88681a"
 		}
 	],
 	"verification": [
@@ -202,11 +208,11 @@
 		"Query GET has no body. Its exact top-level object input uses codec-selected readable or tagged canonical URL values, ASCII key ordering, uppercase percent escapes, duplicate and noncanonical refusal, static branch bounds, and the fixed complete-query limit; unsupported Query codecs fail compilation rather than falling back to POST.",
 		"Query Context is disjoint from input and credential Principal and uses one canonical unpadded-base64url Questpie-Context header. Omission is admitted only when the exact Context codec accepts the empty object; duplicates, joining, padding, noncanonical bytes, invalid JSON, and codec mismatch fail before Context resolution.",
 		"Mutation and Action accept only exact application/json bodies {input, context}. Raw request bytes undergo fatal UTF-8 decoding before duplicate-key JSON parsing, exact-key checks, codec decode, Context resolution, Policy, or execution. Mutation requires Idempotency-Key; Action requires Effect-Key; wrong-kind or duplicate identity carriers fail without first/last-wins behavior.",
-		"The server captures one request start, derives one saturating immutable deadline, combines caller and deadline cancellation into one owned signal, checks cancellation before credentials and after every awaited phase, and cleans timer/listener ownership. Credential resolution remains separate from Context and malformed or unavailable credentials never fall back to anonymous.",
+		"The server captures one request start, derives one saturating immutable deadline, combines caller and deadline cancellation into one owned signal, checks cancellation before credentials and after every awaited phase, and cleans timer/listener ownership. Credential resolution remains separate from Context: a typed malformed ingress failure is value-free correlated UNAUTHENTICATED HTTP 401 and non-retryable, a typed provider outage is retryable RUNTIME_UNAVAILABLE HTTP 503, an untyped fault is sanitized INTERNAL, and none falls back to anonymous or reaches request decode, Context, Policy, or execution.",
 		"Generated Query, Mutation, and Action calls have disjoint exact option surfaces. Query and Mutation cannot carry Effect Identity, Action requires effectKey, Mutation callId maps only to Idempotency-Key, and generated clients use the visible per-Operation endpoints with no private polymorphic transport.",
 		"Success, declared errors, framework failures, committed Mutation ambiguity, and Action ambiguity preserve their Accepted semantic outcomes and correlation. Missing and Policy-invisible targets remain indistinguishable; SQL, PostgreSQL detail, stack, credentials, Context, protected values, and Policy evidence never cross the wire. Every Query response is private, no-store.",
 		"Raw Routes retain explicit external-protocol method/path ownership and one Fetch router. Canonical Operation endpoints and raw Routes share conservative collision analysis with both Origins and no precedence; raw Routes are omitted from OpenAPI with the exact rawRouteUnsupported reason and gain no inferred schema or second ordinary Route mode.",
-		"OpenAPI emission is selected only by exact questpie.json projections.openapi true and emits compiler-owned openapi.json from the same App Contract, codec descriptors, Resource identities, Origins, and projection-neutral summary, description, and example metadata used by generated declarations, clients, public docs, and future MCP. Authors cannot restate parameters, schemas, nullability, bounds, validation, results, errors, tags, grouping, handlers, or authorization for OpenAPI.",
+		"OpenAPI emission is selected only by exact questpie.json projections.openapi true and emits compiler-owned openapi.json from the same App Contract, existing codec descriptors, Resource identities, and Origins. Authors cannot restate parameters, schemas, nullability, bounds, validation, results, errors, tags, grouping, handlers, or authorization for OpenAPI. This candidate adds no summary, description, examples, group, or other descriptive authoring; a projection-neutral metadata owner shared by declarations, public docs, OpenAPI, and MCP remains a separate focused artifact/digest decision.",
 		"OpenAPI 3.1 output, schemas, paths, parameters, statuses, oneOf branches, tags, omissions, and explain inventory are deterministic and canonically ordered. Runtime-inexact standard-schema subsets are marked honestly, cross-kind operationId collisions fail with both Origins, grouping is inferred from the first namespace segment, and explain writes nothing or discloses no runtime evidence.",
 		"The Kernel contract is the sole supersession boundary: only ADR-0011's fixed polymorphic dispatch path/method, generated-client use of that path, and corresponding Operation Wire artifact compatibility change. All previously Accepted identity, codec, Context, Principal, Policy, Call/Effect Identity, transaction, receipt, limit, cancellation, error, nondisclosure, observability, raw Route, and direct/network parity semantics remain intact."
 	]
