@@ -6,6 +6,23 @@ const objectSchema = Object.freeze({
 	type: "object",
 	additionalProperties: false,
 });
+const notFoundSchema = Object.freeze({
+	type: "object",
+	additionalProperties: false,
+	properties: Object.freeze({
+		kind: Object.freeze({ const: "failure" }),
+		error: Object.freeze({
+			type: "object",
+			additionalProperties: false,
+			properties: Object.freeze({
+				code: Object.freeze({ const: "NOT_FOUND" }),
+				retryable: Object.freeze({ const: false }),
+			}),
+			required: Object.freeze(["code", "retryable"]),
+		}),
+	}),
+	required: Object.freeze(["error", "kind"]),
+});
 
 test("derives disjoint kind-qualified names and schemas without authored MCP metadata", () => {
 	const tools = projectMcpTools([
@@ -16,6 +33,7 @@ test("derives disjoint kind-qualified names and schemas without authored MCP met
 			inputSchema: objectSchema,
 			contextSchema: objectSchema,
 			outputSchema: { type: "string" },
+			frameworkFailureSchemas: [notFoundSchema],
 		},
 		{
 			kind: "query",
@@ -28,6 +46,7 @@ test("derives disjoint kind-qualified names and schemas without authored MCP met
 			declaredErrorSchemas: [
 				{ code: "TICKET_HIDDEN", payloadSchema: { type: "null" } },
 			],
+			frameworkFailureSchemas: [notFoundSchema],
 		},
 		{
 			kind: "action",
@@ -36,6 +55,7 @@ test("derives disjoint kind-qualified names and schemas without authored MCP met
 			inputSchema: objectSchema,
 			contextSchema: objectSchema,
 			outputSchema: objectSchema,
+			frameworkFailureSchemas: [notFoundSchema],
 		},
 	]);
 
@@ -79,6 +99,7 @@ test("rejects unsupported and duplicate derived names without an alias", () => {
 		inputSchema: objectSchema,
 		contextSchema: objectSchema,
 		outputSchema: objectSchema,
+		frameworkFailureSchemas: [notFoundSchema],
 	};
 	expect(() => projectMcpTools([duplicate, duplicate])).toThrow(
 		"duplicate MCP tool identity: query.tickets.list",

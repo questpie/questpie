@@ -11,6 +11,7 @@ export type NetworkOperation = Readonly<{
 		code: string;
 		payloadSchema: Readonly<Record<string, unknown>>;
 	}>[];
+	frameworkFailureSchemas: readonly Readonly<Record<string, unknown>>[];
 	description?: string;
 }>;
 
@@ -23,24 +24,6 @@ export type McpTool = Readonly<{
 }>;
 
 const toolNamePattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,126}[A-Za-z0-9]$/;
-
-const frameworkFailureSchema = Object.freeze({
-	type: "object",
-	additionalProperties: false,
-	properties: Object.freeze({
-		kind: Object.freeze({ const: "failure" }),
-		error: Object.freeze({
-			type: "object",
-			additionalProperties: false,
-			properties: Object.freeze({
-				code: Object.freeze({ type: "string" }),
-				retryable: Object.freeze({ type: "boolean" }),
-			}),
-			required: Object.freeze(["code", "retryable"]),
-		}),
-	}),
-	required: Object.freeze(["error", "kind"]),
-});
 
 function outcomeSchema(operation: NetworkOperation) {
 	const result = Object.freeze({
@@ -79,7 +62,11 @@ function outcomeSchema(operation: NetworkOperation) {
 		});
 	return Object.freeze({
 		$schema: "https://json-schema.org/draft/2020-12/schema",
-		oneOf: Object.freeze([result, ...declared, frameworkFailureSchema]),
+		oneOf: Object.freeze([
+			result,
+			...declared,
+			...operation.frameworkFailureSchemas,
+		]),
 	});
 }
 
