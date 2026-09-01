@@ -24,9 +24,20 @@ function normalized(value: unknown): Codec {
 
 function numericPattern(precision: number, scale: number): string {
 	const integral = precision - scale;
+	if (integral < 1) return "(?!)";
+	const signedIntegral = `(?:0|-[1-9][0-9]{0,${integral - 1}}|[1-9][0-9]{0,${integral - 1}})`;
 	return scale === 0
-		? `^-?(?:0|[1-9][0-9]{0,${Math.max(0, integral - 1)}})$`
-		: `^-?(?:0|[1-9][0-9]{0,${Math.max(0, integral - 1)}})\\.[0-9]{${scale}}$`;
+		? `^${signedIntegral}$`
+		: `^${signedIntegral}\\.[0-9]{${scale}}$`;
+}
+
+function runtimeValidation(requirements: readonly string[]) {
+	return {
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements,
+		},
+	};
 }
 
 function project(codec: Codec): JsonSchema {
@@ -68,20 +79,16 @@ function project(codec: Codec): JsonSchema {
 				Number(codec.maximum ?? Number.MAX_SAFE_INTEGER),
 				Number.MAX_SAFE_INTEGER,
 			),
-			"x-questpie-negative-zero": false,
+			...runtimeValidation(["negativeZeroRejected"]),
 		};
 	if (codec.kind === "bigint")
 		return {
 			type: "string",
 			pattern: "^(?:0|-[1-9][0-9]*|[1-9][0-9]*)$",
-			"x-questpie-postgresql-minimum": "-9223372036854775808",
-			"x-questpie-postgresql-maximum": "9223372036854775807",
-			...(codec.minimum === undefined
-				? {}
-				: { "x-questpie-minimum": codec.minimum }),
-			...(codec.maximum === undefined
-				? {}
-				: { "x-questpie-maximum": codec.maximum }),
+			...runtimeValidation([
+				`minimum:${String(codec.minimum ?? "-9223372036854775808")}`,
+				`maximum:${String(codec.maximum ?? "9223372036854775807")}`,
+			]),
 		};
 	if (codec.kind === "numeric")
 		return {
@@ -95,6 +102,7 @@ function project(codec: Codec): JsonSchema {
 			type: "string",
 			...(codec.minLength === undefined ? {} : { minLength: codec.minLength }),
 			...(codec.maxLength === undefined ? {} : { maxLength: codec.maxLength }),
+			...runtimeValidation(["nfc", "noLoneSurrogate"]),
 		};
 	if (codec.kind === "uuid")
 		return {
@@ -103,13 +111,33 @@ function project(codec: Codec): JsonSchema {
 			pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
 		};
 	if (codec.kind === "cursor")
-		return { type: "string", "x-questpie-codec": "cursor" };
-	if (codec.kind === "date") return { type: "string", format: "date" };
+		return {
+			type: "string",
+			"x-questpie-codec": "cursor",
+			...runtimeValidation(["nfc"]),
+		};
+	if (codec.kind === "date")
+		return {
+			type: "string",
+			format: "date",
+			pattern: "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+			...runtimeValidation(["canonicalCalendarDate"]),
+		};
 	if (codec.kind === "timestamp")
 		return {
 			type: "string",
-			format: "date-time",
+			...(codec.withTimezone === false
+				? {
+						pattern:
+							"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+					}
+				: {
+						format: "date-time",
+						pattern:
+							"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
+					}),
 			"x-questpie-timezone": codec.withTimezone !== false,
+			...runtimeValidation(["canonicalMillisecondTimestamp"]),
 		};
 	if (codec.kind === "json")
 		return {
@@ -117,6 +145,11 @@ function project(codec: Codec): JsonSchema {
 			additionalProperties: false,
 			properties: { kind: { const: "json" }, value: {} },
 			required: ["kind", "value"],
+			...runtimeValidation([
+				"canonicalFiniteNumbers",
+				"nfc",
+				"noLoneSurrogate",
+			]),
 		};
 	return invalid();
 }

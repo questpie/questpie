@@ -125,6 +125,14 @@ framework metadata, never input, Context, Principal, or Authority. After Action
 dispatch every untrusted transport failure remains correlated to the chosen
 callId as `ACTION_OUTCOME_AMBIGUOUS`.
 
+Call and Effect Identity header values are canonical UTF-8 percent encodings.
+Unreserved ASCII therefore stays readable, while Unicode, comma, percent, and
+other unsafe header bytes round-trip without first/last-wins ambiguity. Decode
+occurs exactly once and re-encoding must reproduce the received bytes; lowercase
+escapes, malformed UTF-8, raw comma-joining, normalization drift, and duplicate
+header coalescing fail. This is transport encoding only and does not narrow the
+Accepted identity value.
+
 Generated clients send the reserved trio `Questpie-Application`,
 `Questpie-Client-Contract`, and `Questpie-Wire-Digest`. If any is present, all
 are required and must match before work. Ordinary OpenAPI callers omit all three.
@@ -156,13 +164,14 @@ uses one codec-driven lexical encoding, then UTF-8 percent encoding.
 - decode percent exactly once, reverse the codec-selected lexical/`~` form, then
   apply the same member codec used by direct execution and the generated client.
 
-The compiler admits GET only when every reachable codec branch has a static
-maximum canonical encoded size. An unbounded text/array/JSON branch reports
-`queryHttpEncodingUnsupported`; there is no POST fallback. The complete ASCII
-query after percent encoding is at most 16,384 bytes; decoded canonical Context
-JSON is at most 65,536 UTF-8 bytes. Both fixed HTTP framing bounds are checked
-before codec decode. They are not Action's semantic `inputBytes` and are not
-author configuration.
+The compiler admits GET only when every reachable text and array branch has a
+static maximum and no reachable arbitrary JSON branch exists. Cursor is opaque
+and has no authored bound, so the fixed whole-query bound below is its only HTTP
+framing bound. An unsupported branch reports `queryHttpEncodingUnsupported`;
+there is no POST fallback. The complete ASCII query after percent encoding is at
+most 16,384 bytes; decoded canonical Context JSON is at most 65,536 UTF-8 bytes.
+Both fixed HTTP framing bounds are checked before codec decode. They are not
+Action's semantic `inputBytes` and are not author configuration.
 
 ### Mutation and Action JSON
 
@@ -177,10 +186,11 @@ parameter.
 
 Mutation automatically requires exactly one `Idempotency-Key` header. Header
 name comparison is ASCII case-insensitive; differently cased duplicates,
-comma-joining, and first/last-wins behavior are rejected. Its strict UTF-8 value
-must satisfy the Accepted Call Identity contract: 1–256 Unicode scalar values,
-already NFC, no lone surrogate or U+0000. It is rejected, never normalized, and
-becomes `callId` before body decode. Missing/invalid identity is a
+comma-joining, and first/last-wins behavior are rejected. Its decoded canonical
+UTF-8 percent-encoded value must satisfy the Accepted Call Identity contract:
+1–256 Unicode scalar values, already NFC, no lone surrogate or U+0000. It is
+rejected, never normalized, and becomes `callId` before body decode. Missing or
+invalid identity is a
 pre-correlation `PROTOCOL_UNSUPPORTED` 400. Exact key/input replay reaches the
 receipt; changed input reaches existing `IDEMPOTENCY_CONFLICT`. No automatic
 retry occurs.
@@ -327,10 +337,19 @@ OpenAPI has exactly top-level `openapi: "3.1.0"`, `info`, `paths`, and
 `info.title` is application identity; `info.version` is Client Contract digest.
 Each network Operation produces one canonical path
 with inferred method, exact Resource Identity `operationId`, derived Query
-parameters or JSON body, and exact success/declared/framework/post-commit
-schemas. Shared statuses use ASCII-sorted `oneOf`. Content key is
+parameters or JSON body, and compiler-derived success/declared/framework/
+post-commit schemas. Shared statuses use ASCII-sorted `oneOf`. Content key is
 `application/json`. Paths, parameters, statuses, schemas, properties, omissions,
 and Origins sort before canonical bytes.
+
+The schema is exact where JSON Schema 2020-12 can express the Runtime value set.
+Where it cannot express a constraint—currently NFC and lone-surrogate rules,
+negative-zero rejection, PostgreSQL bigint bounds, or canonical calendar/time
+semantics—the emitted standard schema is a conservative superset and carries
+`x-questpie-runtime-validation: { exact: false, requirements: [...] }`. This is
+an honest projection marker, not a validator keyword. The same canonical Runtime
+codec remains the exact request/response validator, and authors cannot restate
+or weaken it in OpenAPI metadata.
 
 `operationId` is the full Qualified Resource Name without the kind prefix, as
 directed for V1. Because Accepted Resource Identity permits equal names across
@@ -373,6 +392,15 @@ selector/stale-output behavior, explain equality,
 and deletion of the polymorphic RPC route, raw Route OpenAPI, security,
 MCP/skills, custom
 paths, duplicate schemas, handlers, or registries.
+
+The candidate proof composes one generated-client request builder with one
+canonical adapter and the shared Runtime codec implementation. It includes all
+current scalar kinds, required/order/duplicate/percent hostiles, exact/parameter/
+wildcard raw Route collisions with both Origins and `rawRouteUnsupported`
+omission Origins, partial compatibility-header refusal before execution,
+post-handler Action `RESOURCE_LIMIT`, malformed Action response ambiguity, and
+Query `private, no-store` responses across different Principal and Context
+values. No helper-only model is evidence for the transport claim.
 
 The inherited `quality:full` release-checksum mismatch at this branch base is
 recorded as unrelated baseline state. This docs/prototype candidate changes no

@@ -35,17 +35,25 @@ const output = Object.freeze({
 	properties: Object.freeze({ accepted: Object.freeze({ kind: "boolean" }) }),
 });
 
-test("schema records exact wire numeric boundaries instead of widening JavaScript or PostgreSQL", () => {
+test("schema identifies runtime-only numeric boundaries instead of claiming false exactness", () => {
 	expect(projectCodecJsonSchema({ kind: "integer" })).toEqual({
 		type: "integer",
 		minimum: Number.MIN_SAFE_INTEGER,
 		maximum: Number.MAX_SAFE_INTEGER,
-		"x-questpie-negative-zero": false,
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements: ["negativeZeroRejected"],
+		},
 	});
 	expect(projectCodecJsonSchema({ kind: "bigint" })).toMatchObject({
 		type: "string",
-		"x-questpie-postgresql-minimum": "-9223372036854775808",
-		"x-questpie-postgresql-maximum": "9223372036854775807",
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements: [
+				"minimum:-9223372036854775808",
+				"maximum:9223372036854775807",
+			],
+		},
 	});
 	const numeric = projectCodecJsonSchema({
 		kind: "numeric",
@@ -56,6 +64,19 @@ test("schema records exact wire numeric boundaries instead of widening JavaScrip
 	expect(pattern.test("123456.78")).toBe(true);
 	expect(pattern.test("1234567.89")).toBe(false);
 	expect(pattern.test("1.2")).toBe(false);
+	expect(pattern.test("-0.00")).toBe(false);
+	expect(
+		projectCodecJsonSchema({ kind: "timestamp", withTimezone: false }),
+	).toEqual({
+		type: "string",
+		pattern:
+			"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}$",
+		"x-questpie-timezone": false,
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements: ["canonicalMillisecondTimestamp"],
+		},
+	});
 });
 const networkContract = Object.freeze({
 	exposure: "network",
@@ -124,7 +145,7 @@ test("negative proof: an RPC-envelope document is deterministic but not the publ
 	const requests =
 		post.requestBody.content[
 			"application/vnd.questpie.operation+json;version=1"
-		].schema.oneOf;
+		]!.schema.oneOf;
 	expect(
 		requests.map(
 			(branch) =>
@@ -193,7 +214,7 @@ test("proof: the closed codec owner lowers without widening unknown members", ()
 	const request =
 		projection.paths["/_questpie/operation"]!.post.requestBody.content[
 			"application/vnd.questpie.operation+json;version=1"
-		].schema.oneOf[0]!;
+		]!.schema.oneOf[0]!;
 	const input = request.properties.input as Readonly<{
 		additionalProperties: boolean;
 		properties: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
@@ -205,19 +226,46 @@ test("proof: the closed codec owner lowers without widening unknown members", ()
 		type: "integer",
 		minimum: 1,
 		maximum: 10,
-		"x-questpie-negative-zero": false,
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements: ["negativeZeroRejected"],
+		},
 	});
 	expect(input.properties.cursor).toEqual({
-		anyOf: [{ type: "string", "x-questpie-codec": "cursor" }, { type: "null" }],
+		anyOf: [
+			{
+				type: "string",
+				"x-questpie-codec": "cursor",
+				"x-questpie-runtime-validation": {
+					exact: false,
+					requirements: ["nfc"],
+				},
+			},
+			{ type: "null" },
+		],
 	});
 	expect(input.properties.tags).toEqual({
 		type: "array",
-		items: { type: "string", minLength: 1, maxLength: 100 },
+		items: {
+			type: "string",
+			minLength: 1,
+			maxLength: 100,
+			"x-questpie-runtime-validation": {
+				exact: false,
+				requirements: ["nfc", "noLoneSurrogate"],
+			},
+		},
 		maxItems: 3,
 	});
 	expect(input.properties.when).toEqual({
 		type: "string",
 		format: "date-time",
+		pattern:
+			"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{3}Z$",
 		"x-questpie-timezone": true,
+		"x-questpie-runtime-validation": {
+			exact: false,
+			requirements: ["canonicalMillisecondTimestamp"],
+		},
 	});
 });
