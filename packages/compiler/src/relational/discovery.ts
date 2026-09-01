@@ -265,7 +265,18 @@ function compileDataQuery(value) {
             continue;
           }
           const nestedRelation = nestedOwner.relations[nestedKey];
-          if (nestedRelation?.kind !== "toOne" || !nestedValue?.select) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
+          if (
+            nestedRelation?.kind !== "toOne" ||
+            !nestedValue ||
+            typeof nestedValue !== "object" ||
+            Array.isArray(nestedValue) ||
+            !Object.prototype.hasOwnProperty.call(nestedValue, "select") ||
+            Object.keys(nestedValue).some((name) => name !== "select") ||
+            !nestedValue.select ||
+            typeof nestedValue.select !== "object" ||
+            Array.isArray(nestedValue.select) ||
+            Object.keys(nestedValue.select).length === 0
+          ) fail("QP-DATA-026", "invalidInverseList", path + "." + nestedKey);
           state.edges += 1;
           if (state.edges > 4) fail("QP-DATA-022", "relationDepthExceeded", path + "." + nestedKey);
           const nestedTarget = relationalCollections.get(nestedRelation.target.slice("collection:".length));

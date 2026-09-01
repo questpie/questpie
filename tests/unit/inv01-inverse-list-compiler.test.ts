@@ -220,6 +220,22 @@ test.each([
 		"comments",
 	],
 	[accepted.replace("body: true", "missing: true"), "QP-DATA-026", "comments"],
+	[
+		accepted.replace(
+			"ticket: { select: { id: true } }",
+			'ticket: { select: { id: true }, after: "cursor" } as any',
+		),
+		"QP-DATA-026",
+		"comments.ticket",
+	],
+	[
+		accepted.replace(
+			"ticket: { select: { id: true } }",
+			"ticket: { select: {} }",
+		),
+		"QP-DATA-026",
+		"comments.ticket",
+	],
 ] as const)(
 	"rejects hostile child authoring through the production evaluator",
 	async (child, code, path) => {
