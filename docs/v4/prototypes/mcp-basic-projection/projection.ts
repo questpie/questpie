@@ -1,9 +1,16 @@
 export type OperationKind = "query" | "mutation" | "action";
 
+export type OperationOrigin = Readonly<{
+	exportName: string;
+	logicalPath: string;
+	packageId: string | null;
+}>;
+
 export type NetworkOperation = Readonly<{
 	kind: OperationKind;
 	name: string;
 	network: boolean;
+	origin: OperationOrigin;
 	inputSchema: Readonly<Record<string, unknown>>;
 	contextSchema: Readonly<Record<string, unknown>>;
 	outputSchema: Readonly<Record<string, unknown>>;
@@ -78,13 +85,25 @@ export function toolName(operation: Pick<NetworkOperation, "kind" | "name">) {
 }
 
 export function projectMcpTools(
-	operations: readonly NetworkOperation[],
+	input: Readonly<{
+		enabled: boolean;
+		operations: readonly NetworkOperation[];
+	}>,
 ): readonly McpTool[] {
-	const tools = operations
+	if (!input.enabled) return Object.freeze([]);
+	const tools = input.operations
 		.filter((operation) => operation.network)
 		.map((operation) => {
-			const name = toolName(operation);
+			let name: string;
+			try {
+				name = toolName(operation);
+			} catch {
+				throw new TypeError(
+					`unsupported MCP tool identity ${operation.kind}.${operation.name} at ${originLabel(operation.origin)}`,
+				);
+			}
 			return Object.freeze({
+				origin: operation.origin,
 				name,
 				...(operation.description === undefined
 					? {}
@@ -110,6 +129,19 @@ export function projectMcpTools(
 		);
 	for (let index = 1; index < tools.length; index += 1)
 		if (tools[index - 1]!.name === tools[index]!.name)
-			throw new TypeError(`duplicate MCP tool identity: ${tools[index]!.name}`);
-	return Object.freeze(tools);
+			throw new TypeError(
+				`duplicate MCP tool identity ${tools[index]!.name} at ${[
+					originLabel(tools[index - 1]!.origin),
+					originLabel(tools[index]!.origin),
+				]
+					.sort()
+					.join(", ")}`,
+			);
+	return Object.freeze(
+		tools.map(({ origin: _origin, ...tool }) => Object.freeze(tool)),
+	);
+}
+
+function originLabel(origin: OperationOrigin): string {
+	return `${origin.packageId ?? "application"}:${origin.logicalPath}#${origin.exportName}`;
 }
