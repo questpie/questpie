@@ -7,6 +7,10 @@ export type NetworkOperation = Readonly<{
 	inputSchema: Readonly<Record<string, unknown>>;
 	contextSchema: Readonly<Record<string, unknown>>;
 	outputSchema: Readonly<Record<string, unknown>>;
+	declaredErrorSchemas?: readonly Readonly<{
+		code: string;
+		payloadSchema: Readonly<Record<string, unknown>>;
+	}>[];
 	description?: string;
 }>;
 
@@ -19,6 +23,65 @@ export type McpTool = Readonly<{
 }>;
 
 const toolNamePattern = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,126}[A-Za-z0-9]$/;
+
+const frameworkFailureSchema = Object.freeze({
+	type: "object",
+	additionalProperties: false,
+	properties: Object.freeze({
+		kind: Object.freeze({ const: "failure" }),
+		error: Object.freeze({
+			type: "object",
+			additionalProperties: false,
+			properties: Object.freeze({
+				code: Object.freeze({ type: "string" }),
+				retryable: Object.freeze({ type: "boolean" }),
+			}),
+			required: Object.freeze(["code", "retryable"]),
+		}),
+	}),
+	required: Object.freeze(["error", "kind"]),
+});
+
+function outcomeSchema(operation: NetworkOperation) {
+	const result = Object.freeze({
+		type: "object",
+		additionalProperties: false,
+		properties: Object.freeze({
+			kind: Object.freeze({ const: "result" }),
+			result: operation.outputSchema,
+		}),
+		required: Object.freeze(["kind", "result"]),
+	});
+	const declared = (operation.declaredErrorSchemas ?? [])
+		.map((error) =>
+			Object.freeze({
+				type: "object",
+				additionalProperties: false,
+				properties: Object.freeze({
+					kind: Object.freeze({ const: "declaredError" }),
+					error: Object.freeze({
+						type: "object",
+						additionalProperties: false,
+						properties: Object.freeze({
+							code: Object.freeze({ const: error.code }),
+							payload: error.payloadSchema,
+						}),
+						required: Object.freeze(["code", "payload"]),
+					}),
+				}),
+				required: Object.freeze(["error", "kind"]),
+			}),
+		)
+		.sort((left, right) => {
+			const leftCode = left.properties.error.properties.code.const;
+			const rightCode = right.properties.error.properties.code.const;
+			return leftCode < rightCode ? -1 : leftCode > rightCode ? 1 : 0;
+		});
+	return Object.freeze({
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		oneOf: Object.freeze([result, ...declared, frameworkFailureSchema]),
+	});
+}
 
 export function toolName(operation: Pick<NetworkOperation, "kind" | "name">) {
 	const name = `${operation.kind}.${operation.name}`;
@@ -49,7 +112,7 @@ export function projectMcpTools(
 					}),
 					required: Object.freeze(["context", "input"]),
 				}),
-				outputSchema: operation.outputSchema,
+				outputSchema: outcomeSchema(operation),
 				...(operation.kind === "query"
 					? { annotations: Object.freeze({ readOnlyHint: true as const }) }
 					: {}),

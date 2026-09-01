@@ -25,6 +25,9 @@ test("derives disjoint kind-qualified names and schemas without authored MCP met
 			inputSchema: objectSchema,
 			contextSchema: objectSchema,
 			outputSchema: { oneOf: [{ type: "string" }, { type: "null" }] },
+			declaredErrorSchemas: [
+				{ code: "TICKET_HIDDEN", payloadSchema: { type: "null" } },
+			],
 		},
 		{
 			kind: "action",
@@ -48,8 +51,20 @@ test("derives disjoint kind-qualified names and schemas without authored MCP met
 		additionalProperties: false,
 		required: ["context", "input"],
 	});
-	expect(tools[1]!.outputSchema).toEqual({
-		oneOf: [{ type: "string" }, { type: "null" }],
+	const outcomes = tools[1]!.outputSchema.oneOf as readonly Readonly<{
+		properties: Readonly<Record<string, unknown>>;
+	}>[];
+	expect(outcomes).toHaveLength(3);
+	expect(outcomes[0]!.properties).toMatchObject({
+		kind: { const: "result" },
+		result: { oneOf: [{ type: "string" }, { type: "null" }] },
+	});
+	expect(outcomes[1]!.properties).toMatchObject({
+		kind: { const: "declaredError" },
+		error: { properties: { code: { const: "TICKET_HIDDEN" } } },
+	});
+	expect(outcomes[2]!.properties).toMatchObject({
+		kind: { const: "failure" },
 	});
 });
 
