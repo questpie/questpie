@@ -147,12 +147,26 @@ type GeneratedDurableWorker = Readonly<{
 	beginDrain(): void;
 }>;
 
-type TracerReport = Readonly<{
+type TracerEvent = Readonly<{
 	phase?: unknown;
+	queryResource?: Readonly<{
+		byteEqualScopesIsolated?: unknown;
+		duplicateSubscriberIndependent?: unknown;
+		forbiddenValueObserved?: unknown;
+		generated?: unknown;
+		publications?: unknown;
+		retainedEvictionTerminal?: unknown;
+		subscriberFaultContained?: unknown;
+		authorizationFailure?: unknown;
+		credentialLifetimeReplaced?: unknown;
+		lastUnsubscribeIdle?: unknown;
+	}>;
 	whoami?: Readonly<{
 		principal?: Readonly<{ id?: unknown; kind?: unknown }>;
 	}>;
 }>;
+type TracerReport = TracerEvent &
+	Readonly<{ history?: ReadonlyArray<TracerEvent> }>;
 
 type DeliveryActionResult = Readonly<{
 	attempt: number;
@@ -1108,8 +1122,10 @@ postgresTest(
 			const profile = join(temporary, "firefox-profile");
 			await mkdir(profile);
 			const body = `browser restart ${crypto.randomUUID()}`;
+			const rollbackBody = `browser rollback ${crypto.randomUUID()}`;
 			const browserUrl = new URL(`http://127.0.0.1:${first.port}/`);
 			browserUrl.searchParams.set("body", body);
+			browserUrl.searchParams.set("forbiddenBody", rollbackBody);
 			// Fixture-only login surrogate: the document response sets the demo
 			// cookie that Firefox sends to /api/whoami.
 			browserUrl.searchParams.set("credential", "demo-cookie");
@@ -1146,19 +1162,29 @@ postgresTest(
 				},
 			});
 
-			expect(
-				await eventually(() => report(first.port), {
-					accept: (current) => current?.phase === "mutation-observed",
-					description: "browser-observed committed Mutation",
-					intervalMilliseconds: 50,
-					timeoutMilliseconds: 30_000,
-				}),
-			).toMatchObject({
+			const mutationReport = await eventually(() => report(first.port), {
+				accept: (current) => current?.phase === "mutation-observed",
+				description: "browser-observed committed Mutation",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(mutationReport).toMatchObject({
 				phase: "mutation-observed",
+				queryResource: {
+					byteEqualScopesIsolated: true,
+					duplicateSubscriberIndependent: true,
+					generated: true,
+					retainedEvictionTerminal: true,
+					subscriberFaultContained: true,
+				},
 				whoami: {
 					principal: { id: tracerIds.principal, kind: "user" },
 				},
 			});
+			const mutationPublications = Number(
+				mutationReport?.queryResource?.publications,
+			);
+			expect(Number.isSafeInteger(mutationPublications)).toBe(true);
 			const [published] = await database!.unsafe<
 				readonly Readonly<{ events: number }>[]
 			>(
@@ -1170,23 +1196,133 @@ WHERE messages.body = $1 AND events.kind = 'published'`,
 			);
 			expect(published).toEqual({ events: 1 });
 
-			await stop(first.child, "SIGKILL");
-			const recovered = await startHost(temporary, first.port);
-			cleanup.defer(() => stop(recovered.child, "SIGTERM"));
-
+			await expect(
+				database!.begin(async (transaction) => {
+					await transaction.unsafe(
+						"UPDATE collaboration.messages SET body = $1 WHERE body = $2",
+						[rollbackBody, body],
+					);
+					throw new Error("qri02 rollback witness");
+				}),
+			).rejects.toThrow("qri02 rollback witness");
+			await database!.unsafe(
+				"UPDATE collaboration.messages SET body = $1 WHERE body = $2",
+				[rollbackBody, "qri02-missing-row"],
+			);
+			await database!.unsafe(
+				"UPDATE collaboration.memberships SET role = 'member' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+				[tracerIds.company, tracerIds.principal],
+			);
 			expect(
-				await eventually(() => report(recovered.port), {
-					accept: (current) => current?.phase === "recovered",
-					description: "browser Live Query reconnect",
+				await eventually(() => report(first.port), {
+					accept: (current) => current?.phase === "authority-redacted",
+					description: "Query Resource current-Policy redaction",
 					intervalMilliseconds: 50,
 					timeoutMilliseconds: 30_000,
 				}),
 			).toMatchObject({
-				phase: "recovered",
+				phase: "authority-redacted",
+				queryResource: {
+					forbiddenValueObserved: false,
+					publications: mutationPublications + 1,
+				},
+			});
+			await database!.unsafe(
+				"UPDATE collaboration.memberships SET role = 'admin' WHERE company_id = $1 AND principal_id = $2 AND scope_key = 'company'",
+				[tracerIds.company, tracerIds.principal],
+			);
+			const restoredReport = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.history?.some(
+						(event) => event.phase === "authority-restored",
+					) === true,
+				description: "Query Resource current-Policy restoration",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(
+				restoredReport?.history?.find(
+					(event) => event.phase === "authority-restored",
+				),
+			).toMatchObject({
+				phase: "authority-restored",
+				queryResource: {
+					forbiddenValueObserved: false,
+					publications: mutationPublications + 2,
+				},
+			});
+			expect(
+				await eventually(() => report(first.port), {
+					accept: (current) =>
+						current?.history?.some(
+							(event) => event.phase === "signed-out-ready",
+						) === true,
+					description: "browser credential lifetime retirement",
+					intervalMilliseconds: 50,
+					timeoutMilliseconds: 30_000,
+				}),
+			).toMatchObject({
+				history: expect.arrayContaining([
+					expect.objectContaining({ phase: "signed-out-ready" }),
+				]),
+			});
+			const authorizationReport = await eventually(() => report(first.port), {
+				accept: (current) =>
+					current?.phase === "fresh-scope-ready" &&
+					current.history?.some(
+						(event) => event.phase === "authorization-failed",
+					) === true,
+				description: "browser terminal authorization failure and fresh scope",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			const authorizationFailure = authorizationReport?.history?.find(
+				(event) => event.phase === "authorization-failed",
+			)?.queryResource?.authorizationFailure;
+			expect(authorizationFailure).toEqual({ code: "AUTHORIZATION_FAILED" });
+			expect(authorizationReport).toMatchObject({
+				phase: "fresh-scope-ready",
+				queryResource: { credentialLifetimeReplaced: true },
+			});
+
+			await stop(first.child, "SIGKILL");
+			const recovered = await startHost(temporary, first.port);
+			cleanup.defer(() => stop(recovered.child, "SIGTERM"));
+
+			const recoveredReport = await eventually(() => report(recovered.port), {
+				accept: (current) => current?.phase === "qri-complete",
+				description: "browser authorization failure and fresh-scope recovery",
+				intervalMilliseconds: 50,
+				timeoutMilliseconds: 30_000,
+			});
+			expect(recoveredReport).toMatchObject({
+				phase: "qri-complete",
+				queryResource: {
+					credentialLifetimeReplaced: true,
+					lastUnsubscribeIdle: true,
+				},
 				whoami: {
 					principal: { id: tracerIds.principal, kind: "user" },
 				},
 			});
+			expect(
+				await eventually(
+					async () => {
+						const [current] = await database!.unsafe<
+							readonly Readonly<{ bindings: number }>[]
+						>(
+							"SELECT count(*)::int AS bindings FROM questpie_internal.realtime_watch_bindings",
+						);
+						return current ?? null;
+					},
+					{
+						accept: (current) => current?.bindings === 0,
+						description: "last Query Resource unsubscribe closes the watch",
+						intervalMilliseconds: 50,
+						timeoutMilliseconds: 10_000,
+					},
+				),
+			).toEqual({ bindings: 0 });
 
 			const terminal = await eventually(
 				async () => {

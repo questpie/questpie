@@ -70,11 +70,12 @@ type RealtimeBinding = {
 				headers: { "content-type": ${JSON.stringify(input.realtime.commandMediaType)} },
 				body: JSON.stringify(body),
 			}));
+			if (response.status === 401 || response.status === 403) throw new Error("AUTHORIZATION_FAILED");
 			if (response.status !== 202) protocolFailure();
 		};
 		const commandBase = Object.freeze({ protocol: ${canonicalBytes(input.realtime.protocol).trim()}, application: ${JSON.stringify(input.application)}, clientContractDigest: ${JSON.stringify(input.clientContractDigest)}, realtimeWireDigest: ${JSON.stringify(input.realtime.digest)}, scopeId });
 		const openBinding = (bindingId: string, binding: RealtimeBinding): void => {
-			void command({ ...commandBase, command: "open", bindingId, context, input: binding.input, query: binding.query, resumeToken: binding.resumeToken }).catch(() => binding.options.onError?.(Object.freeze({ code: "TRANSPORT_FAILED" })));
+			void command({ ...commandBase, command: "open", bindingId, context, input: binding.input, query: binding.query, resumeToken: binding.resumeToken }).catch((error: unknown) => binding.options.onError?.(Object.freeze({ code: error instanceof Error && error.message === "AUTHORIZATION_FAILED" ? "AUTHORIZATION_FAILED" : "TRANSPORT_FAILED" })));
 		};
 		const failBindings = (failure: WatchFailure): void => {
 			const failed = Array.from(bindings.values());
@@ -152,6 +153,7 @@ type RealtimeBinding = {
 					headers: { accept: ${JSON.stringify(input.realtime.streamMediaType)}, "x-questpie-realtime-scope": scopeId },
 					signal: streamAbort?.signal,
 				}));
+				if (response.status === 401 || response.status === 403) throw new Error("AUTHORIZATION_FAILED");
 				if (response.status !== 200 || response.headers.get("content-type") !== ${JSON.stringify(input.realtime.streamMediaType)} || !response.body) protocolFailure();
 				const reader = response.body.getReader();
 				const decoder = new TextDecoder();
@@ -173,6 +175,10 @@ type RealtimeBinding = {
 				if (!streamAbort?.signal.aborted) scheduleReconnect();
 			}).catch((error: unknown) => {
 				if (streamAbort?.signal.aborted) return;
+				if (error instanceof Error && error.message === "AUTHORIZATION_FAILED") {
+					failBindings(Object.freeze({ code: "AUTHORIZATION_FAILED" }));
+					return;
+				}
 				if (error instanceof Error && error.message === "PROTOCOL_UNSUPPORTED") {
 					failBindings(Object.freeze({ code: "VERSION_INCOMPATIBLE" }));
 					return;
