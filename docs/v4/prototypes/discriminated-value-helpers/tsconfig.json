@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"lib": ["ESNext"],
+		"module": "Preserve",
+		"moduleResolution": "Bundler",
+		"noEmit": true,
+		"strict": true,
+		"target": "ESNext",
+		"types": []
+	},
+	"include": ["./helpers.ts", "./helpers.type-test.ts"]
+}
