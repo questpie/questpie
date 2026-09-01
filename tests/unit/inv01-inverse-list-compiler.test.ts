@@ -269,6 +269,88 @@ test("rejects an unsupported inverse child filter expression", async () => {
 	});
 });
 
+test("rejects a forged allowed inverse child scalar expression", async () => {
+	const forged = accepted.replace(
+		'where: ({ row }) => row.body.notEqual("filtered")',
+		'where: () => ({ kind: "equal", field: "collection:tickets/field:id", operand: { kind: "literal", codec: { kind: "uuid" }, value: "00000000-0000-0000-0000-000000000000" } } as any)',
+	);
+	await expect(evaluate(source(forged))).rejects.toMatchObject({
+		code: "QP-DATA-026",
+		details: {
+			path: "comments",
+			origin: { path: "ticket detail.ts", exportName: "ticketDetail" },
+		},
+	});
+});
+
+test("canonicalizes a valid inverse child boolean expression", async () => {
+	const combined = accepted.replace(
+		'where: ({ row }) => row.body.notEqual("filtered")',
+		'where: ({ row }) => expr.and(row.body.notEqual("filtered"), row.id.equal("00000000-0000-0000-0000-000000000000"))',
+	);
+	const value = await evaluate(source(combined));
+	const template = value.templateInput as {
+		select: readonly Readonly<Record<string, unknown>>[];
+	};
+	expect(
+		template.select.find(({ kind }) => kind === "inverseList"),
+	).toMatchObject({
+		filter: {
+			kind: "and",
+			expressions: [
+				expect.objectContaining({ kind: "notEqual" }),
+				expect.objectContaining({ kind: "equal" }),
+			],
+		},
+	});
+});
+
+test.each([
+	'where: ({ row }) => { const expression = row.body.notEqual("filtered") as any; expression.extra = true; return expression; }',
+	'where: ({ row }) => { const expression = row.body.notEqual("filtered") as any; delete expression.operand; return expression; }',
+	'where: ({ row }) => { const expression = row.body.notEqual("filtered") as any; expression.operand = { kind: "literal" }; return expression; }',
+	'where: ({ row }) => { const expression = row.body.notEqual("filtered") as any; expression.operand.codec = { kind: "uuid" }; return expression; }',
+	'where: ({ row }) => { const expression = row.body.in(["filtered"]) as any; expression.set.values = "filtered"; return expression; }',
+] as const)(
+	"rejects a mutated inverse child scalar expression",
+	async (where) => {
+		const forged = accepted.replace(
+			'where: ({ row }) => row.body.notEqual("filtered")',
+			where,
+		);
+		await expect(evaluate(source(forged))).rejects.toMatchObject({
+			code: "QP-DATA-026",
+			details: {
+				path: "comments",
+				origin: { path: "ticket detail.ts", exportName: "ticketDetail" },
+			},
+		});
+	},
+);
+
+test.each([
+	'where: ({ row }) => ({ kind: "booleanExpression", operator: "and", operands: [row.body.notEqual("filtered")] } as any)',
+	'where: ({ row }) => ({ kind: "booleanExpression", operator: "or", operands: [row.body.notEqual("filtered")] } as any)',
+	'where: ({ row }) => ({ kind: "booleanExpression", operator: "not", operands: [row.body.notEqual("filtered"), row.id.equal("00000000-0000-0000-0000-000000000000")] } as any)',
+	'where: ({ row }) => ({ kind: "booleanExpression", operator: "always", operands: [row.body.notEqual("filtered")] } as any)',
+	'where: ({ row }) => ({ kind: "booleanExpression", operator: "not", operands: [row.body.notEqual("filtered")], extra: true } as any)',
+] as const)(
+	"rejects an invalid inverse child boolean expression arity or shape",
+	async (where) => {
+		const forged = accepted.replace(
+			'where: ({ row }) => row.body.notEqual("filtered")',
+			where,
+		);
+		await expect(evaluate(source(forged))).rejects.toMatchObject({
+			code: "QP-DATA-026",
+			details: {
+				path: "comments",
+				origin: { path: "ticket detail.ts", exportName: "ticketDetail" },
+			},
+		});
+	},
+);
+
 test("rejects a non-true nested inverse child Field selection", async () => {
 	const nonTrueNestedField = accepted.replace(
 		"ticket: { select: { id: true } }",

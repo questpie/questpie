@@ -151,16 +151,41 @@ function compileDataQuery(value) {
   if (!collection) throw new Error("QP-DATA unknown Collection " + template.from);
   const parameterNames = new Map(Object.entries(template.parameters).map(([name, parameter]) => [parameter, name]));
   const parameterOperand = (parameter) => ({ kind: "parameter", parameter: parameterNames.get(parameter) });
+  const cloneQueryValue = (candidate) => {
+    if (candidate instanceof Date) return new Date(candidate.getTime());
+    if (Array.isArray(candidate)) return candidate.map(cloneQueryValue);
+    if (candidate && typeof candidate === "object")
+      return Object.fromEntries(Object.entries(candidate).map(([key, nested]) => [key, cloneQueryValue(nested)]));
+    return candidate;
+  };
+  const sameQueryValue = (left, right) => {
+    if (Object.is(left, right)) return true;
+    if (left instanceof Date || right instanceof Date)
+      return left instanceof Date && right instanceof Date && left.getTime() === right.getTime();
+    if (Array.isArray(left) || Array.isArray(right))
+      return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((item, index) => sameQueryValue(item, right[index]));
+    if (!left || typeof left !== "object" || !right || typeof right !== "object") return false;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && sameQueryValue(left[key], right[key]));
+  };
+  const queryScalarExpressions = new WeakMap();
+  const scalarExpression = (owner, canonical) => {
+    const stored = cloneQueryValue(canonical);
+    const authored = cloneQueryValue(stored);
+    queryScalarExpressions.set(authored, { owner: collectionIdentity(owner), canonical: stored });
+    return authored;
+  };
   const makeFields = (owner) => Object.fromEntries(Object.entries(owner.fields).map(([name, field]) => {
       const identity = fieldIdentity(owner, name);
-      const scalar = (kind, right) => ({ kind, field: identity, operand: parameterNames.has(right) ? parameterOperand(right) : { kind: "literal", codec: fieldCodec(field), value: right } });
+      const scalar = (kind, right) => scalarExpression(owner, { kind, field: identity, operand: parameterNames.has(right) ? parameterOperand(right) : { kind: "literal", codec: fieldCodec(field), value: right } });
       return [name, {
         __queryField: identity,
         kind: "field",
         equal: (right) => scalar("equal", right), notEqual: (right) => scalar("notEqual", right),
-        in: (values) => ({ kind: "in", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
-        notIn: (values) => ({ kind: "notIn", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
-        isNull: () => ({ kind: "isNull", field: identity }), isNotNull: () => ({ kind: "isNotNull", field: identity }),
+        in: (values) => scalarExpression(owner, { kind: "in", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
+        notIn: (values) => scalarExpression(owner, { kind: "notIn", field: identity, set: parameterNames.has(values) ? parameterOperand(values) : { kind: "literal", codec: fieldCodec(field), values } }),
+        isNull: () => scalarExpression(owner, { kind: "isNull", field: identity }), isNotNull: () => scalarExpression(owner, { kind: "isNotNull", field: identity }),
         lessThan: (right) => scalar("lessThan", right),
         ascending: (options) => ({ kind: "order", field: identity, direction: "asc", nulls: options.nulls }),
         descending: (options) => ({ kind: "order", field: identity, direction: "desc", nulls: options.nulls }),
@@ -230,7 +255,7 @@ function compileDataQuery(value) {
           return orderKeys[orderKeys.length - constraint.fields.length + index] === name;
         }));
       if (!unique) fail("QP-DATA-026", "invalidInverseList", key);
-      const filter = selected.where === undefined ? null : queryExpression(selected.where({ row: makeFields(child) }), key);
+      const filter = selected.where === undefined ? null : queryExpression(selected.where({ row: makeFields(child) }), key, collectionIdentity(child));
       const compileNested = (nestedOwner, nestedSelection, path) => {
         const compiled = [];
         for (const [nestedKey, nestedValue] of Object.entries(nestedSelection)) {
@@ -281,26 +306,29 @@ function compileDataQuery(value) {
   const fields = makeFields(collection);
   const relationState = { plural: 0, edges: 0 };
   const relations = makeRelations(collection, relationState);
-  const queryExpression = (candidate, inversePath = null) => {
+  const queryExpression = (candidate, inversePath = null, inverseOwner = null) => {
     const invalid = () => {
       if (inversePath !== null) fail("QP-DATA-026", "invalidInverseList", inversePath);
       throw new Error("QP-DATA-005 unknownOperator " + String(candidate?.operator ?? candidate?.kind));
     };
     if (candidate?.kind !== "booleanExpression") {
       if (inversePath === null) return candidate;
-      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return invalid();
-      if (["equal", "notEqual", "lessThan", "lessThanOrEqual", "greaterThan", "greaterThanOrEqual", "in", "notIn", "isNull", "isNotNull"].includes(candidate.kind)) return candidate;
-      return invalid();
+      const scalar = candidate && typeof candidate === "object" && !Array.isArray(candidate)
+        ? queryScalarExpressions.get(candidate)
+        : null;
+      if (!scalar || scalar.owner !== inverseOwner || !sameQueryValue(candidate, scalar.canonical)) return invalid();
+      return scalar.canonical;
     }
+    if (Object.keys(candidate).sort().join("\0") !== ["kind", "operands", "operator"].join("\0")) return invalid();
     const operands = candidate.operands;
     if (!Array.isArray(operands)) return invalid();
     if (candidate.operator === "and" || candidate.operator === "or") {
       if (operands.length < 2) return invalid();
-      return { kind: candidate.operator, expressions: operands.map((operand) => queryExpression(operand, inversePath)) };
+      return { kind: candidate.operator, expressions: operands.map((operand) => queryExpression(operand, inversePath, inverseOwner)) };
     }
     if (candidate.operator === "not") {
       if (operands.length !== 1) return invalid();
-      return { kind: "not", expression: queryExpression(operands[0], inversePath) };
+      return { kind: "not", expression: queryExpression(operands[0], inversePath, inverseOwner) };
     }
     if (candidate.operator === "always") {
       if (operands.length !== 0) return invalid();
