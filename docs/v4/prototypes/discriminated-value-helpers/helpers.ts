@@ -12,7 +12,7 @@ export type DiscriminatedReference<
 
 type KindOf<Value extends Readonly<{ kind: string }>> = Value["kind"];
 
-export type DiscriminatedCases<Value extends Readonly<{ kind: string }>> = {
+type DiscriminatedCases<Value extends Readonly<{ kind: string }>> = {
 	[Kind in KindOf<Value>]: (
 		value: Extract<Value, Readonly<{ kind: Kind }>>,
 	) => unknown;
