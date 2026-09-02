@@ -45,20 +45,6 @@ function exactKeys(
 		);
 }
 
-function requiredKeys(
-	value: RecordValue,
-	required: readonly string[],
-	label: string,
-): void {
-	const missing = required.find((key) => !Object.hasOwn(value, key));
-	if (missing)
-		throw new CompilerDiagnosticError(
-			"QP-COMPOSE-013",
-			"structuralTypeError",
-			`${label} must contain ${missing}`,
-		);
-}
-
 export function normalizeActionContract(
 	value: RecordValue,
 	normalizeCodec: (value: unknown) => unknown,
@@ -204,11 +190,13 @@ export function executionServiceResources(
 
 export function renderActionDeclarations(
 	resources: readonly NormalizedResource[],
+	documentation: Readonly<Record<string, string>> = {},
 ): string {
 	const definitions = actions(resources)
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
+			const jsdoc = documentation[resource.identity];
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
 		})
 		.join("\n\t");
 	const operations = renderServerOperationType(

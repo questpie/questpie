@@ -261,7 +261,15 @@ function configuration(value: unknown): ApplicationConfiguration {
 	const root = object(value, "questpie.json");
 	exactKeys(
 		root,
-		["$schema", "version", "application", "postgres", "source", "packages"],
+		[
+			"$schema",
+			"version",
+			"application",
+			"postgres",
+			"source",
+			"packages",
+			"projections",
+		],
 		"questpie.json",
 	);
 	if (
@@ -310,6 +318,14 @@ function configuration(value: unknown): ApplicationConfiguration {
 			["{", "}", "[", "]", "!", "\\"].some((token) => pattern.includes(token))
 		)
 			invalid(`source.exclude contains unsupported pattern ${pattern}`);
+	let projections: Readonly<{ openapi: true }> | undefined;
+	if (root.projections !== undefined) {
+		const configured = object(root.projections, "projections");
+		exactKeys(configured, ["openapi"], "projections");
+		if (configured.openapi !== true)
+			invalid("projections.openapi must equal true when present");
+		projections = { openapi: true };
+	}
 
 	const rawPackages = object(root.packages, "packages");
 	const packages: Record<string, Readonly<{ inventoryDigest: string }>> = {};
@@ -345,6 +361,7 @@ function configuration(value: unknown): ApplicationConfiguration {
 			) as Readonly<Record<string, string>>,
 		},
 		source: { root: sourceRoot, exclude: excludes },
+		...(projections ? { projections } : {}),
 		packages,
 	};
 }

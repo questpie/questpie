@@ -413,7 +413,9 @@ export function projectRuntimeBuild(
 			([path]) =>
 				path !== "runtime-build.json" &&
 				path !== "internal/checksums.json" &&
-				path !== "operation-documentation.json",
+				path !== "operation-documentation.json" &&
+				path !== "openapi.json" &&
+				path !== "operation-projection-explain.json",
 		)
 		.map(([path, bytes]) => ({ path, digest: contentDigest(bytes) }))
 		.sort((left, right) => compareAscii(left.path, right.path));

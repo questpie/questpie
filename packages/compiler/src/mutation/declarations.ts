@@ -30,11 +30,13 @@ function renderIssueMappings(resource: NormalizedResource): string {
 
 export function renderMutationDeclarations(
 	resources: readonly NormalizedResource[],
+	documentation: Readonly<Record<string, string>> = {},
 ): string {
 	const definitions = mutations(resources)
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
+			const jsdoc = documentation[resource.identity];
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; issueMappings: ${renderIssueMappings(resource)}; }>;`;
 		})
 		.join("\n\t");
 	const operations = renderServerOperationType(

@@ -14,6 +14,7 @@ import {
 	projectExecutionComposition,
 } from "./composition";
 import { renderAppContract, renderPackageContract } from "./generate";
+import { projectOperationProjection } from "./http";
 import {
 	bindCollectionLifecyclePrograms,
 	projectCollectionLifecyclePrograms,
@@ -416,6 +417,19 @@ export async function createArtifacts(
 		],
 		contextProjection: executionComposition.context,
 	});
+	const operationProjection = input.configuration.projections?.openapi
+		? projectOperationProjection({
+				applicationName: input.configuration.application.name,
+				contextCodec: input.resources.find(
+					(resource) => resource.kind === "context",
+				)?.contract.input ?? { kind: "object", properties: {} },
+				httpContract: runtime.http as never,
+				operationContracts: runtime.operationContracts as never,
+				documentationBytes: operationDocumentation.bytes,
+				documentationDigest: operationDocumentation.digest,
+				originMap: originMap as never,
+			})
+		: undefined;
 	const realtime = projectRealtimeWireContract({
 		application: `application:${input.configuration.application.name}`,
 		clientContractDigest: runtime.clientContractDigest,
@@ -464,6 +478,7 @@ export async function createArtifacts(
 			relational.declarations,
 			mutationDeclarations,
 			realtimeEnabled,
+			operationProjection?.jsdoc,
 		),
 		"build-input.json": canonicalBytes(buildInput),
 		"client.ts": renderClientContract(operationResources, {
@@ -498,6 +513,11 @@ export async function createArtifacts(
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"operation-http-contract.json": runtimeArtifactBytes(runtime.http),
 	};
+	if (operationProjection) {
+		generated["openapi.json"] = operationProjection.openapiBytes;
+		generated["operation-projection-explain.json"] =
+			operationProjection.explainBytes;
+	}
 	if (lifecyclePrograms.programs.length > 0)
 		generated["collection-lifecycle-programs.json"] =
 			canonicalBytes(lifecyclePrograms);
@@ -579,6 +599,7 @@ export async function createArtifacts(
 		generated[packageContractPath(compilation.name)] = renderPackageContract(
 			compilation.name,
 			compilation.resources,
+			operationProjection?.jsdoc,
 		);
 	generated["internal/application.d.ts"] = renderApplicationDeclaration();
 	const runtimeCoreBundleEntry = runtimeBundleEntry(

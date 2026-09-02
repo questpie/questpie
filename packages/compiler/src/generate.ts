@@ -355,12 +355,16 @@ export interface GeneratedCollectionLifecycles {
 export type CollectionLifecycle<Name extends keyof GeneratedCollectionLifecycles> = GeneratedCollectionLifecycles[Name];`;
 }
 
-function renderQueries(resources: readonly NormalizedResource[]): string {
+function renderQueries(
+	resources: readonly NormalizedResource[],
+	documentation: Readonly<Record<string, string>> = {},
+): string {
 	return resources
 		.filter((resource) => resource.kind === "query")
 		.map((resource) => {
 			const contract = resource.contract;
-			return `${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
+			const jsdoc = documentation[resource.identity];
+			return `${jsdoc ? `${jsdoc}\n\t` : ""}${JSON.stringify(resource.name)}: Readonly<{ input: ${renderCodecType(contract.input)}; output: ${renderCodecType(contract.output)}; handlerOutput: ${renderCodecType(contract.output)}; }>;`;
 		})
 		.join("\n\t");
 }
@@ -390,6 +394,7 @@ export function renderAppContract(
 	relational: RelationalGeneratedContractV1,
 	mutationContract: MutationGeneratedContractV1,
 	realtime: boolean,
+	documentation: Readonly<Record<string, string>> = {},
 ): string {
 	const sourceModulePath = (logicalPath: string): string => {
 		const prefix =
@@ -523,12 +528,12 @@ export interface GeneratedMutationDataByName {
 ${collectionLifecycleDeclarations}
 
 export interface GeneratedQueries {
-	${renderQueries(resources)}
+	${renderQueries(resources, documentation)}
 }
 
-${renderMutationDeclarations(resources)}
+${renderMutationDeclarations(resources, documentation)}
 
-${renderActionDeclarations(resources)}
+${renderActionDeclarations(resources, documentation)}
 
 export type GeneratedQueryOperations = ${renderQueryOperations(resources)};
 
@@ -742,6 +747,7 @@ export async function createApp(input: CreateAppInput): Promise<GeneratedApp> {
 export function renderPackageContract(
 	packageName: string,
 	resources: readonly NormalizedResource[],
+	documentation: Readonly<Record<string, string>> = {},
 ): string {
 	const services = resources
 		.filter((resource) => resource.kind === "service")
@@ -773,7 +779,7 @@ export interface PackageData {
 }
 
 export interface PackageQueries {
-	${renderQueries(resources)}
+	${renderQueries(resources, documentation)}
 }
 
 export type PackageServices = Readonly<{
