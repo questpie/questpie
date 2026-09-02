@@ -6,6 +6,7 @@ import {
 } from "../../packages/runtime/src/application/observation";
 import {
 	createObservationKernel,
+	retainScopeThroughResponse,
 	type ExecutionEventV2,
 	type NeutralTraceContextV1,
 	type ObservationAdapterV1,
@@ -329,4 +330,28 @@ test("preserves an already-created response when its request is already aborted"
 		kind: "fetch",
 		outcome: "cancelled",
 	});
+});
+
+test("contains a source cancellation rejection after the response consumer leaves", async () => {
+	const ends: unknown[] = [];
+	const response = retainScopeThroughResponse(
+		{
+			end: (end) => ends.push(end),
+			event: () => undefined,
+			run: async (use) => await use(),
+		},
+		new Response(
+			new ReadableStream<Uint8Array>({
+				cancel() {
+					throw new DOMException("The connection was closed.", "AbortError");
+				},
+			}),
+			{ status: 200 },
+		),
+	);
+
+	await expect(response.body!.cancel("Firefox left")).resolves.toBeUndefined();
+	expect(ends).toEqual([
+		{ httpResponseStatusCode: 200, kind: "fetch", outcome: "cancelled" },
+	]);
 });

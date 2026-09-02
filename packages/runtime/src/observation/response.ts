@@ -80,6 +80,8 @@ export function retainScopeThroughResponse(
 		async cancel(reason) {
 			try {
 				await reader.cancel(reason);
+			} catch {
+				/* Consumer cancellation already owns the terminal response outcome. */
 			} finally {
 				finalize("cancelled");
 			}
