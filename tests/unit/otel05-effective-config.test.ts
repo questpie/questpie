@@ -10,7 +10,7 @@ const metadata = Object.freeze({
 	runtimeBuildDigest: "a".repeat(64),
 	runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
 	signalProjectionDigest:
-		"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
+		"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
 	questpieVersion: "4.0.0-beta.1",
 });
 
@@ -37,7 +37,7 @@ test("builds one canonical secret-free effective configuration", () => {
 	expect(new TextDecoder().decode(first.bytes).endsWith("\n")).toBe(true);
 	expect(first.digest).toMatch(/^[0-9a-f]{64}$/u);
 	expect(first.digest).toBe(
-		"53e01e7d88be29efbb7351ffc232482ad996b4aca74f688ea94b4032c2a5e634",
+		"45880ece9d23211758c038abe7a42fab8ea87720a83084920893aee1c41746f8",
 	);
 	expect(first.artifact).toMatchObject({
 		format: "questpie.opentelemetry-effective-config",

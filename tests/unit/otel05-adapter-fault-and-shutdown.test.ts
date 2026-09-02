@@ -113,7 +113,7 @@ test("public pre-bind close is concurrent, idempotent, and terminal", async () =
 			...runtimeInput,
 			observability: telemetry,
 			signalProjectionDigest:
-				"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
+				"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
 		}),
 	).toThrow("QP-OTEL-001 invalidConfiguration: closed");
 });

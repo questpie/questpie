@@ -57,11 +57,11 @@ const collaborationFixture = resolve(
 	"../../fixtures/collaboration",
 );
 const clientContractDigest = "1".repeat(64);
-const operationWireDigest = "2".repeat(64);
+const operationHttpContractDigest = "2".repeat(64);
 const realtime = projectRealtimeWireContract({
 	application: "application:collaboration",
 	clientContractDigest,
-	operationWireDigest,
+	operationHttpContractDigest,
 	resources,
 	watchableQueries: ["query:messages.page"],
 });
@@ -70,9 +70,7 @@ function renderClient(): string {
 	return renderClientContract(resources, {
 		application: realtime.application,
 		clientContractDigest,
-		wireDigest: realtime.operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
+		httpContractDigest: realtime.operationHttpContractDigest,
 		realtime,
 	});
 }
@@ -93,7 +91,7 @@ const timestampResource: NormalizedResource = {
 const timestampRealtime = projectRealtimeWireContract({
 	application: "application:collaboration",
 	clientContractDigest,
-	operationWireDigest,
+	operationHttpContractDigest,
 	resources: [timestampResource],
 	watchableQueries: [timestampResource.identity],
 });
@@ -102,9 +100,7 @@ function renderTimestampClient(): string {
 	return renderClientContract([timestampResource], {
 		application: timestampRealtime.application,
 		clientContractDigest,
-		wireDigest: timestampRealtime.operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
+		httpContractDigest: timestampRealtime.operationHttpContractDigest,
 		realtime: timestampRealtime,
 	});
 }

@@ -63,7 +63,7 @@ export function normalizeActionContract(
 	value: RecordValue,
 	normalizeCodec: (value: unknown) => unknown,
 ): RecordValue {
-	requiredKeys(
+	exactKeys(
 		value,
 		[
 			"__questpie",
@@ -75,6 +75,7 @@ export function normalizeActionContract(
 			"network",
 			"output",
 			"policy",
+			...(Object.hasOwn(value, "describe") ? ["describe"] : []),
 		],
 		"Action Definition",
 	);

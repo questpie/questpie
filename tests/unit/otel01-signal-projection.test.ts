@@ -25,7 +25,7 @@ test("projects the accepted exact OpenTelemetry signal artifact", () => {
 		},
 	});
 	expect(projection.digest).toBe(
-		"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
+		"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
 	);
 	expect(projection.bytes.endsWith("\n")).toBe(true);
 	expect(projection.artifact.spanGraph).toHaveLength(14);
@@ -122,7 +122,7 @@ test("binds the signal projection into generated Runtime Build inventory", async
 			projectObservationSignalProjection("4.0.0-beta.1").bytes,
 		);
 		expect(runtimeBuild.observationSignalProjectionDigest).toBe(
-			"431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
+			"b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
 		);
 		expect(runtimeBuild.inventory).toContainEqual(
 			expect.objectContaining({

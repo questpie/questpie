@@ -262,14 +262,14 @@ test("carries the accepted inverse fixture through Template and Query Projection
 		const operationContracts = JSON.parse(
 			compilation.generatedFiles["operation-contracts.json"]!,
 		);
-		const wireContract = JSON.parse(
-			compilation.generatedFiles["wire-contract.json"]!,
+		const httpContract = JSON.parse(
+			compilation.generatedFiles["operation-http-contract.json"]!,
 		);
 		const runtimeArtifacts = decodeRuntimeArtifacts({
 			runtimeBuild,
 			runtimeExecutables,
 			operationContracts,
-			wireContract,
+			httpContract,
 		});
 		const artifactFiles = Object.fromEntries(
 			runtimeBuild.inventory.map(({ path }) => [
@@ -299,7 +299,7 @@ test("carries the accepted inverse fixture through Template and Query Projection
 				},
 				runtimeExecutables,
 				operationContracts,
-				wireContract,
+				httpContract,
 			}),
 		).toThrow();
 

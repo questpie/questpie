@@ -182,7 +182,7 @@ const metadata = {
   applicationIdentity: "application:clean-consumer",
   runtimeBuildDigest: "a".repeat(64),
   runtimeInstanceId: "01234567-89ab-4def-8123-456789abcdef",
-  signalProjectionDigest: "431a00809677d76cd51b0a48bd4ac005badc729df345e57e35ceb15c5a467dbf",
+  signalProjectionDigest: "b2138ccb6f40f0a95df1573848fb239124b57420609e6f9f9d97d378b6a62d58",
   questpieVersion: "${releaseVersion}",
 } as const;
 const mismatched = await createOpenTelemetry();
