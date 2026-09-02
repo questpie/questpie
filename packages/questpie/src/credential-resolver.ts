@@ -17,6 +17,7 @@ type CredentialService = ServiceDefinition<
 
 export type CredentialResolution =
 	| Readonly<{ kind: "anonymous" }>
+	| Readonly<{ kind: "malformed" }>
 	| Readonly<{ kind: "resolved"; principal: Principal }>
 	| Readonly<{ kind: "unavailable" }>;
 

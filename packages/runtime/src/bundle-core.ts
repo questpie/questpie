@@ -5,6 +5,8 @@ export { failRuntimeApplicationStartup } from "./application/startup-cleanup";
 export { createRuntimeActionExecutor } from "./action";
 export {
 	createRuntimeRouteExecutor,
+	decodeRuntimeCredentialOutcome,
+	RuntimeCredentialMalformed,
 	RuntimeCredentialUnavailable,
 } from "./execution";
 export {

@@ -88,7 +88,7 @@ test("resolves application credentials before executing a handcrafted Route bind
 	await runtime.close();
 });
 
-test("keeps anonymous credentials distinct from typed provider unavailability", async () => {
+test("keeps anonymous, malformed, and unavailable credentials distinct", async () => {
 	let handlerCalls = 0;
 	let routeProjections = 0;
 	const auth = defineService({
@@ -114,6 +114,8 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 			service: auth,
 			resolve: async ({ request, service }) => {
 				expect(service.ready).toBe(true);
+				if (request.headers.has("x-malformed-credential"))
+					return { kind: "malformed" };
 				if (request.headers.has("x-malformed-outcome"))
 					return undefined as never;
 				if (request.headers.has("x-resolver-bug"))
@@ -156,6 +158,22 @@ test("keeps anonymous credentials distinct from typed provider unavailability", 
 		new Request("https://app.test/outcomes"),
 	);
 	expect(await anonymous!.json()).toEqual({ principalKind: "anonymous" });
+	expect({ handlerCalls, routeProjections }).toEqual({
+		handlerCalls: 1,
+		routeProjections: 1,
+	});
+
+	const malformedCredential = await routes.fetch(
+		new Request("https://app.test/outcomes", {
+			headers: {
+				"x-malformed-credential": "credential detail must not escape",
+			},
+		}),
+	);
+	expect(malformedCredential!.status).toBe(401);
+	expect(await malformedCredential!.json()).toEqual({
+		error: { code: "UNAUTHENTICATED", retryable: false },
+	});
 	expect({ handlerCalls, routeProjections }).toEqual({
 		handlerCalls: 1,
 		routeProjections: 1,

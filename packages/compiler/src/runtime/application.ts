@@ -499,13 +499,13 @@ export async function createApplication(input) {
 		executeCollectionOperationAdapter,
 		createRuntimeActionExecutor,
 		createRuntimeRouteExecutor,
+		decodeRuntimeCredentialOutcome,
 		durablePrincipal,
 		failRuntimeApplicationStartup,
 		linkPostgresContextBootstrapPlans,
 		linkPostgresMutationTransactionStatements,
 		linkPostgresQueryPlans,
 		OperationFailure,
-		RuntimeCredentialUnavailable,
 	} = runtimeModule;
 	const loaded = await loadRuntimeArtifacts();
 	if (loaded.artifacts.runtimeBuild.postgresContextBootstrapPlansDigest !== expectedContextBootstrapPlansDigest)
@@ -542,10 +542,7 @@ export async function createApplication(input) {
 			? request
 			: new Request(request, { signal: executionSignal });
 		const outcome = await ${credentialResolverDefinition}.resolve({ request: credentialRequest, service });
-		if (outcome.kind === "unavailable")
-			throw new RuntimeCredentialUnavailable();
-		if (outcome.kind === "anonymous") return principal.anonymous();
-		return outcome.principal;`
+		return decodeRuntimeCredentialOutcome(outcome);`
 				: "return principal.anonymous();"
 		}
 	};

@@ -268,6 +268,8 @@ export function createApplicationRuntime<
 
 export {
 	createRuntimeRouteExecutor,
+	decodeRuntimeCredentialOutcome,
+	RuntimeCredentialMalformed,
 	RuntimeCredentialUnavailable,
 } from "./routes";
 export type {
