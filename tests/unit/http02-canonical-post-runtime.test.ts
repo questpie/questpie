@@ -184,6 +184,86 @@ test("canonical POST deadline spans awaited phases and releases its signal owner
 	expect(executionSignal?.aborted).toBe(false);
 });
 
+test("canonical POST deadline settles an abort-ignoring credential resolver", async () => {
+	let executorCalls = 0;
+	const response = await Promise.race([
+		canonicalPostTransport({
+			resolvePrincipal: async () => new Promise<never>(() => {}),
+			executeMutation: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+		}).fetch(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "noncooperative-credential",
+				"Questpie-Timeout-Milliseconds": "5",
+			}),
+		),
+		new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+	]);
+	expect(response).not.toBe("hung");
+	if (response === "hung") return;
+	expect(response?.status).toBe(408);
+	expect(await response?.json()).toEqual({
+		callId: "noncooperative-credential",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(executorCalls).toBe(0);
+});
+
+test("canonical POST aborts a hung body without leaking cancel failure", async () => {
+	const privateFailure = new Error("private body cancel failure");
+	const unhandled: unknown[] = [];
+	const observeUnhandled = (error: unknown) => unhandled.push(error);
+	process.on("unhandledRejection", observeUnhandled);
+	try {
+		let cancelCalls = 0;
+		let executorCalls = 0;
+		const body = new ReadableStream<Uint8Array>({
+			pull: () => new Promise<void>(() => {}),
+			cancel: () => {
+				cancelCalls += 1;
+				return Promise.reject(privateFailure);
+			},
+		});
+		const response = await Promise.race([
+			canonicalPostTransport({
+				executeMutation: async () => {
+					executorCalls += 1;
+					return { ok: true };
+				},
+			}).fetch(
+				new Request(
+					"https://runtime.test/_questpie/mutation/messages.publish",
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/json",
+							"Idempotency-Key": "hung-body",
+							"Questpie-Timeout-Milliseconds": "5",
+						},
+						body,
+					},
+				),
+			),
+			new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+		]);
+		expect(response).not.toBe("hung");
+		if (response === "hung") return;
+		expect(response?.status).toBe(408);
+		expect(await response?.json()).toEqual({
+			callId: "hung-body",
+			error: { code: "DEADLINE_EXCEEDED", retryable: true },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(cancelCalls).toBe(1);
+		expect(executorCalls).toBe(0);
+		expect(unhandled).toEqual([]);
+	} finally {
+		process.off("unhandledRejection", observeUnhandled);
+	}
+});
+
 test("canonical POST preserves executor-owned Mutation receipt replay", async () => {
 	const receipts = new Map<
 		string,

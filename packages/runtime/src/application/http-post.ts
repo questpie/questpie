@@ -18,6 +18,7 @@ import {
 	type RuntimeOperationContract,
 } from "../operation";
 import {
+	awaitHttpPhase,
 	decodeHttpIdentity as decodeIdentity,
 	decodeHttpTimeout as decodeTimeout,
 	createHttpExecutionControl,
@@ -224,7 +225,9 @@ export function createCanonicalPostHttp<ContextInput, View>(
 			try {
 				let caller: Principal | null;
 				try {
-					caller = await input.resolvePrincipal(request, execution.signal);
+					caller = await awaitHttpPhase(execution.signal, () =>
+						input.resolvePrincipal(request, execution.signal),
+					);
 				} catch (error) {
 					if (execution.signal.aborted)
 						return failure("DEADLINE_EXCEEDED", callId);

@@ -141,7 +141,7 @@ export async function createRuntimeApplication<
 	const activeRoots = new Set<Promise<unknown>>();
 	const rootControllers = new Set<AbortController>();
 	const maximumRoots = input.maximumActiveRootsPerPrincipal ?? 64;
-	const nowMilliseconds = () => (input.now?.() ?? new Date()).getTime();
+	const deadlineNow = () => performance.timeOrigin + performance.now();
 	let rootSequence = 0;
 	let callSequence = 0;
 	let closePromise: Promise<void> | undefined;
@@ -200,7 +200,7 @@ export async function createRuntimeApplication<
 		activeByPrincipal.set(principalKey, active + 1);
 		rootSequence += 1;
 		const executionId = `execution:${rootSequence}`;
-		const controlled = controlledRoot({ ...root, now: nowMilliseconds });
+		const controlled = controlledRoot({ ...root, now: deadlineNow });
 		let committedMutation = false;
 		rootControllers.add(controlled.controller);
 		const pending = core.execution(
@@ -411,7 +411,7 @@ export async function createRuntimeApplication<
 				{ principal: caller, context, signal, deadline },
 				({ invoke }) => invoke(operation, callId),
 			),
-		now: nowMilliseconds,
+		now: deadlineNow,
 	});
 	const canonicalPost = createCanonicalPostHttp<
 		ContextInputOf<Context>,
@@ -490,7 +490,7 @@ export async function createRuntimeApplication<
 					});
 				},
 			),
-		now: nowMilliseconds,
+		now: deadlineNow,
 	});
 
 	const fetch = async (request: Request): Promise<Response> => {

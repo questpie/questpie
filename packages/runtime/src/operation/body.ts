@@ -20,20 +20,49 @@ export async function readBoundedRequestBody(
 	if (!request.body) return Object.freeze({ kind: "body", text: "" });
 	const reader = request.body.getReader();
 	const cancel = () => {
-		void reader.cancel(signal.reason);
+		try {
+			void reader.cancel(signal.reason).catch(() => undefined);
+		} catch {
+			// Cancellation is best-effort; the execution signal owns the failure.
+		}
 	};
 	signal.addEventListener("abort", cancel, { once: true });
 	if (signal.aborted) cancel();
 	const decoder = new TextDecoder("utf-8", { fatal: true });
 	let bytes = 0;
 	let text = "";
+	let pendingRead: ReturnType<typeof reader.read> | undefined;
 	try {
+		if (signal.aborted) throw signal.reason;
 		while (true) {
-			const next = await reader.read();
+			const read = reader.read();
+			pendingRead = read;
+			void read.catch(() => undefined);
+			let rejectAbort: ((reason?: unknown) => void) | undefined;
+			const aborted = new Promise<never>((_resolve, reject) => {
+				rejectAbort = reject;
+			});
+			const abortRead = () => rejectAbort?.(signal.reason);
+			signal.addEventListener("abort", abortRead, { once: true });
+			if (signal.aborted) abortRead();
+			let next: Awaited<typeof read>;
+			try {
+				next = await Promise.race([read, aborted]);
+				pendingRead = undefined;
+			} finally {
+				signal.removeEventListener("abort", abortRead);
+				rejectAbort = undefined;
+			}
 			if (next.done) break;
 			bytes += next.value.byteLength;
 			if (bytes > maximumBytes) {
-				await reader.cancel("QUESTPIE request limit exceeded");
+				try {
+					void reader
+						.cancel("QUESTPIE request limit exceeded")
+						.catch(() => undefined);
+				} catch {
+					// The body limit remains the transport outcome.
+				}
 				return Object.freeze({ kind: "tooLarge" });
 			}
 			text += decoder.decode(next.value, { stream: true });
@@ -46,6 +75,16 @@ export async function readBoundedRequestBody(
 		throw error;
 	} finally {
 		signal.removeEventListener("abort", cancel);
-		reader.releaseLock();
+		if (pendingRead === undefined) reader.releaseLock();
+		else
+			void pendingRead
+				.finally(() => {
+					try {
+						reader.releaseLock();
+					} catch {
+						// The already selected transport outcome remains authoritative.
+					}
+				})
+				.catch(() => undefined);
 	}
 }
