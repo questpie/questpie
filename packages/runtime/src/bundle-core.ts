@@ -6,6 +6,9 @@ export { createRuntimeActionExecutor } from "./action";
 export {
 	createRuntimeRouteExecutor,
 	executionObservationOf,
+	decodeRuntimeCredentialOutcome,
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
 } from "./execution";
 export {
 	bindIngressPrincipal,

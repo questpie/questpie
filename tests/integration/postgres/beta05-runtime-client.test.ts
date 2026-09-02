@@ -374,7 +374,7 @@ postgresTest(
 						hasNextPage: false,
 					},
 				});
-				expect(rawFrame.payload).toEqual({
+				expect(rawFrame.result).toEqual({
 					...(direct as Readonly<Record<string, unknown>>),
 					nodes: [
 						{

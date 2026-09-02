@@ -7,15 +7,6 @@ export function renderClientQueryHttp(
 	}>,
 ): string {
 	return String.raw`
-const canonicalFailures: WireRecord = Object.freeze({
-	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
-	INTERNAL: Object.freeze({ status: 500, retryable: false }),
-	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
-	PROTOCOL_UNSUPPORTED: Object.freeze({ status: 400, retryable: false }),
-	RESOURCE_LIMIT: Object.freeze({ status: 429, retryable: true }),
-	RUNTIME_UNAVAILABLE: Object.freeze({ status: 503, retryable: true }),
-	UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false }),
-});
 function utf8Length(value: string): number {
 	return new TextEncoder().encode(value).byteLength;
 }
@@ -105,33 +96,7 @@ async function invokeCanonicalQuery<Result>(input: Readonly<{
 	const response = await input.transport(request);
 	if (response.headers.get("content-type") !== "application/json; charset=utf-8") return protocolFailure();
 	const frame = wireRecord(await response.json());
-	if (Object.hasOwn(frame, "result")) {
-		exactKeys(frame, ["callId", "result"]);
-		if (response.status !== 200 || frame.callId !== input.callId) return protocolFailure();
-		return decode(outputCodecs[input.operation], frame.result) as Result;
-	}
-	const correlated = Object.hasOwn(frame, "callId");
-	if (correlated) {
-		exactKeys(frame, ["callId", "error"]);
-		if (frame.callId !== input.callId) return protocolFailure();
-	} else exactKeys(frame, ["error"]);
-	const detail = wireRecord(frame.error);
-	if (Object.hasOwn(detail, "payload")) {
-		if (!correlated) return protocolFailure();
-		exactKeys(detail, ["code", "payload"]);
-		if (typeof detail.code !== "string") return protocolFailure();
-		const allowed = declaredErrorContracts[input.operation];
-		if (!Array.isArray(allowed)) return protocolFailure();
-		const contract = allowed.map(wireRecord).find((candidate) => candidate.code === detail.code);
-		if (!contract || response.status !== contract.status) return protocolFailure();
-		const payload = contract.payload === null ? detail.payload === null ? null : protocolFailure() : decode(contract.payload, detail.payload);
-		throw publicError({ code: detail.code, status: contract.status, payload });
-	}
-	exactKeys(detail, ["code", "retryable"]);
-	if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();
-	const failureContract = wireRecord(canonicalFailures[detail.code]);
-	if (response.status !== failureContract.status || detail.retryable !== failureContract.retryable) return protocolFailure();
-	throw publicError(detail);
+	return decodeCanonicalHttpResponse<Result>({ response, frame, operation: input.operation, callId: input.callId, kind: "query" });
 }
 `;
 }

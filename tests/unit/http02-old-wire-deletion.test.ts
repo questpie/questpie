@@ -31,6 +31,16 @@ test("projects one canonical HTTP contract without retained Operation Wire pairs
 		version: 1,
 		application: "application:http02",
 		operations: [],
+		failures: [
+			"COMMITTED_RESULT_UNAVAILABLE",
+			"DEADLINE_EXCEEDED",
+			"INTERNAL",
+			"NOT_FOUND",
+			"PROTOCOL_UNSUPPORTED",
+			"RESOURCE_LIMIT",
+			"RUNTIME_UNAVAILABLE",
+			"UNAUTHENTICATED",
+		],
 	});
 	expect(runtime.http).not.toHaveProperty("path");
 	expect(runtime.http).not.toHaveProperty("compatibility");

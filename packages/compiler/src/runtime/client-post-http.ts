@@ -61,50 +61,7 @@ async function invokeCanonicalPost<Result>(input: Readonly<{
 		throw error;
 	}
 	try {
-		if (Object.hasOwn(frame, "result")) {
-			exactKeys(frame, ["callId", "result"]);
-			if (response.status !== 200 || frame.callId !== input.callId) return protocolFailure();
-			return decode(outputCodecs[input.operation], frame.result) as Result;
-		}
-		const correlated = Object.hasOwn(frame, "callId");
-		if (correlated) {
-			exactKeys(frame, ["callId", "error"]);
-			if (frame.callId !== input.callId) return protocolFailure();
-		} else exactKeys(frame, ["error"]);
-		const detail = wireRecord(frame.error);
-		if (detail.code === "COMMITTED_RESULT_UNAVAILABLE") {
-			if (input.action || !correlated) return protocolFailure();
-			exactKeys(detail, ["code", "retryable", "transactionId"]);
-			if (detail.retryable !== true || response.status !== 500 || !isTransactionIdentity(detail.transactionId)) return protocolFailure();
-			throw new CommittedResultUnavailable(input.callId, detail.transactionId);
-		}
-		if (detail.code === "ACTION_OUTCOME_AMBIGUOUS") {
-			if (!input.action || !correlated) return protocolFailure();
-			exactKeys(detail, ["code", "retryable"]);
-			if (detail.retryable !== false || response.status !== 500) return protocolFailure();
-			throw new ActionOutcomeAmbiguous(input.callId);
-		}
-		if (detail.code === "RESOURCE_LIMIT" && input.action && correlated) {
-			exactKeys(detail, ["code", "retryable"]);
-			if (detail.retryable !== false || response.status !== 429) return protocolFailure();
-			throw publicError(detail);
-		}
-		if (Object.hasOwn(detail, "payload")) {
-			if (!correlated) return protocolFailure();
-			exactKeys(detail, ["code", "payload"]);
-			if (typeof detail.code !== "string") return protocolFailure();
-			const allowedErrors = declaredErrorContracts[input.operation];
-			if (!Array.isArray(allowedErrors)) return protocolFailure();
-			const contract = allowedErrors.map(wireRecord).find((candidate) => candidate.code === detail.code);
-			if (!contract || response.status !== contract.status) return protocolFailure();
-			const payload = contract.payload === null ? detail.payload === null ? null : protocolFailure() : decode(contract.payload, detail.payload);
-			throw publicError({ code: detail.code, status: contract.status, payload });
-		}
-		exactKeys(detail, ["code", "retryable"]);
-		if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();
-		const failureContract = wireRecord(canonicalFailures[detail.code]);
-		if (response.status !== failureContract.status || detail.retryable !== failureContract.retryable) return protocolFailure();
-		throw publicError(detail);
+		return decodeCanonicalHttpResponse<Result>({ response, frame, operation: input.operation, callId: input.callId, kind: input.action ? "action" : "mutation" });
 	} catch (error) {
 		if (input.action && error instanceof ProtocolFailure) throw new ActionOutcomeAmbiguous(input.callId);
 		throw error;

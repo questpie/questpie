@@ -4,40 +4,41 @@ import { principal } from "questpie";
 
 import { RuntimeActionPostHandlerResourceLimit } from "../../packages/runtime/src/action";
 import { createCanonicalPostHttp } from "../../packages/runtime/src/application/http-post";
-import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
+import {
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "../../packages/runtime/src/execution";
+import {
+	CommittedResultUnavailable,
+	DeclaredOperationError,
+	OperationFailure,
+} from "../../packages/runtime/src/operation";
+import {
+	http02ActionIdentity,
+	http02Context as context,
+	http02ContextCodec,
+	http02InputCodec,
+	http02MutationIdentity,
+	http02OutputCodec,
+} from "../support/http02-contract";
 
-const contextCodec = {
-	kind: "object",
-	properties: { tenantId: { kind: "uuid" } },
-} as const;
-const valueCodec = {
-	kind: "object",
-	properties: { value: { kind: "text", maxLength: 32 } },
-} as const;
-const outputCodec = {
-	kind: "object",
-	properties: { ok: { kind: "boolean" } },
-} as const;
 const operations = [
 	{
-		identity: "mutation:messages.publish",
-		input: valueCodec,
-		output: outputCodec,
+		identity: http02MutationIdentity,
+		input: http02InputCodec,
+		output: http02OutputCodec,
 		declaredErrors: [],
 	},
 	{
-		identity: "action:delivery.send",
-		input: valueCodec,
-		output: outputCodec,
+		identity: http02ActionIdentity,
+		input: http02InputCodec,
+		output: http02OutputCodec,
 		declaredErrors: [],
 	},
 ] as const;
 const user = principal.user({
 	id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
 });
-const context = {
-	tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
-};
 
 function post(
 	path: string,
@@ -51,6 +52,384 @@ function post(
 	});
 }
 
+function canonicalPostTransport(
+	overrides: Partial<Parameters<typeof createCanonicalPostHttp>[0]> = {},
+) {
+	return createCanonicalPostHttp({
+		application: "application:test",
+		clientContractDigest: "1".repeat(64),
+		httpContractDigest: "2".repeat(64),
+		maximumRequestBytes: 4096,
+		maximumResponseBytes: 4096,
+		contextCodec: http02ContextCodec as never,
+		operations: operations as never,
+		prepare: (identity, value) =>
+			({
+				declaredErrors: [],
+				input: value,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
+				binding: { identity, kind: "mutation" },
+			}) as never,
+		resolvePrincipal: async () => user,
+		executeMutation: async () => ({ ok: true }),
+		executeAction: async () => ({ ok: true }),
+		now: () => Date.now(),
+		...overrides,
+	} as never);
+}
+
+test("canonical POST maps typed credential outcomes without disclosure", async () => {
+	for (const [error, status, code, retryable] of [
+		[new RuntimeCredentialMalformed(), 401, "UNAUTHENTICATED", false],
+		[new RuntimeCredentialUnavailable(), 503, "RUNTIME_UNAVAILABLE", true],
+		[new OperationFailure("UNAUTHENTICATED"), 500, "INTERNAL", false],
+		[new Error("credential secret"), 500, "INTERNAL", false],
+	] as const) {
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async () => {
+				throw error;
+			},
+		}).fetch(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "credential-call",
+			}),
+		);
+		expect(response?.status).toBe(status);
+		expect(await response?.json()).toEqual({
+			callId: "credential-call",
+			error: { code, retryable },
+		});
+	}
+});
+
+test("typed malformed credentials precede Mutation and Action body decoding", async () => {
+	for (const [path, headers] of [
+		[
+			"/_questpie/mutation/messages.publish",
+			{ "Idempotency-Key": "malformed-mutation" },
+		],
+		[
+			"/_questpie/action/delivery.send",
+			{ "Effect-Key": "effect", "Questpie-Call-Id": "malformed-action" },
+		],
+	] as const) {
+		let prepareCalls = 0;
+		let executorCalls = 0;
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async () => {
+				throw new RuntimeCredentialMalformed();
+			},
+			prepare: () => {
+				prepareCalls += 1;
+				throw new Error("must not decode");
+			},
+			executeMutation: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+			executeAction: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+		}).fetch(post(path, headers, '{"context":'));
+		expect(response?.status).toBe(401);
+		expect(await response?.json()).toEqual({
+			callId: path.includes("mutation")
+				? "malformed-mutation"
+				: "malformed-action",
+			error: { code: "UNAUTHENTICATED", retryable: false },
+		});
+		expect({ prepareCalls, executorCalls }).toEqual({
+			prepareCalls: 0,
+			executorCalls: 0,
+		});
+	}
+});
+
+test("canonical Action distinguishes settled outcomes from post-dispatch cancellation", async () => {
+	for (const outcome of ["settled", "unsettled", "local-deadline"] as const) {
+		const controller = new AbortController();
+		let handlerCalls = 0;
+		const response = await canonicalPostTransport({
+			executeAction: async (value) => {
+				const execution = value as typeof value &
+					Readonly<{ onHandlerDispatch(): void }>;
+				execution.onHandlerDispatch();
+				handlerCalls += 1;
+				if (outcome !== "local-deadline")
+					controller.abort(
+						new DOMException("caller left after dispatch", "AbortError"),
+					);
+				if (outcome === "local-deadline")
+					throw new DOMException("local Action deadline", "AbortError");
+				if (outcome === "unsettled") throw controller.signal.reason;
+				return { ok: true };
+			},
+		}).fetch(
+			new Request(
+				post("/_questpie/action/delivery.send", {
+					"Effect-Key": "must-not-leak",
+					"Questpie-Call-Id": `action-${outcome}`,
+				}),
+				{ signal: controller.signal },
+			),
+		);
+		expect(handlerCalls).toBe(1);
+		expect(response?.status).toBe(outcome === "settled" ? 200 : 500);
+		const body = await response?.json();
+		expect(body).toEqual(
+			outcome === "settled"
+				? { callId: "action-settled", result: { ok: true } }
+				: {
+						callId: `action-${outcome}`,
+						error: {
+							code: "ACTION_OUTCOME_AMBIGUOUS",
+							retryable: false,
+						},
+					},
+		);
+		if (outcome !== "settled") {
+			const encoded = JSON.stringify(body);
+			expect(encoded).not.toContain("must-not-leak");
+			expect(encoded).not.toContain("caller left");
+		}
+	}
+});
+
+test("canonical POST deadline spans awaited phases and releases its signal owners", async () => {
+	const delayed = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
+	for (const phase of ["credentials", "body", "executor"] as const) {
+		let credentialObservedAbort = false;
+		const request =
+			phase === "body"
+				? new Request(
+						"https://runtime.test/_questpie/mutation/messages.publish",
+						{
+							method: "POST",
+							headers: {
+								"content-type": "application/json",
+								"Idempotency-Key": `deadline-${phase}`,
+								"Questpie-Timeout-Milliseconds": "5",
+							},
+							body: new ReadableStream<Uint8Array>({
+								async start(controller) {
+									await delayed();
+									controller.enqueue(
+										new TextEncoder().encode(
+											JSON.stringify({
+												context,
+												input: { value: "accepted" },
+											}),
+										),
+									);
+									controller.close();
+								},
+							}),
+						},
+					)
+				: post("/_questpie/mutation/messages.publish", {
+						"Idempotency-Key": `deadline-${phase}`,
+						"Questpie-Timeout-Milliseconds": "5",
+					});
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async (_request, signal?: AbortSignal) => {
+				if (phase === "credentials") {
+					await Promise.race([
+						new Promise<void>((resolve) =>
+							signal?.addEventListener("abort", () => resolve(), {
+								once: true,
+							}),
+						),
+						delayed(),
+					]);
+					credentialObservedAbort = signal?.aborted ?? false;
+				}
+				return user;
+			},
+			executeMutation: async () => {
+				if (phase === "executor") await delayed();
+				return { ok: true };
+			},
+		}).fetch(request);
+		expect(response?.status).toBe(408);
+		expect(await response?.json()).toMatchObject({
+			callId: `deadline-${phase}`,
+			error: { code: "DEADLINE_EXCEEDED", retryable: true },
+		});
+		if (phase === "credentials") expect(credentialObservedAbort).toBe(true);
+	}
+
+	const requestController = new AbortController();
+	let executionSignal: AbortSignal | undefined;
+	const completed = await canonicalPostTransport({
+		executeMutation: async ({ signal }) => {
+			executionSignal = signal;
+			return { ok: true };
+		},
+	}).fetch(
+		new Request(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "cleanup",
+				"Questpie-Timeout-Milliseconds": "10",
+			}),
+			{ signal: requestController.signal },
+		),
+	);
+	expect(completed?.status).toBe(200);
+	requestController.abort();
+	await delayed();
+	expect(executionSignal?.aborted).toBe(false);
+});
+
+test("canonical POST deadline settles an abort-ignoring credential resolver", async () => {
+	let executorCalls = 0;
+	const response = await Promise.race([
+		canonicalPostTransport({
+			resolvePrincipal: async () => new Promise<never>(() => {}),
+			executeMutation: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+		}).fetch(
+			post("/_questpie/mutation/messages.publish", {
+				"Idempotency-Key": "noncooperative-credential",
+				"Questpie-Timeout-Milliseconds": "5",
+			}),
+		),
+		new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+	]);
+	expect(response).not.toBe("hung");
+	if (response === "hung") return;
+	expect(response?.status).toBe(408);
+	expect(await response?.json()).toEqual({
+		callId: "noncooperative-credential",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(executorCalls).toBe(0);
+});
+
+test("canonical POST aborts a hung body without leaking cancel failure", async () => {
+	const privateFailure = new Error("private body cancel failure");
+	const unhandled: unknown[] = [];
+	const observeUnhandled = (error: unknown) => unhandled.push(error);
+	process.on("unhandledRejection", observeUnhandled);
+	try {
+		let cancelCalls = 0;
+		let executorCalls = 0;
+		const body = new ReadableStream<Uint8Array>({
+			pull: () => new Promise<void>(() => {}),
+			cancel: () => {
+				cancelCalls += 1;
+				return Promise.reject(privateFailure);
+			},
+		});
+		const response = await Promise.race([
+			canonicalPostTransport({
+				executeMutation: async () => {
+					executorCalls += 1;
+					return { ok: true };
+				},
+			}).fetch(
+				new Request(
+					"https://runtime.test/_questpie/mutation/messages.publish",
+					{
+						method: "POST",
+						headers: {
+							"content-type": "application/json",
+							"Idempotency-Key": "hung-body",
+							"Questpie-Timeout-Milliseconds": "5",
+						},
+						body,
+					},
+				),
+			),
+			new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+		]);
+		expect(response).not.toBe("hung");
+		if (response === "hung") return;
+		expect(response?.status).toBe(408);
+		expect(await response?.json()).toEqual({
+			callId: "hung-body",
+			error: { code: "DEADLINE_EXCEEDED", retryable: true },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(cancelCalls).toBe(1);
+		expect(executorCalls).toBe(0);
+		expect(unhandled).toEqual([]);
+	} finally {
+		process.off("unhandledRejection", observeUnhandled);
+	}
+});
+
+test("canonical POST preserves executor-owned Mutation receipt replay", async () => {
+	const receipts = new Map<
+		string,
+		{ bytes: string; result: { ok: boolean } }
+	>();
+	let writes = 0;
+	const declaredErrors = [
+		{
+			code: "IDEMPOTENCY_CONFLICT",
+			status: 409,
+			payload: {
+				kind: "object",
+				properties: { callId: { kind: "text", maxLength: 256 } },
+			},
+		},
+	] as const;
+	const transport = canonicalPostTransport({
+		operations: [{ ...operations[0], declaredErrors }, operations[1]] as never,
+		prepare: (identity, value) =>
+			({
+				declaredErrors,
+				input: value,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
+				binding: { identity, kind: "mutation" },
+			}) as never,
+		executeMutation: async ({ callId, operation }) => {
+			const bytes = JSON.stringify(operation.input);
+			const receipt = receipts.get(callId);
+			if (receipt && receipt.bytes !== bytes)
+				throw new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, {
+					callId,
+				});
+			if (receipt) return receipt.result;
+			writes += 1;
+			const result = { ok: true };
+			receipts.set(callId, { bytes, result });
+			return result;
+		},
+	});
+	const invoke = (value: string) =>
+		transport.fetch(
+			post(
+				"/_questpie/mutation/messages.publish",
+				{ "Idempotency-Key": "receipt-call" },
+				JSON.stringify({ context, input: { value } }),
+			),
+		);
+
+	for (const response of [await invoke("first"), await invoke("first")]) {
+		expect(response?.status).toBe(200);
+		expect(await response?.json()).toEqual({
+			callId: "receipt-call",
+			result: { ok: true },
+		});
+	}
+	expect(writes).toBe(1);
+	const conflict = await invoke("changed");
+	expect(conflict?.status).toBe(409);
+	expect(await conflict?.json()).toEqual({
+		callId: "receipt-call",
+		error: {
+			code: "IDEMPOTENCY_CONFLICT",
+			payload: { callId: "receipt-call" },
+		},
+	});
+});
+
 test("canonical POST decodes after credentials and preserves kind identities", async () => {
 	const executions: unknown[] = [];
 	let authenticated = true;
@@ -60,14 +439,14 @@ test("canonical POST decodes after credentials and preserves kind identities", a
 		httpContractDigest: "2".repeat(64),
 		maximumRequestBytes: 4096,
 		maximumResponseBytes: 4096,
-		contextCodec: contextCodec as never,
+		contextCodec: http02ContextCodec as never,
 		operations: operations as never,
 		prepare: (identity, value) =>
 			({
 				declaredErrors: [],
 				input: value,
-				inputCodec: valueCodec,
-				output: outputCodec,
+				inputCodec: http02InputCodec,
+				output: http02OutputCodec,
 				binding: { identity, kind: "mutation" },
 			}) as never,
 		resolvePrincipal: async () => (authenticated ? user : null),

@@ -3,7 +3,7 @@ import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
 import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
 import { createJobAcceptance, durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
-import type { ExecutionFacts } from "../execution";
+import { runtimeMonotonicNow, type ExecutionFacts } from "../execution";
 import { observePostgresTransaction } from "../observation";
 import {
 	assertOperationAdmission,
@@ -241,7 +241,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 				throw new TypeError("Mutation deadline is invalid");
 			signals.push(
 				AbortSignal.timeout(
-					Math.max(0, Math.ceil(options.deadline - Date.now())),
+					Math.max(0, Math.ceil(options.deadline - runtimeMonotonicNow())),
 				),
 			);
 		}
@@ -279,7 +279,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 									transaction: rawTransaction,
 								})
 							: rawTransaction;
-						const transactionStarted = performance.now();
+						const transactionStarted = runtimeMonotonicNow();
 						const scope = [
 							input.application,
 							facts.tenant.id,
@@ -312,6 +312,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							});
 							return Object.freeze({
 								committed: true as const,
+								transactionId,
 								value: replayResult(operation, receipt.resultBytes),
 							});
 						}
@@ -650,12 +651,13 @@ export function createPostgresDatabaseMutationInvoker<View>(
 							[...scope, resultBytes, owner.operationTime],
 						);
 						signal.throwIfAborted();
-						if (performance.now() - transactionStarted > 5_000)
+						if (runtimeMonotonicNow() - transactionStarted > 5_000)
 							throw new TypeError(
 								"Mutation exceeded its transaction duration limit",
 							);
 						return Object.freeze({
 							committed: true as const,
+							transactionId,
 							value: validated,
 						});
 					},

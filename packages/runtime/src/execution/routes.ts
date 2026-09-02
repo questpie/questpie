@@ -15,6 +15,7 @@ import {
 	OperationFailure,
 	operationFailureStatus,
 } from "../operation";
+import { awaitExecutionPhase } from "./abort";
 import type { ApplicationRuntime, RouteExecutionScope } from "./index";
 
 type AnyCredentialService = ServiceDefinition<
@@ -28,6 +29,41 @@ type AnyCredentialService = ServiceDefinition<
 type MaybePromise<Value> = Value | Promise<Value>;
 
 export type RuntimeCredentialOutcome = CredentialResolution;
+
+export class RuntimeCredentialUnavailable extends Error {
+	readonly name = "RuntimeCredentialUnavailable";
+}
+
+export class RuntimeCredentialMalformed extends Error {
+	readonly name = "RuntimeCredentialMalformed";
+}
+
+function hasExactKeys(value: object, expected: readonly string[]): boolean {
+	const keys = Reflect.ownKeys(value);
+	return (
+		keys.length === expected.length &&
+		expected.every((key) => keys.includes(key))
+	);
+}
+
+export function decodeRuntimeCredentialOutcome(outcome: unknown): Principal {
+	if (!outcome || typeof outcome !== "object" || Array.isArray(outcome))
+		throw new TypeError("Credential resolver outcome is invalid");
+	const kind = (outcome as { kind?: unknown }).kind;
+	if (kind === "anonymous" && hasExactKeys(outcome, ["kind"]))
+		return principal.anonymous();
+	if (kind === "malformed" && hasExactKeys(outcome, ["kind"]))
+		throw new RuntimeCredentialMalformed();
+	if (kind === "unavailable" && hasExactKeys(outcome, ["kind"]))
+		throw new RuntimeCredentialUnavailable();
+	if (
+		kind === "resolved" &&
+		hasExactKeys(outcome, ["kind", "principal"]) &&
+		principal.is((outcome as { principal?: unknown }).principal)
+	)
+		return (outcome as { principal: Principal }).principal;
+	throw new TypeError("Credential resolver outcome is invalid");
+}
 
 export type RuntimeCredentialBinding<
 	Service extends AnyCredentialService = AnyCredentialService,
@@ -467,36 +503,19 @@ export function createRuntimeRouteExecutor<
 		if (binding.credentials === "none" || !input.credentials)
 			return principal.anonymous();
 		try {
-			const service = await input.runtime.applicationService(
-				input.credentials.service,
+			const service = await awaitExecutionPhase(request.signal, () =>
+				input.runtime.applicationService(input.credentials!.service),
 			);
-			const outcome: unknown = await input.credentials.resolve({
-				request,
-				service,
-			});
-			if (!outcome || typeof outcome !== "object" || Array.isArray(outcome))
-				throw new TypeError("Credential resolver outcome is invalid");
-			const keys = Object.keys(outcome);
-			if (
-				(outcome as { kind?: unknown }).kind === "unavailable" &&
-				keys.length === 1
-			)
-				return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
-			if (
-				(outcome as { kind?: unknown }).kind === "anonymous" &&
-				keys.length === 1
-			)
-				return principal.anonymous();
-			if (
-				(outcome as { kind?: unknown }).kind === "resolved" &&
-				keys.length === 2 &&
-				keys.includes("principal") &&
-				principal.is((outcome as { principal?: unknown }).principal)
-			)
-				return (outcome as { principal: Principal }).principal;
-			throw new TypeError("Credential resolver outcome is invalid");
-		} catch {
+			const outcome: unknown = await awaitExecutionPhase(request.signal, () =>
+				input.credentials!.resolve({ request, service }),
+			);
+			return decodeRuntimeCredentialOutcome(outcome);
+		} catch (error) {
 			if (request.signal.aborted) throw request.signal.reason;
+			if (error instanceof RuntimeCredentialMalformed)
+				return failureResponse("UNAUTHENTICATED", 401);
+			if (error instanceof RuntimeCredentialUnavailable)
+				return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
 			return failureResponse("INTERNAL", 500);
 		}
 	};

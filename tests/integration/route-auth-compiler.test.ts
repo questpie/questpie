@@ -30,6 +30,12 @@ test("compiles one application credential resolver and authored Route into the g
 	expect(compilation.generatedFiles["internal/application.js"]).toContain(
 		"createRuntimeRouteExecutor",
 	);
+	expect(compilation.generatedFiles["internal/application.js"]).toContain(
+		"decodeRuntimeCredentialOutcome(outcome)",
+	);
+	expect(compilation.generatedFiles["internal/application.js"]).not.toContain(
+		"return outcome.principal",
+	);
 });
 
 async function compileRouteSource(source: string) {

@@ -23,17 +23,18 @@ export function controlledRoot(
 		);
 	if (input.signal?.aborted) onAbort();
 	else input.signal?.addEventListener("abort", onAbort, { once: true });
-	const delay =
-		input.deadline === undefined
-			? undefined
-			: Math.max(0, input.deadline - input.now());
-	const timer =
-		delay === undefined
-			? undefined
-			: setTimeout(() => {
-					deadlineExpired = true;
-					controller.abort(new DOMException("Deadline exceeded", "AbortError"));
-				}, delay);
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const scheduleDeadline = () => {
+		if (input.deadline === undefined || controller.signal.aborted) return;
+		const remaining = input.deadline - input.now();
+		if (remaining <= 0) {
+			deadlineExpired = true;
+			controller.abort(new DOMException("Deadline exceeded", "AbortError"));
+			return;
+		}
+		timer = setTimeout(scheduleDeadline, Math.min(remaining, 2_147_483_647));
+	};
+	scheduleDeadline();
 	return Object.freeze({
 		controller,
 		get deadlineExpired() {

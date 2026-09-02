@@ -17,7 +17,6 @@ import { createApplicationObservation } from "../../packages/runtime/src/applica
 import { runObservedDurableAttempt } from "../../packages/runtime/src/durable";
 import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
 import type { ObservationAdapterV1 } from "../../packages/runtime/src/observation";
-import { OperationFailure } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -127,26 +126,13 @@ function runtimeArtifacts(
 			properties: { receipt: { kind: "text" as const } },
 		},
 		declaredErrors: {},
-		admission: "authenticated" as const,
-		limits: {
-			inputBytes: 1_024,
-			resultBytes: 1_024,
-			durationMilliseconds: 1_000,
-		},
 	}));
 	const unsignedHttp = {
 		format: "questpie.operation-http",
 		version: 1,
 		application: "application:collaboration",
 		operations: [
-			...actionOperations.map(
-				({ declaredErrors, identity, input, output }) => ({
-					declaredErrors,
-					identity,
-					input,
-					output,
-				}),
-			),
+			...actionOperations,
 			...mutationOperations,
 			{
 				identity: "query:messages.page",
@@ -168,8 +154,6 @@ function runtimeArtifacts(
 					: 0,
 		),
 		failures: [
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
 			"COMMITTED_RESULT_UNAVAILABLE",
 			"DEADLINE_EXCEEDED",
 			"INTERNAL",
@@ -177,6 +161,7 @@ function runtimeArtifacts(
 			"PROTOCOL_UNSUPPORTED",
 			"RESOURCE_LIMIT",
 			"RUNTIME_UNAVAILABLE",
+			"UNAUTHENTICATED",
 		],
 		limits: { requestBytes: 1_048_576, responseBytes: 1_048_576 },
 		principalSource: "ingressOutsideBody",
@@ -187,20 +172,27 @@ function runtimeArtifacts(
 		...unsignedHttp,
 		digest: digest("questpie-operation-http-v1", unsignedHttp),
 	};
+	const actionContracts = actionOperations.map((operation) => ({
+		...operation,
+		admission: "authenticated",
+		limits: {
+			inputBytes: 1_024,
+			resultBytes: 1_024,
+			durationMilliseconds: 1_000,
+		},
+	}));
 	const operationContracts = {
 		format: "questpie.operation-contracts",
 		version: 1,
 		operations: [
-			...actionOperations,
+			...actionContracts,
 			...unsignedHttp.operations
+				.filter((operation) => !operation.identity.startsWith("action:"))
 				.map((operation) =>
-					operation.identity.startsWith("action:")
-						? null
-						: operation.identity.startsWith("mutation:")
-							? { ...operation, admission: "authenticated" as const }
-							: operation,
-				)
-				.filter((operation) => operation !== null),
+					operation.identity.startsWith("mutation:")
+						? { ...operation, admission: "authenticated" as const }
+						: operation,
+				),
 		].sort((left, right) =>
 			left.identity < right.identity
 				? -1
@@ -1694,7 +1686,7 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 		queryExecutable(({ input }) => {
 			handlerCalls += 1;
 			const first = (input as Readonly<{ first: number }>).first;
-			if (first === 3) throw new OperationFailure("CLIENT_OUTDATED", true);
+			if (first === 3) throw new Error("private failure");
 			return { count: first };
 		}),
 	];
@@ -1816,6 +1808,116 @@ test("runs one canonical Query GET through the existing Operation executor", asy
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
+test("canonical Fetch deadlines ignore wall-clock rollback and saturated host timers", async () => {
+	let wall = 1_000;
+	let credentialMode: "resolved" | "rollback" = "rollback";
+	let executionSignal: AbortSignal | undefined;
+	let handlerCalls = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(async ({ input, ctx }) => {
+			handlerCalls += 1;
+			executionSignal = (ctx as Readonly<{ signal: AbortSignal }>).signal;
+			await new Promise((resolve) => setTimeout(resolve, 15));
+			return {
+				count: (input as Readonly<{ first: number }>).first,
+			};
+		}),
+	];
+	const user = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => {
+				if (credentialMode === "rollback") {
+					wall = -100_000;
+					return new Promise<never>(() => {});
+				}
+				return user;
+			},
+		},
+		now: () => new Date(wall),
+	});
+	const contextInput = {
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	};
+	const headers = {
+		"Questpie-Application": artifacts.runtimeBuild.application,
+		"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+		"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
+			"base64url",
+		),
+		"Questpie-Wire-Digest": artifacts.httpContract.digest,
+	};
+	const rolledBack = await Promise.race([
+		app.fetch(
+			new Request("http://runtime.test/_questpie/query/messages.page?first=2", {
+				headers: {
+					...headers,
+					"Questpie-Call-Id": "wall-clock-rollback",
+					"Questpie-Timeout-Milliseconds": "5",
+				},
+			}),
+		),
+		new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+	]);
+	expect(rolledBack).not.toBe("hung");
+	if (rolledBack === "hung") return;
+	expect(rolledBack.status).toBe(408);
+	expect(await rolledBack.json()).toEqual({
+		callId: "wall-clock-rollback",
+		error: { code: "DEADLINE_EXCEEDED", retryable: true },
+	});
+	expect(handlerCalls).toBe(0);
+
+	credentialMode = "resolved";
+	const requestController = new AbortController();
+	const saturated = await app.fetch(
+		new Request("http://runtime.test/_questpie/query/messages.page?first=2", {
+			signal: requestController.signal,
+			headers: {
+				...headers,
+				"Questpie-Call-Id": "saturated-timeout",
+				"Questpie-Timeout-Milliseconds": String(Number.MAX_SAFE_INTEGER),
+			},
+		}),
+	);
+	expect(saturated.status).toBe(200);
+	expect(await saturated.json()).toEqual({
+		callId: "saturated-timeout",
+		result: { count: 2 },
+	});
+	expect(handlerCalls).toBe(1);
+	requestController.abort();
+	await new Promise((resolve) => setTimeout(resolve, 0));
+	expect(executionSignal?.aborted).toBe(false);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
 test("runs canonical Mutation POST and replay through the existing Mutation executor", async () => {
 	const context = defineContext({
 		name: "app.context",
@@ -1862,6 +1964,7 @@ test("runs canonical Mutation POST and replay through the existing Mutation exec
 	const artifacts = runtimeArtifacts([mutationSlot]);
 	const receipts = new Map<string, string>();
 	let mutationExecutions = 0;
+	let abortAfterCommit: (() => void) | undefined;
 	const app = await createRuntimeApplication({
 		artifacts: runtimeArtifactEnvelope(artifacts),
 		artifactFiles: artifacts.artifactFiles,
@@ -1882,7 +1985,8 @@ test("runs canonical Mutation POST and replay through the existing Mutation exec
 					value = `stored:${String(operation.input)}`;
 					receipts.set(callId, value);
 				}
-				return { committed: true, value };
+				if (callId === "post-commit-cancel") abortAfterCommit?.();
+				return { committed: true, transactionId: "901", value };
 			},
 			resolvePrincipal: async () => principal.anonymous(),
 		},
@@ -1923,7 +2027,238 @@ test("runs canonical Mutation POST and replay through the existing Mutation exec
 		});
 	}
 	expect(mutationExecutions).toBe(1);
+	const postCommitController = new AbortController();
+	abortAfterCommit = () =>
+		postCommitController.abort(
+			new DOMException("response transport left", "AbortError"),
+		);
+	const postCommit = await app.fetch(
+		new Request("http://runtime.test/_questpie/mutation/messages.publish", {
+			method: "POST",
+			signal: postCommitController.signal,
+			headers: {
+				"content-type": "application/json",
+				"Idempotency-Key": "post-commit-cancel",
+			},
+			body: JSON.stringify({ context: contextInput, input: "hello" }),
+		}),
+	);
+	expect(postCommit.status).toBe(500);
+	expect(await postCommit.json()).toEqual({
+		callId: "post-commit-cancel",
+		error: {
+			code: "COMMITTED_RESULT_UNAVAILABLE",
+			retryable: true,
+			transactionId: "901",
+		},
+	});
+	abortAfterCommit = undefined;
+	const recovered = await app.fetch(
+		new Request("http://runtime.test/_questpie/mutation/messages.publish", {
+			method: "POST",
+			headers: {
+				"content-type": "application/json",
+				"Idempotency-Key": "post-commit-cancel",
+			},
+			body: JSON.stringify({ context: contextInput, input: "hello" }),
+		}),
+	);
+	expect(recovered.status).toBe(200);
+	expect(await recovered.json()).toEqual({
+		callId: "post-commit-cancel",
+		result: "stored:hello",
+	});
+	expect(mutationExecutions).toBe(2);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
+test("canonical Fetch preserves Action deadline and post-dispatch outcome semantics", async () => {
+	const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
+	const caller = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const modes = ["wall-clock", "pre-dispatch", "settled", "unsettled"] as const;
+
+	for (const mode of modes) {
+		const requestController = new AbortController();
+		let handlerCalls = 0;
+		const context = defineContext({
+			name: "app.context",
+			input: codec.object({ companyId: codec.uuid() }),
+			resolve: ({ input }) => ({
+				tenant: { id: input.companyId },
+				values: {},
+			}),
+		});
+		const actionSlot = {
+			identity: "action:delivery.publish",
+			kind: "action" as const,
+			slot: "handler" as const,
+			origin: {
+				path: "src/delivery-action.ts",
+				exportName: "publishDelivery",
+				packageId: null,
+			},
+			sourceDigest: sha("a"),
+			contractDigest: sha("b"),
+			runtimeGraphDigest: sha("c"),
+			bundleExport: "action_delivery_publish_handler",
+		};
+		const execute = () => {
+			handlerCalls += 1;
+			if (mode === "unsettled") {
+				requestController.abort(
+					new DOMException("caller left after dispatch", "AbortError"),
+				);
+			}
+			if (mode === "unsettled") throw requestController.signal.reason;
+			return { receipt: "accepted" };
+		};
+		const actionBinding = {
+			identity: actionSlot.identity,
+			admission: "authenticated",
+			limits: {
+				inputBytes: 1_024,
+				resultBytes: 1_024,
+				durationMilliseconds: 1_000,
+			},
+			input: {
+				kind: "object",
+				properties: { message: { kind: "text" } },
+			},
+			output: {
+				kind: "object",
+				properties: { receipt: { kind: "text" } },
+			},
+			declaredErrors: [],
+			execute,
+		} satisfies RuntimeActionBinding<Readonly<{ signal: AbortSignal }>>;
+		const actionExecutor = createRuntimeActionExecutor({
+			application: "application:collaboration",
+			bindings: [actionBinding],
+			project: async (scope) => {
+				if (mode === "pre-dispatch") {
+					requestController.abort(
+						new DOMException("caller left before dispatch", "AbortError"),
+					);
+					throw scope.signal.reason;
+				}
+				return Object.freeze({ signal: scope.signal });
+			},
+		});
+		const executableActionBinding = {
+			identity: actionSlot.identity,
+			kind: actionSlot.kind,
+			slot: actionSlot.slot,
+			runtimeGraphDigest: actionSlot.runtimeGraphDigest,
+			bundleExport: actionSlot.bundleExport,
+			execute,
+			definition: { name: "delivery.publish", handler: execute },
+		};
+		const artifacts = runtimeArtifacts([actionSlot]);
+		const app = await createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, [
+				{
+					identity: "context:app.context",
+					kind: "context" as const,
+					slot: "resolve" as const,
+					runtimeGraphDigest: sha("3"),
+					bundleExport: "context_app_context_resolve",
+					definition: context,
+				},
+				queryExecutable(() => ({ count: 1 })),
+				executableActionBinding,
+			]),
+			program: {
+				services: [],
+				context,
+				bootstrap: () => ({ get: async () => null }),
+				project: ({ facts }) => ({ signal: facts.signal }),
+				projectExecution: (scope) => scope,
+				invokeAction: async ({
+					identity,
+					input,
+					effectKey,
+					callId,
+					timeoutMilliseconds,
+					onHandlerDispatch,
+					execution,
+				}) => {
+					const result = await actionExecutor.invoke(identity, {
+						input,
+						effectKey,
+						callId,
+						scope: execution,
+						...(timeoutMilliseconds === undefined
+							? {}
+							: { timeoutMilliseconds }),
+						...(onHandlerDispatch === undefined ? {} : { onHandlerDispatch }),
+					});
+					if (mode === "settled") {
+						requestController.abort(
+							new DOMException("caller left after result", "AbortError"),
+						);
+					}
+					return result;
+				},
+				resolvePrincipal: async () => caller,
+			},
+		});
+		const originalDateNow = Date.now;
+		if (mode === "wall-clock") Date.now = () => Number.MAX_SAFE_INTEGER;
+		let response: Response;
+		try {
+			response = await app.fetch(
+				new Request("http://runtime.test/_questpie/action/delivery.publish", {
+					method: "POST",
+					signal: requestController.signal,
+					headers: {
+						"content-type": "application/json",
+						"Effect-Key": `effect-secret-${mode}`,
+						"Questpie-Call-Id": `action-${mode}`,
+						"Questpie-Timeout-Milliseconds": "100",
+					},
+					body: JSON.stringify({
+						context: { companyId },
+						input: { message: "hello" },
+					}),
+				}),
+			);
+		} finally {
+			Date.now = originalDateNow;
+		}
+		const body = await response.json();
+		const expectedBody =
+			mode === "pre-dispatch"
+				? {
+						callId: "action-pre-dispatch",
+						error: { code: "DEADLINE_EXCEEDED", retryable: true },
+					}
+				: mode === "unsettled"
+					? {
+							callId: "action-unsettled",
+							error: {
+								code: "ACTION_OUTCOME_AMBIGUOUS",
+								retryable: false,
+							},
+						}
+					: {
+							callId: `action-${mode}`,
+							result: { receipt: "accepted" },
+						};
+		expect({ body, mode, status: response.status }).toEqual({
+			body: expectedBody,
+			mode,
+			status: mode === "pre-dispatch" ? 408 : mode === "unsettled" ? 500 : 200,
+		});
+		expect(handlerCalls).toBe(mode === "pre-dispatch" ? 0 : 1);
+		const encoded = JSON.stringify(body);
+		expect(encoded).not.toContain("caller left");
+		expect(encoded).not.toContain(`effect-secret-${mode}`);
+		await app.close({ deadlineAt: Date.now() + 2_000 });
+	}
 });
 
 test("rejects missing, duplicate, stale, wrong-kind and cross-build Action bindings", async () => {
@@ -1997,7 +2332,9 @@ test("rejects missing, duplicate, stale, wrong-kind and cross-build Action bindi
 		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
 			signal: facts.signal,
 		}),
-		invokeAction: async () => null,
+		invokeAction: () => {
+			throw new Error("not executed by artifact validation");
+		},
 		resolvePrincipal: async () => principal.anonymous(),
 	};
 	const accepted = artifacts();

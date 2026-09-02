@@ -1,7 +1,8 @@
 import { decodeRuntimeCodecDescriptor } from "../codec";
-import type {
-	RuntimeDeclaredErrorContract,
-	RuntimeOperationContract,
+import {
+	canonicalOperationFailures,
+	type RuntimeDeclaredErrorContract,
+	type RuntimeOperationContract,
 } from "../operation";
 import {
 	exactRuntimeArtifactKeys as exact,
@@ -314,15 +315,8 @@ function decodeHttpContract(value: unknown): OperationHttpContractV1 {
 	if (
 		JSON.stringify(http.failures) !==
 		JSON.stringify([
-			"APPLICATION_MISMATCH",
-			"CLIENT_OUTDATED",
 			"COMMITTED_RESULT_UNAVAILABLE",
-			"DEADLINE_EXCEEDED",
-			"INTERNAL",
-			"NOT_FOUND",
-			"PROTOCOL_UNSUPPORTED",
-			"RESOURCE_LIMIT",
-			"RUNTIME_UNAVAILABLE",
+			...Object.keys(canonicalOperationFailures),
 		])
 	)
 		fail("operation HTTP failures are invalid");

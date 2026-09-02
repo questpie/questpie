@@ -22,6 +22,8 @@ import {
 	createServiceOwner,
 } from "./services";
 
+export { awaitExecutionPhase } from "./abort";
+
 type MaybePromise<Value> = Value | Promise<Value>;
 
 const trustedExecutionFacts = new WeakSet<object>();
@@ -136,6 +138,7 @@ export interface ApplicationRuntime<Input, View> {
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
 			observation?: RuntimeExecutionObservationBinding;
+			settledUseWinsAbort?: boolean;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -214,13 +217,17 @@ export function createApplicationRuntime<
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
 			observation?: RuntimeExecutionObservationBinding;
+			settledUseWinsAbort?: boolean;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
 		if (!principal.is(input.principal))
 			throw new Error("Execution requires a trusted Principal");
 		return services.execution(
-			{ signal: input.signal },
+			{
+				signal: input.signal,
+				settledUseWinsAbort: input.settledUseWinsAbort,
+			},
 			async ({ child, service, signal }) => {
 				const decoded = deepFreeze(
 					decodeContextInput(program.context.input, input.context),
@@ -346,7 +353,13 @@ export function createApplicationRuntime<
 	});
 }
 
-export { createRuntimeRouteExecutor } from "./routes";
+export {
+	createRuntimeRouteExecutor,
+	decodeRuntimeCredentialOutcome,
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "./routes";
+export { runtimeMonotonicNow } from "./clock";
 export type {
 	RuntimeCredentialBinding,
 	RuntimeCredentialOutcome,

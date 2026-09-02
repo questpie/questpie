@@ -13,6 +13,8 @@ export type { ExecutionEventV2 } from "./observation";
 export {
 	createApplicationRuntime,
 	createRuntimeRouteExecutor,
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
 } from "./execution";
 export type {
 	ApplicationRuntime,

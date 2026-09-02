@@ -580,14 +580,26 @@ test("executes a fresh Mutation through one static read-committed database trans
 	const observationEvents: ExecutionEventV2[] = [];
 	const observed = observedMutation(observationEvents);
 
-	await expect(
-		observed.mutation.run(() =>
-			invoke(signalOperation, "database-static-call", observed.options),
-		),
-	).resolves.toEqual({
-		committed: true,
-		value: { id: widgetId },
-	});
+	const originalDateNow = Date.now;
+	Date.now = () => Number.MAX_SAFE_INTEGER;
+	try {
+		await expect(
+			observed.mutation.run(() =>
+				invoke(signalOperation, "database-static-call", {
+					...observed.options,
+					deadline: performance.timeOrigin + performance.now() + 1_000,
+				}),
+			),
+		).resolves.toEqual({
+			committed: true,
+			transactionId: "901",
+			value: { id: widgetId },
+		});
+	} finally {
+		Date.now = originalDateNow;
+	}
+	await Bun.sleep(1);
+	expect(controlSignal?.aborted).toBe(false);
 	observed.mutation.end({ kind: "mutation", outcome: "ok" });
 	observed.execution.scope.end({ kind: "execution", outcome: "ok" });
 	expect(
@@ -1444,7 +1456,11 @@ test("accepts multiple independently keyed Jobs inside one Mutation transaction"
 		observed.mutation.run(() =>
 			invoke(jobOperation, "database-jobs-call", observed.options),
 		),
-	).resolves.toEqual({ committed: true, value: { id: widgetId } });
+	).resolves.toEqual({
+		committed: true,
+		transactionId: "905",
+		value: { id: widgetId },
+	});
 	observed.mutation.end({ kind: "mutation", outcome: "ok" });
 	observed.execution.scope.end({ kind: "execution", outcome: "ok" });
 	expect(
@@ -1631,7 +1647,11 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 		observed.mutation.run(() =>
 			invoke(replayOperation, "replay-call", observed.options),
 		),
-	).resolves.toEqual({ committed: true, value: { id: widgetId } });
+	).resolves.toEqual({
+		committed: true,
+		transactionId: "904",
+		value: { id: widgetId },
+	});
 	expect(
 		observationEvents
 			.filter(

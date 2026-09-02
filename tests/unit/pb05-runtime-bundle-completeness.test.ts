@@ -285,7 +285,7 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 			} as never,
 			"bundle-completeness-call",
 		),
-	).resolves.toEqual({ committed: true, value: {} });
+	).resolves.toEqual({ committed: true, transactionId: "101", value: {} });
 
 	const kernel = core.createPostgresDatabaseDurableKernel({
 		database,

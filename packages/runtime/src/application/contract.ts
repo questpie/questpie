@@ -48,12 +48,14 @@ export interface RuntimeApplicationProgram<
 			effectKey: string;
 			callId: string;
 			timeoutMilliseconds?: number;
+			onHandlerDispatch?(): void;
 			execution: ExecutionView;
 			operations: RuntimeOperations;
 		}>,
 	) => MaybePromise<unknown>;
 	readonly resolvePrincipal: (
 		request: Request,
+		signal?: AbortSignal,
 	) => MaybePromise<Principal | null>;
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,

@@ -1,4 +1,4 @@
-import { principal, type Principal } from "questpie";
+import type { Principal } from "questpie";
 
 import { RuntimeActionPostHandlerResourceLimit } from "../action";
 import {
@@ -11,70 +11,33 @@ import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
-	isOperationCallId,
 	OperationFailure,
 	type PreparedOperation,
 	readBoundedRequestBody,
 	type RuntimeOperationContract,
 } from "../operation";
+import {
+	decodeHttpIdentity as decodeIdentity,
+	decodeHttpTimeout as decodeTimeout,
+	createHttpExecutionControl,
+	exactHttpKeys as exactKeys,
+	httpFailure,
+	httpJsonResponse as response,
+	httpProtocolFailure as protocol,
+	httpRecord as record,
+	readHttpHeader as header,
+	resolveHttpPrincipal,
+} from "./http-carrier";
+import { isOperationAbort } from "./operation-error";
 
-const JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 const MUTATION_PREFIX = "/_questpie/mutation/";
 const ACTION_PREFIX = "/_questpie/action/";
-
-type RecordValue = Readonly<Record<string, unknown>>;
-
-function protocol(): never {
-	throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-}
-
-function record(value: unknown): RecordValue {
-	if (!value || typeof value !== "object" || Array.isArray(value)) protocol();
-	return value as RecordValue;
-}
-
-function exactKeys(value: RecordValue, expected: readonly string[]): void {
-	const actual = Object.keys(value).sort();
-	const sorted = [...expected].sort();
-	if (
-		actual.length !== sorted.length ||
-		actual.some((key, index) => key !== sorted[index])
-	)
-		protocol();
-}
 
 function contentType(value: string | null): boolean {
 	return (
 		value !== null &&
 		/^application\/json(?:\s*;\s*charset\s*=\s*utf-8)?$/iu.test(value)
 	);
-}
-
-function header(request: Request, name: string): string | null {
-	const value = request.headers.get(name);
-	if (value?.includes(",")) protocol();
-	return value;
-}
-
-function decodeIdentity(value: string): string {
-	if (value.includes("+") || /%(?![0-9A-F]{2})/u.test(value)) protocol();
-	let decoded: string;
-	try {
-		decoded = decodeURIComponent(value);
-	} catch {
-		return protocol();
-	}
-	if (encodeURIComponent(decoded) !== value || !isOperationCallId(decoded))
-		protocol();
-	return decoded;
-}
-
-function decodeTimeout(value: string | null): number | undefined {
-	if (value === null) return undefined;
-	if (!/^[1-9][0-9]*$/u.test(value)) protocol();
-	const parsed = Number(value);
-	if (!Number.isSafeInteger(parsed)) protocol();
-	return parsed;
 }
 
 function parseJsonWithoutDuplicateKeys(source: string): unknown {
@@ -159,55 +122,8 @@ function parseJsonWithoutDuplicateKeys(source: string): unknown {
 	return JSON.parse(source) as unknown;
 }
 
-function canonicalFailureCode(code: string): string {
-	return [
-		"DEADLINE_EXCEEDED",
-		"INTERNAL",
-		"NOT_FOUND",
-		"PROTOCOL_UNSUPPORTED",
-		"RESOURCE_LIMIT",
-		"RUNTIME_UNAVAILABLE",
-		"UNAUTHENTICATED",
-	].includes(code)
-		? code
-		: "INTERNAL";
-}
-
-function failureStatus(code: string): number {
-	if (code === "UNAUTHENTICATED") return 401;
-	if (code === "NOT_FOUND") return 404;
-	if (code === "DEADLINE_EXCEEDED") return 408;
-	if (code === "RESOURCE_LIMIT") return 429;
-	if (code === "RUNTIME_UNAVAILABLE") return 503;
-	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	return 500;
-}
-
-function response(body: unknown, status: number): Response {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { "content-type": JSON_MEDIA_TYPE },
-	});
-}
-
 function failure(code: string, callId?: string, retryable?: boolean): Response {
-	const canonicalCode = canonicalFailureCode(code);
-	return response(
-		{
-			...(callId === undefined ? {} : { callId }),
-			error: {
-				code: canonicalCode,
-				retryable:
-					retryable ??
-					[
-						"DEADLINE_EXCEEDED",
-						"RESOURCE_LIMIT",
-						"RUNTIME_UNAVAILABLE",
-					].includes(canonicalCode),
-			},
-		},
-		failureStatus(canonicalCode),
-	);
+	return httpFailure(code, { callId, retryable });
 }
 
 export function createCanonicalPostHttp<ContextInput, View>(
@@ -220,7 +136,10 @@ export function createCanonicalPostHttp<ContextInput, View>(
 		contextCodec: RuntimeCodec;
 		operations: readonly RuntimeOperationContract[];
 		prepare(identity: string, value: unknown): PreparedOperation<View>;
-		resolvePrincipal(request: Request): Promise<Principal | null>;
+		resolvePrincipal(
+			request: Request,
+			signal: AbortSignal,
+		): Promise<Principal | null>;
 		executeMutation(
 			value: Readonly<{
 				principal: Principal;
@@ -229,6 +148,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				callId: string;
 				signal: AbortSignal;
 				deadline?: number;
+				onCommitted(transactionId: string): void;
 			}>,
 		): Promise<unknown>;
 		executeAction(
@@ -242,6 +162,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				signal: AbortSignal;
 				timeoutMilliseconds?: number;
 				deadline?: number;
+				onHandlerDispatch(): void;
 			}>,
 		): Promise<unknown>;
 		now(): number;
@@ -297,154 +218,195 @@ export function createCanonicalPostHttp<ContextInput, View>(
 			} catch {
 				return failure("PROTOCOL_UNSUPPORTED");
 			}
-			let caller: Principal | null;
+			const execution = createHttpExecutionControl({
+				requestSignal: request.signal,
+				requestStartedAt,
+				...(timeout === undefined ? {} : { timeoutMilliseconds: timeout }),
+				now: input.now,
+			});
 			try {
-				caller = await input.resolvePrincipal(request);
-			} catch (error) {
-				if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-				const unavailable =
-					error instanceof OperationFailure &&
-					(error.code as string) === "CREDENTIALS_UNAVAILABLE";
-				return failure(
-					unavailable ? "RUNTIME_UNAVAILABLE" : "INTERNAL",
-					callId,
-				);
-			}
-			if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-			if (!caller || !principal.is(caller))
-				return failure("UNAUTHENTICATED", callId);
-			const contract = operations.get(
-				`${action ? "action" : "mutation"}:${name}`,
-			);
-			if (!contract) return failure("NOT_FOUND", callId);
-			let operationInput: unknown;
-			let context: ContextInput;
-			let prepared: PreparedOperation<View> | undefined;
-			try {
-				const compatibility = [
-					header(request, "Questpie-Application"),
-					header(request, "Questpie-Client-Contract"),
-					header(request, "Questpie-Wire-Digest"),
-				];
-				if (
-					compatibility.some((value) => value !== null) &&
-					(compatibility[0] !== input.application ||
-						compatibility[1] !== input.clientContractDigest ||
-						compatibility[2] !== input.httpContractDigest)
-				)
-					protocol();
-				if (!contentType(header(request, "content-type"))) protocol();
-				const body = await readBoundedRequestBody(
+				const principalResolution = await resolveHttpPrincipal({
 					request,
-					input.maximumRequestBytes,
-				);
-				if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-				if (body.kind === "tooLarge") return failure("RESOURCE_LIMIT", callId);
-				if (body.kind === "invalid") protocol();
-				const envelope = record(parseJsonWithoutDuplicateKeys(body.text));
-				exactKeys(envelope, ["context", "input"]);
-				context = decodeRuntimeCodec<ContextInput>(
-					input.contextCodec,
-					envelope.context,
-					"$context",
-				);
-				if (action) {
-					const decoded = decodeRuntimeCodec(
-						contract.input,
-						envelope.input,
-						"$input",
-					);
-					operationInput = encodeRuntimeCodec(contract.input, decoded);
-				} else {
-					prepared = input.prepare(contract.identity, envelope.input);
-					operationInput = envelope.input;
-				}
-			} catch {
-				return failure("PROTOCOL_UNSUPPORTED", callId);
-			}
-			if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-			const deadline =
-				timeout === undefined
-					? undefined
-					: Math.min(Number.MAX_SAFE_INTEGER, requestStartedAt + timeout);
-			try {
-				const value = action
-					? await input.executeAction({
-							principal: caller,
-							context,
-							identity: contract.identity,
-							operationInput,
-							effectKey: effectKey!,
-							callId,
-							signal: request.signal,
-							...(timeout === undefined
-								? {}
-								: { timeoutMilliseconds: timeout }),
-							...(deadline === undefined ? {} : { deadline }),
-						})
-					: await input.executeMutation({
-							principal: caller,
-							context,
-							operation: prepared!,
-							callId,
-							signal: request.signal,
-							...(deadline === undefined ? {} : { deadline }),
-						});
-				const body = {
+					signal: execution.signal,
 					callId,
-					result: encodeRuntimeCodec(contract.output, value),
-				};
-				if (
-					Buffer.byteLength(JSON.stringify(body), "utf8") >
-					input.maximumResponseBytes
-				)
-					return failure("RESOURCE_LIMIT", callId, !action);
-				return response(body, 200);
-			} catch (error) {
-				if (error instanceof CommittedResultUnavailable && !action)
-					return response(
-						{
-							callId,
-							error: {
-								code: "COMMITTED_RESULT_UNAVAILABLE",
-								retryable: true,
-								transactionId: error.payload.transactionId,
-							},
-						},
-						500,
+					resolvePrincipal: input.resolvePrincipal,
+				});
+				if (principalResolution.response) return principalResolution.response;
+				const caller = principalResolution.caller;
+				const contract = operations.get(
+					`${action ? "action" : "mutation"}:${name}`,
+				);
+				if (!contract) return failure("NOT_FOUND", callId);
+				let operationInput: unknown;
+				let context: ContextInput;
+				let prepared: PreparedOperation<View> | undefined;
+				try {
+					const compatibility = [
+						header(request, "Questpie-Application"),
+						header(request, "Questpie-Client-Contract"),
+						header(request, "Questpie-Wire-Digest"),
+					];
+					if (
+						compatibility.some((value) => value !== null) &&
+						(compatibility[0] !== input.application ||
+							compatibility[1] !== input.clientContractDigest ||
+							compatibility[2] !== input.httpContractDigest)
+					)
+						protocol();
+					if (!contentType(header(request, "content-type"))) protocol();
+					const body = await readBoundedRequestBody(
+						request,
+						input.maximumRequestBytes,
+						execution.signal,
 					);
-				if (error instanceof DeclaredOperationError) {
-					try {
-						const declared = encodeDeclaredOperationError(
-							(action
-								? {
-										declaredErrors: contract.declaredErrors,
-									}
-								: prepared!) as PreparedOperation<View>,
-							error,
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					if (body.kind === "tooLarge")
+						return failure("RESOURCE_LIMIT", callId);
+					if (body.kind === "invalid") protocol();
+					const envelope = record(parseJsonWithoutDuplicateKeys(body.text));
+					exactKeys(envelope, ["context", "input"]);
+					context = decodeRuntimeCodec<ContextInput>(
+						input.contextCodec,
+						envelope.context,
+						"$context",
+					);
+					if (action) {
+						const decoded = decodeRuntimeCodec(
+							contract.input,
+							envelope.input,
+							"$input",
 						);
+						operationInput = encodeRuntimeCodec(contract.input, decoded);
+					} else {
+						prepared = input.prepare(contract.identity, envelope.input);
+						operationInput = envelope.input;
+					}
+				} catch {
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					return failure("PROTOCOL_UNSUPPORTED", callId);
+				}
+				if (execution.signal.aborted)
+					return failure("DEADLINE_EXCEEDED", callId);
+				let committedResultUnavailable: CommittedResultUnavailable | undefined;
+				let actionDispatched = false;
+				try {
+					const value = action
+						? await input.executeAction({
+								principal: caller,
+								context,
+								identity: contract.identity,
+								operationInput,
+								effectKey: effectKey!,
+								callId,
+								signal: execution.signal,
+								...(timeout === undefined
+									? {}
+									: { timeoutMilliseconds: timeout }),
+								...(execution.deadline === undefined
+									? {}
+									: { deadline: execution.deadline }),
+								onHandlerDispatch: () => {
+									actionDispatched = true;
+								},
+							})
+						: await input.executeMutation({
+								principal: caller,
+								context,
+								operation: prepared!,
+								callId,
+								signal: execution.signal,
+								...(execution.deadline === undefined
+									? {}
+									: { deadline: execution.deadline }),
+								onCommitted: (transactionId) => {
+									committedResultUnavailable = new CommittedResultUnavailable(
+										callId,
+										transactionId,
+										execution.signal.reason,
+									);
+								},
+							});
+					if (execution.signal.aborted && (!action || !actionDispatched))
+						throw (
+							committedResultUnavailable ??
+							new OperationFailure("DEADLINE_EXCEEDED", true)
+						);
+					const body = {
+						callId,
+						result: encodeRuntimeCodec(contract.output, value),
+					};
+					if (
+						Buffer.byteLength(JSON.stringify(body), "utf8") >
+						input.maximumResponseBytes
+					)
+						return failure("RESOURCE_LIMIT", callId, !action);
+					return response(body, 200);
+				} catch (error) {
+					if (error instanceof CommittedResultUnavailable && !action)
 						return response(
 							{
 								callId,
 								error: {
-									code: declared.code,
-									payload: declared.payload,
+									code: "COMMITTED_RESULT_UNAVAILABLE",
+									retryable: true,
+									transactionId: error.payload.transactionId,
 								},
 							},
-							declared.status,
+							500,
 						);
-					} catch {
-						return failure("INTERNAL", callId);
+					if (error instanceof DeclaredOperationError) {
+						try {
+							const declared = encodeDeclaredOperationError(
+								(action
+									? {
+											declaredErrors: contract.declaredErrors,
+										}
+									: prepared!) as PreparedOperation<View>,
+								error,
+							);
+							return response(
+								{
+									callId,
+									error: {
+										code: declared.code,
+										payload: declared.payload,
+									},
+								},
+								declared.status,
+							);
+						} catch {
+							return failure("INTERNAL", callId);
+						}
 					}
-				}
-				if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-				if (error instanceof RuntimeActionPostHandlerResourceLimit)
-					return failure("RESOURCE_LIMIT", callId, false);
-				if (error instanceof OperationFailure)
-					return failure(error.code, callId);
-				if (error instanceof RuntimeCodecError)
+					if (error instanceof RuntimeActionPostHandlerResourceLimit)
+						return failure("RESOURCE_LIMIT", callId, false);
+					if (
+						action &&
+						actionDispatched &&
+						(execution.signal.aborted || isOperationAbort(error))
+					)
+						return response(
+							{
+								callId,
+								error: {
+									code: "ACTION_OUTCOME_AMBIGUOUS",
+									retryable: false,
+								},
+							},
+							500,
+						);
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					if (error instanceof OperationFailure)
+						return failure(error.code, callId);
+					if (error instanceof RuntimeCodecError)
+						return failure("INTERNAL", callId);
 					return failure("INTERNAL", callId);
-				return failure("INTERNAL", callId);
+				}
+			} finally {
+				execution.close();
 			}
 		},
 	});
