@@ -1,12 +1,32 @@
 import type { SupportSession } from "../auth/client";
 import { reportFixturePhase } from "../fixture-control";
-import type { SupportDesk, TicketDetail } from "../questpie";
+import type { SupportDesk } from "../questpie";
 
-type ExecuteTicketOperation = (
+type JourneyTicket = Readonly<{
+	id: string;
+	reference: string;
+	status: string;
+	teamId: string;
+	updatedAt: Date;
+}>;
+
+type ExecuteTicketOperation = <Output>(
 	label: string,
-	ticketId: string,
-	operation: () => Promise<unknown>,
-) => Promise<TicketDetail>;
+	operation: () => Promise<Output>,
+) => Promise<Output>;
+
+async function waitForRenderedText(
+	selector: string,
+	text: string,
+	description: string,
+): Promise<void> {
+	const deadline = Date.now() + 10_000;
+	do {
+		if (document.querySelector(selector)?.textContent?.includes(text)) return;
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	} while (Date.now() < deadline);
+	throw new Error(`${description} was not rendered`);
+}
 
 export function firefoxJourneyFromUrl(
 	url: string,
@@ -29,21 +49,31 @@ export async function runFirefoxJourney(input: {
 	loadFilteredQueue(status: string, teamId: string): Promise<unknown>;
 	reference: string;
 	role: SupportSession["role"];
-	searchTicket(reference: string): Promise<TicketDetail | null>;
+	searchTicket(reference: string): Promise<JourneyTicket | null>;
 	selectFilters(status: string, teamId: string): void;
 }): Promise<void> {
 	let ticket = await input.searchTicket(input.reference);
 	if (ticket === null) throw new Error("Firefox exact-reference search failed");
-	const initialUpdatedAt = Date.parse(ticket.updatedAt);
+	await waitForRenderedText(
+		'[data-detail-state][data-kind="ready"]',
+		"Live ticket view is current.",
+		"initial watched ticket",
+	);
+	const initialUpdatedAt = ticket.updatedAt.getTime();
 	let ticketId = ticket.id;
-	await input.executeTicketOperation("Adding comment", ticketId, () =>
+	await input.executeTicketOperation("Adding comment", () =>
 		input.desk.mutations["ticket.addComment"](
 			{ body: input.commentBody, ticketId },
 			{ callId: `browser:comment:${crypto.randomUUID()}` },
 		),
 	);
+	await waitForRenderedText(
+		".comments",
+		input.commentBody,
+		"committed watched comment",
+	);
 	const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
-	await input.executeTicketOperation("Sending summary", ticketId, async () => {
+	await input.executeTicketOperation("Sending summary", async () => {
 		const result = await input.desk.actions["notification.sendTicketSummary"](
 			{ ticketId },
 			{ effectKey, timeoutMilliseconds: 3_000 },
@@ -57,37 +87,31 @@ export async function runFirefoxJourney(input: {
 		});
 	});
 	if (ticket.status === "closed")
-		ticket = await input.executeTicketOperation(
-			"Reopening ticket",
-			ticketId,
-			() =>
-				input.desk.mutations["ticket.reopen"](
-					{ ticketId },
-					{ callId: `browser:reopen:${crypto.randomUUID()}` },
-				),
+		ticket = await input.executeTicketOperation("Reopening ticket", () =>
+			input.desk.mutations["ticket.reopen"](
+				{ ticketId },
+				{ callId: `browser:reopen:${crypto.randomUUID()}` },
+			),
 		);
 	ticketId = ticket.id;
-	ticket = await input.executeTicketOperation("Closing ticket", ticketId, () =>
+	ticket = await input.executeTicketOperation("Closing ticket", () =>
 		input.desk.mutations["ticket.close"](
 			{ ticketId },
 			{ callId: `browser:close:${crypto.randomUUID()}` },
 		),
 	);
 	ticketId = ticket.id;
-	ticket = await input.executeTicketOperation(
-		"Reopening ticket",
-		ticketId,
-		() =>
-			input.desk.mutations["ticket.reopen"](
-				{ ticketId },
-				{ callId: `browser:reopen:${crypto.randomUUID()}` },
-			),
+	ticket = await input.executeTicketOperation("Reopening ticket", () =>
+		input.desk.mutations["ticket.reopen"](
+			{ ticketId },
+			{ callId: `browser:reopen:${crypto.randomUUID()}` },
+		),
 	);
 	input.selectFilters("open", ticket.teamId);
 	await input.loadFilteredQueue("open", ticket.teamId);
 	const databaseOwnedUpdateAdvanced =
 		Number.isFinite(initialUpdatedAt) &&
-		Date.parse(ticket.updatedAt) > initialUpdatedAt;
+		ticket.updatedAt.getTime() > initialUpdatedAt;
 	if (!databaseOwnedUpdateAdvanced)
 		throw new Error("Firefox database-owned update timestamp did not advance");
 	let lifecycleError: Readonly<{ code: string; status: number }>;
@@ -119,5 +143,6 @@ export async function runFirefoxJourney(input: {
 		phase: "firefox-complete",
 		reference: input.reference,
 		role: input.role,
+		watchedCommentObserved: true,
 	});
 }

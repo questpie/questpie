@@ -231,6 +231,35 @@ describe("BETA-02 migration artifacts", () => {
 		expect(enable.plan.steps).toContainEqual(
 			expect.objectContaining({ kind: "addChangeCapture" }),
 		);
+
+		const expandedSchema = structuredClone(enabledSchema);
+		expandedSchema.changeCapture = {
+			...expandedSchema.changeCapture,
+			collections: [
+				...expandedSchema.changeCapture.collections,
+				{
+					identity: "collection:memberships",
+					postgresName: "memberships",
+					keyColumns: ["id"],
+					rowTrigger: "capture_memberships_row",
+					truncateTrigger: "capture_memberships_truncate",
+				},
+			],
+			fingerprint: "expanded",
+			sql: "SELECT 2;\n",
+		};
+		const replace = createMigrationPlan({
+			baseSchema: enabledSchema,
+			targetSchema: expandedSchema,
+			baseMigration: "000002_enable-capture",
+			slug: "expand-capture",
+		});
+
+		expect(replace.plan.classification).toBe("destructive");
+		expect(replace.plan.steps.map((step) => step.kind)).toEqual([
+			"dropChangeCapture",
+			"addChangeCapture",
+		]);
 	});
 
 	test("plans database-owned update installation and removal explicitly", async () => {

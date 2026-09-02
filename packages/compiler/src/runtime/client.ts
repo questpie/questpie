@@ -1,6 +1,7 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
 import { renderClientQueryHttp } from "./client-query-http";
+import { renderClientQueryResource } from "./client-query-resource";
 import { renderClientRealtime } from "./client-realtime";
 import type { RealtimeWireContractV1 } from "./realtime-wire";
 
@@ -94,7 +95,7 @@ export function renderClientContract(
 			const operationOutput = renderCodecType(resource.contract.output);
 			const call = `(operationInput: ${operationInput}, options?: CallOptions): Promise<${operationOutput}> => invoke<${operationOutput}>(context, ${JSON.stringify(resource.identity)}, operationInput, options)`;
 			return watchableQueries.has(resource.identity)
-				? `${JSON.stringify(resource.name)}: Object.assign(${call}, { watch: (operationInput: ${operationInput}, callback: (result: ${operationOutput}, delivery: QueryDelivery) => void, options?: WatchOptions): (() => void) => watchBinding<${operationOutput}>(${JSON.stringify(resource.identity)}, operationInput, callback, options) }),`
+				? `${JSON.stringify(resource.name)}: Object.assign(${call}, { watch: (operationInput: ${operationInput}, callback: (result: ${operationOutput}, delivery: QueryDelivery) => void, options?: WatchOptions): (() => void) => watchBinding<${operationOutput}>(${JSON.stringify(resource.identity)}, operationInput, callback, options), observe: (operationInput: ${operationInput}): QueryResource<${operationOutput}> => queryResources.observe<${operationOutput}>(${JSON.stringify(resource.identity)}, encode(inputCodecs[${JSON.stringify(resource.identity)}], operationInput)) }),`
 				: `${JSON.stringify(resource.name)}: ${call},`;
 		})
 		.join("\n\t\t\t");
@@ -160,6 +161,7 @@ export function renderClientContract(
 		enabled: watchableQueries.size > 0,
 		realtime: input.realtime,
 	});
+	const queryResource = renderClientQueryResource(watchableQueries.size > 0);
 	return `import type { AppContextInput } from "./app";
 
 export type JsonValue =
@@ -184,6 +186,7 @@ export interface ActionCallOptions extends CallOptions {
 	readonly effectKey: string;
 }
 ${watchTypes}
+${queryResource.types}
 
 export interface GeneratedClientScope {
 	readonly context: AppContextInput;
@@ -229,6 +232,7 @@ export class ActionOutcomeAmbiguous extends Error {
 
 type WireRecord = Readonly<Record<string, unknown>>;
 ${realtimeTypes}
+${queryResource.runtime}
 const inputCodecs: WireRecord = ${canonicalBytes(inputCodecs).trim()};
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
@@ -558,6 +562,7 @@ export function createClient(input: Readonly<{
 	const scope = (next: AppContextInput): GeneratedClientScope => {
 		const context = immutableContext(next);
 		${realtimeScope}
+		${queryResource.scope}
 		return Object.freeze({ context, queries: Object.freeze({
 			${implementations}
 		}), mutations: Object.freeze({

@@ -410,7 +410,12 @@ export function destructiveDeltaSteps(
 	steps.push(...databaseOwnedUpdateSteps(base, target, renames));
 	const baseHasChangeCapture = hasPhysicalChangeCapture(base);
 	const targetHasChangeCapture = hasPhysicalChangeCapture(target);
-	if (baseHasChangeCapture !== targetHasChangeCapture) {
+	const changeCaptureChanged =
+		baseHasChangeCapture &&
+		targetHasChangeCapture &&
+		canonicalBytes(semanticComparable(base.changeCapture, renames)) !==
+			canonicalBytes(semanticComparable(target.changeCapture, []));
+	if (baseHasChangeCapture !== targetHasChangeCapture || changeCaptureChanged) {
 		if (baseHasChangeCapture)
 			steps.push(
 				step({

@@ -14,6 +14,7 @@
 		"tracer": "bun tracer/host.ts"
 	},
 	"dependencies": {
+		"@questpie/react": "workspace:*",
 		"better-auth": "1.7.1",
 		"pg": "8.23.0",
 		"questpie": "workspace:*",

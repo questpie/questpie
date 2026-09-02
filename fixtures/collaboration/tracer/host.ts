@@ -43,6 +43,7 @@ let report: Readonly<Record<string, unknown>> = Object.freeze({
 	phase: "host-ready",
 	connections: 0,
 });
+const reportHistory: Readonly<Record<string, unknown>>[] = [];
 
 const response = (body: BodyInit, contentType: string) =>
 	new Response(body, { headers: { "content-type": contentType } });
@@ -70,12 +71,34 @@ const server = Bun.serve({
 			return response(styles, "text/css; charset=utf-8");
 		if (url.pathname === "/tracer.js")
 			return response(browserJavaScript, "text/javascript; charset=utf-8");
+		if (
+			request.method === "POST" &&
+			url.pathname === "/__questpie_tracer/sign-in"
+		)
+			return new Response(null, {
+				status: 204,
+				headers: {
+					"set-cookie": `${demoSessionCookieName}=${demoSessionToken}; Path=/; HttpOnly; SameSite=Strict`,
+				},
+			});
+		if (
+			request.method === "POST" &&
+			url.pathname === "/__questpie_tracer/sign-out"
+		)
+			return new Response(null, {
+				status: 204,
+				headers: {
+					"set-cookie": `${demoSessionCookieName}=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0`,
+				},
+			});
 		if (url.pathname === "/__questpie_tracer/report") {
 			if (request.method === "POST") {
 				const body = await request.json();
 				if (!body || typeof body !== "object" || Array.isArray(body))
 					return new Response(null, { status: 400 });
-				report = Object.freeze({ ...(body as Record<string, unknown>) });
+				const event = Object.freeze({ ...(body as Record<string, unknown>) });
+				reportHistory.push(event);
+				report = Object.freeze({ ...event, history: [...reportHistory] });
 				return new Response(null, { status: 204 });
 			}
 			return Response.json(report);

@@ -9,6 +9,13 @@
 			"filename": "questpie-4.0.0-beta.1.tgz",
 			"sha256": "6ffaf0c698a32dc38a93f616888253bfbebbb924731aff853dd28aad84e22a38",
 			"declarationSha256": "ded3ff8d0fefb93c77ade5f1c035f51ad0034df6f14dc04c9c4559a99272c68d"
+		},
+		{
+			"name": "@questpie/react",
+			"version": "4.0.0-beta.1",
+			"filename": "questpie-react-4.0.0-beta.1.tgz",
+			"sha256": "924829aaf4b4a4b83cdc9326a134651c018dfb49e55dea00319bc7e250f7eda0",
+			"declarationSha256": "8a9503898c5f1925be1cced252d20ade694d16f60d1bf2f7d2a5c95f2b814a29"
 		}
 	]
 }
