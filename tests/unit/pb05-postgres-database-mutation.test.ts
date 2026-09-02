@@ -509,13 +509,23 @@ test("executes a fresh Mutation through one static read-committed database trans
 		facts,
 	});
 
-	await expect(
-		invoke(signalOperation, "database-static-call"),
-	).resolves.toEqual({
-		committed: true,
-		transactionId: "901",
-		value: { id: widgetId },
-	});
+	const originalDateNow = Date.now;
+	Date.now = () => Number.MAX_SAFE_INTEGER;
+	try {
+		await expect(
+			invoke(signalOperation, "database-static-call", {
+				deadline: performance.timeOrigin + performance.now() + 1_000,
+			}),
+		).resolves.toEqual({
+			committed: true,
+			transactionId: "901",
+			value: { id: widgetId },
+		});
+	} finally {
+		Date.now = originalDateNow;
+	}
+	await Bun.sleep(1);
+	expect(controlSignal?.aborted).toBe(false);
 	expect(transactionCalls).toBe(1);
 	expect(handlerSignal).toBe(controlSignal);
 	expect(calls.map(({ name }) => name)).toEqual([

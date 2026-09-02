@@ -3,7 +3,7 @@ import { decodeRuntimeCodec, encodeRuntimeCodec } from "../codec";
 import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
 import { createJobAcceptance, durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
-import type { ExecutionFacts } from "../execution";
+import { runtimeMonotonicNow, type ExecutionFacts } from "../execution";
 import {
 	assertOperationAdmission,
 	CommittedResultUnavailable,
@@ -222,7 +222,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 				throw new TypeError("Mutation deadline is invalid");
 			signals.push(
 				AbortSignal.timeout(
-					Math.max(0, Math.ceil(options.deadline - Date.now())),
+					Math.max(0, Math.ceil(options.deadline - runtimeMonotonicNow())),
 				),
 			);
 		}
