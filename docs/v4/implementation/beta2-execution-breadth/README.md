@@ -38,9 +38,10 @@ EB-00 accepted authority (done)
   -> EB-09 generated client projection (EB-02, EB-03)
        -> HTTP-01 canonical Query GET tracer
             -> HTTP-02 canonical Mutation/Action tracer + old-route deletion
-                 -> DOC-01 Operation Documentation authoring/artifact
-                      -> HTTP-03/DOC-02 complete OpenAPI/JSDoc/explain projection
-                      -> HTTP-04 reference-consumer and hostile closure
+  -> DOC-01 Operation Documentation authoring/artifact (ADR-0040 accepted)
+  -> (HTTP-02 + DOC-01)
+       -> HTTP-03/DOC-02 complete OpenAPI/JSDoc/explain projection
+            -> HTTP-04 reference-consumer and hostile closure
   -> EB-10 collaboration end-to-end guide/fixture (EB-02 through EB-09)
 ```
 
@@ -281,7 +282,8 @@ Start red with one bounded Query whose generated client must call its exact
 descriptor through compiler normalization, App Contract, executable binding,
 generated declarations, Query URL and Context-header codecs, Fetch routing,
 the existing Operation executor, and decoded client result. Bind
-`QP-COMPOSE-028` and `QP-COMPOSE-029`; reject unsupported/unbounded GET input,
+`QP-COMPOSE-028` and the three canonical path-collision reasons under
+`QP-COMPOSE-029`; reject unsupported/unbounded GET input,
 noncanonical query bytes, duplicate/unknown input, malformed Context, and raw
 Route collisions. Prove direct/Fetch/client parity, cancellation cleanup,
 nondisclosure, deterministic artifact bytes, and no POST fallback.
@@ -312,7 +314,8 @@ by the generated contract. Cover parameters, request bodies, results, declared
 errors, fixed framework failures, nullability, bounds, inferred namespace tags,
 operation IDs, summary/description/examples, omissions with Origins, digest
 pins, target escaping, stale deletion, generated JSDoc, and `questpie explain`.
-Reject unknown configuration and operation-ID/path collisions. No
+Reject unknown configuration and bind
+`QP-COMPOSE-029 openApiOperationIdCollision` with the selector grammar. No
 OpenAPI-specific schema/prose, custom group, path, security, handler, or
 fallback authoring enters production. This is `DOC-02`; do not build an earlier
 metadata-free HTTP-03 generator that this slice must replace.

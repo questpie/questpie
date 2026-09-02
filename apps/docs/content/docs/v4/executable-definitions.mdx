@@ -14,13 +14,14 @@ Import executable Definition factories from `#questpie/app`:
 
 ```ts title="src/features/messages/summary.ts"
 import { defineQuery } from "#questpie/app";
-import { codec, policy } from "questpie";
+import { codec } from "questpie";
 
 export const messageSummary = defineQuery({
 	name: "messages.summary",
 	input: codec.object({ id: codec.uuid() }),
-	policy: policy.authenticated(),
-	errors: {},
+	output: codec.nullable(
+		codec.object({ id: codec.uuid(), body: codec.text() }),
+	),
 	handler: ({ input, ctx }) =>
 		ctx.data.messages.get({
 			key: { id: input.id },
@@ -71,8 +72,9 @@ the Current App Contract and reject stale generated output.
 
 An inline handler is the normal form. The `messageSummary` Definition above
 owns one Executable Slot: the one handler position the compiler records for
-that Definition. Query, Mutation, and Reaction Definitions each carry exactly
-one handler.
+that Definition. Handler-backed Query, Mutation, Action, Reaction, and Job
+Definitions each carry exactly one handler. A plan-backed Query authors no
+handler.
 
 The compiler keeps the handler and its runtime-only imports outside controlled
 structural evaluation. It records a stable slot in the structural contract and
@@ -112,8 +114,9 @@ into an ordinary Query or Mutation before final identity collision resolution
 and Manifest emission.
 
 Each child has its own Resource Identity, Owner, member Origin, Package
-Inventory entry, exact generated server member, and client alias. A custom
-Resource with the same identity is a normal duplicate-identity error.
+Inventory entry, exact generated server member, and network client member when
+exposed. A custom Resource with the same identity is a normal
+duplicate-identity error.
 
 The set does not exist at runtime. There is no separate CRUD dispatcher or
 Admin-only data engine.

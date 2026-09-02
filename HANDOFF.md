@@ -735,9 +735,9 @@ documentation artifact and independent digest; documentation grants no
 exposure, Authority, Policy, handler, or Runtime capability. `DOC-01` owns
 production compiler/artifact/package parity and digest-independence evidence.
 `DOC-02` owns OpenAPI/MCP/JSDoc/explain projection, target escaping,
-disclosure/exposure parity, and request-time Runtime absence. The public
-`skills/questpie` tree remains a separate portable framework skill, not an
-application-generated projection.
+disclosure/exposure parity, and request-time Runtime absence. The planned
+public `skills/questpie` skill stays a separate portable framework skill, not
+an application-generated projection.
 
 ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
 Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,

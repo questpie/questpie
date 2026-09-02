@@ -18,24 +18,24 @@ or external-effect capability.
 
 ```ts
 import { defineQuery } from "#questpie/app";
-import { codec, operation, policy } from "questpie";
+import { codec } from "questpie";
 
 export const ticketDetail = defineQuery({
 	name: "tickets.detail",
 	input: codec.object({ id: codec.uuid() }),
-	policy: policy.authenticated(),
-	errors: {
-		unavailable: operation.error({
-			code: "TICKET_UNAVAILABLE",
-			status: 404,
+	output: codec.nullable(
+		codec.object({
+			id: codec.uuid(),
+			reference: codec.text(),
+			summary: codec.text(),
+			status: codec.text(),
 		}),
-	},
-	handler: async ({ input, ctx, errors }) => {
+	),
+	handler: async ({ input, ctx }) => {
 		const ticket = await ctx.data.tickets.get({
 			key: { id: input.id },
 			select: { id: true, reference: true, summary: true, status: true },
 		});
-		if (ticket === null) throw errors.unavailable();
 		return ticket;
 	},
 	network: true,
@@ -196,7 +196,6 @@ export const createTicket = defineMutation({
 		const ticket = await ctx.data.tickets.create({
 			input,
 			values: { organizationId: ctx.tenant.id },
-			select: true,
 		});
 
 		await ctx.data.ticketEvents.create({
@@ -207,7 +206,6 @@ export const createTicket = defineMutation({
 				kind: "created",
 				occurredAt: ctx.now,
 			},
-			select: { id: true },
 		});
 
 		return ticket;
@@ -357,13 +355,13 @@ export async function editMessage(
 ) {
 	const company = client.withContext({ companyId });
 	const callId = crypto.randomUUID();
-	const page = await company.collections.messages.list({
+	const page = await company.queries["messages.list"]({
 		channelId,
 		first: 20,
 		after: null,
 	});
 
-	const created = await company.collections.messages.create(
+	const created = await company.mutations["messages.create"](
 		{
 			input: {
 				channelId,
@@ -373,17 +371,17 @@ export async function editMessage(
 		},
 		{ callId },
 	);
-	const found = await company.collections.messages.get({
+	const found = await company.queries["messages.get"]({
 		key: { id: created.id },
 	});
 
-	const updated = await company.collections.messages.update({
+	const updated = await company.mutations["messages.update"]({
 		key: { id: created.id },
 		patch: { title: "Approved" },
 	});
 
 	if (updated !== null) {
-		await company.collections.messages.delete({
+		await company.mutations["messages.delete"]({
 			key: { id: updated.id },
 		});
 	}
@@ -443,7 +441,14 @@ export const reindexTicket = defineJob({
 	input: codec.object({ ticketId: codec.uuid() }),
 	output: codec.object({ ticketId: codec.uuid() }),
 	runAs: durable.caller({ whenDenied: "fail" }),
-	retry: durable.retry({ maximumAttempts: 3, initialDelay: "1s" }),
+	retry: durable.retry({
+		maximumAttempts: 3,
+		initialDelay: "1s",
+		backoff: "exponential",
+		maximumDelay: "10s",
+		jitter: "full",
+		horizon: "1h",
+	}),
 	handler: async ({ input }) => ({ ticketId: input.ticketId }),
 });
 ```
