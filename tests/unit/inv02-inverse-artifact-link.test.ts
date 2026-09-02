@@ -17,7 +17,7 @@ const fixtureRoot = resolve(
 );
 const toOneFixtureRoot = resolve(
 	import.meta.dir,
-	"../../fixtures/collaboration",
+	"../../fixtures/archive",
 );
 
 test("carries the accepted inverse fixture through Template and Query Projection v2", async () => {
@@ -353,10 +353,10 @@ test("keeps all-toOne applications on byte-identical v1 artifacts", async () => 
 	expect(JSON.parse(queryBytes).version).toBe(1);
 	expect(JSON.parse(plansBytes).version).toBe(1);
 	expect(contentDigest(queryBytes)).toBe(
-		"69498d86c9d507f805f3e46d4260e6b05056a7684341e9f660d01d47fa17e186",
+		"6c3a7f8283cb9be965fd932c81055dfa2bfdb5263ec5c18ef0845dc200a505c2",
 	);
 	expect(contentDigest(plansBytes)).toBe(
-		"791261da72826276515468ea1c1de99523d8fd1c1e7bbf7431d11bbe4fc5b226",
+		"a4fa08d787a0eb65ca3c632549b5c648438a93fead7a90eb124eeb1a2a9a6bc5",
 	);
 }, 20_000);
 
