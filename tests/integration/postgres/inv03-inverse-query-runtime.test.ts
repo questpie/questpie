@@ -119,16 +119,12 @@ export const inverseDetail = defineQuery({
 	const policyPath = join(root, "src/comments/policy.ts");
 	let policy = await readFile(policyPath, "utf8");
 	const readStart =
-		"\t\trows: ({ row, principal, tenant }) =>\n\t\t\texpr.exists(tickets, ({ row: ticket }) =>";
-	const readEnd = "\t\t\t),\n\t},\n\tcreate:";
+		"\t\trows: ({ row, principal, tenant }) =>\n\t\t\texpr.and(\n";
 	expect(policy).toContain(readStart);
-	expect(policy).toContain(readEnd);
-	policy = policy
-		.replace(
-			readStart,
-			'\t\trows: ({ row, principal, tenant }) =>\n\t\t\texpr.and(\n\t\t\t\trow.kind.equal("public"),\n\t\t\t\texpr.exists(tickets, ({ row: ticket }) =>',
-		)
-		.replace(readEnd, "\t\t\t\t),\n\t\t\t),\n\t},\n\tcreate:");
+	policy = policy.replace(
+		readStart,
+		`${readStart}\t\t\t\trow.kind.equal("public"),\n`,
+	);
 	await writeFile(policyPath, policy);
 }
 
@@ -266,7 +262,10 @@ postgresTest(
 			const rawResponse = await app.fetch(captured);
 			expect(rawResponse.status, await rawResponse.clone().text()).toBe(200);
 			const raw = await rawResponse.json();
-			expect(raw).toMatchObject({ kind: "result" });
+			expect(raw).toMatchObject({
+				callId: expect.any(String),
+				result: { nodes: expect.any(Array), pageInfo: expect.any(Object) },
+			});
 			expect(direct).toEqual({
 				nodes: [
 					{
