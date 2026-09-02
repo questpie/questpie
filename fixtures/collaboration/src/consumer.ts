@@ -10,7 +10,7 @@ export const messagePage = defineQuery({
 	input: codec.object({
 		channelId: codec.uuid(),
 		first: codec.integer(),
-		after: codec.nullable(codec.text()),
+		after: codec.nullable(codec.cursor()),
 	}),
 	output: codec.object({
 		nodes: codec.array(

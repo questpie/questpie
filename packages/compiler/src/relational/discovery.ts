@@ -354,16 +354,16 @@ function compileDataQuery(value) {
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
     if (parameter.parameterKind === "list") {
-      const codec = parameter.itemKind === "text"
+      const codec = parameter.itemCodec ?? (parameter.itemKind === "text"
         ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
-        : { kind: parameter.itemKind };
+        : { kind: parameter.itemKind });
       return { kind: "list", name, codec, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
     }
-    const codec = parameter.parameterKind === "integer"
+    const codec = parameter.codec ?? (parameter.parameterKind === "integer"
       ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null }
       : parameter.parameterKind === "text"
         ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
-        : { kind: parameter.parameterKind };
+        : { kind: parameter.parameterKind });
     return { kind: "scalar", name, codec, nullable: parameter.nullable === true };
   });
   const selection = template.select({ fields, relations });
@@ -385,10 +385,10 @@ function compileDataQuery(value) {
   };
   const parameterCodec = (parameter) => {
     let codec = parameter.parameterKind === "list"
-      ? { kind: "array", items: { kind: parameter.itemKind }, maximum: parameter.maximumItems }
+      ? { kind: "array", items: parameter.itemCodec ?? { kind: parameter.itemKind }, maximum: parameter.maximumItems }
       : parameter.parameterKind === "cursor"
-        ? { kind: "text" }
-        : { kind: parameter.parameterKind, ...(parameter.minimum === undefined ? {} : { minimum: parameter.minimum }), ...(parameter.maximum === undefined ? {} : { maximum: parameter.maximum }) };
+        ? { kind: "cursor" }
+        : parameter.codec ?? { kind: parameter.parameterKind, ...(parameter.minimum === undefined ? {} : { minimum: parameter.minimum }), ...(parameter.maximum === undefined ? {} : { maximum: parameter.maximum }) };
     return parameter.nullable === true ? { kind: "nullable", codec } : codec;
   };
   const fieldForIdentity = (identity) => {

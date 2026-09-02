@@ -41,7 +41,9 @@ export const ticketQueue = defineQuery({
 	network: true,
 	query: tickets.list({
 		parameters: {
-			statuses: codec.nullable(codec.list(codec.text(), { maximum: 8 })),
+			statuses: codec.nullable(
+				codec.list(codec.text({ maxLength: 32 }), { maximum: 8 }),
+			),
 			teamIds: codec.nullable(codec.list(codec.uuid(), { maximum: 16 })),
 			first: codec.integer({ minimum: 1, maximum: 100 }),
 			after: codec.nullable(codec.cursor()),
@@ -136,7 +138,7 @@ export const ticketDetail = defineQuery({
 export const searchTicketByReference = defineQuery({
 	name: "tickets.searchByReference",
 	network: true,
-	input: codec.object({ reference: codec.text() }),
+	input: codec.object({ reference: codec.text({ maxLength: 32 }) }),
 	output: codec.nullable(ticketSummaryCodec),
 	handler: async ({ input, ctx }) => {
 		const page = await ctx.data.run(ticketSearchByReferencePlan, {

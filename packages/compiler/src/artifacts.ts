@@ -462,6 +462,9 @@ export async function createArtifacts(
 			wireDigest: runtime.wireDigest,
 			path: String(runtime.wire.path),
 			mediaType: String(runtime.wire.mediaType),
+			contextCodec: input.resources.find(
+				(resource) => resource.kind === "context",
+			)?.contract.input ?? { kind: "object", properties: {} },
 			realtime: realtimeEnabled ? realtime : undefined,
 		}),
 		"committed-migrations.json": runtimeArtifactBytes(committedMigrations),

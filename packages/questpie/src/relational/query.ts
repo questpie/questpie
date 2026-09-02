@@ -52,6 +52,8 @@ interface QueryParameter<
 	readonly kind: "parameter";
 	readonly parameterKind: Kind;
 	readonly nullable: Nullable;
+	readonly codec?: Readonly<Record<string, unknown>>;
+	readonly itemCodec?: Readonly<Record<string, unknown>>;
 	readonly value?: Value;
 }
 
@@ -702,6 +704,7 @@ function queryParameterFromCodec(value: unknown): AnyQueryParameter {
 			kind: "parameter",
 			parameterKind: "cursor",
 			nullable,
+			codec: descriptor,
 		});
 	if (descriptor.kind === "array") {
 		const item = codecRecord(descriptor.items);
@@ -715,6 +718,7 @@ function queryParameterFromCodec(value: unknown): AnyQueryParameter {
 			parameterKind: "list",
 			nullable,
 			itemKind: item.kind,
+			itemCodec: item,
 			maximumItems: descriptor.maximum,
 		});
 	}
@@ -730,6 +734,7 @@ function queryParameterFromCodec(value: unknown): AnyQueryParameter {
 		kind: "parameter",
 		parameterKind: descriptor.kind,
 		nullable,
+		codec: descriptor,
 		...(descriptor.minimum === undefined
 			? {}
 			: { minimum: descriptor.minimum }),

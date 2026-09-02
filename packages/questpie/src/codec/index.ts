@@ -63,6 +63,11 @@ export interface IntegerCodecOptions {
 	readonly maximum?: number;
 }
 
+export interface TextCodecOptions {
+	readonly minLength?: number;
+	readonly maxLength?: number;
+}
+
 export interface ListCodecOptions {
 	readonly maximum: number;
 }
@@ -91,6 +96,32 @@ function integerCodec(options?: IntegerCodecOptions) {
 	});
 }
 
+function textCodec(options?: TextCodecOptions) {
+	const minLength =
+		options?.minLength === undefined
+			? undefined
+			: safeInteger(options.minLength, "minLength");
+	const maxLength =
+		options?.maxLength === undefined
+			? undefined
+			: safeInteger(options.maxLength, "maxLength");
+	if (minLength !== undefined && minLength < 0)
+		throw new TypeError("minLength must not be negative");
+	if (maxLength !== undefined && maxLength < 0)
+		throw new TypeError("maxLength must not be negative");
+	if (
+		minLength !== undefined &&
+		maxLength !== undefined &&
+		minLength > maxLength
+	)
+		throw new TypeError("minLength must not exceed maxLength");
+	return Object.freeze({
+		kind: "text" as const,
+		...(minLength === undefined ? {} : { minLength }),
+		...(maxLength === undefined ? {} : { maxLength }),
+	});
+}
+
 function scalar<
 	Value,
 	Kind extends "boolean" | "cursor" | "integer" | "text" | "timestamp" | "uuid",
@@ -100,7 +131,9 @@ function scalar<
 
 export const codec = Object.freeze({
 	uuid: () => scalar<string, "uuid">("uuid"),
-	text: () => scalar<string, "text">("text"),
+	text: (
+		options?: TextCodecOptions,
+	): Codec<string, "text"> & Readonly<TextCodecOptions> => textCodec(options),
 	boolean: () => scalar<boolean, "boolean">("boolean"),
 	integer: (
 		options?: IntegerCodecOptions,

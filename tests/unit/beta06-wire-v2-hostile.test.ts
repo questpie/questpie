@@ -232,6 +232,13 @@ function wireResponse(body: unknown, status: number): Response {
 	});
 }
 
+function canonicalQueryResponse(body: unknown, status: number): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { "content-type": "application/json; charset=utf-8" },
+	});
+}
+
 test("generated client carries CRU exactly, freezes it, and never retries", async () => {
 	const generated = await generatedClientModule();
 	try {
@@ -290,16 +297,10 @@ test("generated client rejects a CRU frame for a Query without retrying", async 
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
 				requests += 1;
-				const sent = (await request.json()) as Readonly<{
-					callId: string;
-					operation: string;
-				}>;
-				return wireResponse(
+				const callId = request.headers.get("Questpie-Call-Id");
+				return canonicalQueryResponse(
 					{
-						protocol,
-						kind: "failure",
-						operation: sent.operation,
-						callId: sent.callId,
+						callId,
 						error: {
 							code: "COMMITTED_RESULT_UNAVAILABLE",
 							retryable: true,
@@ -410,17 +411,11 @@ test("generated wire v2 preserves result and declared-error decoding", async () 
 		const resultClient = generated.module.createClient({
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
-				const sent = (await request.json()) as Readonly<{
-					callId: string;
-					operation: string;
-				}>;
-				return wireResponse(
+				const callId = request.headers.get("Questpie-Call-Id");
+				return canonicalQueryResponse(
 					{
-						protocol,
-						kind: "result",
-						operation: sent.operation,
-						callId: sent.callId,
-						payload: { ok: true },
+						callId,
+						result: { ok: true },
 					},
 					200,
 				);

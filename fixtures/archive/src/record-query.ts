@@ -8,9 +8,9 @@ export const recordPage = defineQuery({
 	name: "records.page",
 	network: true,
 	input: codec.object({
-		archiveCode: codec.text(),
+		archiveCode: codec.text({ maxLength: 32 }),
 		first: codec.integer(),
-		after: codec.nullable(codec.text()),
+		after: codec.nullable(codec.cursor()),
 	}),
 	output: codec.object({
 		nodes: codec.array(

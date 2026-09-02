@@ -153,7 +153,7 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 				input: {
 					kind: "object",
 					properties: {
-						after: { kind: "nullable", codec: { kind: "text" } },
+						after: { kind: "nullable", codec: { kind: "cursor" } },
 						channelId: { kind: "uuid" },
 						first: { kind: "integer" },
 					},
@@ -181,15 +181,11 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 			pathToFileURL(join(temporary, ".questpie/generated/client.ts")).href
 		);
 		const call = async (
-			reply: (request: Request) => unknown | Promise<unknown>,
+			reply: (request: Request) => Response | Promise<Response>,
 		) => {
 			const client = generatedClient.createClient({
 				baseUrl: "http://runtime.test",
-				fetch: async (request: Request) =>
-					new Response(JSON.stringify(await reply(request)), {
-						status: 200,
-						headers: { "content-type": wire.mediaType },
-					}),
+				fetch: reply,
 			});
 			return client
 				.withContext({
@@ -201,27 +197,31 @@ test("binds every generated network Query slot to immutable Runtime Build bytes"
 					after: null,
 				});
 		};
-		await expect(call(() => ({ kind: "result", payload: [] }))).rejects.toThrow(
-			"PROTOCOL_UNSUPPORTED",
-		);
+		const response = (body: unknown, status = 200) =>
+			new Response(JSON.stringify(body), {
+				status,
+				headers: { "content-type": "application/json; charset=utf-8" },
+			});
 		await expect(
-			call(() => ({
-				kind: "failure",
-				error: { code: "CLIENT_OUTDATED", retryable: false },
-			})),
-		).rejects.toThrow("CLIENT_OUTDATED");
+			call(() => response({ kind: "result", payload: [] })),
+		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
+		await expect(
+			call(() =>
+				response(
+					{ error: { code: "PROTOCOL_UNSUPPORTED", retryable: false } },
+					400,
+				),
+			),
+		).rejects.toThrow("PROTOCOL_UNSUPPORTED");
 		await expect(
 			call(async (request) => {
-				const sent = (await request.clone().json()) as Readonly<
-					Record<string, unknown>
-				>;
-				return {
-					protocol: { name: "questpie.operation", version: 1 },
-					kind: "failure",
-					operation: sent.operation,
-					callId: sent.callId,
-					error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
-				};
+				return response(
+					{
+						callId: request.headers.get("Questpie-Call-Id"),
+						error: { code: "RUNTIME_UNAVAILABLE", retryable: true },
+					},
+					503,
+				);
 			}),
 		).rejects.toThrow("RUNTIME_UNAVAILABLE");
 	} finally {

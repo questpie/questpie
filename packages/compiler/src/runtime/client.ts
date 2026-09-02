@@ -1,5 +1,6 @@
 import { canonicalBytes, compareAscii } from "../canonical";
 import type { NormalizedResource } from "../types";
+import { renderClientQueryHttp } from "./client-query-http";
 import { renderClientRealtime } from "./client-realtime";
 import type { RealtimeWireContractV1 } from "./realtime-wire";
 
@@ -22,7 +23,12 @@ export function renderCodecType(
 		return renderCodecType(descriptor.codec, timestampType);
 	if (descriptor.kind === "array")
 		return `ReadonlyArray<${renderCodecType(descriptor.items, timestampType)}>`;
-	if (descriptor.kind === "uuid" || descriptor.kind === "text") return "string";
+	if (
+		descriptor.kind === "cursor" ||
+		descriptor.kind === "uuid" ||
+		descriptor.kind === "text"
+	)
+		return "string";
 	if (
 		descriptor.kind === "bigint" ||
 		descriptor.kind === "numeric" ||
@@ -54,6 +60,7 @@ export function renderClientContract(
 		wireDigest: string;
 		path: string;
 		mediaType: string;
+		contextCodec?: unknown;
 		realtime?: RealtimeWireContractV1;
 	}>,
 ): string {
@@ -146,6 +153,7 @@ export function renderClientContract(
 	);
 	const mutationOperations = mutations.map((resource) => resource.identity);
 	const actionOperations = actions.map((resource) => resource.identity);
+	const queryOperations = queries.map((resource) => resource.identity);
 	const { watchTypes, realtimeTypes, realtimeScope } = renderClientRealtime({
 		application: input.application,
 		clientContractDigest: input.clientContractDigest,
@@ -224,6 +232,8 @@ ${realtimeTypes}
 const inputCodecs: WireRecord = ${canonicalBytes(inputCodecs).trim()};
 const outputCodecs: WireRecord = ${canonicalBytes(outputCodecs).trim()};
 const declaredErrorContracts: WireRecord = ${canonicalBytes(declaredErrorContracts).trim()};
+const contextCodec: WireRecord = ${canonicalBytes(input.contextCodec ?? { kind: "object", properties: {} }).trim()};
+const queryOperations = new Set<string>(${canonicalBytes(queryOperations).trim()});
 const mutationOperations = new Set<string>(${canonicalBytes(mutationOperations).trim()});
 const actionOperations = new Set<string>(${canonicalBytes(actionOperations).trim()});
 const failureCodes = new Set([
@@ -460,6 +470,7 @@ function immutableContext(input: AppContextInput): AppContextInput {
 	}
 	return context;
 }
+${renderClientQueryHttp(input)}
 
 export function createClient(input: Readonly<{
 	readonly baseUrl: string;
@@ -477,6 +488,8 @@ export function createClient(input: Readonly<{
 			if (options.timeoutMilliseconds !== undefined && (!Number.isSafeInteger(options.timeoutMilliseconds) || options.timeoutMilliseconds <= 0)) protocolFailure();
 		}
 		if (options.signal?.aborted) throw options.signal.reason;
+		if (queryOperations.has(operation))
+			return invokeCanonicalQuery<Result>({ transport, baseUrl: input.baseUrl, context, operation, operationInput, options, callId });
 		const encodedInput = encode(inputCodecs[operation], operationInput);
 		let request: Request;
 		try {

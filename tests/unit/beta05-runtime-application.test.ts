@@ -7,6 +7,7 @@ import {
 	createRuntimeApplication,
 	type ExecutionEventV1,
 } from "../../packages/runtime/src";
+import { OperationFailure } from "../../packages/runtime/src/operation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
@@ -1121,6 +1122,144 @@ test("sanitizes unknown operation errors identically for direct and wire calls",
 		error: { code: "INTERNAL" },
 	});
 	expect(responseText).not.toContain("duplicate key");
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
+test("runs one canonical Query GET through the existing Operation executor", async () => {
+	let handlerCalls = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({
+			tenant: { id: input.companyId },
+			values: {},
+		}),
+	});
+	const artifacts = runtimeArtifacts();
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(({ input }) => {
+			handlerCalls += 1;
+			const first = (input as Readonly<{ first: number }>).first;
+			if (first === 3) throw new OperationFailure("CLIENT_OUTDATED", true);
+			return { count: first };
+		}),
+	];
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, bindings),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async (request) => readIngressPrincipal(request),
+		},
+	});
+	const user = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const contextInput = {
+		companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+	};
+	expect(
+		await app.execution(
+			{ principal: user, context: contextInput },
+			(operations) => operations.invoke("query:messages.page", { first: 2 }),
+		),
+	).toEqual({ count: 2 });
+	const request = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=2",
+		{
+			headers: {
+				"Questpie-Application": artifacts.runtimeBuild.application,
+				"Questpie-Call-Id": "canonical-query-1",
+				"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+				"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
+					"base64url",
+				),
+				"Questpie-Timeout-Milliseconds": "5000",
+				"Questpie-Wire-Digest": artifacts.wireContract.digest,
+			},
+		},
+	);
+	bindIngressPrincipal(request, user);
+	const response = await app.fetch(request);
+	expect(response.status).toBe(200);
+	expect(response.headers.get("content-type")).toBe(
+		"application/json; charset=utf-8",
+	);
+	expect(response.headers.get("cache-control")).toBe("private, no-store");
+	expect(await response.json()).toEqual({
+		callId: "canonical-query-1",
+		result: { count: 2 },
+	});
+	expect(handlerCalls).toBe(2);
+	const privateFailure = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=3",
+		{ headers: request.headers },
+	);
+	bindIngressPrincipal(privateFailure, user);
+	const privateFailureResponse = await app.fetch(privateFailure);
+	expect(privateFailureResponse.status).toBe(500);
+	expect(await privateFailureResponse.json()).toEqual({
+		callId: "canonical-query-1",
+		error: { code: "INTERNAL", retryable: false },
+	});
+	const headers = {
+		"Questpie-Application": artifacts.runtimeBuild.application,
+		"Questpie-Call-Id": "canonical-hostile-1",
+		"Questpie-Client-Contract": artifacts.runtimeBuild.clientContractDigest,
+		"Questpie-Context": Buffer.from(JSON.stringify(contextInput)).toString(
+			"base64url",
+		),
+		"Questpie-Wire-Digest": artifacts.wireContract.digest,
+	};
+	for (const hostile of [
+		"http://runtime.test/_questpie/query/messages.page?first=2&first=2",
+		"http://runtime.test/_questpie/query/messages.page?unknown=2",
+		"http://runtime.test/_questpie/query/messages.page?first=%32",
+	]) {
+		const invalid = new Request(hostile, { headers });
+		bindIngressPrincipal(invalid, user);
+		const invalidResponse = await app.fetch(invalid);
+		expect(invalidResponse.status).toBe(400);
+		expect(invalidResponse.headers.get("cache-control")).toBe(
+			"private, no-store",
+		);
+	}
+	const malformedContext = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=2",
+		{ headers: { ...headers, "Questpie-Context": "abc=" } },
+	);
+	bindIngressPrincipal(malformedContext, user);
+	expect((await app.fetch(malformedContext)).status).toBe(400);
+	const noPostFallback = new Request(
+		"http://runtime.test/_questpie/query/messages.page?first=2",
+		{ method: "POST", headers },
+	);
+	bindIngressPrincipal(noPostFallback, user);
+	expect((await app.fetch(noPostFallback)).status).toBe(400);
+	const invisible = new Request(
+		"http://runtime.test/_questpie/query/messages.missing?first=2",
+		{ headers },
+	);
+	bindIngressPrincipal(invisible, user);
+	expect((await app.fetch(invisible)).status).toBe(404);
+	const credentialBeforeDecode = new Request(
+		"http://runtime.test/_questpie/query/messages.page?unknown=2",
+		{ headers },
+	);
+	expect((await app.fetch(credentialBeforeDecode)).status).toBe(401);
+	expect(handlerCalls).toBe(3);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 

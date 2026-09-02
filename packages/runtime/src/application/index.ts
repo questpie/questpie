@@ -3,10 +3,6 @@ import {
 	type ContextDefinition,
 	type ContextInputOf,
 	type Principal,
-	type ServiceDefinition,
-	type ServiceDependencyMap,
-	type ServiceEffect,
-	type ServiceInstance,
 } from "questpie";
 
 import {
@@ -14,11 +10,7 @@ import {
 	encodeRuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import {
-	createApplicationRuntime,
-	type RouteExecutionScope,
-	type RuntimeProgram,
-} from "../execution";
+import { createApplicationRuntime } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
@@ -43,27 +35,28 @@ import {
 	resultFrame,
 } from "../operation";
 import { verifyRuntimeArtifactFiles } from "./artifact-files";
-import { decodeRuntimeArtifacts, type RuntimeArtifactsV1 } from "./artifacts";
+import { decodeRuntimeArtifacts } from "./artifacts";
 import {
 	validateRuntimeExecutableBindings,
 	type RuntimeExecutableBindings,
 } from "./bindings";
+import type {
+	RuntimeApplication,
+	RuntimeApplicationProgram,
+	RuntimeOperations,
+} from "./contracts";
 import { createEventEmitter, type ExecutionEventV1 } from "./events";
+import { createCanonicalQueryHttp } from "./http-query";
 import {
 	isOperationAbort,
 	normalizeExecutedOperationError,
 } from "./operation-error";
-import type {
-	LiveQueryCoordinator,
-	RealtimeCarrierObservedPlan,
-} from "./realtime";
 import {
 	matchesRetainedClientPair,
 	retainClientPairs,
 	type RetainedClientPair,
 } from "./retained-clients";
 import { controlledRoot } from "./root";
-import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
 export type { ExecutionEventV1 } from "./events";
 export type {
@@ -71,93 +64,13 @@ export type {
 	RuntimeExecutableInventoryBinding,
 	RuntimeReactionBinding,
 } from "./bindings";
+export type {
+	RuntimeApplication,
+	RuntimeApplicationProgram,
+	RuntimeOperations,
+} from "./contracts";
 
 type MaybePromise<Value> = Value | Promise<Value>;
-
-export interface RuntimeApplicationProgram<
-	Context extends ContextDefinition,
-	OperationView,
-	ExecutionView = OperationView,
-> extends RuntimeProgram<Context, OperationView> {
-	readonly projectExecution?: RuntimeProgram<Context, ExecutionView>["project"];
-	readonly projectMutation?: (
-		scope: Parameters<RuntimeProgram<Context, OperationView>["project"]>[0],
-	) => MaybePromise<MutationInvoker<OperationView>>;
-	readonly invokeAction?: (
-		input: Readonly<{
-			identity: string;
-			input: unknown;
-			effectKey: string;
-			callId: string;
-			timeoutMilliseconds?: number;
-			execution: ExecutionView;
-			operations: RuntimeOperations;
-		}>,
-	) => MaybePromise<unknown>;
-	readonly resolvePrincipal: (
-		request: Request,
-	) => MaybePromise<Principal | null>;
-	readonly verifyReadiness?: (
-		artifacts: RuntimeArtifactsV1,
-	) => MaybePromise<void>;
-	readonly onLiveQueryObserved?: (
-		input: RealtimeCarrierObservedPlan,
-	) => MaybePromise<void>;
-	readonly liveQueryCoordinator?: LiveQueryCoordinator;
-	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
-}
-
-export interface RuntimeOperations {
-	invoke(
-		operation: string,
-		input: unknown,
-		options?: Readonly<{
-			callId?: string;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-	): Promise<unknown>;
-}
-
-export interface RuntimeApplication<Input, ExecutionView> {
-	applicationService<
-		Definition extends ServiceDefinition<
-			string,
-			"application",
-			ServiceEffect,
-			ServiceDependencyMap,
-			unknown
-		>,
-	>(
-		definition: Definition,
-	): Promise<ServiceInstance<Definition>>;
-	execution<Result>(
-		input: Readonly<{
-			principal: Principal;
-			context: Input;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-		use: (
-			scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
-		) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	route<Result>(
-		input: Readonly<{
-			principal: Principal;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-		use: (
-			scope: RouteExecutionScope<
-				Input,
-				RuntimeOperations & Readonly<{ execution: ExecutionView }>
-			>,
-		) => MaybePromise<Result>,
-	): Promise<Awaited<Result>>;
-	fetch(request: Request): Promise<Response>;
-	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
-}
 
 type RuntimeState = "closed" | "draining" | "ready" | "verifying";
 
@@ -503,12 +416,41 @@ export async function createRuntimeApplication<
 			onObservedPlan: input.program.onLiveQueryObserved,
 			coordinator: input.program.liveQueryCoordinator,
 		}) ?? null;
+	const canonicalQuery = createCanonicalQueryHttp<
+		ContextInputOf<Context>,
+		OperationView
+	>({
+		application: artifacts.runtimeBuild.application,
+		clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+		wireDigest: artifacts.wireContract.digest,
+		maximumResponseBytes: artifacts.wireContract.limits.responseBytes,
+		contextCodec: input.program.context.input as never,
+		operations: artifacts.wireContract.operations,
+		prepare: operationEngine.prepare,
+		resolvePrincipal: async (request) =>
+			input.program.resolvePrincipal(request),
+		execute: ({
+			principal: caller,
+			context,
+			operation,
+			callId,
+			signal,
+			deadline,
+		}) =>
+			executeRoot(
+				{ principal: caller, context, signal, deadline },
+				({ invoke }) => invoke(operation, callId),
+			),
+		now: nowMilliseconds,
+	});
 
 	const fetch = async (request: Request): Promise<Response> => {
 		if (realtime) {
 			const response = await realtime.fetch(request);
 			if (response) return response;
 		}
+		const canonicalQueryResponse = await canonicalQuery.fetch(request);
+		if (canonicalQueryResponse) return canonicalQueryResponse;
 		if (new URL(request.url).pathname !== operationPath)
 			return operationWireResponse(rejectionFrame("NOT_FOUND"), 404);
 		if (request.method !== "POST")
