@@ -1,5 +1,11 @@
-import { cpSync, rmSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+	cpSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "..");
 
@@ -41,6 +47,53 @@ cpSync(
 		recursive: true,
 	},
 );
+
+const embeddedRuntimeImports = new Map([
+	[
+		"@questpie/runtime/operation",
+		resolve(internal, "runtime/operation/index.js"),
+	],
+	[
+		"@questpie/runtime/bundle-core-types",
+		resolve(internal, "runtime/bundle-core-types.js"),
+	],
+]);
+
+function rewriteEmbeddedRuntimeImports(directory: string): void {
+	for (const entry of readdirSync(directory, { withFileTypes: true })) {
+		const path = resolve(directory, entry.name);
+		if (entry.isDirectory()) {
+			rewriteEmbeddedRuntimeImports(path);
+			continue;
+		}
+		if (!entry.name.endsWith(".js") && !entry.name.endsWith(".d.ts")) continue;
+		const original = readFileSync(path, "utf8");
+		let rewritten = original;
+		for (const [specifier, target] of embeddedRuntimeImports) {
+			const pathFromCompiler = relative(dirname(path), target).replaceAll(
+				"\\",
+				"/",
+			);
+			const importPath = pathFromCompiler.startsWith(".")
+				? pathFromCompiler
+				: `./${pathFromCompiler}`;
+			rewritten = rewritten
+				.replaceAll(`"${specifier}"`, `"${importPath}"`)
+				.replaceAll(`'${specifier}'`, `'${importPath}'`);
+		}
+		if (
+			/(?:\bfrom\s+|\bimport\s*(?:\(\s*)?)(["'])@questpie\/runtime(?:\/[^"']*)?\1/u.test(
+				rewritten,
+			)
+		)
+			throw new Error(
+				`embedded compiler contains an unmapped private Runtime import: ${path}`,
+			);
+		if (rewritten !== original) writeFileSync(path, rewritten);
+	}
+}
+
+rewriteEmbeddedRuntimeImports(resolve(internal, "compiler"));
 
 const built = await Bun.build({
 	entrypoints: [resolve(repositoryRoot, "packages/questpie/cli/questpie.ts")],
