@@ -1239,6 +1239,7 @@ WHERE call_id = ${editCallId}`;
 				authProvider: "better-auth",
 				commentBody: firefoxComment,
 				databaseOwnedUpdateAdvanced: true,
+				jobRunId: expect.stringMatching(/^[0-9a-f-]{36}$/),
 				lifecycleError: { code: "INVALID_TICKET", status: 422 },
 				phase: "firefox-complete",
 				reference: supportTracerIds.referenceOpen,

@@ -112,12 +112,15 @@ export async function runFirefoxJourney(input: {
 					}),
 				})
 			: null;
-	await input.executeTicketOperation("Adding comment", () =>
-		input.desk.mutations["ticket.addComment"](
-			{ body: input.commentBody, ticketId },
-			{ callId: `browser:comment:${crypto.randomUUID()}` },
-		),
+	const commentResult = await input.executeTicketOperation(
+		"Adding comment",
+		() =>
+			input.desk.mutations["ticket.addComment"](
+				{ body: input.commentBody, ticketId },
+				{ callId: `browser:comment:${crypto.randomUUID()}` },
+			),
 	);
+	const jobRunId = commentResult.job.runId;
 	await waitForRenderedText(
 		".comments",
 		input.commentBody,
@@ -202,6 +205,7 @@ export async function runFirefoxJourney(input: {
 		authProvider: "better-auth",
 		commentBody: input.commentBody,
 		databaseOwnedUpdateAdvanced,
+		jobRunId,
 		lifecycleError,
 		phase: "firefox-complete",
 		reference: input.reference,
