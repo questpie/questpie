@@ -85,18 +85,24 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 		)) as GeneratedClientModule;
 
 		let observed: Request | undefined;
+		let injectedIdentityPreserved = false;
+		const injectedFetch = async function (
+			this: Readonly<{ transport?: unknown }>,
+			request: Request,
+		) {
+			injectedIdentityPreserved = this.transport === injectedFetch;
+			observed = request.clone();
+			return new Response(
+				JSON.stringify({ callId: "query-visible-1", result: { count: 20 } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json; charset=utf-8" },
+				},
+			);
+		};
 		const client = generated.createClient({
 			baseUrl: "http://runtime.test",
-			fetch: async (request) => {
-				observed = request.clone();
-				return new Response(
-					JSON.stringify({ callId: "query-visible-1", result: { count: 20 } }),
-					{
-						status: 200,
-						headers: { "content-type": "application/json; charset=utf-8" },
-					},
-				);
-			},
+			fetch: injectedFetch,
 		});
 		const result = await client
 			.withContext({
@@ -108,6 +114,7 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 			);
 
 		expect(result).toEqual({ count: 20 });
+		expect(injectedIdentityPreserved).toBe(true);
 		expect(observed?.method).toBe("GET");
 		expect(observed?.url).toBe(
 			"http://runtime.test/_questpie/query/messages.page?after=~null&first=20&search=one%20two",
@@ -128,6 +135,12 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 
 		const defaultFetch = globalThis.fetch;
 		try {
+			globalThis.fetch = async () => {
+				throw new Error("default fetch was captured before invocation");
+			};
+			const defaultTransportClient = generated.createClient({
+				baseUrl: "http://runtime.test",
+			});
 			globalThis.fetch = async function (
 				this: typeof globalThis,
 				request: RequestInfo | URL,
@@ -146,9 +159,6 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 					},
 				);
 			};
-			const defaultTransportClient = generated.createClient({
-				baseUrl: "http://runtime.test",
-			});
 			expect(
 				await defaultTransportClient
 					.withContext({
