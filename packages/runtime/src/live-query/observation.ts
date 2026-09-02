@@ -243,17 +243,34 @@ export function createLiveQueryObservation(
 					});
 			}
 			for (const relation of reached.relations) {
+				if (relation.policyProgramDigest !== undefined)
+					add("policyEvidencePoint", relation.collection, {
+						conservative: true,
+						policyProgramDigest: relation.policyProgramDigest,
+						relation: relation.relation,
+					});
+				const boundary =
+					relation.kind === "inverseList"
+						? {
+								correlation: relation.correlation,
+								first: relation.first,
+								kind: relation.kind,
+								statementDigest: relation.statementDigest,
+							}
+						: {};
 				if (relation.endpoints > 0)
 					add("relationEndpoint", relation.collection, {
 						conservative: true,
 						observed: relation.endpoints,
 						relation: relation.relation,
+						...boundary,
 					});
 				if (relation.misses > 0)
 					add("relationMiss", relation.collection, {
 						conservative: true,
 						observed: relation.misses,
 						relation: relation.relation,
+						...boundary,
 					});
 			}
 			observation.recordStructuralQuery(reached.templateDigest, tokens);

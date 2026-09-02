@@ -1,10 +1,15 @@
 import { expect, test } from "bun:test";
 
 import { runtimeArtifactDigest } from "../../packages/runtime/src/application/artifact-protocol";
+import {
+	createLiveQueryObservation,
+	type LinkedQueryWatchabilityV1,
+} from "../../packages/runtime/src/live-query";
 import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";
 import { linkPostgresQueryPlan } from "../../packages/runtime/src/relational/postgres-database";
 import {
 	executePostgresDatabaseQuery,
+	type PostgresQueryObserver,
 	type PostgresQueryPlanV2,
 } from "../../packages/runtime/src/relational/query";
 
@@ -230,30 +235,51 @@ const rows = [
 	],
 ] as const;
 
-test("executes one flattened inverse plan and publishes complete readonly child arrays", async () => {
-	let statements = 0;
-	let mode: unknown;
+function withStatementDigest(
+	value: Omit<PostgresQueryPlanV2, "statementDigest">,
+): PostgresQueryPlanV2 {
+	return {
+		...value,
+		statementDigest: runtimeArtifactDigest(
+			"questpie-postgres-query-statement-v2",
+			value,
+		),
+	};
+}
+
+async function executeRows(
+	returnedRows: readonly (readonly unknown[])[],
+	options: Readonly<{
+		observer?: PostgresQueryObserver;
+		plan?: PostgresQueryPlanV2;
+		signal?: AbortSignal;
+	}> = {},
+) {
+	const facts: { statements: number; transactions: number; mode?: unknown } = {
+		statements: 0,
+		transactions: 0,
+	};
 	const database = {
 		async transaction<Output>(input: {
 			mode: unknown;
 			use(transaction: unknown): Promise<Output>;
 		}): Promise<Output> {
-			mode = input.mode;
+			facts.transactions += 1;
+			facts.mode = input.mode;
 			return input.use({
 				execute: async (statement: { decode(value: unknown): unknown }) => {
-					statements += 1;
+					facts.statements += 1;
 					return statement.decode({
 						command: "SELECT",
-						rowCount: rows.length,
-						rows,
+						rowCount: returnedRows.length,
+						rows: returnedRows,
 					});
 				},
 			});
 		},
 	} as PostgresTransactionRunner;
-
-	const page = await executePostgresDatabaseQuery({
-		linkedPlan: linkPostgresQueryPlan(plan()),
+	const result = executePostgresDatabaseQuery({
+		linkedPlan: linkPostgresQueryPlan(options.plan ?? plan()),
 		binding: {
 			templateDigest,
 			values: [
@@ -267,10 +293,21 @@ test("executes one flattened inverse plan and publishes complete readonly child 
 			tenant: { id: "public" },
 		},
 		database,
+		observer: options.observer,
+		signal: options.signal,
 	});
+	return { facts, result };
+}
 
-	expect(statements).toBe(1);
-	expect(mode).toEqual({ isolation: "repeatableRead", access: "readOnly" });
+test("executes one flattened inverse plan and publishes complete readonly child arrays", async () => {
+	const execution = await executeRows(rows);
+	const page = await execution.result;
+
+	expect(execution.facts).toMatchObject({
+		statements: 1,
+		transactions: 1,
+		mode: { isolation: "repeatableRead", access: "readOnly" },
+	});
 	expect(page).toEqual({
 		nodes: [
 			{
@@ -296,4 +333,183 @@ test("executes one flattened inverse plan and publishes complete readonly child 
 	});
 	expect(Object.isFrozen(page.nodes)).toBe(true);
 	expect(Object.isFrozen(page.nodes[0]!.comments)).toBe(true);
+});
+
+test("rejects malformed flattened ordinals and root drift without partial output", async () => {
+	for (const hostile of [
+		rows.map((row, index) => (index === 1 ? [...row.slice(0, -1), "3"] : row)),
+		rows.map((row, index) =>
+			index === 1 ? [row[0], row[1], "changed", ...row.slice(3)] : row,
+		),
+		rows.map((row, index) =>
+			index === 2 ? [...row.slice(0, 3), child1, ...row.slice(4)] : row,
+		),
+		[rows[0]!, rows[1]!, rows[3]!],
+	] as const) {
+		const execution = await executeRows(hostile);
+		await expect(execution.result).rejects.toMatchObject({
+			code: "QP-DATA-001",
+			phase: "execute",
+		});
+		expect(execution.facts).toMatchObject({ statements: 1, transactions: 1 });
+	}
+});
+
+test("enforces the complete semantic result-byte boundary", async () => {
+	const original = plan();
+	const inverse = original.result.find(
+		(
+			item,
+		): item is Extract<
+			(typeof original.result)[number],
+			{ kind: "inverseList" }
+		> => item.kind === "inverseList",
+	)!;
+	const body = inverse.fields.find(({ key }) => key === "body")!;
+	const { statementDigest: _statementDigest, ...unsigned } = original;
+	const largePlan = withStatementDigest({
+		...unsigned,
+		result: unsigned.result.map((item) =>
+			item === inverse
+				? {
+						...inverse,
+						fields: inverse.fields.map((field) =>
+							field === body
+								? {
+										...body,
+										codec: { ...body.codec, maxLength: 2_000_000 },
+									}
+								: field,
+						),
+					}
+				: item,
+		),
+	});
+	const largeRows = rows.map((row, index) =>
+		index === 0
+			? [...row.slice(0, 4), "x".repeat(1_048_576), ...row.slice(5)]
+			: row,
+	);
+	const execution = await executeRows(largeRows, { plan: largePlan });
+	await expect(execution.result).rejects.toMatchObject({
+		code: "QP-DATA-012",
+		phase: "execute",
+	});
+});
+
+test("performs zero PostgreSQL work when already cancelled", async () => {
+	const controller = new AbortController();
+	controller.abort(new DOMException("cancelled", "AbortError"));
+	const execution = await executeRows(rows, { signal: controller.signal });
+	await expect(execution.result).rejects.toMatchObject({ name: "AbortError" });
+	expect(execution.facts).toEqual({ statements: 0, transactions: 0 });
+});
+
+test("observes the inverse boundary, empty miss, nested Relation, and Policy closure", async () => {
+	const structuralQueries = new Map([
+		[
+			templateDigest,
+			{
+				kind: "structuralQuery" as const,
+				templateDigest,
+				policy: "policy:tickets",
+				policyProgramDigest: "b".repeat(64),
+				collections: [
+					"collection:comments",
+					"collection:memberships",
+					"collection:tickets",
+				],
+				relations: [
+					"collection:comments/relation:author",
+					"collection:comments/relation:ticket",
+				],
+				tokens: [
+					"collectionRange",
+					"orderingBoundary",
+					"pageSentinel",
+					"policyEvidencePoint",
+					"relationEndpoint",
+					"relationMiss",
+				],
+			},
+		],
+	]);
+	const observation = createLiveQueryObservation({
+		identity: "query:tickets.detail",
+		watchable: true,
+		inputCodec: {},
+		outputCodec: {},
+		contractDigest: "d".repeat(64),
+		context: {
+			kind: "context",
+			identity: "context:request",
+			projectionDigest: "e".repeat(64),
+			tokens: ["contextBootstrapPoint"],
+		},
+		structuralQueries,
+		maximumTokensPerPlan: 256,
+		unsupportedReason: null,
+	} satisfies LinkedQueryWatchabilityV1);
+	observation.recordContext("context:request", [
+		{
+			kind: "contextBootstrapPoint",
+			collection: "collection:memberships",
+			detail: { reached: true },
+		},
+	]);
+	const execution = await executeRows(rows, { observer: observation });
+	await execution.result;
+	const tokens = observation.finish().tokens;
+	const token = (kind: string, collection: string) =>
+		tokens.find(
+			(candidate) =>
+				candidate.kind === kind && candidate.collection === collection,
+		);
+
+	expect(token("relationEndpoint", "collection:comments")?.detail).toEqual({
+		conservative: true,
+		correlation: [
+			{
+				field: "collection:comments/field:ticketId",
+				reference: "collection:tickets/field:id",
+			},
+		],
+		first: 2,
+		kind: "inverseList",
+		observed: 2,
+		relation: "collection:comments/relation:ticket",
+		statementDigest: plan().statementDigest,
+	});
+	expect(token("relationMiss", "collection:comments")?.detail).toMatchObject({
+		observed: 1,
+		relation: "collection:comments/relation:ticket",
+	});
+	expect(
+		token("relationEndpoint", "collection:memberships")?.detail,
+	).toMatchObject({
+		observed: 1,
+		relation: "collection:comments/relation:author",
+	});
+	expect(token("relationMiss", "collection:memberships")?.detail).toMatchObject(
+		{
+			observed: 1,
+			relation: "collection:comments/relation:author",
+		},
+	);
+	expect(token("policyEvidencePoint", "collection:comments")?.detail).toEqual({
+		conservative: true,
+		policyProgramDigest: "c".repeat(64),
+		relation: "collection:comments/relation:ticket",
+	});
+	expect(
+		token("policyEvidencePoint", "collection:memberships")?.detail,
+	).toMatchObject({
+		policyProgramDigest: "b".repeat(64),
+		relation: "collection:comments/relation:author",
+	});
+	expect(token("pageSentinel", "collection:tickets")?.detail).toEqual({
+		first: 2,
+		hasNextPage: true,
+		observed: 2,
+	});
 });

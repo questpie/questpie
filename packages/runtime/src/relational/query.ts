@@ -3,26 +3,36 @@ import { createHash } from "node:crypto";
 import { assertOperationAdmission } from "../operation";
 import type { PostgresParameter, PostgresTransactionRunner } from "../postgres";
 import type { PostgresTransaction } from "../postgres";
-import {
-	createCursorBindingV2,
-	type CursorOrderTerm,
-	type CursorScalar,
-} from "./cursor";
+import { createCursorBindingV2, type CursorScalar } from "./cursor";
 import {
 	executeLinkedPostgresQueryPlan,
 	type LinkedPostgresQueryPlan,
 } from "./postgres-database";
+import {
+	DataQueryExecutionError,
+	type DataQueryDiagnosticCode,
+} from "./query-error";
 import type {
+	PostgresInverseListResultV2,
 	PostgresQueryParameterV1,
-	PostgresQueryPlanV1,
+	PostgresQueryPlan,
 	PostgresQueryResultV1,
 	QueryParameterV1,
-	ResultFieldV1,
 	ScalarValue,
 } from "./query-plan";
-import { decodeRelationalScalar, isValidRelationalScalar } from "./scalar";
+import {
+	decodePostgresInversePage,
+	decodePostgresQueryRow,
+	positivePostgresOrdinal,
+	postgresQueryCursorValues,
+	postgresQueryOrderTerms,
+	type PostgresQueryRow,
+} from "./query-result";
+import { isValidRelationalScalar } from "./scalar";
 
 export type { ScalarCodecV1 } from "./scalar";
+export { DataQueryExecutionError } from "./query-error";
+export type { DataQueryDiagnosticCode } from "./query-error";
 export type {
 	PostgresInverseListResultV2,
 	PostgresQueryParameterV1,
@@ -50,7 +60,7 @@ export type QueryExecutionFacts = Readonly<{
 	tenant: Readonly<{ id: string }>;
 }>;
 
-export type PostgresQueryRow = Readonly<Record<string, unknown>>;
+export type { PostgresQueryRow } from "./query-result";
 
 export type PostgresQueryObservationV1 = Readonly<{
 	templateDigest: string;
@@ -70,39 +80,16 @@ export type PostgresQueryObservationV1 = Readonly<{
 		collection: string;
 		endpoints: number;
 		misses: number;
+		kind?: "inverseList" | "toOne";
+		policyProgramDigest?: string;
+		correlation?: readonly Readonly<{ field: string; reference: string }>[];
+		first?: number;
+		statementDigest?: string;
 	}>[];
 }>;
 
 export interface PostgresQueryObserver {
 	recordPostgresQuery(observation: PostgresQueryObservationV1): void;
-}
-
-export type DataQueryDiagnosticCode =
-	| "QP-DATA-001"
-	| "QP-DATA-006"
-	| "QP-DATA-012"
-	| "QP-DATA-014";
-
-const diagnosticClasses = {
-	"QP-DATA-001": "invalidScalarValue",
-	"QP-DATA-006": "invalidSetOperand",
-	"QP-DATA-012": "executionLimitExceeded",
-	"QP-DATA-014": "invalidParameterReference",
-} as const;
-
-export class DataQueryExecutionError extends Error {
-	readonly blocking = "none" as const;
-	readonly diagnosticClass: (typeof diagnosticClasses)[DataQueryDiagnosticCode];
-
-	constructor(
-		readonly code: DataQueryDiagnosticCode,
-		readonly phase: "bind" | "execute",
-	) {
-		const diagnosticClass = diagnosticClasses[code];
-		super(diagnosticClass);
-		this.name = "DataQueryExecutionError";
-		this.diagnosticClass = diagnosticClass;
-	}
 }
 
 export type DataQueryPage = Readonly<{
@@ -193,7 +180,7 @@ function normalizeSet(
 }
 
 function normalizeBinding(
-	plan: PostgresQueryPlanV1,
+	plan: PostgresQueryPlan,
 	binding: DataQueryBindingV1,
 	maximumPageSize: number,
 ): ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]> {
@@ -268,7 +255,7 @@ function executionFact(
 }
 
 function sparseExecutionFacts(
-	plan: PostgresQueryPlanV1,
+	plan: PostgresQueryPlan,
 	facts: QueryExecutionFacts,
 ) {
 	const expected = new Set<string>();
@@ -312,7 +299,7 @@ function sparseExecutionFacts(
 }
 
 function positionalParameters(
-	plan: PostgresQueryPlanV1,
+	plan: PostgresQueryPlan,
 	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
 	facts: QueryExecutionFacts,
 	boundary: readonly CursorScalar[] | null,
@@ -342,132 +329,6 @@ function positionalParameters(
 	});
 }
 
-function decodeField(
-	row: PostgresQueryRow,
-	field: ResultFieldV1,
-	timestampResult: "canonical" | "date" = "date",
-): Date | ScalarValue | null {
-	const value = row[field.column];
-	if (value === null && field.nullable) return null;
-	try {
-		return decodeRelationalScalar(value, field.codec, timestampResult) as
-			| Date
-			| ScalarValue;
-	} catch {
-		throw new DataQueryExecutionError("QP-DATA-001", "execute");
-	}
-}
-
-function decodeRow(
-	row: PostgresQueryRow,
-	result: readonly PostgresQueryResultV1[],
-): Readonly<Record<string, unknown>> {
-	const output: Record<string, unknown> = {};
-	for (const item of result) {
-		if (item.kind === "field") {
-			if (item.guardColumn !== undefined) {
-				const guard = row[item.guardColumn];
-				if (guard === false) continue;
-				if (guard !== true)
-					throw new DataQueryExecutionError("QP-DATA-001", "execute");
-			}
-			output[item.key] = decodeField(row, item);
-			continue;
-		}
-		const present = row[item.presenceColumn];
-		if (present === null) {
-			output[item.key] = null;
-			continue;
-		}
-		if (present !== true)
-			throw new DataQueryExecutionError("QP-DATA-001", "execute");
-		output[item.key] = decodeRelatedRow(row, item);
-	}
-	return Object.freeze(output);
-}
-
-function decodeRelatedRow(
-	row: PostgresQueryRow,
-	item: Extract<PostgresQueryResultV1, { kind: "toOne" }>,
-): Readonly<Record<string, unknown>> {
-	const related: Record<string, unknown> = {};
-	for (const field of item.fields) {
-		if (field.guardColumn !== undefined) {
-			const guard = row[field.guardColumn];
-			if (guard === false) continue;
-			if (guard !== true)
-				throw new DataQueryExecutionError("QP-DATA-001", "execute");
-		}
-		related[field.key] = decodeField(row, field);
-	}
-	for (const nested of item.relations ?? []) {
-		const present = row[nested.presenceColumn];
-		if (present === null) related[nested.key] = null;
-		else if (present === true)
-			related[nested.key] = decodeRelatedRow(row, nested);
-		else throw new DataQueryExecutionError("QP-DATA-001", "execute");
-	}
-	return Object.freeze(related);
-}
-
-function orderTerms(plan: PostgresQueryPlanV1): readonly CursorOrderTerm[] {
-	return plan.page.order.map((term) => {
-		const selected = plan.result.find(
-			(item): item is Extract<PostgresQueryResultV1, { kind: "field" }> =>
-				item.kind === "field" && item.field === term.field,
-		);
-		if (
-			!selected ||
-			selected.guardColumn !== undefined ||
-			selected.codec.kind !== term.codec ||
-			selected.nullable !== term.nullable ||
-			!term.field.startsWith("collection:") ||
-			!term.field.includes("/field:") ||
-			![
-				"bigint",
-				"boolean",
-				"date",
-				"integer",
-				"numeric",
-				"text",
-				"timestamp",
-				"uuid",
-			].includes(term.codec)
-		)
-			throw new TypeError("invalid compiled cursor order");
-		const codec = selected.codec;
-		return {
-			field: term.field as CursorOrderTerm["field"],
-			codec: term.codec as CursorOrderTerm["codec"],
-			nullable: term.nullable,
-			...(codec.kind === "timestamp"
-				? {
-						withTimezone: codec.withTimezone,
-					}
-				: codec.kind === "integer" || codec.kind === "bigint"
-					? { minimum: codec.minimum, maximum: codec.maximum }
-					: codec.kind === "numeric"
-						? { precision: codec.precision, scale: codec.scale }
-						: {}),
-		};
-	});
-}
-
-function cursorValues(
-	plan: PostgresQueryPlanV1,
-	row: PostgresQueryRow,
-): readonly CursorScalar[] {
-	return plan.page.order.map((term) => {
-		const field = plan.result.find(
-			(item): item is Extract<PostgresQueryResultV1, { kind: "field" }> =>
-				item.kind === "field" && item.field === term.field,
-		);
-		if (!field || field.guardColumn !== undefined)
-			throw new TypeError("invalid compiled cursor result Field");
-		return decodeField(row, field, "canonical") as CursorScalar;
-	});
-}
-
 function collectionOfField(field: string): string {
 	const separator = field.indexOf("/field:");
 	if (separator < 1) throw new TypeError("invalid compiled Collection Field");
@@ -475,12 +336,13 @@ function collectionOfField(field: string): string {
 }
 
 function queryObservation(
-	plan: PostgresQueryPlanV1,
+	plan: PostgresQueryPlan,
 	values: ReadonlyMap<string, null | ScalarValue | readonly ScalarValue[]>,
 	facts: QueryExecutionFacts,
-	rows: readonly PostgresQueryRow[],
 	visibleRows: readonly PostgresQueryRow[],
 	first: number,
+	hasNextPage: boolean,
+	flattenedVisibleRows: readonly PostgresQueryRow[] = visibleRows,
 ): PostgresQueryObservationV1 {
 	const primaryCollections = new Set(
 		plan.page.order.map(({ field }) => collectionOfField(field)),
@@ -497,10 +359,38 @@ function queryObservation(
 		return Object.freeze({ parameter, value });
 	});
 	const observeRelations = (
-		items: readonly PostgresQueryResultV1[],
+		items: readonly (PostgresQueryResultV1 | PostgresInverseListResultV2)[],
+		observationRows: readonly PostgresQueryRow[],
 	): PostgresQueryObservationV1["relations"] =>
 		items.flatMap((item) => {
-			if (item.kind !== "toOne") return [];
+			if (item.kind === "field") return [];
+			if (item.kind === "inverseList") {
+				if (plan.version !== 2)
+					throw new TypeError("inverse Query result requires plan v2");
+				const childRows = flattenedVisibleRows.filter(
+					(row) => positivePostgresOrdinal(row[item.ordinalColumn]) !== null,
+				);
+				return [
+					Object.freeze({
+						relation: item.relation,
+						collection: item.source,
+						endpoints: childRows.length,
+						misses:
+							visibleRows.length -
+							new Set(
+								childRows.map((row) =>
+									positivePostgresOrdinal(row[plan.ordinalColumns[0]]),
+								),
+							).size,
+						kind: "inverseList" as const,
+						policyProgramDigest: plan.inversePolicyProgramDigest,
+						correlation: item.correlation,
+						first: item.first,
+						statementDigest: plan.statementDigest,
+					}),
+					...observeRelations(item.relations, childRows),
+				];
+			}
 			const collections = new Set(
 				item.fields.map(({ field }) => collectionOfField(field)),
 			);
@@ -509,7 +399,7 @@ function queryObservation(
 				throw new TypeError("invalid compiled Relation target Collection");
 			let endpoints = 0;
 			let misses = 0;
-			for (const row of visibleRows) {
+			for (const row of observationRows) {
 				const present = row[item.presenceColumn];
 				if (present === true) endpoints += 1;
 				else if (present === null) misses += 1;
@@ -520,11 +410,18 @@ function queryObservation(
 					collection: item.collection ?? [...collections][0]!,
 					endpoints,
 					misses,
+					...(plan.version === 2
+						? {
+								kind: "toOne" as const,
+								policyProgramDigest:
+									plan.disclosureProgramDigest ?? plan.policyProgramDigest,
+							}
+						: {}),
 				}),
-				...observeRelations(item.relations ?? []),
+				...observeRelations(item.relations ?? [], observationRows),
 			];
 		});
-	const relations = observeRelations(plan.result);
+	const relations = observeRelations(plan.result, visibleRows);
 	const after = values.get(plan.page.after.parameter);
 	if (after !== null && typeof after !== "string")
 		throw new TypeError("invalid compiled cursor binding");
@@ -536,7 +433,7 @@ function queryObservation(
 		after,
 		first,
 		observed: visibleRows.length,
-		hasNextPage: rows.length > first,
+		hasNextPage,
 		order: Object.freeze(plan.page.order.map(({ field }) => field)),
 		relations: Object.freeze(relations),
 	});
@@ -553,7 +450,7 @@ type PostgresQueryExecutionInput = Readonly<{
 async function executePostgresQueryWithRows(
 	input: PostgresQueryExecutionInput &
 		Readonly<{
-			plan: PostgresQueryPlanV1;
+			plan: PostgresQueryPlan;
 			read(
 				parameters: readonly PostgresParameter[],
 				signal?: AbortSignal,
@@ -567,7 +464,7 @@ async function executePostgresQueryWithRows(
 		throw new TypeError("maximumPageSize must be a positive integer");
 	if (
 		plan.format !== "questpie.postgres-query-plan" ||
-		plan.version !== 1 ||
+		(plan.version !== 1 && plan.version !== 2) ||
 		!digestPattern.test(plan.templateDigest) ||
 		!digestPattern.test(plan.policyProgramDigest) ||
 		(plan.disclosureProgramDigest !== undefined &&
@@ -593,7 +490,7 @@ async function executePostgresQueryWithRows(
 		policyProgramDigest:
 			plan.disclosureProgramDigest ?? plan.policyProgramDigest,
 		usedExecutionFacts: sparseExecutionFacts(plan, input.executionFacts),
-		order: orderTerms(plan),
+		order: postgresQueryOrderTerms(plan),
 	});
 	const after = values.get(plan.page.after.parameter);
 	if (after !== null && typeof after !== "string")
@@ -611,28 +508,40 @@ async function executePostgresQueryWithRows(
 		const first = values.get(plan.page.first.parameter);
 		if (typeof first !== "number")
 			throw new TypeError("invalid compiled page binding");
-		if (rows.length > first + 1)
+		if (plan.version === 1 && rows.length > first + 1)
 			throw new TypeError(
 				"PostgreSQL Query adapter exceeded compiled row bound",
 			);
-		const visibleRows = rows.slice(0, first);
-		const nodes = visibleRows.map((row) => decodeRow(row, plan.result));
+		const inversePage =
+			plan.version === 2 ? decodePostgresInversePage(plan, rows, first) : null;
+		const visibleRows = inversePage?.representativeRows ?? rows.slice(0, first);
+		const nodes =
+			inversePage?.nodes ??
+			visibleRows.map((row) => decodePostgresQueryRow(row, plan.result));
 		const last = visibleRows.at(-1);
 		const page = Object.freeze({
 			nodes: Object.freeze(nodes),
 			pageInfo: Object.freeze({
-				endCursor: last ? cursor.encode(cursorValues(plan, last)) : null,
-				hasNextPage: rows.length > first,
+				endCursor: last
+					? cursor.encode(postgresQueryCursorValues(plan, last))
+					: null,
+				hasNextPage: inversePage?.hasNextPage ?? rows.length > first,
 			}),
 		});
+		if (
+			plan.version === 2 &&
+			Buffer.byteLength(JSON.stringify(page), "utf8") > 1_048_576
+		)
+			throw new DataQueryExecutionError("QP-DATA-012", "execute");
 		input.observer?.recordPostgresQuery(
 			queryObservation(
 				plan,
 				values,
 				input.executionFacts,
-				rows,
 				visibleRows,
 				first,
+				inversePage?.hasNextPage ?? rows.length > first,
+				inversePage?.flattenedVisibleRows ?? visibleRows,
 			),
 		);
 		return page;
@@ -646,10 +555,6 @@ export function executePostgresDatabaseQuery(
 			database: PostgresTransactionRunner;
 		}>,
 ): Promise<DataQueryPage> {
-	if (input.linkedPlan.plan.version !== 1)
-		return Promise.reject(
-			new TypeError("PostgreSQL Query plan v2 execution is unavailable"),
-		);
 	return executePostgresQueryWithRows({
 		...input,
 		plan: input.linkedPlan.plan,
@@ -671,10 +576,6 @@ export function executePostgresTransactionQuery(
 			transaction: PostgresTransaction;
 		}>,
 ): Promise<DataQueryPage> {
-	if (input.linkedPlan.plan.version !== 1)
-		return Promise.reject(
-			new TypeError("PostgreSQL Query plan v2 execution is unavailable"),
-		);
 	return executePostgresQueryWithRows({
 		...input,
 		plan: input.linkedPlan.plan,
