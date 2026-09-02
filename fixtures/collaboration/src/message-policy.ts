@@ -10,27 +10,36 @@ import { spaces } from "./spaces";
 const readableMessageRows = policy.rows(
 	messages,
 	({ row: message, principal, tenant }) =>
-		expr.exists(channels, ({ row: channel }) =>
-			expr.and(
-				channel.id.equal(message.channelId),
-				expr.exists(spaces, ({ row: space }) =>
-					expr.and(
-						space.id.equal(channel.spaceId),
-						expr.exists(companies, ({ row: company }) =>
-							expr.and(
-								company.id.equal(space.companyId),
-								company.id.equal(tenant.id),
-								expr.exists(memberships, ({ row: membership }) =>
-									expr.and(
-										membership.companyId.equal(company.id),
-										membership.principalId.equal(principal.id),
-										membership.scopeKey.equal("company"),
-										membership.status.equal("active"),
+		expr.and(
+			expr.exists(channels, ({ row: channel }) =>
+				expr.and(
+					channel.id.equal(message.channelId),
+					expr.exists(spaces, ({ row: space }) =>
+						expr.and(
+							space.id.equal(channel.spaceId),
+							expr.exists(companies, ({ row: company }) =>
+								expr.and(
+									company.id.equal(space.companyId),
+									company.id.equal(tenant.id),
+									expr.exists(memberships, ({ row: membership }) =>
+										expr.and(
+											membership.companyId.equal(company.id),
+											membership.principalId.equal(principal.id),
+											membership.scopeKey.equal("company"),
+											membership.status.equal("active"),
+										),
 									),
 								),
 							),
 						),
 					),
+				),
+			),
+			expr.exists(memberships, ({ row: author }) =>
+				expr.and(
+					author.id.equal(message.authorMembershipId),
+					author.companyId.equal(tenant.id),
+					author.status.equal("active"),
 				),
 			),
 		),

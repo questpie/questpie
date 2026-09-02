@@ -571,6 +571,7 @@ VALUES ($1, $2, $3, $4, $5)`,
 				expect(directChannel?.messages).toEqual([
 					{
 						authorMembershipId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3",
+						body: "Welcome",
 						channelId: tracerIds.channel,
 						createdAt: new Date("2026-08-14T12:00:00.000Z"),
 						id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5",
