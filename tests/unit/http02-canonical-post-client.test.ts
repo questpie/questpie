@@ -57,8 +57,6 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 					contextCodec,
 				},
 			),
@@ -94,9 +92,15 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 				baseUrl: "https://runtime.test/prefix",
 				fetch: async (request) => {
 					requests.push(request);
+					if (
+						request.url.includes("/_questpie/action/") &&
+						(await request.clone().text()).includes("ambiguous")
+					)
+						throw new TypeError("response lost after dispatch");
 					return new Response(
 						JSON.stringify({
-							callId: request.headers.get("Questpie-Call-Id") ??
+							callId:
+								request.headers.get("Questpie-Call-Id") ??
 								decodeURIComponent(
 									request.headers.get("Idempotency-Key") ?? "",
 								),
@@ -119,14 +123,32 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 			),
 		).resolves.toEqual({ ok: true });
 		await expect(
+			client.mutations["messages.publish"]!(
+				{ value: "mutation" },
+				{ callId: "mutation key,é", timeoutMilliseconds: 5000 },
+			),
+		).resolves.toEqual({ ok: true });
+		await expect(
 			client.actions["delivery.send"]!(
 				{ value: "action" },
 				{ effectKey: "effect key,é", callId: "action-call" },
 			),
 		).resolves.toEqual({ ok: true });
+		await expect(
+			client.actions["delivery.send"]!(
+				{ value: "ambiguous" },
+				{ effectKey: "ambiguous-effect", callId: "ambiguous-call" },
+			),
+		).rejects.toMatchObject({
+			code: "ACTION_OUTCOME_AMBIGUOUS",
+			payload: { callId: "ambiguous-call" },
+			retryable: false,
+		});
 
 		expect(requests.map((request) => new URL(request.url).pathname)).toEqual([
 			"/_questpie/mutation/messages.publish",
+			"/_questpie/mutation/messages.publish",
+			"/_questpie/action/delivery.send",
 			"/_questpie/action/delivery.send",
 		]);
 		for (const request of requests) {
@@ -134,9 +156,7 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 			expect(request.headers.get("content-type")).toBe("application/json");
 			expect(await request.clone().json()).toEqual({
 				context: { tenantId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
-				input: {
-					value: request.url.includes("mutation") ? "mutation" : "action",
-				},
+				input: expect.objectContaining({ value: expect.any(String) }),
 			});
 		}
 		expect(requests[0]!.headers.get("Idempotency-Key")).toBe(
@@ -144,11 +164,14 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 		);
 		expect(requests[0]!.headers.get("Questpie-Call-Id")).toBeNull();
 		expect(requests[0]!.headers.get("Effect-Key")).toBeNull();
-		expect(requests[1]!.headers.get("Effect-Key")).toBe(
+		expect(requests[1]!.headers.get("Idempotency-Key")).toBe(
+			"mutation%20key%2C%C3%A9",
+		);
+		expect(requests[2]!.headers.get("Effect-Key")).toBe(
 			"effect%20key%2C%C3%A9",
 		);
-		expect(requests[1]!.headers.get("Questpie-Call-Id")).toBe("action-call");
-		expect(requests[1]!.headers.get("Idempotency-Key")).toBeNull();
+		expect(requests[2]!.headers.get("Questpie-Call-Id")).toBe("action-call");
+		expect(requests[2]!.headers.get("Idempotency-Key")).toBeNull();
 		expect(requests[0]!.headers.get("Questpie-Timeout-Milliseconds")).toBe(
 			"5000",
 		);

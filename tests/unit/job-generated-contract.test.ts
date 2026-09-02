@@ -127,8 +127,6 @@ test("does not project Job acceptance into the browser client", () => {
 		application: "application:test",
 		clientContractDigest: "1".repeat(64),
 		wireDigest: "2".repeat(64),
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
 	});
 
 	expect(client).not.toContain("reports.companyDigest");

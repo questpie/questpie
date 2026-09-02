@@ -460,8 +460,6 @@ export async function createArtifacts(
 			application: `application:${input.configuration.application.name}`,
 			clientContractDigest: runtime.clientContractDigest,
 			wireDigest: runtime.wireDigest,
-			path: String(runtime.wire.path),
-			mediaType: String(runtime.wire.mediaType),
 			contextCodec: input.resources.find(
 				(resource) => resource.kind === "context",
 			)?.contract.input ?? { kind: "object", properties: {} },

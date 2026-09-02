@@ -306,7 +306,7 @@ test("generated client verifies declared-error status and decodes its exact payl
 							output: { kind: "object", properties: {} },
 							declaredErrors: {
 								committedResultUnavailable: {
-									code: "COMMITTED_RESULT_UNAVAILABLE",
+									code: "RECOVERY_REQUIRED",
 									status: 503,
 									payload: {
 										kind: "object",
@@ -324,8 +324,6 @@ test("generated client verifies declared-error status and decodes its exact payl
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 				},
 			),
 		);
@@ -354,23 +352,18 @@ test("generated client verifies declared-error status and decodes its exact payl
 			const client = generated.createClient({
 				baseUrl: "http://runtime.test",
 				fetch: async (request) => {
-					const sent = (await request.json()) as Readonly<{
-						callId: string;
-						operation: string;
-					}>;
+					await request.json();
 					return new Response(
 						JSON.stringify({
-							protocol: { name: "questpie.operation", version: 1 },
-							kind: "declaredError",
-							operation: sent.operation,
-							callId: sent.callId,
+							callId: decodeURIComponent(
+								request.headers.get("Idempotency-Key") ?? "",
+							),
 							error: detail,
 						}),
 						{
 							status: responseStatus,
 							headers: {
-								"content-type":
-									"application/vnd.questpie.operation+json;version=1",
+								"content-type": "application/json; charset=utf-8",
 							},
 						},
 					);
@@ -381,14 +374,13 @@ test("generated client verifies declared-error status and decodes its exact payl
 
 		try {
 			await invoke(503, {
-				code: "COMMITTED_RESULT_UNAVAILABLE",
-				status: 503,
+				code: "RECOVERY_REQUIRED",
 				payload: { at: timestamp.toISOString(), callId },
 			});
 			throw new Error("expected declared error");
 		} catch (error) {
 			expect(error).toBeInstanceOf(Error);
-			expect((error as Error).message).toBe("COMMITTED_RESULT_UNAVAILABLE");
+			expect((error as Error).message).toBe("RECOVERY_REQUIRED");
 			expect((error as Error).stack).toBeUndefined();
 			expect(Object.getOwnPropertyNames(error as object).sort()).toEqual([
 				"code",
@@ -409,15 +401,14 @@ test("generated client verifies declared-error status and decodes its exact payl
 			[
 				409,
 				{
-					code: "COMMITTED_RESULT_UNAVAILABLE",
-					status: 503,
+					code: "RECOVERY_REQUIRED",
 					payload: { at: timestamp.toISOString(), callId },
 				},
 			],
 			[
 				503,
 				{
-					code: "COMMITTED_RESULT_UNAVAILABLE",
+					code: "RECOVERY_REQUIRED",
 					status: 409,
 					payload: { at: timestamp.toISOString(), callId },
 				},
@@ -425,16 +416,14 @@ test("generated client verifies declared-error status and decodes its exact payl
 			[
 				503,
 				{
-					code: "COMMITTED_RESULT_UNAVAILABLE",
-					status: 503,
+					code: "RECOVERY_REQUIRED",
 					payload: { callId },
 				},
 			],
 			[
 				503,
 				{
-					code: "COMMITTED_RESULT_UNAVAILABLE",
-					status: 503,
+					code: "RECOVERY_REQUIRED",
 					payload: { at: timestamp.toISOString(), callId, secret: true },
 				},
 			],

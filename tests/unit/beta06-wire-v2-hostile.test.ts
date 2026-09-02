@@ -15,34 +15,7 @@ import {
 } from "../../packages/runtime/src/operation";
 
 const protocol = Object.freeze({ name: "questpie.operation", version: 1 });
-const mediaType = "application/vnd.questpie.operation+json;version=1";
-
-test("keeps an empty generated Mutation inventory string-addressable", () => {
-	const client = renderClientContract(
-		[
-			{
-				kind: "query",
-				name: "health.read",
-				identity: "query:health.read",
-				contract: {
-					exposure: "network",
-					input: { kind: "object", properties: {} },
-					output: { kind: "object", properties: {} },
-					declaredErrors: {},
-				},
-			},
-		] as never,
-		{
-			application: "application:test",
-			clientContractDigest: "1".repeat(64),
-			wireDigest: "2".repeat(64),
-			path: "/_questpie/operation",
-			mediaType,
-		},
-	);
-
-	expect(client).toContain("const mutationOperations = new Set<string>([]);");
-});
+const mediaType = "application/json; charset=utf-8";
 
 test("accepts only exact Call Identity and canonical xid8 boundaries", () => {
 	const fourByteScalar = String.fromCodePoint(0x10ffff);
@@ -214,8 +187,6 @@ async function generatedClientModule(): Promise<
 				application: "application:test",
 				clientContractDigest: "1".repeat(64),
 				wireDigest: "2".repeat(64),
-				path: "/_questpie/operation",
-				mediaType,
 			},
 		),
 	);
@@ -247,16 +218,13 @@ test("generated client carries CRU exactly, freezes it, and never retries", asyn
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
 				requests += 1;
-				const sent = (await request.json()) as Readonly<{
-					callId: string;
-					operation: string;
-				}>;
+				await request.json();
+				const callId = decodeURIComponent(
+					request.headers.get("Idempotency-Key") ?? "",
+				);
 				return wireResponse(
 					{
-						protocol,
-						kind: "failure",
-						operation: sent.operation,
-						callId: sent.callId,
+						callId,
 						error: {
 							code: "COMMITTED_RESULT_UNAVAILABLE",
 							retryable: true,
@@ -324,9 +292,6 @@ test("generated client rejects every wrong CRU frame without widening failures",
 	const generated = await generatedClientModule();
 	try {
 		const exact = (callId: string) => ({
-			protocol,
-			kind: "failure",
-			operation: "mutation:message.publish",
 			callId,
 			error: {
 				code: "COMMITTED_RESULT_UNAVAILABLE",
@@ -364,13 +329,7 @@ test("generated client rejects every wrong CRU frame without widening failures",
 				},
 				status: 500,
 			},
-			{
-				body: {
-					kind: "failure",
-					error: exact("call:hostile").error,
-				},
-				status: 500,
-			},
+			{ body: { error: exact("call:hostile").error }, status: 500 },
 			{
 				body: {
 					...exact("call:hostile"),
@@ -405,7 +364,7 @@ test("generated client rejects every wrong CRU frame without widening failures",
 	}
 });
 
-test("generated wire v2 preserves result and declared-error decoding", async () => {
+test("generated canonical client preserves result and declared-error decoding", async () => {
 	const generated = await generatedClientModule();
 	try {
 		const resultClient = generated.module.createClient({
@@ -428,19 +387,15 @@ test("generated wire v2 preserves result and declared-error decoding", async () 
 		const declaredClient = generated.module.createClient({
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
-				const sent = (await request.json()) as Readonly<{
-					callId: string;
-					operation: string;
-				}>;
+				await request.json();
+				const callId = decodeURIComponent(
+					request.headers.get("Idempotency-Key") ?? "",
+				);
 				return wireResponse(
 					{
-						protocol,
-						kind: "declaredError",
-						operation: sent.operation,
-						callId: sent.callId,
+						callId,
 						error: {
 							code: "IDEMPOTENCY_CONFLICT",
-							status: 409,
 							payload: { callId: "general:text-call" },
 						},
 					},

@@ -79,7 +79,6 @@ let operationContracts: Readonly<Record<string, unknown>>;
 let runtimeExecutables: Readonly<{
 	slots: readonly RuntimeSlot[];
 }>;
-let wireContract: Readonly<Record<string, unknown>>;
 let generatedClient: Readonly<{
 	createClient(
 		input: Readonly<{
@@ -372,7 +371,6 @@ beforeAll(async () => {
 	operationContracts = JSON.parse(
 		compilation.generatedFiles["operation-contracts.json"]!,
 	);
-	wireContract = JSON.parse(compilation.generatedFiles["wire-contract.json"]!);
 });
 
 function definitions(): ReadonlyMap<string, Definition> {
@@ -555,7 +553,6 @@ async function runtimeHarness(
 			runtimeBuild,
 			runtimeExecutables,
 			operationContracts,
-			wireContract,
 		},
 		artifactFiles: artifactFiles(),
 		serverExports: bindings.serverExports,
@@ -614,34 +611,38 @@ async function runtimeHarness(
 	};
 }
 
-function operationFrame(
+function queryRequest(
 	input: QueryInput,
-	overrides: Readonly<Record<string, unknown>> = {},
-) {
-	return {
-		application: runtimeBuild.application,
-		callId: crypto.randomUUID(),
-		clientContractDigest: runtimeBuild.clientContractDigest,
-		context: { companyId },
-		input,
-		operation: "query:messages.page",
-		protocol: wireContract.protocol,
-		timeoutMilliseconds: 5_000,
-		wireDigest: runtimeBuild.wireDigest,
-		...overrides,
-	};
-}
-
-function operationRequest(
-	frame: unknown,
+	options: Readonly<{
+		callId?: string;
+		clientContractDigest?: string;
+		name?: string;
+		extraHeaders?: Readonly<Record<string, string>>;
+	}> = {},
 	user = principal.user({ id: principalId }),
 ) {
+	const query = `after=~null&channelId=${encodeURIComponent(input.channelId)}&first=${String(input.first)}`;
 	return bindIngressPrincipal(
-		new Request("http://runtime.test/_questpie/operation", {
-			method: "POST",
-			headers: { "content-type": String(wireContract.mediaType) },
-			body: JSON.stringify(frame),
-		}),
+		new Request(
+			`http://runtime.test/_questpie/query/${options.name ?? "messages.page"}?${query}`,
+			{
+				headers: {
+					"Questpie-Application": String(runtimeBuild.application),
+					"Questpie-Call-Id": encodeURIComponent(
+						options.callId ?? crypto.randomUUID(),
+					),
+					"Questpie-Client-Contract":
+						options.clientContractDigest ??
+						String(runtimeBuild.clientContractDigest),
+					"Questpie-Context": Buffer.from(
+						JSON.stringify({ companyId }),
+					).toString("base64url"),
+					"Questpie-Timeout-Milliseconds": "5000",
+					"Questpie-Wire-Digest": String(runtimeBuild.wireDigest),
+					...options.extraHeaders,
+				},
+			},
+		),
 		user,
 	);
 }
@@ -656,15 +657,9 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			{ principal: user, context } as never,
 			(operations) => operations.invoke("query:messages.page", input),
 		)) as Readonly<{ nodes: readonly Readonly<{ createdAt: unknown }>[] }>;
-		const raw = await harness.runtime.fetch(
-			operationRequest(operationFrame(input), user),
-		);
+		const raw = await harness.runtime.fetch(queryRequest(input, {}, user));
 		expect(raw.status).toBe(200);
-		const rawFrame = (await raw.json()) as Readonly<{
-			kind: string;
-			payload: unknown;
-		}>;
-		expect(rawFrame.kind).toBe("result");
+		const rawFrame = (await raw.json()) as Readonly<{ result: unknown }>;
 
 		let generatedFetches = 0;
 		const client = generatedClient.createClient({
@@ -679,7 +674,7 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			.queries["messages.page"](input)) as Readonly<{
 			nodes: readonly Readonly<{ createdAt: unknown }>[];
 		}>;
-		expect({ direct, fetch: rawFrame.payload, client: clientResult }).toEqual({
+		expect({ direct, fetch: rawFrame.result, client: clientResult }).toEqual({
 			direct: expectedPage,
 			fetch: expectedWirePage,
 			client: expectedPage,
@@ -695,25 +690,18 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			data: harness.dataRuns(),
 		};
 		const stale = await harness.runtime.fetch(
-			operationRequest(
-				operationFrame(input, { clientContractDigest: "0".repeat(64) }),
-				user,
-			),
+			queryRequest(input, { clientContractDigest: "0".repeat(64) }, user),
 		);
-		expect(stale.status).toBe(409);
-		expect(await stale.json()).toEqual({
-			kind: "failure",
-			error: { code: "CLIENT_OUTDATED", retryable: false },
+		expect(stale.status).toBe(400);
+		expect(await stale.json()).toMatchObject({
+			error: { code: "PROTOCOL_UNSUPPORTED", retryable: false },
 		});
 		const unknown = await harness.runtime.fetch(
-			operationRequest(
-				operationFrame(input, { operation: "query:messages.unknown" }),
-				user,
-			),
+			queryRequest(input, { name: "messages.unknown" }, user),
 		);
 		expect(unknown.status).toBe(404);
 		const malformed = await harness.runtime.fetch(
-			operationRequest({ ...operationFrame(input), authority: "system" }, user),
+			queryRequest(input, { extraHeaders: { "Effect-Key": "forged" } }, user),
 		);
 		expect(malformed.status).toBe(400);
 		expect({
@@ -744,16 +732,18 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		const declaredErrorClient = generatedClient.createClient({
 			baseUrl: "http://runtime.test",
 			fetch: async (request) => {
-				const call = (await request.json()) as Readonly<{ callId: string }>;
+				const callId = decodeURIComponent(
+					request.headers.get("Questpie-Call-Id") ?? "",
+				);
 				return new Response(
 					JSON.stringify({
-						kind: "declaredError",
-						callId: call.callId,
-						operation: "query:messages.page",
-						protocol: wireContract.protocol,
-						error: { code: "NOT_DECLARED", payload: {}, status: 400 },
+						callId,
+						error: { code: "NOT_DECLARED", payload: {} },
 					}),
-					{ headers: { "content-type": String(wireContract.mediaType) } },
+					{
+						status: 400,
+						headers: { "content-type": "application/json; charset=utf-8" },
+					},
 				);
 			},
 		});
@@ -783,60 +773,6 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 	expect(eventBytes).not.toContain("one engine");
 });
 
-test("executes retained v1 Queries but rejects v1 Mutations and unknown operations before context", async () => {
-	const harness = await runtimeHarness();
-	const input = { channelId, first: 20, after: null };
-	const compatibility = wireContract.compatibility as Readonly<{
-		wireV1Digest: string;
-	}>;
-	try {
-		const query = await harness.runtime.fetch(
-			operationRequest(
-				operationFrame(input, {
-					callId: "retained:v1:query",
-					wireDigest: compatibility.wireV1Digest,
-				}),
-			),
-		);
-		expect(query.status).toBe(200);
-		expect(await query.json()).toMatchObject({
-			kind: "result",
-			callId: "retained:v1:query",
-			operation: "query:messages.page",
-		});
-		expect({
-			bootstrap: harness.bootstrapGets(),
-			data: harness.dataRuns(),
-		}).toEqual({ bootstrap: 1, data: 1 });
-
-		for (const operation of [
-			"mutation:message.publish",
-			"query:messages.unknown",
-		]) {
-			const rejected = await harness.runtime.fetch(
-				operationRequest(
-					operationFrame(input, {
-						callId: `retained:v1:${operation}`,
-						operation,
-						wireDigest: compatibility.wireV1Digest,
-					}),
-				),
-			);
-			expect(rejected.status).toBe(409);
-			expect(await rejected.json()).toEqual({
-				kind: "failure",
-				error: { code: "CLIENT_OUTDATED", retryable: false },
-			});
-		}
-		expect({
-			bootstrap: harness.bootstrapGets(),
-			data: harness.dataRuns(),
-		}).toEqual({ bootstrap: 1, data: 1 });
-	} finally {
-		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
-	}
-});
-
 test("request abort cannot mask a known post-commit Mutation outcome", async () => {
 	const callId = "abort:after:commit";
 	const controller = new AbortController();
@@ -850,24 +786,28 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 		);
 	});
 	try {
-		const request = operationRequest(
-			operationFrame(
-				{ channelId, first: 20, after: null },
-				{
-					callId,
-					operation: "mutation:message.publish",
-					input: { channelId, body: "committed before abort" },
+		const request = bindIngressPrincipal(
+			new Request("http://runtime.test/_questpie/mutation/message.publish", {
+				method: "POST",
+				headers: {
+					"content-type": "application/json",
+					"Idempotency-Key": encodeURIComponent(callId),
+					"Questpie-Application": String(runtimeBuild.application),
+					"Questpie-Client-Contract": String(runtimeBuild.clientContractDigest),
+					"Questpie-Wire-Digest": String(runtimeBuild.wireDigest),
 				},
-			),
+				body: JSON.stringify({
+					context: { companyId },
+					input: { channelId, body: "committed before abort" },
+				}),
+			}),
+			principal.user({ id: principalId }),
 		);
 		const correlated = new Request(request, { signal: controller.signal });
 		bindIngressPrincipal(correlated, principal.user({ id: principalId }));
 		const response = await harness.runtime.fetch(correlated);
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({
-			protocol: wireContract.protocol,
-			kind: "failure",
-			operation: "mutation:message.publish",
 			callId,
 			error: {
 				code: "COMMITTED_RESULT_UNAVAILABLE",

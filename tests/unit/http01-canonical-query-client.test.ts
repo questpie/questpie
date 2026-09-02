@@ -71,8 +71,6 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 					application: "application:collaboration",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 					contextCodec: {
 						kind: "object",
 						properties: { companyId: { kind: "uuid" } },

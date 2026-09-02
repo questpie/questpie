@@ -64,8 +64,6 @@ async function verifyCloseOrder(
 		application: realtime.application,
 		clientContractDigest: realtime.clientContractDigest,
 		wireDigest: realtime.operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
 		realtime,
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-client-close-"));

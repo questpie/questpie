@@ -7,7 +7,7 @@ export function renderClientQueryHttp(
 	}>,
 ): string {
 	return String.raw`
-const canonicalQueryFailures: WireRecord = Object.freeze({
+const canonicalFailures: WireRecord = Object.freeze({
 	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
 	INTERNAL: Object.freeze({ status: 500, retryable: false }),
 	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
@@ -129,7 +129,7 @@ async function invokeCanonicalQuery<Result>(input: Readonly<{
 	}
 	exactKeys(detail, ["code", "retryable"]);
 	if (typeof detail.code !== "string" || typeof detail.retryable !== "boolean") return protocolFailure();
-	const failureContract = wireRecord(canonicalQueryFailures[detail.code]);
+	const failureContract = wireRecord(canonicalFailures[detail.code]);
 	if (response.status !== failureContract.status || detail.retryable !== failureContract.retryable) return protocolFailure();
 	throw publicError(detail);
 }

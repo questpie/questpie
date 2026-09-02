@@ -188,8 +188,6 @@ test("adds watch only to the same compiler-proven Query method", () => {
 		application: "application:collaboration",
 		clientContractDigest,
 		wireDigest: operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
 		realtime: projectRealtimeWireContract({
 			application: "application:collaboration",
 			clientContractDigest,
@@ -224,8 +222,6 @@ test("multiplexes private resume acknowledgements behind the public watch method
 		application: "application:collaboration",
 		clientContractDigest,
 		wireDigest: operationWireDigest,
-		path: "/_questpie/operation",
-		mediaType: "application/vnd.questpie.operation+json;version=1",
 		realtime,
 	});
 	const directory = await mkdtemp(join(tmpdir(), "questpie-beta07-client-"));

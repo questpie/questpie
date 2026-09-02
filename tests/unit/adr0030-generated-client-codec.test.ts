@@ -77,8 +77,6 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 				},
 			),
 		);
@@ -115,10 +113,7 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 			const client = generated.createClient({
 				baseUrl: "http://runtime.test",
 				fetch: async (request) => {
-					const frame = (await request.json()) as {
-						callId: string;
-						input: unknown;
-					};
+					const frame = (await request.json()) as { input: unknown };
 					expect(frame.input).toEqual(expectedWireInput);
 					expect(expectedWireInput).toEqual({
 						at: "2026-08-28T10:20:30.000",
@@ -126,16 +121,14 @@ test("compiler-owned input codec encodes no-zone timestamps before transport", a
 					});
 					return new Response(
 						JSON.stringify({
-							protocol: { name: "questpie.operation", version: 1 },
-							kind: "result",
-							operation: "mutation:reports.read",
-							callId: frame.callId,
-							payload: next,
+							callId: decodeURIComponent(
+								request.headers.get("Idempotency-Key") ?? "",
+							),
+							result: next,
 						}),
 						{
 							headers: {
-								"content-type":
-									"application/vnd.questpie.operation+json;version=1",
+								"content-type": "application/json; charset=utf-8",
 							},
 						},
 					);
@@ -188,8 +181,6 @@ test("compiler-owned input codec rejects lossy tagged JSON before transport", as
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 				},
 			),
 		);
@@ -281,8 +272,6 @@ test("generated transform preserves optional, array, cursor, and object directio
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 				},
 			),
 		);
@@ -380,8 +369,6 @@ test("generated JSON declarations preserve the exact recursive value grammar", a
 					application: "application:test",
 					clientContractDigest: "1".repeat(64),
 					wireDigest: "2".repeat(64),
-					path: "/_questpie/operation",
-					mediaType: "application/vnd.questpie.operation+json;version=1",
 				},
 			),
 		);
