@@ -216,6 +216,17 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 				required: false,
 			}),
 		);
+		const requiredContextQuery = project({
+			kind: "object",
+			properties: { locale: { kind: "text", maxLength: 8 } },
+		}).openapi.paths["/_questpie/query/tickets.detail"].get;
+		expect(requiredContextQuery.parameters).toContainEqual(
+			expect.objectContaining({
+				in: "header",
+				name: "Questpie-Context",
+				required: true,
+			}),
+		);
 		expect(query).not.toHaveProperty("requestBody");
 
 		const mutation =
@@ -224,15 +235,47 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 		expect(mutation.tags).toEqual(["tickets"]);
 		expect(
 			mutation.requestBody.content["application/json"].schema,
-		).toBeDefined();
+		).toMatchObject({
+			type: "object",
+			additionalProperties: false,
+			required: ["context", "input"],
+			properties: {
+				context: expect.objectContaining({ type: "object" }),
+				input: expect.objectContaining({ type: "object" }),
+			},
+		});
+		expect(mutation.parameters).toContainEqual(
+			expect.objectContaining({
+				in: "header",
+				name: "Idempotency-Key",
+				required: true,
+			}),
+		);
 		expect(
-			mutation.requestBody.content["application/json"].examples,
-		).toBeDefined();
-		expect(mutation.responses["200"]).toBeDefined();
+			JSON.stringify(mutation.requestBody.content["application/json"].examples),
+		).toContain('"context":{}');
+		expect(
+			JSON.stringify(
+				mutation.responses["200"].content["application/json"].examples,
+			),
+		).toContain('"callId":"openapi-example"');
+		expect(
+			mutation.responses["200"].content["application/json"].schema,
+		).toMatchObject({
+			type: "object",
+			required: ["callId", "result"],
+			properties: {
+				callId: { type: "string" },
+				result: expect.objectContaining({ type: "object" }),
+			},
+		});
 		expect(mutation.responses["422"]).toMatchObject({
 			content: {
 				"application/json": {
-					schema: expect.objectContaining({ type: "object" }),
+					schema: expect.objectContaining({
+						type: "object",
+						required: ["callId", "error"],
+					}),
 				},
 			},
 		});
@@ -240,6 +283,28 @@ describe("HTTP-03 / DOC-02 operation projection", () => {
 			expect(first.openapi.components.schemas).toHaveProperty(
 				"FrameworkFailure_" + failure,
 			);
+		expect(
+			first.openapi.components.schemas.FrameworkFailure_INTERNAL,
+		).toMatchObject({
+			type: "object",
+			required: ["error"],
+			properties: {
+				error: expect.objectContaining({
+					required: ["code", "retryable"],
+				}),
+			},
+		});
+		const action = first.openapi.paths["/_questpie/action/exports.run"].post;
+		expect(action.parameters).toContainEqual(
+			expect.objectContaining({
+				in: "header",
+				name: "Effect-Key",
+				required: true,
+			}),
+		);
+		expect(first.openapi.components.schemas).toHaveProperty(
+			"ActionOutcomeAmbiguous",
+		);
 		expect(first.openapi.components.schemas).toHaveProperty(
 			"PostCommitAmbiguity",
 		);
