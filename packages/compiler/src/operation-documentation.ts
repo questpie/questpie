@@ -11,8 +11,10 @@ import {
 	hasLoneUnicodeSurrogate,
 } from "./canonical";
 import { CompilerDiagnosticError } from "./diagnostic";
-import type { CollectionOperationProgramsV1 } from "./mutation/operation-set-contract";
-import { projectCollectionOperationCodecs } from "./mutation/operation-write-resource";
+import {
+	projectCollectionOperationCodecs,
+	type CollectionOperationProgramsV1,
+} from "./mutation";
 import type { EvaluatedExport, NormalizedResource, SourceSpan } from "./types";
 
 const documentationDigestDomain = "questpie-operation-documentation-v1";
@@ -82,14 +84,6 @@ function invalid(
 	);
 }
 
-export function invalidOperationDocumentation(
-	reason: DocumentationReason,
-	origin: DocumentationOrigin,
-	path: readonly string[],
-): never {
-	return invalid(reason, origin, path);
-}
-
 function record(value: unknown): RecordValue | null {
 	return value && typeof value === "object" && !Array.isArray(value)
 		? (value as RecordValue)
@@ -97,18 +91,8 @@ function record(value: unknown): RecordValue | null {
 }
 
 const allowedMembers = Object.freeze({
-	query: [
-		"__questpie",
-		"describe",
-		"handler",
-		"input",
-		"name",
-		"network",
-		"output",
-		"query",
-	],
+	query: ["describe", "handler", "input", "name", "network", "output", "query"],
 	mutation: [
-		"__questpie",
 		"describe",
 		"errors",
 		"handler",
@@ -120,10 +104,8 @@ const allowedMembers = Object.freeze({
 		"policy",
 	],
 	action: [
-		"__questpie",
 		"describe",
 		"errors",
-		"executableSlots",
 		"handler",
 		"input",
 		"limits",
@@ -166,7 +148,7 @@ export function assertClosedOperationDocumentationMembers(
 ): void {
 	const allowed = new Set<string>(
 		kind === "query" && definition.query !== undefined
-			? ["__questpie", "describe", "name", "network", "query"]
+			? ["describe", "name", "network", "query"]
 			: allowedMembers[kind],
 	);
 	const unexpected = Object.keys(definition)

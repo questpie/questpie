@@ -248,7 +248,16 @@ type CollectionOperationDescriptions<
 						Member,
 						Body[Member]
 					>;
-				}>
+				}> &
+				Readonly<
+					Record<
+						Exclude<
+							keyof Body[Member],
+							keyof NonNullable<CollectionOperationSetBody<Collection>[Member]>
+						>,
+						never
+					>
+				>
 		: never;
 }>;
 
