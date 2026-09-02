@@ -4,6 +4,7 @@ import { principal } from "questpie";
 
 import { RuntimeActionPostHandlerResourceLimit } from "../../packages/runtime/src/action";
 import { createCanonicalPostHttp } from "../../packages/runtime/src/application/http-post";
+import { RuntimeCredentialUnavailable } from "../../packages/runtime/src/execution";
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
@@ -78,12 +79,7 @@ function canonicalPostTransport(
 test("canonical POST maps typed credential outcomes without disclosure", async () => {
 	for (const [error, status, code, retryable] of [
 		[new OperationFailure("UNAUTHENTICATED"), 401, "UNAUTHENTICATED", false],
-		[
-			new OperationFailure("CREDENTIALS_UNAVAILABLE" as never, true),
-			503,
-			"RUNTIME_UNAVAILABLE",
-			true,
-		],
+		[new RuntimeCredentialUnavailable(), 503, "RUNTIME_UNAVAILABLE", true],
 		[new Error("credential secret"), 500, "INTERNAL", false],
 	] as const) {
 		const response = await canonicalPostTransport({

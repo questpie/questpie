@@ -3,7 +3,10 @@ export { verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction } from "
 export type { ReadinessMigration } from "./application/postgres-readiness-prerequisites";
 export { failRuntimeApplicationStartup } from "./application/startup-cleanup";
 export { createRuntimeActionExecutor } from "./action";
-export { createRuntimeRouteExecutor } from "./execution";
+export {
+	createRuntimeRouteExecutor,
+	RuntimeCredentialUnavailable,
+} from "./execution";
 export {
 	bindIngressPrincipal,
 	OperationFailure,

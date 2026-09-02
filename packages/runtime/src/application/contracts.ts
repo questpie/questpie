@@ -41,6 +41,7 @@ export interface RuntimeApplicationProgram<
 	) => MaybePromise<unknown>;
 	readonly resolvePrincipal: (
 		request: Request,
+		signal?: AbortSignal,
 	) => MaybePromise<Principal | null>;
 	readonly verifyReadiness?: (
 		artifacts: RuntimeArtifactsV1,

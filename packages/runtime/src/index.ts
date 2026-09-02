@@ -13,6 +13,7 @@ export type {
 export {
 	createApplicationRuntime,
 	createRuntimeRouteExecutor,
+	RuntimeCredentialUnavailable,
 } from "./execution";
 export type {
 	ApplicationRuntime,

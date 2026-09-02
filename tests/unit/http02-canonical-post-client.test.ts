@@ -21,41 +21,42 @@ test("generated Mutation and Action use exact canonical POST endpoints", async (
 			join(directory, "app.ts"),
 			"export type AppContextInput = Readonly<{ tenantId: string }>;\n",
 		);
-		await writeFile(
-			join(directory, "client.ts"),
-			renderClientContract(
-				[
-					{
-						identity: http02MutationIdentity,
-						kind: "mutation",
-						name: "messages.publish",
-						contract: {
-							exposure: "network",
-							input: http02InputCodec,
-							output: http02OutputCodec,
-							declaredErrors: {},
-						},
-					},
-					{
-						identity: http02ActionIdentity,
-						kind: "action",
-						name: "delivery.send",
-						contract: {
-							exposure: "network",
-							input: http02InputCodec,
-							output: http02OutputCodec,
-							declaredErrors: {},
-						},
-					},
-				] as never,
+		const clientSource = renderClientContract(
+			[
 				{
-					application: "application:test",
-					clientContractDigest: "1".repeat(64),
-					httpContractDigest: "2".repeat(64),
-					contextCodec: http02ContextCodec,
+					identity: http02MutationIdentity,
+					kind: "mutation",
+					name: "messages.publish",
+					contract: {
+						exposure: "network",
+						input: http02InputCodec,
+						output: http02OutputCodec,
+						declaredErrors: {},
+					},
 				},
-			),
+				{
+					identity: http02ActionIdentity,
+					kind: "action",
+					name: "delivery.send",
+					contract: {
+						exposure: "network",
+						input: http02InputCodec,
+						output: http02OutputCodec,
+						declaredErrors: {},
+					},
+				},
+			] as never,
+			{
+				application: "application:test",
+				clientContractDigest: "1".repeat(64),
+				httpContractDigest: "2".repeat(64),
+				contextCodec: http02ContextCodec,
+			},
 		);
+		expect(clientSource).toContain(
+			"UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false })",
+		);
+		await writeFile(join(directory, "client.ts"), clientSource);
 		const generated = (await import(
 			`${pathToFileURL(join(directory, "client.ts")).href}?${crypto.randomUUID()}`
 		)) as {

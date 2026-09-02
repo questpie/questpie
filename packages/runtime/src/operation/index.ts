@@ -50,30 +50,43 @@ export class DeclaredOperationError extends Error {
 	}
 }
 
-export type OperationFailureCode =
-	| "DEADLINE_EXCEEDED"
-	| "INTERNAL"
-	| "NOT_FOUND"
-	| "PROTOCOL_UNSUPPORTED"
-	| "RESOURCE_LIMIT"
-	| "RUNTIME_UNAVAILABLE";
+export const canonicalOperationFailures = Object.freeze({
+	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
+	INTERNAL: Object.freeze({ status: 500, retryable: false }),
+	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
+	PROTOCOL_UNSUPPORTED: Object.freeze({ status: 400, retryable: false }),
+	RESOURCE_LIMIT: Object.freeze({ status: 429, retryable: true }),
+	RUNTIME_UNAVAILABLE: Object.freeze({ status: 503, retryable: true }),
+	UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false }),
+});
+
+export type OperationFailureCode = keyof typeof canonicalOperationFailures;
+
+export function canonicalOperationFailure(code: string): Readonly<{
+	code: OperationFailureCode;
+	status: number;
+	retryable: boolean;
+}> {
+	const canonicalCode = Object.hasOwn(canonicalOperationFailures, code)
+		? (code as OperationFailureCode)
+		: "INTERNAL";
+	return Object.freeze({
+		code: canonicalCode,
+		...canonicalOperationFailures[canonicalCode],
+	});
+}
 
 export function operationFailureStatus(
 	code: OperationFailureCode | "COMMITTED_RESULT_UNAVAILABLE",
 ): number {
 	if (code === "COMMITTED_RESULT_UNAVAILABLE") return 500;
-	if (code === "NOT_FOUND") return 404;
-	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	if (code === "DEADLINE_EXCEEDED") return 408;
-	if (code === "RESOURCE_LIMIT") return 429;
-	if (code === "RUNTIME_UNAVAILABLE") return 503;
-	return 500;
+	return canonicalOperationFailures[code].status;
 }
 
 export class OperationFailure extends Error {
 	constructor(
 		readonly code: OperationFailureCode,
-		readonly retryable = false,
+		readonly retryable = canonicalOperationFailures[code].retryable,
 	) {
 		super(code);
 		closePublicErrorProperties(this, new Set(["code", "retryable"]));

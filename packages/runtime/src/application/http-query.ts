@@ -6,6 +6,7 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
+import { RuntimeCredentialUnavailable } from "../execution";
 import {
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
@@ -16,6 +17,7 @@ import {
 import {
 	decodeHttpIdentity as decodeIdentity,
 	decodeHttpTimeout as decodeTimeout,
+	createHttpExecutionControl,
 	httpFailure,
 	httpJsonResponse,
 	httpProtocolFailure as protocol,
@@ -184,7 +186,10 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 		contextCodec: RuntimeCodec;
 		operations: readonly RuntimeOperationContract[];
 		prepare(identity: string, value: unknown): PreparedOperation<View>;
-		resolvePrincipal(request: Request): Promise<Principal | null>;
+		resolvePrincipal(
+			request: Request,
+			signal: AbortSignal,
+		): Promise<Principal | null>;
 		execute(
 			value: Readonly<{
 				principal: Principal;
@@ -207,6 +212,7 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 		fetch: async (request: Request): Promise<Response | null> => {
 			const url = new URL(request.url);
 			if (!url.pathname.startsWith(QUERY_PREFIX)) return null;
+			const requestStartedAt = input.now();
 			if (request.method !== "GET") return failure("PROTOCOL_UNSUPPORTED");
 			const name = url.pathname.slice(QUERY_PREFIX.length);
 			if (!/^[a-z][A-Za-z0-9]*(?:\.[a-z][A-Za-z0-9]*)*$/u.test(name))
@@ -224,106 +230,123 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 			} catch {
 				return failure("PROTOCOL_UNSUPPORTED");
 			}
-			let caller: Principal | null;
+			const execution = createHttpExecutionControl({
+				requestSignal: request.signal,
+				requestStartedAt,
+				...(timeout === undefined ? {} : { timeoutMilliseconds: timeout }),
+				now: input.now,
+			});
 			try {
-				caller = await input.resolvePrincipal(request);
-			} catch (error) {
-				if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-				const unavailable =
-					error instanceof OperationFailure &&
-					(error.code as string) === "CREDENTIALS_UNAVAILABLE";
-				return failure(
-					unavailable ? "RUNTIME_UNAVAILABLE" : "INTERNAL",
-					callId,
-				);
-			}
-			if (!caller || !principal.is(caller))
-				return failure("UNAUTHENTICATED", callId);
-			const contract = operations.get(`query:${name}`);
-			if (!contract) return failure("NOT_FOUND", callId);
-			let operation: PreparedOperation<View>;
-			let context: ContextInput;
-			try {
-				const compatibility = [
-					header(request, "Questpie-Application"),
-					header(request, "Questpie-Client-Contract"),
-					header(request, "Questpie-Wire-Digest"),
-				];
-				if (
-					compatibility.some((value) => value !== null) &&
-					(compatibility[0] !== input.application ||
-						compatibility[1] !== input.clientContractDigest ||
-						compatibility[2] !== input.httpContractDigest)
-				)
-					protocol();
-				if (
-					header(request, "Idempotency-Key") !== null ||
-					header(request, "Effect-Key") !== null
-				)
-					protocol();
-				operation = input.prepare(
-					contract.identity,
-					decodeQuery(contract.input, url.search.slice(1)),
-				);
-				context = decodeContext(
-					input.contextCodec,
-					header(request, "Questpie-Context"),
-				) as ContextInput;
-			} catch (error) {
-				return failure(
-					error instanceof OperationFailure && error.code === "NOT_FOUND"
-						? "NOT_FOUND"
-						: "PROTOCOL_UNSUPPORTED",
-					callId,
-				);
-			}
-			try {
-				const value = await input.execute({
-					principal: caller,
-					context,
-					operation,
-					callId,
-					signal: request.signal,
-					...(timeout === undefined
-						? {}
-						: {
-								deadline: Math.min(
-									Number.MAX_SAFE_INTEGER,
-									input.now() + timeout,
-								),
-							}),
-				});
-				const body = {
-					callId,
-					result: encodeRuntimeCodec(operation.output, value),
-				};
-				if (
-					Buffer.byteLength(JSON.stringify(body), "utf8") >
-					input.maximumResponseBytes
-				)
-					return failure("RESOURCE_LIMIT", callId);
-				return queryResponse(body, 200);
-			} catch (error) {
-				if (error instanceof DeclaredOperationError) {
-					try {
-						const declared = encodeDeclaredOperationError(operation, error);
-						return queryResponse(
-							{
-								callId,
-								error: { code: declared.code, payload: declared.payload },
-							},
-							declared.status,
-						);
-					} catch {
-						return failure("INTERNAL", callId);
-					}
+				let caller: Principal | null;
+				try {
+					caller = await input.resolvePrincipal(request, execution.signal);
+				} catch (error) {
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					if (
+						error instanceof OperationFailure &&
+						error.code === "UNAUTHENTICATED"
+					)
+						return failure("UNAUTHENTICATED", callId);
+					return failure(
+						error instanceof RuntimeCredentialUnavailable
+							? "RUNTIME_UNAVAILABLE"
+							: "INTERNAL",
+						callId,
+					);
 				}
-				if (request.signal.aborted) return failure("DEADLINE_EXCEEDED", callId);
-				if (error instanceof OperationFailure)
-					return failure(error.code, callId);
-				if (error instanceof RuntimeCodecError)
+				if (execution.signal.aborted)
+					return failure("DEADLINE_EXCEEDED", callId);
+				if (!caller || !principal.is(caller))
+					return failure("UNAUTHENTICATED", callId);
+				const contract = operations.get(`query:${name}`);
+				if (!contract) return failure("NOT_FOUND", callId);
+				let operation: PreparedOperation<View>;
+				let context: ContextInput;
+				try {
+					const compatibility = [
+						header(request, "Questpie-Application"),
+						header(request, "Questpie-Client-Contract"),
+						header(request, "Questpie-Wire-Digest"),
+					];
+					if (
+						compatibility.some((value) => value !== null) &&
+						(compatibility[0] !== input.application ||
+							compatibility[1] !== input.clientContractDigest ||
+							compatibility[2] !== input.httpContractDigest)
+					)
+						protocol();
+					if (
+						header(request, "Idempotency-Key") !== null ||
+						header(request, "Effect-Key") !== null
+					)
+						protocol();
+					operation = input.prepare(
+						contract.identity,
+						decodeQuery(contract.input, url.search.slice(1)),
+					);
+					context = decodeContext(
+						input.contextCodec,
+						header(request, "Questpie-Context"),
+					) as ContextInput;
+				} catch (error) {
+					return failure(
+						error instanceof OperationFailure && error.code === "NOT_FOUND"
+							? "NOT_FOUND"
+							: "PROTOCOL_UNSUPPORTED",
+						callId,
+					);
+				}
+				if (execution.signal.aborted)
+					return failure("DEADLINE_EXCEEDED", callId);
+				try {
+					const value = await input.execute({
+						principal: caller,
+						context,
+						operation,
+						callId,
+						signal: execution.signal,
+						...(execution.deadline === undefined
+							? {}
+							: { deadline: execution.deadline }),
+					});
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					const body = {
+						callId,
+						result: encodeRuntimeCodec(operation.output, value),
+					};
+					if (
+						Buffer.byteLength(JSON.stringify(body), "utf8") >
+						input.maximumResponseBytes
+					)
+						return failure("RESOURCE_LIMIT", callId);
+					return queryResponse(body, 200);
+				} catch (error) {
+					if (error instanceof DeclaredOperationError) {
+						try {
+							const declared = encodeDeclaredOperationError(operation, error);
+							return queryResponse(
+								{
+									callId,
+									error: { code: declared.code, payload: declared.payload },
+								},
+								declared.status,
+							);
+						} catch {
+							return failure("INTERNAL", callId);
+						}
+					}
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
+					if (error instanceof OperationFailure)
+						return failure(error.code, callId);
+					if (error instanceof RuntimeCodecError)
+						return failure("INTERNAL", callId);
 					return failure("INTERNAL", callId);
-				return failure("INTERNAL", callId);
+				}
+			} finally {
+				execution.close();
 			}
 		},
 	});

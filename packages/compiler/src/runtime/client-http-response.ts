@@ -1,14 +1,16 @@
+import { canonicalOperationFailures } from "@questpie/runtime/operation";
+
 /** Renders the shared canonical HTTP response decoder for generated clients. */
 export function renderClientHttpResponse(): string {
+	const failures = Object.entries(canonicalOperationFailures)
+		.map(
+			([code, contract]) =>
+				`\t${code}: Object.freeze({ status: ${contract.status}, retryable: ${String(contract.retryable)} }),`,
+		)
+		.join("\n");
 	return String.raw`
 const canonicalFailures: WireRecord = Object.freeze({
-	DEADLINE_EXCEEDED: Object.freeze({ status: 408, retryable: true }),
-	INTERNAL: Object.freeze({ status: 500, retryable: false }),
-	NOT_FOUND: Object.freeze({ status: 404, retryable: false }),
-	PROTOCOL_UNSUPPORTED: Object.freeze({ status: 400, retryable: false }),
-	RESOURCE_LIMIT: Object.freeze({ status: 429, retryable: true }),
-	RUNTIME_UNAVAILABLE: Object.freeze({ status: 503, retryable: true }),
-	UNAUTHENTICATED: Object.freeze({ status: 401, retryable: false }),
+${failures}
 });
 function decodeCanonicalHttpResponse<Result>(input: Readonly<{
 	response: Response;

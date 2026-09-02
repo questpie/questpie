@@ -1,6 +1,8 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 
+import { canonicalOperationFailures } from "@questpie/runtime/operation";
+
 import {
 	canonicalBytes,
 	compareAscii,
@@ -313,13 +315,7 @@ export function projectRuntimeContract(
 		operations,
 		failures: [
 			"COMMITTED_RESULT_UNAVAILABLE",
-			"DEADLINE_EXCEEDED",
-			"INTERNAL",
-			"NOT_FOUND",
-			"PROTOCOL_UNSUPPORTED",
-			"RESOURCE_LIMIT",
-			"RUNTIME_UNAVAILABLE",
-			"UNAUTHENTICATED",
+			...Object.keys(canonicalOperationFailures),
 		],
 		limits: { requestBytes: 1_048_576, responseBytes: 1_048_576 },
 		principalSource: "ingressOutsideBody",

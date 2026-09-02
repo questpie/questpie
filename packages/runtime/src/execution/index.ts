@@ -266,7 +266,10 @@ export function createApplicationRuntime<
 	});
 }
 
-export { createRuntimeRouteExecutor } from "./routes";
+export {
+	createRuntimeRouteExecutor,
+	RuntimeCredentialUnavailable,
+} from "./routes";
 export type {
 	RuntimeCredentialBinding,
 	RuntimeCredentialOutcome,

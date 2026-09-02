@@ -397,8 +397,8 @@ export async function createRuntimeApplication<
 		contextCodec: input.program.context.input as never,
 		operations: artifacts.httpContract.operations,
 		prepare: operationEngine.prepare,
-		resolvePrincipal: async (request) =>
-			input.program.resolvePrincipal(request),
+		resolvePrincipal: async (request, signal) =>
+			input.program.resolvePrincipal(request, signal),
 		execute: ({
 			principal: caller,
 			context,
@@ -425,8 +425,8 @@ export async function createRuntimeApplication<
 		contextCodec: input.program.context.input as never,
 		operations: artifacts.httpContract.operations,
 		prepare: operationEngine.prepare,
-		resolvePrincipal: async (request) =>
-			input.program.resolvePrincipal(request),
+		resolvePrincipal: async (request, signal) =>
+			input.program.resolvePrincipal(request, signal),
 		executeMutation: ({
 			principal: caller,
 			context,

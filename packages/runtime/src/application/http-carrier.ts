@@ -1,4 +1,8 @@
-import { isOperationCallId, OperationFailure } from "../operation";
+import {
+	canonicalOperationFailure,
+	isOperationCallId,
+	OperationFailure,
+} from "../operation";
 
 export const HTTP_JSON_MEDIA_TYPE = "application/json; charset=utf-8";
 
@@ -55,28 +59,53 @@ export function decodeHttpTimeout(value: string | null): number | undefined {
 	return parsed;
 }
 
-function canonicalFailureCode(code: string): string {
-	return [
-		"DEADLINE_EXCEEDED",
-		"INTERNAL",
-		"NOT_FOUND",
-		"PROTOCOL_UNSUPPORTED",
-		"RESOURCE_LIMIT",
-		"RUNTIME_UNAVAILABLE",
-		"UNAUTHENTICATED",
-	].includes(code)
-		? code
-		: "INTERNAL";
-}
-
-function failureStatus(code: string): number {
-	if (code === "UNAUTHENTICATED") return 401;
-	if (code === "NOT_FOUND") return 404;
-	if (code === "DEADLINE_EXCEEDED") return 408;
-	if (code === "RESOURCE_LIMIT") return 429;
-	if (code === "RUNTIME_UNAVAILABLE") return 503;
-	if (code === "PROTOCOL_UNSUPPORTED") return 400;
-	return 500;
+export function createHttpExecutionControl(
+	input: Readonly<{
+		requestSignal: AbortSignal;
+		requestStartedAt: number;
+		timeoutMilliseconds?: number;
+		now(): number;
+	}>,
+): Readonly<{
+	deadline?: number;
+	signal: AbortSignal;
+	close(): void;
+}> {
+	const controller = new AbortController();
+	const deadline =
+		input.timeoutMilliseconds === undefined
+			? undefined
+			: Math.min(
+					Number.MAX_SAFE_INTEGER,
+					input.requestStartedAt + input.timeoutMilliseconds,
+				);
+	const abortFromRequest = () => {
+		if (!controller.signal.aborted)
+			controller.abort(input.requestSignal.reason);
+	};
+	input.requestSignal.addEventListener("abort", abortFromRequest, {
+		once: true,
+	});
+	if (input.requestSignal.aborted) abortFromRequest();
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const schedule = () => {
+		if (deadline === undefined || controller.signal.aborted) return;
+		const remaining = deadline - input.now();
+		if (remaining <= 0) {
+			controller.abort(new OperationFailure("DEADLINE_EXCEEDED"));
+			return;
+		}
+		timer = setTimeout(schedule, Math.min(remaining, 2_147_483_647));
+	};
+	schedule();
+	return Object.freeze({
+		...(deadline === undefined ? {} : { deadline }),
+		signal: controller.signal,
+		close: () => {
+			input.requestSignal.removeEventListener("abort", abortFromRequest);
+			if (timer !== undefined) clearTimeout(timer);
+		},
+	});
 }
 
 export function httpJsonResponse(
@@ -101,22 +130,16 @@ export function httpFailure(
 		retryable?: boolean;
 	}> = {},
 ): Response {
-	const canonicalCode = canonicalFailureCode(code);
+	const contract = canonicalOperationFailure(code);
 	return httpJsonResponse(
 		{
 			...(options.callId === undefined ? {} : { callId: options.callId }),
 			error: {
-				code: canonicalCode,
-				retryable:
-					options.retryable ??
-					[
-						"DEADLINE_EXCEEDED",
-						"RESOURCE_LIMIT",
-						"RUNTIME_UNAVAILABLE",
-					].includes(canonicalCode),
+				code: contract.code,
+				retryable: options.retryable ?? contract.retryable,
 			},
 		},
-		failureStatus(canonicalCode),
+		contract.status,
 		options.cacheControl,
 	);
 }

@@ -29,6 +29,10 @@ type MaybePromise<Value> = Value | Promise<Value>;
 
 export type RuntimeCredentialOutcome = CredentialResolution;
 
+export class RuntimeCredentialUnavailable extends Error {
+	readonly name = "RuntimeCredentialUnavailable";
+}
+
 export type RuntimeCredentialBinding<
 	Service extends AnyCredentialService = AnyCredentialService,
 > = Readonly<{
@@ -439,7 +443,7 @@ export function createRuntimeRouteExecutor<
 				(outcome as { kind?: unknown }).kind === "unavailable" &&
 				keys.length === 1
 			)
-				return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
+				throw new RuntimeCredentialUnavailable();
 			if (
 				(outcome as { kind?: unknown }).kind === "anonymous" &&
 				keys.length === 1
@@ -453,8 +457,10 @@ export function createRuntimeRouteExecutor<
 			)
 				return (outcome as { principal: Principal }).principal;
 			throw new TypeError("Credential resolver outcome is invalid");
-		} catch {
+		} catch (error) {
 			if (request.signal.aborted) throw request.signal.reason;
+			if (error instanceof RuntimeCredentialUnavailable)
+				return failureResponse("CREDENTIALS_UNAVAILABLE", 503, true);
 			return failureResponse("INTERNAL", 500);
 		}
 	};

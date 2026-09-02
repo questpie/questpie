@@ -505,6 +505,7 @@ export async function createApplication(input) {
 		linkPostgresMutationTransactionStatements,
 		linkPostgresQueryPlans,
 		OperationFailure,
+		RuntimeCredentialUnavailable,
 	} = runtimeModule;
 	const loaded = await loadRuntimeArtifacts();
 	if (loaded.artifacts.runtimeBuild.postgresContextBootstrapPlansDigest !== expectedContextBootstrapPlansDigest)
@@ -533,13 +534,16 @@ export async function createApplication(input) {
 	let routeExecutor;
 	let createDirectActions;
 	let createDirectJobs;
-	const resolveApplicationPrincipal = async (request) => {
+	const resolveApplicationPrincipal = async (request, executionSignal = request.signal) => {
 		${
 			credentialResolverDefinition
 				? `const service = await runtime.applicationService(${credentialResolverDefinition}.service);
-		const outcome = await ${credentialResolverDefinition}.resolve({ request, service });
+		const credentialRequest = executionSignal === request.signal
+			? request
+			: new Request(request, { signal: executionSignal });
+		const outcome = await ${credentialResolverDefinition}.resolve({ request: credentialRequest, service });
 		if (outcome.kind === "unavailable")
-			throw new OperationFailure("CREDENTIALS_UNAVAILABLE", true);
+			throw new RuntimeCredentialUnavailable();
 		if (outcome.kind === "anonymous") return principal.anonymous();
 		return outcome.principal;`
 				: "return principal.anonymous();"
