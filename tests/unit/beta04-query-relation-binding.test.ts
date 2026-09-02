@@ -90,10 +90,7 @@ test("marks a conditionally disclosed nested Field optional in the Operation cod
 \t\tupdate:`,
 			),
 		);
-		for (const relativePath of [
-			"src/comments/queries.ts",
-			"src/tickets/queries.ts",
-		]) {
+		for (const relativePath of ["src/tickets/queries.ts"]) {
 			const path = join(temporary, relativePath);
 			const querySource = await readFile(path, "utf8");
 			await writeFile(

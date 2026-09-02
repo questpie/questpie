@@ -11,8 +11,9 @@ fixture-only shortcuts leaking into application code.
   Collection schemas and relations.
 - `src/<domain>/policy.ts` and `src/<domain>/operations.ts` keep authorization
   and Collection lifecycle next to the domain they govern.
-- `src/{tickets,comments,labels,teams}/queries.ts` and adjacent query-plan files
-  own network Queries, pagination, filters, and nested relation selection.
+- `src/{tickets,labels,teams}/queries.ts` and adjacent query-plan files own
+  network Queries, pagination, filters, and nested relation selection. Ticket
+  detail projects its bounded comments array in the same structural Query.
 - `src/ticket-mutations.ts`, `src/ticket-sla-follow-up-job.ts`,
   `src/notification-action.ts`, and `src/inbound-webhook-route.ts` own ticket
   commands and execution-boundary effects.

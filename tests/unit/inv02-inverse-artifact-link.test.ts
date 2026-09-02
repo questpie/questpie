@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -15,23 +15,15 @@ const fixtureRoot = resolve(
 	import.meta.dir,
 	"../../fixtures/team-support-desk",
 );
-
-async function exposeAcceptedFixture(root: string): Promise<void> {
-	const accepted = await readFile(
-		join(root, "src/tickets/__fixtures__/inverse-projection.ts"),
-		"utf8",
-	);
-	await writeFile(
-		join(root, "src/inverse-projection.ts"),
-		accepted.replaceAll('from "../../', 'from "./'),
-	);
-}
+const toOneFixtureRoot = resolve(
+	import.meta.dir,
+	"../../fixtures/collaboration",
+);
 
 test("carries the accepted inverse fixture through Template and Query Projection v2", async () => {
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-inv02-artifacts-"));
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		await exposeAcceptedFixture(temporary);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
@@ -86,21 +78,9 @@ test("carries the accepted inverse fixture through Template and Query Projection
 			],
 			select: [
 				{
-					kind: "toOne",
-					key: "author",
-					relation: "collection:comments/relation:author",
-					select: [
-						{
-							kind: "field",
-							key: "id",
-							field: "collection:memberships/field:id",
-						},
-						{
-							kind: "field",
-							key: "role",
-							field: "collection:memberships/field:role",
-						},
-					],
+					kind: "field",
+					key: "authorMembershipId",
+					field: "collection:comments/field:authorMembershipId",
 				},
 				{
 					kind: "field",
@@ -116,6 +96,16 @@ test("carries the accepted inverse fixture through Template and Query Projection
 					kind: "field",
 					key: "id",
 					field: "collection:comments/field:id",
+				},
+				{
+					kind: "field",
+					key: "kind",
+					field: "collection:comments/field:kind",
+				},
+				{
+					kind: "field",
+					key: "ticketId",
+					field: "collection:comments/field:ticketId",
 				},
 			],
 		});
@@ -356,17 +346,17 @@ test("carries the accepted inverse fixture through Template and Query Projection
 
 test("keeps all-toOne applications on byte-identical v1 artifacts", async () => {
 	const compilation = await compileApplication({
-		applicationRoot: fixtureRoot,
+		applicationRoot: toOneFixtureRoot,
 	});
 	const queryBytes = compilation.generatedFiles["query-projection.json"]!;
 	const plansBytes = compilation.generatedFiles["postgres-query-plans.json"]!;
 	expect(JSON.parse(queryBytes).version).toBe(1);
 	expect(JSON.parse(plansBytes).version).toBe(1);
 	expect(contentDigest(queryBytes)).toBe(
-		"a57181ce44decdb1f4b8683e6bca3a107b926093d619275507e295118462ed29",
+		"69498d86c9d507f805f3e46d4260e6b05056a7684341e9f660d01d47fa17e186",
 	);
 	expect(contentDigest(plansBytes)).toBe(
-		"e07246b8770b88f4b2d6241c7d7e31195ba631cdd9859124bc04e374c50dcbc8",
+		"791261da72826276515468ea1c1de99523d8fd1c1e7bbf7431d11bbe4fc5b226",
 	);
 }, 20_000);
 
@@ -374,45 +364,15 @@ test("renders conditional child Fields optional inside one non-null readonly arr
 	const temporary = await mkdtemp(join(tmpdir(), "questpie-inv02-types-"));
 	try {
 		await cp(fixtureRoot, temporary, { recursive: true });
-		await exposeAcceptedFixture(temporary);
-		const policyPath = join(temporary, "src/comments/policy.ts");
-		const policy = await readFile(policyPath, "utf8");
-		const needle = "\tfields: {\n\t\tcreate:";
-		expect(policy).toContain(needle);
-		await writeFile(
-			policyPath,
-			policy.replace(
-				needle,
-				"\tfields: {\n\t\toutput: ({ row }) => ({ body: row.id.equal(row.id) }),\n\t\tcreate:",
-			),
-		);
-		const commentQueriesPath = join(temporary, "src/comments/queries.ts");
-		const commentQueries = await readFile(commentQueriesPath, "utf8");
-		await writeFile(
-			commentQueriesPath,
-			commentQueries.replace(
-				"body: codec.text(),",
-				"body: codec.optional(codec.text()),",
-			),
-		);
-		const mutationsPath = join(temporary, "src/ticket-mutations.ts");
-		const mutations = await readFile(mutationsPath, "utf8");
-		await writeFile(
-			mutationsPath,
-			mutations.replace(
-				"authorMembershipId: codec.uuid(),\n\t\t\tbody: codec.text(),",
-				"authorMembershipId: codec.uuid(),\n\t\t\tbody: codec.optional(codec.text()),",
-			),
-		);
 		const compilation = await compileApplication({
 			applicationRoot: temporary,
 		});
 		const appContract = compilation.generatedFiles["app.ts"]!;
 		expect(appContract).toContain(
-			'"comments": readonly { "author": { "id": string; "role": string; } | null; "body"?: string; "createdAt": string; "id": string; }[];',
+			'"comments": readonly { "authorMembershipId": string; "body"?: string; "createdAt": string; "id": string; "kind": string; "ticketId": string; }[];',
 		);
 		expect(appContract).not.toContain(
-			'"comments": readonly { "author": { "id": string; "role": string; } | null; "body"?: string; "createdAt": string; "id": string; }[] | null;',
+			'"comments": readonly { "authorMembershipId": string; "body"?: string; "createdAt": string; "id": string; "kind": string; "ticketId": string; }[] | null;',
 		);
 		expect(appContract).not.toContain('"comments": Readonly<{ nodes:');
 	} finally {

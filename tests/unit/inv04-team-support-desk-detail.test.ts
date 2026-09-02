@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolve } from "node:path";
 
-import { compileApplication } from "@questpie/compiler";
+import { compileApplication, loadCommittedSeed } from "@questpie/compiler";
 
 const fixtureRoot = resolve(
 	import.meta.dir,
@@ -35,6 +35,11 @@ test("publishes comments only through the nullable tickets.detail contract", asy
 		queries: readonly Readonly<{
 			template: Readonly<{
 				from: string;
+				parameters: readonly Readonly<{
+					codec?: unknown;
+					kind: string;
+					name: string;
+				}>[];
 				select: readonly Readonly<{ kind: string; key: string }>[];
 			}>;
 			templateVersion: number;
@@ -49,4 +54,26 @@ test("publishes comments only through the nullable tickets.detail contract", asy
 	);
 
 	expect(detailPlan?.templateVersion).toBe(2);
+	const queuePlan = projection.queries.find(({ template }) =>
+		template.parameters.some(({ name }) => name === "statuses"),
+	);
+	expect(
+		queuePlan?.template.parameters.find(({ name }) => name === "statuses")
+			?.codec,
+	).toEqual({
+		kind: "text",
+		minLength: null,
+		maxLength: 32,
+		collation: "questpie.binary",
+	});
+
+	const followUpSeed = compilation.committedSeeds.find(
+		({ identity }) => identity === "seed:teamSupport.demo.v2",
+	);
+	if (!followUpSeed) expect.unreachable();
+	expect(
+		await loadCommittedSeed(
+			resolve(fixtureRoot, "questpie/seeds/teamSupport.demo.v2"),
+		),
+	).toEqual(followUpSeed);
 });

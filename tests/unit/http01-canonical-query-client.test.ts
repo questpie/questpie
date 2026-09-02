@@ -10,7 +10,7 @@ type GeneratedClientModule = Readonly<{
 	createClient(
 		input: Readonly<{
 			baseUrl: string;
-			fetch(request: Request): Promise<Response>;
+			fetch?(request: Request): Promise<Response>;
 		}>,
 	): Readonly<{
 		withContext(context: Readonly<{ companyId: string }>): Readonly<{
@@ -125,6 +125,46 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 			"1".repeat(64),
 		);
 		expect(observed?.headers.get("Questpie-Wire-Digest")).toBe("2".repeat(64));
+
+		const defaultFetch = globalThis.fetch;
+		try {
+			globalThis.fetch = async function (
+				this: typeof globalThis,
+				request: RequestInfo | URL,
+			): Promise<Response> {
+				if (this !== globalThis)
+					throw new TypeError("default fetch receiver was lost");
+				const sent = new Request(request);
+				return new Response(
+					JSON.stringify({
+						callId: sent.headers.get("Questpie-Call-Id"),
+						result: { count: 1 },
+					}),
+					{
+						status: 200,
+						headers: { "content-type": "application/json; charset=utf-8" },
+					},
+				);
+			};
+			const defaultTransportClient = generated.createClient({
+				baseUrl: "http://runtime.test",
+			});
+			expect(
+				await defaultTransportClient
+					.withContext({
+						companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+					})
+					.queries["messages.page"](
+						{ after: null, first: 1, search: "bound" },
+						{
+							callId: "query-default-fetch-1",
+							timeoutMilliseconds: 5_000,
+						},
+					),
+			).toEqual({ count: 1 });
+		} finally {
+			globalThis.fetch = defaultFetch;
+		}
 	} finally {
 		await rm(directory, { force: true, recursive: true });
 	}

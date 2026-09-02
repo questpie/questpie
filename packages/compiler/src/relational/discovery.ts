@@ -20,6 +20,11 @@ const fieldCodec = (field) => {
   if (field.scalar === "timestamp") return { kind: "timestamp", withTimezone: field.options?.withTimezone === true };
   return { kind: field.scalar };
 };
+const queryParameterCodec = (codec) => {
+  if (codec.kind === "text") return { kind: "text", minLength: codec.minLength ?? null, maxLength: codec.maxLength ?? null, collation: "questpie.binary" };
+  if (codec.kind === "integer") return { kind: "integer", minimum: codec.minimum ?? null, maximum: codec.maximum ?? null };
+  return { kind: codec.kind };
+};
 const operationFieldCodec = (field) => {
   const codec = field.scalar === "timestamp" ? { kind: "timestamp" } : { kind: field.scalar };
   return field.nullable === true ? { kind: "nullable", codec } : codec;
@@ -354,16 +359,14 @@ function compileDataQuery(value) {
   const parameters = Object.entries(template.parameters).map(([name, parameter]) => {
     if (parameter.parameterKind === "cursor") return { kind: "cursor", name, nullable: true };
     if (parameter.parameterKind === "list") {
-      const codec = parameter.itemCodec ?? (parameter.itemKind === "text"
-        ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
-        : { kind: parameter.itemKind });
+      const codec = queryParameterCodec(parameter.itemCodec ?? { kind: parameter.itemKind });
       return { kind: "list", name, codec, maximumItems: parameter.maximumItems, nullable: parameter.nullable === true, semantics: "set" };
     }
-    const codec = parameter.codec ?? (parameter.parameterKind === "integer"
-      ? { kind: "integer", minimum: parameter.minimum ?? null, maximum: parameter.maximum ?? null }
-      : parameter.parameterKind === "text"
-        ? { kind: "text", minLength: null, maxLength: null, collation: "questpie.binary" }
-        : { kind: parameter.parameterKind });
+    const codec = queryParameterCodec(parameter.codec ?? {
+      kind: parameter.parameterKind,
+      minimum: parameter.minimum,
+      maximum: parameter.maximum,
+    });
     return { kind: "scalar", name, codec, nullable: parameter.nullable === true };
   });
   const selection = template.select({ fields, relations });

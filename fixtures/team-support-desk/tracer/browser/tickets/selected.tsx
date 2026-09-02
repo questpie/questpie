@@ -24,13 +24,6 @@ export function SelectedTicket({
 	const detailSnapshot = useQueryResource(
 		desk.queries["tickets.detail"].observe({ id: ticketId }),
 	);
-	const commentsSnapshot = useQueryResource(
-		desk.queries["comments.page"].observe({
-			after: null,
-			first: 50,
-			ticketId,
-		}),
-	);
 	const labelsSnapshot = useQueryResource(
 		desk.queries["labels.page"].observe({
 			after: null,
@@ -45,7 +38,7 @@ export function SelectedTicket({
 	const editDialog = useRef<HTMLDialogElement>(null);
 	const selectionReported = useRef(false);
 
-	const snapshots = [detailSnapshot, commentsSnapshot, labelsSnapshot] as const;
+	const snapshots = [detailSnapshot, labelsSnapshot] as const;
 	const failure = snapshots.find((snapshot) => snapshot.kind === "failed");
 	const reconnecting = snapshots.some(
 		(snapshot) =>
@@ -75,8 +68,6 @@ export function SelectedTicket({
 					? "Loading ticket and activity…"
 					: "Live ticket view is current.";
 	const ticket = detailSnapshot.kind === "ready" ? detailSnapshot.value : null;
-	const comments =
-		commentsSnapshot.kind === "ready" ? commentsSnapshot.value : null;
 	const labels = labelsSnapshot.kind === "ready" ? labelsSnapshot.value : null;
 
 	useEffect(() => {
@@ -135,7 +126,6 @@ export function SelectedTicket({
 				actionKind={actionKind}
 				actionStatus={actionStatus}
 				busy={busy}
-				comments={comments}
 				detailMessage={detailMessage}
 				detailTitle={detailTitle}
 				labels={labels}

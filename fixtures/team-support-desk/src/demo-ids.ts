@@ -26,6 +26,8 @@ export const demoIds = Object.freeze({
 	comments: Object.freeze({
 		customer: `${prefix}7141`,
 		agent: `${prefix}7142`,
+		customerTie: `${prefix}7143`,
+		internal: `${prefix}7144`,
 	}),
 	labels: Object.freeze({
 		urgent: `${prefix}7151`,

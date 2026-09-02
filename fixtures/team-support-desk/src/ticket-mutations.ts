@@ -242,6 +242,8 @@ export const addTicketComment = defineMutation({
 				kind: "public",
 			},
 		});
+		if (comment.body === undefined)
+			throw new TypeError("created Comment body was not disclosed");
 		const dueAt = new Date(ctx.now.getTime() + 1_500);
 		const job = await ctx.jobs.ticket.slaFollowUp.accept(
 			{
@@ -253,6 +255,6 @@ export const addTicketComment = defineMutation({
 			},
 			{ idempotencyKey: `comment:${comment.id}:sla-follow-up` },
 		);
-		return { comment, job };
+		return { comment: { ...comment, body: comment.body }, job };
 	},
 });

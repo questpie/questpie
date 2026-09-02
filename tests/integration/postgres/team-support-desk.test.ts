@@ -501,6 +501,9 @@ $questpie$`);
 					const detail = await queries.tickets.detail({
 						id: supportTracerIds.ticketOpen,
 					});
+					const emptyDetail = await queries.tickets.detail({
+						id: supportTracerIds.ticketClosed,
+					});
 					return {
 						queue,
 						emptyQueue,
@@ -510,6 +513,7 @@ $questpie$`);
 						combined,
 						searched,
 						detail,
+						emptyDetail,
 					};
 				},
 			);
@@ -549,6 +553,37 @@ $questpie$`);
 				team: { id: supportTracerIds.teamPlatform },
 				requester: { id: supportTracerIds.membershipCustomer },
 			});
+			expect(listEvidence.detail?.comments.map(({ id }) => id)).toEqual([
+				supportTracerIds.comments.internal,
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
+			expect(
+				listEvidence.detail?.comments.every(
+					({ body }) => typeof body === "string",
+				),
+			).toBe(true);
+			expect(listEvidence.emptyDetail?.comments).toEqual([]);
+
+			const customerDetail = await app.execution(customerInput, ({ queries }) =>
+				queries.tickets.detail({ id: supportTracerIds.ticketOpen }),
+			);
+			expect(customerDetail?.comments.map(({ id }) => id)).toEqual([
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
+			expect(
+				customerDetail?.comments.find(
+					({ id }) => id === supportTracerIds.comments.agent,
+				),
+			).not.toHaveProperty("body");
+			expect(
+				customerDetail?.comments.find(
+					({ id }) => id === supportTracerIds.comments.customer,
+				)?.body,
+			).toBe("I reproduced this twice after signing in again.");
 
 			const created = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.create(
@@ -727,6 +762,13 @@ WHERE call_id = ${editCallId}`;
 				),
 			);
 			expect(comment.job.resource).toBe("job:ticket.slaFollowUp");
+			expect(
+				(
+					await app.execution(agentInput, ({ queries }) =>
+						queries.tickets.detail({ id: created.id }),
+					)
+				)?.comments.map(({ body }) => body),
+			).toEqual([comment.comment.body]);
 
 			const effectKey = `direct:summary:${crypto.randomUUID()}`;
 			const action = await app.execution(agentInput, ({ actions }) =>
@@ -799,6 +841,18 @@ WHERE call_id = ${editCallId}`;
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);
+			expect(
+				(
+					await browserClient.queries["tickets.detail"]({
+						id: supportTracerIds.ticketOpen,
+					})
+				)?.comments.map(({ id }) => id),
+			).toEqual([
+				supportTracerIds.comments.internal,
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
 			const browserCreated = await browserClient.mutations["ticket.create"](
 				{
 					description: "Created through the derived Collection input codec.",

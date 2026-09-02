@@ -1,14 +1,13 @@
 import type { CSSProperties, FormEvent } from "react";
 
 import type { SupportSession } from "../auth/client";
-import type { CommentPage, LabelPage, TicketDetail } from "../questpie";
+import type { LabelPage, TicketDetail } from "../questpie";
 import { dateTime } from "../shared/format";
 
 type TicketDetailPanelProps = Readonly<{
 	actionKind: "ok" | "error";
 	actionStatus: string;
 	busy: boolean;
-	comments: CommentPage | null;
 	detailMessage: string;
 	detailTitle: string;
 	labels: LabelPage | null;
@@ -27,7 +26,6 @@ export function TicketDetailPanel({
 	actionKind,
 	actionStatus,
 	busy,
-	comments,
 	detailMessage,
 	detailTitle,
 	labels,
@@ -188,31 +186,29 @@ export function TicketDetailPanel({
 					<header>
 						<h3 id="activity-heading">Activity</h3>
 						<span>
-							{comments?.nodes.length ?? 0} comment
-							{comments?.nodes.length === 1 ? "" : "s"}
+							{ticket.comments.length} comment
+							{ticket.comments.length === 1 ? "" : "s"}
 						</span>
 					</header>
 					<div className="state-banner" role="status" aria-live="polite">
-						{comments?.nodes.length === 0 ? "No activity yet." : ""}
+						{ticket.comments.length === 0 ? "No activity yet." : ""}
 					</div>
 					<ol className="comments">
-						{comments?.nodes.map((comment) => (
+						{ticket.comments.map((comment) => (
 							<li className="comment" key={comment.id}>
 								<span className="avatar" aria-hidden="true">
-									{(comment.author?.role ?? "?").slice(0, 2)}
+									{comment.authorMembershipId.slice(0, 2)}
 								</span>
 								<div>
 									<header>
 										<strong>
-											{comment.author
-												? `${comment.author.role} · ${comment.author.principalId.slice(0, 8)}`
-												: "Former member"}
+											Member {comment.authorMembershipId.slice(0, 8)}
 										</strong>
 										<time dateTime={comment.createdAt.toISOString()}>
 											{dateTime(comment.createdAt)}
 										</time>
 									</header>
-									<p>{comment.body}</p>
+									<p>{comment.body ?? "Comment body hidden by Policy."}</p>
 								</div>
 							</li>
 						))}

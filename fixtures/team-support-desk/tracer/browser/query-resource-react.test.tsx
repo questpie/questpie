@@ -125,19 +125,20 @@ test("ships one exact-peer React adapter with no second client owner", () => {
 	);
 });
 
-test("Team Support Desk deletes handwritten reactive state and refresh fan-out", () => {
+test("Team Support Desk observes ticket comments through one detail resource", () => {
 	const browserRoot = resolve(import.meta.dir);
 	const sources = [
 		readFileSync(resolve(browserRoot, "app.tsx"), "utf8"),
+		readFileSync(resolve(browserRoot, "questpie.ts"), "utf8"),
+		readFileSync(resolve(browserRoot, "tickets/detail.tsx"), "utf8"),
 		readFileSync(resolve(browserRoot, "tickets/selected.tsx"), "utf8"),
 	].join("\n");
 
 	expect(sources).toContain('from "@questpie/react"');
 	expect(sources).toContain('["tickets.queue"].observe(');
 	expect(sources).toContain('["tickets.detail"].observe(');
-	expect(sources).toContain('["comments.page"].observe(');
 	expect(sources).toContain('["labels.page"].observe(');
 	expect(sources).not.toMatch(
-		/queueRequest|detailRequest|filterSnapshot|pageSnapshot|refreshCurrentQueue|loadQueue|selectTicket|\.watch\(/u,
+		/comments\.page|commentsSnapshot|CommentPage|commentPagePlan|queueRequest|detailRequest|filterSnapshot|pageSnapshot|refreshCurrentQueue|loadQueue|selectTicket|\.watch\(/u,
 	);
 });
