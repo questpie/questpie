@@ -15,7 +15,6 @@ function compileCollectionOperationSet(value) {
     throw new Error("QP-COMPOSE-013 Collection Operation Set body is not an object");
   const allowed = new Set(["name", "policy", "network", ...operationMemberOrder]);
   const unexpected = Object.keys(body).filter((key) => !allowed.has(key)).sort();
-  if (unexpected.length) throw new Error("QP-COMPOSE-013 Collection Operation Set has unknown member " + unexpected[0]);
   if (typeof body.name !== "string" || body.name.length === 0)
     throw new Error("QP-COMPOSE-013 Collection Operation Set name is invalid");
   if (body.network !== undefined && typeof body.network !== "boolean")
@@ -66,10 +65,34 @@ function compileCollectionOperationSet(value) {
     if (member === "list") {
       if (definition.data?.kind !== "dataQuery")
         throw new Error("QP-COMPOSE-013 Collection Operation Set list requires dataQuery");
-      const { templateInput } = compileDataQuery(definition.data);
+      const { templateInput, input, output } = compileDataQuery(definition.data);
       if (templateInput.from !== target)
         throw new Error("QP-COMPOSE-013 Collection Operation Set list dataQuery targets " + templateInput.from);
       compiled.templateInput = templateInput;
+      compiled.documentationInput = {
+        ...input,
+        properties: Object.fromEntries(
+          templateInput.parameters.map((parameter) => [
+            parameter.name,
+            parameter.kind === "cursor"
+              ? { kind: "nullable", codec: { kind: "cursor" } }
+              : input.properties[parameter.name],
+          ]),
+        ),
+      };
+      compiled.documentationOutput = {
+        ...output,
+        properties: {
+          ...output.properties,
+          pageInfo: {
+            ...output.properties.pageInfo,
+            properties: {
+              ...output.properties.pageInfo.properties,
+              endCursor: { kind: "nullable", codec: { kind: "cursor" } },
+            },
+          },
+        },
+      };
     } else {
       compiled.selectionPaths = selectionPaths(definition.select);
     }
@@ -114,9 +137,12 @@ function compileCollectionOperationSet(value) {
 	  compiled.errors = definition.errors ?? {};
 	  compiled.issueMappings = definition.issueMappings ?? {};
     }
+    compiled.documentationDefinition = Object.fromEntries(
+      Object.keys(definition).map((key) => [key, key === "describe" ? definition.describe : null]),
+    );
     members.push(compiled);
   }
-  if (members.length === 0)
+  if (members.length === 0 && unexpected.length === 0)
     throw new Error("QP-COMPOSE-013 Collection Operation Set has no members");
   return {
     kind: "collectionOperationSet",
@@ -127,6 +153,7 @@ function compileCollectionOperationSet(value) {
     members,
     normalizers,
     serverValues,
+    unexpectedMembers: unexpected,
   };
 }
 

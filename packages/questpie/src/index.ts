@@ -88,6 +88,7 @@ export type {
 	OperationErrorFactories,
 	OperationErrorMap,
 } from "./operation";
+export type { OperationDescription } from "./operation-documentation";
 export { defineCollectionOperations, mutation } from "./operation-set";
 export type {
 	CollectionOperationSelection,

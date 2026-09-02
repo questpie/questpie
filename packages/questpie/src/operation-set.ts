@@ -1,6 +1,8 @@
 import type { CollectionDefinition } from "./collection-contract";
+import type { CollectionRowFor, FieldOperationValue } from "./collection-input";
 import type { FieldDefinition } from "./field-contract";
 import type { OperationErrorMap } from "./operation";
+import type { OperationDescription } from "./operation-documentation";
 import type { InlineShapeDefinition } from "./shape";
 
 type CollectionFields<Collection> =
@@ -35,14 +37,229 @@ type CollectionPolicy<Collection> = Readonly<{
 	target: `collection:${CollectionName<Collection>}`;
 }>;
 
-type FieldValue<Node> =
-	Node extends FieldDefinition<infer Value, infer Nullable>
-		? Value | (Nullable extends true ? null : never)
-		: Node extends InlineShapeDefinition<infer Fields>
-			? Readonly<{ [Key in keyof Fields]: FieldValue<Fields[Key]> }>
-			: never;
+type FieldValue<Node> = Node extends FieldDefinition
+	? FieldOperationValue<Node>
+	: Node extends InlineShapeDefinition<infer Fields>
+		? Readonly<{ [Key in keyof Fields]: FieldValue<Fields[Key]> }>
+		: never;
 
 type FieldName<Fields> = Extract<keyof Fields, string>;
+
+type CollectionConstraints<Collection> =
+	Collection extends CollectionDefinition<
+		string,
+		infer _Fields,
+		infer Constraints
+	>
+		? Constraints
+		: never;
+
+type PrimaryFieldReferences<Collection> = {
+	[Key in keyof CollectionConstraints<Collection>]: CollectionConstraints<Collection>[Key] extends Readonly<{
+		kind: "primaryKey";
+		fields: infer Fields extends readonly unknown[];
+	}>
+		? Fields[number]
+		: never;
+}[keyof CollectionConstraints<Collection>];
+
+type PathObject<Fields, Path> = Path extends keyof Fields
+	? Readonly<{ [Key in Path]: FieldValue<Fields[Key]> }>
+	: Path extends readonly [infer Head extends keyof Fields, ...infer Tail]
+		? Tail extends readonly []
+			? Readonly<{ [Key in Head]: FieldValue<Fields[Key]> }>
+			: Fields[Head] extends InlineShapeDefinition<infer Children>
+				? Readonly<{ [Key in Head]: PathObject<Children, Tail> }>
+				: never
+		: never;
+
+type UnionToIntersection<Value> = (
+	Value extends unknown ? (input: Value) => void : never
+) extends (input: infer Intersection) => void
+	? Intersection
+	: never;
+
+type PrimaryKeyValue<Collection> = Readonly<
+	UnionToIntersection<
+		PrimaryFieldReferences<Collection> extends infer Reference
+			? Reference extends unknown
+				? PathObject<CollectionFields<Collection>, Reference>
+				: never
+			: never
+	>
+>;
+
+type SelectedValue<Fields, Selection> = Readonly<{
+	[Key in keyof Selection & keyof Fields]: Selection[Key] extends true
+		? FieldValue<Fields[Key]>
+		: Fields[Key] extends InlineShapeDefinition<infer Children>
+			? SelectedValue<Children, Selection[Key]>
+			: never;
+}>;
+
+type RequiredCreateFieldNames<Fields> = {
+	[Key in keyof Fields]: Fields[Key] extends FieldDefinition<
+		unknown,
+		false,
+		null
+	>
+		? Key
+		: never;
+}[keyof Fields];
+
+type OperationInputShape<Fields, Names, RequiredNames> = Readonly<
+	{
+		[Key in Extract<Names, keyof Fields> as Key extends RequiredNames
+			? Key
+			: never]: FieldValue<Fields[Key]>;
+	} & {
+		[Key in Extract<Names, keyof Fields> as Key extends RequiredNames
+			? never
+			: Key]?: FieldValue<Fields[Key]>;
+	}
+>;
+
+type AuthoredInputNames<Definition> =
+	Definition extends Readonly<{ input: readonly (infer Name)[] }>
+		? Name
+		: never;
+
+type StaticValueNames<Definition> =
+	Definition extends Readonly<{
+		values: (...input: never[]) => infer Values;
+	}>
+		? keyof Values
+		: never;
+
+type TrustedFieldNames<Fields, Member> = {
+	[Key in keyof Fields]: Fields[Key] extends FieldDefinition<
+		unknown,
+		boolean,
+		FieldDefinition["default"],
+		FieldDefinition["scalar"],
+		infer Immutable,
+		boolean,
+		Readonly<Record<string, unknown>>,
+		infer OnUpdate
+	>
+		? OnUpdate extends "now"
+			? never
+			: Member extends "update"
+				? Immutable extends true
+					? never
+					: Key
+				: Key
+		: Key;
+}[keyof Fields];
+
+type TrustedValuesInput<Fields, Definition, Member> = OperationInputShape<
+	Fields,
+	Exclude<TrustedFieldNames<Fields, Member>, StaticValueNames<Definition>>,
+	Member extends "create"
+		? Exclude<
+				RequiredCreateFieldNames<Fields>,
+				AuthoredInputNames<Definition> | StaticValueNames<Definition>
+			>
+		: never
+>;
+
+type TrustedValuesMember<Fields, Definition, Member> = keyof TrustedValuesInput<
+	Fields,
+	Definition,
+	Member
+> extends never
+	? Readonly<Record<never, never>>
+	: Member extends "create"
+		? Exclude<
+				RequiredCreateFieldNames<Fields>,
+				AuthoredInputNames<Definition> | StaticValueNames<Definition>
+			> extends never
+			? Readonly<{
+					values?: TrustedValuesInput<Fields, Definition, Member>;
+				}>
+			: Readonly<{
+					values: TrustedValuesInput<Fields, Definition, Member>;
+				}>
+		: Readonly<{ values?: TrustedValuesInput<Fields, Definition, Member> }>;
+
+type CollectionOperationDescription<
+	Collection extends CollectionDefinition,
+	Member extends "list" | "get" | "create" | "update" | "delete",
+	Definition,
+> = Member extends "list"
+	? Definition extends Readonly<{
+			data: Readonly<{ parameters: infer Input; result: infer Output }>;
+		}>
+		? OperationDescription<Input, Output>
+		: OperationDescription<never, never>
+	: Definition extends Readonly<{ select: infer Selection }>
+		? OperationDescription<
+				Member extends "get" | "delete"
+					? Readonly<{ key: PrimaryKeyValue<Collection> }>
+					: Member extends "create"
+						? Readonly<{
+								input: OperationInputShape<
+									CollectionFields<Collection>,
+									AuthoredInputNames<Definition>,
+									RequiredCreateFieldNames<CollectionFields<Collection>>
+								>;
+							}> &
+								TrustedValuesMember<
+									CollectionFields<Collection>,
+									Definition,
+									Member
+								>
+						: Readonly<{
+								key: PrimaryKeyValue<Collection>;
+								expected?: Partial<
+									CollectionRowFor<CollectionFields<Collection>>
+								>;
+								patch?: OperationInputShape<
+									CollectionFields<Collection>,
+									AuthoredInputNames<Definition>,
+									never
+								>;
+							}> &
+								TrustedValuesMember<
+									CollectionFields<Collection>,
+									Definition,
+									Member
+								>,
+				Member extends "create"
+					? SelectedValue<CollectionFields<Collection>, Selection>
+					: SelectedValue<CollectionFields<Collection>, Selection> | null
+			>
+		: OperationDescription<never, never>;
+
+type CollectionOperationDescriptions<
+	Collection extends CollectionDefinition,
+	Body,
+> = Readonly<{
+	[Member in
+		| "list"
+		| "get"
+		| "create"
+		| "update"
+		| "delete"]?: Member extends keyof Body
+		? Body[Member] &
+				Readonly<{
+					describe?: CollectionOperationDescription<
+						Collection,
+						Member,
+						Body[Member]
+					>;
+				}> &
+				Readonly<
+					Record<
+						Exclude<
+							keyof Body[Member],
+							keyof NonNullable<CollectionOperationSetBody<Collection>[Member]>
+						>,
+						never
+					>
+				>
+		: never;
+}>;
 
 export interface ValueProgramOperand<Value> {
 	readonly kind: "valueOperand";
@@ -133,6 +350,7 @@ type WriteMember<
 		>;
 	}>;
 	select: CollectionOperationSelection<Fields>;
+	describe?: OperationDescription<unknown, unknown>;
 }>;
 
 export interface CollectionOperationSetBody<
@@ -141,9 +359,13 @@ export interface CollectionOperationSetBody<
 	readonly name: string;
 	readonly policy: CollectionPolicy<Collection>;
 	readonly network?: boolean;
-	readonly list?: Readonly<{ data: Readonly<{ kind: "dataQuery" }> }>;
+	readonly list?: Readonly<{
+		data: Readonly<{ kind: "dataQuery" }>;
+		describe?: OperationDescription<unknown, unknown>;
+	}>;
 	readonly get?: Readonly<{
 		select: CollectionOperationSelection<CollectionFields<Collection>>;
+		describe?: OperationDescription<unknown, unknown>;
 	}>;
 	readonly create?: WriteMember<
 		CollectionFields<Collection>,
@@ -153,6 +375,7 @@ export interface CollectionOperationSetBody<
 	readonly update?: WriteMember<CollectionFields<Collection>, true, Collection>;
 	readonly delete?: Readonly<{
 		select: CollectionOperationSelection<CollectionFields<Collection>>;
+		describe?: OperationDescription<unknown, unknown>;
 	}>;
 }
 
@@ -171,6 +394,7 @@ export function defineCollectionOperations<
 >(
 	collection: Collection,
 	body: Body &
+		CollectionOperationDescriptions<NoInfer<Collection>, Body> &
 		Readonly<
 			Record<
 				Exclude<

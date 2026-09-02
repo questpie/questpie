@@ -35,6 +35,7 @@ import {
 	projectPostgresMutationTransactionStatements,
 } from "./mutation";
 import { projectObservationSignalProjection } from "./observation";
+import { compileApplicationOperationDocumentation } from "./operation-documentation";
 import {
 	lowerPostgresQueryPlans,
 	projectPostgresContextBootstrapPlans,
@@ -164,6 +165,12 @@ export async function createArtifacts(
 			resources: input.resources,
 			data: baseManifest.data,
 		});
+	const operationDocumentation = compileApplicationOperationDocumentation({
+		resources: input.resources,
+		evaluatedExports: input.evaluatedExports,
+		collectionOperations: operationSets.programs,
+		data: baseManifest.data,
+	});
 	const operationResources = Object.freeze([
 		...input.resources,
 		...collectionOperationWriteResources,
@@ -486,6 +493,7 @@ export async function createArtifacts(
 			runtime.operationContracts,
 		),
 		"opentelemetry-signal-projection.json": observationSignalProjection.bytes,
+		"operation-documentation.json": operationDocumentation.bytes,
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"operation-http-contract.json": runtimeArtifactBytes(runtime.http),

@@ -45,11 +45,25 @@ function exactKeys(
 		);
 }
 
+function requiredKeys(
+	value: RecordValue,
+	required: readonly string[],
+	label: string,
+): void {
+	const missing = required.find((key) => !Object.hasOwn(value, key));
+	if (missing)
+		throw new CompilerDiagnosticError(
+			"QP-COMPOSE-013",
+			"structuralTypeError",
+			`${label} must contain ${missing}`,
+		);
+}
+
 export function normalizeActionContract(
 	value: RecordValue,
 	normalizeCodec: (value: unknown) => unknown,
 ): RecordValue {
-	exactKeys(
+	requiredKeys(
 		value,
 		[
 			"__questpie",
@@ -226,6 +240,7 @@ export type ActionDefinition<Name extends keyof GeneratedActions, Errors extends
 	readonly policy: object;
 	readonly errors: Errors;
 	readonly limits: ActionLimits;
+	readonly describe?: OperationDescription<GeneratedActions[Name]["input"], GeneratedActions[Name]["output"]>;
 	readonly handler: (input: Readonly<{
 		input: GeneratedActions[Name]["input"];
 		ctx: ActionContext;
@@ -243,6 +258,7 @@ export type ActionFactory = <const Name extends keyof GeneratedActions, const Er
 		policy: object;
 		errors: Errors;
 		limits: ActionLimits;
+		describe?: OperationDescription<GeneratedActions[Name]["input"], GeneratedActions[Name]["output"]>;
 		handler(input: Readonly<{
 			input: GeneratedActions[Name]["input"];
 			ctx: ActionContext;

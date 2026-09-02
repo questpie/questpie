@@ -66,6 +66,7 @@ export type MutationDefinition<Name extends keyof GeneratedMutations & keyof Gen
 	readonly output: Codec<GeneratedMutations[Name]["output"]>;
 	readonly errors: Errors;
 	readonly issueMappings?: GeneratedMutations[Name]["issueMappings"];
+	readonly describe?: OperationDescription<GeneratedMutations[Name]["input"], GeneratedMutations[Name]["output"]>;
 	readonly handler: (input: Readonly<{
 		input: GeneratedMutations[Name]["input"];
 		ctx: MutationContext<Name>;
@@ -82,6 +83,7 @@ export type MutationFactory = <const Name extends keyof GeneratedMutations & key
 		policy: object;
 		errors: Errors;
 		issueMappings?: GeneratedMutations[Name]["issueMappings"];
+		describe?: OperationDescription<GeneratedMutations[Name]["input"], GeneratedMutations[Name]["output"]>;
 		handler(input: Readonly<{
 			input: GeneratedMutations[Name]["input"];
 			ctx: MutationContext<Name>;

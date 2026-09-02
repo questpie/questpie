@@ -19,6 +19,7 @@ export type CompositionDiagnosticCode =
 	| "QP-COMPOSE-027"
 	| "QP-COMPOSE-028"
 	| "QP-COMPOSE-029"
+	| "QP-COMPOSE-030"
 	| "QP-DATA-003"
 	| "QP-DATA-005"
 	| "QP-DATA-008"
@@ -177,6 +178,7 @@ const diagnosticClassesByCode = {
 	],
 	"QP-COMPOSE-028": ["invalidHttpProjection"],
 	"QP-COMPOSE-029": ["httpProjectionCollision"],
+	"QP-COMPOSE-030": ["invalidDocumentation"],
 	"QP-DATA-003": ["invalidRelationReference"],
 	"QP-DATA-005": ["invalidOperator"],
 	"QP-DATA-008": ["orderFieldNotSelected"],

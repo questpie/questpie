@@ -332,14 +332,14 @@ export async function validateStructuralSources(
 const virtualFactories = `
 const make = (resourceKind) => (definition) => Object.freeze({
   ...definition,
-  __questpie: Object.freeze({ category: "definition", resourceKind }),
+  __questpie: Object.freeze({ category: "definition", resourceKind, authoringMembers: Object.freeze(Object.keys(definition)) }),
 });
 export const defineQuery = (definition) => Object.freeze({
   ...definition,
   ...(definition.query === undefined || definition.handler !== undefined
     ? {}
     : { handler: ({ input, ctx }) => ctx.data.run(definition.query, input) }),
-  __questpie: Object.freeze({ category: "definition", resourceKind: "query" }),
+  __questpie: Object.freeze({ category: "definition", resourceKind: "query", authoringMembers: Object.freeze(Object.keys(definition)) }),
 });
 export const defineMutation = make("mutation");
 export const defineAction = (definition) => {
@@ -349,7 +349,7 @@ export const defineAction = (definition) => {
     ...definition,
     network: Object.hasOwn(definition, "network") ? definition.network : false,
     executableSlots: Object.freeze(["handler"]),
-    __questpie: Object.freeze({ category: "definition", resourceKind: "action" }),
+    __questpie: Object.freeze({ category: "definition", resourceKind: "action", authoringMembers: Object.freeze(Object.keys(definition)) }),
   });
 };
 export const defineRoute = make("route");
