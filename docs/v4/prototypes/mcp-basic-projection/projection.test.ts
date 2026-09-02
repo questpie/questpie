@@ -73,6 +73,7 @@ test("derives documentation, outcomes, and disjoint invocation metadata from can
 			operation("action"),
 		],
 	});
+	if (compiled === null) throw new Error("selected MCP projection was omitted");
 
 	expect(compiled?.artifact).toMatchObject({
 		format: "questpie.mcp-projection",
@@ -117,7 +118,7 @@ test("derives documentation, outcomes, and disjoint invocation metadata from can
 	});
 	expect(
 		(
-			compiled?.artifact.tools[2]?.tool.inputSchema.properties as Record<
+			compiled.artifact.tools[2]!.tool.inputSchema.properties as Record<
 				string,
 				unknown
 			>

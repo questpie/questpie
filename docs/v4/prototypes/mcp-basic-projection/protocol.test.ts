@@ -246,6 +246,54 @@ test("cancels one in-flight execution when the response stream closes and never 
 	expect(executions).toBe(1);
 });
 
+test("refuses MRTR and sanitizes an executor fault without retry", async () => {
+	let executions = 0;
+	const ingress = createMcpIngress({
+		serverInfo: { name: "questpie", version: "4.0.0-beta.2" },
+		tools: [queryTool()],
+		execute: async () => {
+			executions += 1;
+			throw new Error("postgres credential and stack");
+		},
+	});
+	const mrtr = await ingress.fetch(
+		modernRequest("tools/call", {
+			id: "mrtr-1",
+			name: "query.tickets.list",
+			params: {
+				_meta: requestMeta(),
+				name: "query.tickets.list",
+				arguments: { input: {}, context: {} },
+				requestState: { opaque: true },
+			},
+		}),
+	);
+	expect(await mrtr?.json()).toEqual({
+		jsonrpc: "2.0",
+		id: "mrtr-1",
+		error: { code: -32602, message: "Invalid params" },
+	});
+	const fault = await ingress.fetch(
+		modernRequest("tools/call", {
+			id: "fault-1",
+			name: "query.tickets.list",
+			params: {
+				_meta: requestMeta(),
+				name: "query.tickets.list",
+				arguments: { input: {}, context: {} },
+			},
+		}),
+	);
+	const event = await fault!.text();
+	expect(JSON.parse(event.slice(6, -2))).toEqual({
+		jsonrpc: "2.0",
+		id: "fault-1",
+		error: { code: -32603, message: "Internal error" },
+	});
+	expect(event).not.toContain("postgres");
+	expect(executions).toBe(1);
+});
+
 function requestMeta() {
 	return {
 		"io.modelcontextprotocol/protocolVersion": "2026-07-28",

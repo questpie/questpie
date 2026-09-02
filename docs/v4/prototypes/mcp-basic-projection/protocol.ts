@@ -39,6 +39,12 @@ export function createMcpIngress(
 			const url = new URL(request.url);
 			if (url.pathname !== "/_questpie/mcp") return null;
 			if (request.method !== "POST") return new Response(null, { status: 405 });
+			if (
+				!request.headers.get("accept")?.includes("application/json") ||
+				!request.headers.get("accept")?.includes("text/event-stream") ||
+				!request.headers.get("content-type")?.startsWith("application/json")
+			)
+				return protocolError(undefined, -32600, "Invalid request", 400);
 			const origin = request.headers.get("origin");
 			if (origin !== null && origin !== url.origin)
 				return new Response(null, { status: 403 });
@@ -87,7 +93,9 @@ export function createMcpIngress(
 					"Request metadata mismatch",
 					400,
 				);
-			if (message.method === "tools/list")
+			if (message.method === "tools/list") {
+				if (message.params?.cursor !== undefined)
+					return protocolError(message.id, -32602, "Invalid params");
 				return json({
 					jsonrpc: "2.0",
 					id: message.id,
@@ -101,17 +109,32 @@ export function createMcpIngress(
 						},
 					},
 				});
+			}
 			if (message.method === "tools/call") {
+				if (
+					message.params?.inputResponses !== undefined ||
+					message.params?.requestState !== undefined
+				)
+					return protocolError(message.id, -32602, "Invalid params");
 				const name = String(message.params?.name ?? "");
 				const binding = input.tools.find(({ tool }) => tool.name === name);
 				if (!binding) return protocolError(message.id, -32602, "Unknown tool");
 				return sse(request, async (signal) => {
-					const outcome = await input.execute({
-						identity: binding.identity,
-						kind: binding.kind,
-						arguments: message.params?.arguments,
-						signal,
-					});
+					let outcome: McpExecutionResult;
+					try {
+						outcome = await input.execute({
+							identity: binding.identity,
+							kind: binding.kind,
+							arguments: message.params?.arguments,
+							signal,
+						});
+					} catch {
+						return {
+							jsonrpc: "2.0",
+							id: message.id,
+							error: { code: -32603, message: "Internal error" },
+						};
+					}
 					return {
 						jsonrpc: "2.0",
 						id: message.id,
