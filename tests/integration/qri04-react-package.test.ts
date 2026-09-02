@@ -11,6 +11,12 @@ import { basename, join, resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const packageRoot = resolve(repositoryRoot, "packages/react");
+const packageJson = JSON.parse(
+	readFileSync(resolve(packageRoot, "package.json"), "utf8"),
+) as {
+	version: string;
+	peerDependencies: Readonly<Record<string, string>>;
+};
 
 function run(command: readonly string[], cwd: string) {
 	return Bun.spawnSync(command, {
@@ -53,7 +59,7 @@ function stageConsumer(
 	);
 	if (extract.exitCode !== 0)
 		throw new Error(extract.stderr.toString() || "package extraction failed");
-	writePeer(root, "questpie", "4.0.0-beta.1");
+	writePeer(root, "questpie", packageJson.version);
 	writePeer(root, "react", reactVersion);
 	writeFileSync(
 		join(root, "package.json"),
@@ -68,8 +74,6 @@ function stageConsumer(
 test("packs an isolated React projection and exposes peer mismatches", () => {
 	const temporary = mkdtempSync(join(tmpdir(), "questpie-react-package-"));
 	try {
-		const build = run(["bun", "run", "build"], packageRoot);
-		expect(build.exitCode).toBe(0);
 		const packed = run(
 			[
 				"bun",
@@ -113,11 +117,11 @@ test("packs an isolated React projection and exposes peer mismatches", () => {
 		).peerDependencies.react;
 		expect(installedPeerRange).toBe("^19.2.0");
 		expect(Bun.semver.satisfies("18.3.1", installedPeerRange)).toBe(false);
-		expect(basename(tarball)).toBe("questpie-react-4.0.0-beta.1.tgz");
-		expect(
-			JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8"))
-				.peerDependencies,
-		).toEqual({ questpie: "4.0.0-beta.1", react: "^19.2.0" });
+		expect(basename(tarball)).toBe(`questpie-react-${packageJson.version}.tgz`);
+		expect(packageJson.peerDependencies).toEqual({
+			questpie: packageJson.version,
+			react: "^19.2.0",
+		});
 	} finally {
 		rmSync(temporary, { force: true, recursive: true });
 	}

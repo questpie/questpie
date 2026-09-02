@@ -7,8 +7,15 @@
 			"name": "questpie",
 			"version": "4.0.0-beta.1",
 			"filename": "questpie-4.0.0-beta.1.tgz",
-			"sha256": "a158cb1a22b1b676f2cef31326cf2ed1ff32a4fa112a56b624a8e5cd28282209",
+			"sha256": "b59651d11eeab816662af1bd5b00881b89133c3c21fd4dbddf7e485d1985822d",
 			"declarationSha256": "00877af5d2b8c0da6b57f4b061b0d567188bfd96c505bcafa8dad6400962c5fb"
+		},
+		{
+			"name": "@questpie/react",
+			"version": "4.0.0-beta.1",
+			"filename": "questpie-react-4.0.0-beta.1.tgz",
+			"sha256": "924829aaf4b4a4b83cdc9326a134651c018dfb49e55dea00319bc7e250f7eda0",
+			"declarationSha256": "8a9503898c5f1925be1cced252d20ade694d16f60d1bf2f7d2a5c95f2b814a29"
 		}
 	]
 }

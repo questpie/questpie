@@ -3,6 +3,12 @@ import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dir, "../..");
+const releaseVersion = JSON.parse(
+	await readFile(
+		resolve(repositoryRoot, "packages/questpie/package.json"),
+		"utf8",
+	),
+).version as string;
 
 test("owns the aggregate release and production-backend budgets", async () => {
 	const started = performance.now();
@@ -14,6 +20,11 @@ test("owns the aggregate release and production-backend budgets", async () => {
 	const elapsed = performance.now() - started;
 	expect(release.exitCode, release.stderr.toString()).toBe(0);
 	expect(elapsed).toBeLessThanOrEqual(15_000);
+	expect(release.stdout.toString()).toContain(`questpie@${releaseVersion}`);
+	expect(release.stdout.toString()).toContain(
+		`@questpie/react@${releaseVersion}`,
+	);
+	expect(release.stdout.toString()).toContain("exact-peers");
 
 	const root = resolve(repositoryRoot, "quality/performance");
 	const manifests = await Promise.all(

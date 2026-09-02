@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { JSDOM } from "jsdom";
-import { StrictMode, act } from "react";
+import { StrictMode, act, createElement } from "react";
 import { createRoot } from "react-dom/client";
 
 import { useQueryResource } from "@questpie/react";
@@ -78,11 +78,7 @@ test("projects a Query Resource through React 19 without owning its identity or 
 			throw new TypeError("React test root is missing");
 		const root = createRoot(container);
 		await act(async () => {
-			root.render(
-				<StrictMode>
-					<Screen />
-				</StrictMode>,
-			);
+			root.render(createElement(StrictMode, null, createElement(Screen)));
 		});
 		expect(container.textContent).toBe("pending");
 		expect(maximumActiveSubscriptions).toBe(1);
@@ -110,13 +106,14 @@ test("ships one exact-peer React adapter with no second client owner", () => {
 	const manifest = JSON.parse(
 		readFileSync(resolve(packageRoot, "package.json"), "utf8"),
 	) as Readonly<{
+		version: string;
 		dependencies?: Readonly<Record<string, string>>;
 		peerDependencies?: Readonly<Record<string, string>>;
 	}>;
 	const source = readFileSync(resolve(packageRoot, "src/index.ts"), "utf8");
 
 	expect(manifest.peerDependencies).toEqual({
-		questpie: "4.0.0-beta.1",
+		questpie: manifest.version,
 		react: "^19.2.0",
 	});
 	expect(manifest.dependencies ?? {}).toEqual({});

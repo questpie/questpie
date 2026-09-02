@@ -18,9 +18,10 @@ function fail(message: string): never {
 	process.exit(1);
 }
 
-function run(command: string[]): void {
+function run(command: string[], cwd?: string): void {
 	console.log(`> ${command.join(" ")}`);
 	const result = Bun.spawnSync(command, {
+		cwd,
 		stdin: "inherit",
 		stdout: "inherit",
 		stderr: "inherit",
@@ -142,7 +143,12 @@ function full(): void {
 		"test",
 		"--timeout=15000",
 		"--path-ignore-patterns=**/collection-lifecycle-boundary/operation-transaction/check.test.ts",
+		"--path-ignore-patterns=**/query-resource-react.test.tsx",
 	]);
+	run(
+		["bun", "test", "tracer/browser/query-resource-react.test.tsx"],
+		resolve("fixtures/team-support-desk"),
+	);
 	run(["bun", "run", "knip:report"]);
 	run(["bun", "run", "build"]);
 	run(["bun", "run", "skill:check"]);
