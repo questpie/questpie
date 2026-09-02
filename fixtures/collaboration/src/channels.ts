@@ -1,4 +1,10 @@
-import { constraint, defineCollection, field, relation } from "questpie";
+import {
+	constraint,
+	defineCollection,
+	field,
+	relation,
+	relationRef,
+} from "questpie";
 
 import { spaces } from "./spaces";
 
@@ -23,6 +29,9 @@ export const channels = defineCollection({
 			target: spaces,
 			fields: ["spaceId"],
 			references: ["id"],
+		}),
+		messages: relation.toMany({
+			inverseOf: relationRef("messages", "channel"),
 		}),
 	},
 });
