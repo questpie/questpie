@@ -83,18 +83,24 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 		)) as GeneratedClientModule;
 
 		let observed: Request | undefined;
+		let injectedIdentityPreserved = false;
+		const injectedFetch = async function (
+			this: Readonly<{ transport?: unknown }>,
+			request: Request,
+		) {
+			injectedIdentityPreserved = this.transport === injectedFetch;
+			observed = request.clone();
+			return new Response(
+				JSON.stringify({ callId: "query-visible-1", result: { count: 20 } }),
+				{
+					status: 200,
+					headers: { "content-type": "application/json; charset=utf-8" },
+				},
+			);
+		};
 		const client = generated.createClient({
 			baseUrl: "http://runtime.test",
-			fetch: async (request) => {
-				observed = request.clone();
-				return new Response(
-					JSON.stringify({ callId: "query-visible-1", result: { count: 20 } }),
-					{
-						status: 200,
-						headers: { "content-type": "application/json; charset=utf-8" },
-					},
-				);
-			},
+			fetch: injectedFetch,
 		});
 		const result = await client
 			.withContext({
@@ -106,6 +112,7 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 			);
 
 		expect(result).toEqual({ count: 20 });
+		expect(injectedIdentityPreserved).toBe(true);
 		expect(observed?.method).toBe("GET");
 		expect(observed?.url).toBe(
 			"http://runtime.test/_questpie/query/messages.page?after=~null&first=20&search=one%20two",
@@ -124,13 +131,24 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 		);
 		expect(observed?.headers.get("Questpie-Wire-Digest")).toBe("2".repeat(64));
 
-		const originalFetch = globalThis.fetch;
+		const defaultFetch = globalThis.fetch;
 		try {
-			globalThis.fetch = async function (_request) {
-				expect(this).toBe(globalThis);
+			globalThis.fetch = async () => {
+				throw new Error("default fetch was captured before invocation");
+			};
+			const defaultTransportClient = generated.createClient({
+				baseUrl: "http://runtime.test",
+			});
+			globalThis.fetch = async function (
+				this: typeof globalThis,
+				request: RequestInfo | URL,
+			): Promise<Response> {
+				if (this !== globalThis)
+					throw new TypeError("default fetch receiver was lost");
+				const sent = new Request(request);
 				return new Response(
 					JSON.stringify({
-						callId: "query-default-fetch",
+						callId: sent.headers.get("Questpie-Call-Id"),
 						result: { count: 1 },
 					}),
 					{
@@ -139,17 +157,21 @@ test("generated Query uses its visible bodyless canonical GET endpoint", async (
 					},
 				);
 			};
-			await generated
-				.createClient({ baseUrl: "http://runtime.test" })
-				.withContext({
-					companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
-				})
-				.queries["messages.page"](
-					{ after: null, first: 1, search: "receiver" },
-					{ callId: "query-default-fetch", timeoutMilliseconds: 5_000 },
-				);
+			expect(
+				await defaultTransportClient
+					.withContext({
+						companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+					})
+					.queries["messages.page"](
+						{ after: null, first: 1, search: "bound" },
+						{
+							callId: "query-default-fetch-1",
+							timeoutMilliseconds: 5_000,
+						},
+					),
+			).toEqual({ count: 1 });
 		} finally {
-			globalThis.fetch = originalFetch;
+			globalThis.fetch = defaultFetch;
 		}
 	} finally {
 		await rm(directory, { force: true, recursive: true });

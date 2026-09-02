@@ -75,3 +75,26 @@ export const supportDemo = defineSeed({
 		}),
 	],
 });
+
+export const supportInverseComments = defineSeed({
+	name: "teamSupport.demo.v2",
+	dependsOn: ["teamSupport.demo.v1"],
+	steps: [
+		seed.insert(comments, {
+			id: demoIds.comments.customerTie,
+			ticketId: demoIds.tickets.customerOpen,
+			authorMembershipId: demoIds.memberships.customer,
+			body: "The tie-break follow-up keeps the exact total order visible.",
+			kind: "public",
+			createdAt: "2026-08-26T08:20:00.000Z",
+		}),
+		seed.insert(comments, {
+			id: demoIds.comments.internal,
+			ticketId: demoIds.tickets.customerOpen,
+			authorMembershipId: demoIds.memberships.agent,
+			body: "Internal escalation evidence for authorized staff only.",
+			kind: "internal",
+			createdAt: "2026-08-26T08:21:00.000Z",
+		}),
+	],
+});

@@ -1,3 +1,4 @@
+import { demoIds } from "../../../src/demo-ids";
 import type { SupportSession } from "../auth/client";
 import { reportFixturePhase } from "../fixture-control";
 import type { SupportDesk } from "../questpie";
@@ -14,6 +15,47 @@ type ExecuteTicketOperation = <Output>(
 	label: string,
 	operation: () => Promise<Output>,
 ) => Promise<Output>;
+
+type CommentProjection = Readonly<{
+	comments: readonly Readonly<{ body?: string; id: string }>[];
+}>;
+
+export function firefoxCommentProjectionEvidence(input: {
+	detail: CommentProjection | null;
+	emptyDetail: CommentProjection | null;
+}) {
+	if (input.detail === null)
+		throw new Error("Firefox seeded ticket detail was unavailable");
+	if (input.emptyDetail === null || input.emptyDetail.comments.length !== 0)
+		throw new Error("Firefox empty inverse-list projection was not empty");
+	if (input.detail.comments.some(({ id }) => id === demoIds.comments.internal))
+		throw new Error("Firefox hidden inverse-list row remained visible");
+	const expectedSeededCommentIds = [
+		demoIds.comments.customerTie,
+		demoIds.comments.agent,
+		demoIds.comments.customer,
+	];
+	const expectedSeededCommentIdSet = new Set<string>(expectedSeededCommentIds);
+	const seededCommentIds = input.detail.comments
+		.map(({ id }) => id)
+		.filter((id) => expectedSeededCommentIdSet.has(id));
+	if (
+		seededCommentIds.length !== expectedSeededCommentIds.length ||
+		seededCommentIds.some((id, index) => id !== expectedSeededCommentIds[index])
+	)
+		throw new Error("Firefox seeded newest-first/tie order was incorrect");
+	const agentComment = input.detail.comments.find(
+		({ id }) => id === demoIds.comments.agent,
+	);
+	if (agentComment === undefined || Object.hasOwn(agentComment, "body"))
+		throw new Error("Firefox conditional comment body was not omitted");
+	return Object.freeze({
+		conditionalBodyOmitted: true,
+		emptyCommentsObserved: true,
+		hiddenCommentRemoved: true,
+		seededCommentIds: Object.freeze(seededCommentIds),
+	});
+}
 
 async function waitForRenderedText(
 	selector: string,
@@ -61,6 +103,15 @@ export async function runFirefoxJourney(input: {
 	);
 	const initialUpdatedAt = ticket.updatedAt.getTime();
 	let ticketId = ticket.id;
+	const customerProjectionEvidence =
+		input.role === "customer"
+			? firefoxCommentProjectionEvidence({
+					detail: await input.desk.queries["tickets.detail"]({ id: ticketId }),
+					emptyDetail: await input.desk.queries["tickets.detail"]({
+						id: demoIds.tickets.agentClosed,
+					}),
+				})
+			: null;
 	await input.executeTicketOperation("Adding comment", () =>
 		input.desk.mutations["ticket.addComment"](
 			{ body: input.commentBody, ticketId },
@@ -72,6 +123,18 @@ export async function runFirefoxJourney(input: {
 		input.commentBody,
 		"committed watched comment",
 	);
+	if (customerProjectionEvidence !== null) {
+		await reportFixturePhase({
+			authProvider: "better-auth",
+			commentBody: input.commentBody,
+			...customerProjectionEvidence,
+			phase: "firefox-comments-complete",
+			reference: input.reference,
+			role: input.role,
+			watchedCommentObserved: true,
+		});
+		return;
+	}
 	const effectKey = `browser:summary:${ticket.reference}:${crypto.randomUUID()}`;
 	await input.executeTicketOperation("Sending summary", async () => {
 		const result = await input.desk.actions["notification.sendTicketSummary"](

@@ -218,6 +218,36 @@ async function tracerReport(
 	}
 }
 
+async function startFirefoxJourney(input: {
+	commentBody: string;
+	persona: "customer" | "agent";
+	port: number;
+	profile: string;
+	reference: string;
+}): Promise<Child> {
+	await mkdir(input.profile);
+	const browserUrl = new URL(`http://127.0.0.1:${input.port}/`);
+	browserUrl.searchParams.set("tracerPersona", input.persona);
+	browserUrl.searchParams.set("tracerComment", input.commentBody);
+	browserUrl.searchParams.set("tracerReference", input.reference);
+	return Bun.spawn(
+		[
+			firefoxBinary,
+			"--headless",
+			"--no-remote",
+			"--profile",
+			input.profile,
+			browserUrl.toString(),
+		],
+		{
+			env: { ...process.env, MOZ_HEADLESS: "1" },
+			stdin: "ignore",
+			stdout: "pipe",
+			stderr: "pipe",
+		},
+	);
+}
+
 afterAll(async () => {
 	await database?.close({ timeout: 0 });
 });
@@ -501,6 +531,9 @@ $questpie$`);
 					const detail = await queries.tickets.detail({
 						id: supportTracerIds.ticketOpen,
 					});
+					const emptyDetail = await queries.tickets.detail({
+						id: supportTracerIds.ticketClosed,
+					});
 					return {
 						queue,
 						emptyQueue,
@@ -510,6 +543,7 @@ $questpie$`);
 						combined,
 						searched,
 						detail,
+						emptyDetail,
 					};
 				},
 			);
@@ -549,6 +583,37 @@ $questpie$`);
 				team: { id: supportTracerIds.teamPlatform },
 				requester: { id: supportTracerIds.membershipCustomer },
 			});
+			expect(listEvidence.detail?.comments.map(({ id }) => id)).toEqual([
+				supportTracerIds.comments.internal,
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
+			expect(
+				listEvidence.detail?.comments.every(
+					({ body }) => typeof body === "string",
+				),
+			).toBe(true);
+			expect(listEvidence.emptyDetail?.comments).toEqual([]);
+
+			const customerDetail = await app.execution(customerInput, ({ queries }) =>
+				queries.tickets.detail({ id: supportTracerIds.ticketOpen }),
+			);
+			expect(customerDetail?.comments.map(({ id }) => id)).toEqual([
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
+			expect(
+				customerDetail?.comments.find(
+					({ id }) => id === supportTracerIds.comments.agent,
+				),
+			).not.toHaveProperty("body");
+			expect(
+				customerDetail?.comments.find(
+					({ id }) => id === supportTracerIds.comments.customer,
+				)?.body,
+			).toBe("I reproduced this twice after signing in again.");
 
 			const created = await app.execution(agentInput, ({ mutations }) =>
 				mutations.ticket.create(
@@ -727,6 +792,13 @@ WHERE call_id = ${editCallId}`;
 				),
 			);
 			expect(comment.job.resource).toBe("job:ticket.slaFollowUp");
+			expect(
+				(
+					await app.execution(agentInput, ({ queries }) =>
+						queries.tickets.detail({ id: created.id }),
+					)
+				)?.comments.map(({ body }) => body),
+			).toEqual([comment.comment.body]);
 
 			const effectKey = `direct:summary:${crypto.randomUUID()}`;
 			const action = await app.execution(agentInput, ({ actions }) =>
@@ -799,6 +871,18 @@ WHERE call_id = ${editCallId}`;
 					})
 				).nodes.some(({ id }) => id === created.id),
 			).toBe(true);
+			expect(
+				(
+					await browserClient.queries["tickets.detail"]({
+						id: supportTracerIds.ticketOpen,
+					})
+				)?.comments.map(({ id }) => id),
+			).toEqual([
+				supportTracerIds.comments.internal,
+				supportTracerIds.comments.customerTie,
+				supportTracerIds.comments.agent,
+				supportTracerIds.comments.customer,
+			]);
 			const browserCreated = await browserClient.mutations["ticket.create"](
 				{
 					description: "Created through the derived Collection input codec.",
@@ -1097,32 +1181,50 @@ WHERE call_id = ${editCallId}`;
 				state: "cancelled",
 			});
 
-			const profile = join(temporary, "firefox-profile");
-			await mkdir(profile);
-			const firefoxComment = `Firefox operator update ${crypto.randomUUID()}`;
-			const browserUrl = new URL(`http://127.0.0.1:${recoveredHost.port}/`);
-			browserUrl.searchParams.set("tracerPersona", "agent");
-			browserUrl.searchParams.set("tracerComment", firefoxComment);
-			browserUrl.searchParams.set(
-				"tracerReference",
-				supportTracerIds.referenceOpen,
-			);
-			const browser = Bun.spawn(
-				[
-					firefoxBinary,
-					"--headless",
-					"--no-remote",
-					"--profile",
-					profile,
-					browserUrl.toString(),
+			const customerComment = `Firefox customer update ${crypto.randomUUID()}`;
+			const customerBrowser = await startFirefoxJourney({
+				commentBody: customerComment,
+				persona: "customer",
+				port: recoveredHost.port,
+				profile: join(temporary, "firefox-customer-profile"),
+				reference: supportTracerIds.referenceOpen,
+			});
+			cleanup.defer(() => stop(customerBrowser, "SIGKILL"));
+			expect(
+				await eventually(() => tracerReport(recoveredHost.port), {
+					accept: (report) =>
+						report?.phase === "firefox-comments-complete" &&
+						report.commentBody === customerComment,
+					description: "Firefox customer inverse-list journey",
+					intervalMilliseconds: 100,
+					timeoutMilliseconds: 40_000,
+				}),
+			).toMatchObject({
+				authProvider: "better-auth",
+				commentBody: customerComment,
+				conditionalBodyOmitted: true,
+				emptyCommentsObserved: true,
+				hiddenCommentRemoved: true,
+				phase: "firefox-comments-complete",
+				reference: supportTracerIds.referenceOpen,
+				role: "customer",
+				seededCommentIds: [
+					supportTracerIds.comments.customerTie,
+					supportTracerIds.comments.agent,
+					supportTracerIds.comments.customer,
 				],
-				{
-					env: { ...process.env, MOZ_HEADLESS: "1" },
-					stdin: "ignore",
-					stdout: "pipe",
-					stderr: "pipe",
-				},
-			);
+				watchedCommentObserved: true,
+			});
+			await stop(customerBrowser, "SIGTERM");
+
+			const firefoxComment = `Firefox operator update ${crypto.randomUUID()}`;
+			const browser = await startFirefoxJourney({
+				commentBody: firefoxComment,
+				persona: "agent",
+				port: recoveredHost.port,
+				profile: join(temporary, "firefox-agent-profile"),
+				reference: supportTracerIds.referenceOpen,
+			});
 			cleanup.defer(() => stop(browser, "SIGKILL"));
 			expect(
 				await eventually(() => tracerReport(recoveredHost.port), {

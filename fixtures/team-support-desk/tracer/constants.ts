@@ -16,6 +16,7 @@ export const supportTracerIds = Object.freeze({
 	ticketClosed: demoIds.tickets.agentClosed,
 	referenceOpen: demoIds.references.customerOpen,
 	referenceClosed: demoIds.references.agentClosed,
+	comments: demoIds.comments,
 });
 
 export const supportPersonas = Object.freeze({

@@ -93,12 +93,14 @@ overwriting it. No raw lock or SQL handle enters application code.
   production implementation currently exposes no authored scalar-list or
   nullable-filter parameter despite the Accepted foundational contract, so the
   app keeps four ordinary Query Resources and records that duplication.
-- `tickets.detail`: exact ticket id with nested Team, Requester, and Assignee.
+- `tickets.detail`: exact ticket id with nested Team, Requester, Assignee, and
+  the bounded newest-first Comment array.
 - `tickets.searchByReference`: exact stable reference lookup under the same
   Policy. Foundational v1 has no `like`/full-text operator; that material DX
   gap is recorded rather than hidden behind raw SQL.
-- `comments.page` and `labels.page`: cursor pages for the selected ticket;
-  comments select nested author Membership.
+- `labels.page`: cursor page for the selected ticket. Comments have no second
+  Operation: the ticket detail Query projects them structurally through the
+  Comment Collection's bounded inverse `list`.
 - `teams.list`: authorized routing choices for the current Organization.
 
 The browser composes those generated Queries into one useful desk: filterable

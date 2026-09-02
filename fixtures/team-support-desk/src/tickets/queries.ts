@@ -105,6 +105,16 @@ const ticketDetailCodec = codec.object({
 	team: codec.nullable(teamSummaryCodec),
 	requester: codec.nullable(membershipSummaryCodec),
 	assignee: codec.nullable(membershipSummaryCodec),
+	comments: codec.array(
+		codec.object({
+			id: codec.uuid(),
+			ticketId: codec.uuid(),
+			authorMembershipId: codec.uuid(),
+			body: codec.optional(codec.text()),
+			kind: codec.text(),
+			createdAt: codec.timestamp(),
+		}),
+	),
 });
 
 export const ticketDetail = defineQuery({
@@ -136,6 +146,10 @@ export const ticketDetail = defineQuery({
 						ticket.lastSlaFollowUpAt === null
 							? null
 							: timestamp(ticket.lastSlaFollowUpAt),
+					comments: ticket.comments.map((comment) => ({
+						...comment,
+						createdAt: timestamp(comment.createdAt),
+					})),
 				}
 			: null;
 	},

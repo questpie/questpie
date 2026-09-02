@@ -9,20 +9,33 @@ export const commentPolicy = definePolicy(comments, {
 	read: {
 		admit: policy.authenticated(),
 		rows: ({ row, principal, tenant }) =>
-			expr.exists(tickets, ({ row: ticket }) =>
-				expr.and(
-					ticket.id.equal(row.ticketId),
-					ticket.organizationId.equal(tenant.id),
-					expr.exists(memberships, ({ row: membership }) =>
+			expr.and(
+				expr.or(
+					row.kind.equal("public"),
+					expr.exists(memberships, ({ row: actor }) =>
 						expr.and(
-							membership.organizationId.equal(tenant.id),
-							membership.principalId.equal(principal.id),
-							membership.status.equal("active"),
-							expr.or(
-								membership.role.in(["agent", "admin"]),
-								expr.and(
-									membership.role.equal("customer"),
-									ticket.requesterMembershipId.equal(membership.id),
+							actor.organizationId.equal(tenant.id),
+							actor.principalId.equal(principal.id),
+							actor.status.equal("active"),
+							actor.role.in(["agent", "admin"]),
+						),
+					),
+				),
+				expr.exists(tickets, ({ row: ticket }) =>
+					expr.and(
+						ticket.id.equal(row.ticketId),
+						ticket.organizationId.equal(tenant.id),
+						expr.exists(memberships, ({ row: membership }) =>
+							expr.and(
+								membership.organizationId.equal(tenant.id),
+								membership.principalId.equal(principal.id),
+								membership.status.equal("active"),
+								expr.or(
+									membership.role.in(["agent", "admin"]),
+									expr.and(
+										membership.role.equal("customer"),
+										ticket.requesterMembershipId.equal(membership.id),
+									),
 								),
 							),
 						),
@@ -73,6 +86,19 @@ export const commentPolicy = definePolicy(comments, {
 			),
 	},
 	fields: {
+		output: ({ row, principal, tenant }) => ({
+			body: expr.exists(memberships, ({ row: actor }) =>
+				expr.and(
+					actor.organizationId.equal(tenant.id),
+					actor.principalId.equal(principal.id),
+					actor.status.equal("active"),
+					expr.or(
+						actor.role.in(["agent", "admin"]),
+						actor.id.equal(row.authorMembershipId),
+					),
+				),
+			),
+		}),
 		create: ({ principal, tenant }) => {
 			const activeActor = expr.exists(memberships, ({ row: actor }) =>
 				expr.and(

@@ -18,9 +18,6 @@ export type TicketListNode = TicketPage["nodes"][number];
 export type TicketDetail = NonNullable<
 	Awaited<ReturnType<SupportDesk["queries"]["tickets.detail"]>>
 >;
-export type CommentPage = Awaited<
-	ReturnType<SupportDesk["queries"]["comments.page"]>
->;
 export type LabelPage = Awaited<
 	ReturnType<SupportDesk["queries"]["labels.page"]>
 >;
