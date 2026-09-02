@@ -1,0 +1,64 @@
+{
+	"protocolVersion": 2,
+	"ticket": "MCP-BASIC-PROJECTION-REPLACEMENT",
+	"proof": "Propose one stateless MCP 2026-07-28 Tools projection over canonical documented network Operations, with exact invocation arguments, one executor, request-scoped SSE cancellation, and no metadata duplication, retry, fallback, legacy route, or second kernel.",
+	"diffBase": "7d45731b8a35aca5a436438f73a2a7ead3c32f18",
+	"reviewOutput": "docs/v4/prototypes/mcp-basic-projection/REVIEW.json",
+	"authorityHeads": {
+		"accepted canonical per-operation HTTP authority": "f1f6c2d80",
+		"accepted operation documentation authority": "476df65ec",
+		"replacement candidate base": "7d45731b8a35aca5a436438f73a2a7ead3c32f18"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "Proposed basic MCP decision",
+			"path": "docs/adr/0038-freeze-basic-mcp-operation-projection.md",
+			"sha256": "b4f4a0dae14fd3f3f101fb4670624da47817960a8f20e182ba5e60b4914b3693"
+		},
+		{
+			"name": "executable candidate explanation and official schema pin",
+			"path": "docs/v4/prototypes/mcp-basic-projection/README.md",
+			"sha256": "5521fe7aae0c01b06199333aba4ad51b176e3972409a0555e7bfb281cafa0aa3"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/mcp-basic-projection/projection.test.ts docs/v4/prototypes/mcp-basic-projection/protocol.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint --deny-warnings docs/v4/prototypes/mcp-basic-projection/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun <dependency-root>/node_modules/typescript/bin/tsc --noEmit --strict --skipLibCheck --module ESNext --moduleResolution Bundler --target ES2022 --types bun --lib ES2023,DOM docs/v4/prototypes/mcp-basic-projection/{projection,projection.test,protocol,protocol.test}.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/v4/prototypes/mcp-basic-projection docs/adr/0038-freeze-basic-mcp-operation-projection.md docs/v4/implementation/mcp-basic-projection/README.md",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"The compiler consumes canonical Operation Contract and Operation Documentation owners and emits one relocation-stable catalogue whose independent digest pins both source digests; authors repeat no MCP name, schema, prose, example, or handler.",
+		"Generated arguments are exactly Query input context optional callId, Mutation input context required callId, and Action input context required effectKey optional callId; these framework fields never enter domain input.",
+		"The stateless 2026-07-28 endpoint implements only server discover, tools list, and tools call with exact modern metadata and headers, JSON discovery/list, request-scoped SSE call completion and stream-close cancellation.",
+		"A Query MCP POST invokes the one Operation executor directly rather than canonical Query GET or an old generic Operation route; Policy, codecs, limits, outcomes and disclosure remain parity owners.",
+		"There is no Runtime documentation join, domain metadata duplication, session, MRTR, retry, fallback, alias, compatibility route, second cache, or second business executor.",
+		"This candidate changes only a Proposed ADR, executable prototype/proof, manifest, and blocked tracer tickets. It projects no Accepted authority or public behavior and requires independent Fable/adversarial review before formal acceptance."
+	]
+}

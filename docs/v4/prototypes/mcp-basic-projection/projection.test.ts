@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 
-import { projectMcpTools, toolName } from "./projection";
+import { compileMcpProjection, type NetworkOperation } from "./projection";
 
 const objectSchema = Object.freeze({
 	type: "object",
@@ -10,7 +10,6 @@ const notFoundSchema = Object.freeze({
 	type: "object",
 	additionalProperties: false,
 	properties: Object.freeze({
-		kind: Object.freeze({ const: "failure" }),
 		error: Object.freeze({
 			type: "object",
 			additionalProperties: false,
@@ -21,120 +20,145 @@ const notFoundSchema = Object.freeze({
 			required: Object.freeze(["code", "retryable"]),
 		}),
 	}),
-	required: Object.freeze(["error", "kind"]),
+	required: Object.freeze(["error"]),
 });
 const applicationOrigin = Object.freeze({
 	exportName: "ticketDetail",
 	logicalPath: "src/tickets.ts",
 	packageId: null,
 });
-
-test("derives disjoint kind-qualified names and schemas without authored MCP metadata", () => {
-	const tools = projectMcpTools({
-		enabled: true,
-		operations: [
-			{
-				kind: "mutation",
-				name: "tickets.detail",
-				network: true,
-				origin: applicationOrigin,
-				inputSchema: objectSchema,
-				contextSchema: objectSchema,
-				outputSchema: { type: "string" },
-				frameworkFailureSchemas: [notFoundSchema],
-			},
-			{
-				kind: "query",
-				name: "tickets.detail",
-				network: true,
-				origin: applicationOrigin,
-				description: "Read one visible ticket.",
-				inputSchema: objectSchema,
-				contextSchema: objectSchema,
-				outputSchema: { oneOf: [{ type: "string" }, { type: "null" }] },
-				declaredErrorSchemas: [
-					{ code: "TICKET_HIDDEN", payloadSchema: { type: "null" } },
-				],
-				frameworkFailureSchemas: [notFoundSchema],
-			},
-			{
-				kind: "action",
-				name: "privateExport",
-				network: false,
-				origin: applicationOrigin,
-				inputSchema: objectSchema,
-				contextSchema: objectSchema,
-				outputSchema: objectSchema,
-				frameworkFailureSchemas: [notFoundSchema],
-			},
-		],
-	});
-
-	expect(tools.map(({ name }) => name)).toEqual([
-		"mutation.tickets.detail",
-		"query.tickets.detail",
-	]);
-	expect(tools[0]!.annotations).toBeUndefined();
-	expect(tools[1]!.annotations).toEqual({ readOnlyHint: true });
-	expect(tools[1]!.description).toBe("Read one visible ticket.");
-	expect(tools[1]!.inputSchema).toMatchObject({
-		type: "object",
-		additionalProperties: false,
-		required: ["context", "input"],
-	});
-	const outcomes = tools[1]!.outputSchema.oneOf as readonly Readonly<{
-		properties: Readonly<Record<string, unknown>>;
-	}>[];
-	expect(outcomes).toHaveLength(3);
-	expect(outcomes[0]!.properties).toMatchObject({
-		kind: { const: "result" },
-		result: { oneOf: [{ type: "string" }, { type: "null" }] },
-	});
-	expect(outcomes[1]!.properties).toMatchObject({
-		kind: { const: "declaredError" },
-		error: { properties: { code: { const: "TICKET_HIDDEN" } } },
-	});
-	expect(outcomes[2]!.properties).toMatchObject({
-		kind: { const: "failure" },
-	});
+const invocationSchemas = Object.freeze({
+	callIdSchema: Object.freeze({
+		type: "string",
+		minLength: 1,
+		maxLength: 256,
+	}),
+	effectKeySchema: Object.freeze({
+		type: "string",
+		minLength: 1,
+		maxLength: 256,
+	}),
 });
 
-test("rejects unsupported and duplicate derived names without an alias", () => {
-	expect(() => toolName({ kind: "query", name: "bad/name" })).toThrow(
-		"unsupported MCP tool identity",
-	);
-	expect(() =>
-		projectMcpTools({
-			enabled: true,
-			operations: [
-				{
-					kind: "query",
-					name: "bad/name",
-					network: true,
-					origin: applicationOrigin,
-					inputSchema: objectSchema,
-					contextSchema: objectSchema,
-					outputSchema: objectSchema,
-					frameworkFailureSchemas: [notFoundSchema],
-				},
-			],
-		}),
-	).toThrow(
-		"unsupported MCP tool identity query.bad/name at application:src/tickets.ts#ticketDetail",
-	);
-	const duplicate = {
-		kind: "query" as const,
-		name: "tickets.list",
+function operation(
+	kind: NetworkOperation["kind"],
+	name = `tickets.${kind}`,
+): NetworkOperation {
+	return Object.freeze({
+		kind,
+		name,
 		network: true,
 		origin: applicationOrigin,
 		inputSchema: objectSchema,
 		contextSchema: objectSchema,
-		outputSchema: objectSchema,
+		outputSchema: { type: "string" },
 		frameworkFailureSchemas: [notFoundSchema],
-	};
+		documentation: {
+			summary: `Run ${kind}`,
+			description: `Uses the canonical ${kind} executor.`,
+			examples: [{ input: {}, output: `${kind}-result` }],
+		},
+	});
+}
+
+test("derives documentation, outcomes, and disjoint invocation metadata from canonical owners", () => {
+	const compiled = compileMcpProjection({
+		enabled: true,
+		operationContractDigest: "operation-contract-digest",
+		operationDocumentationDigest: "operation-documentation-digest",
+		...invocationSchemas,
+		operations: [
+			operation("query"),
+			operation("mutation"),
+			operation("action"),
+		],
+	});
+
+	expect(compiled?.artifact).toMatchObject({
+		format: "questpie.mcp-projection",
+		version: 1,
+		protocolVersion: "2026-07-28",
+		operationContractDigest: "operation-contract-digest",
+		operationDocumentationDigest: "operation-documentation-digest",
+	});
+	expect(
+		compiled?.artifact.tools.map(({ identity, tool }) => ({
+			identity,
+			name: tool.name,
+			title: tool.title,
+			description: tool.description,
+			required: tool.inputSchema.required,
+		})),
+	).toEqual([
+		{
+			identity: "action:tickets.action",
+			name: "action.tickets.action",
+			title: "Run action",
+			description: "Run action\n\nUses the canonical action executor.",
+			required: ["context", "effectKey", "input"],
+		},
+		{
+			identity: "mutation:tickets.mutation",
+			name: "mutation.tickets.mutation",
+			title: "Run mutation",
+			description: "Run mutation\n\nUses the canonical mutation executor.",
+			required: ["callId", "context", "input"],
+		},
+		{
+			identity: "query:tickets.query",
+			name: "query.tickets.query",
+			title: "Run query",
+			description: "Run query\n\nUses the canonical query executor.",
+			required: ["context", "input"],
+		},
+	]);
+	expect(compiled?.artifact.tools[2]?.tool.annotations).toEqual({
+		readOnlyHint: true,
+	});
+	expect(
+		(
+			compiled?.artifact.tools[2]?.tool.inputSchema.properties as Record<
+				string,
+				unknown
+			>
+		).input,
+	).toEqual({
+		...objectSchema,
+		examples: [{}],
+	});
+	expect(compiled?.artifact.tools[2]?.tool.outputSchema).toMatchObject({
+		oneOf: [
+			{
+				required: ["callId", "result"],
+				properties: { result: { type: "string", examples: ["query-result"] } },
+			},
+			{
+				properties: { error: { properties: { code: { const: "NOT_FOUND" } } } },
+			},
+		],
+	});
+	expect(compiled?.digest).toMatch(/^[0-9a-f]{64}$/);
+});
+
+test("rejects unsupported and duplicate names with both Origins and no alias", () => {
 	expect(() =>
-		projectMcpTools({
+		compileMcpProjection({
 			enabled: true,
+			operationContractDigest: "operation-contract-digest",
+			operationDocumentationDigest: "operation-documentation-digest",
+			...invocationSchemas,
+			operations: [operation("query", "bad/name")],
+		}),
+	).toThrow(
+		"unsupported MCP tool identity query.bad/name at application:src/tickets.ts#ticketDetail",
+	);
+	const duplicate = operation("query", "tickets.list");
+	expect(() =>
+		compileMcpProjection({
+			enabled: true,
+			operationContractDigest: "operation-contract-digest",
+			operationDocumentationDigest: "operation-documentation-digest",
+			...invocationSchemas,
 			operations: [
 				duplicate,
 				{
@@ -152,22 +176,39 @@ test("rejects unsupported and duplicate derived names without an alias", () => {
 	);
 });
 
-test("emits nothing when the application projection is not selected", () => {
+test("emits no bytes when unselected and keeps semantic bytes relocation-stable", () => {
 	expect(
-		projectMcpTools({
+		compileMcpProjection({
 			enabled: false,
-			operations: [
-				{
-					kind: "query",
-					name: "unsupported/name",
-					network: true,
-					origin: applicationOrigin,
-					inputSchema: objectSchema,
-					contextSchema: objectSchema,
-					outputSchema: objectSchema,
-					frameworkFailureSchemas: [notFoundSchema],
-				},
-			],
+			operationContractDigest: "operation-contract-digest",
+			operationDocumentationDigest: "operation-documentation-digest",
+			...invocationSchemas,
+			operations: [operation("query", "bad/name")],
 		}),
-	).toEqual([]);
+	).toBeNull();
+	const first = compileMcpProjection({
+		enabled: true,
+		operationContractDigest: "operation-contract-digest",
+		operationDocumentationDigest: "operation-documentation-digest",
+		...invocationSchemas,
+		operations: [operation("query")],
+	});
+	const relocated = compileMcpProjection({
+		enabled: true,
+		operationContractDigest: "operation-contract-digest",
+		operationDocumentationDigest: "operation-documentation-digest",
+		...invocationSchemas,
+		operations: [
+			{
+				...operation("query"),
+				origin: {
+					exportName: "renamedExport",
+					logicalPath: "src/relocated/ticket-query.ts",
+					packageId: "@acme/support",
+				},
+			},
+		],
+	});
+	expect(relocated?.bytes).toBe(first?.bytes);
+	expect(relocated?.digest).toBe(first?.digest);
 });

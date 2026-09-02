@@ -3,7 +3,7 @@
 - Status: Proposed
 - Date: 2026-09-01
 - Owners: Product architecture, compiler, Runtime ingress
-- Protocol target: MCP `2026-07-28`
+- Protocol target: MCP `2026-07-28` (`5f5440bb26a62e2cf3440b92da5a667efa03b267`)
 
 ## Context
 
@@ -32,21 +32,40 @@ ASCII bytes, and are globally unique across application and Package
 contributions. Unsupported identities and collisions fail with both Origins;
 there is no alias or source-order winner.
 
-Each tool has exact object arguments `{ input, context }`. Both child JSON
-Schemas and their descriptions/examples derive from the canonical codecs and
-projection-neutral Operation metadata. Principal and credentials remain trusted
-HTTP ingress facts and are never tool arguments. Call Identity, Effect Identity,
-deadline, cancellation, and replay metadata are adapter-owned rather than
-domain input; their final carrier must preserve the accepted Operation outcomes
-before implementation begins.
+The compiler consumes the App Contract and ADR-0040 Operation Documentation
+artifact. It emits no duplicate domain metadata. `title` is `summary`;
+`description` is `summary` or `summary + "\n\n" + description`; input examples
+annotate the nested input schema and output examples annotate only the success
+result schema. Its independent digest pins the Operation Contract and Operation
+Documentation digests. Origins affect diagnostics, never semantic bytes.
 
-The tool `outputSchema` is a compiler-owned closed `oneOf` containing result,
-declared errors, applicable framework failures, committed-result uncertainty,
-and Action ambiguity. Every result/payload schema derives from the existing
-codec/error contract. Success and tool-execution errors return conforming
-`structuredContent` plus the protocol-recommended canonical JSON text block;
-errors set `isError: true`. Unknown tools, malformed MCP envelopes, and MCP
-server failures alone use JSON-RPC protocol errors. The adapter never retries.
+Generated tool arguments are exact and disjoint:
+
+```ts
+type QueryCall<I, C> = { input: I; context: C; callId?: CallId };
+type MutationCall<I, C> = { input: I; context: C; callId: CallId };
+type ActionCall<I, C> = {
+	input: I;
+	context: C;
+	effectKey: EffectKey;
+	callId?: CallId;
+};
+```
+
+These are framework invocation arguments, not domain input. Mutation requires a
+caller-known `callId` because response loss must remain replayable. Action
+requires a caller-known `effectKey`; `callId` remains optional. Principal,
+credentials, Authority, deadline, transport state, and cancellation signals are
+never model arguments.
+
+The tool `outputSchema` is a compiler-owned closed `oneOf` over the exact
+canonical Operation frames: `{ callId, result }`, declared `{ callId, error }`
+frames, applicable framework failures, committed-result uncertainty, and
+Action ambiguity. It invents no `{ kind }` envelope. Success and tool-execution
+errors return conforming `structuredContent` plus the same canonical JSON in a
+text block; errors set `isError: true`. Unknown tools, malformed MCP envelopes,
+and MCP server protocol failures alone use JSON-RPC errors. No adapter retry,
+fallback, or legacy route exists.
 
 The compiler emits only `readOnlyHint: true` for Query. Mutation and Action omit
 risk annotations so the protocol's conservative defaults apply. No annotation,
@@ -57,8 +76,36 @@ does not evaluate input-dependent Policy or disclose Policy evidence.
 Every call creates a fresh accepted Execution and reuses Context resolution,
 Principal, Policy, limits, codecs, transactions, receipts, errors, cancellation,
 nondisclosure, and the Execution Envelope. MCP owns transport decode/encode
-only. Raw Routes, Jobs, durable maintenance, Tasks, resources, prompts,
+only. A Query tool call is MCP `POST`; it invokes the one executor directly and
+does not loop through the canonical Query `GET` or an old generic Operation
+route. Raw Routes, Jobs, durable maintenance, Tasks, resources, prompts,
 sampling, elicitation, and skills are outside this basic slice.
+
+## Exact protocol and failure boundary
+
+The one endpoint is stateless: there is no initialize/session flow.
+`server/discover`, `tools/list`, and `tools/call` require the `2026-07-28`
+request `_meta`, `MCP-Protocol-Version`, and matching `Mcp-Method`; calls also
+require matching `Mcp-Name`. Discovery and list return JSON. Calls return one
+request-scoped SSE stream whose final event has `resultType: "complete"`.
+Closing that response stream cancels the one Execution; the server emits no
+`notifications/cancelled`, retries nothing, and fabricates no result after an
+ambiguous transport loss. `inputResponses` and `requestState` are rejected; the
+basic slice never returns `input_required`.
+
+Absent `Origin` is allowed for non-browser clients. A present `Origin` must
+exactly match the request URL origin before credentials or execution; mismatch
+is a value-free HTTP 403. Unsupported versions are `-32022`/400 with only the
+requested and supported versions. Header/body ambiguity is `-32020`/400 without
+echoing credentials or payloads. Parse and invalid-request failures disclose no
+codec, Policy, PostgreSQL, stack, or handler detail. Declared/framework
+Operation outcomes remain tool results, preserving direct/network/MCP parity.
+
+`tools/list` is one deterministic public catalogue with `ttlMs: 0` and
+`cacheScope: "public"`. Listing evaluates neither Principal nor Policy. The App
+opt-in already makes every selected network Operation discoverable; Policy is
+evaluated only for a concrete call. Runtime reads the compiled MCP catalogue;
+it never joins the Operation Documentation artifact.
 
 ## Artifact and explain boundary
 
