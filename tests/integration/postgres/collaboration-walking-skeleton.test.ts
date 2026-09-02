@@ -183,11 +183,29 @@ type DeliveryAction = (
 	}>,
 ) => Promise<DeliveryActionResult>;
 
+type ChannelDetail = Readonly<{
+	id: string;
+	spaceId: string;
+	name: string;
+	messages: ReadonlyArray<
+		Readonly<{
+			id: string;
+			channelId: string;
+			authorMembershipId: string;
+			body?: string;
+			createdAt: Date;
+		}>
+	>;
+}> | null;
+
 type GeneratedExecutionScope = Readonly<{
 	actions: Readonly<{
 		delivery: Readonly<{ publish: DeliveryAction }>;
 	}>;
 	queries: Readonly<{
+		channels: Readonly<{
+			detail(input: Readonly<{ id: string }>): Promise<ChannelDetail>;
+		}>;
 		messages: Readonly<{ page: unknown }>;
 	}>;
 	mutations: Readonly<{
@@ -224,6 +242,11 @@ type GeneratedExecutionScope = Readonly<{
 type GeneratedNetworkClient = Readonly<{
 	withContext(input: Readonly<{ companyId: string }>): Readonly<{
 		actions: Readonly<{ "delivery.publish": DeliveryAction }>;
+		queries: Readonly<{
+			"channels.detail"(
+				input: Readonly<{ id: string }>,
+			): Promise<ChannelDetail>;
+		}>;
 	}>;
 }>;
 
@@ -517,6 +540,47 @@ postgresTest(
 					"INSERT INTO collaboration.channels (id, space_id, name) VALUES ($1, $2, 'foreign-channel')",
 					[foreignChannelId, foreignSpaceId],
 				);
+				const revokedAuthorId = "00000000-0000-4000-8000-000000000075";
+				await database!.unsafe(
+					`INSERT INTO collaboration.memberships
+  (id, company_id, principal_id, role, scope_key, status)
+VALUES ($1, $2, '00000000-0000-4000-8000-000000000076', 'member', 'company', 'revoked')`,
+					[revokedAuthorId, tracerIds.company],
+				);
+				for (let index = 0; index < 50; index += 1)
+					await database!.unsafe(
+						`INSERT INTO collaboration.messages
+  (id, channel_id, author_membership_id, body, created_at)
+VALUES ($1, $2, $3, $4, $5)`,
+						[
+							`40000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`,
+							tracerIds.channel,
+							revokedAuthorId,
+							`hidden-${index}`,
+							new Date(1_788_240_000_000 + index * 1_000),
+						],
+					);
+				const directChannel = await routeApplication.execution(
+					executionInput,
+					({ queries }) => queries.channels.detail({ id: tracerIds.channel }),
+				);
+				const networkChannel = await networkClient.queries["channels.detail"]({
+					id: tracerIds.channel,
+				});
+				expect(networkChannel).toEqual(directChannel);
+				expect(directChannel?.messages).toEqual([
+					{
+						authorMembershipId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a3",
+						channelId: tracerIds.channel,
+						createdAt: new Date("2026-08-14T12:00:00.000Z"),
+						id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a5",
+					},
+				]);
+				expect(
+					await networkClient.queries["channels.detail"]({
+						id: foreignChannelId,
+					}),
+				).toBeNull();
 				const rejectedCheckCallIds: string[] = [];
 				const assertChannelUnavailable = (error: unknown): string => {
 					expect(error).toMatchObject({
