@@ -53,7 +53,7 @@ const statementContracts: Readonly<Record<string, StatementContract>> =
 			columns: [{ key: "enabled", codec: "text", nullable: false }],
 		},
 		"mutation.dispatch.run.insert": {
-			parameterCount: 20,
+			parameterCount: 23,
 			command: "INSERT",
 			affectedRows: [0, 1],
 			returnedRows: [0, 1],
@@ -217,6 +217,8 @@ function linkStatement(
 		"result keys",
 	);
 	const command = text(result.command, "result command");
+	if (command !== "INSERT" && command !== "SELECT" && command !== "UPDATE")
+		throw new TypeError("invalid PostgreSQL Mutation result command");
 	const affectedRows = record(result.affectedRows, "affected rows");
 	const returnedRows = record(result.returnedRows, "returned rows");
 	exact(affectedRows, ["minimum", "maximum"], "affected row keys");
@@ -248,6 +250,7 @@ function linkStatement(
 	placeholders(statementText, parameterCount);
 	const statement = definePostgresStatement({
 		name: identity,
+		operation: command,
 		text: statementText,
 		parameterCount,
 		parameters(input) {

@@ -25,8 +25,24 @@ export type PostgresParameter =
 	| readonly PostgresParameter[]
 	| PostgresJson;
 
-export type PostgresStatement<Input, Output> = Readonly<{
+export type PostgresDatabaseOperation =
+	| "SELECT"
+	| "INSERT"
+	| "UPDATE"
+	| "DELETE"
+	| "CALL";
+
+export type PostgresStatementOperation =
+	| PostgresDatabaseOperation
+	| "administrative";
+
+export type PostgresStatement<
+	Input,
+	Output,
+	Operation extends PostgresStatementOperation = PostgresDatabaseOperation,
+> = Readonly<{
 	name: string;
+	operation: Operation;
 	text: string;
 	parameterCount: number;
 	parameters(input: Input): readonly PostgresParameter[];
@@ -41,6 +57,21 @@ export type PostgresStatement<Input, Output> = Readonly<{
 }>;
 
 export interface DefinePostgresStatement {
+	<Input, Output, const Operation extends PostgresDatabaseOperation>(
+		input: Readonly<{
+			name: string;
+			operation: Operation;
+			text: string;
+			parameterCount: number;
+			parameters(input: Input): readonly PostgresParameter[];
+			decode: PostgresStatement<Input, Output>["decode"];
+		}>,
+	): PostgresStatement<Input, Output, Operation>;
+}
+
+export declare const definePostgresStatement: DefinePostgresStatement;
+
+export interface DefinePostgresAdministrativeStatement {
 	<Input, Output>(
 		input: Readonly<{
 			name: string;
@@ -49,10 +80,10 @@ export interface DefinePostgresStatement {
 			parameters(input: Input): readonly PostgresParameter[];
 			decode: PostgresStatement<Input, Output>["decode"];
 		}>,
-	): PostgresStatement<Input, Output>;
+	): PostgresStatement<Input, Output, "administrative">;
 }
 
-export declare const definePostgresStatement: DefinePostgresStatement;
+export declare const definePostgresAdministrativeStatement: DefinePostgresAdministrativeStatement;
 
 export type PostgresTransactionMode = Readonly<{
 	isolation: "readCommitted" | "repeatableRead" | "serializable";
@@ -70,7 +101,7 @@ export type PostgresControl = Readonly<{
 export interface PostgresTransaction {
 	readonly [transactionBrand]: true;
 	execute<Input, Output>(
-		statement: PostgresStatement<Input, Output>,
+		statement: PostgresStatement<Input, Output, PostgresStatementOperation>,
 		input: Input,
 	): Promise<Output>;
 }

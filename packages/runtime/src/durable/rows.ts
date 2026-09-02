@@ -1,20 +1,7 @@
 import { uuidFromSha256Digest } from "../canonical-json";
 import { canonicalMutationBytes, mutationDigest } from "../mutation/canonical";
-import {
-	durableEventInsert,
-	durableEventSequenceBump,
-	type DurableEventErrorCode,
-	type DurableEventKind,
-} from "./postgres-statements";
-import { durableKernelMarker } from "./postgres-statements";
+import type { NeutralTraceContextV1 } from "../observation";
 import type { LinkedReactionRetry } from "./projection";
-
-export type DurableRow = Readonly<Record<string, unknown>>;
-
-export type DurableQuery = (
-	statement: string,
-	parameters?: readonly unknown[],
-) => Promise<readonly DurableRow[]>;
 
 export type DurablePrincipalKind = "anonymous" | "service" | "user";
 
@@ -42,12 +29,14 @@ export type DurableFailureCode =
 	| "VALIDATION_FAILED";
 
 export type DurableClaim = Readonly<{
+	acceptanceTrace: NeutralTraceContextV1 | null;
 	runId: string;
 	dispatchId: string;
 	resource: string;
 	semanticVersion: number;
 	attemptId: string;
 	attemptNumber: number;
+	queueDelayMilliseconds: number;
 	leaseToken: string;
 	leaseMilliseconds: number;
 	leaseExpiresAt: Date;
@@ -82,11 +71,23 @@ export type DurableHeartbeat = Readonly<{
 	deadlineExpired: boolean;
 }>;
 
-export type DurableTransition = Readonly<{
-	status: "applied" | "fenced";
-	state: DurableRunState | null;
-	deadLetter: boolean;
-}>;
+export type DurableTransition =
+	| Readonly<{
+			status: "fenced";
+			state: null;
+			deadLetter: false;
+	  }>
+	| Readonly<{
+			status: "applied";
+			state: "delayed";
+			deadLetter: false;
+			retryDelayMilliseconds: number;
+	  }>
+	| Readonly<{
+			status: "applied";
+			state: Exclude<DurableRunState, "delayed">;
+			deadLetter: boolean;
+	  }>;
 
 export type DurableRunView = Readonly<{
 	runId: string;
@@ -137,19 +138,6 @@ export interface DurableKernel {
 	cancel(claim: DurableClaim): Promise<DurableTransition>;
 	inspect(runId: string): Promise<DurableRunView | null>;
 	events(runId: string): Promise<readonly DurableRunEventView[]>;
-}
-
-/**
- * The durable kernel opts every one of its own transactions into the
- * `questpie_internal` guard. Application and worker statements that never call
- * this are rejected by the run, attempt, event, and dispatch triggers.
- */
-export const durableKernelMarkerStatement = durableKernelMarker.text;
-
-export async function markDurableKernelTransaction(
-	query: DurableQuery,
-): Promise<void> {
-	await query(durableKernelMarkerStatement);
 }
 
 export function durableText(value: unknown, label: string): string {
@@ -248,38 +236,6 @@ export type DurableEventClaim = Readonly<{
 	causationId: string;
 	correlationId: string;
 }>;
-
-/** One append-only writer for every durable transition. */
-export async function appendDurableRunEvent(
-	query: DurableQuery,
-	input: Readonly<{
-		application: string;
-		claim: DurableEventClaim;
-		kind: DurableEventKind;
-		errorCode?: DurableEventErrorCode | null;
-	}>,
-): Promise<void> {
-	const [bumped] = await query(durableEventSequenceBump.text, [
-		input.application,
-		input.claim.runId,
-	]);
-	if (!bumped) throw new TypeError("durable run history has no run");
-	await query(durableEventInsert.text, [
-		input.application,
-		input.claim.runId,
-		durableInteger(bumped.sequence, "run event sequence"),
-		input.claim.resource,
-		input.claim.dispatchId,
-		input.claim.attemptId,
-		input.claim.leaseToken === null
-			? null
-			: leaseTokenDigest(input.claim.leaseToken),
-		input.claim.causationId,
-		input.claim.correlationId,
-		input.kind,
-		input.errorCode ?? null,
-	]);
-}
 
 export function effectIdentity(
 	application: string,

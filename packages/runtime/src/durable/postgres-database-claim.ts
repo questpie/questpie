@@ -52,12 +52,14 @@ function claim(
 	}>,
 ): DurableClaim {
 	return Object.freeze({
+		acceptanceTrace: row.acceptanceTrace,
 		runId: row.runId,
 		dispatchId: row.dispatchId,
 		resource: row.resource,
 		semanticVersion: row.semanticVersion,
 		attemptId: input.attemptId,
 		attemptNumber: input.attemptNumber,
+		queueDelayMilliseconds: row.queueDelayMilliseconds,
 		leaseToken: input.leaseToken,
 		leaseMilliseconds: input.leaseMilliseconds,
 		leaseExpiresAt: input.leaseExpiresAt,

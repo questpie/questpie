@@ -147,6 +147,7 @@ const supersedeLease = definePostgresStatement<
 	void
 >({
 	name: "durable.effect.test.supersede",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET lease_token_digest = $2::text
 WHERE application_name = 'application:collaboration' AND run_id = $1::uuid`,
@@ -164,6 +165,7 @@ WHERE application_name = 'application:collaboration' AND run_id = $1::uuid`,
 
 const backendPid = definePostgresStatement<void, number>({
 	name: "durable.effect.test.backend-pid",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_backend_pid()",
 	parameterCount: 0,
 	parameters: () => [],
@@ -186,6 +188,7 @@ const effectState = definePostgresStatement<
 	Readonly<{ status: string; receipt: string | null; settledEvents: number }>
 >({
 	name: "durable.effect.test.inspect",
+	operation: "SELECT",
 	text: `SELECT effects.status, effects.receipt,
   (SELECT count(*)::int FROM questpie_internal.durable_run_events AS events
    WHERE events.application_name = effects.application_name
@@ -220,6 +223,7 @@ const ambiguousEffectState = definePostgresStatement<
 	Readonly<{ status: string; ambiguousEvents: number }>
 >({
 	name: "durable.effect.test.inspect-ambiguous",
+	operation: "SELECT",
 	text: `SELECT effects.status,
   (SELECT count(*)::int FROM questpie_internal.durable_run_events AS events
    WHERE events.application_name = effects.application_name
@@ -249,6 +253,7 @@ const effectCount = definePostgresStatement<
 	number
 >({
 	name: "durable.effect.test.count",
+	operation: "SELECT",
 	text: `SELECT count(*)::int FROM questpie_internal.durable_effects
 WHERE application_name = 'application:collaboration'
   AND run_id = $1::uuid AND effect_name = $2::text`,

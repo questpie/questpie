@@ -4,12 +4,14 @@ import type { LinkedJobProjection, LinkedReactionProjection } from "../durable";
 import { createJobAcceptance, durableRunIdentity } from "../durable/acceptance";
 import { retryBytes } from "../durable/rows";
 import type { ExecutionFacts } from "../execution";
+import { observePostgresTransaction } from "../observation";
 import {
 	assertOperationAdmission,
 	CommittedResultUnavailable,
 	DeclaredOperationError,
 	isOperationCallId,
 	isPostgresTransactionId,
+	OperationFailure,
 	type PreparedOperation,
 } from "../operation";
 import {
@@ -58,6 +60,23 @@ const emptyJobs: LinkedJobProjection = Object.freeze({
 	byIdentity: new Map(),
 });
 type FixedIdentity = (typeof fixedIdentities)[number];
+
+function mutationPostgresObservationFailure(
+	error: unknown,
+	signal: AbortSignal,
+) {
+	const errorCode =
+		error instanceof QuestpiePostgresError ? { errorCode: error.code } : {};
+	if (
+		(error instanceof QuestpiePostgresError && error.code !== "cancelled") ||
+		!signal.aborted
+	)
+		return { outcome: "framework_error" as const, ...errorCode };
+	return signal.reason instanceof DOMException &&
+		signal.reason.name === "TimeoutError"
+		? { outcome: "deadline" as const, ...errorCode }
+		: { outcome: "cancelled" as const, ...errorCode };
+}
 
 function lifecycleJobRequest(value: unknown): Readonly<{
 	payload: Readonly<Record<string, unknown>>;
@@ -230,342 +249,422 @@ export function createPostgresDatabaseMutationInvoker<View>(
 			signals.length === 1 ? signals[0]! : AbortSignal.any(signals);
 		const facts = Object.freeze({ ...input.facts, signal });
 		let transactionId: string | null = null;
+		let observedTransactionId: string | undefined;
+		const transactionObservation = options?.observation?.execution.begin({
+			kind: "transaction",
+			principalKind: facts.principal.kind,
+			trace: { kind: "active-parent" },
+		});
+		const commitObservedTransaction = () => {
+			transactionObservation?.event({
+				kind: "transaction.committed",
+				...(observedTransactionId === undefined
+					? {}
+					: { transactionId: observedTransactionId }),
+			});
+			transactionObservation?.end({ kind: "transaction", outcome: "ok" });
+		};
 		try {
-			return await input.database.transaction({
-				mode: { isolation: "readCommitted", access: "readWrite" },
-				control: { signal },
-				use: async (transaction) => {
-					const transactionStarted = performance.now();
-					const scope = [
-						input.application,
-						facts.tenant.id,
-						operation.binding.identity,
-						facts.principal.kind,
-						facts.principal.id,
-						callId,
-					] as const;
-					const owners = await transaction.execute(
-						statements["mutation.receipt.claim"].statement,
-						[...scope, inputDigest],
-					);
-					if (owners.length === 0) {
-						const receipts = await transaction.execute(
-							statements["mutation.receipt.read"].statement,
-							scope,
+			const runTransaction = () =>
+				input.database.transaction({
+					mode: { isolation: "readCommitted", access: "readWrite" },
+					control: { signal },
+					use: async (rawTransaction) => {
+						const transaction = options?.observation
+							? observePostgresTransaction({
+									execution: options.observation.execution,
+									failure: (error) =>
+										mutationPostgresObservationFailure(error, signal),
+									principalKind: facts.principal.kind,
+									transaction: rawTransaction,
+								})
+							: rawTransaction;
+						const transactionStarted = performance.now();
+						const scope = [
+							input.application,
+							facts.tenant.id,
+							operation.binding.identity,
+							facts.principal.kind,
+							facts.principal.id,
+							callId,
+						] as const;
+						const owners = await transaction.execute(
+							statements["mutation.receipt.claim"].statement,
+							[...scope, inputDigest],
 						);
-						const receipt = receipts[0];
-						if (!receipt || receipt.outcome !== "committed")
-							throw new TypeError(
-								"Mutation receipt is unavailable after conflict",
+						if (owners.length === 0) {
+							const receipts = await transaction.execute(
+								statements["mutation.receipt.read"].statement,
+								scope,
 							);
-						if (receipt.inputDigest !== inputDigest)
-							throw new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, {
-								callId,
+							const receipt = receipts[0];
+							if (!receipt || receipt.outcome !== "committed")
+								throw new TypeError(
+									"Mutation receipt is unavailable after conflict",
+								);
+							if (receipt.inputDigest !== inputDigest)
+								throw new DeclaredOperationError("IDEMPOTENCY_CONFLICT", 409, {
+									callId,
+								});
+							transactionId = transactionIdentity(receipt.transactionId);
+							options?.observation?.mutation.event({
+								kind: "receipt.replayed",
 							});
-						transactionId = transactionIdentity(receipt.transactionId);
-						return Object.freeze({
-							committed: true as const,
-							value: replayResult(operation, receipt.resultBytes),
+							return Object.freeze({
+								committed: true as const,
+								value: replayResult(operation, receipt.resultBytes),
+							});
+						}
+						const owner = owners[0]!;
+						transactionId = transactionIdentity(owner.transactionId);
+						observedTransactionId = transactionId;
+						if (!(owner.operationTime instanceof Date))
+							throw new TypeError(
+								"operation time must be a PostgreSQL timestamp",
+							);
+						let businessRows = 0;
+						const lifecycleDoom = createCollectionLifecycleDoom();
+						const lifecycleBudget = createDefaultCollectionExecutionBudget({
+							doom: lifecycleDoom,
+							signal,
 						});
-					}
-					const owner = owners[0]!;
-					transactionId = transactionIdentity(owner.transactionId);
-					if (!(owner.operationTime instanceof Date))
-						throw new TypeError(
-							"operation time must be a PostgreSQL timestamp",
-						);
-					let businessRows = 0;
-					const lifecycleDoom = createCollectionLifecycleDoom();
-					const lifecycleBudget = createDefaultCollectionExecutionBudget({
-						doom: lifecycleDoom,
-						signal,
-					});
-					const recordIdForSlot = (dispatchSlot: string) =>
-						deterministicUuid(
-							inputScopeBytes({
-								application: input.application,
-								tenantId: facts.tenant.id,
-								operation: operation.binding.identity,
-								principalKind: facts.principal.kind,
-								principalId: facts.principal.id,
-								callId,
-								dispatchSlot,
-							}),
-						);
-					const jobTransaction = createPostgresJobAcceptanceTransaction({
-						transaction,
-						statements: input.transactionStatements,
-						application: input.application,
-						sourceOperation: operation.binding.identity,
-						callId,
-					});
-					const commonJobAcceptance = Object.freeze({
-						application: input.application,
-						tenantId: facts.tenant.id,
-						principal: facts.principal,
-						contextInput: facts.contextInput,
-						contextInputCodec: input.contextInputCodec,
-						runtimeBuildDigest: input.runtimeBuildDigest,
-						acceptedAt: owner.operationTime,
-						causation: Object.freeze({
-							kind: "mutationDispatch" as const,
-							id: callId,
-							correlationId: callId,
-						}),
-					});
-					const jobAcceptance = createJobAcceptance({
-						...commonJobAcceptance,
-						transaction: jobTransaction,
-					});
-					const linkedJobs = input.jobs ?? emptyJobs;
-					const lifecycleJobAcceptance = createJobAcceptance({
-						...commonJobAcceptance,
-						transaction: createPostgresJobAcceptanceTransaction({
-							transaction: budgetPostgresTransaction(
-								transaction,
-								lifecycleBudget,
-							),
+						const recordIdForSlot = (dispatchSlot: string) =>
+							deterministicUuid(
+								inputScopeBytes({
+									application: input.application,
+									tenantId: facts.tenant.id,
+									operation: operation.binding.identity,
+									principalKind: facts.principal.kind,
+									principalId: facts.principal.id,
+									callId,
+									dispatchSlot,
+								}),
+							);
+						const jobTransaction = createPostgresJobAcceptanceTransaction({
+							transaction,
 							statements: input.transactionStatements,
 							application: input.application,
 							sourceOperation: operation.binding.identity,
 							callId,
-						}),
-					});
-					const durableDispatch = createDurableDispatch(
-						input.reactions,
-						linkedJobs,
-						jobAcceptance,
-					);
-					const data = createCollectionMutationData({
-						plans: input.collectionPlans,
-						facts,
-						operationTime: owner.operationTime,
-						resultValuesDecoded: true,
-						executeLeaf: (leaf, parameters) =>
-							transaction.execute(leaf.statement, parameters),
-						callId,
-						lifecycleDoom,
-						executionBudget: lifecycleBudget,
-						issueMappings: operation.issueMappings,
-						executeList: async (identity, argument) => {
-							const list = input.collectionOperations?.byIdentity.get(identity);
-							if (
-								!list ||
-								list.member !== "list" ||
-								list.dataQueryDigest === null
-							)
-								throw new TypeError("Lifecycle list capability is withheld");
-							const linkedPlan = input.queryPlans?.get(list.dataQueryDigest);
-							if (!linkedPlan)
-								throw new TypeError("Lifecycle list Query plan is unavailable");
-							if (
-								!argument ||
-								typeof argument !== "object" ||
-								Array.isArray(argument)
-							)
-								throw new TypeError(
-									"Lifecycle list argument must be an object",
-								);
-							const values = argument as Readonly<Record<string, unknown>>;
-							let observation: PostgresQueryObservationV1 | undefined;
-							const page = await executePostgresTransactionQuery({
-								linkedPlan,
-								binding: {
-									templateDigest: linkedPlan.plan.templateDigest,
-									values: linkedPlan.plan.binding.parameters.map(
-										({ name }) => ({
-											parameter: name,
-											value: values[
-												name
-											] as DataQueryBindingV1["values"][number]["value"],
-										}),
-									),
-								},
-								executionFacts: {
-									authority: facts.authority,
-									principal: {
-										id: facts.principal.id,
-										kind: facts.principal.kind,
+						});
+						const commonJobAcceptance = Object.freeze({
+							application: input.application,
+							tenantId: facts.tenant.id,
+							principal: facts.principal,
+							contextInput: facts.contextInput,
+							contextInputCodec: input.contextInputCodec,
+							runtimeBuildDigest: input.runtimeBuildDigest,
+							acceptedAt: owner.operationTime,
+							observation: options?.observation?.execution,
+							signal,
+							causation: Object.freeze({
+								kind: "mutationDispatch" as const,
+								id: callId,
+								correlationId: callId,
+							}),
+						});
+						const jobAcceptance = createJobAcceptance({
+							...commonJobAcceptance,
+							transaction: jobTransaction,
+						});
+						const linkedJobs = input.jobs ?? emptyJobs;
+						const lifecycleJobAcceptance = createJobAcceptance({
+							...commonJobAcceptance,
+							transaction: createPostgresJobAcceptanceTransaction({
+								transaction: budgetPostgresTransaction(
+									transaction,
+									lifecycleBudget,
+								),
+								statements: input.transactionStatements,
+								application: input.application,
+								sourceOperation: operation.binding.identity,
+								callId,
+							}),
+						});
+						const durableDispatch = createDurableDispatch(
+							input.reactions,
+							linkedJobs,
+							jobAcceptance,
+						);
+						const data = createCollectionMutationData({
+							plans: input.collectionPlans,
+							facts,
+							operationTime: owner.operationTime,
+							resultValuesDecoded: true,
+							executeLeaf: (leaf, parameters) =>
+								transaction.execute(leaf.statement, parameters),
+							callId,
+							lifecycleDoom,
+							executionBudget: lifecycleBudget,
+							issueMappings: operation.issueMappings,
+							executeList: async (identity, argument) => {
+								const list =
+									input.collectionOperations?.byIdentity.get(identity);
+								if (
+									!list ||
+									list.member !== "list" ||
+									list.dataQueryDigest === null
+								)
+									throw new TypeError("Lifecycle list capability is withheld");
+								const linkedPlan = input.queryPlans?.get(list.dataQueryDigest);
+								if (!linkedPlan)
+									throw new TypeError(
+										"Lifecycle list Query plan is unavailable",
+									);
+								if (
+									!argument ||
+									typeof argument !== "object" ||
+									Array.isArray(argument)
+								)
+									throw new TypeError(
+										"Lifecycle list argument must be an object",
+									);
+								const values = argument as Readonly<Record<string, unknown>>;
+								let observation: PostgresQueryObservationV1 | undefined;
+								const page = await executePostgresTransactionQuery({
+									linkedPlan,
+									binding: {
+										templateDigest: linkedPlan.plan.templateDigest,
+										values: linkedPlan.plan.binding.parameters.map(
+											({ name }) => ({
+												parameter: name,
+												value: values[
+													name
+												] as DataQueryBindingV1["values"][number]["value"],
+											}),
+										),
 									},
-									tenant: { id: facts.tenant.id },
-								},
-								transaction,
-								signal,
-								observer: {
-									recordPostgresQuery(value) {
-										observation = value;
+									executionFacts: {
+										authority: facts.authority,
+										principal: {
+											id: facts.principal.id,
+											kind: facts.principal.kind,
+										},
+										tenant: { id: facts.tenant.id },
 									},
-								},
-							});
-							if (!observation)
-								throw new TypeError(
-									"Lifecycle list observation is unavailable",
+									transaction,
+									signal,
+									observer: {
+										recordPostgresQuery(value) {
+											observation = value;
+										},
+									},
+								});
+								if (!observation)
+									throw new TypeError(
+										"Lifecycle list observation is unavailable",
+									);
+								return Object.freeze({
+									nodes: page.nodes,
+									observed: observation.observed,
+								});
+							},
+							acceptJob: async (identity, argument) => {
+								const job = linkedJobs.byIdentity.get(identity);
+								if (!job)
+									throw new TypeError("Lifecycle Job capability is withheld");
+								const request = lifecycleJobRequest(argument);
+								return lifecycleJobAcceptance.accept(
+									job,
+									request.payload,
+									request.options,
 								);
-							return Object.freeze({
-								nodes: page.nodes,
-								observed: observation.observed,
-							});
-						},
-						acceptJob: async (identity, argument) => {
-							const job = linkedJobs.byIdentity.get(identity);
-							if (!job)
-								throw new TypeError("Lifecycle Job capability is withheld");
-							const request = lifecycleJobRequest(argument);
-							return lifecycleJobAcceptance.accept(
-								job,
-								request.payload,
-								request.options,
-							);
-						},
-						consumeRows(count) {
-							businessRows += count;
-							if (businessRows > 100)
-								throw new TypeError("Mutation exceeded its business row limit");
-						},
-					});
-					const ctx = Object.freeze({
-						principal: facts.principal,
-						authority: facts.authority,
-						tenant: facts.tenant,
-						values: facts.values,
-						signal,
-						deadline: options?.deadline ?? facts.deadline,
-						data,
-						now: owner.operationTime,
-						callId,
-						transactionId,
-						dispatch: durableDispatch.dispatch,
-						jobs: durableDispatch.jobs,
-					});
-					let result: unknown;
-					try {
-						result = await operation.binding.execute({
-							input: operation.input,
-							ctx: ctx as View,
-							errors: errorFactories(operation.binding.definition),
-						} as never);
-					} catch (error) {
+							},
+							consumeRows(count) {
+								businessRows += count;
+								if (businessRows > 100)
+									throw new TypeError(
+										"Mutation exceeded its business row limit",
+									);
+							},
+						});
+						const ctx = Object.freeze({
+							principal: facts.principal,
+							authority: facts.authority,
+							tenant: facts.tenant,
+							values: facts.values,
+							signal,
+							deadline: options?.deadline ?? facts.deadline,
+							data,
+							now: owner.operationTime,
+							callId,
+							transactionId,
+							dispatch: durableDispatch.dispatch,
+							jobs: durableDispatch.jobs,
+						});
+						let result: unknown;
+						try {
+							result = await operation.binding.execute({
+								input: operation.input,
+								ctx: ctx as View,
+								errors: errorFactories(operation.binding.definition),
+							} as never);
+						} catch (error) {
+							lifecycleDoom.throwIfDoomed();
+							throw error;
+						}
 						lifecycleDoom.throwIfDoomed();
-						throw error;
-					}
-					lifecycleDoom.throwIfDoomed();
-					const validated = decodeRuntimeCodec(
-						operation.output,
-						result,
-						"$mutation.result",
-					);
-					const resultBytes = canonicalMutationBytes(
-						encodeRuntimeCodec(operation.output, validated),
-					);
-					if (resultBytes.byteLength > 1_048_576)
-						throw new TypeError("Mutation result exceeds its byte limit");
-					for (const dispatch of durableDispatch.pending) {
-						const recordId = recordIdForSlot(dispatch.slot);
-						const firstMarker = await transaction.execute(
-							statements["mutation.dispatch.kernel.mark"].statement,
-							[],
+						const validated = decodeRuntimeCodec(
+							operation.output,
+							result,
+							"$mutation.result",
 						);
-						if (firstMarker[0]?.enabled !== "on")
-							throw new TypeError(
-								"Durable kernel transaction marker is unavailable",
-							);
+						const resultBytes = canonicalMutationBytes(
+							encodeRuntimeCodec(operation.output, validated),
+						);
+						if (resultBytes.byteLength > 1_048_576)
+							throw new TypeError("Mutation result exceeds its byte limit");
+						for (const dispatch of durableDispatch.pending) {
+							const recordId = recordIdForSlot(dispatch.slot);
+							const runId = durableRunIdentity(recordId);
+							const reactionAcceptedAt = owner.operationTime;
+							const acceptanceObservation =
+								options?.observation?.execution.begin({
+									dispatchId: recordId,
+									kind: "reaction.accept",
+									principalKind: facts.principal.kind,
+									resourceIdentity: dispatch.resource.identity,
+									runId,
+									trace: { kind: "active-parent" },
+								});
+							const acceptReaction = async () => {
+								const firstMarker = await transaction.execute(
+									statements["mutation.dispatch.kernel.mark"].statement,
+									[],
+								);
+								if (firstMarker[0]?.enabled !== "on")
+									throw new TypeError(
+										"Durable kernel transaction marker is unavailable",
+									);
+								await transaction.execute(
+									statements["mutation.dispatch.insert"].statement,
+									[
+										input.application,
+										facts.tenant.id,
+										operation.binding.identity,
+										facts.principal.kind,
+										facts.principal.id,
+										callId,
+										dispatch.slot,
+										recordId,
+										dispatch.resourceKind,
+										dispatch.resource.identity,
+										mutationDigest(dispatch.payloadBytes),
+										dispatch.payloadBytes,
+										reactionAcceptedAt,
+									],
+								);
+								const secondMarker = await transaction.execute(
+									statements["mutation.dispatch.kernel.mark"].statement,
+									[],
+								);
+								if (secondMarker[0]?.enabled !== "on")
+									throw new TypeError(
+										"Durable kernel transaction marker is unavailable",
+									);
+								const advanced = await transaction.execute(
+									statements["mutation.dispatch.accept"].statement,
+									[input.application, recordId],
+								);
+								if (
+									advanced.length !== 1 ||
+									advanced[0]!.dispatchId !== recordId
+								)
+									throw new TypeError(
+										"Durable dispatch acceptance did not advance",
+									);
+								const inserted = await transaction.execute(
+									statements["mutation.dispatch.run.insert"].statement,
+									[
+										input.application,
+										runId,
+										recordId,
+										dispatch.resource.identity,
+										1,
+										facts.tenant.id,
+										facts.principal.kind,
+										facts.principal.id,
+										canonicalMutationBytes(
+											encodeRuntimeCodec(
+												input.contextInputCodec,
+												facts.contextInput,
+											),
+										),
+										dispatch.payloadBytes,
+										retryBytes(dispatch.resource.retry),
+										input.runtimeBuildDigest,
+										dispatch.resource.contractDigest,
+										"mutationDispatch",
+										callId,
+										callId,
+										"ready",
+										reactionAcceptedAt,
+										new Date(
+											reactionAcceptedAt.getTime() +
+												dispatch.resource.retry.horizonMilliseconds,
+										),
+										reactionAcceptedAt,
+										acceptanceObservation?.context?.traceId ?? null,
+										acceptanceObservation?.context?.spanId ?? null,
+										acceptanceObservation?.context?.flags ?? null,
+									],
+								);
+								if (inserted.length !== 1 || inserted[0]!.runId !== runId)
+									throw new TypeError(
+										"Durable dispatch acceptance did not advance",
+									);
+								await transaction.execute(
+									statements["mutation.dispatch.event.insert"].statement,
+									[
+										input.application,
+										runId,
+										reactionAcceptedAt,
+										dispatch.resource.identity,
+										recordId,
+										callId,
+										callId,
+									],
+								);
+							};
+							try {
+								await acceptReaction();
+								acceptanceObservation?.event({
+									dispatchId: recordId,
+									kind: "durable.accepted",
+									runId,
+								});
+								acceptanceObservation?.end({
+									kind: "reaction.accept",
+									outcome: "ok",
+								});
+							} catch (error) {
+								acceptanceObservation?.end({
+									kind: "reaction.accept",
+									...mutationPostgresObservationFailure(error, signal),
+								});
+								throw error;
+							}
+						}
 						await transaction.execute(
-							statements["mutation.dispatch.insert"].statement,
-							[
-								input.application,
-								facts.tenant.id,
-								operation.binding.identity,
-								facts.principal.kind,
-								facts.principal.id,
-								callId,
-								dispatch.slot,
-								recordId,
-								dispatch.resourceKind,
-								dispatch.resource.identity,
-								mutationDigest(dispatch.payloadBytes),
-								dispatch.payloadBytes,
-								owner.operationTime,
-							],
+							statements["mutation.receipt.commit"].statement,
+							[...scope, resultBytes, owner.operationTime],
 						);
-						const secondMarker = await transaction.execute(
-							statements["mutation.dispatch.kernel.mark"].statement,
-							[],
-						);
-						if (secondMarker[0]?.enabled !== "on")
+						signal.throwIfAborted();
+						if (performance.now() - transactionStarted > 5_000)
 							throw new TypeError(
-								"Durable kernel transaction marker is unavailable",
+								"Mutation exceeded its transaction duration limit",
 							);
-						const advanced = await transaction.execute(
-							statements["mutation.dispatch.accept"].statement,
-							[input.application, recordId],
-						);
-						if (advanced.length !== 1 || advanced[0]!.dispatchId !== recordId)
-							throw new TypeError(
-								"Durable dispatch acceptance did not advance",
-							);
-						const runId = durableRunIdentity(recordId);
-						const inserted = await transaction.execute(
-							statements["mutation.dispatch.run.insert"].statement,
-							[
-								input.application,
-								runId,
-								recordId,
-								dispatch.resource.identity,
-								1,
-								facts.tenant.id,
-								facts.principal.kind,
-								facts.principal.id,
-								canonicalMutationBytes(
-									encodeRuntimeCodec(
-										input.contextInputCodec,
-										facts.contextInput,
-									),
-								),
-								dispatch.payloadBytes,
-								retryBytes(dispatch.resource.retry),
-								input.runtimeBuildDigest,
-								dispatch.resource.contractDigest,
-								"mutationDispatch",
-								callId,
-								callId,
-								"ready",
-								owner.operationTime,
-								new Date(
-									owner.operationTime.getTime() +
-										dispatch.resource.retry.horizonMilliseconds,
-								),
-								owner.operationTime,
-							],
-						);
-						if (inserted.length !== 1 || inserted[0]!.runId !== runId)
-							throw new TypeError(
-								"Durable dispatch acceptance did not advance",
-							);
-						await transaction.execute(
-							statements["mutation.dispatch.event.insert"].statement,
-							[
-								input.application,
-								runId,
-								owner.operationTime,
-								dispatch.resource.identity,
-								recordId,
-								callId,
-								callId,
-							],
-						);
-					}
-					await transaction.execute(
-						statements["mutation.receipt.commit"].statement,
-						[...scope, resultBytes, owner.operationTime],
-					);
-					signal.throwIfAborted();
-					if (performance.now() - transactionStarted > 5_000)
-						throw new TypeError(
-							"Mutation exceeded its transaction duration limit",
-						);
-					return Object.freeze({ committed: true as const, value: validated });
-				},
-			});
+						return Object.freeze({
+							committed: true as const,
+							value: validated,
+						});
+					},
+				});
+			const result = await (transactionObservation
+				? transactionObservation.run(runTransaction)
+				: runTransaction());
+			commitObservedTransaction();
+			return result;
 		} catch (error) {
 			if (
 				error instanceof QuestpiePostgresError &&
@@ -573,13 +672,29 @@ export function createPostgresDatabaseMutationInvoker<View>(
 				error.phase === "commit" &&
 				error.retry === "callerMustResolveCommit"
 			) {
-				if (transactionId === null)
+				if (transactionId === null) {
+					transactionObservation?.end({
+						kind: "transaction",
+						outcome: "framework_error",
+					});
 					throw new TypeError(
 						"Committed mutation transaction identity is unavailable",
 						{ cause: error },
 					);
+				}
+				commitObservedTransaction();
 				throw new CommittedResultUnavailable(callId, transactionId, error);
 			}
+			const outcome = signal.aborted
+				? signal.reason instanceof DOMException &&
+					signal.reason.name === "TimeoutError"
+					? ("deadline" as const)
+					: ("cancelled" as const)
+				: ("framework_error" as const);
+			transactionObservation?.end({ kind: "transaction", outcome });
+			if (outcome === "deadline")
+				throw new OperationFailure("DEADLINE_EXCEEDED", true);
+			if (outcome === "cancelled") throw signal.reason;
 			throw error;
 		}
 	};

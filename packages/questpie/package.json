@@ -12,6 +12,10 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
+		},
+		"./internal/observability": {
+			"types": "./dist/internal/observability.d.ts",
+			"import": "./dist/internal/observability.js"
 		}
 	},
 	"scripts": {

@@ -100,6 +100,7 @@ export const deleteExpiredScope: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-expired-delete",
+	operation: "DELETE",
 	text: `DELETE FROM questpie_internal.realtime_scope_attachments
 WHERE application_name = $1 AND scope_identity = $2 AND expires_at <= transaction_timestamp()`,
 	parameterCount: 2,
@@ -115,6 +116,7 @@ export const attachScope: PostgresStatement<
 	bigint | undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-attach",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.realtime_scope_attachments
   (application_name, scope_identity, deployment_digest, authority_partition_digest, principal_kind, principal_id, state)
 VALUES ($1, $2, $3, NULL, $4, $5, 'attached')
@@ -146,6 +148,7 @@ export const renewScope: PostgresStatement<
 	boolean
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-renew",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_scope_attachments SET renewed_at = transaction_timestamp()
 WHERE application_name = $1 AND scope_identity = $2 AND deployment_digest = $3 AND principal_kind = $4 AND principal_id = $5
   AND holder_generation = $6 AND state <> 'withdrawn' AND expires_at > transaction_timestamp()`,
@@ -164,6 +167,7 @@ WHERE application_name = $1 AND scope_identity = $2 AND deployment_digest = $3 A
 export const lockScope: PostgresStatement<string, void> =
 	definePostgresStatement({
 		name: "live-query.realtime-scope-lock",
+		operation: "SELECT",
 		text: `SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 0))`,
 		parameterCount: 1,
 		parameters: (identity: string) => [identity],
@@ -179,6 +183,7 @@ export const deleteExpiredPrincipalScopes: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-principal-scopes-expired-delete",
+	operation: "DELETE",
 	text: `DELETE FROM questpie_internal.realtime_scope_attachments
 WHERE application_name = $1 AND deployment_digest = $2 AND principal_kind = $3 AND principal_id = $4 AND expires_at <= transaction_timestamp()`,
 	parameterCount: 4,
@@ -197,6 +202,7 @@ export const readScopeAuthority: PostgresStatement<
 	| undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-authority-read",
+	operation: "SELECT",
 	text: `SELECT authority_partition_digest, state FROM questpie_internal.realtime_scope_attachments
 WHERE application_name = $1 AND scope_identity = $2 AND deployment_digest = $3 AND principal_kind = $4 AND principal_id = $5
   AND state IN ('attached', 'open') AND expires_at > transaction_timestamp() FOR UPDATE`,
@@ -228,6 +234,7 @@ export const readExistingWatch: PostgresStatement<
 	ExistingWatch | undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-watch-existing-read",
+	operation: "SELECT",
 	text: `SELECT active_slot, authority_partition_digest, query_identity, query_bytes, input_bytes, context_input_bytes, input_digest, wire_version, state
 FROM questpie_internal.realtime_watch_bindings WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3`,
 	parameterCount: 3,
@@ -275,6 +282,7 @@ export const allocateWatchSlot: PostgresStatement<
 	number | undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-watch-slot-allocate",
+	operation: "SELECT",
 	text: `SELECT candidate.slot::integer FROM pg_catalog.generate_series(1, 64) AS candidate(slot)
 WHERE NOT EXISTS (SELECT 1 FROM questpie_internal.realtime_watch_bindings watch WHERE watch.application_name = $1 AND watch.deployment_digest = $2 AND watch.principal_kind = $3 AND watch.principal_id = $4 AND watch.active_slot = candidate.slot)
 ORDER BY candidate.slot LIMIT 1`,
@@ -296,6 +304,7 @@ export const markScopeOpen: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-open",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_scope_attachments SET authority_partition_digest = $3, state = 'open' WHERE application_name = $1 AND scope_identity = $2`,
 	parameterCount: 3,
 	parameters: (input: PostgresRealtimeOpenWatch) => [
@@ -313,6 +322,7 @@ export type WatchInsert = Readonly<{
 export const insertWatch: PostgresStatement<WatchInsert, number> =
 	definePostgresStatement({
 		name: "live-query.realtime-watch-insert",
+		operation: "INSERT",
 		text: `INSERT INTO questpie_internal.realtime_watch_bindings
   (application_name, scope_identity, binding_identity, deployment_digest, authority_partition_digest, principal_kind, principal_id, active_slot,
    query_identity, query_bytes, input_bytes, context_input_bytes, input_digest, wire_version, resume_requested, requested_resume_token, state)
@@ -351,6 +361,7 @@ export const scanOpenWatches: PostgresStatement<
 	readonly PostgresRealtimeWatch[]
 > = definePostgresStatement({
 	name: "live-query.realtime-watches-scan",
+	operation: "SELECT",
 	text: `${watchSelect}
 WHERE scope.application_name = $1 AND scope.scope_identity = $2 AND scope.deployment_digest = $3 AND scope.principal_kind = $4 AND scope.principal_id = $5
  AND scope.holder_generation = $6 AND scope.state = 'open' AND scope.expires_at > transaction_timestamp() AND watch.state = 'open' ORDER BY watch.binding_identity`,
@@ -379,6 +390,7 @@ export const readOpenWatch: PostgresStatement<
 	PostgresRealtimeWatch | undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-watch-read",
+	operation: "SELECT",
 	text: `${watchSelect}
 WHERE scope.application_name = $1 AND scope.scope_identity = $2 AND scope.deployment_digest = $3 AND scope.principal_kind = $4 AND scope.principal_id = $5
  AND scope.state = 'open' AND scope.expires_at > transaction_timestamp() AND watch.binding_identity = $6 AND watch.state = 'open'`,
@@ -400,6 +412,7 @@ WHERE scope.application_name = $1 AND scope.scope_identity = $2 AND scope.deploy
 export const closeWatch: PostgresStatement<BindingIdentity, boolean> =
 	definePostgresStatement({
 		name: "live-query.realtime-watch-close",
+		operation: "UPDATE",
 		text: `UPDATE questpie_internal.realtime_watch_bindings watch SET state = 'withdrawn' FROM questpie_internal.realtime_scope_attachments scope
 WHERE scope.application_name = $1 AND scope.scope_identity = $2 AND scope.deployment_digest = $3 AND scope.principal_kind = $4 AND scope.principal_id = $5
  AND scope.state = 'open' AND scope.expires_at > transaction_timestamp() AND watch.application_name = scope.application_name AND watch.scope_identity = scope.scope_identity
@@ -421,6 +434,7 @@ export const withdrawScope: PostgresStatement<
 	boolean
 > = definePostgresStatement({
 	name: "live-query.realtime-scope-withdraw",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_scope_attachments SET state = 'withdrawn'
 WHERE application_name = $1 AND scope_identity = $2 AND deployment_digest = $3 AND principal_kind = $4 AND principal_id = $5
  AND holder_generation = $6 AND state <> 'withdrawn' AND expires_at > transaction_timestamp()`,
@@ -441,6 +455,7 @@ export const expireScopes: PostgresStatement<
 	Readonly<{ scopes: number; watches: number }>
 > = definePostgresStatement({
 	name: "live-query.realtime-scopes-expire",
+	operation: "SELECT",
 	text: `WITH doomed AS MATERIALIZED (SELECT application_name, scope_identity FROM questpie_internal.realtime_scope_attachments
  WHERE application_name = $1 AND deployment_digest = $2 AND expires_at <= transaction_timestamp() FOR UPDATE),
 watch_count AS (SELECT count(*)::integer FROM questpie_internal.realtime_watch_bindings watch JOIN doomed USING (application_name, scope_identity)),

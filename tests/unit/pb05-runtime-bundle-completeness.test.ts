@@ -51,8 +51,8 @@ function successfulDatabase(observed: Observed): PostgresTransactionRunner {
 				async execute(statement: PostgresStatement<unknown, unknown>) {
 					observed.statements.push({ transaction, name: statement.name });
 					switch (statement.name) {
-						case "readiness.protocol.v7":
-							return { version: 7, checksum: "b".repeat(64) } as never;
+						case "readiness.protocol.v8":
+							return { version: 8, checksum: "b".repeat(64) } as never;
 						case "readiness.application-binding":
 							return [
 								{ application, postgresSchema: realtimeApplication },
@@ -113,6 +113,7 @@ function successfulDatabase(observed: Observed): PostgresTransactionRunner {
 function statement(name: string, parameterCount = 0) {
 	return core.definePostgresStatement({
 		name,
+		operation: "SELECT",
 		text: "SELECT 1",
 		parameterCount,
 		parameters: (input: readonly PostgresParameter[] | undefined) =>
@@ -148,7 +149,7 @@ function mutationStatements() {
 
 test("private Runtime bundles expose only the required PB database subset", () => {
 	const requiredCore = [
-		"createDurableReactionWorker",
+		"createDurableWorker",
 		"createLinkedPostgresContextBootstrapFactory",
 		"createPostgresDatabaseDurableEffectLedger",
 		"createPostgresDatabaseDurableKernel",
@@ -165,6 +166,7 @@ test("private Runtime bundles expose only the required PB database subset", () =
 		"linkPostgresMutationTransactionStatements",
 		"linkPostgresQueryPlans",
 		"linkReactionProjection",
+		"runObservedDurableAttempt",
 		"verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction",
 	] as const;
 	const requiredRealtime = [
@@ -213,7 +215,7 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 		use: (transaction) =>
 			core.verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction({
 				transaction,
-				protocol: { version: 7, checksum: "b".repeat(64) },
+				protocol: { version: 8, checksum: "b".repeat(64) },
 				application,
 				postgresSchema: realtimeApplication,
 				migrationHead: "000001_initial",
@@ -242,6 +244,8 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 			database,
 			{ statement: queryStatement } as never,
 			[tenantId],
+			undefined,
+			null,
 		),
 	).resolves.toEqual([{ id: "message:one" }]);
 
@@ -285,11 +289,17 @@ test("one injected runner reaches every database-mode bundle arm without a Pool"
 
 	const kernel = core.createPostgresDatabaseDurableKernel({
 		database,
+		attemptDatabase: core.createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 		reactions: { byIdentity: new Map() } as never,
 	});
 	const effects = core.createPostgresDatabaseDurableEffectLedger({
 		database,
+		attemptDatabase: core.createPostgresDatabaseDurableAttemptObservation({
+			database,
+		}).database,
 		application,
 	});
 	const maintenance = core.createPostgresDatabaseDurablePrincipalMaintenance({
@@ -387,7 +397,13 @@ test("bundle database arms preserve exact errors and cancellation", async () => 
 	});
 	const linked = { statement: statement("query.bundle-failure") } as never;
 	await expect(
-		core.executeLinkedPostgresQueryPlan(failing(primary), linked, []),
+		core.executeLinkedPostgresQueryPlan(
+			failing(primary),
+			linked,
+			[],
+			undefined,
+			null,
+		),
 	).rejects.toBe(primary);
 	await expect(
 		core.executeLinkedPostgresContextBootstrap(failing(cancellation), linked, {

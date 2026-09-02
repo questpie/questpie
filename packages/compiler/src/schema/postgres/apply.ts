@@ -27,7 +27,7 @@ import {
 	providerObservations,
 	schemaExists,
 } from "./fingerprint";
-import { ensureInternalProtocolV7 } from "./internal-protocol-v7";
+import { ensureInternalProtocolV8 } from "./internal-protocol-v8";
 import { fail } from "./shared";
 
 const schemaDiagnosticCodes = new Set<string>([
@@ -218,7 +218,7 @@ async function assertMigrationBoundary(
 
 export async function applyCommittedMigrations(
 	input: Readonly<{
-		allowNonRollingProtocolV7?: boolean;
+		allowNonRollingProtocolV8?: boolean;
 		connectionString?: string;
 		migrations: readonly CommittedMigration[];
 	}> &
@@ -260,13 +260,13 @@ export async function applyCommittedMigrations(
 				"current database is unavailable",
 			);
 		await providerObservations(session, target);
-		await ensureInternalProtocolV7(
+		await ensureInternalProtocolV8(
 			session,
 			database.name,
 			firstPid,
 			control,
 			{
-				allowNonRollingProtocolV7: input.allowNonRollingProtocolV7,
+				allowNonRollingProtocolV8: input.allowNonRollingProtocolV8,
 			},
 			input.signal,
 		);

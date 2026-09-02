@@ -17,4 +17,8 @@ function acceptsRuntimeStatement(
 
 // @ts-expect-error an unbranded compiler descriptor cannot enter Runtime SQL
 acceptsRuntimeStatement(definition);
-acceptsRuntimeStatement(definePostgresStatement(definition));
+// @ts-expect-error observable statements require an authored closed SQL verb
+definePostgresStatement(definition);
+acceptsRuntimeStatement(
+	definePostgresStatement({ ...definition, operation: "SELECT" }),
+);

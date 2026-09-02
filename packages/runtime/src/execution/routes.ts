@@ -71,6 +71,27 @@ export interface RuntimeRouteExecutor {
 	): Promise<Response>;
 }
 
+type OwnedRouteResponse = Readonly<{
+	outcome: "ok" | "framework_error" | "deadline";
+	response: Response;
+	signal: AbortSignal;
+	finalize(): void;
+	retainControl: boolean;
+}>;
+
+const ownedRouteResponse = (
+	response: Response,
+	signal: AbortSignal,
+	outcome: OwnedRouteResponse["outcome"] = "ok",
+): OwnedRouteResponse =>
+	Object.freeze({
+		outcome,
+		response,
+		signal,
+		finalize: () => undefined,
+		retainControl: false,
+	});
+
 function failureResponse(
 	code: string,
 	status: number,
@@ -102,6 +123,16 @@ function executionFailureResponse(error: unknown): Response {
 			error.retryable,
 		);
 	return failureResponse("INTERNAL", 500);
+}
+
+function routeFailureOutcome(
+	error: unknown,
+): Exclude<OwnedRouteResponse["outcome"], "ok"> {
+	if (error instanceof RouteResourceLimitError && error.status === 429)
+		return "deadline";
+	if (error instanceof OperationFailure && error.code === "DEADLINE_EXCEEDED")
+		return "deadline";
+	return "framework_error";
 }
 
 class RouteResourceLimitError extends Error {
@@ -308,7 +339,7 @@ export function createRuntimeRouteExecutor<
 	input: Readonly<{
 		runtime: Pick<
 			ApplicationRuntime<Input, ExecutionView>,
-			"applicationService" | "route"
+			"applicationService" | "observeRoute" | "observeUnmatchedFetch" | "route"
 		>;
 		bindings: readonly RuntimeRouteBinding<RouteView>[];
 		credentials?: RuntimeCredentialBinding<CredentialService>;
@@ -344,7 +375,8 @@ export function createRuntimeRouteExecutor<
 		request: Request,
 		caller: Principal,
 		params: Readonly<Record<string, string>>,
-	): Promise<Response> => {
+		entry: "direct" | "fetch",
+	): Promise<OwnedRouteResponse> => {
 		if (!principal.is(caller))
 			throw new TypeError("Route requires a trusted Principal");
 		try {
@@ -354,9 +386,13 @@ export function createRuntimeRouteExecutor<
 			});
 		} catch (error) {
 			if (error instanceof OperationAdmissionError)
-				return error.code === "unauthenticated"
-					? failureResponse("UNAUTHENTICATED", 401)
-					: failureResponse("FORBIDDEN", 403);
+				return ownedRouteResponse(
+					error.code === "unauthenticated"
+						? failureResponse("UNAUTHENTICATED", 401)
+						: failureResponse("FORBIDDEN", 403),
+					request.signal,
+					"framework_error",
+				);
 			throw error;
 		}
 		const limits = binding.limits ?? {
@@ -397,7 +433,7 @@ export function createRuntimeRouteExecutor<
 					});
 			});
 			const pending = input.runtime.route(
-				{ principal: caller, signal: controller.signal, deadline },
+				{ principal: caller, signal: controller.signal, deadline, entry },
 				async (scope) => {
 					const projected = await input.project(scope);
 					const response = await binding.execute({
@@ -411,7 +447,13 @@ export function createRuntimeRouteExecutor<
 			);
 			void pending.catch(() => undefined);
 			const response = await Promise.race([pending, aborted]);
-			return retainRouteControl(response, controller.signal, finalize);
+			return Object.freeze({
+				outcome: "ok" as const,
+				response,
+				signal: controller.signal,
+				finalize,
+				retainControl: true,
+			});
 		} catch (error) {
 			finalize();
 			throw error;
@@ -474,24 +516,48 @@ export function createRuntimeRouteExecutor<
 			if (!match) {
 				if (matches.length === 0) return null;
 				const allowed = new Set(matches.map(({ binding }) => binding.method));
-				return new Response(null, {
-					status: 405,
-					headers: {
-						allow: [...allowed].sort().join(", "),
-						"cache-control": "no-store",
-					},
-				});
+				return input.runtime.observeUnmatchedFetch(
+					request,
+					async () =>
+						new Response(null, {
+							status: 405,
+							headers: {
+								allow: [...allowed].sort().join(", "),
+								"cache-control": "no-store",
+							},
+						}),
+				);
 			}
-			const caller = await resolveFetchPrincipal(match.binding, request);
-			if (caller instanceof Response) return caller;
-			try {
-				return await execute(match.binding, request, caller, match.params!);
-			} catch (error) {
-				if (request.signal.aborted) throw request.signal.reason;
-				return executionFailureResponse(error);
-			}
+			const run = async () => {
+				const caller = await resolveFetchPrincipal(match.binding, request);
+				if (caller instanceof Response)
+					return Object.freeze({
+						outcome: "framework_error" as const,
+						response: caller,
+						signal: request.signal,
+						finalize: () => undefined,
+						retainControl: false,
+					});
+				try {
+					return await execute(
+						match.binding,
+						request,
+						caller,
+						match.params!,
+						"fetch",
+					);
+				} catch (error) {
+					if (request.signal.aborted) throw request.signal.reason;
+					return ownedRouteResponse(
+						executionFailureResponse(error),
+						request.signal,
+						routeFailureOutcome(error),
+					);
+				}
+			};
+			return input.runtime.observeRoute(request, match.binding.path, run);
 		},
-		direct: (
+		direct: async (
 			identity: `route:${string}`,
 			routeInput: Readonly<{
 				request: Request;
@@ -513,12 +579,14 @@ export function createRuntimeRouteExecutor<
 				return Promise.reject(
 					new TypeError("Direct Route request method does not match"),
 				);
-			return execute(
+			const owned = await execute(
 				binding,
 				routeInput.request,
 				routeInput.execution.principal,
 				params,
+				"direct",
 			);
+			return retainRouteControl(owned.response, owned.signal, owned.finalize);
 		},
 	});
 }

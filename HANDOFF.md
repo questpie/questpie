@@ -630,9 +630,65 @@ SHA-256 `bee891d02adc2fffe3f8151840a7337def2ebf7a2a1a9c9583a589c4dbf01573`
 and declaration SHA-256
 `41f9fb9298284876a088894f911d69bc7ba52a3018b9f793c1b553a4020020cb`.
 
-The OpenTelemetry workbench at
-`docs/v4/research/observability-2026/WORKBENCH.md` is research only. It creates
-no accepted public or Runtime API.
+ADR-0033 is Accepted after the manifest-bound replacement candidate
+`c3bd1a2d337e6142013fe79ab5b78fca0fe327e0` received `PASS`. The verified
+`docs/v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json` record is
+committed at `17ee8898af956c838b3f62b8a34cccd23e365b92`. The accepted boundary
+freezes one private Runtime observation kernel, Execution Envelope v2, exact
+signal artifacts, protocol-v8 first-acceptance durable trace links, and the
+optional exact-peer `@questpie/opentelemetry` integration. It adds no authored
+telemetry capability or generic provider matrix.
+
+ADR-0034 is Accepted after focused candidate
+`c6cce528ed837305ba816e2a83e0e4ebc593798f` received a manifest-bound
+Claude Opus medium `PASS`; the verified record is committed at
+`85ee561b8cd3476f83f9b1f83ea0fff16e79ec19`. It repairs only two incomplete
+ADR-0033 private-interface clauses: extraction returns the complete
+continue/restart ingress trace plan, and a Fetch/Route terminal before a
+`Response` carries explicit null rather than an invented HTTP status. The old
+decoder and any synthetic-status path must be deleted atomically in OTEL-02.
+
+OpenTelemetry implementation is complete through OTEL-03. OTEL-01 landed at
+`5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b`: one direct generated Query now
+crosses the opaque handle, exact signal artifact/Runtime Build binding, private
+Runtime observation kernel, and canonical Execution Envelope v2 path with no
+v1 or compatibility path. OTEL-02 is complete through `594053d09`: generated
+Fetch owns the exact continue/restart ingress plan, bounded HTTP shape,
+response-body lifetime, response-present status, and all three response-absent
+terminal outcomes. Only exact `POST` on the generated Operation path is a
+generated-operation request; other methods remain nondisclosing unmatched
+Fetches. The focused 41-test suite passes with 328 assertions, and independent
+Standards and Spec re-reviews pass after the two stated Spec findings were
+repaired.
+
+OTEL-03 is complete through `eeeefcfaa`. Runtime lifecycle, Route, Query,
+Mutation and transaction, Action and effect, Live Query evaluation, durable
+acceptance, Job and Reaction Attempt, and compiler-owned PostgreSQL statements
+now use the one private observation kernel and one Execution Envelope v2 path.
+The old `ExecutionEventV1` emitter and dual-path tests are absent. Acceptance
+PRODUCER scopes retain their own event and outcome, while their PostgreSQL work
+stays under the accepting Execution or Mutation transaction. Attempt-owned
+heartbeat, terminal, retry and effect writes require a runtime-verified
+Attempt runner with an explicit observation decision; external inspection and
+pre-Attempt work remain on the raw runner. Automatic heartbeat settlement is
+ordered before terminal SQL, and Runtime deadlines classify as `deadline`.
+
+Independent Standards, Spec and deletion reviews pass for the complete
+OTEL-03 range after repairing the acceptance-parent finding. Focused tests,
+workspace typechecks, architecture, generated goldens and `git diff --check`
+pass. The full lane at `4b2f9c5e0` recorded 823 passes and only the already-owned
+OTEL-08 release-checksum failures plus the manifest-bound PostgreSQL proof that
+requires `PGHOST`; the affected acceptance tests and deterministic gates were
+rerun after `eeeefcfaa`. OTEL-04 protocol v8 is complete through `6dff55285`,
+OTEL-05's exact-peer adapter is complete through `5b5cf8404`, and OTEL-06's CLI
+plus loopback OTLP operation is complete through `0a37ee993` after independent
+Standards and Spec PASS. OTEL-07 reference tracers are now unblocked.
+`questpie` remains the sole application authoring/Runtime package; compiler,
+Runtime, and testkit packages remain private. Public `apps/docs` changes are
+structurally blocked until OTEL-07's reference tracers pass, then land with
+release closure in OTEL-08. The
+historical workbench at `docs/v4/research/observability-2026/WORKBENCH.md`
+remains research, not additional authority.
 
 ADR-0031 is Accepted after the manifest-bound lifecycle candidate
 `ca7d18e3fce4b55bd0e0ce36aa212a48dcec7af1` received the committed
@@ -774,8 +830,7 @@ byte-identical release dry-runs pass.
 4. ADR-0031 and LIFE-01 through LIFE-06 are closed. Do not redesign or
    reimplement lifecycle, restore callback-based Operation Set normalization,
    or create a second Collection/CRUD kernel. Start the next vertical from its
-   own accepted authority; OpenTelemetry still requires a separate docs-first
-   decision before any implementation.
+   own accepted authority.
 5. Implement ADR-0035 only from its tracer ticket ledger: framework-neutral
    Query Resource core first, then fixture deletion/hostiles, then the optional
    React adapter and public-doc verification. Delete the executable prototype
@@ -794,9 +849,16 @@ byte-identical release dry-runs pass.
    stale deletion, and do not add codec/Field prose, projection-specific
    registries, Runtime reads, fallback behavior, or application-generated
    skills.
-9. Treat OpenTelemetry as a separate docs-first decision. The research
-   workbench may inform a future tracer, but it is not authority for exports,
-   span names, attributes, sampling, exporters or persistence behavior.
+9. ADR-0033 and its focused ADR-0034 correction are Accepted. OTEL-01 through
+   OTEL-06 are complete through `0a37ee993`; `2c4a0b98d` closes that handoff.
+   Continue with OTEL-07's reference browser and hostile tracers, then OTEL-08's
+   public guide and release closure. OTEL-07 must rebind generated-Fetch
+   classification from the retained `operationPath` POST baseline to the
+   canonical HTTP binding artifact only after HTTP-02 lands; this integration
+   does not pre-merge that in-progress artifact. Do not restore a v7/v8 Runtime
+   compatibility path, add a second observation kernel, or publish the
+   `apps/docs` install guide before OTEL-07 passes and OTEL-08 closes release
+   evidence.
 10. Do not reopen the reference application by adding Cron, Collection triggers,
     checkpoints, generic browser control or workflow orchestration without new
     product authority.

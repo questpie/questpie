@@ -17,7 +17,7 @@ import {
 	assertSchemaMatches,
 	assertSchemaMatchesInOwnedTransaction,
 	childRecords,
-	ensureInternalProtocolV7,
+	ensureInternalProtocolV8,
 	fail,
 	providerObservations,
 } from "../../schema";
@@ -205,7 +205,6 @@ async function executeSeedStep(
 
 export async function applyCommittedSeeds(
 	input: Readonly<{
-		allowNonRollingProtocolV7?: boolean;
 		connectionString?: string;
 		schema: SchemaProjectionV1;
 		seeds: readonly CommittedSeedV1[];
@@ -240,14 +239,12 @@ export async function applyCommittedSeeds(
 				"current database is unavailable",
 			);
 		await providerObservations(session, input.schema);
-		await ensureInternalProtocolV7(
+		await ensureInternalProtocolV8(
 			session,
 			database.name,
 			expectedPid,
 			control,
-			{
-				allowNonRollingProtocolV7: input.allowNonRollingProtocolV7,
-			},
+			{},
 			input.signal,
 		);
 		await assertBackendPid(session, expectedPid, "Seed bootstrap");

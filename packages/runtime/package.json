@@ -7,7 +7,8 @@
 		".": "./src/index.ts",
 		"./bundle-core": "./src/bundle-core.ts",
 		"./bundle-core-types": "./src/bundle-core-types.d.ts",
-		"./bundle-realtime": "./src/bundle-realtime.ts"
+		"./bundle-realtime": "./src/bundle-realtime.ts",
+		"./observation": "./src/observation/index.ts"
 	},
 	"scripts": {
 		"build": "bun ../../node_modules/typescript/bin/tsc -p tsconfig.json && bun scripts/copy-source-declarations.ts",

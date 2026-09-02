@@ -2,19 +2,32 @@ import { expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 
 import { codec, defineContext, defineService, principal } from "questpie";
+import { createOfficialQuestpieObservability } from "questpie/internal/observability";
 
+import { projectObservationSignalProjection } from "../../packages/compiler/src/observation";
+import { projectOperationWireV3 } from "../../packages/compiler/src/runtime/operation-wire-v3";
 import {
 	createRuntimeApplication,
-	type ExecutionEventV1,
+	type ExecutionEventV2,
 } from "../../packages/runtime/src";
 import { OperationFailure } from "../../packages/runtime/src/operation";
+import {
+	createRuntimeActionExecutor,
+	type RuntimeActionBinding,
+} from "../../packages/runtime/src/action";
+import { createApplicationObservation } from "../../packages/runtime/src/application/observation";
+import { runObservedDurableAttempt } from "../../packages/runtime/src/durable";
+import type { LiveQueryObservation } from "../../packages/runtime/src/live-query";
+import type { ObservationAdapterV1 } from "../../packages/runtime/src/observation";
 import {
 	bindIngressPrincipal,
 	readIngressPrincipal,
 } from "../../packages/runtime/src/operation/ingress";
-import expectedRuntimeEvents from "../goldens/beta05/runtime-events.json";
 
 const sha = (character: string) => character.repeat(64);
+
+const createObservationHandle = (adapter: ObservationAdapterV1) =>
+	createOfficialQuestpieObservability(() => adapter);
 
 function canonical(value: unknown): string {
 	if (value === null || typeof value !== "object") return JSON.stringify(value);
@@ -40,6 +53,8 @@ function runtimeArtifacts(
 	additionalSlots: readonly unknown[] = [],
 	actionContractIdentities?: readonly string[],
 ) {
+	const observationSignalProjection =
+		projectObservationSignalProjection("4.0.0-beta.1");
 	const runtimeExecutables = {
 		format: "questpie.runtime-executables",
 		version: 1,
@@ -148,8 +163,14 @@ function runtimeArtifacts(
 		actionContractIdentities ?? inferredActionIdentities
 	).map((identity) => ({
 		identity,
-		input: { kind: "text" },
-		output: { kind: "text" },
+		input: {
+			kind: "object",
+			properties: { message: { kind: "text" } },
+		},
+		output: {
+			kind: "object",
+			properties: { receipt: { kind: "text" } },
+		},
 		declaredErrors: {},
 		admission: "authenticated",
 		limits: {
@@ -211,6 +232,7 @@ function runtimeArtifacts(
 		"internal/package-inventories.json": "[]\n",
 		"internal/server.ts": "export const executable = true;\n",
 		"manifest.json": '{"format":"questpie.manifest"}\n',
+		"opentelemetry-signal-projection.json": observationSignalProjection.bytes,
 		"operation-contracts.json": `${JSON.stringify(operationContracts)}\n`,
 		"policy-projection.json": "{}\n",
 		"postgres-context-bootstrap-plans.json": `${JSON.stringify(contextBootstrapPlans)}\n`,
@@ -271,6 +293,7 @@ function runtimeArtifacts(
 		postgresMutationTransactionStatementsDigest:
 			mutationTransactionStatements.digest,
 		postgresCollectionOperationPlansDigest: collectionOperationPlansDigest,
+		observationSignalProjectionDigest: observationSignalProjection.digest,
 		committedMigrationsDigest: fileDigest(
 			artifactFiles["committed-migrations.json"],
 		),
@@ -321,8 +344,11 @@ function runtimeArtifactEnvelope(value: ReturnType<typeof runtimeArtifacts>) {
 	};
 }
 
-function runtimeArtifactsV2() {
-	const original = runtimeArtifacts();
+function runtimeArtifactsV2(
+	additionalSlots: readonly unknown[] = [],
+	actionContractIdentities?: readonly string[],
+) {
+	const original = runtimeArtifacts(additionalSlots, actionContractIdentities);
 	const { digest: _wireDigest, ...wireV1 } = original.wireContract;
 	const wireV2WithoutDigest = {
 		...wireV1,
@@ -386,6 +412,52 @@ function runtimeArtifactsV2() {
 		...wireV2WithoutDigest,
 		digest: digest("questpie-operation-wire-v2", wireV2WithoutDigest),
 	};
+	const wireBytes = `${JSON.stringify(wireContract)}\n`;
+	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
+		original.runtimeBuild;
+	const reboundBuild = {
+		...runtimeBuildWithoutDigest,
+		wireDigest: wireContract.digest,
+		inventory: runtimeBuildWithoutDigest.inventory.map((item) =>
+			item.path === "wire-contract.json"
+				? { ...item, digest: fileDigest(wireBytes) }
+				: item,
+		),
+	};
+	return {
+		...original,
+		artifactFiles: {
+			...original.artifactFiles,
+			"wire-contract.json": wireBytes,
+		},
+		runtimeBuild: {
+			...reboundBuild,
+			digest: digest("questpie-runtime-build-v1", reboundBuild),
+		},
+		wireContract,
+	};
+}
+
+function runtimeArtifactsV3(
+	additionalSlots: readonly unknown[],
+	actionContractIdentities: readonly string[],
+) {
+	const original = runtimeArtifactsV2(
+		additionalSlots,
+		actionContractIdentities,
+	);
+	const actionOperations = original.operationContracts.operations
+		.filter((operation) => operation.identity.startsWith("action:"))
+		.map(({ declaredErrors, identity, input, output }) => ({
+			declaredErrors,
+			identity,
+			input,
+			output,
+		}));
+	const wireContract = projectOperationWireV3({
+		retainedWireV2: original.wireContract,
+		actionOperations,
+	});
 	const wireBytes = `${JSON.stringify(wireContract)}\n`;
 	const { digest: _buildDigest, ...runtimeBuildWithoutDigest } =
 		original.runtimeBuild;
@@ -806,6 +878,86 @@ test("rejects a changed inventory file before readiness or executable disclosure
 			program,
 		}),
 	).rejects.toThrow("manifest.json digest does not match");
+	const forgedSignalProjection = {
+		...JSON.parse(
+			artifacts.artifactFiles["opentelemetry-signal-projection.json"],
+		),
+		unexpected: true,
+	};
+	const forgedSignalBytes = `${JSON.stringify(forgedSignalProjection)}\n`;
+	const { digest: _signalBuildDigest, ...unsignedSignalBuild } =
+		artifacts.runtimeBuild;
+	const resignedSignalBuild = {
+		...unsignedSignalBuild,
+		observationSignalProjectionDigest: digest(
+			"questpie-opentelemetry-projection-v1",
+			forgedSignalProjection,
+		),
+		inventory: unsignedSignalBuild.inventory.map((item) =>
+			item.path === "opentelemetry-signal-projection.json"
+				? { ...item, digest: fileDigest(forgedSignalBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...resignedSignalBuild,
+					digest: digest("questpie-runtime-build-v1", resignedSignalBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"opentelemetry-signal-projection.json": forgedSignalBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow("opentelemetry-signal-projection.json has invalid keys");
+	const currentSignalProjection = JSON.parse(
+		artifacts.artifactFiles["opentelemetry-signal-projection.json"],
+	);
+	const forgedGrammarProjection = {
+		...currentSignalProjection,
+		httpTerminalGrammar: {
+			...currentSignalProjection.httpTerminalGrammar,
+			null: { outcomes: ["framework_error", "cancelled"] },
+		},
+	};
+	const forgedGrammarBytes = `${JSON.stringify(forgedGrammarProjection)}\n`;
+	const resignedGrammarBuild = {
+		...unsignedSignalBuild,
+		observationSignalProjectionDigest: digest(
+			"questpie-opentelemetry-projection-v1",
+			forgedGrammarProjection,
+		),
+		inventory: unsignedSignalBuild.inventory.map((item) =>
+			item.path === "opentelemetry-signal-projection.json"
+				? { ...item, digest: fileDigest(forgedGrammarBytes) }
+				: item,
+		),
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: {
+				...runtimeArtifactEnvelope(artifacts),
+				runtimeBuild: {
+					...resignedGrammarBuild,
+					digest: digest("questpie-runtime-build-v1", resignedGrammarBuild),
+				},
+			},
+			artifactFiles: {
+				...artifacts.artifactFiles,
+				"opentelemetry-signal-projection.json": forgedGrammarBytes,
+			},
+			...executableBindings(artifacts, bindings),
+			program,
+		}),
+	).rejects.toThrow(
+		"OpenTelemetry ingress and HTTP terminal grammar does not match Runtime",
+	);
 	const { digest: _digest, ...unsignedBuild } = artifacts.runtimeBuild;
 	const mismatchedBuild = {
 		...unsignedBuild,
@@ -952,6 +1104,525 @@ test("runs one valid build through the direct operation engine", async () => {
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
+test("does zero observation work when the optional boundary is absent", () => {
+	expect(
+		createApplicationObservation({
+			applicationIdentity: "application:collaboration",
+			runtimeBuildDigest: sha("a"),
+			questpieVersion: "4.0.0-beta.1",
+		}),
+	).toBeNull();
+	expect(() =>
+		createApplicationObservation({
+			applicationIdentity: "application:collaboration",
+			runtimeBuildDigest: sha("a"),
+			signalProjectionDigest: sha("b"),
+			questpieVersion: "4.0.0-beta.1",
+			observability: createObservationHandle({
+				format: "questpie.runtime-observability",
+				version: 1,
+			} as never),
+		}),
+	).toThrow("Runtime observation adapter is incompatible");
+});
+
+test("keeps one direct Query result and error across absent, sampled, working, and faulting observation", async () => {
+	let readinessChecks = 0;
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	let handlerCalls = 0;
+	const bindings = [
+		{
+			identity: "context:app.context",
+			kind: "context" as const,
+			slot: "resolve" as const,
+			runtimeGraphDigest: sha("3"),
+			bundleExport: "context_app_context_resolve",
+			definition: context,
+		},
+		queryExecutable(({ input }) => {
+			handlerCalls += 1;
+			if ((input as Readonly<{ first: number }>).first === 8)
+				throw new Error("private handler failure");
+			return { count: 7 };
+		}),
+	];
+	const program = {
+		services: [],
+		context,
+		bootstrap: () => ({ get: async () => null }),
+		project: ({ facts }: { facts: { signal: AbortSignal } }) => ({
+			signal: facts.signal,
+		}),
+		resolvePrincipal: async () => principal.anonymous(),
+		verifyReadiness: () => {
+			readinessChecks += 1;
+		},
+	};
+	await expect(
+		createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program,
+			observability: {} as never,
+		}),
+	).rejects.toThrow("Runtime observation handle is incompatible");
+	expect(readinessChecks).toBe(0);
+
+	for (const mode of [
+		"absent",
+		"sampled",
+		"working",
+		"pre-entry-fault",
+	] as const) {
+		const events: ExecutionEventV2[] = [];
+		const begins: string[] = [];
+		const runs: string[] = [];
+		const adapter: ObservationAdapterV1 | undefined =
+			mode === "absent"
+				? undefined
+				: {
+						format: "questpie.runtime-observability",
+						version: 1,
+						extract: () => null,
+						begin(input) {
+							begins.push(input.kind);
+							return {
+								context:
+									mode === "working"
+										? {
+												format: "questpie.trace-context",
+												version: 1,
+												traceId: new Uint8Array(16).fill(1),
+												spanId: new Uint8Array(8).fill(2),
+												flags: 1,
+											}
+										: null,
+								async run(use) {
+									if (mode === "pre-entry-fault")
+										throw new Error("adapter down");
+									runs.push(`enter:${input.kind}`);
+									try {
+										return await use();
+									} finally {
+										runs.push(`exit:${input.kind}`);
+									}
+								},
+								event: () => undefined,
+								end: () => undefined,
+							};
+						},
+					};
+		const before = handlerCalls;
+		const app = await createRuntimeApplication({
+			artifacts: runtimeArtifactEnvelope(artifacts),
+			artifactFiles: artifacts.artifactFiles,
+			...executableBindings(artifacts, bindings),
+			program,
+			...(adapter === undefined
+				? {}
+				: { observability: createObservationHandle(adapter) }),
+			events: (event) => events.push(event),
+		});
+		expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+			["scope.started", "runtime"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["runtime"]);
+		events.length = 0;
+		begins.length = 0;
+		const result = await app.execution(
+			{
+				principal: principal.anonymous(),
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+			},
+			(operations) => operations.invoke("query:messages.page", { first: 7 }),
+		);
+		expect(result).toEqual({ count: 7 });
+		expect(handlerCalls - before).toBe(1);
+		expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+			["scope.started", "execution"],
+			["scope.event", "execution"],
+			["scope.started", "query"],
+			["scope.ended", "query"],
+			["scope.ended", "execution"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
+		events.length = 0;
+		begins.length = 0;
+		const beforeError = handlerCalls;
+		await expect(
+			app.execution(
+				{
+					principal: principal.anonymous(),
+					context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+				},
+				(operations) => operations.invoke("query:messages.page", { first: 8 }),
+			),
+		).rejects.toMatchObject({ code: "INTERNAL" });
+		expect(handlerCalls - beforeError).toBe(1);
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual([
+			["query", "framework_error"],
+			["execution", "framework_error"],
+		]);
+		expect(begins).toEqual(mode === "absent" ? [] : ["execution", "query"]);
+		events.length = 0;
+		begins.length = 0;
+		runs.length = 0;
+		const cancelled = new AbortController();
+		cancelled.abort(new DOMException("Run cancelled", "AbortError"));
+		let workerUseCalls = 0;
+		expect(
+			await app.workerExecution(
+				{
+					principal: principal.anonymous(),
+					context: {
+						companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+					},
+					signal: cancelled.signal,
+				},
+				async (observation, proceed) => {
+					if (mode === "working") {
+						await runObservedDurableAttempt({
+							observation,
+							request: {
+								acceptanceTrace: null,
+								capability: "job",
+								attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
+								attemptNumber: 1,
+								queueDelayMilliseconds: 0,
+								contextInput: {},
+								dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
+								principal: { kind: "anonymous", id: "anonymous" },
+								resource: "job:reports.companyDigest",
+								runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
+								signal: cancelled.signal,
+							},
+							use: async () => {
+								try {
+									await proceed();
+								} catch (error) {
+									expect(error).toBe(cancelled.signal.reason);
+								}
+								return {
+									attemptNumber: 1,
+									failureCode: null,
+									outcome: "cancelled",
+									resource: "job:reports.companyDigest",
+									runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
+								};
+							},
+						});
+						return "settled-cancelled";
+					}
+					try {
+						return await proceed();
+					} catch (error) {
+						expect(error).toBe(cancelled.signal.reason);
+						return "settled-cancelled";
+					}
+				},
+				async () => {
+					workerUseCalls += 1;
+					return "unreachable";
+				},
+			),
+		).toBe("settled-cancelled");
+		expect(workerUseCalls).toBe(0);
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual(
+			mode === "working"
+				? [
+						["job.attempt", "cancelled"],
+						["execution", "cancelled"],
+					]
+				: [["execution", "cancelled"]],
+		);
+		if (mode === "working") {
+			expect(begins).toEqual(["execution", "job.attempt"]);
+			expect(runs).toEqual([
+				"enter:execution",
+				"enter:job.attempt",
+				"exit:job.attempt",
+				"exit:execution",
+			]);
+		}
+		events.length = 0;
+		await app.close({ deadlineAt: Date.now() + 2_000 });
+		expect(
+			events
+				.filter((event) => event.kind === "scope.ended")
+				.map((event) => [event.scopeKind, event.end.outcome]),
+		).toEqual([["runtime", "ok"]]);
+	}
+});
+
+test("carries one issued Execution privately through direct and network Action", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const action = {
+		identity: "action:delivery.publish",
+		admission: "authenticated",
+		limits: {
+			inputBytes: 1_024,
+			resultBytes: 1_024,
+			durationMilliseconds: 5_000,
+		},
+		input: codec.object({ message: codec.text() }),
+		output: codec.object({ receipt: codec.text() }),
+		declaredErrors: [],
+		execute: () => ({ receipt: "sent" }),
+	} satisfies RuntimeActionBinding<Readonly<{ marker: true }>>;
+	const actions = createRuntimeActionExecutor({
+		application: "application:collaboration",
+		bindings: [action],
+		project: () => Object.freeze({ marker: true as const }),
+	});
+	const actionSlot = {
+		identity: action.identity,
+		kind: "action" as const,
+		slot: "handler" as const,
+		origin: {
+			path: "src/delivery-action.ts",
+			exportName: "deliveryPublish",
+			packageId: null,
+		},
+		sourceDigest: sha("a"),
+		contractDigest: sha("b"),
+		runtimeGraphDigest: sha("c"),
+		bundleExport: "action_delivery_publish_handler",
+	};
+	const artifacts = runtimeArtifactsV3([actionSlot], [action.identity]);
+	const events: ExecutionEventV2[] = [];
+	const executableAction = {
+		...actionSlot,
+		execute: action.execute,
+		definition: { name: "delivery.publish", handler: action.execute },
+	};
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts as never),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts as never, [
+			{
+				identity: "context:app.context",
+				kind: "context" as const,
+				slot: "resolve" as const,
+				runtimeGraphDigest: sha("3"),
+				bundleExport: "context_app_context_resolve",
+				definition: context,
+			},
+			queryExecutable(() => ({ count: 1 })),
+			executableAction,
+		]),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			projectExecution: (scope) => ({ actionScope: scope }),
+			invokeAction: ({
+				callId,
+				effectKey,
+				execution,
+				identity,
+				input,
+				timeoutMilliseconds,
+			}) =>
+				actions.invoke(identity, {
+					callId,
+					effectKey,
+					input,
+					scope: execution.actionScope,
+					...(timeoutMilliseconds === undefined ? {} : { timeoutMilliseconds }),
+				}),
+			resolvePrincipal: async (request) => readIngressPrincipal(request),
+		},
+		events: (event) => events.push(event),
+	});
+
+	await expect(
+		app.execution(
+			{
+				principal: principal.user({
+					id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+				}),
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+			},
+			({ execution }) =>
+				actions.invoke(action.identity, {
+					effectKey: "delivery-1",
+					input: { message: "hello" },
+					scope: execution.actionScope,
+				}),
+		),
+	).resolves.toEqual({ receipt: "sent" });
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "runtime"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "action"],
+		["scope.started", "action.effect"],
+		["scope.ended", "action.effect"],
+		["scope.ended", "action"],
+		["scope.ended", "execution"],
+	]);
+	expect(
+		new Set(
+			events
+				.filter((event) => event.scopeKind !== "runtime")
+				.map((event) => event.executionId),
+		),
+	).toEqual(new Set([events[1]!.executionId]));
+
+	events.length = 0;
+	const user = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	const request = new Request("http://runtime.test/_questpie/operation", {
+		method: "POST",
+		headers: {
+			"content-type": "application/vnd.questpie.operation+json;version=1",
+		},
+		body: JSON.stringify({
+			application: artifacts.runtimeBuild.application,
+			callId: "call:network-action",
+			clientContractDigest: artifacts.runtimeBuild.clientContractDigest,
+			context: {
+				companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0",
+			},
+			effectKey: "delivery-network-1",
+			input: { message: "hello" },
+			operation: action.identity,
+			protocol: { name: "questpie.operation", version: 1 },
+			timeoutMilliseconds: 1_000,
+			wireDigest: artifacts.wireContract.digest,
+		}),
+	});
+	bindIngressPrincipal(request, user);
+	const response = await app.fetch(request);
+	expect(response.status).toBe(200);
+	expect(await response.json()).toMatchObject({
+		kind: "result",
+		operation: action.identity,
+		payload: { receipt: "sent" },
+	});
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "action"],
+		["scope.started", "action.effect"],
+		["scope.ended", "action.effect"],
+		["scope.ended", "action"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+	]);
+	const executionId = events.find(
+		(event) => event.scopeKind === "execution",
+	)?.executionId;
+	expect(
+		events
+			.filter((event) => event.scopeKind !== "fetch")
+			.every((event) => event.executionId === executionId),
+	).toBe(true);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
+test("observes Live Query initial and recompute evaluations as distinct entries", async () => {
+	const context = defineContext({
+		name: "app.context",
+		input: codec.object({ companyId: codec.uuid() }),
+		resolve: ({ input }) => ({ tenant: { id: input.companyId }, values: {} }),
+	});
+	const artifacts = runtimeArtifacts();
+	const events: ExecutionEventV2[] = [];
+	let evaluate!: (input: Readonly<Record<string, unknown>>) => Promise<unknown>;
+	const observation = Object.freeze({
+		recordContext: () => undefined,
+		recordPostgresQuery: () => undefined,
+		recordStructuralQuery: () => undefined,
+		recordStructuralQueryReached: () => undefined,
+		finish: () => {
+			throw new Error("not used by the application bridge");
+		},
+	}) satisfies LiveQueryObservation;
+	const app = await createRuntimeApplication({
+		artifacts: runtimeArtifactEnvelope(artifacts),
+		artifactFiles: artifacts.artifactFiles,
+		...executableBindings(artifacts, [
+			{
+				identity: "context:app.context",
+				kind: "context" as const,
+				slot: "resolve" as const,
+				runtimeGraphDigest: sha("3"),
+				bundleExport: "context_app_context_resolve",
+				definition: context,
+			},
+			queryExecutable(({ input }) => ({
+				count: (input as Readonly<{ first: number }>).first,
+			})),
+		]),
+		program: {
+			services: [],
+			context,
+			bootstrap: () => ({ get: async () => null }),
+			project: ({ facts }) => ({ signal: facts.signal }),
+			resolvePrincipal: async () => principal.anonymous(),
+			createRealtime: (input) => {
+				evaluate = input.evaluate as typeof evaluate;
+				return {
+					fetch: async () => null,
+					beginDrain: () => undefined,
+					drain: async () => undefined,
+				};
+			},
+		},
+		events: (event) => events.push(event),
+	});
+	const caller = principal.user({
+		id: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a4",
+	});
+	for (const entry of ["watch_initial", "watch_recompute"] as const)
+		await expect(
+			evaluate({
+				entry,
+				principal: caller,
+				context: { companyId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0" },
+				query: "query:messages.page",
+				input: { first: 2 },
+				signal: new AbortController().signal,
+				observation,
+			}),
+		).resolves.toEqual({ count: 2 });
+
+	expect(
+		events
+			.filter((event) => event.kind === "scope.started")
+			.map((event) => [event.scopeKind, event.start.entry]),
+	).toEqual([
+		["runtime", undefined],
+		["execution", "watch_initial"],
+		["query", "watch_initial"],
+		["execution", "watch_recompute"],
+		["query", "watch_recompute"],
+	]);
+	await app.close({ deadlineAt: Date.now() + 2_000 });
+});
+
 test("does not publish Runtime readiness before durable Live Query startup reconciliation", async () => {
 	const context = defineContext({
 		name: "app.context",
@@ -981,7 +1652,7 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	const startupEntered = new Promise<void>((resolve) => {
 		reportStarted = resolve;
 	});
-	const events: ExecutionEventV1[] = [];
+	const events: ExecutionEventV2[] = [];
 	let coordinatorDrains = 0;
 	const creation = createRuntimeApplication({
 		artifacts: runtimeArtifactEnvelope(artifacts),
@@ -1010,10 +1681,9 @@ test("does not publish Runtime readiness before durable Live Query startup recon
 	expect(events).toEqual([]);
 	releaseStartup();
 	const app = await creation;
-	expect(events.map(({ event }) => event)).toContainEqual({
-		family: "runtime",
-		kind: "ready",
-	});
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "runtime"],
+	]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 	expect(coordinatorDrains).toBe(1);
 
@@ -1617,10 +2287,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 				return readIngressPrincipal(request);
 			},
 		},
-		events: (event) => {
-			events.push(event);
-			throw new Error("telemetry unavailable");
-		},
+		events: (event) => events.push(event),
 		now: () => new Date("2026-08-15T16:00:00.000Z"),
 	});
 	const baseFrame = {
@@ -1702,6 +2369,7 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		resolves: 0,
 	});
 
+	events.length = 0;
 	const network = await send(baseFrame);
 	expect(network.status).toBe(200);
 	expect((await network.json()) as unknown).toMatchObject({
@@ -1725,7 +2393,22 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 		principalResolutions: 1,
 		resolves: 2,
 	});
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+	]);
 
+	events.length = 0;
 	principalFailure = true;
 	const failedPrincipal = await send({ ...baseFrame, callId: "call:2" });
 	expect((await failedPrincipal.json()) as unknown).toMatchObject({
@@ -1735,23 +2418,14 @@ test("uses one engine for direct and Fetch and rejects hostile wire before discl
 	expect(handlerCalls).toBe(2);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 	const eventBytes = JSON.stringify(events);
-	expect(events).toEqual(expectedRuntimeEvents);
 	expect(eventBytes).not.toContain(baseFrame.context.companyId);
 	expect(eventBytes).not.toContain('"input"');
-	expect(
-		events.map(
-			(event) =>
-				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-		),
-	).toEqual([
-		"ready",
-		"accepted",
-		"result",
-		"accepted",
-		"result",
-		"drainStarted",
-		"stopped",
+	expect(events.map((event) => [event.kind, event.scopeKind])).toEqual([
+		["scope.started", "fetch"],
+		["scope.ended", "fetch"],
+		["scope.ended", "runtime"],
 	]);
+	expect(events.every(({ executionId }) => executionId === null)).toBe(true);
 });
 
 test("executes a retained v1 Query only for its exact deployment-owned digest pair", async () => {
@@ -1867,6 +2541,7 @@ test("executes a retained v1 Query only for its exact deployment-owned digest pa
 async function createHoldingRuntime(
 	input: Readonly<{
 		coordinatorDeadlines?: number[];
+		coordinatorDrainFailure?: Error;
 		drainMilliseconds?: number;
 		events?: (event: unknown) => void;
 		holdCoordinatorDrain?: boolean;
@@ -1915,12 +2590,14 @@ async function createHoldingRuntime(
 			bootstrap: () => ({ get: async () => null }),
 			project: ({ facts }) => ({ signal: facts.signal }),
 			resolvePrincipal: async () => principal.anonymous(),
-			...(input.coordinatorDeadlines
+			...(input.coordinatorDeadlines || input.coordinatorDrainFailure
 				? {
 						liveQueryCoordinator: {
 							start: () => Promise.resolve(),
 							drain(close: Readonly<{ deadlineAt: number }>) {
-								input.coordinatorDeadlines!.push(close.deadlineAt);
+								input.coordinatorDeadlines?.push(close.deadlineAt);
+								if (input.coordinatorDrainFailure)
+									throw input.coordinatorDrainFailure;
 								return input.holdCoordinatorDrain
 									? new Promise<void>(() => {})
 									: Promise.resolve();
@@ -1934,6 +2611,28 @@ async function createHoldingRuntime(
 	});
 	return { app, releases, artifacts };
 }
+
+test("preserves a Runtime close failure and observes it once", async () => {
+	const events: unknown[] = [];
+	const closeFailure = new Error("coordinator close failed");
+	const { app } = await createHoldingRuntime({
+		coordinatorDrainFailure: closeFailure,
+		events: (event) => events.push(event),
+	});
+	const closing = app.close({ deadlineAt: Date.now() + 2_000 });
+	await expect(closing).rejects.toBe(closeFailure);
+	await expect(app.close({ deadlineAt: Date.now() + 4_000 })).rejects.toBe(
+		closeFailure,
+	);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([["runtime", "framework_error"]]);
+});
 
 test("separates runtime deadlines from Fetch disconnect cancellation", async () => {
 	const { app, releases, artifacts } = await createHoldingRuntime();
@@ -2053,11 +2752,24 @@ test("refuses a late result from a handler that ignores deadline cancellation", 
 	releases[0]?.();
 	await expect(pending).rejects.toThrow("DEADLINE_EXCEEDED");
 	expect(
-		events.map(
-			(event) =>
-				(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-		),
-	).toEqual(["ready", "accepted", "failed"]);
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["query", "deadline"],
+		["execution", "deadline"],
+	]);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+					event.kind === "scope.event" && event.scopeKind === "execution",
+			)
+			.map(({ observationEvent }) => observationEvent.kind),
+	).toEqual(["context.completed", "execution.deadline_exceeded"]);
 	await app.close({ deadlineAt: Date.now() + 2_000 });
 });
 
@@ -2083,6 +2795,29 @@ test("enforces 64 active roots per Principal across the shared admission gate", 
 			operations.invoke("query:messages.page", { first: 1 }),
 		),
 	).rejects.toThrow("RESOURCE_LIMIT");
+	let workerAroundCalls = 0;
+	let workerUseCalls = 0;
+	expect(
+		await app.workerExecution(
+			{ principal: firstPrincipal, context },
+			async (_observation, proceed) => {
+				workerAroundCalls += 1;
+				try {
+					await proceed();
+				} catch (error) {
+					expect(error).toMatchObject({ code: "RESOURCE_LIMIT" });
+					return "settled-admission-failure";
+				}
+				throw new Error("saturated worker root was admitted");
+			},
+			async () => {
+				workerUseCalls += 1;
+				return "unreachable";
+			},
+		),
+	).toBe("settled-admission-failure");
+	expect(workerAroundCalls).toBe(1);
+	expect(workerUseCalls).toBe(0);
 	const independent = app.execution(
 		{ principal: secondPrincipal, context },
 		(operations) => operations.invoke("query:messages.page", { first: 1 }),
@@ -2119,20 +2854,26 @@ test("bounds drain, aborts the remaining root and refuses new work", async () =>
 	await expect(held).rejects.toThrow("Runtime draining");
 	await closing;
 	await app.close({ deadlineAt: Date.now() + 2_000 });
-	const eventKinds = events.map(
-		(event) =>
-			(event as Readonly<{ event: Readonly<{ kind: string }> }>).event.kind,
-	);
-	expect(eventKinds.slice(0, 4)).toEqual([
-		"ready",
-		"accepted",
-		"drainStarted",
-		"drainTimedOut",
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["query", "cancelled"],
+		["runtime", "deadline"],
+		["execution", "cancelled"],
 	]);
-	expect(eventKinds.at(-1)).toBe("stopped");
-	const failedIndex = eventKinds.indexOf("failed");
-	if (failedIndex !== -1)
-		expect(failedIndex).toBeLessThan(eventKinds.indexOf("stopped"));
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+					event.kind === "scope.event" && event.scopeKind === "execution",
+			)
+			.map(({ observationEvent }) => observationEvent.kind),
+	).toEqual(["context.completed", "execution.cancelled"]);
 });
 
 test("shares the first absolute close deadline and does not restart it for stuck phases", async () => {
@@ -2163,13 +2904,21 @@ test("shares the first absolute close deadline and does not restart it for stuck
 	await closing;
 	expect(Date.now() - startedAt).toBeLessThan(100);
 	expect(coordinatorDeadlines).toEqual([deadlineAt]);
-	const stoppedEventCount = events.length;
-	expect(
-		(events.at(-1) as Readonly<{ event: Readonly<{ kind: string }> }>).event
-			.kind,
-	).toBe("stopped");
+	const eventsAtClose = events.length;
 
 	releases[0]?.();
 	await expect(heldOutcome).resolves.toMatchObject({ name: "AbortError" });
-	expect(events).toHaveLength(stoppedEventCount);
+	expect(events.length).toBeGreaterThan(eventsAtClose);
+	expect(
+		events
+			.filter(
+				(event): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+					event.kind === "scope.ended",
+			)
+			.map(({ end }) => [end.kind, end.outcome]),
+	).toEqual([
+		["runtime", "deadline"],
+		["query", "cancelled"],
+		["execution", "cancelled"],
+	]);
 });

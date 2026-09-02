@@ -1,0 +1,236 @@
+{
+	"format": "questpie.authority-projection.v1",
+	"base": "efd835a073ae33e4dfa3f5bef2cf2cad8c46c393",
+	"status": "accepted-unimplemented-spec-tickets-next",
+	"acceptance": {
+		"record": "docs/v4/prototypes/opentelemetry-boundary/REVIEW-REPLACEMENT.json",
+		"sha256": "2752f26bf625a4eda7637eefa81372c226b30088a13b3df79e0b775f798aea46",
+		"reviewedHead": "c3bd1a2d337e6142013fe79ab5b78fca0fe327e0",
+		"recordCommit": "17ee8898af956c838b3f62b8a34cccd23e365b92",
+		"verdict": "PASS"
+	},
+	"publicDraft": {
+		"source": "docs/v4/prototypes/opentelemetry-boundary/PUBLIC-DRAFT.md",
+		"sha256": "1f4c3bf2904e9c08b45c4f2cbf5c49162c8e58c7fdaf4750946c423b0ee196fd",
+		"destination": "apps/docs/content/docs/v4/opentelemetry.mdx",
+		"transformation": "only after the implementation tracer passes, replace the candidate status with docs frontmatter and preserve every behavioral paragraph"
+	},
+	"unchangedBeforePass": [
+		{
+			"path": "SPEC.md",
+			"sha256": "c6b15dcb82e020be32b55ab432547d0e722513d01af602cbdd8d59c48326ae26"
+		},
+		{
+			"path": "CONTEXT.md",
+			"sha256": "99aa67eb8e667ae091401c3eb264144d8a3a660a586d6fe09ad037c27927efb6"
+		},
+		{
+			"path": "HANDOFF.md",
+			"sha256": "237c17994f1bf78cb95d1b2c8c16c472a92395b2491821d77dc8a64aa5b82304"
+		},
+		{
+			"path": "docs/adr/README.md",
+			"sha256": "6f65e52dbda74c67d10721b7b1f6e9adb58f8b46c1483b371f4c0367702bd675"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/runtime-and-studio.mdx",
+			"sha256": "7455250ee9364df3e4aeedfe4ecfbb79ab7a4348b353cd742391f72a872cc232"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/beta1-release.mdx",
+			"sha256": "83843a30853ed572b74ba3542a762119003a54fac9d7b4437af36dc51b68084d"
+		},
+		{
+			"path": ".agents/skills/questpie-v4/references/codebase.md",
+			"sha256": "dff962a66d70729569e95fade08987a334143bb9ad12bb540137c9d894eddfd7"
+		},
+		{
+			"path": "docs/v4/runtime-client-envelope-and-studio.md",
+			"sha256": "399c6f494e04d67f8ce5bedfb9a9cd9db1247966d06ad68bc952addfe7c71e62"
+		},
+		{
+			"path": "docs/v4/implementation-gates.md",
+			"sha256": "e44b7874dbea21c9a00d9c3e107dc21e6c301746e769a9669fd5fe7a9a53a4e8"
+		},
+		{
+			"path": "docs/v4/beta1-build-spec.md",
+			"sha256": "94ae8a6cbc7a076d13a09118d3de769c2ccd4fd60e5353c8dea9a87bcc0fc552"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/meta.json",
+			"sha256": "efa05c157ceebbc7749895967713c61ddb7cc0b8c7035f2e84809fdaa57fb4bf"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/durable-reactions.mdx",
+			"sha256": "279fba1dc6097ca7cf139e6881163ac3e42c71ff5df6315681fcde407b37a94b"
+		},
+		{
+			"path": "packages/runtime/src/application/events.ts",
+			"sha256": "7d272cec17a7e5c7b6d32bbcd899be4e0a0852e65fc5705d10cd8eb26d90dcd1"
+		},
+		{
+			"path": "packages/runtime/src/application/index.ts",
+			"sha256": "399a6a7aa00b1d86ebabb9f8f2deb9776c2dce168e0ac35740e459a1999e6c8b"
+		},
+		{
+			"path": "packages/runtime/src/index.ts",
+			"sha256": "1f17f3ea0ce9f50675fb740d45c7af12de13d795b0335450c08978f22603a8ac"
+		},
+		{
+			"path": "tests/unit/beta05-runtime-application.test.ts",
+			"sha256": "694eea60e89cc2df823cb46af480595ec88db557890cab65b680ff0357b5d40e"
+		},
+		{
+			"path": "tests/integration/beta05-runtime-client.test.ts",
+			"sha256": "fc60e5db6416004648263b106df01e6b62c5ecdf123fad99dce3e31f518e2a70"
+		},
+		{
+			"path": "packages/compiler/src/runtime/postgres-readiness.ts",
+			"sha256": "c50f8b2c298ff58bb33f447e0c35863df3c2536ccb00ea64af6ddd04e0d67142"
+		},
+		{
+			"path": "packages/compiler/src/schema/index.ts",
+			"sha256": "d27152c52a9ec959f0709aa2381d687d4732be0ea4696ec0dbbd0d72b2e34b8c"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/apply.ts",
+			"sha256": "e321194c51e28f4a86807556091949ef6afcfac5479374775b4cc805ddf89769"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-catalog-columns.ts",
+			"sha256": "6fc907aa6fed7f33b057be7b49eda7e2c3ab214ffbd671f851b7d29eaa79fc07"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-catalog-constraints-a.ts",
+			"sha256": "1c20cf161eba5523b686690fdc3c5ae1a84ed8db0e75ee156ded32eea45f7239"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-catalog-constraints-b.ts",
+			"sha256": "4e6bce5a22fa961da5c03c2e7a28146f0d19c859a0aaa6a79690e2aa6faa2892"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-catalog-indexes.ts",
+			"sha256": "dfa53dd2c569a6ab1f4b50ffad97642bb9860966abc8837adfbb73db75eb12b8"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-catalog.ts",
+			"sha256": "e7a87dad994a55aeb4d40a62230b8323614cea9ea1accab6f611d6fda94d47ac"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7-sql.ts",
+			"sha256": "65cfa1f98f3d0bcf6dd3efd53a535e48cb32de85eb53f369f1174a58c0cb5767"
+		},
+		{
+			"path": "packages/compiler/src/schema/postgres/internal-protocol-v7.ts",
+			"sha256": "d0b32a249966a5051e8c1ae42431dfddf442918ef39cd487bc60fda36ebabbb9"
+		},
+		{
+			"path": "packages/compiler/src/seed/postgres/apply.ts",
+			"sha256": "5602fc423c0c320bebc77dc34f5bb6f1715a88e6861c14182de8b02f7b57534d"
+		},
+		{
+			"path": "packages/questpie/cli/questpie.ts",
+			"sha256": "1cdd2fa64e4f0f3cd51c9e954fada05f84de756d44480235aa87b89ede79fc74"
+		},
+		{
+			"path": "packages/runtime/src/application/postgres-readiness-prerequisites.ts",
+			"sha256": "a69fbc652a8f59b8da36617dd286e13db24e40b655efe0fa20aa58ebbc1fb493"
+		},
+		{
+			"path": "tests/integration/postgres/job-internal-protocol-v7.test.ts",
+			"sha256": "05f7cf735c4018838a6e408b85016b9d167c896953c6d271891d17c47d5ff274"
+		},
+		{
+			"path": "tests/unit/job-protocol-v7-cutover.test.ts",
+			"sha256": "f6ffa4a0af02a458a5baf06df636068ac41a6ea5a6c57adc1cf794011ab6e4a6"
+		},
+		{
+			"path": "tests/unit/pb05-postgres-database-complete-readiness.test.ts",
+			"sha256": "ef978cae37eb1c35da91f92ae3a683e44ddaca5675398c6db0830032b0c97938"
+		},
+		{
+			"path": "tests/unit/pb05-postgres-database-runtime-readiness.test.ts",
+			"sha256": "4cd4bbe7adf6c835ccc440b9058e9a1c7a434a80cb6ba430a11a84cb2f65607c"
+		},
+		{
+			"path": "packages/runtime/src/bundle-core-types.d.ts",
+			"sha256": "aeca3212f0c3da8c27e9bb32dfaaae64283923584af2d58e9359c7287f30ac5b"
+		},
+		{
+			"path": "tests/unit/pb05-runtime-bundle-completeness.test.ts",
+			"sha256": "7626e0f6c582db389ae890f2233fef15d77b4ca417500e625885c2de5dbec7b9"
+		}
+	],
+	"postPassChanges": [
+		{
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"change": "change only Proposed to Accepted and add the verified review-record identity"
+		},
+		{
+			"path": "docs/adr/README.md",
+			"change": "index ADR-0033 and state its exact ADR-0014 Envelope-v1 supersession"
+		},
+		{
+			"path": "SPEC.md",
+			"change": "replace the open Execution Envelope correlation list with the v2 allowlist, official optional adapter, lossy semantics, and no telemetry authority"
+		},
+		{
+			"path": "CONTEXT.md",
+			"change": "define Execution Envelope v2, Observation Scope, and neutral Trace Context without adding application telemetry capability"
+		},
+		{
+			"path": "HANDOFF.md",
+			"change": "record the reviewed head and PASS record; pull spec/tickets and implementation while leaving OpenTelemetry unimplemented until those tickets land"
+		},
+		{
+			"path": ".agents/skills/questpie-v4/references/codebase.md",
+			"change": "replace the single-published-package routing rule with questpie as the sole application authoring/runtime package plus separately accepted optional official integration packages; retain private compiler/runtime/testkit and no generic provider matrix"
+		},
+		{
+			"path": "docs/v4/runtime-client-envelope-and-studio.md",
+			"change": "replace the fixed Envelope-v1 schema and digests with reviewed v2 semantics and regenerated implementation artifacts only after implementation"
+		},
+		{
+			"path": "docs/v4/implementation-gates.md",
+			"change": "replace the broad log/metric/audit correlation promise with the exact v2 allowlist and separate audit ownership"
+		},
+		{
+			"path": "docs/v4/beta1-build-spec.md",
+			"change": "stop calling lossy Execution events durable truth; retain PostgreSQL receipts, ledger, and durable state as truth"
+		}
+	],
+	"postImplementationTracerChanges": [
+		{
+			"path": "apps/docs/content/docs/v4/opentelemetry.mdx",
+			"change": "publish the exact publicDraft transformation only after package, CLI, Runtime, PostgreSQL 17, browser, and release tracer evidence passes"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/runtime-and-studio.mdx",
+			"change": "advance events to v2; retain 64 KiB and 2048 Envelope limits; remove unsupported 4096 exporter-queue, 30-day telemetry-retention, and 365-day audit-retention claims; link the OpenTelemetry guide"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/beta1-release.mdx",
+			"change": "document the shipped optional exact-version @questpie/opentelemetry package and explicit CLI/embedded setup"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/durable-reactions.mdx",
+			"change": "add the explicit v7-to-v8 non-rolling cutover command, v8 refusal in both mixed directions, and unsupported in-place downgrade rule while retaining the historical v6-to-v7 instruction"
+		},
+		{
+			"path": "apps/docs/content/docs/v4/meta.json",
+			"change": "route the finished OpenTelemetry public guide"
+		}
+	],
+	"breakingDeletions": [
+		"delete ExecutionEventV1 and createEventEmitter in packages/runtime/src/application/events.ts when the one observation kernel lands; do not dual-emit or add a compatibility adapter",
+		"replace only the private Runtime events input/import/export in packages/runtime/src/application/index.ts and packages/runtime/src/index.ts atomically with ExecutionEventV2; generated CreateAppInput remains without an events callback",
+		"replace the v1 event assertions/imports in tests/unit/beta05-runtime-application.test.ts and tests/integration/beta05-runtime-client.test.ts; delete tests whose only owner is v1",
+		"do not add a second observation kernel, provider registry, ctx.telemetry, or authored signal API",
+		"protocol v8 refuses v7 and v7 refuses v8; do not add mixed-version decoding or rolling compatibility",
+		"replace the protocol-v7 compiler catalog, checksum, SQL, schema and Seed apply exports with protocol v8 across packages/compiler/src/runtime/postgres-readiness.ts, packages/compiler/src/schema/index.ts, packages/compiler/src/schema/postgres/apply.ts, packages/compiler/src/schema/postgres/internal-protocol-v7*.ts, and packages/compiler/src/seed/postgres/apply.ts; delete v7-only names after all current owners move",
+		"replace --allow-non-rolling-protocol-v7 routing in packages/questpie/cli/questpie.ts with the v8 cutover and retain no v7 alias",
+		"replace protocol-v7 readiness in packages/runtime/src/application/postgres-readiness-prerequisites.ts and the v7 unit/integration assertions in tests/unit/job-protocol-v7-cutover.test.ts, tests/unit/pb05-postgres-database-complete-readiness.test.ts, tests/unit/pb05-postgres-database-runtime-readiness.test.ts, and tests/integration/postgres/job-internal-protocol-v7.test.ts; delete tests whose only owner is v7",
+		"replace the protocol version 7 bundle contract in packages/runtime/src/bundle-core-types.d.ts and the readiness.protocol.v7/version-7 assertions in tests/unit/pb05-runtime-bundle-completeness.test.ts atomically with v8; retain no v7 bundle field, readiness alias, or compatibility assertion",
+		"exact questpie/@questpie-opentelemetry version mismatch and explicit missing CLI adapter fail before readiness"
+	]
+}

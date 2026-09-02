@@ -1,3 +1,4 @@
+import type { NeutralTraceContextV1 } from "../observation";
 import {
 	definePostgresStatement,
 	type PostgresStatement,
@@ -66,6 +67,33 @@ function bytes(value: unknown, maximum: number, label: string): Uint8Array {
 	return new Uint8Array(value);
 }
 
+function acceptanceTrace(
+	traceIdValue: unknown,
+	spanIdValue: unknown,
+	flagsValue: unknown,
+): NeutralTraceContextV1 | null {
+	if (traceIdValue === null && spanIdValue === null && flagsValue === null)
+		return null;
+	if (traceIdValue === null || spanIdValue === null || flagsValue === null)
+		throw new TypeError("invalid PostgreSQL Durable acceptance trace context");
+	const traceId = bytes(traceIdValue, 16, "acceptance trace identity");
+	const spanId = bytes(spanIdValue, 8, "acceptance span identity");
+	if (
+		traceId.byteLength !== 16 ||
+		spanId.byteLength !== 8 ||
+		traceId.every((byte) => byte === 0) ||
+		spanId.every((byte) => byte === 0)
+	)
+		throw new TypeError("invalid PostgreSQL Durable acceptance trace context");
+	return Object.freeze({
+		format: "questpie.trace-context",
+		version: 1,
+		traceId,
+		spanId,
+		flags: integer(flagsValue as number, 0, 255, "acceptance trace flags"),
+	});
+}
+
 function principalKind(value: unknown): DurablePrincipalKind {
 	if (value !== "anonymous" && value !== "service" && value !== "user")
 		throw new TypeError("invalid PostgreSQL Durable Principal kind");
@@ -110,6 +138,7 @@ function returnedAttempts(
 }
 
 export type DurableClaimRun = Readonly<{
+	acceptanceTrace: NeutralTraceContextV1 | null;
 	runId: string;
 	dispatchId: string;
 	resource: string;
@@ -126,6 +155,7 @@ export type DurableClaimRun = Readonly<{
 	correlationId: string;
 	cancellationRequested: boolean;
 	attemptCount: number;
+	queueDelayMilliseconds: number;
 }>;
 
 type RunIdentityInput = Readonly<{ application: string; runId: string }>;
@@ -145,13 +175,25 @@ const runSelection = `run_id::text AS "runId",
        causation_id AS "causationId",
        correlation_id AS "correlationId",
        cancellation_requested AS "cancellationRequested",
-       attempt_count AS "attemptCount"`;
+	   attempt_count AS "attemptCount",
+	   GREATEST(0, floor(extract(epoch FROM (
+	     pg_catalog.transaction_timestamp() - (
+	       horizon_at - (
+	         (pg_catalog.convert_from(retry_bytes, 'UTF8')::jsonb ->> 'horizonMilliseconds')::double precision
+	         * interval '1 millisecond'
+	       )
+	     )
+	   )) * 1000))::float8 AS "queueDelayMilliseconds",
+	   trace_id AS "traceId",
+       span_id AS "spanId",
+       trace_flags AS "traceFlags"`;
 
 export const durableClaimRunSelect: PostgresStatement<
 	RunIdentityInput,
 	DurableClaimRun | null
 > = definePostgresStatement({
 	name: "durable.claim.run.select",
+	operation: "SELECT",
 	text: `SELECT ${runSelection}
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
@@ -175,11 +217,12 @@ FOR UPDATE SKIP LOCKED`,
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (result.rowCount === 0) return null;
 		const row = result.rows[0];
-		if (row?.length !== 16)
+		if (row?.length !== 20)
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		if (typeof row[14] !== "boolean")
 			throw new TypeError("invalid PostgreSQL Durable claim selection result");
 		return Object.freeze({
+			acceptanceTrace: acceptanceTrace(row[17], row[18], row[19]),
 			runId: uuid(row[0] as string, "run identity"),
 			dispatchId: uuid(row[1] as string, "dispatch identity"),
 			resource: text(row[2] as string, "Resource Identity"),
@@ -201,6 +244,12 @@ FOR UPDATE SKIP LOCKED`,
 			correlationId: text(row[13] as string, "correlation identity"),
 			cancellationRequested: row[14],
 			attemptCount: integer(row[15] as number, 0, 8, "attempt count"),
+			queueDelayMilliseconds: integer(
+				row[16] as number,
+				0,
+				Number.MAX_SAFE_INTEGER,
+				"queue delay",
+			),
 		});
 	},
 });
@@ -210,6 +259,7 @@ export const durableClaimAttemptsExhaust: PostgresStatement<
 	readonly Readonly<{ attemptId: string; leaseTokenDigest: string }>[]
 > = definePostgresStatement({
 	name: "durable.claim.attempts.exhaust",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = 'failed', failure_code = 'RETRY_EXHAUSTED'
 WHERE application_name = $1 AND run_id = $2 AND outcome IS NULL
@@ -222,6 +272,7 @@ RETURNING attempt_id::text AS "attemptId", lease_token_digest AS "leaseTokenDige
 export const durableClaimRunExhaust: PostgresStatement<RunIdentityInput, void> =
 	definePostgresStatement({
 		name: "durable.claim.run.exhaust",
+		operation: "UPDATE",
 		text: `UPDATE questpie_internal.durable_runs
 SET state = 'failed', current_attempt_id = NULL, lease_token_digest = NULL,
     lease_expires_at = NULL, result_bytes = NULL,
@@ -247,6 +298,7 @@ export const durableClaimRunLease: PostgresStatement<
 	Readonly<{ leaseExpiresAt: Date; deadlineAt: Date }>
 > = definePostgresStatement({
 	name: "durable.claim.run.lease",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET state = 'running', attempt_count = $3, current_attempt_id = $4,
     lease_token_digest = $5,
@@ -284,6 +336,7 @@ export const durableClaimAttemptsSupersede: PostgresStatement<
 	readonly Readonly<{ attemptId: string; leaseTokenDigest: string }>[]
 > = definePostgresStatement({
 	name: "durable.claim.attempts.supersede",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET outcome = 'leaseSuperseded'
 WHERE application_name = $1 AND run_id = $2 AND attempt_id <> $3 AND outcome IS NULL
@@ -313,6 +366,7 @@ export const durableClaimAttemptInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.claim.attempt.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_attempts
   (application_name, attempt_id, run_id, attempt_number, worker_id, lease_token_digest,
    lease_expires_at, deadline_at, started_at, heartbeat_at)

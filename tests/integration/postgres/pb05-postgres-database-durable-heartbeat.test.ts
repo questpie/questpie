@@ -119,6 +119,7 @@ type LeaseState = Readonly<{
 
 const inspectLease = definePostgresStatement<string, LeaseState>({
 	name: "durable.heartbeat.lease.inspect",
+	operation: "SELECT",
 	text: `SELECT runs.lease_expires_at,
        attempts.lease_expires_at,
        attempts.heartbeat_at

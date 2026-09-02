@@ -10,6 +10,11 @@ import {
 } from "questpie";
 
 import type { LiveQueryObservation } from "../live-query";
+import type {
+	ExecutionEntry,
+	RuntimeExecutionObservation,
+} from "../observation";
+import { retainScopeThroughResponse } from "../observation/response";
 import { decodeContextInput } from "./context-input";
 import {
 	type AnyApplicationService,
@@ -22,6 +27,12 @@ type MaybePromise<Value> = Value | Promise<Value>;
 
 const trustedExecutionFacts = new WeakSet<object>();
 const trustedExecutionScopes = new WeakSet<object>();
+const executionObservation = Symbol("questpie.execution.observation");
+
+export type RuntimeExecutionObservationBinding = Readonly<{
+	entry: ExecutionEntry;
+	execution: RuntimeExecutionObservation;
+}>;
 
 export type RuntimeContextBootstrapFactory = (
 	signal: AbortSignal,
@@ -90,6 +101,21 @@ export function isRuntimeExecutionScope(
 	);
 }
 
+export function executionObservationOf(
+	scope: RuntimeExecutionScope<
+		Readonly<{ tenant: Readonly<{ id: string }>; values: unknown }>
+	>,
+): RuntimeExecutionObservationBinding | null {
+	if (!trustedExecutionScopes.has(scope)) return null;
+	return (
+		(
+			scope as RuntimeExecutionScope<never> & {
+				readonly [executionObservation]?: RuntimeExecutionObservationBinding;
+			}
+		)[executionObservation] ?? null
+	);
+}
+
 export interface RuntimeProgram<Context extends ContextDefinition, View> {
 	readonly services: readonly AnyService[];
 	readonly context: Context;
@@ -112,6 +138,7 @@ export interface ApplicationRuntime<Input, View> {
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			observation?: RuntimeExecutionObservationBinding;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -129,9 +156,27 @@ export interface ApplicationRuntime<Input, View> {
 			principal: Principal;
 			signal?: AbortSignal;
 			deadline?: number;
+			entry?: "direct" | "fetch";
 		}>,
 		use: (scope: RouteExecutionScope<Input, View>) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
+	observeRoute(
+		request: Request,
+		routeTemplate: string,
+		use: () => Promise<
+			Readonly<{
+				outcome: "ok" | "framework_error" | "deadline";
+				response: Response;
+				signal: AbortSignal;
+				finalize(): void;
+				retainControl: boolean;
+			}>
+		>,
+	): Promise<Response>;
+	observeUnmatchedFetch(
+		request: Request,
+		use: () => Promise<Response>,
+	): Promise<Response>;
 	close(): Promise<void>;
 }
 
@@ -180,6 +225,7 @@ export function createApplicationRuntime<
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			observation?: RuntimeExecutionObservationBinding;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
@@ -229,7 +275,15 @@ export function createApplicationRuntime<
 					liveQueryObservation: input.liveQueryObservation ?? null,
 				}) as ExecutionFacts<ContextResolvedOf<Context>>;
 				trustedExecutionFacts.add(facts);
-				const scope = Object.freeze({ child, facts, service });
+				const scope = { child, facts, service };
+				if (input.observation !== undefined)
+					Object.defineProperty(scope, executionObservation, {
+						configurable: false,
+						enumerable: false,
+						value: Object.freeze({ ...input.observation }),
+						writable: false,
+					});
+				Object.freeze(scope);
 				trustedExecutionScopes.add(scope);
 				try {
 					const view = await program.project(scope);
@@ -246,6 +300,31 @@ export function createApplicationRuntime<
 	return Object.freeze({
 		applicationService: services.application,
 		execution,
+		observeRoute: async (
+			_request: Request,
+			_routeTemplate: string,
+			use: () => Promise<
+				Readonly<{
+					outcome: "ok" | "framework_error" | "deadline";
+					response: Response;
+					signal: AbortSignal;
+					finalize(): void;
+					retainControl: boolean;
+				}>
+			>,
+		) => {
+			const owned = await use();
+			if (!owned.retainControl) return owned.response;
+			return retainScopeThroughResponse(
+				null,
+				owned.response,
+				"route",
+				owned.signal,
+				owned.finalize,
+			);
+		},
+		observeUnmatchedFetch: (_request: Request, use: () => Promise<Response>) =>
+			use(),
 		operationWire: <Result>(
 			input: Readonly<{
 				principal: Principal;

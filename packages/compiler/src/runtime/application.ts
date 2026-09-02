@@ -13,6 +13,7 @@ import {
 	renderDirectJobAcceptance,
 	renderDirectJobOperations,
 } from "./application-jobs";
+import { renderDatabaseQueryProject } from "./application-query";
 import { expectedQueryTemplates } from "./application-query-artifacts";
 import * as emptyDurableProjections from "./empty-durable-projections";
 import * as postgresRuntimeTemplates from "./postgres-runtime-ownership";
@@ -496,6 +497,8 @@ export async function createApplication(input) {
 		createDurableWorker,
 		createJobAcceptance,
 		createPostgresJobAcceptanceTransaction,
+		executionObservationOf,
+		runObservedDurableAttempt,
 		${postgresRuntimeTemplates.renderPostgresRuntimeImports()},
 		createRuntimeApplication,
 		executeCollectionOperationAdapter,
@@ -564,6 +567,7 @@ export async function createApplication(input) {
 		runtime = await createRuntimeApplication({
 		artifacts: loaded.artifacts,
 		artifactFiles: loaded.artifactFiles,
+		observability: input.observability,
 		serverExports,
 		bindings: {
 			application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
@@ -595,6 +599,7 @@ export async function createApplication(input) {
 				return verifyPostgresDatabaseRuntimeReadiness({
 					database,
 					runtime: {
+						definePostgresAdministrativeStatement,
 						definePostgresStatement,
 						verifyReadinessPrerequisites: verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
 					},
@@ -603,31 +608,7 @@ export async function createApplication(input) {
 					expected: artifacts.runtimeBuild,
 				});
 			},
-			project: ({ facts }) => Object.freeze({
-				data: Object.freeze({
-					run: (definition, operationInput) => {
-						const queryDigest = structuralQueryDigests.get(definition);
-						const linkedPlan = queryDigest && queryPlans?.get(queryDigest);
-						if (!linkedPlan) throw new TypeError("Structural Query is not in the Runtime Build");
-						return executePostgresDatabaseQuery({
-							linkedPlan,
-							binding: {
-								templateDigest: linkedPlan.plan.templateDigest,
-								values: linkedPlan.plan.binding.parameters.map(({ name }) => ({ parameter: name, value: operationInput[name] })),
-							},
-							executionFacts: {
-								authority: facts.authority,
-								principal: { id: facts.principal.id, kind: facts.principal.kind },
-								tenant: { id: facts.tenant.id },
-							},
-							database,
-							signal: facts.signal,
-							observer: facts.liveQueryObservation ?? undefined,
-						});
-					},
-				}),
-				signal: facts.signal,
-			}),
+			${renderDatabaseQueryProject()}
 			projectMutation: ({ facts }) => {
 				if (!mutationArtifacts)
 					throw new TypeError("Mutation artifacts are not linked");
@@ -698,7 +679,7 @@ export async function createApplication(input) {
 					queries: ${directQueries},
 					mutations: ${directMutations},
 					actions: createDirectActions(actionScope, operations),
-					jobs: createDirectJobs(facts, root.context),
+					jobs: createDirectJobs(actionScope, facts, root.context),
 				}))),
 			}),
 		});
@@ -738,7 +719,7 @@ export async function createApplication(input) {
 			queries: ${directQueries},
 			mutations: ${directMutations},
 			actions: createDirectActions(actionScope, operations),
-			jobs: createDirectJobs(execution, root.context),
+			jobs: createDirectJobs(actionScope, execution, root.context),
 		}))),
 		durable,
 		routes: Object.freeze({${directRouteEntries}}),

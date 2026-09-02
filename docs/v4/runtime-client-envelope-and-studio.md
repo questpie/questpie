@@ -5,7 +5,9 @@
 
 Status: accepted by ADR-0014 and proof head
 `94c237c9aa910a60a332b1ef97473f34fe89d65b`, with the focused post-commit
-outcome revision accepted by ADR-0023 and `P6R1/PostCommitOutcome`.
+outcome revision accepted by ADR-0023 and `P6R1/PostCommitOutcome`. ADR-0033
+supersedes the Envelope v1 schema and digest with the reviewed Envelope v2
+contract below.
 
 ## Accepted contract
 
@@ -67,11 +69,41 @@ Schema, wire, Policy/Context, realtime, executable, and internal-protocol
 compatibility are separate decisions. A retained Resume Token or nonterminal
 Durable Run can prevent artifact retirement.
 
-The Execution Envelope and its event union are closed and append-only. Studio
-application data uses generated Operations and ordinary Policy. Maintenance is
-limited to `acknowledgeAmbiguity`, `cancelRun`, `drainRuntime`, and `retryRun`;
-each command requires maintenance Authority, exact identity, bounded reason,
-idempotency, expected-version fencing, a typed winner, and append-only audit.
+The Execution Envelope v2 event union is closed, append-only, lossy, and
+non-authoritative. A successful Runtime start owns one random UUIDv4 Runtime
+Instance Identity. Unsigned 64-bit decimal event and Execution sequences start
+at 1 for that instance. Their opaque identities are exactly
+`runtimeInstanceId + ":event:" + eventSequence` and
+`runtimeInstanceId + ":execution:" + executionSequence`. A root Execution
+allocates the Execution sequence; every nested semantic scope shares it.
+Runtime lifecycle records outside an Execution carry null Execution identity,
+and every physical durable Attempt owns a fresh worker root.
+
+The safe Envelope allowlist is application identity, exact Runtime Build
+digest, RFC 3339 UTC millisecond occurrence time, Principal kind (`anonymous`,
+`service`, or `user`), ordinary Authority class, optional neutral trace context
+with exact 16-byte trace ID, 8-byte span ID, and one-byte flags, and closed
+links to artifact, Operation, canonical nonzero PostgreSQL `xid8` transaction,
+Dispatch, Durable Run, Physical Attempt, and Effect identities. It never
+contains Principal or Tenant identity, raw Call Identity, a generic correlation
+ID, request or result payload, headers, credentials, database URLs, Context,
+Policy identity or evidence, Service state, SQL text or parameters, provider
+payload, exception messages, or stacks. The adapter cannot supply Envelope
+facts or outcomes.
+
+Canonical v2 lines remain bounded to 64 KiB and one Execution remains bounded
+to 2,048 records. Overflow omits only the callback projection and records a
+bounded diagnostic; it cannot change application work. Sequence orders records
+only within one Runtime instance. Missing records, missing telemetry, and
+cross-instance ordering are explicit. PostgreSQL receipts, Change Ledger facts,
+and durable state—not Envelope or telemetry—remain truth and authority.
+
+Studio application data uses generated Operations and ordinary Policy.
+Maintenance is limited to `acknowledgeAmbiguity`, `cancelRun`, `drainRuntime`,
+and `retryRun`; each command requires maintenance Authority, exact identity,
+bounded reason, idempotency, expected-version fencing, a typed winner, and
+append-only audit. Audit is a separately owned durable record, not an Envelope
+or telemetry reconstruction; this contract assigns it no retention period.
 
 ## Fixed canonical digests
 
@@ -79,8 +111,6 @@ idempotency, expected-version fencing, a typed winner, and append-only audit.
 | ------------------------ | ------------------------------------------------------------------ |
 | Runtime bundle           | `9773e0147b5a227bc68b4cb9629fb2692f3d73a82d9c675949885e2400d4c712` |
 | deployment compatibility | `1806bd17a8348f7093f6fa203f57e9a6eff7c9d315cab1e273ee91d67c34aeb7` |
-| Execution Envelope       | `8f40863f884a6913f943544ce044b3681ab81ed4389d455934691fb84677899f` |
-| Execution events         | `ec38b77532b329a2ef39b799d7a7cb8cad01e12d95c7c487293a4c930b903638` |
 | Runtime executables      | `bb24f52e4d3580d4ed7f6e1574cc4defceb624135dccd6da8b5fbcee7a644b46` |
 | Runtime lifecycle        | `e8417f2a1eaf3fcc87d0df04a686ec14bb3ca3991a524c17d071deec1d46404a` |
 | Runtime/Studio limits    | `65a1ea826cfb36956f4fb4021372d56066f5313d7e57c3ea2eff4a0816369438` |
@@ -92,7 +122,9 @@ idempotency, expected-version fencing, a typed winner, and append-only audit.
 | operation wire v1        | `d9c28927d2ced07aaecc8d2cd8caf0f94327232b33d8466535642c2af1c9115c` |
 
 The P6R1 proof records the separate Operation Wire v2 digest without changing
-the v1 row.
+the v1 row. The removed Envelope and event digests identify historical v1
+bytes only. No Envelope v2 implementation digest is asserted here: build and
+artifact generation must produce and bind it when the v2 implementation lands.
 
 ## Evidence and boundaries
 

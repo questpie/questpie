@@ -26,7 +26,8 @@ export function renderDirectJobAcceptance(
 		directJobOperations: string;
 	}>,
 ): string {
-	return `createDirectJobs = (execution, contextInput) => {
+	return `createDirectJobs = (scope, execution, contextInput) => {
+			const observation = executionObservationOf(scope);
 			const acceptJob = async (identity, jobInput, options) => {
 				if (!mutationArtifacts)
 					throw new TypeError("Job acceptance artifacts are not linked");
@@ -45,6 +46,8 @@ export function renderDirectJobAcceptance(
 						contextInputCodec: ${input.contextDefinition}.input,
 						runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 						acceptedAt,
+						...(observation ? { observation: observation.execution } : {}),
+						signal: execution.signal,
 						causation: Object.freeze({ kind: "explicit", id: causationId, correlationId: causationId }),
 						transaction: createPostgresJobAcceptanceTransaction({
 							transaction,
@@ -52,6 +55,7 @@ export function renderDirectJobAcceptance(
 							application: ${JSON.stringify(input.application)},
 							sourceOperation: "execution:jobs.accept",
 							callId: causationId,
+							...(observation ? { observation: Object.freeze({ execution: observation.execution, principalKind: execution.principal.kind, signal: execution.signal }) } : {}),
 						}),
 					}).accept(job, jobInput, options),
 				});

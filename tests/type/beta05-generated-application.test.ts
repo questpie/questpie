@@ -26,18 +26,31 @@ test("emits one executable App over the same exact Query engine", async () => {
 			force: true,
 			recursive: true,
 		});
-		await mkdir(join(temporary, "node_modules/questpie"));
+		await mkdir(join(temporary, "node_modules/questpie/internal"), {
+			recursive: true,
+		});
 		await writeFile(
 			join(temporary, "node_modules/questpie/package.json"),
 			JSON.stringify({
 				name: "questpie",
 				type: "module",
-				exports: "./index.ts",
+				exports: {
+					".": "./index.ts",
+					"./internal/observability": "./internal/observability.ts",
+				},
 			}),
 		);
 		await symlink(
 			resolve(repositoryRoot, "packages/questpie/src/index.ts"),
 			join(temporary, "node_modules/questpie/index.ts"),
+			"file",
+		);
+		await symlink(
+			resolve(
+				repositoryRoot,
+				"packages/questpie/src/internal/observability.ts",
+			),
+			join(temporary, "node_modules/questpie/internal/observability.ts"),
 			"file",
 		);
 		const compilation = await compileApplication({
@@ -51,6 +64,9 @@ test("emits one executable App over the same exact Query engine", async () => {
 		);
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
 			"createRuntimeApplication",
+		);
+		expect(compilation.generatedFiles["internal/application.js"]).toContain(
+			"observability",
 		);
 		expect(compilation.generatedFiles["internal/application.js"]).toContain(
 			"serverExports",
@@ -98,7 +114,9 @@ test("emits one executable App over the same exact Query engine", async () => {
 		await writeFile(
 			join(temporary, "generated-app-contract-consumer.ts"),
 			`import { createApp, type QueryDefinition } from "#questpie/app";
-import { principal } from "questpie";
+import { principal, type QuestpieObservability } from "questpie";
+
+declare const observability: QuestpieObservability;
 
 type MessagePageHandlerOutput = Awaited<
 	ReturnType<QueryDefinition<"messages.page">["handler"]>
@@ -114,6 +132,19 @@ async function useGeneratedApp() {
 		postgres: { url: "postgres://localhost/questpie" },
 		realtime: { hmacKey: new Uint8Array(32) },
 		maintenance: { authorize: () => true },
+	});
+	createApp({
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: { authorize: () => true },
+		observability,
+	});
+	createApp({
+		postgres: { connectionUrl: "postgres://localhost/questpie", directConnectionUrl: "postgres://localhost/questpie" },
+		realtime: { hmacKey: new Uint8Array(32) },
+		maintenance: { authorize: () => true },
+		// @ts-expect-error observation handles are nominal and cannot be forged structurally
+		observability: {},
 	});
 	// @ts-expect-error maintenance authorization is deployment-owned and required
 	createApp({

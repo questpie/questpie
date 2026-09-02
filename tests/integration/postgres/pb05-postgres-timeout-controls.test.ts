@@ -40,6 +40,7 @@ function database(idleInTransactionMs = 1_000) {
 
 const backendPid = definePostgresStatement({
 	name: "pb05.timeout.backend-pid",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_backend_pid()",
 	parameterCount: 0,
 	parameters: () => [],
@@ -53,6 +54,7 @@ const backendPid = definePostgresStatement({
 
 const lockTarget = definePostgresStatement({
 	name: "pb05.timeout.lock-target",
+	operation: "SELECT",
 	text: `SELECT value
 FROM qp_pb05_timeout_target
 WHERE id = 1
@@ -64,6 +66,7 @@ FOR UPDATE`,
 
 const incrementTarget = definePostgresStatement({
 	name: "pb05.timeout.increment-target",
+	operation: "UPDATE",
 	text: `UPDATE qp_pb05_timeout_target
 SET value = value + 1
 WHERE id = 1`,
@@ -74,6 +77,7 @@ WHERE id = 1`,
 
 const readTarget = definePostgresStatement({
 	name: "pb05.timeout.read-target",
+	operation: "SELECT",
 	text: "SELECT value FROM qp_pb05_timeout_target WHERE id = 1",
 	parameterCount: 0,
 	parameters: () => [],
@@ -87,6 +91,7 @@ const readTarget = definePostgresStatement({
 
 const shortStatement = definePostgresStatement({
 	name: "pb05.timeout.short-statement",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_sleep(0.02)",
 	parameterCount: 0,
 	parameters: () => [],

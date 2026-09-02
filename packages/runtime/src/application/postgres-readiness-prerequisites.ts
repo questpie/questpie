@@ -24,7 +24,7 @@ export type ReadinessMigration = Readonly<{
 }>;
 
 type ReadinessInput = Readonly<{
-	protocol: Readonly<{ version: 7; checksum: string }>;
+	protocol: Readonly<{ version: 8; checksum: string }>;
 	application: string;
 	postgresSchema: string;
 	migrationHead: string | null;
@@ -76,11 +76,11 @@ function statement<Input, Output>(
 		decode(result: StatementResult): Output;
 	}>,
 ): PostgresStatement<Input, Output> {
-	return definePostgresStatement(input);
+	return definePostgresStatement({ ...input, operation: "SELECT" });
 }
 
 const protocolStatement = statement<void, Protocol | null>({
-	name: "readiness.protocol.v7",
+	name: "readiness.protocol.v8",
 	text: `SELECT version, checksum
 FROM questpie_internal.protocol
 WHERE singleton = true`,
@@ -219,8 +219,8 @@ export async function verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransac
 }
 
 function validateReadiness(input: ReadinessInput): ValidatedReadiness {
-	if (input.protocol.version !== 7)
-		throw new TypeError("expected PostgreSQL readiness protocol must be v7");
+	if (input.protocol.version !== 8)
+		throw new TypeError("expected PostgreSQL readiness protocol must be v8");
 	const expectedProtocol: Protocol = Object.freeze({
 		version: input.protocol.version,
 		checksum: digest(input.protocol.checksum, "protocol checksum"),
@@ -270,7 +270,7 @@ async function executePostgresDatabaseReadinessPrerequisites(
 		protocol?.version !== input.expectedProtocol.version ||
 		protocol.checksum !== input.expectedProtocol.checksum
 	)
-		throw new TypeError("questpie_internal protocol v7 is not installed");
+		throw new TypeError("questpie_internal protocol v8 is not installed");
 	const bindings = await transaction.execute(applicationBindingStatement, {
 		application: input.application,
 		postgresSchema: input.postgresSchema,

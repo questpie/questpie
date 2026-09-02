@@ -14,6 +14,7 @@ import {
 	type PostgresJsonValue,
 	type PostgresParameter,
 	type PostgresStatement,
+	type PostgresStatementOperation,
 	type PostgresTransaction,
 	type PostgresTransactionMode,
 } from "./contract";
@@ -205,10 +206,14 @@ function effectiveTimeout(
 	return Math.min(candidate, maximum);
 }
 
-async function executeStatement<Input, Output>(
+async function executeStatement<
+	Input,
+	Output,
+	Operation extends PostgresStatementOperation,
+>(
 	input: Readonly<{
 		client: PoolClient | Client;
-		statement: PostgresStatement<Input, Output>;
+		statement: PostgresStatement<Input, Output, Operation>;
 		value: Input;
 		active: () => boolean;
 		signal?: AbortSignal;

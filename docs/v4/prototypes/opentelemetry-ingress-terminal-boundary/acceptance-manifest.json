@@ -1,0 +1,170 @@
+{
+	"protocolVersion": 2,
+	"ticket": "ADR-0034",
+	"proof": "Repair exactly two omissions in ADR-0033's private neutral observation interface: make continue versus restart an explicit complete ingress trace plan, and represent a Fetch/Route terminal before Response creation without fabricating an HTTP status.",
+	"diffBase": "5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b",
+	"reviewOutput": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW-REPLACEMENT.json",
+	"authorityHeads": {
+		"OTEL-01 implementation base": "5a3c9c98702e4d27f9be5ea7c78fcd4af735c26b",
+		"ADR-0033 accepted candidate": "c3bd1a2d337e6142013fe79ab5b78fca0fe327e0",
+		"ADR-0033 accepted review record commit": "17ee8898af956c838b3f62b8a34cccd23e365b92"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "canonical product specification",
+			"path": "SPEC.md",
+			"sha256": "e23c778d39f93e0d7fc812e8651010d482696d2d8096d3dfb85a853a9c338b3d"
+		},
+		{
+			"name": "canonical language",
+			"path": "CONTEXT.md",
+			"sha256": "ab367e09d89959742ce5b38040fd81e872de8d50fb2bac33a77d909b8fbe750d"
+		},
+		{
+			"name": "current delivery handoff",
+			"path": "HANDOFF.md",
+			"sha256": "d3cca0461f682a2541ef74e812c3e9d53f2550a7e364b106aea9d46760746cdf"
+		},
+		{
+			"name": "ADR status index",
+			"path": "docs/adr/README.md",
+			"sha256": "b7fc7fcec1ba15dcd293f5880ca55e9a7ef04f4e6841ce31fbc2f5e4b17d590a"
+		},
+		{
+			"name": "tracer-led delivery procedure",
+			"path": "docs/v4/DELIVERY-FLOW.md",
+			"sha256": "0db11be5d01ad9c71017132ee62604ea21663d06b486378e0f72428a13718401"
+		},
+		{
+			"name": "accepted OpenTelemetry architecture",
+			"path": "docs/adr/0033-freeze-runtime-observation-and-opentelemetry-projection.md",
+			"sha256": "af3b540887e3d7216cffb0f9d30c24761646371974130e658384b066a70b5043"
+		},
+		{
+			"name": "accepted private neutral interface",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/BOUNDARY.md",
+			"sha256": "2e18dfe276c67429e83d6dd2497cdfec8ab37b2e3adcbc406bba12551f5070ec"
+		},
+		{
+			"name": "accepted signal projection",
+			"path": "docs/v4/prototypes/opentelemetry-boundary/SIGNALS.md",
+			"sha256": "b29a09312c8eb5d7fb1016a83a5b6f842ea3a1abc24061b38b7537067cfde8b6"
+		},
+		{
+			"name": "current OTEL implementation queue",
+			"path": "docs/v4/implementation/opentelemetry/README.md",
+			"sha256": "9765ca719ab81420e2f6973b7316c92746425185ac6428cc58d1d1749c8167fd"
+		},
+		{
+			"name": "current Runtime observation contract",
+			"path": "packages/runtime/src/observation/contract.ts",
+			"sha256": "f098b96489f5b860d35cf135ddcb35b978b203f4c2334e282d5f17a4ba3304d9"
+		},
+		{
+			"name": "current Runtime observation kernel",
+			"path": "packages/runtime/src/observation/kernel.ts",
+			"sha256": "6ba23174e3ddeb89ecfb2f057619a0b5e63a83784f8e9049f0979a0fb2d7a6a1"
+		},
+		{
+			"name": "current Runtime observation validation",
+			"path": "packages/runtime/src/observation/validation.ts",
+			"sha256": "9ce85346605930b90a5d6ccbc567a2b08ec92c970e06c9d37d481ea3ad5223b3"
+		},
+		{
+			"name": "current Runtime response lifetime owner",
+			"path": "packages/runtime/src/observation/response.ts",
+			"sha256": "c6b24b976da666bc0d0f8e04990a55f48ccb88597b86a9bdaa6ec926e79f725d"
+		},
+		{
+			"name": "focused proposed decision",
+			"path": "docs/adr/0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md",
+			"sha256": "eaa12df3b63677258452537864f193554e604cf1dd773aa31b0390287e6b7c4e"
+		},
+		{
+			"name": "focused proof wayfinder",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/README.md",
+			"sha256": "e2cf6c1547c13c1671530ec328e941f73266908b0e179772b4a6395dd70f1207"
+		},
+		{
+			"name": "focused candidate comparison",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/CANDIDATES.md",
+			"sha256": "09586ec4c541fd8976d99186f0f9756d4af7871fc983865c6399c3873006de4e"
+		},
+		{
+			"name": "executable delta contract",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/kernel.ts",
+			"sha256": "8bd6dad96df50379f0707c3162129666be112c5e200e9ae8a10b33dfdf402b9d"
+		},
+		{
+			"name": "delta hostile tests",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/kernel.test.ts",
+			"sha256": "5dd6fad450f4cc3f25a66f35a2c0982978aebcacaa3e9f3fd1702e3acbc94cd6"
+		},
+		{
+			"name": "delta proof type boundary",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/tsconfig.json",
+			"sha256": "1c1cf0f399bd8aba1d4d593b7b3d0f4ec41000be7d29f8525c9ba7d867e917b4"
+		},
+		{
+			"name": "candidate staging proof",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/staging-check.ts",
+			"sha256": "2ddb66a4512e2bc2882093309d64dc831d476b0fdc33df25bcf48af6aa720963"
+		},
+		{
+			"name": "committed blocked review for 9afe302ab",
+			"path": "docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/REVIEW.json",
+			"sha256": "f4248c3c16ef079fb854068044d357fd700930cf94f59ff310cb2600ec38e94c"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/kernel.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc -p docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/tsconfig.json --pretty false",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxlint docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/*.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx oxfmt --check docs/adr/0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md docs/v4/prototypes/opentelemetry-ingress-terminal-boundary",
+			"result": "PASS"
+		},
+		{
+			"command": "bun docs/v4/prototypes/opentelemetry-ingress-terminal-boundary/staging-check.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0033 remains Accepted and unchanged except through the explicit narrow supersession ledger in Proposed ADR-0034; its owner graph, signal vocabulary, propagation headers, adapter/package ownership, durable links, protocol v8, nondisclosure, and application-result authority are not reopened.",
+		"The private adapter extraction return is exactly null, remote-parent with one complete validated extraction including bounded tracestate, or root-with-links with exactly one validated neutral context and no tracestate member. It cannot return active-parent or root.",
+		"The official adapter translates its static continue or restart option into that complete return value. Runtime validates and recursively freezes it without reading adapter configuration, consulting identity, or using a side channel; invalid propagation, faults, and invalid plans behave as absent incoming context without changing request work.",
+		"Fetch and Route ends carry an explicit httpResponseStatusCode field. It is an integer 100 through 599 when a Response existed, or null only for framework_error, cancelled, or deadline before a Response existed. It is never missing, null with ok, or a fabricated numeric status.",
+		"The OpenTelemetry projection omits http.response.status_code for a null terminal and derives status only from the closed outcome and safe error code. It receives no exception message, stack, raw path, arbitrary header, input, output, Principal identity, SQL, or PostgreSQL detail.",
+		"When a Response exists, the accepted SERVER lifetime through EOF, source error, consumer cancellation, and host abort remains unchanged. The first terminal wins, host abort cancels the reader best-effort without waiting, and later body signals cannot rewrite the terminal.",
+		"Observation does not create cancellation, deadline, retry, error code, HTTP response, or application behavior. Adapter and telemetry faults remain lossy and cannot replace request, Policy, PostgreSQL, commit, retry, or Runtime close results.",
+		"Implementation atomically replaces the current private extraction and HTTP-end grammar, advances the exact signal artifact and Runtime Build binding, and retains no old decoder, dual interface, or second observation kernel.",
+		"ADR-0034 remains Proposed and absent from the ADR index, SPEC, CONTEXT, public documentation, and HANDOFF until this exact manifest-bound candidate receives PASS. Authority projection and OTEL-02 implementation occur only afterward in separate coherent commits."
+	]
+}

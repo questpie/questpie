@@ -499,7 +499,7 @@ export function renderAppContract(
 		resources,
 		mutationContract,
 	);
-	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, ServiceInstance, TaggedJsonValue } from "questpie";
+	return `import type { Authority, Codec, CollectionIssueValue, ContextInputOf, ContextResolvedOf, DataFieldDescriptor, DurableRetryDefinition, DurableRunAsDefinition, OperationErrorFactories, OperationErrorMap, Principal, QuestpieObservability, ServiceInstance, TaggedJsonValue } from "questpie";
 
 ${renderCoreDataContract(data, schema)}
 
@@ -729,9 +729,9 @@ export type CreateAppInput = Readonly<{
 		directConnectionUrl: string;
 	}>;
 	${realtime ? "realtime: Readonly<{ hmacKey: Uint8Array }>;" : ""}
+	observability?: QuestpieObservability;
 	maintenance: Readonly<{ authorize: DurableMaintenanceAuthorization }>;
 }>;
-
 export async function createApp(input: CreateAppInput): Promise<GeneratedApp> {
 	const application = await import("./internal/application.js");
 	return application.createApplication(input);

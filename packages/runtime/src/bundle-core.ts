@@ -3,7 +3,10 @@ export { verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction } from "
 export type { ReadinessMigration } from "./application/postgres-readiness-prerequisites";
 export { failRuntimeApplicationStartup } from "./application/startup-cleanup";
 export { createRuntimeActionExecutor } from "./action";
-export { createRuntimeRouteExecutor } from "./execution";
+export {
+	createRuntimeRouteExecutor,
+	executionObservationOf,
+} from "./execution";
 export {
 	bindIngressPrincipal,
 	OperationFailure,
@@ -33,20 +36,27 @@ export {
 } from "./mutation";
 export { linkPostgresMutationTransactionStatements } from "./mutation/postgres-transaction-statements";
 export {
-	createDurableReactionWorker,
 	createDurableWorker,
 	createDurableJobContext,
 	createDurableReactionContext,
 	createJobAcceptance,
+	createPostgresDatabaseDurableAttemptObservation,
 	createPostgresDatabaseDurableEffectLedger,
 	createPostgresDatabaseDurableKernel,
 	createPostgresDatabaseDurablePrincipalMaintenance,
 	durablePrincipal,
+	runObservedDurableAttempt,
 } from "./durable";
-export { createRuntimePostgres, definePostgresStatement } from "./postgres";
+export {
+	createRuntimePostgres,
+	definePostgresAdministrativeStatement,
+	definePostgresStatement,
+} from "./postgres";
 export type {
+	PostgresDatabaseOperation,
 	PostgresParameter,
 	PostgresStatement,
+	PostgresStatementOperation,
 	PostgresTransaction,
 	PostgresTransactionRunner,
 } from "./postgres";

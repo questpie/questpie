@@ -142,6 +142,7 @@ export type DurableEventErrorCode =
 export const durableKernelMarker: PostgresStatement<void, void> =
 	definePostgresStatement({
 		name: "durable.kernel.mark",
+		operation: "SELECT",
 		text: "SELECT set_config('questpie.durable_kernel', 'on', true)",
 		parameterCount: 0,
 		parameters: () => [],
@@ -170,6 +171,7 @@ export const durableRunHeartbeat: PostgresStatement<
 	Readonly<{ held: boolean; cancellationRequested: boolean }>
 > = definePostgresStatement({
 	name: "durable.heartbeat.run",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET lease_expires_at = pg_catalog.transaction_timestamp()
       + make_interval(secs => $5::double precision)
@@ -204,6 +206,7 @@ export const durableAttemptHeartbeat: PostgresStatement<
 	Readonly<{ found: boolean; deadlineExpired: boolean }>
 > = definePostgresStatement({
 	name: "durable.heartbeat.attempt",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_attempts
 SET heartbeat_at = pg_catalog.transaction_timestamp(),
     lease_expires_at = pg_catalog.transaction_timestamp()
@@ -235,6 +238,7 @@ export const durableEventSequenceBump: PostgresStatement<
 	Readonly<{ sequence: number }> | null
 > = definePostgresStatement({
 	name: "durable.event.sequence.bump",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_runs
 SET event_sequence = event_sequence + 1
 WHERE application_name = $1 AND run_id = $2
@@ -282,6 +286,7 @@ export const durableEventInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.event.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_run_events
   (application_name, run_id, sequence, occurred_at, resource_identity, dispatch_id,
    attempt_id, lease_token_digest, causation_id, correlation_id, kind, error_code)
@@ -328,6 +333,7 @@ export const durableEffectFence: PostgresStatement<
 	boolean
 > = definePostgresStatement({
 	name: "durable.effect.fence",
+	operation: "SELECT",
 	text: `SELECT 1 AS held FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2
   AND current_attempt_id = $3 AND lease_token_digest = $4
@@ -368,6 +374,7 @@ export const durableEffectSettle: PostgresStatement<
 	string | null
 > = definePostgresStatement({
 	name: "durable.effect.settle",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_effects
 SET status = 'succeeded', receipt = $4, settled_attempt_id = $5,
     settled_at = pg_catalog.transaction_timestamp()
@@ -410,6 +417,7 @@ export const durableEffectAmbiguous: PostgresStatement<
 	string | null
 > = definePostgresStatement({
 	name: "durable.effect.ambiguous",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.durable_effects
 SET status = 'ambiguous'
 WHERE application_name = $1 AND run_id = $2 AND effect_name = $3 AND status = 'pending'
@@ -451,6 +459,7 @@ export const durableEffectReservationInsert: PostgresStatement<
 	void
 > = definePostgresStatement({
 	name: "durable.effect.reservation.insert",
+	operation: "INSERT",
 	text: `INSERT INTO questpie_internal.durable_effects
   (application_name, run_id, effect_name, effect_id, input_digest, status,
    reserved_attempt_id, reserved_at)
@@ -501,6 +510,7 @@ export const durableEffectReservationRead: PostgresStatement<
 	DurableEffectReservationRow
 > = definePostgresStatement({
 	name: "durable.effect.reservation.read",
+	operation: "SELECT",
 	text: `SELECT effect_id::text AS "effectId", status, receipt, input_digest AS "inputDigest"
 FROM questpie_internal.durable_effects
 WHERE application_name = $1 AND run_id = $2 AND effect_name = $3`,
@@ -557,6 +567,7 @@ export const durableEffectRead: PostgresStatement<
 	readonly DurableEffectReadRow[]
 > = definePostgresStatement({
 	name: "durable.effect.read",
+	operation: "SELECT",
 	text: `SELECT effect_name AS "effectName", effect_id::text AS "effectId",
        status, receipt
 FROM questpie_internal.durable_effects

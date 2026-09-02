@@ -252,6 +252,7 @@ function oneRow(result: StatementResult, name: string): readonly unknown[] {
 
 const maintenanceAntagonist = definePostgresStatement({
 	name: "pb05.owner-path.maintenance-antagonist",
+	operation: "SELECT",
 	text: `SELECT run_id::text
 FROM questpie_internal.durable_runs
 WHERE application_name = $1 AND run_id = $2::uuid
@@ -270,6 +271,7 @@ FOR UPDATE`,
 
 const reconciliationAntagonist = definePostgresStatement({
 	name: "pb05.owner-path.reconciliation-antagonist",
+	operation: "SELECT",
 	text: `SELECT xid_horizon::text
 FROM questpie_internal.reconciliation_consumers
 WHERE application_name = $1 AND consumer_id = $2
@@ -288,6 +290,7 @@ FOR UPDATE`,
 
 const retentionAntagonist = definePostgresStatement({
 	name: "pb05.owner-path.retention-antagonist",
+	operation: "SELECT",
 	text: "SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 0))",
 	parameterCount: 1,
 	parameters: (lockIdentity: string) => [lockIdentity],
@@ -298,6 +301,7 @@ const retentionAntagonist = definePostgresStatement({
 
 const lockWaitProbe = definePostgresStatement({
 	name: "pb05.owner-path.lock-wait-probe",
+	operation: "SELECT",
 	text: `SELECT EXISTS (
   SELECT 1 FROM pg_catalog.pg_stat_activity
   WHERE application_name = $1 AND wait_event_type = 'Lock'

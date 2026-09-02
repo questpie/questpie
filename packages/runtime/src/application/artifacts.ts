@@ -52,6 +52,7 @@ type RuntimeBuildV1 = Readonly<{
 	postgresContextBootstrapPlansDigest: string;
 	postgresMutationTransactionStatementsDigest: string;
 	postgresCollectionOperationPlansDigest: string;
+	observationSignalProjectionDigest: string;
 	committedMigrationsDigest: string;
 	migrationHead: string | null;
 	schemaFingerprint: string;
@@ -139,14 +140,12 @@ export type OperationContractsV1 = Readonly<{
 	version: 1;
 	operations: readonly RuntimeOperationContract[];
 }>;
-
 export type RuntimeArtifactsV1 = Readonly<{
 	runtimeBuild: RuntimeBuildV1;
 	runtimeExecutables: RuntimeExecutablesV1;
 	operationContracts: OperationContractsV1;
 	wireContract: OperationWireContract;
 }>;
-
 function decodeOperationContracts(value: unknown): OperationContractsV1 {
 	const artifact = record(value, "operation contracts");
 	exact(artifact, ["format", "version", "operations"], "operation contracts");
@@ -474,6 +473,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 			"postgresContextBootstrapPlansDigest",
 			"postgresMutationTransactionStatementsDigest",
 			"postgresCollectionOperationPlansDigest",
+			"observationSignalProjectionDigest",
 			"committedMigrationsDigest",
 			"migrationHead",
 			"schemaFingerprint",
@@ -505,6 +505,7 @@ function decodeBuild(value: unknown): RuntimeBuildV1 {
 		"clientContractDigest",
 		"packageInventoryDigest",
 		"schemaProjectionDigest",
+		"observationSignalProjectionDigest",
 		"compilerRuntimeBuildDigest",
 		"committedMigrationsDigest",
 		"schemaFingerprint",

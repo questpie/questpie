@@ -1,7 +1,10 @@
 export {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
+	type PostgresDatabaseOperation,
 	type PostgresParameter,
 	type PostgresStatement,
+	type PostgresStatementOperation,
 	type PostgresTransaction,
 	type PostgresTransactionRunner,
 } from "./postgres/contract-types.js";
@@ -18,7 +21,7 @@ export type ReadinessMigration = Readonly<{
 export declare function verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction(
 	input: Readonly<{
 		transaction: PostgresTransaction;
-		protocol: Readonly<{ version: 7; checksum: string }>;
+		protocol: Readonly<{ version: 8; checksum: string }>;
 		application: string;
 		postgresSchema: string;
 		migrationHead: string | null;

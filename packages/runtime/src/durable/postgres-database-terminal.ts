@@ -96,8 +96,13 @@ export function createPostgresDatabaseDurableTerminal(
 	const retry = (
 		claim: DurableClaim,
 		failureCode: DurableFailureCode,
-	): Promise<DurableTransition> =>
-		input.database.transaction({
+	): Promise<DurableTransition> => {
+		const delay = retryDelayMilliseconds(
+			claim.retry,
+			claim.attemptNumber,
+			random,
+		);
+		return input.database.transaction({
 			mode: { isolation: "readCommitted", access: "readWrite" },
 			use: async (transaction) => {
 				await transaction.execute(durableKernelMarker, undefined);
@@ -107,9 +112,7 @@ export function createPostgresDatabaseDurableTerminal(
 					attemptId: claim.attemptId,
 					leaseTokenDigest: leaseTokenDigest(claim.leaseToken),
 					failureCode,
-					delaySeconds:
-						retryDelayMilliseconds(claim.retry, claim.attemptNumber, random) /
-						1_000,
+					delaySeconds: delay / 1_000,
 				});
 				if (applied === null)
 					return Object.freeze({
@@ -135,9 +138,11 @@ export function createPostgresDatabaseDurableTerminal(
 					status: "applied" as const,
 					state: "delayed" as const,
 					deadLetter: false,
+					retryDelayMilliseconds: delay,
 				});
 			},
 		});
+	};
 
 	return Object.freeze({
 		succeed: (claim, resultBytes) =>

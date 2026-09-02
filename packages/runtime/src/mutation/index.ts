@@ -1,3 +1,7 @@
+import type {
+	ObservationScope,
+	RuntimeExecutionObservation,
+} from "../observation";
 import type { PreparedOperation } from "../operation";
 
 export { linkCollectionOperationAdapters } from "./adapter";
@@ -50,6 +54,10 @@ export type {
 export type MutationCallOptions = Readonly<{
 	signal?: AbortSignal;
 	deadline?: number;
+	observation?: Readonly<{
+		execution: RuntimeExecutionObservation;
+		mutation: ObservationScope;
+	}>;
 }>;
 
 export type MutationInvocationResult = Readonly<{

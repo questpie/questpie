@@ -48,8 +48,10 @@ Owner/Origin, Compiled Manifest, Schema/Data/Policy/Operation/Service/ledger/
 durable projections, Runtime Build inventory, generated app/package/client
 declarations, and explanation joins. `.questpie/generated/` is replace-on-
 success derived output. Committed migrations are reviewed source; PostgreSQL
-receipts, Change Ledger facts, durable state, and Execution events are durable
-truth. CLI joins canonical facts and never maintains a second manifest.
+receipts, Change Ledger facts, and durable state are durable truth. Execution
+Envelope events are a bounded, lossy, non-authoritative observation projection;
+they cannot replace receipts, ledger facts, durable state, or separately owned
+audit. CLI joins canonical facts and never maintains a second manifest.
 
 The implementation order is the topological order in `QUEUE.json`. Every issue
 must begin with its named red test and run the seconds-long changed lane while

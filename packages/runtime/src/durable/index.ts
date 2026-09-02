@@ -1,11 +1,9 @@
 export {
-	acceptDurableDispatch,
 	createJobAcceptance,
 	durableRunIdentity,
 	JobAcceptanceConflict,
 } from "./acceptance";
 export type {
-	DurableAcceptance,
 	JobAcceptance,
 	JobAcceptanceOptions,
 	JobAcceptanceReceipt,
@@ -26,6 +24,7 @@ export type {
 	DurableRunHandle,
 } from "./effects";
 export { createPostgresDatabaseDurableEffectLedger } from "./postgres-database-effect-ledger";
+export { createPostgresDatabaseDurableAttemptObservation } from "./postgres-attempt-observation";
 export type {
 	DurableEffectLedger,
 	DurableEffectReservation,
@@ -65,11 +64,12 @@ export type { LinkedJobMember, LinkedJobProjection } from "./job-projection";
 export { createDurableJobContext } from "./job-context";
 export { createDurableReactionContext } from "./reaction-context";
 export { durablePrincipal } from "./principal";
-export { markDurableKernelTransaction } from "./rows";
-export type { DurableActor, DurableQuery } from "./rows";
-export { createDurableReactionWorker, createDurableWorker } from "./worker";
+export { runObservedDurableAttempt } from "./observation";
+export type { DurableActor } from "./rows";
+export { createDurableWorker } from "./worker";
 export type {
-	DurableAttemptExecutor,
+	DurableAttemptExecution,
+	DurableAttemptExecutionRequest,
 	DurableAttemptHandle,
 	DurableAttemptRequest,
 	DurableJobAttemptRequest,

@@ -293,6 +293,7 @@ async function executeRows(
 			tenant: { id: "public" },
 		},
 		database,
+		observation: null,
 		observer: options.observer,
 		signal: options.signal,
 	});

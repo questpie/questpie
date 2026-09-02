@@ -95,7 +95,7 @@ function measureDatabaseRuntime(plan: unknown): Readonly<{
 		let nodeCount = 0;
 		const started = performance.now();
 		for (let index = 0; index < 100; index += 1) {
-			const page = await executePostgresDatabaseQuery({ linkedPlan, binding, executionFacts, database });
+			const page = await executePostgresDatabaseQuery({ linkedPlan, binding, executionFacts, database, observation: null });
 			nodeCount += page.nodes.length;
 		}
 		console.log(JSON.stringify({ bindDecode100Ms: performance.now() - started, nodeCount }));

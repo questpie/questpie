@@ -1,4 +1,5 @@
 import type {
+	definePostgresAdministrativeStatement,
 	definePostgresStatement,
 	PostgresTransactionRunner,
 	verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction,
@@ -7,7 +8,7 @@ import type {
 import { digest } from "../canonical";
 import { CompilerDiagnosticError } from "../diagnostic";
 import {
-	internalProtocolV7Checksum,
+	internalProtocolV8Checksum,
 	type SchemaProjectionV1,
 	verifyPostgresDatabaseSchemaReadiness,
 } from "../schema";
@@ -129,6 +130,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
 		runtime: Readonly<{
+			definePostgresAdministrativeStatement: typeof definePostgresAdministrativeStatement;
 			definePostgresStatement: typeof definePostgresStatement;
 			verifyReadinessPrerequisites: typeof verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction;
 		}>;
@@ -149,7 +151,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 			try {
 				await input.runtime.verifyReadinessPrerequisites({
 					transaction,
-					protocol: { version: 7, checksum: internalProtocolV7Checksum },
+					protocol: { version: 8, checksum: internalProtocolV8Checksum },
 					application: input.schema.application.name,
 					postgresSchema: input.schema.application.postgresSchema,
 					migrationHead: committed.head,
@@ -159,6 +161,7 @@ export async function verifyPostgresDatabaseRuntimeReadiness(
 					transaction,
 					input.schema,
 					input.runtime.definePostgresStatement,
+					input.runtime.definePostgresAdministrativeStatement,
 				);
 				const fingerprintDigest = digest(
 					"questpie-schema-fingerprint-v1",

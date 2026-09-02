@@ -14,6 +14,7 @@ import {
 	type PreparedOperation,
 	type RuntimeOperationContract,
 } from "../operation";
+import type { RuntimeArtifactsV1 } from "./artifacts";
 
 const QUERY_PREFIX = "/_questpie/query/";
 const JSON_MEDIA_TYPE = "application/json; charset=utf-8";
@@ -259,7 +260,9 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 		contextCodec: RuntimeCodec;
 		operations: readonly RuntimeOperationContract[];
 		prepare(identity: string, value: unknown): PreparedOperation<View>;
-		resolvePrincipal(request: Request): Promise<Principal | null>;
+		resolvePrincipal(
+			request: Request,
+		): Principal | null | Promise<Principal | null>;
 		execute(
 			value: Readonly<{
 				principal: Principal;
@@ -401,5 +404,67 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 				return failure("INTERNAL", callId);
 			}
 		},
+	});
+}
+
+type CanonicalQueryRootExecutor<ContextInput, View> = <Result>(
+	root: Readonly<{
+		principal: Principal;
+		context: ContextInput;
+		signal: AbortSignal;
+		deadline?: number;
+		observationEntry: "fetch";
+	}>,
+	use: (
+		scope: Readonly<{
+			invoke(
+				operation: PreparedOperation<View>,
+				callId: string,
+			): Promise<unknown>;
+		}>,
+	) => Result | Promise<Result>,
+) => Promise<Awaited<Result>>;
+
+/** Binds the canonical Query adapter to one verified Runtime artifact/root owner. */
+export function createCanonicalQueryApplicationHttp<ContextInput, View>(
+	input: Readonly<{
+		artifacts: Pick<RuntimeArtifactsV1, "runtimeBuild" | "wireContract">;
+		contextCodec: RuntimeCodec;
+		prepare(identity: string, value: unknown): PreparedOperation<View>;
+		resolvePrincipal(
+			request: Request,
+		): Principal | null | Promise<Principal | null>;
+		executeRoot: CanonicalQueryRootExecutor<ContextInput, View>;
+		now(): number;
+	}>,
+): Readonly<{ fetch(request: Request): Promise<Response | null> }> {
+	return createCanonicalQueryHttp<ContextInput, View>({
+		application: input.artifacts.runtimeBuild.application,
+		clientContractDigest: input.artifacts.runtimeBuild.clientContractDigest,
+		wireDigest: input.artifacts.wireContract.digest,
+		maximumResponseBytes: input.artifacts.wireContract.limits.responseBytes,
+		contextCodec: input.contextCodec,
+		operations: input.artifacts.wireContract.operations,
+		prepare: input.prepare,
+		resolvePrincipal: async (request) => input.resolvePrincipal(request),
+		execute: ({
+			principal: caller,
+			context,
+			operation,
+			callId,
+			signal,
+			deadline,
+		}) =>
+			input.executeRoot(
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+					observationEntry: "fetch",
+				},
+				({ invoke }) => invoke(operation, callId),
+			),
+		now: input.now,
 	});
 }

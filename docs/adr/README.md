@@ -38,10 +38,12 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 30. [Freeze Collection provenance and trusted values](./0030-freeze-collection-provenance-and-trusted-values.md)
 31. [Freeze Collection lifecycle programs and issue mapping](./0031-freeze-collection-lifecycle-programs-and-issue-mapping.md)
 32. [Freeze bounded inverse `toMany` Query projection](./0032-freeze-bounded-inverse-tomany-query-projection.md)
-33. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
-34. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
-35. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
-36. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
+33. [Freeze Runtime observation and the OpenTelemetry projection](./0033-freeze-runtime-observation-and-opentelemetry-projection.md)
+34. [Freeze explicit ingress trace plans and response-absent HTTP terminals](./0034-freeze-explicit-ingress-trace-plans-and-response-absent-http-terminals.md)
+35. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
+36. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
+37. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
+38. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
 
 ## Open decisions
 
@@ -99,6 +101,19 @@ deferral. Existing recursive-`toOne` Template v1 bytes remain readable and
 emitted; one child-owned bounded `collection.list({ first, ... })` inverse
 projection emits Template v2, shares one Policy-aware PostgreSQL statement,
 and returns one exact readonly child array without nested cursor semantics.
+ADR-0033 narrowly supersedes ADR-0014 only for the private Execution Envelope v1
+event schema and fixed digest. It adds Execution Envelope v2's exact safe
+allowlist, one private scoped observation kernel, one optional exact-peer
+official OpenTelemetry adapter, and the non-rolling protocol-v8 durable
+trace-link cutover. Observation remains lossy and non-authoritative; the
+decision adds no authored telemetry capability, public event callback, general
+provider SPI, audit truth, or implementation status.
+ADR-0034 narrowly repairs two incomplete ADR-0033 private-interface clauses.
+Adapter extraction returns the complete continue/restart ingress trace plan,
+and Fetch/Route terminals use an exact numeric-or-null response-status union so
+pre-Response cancellation, deadline, or framework failure never invents an
+HTTP response. No old decoder, second observation kernel, or compatibility path
+is retained.
 ADR-0035 adds `.observe(input)` only to compiler-proven watchable generated
 Queries, keeps canonical Query Resource identity and bounded lifetime inside one
 immutable generated Context scope, and accepts an optional exact-peer React

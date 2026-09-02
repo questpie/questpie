@@ -46,6 +46,7 @@ export const readGenerationBinding: PostgresStatement<
 	StagedBinding | undefined
 > = definePostgresStatement({
 	name: "live-query.realtime-generation-binding-read",
+	operation: "SELECT",
 	text: `SELECT watch.deployment_digest, watch.authority_partition_digest,
        watch.query_identity, watch.input_digest, watch.wire_version,
        watch.invalidation_generation::text,
@@ -123,6 +124,7 @@ export const clearLatestGeneration: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-generation-latest-clear",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_binding_generations SET latest_slot = NULL
 WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3 AND latest_slot = 1`,
 	parameterCount: 3,
@@ -144,6 +146,7 @@ export type GenerationInsert = Readonly<{
 export const insertGeneration: PostgresStatement<GenerationInsert, number> =
 	definePostgresStatement({
 		name: "live-query.realtime-generation-insert",
+		operation: "INSERT",
 		text: `INSERT INTO questpie_internal.realtime_binding_generations
   (application_name, scope_identity, binding_identity, deployment_digest,
    authority_partition_digest, query_identity, input_digest, wire_version,
@@ -173,6 +176,7 @@ VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,1,NULL)`,
 export const upsertObservedPlan: PostgresStatement<GenerationInsert, number> =
 	definePostgresStatement({
 		name: "live-query.realtime-observed-plan-upsert",
+		operation: "INSERT",
 		text: `INSERT INTO questpie_internal.observed_dependency_plans
   (application_name, scope_identity, binding_identity, deployment_digest,
    authority_partition_digest, query_identity, input_digest, wire_version,
@@ -203,6 +207,7 @@ export const markGenerationEvaluated: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-generation-evaluated-update",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_watch_bindings
 SET evaluated_invalidation_generation = $4
 WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3`,
@@ -221,6 +226,7 @@ export const pruneUnreferencedGenerations: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-generations-unreferenced-delete",
+	operation: "DELETE",
 	text: `DELETE FROM questpie_internal.realtime_binding_generations
 WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3
   AND latest_slot IS NULL AND ack_slot IS NULL`,
@@ -240,6 +246,7 @@ export const readAcknowledgementCandidate: PostgresStatement<
 	boolean
 > = definePostgresStatement({
 	name: "live-query.realtime-acknowledgement-candidate-read",
+	operation: "SELECT",
 	text: `SELECT generation.generation::text
 FROM questpie_internal.realtime_scope_attachments scope
 JOIN questpie_internal.realtime_watch_bindings watch USING (application_name, scope_identity)
@@ -284,6 +291,7 @@ export const clearPriorAcknowledgement: PostgresStatement<
 	number
 > = definePostgresStatement({
 	name: "live-query.realtime-acknowledgement-prior-clear",
+	operation: "UPDATE",
 	text: `UPDATE questpie_internal.realtime_binding_generations SET ack_slot = NULL
 WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3 AND ack_slot = 1 AND generation <> $4`,
 	parameterCount: 4,
@@ -299,6 +307,7 @@ WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3 AN
 export const setAcknowledgement: PostgresStatement<BindingGeneration, number> =
 	definePostgresStatement({
 		name: "live-query.realtime-acknowledgement-set",
+		operation: "UPDATE",
 		text: `UPDATE questpie_internal.realtime_binding_generations SET ack_slot = 1
 WHERE application_name = $1 AND scope_identity = $2 AND binding_identity = $3 AND generation = $4`,
 		parameterCount: 4,

@@ -1,5 +1,9 @@
 import type { PostgresTransactionRunner } from "../postgres";
 import type { LinkedJobProjection } from "./job-projection";
+import {
+	assertDurableAttemptPostgresTransactionRunner,
+	type DurableAttemptPostgresTransactionRunner,
+} from "./postgres-attempt-observation";
 import { createPostgresDatabaseDurableClaim } from "./postgres-database-claim";
 import { createPostgresDatabaseDurableHeartbeat } from "./postgres-database-heartbeat";
 import { createPostgresDatabaseDurableInspection } from "./postgres-database-inspection";
@@ -11,6 +15,7 @@ import type { DurableKernel } from "./rows";
 export function createPostgresDatabaseDurableKernel(
 	input: Readonly<{
 		database: PostgresTransactionRunner;
+		attemptDatabase: DurableAttemptPostgresTransactionRunner;
 		application: string;
 		reactions: LinkedReactionProjection;
 		jobs?: LinkedJobProjection;
@@ -18,6 +23,7 @@ export function createPostgresDatabaseDurableKernel(
 		random?: () => number;
 	}>,
 ): DurableKernel {
+	assertDurableAttemptPostgresTransactionRunner(input.attemptDatabase);
 	const maximumBatch = input.claimBatch ?? 64;
 	if (
 		!Number.isSafeInteger(maximumBatch) ||
@@ -46,7 +52,7 @@ export function createPostgresDatabaseDurableKernel(
 		application: input.application,
 	});
 	const terminal = createPostgresDatabaseDurableTerminal({
-		database: input.database,
+		database: input.attemptDatabase,
 		application: input.application,
 		random: input.random ?? Math.random,
 	});
@@ -62,7 +68,7 @@ export function createPostgresDatabaseDurableKernel(
 			jobs: input.jobs,
 		}),
 		heartbeat: createPostgresDatabaseDurableHeartbeat({
-			database: input.database,
+			database: input.attemptDatabase,
 			application: input.application,
 		}),
 		succeed: terminal.succeed,

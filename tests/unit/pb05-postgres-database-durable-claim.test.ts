@@ -70,6 +70,7 @@ function selectedRun(
 	}> = {},
 ) {
 	return {
+		acceptanceTrace: null,
 		runId,
 		dispatchId,
 		resource: input.resource ?? "reaction:messagePublished",
@@ -86,6 +87,7 @@ function selectedRun(
 		correlationId: "correlation:one",
 		cancellationRequested: false,
 		attemptCount: input.attemptCount ?? 0,
+		queueDelayMilliseconds: 125,
 	};
 }
 

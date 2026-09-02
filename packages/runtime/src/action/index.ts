@@ -14,10 +14,13 @@ import {
 } from "../codec";
 import {
 	type ExecutionFacts,
+	executionObservationOf,
 	isRuntimeExecutionFacts,
 	isRuntimeExecutionScope,
+	type RuntimeExecutionObservationBinding,
 	type RuntimeExecutionScope,
 } from "../execution";
+import type { ObservationScope } from "../observation";
 import {
 	assertOperationAdmission,
 	DeclaredOperationError,
@@ -186,7 +189,7 @@ function errorFactories(
 function validateDeclaredError(
 	binding: RuntimeActionBinding<unknown>,
 	error: DeclaredOperationError,
-): void {
+): RuntimeDeclaredErrorContract {
 	const contract = binding.declaredErrors.find(
 		(candidate) =>
 			candidate.code === error.code && candidate.status === error.status,
@@ -196,7 +199,7 @@ function validateDeclaredError(
 		if (contract.payload === null) {
 			if (error.payload !== null) throw new OperationFailure("INTERNAL");
 			enforceResultBytes(binding, null);
-			return;
+			return contract;
 		}
 		const encoded = encodeRuntimeCodec(
 			contract.payload,
@@ -209,6 +212,105 @@ function validateDeclaredError(
 		if (caught instanceof RuntimeCodecError)
 			throw new OperationFailure("INTERNAL");
 		throw caught;
+	}
+	return contract;
+}
+
+function actionObservationFailure(error: unknown, signal: AbortSignal) {
+	const errorCode =
+		error instanceof DeclaredOperationError || error instanceof OperationFailure
+			? { errorCode: error.code }
+			: {};
+	if (error instanceof DeclaredOperationError)
+		return { outcome: "declared_error" as const, ...errorCode };
+	if (
+		(error instanceof OperationFailure && error.code === "DEADLINE_EXCEEDED") ||
+		(signal.aborted &&
+			error === signal.reason &&
+			signal.reason instanceof OperationFailure &&
+			signal.reason.code === "DEADLINE_EXCEEDED")
+	)
+		return { outcome: "deadline" as const, ...errorCode };
+	if (signal.aborted && error === signal.reason)
+		return { outcome: "cancelled" as const, ...errorCode };
+	return { outcome: "framework_error" as const, ...errorCode };
+}
+
+async function runObservedAction<Result>(
+	input: Readonly<{
+		facts: ActionExecutionFacts;
+		identity: `action:${string}`;
+		observation: RuntimeExecutionObservationBinding | null;
+		use(): Promise<Result>;
+	}>,
+): Promise<Result> {
+	const scope = input.observation?.execution.begin({
+		entry: input.observation.entry,
+		kind: "action",
+		principalKind: input.facts.principal.kind,
+		resourceIdentity: input.identity,
+		trace: { kind: "active-parent" },
+	});
+	if (!scope) return input.use();
+	try {
+		const result = await scope.run(input.use);
+		scope.end({ kind: "action", outcome: "ok" });
+		return result;
+	} catch (error) {
+		scope.end({
+			kind: "action",
+			...actionObservationFailure(error, input.facts.signal),
+		});
+		throw error;
+	}
+}
+
+async function runObservedActionEffect<Result>(
+	input: Readonly<{
+		binding: RuntimeActionBinding<unknown>;
+		effectId: string;
+		facts: ActionExecutionFacts;
+		observation: RuntimeExecutionObservationBinding | null;
+		use(): Promise<Result>;
+	}>,
+): Promise<Result> {
+	const scope: ObservationScope | undefined =
+		input.observation?.execution.begin({
+			effectId: input.effectId,
+			kind: "action.effect",
+			principalKind: input.facts.principal.kind,
+			resourceIdentity: input.binding.identity,
+			trace: { kind: "active-parent" },
+		});
+	if (!scope) return input.use();
+	try {
+		const result = await scope.run(input.use);
+		scope.end({ kind: "action.effect", outcome: "ok" });
+		return result;
+	} catch (error) {
+		const declared =
+			error instanceof DeclaredOperationError
+				? input.binding.declaredErrors.find(
+						(contract) =>
+							contract.code === error.code && contract.status === error.status,
+					)
+				: undefined;
+		if (
+			error instanceof DeclaredOperationError &&
+			declared?.key === "outcomeUnknown"
+		) {
+			scope.event({ kind: "action.ambiguous", effectId: input.effectId });
+			scope.end({
+				errorCode: error.code,
+				kind: "action.effect",
+				outcome: "ambiguous",
+			});
+		} else
+			scope.end({
+				kind: "action.effect",
+				...actionObservationFailure(error, input.facts.signal),
+			});
+		throw error;
 	}
 }
 
@@ -280,152 +382,170 @@ export function createRuntimeActionExecutor<Context>(
 				!principal.is(facts.principal)
 			)
 				throw new OperationFailure("INTERNAL");
-			let startedAt = 0;
-			let clockFailure: OperationFailure | undefined;
-			try {
-				startedAt = actionMonotonicNow(clock);
-			} catch (error) {
-				clockFailure =
-					error instanceof OperationFailure
-						? error
-						: new OperationFailure("INTERNAL");
-			}
-			assertOperationAdmission(binding.admission, facts);
-			const invocationKeys = Object.keys(invocation).sort();
-			if (
-				invocationKeys.length < 3 ||
-				invocationKeys.length > 5 ||
-				!invocationKeys.includes("effectKey") ||
-				!invocationKeys.includes("input") ||
-				!invocationKeys.includes("scope") ||
-				invocationKeys.some(
-					(key) =>
-						!(
-							[
-								"callId",
-								"effectKey",
-								"input",
-								"scope",
-								"timeoutMilliseconds",
-							] as const
-						).includes(key as never),
-				) ||
-				(invocation.callId !== undefined &&
-					!isOperationCallId(invocation.callId)) ||
-				(invocation.timeoutMilliseconds !== undefined &&
-					(!Number.isSafeInteger(invocation.timeoutMilliseconds) ||
-						invocation.timeoutMilliseconds <= 0))
-			)
-				throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-			if (clockFailure) throw clockFailure;
-			const control = createActionControl(
+			const observation = executionObservationOf(executionScope);
+			return runObservedAction({
 				facts,
-				Math.min(
-					binding.limits.durationMilliseconds,
-					invocation.timeoutMilliseconds ?? Number.MAX_SAFE_INTEGER,
-				),
-				startedAt,
-				clock,
-			);
-			try {
-				control.throwIfExpired();
-				let effectIdentity: string;
-				try {
-					effectIdentity = deriveOrdinaryEffectIdentity(
-						application,
-						binding.identity,
+				identity: binding.identity,
+				observation,
+				use: async () => {
+					let startedAt = 0;
+					let clockFailure: OperationFailure | undefined;
+					try {
+						startedAt = actionMonotonicNow(clock);
+					} catch (error) {
+						clockFailure =
+							error instanceof OperationFailure
+								? error
+								: new OperationFailure("INTERNAL");
+					}
+					assertOperationAdmission(binding.admission, facts);
+					const invocationKeys = Object.keys(invocation).sort();
+					if (
+						invocationKeys.length < 3 ||
+						invocationKeys.length > 5 ||
+						!invocationKeys.includes("effectKey") ||
+						!invocationKeys.includes("input") ||
+						!invocationKeys.includes("scope") ||
+						invocationKeys.some(
+							(key) =>
+								!(
+									[
+										"callId",
+										"effectKey",
+										"input",
+										"scope",
+										"timeoutMilliseconds",
+									] as const
+								).includes(key as never),
+						) ||
+						(invocation.callId !== undefined &&
+							!isOperationCallId(invocation.callId)) ||
+						(invocation.timeoutMilliseconds !== undefined &&
+							(!Number.isSafeInteger(invocation.timeoutMilliseconds) ||
+								invocation.timeoutMilliseconds <= 0))
+					)
+						throw new OperationFailure("PROTOCOL_UNSUPPORTED");
+					if (clockFailure) throw clockFailure;
+					const control = createActionControl(
 						facts,
-						invocation.effectKey,
+						Math.min(
+							binding.limits.durationMilliseconds,
+							invocation.timeoutMilliseconds ?? Number.MAX_SAFE_INTEGER,
+						),
+						startedAt,
+						clock,
 					);
-				} catch (error) {
-					if (error instanceof OperationFailure) throw error;
-					throw new OperationFailure("INTERNAL");
-				}
-				const decodedInput = decodeInput(binding.input, invocation.input);
-				const encodedInput = encodedValue(
-					binding.input,
-					decodedInput,
-					"$action.input",
-					"PROTOCOL_UNSUPPORTED",
-				);
-				enforceInputBytes(binding, encodedInput);
-				control.throwIfExpired();
-				const actionFacts = Object.freeze({
-					...facts,
-					signal: control.signal,
-					deadline: facts.deadline,
-				}) as ActionExecutionFacts;
-				const execute = async (
-					child: Readonly<{
-						signal: AbortSignal;
-						executionService<Definition extends ExternalEffectService>(
-							definition: Definition,
-						): Promise<ServiceInstance<Definition>>;
-					}>,
-				): Promise<unknown> => {
-					let context: Context;
 					try {
-						context = await input.project(
-							Object.freeze({
-								...actionFacts,
-								facts: actionFacts,
-								service: <Definition extends ExternalEffectService>(
-									definition: Definition,
-								) => {
-									if (
-										definition.effect !== "external" ||
-										definition.lifetime !== "execution"
-									)
-										return Promise.reject(new OperationFailure("INTERNAL"));
-									return child.executionService(definition);
-								},
-							}),
-						);
-					} catch (error) {
-						if (control.signal.aborted && error === control.signal.reason)
-							throw error;
-						throw new OperationFailure("INTERNAL");
-					}
-					control.throwIfExpired();
-					let raw: unknown;
-					try {
-						raw = await binding.execute({
-							input: decodedInput,
-							ctx: context,
-							effect: Object.freeze({ id: effectIdentity }),
-							errors: errorFactories(binding.declaredErrors),
-						});
-					} catch (error) {
-						if (error instanceof DeclaredOperationError) {
-							validateDeclaredError(binding, error);
-							throw error;
+						control.throwIfExpired();
+						let effectIdentity: string;
+						try {
+							effectIdentity = deriveOrdinaryEffectIdentity(
+								application,
+								binding.identity,
+								facts,
+								invocation.effectKey,
+							);
+						} catch (error) {
+							if (error instanceof OperationFailure) throw error;
+							throw new OperationFailure("INTERNAL");
 						}
-						if (control.signal.aborted && error === control.signal.reason)
-							throw error;
-						throw new OperationFailure("INTERNAL");
-					}
-					const result = decodeOutput(binding.output, raw);
-					const encoded = encodedValue(
-						binding.output,
-						result,
-						"$action.output",
-						"INTERNAL",
-					);
-					enforceResultBytes(binding, encoded);
-					return result;
-				};
+						const decodedInput = decodeInput(binding.input, invocation.input);
+						const encodedInput = encodedValue(
+							binding.input,
+							decodedInput,
+							"$action.input",
+							"PROTOCOL_UNSUPPORTED",
+						);
+						enforceInputBytes(binding, encodedInput);
+						control.throwIfExpired();
+						const actionFacts = Object.freeze({
+							...facts,
+							signal: control.signal,
+							deadline: facts.deadline,
+						}) as ActionExecutionFacts;
+						const execute = async (
+							child: Readonly<{
+								signal: AbortSignal;
+								executionService<Definition extends ExternalEffectService>(
+									definition: Definition,
+								): Promise<ServiceInstance<Definition>>;
+							}>,
+						): Promise<unknown> => {
+							let context: Context;
+							try {
+								context = await input.project(
+									Object.freeze({
+										...actionFacts,
+										facts: actionFacts,
+										service: <Definition extends ExternalEffectService>(
+											definition: Definition,
+										) => {
+											if (
+												definition.effect !== "external" ||
+												definition.lifetime !== "execution"
+											)
+												return Promise.reject(new OperationFailure("INTERNAL"));
+											return child.executionService(definition);
+										},
+									}),
+								);
+							} catch (error) {
+								if (control.signal.aborted && error === control.signal.reason)
+									throw error;
+								throw new OperationFailure("INTERNAL");
+							}
+							control.throwIfExpired();
+							const raw = await runObservedActionEffect({
+								binding: binding as RuntimeActionBinding<unknown>,
+								effectId: effectIdentity,
+								facts: actionFacts,
+								observation,
+								use: async () => {
+									try {
+										return await binding.execute({
+											input: decodedInput,
+											ctx: context,
+											effect: Object.freeze({ id: effectIdentity }),
+											errors: errorFactories(binding.declaredErrors),
+										});
+									} catch (error) {
+										if (error instanceof DeclaredOperationError) {
+											validateDeclaredError(binding, error);
+											throw error;
+										}
+										if (
+											control.signal.aborted &&
+											error === control.signal.reason
+										)
+											throw error;
+										throw new OperationFailure("INTERNAL");
+									}
+								},
+							});
+							const result = decodeOutput(binding.output, raw);
+							const encoded = encodedValue(
+								binding.output,
+								result,
+								"$action.output",
+								"INTERNAL",
+							);
+							enforceResultBytes(binding, encoded);
+							return result;
+						};
 
-				return await executionScope.child(
-					{
-						detachedTerminalCleanup: true,
-						signal: control.signal,
-						settledUseWinsAbort: true,
-					},
-					execute,
-				);
-			} finally {
-				control.close();
-			}
+						return await executionScope.child(
+							{
+								detachedTerminalCleanup: true,
+								signal: control.signal,
+								settledUseWinsAbort: true,
+							},
+							execute,
+						);
+					} finally {
+						control.close();
+					}
+				},
+			});
 		},
 	});
 }

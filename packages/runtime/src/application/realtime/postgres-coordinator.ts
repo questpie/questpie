@@ -184,7 +184,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 					});
 					let evaluated;
 					try {
-						evaluated = await prepared.evaluate();
+						evaluated = await prepared.evaluate("watch_initial");
 					} catch (error) {
 						if (error instanceof LiveQueryEvaluationFailure) {
 							signal.throwIfAborted();
@@ -275,7 +275,9 @@ export function createPostgresDurableLiveQueryCoordinator(
 			}
 			let evaluated;
 			try {
-				evaluated = await prepared.evaluate();
+				evaluated = await prepared.evaluate(
+					watch.latest === null ? "watch_initial" : "watch_recompute",
+				);
 			} catch (error) {
 				if (error instanceof LiveQueryEvaluationFailure) {
 					signal.throwIfAborted();
@@ -349,7 +351,7 @@ export function createPostgresDurableLiveQueryCoordinator(
 		// deny before anything is framed, exactly as the resume path does.
 		let evaluated;
 		try {
-			evaluated = await prepared.evaluate();
+			evaluated = await prepared.evaluate("watch_recompute");
 		} catch (error) {
 			if (error instanceof LiveQueryEvaluationFailure) {
 				signal.throwIfAborted();

@@ -34,6 +34,7 @@ import {
 	projectMutations,
 	projectPostgresMutationTransactionStatements,
 } from "./mutation";
+import { projectObservationSignalProjection } from "./observation";
 import {
 	lowerPostgresQueryPlans,
 	projectPostgresContextBootstrapPlans,
@@ -444,6 +445,8 @@ export async function createArtifacts(
 		input.resources,
 		compiledLifecycle.issueRequirements,
 	);
+	const observationSignalProjection =
+		projectObservationSignalProjection("4.0.0-beta.1");
 	const generated: Record<string, string> = {
 		...liveQuery.bytes,
 		"app.ts": renderAppContract(
@@ -484,6 +487,7 @@ export async function createArtifacts(
 		"operation-contracts.json": runtimeArtifactBytes(
 			runtime.operationContracts,
 		),
+		"opentelemetry-signal-projection.json": observationSignalProjection.bytes,
 		"runtime-executables.json": runtimeArtifactBytes(runtime.executables),
 		"realtime-wire-contract.json": runtimeArtifactBytes(realtime),
 		"wire-contract.json": runtimeArtifactBytes(runtime.wire),
@@ -631,6 +635,7 @@ export async function createArtifacts(
 				mutationTransactionStatements.digest,
 			postgresCollectionOperationPlansDigest:
 				postgresCollectionOperationPlans.digest,
+			observationSignalProjectionDigest: observationSignalProjection.digest,
 		}),
 	);
 	generated["internal/checksums.json"] = canonicalBytes({

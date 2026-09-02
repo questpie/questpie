@@ -45,6 +45,15 @@ describe("BETA-01 generated contract", () => {
 		});
 
 		expect(relocated.generatedFiles).toEqual(first.generatedFiles);
+		expect(first.generatedFiles["app.ts"]).toContain("QuestpieObservability");
+		expect(first.generatedFiles["app.ts"]).toContain(
+			"observability?: QuestpieObservability",
+		);
+		expect(first.generatedFiles["app.ts"]).not.toContain(
+			"@questpie/opentelemetry",
+		);
+		expect(first.generatedFiles["client.ts"]).not.toContain("observability");
+		expect(first.generatedFiles["client.ts"]).not.toContain("traceparent");
 		const workspaceGraph = await Promise.all(
 			[
 				"packages/questpie",
@@ -88,10 +97,10 @@ describe("BETA-01 generated contract", () => {
 			"durable-kernel.json",
 			"execution-composition-explain.json",
 			"field-normalizer-programs.json",
-			"internal/application-9842advz.js",
-			"internal/application-br7x7drg.js",
-			"internal/application-mcjqnqbb.js",
-			"internal/application-qga406mn.js",
+			"internal/application-3tatyqev.js",
+			"internal/application-h8k688m6.js",
+			"internal/application-h8vfb7x1.js",
+			"internal/application-s4ahpvbd.js",
 			"internal/application.d.ts",
 			"internal/application.js",
 			"internal/checksums.json",
@@ -104,6 +113,7 @@ describe("BETA-01 generated contract", () => {
 			"manifest.json",
 			"mutation-projection.json",
 			"mutation-transaction-plans.json",
+			"opentelemetry-signal-projection.json",
 			"operation-contracts.json",
 			"origin-map.json",
 			"policy-projection.json",

@@ -59,6 +59,7 @@ function distribution(values: readonly number[]) {
 
 const markerStart = definePostgresStatement({
 	name: "pb05.measurement.marker.start",
+	operation: "SELECT",
 	text: "SELECT 1",
 	parameterCount: 0,
 	parameters: () => [],
@@ -66,6 +67,7 @@ const markerStart = definePostgresStatement({
 });
 const markerFinish = definePostgresStatement({
 	name: "pb05.measurement.marker.finish",
+	operation: "SELECT",
 	text: "SELECT 1",
 	parameterCount: 0,
 	parameters: () => [],
@@ -73,6 +75,7 @@ const markerFinish = definePostgresStatement({
 });
 const maintenanceLock = definePostgresStatement({
 	name: "durable.maintenance.run.read-locked",
+	operation: "SELECT",
 	text: `/* pb05-wait-maintenance */
 SELECT run_id
 FROM questpie_internal.durable_runs
@@ -87,6 +90,7 @@ FOR UPDATE`,
 });
 const reconciliationLock = definePostgresStatement({
 	name: "live-query.reconciliation-horizon-read",
+	operation: "SELECT",
 	text: `/* pb05-wait-reconciliation */
 SELECT xid_horizon
 FROM questpie_internal.reconciliation_consumers
@@ -101,6 +105,7 @@ FOR UPDATE`,
 });
 const retentionLock = definePostgresStatement({
 	name: "live-query.retention-authority-lock",
+	operation: "SELECT",
 	text: `/* pb05-wait-retention */
 SELECT pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended($1, 0))`,
 	parameterCount: 1,

@@ -10,6 +10,7 @@ import type {
 
 import type { RouteExecutionScope, RuntimeProgram } from "../execution";
 import type { MutationInvoker } from "../mutation";
+import type { RuntimeExecutionObservation } from "../observation";
 import type { RuntimeArtifactsV1 } from "./artifacts";
 import type {
 	LiveQueryCoordinator,
@@ -17,7 +18,19 @@ import type {
 } from "./realtime";
 import type { RuntimeRealtimeFactory } from "./runtime-realtime";
 
-type MaybePromise<Value> = Value | Promise<Value>;
+export type MaybePromise<Value> = Value | Promise<Value>;
+
+export interface RuntimeOperations {
+	invoke(
+		operation: string,
+		input: unknown,
+		options?: Readonly<{
+			callId?: string;
+			signal?: AbortSignal;
+			deadline?: number;
+		}>,
+	): Promise<unknown>;
+}
 
 export interface RuntimeApplicationProgram<
 	Context extends ContextDefinition,
@@ -52,18 +65,6 @@ export interface RuntimeApplicationProgram<
 	readonly createRealtime?: RuntimeRealtimeFactory<ContextInputOf<Context>>;
 }
 
-export interface RuntimeOperations {
-	invoke(
-		operation: string,
-		input: unknown,
-		options?: Readonly<{
-			callId?: string;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-	): Promise<unknown>;
-}
-
 export interface RuntimeApplication<Input, ExecutionView> {
 	applicationService<
 		Definition extends ServiceDefinition<
@@ -77,21 +78,20 @@ export interface RuntimeApplication<Input, ExecutionView> {
 		definition: Definition,
 	): Promise<ServiceInstance<Definition>>;
 	execution<Result>(
-		input: Readonly<{
-			principal: Principal;
-			context: Input;
-			signal?: AbortSignal;
-			deadline?: number;
-		}>,
-		use: (
-			scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
-		) => MaybePromise<Result>,
+		input: ExecutionInput<Input>,
+		use: ExecutionUse<ExecutionView, Result>,
+	): Promise<Awaited<Result>>;
+	workerExecution<Result>(
+		input: ExecutionInput<Input>,
+		around: WorkerExecutionAround<Result>,
+		use: ExecutionUse<ExecutionView, Result>,
 	): Promise<Awaited<Result>>;
 	route<Result>(
 		input: Readonly<{
 			principal: Principal;
 			signal?: AbortSignal;
 			deadline?: number;
+			entry?: "direct" | "fetch";
 		}>,
 		use: (
 			scope: RouteExecutionScope<
@@ -100,6 +100,39 @@ export interface RuntimeApplication<Input, ExecutionView> {
 			>,
 		) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
+	observeRoute(
+		request: Request,
+		routeTemplate: string,
+		use: () => Promise<
+			Readonly<{
+				outcome: "ok" | "framework_error" | "deadline";
+				response: Response;
+				signal: AbortSignal;
+				finalize(): void;
+				retainControl: boolean;
+			}>
+		>,
+	): Promise<Response>;
+	observeUnmatchedFetch(
+		request: Request,
+		use: () => Promise<Response>,
+	): Promise<Response>;
 	fetch(request: Request): Promise<Response>;
 	close(input: Readonly<{ deadlineAt: number }>): Promise<void>;
 }
+
+export type ExecutionInput<Input> = Readonly<{
+	principal: Principal;
+	context: Input;
+	signal?: AbortSignal;
+	deadline?: number;
+}>;
+
+export type ExecutionUse<ExecutionView, Result> = (
+	scope: RuntimeOperations & Readonly<{ execution: ExecutionView }>,
+) => MaybePromise<Result>;
+
+export type WorkerExecutionAround<Result> = (
+	observation: RuntimeExecutionObservation | null,
+	use: () => Promise<Result>,
+) => MaybePromise<Result>;

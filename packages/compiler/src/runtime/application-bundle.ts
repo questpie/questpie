@@ -31,7 +31,7 @@ export async function bundleApplicationEntry(
 		minify: { syntax: true, whitespace: true },
 		sourcemap: "none",
 		packages: "bundle",
-		external: ["questpie"],
+		external: ["questpie", "questpie/internal/observability"],
 		plugins: [
 			{
 				name: "questpie-application-bundle",

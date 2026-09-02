@@ -31,6 +31,22 @@ function run(command: string[], cwd?: string): void {
 	}
 }
 
+function runWithEnvironment(
+	command: string[],
+	environment: Readonly<Record<string, string>>,
+): void {
+	console.log(`> ${command.join(" ")}`);
+	const result = Bun.spawnSync(command, {
+		env: { ...process.env, ...environment },
+		stdin: "inherit",
+		stdout: "inherit",
+		stderr: "inherit",
+	});
+	if (result.exitCode !== 0) {
+		fail(`${command.join(" ")} exited ${result.exitCode}`);
+	}
+}
+
 function output(command: string[]): string {
 	const result = Bun.spawnSync(command, { stdout: "pipe", stderr: "pipe" });
 	if (result.exitCode !== 0)
@@ -215,6 +231,18 @@ else if (lane === "release") {
 	full();
 	run(["bun", "run", "knip:strict"]);
 	run(["bun", "run", "package:check"]);
+	runWithEnvironment(
+		[
+			"bun",
+			"test",
+			"tests/integration/otel05-packed-package-isolation.test.ts",
+		],
+		{ QUESTPIE_OTEL05_PACKAGE_ISOLATION: "1" },
+	);
+	runWithEnvironment(
+		["bun", "test", "tests/integration/otel06-packed-cli-telemetry.test.ts"],
+		{ QUESTPIE_OTEL06_CLI_TRACER: "1" },
+	);
 	run(["bun", "run", "scripts/performance.ts", "check"]);
 } else if (lane === "typescript-forward") {
 	compiler(

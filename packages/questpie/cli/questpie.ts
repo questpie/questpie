@@ -10,6 +10,12 @@ import {
 	loadGeneratedSchemaProjection,
 	requestedPort,
 } from "./artifacts";
+import {
+	createStartShutdown,
+	createTelemetryApplication,
+	loadOpenTelemetry,
+	requestedTelemetry,
+} from "./telemetry";
 
 type Compiler = Readonly<{
 	compileApplication(
@@ -19,14 +25,13 @@ type Compiler = Readonly<{
 	loadCommittedSeed(path: string): Promise<unknown>;
 	applyCommittedMigrations(
 		input: Readonly<{
-			allowNonRollingProtocolV7?: boolean;
+			allowNonRollingProtocolV8?: boolean;
 			connectionString?: string;
 			migrations: readonly unknown[];
 		}>,
 	): Promise<Readonly<{ status: string }>>;
 	applyCommittedSeeds(
 		input: Readonly<{
-			allowNonRollingProtocolV7?: boolean;
 			connectionString?: string;
 			schema: unknown;
 			seeds: readonly unknown[];
@@ -45,7 +50,11 @@ type GeneratedInternal = Readonly<{
 	bindIngressPrincipalForRequest(request: Request, principal: unknown): Request;
 	createApplication(
 		input: Readonly<{
-			postgres: Readonly<{ url: string }>;
+			observability?: unknown;
+			postgres: Readonly<{
+				connectionUrl: string;
+				directConnectionUrl: string;
+			}>;
 			realtime: Readonly<{ hmacKey: Uint8Array }>;
 			maintenance: Readonly<{ authorize(): boolean }>;
 		}>,
@@ -111,8 +120,8 @@ async function main(): Promise<void> {
 		);
 		if (migrations.length === 0) fail("no committed migrations found");
 		const result = await api.applyCommittedMigrations({
-			allowNonRollingProtocolV7: cliArguments.includes(
-				"--allow-non-rolling-protocol-v7",
+			allowNonRollingProtocolV8: cliArguments.includes(
+				"--allow-non-rolling-protocol-v8",
 			),
 			connectionString: databaseUrl(),
 			migrations,
@@ -135,9 +144,6 @@ async function main(): Promise<void> {
 		);
 		if (seeds.length === 0) fail("no committed Seeds found");
 		const result = await api.applyCommittedSeeds({
-			allowNonRollingProtocolV7: cliArguments.includes(
-				"--allow-non-rolling-protocol-v7",
-			),
 			connectionString: databaseUrl(),
 			schema: await loadGeneratedSchemaProjection(root),
 			seeds,
@@ -148,6 +154,7 @@ async function main(): Promise<void> {
 		return;
 	}
 	if (command === "start") {
+		const telemetryKind = requestedTelemetry(cliArguments.slice(1));
 		const internal = (await import(
 			`${pathToFileURL(resolve(root, ".questpie/generated/internal/application.js")).href}?start=${crypto.randomUUID()}`
 		)) as GeneratedInternal;
@@ -155,28 +162,61 @@ async function main(): Promise<void> {
 			new URL("./index.js", import.meta.url).href
 		)) as Framework;
 		const postgresUrl = databaseUrl();
-		const application = await internal.createApplication({
-			postgres: {
-				connectionUrl: postgresUrl,
-				directConnectionUrl: postgresUrl,
-			},
-			realtime: { hmacKey: realtimeKey() },
-			maintenance: { authorize: () => false },
-		});
-		const server = Bun.serve({
-			port: requestedPort(cliArguments.slice(1), process.env.PORT),
-			fetch: (request) =>
-				application.fetch(
-					internal.bindIngressPrincipalForRequest(
-						request,
-						framework.principal.anonymous(),
+		const hmacKey = realtimeKey();
+		const port = requestedPort(cliArguments.slice(1), process.env.PORT);
+		const telemetry =
+			telemetryKind === null ? null : await loadOpenTelemetry(root);
+		const createApplication = (observability?: unknown) =>
+			internal.createApplication({
+				...(observability === undefined ? {} : { observability }),
+				postgres: {
+					connectionUrl: postgresUrl,
+					directConnectionUrl: postgresUrl,
+				},
+				realtime: { hmacKey },
+				maintenance: { authorize: () => false },
+			});
+		const application =
+			telemetry === null
+				? await createApplication()
+				: await createTelemetryApplication(telemetry, createApplication);
+		let server: ReturnType<typeof Bun.serve>;
+		try {
+			server = Bun.serve({
+				port,
+				fetch: (request) =>
+					application.fetch(
+						internal.bindIngressPrincipalForRequest(
+							request,
+							framework.principal.anonymous(),
+						),
 					),
-				),
+			});
+		} catch (error) {
+			try {
+				await createStartShutdown({
+					application,
+					stopIngress: () => undefined,
+					telemetry,
+				})();
+			} catch {
+				// Server creation remains the primary startup failure.
+			}
+			throw error;
+		}
+		const shutdown = createStartShutdown({
+			application,
+			stopIngress: () => server.stop(false),
+			telemetry,
 		});
-		const close = async () => {
-			server.stop(false);
-			await application.close();
-			process.exit(0);
+		const close = () => {
+			void shutdown().then(
+				() => process.exit(0),
+				() => {
+					console.error("questpie: shutdown failed");
+					process.exit(1);
+				},
+			);
 		};
 		process.once("SIGINT", close);
 		process.once("SIGTERM", close);

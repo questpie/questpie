@@ -274,6 +274,7 @@ test("measurement refuses missing inventory and malformed clocks", () => {
 test("transaction runner instrument records exact statements and preserves failures", async () => {
 	const statement = definePostgresStatement({
 		name: "query.representative",
+		operation: "SELECT",
 		text: "select 1",
 		parameterCount: 0,
 		parameters: () => [],
@@ -281,6 +282,7 @@ test("transaction runner instrument records exact statements and preserves failu
 	});
 	const failureStatement = definePostgresStatement({
 		name: "query.failure",
+		operation: "SELECT",
 		text: "select 2",
 		parameterCount: 0,
 		parameters: () => [],
@@ -359,6 +361,7 @@ test("transaction instrumentation rejects invalid config before database admissi
 test("transaction instrumentation refuses an invalid start clock before SQL", async () => {
 	const statement = definePostgresStatement({
 		name: "query.clock",
+		operation: "SELECT",
 		text: "select 1",
 		parameterCount: 0,
 		parameters: () => [],
@@ -402,6 +405,7 @@ test("transaction instrumentation refuses an invalid start clock before SQL", as
 test("observer and finish-clock failures cannot replace a database failure", async () => {
 	const statement = definePostgresStatement({
 		name: "query.primary-failure",
+		operation: "SELECT",
 		text: "select 1",
 		parameterCount: 0,
 		parameters: () => [],
@@ -446,6 +450,7 @@ test("observer and finish-clock failures cannot replace a database failure", asy
 test("observer failure after successful SQL remains visible", async () => {
 	const statement = definePostgresStatement({
 		name: "query.observer-failure",
+		operation: "SELECT",
 		text: "select 1",
 		parameterCount: 0,
 		parameters: () => [],
@@ -478,6 +483,7 @@ test("observer failure after successful SQL remains visible", async () => {
 test("shared transaction observer keeps reconciliation and apply attribution distinct", async () => {
 	const reconciliation = definePostgresStatement({
 		name: "live-query.reconciliation",
+		operation: "SELECT",
 		text: "select 1",
 		parameterCount: 0,
 		parameters: () => [],
@@ -485,6 +491,7 @@ test("shared transaction observer keeps reconciliation and apply attribution dis
 	});
 	const apply = definePostgresStatement({
 		name: "live-query.apply",
+		operation: "SELECT",
 		text: "select 2",
 		parameterCount: 0,
 		parameters: () => [],

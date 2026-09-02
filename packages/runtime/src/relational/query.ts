@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import type { RuntimeExecutionObservation } from "../observation";
 import { assertOperationAdmission } from "../operation";
 import type { PostgresParameter, PostgresTransactionRunner } from "../postgres";
 import type { PostgresTransaction } from "../postgres";
@@ -553,6 +554,7 @@ export function executePostgresDatabaseQuery(
 		Readonly<{
 			linkedPlan: LinkedPostgresQueryPlan;
 			database: PostgresTransactionRunner;
+			observation: RuntimeExecutionObservation | null;
 		}>,
 ): Promise<DataQueryPage> {
 	return executePostgresQueryWithRows({
@@ -564,6 +566,12 @@ export function executePostgresDatabaseQuery(
 				input.linkedPlan,
 				parameters,
 				signal,
+				input.observation === null
+					? null
+					: {
+							execution: input.observation,
+							principalKind: input.executionFacts.principal.kind,
+						},
 			),
 	});
 }

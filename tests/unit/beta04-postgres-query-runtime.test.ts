@@ -1,17 +1,32 @@
 import { expect, test } from "bun:test";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
 	DataQueryExecutionError,
-	executePostgresDatabaseQuery,
+	executePostgresDatabaseQuery as executeRuntimePostgresDatabaseQuery,
 	type PostgresQueryPlanV1,
 } from "../../packages/runtime/src";
+import {
+	runObservedDurableAttempt,
+	type DurableWorkerOutcome,
+} from "../../packages/runtime/src/durable";
 import {
 	createLiveQueryObservation,
 	type LinkedQueryWatchabilityV1,
 	type LinkedStructuralQueryObservationSlotV1,
 } from "../../packages/runtime/src/live-query";
-import type { PostgresTransactionRunner } from "../../packages/runtime/src/postgres";
 import {
+	createObservationKernel,
+	type ExecutionEventV2,
+	type ObservationAdapterV1,
+} from "../../packages/runtime/src/observation";
+import {
+	QuestpiePostgresError,
+	transactionBrand,
+	type PostgresTransactionRunner,
+} from "../../packages/runtime/src/postgres";
+import {
+	executeLinkedPostgresQueryPlan,
 	linkPostgresQueryPlan,
 	linkPostgresQueryPlans,
 } from "../../packages/runtime/src/relational";
@@ -28,6 +43,47 @@ const createdAt3 = "2026-08-15T10:00:00.000Z";
 const id1 = "00000000-0000-0000-0000-000000000001";
 const id2 = "00000000-0000-0000-0000-000000000002";
 const id3 = "00000000-0000-0000-0000-000000000003";
+
+type DatabaseQueryInput = Parameters<
+	typeof executeRuntimePostgresDatabaseQuery
+>[0];
+
+function executePostgresDatabaseQuery(
+	input: Omit<DatabaseQueryInput, "observation"> &
+		Partial<Pick<DatabaseQueryInput, "observation">>,
+) {
+	return executeRuntimePostgresDatabaseQuery({
+		...input,
+		observation: input.observation ?? null,
+	});
+}
+
+function parentRecordingAdapter(
+	parents: Array<
+		Readonly<{ kind: string; parent: string | null; trace: string }>
+	>,
+): ObservationAdapterV1 {
+	const active = new AsyncLocalStorage<string>();
+	return Object.freeze({
+		format: "questpie.runtime-observability" as const,
+		version: 1 as const,
+		extract: () => null,
+		begin(input) {
+			parents.push({
+				kind: input.kind,
+				parent: active.getStore() ?? null,
+				trace: input.trace.kind,
+			});
+			return Object.freeze({
+				context: null,
+				run: async <Result>(use: () => Result | Promise<Result>) =>
+					await active.run(input.kind, use),
+				event: () => undefined,
+				end: () => undefined,
+			});
+		},
+	});
+}
 
 const plan = {
 	format: "questpie.postgres-query-plan",
@@ -441,15 +497,58 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		population: "query",
 		operation: "firstPage",
 	});
-
-	const page = await executePostgresDatabaseQuery({
-		linkedPlan,
-		binding,
-		executionFacts,
-		database,
+	const events: ExecutionEventV2[] = [];
+	const observation = createObservationKernel({
+		applicationIdentity: "application:query-test",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "f".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "direct",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (!execution) throw new Error("expected Query observation Execution");
+	const query = execution.observation.begin({
+		entry: "direct",
+		kind: "query",
+		principalKind: "user",
+		resourceIdentity: "query:messages.page",
+		trace: { kind: "active-parent" },
 	});
 
+	const page = await execution.scope.run(() =>
+		query.run(() =>
+			executePostgresDatabaseQuery({
+				linkedPlan,
+				binding,
+				executionFacts,
+				database,
+				observation: execution.observation,
+			}),
+		),
+	);
+
 	expect(transactions).toBe(1);
+	expect(
+		events
+			.filter((event) => event.scopeKind === "postgresql")
+			.map((event) =>
+				event.kind === "scope.started"
+					? [
+							event.kind,
+							event.start.kind === "postgresql"
+								? event.start.statementIdentity
+								: null,
+						]
+					: [event.kind, event.end.outcome],
+			),
+	).toEqual([
+		["scope.started", `query.${templateDigest}`],
+		["scope.ended", "ok"],
+	]);
 	expect(modes).toEqual([{ isolation: "repeatableRead", access: "readOnly" }]);
 	expect(statements).toEqual([
 		{
@@ -485,6 +584,301 @@ test("links one static Query statement and executes it through the PostgreSQL tr
 		distinctStatements: ["query." + templateDigest],
 		transactions: 1,
 	});
+});
+
+test("keeps every root Query entry's compiled SELECT under its active Query scope", async () => {
+	const entries = [
+		"direct",
+		"fetch",
+		"watch_initial",
+		"watch_recompute",
+	] as const;
+	const parents: Array<
+		Readonly<{ kind: string; parent: string | null; trace: string }>
+	> = [];
+	const events: ExecutionEventV2[] = [];
+	const observation = createObservationKernel({
+		adapter: parentRecordingAdapter(parents),
+		applicationIdentity: "application:query-entry-test",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "f".repeat(64),
+	});
+	const database = fakeDatabase({
+		rows: rows().map((row) => [
+			row.qp_f0,
+			row.qp_f1,
+			row.qp_g1,
+			row.qp_f2,
+			row.qp_r3_present,
+			row.qp_r3_f0,
+		]),
+	});
+	const linkedPlan = linkPostgresQueryPlan(databasePlan);
+
+	for (const entry of entries) {
+		const execution = observation.beginExecution({
+			entry,
+			kind: "execution",
+			principalKind: "user",
+			trace: { kind: "root" },
+		});
+		if (!execution) throw new Error("expected Query observation Execution");
+		const query = execution.observation.begin({
+			entry,
+			kind: "query",
+			principalKind: "user",
+			resourceIdentity: "query:messages.page",
+			trace: { kind: "active-parent" },
+		});
+
+		const page = await execution.scope.run(() =>
+			query.run(() =>
+				executePostgresDatabaseQuery({
+					linkedPlan,
+					binding,
+					executionFacts,
+					database,
+					observation: execution.observation,
+				}),
+			),
+		);
+		expect(page.nodes).toHaveLength(2);
+		query.end({ kind: "query", outcome: "ok" });
+		execution.scope.end({ kind: "execution", outcome: "ok" });
+	}
+
+	expect(parents.filter(({ kind }) => kind === "postgresql")).toEqual(
+		entries.map(() => ({
+			kind: "postgresql",
+			parent: "query",
+			trace: "active-parent",
+		})),
+	);
+	const postgresStarts = events.filter(
+		(event) =>
+			event.kind === "scope.started" && event.scopeKind === "postgresql",
+	);
+	expect(
+		postgresStarts.map((event) =>
+			event.kind === "scope.started" && event.start.kind === "postgresql"
+				? [
+						event.start.databaseOperation,
+						event.start.statementIdentity,
+						event.executionId,
+					]
+				: null,
+		),
+	).toEqual(
+		entries.map((_, index) => [
+			"SELECT",
+			`query.${templateDigest}`,
+			`01234567-89ab-4def-8123-456789abcdef:execution:${index + 1}`,
+		]),
+	);
+});
+
+test("keeps a Reaction structural SELECT under the active Reaction Attempt", async () => {
+	const parents: Array<
+		Readonly<{ kind: string; parent: string | null; trace: string }>
+	> = [];
+	const events: ExecutionEventV2[] = [];
+	const observation = createObservationKernel({
+		adapter: parentRecordingAdapter(parents),
+		applicationIdentity: "application:reaction-query-test",
+		createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+		events: (event) => events.push(event),
+		runtimeBuildDigest: "f".repeat(64),
+	});
+	const execution = observation.beginExecution({
+		entry: "worker",
+		kind: "execution",
+		principalKind: "user",
+		trace: { kind: "root" },
+	});
+	if (!execution) throw new Error("expected Reaction worker Execution");
+	const database = fakeDatabase({
+		rows: rows().map((row) => [
+			row.qp_f0,
+			row.qp_f1,
+			row.qp_g1,
+			row.qp_f2,
+			row.qp_r3_present,
+			row.qp_r3_f0,
+		]),
+	});
+	const outcome = Object.freeze({
+		attemptNumber: 1,
+		failureCode: null,
+		outcome: "succeeded" as const,
+		resource: "reaction:messages.published",
+		runId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6200",
+	}) satisfies DurableWorkerOutcome;
+
+	const returned = await execution.scope.run(() =>
+		runObservedDurableAttempt({
+			observation: execution.observation,
+			request: {
+				capability: "reaction",
+				acceptanceTrace: null,
+				attemptId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6202",
+				attemptNumber: 1,
+				contextInput: { tenant: "stored" },
+				dispatchId: "018f5f6e-5f2c-7b41-a854-3d9a6b6b6201",
+				principal: { id: "user:one", kind: "user" },
+				resource: outcome.resource,
+				runId: outcome.runId,
+				signal: new AbortController().signal,
+			},
+			use: async () => {
+				const page = await executePostgresDatabaseQuery({
+					linkedPlan: linkPostgresQueryPlan(databasePlan),
+					binding,
+					executionFacts,
+					database,
+					observation: execution.observation,
+				});
+				expect(page.nodes).toHaveLength(2);
+				return outcome;
+			},
+		}),
+	);
+
+	expect(returned).toBe(outcome);
+	expect(parents.find(({ kind }) => kind === "postgresql")).toEqual({
+		kind: "postgresql",
+		parent: "reaction.attempt",
+		trace: "active-parent",
+	});
+	expect(
+		events.find(
+			(event) =>
+				event.kind === "scope.started" && event.scopeKind === "postgresql",
+		),
+	).toMatchObject({
+		executionId: execution.identity.executionId,
+		start: {
+			databaseOperation: "SELECT",
+			kind: "postgresql",
+			statementIdentity: `query.${templateDigest}`,
+		},
+	});
+});
+
+test("closes failed compiled Query statements with safe PostgreSQL outcomes", async () => {
+	const cases = [
+		{
+			abort: new DOMException("private cancellation reason", "AbortError"),
+			code: "cancelled" as const,
+			outcome: "cancelled" as const,
+		},
+		{
+			abort: new DOMException("private timeout reason", "TimeoutError"),
+			code: "cancelled" as const,
+			outcome: "deadline" as const,
+		},
+		{
+			abort: null,
+			code: "queryFailed" as const,
+			outcome: "framework_error" as const,
+		},
+	] as const;
+
+	for (const scenario of cases) {
+		const events: ExecutionEventV2[] = [];
+		const observation = createObservationKernel({
+			applicationIdentity: "application:query-failure-test",
+			createRuntimeInstanceId: () => "01234567-89ab-4def-8123-456789abcdef",
+			events: (event) => events.push(event),
+			runtimeBuildDigest: "f".repeat(64),
+		});
+		const execution = observation.beginExecution({
+			entry: "direct",
+			kind: "execution",
+			principalKind: "user",
+			trace: { kind: "root" },
+		});
+		if (!execution) throw new Error("expected Query observation Execution");
+		const controller = new AbortController();
+		const failure = new QuestpiePostgresError({
+			cause: new Error("private PostgreSQL detail"),
+			code: scenario.code,
+			phase: "statement",
+			statementName: `private.${scenario.code}`,
+		});
+		const database = {
+			async transaction<Input>(input: {
+				use(transaction: { execute(): Promise<never> }): Promise<Input>;
+			}): Promise<Input> {
+				return input.use({
+					[transactionBrand]: true as const,
+					async execute() {
+						if (scenario.abort !== null) controller.abort(scenario.abort);
+						throw failure;
+					},
+				});
+			},
+		} as PostgresTransactionRunner;
+
+		let caught: unknown;
+		try {
+			await execution.scope.run(() =>
+				executePostgresDatabaseQuery({
+					linkedPlan: linkPostgresQueryPlan(databasePlan),
+					binding,
+					executionFacts,
+					database,
+					observation: execution.observation,
+					signal: controller.signal,
+				}),
+			);
+		} catch (error) {
+			caught = error;
+		}
+
+		expect(caught).toBe(failure);
+		expect(
+			events.filter(
+				(event) =>
+					event.kind === "scope.ended" && event.scopeKind === "postgresql",
+			),
+		).toEqual([
+			expect.objectContaining({
+				end: {
+					errorCode: scenario.code,
+					kind: "postgresql",
+					outcome: scenario.outcome,
+				},
+			}),
+		]);
+		const serialized = JSON.stringify(events);
+		expect(serialized).not.toContain("private PostgreSQL detail");
+		expect(serialized).not.toContain("private cancellation reason");
+		expect(serialized).not.toContain("private timeout reason");
+		expect(serialized).not.toContain(`private.${scenario.code}`);
+		expect(serialized).not.toContain(databasePlan.sql);
+	}
+});
+
+test("refuses an omitted Query observation decision before PostgreSQL", async () => {
+	let transactions = 0;
+	const database = fakeDatabase({
+		rows: [],
+		onTransaction: () => {
+			transactions += 1;
+		},
+	});
+
+	await expect(
+		executeLinkedPostgresQueryPlan(
+			database,
+			linkPostgresQueryPlan(databasePlan),
+			[],
+			undefined,
+			undefined as never,
+		),
+	).rejects.toThrow("PostgreSQL Query observation decision is required");
+	expect(transactions).toBe(0);
 });
 
 test("rejects a Query statement cast mismatch before opening PostgreSQL", async () => {

@@ -1,10 +1,12 @@
 export function renderPostgresRuntimeImports(): string {
 	return `createLinkedPostgresContextBootstrapFactory,
+		createPostgresDatabaseDurableAttemptObservation,
 		createPostgresDatabaseDurableEffectLedger,
 		createPostgresDatabaseDurableKernel,
 		createPostgresDatabaseDurablePrincipalMaintenance,
 		createPostgresDatabaseMutationInvoker,
 		createRuntimePostgres,
+		definePostgresAdministrativeStatement,
 		definePostgresStatement,
 		executePostgresDatabaseQuery,
 		verifyPostgresDatabaseReadinessPrerequisitesInOwnedTransaction`;

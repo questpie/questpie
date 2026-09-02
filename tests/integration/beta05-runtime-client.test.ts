@@ -14,22 +14,8 @@ import {
 
 import { compileApplication } from "@questpie/compiler";
 
-import {
-	createRuntimeApplication,
-	type ExecutionEventV1,
-} from "../../packages/runtime/src/application";
-import {
-	executeCollectionOperationAdapter,
-	linkCollectionMutationPrograms,
-	linkCollectionOperationAdapters,
-	type MutationInvoker,
-} from "../../packages/runtime/src/mutation";
-import { mutationProgramDigest } from "../../packages/runtime/src/mutation/program";
-import { CommittedResultUnavailable } from "../../packages/runtime/src/operation";
-import {
-	bindIngressPrincipal,
-	readIngressPrincipal,
-} from "../../packages/runtime/src/operation/ingress";
+import type { MutationInvoker } from "../../packages/runtime/src/mutation";
+import type { ExecutionEventV2 } from "../../packages/runtime/src/observation";
 
 const fixtureRoot = resolve(import.meta.dir, "../../fixtures/collaboration");
 const companyId = "018f5f6e-5f2c-7b41-a854-3d9a6b6b61a0";
@@ -74,6 +60,11 @@ type GeneratedOperationContext = Readonly<{
 }>;
 
 let compilation: GeneratedCompilation;
+let createRuntimeApplication: (typeof import("../../packages/runtime/src/application"))["createRuntimeApplication"];
+let runtimeMutation: typeof import("../../packages/runtime/src/mutation");
+let runtimeMutationProgram: typeof import("../../packages/runtime/src/mutation/program");
+let runtimeOperation: typeof import("../../packages/runtime/src/operation");
+let runtimeIngress: typeof import("../../packages/runtime/src/operation/ingress");
 let runtimeBuild: Readonly<Record<string, unknown>>;
 let operationContracts: Readonly<Record<string, unknown>>;
 let runtimeExecutables: Readonly<{
@@ -140,6 +131,13 @@ const expectedPage = Object.freeze({
 
 beforeAll(async () => {
 	compilation = await compileApplication({ applicationRoot: fixtureRoot });
+	({ createRuntimeApplication } =
+		await import("../../packages/runtime/src/application"));
+	runtimeMutation = await import("../../packages/runtime/src/mutation");
+	runtimeMutationProgram =
+		await import("../../packages/runtime/src/mutation/program");
+	runtimeOperation = await import("../../packages/runtime/src/operation");
+	runtimeIngress = await import("../../packages/runtime/src/operation/ingress");
 	const generated = resolve(fixtureRoot, ".questpie/generated");
 	const nonce = `?beta05=${crypto.randomUUID()}`;
 	generatedClient = (await import(
@@ -415,7 +413,7 @@ function generatedCollectionOperationDefinitions(): ReadonlyMap<
 	const lifecyclePrograms = JSON.parse(
 		compilation.generatedFiles["collection-lifecycle-programs.json"]!,
 	);
-	const kernels = linkCollectionMutationPrograms({
+	const kernels = runtimeMutation.linkCollectionMutationPrograms({
 		collectionOperations: JSON.parse(
 			compilation.generatedFiles["collection-operation-programs.json"]!,
 		),
@@ -434,13 +432,14 @@ function generatedCollectionOperationDefinitions(): ReadonlyMap<
 			target: program.target,
 		})),
 		lifecyclePrograms,
-		expectedLifecycleProgramsDigest: mutationProgramDigest(
-			"questpie.collection-lifecycle-programs-v1",
-			lifecyclePrograms,
-		),
+		expectedLifecycleProgramsDigest:
+			runtimeMutationProgram.mutationProgramDigest(
+				"questpie.collection-lifecycle-programs-v1",
+				lifecyclePrograms,
+			),
 		compilerRuntimeBuildDigest: String(runtimeBuild.compilerRuntimeBuildDigest),
 	});
-	const adapters = linkCollectionOperationAdapters({
+	const adapters = runtimeMutation.linkCollectionOperationAdapters({
 		artifact: JSON.parse(
 			compilation.generatedFiles["collection-operation-adapters.json"]!,
 		),
@@ -461,7 +460,7 @@ function generatedCollectionOperationDefinitions(): ReadonlyMap<
 					input: unknown;
 					ctx: GeneratedOperationContext;
 				}>) =>
-					executeCollectionOperationAdapter(
+					runtimeMutation.executeCollectionOperationAdapter(
 						{
 							adapter,
 							facts: {
@@ -548,7 +547,7 @@ async function runtimeHarness(
 ) {
 	let bootstrapGets = 0;
 	let dataRuns = 0;
-	const events: ExecutionEventV1[] = [];
+	const events: ExecutionEventV2[] = [];
 	const bindings = executableBindings();
 	const runtime = await createRuntimeApplication({
 		artifacts: {
@@ -588,7 +587,7 @@ async function runtimeHarness(
 					});
 				}) as never,
 			}),
-			resolvePrincipal: readIngressPrincipal,
+			resolvePrincipal: runtimeIngress.readIngressPrincipal,
 			project: ({ facts }) =>
 				Object.freeze({
 					data: Object.freeze({
@@ -636,7 +635,7 @@ function operationRequest(
 	frame: unknown,
 	user = principal.user({ id: principalId }),
 ) {
-	return bindIngressPrincipal(
+	return runtimeIngress.bindIngressPrincipal(
 		new Request("http://runtime.test/_questpie/operation", {
 			method: "POST",
 			headers: { "content-type": String(wireContract.mediaType) },
@@ -671,7 +670,9 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			baseUrl: "http://runtime.test",
 			fetch: (request) => {
 				generatedFetches += 1;
-				return harness.runtime.fetch(bindIngressPrincipal(request, user));
+				return harness.runtime.fetch(
+					runtimeIngress.bindIngressPrincipal(request, user),
+				);
 			},
 		});
 		const clientResult = (await client
@@ -727,7 +728,7 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 			fetch: async (request) => {
 				lostResponses += 1;
 				const response = await harness.runtime.fetch(
-					bindIngressPrincipal(request, user),
+					runtimeIngress.bindIngressPrincipal(request, user),
 				);
 				expect(response.status).toBe(200);
 				throw new Error("response lost");
@@ -765,19 +766,70 @@ test("uses one compiled Message Query engine for direct, Fetch, and generated cl
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}
 
-	expect(harness.events.map(({ event }) => event.kind)).toEqual([
-		"ready",
-		"accepted",
-		"result",
-		"accepted",
-		"result",
-		"accepted",
-		"result",
-		"accepted",
-		"result",
-		"drainStarted",
-		"stopped",
+	const runtimeEvents = harness.events.filter(
+		(event) => event.scopeKind === "runtime",
+	);
+	expect(
+		runtimeEvents.map((event) =>
+			event.kind === "scope.ended"
+				? [event.kind, event.scopeKind, event.end.outcome]
+				: [event.kind, event.scopeKind],
+		),
+	).toEqual([
+		["scope.started", "runtime"],
+		["scope.ended", "runtime", "ok"],
 	]);
+	const operationEvents = harness.events.filter(
+		(event) => event.scopeKind !== "runtime",
+	);
+	expect(
+		operationEvents.slice(0, 19).map((event) => [event.kind, event.scopeKind]),
+	).toEqual([
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+		["scope.started", "fetch"],
+		["scope.started", "execution"],
+		["scope.event", "execution"],
+		["scope.started", "query"],
+		["scope.ended", "query"],
+		["scope.ended", "execution"],
+		["scope.ended", "fetch"],
+	]);
+	const firstFetch = operationEvents.slice(5, 12);
+	expect(firstFetch[0]).toMatchObject({
+		executionId: null,
+		principalKind: null,
+		scopeKind: "fetch",
+		start: {
+			kind: "fetch",
+			method: "POST",
+			requestKind: "generated_operation",
+			scheme: "http",
+		},
+	});
+	expect(firstFetch.at(-1)).toMatchObject({
+		end: { httpResponseStatusCode: 200, kind: "fetch", outcome: "ok" },
+		executionId: null,
+	});
+	expect(firstFetch[1]).toMatchObject({
+		scopeKind: "execution",
+		start: { entry: "fetch", kind: "execution" },
+	});
+	const fetchExecutionIds = new Set(
+		firstFetch.slice(1, -1).map((event) => event.executionId),
+	);
+	expect(fetchExecutionIds.size).toBe(1);
+	expect(fetchExecutionIds.has(null)).toBe(false);
 	const eventBytes = JSON.stringify(harness.events);
 	expect(eventBytes).not.toContain("companyId");
 	expect(eventBytes).not.toContain("one engine");
@@ -843,7 +895,7 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 	const harness = await runtimeHarness(async (_operation, actualCallId) => {
 		expect(actualCallId).toBe(callId);
 		controller.abort(new DOMException("caller disconnected", "AbortError"));
-		throw new CommittedResultUnavailable(
+		throw new runtimeOperation.CommittedResultUnavailable(
 			actualCallId,
 			"18446744073709551615",
 			new Error("result serialization failed"),
@@ -861,7 +913,10 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 			),
 		);
 		const correlated = new Request(request, { signal: controller.signal });
-		bindIngressPrincipal(correlated, principal.user({ id: principalId }));
+		runtimeIngress.bindIngressPrincipal(
+			correlated,
+			principal.user({ id: principalId }),
+		);
 		const response = await harness.runtime.fetch(correlated);
 		expect(response.status).toBe(500);
 		expect(await response.json()).toEqual({
@@ -875,6 +930,124 @@ test("request abort cannot mask a known post-commit Mutation outcome", async () 
 				transactionId: "18446744073709551615",
 			},
 		});
+		const mutationEvents = harness.events.filter(
+			(event) => event.scopeKind === "mutation",
+		);
+		expect(mutationEvents.map((event) => event.kind)).toEqual([
+			"scope.started",
+			"scope.event",
+			"scope.ended",
+		]);
+		expect(mutationEvents[1]).toMatchObject({
+			observationEvent: {
+				kind: "operation.post_commit_ambiguous",
+				transactionId: "18446744073709551615",
+			},
+		});
+		expect(mutationEvents[2]).toMatchObject({
+			end: { kind: "mutation", outcome: "ambiguous" },
+		});
+	} finally {
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
+	}
+});
+
+test("operation-local Mutation cancellation owns Mutation and Execution terminals", async () => {
+	const cancellation = new AbortController();
+	const reason = new DOMException("cancel only this Mutation", "AbortError");
+	const harness = await runtimeHarness(async (_operation, _callId, options) => {
+		expect(options?.signal).toBe(cancellation.signal);
+		options?.signal?.throwIfAborted();
+		throw new Error("expected the operation-local signal to abort");
+	});
+	cancellation.abort(reason);
+	try {
+		await expect(
+			harness.runtime.execution(
+				{
+					principal: principal.user({ id: principalId }),
+					context: { companyId },
+				},
+				(operations) =>
+					operations.invoke(
+						"mutation:message.publish",
+						{ channelId, body: "cancelled locally" },
+						{ signal: cancellation.signal },
+					),
+			),
+		).rejects.toBe(reason);
+		expect(
+			harness.events
+				.filter(
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+						event.kind === "scope.ended",
+				)
+				.map(({ end }) => [end.kind, end.outcome]),
+		).toEqual([
+			["mutation", "cancelled"],
+			["execution", "cancelled"],
+		]);
+		expect(
+			harness.events
+				.filter(
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+						event.kind === "scope.event" && event.scopeKind === "execution",
+				)
+				.map(({ observationEvent }) => observationEvent.kind),
+		).toEqual(["context.completed", "execution.cancelled"]);
+	} finally {
+		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
+	}
+});
+
+test("operation-local Mutation deadline owns Mutation and Execution terminals", async () => {
+	const deadline = Date.now() + 1_000;
+	const harness = await runtimeHarness(async (_operation, _callId, options) => {
+		expect(options?.deadline).toBe(deadline);
+		throw new runtimeOperation.OperationFailure("DEADLINE_EXCEEDED", true);
+	});
+	try {
+		await expect(
+			harness.runtime.execution(
+				{
+					principal: principal.user({ id: principalId }),
+					context: { companyId },
+				},
+				(operations) =>
+					operations.invoke(
+						"mutation:message.publish",
+						{ channelId, body: "deadline locally" },
+						{ deadline },
+					),
+			),
+		).rejects.toMatchObject({ code: "DEADLINE_EXCEEDED", retryable: true });
+		expect(
+			harness.events
+				.filter(
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.ended" }> =>
+						event.kind === "scope.ended",
+				)
+				.map(({ end }) => [end.kind, end.outcome]),
+		).toEqual([
+			["mutation", "deadline"],
+			["execution", "deadline"],
+		]);
+		expect(
+			harness.events
+				.filter(
+					(
+						event,
+					): event is Extract<ExecutionEventV2, { kind: "scope.event" }> =>
+						event.kind === "scope.event" && event.scopeKind === "execution",
+				)
+				.map(({ observationEvent }) => observationEvent.kind),
+		).toEqual(["context.completed", "execution.deadline_exceeded"]);
 	} finally {
 		await harness.runtime.close({ deadlineAt: Date.now() + 2_000 });
 	}

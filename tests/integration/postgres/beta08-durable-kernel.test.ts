@@ -4,7 +4,7 @@ import { SQL } from "bun";
 
 import { createDurableRunHandle } from "../../../packages/runtime/src/durable/effects";
 import { linkReactionProjection } from "../../../packages/runtime/src/durable/projection";
-import { createDurableReactionWorker } from "../../../packages/runtime/src/durable/worker";
+import { createDurableWorker } from "../../../packages/runtime/src/durable/worker";
 import {
 	beta05Ids,
 	beta08Harness,
@@ -787,9 +787,16 @@ postgresTest(
 		// TypeScript is erased at runtime, so a handler can return a value
 		// outside its declared result codec. The worker factory here is the one
 		// the generated application builds; only the executor differs.
-		const worker = createDurableReactionWorker({
+		const worker = createDurableWorker({
+			attemptExecution: (_request, work) => {
+				work.enter();
+				return work.preparationError === undefined
+					? work.use(undefined)
+					: work.failure(work.preparationError);
+			},
 			kernel: prepared.kernel,
 			ledger: prepared.ledger,
+			jobs: Object.freeze({ members: new Map(), byIdentity: new Map() }),
 			reactions: linkReactionProjection(
 				JSON.parse(prepared.reactionProjectionBytes),
 			),
