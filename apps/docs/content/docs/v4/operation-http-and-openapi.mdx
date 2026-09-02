@@ -46,6 +46,48 @@ input and cannot supply Principal or Authority. Direct and network calls use
 the same Context Resolution, Policy, Operation, limits, result validation,
 errors, cancellation, transaction behavior, and observability.
 
+## Describe an Operation once
+
+Add `describe` to the Operation Definition when generated documentation needs
+human-facing prose or examples:
+
+```ts title="src/status.ts"
+import { codec } from "questpie";
+
+import { defineQuery } from "#questpie/app";
+
+export const barbershopStatus = defineQuery({
+	name: "barbershop.status",
+	network: true,
+	input: codec.object({}),
+	output: codec.object({ online: codec.boolean() }),
+	describe: {
+		summary: "Check whether the barbershop is online",
+		description: "Returns the current public booking availability state.",
+		examples: [{ input: {}, output: { online: true } }],
+	},
+	handler: () => ({ online: true }),
+});
+```
+
+`summary` is required when `describe` is present. It is one NFC line of at most
+120 Unicode scalars. `description` is optional NFC text of at most 1,024
+Unicode scalars. Examples always contain `input`; `output` is optional. The
+generated factory infers both example types from the Operation codecs.
+
+The compiler decodes and re-encodes every example through those codecs. It
+rejects invalid values, Runtime-minted cursors, and more than 4,096 canonical
+example bytes for one Operation. Examples are documentation data. QUESTPIE
+never sends or executes them, and diagnostics never print their values.
+
+Operation Documentation belongs to the Operation because one codec can serve
+several Operations with different purposes. The compiler emits one
+relocation-stable `operation-documentation.json` artifact and a separate
+documentation digest. A prose-only edit therefore does not change generated
+client identity, Operation Wire identity, or database migration identity.
+Exposure remains separate: documentation cannot make a server-only Operation
+network-visible or bypass Policy.
+
 ## Understand Query GET encoding
 
 A Query uses `GET` and has no body. Each present top-level input member becomes
@@ -130,7 +172,7 @@ provide a canonical Operation schema. Security schemes are also absent;
 application credential composition remains the ingress owner.
 
 OpenAPI marks constraints that JSON Schema cannot express exactly as Runtime
-validation requirements. The Runtime codec remains authoritative. This release
-adds no summary, description, example, or custom-group authoring; those require
-one projection-neutral metadata owner shared by declarations, public docs,
-OpenAPI, and MCP.
+validation requirements. The Runtime codec remains authoritative. OpenAPI
+projects `summary`, `description`, and schema-valid examples from Operation
+Documentation and pins its digest. Authors cannot restate that prose for
+OpenAPI. Grouping remains compiler-inferred; there is no custom-group member.

@@ -44,10 +44,9 @@ semantics are owned by
 The compiler-owned documentation projection and explain semantics are owned by
 [`HTTP-OPENAPI-PROPOSAL.md`](../v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md).
 
-This decision adds no descriptive authoring surface. Projection-neutral
-summaries, descriptions, examples, and custom groups remain deferred to a
-separate focused artifact/digest decision rather than being introduced only for
-OpenAPI.
+This decision adds no OpenAPI-specific descriptive authoring surface. ADR-0040
+now owns the separate projection-neutral summary, description, example,
+artifact, and digest contract. Custom groups remain absent.
 
 ## Supersession ledger
 

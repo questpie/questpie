@@ -1,6 +1,6 @@
 # ADR-0040: Freeze projection-neutral Operation documentation
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-02
 - Owners: Product architecture, compiler, generated projections
 
@@ -144,13 +144,13 @@ superseding an Accepted surface.
 
 ## Acceptance
 
-ADR-0040 remains Proposed until executable evidence and an independent review
-prove exact type inference, fixture-bound closed member admission including a
-Collection Operation Set member, text and example validation, deterministic
-domain-separated semantic bytes, relocation stability, Origin-safe
-non-disclosing diagnostics, and the absence of codec metadata,
-projection-specific prose, Runtime capability, fallbacks, or
-application-specific skill generation.
+The exact replacement candidate at
+`df237a5938e9cd3d5b9529e899c067bbbca8d780` received a protocol-v2 `PASS`.
+The generated review record is committed at
+`4360a4582b3f17e0791eaeaf3f3e1a38ada232f7` and verifies without model
+credentials. The retained first review remains the immutable `BLOCKED` record
+for the repaired acceptance-staging, real-member closure, and target-escaping
+findings.
 
 After ratification, `DOC-01` owns compiler authoring, Package/application
 parity, artifact emission and stale deletion, plus executable proof that its
@@ -160,6 +160,3 @@ explain consumption, digest pins, target-specific escaping hostiles (including
 `*/` and JSON/OpenAPI strings), exposure/disclosure parity, and proof that the
 Runtime and canonical HTTP adapter do not read documentation at request time.
 Neither ticket may project an application-specific generated skill.
-
-No ADR index, SPEC, CONTEXT, public documentation, or HANDOFF projection may
-describe this decision as Accepted before a committed PASS record exists.

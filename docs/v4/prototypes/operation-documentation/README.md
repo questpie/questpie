@@ -1,6 +1,6 @@
 # Projection-neutral Operation documentation proof
 
-- Status: executable candidate; not Accepted authority
+- Status: accepted proof; production implementation pending
 - Decision: [ADR-0040](../../../adr/0040-freeze-projection-neutral-operation-documentation.md)
 - Candidates: [CANDIDATES.md](./CANDIDATES.md)
 

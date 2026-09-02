@@ -6,9 +6,9 @@
 - Kernel dependency:
   [CANONICAL-HTTP-CONTRACT.md](./CANONICAL-HTTP-CONTRACT.md)
 - Excluded: custom paths or methods, authored request/response schemas, raw-Route
-  OpenAPI, security schemes, MCP, skills, new descriptive-metadata authoring,
-  multiple bindings, a second handler or Policy model, and production
-  implementation
+  OpenAPI, security schemes, MCP, skills, OpenAPI-specific descriptive
+  authoring, multiple bindings, a second handler or Policy model, and
+  production implementation
 
 This document adds no wire or supersession. The linked Kernel contract solely
 owns canonical HTTP execution, carriers, cancellation, disclosure, raw-Route
@@ -54,14 +54,14 @@ This duplicates the network exposure fact and lets surfaces drift. It is
 rejected. A server-only Operation stays direct; a network Operation always has
 the linked canonical endpoint.
 
-## Descriptive metadata is deferred
+## Descriptive metadata has one separate owner
 
-This candidate adds no `summary`, `description`, `examples`, group, or other
-descriptive authoring member. OpenAPI V1 uses only already-canonical Resource
-identity and codec facts and invents no prose. A projection-neutral metadata
-owner shared by declarations, public docs, OpenAPI, and MCP requires its own
-focused decision and executable artifact/digest proof; no projection-specific
-description registry may precede it.
+This candidate adds no OpenAPI-owned `summary`, `description`, `examples`,
+group, or other descriptive member. ADR-0040 now owns the one
+projection-neutral Operation `describe` envelope and compiler documentation
+artifact shared by declarations and Contract Projections. OpenAPI consumes that
+artifact and never invents or restates prose. No projection-specific
+description registry exists, and custom grouping remains absent.
 
 ## Selector, artifact, and exact fields
 
