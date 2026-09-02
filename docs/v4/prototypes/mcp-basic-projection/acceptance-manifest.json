@@ -5,8 +5,8 @@
 	"diffBase": "7d45731b8a35aca5a436438f73a2a7ead3c32f18",
 	"reviewOutput": "docs/v4/prototypes/mcp-basic-projection/REVIEW.json",
 	"authorityHeads": {
-		"accepted canonical per-operation HTTP authority": "f1f6c2d80",
-		"accepted operation documentation authority": "476df65ec",
+		"accepted canonical per-operation HTTP authority": "f1f6c2d806a5cd1ea8a07ec58e35d00cacd66863",
+		"accepted operation documentation authority": "476df65ec60ab02ad9820b43390daf13f4883b23",
 		"replacement candidate base": "7d45731b8a35aca5a436438f73a2a7ead3c32f18"
 	},
 	"authorityDocuments": [
