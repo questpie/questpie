@@ -5,7 +5,7 @@ import {
 	type Principal,
 } from "questpie";
 
-import { createApplicationRuntime } from "../execution";
+import { createApplicationRuntime, runtimeMonotonicNow } from "../execution";
 import type { LiveQueryObservation } from "../live-query";
 import type { MutationInvoker } from "../mutation";
 import {
@@ -141,7 +141,7 @@ export async function createRuntimeApplication<
 	const activeRoots = new Set<Promise<unknown>>();
 	const rootControllers = new Set<AbortController>();
 	const maximumRoots = input.maximumActiveRootsPerPrincipal ?? 64;
-	const deadlineNow = () => performance.timeOrigin + performance.now();
+	const deadlineNow = runtimeMonotonicNow;
 	let rootSequence = 0;
 	let callSequence = 0;
 	let closePromise: Promise<void> | undefined;
@@ -174,6 +174,8 @@ export async function createRuntimeApplication<
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			onMutationCommitted?(transactionId: string): void;
+			completionOwnsAbort?: boolean;
 		}>,
 		use: (
 			input: Readonly<{
@@ -201,7 +203,7 @@ export async function createRuntimeApplication<
 		rootSequence += 1;
 		const executionId = `execution:${rootSequence}`;
 		const controlled = controlledRoot({ ...root, now: deadlineNow });
-		let committedMutation = false;
+		let committedMutation: CommittedResultUnavailable | undefined;
 		rootControllers.add(controlled.controller);
 		const pending = core.execution(
 			{
@@ -210,6 +212,7 @@ export async function createRuntimeApplication<
 				signal: controlled.controller.signal,
 				deadline: root.deadline,
 				liveQueryObservation: root.liveQueryObservation,
+				settledUseWinsAbort: root.completionOwnsAbort,
 			},
 			(view) =>
 				use({
@@ -245,7 +248,12 @@ export async function createRuntimeApplication<
 									callId,
 									options,
 								);
-								committedMutation = invocation.committed;
+								committedMutation = new CommittedResultUnavailable(
+									callId,
+									invocation.transactionId,
+									controlled.controller.signal.reason,
+								);
+								root.onMutationCommitted?.(invocation.transactionId);
 								result = invocation.value;
 							} else {
 								result = await operationEngine.invokePrepared(
@@ -253,12 +261,16 @@ export async function createRuntimeApplication<
 									view.operation,
 								);
 							}
-							if (controlled.deadlineExpired)
-								if (!committedMutation)
-									throw new OperationFailure("DEADLINE_EXCEEDED", true);
-							if (controlled.controller.signal.aborted)
-								if (!committedMutation)
-									throw controlled.controller.signal.reason;
+							if (controlled.deadlineExpired && !root.completionOwnsAbort)
+								throw (
+									committedMutation ??
+									new OperationFailure("DEADLINE_EXCEEDED", true)
+								);
+							if (
+								controlled.controller.signal.aborted &&
+								!root.completionOwnsAbort
+							)
+								throw committedMutation ?? controlled.controller.signal.reason;
 							emitBeforeStopped(
 								{
 									family: "operation",
@@ -286,17 +298,21 @@ export async function createRuntimeApplication<
 		activeRoots.add(pending);
 		try {
 			const result = await pending;
-			if (controlled.deadlineExpired && !committedMutation)
-				throw new OperationFailure("DEADLINE_EXCEEDED", true);
-			if (controlled.controller.signal.aborted && !committedMutation)
-				throw controlled.controller.signal.reason;
+			if (controlled.deadlineExpired && !root.completionOwnsAbort)
+				throw (
+					committedMutation ?? new OperationFailure("DEADLINE_EXCEEDED", true)
+				);
+			if (controlled.controller.signal.aborted && !root.completionOwnsAbort)
+				throw committedMutation ?? controlled.controller.signal.reason;
 			return result;
 		} catch (error) {
 			if (error instanceof CommittedResultUnavailable) throw error;
-			if (controlled.deadlineExpired && !committedMutation)
-				throw new OperationFailure("DEADLINE_EXCEEDED", true);
-			if (controlled.controller.signal.aborted && !committedMutation)
-				throw controlled.controller.signal.reason;
+			if (controlled.deadlineExpired && !root.completionOwnsAbort)
+				throw (
+					committedMutation ?? new OperationFailure("DEADLINE_EXCEEDED", true)
+				);
+			if (controlled.controller.signal.aborted && !root.completionOwnsAbort)
+				throw committedMutation ?? controlled.controller.signal.reason;
 			throw error;
 		} finally {
 			activeRoots.delete(pending);
@@ -408,7 +424,12 @@ export async function createRuntimeApplication<
 			deadline,
 		}) =>
 			executeRoot(
-				{ principal: caller, context, signal, deadline },
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+				},
 				({ invoke }) => invoke(operation, callId),
 			),
 		now: deadlineNow,
@@ -434,9 +455,16 @@ export async function createRuntimeApplication<
 			callId,
 			signal,
 			deadline,
+			onCommitted,
 		}) =>
 			executeRoot(
-				{ principal: caller, context, signal, deadline },
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+					onMutationCommitted: onCommitted,
+				},
 				({ invoke }) => invoke(operation, callId),
 			),
 		executeAction: ({
@@ -449,9 +477,16 @@ export async function createRuntimeApplication<
 			signal,
 			timeoutMilliseconds,
 			deadline,
+			onHandlerDispatch,
 		}) =>
 			executeRoot(
-				{ principal: caller, context, signal, deadline },
+				{
+					principal: caller,
+					context,
+					signal,
+					deadline,
+					completionOwnsAbort: true,
+				},
 				async ({ invoke, view }) => {
 					const operations: RuntimeOperations = Object.freeze({
 						invoke: (
@@ -485,6 +520,7 @@ export async function createRuntimeApplication<
 						...(timeoutMilliseconds === undefined
 							? {}
 							: { timeoutMilliseconds }),
+						onHandlerDispatch,
 						execution: await view.execution(),
 						operations,
 					});

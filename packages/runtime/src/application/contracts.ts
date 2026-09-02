@@ -35,6 +35,7 @@ export interface RuntimeApplicationProgram<
 			effectKey: string;
 			callId: string;
 			timeoutMilliseconds?: number;
+			onHandlerDispatch?(): void;
 			execution: ExecutionView;
 			operations: RuntimeOperations;
 		}>,

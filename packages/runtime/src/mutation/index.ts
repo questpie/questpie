@@ -54,6 +54,7 @@ export type MutationCallOptions = Readonly<{
 
 export type MutationInvocationResult = Readonly<{
 	committed: true;
+	transactionId: string;
 	value: unknown;
 }>;
 

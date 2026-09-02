@@ -265,6 +265,7 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						transactionId = transactionIdentity(receipt.transactionId);
 						return Object.freeze({
 							committed: true as const,
+							transactionId,
 							value: replayResult(operation, receipt.resultBytes),
 						});
 					}
@@ -563,7 +564,11 @@ export function createPostgresDatabaseMutationInvoker<View>(
 						throw new TypeError(
 							"Mutation exceeded its transaction duration limit",
 						);
-					return Object.freeze({ committed: true as const, value: validated });
+					return Object.freeze({
+						committed: true as const,
+						transactionId,
+						value: validated,
+					});
 				},
 			});
 		} catch (error) {

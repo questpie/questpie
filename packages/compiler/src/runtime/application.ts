@@ -270,7 +270,12 @@ function applicationEntry(
 					const optionKeys = options && typeof options === "object" && !Array.isArray(options) ? Object.keys(options) : [];
 					if (!Object.hasOwn(options ?? {}, "effectKey") || optionKeys.some((key) => key !== "effectKey" && key !== "callId" && key !== "timeoutMilliseconds"))
 						throw new OperationFailure("PROTOCOL_UNSUPPORTED");
-					return actions.invoke(${JSON.stringify(resource.identity)}, { input: actionInput, scope, ...options });
+					return actions.invoke(${JSON.stringify(resource.identity)}, {
+						input: actionInput,
+						scope,
+						...options,
+						...(onHandlerDispatch === undefined ? {} : { onHandlerDispatch }),
+					});
 				}`,
 		})),
 	);
@@ -283,7 +288,7 @@ function applicationEntry(
 				.map((segment) => `[${JSON.stringify(segment)}]`)
 				.join("");
 			return `case ${JSON.stringify(resource.identity)}:
-				return createDirectActions(execution.actionScope, operations)${access}(actionInput, {
+				return createDirectActions(execution.actionScope, operations, onHandlerDispatch)${access}(actionInput, {
 					effectKey,
 					callId,
 					...(timeoutMilliseconds === undefined ? {} : { timeoutMilliseconds }),
@@ -644,7 +649,7 @@ export async function createApplication(input) {
 					runtimeBuildDigest: loaded.artifacts.runtimeBuild.digest,
 				});
 			},
-			invokeAction: ({ identity, input: actionInput, effectKey, callId, timeoutMilliseconds, execution, operations }) => {
+			invokeAction: ({ identity, input: actionInput, effectKey, callId, timeoutMilliseconds, onHandlerDispatch, execution, operations }) => {
 				switch (identity) {
 					${networkActionCases}
 					default: throw new OperationFailure("NOT_FOUND");
@@ -665,7 +670,7 @@ export async function createApplication(input) {
 		const actionContracts = new Map(loaded.artifacts.operationContracts.operations
 			.filter((contract) => contract.identity.startsWith("action:"))
 			.map((contract) => [contract.identity, contract]));
-		createDirectActions = (scope, operations) => {
+		createDirectActions = (scope, operations, onHandlerDispatch) => {
 			const actions = createRuntimeActionExecutor({
 				application: ${JSON.stringify(`application:${input.configuration.application.name}`)},
 				bindings: Object.freeze([${actionBindings}]),

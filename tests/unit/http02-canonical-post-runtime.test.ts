@@ -147,6 +147,56 @@ test("typed malformed credentials precede Mutation and Action body decoding", as
 	}
 });
 
+test("canonical Action distinguishes settled outcomes from post-dispatch cancellation", async () => {
+	for (const outcome of ["settled", "unsettled", "local-deadline"] as const) {
+		const controller = new AbortController();
+		let handlerCalls = 0;
+		const response = await canonicalPostTransport({
+			executeAction: async (value) => {
+				const execution = value as typeof value &
+					Readonly<{ onHandlerDispatch(): void }>;
+				execution.onHandlerDispatch();
+				handlerCalls += 1;
+				if (outcome !== "local-deadline")
+					controller.abort(
+						new DOMException("caller left after dispatch", "AbortError"),
+					);
+				if (outcome === "local-deadline")
+					throw new DOMException("local Action deadline", "AbortError");
+				if (outcome === "unsettled") throw controller.signal.reason;
+				return { ok: true };
+			},
+		}).fetch(
+			new Request(
+				post("/_questpie/action/delivery.send", {
+					"Effect-Key": "must-not-leak",
+					"Questpie-Call-Id": `action-${outcome}`,
+				}),
+				{ signal: controller.signal },
+			),
+		);
+		expect(handlerCalls).toBe(1);
+		expect(response?.status).toBe(outcome === "settled" ? 200 : 500);
+		const body = await response?.json();
+		expect(body).toEqual(
+			outcome === "settled"
+				? { callId: "action-settled", result: { ok: true } }
+				: {
+						callId: `action-${outcome}`,
+						error: {
+							code: "ACTION_OUTCOME_AMBIGUOUS",
+							retryable: false,
+						},
+					},
+		);
+		if (outcome !== "settled") {
+			const encoded = JSON.stringify(body);
+			expect(encoded).not.toContain("must-not-leak");
+			expect(encoded).not.toContain("caller left");
+		}
+	}
+});
+
 test("canonical POST deadline spans awaited phases and releases its signal owners", async () => {
 	const delayed = () => new Promise<void>((resolve) => setTimeout(resolve, 15));
 	for (const phase of ["credentials", "body", "executor"] as const) {

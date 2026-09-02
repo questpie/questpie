@@ -32,6 +32,7 @@ import {
 	httpRecord as record,
 	readHttpHeader as header,
 } from "./http-carrier";
+import { isOperationAbort } from "./operation-error";
 
 const MUTATION_PREFIX = "/_questpie/mutation/";
 const ACTION_PREFIX = "/_questpie/action/";
@@ -151,6 +152,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				callId: string;
 				signal: AbortSignal;
 				deadline?: number;
+				onCommitted(transactionId: string): void;
 			}>,
 		): Promise<unknown>;
 		executeAction(
@@ -164,6 +166,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				signal: AbortSignal;
 				timeoutMilliseconds?: number;
 				deadline?: number;
+				onHandlerDispatch(): void;
 			}>,
 		): Promise<unknown>;
 		now(): number;
@@ -303,6 +306,8 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				}
 				if (execution.signal.aborted)
 					return failure("DEADLINE_EXCEEDED", callId);
+				let committedResultUnavailable: CommittedResultUnavailable | undefined;
+				let actionDispatched = false;
 				try {
 					const value = action
 						? await input.executeAction({
@@ -319,6 +324,9 @@ export function createCanonicalPostHttp<ContextInput, View>(
 								...(execution.deadline === undefined
 									? {}
 									: { deadline: execution.deadline }),
+								onHandlerDispatch: () => {
+									actionDispatched = true;
+								},
 							})
 						: await input.executeMutation({
 								principal: caller,
@@ -329,9 +337,19 @@ export function createCanonicalPostHttp<ContextInput, View>(
 								...(execution.deadline === undefined
 									? {}
 									: { deadline: execution.deadline }),
+								onCommitted: (transactionId) => {
+									committedResultUnavailable = new CommittedResultUnavailable(
+										callId,
+										transactionId,
+										execution.signal.reason,
+									);
+								},
 							});
-					if (execution.signal.aborted)
-						return failure("DEADLINE_EXCEEDED", callId);
+					if (execution.signal.aborted && (!action || !actionDispatched))
+						throw (
+							committedResultUnavailable ??
+							new OperationFailure("DEADLINE_EXCEEDED", true)
+						);
 					const body = {
 						callId,
 						result: encodeRuntimeCodec(contract.output, value),
@@ -379,10 +397,25 @@ export function createCanonicalPostHttp<ContextInput, View>(
 							return failure("INTERNAL", callId);
 						}
 					}
-					if (execution.signal.aborted)
-						return failure("DEADLINE_EXCEEDED", callId);
 					if (error instanceof RuntimeActionPostHandlerResourceLimit)
 						return failure("RESOURCE_LIMIT", callId, false);
+					if (
+						action &&
+						actionDispatched &&
+						(execution.signal.aborted || isOperationAbort(error))
+					)
+						return response(
+							{
+								callId,
+								error: {
+									code: "ACTION_OUTCOME_AMBIGUOUS",
+									retryable: false,
+								},
+							},
+							500,
+						);
+					if (execution.signal.aborted)
+						return failure("DEADLINE_EXCEEDED", callId);
 					if (error instanceof OperationFailure)
 						return failure(error.code, callId);
 					if (error instanceof RuntimeCodecError)

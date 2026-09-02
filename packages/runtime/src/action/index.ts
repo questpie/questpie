@@ -17,6 +17,7 @@ import {
 	isRuntimeExecutionFacts,
 	isRuntimeExecutionScope,
 	type RuntimeExecutionScope,
+	runtimeMonotonicNow,
 } from "../execution";
 import {
 	assertOperationAdmission,
@@ -89,6 +90,7 @@ export interface RuntimeActionExecutor {
 			effectKey: string;
 			scope: ActionExecutionScope;
 			timeoutMilliseconds?: number;
+			onHandlerDispatch?(): void;
 		}>,
 	): Promise<unknown>;
 }
@@ -245,11 +247,11 @@ export function createRuntimeActionExecutor<Context>(
 		Object.freeze({
 			cancel: (timer: unknown) =>
 				clearTimeout(timer as ReturnType<typeof setTimeout>),
-			monotonicNow: performance.now.bind(performance),
+			monotonicNow: runtimeMonotonicNow,
 			rootRemainingMilliseconds: (facts: ActionExecutionFacts) =>
 				facts.deadline === null
 					? null
-					: Math.max(0, facts.deadline - Date.now()),
+					: Math.max(0, facts.deadline - runtimeMonotonicNow()),
 			schedule: (callback: () => void, delayMilliseconds: number) =>
 				setTimeout(callback, delayMilliseconds),
 		});
@@ -268,6 +270,7 @@ export function createRuntimeActionExecutor<Context>(
 				effectKey: string;
 				scope: ActionExecutionScope;
 				timeoutMilliseconds?: number;
+				onHandlerDispatch?(): void;
 			}>,
 		) => {
 			const binding = bindings.get(identity as `action:${string}`);
@@ -294,7 +297,7 @@ export function createRuntimeActionExecutor<Context>(
 			const invocationKeys = Object.keys(invocation).sort();
 			if (
 				invocationKeys.length < 3 ||
-				invocationKeys.length > 5 ||
+				invocationKeys.length > 6 ||
 				!invocationKeys.includes("effectKey") ||
 				!invocationKeys.includes("input") ||
 				!invocationKeys.includes("scope") ||
@@ -305,6 +308,7 @@ export function createRuntimeActionExecutor<Context>(
 								"callId",
 								"effectKey",
 								"input",
+								"onHandlerDispatch",
 								"scope",
 								"timeoutMilliseconds",
 							] as const
@@ -314,7 +318,9 @@ export function createRuntimeActionExecutor<Context>(
 					!isOperationCallId(invocation.callId)) ||
 				(invocation.timeoutMilliseconds !== undefined &&
 					(!Number.isSafeInteger(invocation.timeoutMilliseconds) ||
-						invocation.timeoutMilliseconds <= 0))
+						invocation.timeoutMilliseconds <= 0)) ||
+				(invocation.onHandlerDispatch !== undefined &&
+					typeof invocation.onHandlerDispatch !== "function")
 			)
 				throw new OperationFailure("PROTOCOL_UNSUPPORTED");
 			if (clockFailure) throw clockFailure;
@@ -389,6 +395,7 @@ export function createRuntimeActionExecutor<Context>(
 					control.throwIfExpired();
 					let raw: unknown;
 					try {
+						invocation.onHandlerDispatch?.();
 						raw = await binding.execute({
 							input: decodedInput,
 							ctx: context,

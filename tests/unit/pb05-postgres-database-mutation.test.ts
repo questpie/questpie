@@ -513,6 +513,7 @@ test("executes a fresh Mutation through one static read-committed database trans
 		invoke(signalOperation, "database-static-call"),
 	).resolves.toEqual({
 		committed: true,
+		transactionId: "901",
 		value: { id: widgetId },
 	});
 	expect(transactionCalls).toBe(1);
@@ -1127,6 +1128,7 @@ test("accepts multiple independently keyed Jobs inside one Mutation transaction"
 
 	await expect(invoke(jobOperation, "database-jobs-call")).resolves.toEqual({
 		committed: true,
+		transactionId: "905",
 		value: { id: widgetId },
 	});
 	expect(
@@ -1258,6 +1260,7 @@ test("replays a committed receipt without handler, Collection, dispatch, or rece
 
 	await expect(invoke(replayOperation, "replay-call")).resolves.toEqual({
 		committed: true,
+		transactionId: "904",
 		value: { id: widgetId },
 	});
 	expect(calls).toEqual(["mutation.receipt.claim", "mutation.receipt.read"]);

@@ -109,6 +109,7 @@ export interface ApplicationRuntime<Input, View> {
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			settledUseWinsAbort?: boolean;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>>;
@@ -168,13 +169,17 @@ export function createApplicationRuntime<
 			signal?: AbortSignal;
 			deadline?: number;
 			liveQueryObservation?: LiveQueryObservation;
+			settledUseWinsAbort?: boolean;
 		}>,
 		use: (view: View) => MaybePromise<Result>,
 	): Promise<Awaited<Result>> {
 		if (!principal.is(input.principal))
 			throw new Error("Execution requires a trusted Principal");
 		return services.execution(
-			{ signal: input.signal },
+			{
+				signal: input.signal,
+				settledUseWinsAbort: input.settledUseWinsAbort,
+			},
 			async ({ child, service, signal }) => {
 				const decoded = deepFreeze(
 					decodeContextInput(program.context.input, input.context),
@@ -272,6 +277,7 @@ export {
 	RuntimeCredentialMalformed,
 	RuntimeCredentialUnavailable,
 } from "./routes";
+export { runtimeMonotonicNow } from "./clock";
 export type {
 	RuntimeCredentialBinding,
 	RuntimeCredentialOutcome,
