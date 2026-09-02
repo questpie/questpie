@@ -1,3 +1,10 @@
+import { principal, type Principal } from "questpie";
+
+import {
+	awaitExecutionPhase,
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "../execution";
 import {
 	canonicalOperationFailure,
 	isOperationCallId,
@@ -57,30 +64,6 @@ export function decodeHttpTimeout(value: string | null): number | undefined {
 	const parsed = Number(value);
 	if (!Number.isSafeInteger(parsed)) httpProtocolFailure();
 	return parsed;
-}
-
-export async function awaitHttpPhase<Value>(
-	signal: AbortSignal,
-	use: () => Value | PromiseLike<Value>,
-): Promise<Value> {
-	let rejectAbort: ((reason?: unknown) => void) | undefined;
-	const aborted = new Promise<never>((_resolve, reject) => {
-		rejectAbort = reject;
-	});
-	const onAbort = () => rejectAbort?.(signal.reason);
-	signal.addEventListener("abort", onAbort, { once: true });
-	if (signal.aborted) onAbort();
-	const pending = Promise.resolve().then(() => {
-		if (signal.aborted) throw signal.reason;
-		return use();
-	});
-	void pending.catch(() => undefined);
-	try {
-		return await Promise.race([pending, aborted]);
-	} finally {
-		signal.removeEventListener("abort", onAbort);
-		rejectAbort = undefined;
-	}
 }
 
 export function createHttpExecutionControl(
@@ -166,4 +149,66 @@ export function httpFailure(
 		contract.status,
 		options.cacheControl,
 	);
+}
+
+export type HttpPrincipalResolution =
+	| Readonly<{ caller: Principal; response?: never }>
+	| Readonly<{ caller?: never; response: Response }>;
+
+export async function resolveHttpPrincipal(
+	input: Readonly<{
+		request: Request;
+		signal: AbortSignal;
+		callId: string;
+		cacheControl?: string;
+		resolvePrincipal(
+			request: Request,
+			signal: AbortSignal,
+		): Principal | null | PromiseLike<Principal | null>;
+	}>,
+): Promise<HttpPrincipalResolution> {
+	let caller: Principal | null;
+	try {
+		caller = await awaitExecutionPhase(input.signal, () =>
+			input.resolvePrincipal(input.request, input.signal),
+		);
+	} catch (error) {
+		if (input.signal.aborted)
+			return {
+				response: httpFailure("DEADLINE_EXCEEDED", {
+					callId: input.callId,
+					cacheControl: input.cacheControl,
+				}),
+			};
+		if (error instanceof RuntimeCredentialMalformed)
+			return {
+				response: httpFailure("UNAUTHENTICATED", {
+					callId: input.callId,
+					cacheControl: input.cacheControl,
+				}),
+			};
+		return {
+			response: httpFailure(
+				error instanceof RuntimeCredentialUnavailable
+					? "RUNTIME_UNAVAILABLE"
+					: "INTERNAL",
+				{ callId: input.callId, cacheControl: input.cacheControl },
+			),
+		};
+	}
+	if (input.signal.aborted)
+		return {
+			response: httpFailure("DEADLINE_EXCEEDED", {
+				callId: input.callId,
+				cacheControl: input.cacheControl,
+			}),
+		};
+	if (!caller || !principal.is(caller))
+		return {
+			response: httpFailure("UNAUTHENTICATED", {
+				callId: input.callId,
+				cacheControl: input.cacheControl,
+			}),
+		};
+	return { caller };
 }

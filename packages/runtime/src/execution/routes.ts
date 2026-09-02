@@ -15,6 +15,7 @@ import {
 	OperationFailure,
 	operationFailureStatus,
 } from "../operation";
+import { awaitExecutionPhase } from "./abort";
 import type { ApplicationRuntime, RouteExecutionScope } from "./index";
 
 type AnyCredentialService = ServiceDefinition<
@@ -26,30 +27,6 @@ type AnyCredentialService = ServiceDefinition<
 >;
 
 type MaybePromise<Value> = Value | Promise<Value>;
-
-async function awaitRequestAbort<Value>(
-	signal: AbortSignal,
-	use: () => MaybePromise<Value>,
-): Promise<Value> {
-	let rejectAbort: ((reason?: unknown) => void) | undefined;
-	const aborted = new Promise<never>((_resolve, reject) => {
-		rejectAbort = reject;
-	});
-	const onAbort = () => rejectAbort?.(signal.reason);
-	signal.addEventListener("abort", onAbort, { once: true });
-	if (signal.aborted) onAbort();
-	const pending = Promise.resolve().then(() => {
-		if (signal.aborted) throw signal.reason;
-		return use();
-	});
-	void pending.catch(() => undefined);
-	try {
-		return await Promise.race([pending, aborted]);
-	} finally {
-		signal.removeEventListener("abort", onAbort);
-		rejectAbort = undefined;
-	}
-}
 
 export type RuntimeCredentialOutcome = CredentialResolution;
 
@@ -484,10 +461,10 @@ export function createRuntimeRouteExecutor<
 		if (binding.credentials === "none" || !input.credentials)
 			return principal.anonymous();
 		try {
-			const service = await awaitRequestAbort(request.signal, () =>
+			const service = await awaitExecutionPhase(request.signal, () =>
 				input.runtime.applicationService(input.credentials!.service),
 			);
-			const outcome: unknown = await awaitRequestAbort(request.signal, () =>
+			const outcome: unknown = await awaitExecutionPhase(request.signal, () =>
 				input.credentials!.resolve({ request, service }),
 			);
 			return decodeRuntimeCredentialOutcome(outcome);

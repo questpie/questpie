@@ -1,4 +1,4 @@
-import { principal, type Principal } from "questpie";
+import type { Principal } from "questpie";
 
 import { RuntimeActionPostHandlerResourceLimit } from "../action";
 import {
@@ -7,10 +7,6 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import {
-	RuntimeCredentialMalformed,
-	RuntimeCredentialUnavailable,
-} from "../execution";
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
@@ -21,7 +17,6 @@ import {
 	type RuntimeOperationContract,
 } from "../operation";
 import {
-	awaitHttpPhase,
 	decodeHttpIdentity as decodeIdentity,
 	decodeHttpTimeout as decodeTimeout,
 	createHttpExecutionControl,
@@ -31,6 +26,7 @@ import {
 	httpProtocolFailure as protocol,
 	httpRecord as record,
 	readHttpHeader as header,
+	resolveHttpPrincipal,
 } from "./http-carrier";
 import { isOperationAbort } from "./operation-error";
 
@@ -229,27 +225,14 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				now: input.now,
 			});
 			try {
-				let caller: Principal | null;
-				try {
-					caller = await awaitHttpPhase(execution.signal, () =>
-						input.resolvePrincipal(request, execution.signal),
-					);
-				} catch (error) {
-					if (execution.signal.aborted)
-						return failure("DEADLINE_EXCEEDED", callId);
-					if (error instanceof RuntimeCredentialMalformed)
-						return failure("UNAUTHENTICATED", callId);
-					return failure(
-						error instanceof RuntimeCredentialUnavailable
-							? "RUNTIME_UNAVAILABLE"
-							: "INTERNAL",
-						callId,
-					);
-				}
-				if (execution.signal.aborted)
-					return failure("DEADLINE_EXCEEDED", callId);
-				if (!caller || !principal.is(caller))
-					return failure("UNAUTHENTICATED", callId);
+				const principalResolution = await resolveHttpPrincipal({
+					request,
+					signal: execution.signal,
+					callId,
+					resolvePrincipal: input.resolvePrincipal,
+				});
+				if (principalResolution.response) return principalResolution.response;
+				const caller = principalResolution.caller;
 				const contract = operations.get(
 					`${action ? "action" : "mutation"}:${name}`,
 				);

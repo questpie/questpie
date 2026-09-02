@@ -1,4 +1,4 @@
-import { principal, type Principal } from "questpie";
+import type { Principal } from "questpie";
 
 import {
 	decodeRuntimeCodec,
@@ -7,10 +7,6 @@ import {
 	RuntimeCodecError,
 } from "../codec";
 import {
-	RuntimeCredentialMalformed,
-	RuntimeCredentialUnavailable,
-} from "../execution";
-import {
 	DeclaredOperationError,
 	encodeDeclaredOperationError,
 	OperationFailure,
@@ -18,7 +14,6 @@ import {
 	type RuntimeOperationContract,
 } from "../operation";
 import {
-	awaitHttpPhase,
 	decodeHttpIdentity as decodeIdentity,
 	decodeHttpTimeout as decodeTimeout,
 	createHttpExecutionControl,
@@ -27,6 +22,7 @@ import {
 	httpProtocolFailure as protocol,
 	httpRecord as record,
 	readHttpHeader as header,
+	resolveHttpPrincipal,
 } from "./http-carrier";
 
 const QUERY_PREFIX = "/_questpie/query/";
@@ -241,27 +237,15 @@ export function createCanonicalQueryHttp<ContextInput, View>(
 				now: input.now,
 			});
 			try {
-				let caller: Principal | null;
-				try {
-					caller = await awaitHttpPhase(execution.signal, () =>
-						input.resolvePrincipal(request, execution.signal),
-					);
-				} catch (error) {
-					if (execution.signal.aborted)
-						return failure("DEADLINE_EXCEEDED", callId);
-					if (error instanceof RuntimeCredentialMalformed)
-						return failure("UNAUTHENTICATED", callId);
-					return failure(
-						error instanceof RuntimeCredentialUnavailable
-							? "RUNTIME_UNAVAILABLE"
-							: "INTERNAL",
-						callId,
-					);
-				}
-				if (execution.signal.aborted)
-					return failure("DEADLINE_EXCEEDED", callId);
-				if (!caller || !principal.is(caller))
-					return failure("UNAUTHENTICATED", callId);
+				const principalResolution = await resolveHttpPrincipal({
+					request,
+					signal: execution.signal,
+					callId,
+					cacheControl: QUERY_CACHE_CONTROL,
+					resolvePrincipal: input.resolvePrincipal,
+				});
+				if (principalResolution.response) return principalResolution.response;
+				const caller = principalResolution.caller;
 				const contract = operations.get(`query:${name}`);
 				if (!contract) return failure("NOT_FOUND", callId);
 				let operation: PreparedOperation<View>;

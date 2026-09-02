@@ -17,6 +17,8 @@ import {
 	createServiceOwner,
 } from "./services";
 
+export { awaitExecutionPhase } from "./abort";
+
 type MaybePromise<Value> = Value | Promise<Value>;
 
 const trustedExecutionFacts = new WeakSet<object>();
