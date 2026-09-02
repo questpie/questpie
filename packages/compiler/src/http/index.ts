@@ -1,6 +1,12 @@
 import { CompilerDiagnosticError } from "../diagnostic";
 import type { EvaluatedExport, NormalizedResource, SourceSpan } from "../types";
 
+export {
+	projectOperationProjection,
+	type OperationProjection,
+	type OperationProjectionInput,
+} from "./operation-projection";
+
 type RecordValue = Readonly<Record<string, unknown>>;
 
 type RouteSegment =
