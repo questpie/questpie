@@ -46,7 +46,7 @@ test("binds one-hop Relation selection to its target disclosure Policy", async (
 	);
 	if (!messagePolicy) throw new Error("expected the Message disclosure Policy");
 
-	expect(queryProjection.queries).toHaveLength(1);
+	expect(queryProjection.queries).toHaveLength(2);
 	expect(messagePage).toMatchObject({
 		policy: "policy:messages.default",
 	});

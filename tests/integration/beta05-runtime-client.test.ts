@@ -96,6 +96,7 @@ let recordDelivery: Definition;
 let requestDigest: Definition;
 let messagePublished: Definition;
 let companyDigest: Definition;
+let channelDetail: Definition;
 let messagePage: Definition;
 let channelMessagePage: unknown;
 let applicationCredentials: Definition;
@@ -220,6 +221,32 @@ beforeAll(async () => {
 		handler: () => new Response(null, { status: 204 }),
 	});
 	channelMessagePage = structural.channelMessagePage;
+	channelDetail = generatedApp.defineQuery({
+		name: "channels.detail",
+		network: true,
+		input: codec.object({ id: codec.uuid() }),
+		output: codec.nullable(
+			codec.object({
+				id: codec.uuid(),
+				spaceId: codec.uuid(),
+				name: codec.text(),
+				messages: codec.array(
+					codec.object({
+						id: codec.uuid(),
+						channelId: codec.uuid(),
+						authorMembershipId: codec.uuid(),
+						body: codec.optional(codec.text()),
+						createdAt: codec.timestamp(),
+					}),
+				),
+			}),
+		),
+		handler: () => {
+			throw new Error(
+				"channel detail is outside this Query-only runtime harness",
+			);
+		},
+	});
 	publishMessage = generatedApp.defineMutation({
 		name: "message.publish",
 		network: true,
@@ -384,6 +411,7 @@ function definitions(): ReadonlyMap<string, Definition> {
 		["mutation:message.publish", publishMessage],
 		["mutation:message.recordDelivery", recordDelivery],
 		["mutation:message.requestDigest", requestDigest],
+		["query:channels.detail", channelDetail],
 		["query:messages.page", messagePage],
 		["reaction:messagePublished", messagePublished],
 		["route:collaboration.whoami", whoami],

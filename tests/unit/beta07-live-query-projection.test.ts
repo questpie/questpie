@@ -381,6 +381,14 @@ test("emits Message watchability and inventories every live-query artifact", asy
 				"network: false",
 			),
 		);
+		const channelDetailPath = join(temporary, "src/channel-detail.ts");
+		await writeFile(
+			channelDetailPath,
+			(await readFile(channelDetailPath, "utf8")).replace(
+				"network: true",
+				"network: false",
+			),
+		);
 		const ordinary = await compileApplication({ applicationRoot: temporary });
 		const ordinaryBundles = Object.entries(ordinary.generatedFiles).filter(
 			([path]) =>
@@ -478,7 +486,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			contractDigest:
 				"47f2b820bb4148c2ad10ea82999865d3f8e545f2b0226a6ac8d68c456b64babd",
 			possibleObservationSlotsDigest:
-				"2dc70e43527e54a338ae817d1a8953666b86201b513cd5b4a1f1093ca26fb114",
+				"59f561650f648265769f66080bc0857f4a960df578afea76b07418a8960ebb3c",
 		});
 		expect(
 			Object.fromEntries(
@@ -499,7 +507,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			),
 		).toEqual({
 			"query-watchability.json":
-				"90840ffe0400113db02eae6f0ffce8db6339643e1bb2004e6b91f5048b620a28",
+				"0589d3c698fed517dcb461e63bb5b0b32e30f1f81469fca78a5120367eed59b4",
 			"change-ledger.json":
 				"e6f31477481424bdf9ddf9e9ae1816fe1ef816843193bd0a37dba97eaa840373",
 			"live-query-dependency-algebra.json":
@@ -551,6 +559,7 @@ test("emits Message watchability and inventories every live-query artifact", asy
 			format: "questpie.realtime-wire",
 			version: 1,
 			watchableQueries: [
+				expect.objectContaining({ identity: "query:channels.detail" }),
 				expect.objectContaining({ identity: "query:messages.page" }),
 			],
 			digest: runtimeBuild.realtimeWireDigest,

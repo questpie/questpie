@@ -128,6 +128,7 @@ test("projects one authored Action into exact direct and canonical HTTP artifact
 		"action:delivery.publish",
 		"mutation:message.publish",
 		"mutation:message.requestDigest",
+		"query:channels.detail",
 		"query:messages.page",
 	]);
 	expect(http.digest).not.toBe(baselineHttp.digest);

@@ -222,6 +222,7 @@ describe("BETA-01 generated contract", () => {
 			"policy:messageEvents.default",
 			"policy:messages.default",
 			"policy:spaces.default",
+			"query:channels.detail",
 			"query:channels.get",
 			"query:messages.page",
 			"query:spaces.get",
