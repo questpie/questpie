@@ -58,7 +58,10 @@ describe("BETA-07 compiler to Runtime Live Query contract", () => {
 		const linked = linkLiveQueryProgram(artifacts);
 		const message = linked.queries.get("query:messages.page");
 
-		expect(linked.queries.size).toBe(1);
+		expect([...linked.queries.keys()]).toEqual([
+			"query:channels.detail",
+			"query:messages.page",
+		]);
 		expect(message).toMatchObject({
 			identity: "query:messages.page",
 			watchable: true,
@@ -75,7 +78,7 @@ describe("BETA-07 compiler to Runtime Live Query contract", () => {
 		expect(message?.structuralQueries).toEqual(
 			new Map([
 				[
-					"d6d901c38dd4e42de880724f84376416a712d2567013193fba3d47b0c23e8c81",
+					"52406f6090ed0bc03cc5d4b194a91e08c4022365d7e01079ca9ecf4aad773232",
 					expect.objectContaining({
 						policy: "policy:messages.default",
 						collections: [
@@ -86,6 +89,29 @@ describe("BETA-07 compiler to Runtime Live Query contract", () => {
 							"collection:spaces",
 						],
 						relations: ["collection:messages/relation:author"],
+						tokens: [
+							"collectionRange",
+							"orderingBoundary",
+							"pageSentinel",
+							"policyEvidencePoint",
+							"relationEndpoint",
+							"relationMiss",
+							"tenantPartition",
+						],
+					}),
+				],
+				[
+					"f2e00ccc3393e7b25a12c8360708f214205b6c925ba97d2cce059e48537abcfb",
+					expect.objectContaining({
+						policy: "policy:channels.default",
+						collections: [
+							"collection:channels",
+							"collection:companies",
+							"collection:memberships",
+							"collection:messages",
+							"collection:spaces",
+						],
+						relations: ["collection:messages/relation:channel"],
 						tokens: [
 							"collectionRange",
 							"orderingBoundary",
