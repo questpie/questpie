@@ -4,7 +4,10 @@ import { principal } from "questpie";
 
 import { RuntimeActionPostHandlerResourceLimit } from "../../packages/runtime/src/action";
 import { createCanonicalPostHttp } from "../../packages/runtime/src/application/http-post";
-import { RuntimeCredentialUnavailable } from "../../packages/runtime/src/execution";
+import {
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "../../packages/runtime/src/execution";
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
@@ -78,8 +81,9 @@ function canonicalPostTransport(
 
 test("canonical POST maps typed credential outcomes without disclosure", async () => {
 	for (const [error, status, code, retryable] of [
-		[new OperationFailure("UNAUTHENTICATED"), 401, "UNAUTHENTICATED", false],
+		[new RuntimeCredentialMalformed(), 401, "UNAUTHENTICATED", false],
 		[new RuntimeCredentialUnavailable(), 503, "RUNTIME_UNAVAILABLE", true],
+		[new OperationFailure("UNAUTHENTICATED"), 500, "INTERNAL", false],
 		[new Error("credential secret"), 500, "INTERNAL", false],
 	] as const) {
 		const response = await canonicalPostTransport({
@@ -95,6 +99,50 @@ test("canonical POST maps typed credential outcomes without disclosure", async (
 		expect(await response?.json()).toEqual({
 			callId: "credential-call",
 			error: { code, retryable },
+		});
+	}
+});
+
+test("typed malformed credentials precede Mutation and Action body decoding", async () => {
+	for (const [path, headers] of [
+		[
+			"/_questpie/mutation/messages.publish",
+			{ "Idempotency-Key": "malformed-mutation" },
+		],
+		[
+			"/_questpie/action/delivery.send",
+			{ "Effect-Key": "effect", "Questpie-Call-Id": "malformed-action" },
+		],
+	] as const) {
+		let prepareCalls = 0;
+		let executorCalls = 0;
+		const response = await canonicalPostTransport({
+			resolvePrincipal: async () => {
+				throw new RuntimeCredentialMalformed();
+			},
+			prepare: () => {
+				prepareCalls += 1;
+				throw new Error("must not decode");
+			},
+			executeMutation: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+			executeAction: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+		}).fetch(post(path, headers, '{"context":'));
+		expect(response?.status).toBe(401);
+		expect(await response?.json()).toEqual({
+			callId: path.includes("mutation")
+				? "malformed-mutation"
+				: "malformed-action",
+			error: { code: "UNAUTHENTICATED", retryable: false },
+		});
+		expect({ prepareCalls, executorCalls }).toEqual({
+			prepareCalls: 0,
+			executorCalls: 0,
 		});
 	}
 });

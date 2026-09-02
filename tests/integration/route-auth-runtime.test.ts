@@ -130,6 +130,8 @@ test("keeps anonymous, malformed, and unavailable credentials distinct", async (
 						);
 					});
 				}
+				if (request.headers.has("x-ignore-abort"))
+					return new Promise<never>(() => {});
 				return request.headers.has("x-provider-down")
 					? { kind: "unavailable" }
 					: { kind: "anonymous" };
@@ -234,6 +236,26 @@ test("keeps anonymous, malformed, and unavailable credentials distinct", async (
 	await expect(cancelled).rejects.toMatchObject({
 		name: "AbortError",
 		message: "credential caller left",
+	});
+	const ignoringController = new AbortController();
+	const ignoring = routes.fetch(
+		new Request("https://app.test/outcomes", {
+			headers: { "x-ignore-abort": "1" },
+			signal: ignoringController.signal,
+		}),
+	);
+	await Promise.resolve();
+	ignoringController.abort(
+		new DOMException("noncooperative credential caller left", "AbortError"),
+	);
+	await expect(
+		Promise.race([
+			ignoring,
+			new Promise<"hung">((resolve) => setTimeout(() => resolve("hung"), 100)),
+		]),
+	).rejects.toMatchObject({
+		name: "AbortError",
+		message: "noncooperative credential caller left",
 	});
 	await runtime.close();
 });

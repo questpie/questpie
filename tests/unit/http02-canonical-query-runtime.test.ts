@@ -4,6 +4,11 @@ import { principal } from "questpie";
 
 import { createCanonicalQueryHttp } from "../../packages/runtime/src/application/http-query";
 import {
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "../../packages/runtime/src/execution";
+import { OperationFailure } from "../../packages/runtime/src/operation";
+import {
 	http02ContextCodec,
 	http02InputCodec,
 	http02OutputCodec,
@@ -76,4 +81,44 @@ test("canonical Query deadline settles an abort-ignoring credential resolver", a
 		error: { code: "DEADLINE_EXCEEDED", retryable: true },
 	});
 	expect(executorCalls).toBe(0);
+});
+
+test("canonical Query maps only typed credential outcomes before URL decoding", async () => {
+	for (const [error, status, code, retryable] of [
+		[new RuntimeCredentialMalformed(), 401, "UNAUTHENTICATED", false],
+		[new RuntimeCredentialUnavailable(), 503, "RUNTIME_UNAVAILABLE", true],
+		[new OperationFailure("UNAUTHENTICATED"), 500, "INTERNAL", false],
+		[new Error("credential secret"), 500, "INTERNAL", false],
+	] as const) {
+		let prepareCalls = 0;
+		let executorCalls = 0;
+		const response = await transport({
+			resolvePrincipal: async () => {
+				throw error;
+			},
+			prepare: () => {
+				prepareCalls += 1;
+				throw new Error("must not decode");
+			},
+			execute: async () => {
+				executorCalls += 1;
+				return { ok: true };
+			},
+		}).fetch(
+			new Request(
+				"https://runtime.test/_questpie/query/messages.page?unknown=input",
+				{ headers: { "Questpie-Call-Id": "credential-before-query" } },
+			),
+		);
+		expect(response?.status).toBe(status);
+		expect(response?.headers.get("cache-control")).toBe("private, no-store");
+		expect(await response?.json()).toEqual({
+			callId: "credential-before-query",
+			error: { code, retryable },
+		});
+		expect({ prepareCalls, executorCalls }).toEqual({
+			prepareCalls: 0,
+			executorCalls: 0,
+		});
+	}
 });

@@ -7,7 +7,10 @@ import {
 	type RuntimeCodec,
 	RuntimeCodecError,
 } from "../codec";
-import { RuntimeCredentialUnavailable } from "../execution";
+import {
+	RuntimeCredentialMalformed,
+	RuntimeCredentialUnavailable,
+} from "../execution";
 import {
 	CommittedResultUnavailable,
 	DeclaredOperationError,
@@ -231,10 +234,7 @@ export function createCanonicalPostHttp<ContextInput, View>(
 				} catch (error) {
 					if (execution.signal.aborted)
 						return failure("DEADLINE_EXCEEDED", callId);
-					if (
-						error instanceof OperationFailure &&
-						error.code === "UNAUTHENTICATED"
-					)
+					if (error instanceof RuntimeCredentialMalformed)
 						return failure("UNAUTHENTICATED", callId);
 					return failure(
 						error instanceof RuntimeCredentialUnavailable
