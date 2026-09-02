@@ -1,0 +1,168 @@
+{
+	"protocolVersion": 2,
+	"ticket": "DX-PROJECTION-NEUTRAL-OPERATION-DOCUMENTATION",
+	"proof": "Ratify one optional Operation describe envelope and one compiler-owned documentation artifact/digest shared by declarations, docs, OpenAPI, and future MCP without adding codec or Field metadata, projection-specific prose, Runtime authority, application-specific skill generation, fallback, or production implementation. Keep ADR-0040 and every authority/public projection Proposed until a committed protocol-v2 PASS record exists.",
+	"diffBase": "e00943dc0033a644f485433b2a765e55e23cd2c8",
+	"reviewOutput": "docs/v4/prototypes/operation-documentation/REVIEW-REPLACEMENT.json",
+	"authorityHeads": {
+		"integrated accepted authority base": "e00943dc0033a644f485433b2a765e55e23cd2c8",
+		"initial focused candidate": "7c5fb9ebac0b8b5d6db4926965e0db21e6079745",
+		"relocation-stable repaired candidate": "827f816a663a81d7ee7de7ea81a1bf9d6b66e67d",
+		"Fable adversarial findings repaired before fresh manifest": "e3ec535d31079afc93b0a83c2f50e2dafff0506e",
+		"formally blocked candidate": "7d711b01cb08eb07db8c9ef9ada849ba7d26e9e8",
+		"committed BLOCKED record": "7ad5d6af759e0228e2ac2a2eccae23c47ba8afd4"
+	},
+	"authorityDocuments": [
+		{
+			"name": "product and public-interface decision procedure",
+			"path": ".agents/skills/questpie-v4/references/design.md",
+			"sha256": "2efdea4c829174c05ef050592687d3ed506c9578fa143fee488ccd599537238d"
+		},
+		{
+			"name": "proof construction and acceptance procedure",
+			"path": ".agents/skills/questpie-v4/references/proof.md",
+			"sha256": "e86910e7cee8a3f324822146726b256db72046cbe3668016a52a5c0ba7222cd4"
+		},
+		{
+			"name": "repository quality and evidence ownership",
+			"path": ".agents/skills/questpie-v4/references/repository-quality.md",
+			"sha256": "e0fb79556af46b0f9e005d762e30fee59876012846b4c6087f00607dda230cc8"
+		},
+		{
+			"name": "canonical product specification before projection",
+			"path": "SPEC.md",
+			"sha256": "e8e716c02e61940b5c718a677b7585c0ddcd839da4ae8dd8c7345b2c03bcc7f0"
+		},
+		{
+			"name": "canonical product language before projection",
+			"path": "CONTEXT.md",
+			"sha256": "4f61f3caf3b0444826d337ed81cc5c8c72db1852e888d377dfd6e3d54e90f3e8"
+		},
+		{
+			"name": "canonical handoff before projection",
+			"path": "HANDOFF.md",
+			"sha256": "2b34d3f9dbfff4755e0717b3e63c80edb332ac10356ad03084cf23e68fa3de00"
+		},
+		{
+			"name": "ADR index with ADR-0040 still unprojected",
+			"path": "docs/adr/README.md",
+			"sha256": "9e01d6de9d353c400ca09bddb57cbbed45699db0ddcab24dcd3bb83678817b15"
+		},
+		{
+			"name": "accepted compiler projection ownership",
+			"path": "docs/adr/0018-freeze-file-search-and-contract-projections.md",
+			"sha256": "53655c1feaeb17f61d70186c71fd754f3a2da9cef331a6b1b5fea69d517dc1d4"
+		},
+		{
+			"name": "accepted semantic kernel and public surface boundary",
+			"path": "docs/adr/0019-freeze-semantic-kernels-and-public-surface.md",
+			"sha256": "4413e7ed5ada104a85498e11cea2ac78dc6e2dffd6931c475f7b56afb4541610"
+		},
+		{
+			"name": "accepted tracer-led delivery procedure",
+			"path": "docs/adr/0027-simplify-v4-delivery-flow.md",
+			"sha256": "e89e596d9b12bbda2d091484a9d5e584fc04e3cc32e007dac515d8d63abb1b10"
+		},
+		{
+			"name": "accepted canonical Operation HTTP and OpenAPI projection",
+			"path": "docs/adr/0036-freeze-canonical-operation-http-and-openapi-projection.md",
+			"sha256": "c579727d201ed8c5c4070b97e4d7b7eddd6e93e2a40cc8b33cdcf6bbc2d042ae"
+		},
+		{
+			"name": "accepted OpenAPI descriptive metadata deferral",
+			"path": "docs/v4/implementation/beta2-execution-breadth/HTTP-OPENAPI-PROPOSAL.md",
+			"sha256": "5caa546059c8661a548f64f1b9c3f122566d6cc7bc1a9cfc63949c95cee3313f"
+		},
+		{
+			"name": "current public Agent Skill primary-source research",
+			"path": "docs/v4/research/agent-skills-2026/QUESTPIE-PUBLIC-SKILL.md",
+			"sha256": "512a85a352052408f68ce626a9b12b98ff9408b8fd26c9111cde1beca16d9a81"
+		},
+		{
+			"name": "preserved formal BLOCKED findings",
+			"path": "docs/v4/prototypes/operation-documentation/REVIEW.json",
+			"sha256": "3f4b92738e8d6ba10a94053029cbf295911eadf69a27866185acc93451fac8ab"
+		},
+		{
+			"name": "Proposed projection-neutral Operation documentation decision",
+			"path": "docs/adr/0040-freeze-projection-neutral-operation-documentation.md",
+			"sha256": "0b77fec845103f3a36dcbb1d966c820302e8fdecfee5b53ba88ca092f95a0633"
+		},
+		{
+			"name": "focused interface candidates",
+			"path": "docs/v4/prototypes/operation-documentation/CANDIDATES.md",
+			"sha256": "1bf6d2eec597447cdb66d97020ec5d1d14ddf8806930a544114ea487c5f1136e"
+		},
+		{
+			"name": "executable proof declaration",
+			"path": "docs/v4/prototypes/operation-documentation/README.md",
+			"sha256": "2b423c19a7abbee39a1a5908ac2b086ecaa824780fc866a6ae024fffa26968ca"
+		},
+		{
+			"name": "documentation compiler and artifact prototype",
+			"path": "docs/v4/prototypes/operation-documentation/contract.ts",
+			"sha256": "1f893452eec772a490bee72125a6bb868c85236e86bb016147f18a69b0d25699"
+		},
+		{
+			"name": "documentation compiler executable evidence",
+			"path": "docs/v4/prototypes/operation-documentation/contract.test.ts",
+			"sha256": "91b791d7e024b36692f1b74a0fc6ec719bf2316b14961d8797ff4239defd9742"
+		},
+		{
+			"name": "typed example inference evidence",
+			"path": "docs/v4/prototypes/operation-documentation/type-contract.ts",
+			"sha256": "2cf3057beb43353da8575f06cc04b0c50cd6f0fb8210edec0001aebba4b19133"
+		},
+		{
+			"name": "strict type evidence configuration",
+			"path": "docs/v4/prototypes/operation-documentation/tsconfig.json",
+			"sha256": "3d2b77470206e988ddfe4eceb963e895ee1eb137c047e9c8cd5b1fb0279576a6"
+		}
+	],
+	"verification": [
+		{
+			"command": "bun test docs/v4/prototypes/operation-documentation/contract.test.ts",
+			"result": "PASS"
+		},
+		{
+			"command": "bunx tsc -p docs/v4/prototypes/operation-documentation/tsconfig.json",
+			"result": "PASS"
+		},
+		{
+			"command": "QUESTPIE_DIFF_BASE=e00943dc0033a644f485433b2a765e55e23cd2c8 bun run check:changed",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run architecture:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs types:check",
+			"result": "PASS"
+		},
+		{
+			"command": "bun run --cwd apps/docs build",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check e00943dc0033a644f485433b2a765e55e23cd2c8..HEAD",
+			"result": "PASS"
+		},
+		{
+			"command": "git diff --check",
+			"result": "PASS"
+		}
+	],
+	"acceptanceCriteria": [
+		"ADR-0040, the ADR index, SPEC, CONTEXT, public documentation, and HANDOFF remain Proposed or unchanged until a committed protocol-v2 PASS record exists. Production implementation begins only after a separate authority projection commit.",
+		"Query, Mutation, Action, and their generated Collection Operation Set members share one optional describe envelope whose required summary and optional description/examples are inferred from the existing Operation input/output codecs. No codec, Field, Context, error, Route, Job, projection-specific, or application-configuration metadata member exists.",
+		"The closure contract explicitly preserves the real per-kind authored asymmetry for handler and plan-backed Query, Mutation, Action, and Collection list/get/create/update/delete members. Both production fixtures bind those existing member sets to the proof. Unknown or misspelled members fail at exact Origin/member path with QP-COMPOSE-030 and no value disclosure instead of being silently dropped.",
+		"Summary and description use the exact bounded NFC plain-text grammar. Examples are non-executable synthetic documentation data, decode and re-encode through the existing codecs, reject present Runtime-minted cursor values and invalid canonical values, disclose no values in diagnostics, and are bounded to 4096 canonical bytes per Operation within the existing generated-byte ceiling.",
+		"The proof emits deterministic ASCII-ordered questpie.operation-documentation v1 semantic bytes and a domain-separated digest. Origin remains outside those bytes, making relocation stable. DOC-01, rather than this ratification proof, owns executable cross-artifact digest independence, stale deletion, and migration/client non-interference.",
+		"DOC-01 owns production compiler authoring plus Package/application parity. DOC-02 owns OpenAPI, future MCP, generated JSDoc and explain consumption, digest pins, target-specific escaping hostiles, exposure/disclosure parity, and executable proof that Runtime and the canonical HTTP adapter do not read documentation at request time. No projection may execute an example.",
+		"The decision defines that OpenAPI derives summary, description, and schema-valid examples without authored HTTP placement, while future MCP may map summary/title/description. Any risk hint derives from separately Accepted Operation kind semantics, never prose, examples, annotations, discovery, or model confirmation; those never grant Authority or replace Policy. Projection behavior remains a DOC-02 implementation gate.",
+		"The public repository skills/questpie tree remains one portable framework-authoring skill built only from released public docs. It is not application-generated, never embeds application prose, and stays distinct from the internal contributor skill. Application-specific skill generation remains deferred.",
+		"Package and application authors are designed to use the same describe primitive and diagnostics, with executable parity owned by DOC-01. Exposure remains separately owned: direct-only prose does not make an Operation network-, OpenAPI-, MCP-, or skill-visible, and Policy-hidden members/evidence remain undisclosed; executable projection parity is owned by DOC-02.",
+		"The candidate adds no production bytes, codec decorator/chaining, Field prose, error examples, custom grouping, generated application skill, alternate schema, Runtime capability, handler, retry, compatibility alias, fallback, or unrelated OpenTelemetry behavior. Every named deferral requires its own tracer and authority."
+	]
+}

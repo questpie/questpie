@@ -28,7 +28,6 @@ import { createClient } from "#questpie/client";
 
 const client = createClient({
 	baseUrl: "https://barbershop.example",
-	credentials: "include",
 });
 
 const shop = client.withContext({
@@ -45,6 +44,57 @@ Credentials remain HTTP ingress material. `withContext` supplies typed Context
 input and cannot supply Principal or Authority. Direct and network calls use
 the same Context Resolution, Policy, Operation, limits, result validation,
 errors, cancellation, transaction behavior, and observability.
+
+## Describe an Operation once
+
+Add `describe` to the Operation Definition when generated documentation needs
+human-facing prose or examples:
+
+```ts title="src/status.ts"
+import { defineQuery } from "#questpie/app";
+import { codec } from "questpie";
+
+export const barbershopStatus = defineQuery({
+	name: "barbershop.status",
+	network: true,
+	input: codec.object({}),
+	output: codec.object({ online: codec.boolean() }),
+	describe: {
+		summary: "Check whether the barbershop is online",
+		description: "Returns the current public booking availability state.",
+		examples: [{ input: {}, output: { online: true } }],
+	},
+	handler: () => ({ online: true }),
+});
+```
+
+`summary` is required when `describe` is present. It is one NFC line of at most
+120 Unicode scalar values. `description` is optional NFC text of at most 1,024
+Unicode scalar values. Examples always contain `input`; `output` is optional.
+The generated factory infers both example types from the Operation codecs.
+
+Operation Definition shapes are closed. A misspelled or unknown member fails
+at its Origin and member path with `QP-COMPOSE-030 invalidDocumentation` and
+reason `unexpectedOperationMember`. Leading or trailing whitespace, control
+characters other than a line feed inside `description`, bidi controls, and
+non-NFC text also fail. A summary cannot contain a line break. Collection
+Operation Set `list`, `get`, `create`, `update`, and `delete` members accept the
+same `describe` envelope.
+
+The compiler decodes and re-encodes every example through the Operation's input
+and output codecs. It rejects invalid values, cursor values, and more than
+4,096 canonical example bytes for one Operation. Only the Runtime can mint a
+valid cursor, so an example cannot contain one. Examples are documentation
+data. QUESTPIE never sends or executes them. Diagnostics never print example or
+member values.
+
+Operation Documentation belongs to the Operation because one codec can serve
+several Operations with different purposes. The compiler emits one
+relocation-stable `operation-documentation.json` artifact and a separate
+documentation digest. A prose-only edit therefore does not change generated
+client identity, Operation Wire identity, or database migration identity.
+Exposure remains separate: documentation cannot make a server-only Operation
+network-visible or bypass Policy.
 
 ## Understand Query GET encoding
 
@@ -122,7 +172,8 @@ Enable the compiler projection in `questpie.json`:
 The compiler emits deterministic `openapi.json` from the canonical network
 Operations and their codecs. It derives paths, parameters, request bodies,
 results, declared errors, framework failures, nullability, bounds, and inferred
-namespace tags. Authors cannot restate them for OpenAPI.
+namespace tags. Authors cannot restate them or the Operation Documentation prose
+for OpenAPI.
 
 Raw Routes keep their authored external-protocol method and path. QUESTPIE
 omits them from this projection because a raw `Request` and `Response` do not
@@ -130,7 +181,8 @@ provide a canonical Operation schema. Security schemes are also absent;
 application credential composition remains the ingress owner.
 
 OpenAPI marks constraints that JSON Schema cannot express exactly as Runtime
-validation requirements. The Runtime codec remains authoritative. This release
-adds no summary, description, example, or custom-group authoring; those require
-one projection-neutral metadata owner shared by declarations, public docs,
-OpenAPI, and MCP.
+validation requirements. The Runtime codec remains authoritative. OpenAPI
+projects `summary`, `description`, and schema-valid examples from Operation
+Documentation and records the documentation digest at
+`info.x-questpie-operation-documentation-digest`. Grouping remains
+compiler-inferred; there is no custom-group member.

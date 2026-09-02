@@ -440,9 +440,19 @@ Exact `questpie.json` selection `{ "projections": { "openapi": true } }`
 emits deterministic OpenAPI 3.1 from the canonical Operation HTTP binding and
 existing codecs. Authors cannot restate paths, methods, parameters, schemas,
 nullability, bounds, results, errors, grouping, handlers, or authorization for
-OpenAPI. Raw Routes and security schemes are omitted. Projection-neutral prose
-metadata remains a separate decision rather than an OpenAPI-only authoring
-surface.
+OpenAPI. Raw Routes and security schemes are omitted.
+
+An Operation may author one projection-neutral `describe` envelope with a
+required bounded summary, optional bounded description, and codec-typed
+non-executable examples. Query, Mutation, Action, and generated Collection
+Operation Set members use the same envelope. The compiler validates examples
+through the existing codecs and emits one relocation-stable
+`operation-documentation.json` artifact with its own domain-separated digest.
+OpenAPI, generated declarations, explain, and later compatible Contract
+Projections consume this artifact instead of defining their own prose.
+Documentation never grants exposure, Authority, Policy, a handler, or Runtime
+capability and never changes Client Contract, Operation Wire, Schema
+Projection, or Schema Fingerprint identity.
 
 ## 12. Hosting and Cloud
 
@@ -603,6 +613,13 @@ invalidate resources directly. ADR-0037 exports `DiscriminatedValue`,
 `DiscriminatedReference`, and `matchDiscriminated` for ordinary TypeScript
 disjunctions and branded reference values. Those helpers create no Relation,
 codec, generated descriptor, Policy traversal, or Runtime kernel.
+
+ADR-0040 accepts one optional projection-neutral Operation `describe` envelope
+with bounded summary/description and codec-typed non-executable examples. One
+compiler-owned relocation-stable documentation artifact and independent digest
+feed generated projections without adding codec/Field metadata, exposure,
+Authority, Runtime reads, projection-specific prose, fallbacks, or an
+application-specific generated skill.
 
 Transactional Dispatch, caller-run-as Reaction, attempt/lease fencing, bounded
 retry and timeout, cancellation, external-effect ambiguity, retention, and

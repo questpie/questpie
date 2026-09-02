@@ -722,8 +722,22 @@ clients and optional OpenAPI 3.1 derive from the same Resource identities,
 codecs, Context, outcomes, Policy, cancellation, and executor. Raw Routes keep
 their authored external-protocol paths. The former polymorphic endpoint is
 deleted by the implementation tracer with no fallback, redirect, compatibility
-handler, or parallel wire. Projection-neutral descriptive metadata remains a
-separate decision.
+handler, or parallel wire. Projection-neutral descriptive metadata is accepted
+separately by ADR-0040.
+
+ADR-0040 is Accepted after the exact repaired candidate
+`df237a5938e9cd3d5b9529e899c067bbbca8d780` received the committed pinned
+protocol-v2 `PASS` at `4360a4582b3f17e0791eaeaf3f3e1a38ada232f7`.
+Query, Mutation, Action, and generated Collection Operation Set members share
+one optional `describe` envelope with bounded summary/description and
+codec-typed non-executable examples. The compiler owns one relocation-stable
+documentation artifact and independent digest; documentation grants no
+exposure, Authority, Policy, handler, or Runtime capability. `DOC-01` owns
+production compiler/artifact/package parity and digest-independence evidence.
+`DOC-02` owns OpenAPI/MCP/JSDoc/explain projection, target escaping,
+disclosure/exposure parity, and request-time Runtime absence. The planned
+public `skills/questpie` skill stays a separate portable framework skill, not
+an application-generated projection.
 
 ADR-0037 is Accepted as a Product projection under ADR-0027 after independent
 Standards and Spec PASS. `questpie` exports only `DiscriminatedValue`,
@@ -775,10 +789,15 @@ byte-identical release dry-runs pass.
 7. ADR-0037 is closed. Preserve the exact three-helper boundary and do not add
    a codec variant, polymorphic Relation, generated descriptor, registry, or
    compatibility alias.
-8. Treat OpenTelemetry as a separate docs-first decision. The research
+8. Implement ADR-0040 only through `DOC-01` and `DOC-02`; keep one Operation
+   `describe` owner and one documentation artifact, prove target escaping and
+   stale deletion, and do not add codec/Field prose, projection-specific
+   registries, Runtime reads, fallback behavior, or application-generated
+   skills.
+9. Treat OpenTelemetry as a separate docs-first decision. The research
    workbench may inform a future tracer, but it is not authority for exports,
    span names, attributes, sampling, exporters or persistence behavior.
-9. Do not reopen the reference application by adding Cron, Collection triggers,
-   checkpoints, generic browser control or workflow orchestration without new
-   product authority.
-10. Do not push, tag or publish without explicit authority.
+10. Do not reopen the reference application by adding Cron, Collection triggers,
+    checkpoints, generic browser control or workflow orchestration without new
+    product authority.
+11. Do not push, tag or publish without explicit authority.

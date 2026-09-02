@@ -559,6 +559,21 @@ A compiler output such as OpenAPI, MCP, or a skill bundle derived from exact
 App Contract members and Origins. It grants no handler or authorization
 authority.
 
+### Operation Documentation
+
+The optional projection-neutral `describe` envelope on one Query, Mutation,
+Action, or generated Collection Operation Set member. It contains a required
+bounded summary, an optional bounded description, and codec-typed examples that
+never execute. The compiler emits it in one relocation-stable documentation
+artifact with its own digest for Contract Projections and generated
+declarations.
+
+Operation Documentation does not create exposure, Authority, Policy, a
+handler, Runtime capability, codec metadata, Field metadata, or an
+application-specific generated skill.
+
+Do not use: OpenAPI metadata, MCP metadata, codec description.
+
 ### OpenAPI Projection
 
 The optional deterministic OpenAPI 3.1 Contract Projection of canonical

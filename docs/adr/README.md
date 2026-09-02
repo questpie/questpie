@@ -41,6 +41,7 @@ product models. Git history and `docs/v4/research/` preserve the evidence.
 33. [Freeze Query Resource and React client integration](./0035-freeze-query-resource-and-react-client-integration.md)
 34. [Freeze canonical Operation HTTP and OpenAPI projection](./0036-freeze-canonical-operation-http-and-openapi-projection.md)
 35. [Freeze discriminated value TypeScript helpers](./0037-freeze-discriminated-value-helpers.md)
+36. [Freeze projection-neutral Operation documentation](./0040-freeze-projection-neutral-operation-documentation.md)
 
 ## Open decisions
 
@@ -114,6 +115,12 @@ ADR-0037 exports `DiscriminatedValue`, `DiscriminatedReference`, and
 `matchDiscriminated` as ordinary TypeScript helpers. They preserve exhaustive
 disjunction handling and branded reference IDs without creating a codec,
 Relation, generated descriptor, Policy traversal, or Runtime polymorphism.
+ADR-0040 adds one optional Operation-level `describe` envelope with required
+summary, optional description, and codec-typed examples. The compiler owns one
+relocation-stable documentation artifact and independent digest shared by
+generated projections. It adds no codec or Field prose, projection-specific
+authoring, Runtime authority, executable example, compatibility alias, or
+application-specific generated skill.
 ADR-0021 accepted the connected beta.1 slice: compiler through minimal Studio,
 including Service lifetime, watched Query, one committed-fact Reaction, and
 explicit absence stories for later breadth. ADR-0024 removes the Studio path
